@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import { format } from "date-fns";
 import { InpaintCanvas } from "./InpaintCanvas";
@@ -27,6 +27,7 @@ import {
 
 const docsUrl = "https://docs.novelai.net/en/image/";
 const tokenHelpUrl = "https://docs.novelai.net/en/api/";
+const appIconUrl = "./icon.png";
 
 // ── Tag autocomplete helpers ──────────────────────────────────────────────────
 function fmtCount(n: number): string {
@@ -328,6 +329,15 @@ function Button({
   );
 }
 
+function IconText({ icon, children }: { icon: string; children: ReactNode }) {
+  return (
+    <span className="icon-text">
+      <span className="btn-icon" aria-hidden="true">{icon}</span>
+      <span>{children}</span>
+    </span>
+  );
+}
+
 function Toggle({
   checked,
   onChange,
@@ -443,7 +453,7 @@ function SplashPage() {
       )}
       <div className="splash-title">
         <div className="splash-brand">
-          <span className="brand-icon">✦</span>
+          <img className="brand-icon-img" src={appIconUrl} alt="" />
           <h1>{APP_NAME}</h1>
         </div>
         <div className="splash-divider" />
@@ -459,7 +469,7 @@ function TitleBar() {
   return (
     <header className="title-bar">
       <div className="window-title">
-        <span className="title-gem">✦</span>
+        <img className="title-icon" src={appIconUrl} alt="" />
         {APP_NAME}
         <span className="title-ver">v{APP_VERSION}</span>
       </div>
@@ -484,13 +494,13 @@ function MenuBar({ openSettings }: { openSettings: () => void }) {
         className="menu-action"
         onClick={() => settings?.outputDir && window.naiDesktop.openInExplorer(settings.outputDir)}
       >
-        输出目录
+        <IconText icon="📁">输出目录</IconText>
       </button>
       <button className="menu-action" onClick={openSettings}>
-        设置
+        <IconText icon="⚙">设置</IconText>
       </button>
       <button className="menu-action" onClick={() => window.naiDesktop.openExternal(docsUrl)}>
-        文档
+        <IconText icon="❔">文档</IconText>
       </button>
     </nav>
   );
@@ -571,10 +581,10 @@ function AdvancedParamsModal({ onClose }: { onClose: () => void }) {
               }
             }}
           >
-            重置为默认
+            <IconText icon="↺">重置为默认</IconText>
           </Button>
           <Button variant="primary" onClick={onClose}>
-            确认
+            <IconText icon="✓">确认</IconText>
           </Button>
         </footer>
       </div>
@@ -637,7 +647,7 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
           ))}
           <div className="vibe-add-row">
             <label className="btn btn-secondary vibe-add-btn">
-              + 氛围迁移图（提取 0.7）
+              <IconText icon="+">氛围迁移图（提取 0.7）</IconText>
               <input
                 type="file"
                 hidden
@@ -649,7 +659,7 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
               />
             </label>
             <label className="btn btn-secondary vibe-add-btn">
-              + 精确参考图（提取 1.0）
+              <IconText icon="+">精确参考图（提取 1.0）</IconText>
               <input
                 type="file"
                 hidden
@@ -663,8 +673,12 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
           </div>
         </div>
         <footer>
-          <Button onClick={clearVibeImages}>清空所有</Button>
-          <Button variant="primary" onClick={onClose}>完成</Button>
+          <Button onClick={clearVibeImages}>
+            <IconText icon="⌧">清空所有</IconText>
+          </Button>
+          <Button variant="primary" onClick={onClose}>
+            <IconText icon="✓">完成</IconText>
+          </Button>
         </footer>
       </div>
     </div>
@@ -699,7 +713,7 @@ function CharCaptionsModal({ onClose }: { onClose: () => void }) {
               <div className="char-row-head">
                 <strong>角色 {idx + 1}</strong>
                 <Button variant="ghost" onClick={() => removeCharCaption(cc.id)}>
-                  删除
+                  <IconText icon="✕">删除</IconText>
                 </Button>
               </div>
               <textarea
@@ -739,13 +753,15 @@ function CharCaptionsModal({ onClose }: { onClose: () => void }) {
             </div>
           ))}
           <Button className="full" onClick={addCharCaption}>
-            + 添加角色
+            <IconText icon="+">添加角色</IconText>
           </Button>
         </div>
         <footer>
-          <Button onClick={clearCharCaptions}>清空角色</Button>
+          <Button onClick={clearCharCaptions}>
+            <IconText icon="⌧">清空角色</IconText>
+          </Button>
           <Button variant="primary" onClick={onClose}>
-            完成
+            <IconText icon="✓">完成</IconText>
           </Button>
         </footer>
       </div>
@@ -840,18 +856,18 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
       </div>
       <div className="quick-actions">
         <Button onClick={() => setShowCharModal(true)}>
-          角色提示{charCaptions.length > 0 ? ` · ${charCaptions.length}` : ""}
+          <IconText icon="♙">角色提示{charCaptions.length > 0 ? ` · ${charCaptions.length}` : ""}</IconText>
         </Button>
         <Button onClick={() => setShowVibeModal(true)}>
-          氛围迁移{vibeImages.length > 0 ? ` · ${vibeImages.length}` : ""}
+          <IconText icon="◒">氛围迁移{vibeImages.length > 0 ? ` · ${vibeImages.length}` : ""}</IconText>
         </Button>
         <Button onClick={() => setShowVibeModal(true)}>
-          精确参考
+          <IconText icon="◇">精确参考</IconText>
         </Button>
         {templates.length > 0 && (
           <div className="template-dropdown" style={{ position: "relative" }}>
             <Button onClick={() => setShowTemplateMenu((v) => !v)}>
-              📋 模板{showTemplateMenu ? " ▲" : " ▼"}
+              <IconText icon="▣">模板{showTemplateMenu ? " ▲" : " ▼"}</IconText>
             </Button>
             {showTemplateMenu && (
               <div className="menu-pop template-pop">
@@ -881,7 +897,7 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
       <div className="seed-row">
         <NumberInput label="种子（0 = 随机）" value={params.seed} min={0} onChange={(v) => setParam("seed", v)} />
         <Button title="随机种子" onClick={() => setParam("seed", Math.floor(Math.random() * 2_147_483_647))}>
-          ⤨
+          ⇄
         </Button>
         <Button title="重置为随机" onClick={() => setParam("seed", 0)}>
           ↺
@@ -892,7 +908,7 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
         <span>多样化（Variety+）</span>
       </label>
       <Button className="full" onClick={() => setShowAdvanced(true)}>
-        ⚙ 高级参数...
+        <IconText icon="⚙">高级参数...</IconText>
       </Button>
       {showAdvanced && <AdvancedParamsModal onClose={() => setShowAdvanced(false)} />}
       {showVibeModal && <VibeTransferModal onClose={() => setShowVibeModal(false)} />}
@@ -916,12 +932,18 @@ function WorkbenchImageUpload() {
             {workbenchImage.width || "未知"} × {workbenchImage.height || "未知"}
           </small>
           <div className="row-actions tight">
-            <Button className="full" onClick={loadWorkbenchImage}>重新加载</Button>
-            <Button variant="ghost" onClick={() => void clearWorkbenchImage()}>清除</Button>
+          <Button className="full" onClick={loadWorkbenchImage}>
+            <IconText icon="↻">重新加载</IconText>
+          </Button>
+            <Button variant="ghost" onClick={() => void clearWorkbenchImage()}>
+              <IconText icon="✕">清除</IconText>
+            </Button>
           </div>
         </>
       ) : (
-        <Button className="full" onClick={loadWorkbenchImage}>📂 加载图片...</Button>
+        <Button className="full" onClick={loadWorkbenchImage}>
+          <IconText icon="📂">加载图片...</IconText>
+        </Button>
       )}
     </div>
   );
@@ -951,15 +973,15 @@ function AccountAndRunButton({
       </div>
       {!account.hasToken ? (
         <Button variant="primary" className="full" onClick={openSettings}>
-          🌐 请先设置 API
+          <IconText icon="🔑">请先设置 API</IconText>
         </Button>
       ) : isGenerating ? (
         <Button variant="danger" className="full" onClick={() => void cancel()}>
-          停止
+          <IconText icon="■">停止</IconText>
         </Button>
       ) : (
         <Button variant="primary" className="full" onClick={onRun}>
-          ▶ {label}
+          <IconText icon="▶">{label}</IconText>
         </Button>
       )}
     </div>
@@ -1061,13 +1083,15 @@ function InpaintPanel({ openSettings }: { openSettings: () => void }) {
         <SliderInput label="画笔大小" value={brushSize} min={2} max={128} step={1} onChange={setBrushSize} />
         <div className="mode-buttons">
           <Button variant={brushMode === "paint" ? "primary" : "secondary"} onClick={() => setBrushMode("paint")}>
-            画笔（白=重绘）
+            <IconText icon="✎">画笔（白=重绘）</IconText>
           </Button>
           <Button variant={brushMode === "erase" ? "primary" : "secondary"} onClick={() => setBrushMode("erase")}>
-            橡皮（黑=保留）
+            <IconText icon="⌫">橡皮（黑=保留）</IconText>
           </Button>
         </div>
-        <Button className="full" onClick={clearInpaintMask}>清空蒙版</Button>
+        <Button className="full" onClick={clearInpaintMask}>
+          <IconText icon="⌧">清空蒙版</IconText>
+        </Button>
         <div className="panel-divider" />
         <PromptAndParams includeModel={false} />
       </div>
@@ -1239,7 +1263,7 @@ function InspectPanel() {
             <span style={{ fontSize: 12 }}>拖入图片到此处，或点击下方按钮打开</span>
           )}
           <label className="btn btn-secondary" style={{ cursor: "pointer", fontSize: 12 }}>
-            📂 打开文件
+            <IconText icon="📂">打开文件</IconText>
             <input
               type="file"
               hidden
@@ -1285,7 +1309,7 @@ function InspectPanel() {
             disabled={reversePrompting}
             onClick={() => void runReversePrompt()}
           >
-            {reversePrompting ? "⏳ 反推中..." : "✦ AI 反推提示词"}
+            {reversePrompting ? <IconText icon="…">反推中...</IconText> : <IconText icon="◎">AI 反推提示词</IconText>}
           </Button>
         )}
 
@@ -1332,11 +1356,11 @@ function InspectPanel() {
             disabled={!reversePromptText.trim()}
             onClick={applyToPanel}
           >
-            复用至生成面板
+            <IconText icon="↙">复用至生成面板</IconText>
           </Button>
           {hasImage && (
             <Button className="full" onClick={clearInspect}>
-              清除图片
+              <IconText icon="✕">清除图片</IconText>
             </Button>
           )}
         </div>
@@ -1440,7 +1464,7 @@ function PromptConverterPanel() {
           disabled={converting || !convertInput.trim()}
           onClick={() => void runConvertPrompt()}
         >
-          {converting ? "⏳ 转换中..." : "✦ 转换为 Danbooru 标签"}
+          {converting ? <IconText icon="…">转换中...</IconText> : <IconText icon="⇄">转换为 Danbooru 标签</IconText>}
         </Button>
 
         {convertResult && (
@@ -1477,14 +1501,14 @@ function PromptConverterPanel() {
       <div className="left-footer">
         <div style={{ display: "grid", gap: 8 }}>
           <Button variant="primary" className="full" disabled={!convertResult.trim()} onClick={applyToPanel}>
-            复用至生成面板
+            <IconText icon="↙">复用至生成面板</IconText>
           </Button>
           <Button
             className="full"
             disabled={!convertResult.trim()}
             onClick={() => { void navigator.clipboard.writeText(convertResult); setToast("已复制到剪贴板"); }}
           >
-            复制结果
+            <IconText icon="⧉">复制结果</IconText>
           </Button>
         </div>
       </div>
@@ -1602,13 +1626,27 @@ function ImageCanvas() {
           <img src={currentImage.fileUrl} alt="生成结果" />
           {settings?.showFloatingToolbar && (
             <div className="floating-toolbar">
-              <Button onClick={() => window.naiDesktop.openInExplorer(currentImage.filePath)}>定位文件</Button>
-              <Button onClick={() => void navigator.clipboard.writeText(currentImage.filePath)}>复制路径</Button>
-              <Button onClick={() => sendCurrentTo("generate")}>发送到工作台</Button>
-              <Button onClick={() => sendCurrentTo("inpaint")}>发送到重绘</Button>
-              <Button onClick={() => sendCurrentTo("upscale")}>发送到超分</Button>
-              <Button onClick={() => sendCurrentTo("postprocess")}>发送到后期</Button>
-              <Button onClick={generate}>重新文生图</Button>
+              <Button onClick={() => window.naiDesktop.openInExplorer(currentImage.filePath)}>
+                <IconText icon="📍">定位</IconText>
+              </Button>
+              <Button onClick={() => void navigator.clipboard.writeText(currentImage.filePath)}>
+                <IconText icon="⧉">复制路径</IconText>
+              </Button>
+              <Button onClick={() => sendCurrentTo("generate")}>
+                <IconText icon="▧">工作台</IconText>
+              </Button>
+              <Button onClick={() => sendCurrentTo("inpaint")}>
+                <IconText icon="◌">重绘</IconText>
+              </Button>
+              <Button onClick={() => sendCurrentTo("upscale")}>
+                <IconText icon="↗">超分</IconText>
+              </Button>
+              <Button onClick={() => sendCurrentTo("postprocess")}>
+                <IconText icon="◈">后期</IconText>
+              </Button>
+              <Button onClick={generate}>
+                <IconText icon="↻">再生成</IconText>
+              </Button>
             </div>
           )}
         </div>
@@ -1756,9 +1794,11 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                 </label>
                 <div className="row-actions">
                   <Button variant="primary" disabled={checking} onClick={verify}>
-                    {checking ? "验证中..." : "验证并保存 Token"}
+                    {checking ? <IconText icon="…">验证中...</IconText> : <IconText icon="✓">验证并保存 Token</IconText>}
                   </Button>
-                  <Button onClick={() => window.naiDesktop.openExternal(tokenHelpUrl)}>如何获取 Token</Button>
+                  <Button onClick={() => window.naiDesktop.openExternal(tokenHelpUrl)}>
+                    <IconText icon="❔">如何获取 Token</IconText>
+                  </Button>
                   <Button
                     variant="danger"
                     onClick={async () => {
@@ -1766,7 +1806,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                       await refreshAccount();
                     }}
                   >
-                    退出 API 登录
+                    <IconText icon="⇥">退出 API 登录</IconText>
                   </Button>
                 </div>
                 {status && <div className={clsx("status-box", status.valid ? "ok" : "bad")}>{status.message}</div>}
@@ -1787,8 +1827,12 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                   <input value={settings.outputDir} onChange={(e) => void update("outputDir", e.target.value)} />
                 </label>
                 <div className="row-actions">
-                  <Button onClick={selectDir}>浏览...</Button>
-                  <Button onClick={() => window.naiDesktop.openInExplorer(settings.outputDir)}>打开输出目录</Button>
+                  <Button onClick={selectDir}>
+                    <IconText icon="📁">浏览...</IconText>
+                  </Button>
+                  <Button onClick={() => window.naiDesktop.openInExplorer(settings.outputDir)}>
+                    <IconText icon="↗">打开输出目录</IconText>
+                  </Button>
                 </div>
                 <NumberInput label="历史记录保留天数" value={settings.historyRetentionDays} min={1} max={3650} onChange={(v) => void update("historyRetentionDays", v)} />
               </div>
@@ -1873,7 +1917,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                     )
                   }
                 >
-                  重置为默认 Prompt
+                  <IconText icon="↺">重置为默认 Prompt</IconText>
                 </Button>
               </div>
             )}
@@ -1890,7 +1934,9 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                   <div className="tpl-item" key={tpl.id}>
                     <div className="tpl-item-head">
                       <strong>{tpl.name}</strong>
-                      <Button variant="ghost" onClick={() => deleteTemplate(tpl.id)}>删除</Button>
+                      <Button variant="ghost" onClick={() => deleteTemplate(tpl.id)}>
+                        <IconText icon="✕">删除</IconText>
+                      </Button>
                     </div>
                     {tpl.prefix && <small>前缀：{tpl.prefix}</small>}
                     {tpl.suffix && <small>后缀：{tpl.suffix}</small>}
@@ -1916,7 +1962,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                     <input value={newTplNeg} placeholder="lowres, bad anatomy, ..." onChange={(e) => setNewTplNeg(e.target.value)} />
                   </label>
                   <Button variant="primary" onClick={saveNewTemplate} disabled={!newTplName.trim()}>
-                    + 添加模板
+                    <IconText icon="+">添加模板</IconText>
                   </Button>
                 </div>
               </div>
@@ -1924,7 +1970,9 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
           </section>
         </div>
         <footer>
-          <Button variant="primary" onClick={onClose}>关闭</Button>
+          <Button variant="primary" onClick={onClose}>
+            <IconText icon="✓">关闭</IconText>
+          </Button>
         </footer>
       </div>
     </div>
@@ -2002,9 +2050,11 @@ function OnboardingWizard() {
                 </label>
                 <div className="row-actions">
                   <Button variant="primary" onClick={verify} disabled={checking}>
-                    {checking ? "验证中..." : "验证并保存"}
+                    {checking ? <IconText icon="…">验证中...</IconText> : <IconText icon="✓">验证并保存</IconText>}
                   </Button>
-                  <Button onClick={() => window.naiDesktop.openExternal(tokenHelpUrl)}>如何获取 Token</Button>
+                  <Button onClick={() => window.naiDesktop.openExternal(tokenHelpUrl)}>
+                    <IconText icon="❔">如何获取 Token</IconText>
+                  </Button>
                 </div>
                 {tokenStatus && <div className={clsx("status-box", tokenStatus.valid ? "ok" : "bad")}>{tokenStatus.message}</div>}
               </div>
@@ -2021,7 +2071,7 @@ function OnboardingWizard() {
                     await load();
                   }}
                 >
-                  浏览...
+                  <IconText icon="📁">浏览...</IconText>
                 </Button>
               </div>
             )}

@@ -34,6 +34,10 @@ let mainWindow: BrowserWindow | null = null;
 const isDev = Boolean(process.env.VITE_DEV_SERVER_URL);
 
 function createWindow() {
+  const iconPath = isDev
+    ? path.join(__dirname, "../../public/icon.png")
+    : path.join(__dirname, "../../dist/icon.png");
+
   mainWindow = new BrowserWindow({
     width: 1385,
     height: 900,
@@ -43,6 +47,7 @@ function createWindow() {
     frame: false,
     backgroundColor: "#f0eff9",
     title: "NovelAI Studio",
+    icon: iconPath,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       nodeIntegration: false,
