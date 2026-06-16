@@ -6,6 +6,10 @@ on:
     tags: ['v*']
   workflow_dispatch:
 
+# Needed for softprops/action-gh-release to create/attach to Releases on v* tags.
+permissions:
+  contents: write
+
 # Force bundled JS actions onto Node 24 (silences the Node 20 deprecation notice).
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true

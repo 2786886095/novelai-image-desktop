@@ -4,10 +4,11 @@ on:
   push:
     branches: [main]
     tags: ['v*']
-    paths:
-      - 'mobile/**'
-      - '.github/workflows/build-mobile.yml'
   workflow_dispatch:
+
+# Needed for softprops/action-gh-release to create/attach to Releases on v* tags.
+permissions:
+  contents: write
 
 jobs:
   android:
