@@ -3025,3 +3025,19 @@ html, body, #root {
   background: rgba(124, 92, 250, 0.16);
   font-size: 11px;
 }
+
+/* ── Queue progress / pause ────────────────────────────────────────────────── */
+.run-button-row { display: flex; gap: 8px; }
+.run-button-row .btn { flex: 1; }
+.queue-progress {
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+  margin-bottom: 6px;
+}
+.anlas-spent {
+  font-size: 12px;
+  color: #1f9d57;
+  text-align: center;
+  margin-bottom: 6px;
+}

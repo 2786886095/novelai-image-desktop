@@ -1137,6 +1137,10 @@ function AccountAndRunButton({
   const account = useAppStore((state) => state.account);
   const isGenerating = useAppStore((state) => state.isGenerating);
   const cancel = useAppStore((state) => state.cancel);
+  const togglePause = useAppStore((state) => state.togglePause);
+  const queuePaused = useAppStore((state) => state.queuePaused);
+  const queueProgress = useAppStore((state) => state.queueProgress);
+  const lastAnlasSpent = useAppStore((state) => state.lastAnlasSpent);
   const refreshAccount = useAppStore((state) => state.refreshAccount);
   const [refreshingAccount, setRefreshingAccount] = useState(false);
   async function refreshBalance() {
@@ -1166,13 +1170,31 @@ function AccountAndRunButton({
           <IconText icon="🔑">请先设置 API</IconText>
         </Button>
       ) : isGenerating ? (
-        <Button variant="danger" className="full" onClick={() => void cancel()}>
-          <IconText icon="■">停止</IconText>
-        </Button>
+        <>
+          {queueProgress && queueProgress.total > 1 && (
+            <div className="queue-progress">
+              进度 {queueProgress.done + queueProgress.failed}/{queueProgress.total}
+              {queueProgress.failed > 0 ? ` · 失败 ${queueProgress.failed}` : ""}
+            </div>
+          )}
+          <div className="run-button-row">
+            <Button variant="secondary" onClick={togglePause}>
+              <IconText icon={queuePaused ? "▶" : "⏸"}>{queuePaused ? "继续" : "暂停"}</IconText>
+            </Button>
+            <Button variant="danger" onClick={() => void cancel()}>
+              <IconText icon="■">停止</IconText>
+            </Button>
+          </div>
+        </>
       ) : (
-        <Button variant="primary" className="full" onClick={onRun}>
-          <IconText icon="▶">{label}</IconText>
-        </Button>
+        <>
+          {lastAnlasSpent != null && lastAnlasSpent > 0 && (
+            <div className="anlas-spent">上次实扣 {lastAnlasSpent} Anlas</div>
+          )}
+          <Button variant="primary" className="full" onClick={onRun}>
+            <IconText icon="▶">{label}</IconText>
+          </Button>
+        </>
       )}
     </div>
   );

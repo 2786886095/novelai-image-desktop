@@ -63,6 +63,9 @@ interface AppState {
   convertMode: ReversePromptMode;
   converting: boolean;
   isGenerating: boolean;
+  queuePaused: boolean;
+  queueProgress: { done: number; failed: number; total: number } | null;
+  lastAnlasSpent: number | null;
   statusText: string;
   lastError: string;
   toast: string;
@@ -128,6 +131,7 @@ interface AppState {
   upscaleCurrentImage: () => Promise<void>;
   runDirectorTool: () => Promise<void>;
   cancel: () => Promise<void>;
+  togglePause: () => void;
   selectImage: (item: HistoryItem) => void;
   variationFromImage: (item: HistoryItem) => void;
   deleteHistory: (id: string) => Promise<void>;
@@ -201,6 +205,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   convertMode: "tags" as ReversePromptMode,
   converting: false,
   isGenerating: false,
+  queuePaused: false,
+  queueProgress: null,
+  lastAnlasSpent: null,
   statusText: "就绪",
   lastError: "",
   toast: "",
@@ -531,16 +538,29 @@ export const useAppStore = create<AppState>((set, get) => ({
     const total = Math.max(1, state.batchCount);
     const extras = buildExtras(state);
     const initialSeed = state.params.seed;
+    const anlasBefore = state.account.anlasBalance;
     set({
       isGenerating: true,
+      queuePaused: false,
+      queueProgress: { done: 0, failed: 0, total },
+      lastAnlasSpent: null,
       lastError: "",
       statusText: total > 1 ? `批量生成 1/${total}...` : "正在调用 NovelAI API 生成图片...",
     });
 
     let completed = 0;
+    let failed = 0;
+    let lastError = "";
     for (let i = 0; i < total; i++) {
       if (!get().isGenerating) break; // cancelled
-      if (total > 1 && i > 0) set({ statusText: `批量生成 ${i + 1}/${total}...` });
+      // Honor pause: hold here until resumed or cancelled.
+      while (get().queuePaused && get().isGenerating) {
+        set({ statusText: `已暂停（${completed}/${total}），点击继续` });
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      if (!get().isGenerating) break;
+      if (total > 1) set({ statusText: `批量生成 ${i + 1}/${total}（成功 ${completed}，失败 ${failed}）...` });
+
       const base = get().params;
       const currentParams = {
         ...base,
@@ -549,20 +569,47 @@ export const useAppStore = create<AppState>((set, get) => ({
         negativePrompt: expandWildcards(base.negativePrompt),
         seed: initialSeed > 0 ? initialSeed + i : 0,
       };
-      const result = await window.naiDesktop.generate(currentParams, extras);
+
+      // One in-loop retry on top of the main process's HTTP-level 429/5xx retry.
+      let result = await window.naiDesktop.generate(currentParams, extras);
+      if ((!result.ok || result.items.length === 0) && get().isGenerating) {
+        await new Promise((r) => setTimeout(r, 1200));
+        result = await window.naiDesktop.generate(currentParams, extras);
+      }
+
       if (result.ok && result.items.length > 0) {
         completed++;
         const current = result.items[0];
         set({ params: { ...get().params, seed: result.actualSeed ?? current.actualSeed } });
         await refreshAfterImage(set, get, current);
       } else {
-        set({ isGenerating: false, lastError: result.message, statusText: "生成失败", toast: result.message });
-        return;
+        // Skip the failed image and continue the batch instead of aborting.
+        failed++;
+        lastError = result.message;
       }
+      set({ queueProgress: { done: completed, failed, total } });
     }
+
+    const anlasAfter = get().account.anlasBalance;
+    const spent =
+      typeof anlasBefore === "number" && typeof anlasAfter === "number"
+        ? Math.max(0, anlasBefore - anlasAfter)
+        : null;
+    const spentText = spent && spent > 0 ? `，实扣 ${spent} Anlas` : "";
     const finalMsg =
-      completed > 1 ? `批量生成完成，共 ${completed} 张。` : `生成完成，已保存 1 张图片。`;
-    set({ isGenerating: false, statusText: finalMsg, toast: finalMsg });
+      failed > 0
+        ? `完成：成功 ${completed} 张，失败 ${failed} 张${spentText}`
+        : completed > 1
+          ? `批量生成完成，共 ${completed} 张${spentText}。`
+          : `生成完成，已保存 1 张图片${spentText}。`;
+    set({
+      isGenerating: false,
+      queuePaused: false,
+      lastAnlasSpent: spent,
+      lastError: failed > 0 ? lastError : "",
+      statusText: finalMsg,
+      toast: finalMsg,
+    });
   },
 
   async generateI2I() {
@@ -642,7 +689,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   async cancel() {
     await window.naiDesktop.cancel();
-    set({ isGenerating: false, statusText: "已取消操作" });
+    set({ isGenerating: false, queuePaused: false, statusText: "已取消操作" });
+  },
+
+  togglePause() {
+    if (!get().isGenerating) return;
+    set({ queuePaused: !get().queuePaused });
   },
 
   selectImage(item) {
