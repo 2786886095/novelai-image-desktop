@@ -1,10 +1,19 @@
 # Langbai NovelAI Studio
 
-中文 API-only NovelAI 图像创作桌面客户端。项目地址：
+[![Build](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build.yml/badge.svg)](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
+[![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android%20%7C%20iOS-7c5cfa.svg)](#下载)
 
-https://github.com/2786886095/novelai-image-desktop
+中文 **API-only** NovelAI 图像创作桌面客户端（Electron + React + TypeScript），附带 Flutter 移动端。
 
 程序不使用网页登录、Cookie、DOM 点击或 Chrome CDP。NovelAI 图像能力均通过 Electron 主进程调用官方 API，渲染进程不直接持有 Token。
+
+## 下载
+
+- **正式版**：[Releases](https://github.com/2786886095/novelai-image-desktop/releases)（桌面 + APK + 未签名 IPA）
+- **每次构建**：[Actions](https://github.com/2786886095/novelai-image-desktop/actions) 的产物（Win 便携版 EXE、macOS 通用 DMG/ZIP、Linux AppImage、Android APK、未签名 IPA）
+
+> macOS 包未签名，首次打开需右键 → 打开；iOS 为未签名 IPA，需自行侧载（无 Apple 开发者证书）。
 
 ## 当前能力
 
@@ -22,7 +31,12 @@ https://github.com/2786886095/novelai-image-desktop
 - 动态灵感胶囊：可随机换一组提示词灵感。
 - AI 反推：使用独立视觉模型 API。
 - 提示词转换：使用独立文本模型 API，与反推接口分离。
-- 历史与素材：按日期和分组筛选，可新建分组、给图片分组、删除记录。
+- 历史与素材：按日期和分组筛选，可新建 / 重命名 / 删除分组、给图片分组、一键将分组打包为 ZIP 导出。
+- 图片命名模板：保存与导出文件名支持 `{date} {time} {seq} {seed} {model}` 等占位符。
+- 动态提示词通配符：`{red|blue|green} hair` 批量时每张随机取一项，不影响 NovelAI 的 `{tag}` 权重语法。
+- 锁种变体：一键载入某图的全部参数并锁定其种子，改一个 tag 即可生成同种子变体。
+- 生成队列：批量抗失败（单张失败自动重试后跳过继续）、可暂停 / 继续，并显示**实扣 Anlas**（账户余额差值）。
+- 灵感胶囊相关推荐：根据已输入的 tag 推荐常一起使用的同现 tag。
 - 成本提示：各功能显示预计 Anlas 消耗、当前余额和余额不足提示；实际扣费以 NovelAI 账户余额变化为准。
 
 ## 运行
@@ -65,7 +79,7 @@ release\NovelAI-Image-Desktop.exe
 3. 如需图片反推，在“设置 > AI 反推”配置视觉模型 API，并可点击“检测反推接口模型”。
 4. 如需中文转 tag，在“设置 > 转换 API”配置文本模型 API，并可点击“检测转换接口模型”。
 5. 如需更强的 Danbooru tag 检索，在“设置 > 提示词/补全”启用 Tag/MCP 服务并检测。
-6. 在左侧填写提示词和参数；顶部切换生成、重绘、超分、后期、检视、转换。
+6. 在左侧填写提示词和参数；顶部切换生成、重绘、超分、后期、反推、转换。
 7. 生成结果会自动保存到输出目录，并进入右侧历史与素材库。
 8. 可在历史面板创建分组、筛选分组、给单张图片分配分组。
 
@@ -84,6 +98,28 @@ release\NovelAI-Image-Desktop.exe
 - `electron/ipc/storage.ts`：历史删除、目录选择、分组操作。
 - `electron/preload.ts`：安全暴露 `window.naiDesktop`。
 - `src/App.tsx`：主 UI、设置、历史、反推、转换。
+- `src/components/ui.tsx`：共享 UI 基础组件。
+- `src/prompt-data.ts`：标签分类与灵感胶囊词条。
+- `src/wildcards.ts` / `src/related-tags.ts` / `src/png-meta.ts` / `src/anlas.ts`：纯逻辑模块（均带单元测试）。
+- `electron/data/tag-dictionary.ts`：中文 → Danbooru 离线词库。
 - `src/InpaintCanvas.tsx`：局部重绘蒙版画布。
-- `src/store.ts`：Zustand 前端状态。
+- `src/store.ts`：Zustand 前端状态（生成队列、暂停、Anlas）。
 - `src/types.ts`：共享类型和默认参数。
+
+## 开发与测试
+
+```powershell
+npm run dev        # 渲染层 + Electron（开发模式）
+npm run typecheck  # 类型检查
+npm test           # vitest 单元测试
+```
+
+CI 会对 Windows / macOS / Linux 三平台跑类型检查、单元测试与打包。
+
+## 移动端
+
+`mobile/` 是 Flutter (Dart) 编写的 Android / iOS 客户端（Phase 1：Token 配置 + 文生图 + 图库）。详见 [`mobile/README.md`](./mobile/README.md)。
+
+## 贡献
+
+欢迎 PR / issue，请先阅读 [CONTRIBUTING.md](./CONTRIBUTING.md)。本项目基于 [MIT 许可](./LICENSE)。
