@@ -272,6 +272,33 @@ export interface AppSettings {
 
 export type SettingKey = keyof AppSettings;
 
+export interface UpdateInfo {
+  /** true when a newer release is available on GitHub */
+  hasUpdate: boolean;
+  currentVersion: string;
+  latestVersion?: string;
+  releaseUrl?: string;
+  /** populated when the check itself failed (network / rate limit) */
+  error?: string;
+}
+
+/** Parsed generation parameters extracted from a NovelAI PNG's metadata. */
+export interface ImportedParams {
+  positivePrompt?: string;
+  negativePrompt?: string;
+  model?: NAIModel;
+  steps?: number;
+  cfgScale?: number;
+  cfgRescale?: number;
+  sampler?: NAISampler;
+  noiseSchedule?: string;
+  seed?: number;
+  width?: number;
+  height?: number;
+  smea?: boolean;
+  smeaDyn?: boolean;
+}
+
 export interface NaiDesktopApi {
   hasToken: () => Promise<AccountSummary>;
   verifyToken: (token: string) => Promise<TokenStatus>;
@@ -298,6 +325,7 @@ export interface NaiDesktopApi {
   reversePrompt: (imageBase64: string, mode: ReversePromptMode) => Promise<{ ok: boolean; prompt?: string; message: string }>;
   convertPrompt: (text: string) => Promise<{ ok: boolean; result?: string; message: string }>;
   suggestTags: (model: string, prompt: string) => Promise<TagSuggestion[]>;
+  checkUpdate: () => Promise<UpdateInfo>;
   minimize: () => Promise<void>;
   maximize: () => Promise<void>;
   close: () => Promise<void>;

@@ -2029,3 +2029,56 @@ button { user-select: none; }
 }
 .theme-dark .empty-orb-b { background: rgba(26, 22, 44, 0.72); }
 .theme-dark .empty-shortcuts span { background: var(--accent-soft); border-color: var(--border); }
+
+/* ── Update banner ─────────────────────────────────────────────────────────── */
+.update-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 16px;
+  font-size: 13px;
+  background: linear-gradient(90deg, rgba(124, 92, 250, 0.16), rgba(167, 139, 250, 0.12));
+  border-bottom: 1px solid var(--border);
+}
+.update-banner-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.update-banner .btn { padding: 4px 12px; font-size: 12px; }
+
+/* ── Anlas cost row ────────────────────────────────────────────────────────── */
+.cost-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  background: var(--accent-soft);
+  border: 1px solid var(--border);
+}
+.cost-row strong { color: var(--accent); font-weight: 600; }
+.cost-row.cost-free { background: rgba(52, 199, 120, 0.12); }
+.cost-row.cost-free strong { color: #1f9d57; }
+
+/* ── Metadata restore ──────────────────────────────────────────────────────── */
+.meta-restore { display: grid; gap: 6px; margin-top: 10px; }
+.meta-restore small { color: var(--muted); font-size: 11px; line-height: 1.5; }
+
+/* ── Splash custom image + entrance animation ──────────────────────────────── */
+.splash-animate { animation: splash-fade 0.6s ease both; }
+@keyframes splash-fade {
+  from { opacity: 0; transform: scale(1.02); }
+  to { opacity: 1; transform: scale(1); }
+}
+.splash-custom {
+  width: 220px;
+  height: 220px;
+  object-fit: contain;
+  border-radius: 28px;
+  margin-bottom: 24px;
+  animation: splash-pop 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes splash-pop {
+  from { opacity: 0; transform: translateY(12px) scale(0.94); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}

@@ -45,6 +45,7 @@ contextBridge.exposeInMainWorld("naiDesktop", {
   isFirstRun: () => ipcRenderer.invoke("settings:isFirstRun"),
   completeSetup: () => ipcRenderer.invoke("settings:completeSetup"),
 
+  checkUpdate: () => ipcRenderer.invoke("app:checkUpdate"),
   minimize: () => ipcRenderer.invoke("window:minimize"),
   maximize: () => ipcRenderer.invoke("window:maximize"),
   close: () => ipcRenderer.invoke("window:close"),

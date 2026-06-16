@@ -48,8 +48,16 @@
     "asar": true,
     "compression": "maximum",
     "directories": {
-      "output": "release"
+      "output": "release",
+      "buildResources": "build"
     },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "2786886095",
+        "repo": "novelai-image-desktop"
+      }
+    ],
     "files": [
       "dist/**",
       "dist-electron/**",
@@ -57,11 +65,13 @@
       "package.json"
     ],
     "win": {
+      "icon": "build/icon.png",
       "target": [
         "portable"
       ]
     },
     "mac": {
+      "icon": "build/icon.png",
       "category": "public.app-category.graphics-design",
       "target": [
         {
@@ -72,6 +82,13 @@
           "target": "zip",
           "arch": "universal"
         }
+      ]
+    },
+    "linux": {
+      "icon": "build/icon.png",
+      "category": "Graphics",
+      "target": [
+        "AppImage"
       ]
     },
     "dmg": {

@@ -27,6 +27,7 @@ import {
   setSetting,
 } from "./ipc/store";
 import { deleteHistoryItem, listHistory, listHistoryDates, openTarget, selectOutputDir } from "./ipc/storage";
+import { checkUpdate } from "./ipc/update";
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -116,6 +117,7 @@ function registerIpc() {
   });
   ipcMain.handle("window:close", () => mainWindow?.close());
   ipcMain.handle("window:openExternal", (_event, url: string) => shell.openExternal(url));
+  ipcMain.handle("app:checkUpdate", () => checkUpdate());
 }
 
 app.whenReady().then(() => {

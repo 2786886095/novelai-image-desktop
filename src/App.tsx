@@ -3,6 +3,7 @@ import clsx from "clsx";
 import { format } from "date-fns";
 import { InpaintCanvas } from "./InpaintCanvas";
 import { useAppStore } from "./store";
+import { estimateAnlas } from "./anlas";
 import {
   APP_NAME,
   APP_VERSION,
@@ -15,6 +16,9 @@ import {
   NAI_UC_PRESETS,
   type AppSettings,
   type GenerateParams,
+  type ImportedParams,
+  type NAIModel,
+  type NAISampler,
   type PromptTemplate,
   type ReversePromptMode,
   type TagSuggestion,
@@ -264,6 +268,50 @@ function parsePngMeta(buffer: ArrayBuffer): Record<string, string> {
   return result;
 }
 
+/**
+ * Map NovelAI PNG metadata (tEXt chunks: Description + Comment JSON) to our
+ * GenerateParams shape. Only fields present and valid are returned, so applying
+ * the result never clobbers a setting the image didn't specify.
+ */
+function parseImportedParams(meta: Record<string, string>): ImportedParams {
+  const out: ImportedParams = {};
+  let comment: Record<string, unknown> = {};
+  try {
+    comment = JSON.parse(meta.Comment ?? "{}");
+  } catch {
+    comment = {};
+  }
+
+  const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
+  const samplerValues = NAI_SAMPLERS.map((s) => s.value) as string[];
+  const modelValues = NAI_MODELS.map((m) => m.value) as string[];
+
+  const prompt = meta.Description ?? (typeof comment.prompt === "string" ? comment.prompt : undefined);
+  if (prompt) out.positivePrompt = prompt.trim();
+  if (typeof comment.uc === "string") out.negativePrompt = comment.uc.trim();
+
+  out.steps = num(comment.steps);
+  out.cfgScale = num(comment.scale);
+  out.cfgRescale = num(comment.cfg_rescale);
+  out.seed = num(comment.seed);
+  out.width = num(comment.width);
+  out.height = num(comment.height);
+  if (typeof comment.sampler === "string" && samplerValues.includes(comment.sampler)) {
+    out.sampler = comment.sampler as NAISampler;
+  }
+  if (typeof comment.noise_schedule === "string") out.noiseSchedule = comment.noise_schedule;
+  if (typeof comment.sm === "boolean") out.smea = comment.sm;
+  if (typeof comment.sm_dyn === "boolean") out.smeaDyn = comment.sm_dyn;
+
+  const modelCandidate = typeof comment.model === "string" ? comment.model : meta.Source;
+  if (modelCandidate && modelValues.includes(modelCandidate)) {
+    out.model = modelCandidate as NAIModel;
+  }
+
+  // Drop undefined keys so the caller's spread doesn't overwrite with undefined.
+  return Object.fromEntries(Object.entries(out).filter(([, v]) => v !== undefined)) as ImportedParams;
+}
+
 // ── Shared UI primitives ──────────────────────────────────────────────────────
 function Button({
   children,
@@ -370,16 +418,29 @@ function SliderInput({
 
 // ── Splash ────────────────────────────────────────────────────────────────────
 function SplashPage() {
+  // Show a custom entrance image when public/splash.png exists; otherwise fall
+  // back to the built-in animated orbs. The <img> hides itself on load error.
+  const [hasCustom, setHasCustom] = useState(true);
   return (
-    <div className="splash-page">
-      <div className="splash-art">
-        <div className="splash-orb splash-orb-a" />
-        <div className="splash-orb splash-orb-b" />
-        <div className="splash-logo-mark">
-          <div className="logo-gem" />
-          <div className="logo-ring" />
+    <div className="splash-page splash-animate">
+      {hasCustom && (
+        <img
+          className="splash-custom"
+          src="./splash.png"
+          alt=""
+          onError={() => setHasCustom(false)}
+        />
+      )}
+      {!hasCustom && (
+        <div className="splash-art">
+          <div className="splash-orb splash-orb-a" />
+          <div className="splash-orb splash-orb-b" />
+          <div className="splash-logo-mark">
+            <div className="logo-gem" />
+            <div className="logo-ring" />
+          </div>
         </div>
-      </div>
+      )}
       <div className="splash-title">
         <div className="splash-brand">
           <span className="brand-icon">✦</span>
@@ -910,6 +971,13 @@ function GeneratePanel({ openSettings }: { openSettings: () => void }) {
   const generate = useAppStore((state) => state.generate);
   const batchCount = useAppStore((state) => state.batchCount);
   const setBatchCount = useAppStore((state) => state.setBatchCount);
+  const params = useAppStore((state) => state.params);
+  const tierLevel = useAppStore((state) => state.account.tierLevel);
+
+  const cost = useMemo(
+    () => estimateAnlas(params, batchCount, tierLevel),
+    [params, batchCount, tierLevel],
+  );
 
   return (
     <>
@@ -926,6 +994,17 @@ function GeneratePanel({ openSettings }: { openSettings: () => void }) {
             max={16}
             onChange={(e) => setBatchCount(Number(e.target.value))}
           />
+        </div>
+        <div className={clsx("cost-row", cost.free && "cost-free")}>
+          <span>预计消耗</span>
+          {cost.free ? (
+            <strong>免费（Opus 额度）</strong>
+          ) : (
+            <strong>
+              约 {cost.total} Anlas
+              {batchCount > 1 ? `（${cost.perImage}/张 × ${batchCount}）` : ""}
+            </strong>
+          )}
         </div>
       </div>
       <AccountAndRunButton
@@ -1083,8 +1162,24 @@ function InspectPanel() {
   const setParam = useAppStore((state) => state.setParam);
   const setToast = useAppStore((state) => state.setToast);
   const settings = useAppStore((state) => state.settings);
+  const inspectMeta = useAppStore((state) => state.inspectMeta);
+  const applyParams = useAppStore((state) => state.applyParams);
+  const setActiveTab = useAppStore((state) => state.setActiveTab);
   const [dragging, setDragging] = useState(false);
   const hasImage = Boolean(inspectImageUrl);
+
+  const imported = useMemo(() => (inspectMeta ? parseImportedParams(inspectMeta) : {}), [inspectMeta]);
+  const hasMeta = Object.keys(imported).length > 0;
+
+  function restoreParams() {
+    if (!hasMeta) {
+      setToast("该图片不含可识别的 NovelAI 参数。");
+      return;
+    }
+    applyParams(imported);
+    setActiveTab("generate");
+    setToast("已从图片元数据还原参数。");
+  }
 
   const modes: [ReversePromptMode, string, string][] = [
     ["tags", "Danbooru 标签", "输出标准 Danbooru tag 格式"],
@@ -1156,6 +1251,19 @@ function InspectPanel() {
             />
           </label>
         </div>
+
+        {hasImage && (
+          <div className="meta-restore">
+            <Button variant="secondary" className="full" disabled={!hasMeta} onClick={restoreParams}>
+              ↩ 从图片还原参数
+            </Button>
+            <small>
+              {hasMeta
+                ? "读取 NovelAI PNG 内嵌的提示词、种子、采样器等参数并填入生成面板。"
+                : "未检测到 NovelAI 参数（图片可能被压缩或来自其它来源）。"}
+            </small>
+          </div>
+        )}
 
         <div className="mode-selector">
           {modes.map(([val, label, tip]) => (
@@ -1939,6 +2047,31 @@ function OnboardingWizard() {
   );
 }
 
+// ── Update banner ─────────────────────────────────────────────────────────────
+function UpdateBanner() {
+  const updateInfo = useAppStore((state) => state.updateInfo);
+  const dismissUpdate = useAppStore((state) => state.dismissUpdate);
+  if (!updateInfo?.hasUpdate) return null;
+  return (
+    <div className="update-banner">
+      <span>
+        🎉 发现新版本 <strong>v{updateInfo.latestVersion}</strong>（当前 v{updateInfo.currentVersion}）
+      </span>
+      <div className="update-banner-actions">
+        <button
+          className="btn btn-primary"
+          onClick={() => updateInfo.releaseUrl && void window.naiDesktop.openExternal(updateInfo.releaseUrl)}
+        >
+          前往下载
+        </button>
+        <button className="btn btn-ghost" onClick={dismissUpdate}>
+          稍后
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 function MainPage() {
   const showSettings = useAppStore((state) => state.showSettings);
@@ -1973,6 +2106,7 @@ function MainPage() {
   return (
     <div className="app-shell">
       <TitleBar />
+      <UpdateBanner />
       <MenuBar openSettings={() => setShowSettings(true)} />
       <TabBar />
       <div className="workspace">
@@ -1998,12 +2132,14 @@ export default function App() {
   const [splash, setSplash] = useState(true);
   const bootDone = useAppStore((state) => state.bootDone);
   const load = useAppStore((state) => state.load);
+  const checkUpdate = useAppStore((state) => state.checkUpdate);
 
   useEffect(() => {
     void load();
+    void checkUpdate();
     const timer = window.setTimeout(() => setSplash(false), 2500);
     return () => window.clearTimeout(timer);
-  }, [load]);
+  }, [load, checkUpdate]);
 
   const shouldShowSplash = useMemo(() => splash || !bootDone, [splash, bootDone]);
   return shouldShowSplash ? <SplashPage /> : <MainPage />;

@@ -11,6 +11,7 @@ import type {
   I2IParams,
   NAIInpaintModel,
   ReversePromptMode,
+  UpdateInfo,
   UpscaleScale,
   VibeTransferImage,
   WorkingImage,
@@ -60,6 +61,7 @@ interface AppState {
   statusText: string;
   lastError: string;
   toast: string;
+  updateInfo: UpdateInfo | null;
 
   load: () => Promise<void>;
   setShowOnboarding: (value: boolean) => void;
@@ -67,6 +69,9 @@ interface AppState {
   setActiveTab: (tab: ActiveTab) => void;
   setPromptTab: (tab: PromptTab) => void;
   setParam: <K extends keyof GenerateParams>(key: K, value: GenerateParams[K]) => void;
+  applyParams: (patch: Partial<GenerateParams>) => void;
+  checkUpdate: () => Promise<void>;
+  dismissUpdate: () => void;
   setSelectedDate: (date: string) => Promise<void>;
   refreshHistory: (date?: string) => Promise<void>;
   refreshSettings: () => Promise<void>;
@@ -183,6 +188,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   statusText: "就绪",
   lastError: "",
   toast: "",
+  updateInfo: null,
 
   async load() {
     const [settings, account, firstRun, dates] = await Promise.all([
@@ -224,6 +230,23 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setParam(key, value) {
     set((state) => ({ params: { ...state.params, [key]: value } }));
+  },
+
+  applyParams(patch) {
+    set((state) => ({ params: { ...state.params, ...patch } }));
+  },
+
+  async checkUpdate() {
+    try {
+      const info = await window.naiDesktop.checkUpdate();
+      set({ updateInfo: info });
+    } catch {
+      // silent — update check is best-effort
+    }
+  },
+
+  dismissUpdate() {
+    set({ updateInfo: null });
   },
 
   async setSelectedDate(date) {

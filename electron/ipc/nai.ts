@@ -297,6 +297,58 @@ function buildPayload(params: GenerateParams, actualSeed: number, extras?: Gener
   };
 }
 
+/**
+ * V4/V4.5 Vibe Transfer requires reference images to be pre-encoded through the
+ * /ai/encode-vibe endpoint (legacy V3 accepted raw image bytes directly). For
+ * V4+ models we encode each vibe; if the endpoint is unavailable we fall back to
+ * the raw base64 so behavior never regresses versus the previous version.
+ *
+ * NOTE: needs verification against a live V4.5 token — the encode-vibe payload
+ * shape is based on the NovelAI web client and may need adjustment.
+ */
+async function prepareExtras(params: GenerateParams, extras?: GenerateExtras): Promise<GenerateExtras | undefined> {
+  if (!extras || !extras.vibeImages || extras.vibeImages.length === 0) return extras;
+  if (!isV4Plus(params.model)) return extras; // V3 path unchanged
+
+  const token = getToken();
+  const settings = getSettings();
+  const imageBaseUrl = normalizeBaseUrl(settings.imageBaseUrl, "https://image.novelai.net");
+
+  const encoded = await Promise.all(
+    extras.vibeImages.map(async (vibe) => {
+      try {
+        const res = await requestWithRetry(
+          () =>
+            axios.post(
+              `${imageBaseUrl}/ai/encode-vibe`,
+              {
+                image: stripBase64Prefix(vibe.base64),
+                information_extracted: vibe.infoExtracted,
+                model: params.model,
+              },
+              {
+                headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+                responseType: "arraybuffer",
+                timeout: 60_000,
+                signal: currentAbort?.signal,
+              },
+            ),
+          { retries: 2, signal: currentAbort?.signal ?? undefined },
+        );
+        return { ...vibe, base64: Buffer.from(res.data).toString("base64") };
+      } catch (error: any) {
+        if (currentAbort?.signal.aborted) throw error;
+        if (getSettings().debugLogs) {
+          console.warn("[vibe] encode-vibe failed, falling back to raw image:", responseErrorText(error));
+        }
+        return vibe; // fallback: raw base64
+      }
+    }),
+  );
+
+  return { ...extras, vibeImages: encoded };
+}
+
 async function extractImages(zipBytes: ArrayBuffer | Buffer): Promise<Buffer[]> {
   const zip = await JSZip.loadAsync(zipBytes);
   const images: Buffer[] = [];
@@ -440,21 +492,67 @@ async function saveBuffers(
   return items;
 }
 
+function sleep(ms: number, signal?: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    if (signal?.aborted) return reject(new Error("已取消"));
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        reject(new Error("已取消"));
+      },
+      { once: true },
+    );
+  });
+}
+
+/**
+ * Retry transient NovelAI failures (429 rate-limit, 5xx) with exponential
+ * backoff. Honors a `Retry-After` header when present. Never retries on
+ * user-cancel or auth/validation errors.
+ */
+async function requestWithRetry<T>(
+  fn: () => Promise<T>,
+  { retries = 3, baseDelay = 2_000, signal }: { retries?: number; baseDelay?: number; signal?: AbortSignal } = {},
+): Promise<T> {
+  let attempt = 0;
+  for (;;) {
+    try {
+      return await fn();
+    } catch (error: any) {
+      if (signal?.aborted || axios.isCancel?.(error) || error?.code === "ERR_CANCELED") throw error;
+      const status = error?.response?.status;
+      const retryable = status === 429 || status === 500 || status === 502 || status === 503 || status === 524;
+      if (!retryable || attempt >= retries) throw error;
+
+      const retryAfter = Number(error?.response?.headers?.["retry-after"]);
+      const wait = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : baseDelay * 2 ** attempt;
+      attempt += 1;
+      await sleep(Math.min(wait, 30_000), signal);
+    }
+  }
+}
+
 async function postGenerateImage(payload: ReturnType<typeof buildPayload>) {
   const token = getToken();
   if (!token) throw new Error("请先配置 API Token。");
   const settings = getSettings();
   const imageBaseUrl = normalizeBaseUrl(settings.imageBaseUrl, "https://image.novelai.net");
-  const res = await axios.post(`${imageBaseUrl}/ai/generate-image`, payload, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-      Accept: "application/zip, application/octet-stream",
-    },
-    responseType: "arraybuffer",
-    timeout: 180_000,
-    signal: currentAbort?.signal,
-  });
+  const res = await requestWithRetry(
+    () =>
+      axios.post(`${imageBaseUrl}/ai/generate-image`, payload, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          Accept: "application/zip, application/octet-stream",
+        },
+        responseType: "arraybuffer",
+        timeout: 180_000,
+        signal: currentAbort?.signal,
+      }),
+    { signal: currentAbort?.signal ?? undefined },
+  );
   return extractImages(res.data);
 }
 
@@ -626,9 +724,10 @@ export async function generateImage(params: GenerateParams, extras?: GenerateExt
   currentAbort = new AbortController();
 
   const actualSeed = params.seed > 0 ? params.seed : crypto.randomInt(1, 2_147_483_647);
-  const payload = buildPayload(params, actualSeed, extras);
 
   try {
+    const preparedExtras = await prepareExtras(params, extras);
+    const payload = buildPayload(params, actualSeed, preparedExtras);
     const buffers = await postGenerateImage(payload);
     if (buffers.length === 0) return { ok: false, message: "API 返回成功，但压缩包中没有图片。", items: [] };
     const items = await saveBuffers(buffers, params, actualSeed, "t2i");
@@ -651,7 +750,8 @@ export async function generateI2I(params: GenerateParams, i2i: I2IParams, extras
   currentAbort = new AbortController();
 
   const actualSeed = params.seed > 0 ? params.seed : crypto.randomInt(1, 2_147_483_647);
-  const payload = buildPayload(params, actualSeed, extras);
+  const preparedExtras = await prepareExtras(params, extras);
+  const payload = buildPayload(params, actualSeed, preparedExtras);
   payload.action = "img2img";
   payload.parameters.image = await readWorkbenchBase64();
   payload.parameters.strength = Math.min(1, Math.max(0, i2i.strength));
