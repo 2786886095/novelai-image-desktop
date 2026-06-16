@@ -1,0 +1,82 @@
+{
+  "name": "novelai-image-desktop",
+  "version": "0.4.0",
+  "private": true,
+  "description": "API-only NovelAI image generation desktop client with Chinese UI.",
+  "author": "Codex",
+  "main": "dist-electron/electron/main.js",
+  "scripts": {
+    "dev": "concurrently -k \"npm:dev:renderer\" \"npm:dev:electron\"",
+    "dev:renderer": "vite --host 127.0.0.1",
+    "dev:electron": "wait-on http://127.0.0.1:5173 && npm run build:electron && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .",
+    "build": "npm run build:renderer && npm run build:electron",
+    "build:renderer": "vite build",
+    "build:electron": "tsc -p tsconfig.electron.json",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.electron.json --noEmit",
+    "start": "npm run build && electron .",
+    "pack": "node scripts/cleanup-portable-release.mjs && npm run build && electron-builder --win portable && node scripts/copy-ascii-release.mjs && node scripts/cleanup-portable-release.mjs",
+    "pack:dir": "npm run build && electron-builder --dir",
+    "dist": "npm run build && electron-builder --win portable",
+    "dist:mac": "npm run build && electron-builder --mac"
+  },
+  "dependencies": {
+    "axios": "^1.13.2",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.1.0",
+    "jszip": "^3.10.1",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "zustand": "^5.0.9"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.2",
+    "concurrently": "^10.0.3",
+    "cross-env": "^10.1.0",
+    "electron": "^42.4.0",
+    "electron-builder": "^26.15.3",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.16",
+    "wait-on": "^9.0.10"
+  },
+  "build": {
+    "appId": "com.codex.novelai-image-desktop",
+    "productName": "NovelAI Studio",
+    "artifactName": "NovelAI-Image-Desktop-${version}.${ext}",
+    "asar": true,
+    "compression": "maximum",
+    "electronDist": "node_modules/electron/dist",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "dist-electron/**",
+      "!**/*.map",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "portable"
+      ]
+    },
+    "mac": {
+      "category": "public.app-category.graphics-design",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": "universal"
+        },
+        {
+          "target": "zip",
+          "arch": "universal"
+        }
+      ]
+    },
+    "dmg": {
+      "artifactName": "NovelAI-Image-Desktop-${version}-${arch}.${ext}"
+    }
+  }
+}
