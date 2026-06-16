@@ -1200,6 +1200,9 @@ function GeneratePanel({ openSettings }: { openSettings: () => void }) {
             onChange={(e) => setBatchCount(Number(e.target.value))}
           />
         </div>
+        <p className="wildcard-hint">
+          💡 支持动态提示词通配符 <code>{"{red|blue|green} hair"}</code>，批量时每张随机取一项；NovelAI 的 <code>{"{tag}"}</code> 权重语法不受影响。
+        </p>
         <FeatureCostCard feature="generate" batchCount={batchCount} label="文生图预计消耗" />
       </div>
       <AccountAndRunButton
@@ -1777,6 +1780,7 @@ function ImageCanvas() {
   const inspectImageUrl = useAppStore((state) => state.inspectImageUrl);
   const loadWorkbenchFromPath = useAppStore((state) => state.loadWorkbenchFromPath);
   const setActiveTab = useAppStore((state) => state.setActiveTab);
+  const variationFromImage = useAppStore((state) => state.variationFromImage);
   const [dropOver, setDropOver] = useState(false);
   const superDrop = settings?.superDrop ?? false;
 
@@ -1894,6 +1898,9 @@ function ImageCanvas() {
               </Button>
               <Button onClick={() => sendCurrentTo("postprocess")}>
                 <IconText icon="◈">后期</IconText>
+              </Button>
+              <Button onClick={() => variationFromImage(currentImage)} title="载入此图参数并锁定种子，改提示词后即为变体">
+                <IconText icon="🔒">锁种变体</IconText>
               </Button>
               <Button onClick={generate}>
                 <IconText icon="↻">再生成</IconText>

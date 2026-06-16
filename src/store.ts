@@ -18,6 +18,7 @@ import type {
   WorkingImage,
 } from "./types";
 import { DEFAULT_AUGMENT_OPTIONS, DEFAULT_I2I_PARAMS, DEFAULT_PARAMS } from "./types";
+import { expandWildcards } from "./wildcards";
 
 type ActiveTab = "generate" | "inpaint" | "upscale" | "postprocess" | "inspect" | "convert";
 type PromptTab = "positive" | "negative";
@@ -128,6 +129,7 @@ interface AppState {
   runDirectorTool: () => Promise<void>;
   cancel: () => Promise<void>;
   selectImage: (item: HistoryItem) => void;
+  variationFromImage: (item: HistoryItem) => void;
   deleteHistory: (id: string) => Promise<void>;
   clearToast: () => void;
 }
@@ -539,8 +541,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     for (let i = 0; i < total; i++) {
       if (!get().isGenerating) break; // cancelled
       if (total > 1 && i > 0) set({ statusText: `批量生成 ${i + 1}/${total}...` });
+      const base = get().params;
       const currentParams = {
-        ...get().params,
+        ...base,
+        // Expand {a|b|c} wildcards independently per image so batches vary.
+        positivePrompt: expandWildcards(base.positivePrompt),
+        negativePrompt: expandWildcards(base.negativePrompt),
         seed: initialSeed > 0 ? initialSeed + i : 0,
       };
       const result = await window.naiDesktop.generate(currentParams, extras);
@@ -642,6 +648,18 @@ export const useAppStore = create<AppState>((set, get) => ({
   selectImage(item) {
     set({ currentImage: item, statusText: `已选择历史图片：${item.date}` });
     void get().loadWorkbenchFromPath(item.filePath);
+  },
+
+  variationFromImage(item) {
+    // Load this image's exact params and LOCK its seed, then jump to generate so
+    // the user can tweak one tag and reroll a variation on the same seed.
+    const seed = item.actualSeed || item.params?.seed || 0;
+    set((state) => ({
+      params: { ...state.params, ...item.params, seed },
+      activeTab: "generate",
+      currentImage: item,
+      toast: seed > 0 ? `已载入参数并锁定种子 ${seed}，改提示词后生成即为变体` : "已载入参数",
+    }));
   },
 
   async deleteHistory(id) {

@@ -3008,3 +3008,20 @@ html, body, #root {
 }
 .history-group-actions button:hover:not(:disabled) { background: var(--accent); color: #fff; }
 .history-group-actions button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* ── Wildcard hint ─────────────────────────────────────────────────────────── */
+.wildcard-hint {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--muted);
+  background: var(--accent-soft);
+  border-radius: 8px;
+}
+.wildcard-hint code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(124, 92, 250, 0.16);
+  font-size: 11px;
+}

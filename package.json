@@ -19,6 +19,8 @@
     "build:renderer": "vite build",
     "build:electron": "tsc -p tsconfig.electron.json",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.electron.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "start": "npm run build && electron .",
     "pack": "node scripts/cleanup-portable-release.mjs && npm run build && electron-builder --win portable && node scripts/copy-ascii-release.mjs && node scripts/cleanup-portable-release.mjs",
     "pack:dir": "npm run build && electron-builder --dir",
@@ -45,6 +47,7 @@
     "electron-builder": "^26.15.3",
     "typescript": "^6.0.3",
     "vite": "^8.0.16",
+    "vitest": "^4.1.9",
     "wait-on": "^9.0.10"
   },
   "build": {
