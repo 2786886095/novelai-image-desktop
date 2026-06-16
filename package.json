@@ -4,6 +4,7 @@
   "private": true,
   "description": "Langbai NovelAI Studio: API-only NovelAI image generation desktop client with Chinese UI.",
   "author": "Langbai",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/2786886095/novelai-image-desktop.git"
