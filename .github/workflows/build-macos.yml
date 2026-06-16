@@ -24,11 +24,10 @@ jobs:
         run: npm ci
 
       - name: Build macOS app (universal DMG + ZIP)
-        run: npm run dist:mac
+        run: npm run dist:mac -- --publish never
         env:
           # Skip code signing / notarization (no Apple Developer cert in CI)
           CSC_IDENTITY_AUTO_DISCOVERY: false
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

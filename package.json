@@ -47,7 +47,6 @@
     "artifactName": "NovelAI-Image-Desktop-${version}.${ext}",
     "asar": true,
     "compression": "maximum",
-    "electronDist": "node_modules/electron/dist",
     "directories": {
       "output": "release"
     },
