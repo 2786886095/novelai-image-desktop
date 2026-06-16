@@ -5,6 +5,7 @@ import { format } from "date-fns";
 import { InpaintCanvas } from "./InpaintCanvas";
 import { useAppStore } from "./store";
 import { estimateAnlas } from "./anlas";
+import { relatedTags } from "./related-tags";
 import {
   APP_NAME,
   APP_VERSION,
@@ -882,6 +883,8 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
   const promptValue = promptTab === "positive" ? params.positivePrompt : params.negativePrompt;
   const promptKey = promptTab === "positive" ? "positivePrompt" : "negativePrompt";
   const templates: PromptTemplate[] = settings?.promptTemplates ?? [];
+  // Co-occurrence: tags commonly used alongside what's already in the prompt.
+  const related = useMemo(() => relatedTags(params.positivePrompt, 8), [params.positivePrompt]);
 
   function applyTemplate(tpl: PromptTemplate) {
     setShowTemplateMenu(false);
@@ -950,6 +953,19 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
             </button>
           ))}
         </div>
+        {related.length > 0 && (
+          <div className="related-tags">
+            <div className="related-tags-head">🔗 相关推荐（常一起使用）</div>
+            <div className="prompt-chip-list">
+              {related.map((r) => (
+                <button key={r.tag} type="button" onClick={() => appendChip(r.tag)} title={`${r.tag}：${r.zh}`}>
+                  <span>{r.tag}</span>
+                  <small>{r.zh}</small>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
       <div className="prompt-tabs">
         <button className={clsx(promptTab === "positive" && "active")} onClick={() => setPromptTab("positive")}>

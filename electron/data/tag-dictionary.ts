@@ -120,4 +120,62 @@ export const TAG_DICTIONARY: DictEntry[] = [
   { tag: "very aesthetic", count: 900_000, category: 5, zh: "高审美", keywords: ["高审美", "美感"], aliases: ["very_aesthetic"] },
   { tag: "absurdres", count: 1_200_000, category: 5, zh: "超高分辨率", keywords: ["超高分辨率", "高清"] },
   { tag: "official art", count: 200_000, category: 5, zh: "官方插画", keywords: ["官方插画", "官图"], aliases: ["official_art"] },
+
+  // ── 扩充：发型细节 ───────────────────────────────────────────────
+  { tag: "bangs", count: 2_000_000, category: 0, zh: "刘海", keywords: ["刘海", "齐刘海"] },
+  { tag: "hair between eyes", count: 1_500_000, category: 0, zh: "碎发", keywords: ["碎发", "中分碎发"], aliases: ["hair_between_eyes"] },
+  { tag: "very long hair", count: 1_600_000, category: 0, zh: "超长发", keywords: ["超长发", "极长发"], aliases: ["very_long_hair"] },
+  { tag: "messy hair", count: 300_000, category: 0, zh: "凌乱头发", keywords: ["凌乱头发", "乱发"], aliases: ["messy_hair"] },
+  { tag: "wavy hair", count: 250_000, category: 0, zh: "波浪发", keywords: ["波浪发", "卷发"], aliases: ["wavy_hair"] },
+  { tag: "double bun", count: 200_000, category: 0, zh: "双丸子头", keywords: ["双丸子头", "包包头"], aliases: ["double_bun"] },
+  { tag: "hime cut", count: 120_000, category: 0, zh: "公主切", keywords: ["公主切"], aliases: ["hime_cut"] },
+
+  // ── 扩充：身体 / 特征 ─────────────────────────────────────────────
+  { tag: "fang", count: 500_000, category: 0, zh: "虎牙", keywords: ["虎牙", "尖牙"] },
+  { tag: "pointy ears", count: 400_000, category: 0, zh: "尖耳朵", keywords: ["尖耳朵", "精灵耳"], aliases: ["pointy_ears"] },
+  { tag: "tail", count: 1_200_000, category: 0, zh: "尾巴", keywords: ["尾巴"] },
+  { tag: "horns", count: 600_000, category: 0, zh: "角", keywords: ["角", "犄角"] },
+  { tag: "freckles", count: 150_000, category: 0, zh: "雀斑", keywords: ["雀斑"] },
+  { tag: "mole under eye", count: 200_000, category: 0, zh: "泪痣", keywords: ["泪痣", "眼下痣"], aliases: ["mole_under_eye"] },
+
+  // ── 扩充：服装细节 ───────────────────────────────────────────────
+  { tag: "necktie", count: 700_000, category: 0, zh: "领带", keywords: ["领带"] },
+  { tag: "pleated skirt", count: 800_000, category: 0, zh: "百褶裙", keywords: ["百褶裙"], aliases: ["pleated_skirt"] },
+  { tag: "apron", count: 300_000, category: 0, zh: "围裙", keywords: ["围裙"] },
+  { tag: "frills", count: 600_000, category: 0, zh: "褶边", keywords: ["褶边", "荷叶边"] },
+  { tag: "jacket", count: 1_000_000, category: 0, zh: "夹克", keywords: ["夹克", "外套"] },
+  { tag: "coat", count: 500_000, category: 0, zh: "大衣", keywords: ["大衣", "风衣"] },
+  { tag: "sweater", count: 400_000, category: 0, zh: "毛衣", keywords: ["毛衣", "针织衫"] },
+  { tag: "shorts", count: 600_000, category: 0, zh: "短裤", keywords: ["短裤"] },
+  { tag: "pantyhose", count: 700_000, category: 0, zh: "连裤袜", keywords: ["连裤袜", "丝袜"] },
+  { tag: "bare shoulders", count: 1_100_000, category: 0, zh: "露肩", keywords: ["露肩", "裸肩"], aliases: ["bare_shoulders"] },
+  { tag: "off shoulder", count: 500_000, category: 0, zh: "一字肩", keywords: ["一字肩", "落肩"], aliases: ["off_shoulder"] },
+
+  // ── 扩充：姿势 / 动作 ─────────────────────────────────────────────
+  { tag: "arms up", count: 250_000, category: 0, zh: "举手", keywords: ["举手", "双手举起"], aliases: ["arms_up"] },
+  { tag: "hand on hip", count: 200_000, category: 0, zh: "叉腰", keywords: ["叉腰", "手扶腰"], aliases: ["hand_on_hip"] },
+  { tag: "kneeling", count: 200_000, category: 0, zh: "跪姿", keywords: ["跪", "跪着", "跪姿"] },
+  { tag: "running", count: 120_000, category: 0, zh: "奔跑", keywords: ["跑", "奔跑"] },
+  { tag: "looking back", count: 400_000, category: 0, zh: "回眸", keywords: ["回眸", "回头看"], aliases: ["looking_back"] },
+  { tag: "outstretched hand", count: 150_000, category: 0, zh: "伸手", keywords: ["伸手", "伸出手"], aliases: ["outstretched_hand"] },
+
+  // ── 扩充：场景 / 氛围 ─────────────────────────────────────────────
+  { tag: "sunset", count: 350_000, category: 0, zh: "日落", keywords: ["日落", "夕阳", "黄昏"] },
+  { tag: "starry sky", count: 300_000, category: 0, zh: "星空", keywords: ["星空", "繁星"], aliases: ["starry_sky"] },
+  { tag: "moon", count: 500_000, category: 0, zh: "月亮", keywords: ["月亮", "月"] },
+  { tag: "fireworks", count: 100_000, category: 0, zh: "烟花", keywords: ["烟花", "烟火"] },
+  { tag: "petals", count: 400_000, category: 0, zh: "花瓣", keywords: ["花瓣", "飘落花瓣"] },
+  { tag: "underwater", count: 150_000, category: 0, zh: "水下", keywords: ["水下", "水中"] },
+  { tag: "classroom", count: 200_000, category: 0, zh: "教室", keywords: ["教室", "课室"] },
+  { tag: "cafe", count: 80_000, category: 0, zh: "咖啡馆", keywords: ["咖啡馆", "咖啡厅"] },
+  { tag: "bedroom", count: 200_000, category: 0, zh: "卧室", keywords: ["卧室", "房间"] },
+  { tag: "neon lights", count: 120_000, category: 0, zh: "霓虹灯", keywords: ["霓虹灯", "霓虹"], aliases: ["neon_lights"] },
+
+  // ── 扩充：光影 / 画风 ─────────────────────────────────────────────
+  { tag: "cinematic lighting", count: 200_000, category: 0, zh: "电影感光照", keywords: ["电影感光照", "电影光"], aliases: ["cinematic_lighting"] },
+  { tag: "rim lighting", count: 100_000, category: 0, zh: "轮廓光", keywords: ["轮廓光", "边缘光"], aliases: ["rim_lighting"] },
+  { tag: "bloom", count: 150_000, category: 0, zh: "泛光", keywords: ["泛光", "辉光"] },
+  { tag: "watercolor (medium)", count: 200_000, category: 0, zh: "水彩", keywords: ["水彩", "水彩画"], aliases: ["watercolor"] },
+  { tag: "monochrome", count: 900_000, category: 0, zh: "单色", keywords: ["单色", "黑白"] },
+  { tag: "lineart", count: 200_000, category: 0, zh: "线稿", keywords: ["线稿", "线条画"] },
 ];
