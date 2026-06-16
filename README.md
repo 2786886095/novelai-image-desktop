@@ -1,0 +1,1 @@
+# novelai-image-desktop
