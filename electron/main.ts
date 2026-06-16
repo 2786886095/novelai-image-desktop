@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, shell } from "electron";
 import path from "path";
+import fs from "fs";
 import {
   augmentImg,
   cancelGeneration,
@@ -10,9 +11,11 @@ import {
   inpaintImage,
   loadImageFile,
   loadImageFromPath,
+  listAiModels,
   refreshStoredAccount,
   reversePromptImage,
   suggestTags,
+  testTagServer,
   upscaleImg,
   verifyToken,
 } from "./ipc/nai";
@@ -26,12 +29,67 @@ import {
   readStore,
   setSetting,
 } from "./ipc/store";
-import { deleteHistoryItem, listHistory, listHistoryDates, openTarget, selectOutputDir } from "./ipc/storage";
+import {
+  assignHistoryGroup,
+  createGroup,
+  deleteHistoryItem,
+  exportGroup,
+  listHistory,
+  listHistoryDates,
+  listHistoryGroups,
+  openTarget,
+  removeGroup,
+  renameGroup,
+  selectOutputDir,
+} from "./ipc/storage";
 import { checkUpdate } from "./ipc/update";
 
 let mainWindow: BrowserWindow | null = null;
 
 const isDev = Boolean(process.env.VITE_DEV_SERVER_URL);
+
+const STORE_FILE = "novelai-image-desktop.json";
+// Legacy userData folder names this app has shipped under. Renames change
+// app.getName()/productName which moves userData, orphaning the saved token and
+// history. We pin userData to a stable folder and migrate the newest legacy
+// store into it so settings survive any future rename.
+const LEGACY_DIRS = ["Langbai NovelAI Studio", "langbai-novelai-studio", "NovelAI Studio"];
+
+function pinUserDataAndMigrate() {
+  const appData = app.getPath("appData");
+  const stableDir = path.join(appData, "novelai-image-desktop");
+  try {
+    fs.mkdirSync(stableDir, { recursive: true });
+    app.setPath("userData", stableDir);
+
+    const target = path.join(stableDir, STORE_FILE);
+    const targetHasToken = (() => {
+      try {
+        return Boolean(JSON.parse(fs.readFileSync(target, "utf8"))?.token);
+      } catch {
+        return false;
+      }
+    })();
+    if (targetHasToken) return;
+
+    // Find the newest legacy store that actually holds a token.
+    let best: { file: string; mtime: number } | null = null;
+    for (const dir of LEGACY_DIRS) {
+      const candidate = path.join(appData, dir, STORE_FILE);
+      try {
+        const raw = JSON.parse(fs.readFileSync(candidate, "utf8"));
+        if (!raw?.token) continue;
+        const mtime = fs.statSync(candidate).mtimeMs;
+        if (!best || mtime > best.mtime) best = { file: candidate, mtime };
+      } catch {
+        // missing or unreadable — skip
+      }
+    }
+    if (best) fs.copyFileSync(best.file, target);
+  } catch {
+    // Non-fatal: fall back to whatever userData Electron resolved.
+  }
+}
 
 function createWindow() {
   const iconPath = isDev
@@ -46,7 +104,7 @@ function createWindow() {
     show: false,
     frame: false,
     backgroundColor: "#f0eff9",
-    title: "NovelAI Studio",
+    title: "Langbai NovelAI Studio",
     icon: iconPath,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
@@ -95,12 +153,22 @@ function registerIpc() {
   ipcMain.handle("nai:reversePrompt", (_event, imageBase64: string, mode: string) =>
     reversePromptImage(imageBase64, (mode as "tags" | "natural" | "mixed") ?? "tags"),
   );
-  ipcMain.handle("nai:convertPrompt", (_event, text: string) => convertPromptText(text));
+  ipcMain.handle("nai:convertPrompt", (_event, text: string, mode: string) =>
+    convertPromptText(text, (mode as "tags" | "natural" | "mixed") ?? "tags"),
+  );
+  ipcMain.handle("nai:listModels", (_event, kind: "reverse" | "convert") => listAiModels(kind));
+  ipcMain.handle("nai:testTagServer", (_event, query: string) => testTagServer(query));
   ipcMain.handle("nai:suggestTags", (_event, model: string, prompt: string) => suggestTags(model, prompt));
   ipcMain.handle("nai:cancel", () => cancelGeneration());
 
-  ipcMain.handle("storage:getHistory", (_event, date?: string) => listHistory(date));
+  ipcMain.handle("storage:getHistory", (_event, date?: string, groupId?: string) => listHistory(date, groupId));
   ipcMain.handle("storage:getHistoryDates", () => listHistoryDates());
+  ipcMain.handle("storage:getHistoryGroups", () => listHistoryGroups());
+  ipcMain.handle("storage:createGroup", (_event, name: string) => createGroup(name));
+  ipcMain.handle("storage:renameGroup", (_event, id: string, name: string) => renameGroup(id, name));
+  ipcMain.handle("storage:deleteGroup", (_event, id: string) => removeGroup(id));
+  ipcMain.handle("storage:exportGroup", (_event, groupId: string) => exportGroup(groupId));
+  ipcMain.handle("storage:setHistoryGroup", (_event, id: string, groupId?: string) => assignHistoryGroup(id, groupId));
   ipcMain.handle("storage:delete", (_event, id: string) => deleteHistoryItem(id));
   ipcMain.handle("storage:open", (_event, targetPath: string) => openTarget(targetPath));
   ipcMain.handle("storage:selectDir", () => selectOutputDir());
@@ -126,6 +194,7 @@ function registerIpc() {
 }
 
 app.whenReady().then(() => {
+  pinUserDataAndMigrate();
   readStore();
   registerIpc();
   createWindow();

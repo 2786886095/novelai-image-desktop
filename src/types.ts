@@ -1,7 +1,17 @@
-export const APP_VERSION = "0.4.0";
-export const APP_NAME = "NovelAI Studio";
+export const APP_VERSION = "0.5.0";
+export const APP_NAME = "Langbai NovelAI Studio";
+export const PROJECT_REPOSITORY = "https://github.com/2786886095/novelai-image-desktop";
 
 export type ReversePromptMode = "tags" | "natural" | "mixed";
+
+/** Independent system-prompt templates keyed by output mode. Empty = built-in. */
+export interface ModePromptTemplates {
+  tags: string;
+  natural: string;
+  mixed: string;
+}
+
+export const EMPTY_MODE_TEMPLATES: ModePromptTemplates = { tags: "", natural: "", mixed: "" };
 
 export const NAI_MODELS = [
   { label: "NAI Diffusion 4.5 Full（完整模型）", value: "nai-diffusion-4-5-full" },
@@ -199,11 +209,18 @@ export interface HistoryItem {
   fileUrl: string;
   date: string;
   createdAt: string;
+  groupId?: string;
   params: GenerateParams;
   actualSeed: number;
   model: string;
   width: number;
   height: number;
+}
+
+export interface HistoryGroup {
+  id: string;
+  name: string;
+  createdAt: string;
 }
 
 export interface GenerateResult {
@@ -266,6 +283,23 @@ export interface AppSettings {
   visionApiModel: string;
   visionSystemPrompt: string;
   reversePromptMode: ReversePromptMode;
+  // Per-mode reverse-prompt system templates (empty string = use built-in default).
+  reversePromptTemplates: ModePromptTemplates;
+  // Text-only prompt conversion API, intentionally separated from vision reverse-prompt.
+  convertApiUrl: string;
+  convertApiKey: string;
+  convertApiModel: string;
+  convertSystemPrompt: string;
+  // Convert output type + per-mode conversion system templates.
+  convertMode: ReversePromptMode;
+  convertPromptTemplates: ModePromptTemplates;
+  // Optional Danbooru / MCP-compatible tag search service.
+  tagServerEnabled: boolean;
+  tagServerUrl: string;
+  tagServerApiKey: string;
+  activeHistoryGroupId: string;
+  // Filename template for saved images. Tokens: {date} {time} {seq} {seed} {model} {ext}
+  imageNameTemplate: string;
   // Prompt templates
   promptTemplates: PromptTemplate[];
 }
@@ -280,6 +314,12 @@ export interface UpdateInfo {
   releaseUrl?: string;
   /** populated when the check itself failed (network / rate limit) */
   error?: string;
+}
+
+export interface AiModelListResult {
+  ok: boolean;
+  message: string;
+  models: string[];
 }
 
 /** Parsed generation parameters extracted from a NovelAI PNG's metadata. */
@@ -312,8 +352,14 @@ export interface NaiDesktopApi {
   loadImage: () => Promise<LoadImageResult>;
   loadImageFromPath: (filePath: string) => Promise<LoadImageResult>;
   clearWorkbenchImage: () => Promise<{ ok: boolean }>;
-  getHistory: (date?: string) => Promise<HistoryItem[]>;
+  getHistory: (date?: string, groupId?: string) => Promise<HistoryItem[]>;
   getHistoryDates: () => Promise<string[]>;
+  getHistoryGroups: () => Promise<HistoryGroup[]>;
+  createHistoryGroup: (name: string) => Promise<HistoryGroup[]>;
+  renameHistoryGroup: (id: string, name: string) => Promise<HistoryGroup[]>;
+  deleteHistoryGroup: (id: string) => Promise<HistoryGroup[]>;
+  exportHistoryGroup: (groupId: string) => Promise<{ ok: boolean; message: string; path?: string }>;
+  setHistoryGroup: (id: string, groupId?: string) => Promise<{ ok: boolean }>;
   deleteHistory: (id: string) => Promise<{ ok: boolean }>;
   openInExplorer: (targetPath: string) => Promise<{ ok: boolean }>;
   selectOutputDir: () => Promise<string | null>;
@@ -323,7 +369,9 @@ export interface NaiDesktopApi {
   isFirstRun: () => Promise<boolean>;
   completeSetup: () => Promise<{ ok: boolean }>;
   reversePrompt: (imageBase64: string, mode: ReversePromptMode) => Promise<{ ok: boolean; prompt?: string; message: string }>;
-  convertPrompt: (text: string) => Promise<{ ok: boolean; result?: string; message: string }>;
+  convertPrompt: (text: string, mode: ReversePromptMode) => Promise<{ ok: boolean; result?: string; message: string }>;
+  listAiModels: (kind: "reverse" | "convert") => Promise<AiModelListResult>;
+  testTagServer: (query: string) => Promise<{ ok: boolean; message: string; tags: TagSuggestion[] }>;
   suggestTags: (model: string, prompt: string) => Promise<TagSuggestion[]>;
   checkUpdate: () => Promise<UpdateInfo>;
   minimize: () => Promise<void>;

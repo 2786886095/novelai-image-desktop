@@ -1,13 +1,15 @@
 import { app } from "electron";
+import crypto from "crypto";
 import fs from "fs";
 import path from "path";
-import type { AccountSummary, AppSettings, HistoryItem, SettingKey } from "../../src/types";
+import type { AccountSummary, AppSettings, HistoryGroup, HistoryItem, SettingKey } from "../../src/types";
 
 interface PersistedData {
   token?: string;
   account?: Omit<AccountSummary, "hasToken">;
   settings: AppSettings;
   history: HistoryItem[];
+  historyGroups: HistoryGroup[];
 }
 
 let cache: PersistedData | null = null;
@@ -20,7 +22,7 @@ export function defaultSettings(): AppSettings {
   return {
     hasOnboarded: false,
     language: "zh-CN",
-    outputDir: path.join(app.getPath("pictures"), "NovelAI Studio"),
+    outputDir: path.join(app.getPath("pictures"), "Langbai NovelAI Studio"),
     apiBaseUrl: "https://api.novelai.net",
     imageBaseUrl: "https://image.novelai.net",
     proxyUrl: "",
@@ -39,6 +41,18 @@ export function defaultSettings(): AppSettings {
     visionApiModel: "gpt-4o",
     visionSystemPrompt: "",
     reversePromptMode: "tags" as const,
+    reversePromptTemplates: { tags: "", natural: "", mixed: "" },
+    convertApiUrl: "https://api.openai.com/v1",
+    convertApiKey: "",
+    convertApiModel: "gpt-4o-mini",
+    convertSystemPrompt: "",
+    convertMode: "tags" as const,
+    convertPromptTemplates: { tags: "", natural: "", mixed: "" },
+    tagServerEnabled: false,
+    tagServerUrl: "",
+    tagServerApiKey: "",
+    activeHistoryGroupId: "",
+    imageNameTemplate: "{date}_{seq}_{model}",
     promptTemplates: [],
   };
 }
@@ -50,6 +64,7 @@ function normalize(raw: Partial<PersistedData> | null): PersistedData {
     account: raw?.account && typeof raw.account === "object" ? raw.account : undefined,
     settings: { ...defaults, ...(raw?.settings ?? {}) },
     history: Array.isArray(raw?.history) ? raw.history : [],
+    historyGroups: Array.isArray(raw?.historyGroups) ? raw.historyGroups : [],
   };
 }
 
@@ -68,6 +83,14 @@ export function readStore(): PersistedData {
     cache = normalize(raw);
     return cache;
   } catch {
+    // Don't silently wipe a corrupt store (would lose the saved token/history).
+    // Back it up as .corrupt so it can be recovered.
+    try {
+      const file = storePath();
+      if (fs.existsSync(file)) fs.copyFileSync(file, `${file}.corrupt-${Date.now()}`);
+    } catch {
+      // ignore backup failure
+    }
     cache = normalize(null);
     writeStore(cache);
     return cache;
@@ -130,13 +153,20 @@ export function setAccountSummary(account: Omit<AccountSummary, "hasToken">) {
 
 export function addHistory(items: HistoryItem[]) {
   const data = readStore();
-  data.history = [...items, ...data.history];
+  const groupId = data.settings.activeHistoryGroupId || undefined;
+  const nextItems = groupId ? items.map((item) => ({ ...item, groupId })) : items;
+  data.history = [...nextItems, ...data.history];
   writeStore(data);
 }
 
-export function getHistory(date?: string): HistoryItem[] {
+export function getHistory(date?: string, groupId?: string): HistoryItem[] {
   const history = readStore().history;
-  return date ? history.filter((item) => item.date === date) : history;
+  return history.filter((item) => {
+    if (date && item.date !== date) return false;
+    if (!groupId) return true;
+    if (groupId === "__ungrouped") return !item.groupId;
+    return item.groupId === groupId;
+  });
 }
 
 export function getHistoryDates(): string[] {
@@ -149,4 +179,55 @@ export function removeHistory(id: string): HistoryItem | null {
   data.history = data.history.filter((item) => item.id !== id);
   writeStore(data);
   return found;
+}
+
+export function getHistoryGroups(): HistoryGroup[] {
+  return readStore().historyGroups;
+}
+
+export function createHistoryGroup(name: string): HistoryGroup[] {
+  const trimmed = name.trim();
+  const data = readStore();
+  if (!trimmed) return data.historyGroups;
+  const exists = data.historyGroups.some((group) => group.name.toLowerCase() === trimmed.toLowerCase());
+  if (!exists) {
+    data.historyGroups = [
+      ...data.historyGroups,
+      { id: crypto.randomUUID(), name: trimmed, createdAt: new Date().toISOString() },
+    ];
+    writeStore(data);
+  }
+  return data.historyGroups;
+}
+
+export function renameHistoryGroup(id: string, name: string): HistoryGroup[] {
+  const trimmed = name.trim();
+  const data = readStore();
+  if (trimmed) {
+    data.historyGroups = data.historyGroups.map((group) =>
+      group.id === id ? { ...group, name: trimmed } : group,
+    );
+    writeStore(data);
+  }
+  return data.historyGroups;
+}
+
+export function deleteHistoryGroup(id: string): HistoryGroup[] {
+  const data = readStore();
+  data.historyGroups = data.historyGroups.filter((group) => group.id !== id);
+  // Items in the deleted group fall back to ungrouped (images are kept).
+  data.history = data.history.map((item) => (item.groupId === id ? { ...item, groupId: undefined } : item));
+  if (data.settings.activeHistoryGroupId === id) {
+    data.settings = { ...data.settings, activeHistoryGroupId: "" };
+  }
+  writeStore(data);
+  return data.historyGroups;
+}
+
+export function setHistoryGroup(id: string, groupId?: string) {
+  const data = readStore();
+  const normalized = groupId && groupId !== "__ungrouped" ? groupId : undefined;
+  data.history = data.history.map((item) => (item.id === id ? { ...item, groupId: normalized } : item));
+  writeStore(data);
+  return { ok: true };
 }

@@ -1,9 +1,14 @@
 {
-  "name": "novelai-image-desktop",
-  "version": "0.4.0",
+  "name": "langbai-novelai-studio",
+  "version": "0.5.0",
   "private": true,
-  "description": "API-only NovelAI image generation desktop client with Chinese UI.",
-  "author": "Codex",
+  "description": "Langbai NovelAI Studio: API-only NovelAI image generation desktop client with Chinese UI.",
+  "author": "Langbai",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/2786886095/novelai-image-desktop.git"
+  },
+  "homepage": "https://github.com/2786886095/novelai-image-desktop#readme",
   "main": "dist-electron/electron/main.js",
   "scripts": {
     "dev": "concurrently -k \"npm:dev:renderer\" \"npm:dev:electron\"",
@@ -42,9 +47,9 @@
     "wait-on": "^9.0.10"
   },
   "build": {
-    "appId": "com.codex.novelai-image-desktop",
-    "productName": "NovelAI Studio",
-    "artifactName": "NovelAI-Image-Desktop-${version}.${ext}",
+    "appId": "com.langbai.novelai-studio",
+    "productName": "Langbai NovelAI Studio",
+    "artifactName": "Langbai-NovelAI-Studio-${version}.${ext}",
     "asar": true,
     "compression": "maximum",
     "directories": {
@@ -92,7 +97,7 @@
       ]
     },
     "dmg": {
-      "artifactName": "NovelAI-Image-Desktop-${version}-${arch}.${ext}"
+      "artifactName": "Langbai-NovelAI-Studio-${version}-${arch}.${ext}"
     }
   }
 }

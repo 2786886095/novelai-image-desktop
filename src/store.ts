@@ -7,6 +7,7 @@ import type {
   DirectorTool,
   GenerateExtras,
   GenerateParams,
+  HistoryGroup,
   HistoryItem,
   I2IParams,
   NAIInpaintModel,
@@ -33,7 +34,9 @@ interface AppState {
   account: AccountSummary;
   history: HistoryItem[];
   historyDates: string[];
+  historyGroups: HistoryGroup[];
   selectedDate: string;
+  selectedGroupId: string;
   currentImage: HistoryItem | null;
   workbenchImage: WorkingImage | null;
   i2iParams: I2IParams;
@@ -56,6 +59,7 @@ interface AppState {
   reversePrompting: boolean;
   convertInput: string;
   convertResult: string;
+  convertMode: ReversePromptMode;
   converting: boolean;
   isGenerating: boolean;
   statusText: string;
@@ -73,6 +77,12 @@ interface AppState {
   checkUpdate: () => Promise<void>;
   dismissUpdate: () => void;
   setSelectedDate: (date: string) => Promise<void>;
+  setSelectedGroupId: (groupId: string) => Promise<void>;
+  createHistoryGroup: (name: string) => Promise<void>;
+  renameHistoryGroup: (id: string, name: string) => Promise<void>;
+  deleteHistoryGroup: (id: string) => Promise<void>;
+  exportHistoryGroup: (groupId: string) => Promise<void>;
+  setHistoryItemGroup: (id: string, groupId?: string) => Promise<void>;
   refreshHistory: (date?: string) => Promise<void>;
   refreshSettings: () => Promise<void>;
   refreshAccount: () => Promise<void>;
@@ -107,6 +117,7 @@ interface AppState {
   runReversePrompt: () => Promise<void>;
   setConvertInput: (text: string) => void;
   setConvertResult: (text: string) => void;
+  setConvertMode: (mode: ReversePromptMode) => void;
   runConvertPrompt: () => Promise<void>;
   setToast: (message: string) => void;
   // Core actions
@@ -160,7 +171,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   account: { hasToken: false },
   history: [],
   historyDates: [],
+  historyGroups: [],
   selectedDate: "",
+  selectedGroupId: "",
   currentImage: null,
   workbenchImage: null,
   i2iParams: { ...DEFAULT_I2I_PARAMS },
@@ -183,6 +196,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   reversePrompting: false,
   convertInput: "",
   convertResult: "",
+  convertMode: "tags" as ReversePromptMode,
   converting: false,
   isGenerating: false,
   statusText: "就绪",
@@ -191,21 +205,25 @@ export const useAppStore = create<AppState>((set, get) => ({
   updateInfo: null,
 
   async load() {
-    const [settings, account, firstRun, dates] = await Promise.all([
+    const [settings, account, firstRun, dates, groups] = await Promise.all([
       window.naiDesktop.getSettings(),
       window.naiDesktop.hasToken(),
       window.naiDesktop.isFirstRun(),
       window.naiDesktop.getHistoryDates(),
+      window.naiDesktop.getHistoryGroups(),
     ]);
     const selectedDate = dates[0] ?? "";
-    const history = await window.naiDesktop.getHistory(selectedDate || undefined);
+    const selectedGroupId = settings.activeHistoryGroupId ?? "";
+    const history = await window.naiDesktop.getHistory(selectedDate || undefined, selectedGroupId || undefined);
     set({
       bootDone: true,
       settings,
       account,
       showOnboarding: firstRun,
       historyDates: dates,
+      historyGroups: groups,
       selectedDate,
+      selectedGroupId,
       history,
       currentImage: history[0] ?? null,
       statusText: account.hasToken ? "API 已配置" : "请先设置 API Token",
@@ -250,15 +268,56 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   async setSelectedDate(date) {
-    const history = await window.naiDesktop.getHistory(date || undefined);
+    const history = await window.naiDesktop.getHistory(date || undefined, get().selectedGroupId || undefined);
     set({ selectedDate: date, history, currentImage: history[0] ?? get().currentImage });
   },
 
+  async setSelectedGroupId(groupId) {
+    const selectedDate = get().selectedDate;
+    await window.naiDesktop.setSetting("activeHistoryGroupId", groupId);
+    const history = await window.naiDesktop.getHistory(selectedDate || undefined, groupId || undefined);
+    set({ selectedGroupId: groupId, history, currentImage: history[0] ?? get().currentImage });
+  },
+
+  async createHistoryGroup(name) {
+    const groups = await window.naiDesktop.createHistoryGroup(name);
+    set({ historyGroups: groups, toast: name.trim() ? `已创建分组：${name.trim()}` : "分组名称不能为空" });
+  },
+
+  async renameHistoryGroup(id, name) {
+    if (!name.trim()) return;
+    const groups = await window.naiDesktop.renameHistoryGroup(id, name);
+    set({ historyGroups: groups, toast: `已重命名分组：${name.trim()}` });
+  },
+
+  async deleteHistoryGroup(id) {
+    const groups = await window.naiDesktop.deleteHistoryGroup(id);
+    const selectedGroupId = get().selectedGroupId === id ? "" : get().selectedGroupId;
+    set({ historyGroups: groups, selectedGroupId });
+    await get().refreshHistory();
+    set({ toast: "已删除分组（图片已转为未分组）" });
+  },
+
+  async exportHistoryGroup(groupId) {
+    set({ toast: "正在打包分组..." });
+    const result = await window.naiDesktop.exportHistoryGroup(groupId);
+    set({ toast: result.message });
+  },
+
+  async setHistoryItemGroup(id, groupId) {
+    await window.naiDesktop.setHistoryGroup(id, groupId || undefined);
+    await get().refreshHistory();
+  },
+
   async refreshHistory(date) {
-    const dates = await window.naiDesktop.getHistoryDates();
+    const [dates, groups] = await Promise.all([
+      window.naiDesktop.getHistoryDates(),
+      window.naiDesktop.getHistoryGroups(),
+    ]);
     const selectedDate = date ?? get().selectedDate ?? dates[0] ?? "";
-    const history = await window.naiDesktop.getHistory(selectedDate || undefined);
-    set({ historyDates: dates, selectedDate, history });
+    const selectedGroupId = get().selectedGroupId;
+    const history = await window.naiDesktop.getHistory(selectedDate || undefined, selectedGroupId || undefined);
+    set({ historyDates: dates, historyGroups: groups, selectedDate, history });
   },
 
   async refreshSettings() {
@@ -435,14 +494,18 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ convertResult: text });
   },
 
+  setConvertMode(mode) {
+    set({ convertMode: mode });
+  },
+
   async runConvertPrompt() {
-    const { convertInput } = get();
+    const { convertInput, convertMode } = get();
     if (!convertInput.trim()) {
       set({ toast: "请先输入描述文字。" });
       return;
     }
     set({ converting: true });
-    const result = await window.naiDesktop.convertPrompt(convertInput);
+    const result = await window.naiDesktop.convertPrompt(convertInput, convertMode);
     set({ converting: false });
     if (result.ok && result.result) {
       set({ convertResult: result.result, toast: "转换完成！" });

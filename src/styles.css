@@ -2362,6 +2362,16 @@ html, body, #root {
   color: var(--text-muted);
   font-size: 11px;
 }
+.prompt-chip-head button {
+  border: 1px solid rgba(124, 58, 237, 0.16);
+  border-radius: 999px;
+  padding: 3px 8px;
+  background: rgba(255,255,255,0.62);
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+}
 .prompt-chip-list {
   display: flex;
   flex-wrap: wrap;
@@ -2583,6 +2593,72 @@ html, body, #root {
 .cost-row strong { color: var(--accent); font-weight: 600; }
 .cost-row.cost-free { background: rgba(52, 199, 120, 0.12); }
 .cost-row.cost-free strong { color: #1f9d57; }
+.cost-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 10px;
+  align-items: start;
+}
+.cost-card div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.cost-card small {
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.cost-card .cost-balance {
+  grid-column: 1 / -1;
+}
+.cost-row.cost-warn {
+  border-color: rgba(239, 68, 68, 0.32);
+  background: rgba(239, 68, 68, 0.08);
+}
+.cost-row.cost-warn strong {
+  color: var(--danger);
+}
+
+.history-filters {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.history-group-create {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+}
+.history-group-create input,
+.history-item-group {
+  border: 1px solid rgba(124, 58, 237, 0.14);
+  border-radius: 12px;
+  padding: 7px 9px;
+  background: rgba(255,255,255,0.70);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.history-group-create button {
+  border: 1px solid rgba(124, 58, 237, 0.20);
+  border-radius: 12px;
+  padding: 0 10px;
+  background: rgba(124, 58, 237, 0.10);
+  color: var(--accent);
+  cursor: pointer;
+  font-weight: 800;
+}
+.history-item-group {
+  width: calc(100% - 12px);
+  margin: 0 6px 6px;
+}
+.model-check-result small {
+  display: block;
+  margin-top: 6px;
+  max-height: 84px;
+  overflow: auto;
+  word-break: break-all;
+}
 
 /* ── Metadata restore ──────────────────────────────────────────────────────── */
 .meta-restore { display: grid; gap: 6px; margin-top: 10px; }
@@ -2590,6 +2666,173 @@ html, body, #root {
 
 /* ── Splash custom image + entrance animation ──────────────────────────────── */
 .splash-animate { animation: splash-fade 0.6s ease both; }
+
+/* Responsive hardening: keep global dialogs and window controls usable */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  width: 100vw;
+  height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  overflow: auto;
+}
+
+.modal {
+  width: min(960px, calc(100vw - 56px));
+  max-width: calc(100vw - 56px);
+  max-height: calc(100vh - 56px);
+  min-width: 0;
+}
+
+.advanced-modal,
+.vibe-modal,
+.char-modal {
+  width: min(880px, calc(100vw - 56px));
+}
+
+.settings-modal {
+  width: min(1120px, calc(100vw - 56px));
+  height: min(710px, calc(100vh - 56px));
+}
+
+.onboarding {
+  width: min(960px, calc(100vw - 56px));
+  height: min(596px, calc(100vh - 56px));
+}
+
+.advanced-grid,
+.vibe-body,
+.char-body,
+.settings-body,
+.settings-content,
+.onboarding-body {
+  min-width: 0;
+}
+
+.modal > header {
+  min-width: 0;
+}
+
+.modal > header h2 {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.title-bar {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto minmax(144px, 1fr);
+  align-items: center;
+  padding-left: 14px;
+  padding-right: 0;
+}
+
+.window-title {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.title-account {
+  position: static;
+  left: auto;
+  top: auto;
+  transform: none;
+  justify-self: center;
+  max-width: min(360px, 34vw);
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.window-controls {
+  justify-self: end;
+  min-width: 144px;
+  z-index: 2;
+}
+
+.compact-toolbar,
+.tab-bar {
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.compact-toolbar::-webkit-scrollbar,
+.tab-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.compact-toolbar button,
+.tab-bar button {
+  flex: 0 0 auto;
+}
+
+.workspace {
+  grid-template-columns: minmax(300px, 344px) minmax(340px, 1fr) minmax(260px, 306px);
+  min-width: 0;
+}
+
+.left-panel,
+.history-panel,
+.canvas-area {
+  min-width: 0;
+}
+
+@media (max-width: 1180px) {
+  .workspace {
+    grid-template-columns: minmax(300px, 360px) minmax(340px, 1fr);
+  }
+
+  .history-panel {
+    display: none;
+  }
+}
+
+@media (max-width: 860px) {
+  .title-bar {
+    grid-template-columns: minmax(140px, 1fr) 144px;
+  }
+
+  .title-account {
+    display: none;
+  }
+
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .left-panel,
+  .canvas-area {
+    min-height: 0;
+  }
+
+  .advanced-grid,
+  .char-coords,
+  .vibe-add-row,
+  .settings-body,
+  .onboarding-body {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-nav {
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+    flex-direction: row;
+    overflow-x: auto;
+  }
+
+  .settings-nav button {
+    min-width: max-content;
+  }
+}
 @keyframes splash-fade {
   from { opacity: 0; transform: scale(1.02); }
   to { opacity: 1; transform: scale(1); }
@@ -2612,3 +2855,156 @@ html, body, #root {
   from { opacity: 0; transform: scale(1.06); filter: blur(8px) saturate(0.92); }
   to { opacity: 1; transform: scale(1); filter: blur(0) saturate(1.06) contrast(1.02); }
 }
+
+/* v0.5 polish: readable inspiration chips, aligned icons, non-distorting history thumbs */
+.btn,
+.icon-text,
+.tab-bar button,
+.title-actions button,
+.window-controls button {
+  align-items: center;
+}
+
+.btn-icon,
+.tab-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  line-height: 1;
+  font-family: "Segoe UI Symbol", "Segoe UI", sans-serif;
+  font-size: 13px;
+}
+
+.prompt-chip-search {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid rgba(124, 58, 237, 0.14);
+  border-radius: 14px;
+  padding: 8px 10px;
+  background: rgba(255,255,255,0.72);
+  color: var(--text-primary);
+  outline: none;
+}
+
+.prompt-chip-search:focus {
+  border-color: rgba(124, 58, 237, 0.36);
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.10);
+}
+
+.prompt-chip-list button {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2px;
+  align-items: center;
+  justify-items: start;
+  border-radius: 14px;
+  padding: 7px 10px;
+  text-align: left;
+}
+
+.prompt-chip-list button span {
+  font-family: "Cascadia Code", "Consolas", monospace;
+  font-size: 11.5px;
+  color: var(--text-primary);
+}
+
+.prompt-chip-list button small {
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.15;
+}
+
+.account-mini {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.account-mini > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.account-mini button {
+  border: 1px solid rgba(124, 58, 237, 0.18);
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: rgba(124, 58, 237, 0.09);
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.account-mini button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.history-thumb-frame {
+  width: 100%;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 18px 18px 10px 10px;
+  background:
+    linear-gradient(135deg, rgba(255,255,255,0.72), rgba(255,255,255,0.36)),
+    radial-gradient(circle at 50% 50%, rgba(124, 58, 237, 0.10), transparent 58%);
+}
+
+.history-thumb-frame img,
+.history-item img {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+  object-fit: contain;
+  display: block;
+  border-radius: 0;
+}
+
+.history-meta {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tag-server-card {
+  display: grid;
+  gap: 10px;
+  border: 1px solid rgba(124, 58, 237, 0.12);
+  border-radius: 18px;
+  padding: 12px;
+  background: rgba(255,255,255,0.50);
+}
+
+.tag-server-card .status-box small {
+  display: block;
+  margin-top: 6px;
+  max-height: 72px;
+  overflow: auto;
+  word-break: break-word;
+}
+
+/* ── History group actions ─────────────────────────────────────────────────── */
+.history-group-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+.history-group-actions button {
+  flex: 1;
+  padding: 5px 6px;
+  font-size: 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--accent-soft);
+  cursor: pointer;
+  color: inherit;
+}
+.history-group-actions button:hover:not(:disabled) { background: var(--accent); color: #fff; }
+.history-group-actions button:disabled { opacity: 0.45; cursor: not-allowed; }

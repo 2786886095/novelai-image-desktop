@@ -8,8 +8,12 @@ const releaseDir = path.resolve(projectRoot, "release");
 const files = await fs.readdir(releaseDir);
 const candidates = await Promise.all(
   files
-    .filter((name) => /^NovelAI-Image-Desktop-.+\.exe$/i.test(name) || /^NovelAI.+\.exe$/i.test(name))
-    .filter((name) => name !== "NovelAI-Image-Desktop.exe")
+    .filter((name) =>
+      /^Langbai-NovelAI-Studio-.+\.exe$/i.test(name) ||
+      /^NovelAI-Image-Desktop-.+\.exe$/i.test(name) ||
+      /^NovelAI.+\.exe$/i.test(name),
+    )
+    .filter((name) => name !== "NovelAI-Image-Desktop.exe" && name !== "Langbai-NovelAI-Studio.exe")
     .map(async (name) => ({
       name,
       mtimeMs: (await fs.stat(path.join(releaseDir, name))).mtimeMs,
@@ -22,7 +26,8 @@ if (!portable) {
 }
 
 const source = path.join(releaseDir, portable);
-const target = path.join(releaseDir, "NovelAI-Image-Desktop.exe");
+const target = path.join(releaseDir, "Langbai-NovelAI-Studio.exe");
+const legacyTarget = path.join(releaseDir, "NovelAI-Image-Desktop.exe");
 
 async function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -33,6 +38,8 @@ for (let attempt = 1; attempt <= 10; attempt += 1) {
   try {
     await fs.rm(target, { force: true });
     await fs.copyFile(source, target);
+    await fs.rm(legacyTarget, { force: true });
+    await fs.copyFile(source, legacyTarget);
     lastError = undefined;
     break;
   } catch (err) {
@@ -43,10 +50,10 @@ for (let attempt = 1; attempt <= 10; attempt += 1) {
 
 if (lastError) {
   throw new Error(
-    `Failed to create release/NovelAI-Image-Desktop.exe. Close the running app and retry: ${
+    `Failed to create release/Langbai-NovelAI-Studio.exe. Close the running app and retry: ${
       lastError.message || lastError
     }`,
   );
 }
 
-console.log("Created release/NovelAI-Image-Desktop.exe.");
+console.log("Created release/Langbai-NovelAI-Studio.exe and legacy NovelAI-Image-Desktop.exe.");

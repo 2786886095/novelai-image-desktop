@@ -9,6 +9,7 @@ import {
   DEFAULT_PARAMS,
   type AccountSummary,
   type AugmentOptions,
+  type AiModelListResult,
   type DirectorTool,
   type GenerateExtras,
   type GenerateParams,
@@ -32,6 +33,7 @@ import {
   setAccountSummary,
   setToken,
 } from "./store";
+import { TAG_DICTIONARY } from "../data/tag-dictionary";
 
 let currentAbort: AbortController | null = null;
 let workbenchImagePath: string | null = null;
@@ -455,6 +457,42 @@ async function readWorkbenchImage(): Promise<{ base64: string; buffer: Buffer; i
   };
 }
 
+/** Render a save filename (without extension) from the user template. */
+function buildImageFileName(
+  template: string,
+  ctx: { date: string; now: Date; seq: number; seed: number; model: string; prefix: string },
+): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const time = `${pad(ctx.now.getHours())}${pad(ctx.now.getMinutes())}${pad(ctx.now.getSeconds())}`;
+  const tokens: Record<string, string> = {
+    date: ctx.date,
+    time,
+    seq: pad(ctx.seq),
+    seed: String(ctx.seed),
+    model: ctx.model,
+    type: ctx.prefix,
+    ts: String(ctx.now.getTime()),
+  };
+  let name = (template && template.trim()) || "{date}_{seq}_{model}";
+  name = name.replace(/\{(\w+)\}/g, (_m, key: string) => tokens[key] ?? "");
+  name = name.replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, "_").slice(0, 100);
+  return name || `${ctx.now.getTime()}-${ctx.seq}`;
+}
+
+/** Return a non-colliding path, appending -1, -2... if needed. */
+async function uniqueFilePath(dir: string, base: string, ext: string): Promise<string> {
+  let candidate = path.join(dir, `${base}.${ext}`);
+  let n = 1;
+  for (;;) {
+    try {
+      await fs.access(candidate);
+      candidate = path.join(dir, `${base}-${n++}.${ext}`);
+    } catch {
+      return candidate; // does not exist
+    }
+  }
+}
+
 async function saveBuffers(
   buffers: Buffer[],
   params: GenerateParams,
@@ -473,7 +511,15 @@ async function saveBuffers(
     const id = crypto.randomUUID();
     const ext = detectExt(buffers[index]);
     const safeModel = (modelOverride ?? params.model).replace(/[^\w.-]+/g, "-");
-    const filePath = path.join(dir, `${now.getTime()}-${prefix}-${index + 1}-${safeModel}.${ext}`);
+    const base = buildImageFileName(settings.imageNameTemplate, {
+      date,
+      now,
+      seq: index + 1,
+      seed: actualSeed,
+      model: safeModel,
+      prefix,
+    });
+    const filePath = await uniqueFilePath(dir, base, ext);
     await fs.writeFile(filePath, buffers[index]);
     items.push({
       id,
@@ -613,6 +659,34 @@ Rules:
 - Output ONLY the prompt. No explanation.`,
 };
 
+// Text-only conversion (description -> prompt) system prompts, one per output mode.
+const CONVERT_SYSTEM_PROMPTS = {
+  tags: `You are a Danbooru tag translator for NovelAI image generation.
+Convert the user's description (may be Chinese or other language) into Danbooru-style English tags.
+Rules:
+1. Output ONLY comma-separated Danbooru tags in English. No explanation, no translation notes.
+2. Use Danbooru format: lowercase, underscores for spaces (e.g. long_hair, blue_eyes, 1girl)
+3. Start with quality tags: masterpiece, best quality, ultra-detailed
+4. Break the description into specific individual Danbooru tags
+5. Add relevant style, medium, and atmosphere tags inferred from context
+6. If no clear subject is specified, add appropriate general tags`,
+
+  natural: `You are an AI art prompt writer for NovelAI.
+Rewrite the user's description (may be Chinese or other language) into a vivid English natural-language prompt.
+Rules:
+- Output flowing descriptive English sentences, faithfully expanding the user's intent.
+- Cover subject, appearance, clothing, pose, setting, lighting, colors, mood and art style when implied.
+- Output ONLY the description. No explanation, no translation notes.`,
+
+  mixed: `You are a NovelAI prompt specialist.
+Convert the user's description (may be Chinese or other language) into a hybrid English prompt mixing Danbooru tags and natural language.
+Rules:
+- Begin with Danbooru quality/style tags (masterpiece, best quality, ...).
+- Follow with key Danbooru character/scene tags (1girl, long_hair, blue_eyes...).
+- Use natural-language phrases for complex elements, comma-separated.
+- Output ONLY the prompt. No explanation, no translation notes.`,
+};
+
 async function callVisionApi(
   systemPrompt: string,
   userContent: Array<{ type: string; [k: string]: any }>,
@@ -652,13 +726,217 @@ async function callVisionApi(
   }
 }
 
+async function callConvertApi(
+  systemPrompt: string,
+  userText: string,
+  maxTokens = 600,
+): Promise<{ ok: boolean; content?: string; message: string }> {
+  const settings = getSettings();
+  const apiUrl = settings.convertApiUrl.trim();
+  const apiKey = settings.convertApiKey.trim();
+  const model = settings.convertApiModel.trim() || "gpt-4o-mini";
+
+  if (!apiKey) return { ok: false, message: "请先在 设置 > 转换 API 中填写 API Key。" };
+  if (!apiUrl) return { ok: false, message: "请先在 设置 > 转换 API 中填写 API 地址。" };
+
+  const base = apiUrl.replace(/\/+$/, "");
+  const body = {
+    model,
+    max_tokens: maxTokens,
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userText },
+    ],
+  };
+
+  try {
+    const resp = await axios.post(`${base}/chat/completions`, body, {
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      timeout: 60_000,
+    });
+    const content: string = resp.data?.choices?.[0]?.message?.content ?? "";
+    if (!content.trim()) return { ok: false, message: "API 返回内容为空，请检查模型设置。" };
+    return { ok: true, content: content.trim(), message: "成功" };
+  } catch (error: any) {
+    const msg =
+      error?.response?.data?.error?.message ??
+      error?.response?.data?.message ??
+      error?.message ??
+      "未知错误";
+    return { ok: false, message: msg };
+  }
+}
+
+export async function listAiModels(kind: "reverse" | "convert"): Promise<AiModelListResult> {
+  const settings = getSettings();
+  const apiUrl = (kind === "reverse" ? settings.visionApiUrl : settings.convertApiUrl).trim();
+  const apiKey = (kind === "reverse" ? settings.visionApiKey : settings.convertApiKey).trim();
+  if (!apiUrl) return { ok: false, message: "请先填写 API 地址。", models: [] };
+  if (!apiKey) return { ok: false, message: "请先填写 API Key。", models: [] };
+
+  try {
+    const base = apiUrl.replace(/\/+$/, "");
+    const resp = await axios.get(`${base}/models`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      timeout: 20_000,
+    });
+    const raw = Array.isArray(resp.data?.data) ? resp.data.data : Array.isArray(resp.data) ? resp.data : [];
+    const models = raw
+      .map((item: any) => (typeof item === "string" ? item : item?.id))
+      .filter((id: unknown): id is string => typeof id === "string" && id.length > 0)
+      .sort();
+    return {
+      ok: true,
+      message: models.length ? `检测到 ${models.length} 个模型。` : "接口可用，但未返回模型列表。",
+      models,
+    };
+  } catch (error: any) {
+    const msg =
+      error?.response?.data?.error?.message ??
+      error?.response?.data?.message ??
+      error?.message ??
+      "未知错误";
+    return { ok: false, message: `模型检测失败：${msg}`, models: [] };
+  }
+}
+
+function normalizeTagServerItem(item: unknown): TagSuggestion | null {
+  if (typeof item === "string") {
+    const tag = item.trim();
+    return tag ? { tag, count: 0, category: 0 } : null;
+  }
+  if (!item || typeof item !== "object") return null;
+  const row = item as Record<string, unknown>;
+  const rawTag = row.tag ?? row.name ?? row.value ?? row.label ?? row.text;
+  if (typeof rawTag !== "string" || !rawTag.trim()) return null;
+  const rawCount = row.count ?? row.post_count ?? row.posts ?? row.total;
+  const count =
+    typeof rawCount === "number"
+      ? rawCount
+      : typeof rawCount === "string" && Number.isFinite(Number(rawCount))
+        ? Number(rawCount)
+        : 0;
+  const rawCategory = row.category ?? row.type;
+  const category =
+    typeof rawCategory === "number"
+      ? rawCategory
+      : rawCategory === "artist"
+        ? 1
+        : rawCategory === "copyright"
+          ? 3
+          : rawCategory === "character"
+            ? 4
+            : rawCategory === "meta"
+              ? 5
+              : 0;
+  const description =
+    typeof row.description === "string"
+      ? row.description
+      : typeof row.translation === "string"
+        ? row.translation
+        : typeof row.zh === "string"
+          ? row.zh
+          : undefined;
+  return { tag: rawTag.trim(), count: Math.round(count), category, description };
+}
+
+function parseTagServerPayload(payload: unknown): TagSuggestion[] {
+  if (!payload) return [];
+  if (Array.isArray(payload)) return payload.map(normalizeTagServerItem).filter((x): x is TagSuggestion => Boolean(x));
+  if (typeof payload === "string") {
+    try {
+      return parseTagServerPayload(JSON.parse(payload));
+    } catch {
+      return payload
+        .split(/[\n,]/)
+        .map((tag) => normalizeTagServerItem(tag))
+        .filter((x): x is TagSuggestion => Boolean(x));
+    }
+  }
+  if (typeof payload !== "object") return [];
+  const obj = payload as Record<string, unknown>;
+  const content = obj.content;
+  if (Array.isArray(content)) {
+    const parts = content
+      .map((entry) => {
+        if (typeof entry === "string") return entry;
+        if (entry && typeof entry === "object") {
+          const text = (entry as Record<string, unknown>).text;
+          return typeof text === "string" ? text : "";
+        }
+        return "";
+      })
+      .filter(Boolean)
+      .join("\n");
+    const parsed = parseTagServerPayload(parts);
+    if (parsed.length > 0) return parsed;
+  }
+  for (const key of ["tags", "results", "data", "items", "result"]) {
+    const parsed = parseTagServerPayload(obj[key]);
+    if (parsed.length > 0) return parsed;
+  }
+  return [];
+}
+
+async function queryTagServer(query: string, limit = 12): Promise<TagSuggestion[]> {
+  const settings = getSettings();
+  if (!settings.tagServerEnabled || !settings.tagServerUrl.trim() || !query.trim()) return [];
+  const base = settings.tagServerUrl.trim().replace(/\/+$/, "");
+  const headers: Record<string, string> = {};
+  if (settings.tagServerApiKey.trim()) headers.Authorization = `Bearer ${settings.tagServerApiKey.trim()}`;
+
+  const attempts = [
+    () => axios.get(`${base}/search`, { params: { q: query, query, limit }, headers, timeout: 8_000 }),
+    () => axios.get(`${base}/tags`, { params: { q: query, query, limit }, headers, timeout: 8_000 }),
+    () => axios.post(`${base}/search`, { query, limit }, { headers, timeout: 8_000 }),
+    () =>
+      axios.post(
+        base,
+        {
+          jsonrpc: "2.0",
+          id: `tag-${Date.now()}`,
+          method: "tools/call",
+          params: { name: "search_tags", arguments: { query, limit } },
+        },
+        { headers: { ...headers, "Content-Type": "application/json" }, timeout: 8_000 },
+      ),
+  ];
+
+  for (const attempt of attempts) {
+    try {
+      const response = await attempt();
+      const tags = parseTagServerPayload(response.data).slice(0, limit);
+      if (tags.length > 0) return tags;
+    } catch {
+      // Try the next common tag-server shape.
+    }
+  }
+  return [];
+}
+
+function mergeTagHints(prompt: string, hints: TagSuggestion[]) {
+  const hintTags = hints.map((hint) => hint.tag).filter(Boolean).join(", ");
+  return hintTags ? mergePrompt(prompt, hintTags) : prompt;
+}
+
+export async function testTagServer(query: string): Promise<{ ok: boolean; message: string; tags: TagSuggestion[] }> {
+  const tags = await queryTagServer(query || "girl", 12);
+  return tags.length > 0
+    ? { ok: true, message: `Tag 服务可用，返回 ${tags.length} 个结果。`, tags }
+    : { ok: false, message: "Tag 服务没有返回结果，请检查地址、鉴权或接口路径。", tags: [] };
+}
+
 export async function reversePromptImage(
   imageBase64: string,
   mode: "tags" | "natural" | "mixed" = "tags",
 ): Promise<{ ok: boolean; prompt?: string; message: string }> {
   const settings = getSettings();
-  // Use custom system prompt if set, otherwise use built-in for the mode
-  const systemPrompt = settings.visionSystemPrompt.trim() || REVERSE_SYSTEM_PROMPTS[mode];
+  // Per-mode template overrides built-in; legacy single visionSystemPrompt is a
+  // final fallback for older configs.
+  const systemPrompt =
+    settings.reversePromptTemplates?.[mode]?.trim() ||
+    settings.visionSystemPrompt.trim() ||
+    REVERSE_SYSTEM_PROMPTS[mode];
 
   const result = await callVisionApi(
     systemPrompt,
@@ -669,30 +947,38 @@ export async function reversePromptImage(
     900,
   );
 
-  if (result.ok) return { ok: true, prompt: result.content, message: "反推成功" };
+  if (result.ok) {
+    const hints = await queryTagServer(result.content ?? "", 16);
+    return { ok: true, prompt: mergeTagHints(result.content ?? "", hints), message: "反推成功" };
+  }
   return { ok: false, message: `反推失败：${result.message}` };
 }
 
 export async function convertPromptText(
   chineseText: string,
+  mode: "tags" | "natural" | "mixed" = "tags",
 ): Promise<{ ok: boolean; result?: string; message: string }> {
-  const systemPrompt = `You are a Danbooru tag translator for NovelAI image generation.
-Convert the user's description (may be Chinese or other language) into Danbooru-style English tags.
-Rules:
-1. Output ONLY comma-separated Danbooru tags in English. No explanation, no translation notes.
-2. Use Danbooru format: lowercase, underscores for spaces (e.g. long_hair, blue_eyes, 1girl)
-3. Start with quality tags: masterpiece, best quality, ultra-detailed
-4. Break the description into specific individual Danbooru tags
-5. Add relevant style, medium, and atmosphere tags inferred from context
-6. If no clear subject is specified, add appropriate general tags`;
+  const settings = getSettings();
+  const systemPrompt =
+    settings.convertPromptTemplates?.[mode]?.trim() ||
+    settings.convertSystemPrompt.trim() ||
+    CONVERT_SYSTEM_PROMPTS[mode];
 
-  const result = await callVisionApi(
-    systemPrompt,
-    [{ type: "text", text: chineseText }],
-    600,
-  );
+  // Tag-server hints only make sense for tag-style output.
+  const tagHints = mode === "natural" ? [] : await queryTagServer(chineseText, 24);
+  const hintText = tagHints.length
+    ? `\n\nCandidate Danbooru tags from the configured tag server:\n${tagHints.map((tag) => tag.tag).join(", ")}`
+    : "";
+  const result = await callConvertApi(systemPrompt, `${chineseText}${hintText}`, 600);
 
-  if (result.ok) return { ok: true, result: result.content, message: "转换成功" };
+  if (result.ok) {
+    const content = result.content ?? "";
+    return {
+      ok: true,
+      result: mode === "natural" ? content : mergeTagHints(content, tagHints),
+      message: "转换成功",
+    };
+  }
   return { ok: false, message: `转换失败：${result.message}` };
 }
 
@@ -821,31 +1107,53 @@ export async function upscaleImg(scale: UpscaleScale): Promise<SingleImageResult
   if (!workbenchImagePath) return { ok: false, message: "请先加载图片。" };
 
   currentAbort?.abort();
-  currentAbort = new AbortController();
+  const abort = new AbortController();
+  currentAbort = abort;
 
   try {
     const { base64, image } = await readWorkbenchImage();
+    if (!image.width || !image.height) {
+      return { ok: false, message: "无法读取图片尺寸，请重新加载图片。" };
+    }
     const settings = getSettings();
-    const imageBaseUrl = normalizeBaseUrl(settings.imageBaseUrl, "https://image.novelai.net");
-    const res = await axios.post(
-      `${imageBaseUrl}/ai/upscale`,
-      {
-        image: base64,
-        width: image.width,
-        height: image.height,
-        scale,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-          Accept: "image/png, application/octet-stream",
-        },
-        responseType: "arraybuffer",
-        timeout: 180_000,
-        signal: currentAbort.signal,
-      },
+    // Upscale lives on the API host (api.novelai.net), NOT the image host, and
+    // returns a ZIP archive (same as generate-image), not a raw PNG.
+    const apiBaseUrl = normalizeBaseUrl(settings.apiBaseUrl, "https://api.novelai.net");
+    const res = await requestWithRetry(
+      () =>
+        axios.post(
+          `${apiBaseUrl}/ai/upscale`,
+          {
+            image: stripBase64Prefix(base64),
+            width: image.width,
+            height: image.height,
+            scale,
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+              Accept: "application/zip, application/octet-stream, image/png",
+            },
+            responseType: "arraybuffer",
+            timeout: 180_000,
+            signal: abort.signal,
+          },
+        ),
+      { signal: abort.signal },
     );
+
+    // Response is usually a ZIP containing the upscaled PNG; fall back to raw bytes.
+    let outBuffer: Buffer;
+    try {
+      const images = await extractImages(res.data);
+      outBuffer = images.length > 0 ? images[0] : Buffer.from(res.data);
+    } catch {
+      outBuffer = Buffer.from(res.data); // not a zip — treat as raw image bytes
+    }
+    if (outBuffer.length === 0) {
+      return { ok: false, message: "超分返回了空数据。" };
+    }
 
     const now = new Date();
     const date = dateStamp(now);
@@ -853,7 +1161,7 @@ export async function upscaleImg(scale: UpscaleScale): Promise<SingleImageResult
     await fs.mkdir(dir, { recursive: true });
     const baseName = path.basename(workbenchImagePath, path.extname(workbenchImagePath)).replace(/[^\w.-]+/g, "-");
     const filePath = path.join(dir, `${now.getTime()}-upscale${scale}x-${baseName}.png`);
-    await fs.writeFile(filePath, Buffer.from(res.data));
+    await fs.writeFile(filePath, outBuffer);
     const item: HistoryItem = {
       id: crypto.randomUUID(),
       filePath,
@@ -952,57 +1260,25 @@ export function cancelGeneration() {
   return { ok: true };
 }
 
-const LOCAL_TAG_SUGGESTIONS: Array<TagSuggestion & { aliases?: string[] }> = [
-  { tag: "1girl", count: 19_000_000, category: 0, description: "一个女孩 / 单女性角色", aliases: ["girl", "g"] },
-  { tag: "1boy", count: 8_000_000, category: 0, description: "一个男孩 / 单男性角色", aliases: ["boy"] },
-  { tag: "solo", count: 13_000_000, category: 0, description: "单人画面" },
-  { tag: "long hair", count: 6_800_000, category: 0, description: "长发", aliases: ["long_hair", "lh"] },
-  { tag: "short hair", count: 5_400_000, category: 0, description: "短发", aliases: ["short_hair", "sh"] },
-  { tag: "blonde hair", count: 1_100_000, category: 0, description: "金发", aliases: ["blonde_hair", "gold hair", "golden hair"] },
-  { tag: "black hair", count: 3_600_000, category: 0, description: "黑发", aliases: ["black_hair"] },
-  { tag: "white hair", count: 2_100_000, category: 0, description: "白发", aliases: ["white_hair"] },
-  { tag: "blue hair", count: 1_800_000, category: 0, description: "蓝发", aliases: ["blue_hair"] },
-  { tag: "red hair", count: 1_200_000, category: 0, description: "红发", aliases: ["red_hair"] },
-  { tag: "pink hair", count: 1_200_000, category: 0, description: "粉发", aliases: ["pink_hair"] },
-  { tag: "green hair", count: 820_000, category: 0, description: "绿发", aliases: ["green_hair"] },
-  { tag: "blue eyes", count: 3_900_000, category: 0, description: "蓝眼睛", aliases: ["blue_eyes"] },
-  { tag: "green eyes", count: 622_800, category: 0, description: "绿眼睛", aliases: ["green_eyes"] },
-  { tag: "red eyes", count: 1_700_000, category: 0, description: "红眼睛", aliases: ["red_eyes"] },
-  { tag: "yellow eyes", count: 496_800, category: 0, description: "黄眼睛 / 金色眼睛", aliases: ["yellow_eyes", "golden eyes"] },
-  { tag: "gloves", count: 959_100, category: 0, description: "手套", aliases: ["glove"] },
-  { tag: "black gloves", count: 246_000, category: 0, description: "黑色手套", aliases: ["black_gloves"] },
-  { tag: "white gloves", count: 210_000, category: 0, description: "白色手套", aliases: ["white_gloves"] },
-  { tag: "dress", count: 2_600_000, category: 0, description: "连衣裙" },
-  { tag: "white dress", count: 410_000, category: 0, description: "白色连衣裙", aliases: ["white_dress"] },
-  { tag: "school uniform", count: 1_500_000, category: 0, description: "校服", aliases: ["school_uniform"] },
-  { tag: "skirt", count: 2_300_000, category: 0, description: "裙子" },
-  { tag: "smile", count: 3_200_000, category: 0, description: "微笑" },
-  { tag: "looking at viewer", count: 4_400_000, category: 0, description: "看向观众 / 正视镜头", aliases: ["looking_at_viewer"] },
-  { tag: "open mouth", count: 2_200_000, category: 0, description: "张嘴", aliases: ["open_mouth"] },
-  { tag: "hair ornament", count: 1_200_000, category: 0, description: "发饰", aliases: ["hair_ornament"] },
-  { tag: "earrings", count: 378_700, category: 0, description: "耳环" },
-  { tag: "male focus", count: 557_500, category: 0, description: "男性为主体", aliases: ["male_focus"] },
-  { tag: "grey eyes", count: 220_000, category: 0, description: "灰色眼睛", aliases: ["gray eyes", "grey_eyes"] },
-  { tag: "simple background", count: 1_100_000, category: 0, description: "简单背景", aliases: ["simple_background"] },
-  { tag: "outdoors", count: 1_600_000, category: 0, description: "户外" },
-  { tag: "night", count: 780_000, category: 0, description: "夜晚" },
-  { tag: "city", count: 710_000, category: 0, description: "城市" },
-  { tag: "masterpiece", count: 5_000_000, category: 5, description: "杰作 / 高质量修饰词" },
-  { tag: "best quality", count: 4_800_000, category: 5, description: "最佳质量修饰词", aliases: ["best_quality"] },
-  { tag: "very aesthetic", count: 900_000, category: 5, description: "高审美质量修饰词", aliases: ["very_aesthetic"] },
-  { tag: "artist name", count: 120_000, category: 1, description: "画师名占位标签", aliases: ["artist"] },
-];
-
 function localSuggestTags(prompt: string): TagSuggestion[] {
   const query = prompt.trim().toLowerCase().replace(/_/g, " ");
   if (!query) return [];
-  return LOCAL_TAG_SUGGESTIONS
-    .map((item) => {
-      const terms = [item.tag, ...(item.aliases ?? [])].map((x) => x.toLowerCase().replace(/_/g, " "));
-      const starts = terms.some((term) => term.startsWith(query));
-      const contains = terms.some((term) => term.includes(query));
-      return { item, score: starts ? 2 : contains ? 1 : 0 };
-    })
+  const isCjk = /[㐀-鿿]/.test(query);
+
+  return TAG_DICTIONARY.map((item) => {
+    // Chinese input matches Chinese keywords; latin input matches tag/aliases.
+    const terms = isCjk
+      ? [item.zh, ...(item.keywords ?? [])]
+      : [item.tag, ...(item.aliases ?? [])].map((x) => x.toLowerCase().replace(/_/g, " "));
+    let score = 0;
+    for (const term of terms) {
+      const t = term.toLowerCase();
+      if (t === query) score = Math.max(score, 3);
+      else if (t.startsWith(query)) score = Math.max(score, 2);
+      else if (t.includes(query)) score = Math.max(score, 1);
+    }
+    return { item, score };
+  })
     .filter(({ score }) => score > 0)
     .sort((a, b) => b.score - a.score || b.item.count - a.item.count)
     .slice(0, 12)
@@ -1010,7 +1286,7 @@ function localSuggestTags(prompt: string): TagSuggestion[] {
       tag: item.tag,
       count: item.count,
       category: item.category,
-      description: item.description,
+      description: item.zh,
     }));
 }
 
@@ -1019,6 +1295,8 @@ export async function suggestTags(model: string, prompt: string): Promise<TagSug
   const token = getToken();
   if (!prompt.trim()) return [];
   const fallback = localSuggestTags(prompt);
+  const serverTags = await queryTagServer(prompt, 12);
+  if (serverTags.length > 0) return serverTags;
   if (!token) return fallback;
   const settings = getSettings();
   const apiBaseUrl = normalizeBaseUrl(settings.apiBaseUrl, "https://api.novelai.net");
