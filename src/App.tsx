@@ -6,6 +6,8 @@ import { InpaintCanvas } from "./InpaintCanvas";
 import { useAppStore } from "./store";
 import { estimateAnlas } from "./anlas";
 import { relatedTags } from "./related-tags";
+import { fmtCount, wordAtCursor } from "./text-utils";
+import { parsePngMeta, parseImportedParams } from "./png-meta";
 import {
   APP_NAME,
   APP_VERSION,
@@ -19,10 +21,7 @@ import {
   type AppSettings,
   type HistoryGroup,
   type GenerateParams,
-  type ImportedParams,
   type ModePromptTemplates,
-  type NAIModel,
-  type NAISampler,
   type PromptTemplate,
   type ReversePromptMode,
   type TagSuggestion,
@@ -34,12 +33,6 @@ const tokenHelpUrl = "https://docs.novelai.net/en/api/";
 const appIconUrl = "./icon.png";
 
 // ── Tag autocomplete helpers ──────────────────────────────────────────────────
-function fmtCount(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}k`;
-  return String(n);
-}
-
 /** CSS color per Danbooru tag category */
 const CAT_COLOR: Record<number, string> = {
   0: "#4ade80", // general
@@ -183,14 +176,6 @@ function tagDescription(s: TagSuggestion): string {
 }
 
 /** Word-at-cursor: scan backwards from cursor for [\w-] chars */
-function wordAtCursor(text: string, cursor: number): { word: string; start: number } {
-  // Include CJK so Chinese input (e.g. "蓝眼") triggers the 灵感胶囊 autocomplete.
-  const wordChar = /[\w㐀-鿿-]/;
-  let s = cursor;
-  while (s > 0 && wordChar.test(text[s - 1])) s--;
-  return { word: text.slice(s, cursor), start: s };
-}
-
 // ── PromptTextarea: textarea with Danbooru tag autocomplete ───────────────────
 function PromptTextarea({
   value,
@@ -303,91 +288,6 @@ function PromptTextarea({
       )}
     </div>
   );
-}
-
-// ── PNG metadata parser ───────────────────────────────────────────────────────
-function parsePngMeta(buffer: ArrayBuffer): Record<string, string> {
-  const sig = new Uint8Array(buffer, 0, 8);
-  if (
-    sig[0] !== 0x89 ||
-    sig[1] !== 0x50 ||
-    sig[2] !== 0x4e ||
-    sig[3] !== 0x47 ||
-    sig[4] !== 0x0d ||
-    sig[5] !== 0x0a ||
-    sig[6] !== 0x1a ||
-    sig[7] !== 0x0a
-  ) {
-    return {};
-  }
-  const view = new DataView(buffer);
-  const result: Record<string, string> = {};
-  let offset = 8;
-  while (offset + 12 <= buffer.byteLength) {
-    const length = view.getUint32(offset, false);
-    const type = String.fromCharCode(
-      view.getUint8(offset + 4),
-      view.getUint8(offset + 5),
-      view.getUint8(offset + 6),
-      view.getUint8(offset + 7),
-    );
-    if (type === "IEND") break;
-    if (type === "tEXt" && length > 0 && offset + 8 + length <= buffer.byteLength) {
-      const data = new Uint8Array(buffer, offset + 8, length);
-      const nullIdx = data.indexOf(0);
-      if (nullIdx >= 0) {
-        const key = new TextDecoder("latin1").decode(data.subarray(0, nullIdx));
-        const value = new TextDecoder("utf-8").decode(data.subarray(nullIdx + 1));
-        result[key] = value;
-      }
-    }
-    offset += 12 + length;
-  }
-  return result;
-}
-
-/**
- * Map NovelAI PNG metadata (tEXt chunks: Description + Comment JSON) to our
- * GenerateParams shape. Only fields present and valid are returned, so applying
- * the result never clobbers a setting the image didn't specify.
- */
-function parseImportedParams(meta: Record<string, string>): ImportedParams {
-  const out: ImportedParams = {};
-  let comment: Record<string, unknown> = {};
-  try {
-    comment = JSON.parse(meta.Comment ?? "{}");
-  } catch {
-    comment = {};
-  }
-
-  const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
-  const samplerValues = NAI_SAMPLERS.map((s) => s.value) as string[];
-  const modelValues = NAI_MODELS.map((m) => m.value) as string[];
-
-  const prompt = meta.Description ?? (typeof comment.prompt === "string" ? comment.prompt : undefined);
-  if (prompt) out.positivePrompt = prompt.trim();
-  if (typeof comment.uc === "string") out.negativePrompt = comment.uc.trim();
-
-  out.steps = num(comment.steps);
-  out.cfgScale = num(comment.scale);
-  out.cfgRescale = num(comment.cfg_rescale);
-  out.seed = num(comment.seed);
-  out.width = num(comment.width);
-  out.height = num(comment.height);
-  if (typeof comment.sampler === "string" && samplerValues.includes(comment.sampler)) {
-    out.sampler = comment.sampler as NAISampler;
-  }
-  if (typeof comment.noise_schedule === "string") out.noiseSchedule = comment.noise_schedule;
-  if (typeof comment.sm === "boolean") out.smea = comment.sm;
-  if (typeof comment.sm_dyn === "boolean") out.smeaDyn = comment.sm_dyn;
-
-  const modelCandidate = typeof comment.model === "string" ? comment.model : meta.Source;
-  if (modelCandidate && modelValues.includes(modelCandidate)) {
-    out.model = modelCandidate as NAIModel;
-  }
-
-  // Drop undefined keys so the caller's spread doesn't overwrite with undefined.
-  return Object.fromEntries(Object.entries(out).filter(([, v]) => v !== undefined)) as ImportedParams;
 }
 
 // ── Shared UI primitives ──────────────────────────────────────────────────────
