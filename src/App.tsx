@@ -103,6 +103,21 @@ const TAB_ITEMS = [
   { value: "convert", label: "转换", icon: "⇄", title: "中文描述转标签", desc: "自然语言转 Danbooru 标签" },
 ] as const;
 
+const PROMPT_CHIPS = [
+  "masterpiece",
+  "best quality",
+  "very aesthetic",
+  "1girl",
+  "solo",
+  "looking at viewer",
+  "detailed eyes",
+  "cinematic lighting",
+  "dynamic pose",
+  "simple background",
+  "watercolor",
+  "soft shading",
+] as const;
+
 function tagDescription(s: TagSuggestion): string {
   return s.description ?? TAG_ZH[s.tag.toLowerCase().replace(/_/g, " ")] ?? `${CAT_LABEL[s.category] ?? "标签"}分类`;
 }
@@ -466,12 +481,19 @@ function SplashPage() {
 
 // ── Title bar ─────────────────────────────────────────────────────────────────
 function TitleBar() {
+  const account = useAppStore((state) => state.account);
   return (
     <header className="title-bar">
       <div className="window-title">
         <img className="title-icon" src={appIconUrl} alt="" />
         {APP_NAME}
         <span className="title-ver">v{APP_VERSION}</span>
+      </div>
+      <div className={clsx("title-account", account.hasToken && "online")}>
+        <span className="pulse-dot" />
+        {account.hasToken
+          ? `${account.tierName ?? "已连接"} · Anlas ${account.anlasBalance ?? "未知"}`
+          : "未连接 API"}
       </div>
       <div className="window-controls">
         <button onClick={() => window.naiDesktop.minimize()}>—</button>
@@ -796,6 +818,12 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
     setToast(`已应用模板「${tpl.name}」`);
   }
 
+  function appendChip(tag: string) {
+    const current = promptValue.trim();
+    const next = current ? `${current.replace(/\s*,?\s*$/, "")}, ${tag}, ` : `${tag}, `;
+    setParam(promptKey, next);
+  }
+
   const tagCount = useMemo(
     () => promptValue.trim().split(",").filter((s) => s.trim().length > 0).length,
     [promptValue],
@@ -824,6 +852,19 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
           onChange={(e) => setParam("stylePrompt", e.target.value)}
         />
       </label>
+      <div className="prompt-chip-zone">
+        <div className="prompt-chip-head">
+          <span>灵感胶囊</span>
+          <small>点击追加到当前提示词</small>
+        </div>
+        <div className="prompt-chip-list">
+          {PROMPT_CHIPS.map((tag) => (
+            <button key={tag} type="button" onClick={() => appendChip(tag)}>
+              {tag}
+            </button>
+          ))}
+        </div>
+      </div>
       <div className="prompt-tabs">
         <button className={clsx(promptTab === "positive" && "active")} onClick={() => setPromptTab("positive")}>
           正面提示词

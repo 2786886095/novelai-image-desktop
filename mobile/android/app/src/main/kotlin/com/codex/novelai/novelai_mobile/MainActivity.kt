@@ -1,0 +1,5 @@
+package com.codex.novelai.novelai_mobile
+
+import io.flutter.embedding.android.FlutterActivity
+
+class MainActivity: FlutterActivity()
