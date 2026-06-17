@@ -3,7 +3,7 @@
 [![Build](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build.yml/badge.svg)](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build.yml)
 [![Build Mobile](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build-mobile.yml/badge.svg)](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build-mobile.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
-[![Release](https://img.shields.io/badge/release-v0.6.0-7c5cfa.svg)](https://github.com/2786886095/novelai-image-desktop/releases/tag/v0.6.0)
+[![Release](https://img.shields.io/badge/release-v0.7.0-7c5cfa.svg)](https://github.com/2786886095/novelai-image-desktop/releases/tag/v0.7.0)
 [![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android%20%7C%20iOS-20b7d8.svg)](#下载)
 
 ![Langbai NovelAI Studio hero](./docs/assets/hero.png)
@@ -14,14 +14,14 @@
 
 ## 下载
 
-- **v0.6.0 正式版**：[GitHub Releases](https://github.com/2786886095/novelai-image-desktop/releases/tag/v0.6.0)
+- **v0.7.0 正式版**：[GitHub Releases](https://github.com/2786886095/novelai-image-desktop/releases/tag/v0.7.0)
 - **持续构建产物**：[GitHub Actions](https://github.com/2786886095/novelai-image-desktop/actions)
 
 Release 目标产物：
 
 | 平台 | 文件 |
 | --- | --- |
-| Windows | `Langbai-NovelAI-Studio-0.6.0.exe` |
+| Windows | `Langbai-NovelAI-Studio-0.7.0.exe` |
 | macOS | universal `.dmg` + `.zip` |
 | Linux | `.AppImage` |
 | Android | `app-release.apk` |
@@ -45,12 +45,15 @@ Release 目标产物：
 - **云端超分**：2x / 4x 超分。
 - **Director Tools 后期**：移除背景、线稿、草图、上色、表情迁移、去杂乱。
 - **Tag 自动补全**：输入英文时自动推测 Danbooru / NovelAI 常用 tag；失败时使用本地高频词库兜底。
-- **灵感胶囊**：每个 tag 显示中文含义，可输入中文大意匹配可能 tag。
+- **灵感胶囊**：可折叠（默认收起为一行），内置约 190 个中文概念词库，支持「蓝眼白发夜景」这类复合中文查询，一键插入对应 Danbooru 标签。
+- **标签权重微调**：提示词下方按标签提供 − / ＋ 控件，基于 NovelAI 的 `{}` / `[]` 语法增减权重并显示近似倍率。
+- **中英翻译**：一键将中文提示词翻译为英文（主进程调用公共翻译接口，无需 Key）。
 - **Tag/MCP 服务**：可配置 HTTP Tag 服务或 MCP HTTP 网关，补强自动补全、AI 反推和中文转换。
 - **AI 反推 / 提示词转换**：反推使用视觉模型 API；转换使用文本模型 API，二者独立配置与检测。
 - **历史与素材分组**：按日期和分组筛选，新建 / 重命名 / 删除分组，给图片分组，一键 ZIP 导出。
 - **生成队列**：批量任务可暂停 / 继续，失败后重试并跳过，记录实扣 Anlas。
 - **锁种变体**：复用历史图参数并锁定 seed，适合微调单个 tag。
+- **图片命名**：生成面板可填写文件名前缀，配合 `{date} {time} {seq} {seed} {model} {name}` 命名模板。
 - **动态提示词通配符**：支持 `{red|blue|green} hair` 这种本地随机展开。
 
 ## 快速开始
@@ -80,7 +83,7 @@ npm run pack
 本地 Windows 便携包输出：
 
 ```text
-release\Langbai-NovelAI-Studio-0.6.0.exe
+release\Langbai-NovelAI-Studio-0.7.0.exe
 release\Langbai-NovelAI-Studio.exe
 ```
 
@@ -101,9 +104,9 @@ release\NovelAI-Image-Desktop.exe
 推送 `v*` tag 会触发桌面端与移动端两个 workflow，并把所有平台产物汇总到同一个 Release：
 
 ```powershell
-git tag v0.6.0
+git tag v0.7.0
 git push origin main
-git push origin v0.6.0
+git push origin v0.7.0
 ```
 
 如果 Release 上传时报 403，请在仓库 `Settings -> Actions -> General -> Workflow permissions` 中启用 `Read and write permissions`。
