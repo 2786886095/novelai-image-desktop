@@ -460,10 +460,11 @@ async function readWorkbenchImage(): Promise<{ base64: string; buffer: Buffer; i
 /** Render a save filename (without extension) from the user template. */
 function buildImageFileName(
   template: string,
-  ctx: { date: string; now: Date; seq: number; seed: number; model: string; prefix: string },
+  ctx: { date: string; now: Date; seq: number; seed: number; model: string; prefix: string; name?: string },
 ): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   const time = `${pad(ctx.now.getHours())}${pad(ctx.now.getMinutes())}${pad(ctx.now.getSeconds())}`;
+  const custom = (ctx.name ?? "").trim();
   const tokens: Record<string, string> = {
     date: ctx.date,
     time,
@@ -471,10 +472,17 @@ function buildImageFileName(
     seed: String(ctx.seed),
     model: ctx.model,
     type: ctx.prefix,
+    name: custom,
     ts: String(ctx.now.getTime()),
   };
   let name = (template && template.trim()) || "{date}_{seq}_{model}";
   name = name.replace(/\{(\w+)\}/g, (_m, key: string) => tokens[key] ?? "");
+  // If the user typed a custom name but the template has no {name} slot, prepend it
+  // so the custom name always takes effect without forcing a template edit.
+  if (custom && !/\{name\}/.test(template || "")) {
+    const safeCustom = custom.replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, "_");
+    name = `${safeCustom}_${name}`;
+  }
   name = name.replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, "_").slice(0, 100);
   return name || `${ctx.now.getTime()}-${ctx.seq}`;
 }
@@ -518,6 +526,7 @@ async function saveBuffers(
       seed: actualSeed,
       model: safeModel,
       prefix,
+      name: params.fileNamePrefix,
     });
     const filePath = await uniqueFilePath(dir, base, ext);
     await fs.writeFile(filePath, buffers[index]);
@@ -1310,5 +1319,31 @@ export async function suggestTags(model: string, prompt: string): Promise<TagSug
     return tags.length > 0 ? tags : fallback;
   } catch {
     return fallback;
+  }
+}
+
+/**
+ * Translate text (e.g. Chinese -> English) using the public Google Translate
+ * gtx endpoint, which needs no API key. Done in the main process to avoid CORS.
+ * Returns the translated string, or an error message on failure.
+ */
+export async function translateText(
+  text: string,
+  target = "en",
+): Promise<{ ok: boolean; text?: string; error?: string }> {
+  const trimmed = (text ?? "").trim();
+  if (!trimmed) return { ok: false, error: "没有可翻译的内容。" };
+  try {
+    const res = await axios.get("https://translate.googleapis.com/translate_a/single", {
+      params: { client: "gtx", sl: "auto", tl: target, dt: "t", q: trimmed },
+      timeout: 8_000,
+    });
+    // Response shape: [[[ "translated", "source", ... ], ...], ...]
+    const segments = (res.data?.[0] ?? []) as Array<[string, string, ...unknown[]]>;
+    const out = segments.map((s) => s?.[0] ?? "").join("").trim();
+    if (!out) return { ok: false, error: "翻译结果为空。" };
+    return { ok: true, text: out };
+  } catch (error: any) {
+    return { ok: false, error: error?.message ? `翻译失败：${error.message}` : "翻译失败，请检查网络。" };
   }
 }

@@ -3049,3 +3049,133 @@ html, body, #root {
   color: var(--muted);
   margin-bottom: 6px;
 }
+
+/* ── Inspiration capsule: collapsible header ──────────────────────────────────── */
+.prompt-chip-zone.collapsed { gap: 0; padding: 8px 12px; }
+button.prompt-chip-head {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+.chip-head-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+.chip-caret {
+  display: inline-block;
+  transition: transform 0.16s var(--ease-out);
+  color: var(--accent);
+  font-size: 11px;
+}
+.chip-caret.open { transform: rotate(90deg); }
+.chip-head-hint { color: var(--text-muted); font-size: 11px; }
+.prompt-chip-toolbar {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+}
+.prompt-chip-toolbar .prompt-chip-search { flex: 1; }
+.chip-refresh {
+  flex-shrink: 0;
+  border: 1px solid rgba(124, 58, 237, 0.16);
+  border-radius: 999px;
+  padding: 6px 11px;
+  background: rgba(255,255,255,0.62);
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+}
+.chip-refresh:hover { background: #fff; }
+.chip-empty { font-size: 11.5px; color: var(--text-muted); padding: 2px 0; }
+
+/* ── Prompt toolbar: weight editor + translate ───────────────────────────────── */
+.prompt-toolbar-row {
+  display: flex;
+  gap: 8px;
+  margin: 8px 0 2px;
+}
+.prompt-tool-btn {
+  flex: 1;
+  border: 1px solid rgba(124, 58, 237, 0.18);
+  border-radius: 10px;
+  padding: 7px 10px;
+  background: rgba(255,255,255,0.6);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  transition: background 0.14s, color 0.14s, border-color 0.14s;
+}
+.prompt-tool-btn:hover:not(:disabled) { background: #fff; color: var(--accent); border-color: rgba(124,58,237,0.4); }
+.prompt-tool-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.weight-editor {
+  margin: 8px 0 4px;
+  padding: 10px;
+  border: 1px solid rgba(124, 58, 237, 0.14);
+  border-radius: 14px;
+  background: rgba(255,255,255,0.5);
+}
+.weight-editor-hint { font-size: 11px; color: var(--text-muted); margin-bottom: 8px; }
+.weight-tag-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.weight-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border: 1px solid rgba(124, 58, 237, 0.16);
+  border-radius: 999px;
+  background: rgba(255,255,255,0.78);
+  padding: 1px;
+  overflow: hidden;
+}
+.weight-tag.up { border-color: rgba(16, 185, 129, 0.5); background: rgba(16,185,129,0.08); }
+.weight-tag.down { border-color: rgba(239, 68, 68, 0.5); background: rgba(239,68,68,0.07); }
+.weight-tag-core {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.weight-tag-core em { font-style: normal; font-size: 10px; color: var(--accent); font-weight: 800; }
+.weight-btn {
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+}
+.weight-btn:hover { background: rgba(124, 58, 237, 0.12); }
+
+/* ── Run button row (pause / stop while generating) ──────────────────────────── */
+.run-button-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.run-row-btn {
+  width: 100%;
+  font-weight: 700;
+  white-space: nowrap;
+}

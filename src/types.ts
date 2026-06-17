@@ -63,6 +63,8 @@ export interface GenerateParams {
   smea: boolean;
   smeaDyn: boolean;
   variety: boolean;
+  /** Optional custom file-name prefix; empty = use the global naming template only. */
+  fileNamePrefix: string;
 }
 
 export const DEFAULT_PARAMS: GenerateParams = {
@@ -83,6 +85,7 @@ export const DEFAULT_PARAMS: GenerateParams = {
   smea: false,
   smeaDyn: false,
   variety: false,
+  fileNamePrefix: "",
 };
 
 export interface WorkingImage {
@@ -373,6 +376,7 @@ export interface NaiDesktopApi {
   listAiModels: (kind: "reverse" | "convert") => Promise<AiModelListResult>;
   testTagServer: (query: string) => Promise<{ ok: boolean; message: string; tags: TagSuggestion[] }>;
   suggestTags: (model: string, prompt: string) => Promise<TagSuggestion[]>;
+  translate: (text: string, target?: string) => Promise<{ ok: boolean; text?: string; error?: string }>;
   checkUpdate: () => Promise<UpdateInfo>;
   minimize: () => Promise<void>;
   maximize: () => Promise<void>;

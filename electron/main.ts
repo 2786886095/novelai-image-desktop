@@ -16,6 +16,7 @@ import {
   reversePromptImage,
   suggestTags,
   testTagServer,
+  translateText,
   upscaleImg,
   verifyToken,
 } from "./ipc/nai";
@@ -159,6 +160,7 @@ function registerIpc() {
   ipcMain.handle("nai:listModels", (_event, kind: "reverse" | "convert") => listAiModels(kind));
   ipcMain.handle("nai:testTagServer", (_event, query: string) => testTagServer(query));
   ipcMain.handle("nai:suggestTags", (_event, model: string, prompt: string) => suggestTags(model, prompt));
+  ipcMain.handle("nai:translate", (_event, text: string, target?: string) => translateText(text, target));
   ipcMain.handle("nai:cancel", () => cancelGeneration());
 
   ipcMain.handle("storage:getHistory", (_event, date?: string, groupId?: string) => listHistory(date, groupId));

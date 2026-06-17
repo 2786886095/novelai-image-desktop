@@ -7,11 +7,11 @@ import { estimateAnlas } from "./anlas";
 import { relatedTags } from "./related-tags";
 import { fmtCount, wordAtCursor } from "./text-utils";
 import { parsePngMeta, parseImportedParams } from "./png-meta";
+import { splitPromptTags, parseWeightedTag, formatMultiplier, setTagLevelInPrompt } from "./prompt-weight";
 import { Button, IconText, AppPortal, Toggle, NumberInput, SliderInput } from "./components/ui";
 import {
   CAT_COLOR,
   CAT_LABEL,
-  PROMPT_CHIP_POOL,
   TAB_ITEMS,
   pickPromptChips,
   tagDescription,
@@ -527,6 +527,9 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
   const [showCharModal, setShowCharModal] = useState(false);
   const [showTemplateMenu, setShowTemplateMenu] = useState(false);
   const [chipQuery, setChipQuery] = useState("");
+  const [chipOpen, setChipOpen] = useState(false);
+  const [showWeights, setShowWeights] = useState(false);
+  const [translating, setTranslating] = useState(false);
   const [promptChips, setPromptChips] = useState<PromptChip[]>(() => pickPromptChips());
   const promptValue = promptTab === "positive" ? params.positivePrompt : params.negativePrompt;
   const promptKey = promptTab === "positive" ? "positivePrompt" : "negativePrompt";
@@ -547,11 +550,48 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
     const current = promptValue.trim();
     const next = current ? `${current.replace(/\s*,?\s*$/, "")}, ${tag}, ` : `${tag}, `;
     setParam(promptKey, next);
-    setPromptChips(pickPromptChips(12, chipQuery));
+    setPromptChips(pickPromptChips(24, chipQuery));
+  }
+
+  // Per-tag weight editor: parse the active prompt into { core, level } chips.
+  const weightTags = useMemo(
+    () => splitPromptTags(promptValue).map((seg) => parseWeightedTag(seg)),
+    [promptValue],
+  );
+  function bumpWeight(index: number, delta: number) {
+    const tag = weightTags[index];
+    if (!tag) return;
+    setParam(promptKey, setTagLevelInPrompt(promptValue, index, tag.level + delta));
+  }
+
+  async function translatePrompt() {
+    const text = promptValue.trim();
+    if (!text) {
+      setToast("提示词为空，无需翻译");
+      return;
+    }
+    if (!/[一-鿿]/.test(text)) {
+      setToast("当前提示词已是英文");
+      return;
+    }
+    setTranslating(true);
+    try {
+      const res = await window.naiDesktop.translate(text, "en");
+      if (res.ok && res.text) {
+        setParam(promptKey, res.text.trim() + (res.text.trim().endsWith(",") ? " " : ", "));
+        setToast("已翻译为英文，请检查标签");
+      } else {
+        setToast(res.error ?? "翻译失败");
+      }
+    } catch {
+      setToast("翻译失败，请检查网络");
+    } finally {
+      setTranslating(false);
+    }
   }
 
   useEffect(() => {
-    setPromptChips(pickPromptChips(12, chipQuery));
+    setPromptChips(pickPromptChips(24, chipQuery));
   }, [chipQuery]);
 
   const tagCount = useMemo(
@@ -582,37 +622,51 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
           onChange={(e) => setParam("stylePrompt", e.target.value)}
         />
       </label>
-      <div className="prompt-chip-zone">
-        <div className="prompt-chip-head">
-          <span>灵感胶囊</span>
-          <button type="button" onClick={() => setPromptChips(pickPromptChips(12, chipQuery))}>换一组</button>
-        </div>
-        <input
-          className="prompt-chip-search"
-          value={chipQuery}
-          placeholder="输入中文大概意思，例如：蓝眼白发、夜景城市、水彩风格"
-          onChange={(e) => setChipQuery(e.target.value)}
-        />
-        <div className="prompt-chip-list">
-          {promptChips.map((chip) => (
-            <button key={chip.tag} type="button" onClick={() => appendChip(chip.tag)} title={`${chip.tag}：${chip.zh}`}>
-              <span>{chip.tag}</span>
-              <small>{chip.zh}</small>
-            </button>
-          ))}
-        </div>
-        {related.length > 0 && (
-          <div className="related-tags">
-            <div className="related-tags-head">🔗 相关推荐（常一起使用）</div>
-            <div className="prompt-chip-list">
-              {related.map((r) => (
-                <button key={r.tag} type="button" onClick={() => appendChip(r.tag)} title={`${r.tag}：${r.zh}`}>
-                  <span>{r.tag}</span>
-                  <small>{r.zh}</small>
-                </button>
-              ))}
+      <div className={clsx("prompt-chip-zone", !chipOpen && "collapsed")}>
+        <button type="button" className="prompt-chip-head" onClick={() => setChipOpen((v) => !v)}>
+          <span className="chip-head-title">
+            <span className={clsx("chip-caret", chipOpen && "open")}>▸</span>
+            灵感胶囊
+          </span>
+          <small className="chip-head-hint">{chipOpen ? "中文搜索 → 点击插入标签" : "点击展开 · 中文搜 Danbooru 标签"}</small>
+        </button>
+        {chipOpen && (
+          <>
+            <div className="prompt-chip-toolbar">
+              <input
+                className="prompt-chip-search"
+                value={chipQuery}
+                placeholder="输入中文大概意思，例如：蓝眼白发、夜景城市、水彩风格"
+                onChange={(e) => setChipQuery(e.target.value)}
+              />
+              <button type="button" className="chip-refresh" onClick={() => setPromptChips(pickPromptChips(24, chipQuery))}>换一组</button>
             </div>
-          </div>
+            <div className="prompt-chip-list">
+              {promptChips.length === 0 ? (
+                <span className="chip-empty">没有匹配的标签，换个中文词试试（如「猫耳」「赛博朋克」）</span>
+              ) : (
+                promptChips.map((chip) => (
+                  <button key={chip.tag} type="button" onClick={() => appendChip(chip.tag)} title={`${chip.tag}：${chip.zh}`}>
+                    <span>{chip.tag}</span>
+                    <small>{chip.zh}</small>
+                  </button>
+                ))
+              )}
+            </div>
+            {related.length > 0 && (
+              <div className="related-tags">
+                <div className="related-tags-head">🔗 相关推荐（常一起使用）</div>
+                <div className="prompt-chip-list">
+                  {related.map((r) => (
+                    <button key={r.tag} type="button" onClick={() => appendChip(r.tag)} title={`${r.tag}：${r.zh}`}>
+                      <span>{r.tag}</span>
+                      <small>{r.zh}</small>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
       <div className="prompt-tabs">
@@ -630,6 +684,31 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
         enabled={settings?.autoComplete ?? true}
         placeholder={promptTab === "positive" ? "输入正面提示词..." : "输入不希望出现的内容..."}
       />
+      <div className="prompt-toolbar-row">
+        <button type="button" className="prompt-tool-btn" onClick={() => setShowWeights((v) => !v)} disabled={weightTags.length === 0}>
+          ⚖ 权重微调{weightTags.length ? ` (${weightTags.length})` : ""} {showWeights ? "▲" : "▼"}
+        </button>
+        <button type="button" className="prompt-tool-btn" onClick={() => void translatePrompt()} disabled={translating}>
+          {translating ? "翻译中…" : "🌐 中→英翻译"}
+        </button>
+      </div>
+      {showWeights && weightTags.length > 0 && (
+        <div className="weight-editor">
+          <div className="weight-editor-hint">点击 − / ＋ 调整该标签权重（基于 NovelAI 的 {"{}"} / [] 语法）</div>
+          <div className="weight-tag-list">
+            {weightTags.map((wt, i) => (
+              <div key={`${wt.core}-${i}`} className={clsx("weight-tag", wt.level > 0 && "up", wt.level < 0 && "down")}>
+                <button type="button" className="weight-btn" title="降低权重" onClick={() => bumpWeight(i, -1)}>−</button>
+                <span className="weight-tag-core" title={wt.raw}>
+                  {wt.core || "(空)"}
+                  {wt.level !== 0 && <em>{formatMultiplier(wt.level)}</em>}
+                </span>
+                <button type="button" className="weight-btn" title="提高权重" onClick={() => bumpWeight(i, 1)}>＋</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="prompt-helper">
         {settings?.autoComplete ?? true
           ? "英文输入 1 个字符即可推测 tag；↑↓ 选择，Tab/Enter 插入，Esc 关闭。"
@@ -842,11 +921,11 @@ function AccountAndRunButton({
             </div>
           )}
           <div className="run-button-row">
-            <Button variant="secondary" onClick={togglePause}>
-              <IconText icon={queuePaused ? "▶" : "⏸"}>{queuePaused ? "继续" : "暂停"}</IconText>
+            <Button variant="secondary" className="run-row-btn" onClick={togglePause}>
+              {queuePaused ? "▶ 继续生成" : "⏸ 暂停"}
             </Button>
-            <Button variant="danger" onClick={() => void cancel()}>
-              <IconText icon="■">停止</IconText>
+            <Button variant="danger" className="run-row-btn" onClick={() => void cancel()}>
+              ✕ 停止
             </Button>
           </div>
         </>
@@ -869,6 +948,8 @@ function GeneratePanel({ openSettings }: { openSettings: () => void }) {
   const generate = useAppStore((state) => state.generate);
   const batchCount = useAppStore((state) => state.batchCount);
   const setBatchCount = useAppStore((state) => state.setBatchCount);
+  const fileNamePrefix = useAppStore((state) => state.params.fileNamePrefix);
+  const setParam = useAppStore((state) => state.setParam);
 
   return (
     <>
@@ -886,6 +967,14 @@ function GeneratePanel({ openSettings }: { openSettings: () => void }) {
             onChange={(e) => setBatchCount(Number(e.target.value))}
           />
         </div>
+        <label className="field">
+          <span>图片命名（文件名前缀，可留空）</span>
+          <input
+            value={fileNamePrefix}
+            placeholder="例如：我的角色 → 我的角色_20260617_01.png"
+            onChange={(e) => setParam("fileNamePrefix", e.target.value)}
+          />
+        </label>
         <p className="wildcard-hint">
           💡 支持动态提示词通配符 <code>{"{red|blue|green} hair"}</code>，批量时每张随机取一项；NovelAI 的 <code>{"{tag}"}</code> 权重语法不受影响。
         </p>
