@@ -18,7 +18,7 @@ export function Button({
   );
 }
 
-export function IconText({ icon, children }: { icon: string; children: ReactNode }) {
+export function IconText({ icon, children }: { icon: ReactNode; children: ReactNode }) {
   return (
     <span className="icon-text">
       <span className="btn-icon" aria-hidden="true">{icon}</span>

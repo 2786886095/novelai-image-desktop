@@ -3168,6 +3168,15 @@ button.prompt-chip-head {
   padding: 12px 18px 16px;
 }
 
+/* ── Line-icon set (SVG, inherits text color + size) ─────────────────────────── */
+.ui-icon {
+  display: inline-block;
+  vertical-align: -0.14em;
+  flex-shrink: 0;
+}
+/* When an icon is the IconText leading glyph, keep it optically centered. */
+.btn-icon .ui-icon { vertical-align: -0.16em; }
+
 /* ── Model mode + seed mode switches ─────────────────────────────────────────── */
 .model-mode-switch,
 .seed-mode-switch {

@@ -15,6 +15,7 @@ import {
   type NormalizeOptions,
 } from "./prompt-normalize";
 import { Button, IconText, AppPortal, Toggle, NumberInput, SliderInput } from "./components/ui";
+import { Icon } from "./components/icons";
 import {
   CAT_COLOR,
   CAT_LABEL,
@@ -241,7 +242,7 @@ function MenuBar({ openSettings }: { openSettings: () => void }) {
         className="menu-action"
         onClick={() => settings?.outputDir && window.naiDesktop.openInExplorer(settings.outputDir)}
       >
-        <IconText icon="📁">输出目录</IconText>
+        <IconText icon={<Icon name="folder" />}>输出目录</IconText>
       </button>
       <button className="menu-action" onClick={openSettings}>
         <IconText icon="⚙">设置</IconText>
@@ -692,10 +693,10 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
           <span>模型</span>
           <div className="model-mode-switch">
             <button type="button" className={clsx(modelMode === "anime" && "active")} onClick={() => void switchModelMode("anime")}>
-              🎨 动漫模式
+              <Icon name="palette" /> 动漫模式
             </button>
             <button type="button" className={clsx(modelMode === "furry" && "active")} onClick={() => void switchModelMode("furry")}>
-              🐾 Furry 模式
+              <Icon name="paw" /> Furry 模式
             </button>
           </div>
           <select value={params.model} onChange={(e) => setParam("model", e.target.value as GenerateParams["model"])}>
@@ -714,7 +715,7 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
             title={styleLocked ? "已锁定：重置/模板不会改动，重启保留。点击解锁" : "锁定并保存当前风格提示词，使其固定不变"}
             onClick={() => void toggleLock("style")}
           >
-            {styleLocked ? "🔒 已锁定" : "🔓 锁定"}
+            {styleLocked ? <><Icon name="lock" /> 已锁定</> : <><Icon name="unlock" /> 锁定</>}
           </button>
         </span>
         <input
@@ -744,7 +745,7 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
             </div>
             {serverChips.length > 0 && (
               <div className="related-tags">
-                <div className="related-tags-head">🔌 MCP 推荐（{settings?.tagServerTool || "search_tags"}）</div>
+                <div className="related-tags-head"><Icon name="plug" /> MCP 推荐（{settings?.tagServerTool || "search_tags"}）</div>
                 <div className="prompt-chip-list">
                   {serverChips.map((c) => (
                     <button key={`mcp-${c.tag}`} type="button" onClick={() => appendChip(c.tag)} title={`${c.tag}：${c.zh}`}>
@@ -769,7 +770,7 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
             </div>
             {related.length > 0 && (
               <div className="related-tags">
-                <div className="related-tags-head">🔗 相关推荐（常一起使用）</div>
+                <div className="related-tags-head"><Icon name="link" /> 相关推荐（常一起使用）</div>
                 <div className="prompt-chip-list">
                   {related.map((r) => (
                     <button key={r.tag} type="button" onClick={() => appendChip(r.tag)} title={`${r.tag}：${r.zh}`}>
@@ -788,7 +789,7 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
           正面提示词
         </button>
         <button className={clsx(promptTab === "negative" && "active")} onClick={() => setPromptTab("negative")}>
-          负面提示词{negLocked ? " 🔒" : ""}
+          负面提示词{negLocked ? <> <Icon name="lock" /></> : ""}
         </button>
         {promptTab === "negative" && (
           <button
@@ -797,7 +798,7 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
             title={negLocked ? "已锁定：重置/模板不会改动，重启保留。点击解锁" : "锁定并保存当前负面提示词，使其固定不变"}
             onClick={() => void toggleLock("neg")}
           >
-            {negLocked ? "🔒 已锁定" : "🔓 锁定"}
+            {negLocked ? <><Icon name="lock" /> 已锁定</> : <><Icon name="unlock" /> 锁定</>}
           </button>
         )}
       </div>
@@ -813,10 +814,10 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
           ⚖ 权重微调{weightTags.length ? ` (${weightTags.length})` : ""} {showWeights ? "▲" : "▼"}
         </button>
         <button type="button" className="prompt-tool-btn" onClick={() => void translatePrompt()} disabled={translating}>
-          {translating ? "翻译中…" : "🌐 中→英翻译"}
+          {translating ? "翻译中…" : <><Icon name="globe" /> 中→英翻译</>}
         </button>
         <button type="button" className="prompt-tool-btn" onClick={() => setShowNormalize(true)} disabled={!promptValue.trim()}>
-          ✨ 标准化
+          <Icon name="sparkles" /> 标准化
         </button>
         <button
           type="button"
@@ -824,7 +825,7 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
           title="输入英文时推测候选 tag 的功能"
           onClick={() => void toggleAutoComplete()}
         >
-          {(settings?.autoComplete ?? true) ? "💡 提词：开" : "💡 提词：关"}
+          <Icon name="bulb" /> {(settings?.autoComplete ?? true) ? "提词：开" : "提词：关"}
         </button>
       </div>
       {showWeights && weightTags.length > 0 && (
@@ -854,7 +855,7 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
           <>
             <span>{tagCount} 个标签</span>
             <span className={clsx(tokenWarn && "token-warn")}>
-              ≈{tokenEst} tokens{tokenWarn ? " ⚠ 超出225限制" : ""}
+              ≈{tokenEst} tokens{tokenWarn ? <> <Icon name="warning" /> 超出225限制</> : ""}
             </span>
           </>
         )}
@@ -905,7 +906,7 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
           className={clsx(params.seedMode === "random" && "active")}
           onClick={() => setParam("seedMode", "random")}
         >
-          🎲 随机种子
+          <Icon name="dice" /> 随机种子
         </button>
         <button
           type="button"
@@ -915,7 +916,7 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
             if (params.seed <= 0) setParam("seed", Math.floor(Math.random() * 2_147_483_647));
           }}
         >
-          📌 固定种子
+          <Icon name="pin" /> 固定种子
         </button>
       </div>
       {params.seedMode === "fixed" && (
@@ -1026,7 +1027,7 @@ function WorkbenchImageUpload() {
         </>
       ) : (
         <Button className="full" onClick={loadWorkbenchImage}>
-          <IconText icon="📂">加载图片...</IconText>
+          <IconText icon={<Icon name="folderOpen" />}>加载图片...</IconText>
         </Button>
       )}
     </div>
@@ -1124,7 +1125,7 @@ function AccountAndRunButton({
       </div>
       {!account.hasToken ? (
         <Button variant="primary" className="full" onClick={openSettings}>
-          <IconText icon="🔑">请先设置 API</IconText>
+          <IconText icon={<Icon name="key" />}>请先设置 API</IconText>
         </Button>
       ) : isGenerating ? (
         <>
@@ -1190,7 +1191,7 @@ function GeneratePanel({ openSettings }: { openSettings: () => void }) {
           />
         </label>
         <p className="wildcard-hint">
-          💡 支持动态提示词通配符 <code>{"{red|blue|green} hair"}</code>，批量时每张随机取一项；NovelAI 的 <code>{"{tag}"}</code> 权重语法不受影响。
+          <Icon name="bulb" /> 支持动态提示词通配符 <code>{"{red|blue|green} hair"}</code>，批量时每张随机取一项；NovelAI 的 <code>{"{tag}"}</code> 权重语法不受影响。
         </p>
         <FeatureCostCard feature="generate" batchCount={batchCount} label="文生图预计消耗" />
       </div>
@@ -1473,7 +1474,7 @@ function ReversePanel() {
             <span style={{ fontSize: 12 }}>拖入图片到此处，或点击下方按钮打开</span>
           )}
           <label className="btn btn-secondary" style={{ cursor: "pointer", fontSize: 12 }}>
-            <IconText icon="📂">打开文件</IconText>
+            <IconText icon={<Icon name="folderOpen" />}>打开文件</IconText>
             <input
               type="file"
               hidden
@@ -1871,7 +1872,7 @@ function ImageCanvas() {
           {settings?.showFloatingToolbar && (
             <div className="floating-toolbar">
               <Button onClick={() => window.naiDesktop.openInExplorer(currentImage.filePath)}>
-                <IconText icon="📍">定位</IconText>
+                <IconText icon={<Icon name="mapPin" />}>定位</IconText>
               </Button>
               <Button onClick={() => void navigator.clipboard.writeText(currentImage.filePath)}>
                 <IconText icon="⧉">复制路径</IconText>
@@ -1889,7 +1890,7 @@ function ImageCanvas() {
                 <IconText icon="◈">后期</IconText>
               </Button>
               <Button onClick={() => variationFromImage(currentImage)} title="载入此图参数并锁定种子，改提示词后即为变体">
-                <IconText icon="🔒">锁种变体</IconText>
+                <IconText icon={<Icon name="lock" />}>锁种变体</IconText>
               </Button>
               <Button onClick={generate}>
                 <IconText icon="↻">再生成</IconText>
@@ -2045,13 +2046,13 @@ function HistoryPanel() {
         </div>
         <div className="history-group-actions">
           <button type="button" disabled={!canExport} title="打包当前分组为 ZIP" onClick={() => void exportHistoryGroup(selectedGroupId)}>
-            ⬇ 导出ZIP
+            <Icon name="download" /> 导出ZIP
           </button>
           <button type="button" disabled={!activeGroup} title="重命名当前分组" onClick={renameActiveGroup}>
             ✎ 重命名
           </button>
           <button type="button" disabled={!activeGroup} title="删除当前分组" onClick={deleteActiveGroup}>
-            🗑 删除
+            <Icon name="trash" /> 删除
           </button>
         </div>
       </div>
@@ -2263,7 +2264,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                 </label>
                 <div className="row-actions">
                   <Button onClick={selectDir}>
-                    <IconText icon="📁">浏览...</IconText>
+                    <IconText icon={<Icon name="folder" />}>浏览...</IconText>
                   </Button>
                   <Button onClick={() => window.naiDesktop.openInExplorer(settings.outputDir)}>
                     <IconText icon="↗">打开输出目录</IconText>
@@ -2511,7 +2512,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                   </div>
                 </div>
                 <div className="tag-server-card">
-                  <p className="settings-hint" style={{ margin: 0 }}>提示词「🌐 中→英翻译」按钮使用的翻译引擎。</p>
+                  <p className="settings-hint" style={{ margin: 0 }}>提示词「中→英翻译」按钮使用的翻译引擎。</p>
                   <label className="field">
                     <span>翻译引擎</span>
                     <select value={settings.translateProvider} onChange={(e) => void update("translateProvider", e.target.value as AppSettings["translateProvider"])}>
@@ -2688,7 +2689,7 @@ function OnboardingWizard() {
                     await load();
                   }}
                 >
-                  <IconText icon="📁">浏览...</IconText>
+                  <IconText icon={<Icon name="folder" />}>浏览...</IconText>
                 </Button>
               </div>
             )}
@@ -2723,7 +2724,7 @@ function UpdateBanner() {
   return (
     <div className="update-banner">
       <span>
-        🎉 发现新版本 <strong>v{updateInfo.latestVersion}</strong>（当前 v{updateInfo.currentVersion}）
+        <Icon name="upgrade" /> 发现新版本 <strong>v{updateInfo.latestVersion}</strong>（当前 v{updateInfo.currentVersion}）
       </span>
       <div className="update-banner-actions">
         <button
