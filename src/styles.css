@@ -1004,38 +1004,36 @@ button { user-select: none; }
 }
 
 /* ── Inpaint canvas ──────────────────────────────────────────────────────────── */
+/* Mirror .image-stage so the 重绘 preview matches the other three tabs: a
+   definite absolute-inset box, image centered and sized by max-height:100%.
+   The mask canvas shares the image's intrinsic aspect + max constraints, so it
+   renders at the exact same rect (centered) and overlays the image precisely. */
 .inpaint-stage {
-  position: relative;
-  display: grid;
-  place-items: center;
-  max-width: calc(100% - 56px);
-  max-height: calc(100% - 56px);
+  position: absolute;
+  inset: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background:
-    linear-gradient(45deg, #f0eef8 25%, transparent 25%),
-    linear-gradient(-45deg, #f0eef8 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, #f0eef8 75%),
-    linear-gradient(-45deg, transparent 75%, #f0eef8 75%),
-    #fff;
-  background-size: 24px 24px;
-  background-position: 0 0, 0 12px, 12px -12px, -12px 0;
-  box-shadow: var(--shadow-lg);
 }
 .inpaint-base-img {
   display: block;
   max-width: 100%;
-  max-height: calc(100vh - 180px);
+  max-height: 100%;
   object-fit: contain;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-xl);
   user-select: none;
   pointer-events: none;
 }
 .inpaint-mask-canvas {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: var(--radius-md);
   cursor: crosshair;
   touch-action: none;
   mix-blend-mode: screen;
