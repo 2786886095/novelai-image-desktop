@@ -4,14 +4,21 @@
 
 | 系统 | 安装包 | 安装说明 |
 | --- | --- | --- |
-| 🪟 **Windows** (x64) | `Langbai-NovelAI-Studio-0.7.5.exe` | 便携版，双击即用，无需安装 |
-| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-0.7.5-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
-| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-0.7.5.zip` | 解压后即为 `.app`，同样需右键「打开」 |
-| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-0.7.5.AppImage` | `chmod +x` 后直接运行 |
+| 🪟 **Windows** (x64) | `Langbai-NovelAI-Studio-0.7.6.exe` | 便携版，双击即用，无需安装 |
+| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-0.7.6-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
+| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-0.7.6.zip` | 解压后即为 `.app`，同样需右键「打开」 |
+| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-0.7.6.AppImage` | `chmod +x` 后直接运行 |
 | 🤖 **Android** | `app-release.apk` | 直接安装；未签名，需允许「未知来源」 |
 | 📱 **iOS** | `novelai-mobile-unsigned.ipa` | **未签名**，需用 AltStore / Sideloadly 等工具自行侧载 |
 
 > 桌面端与移动端均为 **API-only** 客户端，需自备 NovelAI Persistent API Token。
+
+### v0.7.6 更新内容
+
+- **动漫 / Furry 模式**：模型上方新增「🎨 动漫模式 / 🐾 Furry 模式」切换（默认动漫），模型下拉只显示对应家族的模型并记住选择。
+- **锁定风格 / 负面提示词**：风格提示词与负面提示词支持 🔒 锁定，锁定后跨重启保留，且不会被「重置为默认」或模板套用覆盖。
+- **种子固定 / 随机**：种子新增「🎲 随机 / 📌 固定」切换；固定模式每次复用所填数值，随机模式每次生成都换新种子（文生图 / 图生图 / 局部重绘通用）。
+- **内置反推 / 转换模版升级**：AI 反推与提示词转换的默认系统提示词替换为作者编写的 NovelAI V4.5 三模式模版（Danbooru 标签 / 自然语言 / 混合），覆盖 V4.5 多角色 `|` 写法、MCP 角色检索、权重与冲突检查。
 
 ### v0.7.5 更新内容
 
