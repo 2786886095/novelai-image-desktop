@@ -4,14 +4,21 @@
 
 | 系统 | 安装包 | 安装说明 |
 | --- | --- | --- |
-| 🪟 **Windows** (x64) | `Langbai-NovelAI-Studio-0.7.8.exe` | 便携版，双击即用，无需安装 |
-| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-0.7.8-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
-| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-0.7.8.zip` | 解压后即为 `.app`，同样需右键「打开」 |
-| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-0.7.8.AppImage` | `chmod +x` 后直接运行 |
+| 🪟 **Windows** (x64) | `Langbai-NovelAI-Studio-0.7.9.exe` | 便携版，双击即用，无需安装 |
+| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-0.7.9-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
+| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-0.7.9.zip` | 解压后即为 `.app`，同样需右键「打开」 |
+| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-0.7.9.AppImage` | `chmod +x` 后直接运行 |
 | 🤖 **Android** | `app-release.apk` | 直接安装；未签名，需允许「未知来源」 |
 | 📱 **iOS** | `novelai-mobile-unsigned.ipa` | **未签名**，需用 AltStore / Sideloadly 等工具自行侧载 |
 
 > 桌面端与移动端均为 **API-only** 客户端，需自备 NovelAI Persistent API Token。
+
+### v0.7.9 更新内容
+
+- **修复角色提示词导致无法生成**：清洗角色提示（去空、坐标转数字并 clamp 到 0~1、最多 6 个）；V4/V4.5 正常走结构化 `v4_prompt.char_captions`，仅在 API 返回 400/422 参数错误时回退为 `base prompt | 角色1 | 角色2` 管道写法（不会因 Token/余额/网络/429/5xx 或 V3 误重试）。
+- **修复生成 / 超分 / 后期画布图片被裁切**：修正 `.image-stage` 盒模型（border-box + min-0 + 图片 block/auto），padding 不再撑爆容器裁掉图片边缘。
+- **失败提示更明确**：单张生成失败时显示「图片生成失败：具体原因」，不再误显示「完成：成功 0 张」；取消生成不再被误标为失败。
+- **图生图健壮性**：payload 准备步骤移入 try，准备/读图阶段异常也走统一错误处理。
 
 ### v0.7.8 更新内容
 
