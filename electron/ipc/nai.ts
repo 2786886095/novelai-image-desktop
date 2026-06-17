@@ -720,7 +720,16 @@ async function callVisionApi(
       ...proxyConfig("ai"),
     });
     const content: string = resp.data?.choices?.[0]?.message?.content ?? "";
-    if (!content.trim()) return { ok: false, message: "API 返回内容为空，请检查模型设置。" };
+    if (!content.trim()) {
+      const fin = resp.data?.choices?.[0]?.finish_reason;
+      return {
+        ok: false,
+        message:
+          fin === "length"
+            ? "API 返回被长度截断（内容为空）：该模型可能把额度用在了推理上，请换非推理模型。"
+            : "API 返回内容为空：请确认「模型」填的是该服务支持的模型名（例如 xAI 用 grok-4.3，而非默认 gpt-4o-mini），可点「检测模型」选择。",
+      };
+    }
     return { ok: true, content: content.trim(), message: "成功" };
   } catch (error: any) {
     const msg =
@@ -735,7 +744,7 @@ async function callVisionApi(
 async function callConvertApi(
   systemPrompt: string,
   userText: string,
-  maxTokens = 600,
+  maxTokens = 2000,
 ): Promise<{ ok: boolean; content?: string; message: string }> {
   const settings = getSettings();
   const apiUrl = settings.convertApiUrl.trim();
@@ -762,7 +771,16 @@ async function callConvertApi(
       ...proxyConfig("ai"),
     });
     const content: string = resp.data?.choices?.[0]?.message?.content ?? "";
-    if (!content.trim()) return { ok: false, message: "API 返回内容为空，请检查模型设置。" };
+    if (!content.trim()) {
+      const fin = resp.data?.choices?.[0]?.finish_reason;
+      return {
+        ok: false,
+        message:
+          fin === "length"
+            ? "API 返回被长度截断（内容为空）：该模型可能把额度用在了推理上，请换非推理模型。"
+            : "API 返回内容为空：请确认「模型」填的是该服务支持的模型名（例如 xAI 用 grok-4.3，而非默认 gpt-4o-mini），可点「检测模型」选择。",
+      };
+    }
     return { ok: true, content: content.trim(), message: "成功" };
   } catch (error: any) {
     const msg =
@@ -1003,7 +1021,7 @@ export async function reversePromptImage(
       { type: "image_url", image_url: { url: `data:image/png;base64,${imageBase64}`, detail: "high" } },
       { type: "text", text: "Generate the prompt for this image." },
     ],
-    900,
+    2000,
   );
 
   if (result.ok) {
@@ -1097,7 +1115,7 @@ export async function convertPromptText(
   const hintText = tagHints.length
     ? `\n\nCandidate Danbooru tags from the configured tag server:\n${tagHints.map((tag) => tag.tag).join(", ")}`
     : "";
-  const result = await callConvertApi(systemPrompt, `${chineseText}${hintText}`, 600);
+  const result = await callConvertApi(systemPrompt, `${chineseText}${hintText}`, 2000);
 
   if (result.ok) {
     const content = result.content ?? "";
