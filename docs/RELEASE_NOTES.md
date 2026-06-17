@@ -4,18 +4,22 @@
 
 | 系统 | 安装包 | 安装说明 |
 | --- | --- | --- |
-| 🪟 **Windows** (x64) | `Langbai-NovelAI-Studio-0.8.3.exe` | 便携版，双击即用，无需安装 |
-| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-0.8.3-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
-| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-0.8.3.zip` | 解压后即为 `.app`，同样需右键「打开」 |
-| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-0.8.3.AppImage` | `chmod +x` 后直接运行 |
+| 🪟 **Windows** (x64) | `Langbai-NovelAI-Studio-0.8.4.exe` | 便携版，双击即用，无需安装 |
+| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-0.8.4-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
+| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-0.8.4.zip` | 解压后即为 `.app`，同样需右键「打开」 |
+| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-0.8.4.AppImage` | `chmod +x` 后直接运行 |
 | 🤖 **Android** | `app-release.apk` | 直接安装；未签名，需允许「未知来源」 |
 | 📱 **iOS** | `novelai-mobile-unsigned.ipa` | **未签名**，需用 AltStore / Sideloadly 等工具自行侧载 |
 
 > 桌面端与移动端均为 **API-only** 客户端，需自备 NovelAI Persistent API Token。
 
+### v0.8.4 更新内容
+
+- **AI 反推 / 转换 报错更清晰 + 兼容推理模型**：实测确认请求格式、三模式模版、视觉反推在 xAI（grok-4.3 等）均正常工作并遵循模版。但默认模型 `gpt-4o` / `gpt-4o-mini` 在非 OpenAI 服务（如 xAI）不存在（返回 400），这是接入第三方服务时「返回为空 / 结果不对」的常见原因。本版：返回为空时明确提示「请把模型填成该服务支持的名字（如 xAI 用 grok-4.3，而非默认 gpt-4o-mini），可点检测模型选择」，并区分推理模型的长度截断；同时把反推 / 转换输出额度调大（600/900 → 2000），避免推理模型把额度耗在推理上导致空返回。
+
 ### v0.8.3 更新内容
 
-- **重绘预览与其他三个标签对齐**：局部重绘（反推 / 超分 / 后期之外）的预览原来用 grid + 视口高度上限 + 棋盘格卡片，显得更小、风格也不一致。现改为与生成/超分/后期同款（绝对定位 flex 居中、图片 `max-height:100%` 同样大小、阴影加在图片上、无卡片）。蒙版画布与图片同宽高比、同 max 约束并居中叠放，像素级对齐，绘制映射不受影响。
+- **重绘预览与其他三个标签对齐**：局部重绘的预览原来用 grid + 视口高度上限 + 棋盘格卡片，显得更小、风格也不一致。现改为与生成/超分/后期同款（绝对定位 flex 居中、图片 `max-height:100%` 同样大小、阴影加在图片上、无卡片）。蒙版画布与图片同宽高比、同 max 约束并居中叠放，像素级对齐，绘制映射不受影响。
 
 ### v0.8.2 更新内容
 
