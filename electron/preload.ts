@@ -44,6 +44,7 @@ contextBridge.exposeInMainWorld("naiDesktop", {
   exportHistoryGroup: (groupId: string) => ipcRenderer.invoke("storage:exportGroup", groupId),
   setHistoryGroup: (id: string, groupId?: string) => ipcRenderer.invoke("storage:setHistoryGroup", id, groupId),
   deleteHistory: (id: string) => ipcRenderer.invoke("storage:delete", id),
+  renameHistoryItem: (id: string, name: string) => ipcRenderer.invoke("storage:renameItem", id, name),
   openInExplorer: (targetPath: string) => ipcRenderer.invoke("storage:open", targetPath),
   selectOutputDir: () => ipcRenderer.invoke("storage:selectDir"),
 

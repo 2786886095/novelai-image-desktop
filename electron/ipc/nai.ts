@@ -34,6 +34,7 @@ import {
   setToken,
 } from "./store";
 import { TAG_DICTIONARY } from "../data/tag-dictionary";
+import { mcpSearch } from "./mcp-client";
 
 let currentAbort: AbortController | null = null;
 let workbenchImagePath: string | null = null;
@@ -889,7 +890,30 @@ function parseTagServerPayload(payload: unknown): TagSuggestion[] {
 
 async function queryTagServer(query: string, limit = 12): Promise<TagSuggestion[]> {
   const settings = getSettings();
-  if (!settings.tagServerEnabled || !settings.tagServerUrl.trim() || !query.trim()) return [];
+  if (!settings.tagServerEnabled || !query.trim()) return [];
+  const type = settings.tagServerType ?? "rest";
+  // MCP transports (Streamable HTTP / SSE / stdio) go through the MCP client.
+  if (type === "http" || type === "sse" || type === "stdio") {
+    if (type !== "stdio" && !settings.tagServerUrl.trim()) return [];
+    try {
+      const text = await mcpSearch(
+        {
+          type,
+          url: settings.tagServerUrl,
+          apiKey: settings.tagServerApiKey,
+          tool: settings.tagServerTool,
+          command: settings.tagServerCommand,
+          args: settings.tagServerArgs,
+        },
+        query,
+        limit,
+      );
+      return parseTagServerPayload(text).slice(0, limit);
+    } catch {
+      return [];
+    }
+  }
+  if (!settings.tagServerUrl.trim()) return [];
   const base = settings.tagServerUrl.trim().replace(/\/+$/, "");
   const headers: Record<string, string> = {};
   if (settings.tagServerApiKey.trim()) headers.Authorization = `Bearer ${settings.tagServerApiKey.trim()}`;
@@ -929,7 +953,34 @@ function mergeTagHints(prompt: string, hints: TagSuggestion[]) {
 }
 
 export async function testTagServer(query: string): Promise<{ ok: boolean; message: string; tags: TagSuggestion[] }> {
-  const tags = await queryTagServer(query || "girl", 12);
+  const settings = getSettings();
+  const type = settings.tagServerType ?? "rest";
+  const q = query || "蓝眼白发的少女";
+  // For MCP transports, call directly so we can surface the real error message.
+  if (type === "http" || type === "sse" || type === "stdio") {
+    try {
+      const text = await mcpSearch(
+        {
+          type,
+          url: settings.tagServerUrl,
+          apiKey: settings.tagServerApiKey,
+          tool: settings.tagServerTool,
+          command: settings.tagServerCommand,
+          args: settings.tagServerArgs,
+        },
+        q,
+        12,
+      );
+      const tags = parseTagServerPayload(text).slice(0, 12);
+      const label = type === "stdio" ? "stdio MCP" : type === "sse" ? "SSE MCP" : "Streamable HTTP MCP";
+      return tags.length > 0
+        ? { ok: true, message: `${label} 可用，工具「${settings.tagServerTool || "search_tags"}」返回 ${tags.length} 个标签。`, tags }
+        : { ok: false, message: `${label} 已连接，但工具未返回可解析的标签（原始返回：${text.slice(0, 120) || "空"}）。`, tags: [] };
+    } catch (error: any) {
+      return { ok: false, message: `MCP 连接失败：${error?.message ?? "未知错误"}`, tags: [] };
+    }
+  }
+  const tags = await queryTagServer(q, 12);
   return tags.length > 0
     ? { ok: true, message: `Tag 服务可用，返回 ${tags.length} 个结果。`, tags }
     : { ok: false, message: "Tag 服务没有返回结果，请检查地址、鉴权或接口路径。", tags: [] };
@@ -1323,9 +1374,10 @@ export async function suggestTags(model: string, prompt: string): Promise<TagSug
 }
 
 /**
- * Translate text (e.g. Chinese -> English) using the public Google Translate
- * gtx endpoint, which needs no API key. Done in the main process to avoid CORS.
- * Returns the translated string, or an error message on failure.
+ * Translate text (e.g. Chinese -> English). Provider is chosen in settings:
+ * "google" uses the public gtx endpoint (no key); "baidu" uses the Baidu
+ * translate open API (needs appid + secret). Runs in the main process to avoid
+ * CORS. Returns the translated string, or an error message on failure.
  */
 export async function translateText(
   text: string,
@@ -1333,17 +1385,60 @@ export async function translateText(
 ): Promise<{ ok: boolean; text?: string; error?: string }> {
   const trimmed = (text ?? "").trim();
   if (!trimmed) return { ok: false, error: "没有可翻译的内容。" };
+  const settings = getSettings();
+  if (settings.translateProvider === "baidu") {
+    return baiduTranslate(trimmed, target, settings.baiduAppId.trim(), settings.baiduSecret.trim());
+  }
+  return googleTranslate(trimmed, target);
+}
+
+async function googleTranslate(
+  text: string,
+  target: string,
+): Promise<{ ok: boolean; text?: string; error?: string }> {
   try {
     const res = await axios.get("https://translate.googleapis.com/translate_a/single", {
-      params: { client: "gtx", sl: "auto", tl: target, dt: "t", q: trimmed },
+      params: { client: "gtx", sl: "auto", tl: target, dt: "t", q: text },
       timeout: 8_000,
     });
     // Response shape: [[[ "translated", "source", ... ], ...], ...]
     const segments = (res.data?.[0] ?? []) as Array<[string, string, ...unknown[]]>;
     const out = segments.map((s) => s?.[0] ?? "").join("").trim();
-    if (!out) return { ok: false, error: "翻译结果为空。" };
+    if (!out) return { ok: false, error: "谷歌翻译结果为空。" };
     return { ok: true, text: out };
   } catch (error: any) {
-    return { ok: false, error: error?.message ? `翻译失败：${error.message}` : "翻译失败，请检查网络。" };
+    return { ok: false, error: error?.message ? `谷歌翻译失败：${error.message}` : "谷歌翻译失败，请检查网络（可能需要代理）。" };
+  }
+}
+
+async function baiduTranslate(
+  text: string,
+  target: string,
+  appid: string,
+  secret: string,
+): Promise<{ ok: boolean; text?: string; error?: string }> {
+  if (!appid || !secret) {
+    return { ok: false, error: "请先在设置中填写百度翻译 APP ID 与密钥。" };
+  }
+  // Baidu expects "zh"/"en" language codes and a salt+sign signature.
+  const to = target === "en" ? "en" : target === "zh" || target === "zh-CN" ? "zh" : target;
+  const salt = String(Date.now());
+  const sign = crypto.createHash("md5").update(appid + text + salt + secret).digest("hex");
+  try {
+    const res = await axios.get("https://fanyi-api.baidu.com/api/trans/vip/translate", {
+      params: { q: text, from: "auto", to, appid, salt, sign },
+      timeout: 8_000,
+    });
+    if (res.data?.error_code) {
+      return { ok: false, error: `百度翻译失败：${res.data.error_code} ${res.data.error_msg ?? ""}` };
+    }
+    const out = (res.data?.trans_result ?? [])
+      .map((r: { dst?: string }) => r?.dst ?? "")
+      .join("\n")
+      .trim();
+    if (!out) return { ok: false, error: "百度翻译结果为空。" };
+    return { ok: true, text: out };
+  } catch (error: any) {
+    return { ok: false, error: error?.message ? `百度翻译失败：${error.message}` : "百度翻译失败，请检查网络。" };
   }
 }

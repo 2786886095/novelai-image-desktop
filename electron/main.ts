@@ -41,6 +41,7 @@ import {
   openTarget,
   removeGroup,
   renameGroup,
+  renameHistoryItem,
   selectOutputDir,
 } from "./ipc/storage";
 import { checkUpdate } from "./ipc/update";
@@ -172,6 +173,7 @@ function registerIpc() {
   ipcMain.handle("storage:exportGroup", (_event, groupId: string) => exportGroup(groupId));
   ipcMain.handle("storage:setHistoryGroup", (_event, id: string, groupId?: string) => assignHistoryGroup(id, groupId));
   ipcMain.handle("storage:delete", (_event, id: string) => deleteHistoryItem(id));
+  ipcMain.handle("storage:renameItem", (_event, id: string, name: string) => renameHistoryItem(id, name));
   ipcMain.handle("storage:open", (_event, targetPath: string) => openTarget(targetPath));
   ipcMain.handle("storage:selectDir", () => selectOutputDir());
 

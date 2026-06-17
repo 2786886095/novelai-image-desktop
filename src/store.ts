@@ -135,6 +135,7 @@ interface AppState {
   selectImage: (item: HistoryItem) => void;
   variationFromImage: (item: HistoryItem) => void;
   deleteHistory: (id: string) => Promise<void>;
+  renameHistoryItem: (id: string, name: string) => Promise<void>;
   clearToast: () => void;
 }
 
@@ -719,6 +720,18 @@ export const useAppStore = create<AppState>((set, get) => ({
     await get().refreshHistory();
     const current = get().currentImage;
     if (current?.id === id) set({ currentImage: get().history[0] ?? null });
+  },
+
+  async renameHistoryItem(id, name) {
+    const res = await window.naiDesktop.renameHistoryItem(id, name);
+    if (!res.ok) {
+      set({ toast: res.message ?? "重命名失败" });
+      return;
+    }
+    await get().refreshHistory();
+    const current = get().currentImage;
+    if (current?.id === id && res.item) set({ currentImage: res.item });
+    set({ toast: "已重命名图片" });
   },
 
   clearToast() {

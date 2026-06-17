@@ -3,6 +3,7 @@ import fs from "fs/promises";
 import path from "path";
 import JSZip from "jszip";
 import type { HistoryItem } from "../../src/types";
+import { pathToFileURL } from "url";
 import {
   createHistoryGroup,
   deleteHistoryGroup,
@@ -14,6 +15,7 @@ import {
   renameHistoryGroup,
   setHistoryGroup,
   setSetting,
+  updateHistoryItem,
 } from "./store";
 
 /** Sanitize a string for safe use inside a filename. */
@@ -108,6 +110,41 @@ export function createGroup(name: string) {
 
 export function assignHistoryGroup(id: string, groupId?: string) {
   return setHistoryGroup(id, groupId);
+}
+
+/**
+ * Rename a saved image from the history panel: rename the file on disk (keeping
+ * its extension, in the same folder, avoiding collisions) and update the index.
+ */
+export async function renameHistoryItem(id: string, rawName: string): Promise<{ ok: boolean; message?: string; item?: HistoryItem }> {
+  const items = getHistory();
+  const item = items.find((it) => it.id === id);
+  if (!item) return { ok: false, message: "找不到该图片记录。" };
+  const cleaned = safeName(rawName);
+  if (!cleaned) return { ok: false, message: "文件名不能为空。" };
+  const dir = path.dirname(item.filePath);
+  const ext = path.extname(item.filePath) || ".png";
+  let target = path.join(dir, `${cleaned}${ext}`);
+  if (path.resolve(target) === path.resolve(item.filePath)) {
+    return { ok: true, item }; // unchanged
+  }
+  // Avoid clobbering an existing file.
+  let n = 1;
+  while (true) {
+    try {
+      await fs.access(target);
+      target = path.join(dir, `${cleaned}-${n++}${ext}`);
+    } catch {
+      break;
+    }
+  }
+  try {
+    await fs.rename(item.filePath, target);
+  } catch (e: any) {
+    return { ok: false, message: `重命名失败：${e?.message ?? "未知错误"}` };
+  }
+  const updated = updateHistoryItem(id, { filePath: target, fileUrl: pathToFileURL(target).toString() });
+  return { ok: true, item: updated ?? { ...item, filePath: target, fileUrl: pathToFileURL(target).toString() } };
 }
 
 export async function deleteHistoryItem(id: string) {

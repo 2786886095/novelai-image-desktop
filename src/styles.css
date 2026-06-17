@@ -1175,6 +1175,23 @@ button { user-select: none; }
 }
 .history-item:hover .history-delete { display: flex; align-items: center; justify-content: center; }
 
+.history-rename {
+  position: absolute;
+  top: 4px;
+  right: 30px;
+  display: none;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(109, 40, 217, 0.88);
+  color: #fff;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+}
+.history-item:hover .history-rename { display: flex; align-items: center; justify-content: center; }
+
 /* ── Status bar ──────────────────────────────────────────────────────────────── */
 .status-bar {
   display: flex;
@@ -3027,8 +3044,6 @@ html, body, #root {
 }
 
 /* ── Queue progress / pause ────────────────────────────────────────────────── */
-.run-button-row { display: flex; gap: 8px; }
-.run-button-row .btn { flex: 1; }
 .queue-progress {
   font-size: 12px;
   color: var(--muted);
@@ -3176,6 +3191,17 @@ button.prompt-chip-head {
 }
 .run-row-btn {
   width: 100%;
+  min-height: 38px;
   font-weight: 700;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+/* Guarantee the stop button is always a visible solid red with white text,
+   regardless of theme/base-button overrides. */
+.run-row-btn.btn-danger {
+  background: var(--danger, #dc2626) !important;
+  border-color: var(--danger, #dc2626) !important;
+  color: #fff !important;
 }

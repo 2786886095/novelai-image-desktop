@@ -51,6 +51,13 @@ export function defaultSettings(): AppSettings {
     tagServerEnabled: false,
     tagServerUrl: "",
     tagServerApiKey: "",
+    tagServerType: "rest" as const,
+    tagServerCommand: "",
+    tagServerArgs: "",
+    tagServerTool: "search_tags",
+    translateProvider: "google" as const,
+    baiduAppId: "",
+    baiduSecret: "",
     activeHistoryGroupId: "",
     imageNameTemplate: "{date}_{seq}_{model}",
     promptTemplates: [],
@@ -179,6 +186,18 @@ export function removeHistory(id: string): HistoryItem | null {
   data.history = data.history.filter((item) => item.id !== id);
   writeStore(data);
   return found;
+}
+
+export function updateHistoryItem(id: string, patch: Partial<HistoryItem>): HistoryItem | null {
+  const data = readStore();
+  let updated: HistoryItem | null = null;
+  data.history = data.history.map((item) => {
+    if (item.id !== id) return item;
+    updated = { ...item, ...patch };
+    return updated;
+  });
+  if (updated) writeStore(data);
+  return updated;
 }
 
 export function getHistoryGroups(): HistoryGroup[] {

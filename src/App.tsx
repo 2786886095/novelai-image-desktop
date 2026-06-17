@@ -29,6 +29,7 @@ import {
   NAI_UC_PRESETS,
   type AppSettings,
   type HistoryGroup,
+  type HistoryItem,
   type GenerateParams,
   type ModePromptTemplates,
   type PromptTemplate,
@@ -1704,7 +1705,14 @@ function HistoryPanel() {
   const setHistoryItemGroup = useAppStore((state) => state.setHistoryItemGroup);
   const selectImage = useAppStore((state) => state.selectImage);
   const deleteHistory = useAppStore((state) => state.deleteHistory);
+  const renameHistoryItem = useAppStore((state) => state.renameHistoryItem);
   const [newGroupName, setNewGroupName] = useState("");
+
+  function renameItem(item: HistoryItem) {
+    const current = item.filePath.split(/[\\/]/).pop()?.replace(/\.[^.]+$/, "") ?? "";
+    const next = window.prompt("重命名图片（不含扩展名，会同步重命名本地文件）", current);
+    if (next && next.trim()) void renameHistoryItem(item.id, next.trim());
+  }
 
   function submitGroup() {
     const name = newGroupName.trim();
@@ -1801,6 +1809,9 @@ function HistoryPanel() {
                 <option value={group.id} key={group.id}>{group.name}</option>
               ))}
             </select>
+            <button className="history-rename" title="重命名图片（同步本地文件）" onClick={() => renameItem(item)}>
+              ✎
+            </button>
             <button className="history-delete" title="删除记录和本地文件" onClick={() => void deleteHistory(item.id)}>
               ×
             </button>
@@ -1828,6 +1839,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
   const [modelCheckKind, setModelCheckKind] = useState<"reverse" | "convert" | "">("");
   const [modelCheckMessage, setModelCheckMessage] = useState("");
   const [detectedModels, setDetectedModels] = useState<string[]>([]);
+  const [detectedKind, setDetectedKind] = useState<"reverse" | "convert" | "">("");
   const [tagTestQuery, setTagTestQuery] = useState("蓝眼白发少女");
   const [tagTestMessage, setTagTestMessage] = useState("");
   const [tagTestTags, setTagTestTags] = useState<TagSuggestion[]>([]);
@@ -1877,10 +1889,12 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
     setModelCheckKind(kind);
     setModelCheckMessage("正在检测模型...");
     setDetectedModels([]);
+    setDetectedKind("");
     const result = await window.naiDesktop.listAiModels(kind);
     setModelCheckKind("");
     setModelCheckMessage(result.message);
-    setDetectedModels(result.models.slice(0, 30));
+    setDetectedModels(result.models.slice(0, 80));
+    if (result.models.length > 0) setDetectedKind(kind);
   }
 
   async function detectTagServer() {
@@ -2052,6 +2066,20 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                 <Button onClick={() => void detectModels("reverse")} disabled={modelCheckKind === "reverse"}>
                   <IconText icon="◎">{modelCheckKind === "reverse" ? "检测中..." : "检测反推接口模型"}</IconText>
                 </Button>
+                {detectedKind === "reverse" && detectedModels.length > 0 && (
+                  <label className="field">
+                    <span>选择模型（检测到 {detectedModels.length} 个）</span>
+                    <select
+                      value={detectedModels.includes(settings.visionApiModel) ? settings.visionApiModel : ""}
+                      onChange={(e) => e.target.value && void update("visionApiModel", e.target.value)}
+                    >
+                      <option value="">— 从检测结果选择 —</option>
+                      {detectedModels.map((m) => (
+                        <option value={m} key={m}>{m}</option>
+                      ))}
+                    </select>
+                  </label>
+                )}
                 <ModeTemplateEditor
                   value={settings.reversePromptTemplates}
                   onChange={(next) => void update("reversePromptTemplates", next)}
@@ -2089,6 +2117,20 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                 <Button onClick={() => void detectModels("convert")} disabled={modelCheckKind === "convert"}>
                   <IconText icon="◎">{modelCheckKind === "convert" ? "检测中..." : "检测转换接口模型"}</IconText>
                 </Button>
+                {detectedKind === "convert" && detectedModels.length > 0 && (
+                  <label className="field">
+                    <span>选择模型（检测到 {detectedModels.length} 个）</span>
+                    <select
+                      value={detectedModels.includes(settings.convertApiModel) ? settings.convertApiModel : ""}
+                      onChange={(e) => e.target.value && void update("convertApiModel", e.target.value)}
+                    >
+                      <option value="">— 从检测结果选择 —</option>
+                      {detectedModels.map((m) => (
+                        <option value={m} key={m}>{m}</option>
+                      ))}
+                    </select>
+                  </label>
+                )}
                 <ModeTemplateEditor
                   value={settings.convertPromptTemplates}
                   onChange={(next) => void update("convertPromptTemplates", next)}
@@ -2109,22 +2151,64 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                 </div>
                 <div className="tag-server-card">
                   <label className="field">
-                    <span>Tag/MCP 服务地址</span>
-                    <input
-                      value={settings.tagServerUrl}
-                      placeholder="例如：http://127.0.0.1:8765 或 MCP HTTP 网关"
-                      onChange={(e) => void update("tagServerUrl", e.target.value)}
-                    />
+                    <span>服务类型 / MCP 传输</span>
+                    <select value={settings.tagServerType} onChange={(e) => void update("tagServerType", e.target.value as AppSettings["tagServerType"])}>
+                      <option value="rest">普通 HTTP 接口（REST /search /tags）</option>
+                      <option value="http">MCP · Streamable HTTP（推荐，如 DanbooruSearchOnline）</option>
+                      <option value="sse">MCP · SSE（旧版 HTTP+SSE）</option>
+                      <option value="stdio">MCP · stdio（本地启动子进程）</option>
+                    </select>
                   </label>
-                  <label className="field">
-                    <span>服务 Key（可选）</span>
-                    <input
-                      type="password"
-                      value={settings.tagServerApiKey}
-                      placeholder="Bearer Token，可留空"
-                      onChange={(e) => void update("tagServerApiKey", e.target.value)}
-                    />
-                  </label>
+                  {settings.tagServerType === "stdio" ? (
+                    <>
+                      <label className="field">
+                        <span>启动命令</span>
+                        <input
+                          value={settings.tagServerCommand}
+                          placeholder="例如：npx 或 mcp-remote 的绝对路径"
+                          onChange={(e) => void update("tagServerCommand", e.target.value)}
+                        />
+                      </label>
+                      <label className="field">
+                        <span>命令参数（空格分隔）</span>
+                        <input
+                          value={settings.tagServerArgs}
+                          placeholder="例如：-y mcp-remote https://sakizuki-danboorusearch.hf.space/mcp/mcp"
+                          onChange={(e) => void update("tagServerArgs", e.target.value)}
+                        />
+                      </label>
+                    </>
+                  ) : (
+                    <>
+                      <label className="field">
+                        <span>{settings.tagServerType === "rest" ? "服务地址" : "MCP 服务地址"}</span>
+                        <input
+                          value={settings.tagServerUrl}
+                          placeholder={settings.tagServerType === "rest" ? "例如：http://127.0.0.1:8765" : "例如：https://sakizuki-danboorusearch.hf.space/mcp/mcp"}
+                          onChange={(e) => void update("tagServerUrl", e.target.value)}
+                        />
+                      </label>
+                      <label className="field">
+                        <span>服务 Key（可选）</span>
+                        <input
+                          type="password"
+                          value={settings.tagServerApiKey}
+                          placeholder="Bearer Token，可留空"
+                          onChange={(e) => void update("tagServerApiKey", e.target.value)}
+                        />
+                      </label>
+                    </>
+                  )}
+                  {settings.tagServerType !== "rest" && (
+                    <label className="field">
+                      <span>MCP 工具名</span>
+                      <input
+                        value={settings.tagServerTool}
+                        placeholder="search_tags"
+                        onChange={(e) => void update("tagServerTool", e.target.value)}
+                      />
+                    </label>
+                  )}
                   <div className="history-group-create">
                     <input value={tagTestQuery} onChange={(e) => setTagTestQuery(e.target.value)} placeholder="测试搜索，例如：蓝眼白发少女" />
                     <button type="button" onClick={() => void detectTagServer()} disabled={tagTesting}>
@@ -2136,6 +2220,37 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                       <strong>{tagTestMessage}</strong>
                       {tagTestTags.length > 0 && <small>{tagTestTags.map((tag) => tag.tag).join(", ")}</small>}
                     </div>
+                  )}
+                </div>
+                <div className="tag-server-card">
+                  <p className="settings-hint" style={{ margin: 0 }}>提示词「🌐 中→英翻译」按钮使用的翻译引擎。</p>
+                  <label className="field">
+                    <span>翻译引擎</span>
+                    <select value={settings.translateProvider} onChange={(e) => void update("translateProvider", e.target.value as AppSettings["translateProvider"])}>
+                      <option value="google">谷歌翻译（免费，可能需要代理）</option>
+                      <option value="baidu">百度翻译（需 APP ID 与密钥）</option>
+                    </select>
+                  </label>
+                  {settings.translateProvider === "baidu" && (
+                    <>
+                      <label className="field">
+                        <span>百度翻译 APP ID</span>
+                        <input
+                          value={settings.baiduAppId}
+                          placeholder="在 fanyi-api.baidu.com 申请"
+                          onChange={(e) => void update("baiduAppId", e.target.value)}
+                        />
+                      </label>
+                      <label className="field">
+                        <span>百度翻译密钥</span>
+                        <input
+                          type="password"
+                          value={settings.baiduSecret}
+                          placeholder="开发者密钥"
+                          onChange={(e) => void update("baiduSecret", e.target.value)}
+                        />
+                      </label>
+                    </>
                   )}
                 </div>
                 <p className="settings-hint">提示词模板可以为提示词快速添加前缀/后缀/负面词。在生成面板的提示词区或检视面板可一键应用。</p>

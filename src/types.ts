@@ -3,6 +3,8 @@ export const APP_NAME = "Langbai NovelAI Studio";
 export const PROJECT_REPOSITORY = "https://github.com/2786886095/novelai-image-desktop";
 
 export type ReversePromptMode = "tags" | "natural" | "mixed";
+export type TagServerType = "rest" | "http" | "sse" | "stdio";
+export type TranslateProvider = "google" | "baidu";
 
 /** Independent system-prompt templates keyed by output mode. Empty = built-in. */
 export interface ModePromptTemplates {
@@ -300,6 +302,19 @@ export interface AppSettings {
   tagServerEnabled: boolean;
   tagServerUrl: string;
   tagServerApiKey: string;
+  // Transport for the tag service. "rest" = plain HTTP endpoints; "http" =
+  // Streamable HTTP MCP (DanbooruSearchOnline); "sse" = legacy HTTP+SSE MCP;
+  // "stdio" = spawn a local MCP server process.
+  tagServerType: TagServerType;
+  // For stdio MCP: the command + args to launch the server.
+  tagServerCommand: string;
+  tagServerArgs: string;
+  // MCP tool name to call for tag search (DanbooruSearchOnline: search_tags).
+  tagServerTool: string;
+  // Translation
+  translateProvider: TranslateProvider;
+  baiduAppId: string;
+  baiduSecret: string;
   activeHistoryGroupId: string;
   // Filename template for saved images. Tokens: {date} {time} {seq} {seed} {model} {ext}
   imageNameTemplate: string;
@@ -364,6 +379,7 @@ export interface NaiDesktopApi {
   exportHistoryGroup: (groupId: string) => Promise<{ ok: boolean; message: string; path?: string }>;
   setHistoryGroup: (id: string, groupId?: string) => Promise<{ ok: boolean }>;
   deleteHistory: (id: string) => Promise<{ ok: boolean }>;
+  renameHistoryItem: (id: string, name: string) => Promise<{ ok: boolean; message?: string; item?: HistoryItem }>;
   openInExplorer: (targetPath: string) => Promise<{ ok: boolean }>;
   selectOutputDir: () => Promise<string | null>;
   getSetting: <K extends SettingKey>(key: K) => Promise<AppSettings[K]>;
