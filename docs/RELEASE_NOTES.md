@@ -4,14 +4,18 @@
 
 | 系统 | 安装包 | 安装说明 |
 | --- | --- | --- |
-| 🪟 **Windows** (x64) | `Langbai-NovelAI-Studio-0.8.2.exe` | 便携版，双击即用，无需安装 |
-| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-0.8.2-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
-| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-0.8.2.zip` | 解压后即为 `.app`，同样需右键「打开」 |
-| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-0.8.2.AppImage` | `chmod +x` 后直接运行 |
+| 🪟 **Windows** (x64) | `Langbai-NovelAI-Studio-0.8.3.exe` | 便携版，双击即用，无需安装 |
+| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-0.8.3-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
+| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-0.8.3.zip` | 解压后即为 `.app`，同样需右键「打开」 |
+| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-0.8.3.AppImage` | `chmod +x` 后直接运行 |
 | 🤖 **Android** | `app-release.apk` | 直接安装；未签名，需允许「未知来源」 |
 | 📱 **iOS** | `novelai-mobile-unsigned.ipa` | **未签名**，需用 AltStore / Sideloadly 等工具自行侧载 |
 
 > 桌面端与移动端均为 **API-only** 客户端，需自备 NovelAI Persistent API Token。
+
+### v0.8.3 更新内容
+
+- **重绘预览与其他三个标签对齐**：局部重绘（反推 / 超分 / 后期之外）的预览原来用 grid + 视口高度上限 + 棋盘格卡片，显得更小、风格也不一致。现改为与生成/超分/后期同款（绝对定位 flex 居中、图片 `max-height:100%` 同样大小、阴影加在图片上、无卡片）。蒙版画布与图片同宽高比、同 max 约束并居中叠放，像素级对齐，绘制映射不受影响。
 
 ### v0.8.2 更新内容
 
@@ -24,7 +28,7 @@
 
 ### v0.8.0 更新内容
 
-- **修复发现新版本时界面全乱（首次尝试）**：`.app-shell` 网格新增自适应横幅行 + 始终渲染 0 高占位（注：此版未覆盖到玻璃主题里的第二处 `.app-shell`，已在 v0.8.2 补全）。
+- **修复发现新版本时界面全乱（首次尝试）**：`.app-shell` 网格新增自适应横幅行 + 始终渲染 0 高占位（注：此版未覆盖到玻璃主题里的第二处 `.app-shell`，已在 v0.8.1 补全）。
 - **去掉画布底部悬浮工具条**：原本绝对定位在图片底部、遮挡画面——这正是「生成 / 超分 / 后期」图片看起来不完整（而重绘没有该悬浮条所以完整）的原因。已彻底移除定位 / 复制 / 发送等悬浮按钮，图片完整显示、视野不再被挡。
 
 ### v0.7.9 更新内容
