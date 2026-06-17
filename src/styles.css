@@ -474,6 +474,9 @@ button { user-select: none; }
 .workspace {
   display: grid;
   grid-template-columns: 320px minmax(420px, 1fr) 280px;
+  /* A definite single row so each column (incl. the canvas) has a definite
+     height — needed for the image stage's max-height to actually constrain. */
+  grid-template-rows: minmax(0, 1fr);
   min-height: 0;
   gap: 10px;
   padding: 10px;
@@ -932,21 +935,19 @@ button { user-select: none; }
 
 /* ── Image stage ─────────────────────────────────────────────────────────────── */
 .image-stage {
-  position: relative;
-  box-sizing: border-box;
-  display: grid;
-  place-items: center;
-  width: 100%;
-  height: 100%;
-  min-width: 0;
-  min-height: 0;
+  /* Absolute inset gives a DEFINITE box (canvas minus a margin). Use FLEX (not
+     grid) to center: a grid's implicit auto row grows to the image's content
+     height, so max-height:100% on the img wouldn't constrain and a tall
+     portrait overflowed/clipped. Flex resolves max-height:100% against this box. */
+  position: absolute;
+  inset: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   overflow: hidden;
-  padding: 28px;
 }
 .image-stage img {
   display: block;
-  width: auto;
-  height: auto;
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
@@ -2486,9 +2487,6 @@ html, body, #root {
   background: rgba(255,255,255,0.70);
   box-shadow: inset 0 0 0 1px rgba(255,255,255,0.68);
 }
-.image-stage {
-  padding: 34px;
-}
 .image-stage img {
   border-radius: 24px;
   box-shadow: 0 34px 100px rgba(38, 20, 84, 0.28);
@@ -3155,6 +3153,19 @@ button.prompt-chip-head {
   gap: 8px;
   padding: 12px 18px 16px;
 }
+
+/* ── Per-mode template editor (反推 / 转换) ───────────────────────────────────── */
+.tpl-state {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgba(124, 58, 237, 0.10);
+  color: var(--text-muted);
+}
+.tpl-state.custom { background: rgba(245, 158, 11, 0.18); color: #b45309; }
+.tpl-actions { display: flex; gap: 8px; margin-top: 6px; }
+.theme-dark .tpl-state.custom { color: #fbbf24; }
 
 /* ── Proxy settings card ─────────────────────────────────────────────────────── */
 .proxy-card {

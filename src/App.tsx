@@ -14,6 +14,7 @@ import {
   NORMALIZE_LABELS,
   type NormalizeOptions,
 } from "./prompt-normalize";
+import { REVERSE_SYSTEM_PROMPTS, CONVERT_SYSTEM_PROMPTS } from "./data/prompt-templates";
 import { Button, IconText, AppPortal, Toggle, NumberInput, SliderInput } from "./components/ui";
 import { Icon } from "./components/icons";
 import {
@@ -1346,9 +1347,11 @@ function DirectorPanel({ openSettings }: { openSettings: () => void }) {
 // Per-mode system-prompt template editor (used in both 反推 and 转换 settings).
 function ModeTemplateEditor({
   value,
+  defaults,
   onChange,
 }: {
   value: ModePromptTemplates;
+  defaults: ModePromptTemplates;
   onChange: (next: ModePromptTemplates) => void;
 }) {
   const [mode, setMode] = useState<ReversePromptMode>("tags");
@@ -1357,9 +1360,16 @@ function ModeTemplateEditor({
     ["natural", "自然语言"],
     ["mixed", "混合模式"],
   ];
+  const override = value?.[mode]?.trim() ?? "";
+  const isCustom = override.length > 0;
+  // Show the built-in default text when there's no override, so it's never hidden.
+  const shown = isCustom ? value[mode] : defaults[mode];
   return (
     <div className="field">
-      <span>提示词模板（按输出模式独立）</span>
+      <span className="field-label-row">
+        提示词模板（三种模式各自独立，绝不混用）
+        <span className={clsx("tpl-state", isCustom && "custom")}>{isCustom ? "已自定义" : "默认"}</span>
+      </span>
       <div className="mode-selector" style={{ marginBottom: 8 }}>
         {labels.map(([val, label]) => (
           <button
@@ -1374,12 +1384,24 @@ function ModeTemplateEditor({
       </div>
       <textarea
         className="prompt-box"
-        style={{ minHeight: 120 }}
-        value={value?.[mode] ?? ""}
-        placeholder="留空则使用内置默认模板"
+        style={{ minHeight: 160 }}
+        value={shown}
         onChange={(e) => onChange({ ...value, [mode]: e.target.value })}
       />
-      <small className="settings-hint">标签 / 自然语言 / 混合三种输出各用独立系统提示词；留空使用内置默认。</small>
+      <div className="tpl-actions">
+        <button
+          type="button"
+          className="prompt-tool-btn"
+          disabled={!isCustom}
+          title="把当前模式恢复为内置默认模板"
+          onClick={() => onChange({ ...value, [mode]: "" })}
+        >
+          ↺ 恢复默认（{labels.find(([v]) => v === mode)?.[1]}）
+        </button>
+      </div>
+      <small className="settings-hint">
+        标签 / 自然语言 / 混合三种输出各用<strong>独立</strong>系统提示词，互不混用。直接编辑即生效；点「恢复默认」可随时还原为内置模板。
+      </small>
     </div>
   );
 }
@@ -2363,6 +2385,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                 )}
                 <ModeTemplateEditor
                   value={settings.reversePromptTemplates}
+                  defaults={REVERSE_SYSTEM_PROMPTS}
                   onChange={(next) => void update("reversePromptTemplates", next)}
                 />
               </div>
@@ -2414,6 +2437,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                 )}
                 <ModeTemplateEditor
                   value={settings.convertPromptTemplates}
+                  defaults={CONVERT_SYSTEM_PROMPTS}
                   onChange={(next) => void update("convertPromptTemplates", next)}
                 />
               </div>

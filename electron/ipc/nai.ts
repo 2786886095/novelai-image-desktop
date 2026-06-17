@@ -37,7 +37,7 @@ import { TAG_DICTIONARY } from "../data/tag-dictionary";
 import { mcpSearch } from "./mcp-client";
 import { zhForTag } from "../../src/prompt-data";
 import { proxyConfig } from "./proxy";
-import { REVERSE_SYSTEM_PROMPTS, CONVERT_SYSTEM_PROMPTS } from "../data/prompt-templates";
+import { REVERSE_SYSTEM_PROMPTS, CONVERT_SYSTEM_PROMPTS } from "../../src/data/prompt-templates";
 
 let currentAbort: AbortController | null = null;
 let workbenchImagePath: string | null = null;
