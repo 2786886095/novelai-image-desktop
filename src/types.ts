@@ -1,4 +1,4 @@
-export const APP_VERSION = "0.7.2";
+export const APP_VERSION = "0.7.3";
 export const APP_NAME = "Langbai NovelAI Studio";
 export const PROJECT_REPOSITORY = "https://github.com/2786886095/novelai-image-desktop";
 

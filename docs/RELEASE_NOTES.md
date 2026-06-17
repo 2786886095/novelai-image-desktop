@@ -4,14 +4,22 @@
 
 | 系统 | 安装包 | 安装说明 |
 | --- | --- | --- |
-| 🪟 **Windows** (x64) | `Langbai-NovelAI-Studio-0.7.2.exe` | 便携版，双击即用，无需安装 |
-| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-0.7.2-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
-| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-0.7.2.zip` | 解压后即为 `.app`，同样需右键「打开」 |
-| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-0.7.2.AppImage` | `chmod +x` 后直接运行 |
+| 🪟 **Windows** (x64) | `Langbai-NovelAI-Studio-0.7.3.exe` | 便携版，双击即用，无需安装 |
+| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-0.7.3-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
+| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-0.7.3.zip` | 解压后即为 `.app`，同样需右键「打开」 |
+| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-0.7.3.AppImage` | `chmod +x` 后直接运行 |
 | 🤖 **Android** | `app-release.apk` | 直接安装；未签名，需允许「未知来源」 |
 | 📱 **iOS** | `novelai-mobile-unsigned.ipa` | **未签名**，需用 AltStore / Sideloadly 等工具自行侧载 |
 
 > 桌面端与移动端均为 **API-only** 客户端，需自备 NovelAI Persistent API Token。
+
+### v0.7.3 更新内容
+
+- **修复图片重命名**：历史面板点重命名无反应（Electron 不支持 `window.prompt`），改为应用内输入弹窗；分组重命名同样修复。
+- **MCP 提速**：缓存 Streamable HTTP 握手（会话 + 工具参数），重复搜索只需一次请求；灵感胶囊防抖提高到 400ms。
+- **MCP 标签中文化**：服务返回的标签会用本地词库补上中文标识。
+- **本地词库扩充**：灵感胶囊离线词库新增约 120 个概念（发型/身体/服饰/道具/场景/主题）。
+- **提词开关**：提示词区新增「💡 提词：开/关」按钮，可直接开关输入补全。
 
 ### v0.7.2 更新内容
 
