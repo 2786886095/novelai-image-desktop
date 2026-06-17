@@ -4,18 +4,24 @@
 
 | 系统 | 安装包 | 安装说明 |
 | --- | --- | --- |
-| 🪟 **Windows** (x64) | `Langbai-NovelAI-Studio-0.8.4.exe` | 便携版，双击即用，无需安装 |
-| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-0.8.4-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
-| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-0.8.4.zip` | 解压后即为 `.app`，同样需右键「打开」 |
-| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-0.8.4.AppImage` | `chmod +x` 后直接运行 |
+| 🪟 **Windows** (x64) | `Langbai-NovelAI-Studio-0.8.5.exe` | 便携版，双击即用，无需安装 |
+| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-0.8.5-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
+| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-0.8.5.zip` | 解压后即为 `.app`，同样需右键「打开」 |
+| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-0.8.5.AppImage` | `chmod +x` 后直接运行 |
 | 🤖 **Android** | `app-release.apk` | 直接安装；未签名，需允许「未知来源」 |
 | 📱 **iOS** | `novelai-mobile-unsigned.ipa` | **未签名**，需用 AltStore / Sideloadly 等工具自行侧载 |
 
 > 桌面端与移动端均为 **API-only** 客户端，需自备 NovelAI Persistent API Token。
 
+### v0.8.5 更新内容
+
+- **三模式模版彻底不混用**：反推 / 转换现在严格按当前所选模式取模版（自定义覆盖 → 内置默认），**彻底忽略**旧的全局模版字段（`convertSystemPrompt` / `visionSystemPrompt`，无界面、易隐性覆盖当前模式），避免「选了自然语言却被旧模板带偏」。
+- **输出格式自纠 + 清理**：请求时附带当前模式的明确输出约束；返回后清理 `Output:` / markdown / 引号 / 换行等包装；若输出明显跑偏（如自然语言模式返回了 tag 列表）会做**一次**低额度（900）修复请求。修复为「尽力而为」——即使启发式仍判定不符也不会硬失败丢弃结果。
+- 新增 12 项测试覆盖模版取用、格式检测与清理。
+
 ### v0.8.4 更新内容
 
-- **AI 反推 / 转换 报错更清晰 + 兼容推理模型**：实测确认请求格式、三模式模版、视觉反推在 xAI（grok-4.3 等）均正常工作并遵循模版。但默认模型 `gpt-4o` / `gpt-4o-mini` 在非 OpenAI 服务（如 xAI）不存在（返回 400），这是接入第三方服务时「返回为空 / 结果不对」的常见原因。本版：返回为空时明确提示「请把模型填成该服务支持的名字（如 xAI 用 grok-4.3，而非默认 gpt-4o-mini），可点检测模型选择」，并区分推理模型的长度截断；同时把反推 / 转换输出额度调大（600/900 → 2000），避免推理模型把额度耗在推理上导致空返回。
+- **AI 反推 / 转换 报错更清晰 + 兼容推理模型**：实测确认请求格式、三模式模版、视觉反推在 xAI（grok-4.3 等）均正常工作并遵循模版。但默认模型 `gpt-4o` / `gpt-4o-mini` 在非 OpenAI 服务（如 xAI）不存在（返回 400），这是接入第三方服务时「返回为空 / 结果不对」的常见原因。本版：返回为空时明确提示要把模型填成该服务支持的名字（如 grok-4.3，可点检测模型选择），并区分推理模型的长度截断；同时把反推 / 转换输出额度调大（600/900 → 2000）。
 
 ### v0.8.3 更新内容
 
