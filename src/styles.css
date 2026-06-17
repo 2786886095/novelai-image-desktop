@@ -273,7 +273,8 @@ button { user-select: none; }
 /* ── App shell ───────────────────────────────────────────────────────────────── */
 .app-shell {
   display: grid;
-  grid-template-rows: 32px 36px 38px 1fr 22px;
+  /* Rows: title · update-banner (auto, collapses to 0 when hidden) · menu · tabs · workspace · status */
+  grid-template-rows: 32px auto 36px 38px 1fr 22px;
   width: 100%;
   height: 100%;
   background: var(--bg-window);
@@ -951,22 +952,6 @@ button { user-select: none; }
   object-fit: contain;
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-xl);
-}
-
-/* ── Floating toolbar ────────────────────────────────────────────────────────── */
-.floating-toolbar {
-  position: absolute;
-  bottom: 18px;
-  left: 50%;
-  display: flex;
-  gap: 6px;
-  padding: 7px;
-  border: 1px solid rgba(109, 40, 217, 0.12);
-  border-radius: var(--radius-xl);
-  background: rgba(255, 255, 255, 0.90);
-  box-shadow: var(--shadow-lg);
-  backdrop-filter: blur(10px);
-  transform: translateX(-50%);
 }
 
 /* ── Generating overlay ──────────────────────────────────────────────────────── */
@@ -2504,13 +2489,6 @@ html, body, #root {
 .image-stage img {
   border-radius: 24px;
   box-shadow: 0 34px 100px rgba(38, 20, 84, 0.28);
-}
-.floating-toolbar {
-  bottom: 24px;
-  border-color: rgba(255,255,255,0.62);
-  border-radius: 999px;
-  background: rgba(255,255,255,0.66);
-  backdrop-filter: blur(28px);
 }
 
 .history-panel {

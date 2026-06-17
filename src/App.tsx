@@ -1769,8 +1769,6 @@ function ImageCanvas() {
   const settings = useAppStore((state) => state.settings);
   const inspectImageUrl = useAppStore((state) => state.inspectImageUrl);
   const loadWorkbenchFromPath = useAppStore((state) => state.loadWorkbenchFromPath);
-  const setActiveTab = useAppStore((state) => state.setActiveTab);
-  const variationFromImage = useAppStore((state) => state.variationFromImage);
   const [dropOver, setDropOver] = useState(false);
   const superDrop = settings?.superDrop ?? false;
 
@@ -1791,12 +1789,6 @@ function ImageCanvas() {
     if (filePath) {
       void loadWorkbenchFromPath(filePath);
     }
-  }
-
-  function sendCurrentTo(tab: "generate" | "inpaint" | "upscale" | "postprocess") {
-    if (!currentImage) return;
-    void loadWorkbenchFromPath(currentImage.filePath);
-    setActiveTab(tab);
   }
 
   if (activeTab === "inspect") {
@@ -1869,34 +1861,6 @@ function ImageCanvas() {
       {currentImage && (
         <div className="image-stage">
           <img src={currentImage.fileUrl} alt="生成结果" />
-          {settings?.showFloatingToolbar && (
-            <div className="floating-toolbar">
-              <Button onClick={() => window.naiDesktop.openInExplorer(currentImage.filePath)}>
-                <IconText icon={<Icon name="mapPin" />}>定位</IconText>
-              </Button>
-              <Button onClick={() => void navigator.clipboard.writeText(currentImage.filePath)}>
-                <IconText icon="⧉">复制路径</IconText>
-              </Button>
-              <Button onClick={() => sendCurrentTo("generate")}>
-                <IconText icon="▧">工作台</IconText>
-              </Button>
-              <Button onClick={() => sendCurrentTo("inpaint")}>
-                <IconText icon="◌">重绘</IconText>
-              </Button>
-              <Button onClick={() => sendCurrentTo("upscale")}>
-                <IconText icon="↗">超分</IconText>
-              </Button>
-              <Button onClick={() => sendCurrentTo("postprocess")}>
-                <IconText icon="◈">后期</IconText>
-              </Button>
-              <Button onClick={() => variationFromImage(currentImage)} title="载入此图参数并锁定种子，改提示词后即为变体">
-                <IconText icon={<Icon name="lock" />}>锁种变体</IconText>
-              </Button>
-              <Button onClick={generate}>
-                <IconText icon="↻">再生成</IconText>
-              </Button>
-            </div>
-          )}
         </div>
       )}
     </main>
@@ -2349,7 +2313,6 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                   </select>
                 </label>
                 <div className="toggle-list">
-                  <Toggle checked={settings.showFloatingToolbar} onChange={(v) => void update("showFloatingToolbar", v)} label="生成后工具悬浮条" description="在画布底部显示定位、复制和发送到功能面板按钮。" />
                 </div>
               </div>
             )}
@@ -2754,7 +2717,9 @@ function OnboardingWizard() {
 function UpdateBanner() {
   const updateInfo = useAppStore((state) => state.updateInfo);
   const dismissUpdate = useAppStore((state) => state.dismissUpdate);
-  if (!updateInfo?.hasUpdate) return null;
+  // Always render an element so .app-shell keeps a stable 6-row grid; the empty
+  // slot collapses to 0 height when there's no update.
+  if (!updateInfo?.hasUpdate) return <div className="update-banner-slot" />;
   return (
     <div className="update-banner">
       <span>
