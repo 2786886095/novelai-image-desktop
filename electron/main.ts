@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, shell } from "electron";
 import path from "path";
 import fs from "fs";
 import {
@@ -50,6 +50,29 @@ import { checkUpdate } from "./ipc/update";
 let mainWindow: BrowserWindow | null = null;
 
 const isDev = Boolean(process.env.VITE_DEV_SERVER_URL);
+
+/**
+ * Right-click context menu for text fields: 剪切 / 复制 / 粘贴 / 全选. Electron
+ * ships no default editing menu, so we build one per right-click based on what's
+ * available (editable field, current selection, clipboard text).
+ */
+function attachEditContextMenu(win: BrowserWindow) {
+  win.webContents.on("context-menu", (_event, params) => {
+    const { isEditable, editFlags } = params;
+    const hasSelection = params.selectionText.trim().length > 0;
+    if (!isEditable && !hasSelection) return;
+    const template: Electron.MenuItemConstructorOptions[] = [];
+    if (isEditable) {
+      template.push({ label: "剪切", role: "cut", enabled: editFlags.canCut });
+    }
+    template.push({ label: "复制", role: "copy", enabled: editFlags.canCopy });
+    if (isEditable) {
+      template.push({ label: "粘贴", role: "paste", enabled: editFlags.canPaste });
+    }
+    template.push({ type: "separator" }, { label: "全选", role: "selectAll" });
+    Menu.buildFromTemplate(template).popup({ window: win });
+  });
+}
 
 const STORE_FILE = "novelai-image-desktop.json";
 // Legacy userData folder names this app has shipped under. Renames change
@@ -114,8 +137,13 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: false,
+      // Disable the native spellchecker so prompts (English Danbooru tags)
+      // don't get red squiggly underlines.
+      spellcheck: false,
     },
   });
+
+  attachEditContextMenu(mainWindow);
 
   mainWindow.once("ready-to-show", () => {
     mainWindow?.show();
