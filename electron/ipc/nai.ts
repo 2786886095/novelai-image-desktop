@@ -38,6 +38,15 @@ import { mcpSearch } from "./mcp-client";
 import { zhForTag } from "../../src/prompt-data";
 import { proxyConfig } from "./proxy";
 import { REVERSE_SYSTEM_PROMPTS, CONVERT_SYSTEM_PROMPTS } from "../../src/data/prompt-templates";
+import {
+  buildConvertUserText,
+  buildModeRepairUserText,
+  cleanPromptOutput,
+  modeNeedsRepair,
+  modeUserInstruction,
+  modeRepairSystemPrompt,
+  resolveModePrompt,
+} from "../../src/prompt-mode";
 
 let currentAbort: AbortController | null = null;
 let workbenchImagePath: string | null = null;
@@ -730,7 +739,7 @@ async function callVisionApi(
             : "API 返回内容为空：请确认「模型」填的是该服务支持的模型名（例如 xAI 用 grok-4.3，而非默认 gpt-4o-mini），可点「检测模型」选择。",
       };
     }
-    return { ok: true, content: content.trim(), message: "成功" };
+    return { ok: true, content: cleanPromptOutput(content), message: "成功" };
   } catch (error: any) {
     const msg =
       error?.response?.data?.error?.message ??
@@ -781,7 +790,7 @@ async function callConvertApi(
             : "API 返回内容为空：请确认「模型」填的是该服务支持的模型名（例如 xAI 用 grok-4.3，而非默认 gpt-4o-mini），可点「检测模型」选择。",
       };
     }
-    return { ok: true, content: content.trim(), message: "成功" };
+    return { ok: true, content: cleanPromptOutput(content), message: "成功" };
   } catch (error: any) {
     const msg =
       error?.response?.data?.error?.message ??
@@ -1008,25 +1017,41 @@ export async function reversePromptImage(
   mode: "tags" | "natural" | "mixed" = "tags",
 ): Promise<{ ok: boolean; prompt?: string; message: string }> {
   const settings = getSettings();
-  // Per-mode template overrides built-in; legacy single visionSystemPrompt is a
-  // final fallback for older configs.
-  const systemPrompt =
-    settings.reversePromptTemplates?.[mode]?.trim() ||
-    settings.visionSystemPrompt.trim() ||
-    REVERSE_SYSTEM_PROMPTS[mode];
+  const systemPrompt = resolveModePrompt(
+    mode,
+    settings.reversePromptTemplates,
+    settings.visionSystemPrompt,
+    REVERSE_SYSTEM_PROMPTS,
+  );
 
   const result = await callVisionApi(
     systemPrompt,
     [
       { type: "image_url", image_url: { url: `data:image/png;base64,${imageBase64}`, detail: "high" } },
-      { type: "text", text: "Generate the prompt for this image." },
+      { type: "text", text: `Generate the prompt for this image.\n\n${modeUserInstruction(mode, "reverse")}` },
     ],
     2000,
   );
 
   if (result.ok) {
-    const hints = settings.mcpForReverse ? await queryTagServer(result.content ?? "", 16) : [];
-    return { ok: true, prompt: mergeTagHints(result.content ?? "", hints), message: "反推成功" };
+    let content = cleanPromptOutput(result.content ?? "");
+    if (modeNeedsRepair(mode, content)) {
+      const repaired = await callVisionApi(
+        modeRepairSystemPrompt(mode),
+        [
+          { type: "image_url", image_url: { url: `data:image/png;base64,${imageBase64}`, detail: "high" } },
+          { type: "text", text: buildModeRepairUserText(mode, "Image reverse-prompt request", content) },
+        ],
+        900,
+      );
+      // Best-effort: adopt the repaired output when available, but never hard-fail
+      // on a heuristic mismatch — modeNeedsRepair can false-positive and we must
+      // not discard an otherwise-usable result.
+      if (repaired.ok && repaired.content) content = cleanPromptOutput(repaired.content);
+    }
+
+    const hints = mode === "natural" || !settings.mcpForReverse ? [] : await queryTagServer(content, 16);
+    return { ok: true, prompt: mode === "natural" ? content : mergeTagHints(content, hints), message: "反推成功" };
   }
   return { ok: false, message: `反推失败：${result.message}` };
 }
@@ -1104,10 +1129,12 @@ export async function convertPromptText(
   mode: "tags" | "natural" | "mixed" = "tags",
 ): Promise<{ ok: boolean; result?: string; message: string }> {
   const settings = getSettings();
-  const systemPrompt =
-    settings.convertPromptTemplates?.[mode]?.trim() ||
-    settings.convertSystemPrompt.trim() ||
-    CONVERT_SYSTEM_PROMPTS[mode];
+  const systemPrompt = resolveModePrompt(
+    mode,
+    settings.convertPromptTemplates,
+    settings.convertSystemPrompt,
+    CONVERT_SYSTEM_PROMPTS,
+  );
 
   // Tag-server hints only make sense for tag-style output, and only when the
   // user opted convert into using the MCP/tag service.
@@ -1115,10 +1142,21 @@ export async function convertPromptText(
   const hintText = tagHints.length
     ? `\n\nCandidate Danbooru tags from the configured tag server:\n${tagHints.map((tag) => tag.tag).join(", ")}`
     : "";
-  const result = await callConvertApi(systemPrompt, `${chineseText}${hintText}`, 2000);
+  const result = await callConvertApi(systemPrompt, buildConvertUserText(chineseText, mode, hintText), 2000);
 
   if (result.ok) {
-    const content = result.content ?? "";
+    let content = cleanPromptOutput(result.content ?? "");
+    if (modeNeedsRepair(mode, content)) {
+      const repaired = await callConvertApi(
+        modeRepairSystemPrompt(mode),
+        buildModeRepairUserText(mode, chineseText, content),
+        900,
+      );
+      // Best-effort: adopt the repaired output when available, but never hard-fail
+      // on a heuristic mismatch — modeNeedsRepair can false-positive and we must
+      // not discard an otherwise-usable result.
+      if (repaired.ok && repaired.content) content = cleanPromptOutput(repaired.content);
+    }
     return {
       ok: true,
       result: mode === "natural" ? content : mergeTagHints(content, tagHints),
