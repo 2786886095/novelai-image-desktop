@@ -36,6 +36,7 @@ import {
 import { TAG_DICTIONARY } from "../data/tag-dictionary";
 import { mcpSearch } from "./mcp-client";
 import { zhForTag } from "../../src/prompt-data";
+import { proxyConfig } from "./proxy";
 import { REVERSE_SYSTEM_PROMPTS, CONVERT_SYSTEM_PROMPTS } from "../data/prompt-templates";
 
 let currentAbort: AbortController | null = null;
@@ -95,6 +96,7 @@ async function fetchAccount(token: string): Promise<Omit<AccountSummary, "hasTok
   const res = await axios.get(`${apiBaseUrl}/user/data`, {
     headers: { Authorization: `Bearer ${token}` },
     timeout: 15_000,
+    ...proxyConfig("nai"),
   });
   return parseAccount(res.data);
 }
@@ -111,6 +113,7 @@ export async function verifyToken(token: string): Promise<TokenStatus> {
     await axios.get(`${apiBaseUrl}/user/information`, {
       headers: { Authorization: `Bearer ${normalized}` },
       timeout: 15_000,
+      ...proxyConfig("nai"),
     });
 
     let account: Omit<AccountSummary, "hasToken"> = {};
@@ -336,6 +339,7 @@ async function prepareExtras(params: GenerateParams, extras?: GenerateExtras): P
                 responseType: "arraybuffer",
                 timeout: 60_000,
                 signal: currentAbort?.signal,
+                ...proxyConfig("nai"),
               },
             ),
           { retries: 2, signal: currentAbort?.signal ?? undefined },
@@ -608,6 +612,7 @@ async function postGenerateImage(payload: ReturnType<typeof buildPayload>) {
         responseType: "arraybuffer",
         timeout: 180_000,
         signal: currentAbort?.signal,
+        ...proxyConfig("nai"),
       }),
     { signal: currentAbort?.signal ?? undefined },
   );
@@ -672,6 +677,7 @@ async function callVisionApi(
     const resp = await axios.post(`${base}/chat/completions`, body, {
       headers: { Authorization: `Bearer ${visionApiKey}`, "Content-Type": "application/json" },
       timeout: 60_000,
+      ...proxyConfig("ai"),
     });
     const content: string = resp.data?.choices?.[0]?.message?.content ?? "";
     if (!content.trim()) return { ok: false, message: "API 返回内容为空，请检查模型设置。" };
@@ -713,6 +719,7 @@ async function callConvertApi(
     const resp = await axios.post(`${base}/chat/completions`, body, {
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       timeout: 60_000,
+      ...proxyConfig("ai"),
     });
     const content: string = resp.data?.choices?.[0]?.message?.content ?? "";
     if (!content.trim()) return { ok: false, message: "API 返回内容为空，请检查模型设置。" };
@@ -739,6 +746,7 @@ export async function listAiModels(kind: "reverse" | "convert"): Promise<AiModel
     const resp = await axios.get(`${base}/models`, {
       headers: { Authorization: `Bearer ${apiKey}` },
       timeout: 20_000,
+      ...proxyConfig("ai"),
     });
     const raw = Array.isArray(resp.data?.data) ? resp.data.data : Array.isArray(resp.data) ? resp.data : [];
     const models = raw
@@ -868,10 +876,11 @@ async function queryTagServer(query: string, limit = 12): Promise<TagSuggestion[
   const headers: Record<string, string> = {};
   if (settings.tagServerApiKey.trim()) headers.Authorization = `Bearer ${settings.tagServerApiKey.trim()}`;
 
+  const px = proxyConfig("mcp");
   const attempts = [
-    () => axios.get(`${base}/search`, { params: { q: query, query, limit }, headers, timeout: 8_000 }),
-    () => axios.get(`${base}/tags`, { params: { q: query, query, limit }, headers, timeout: 8_000 }),
-    () => axios.post(`${base}/search`, { query, limit }, { headers, timeout: 8_000 }),
+    () => axios.get(`${base}/search`, { params: { q: query, query, limit }, headers, timeout: 8_000, ...px }),
+    () => axios.get(`${base}/tags`, { params: { q: query, query, limit }, headers, timeout: 8_000, ...px }),
+    () => axios.post(`${base}/search`, { query, limit }, { headers, timeout: 8_000, ...px }),
     () =>
       axios.post(
         base,
@@ -881,7 +890,7 @@ async function queryTagServer(query: string, limit = 12): Promise<TagSuggestion[
           method: "tools/call",
           params: { name: "search_tags", arguments: { query, limit } },
         },
-        { headers: { ...headers, "Content-Type": "application/json" }, timeout: 8_000 },
+        { headers: { ...headers, "Content-Type": "application/json" }, timeout: 8_000, ...px },
       ),
   ];
 
@@ -1221,6 +1230,7 @@ export async function upscaleImg(scale: UpscaleScale): Promise<SingleImageResult
             responseType: "arraybuffer",
             timeout: 180_000,
             signal: abort.signal,
+            ...proxyConfig("nai"),
           },
         ),
       { signal: abort.signal },
@@ -1305,6 +1315,7 @@ export async function augmentImg(tool: DirectorTool, options: AugmentOptions): P
       responseType: "arraybuffer",
       timeout: 180_000,
       signal: currentAbort.signal,
+      ...proxyConfig("nai"),
     });
 
     const buffers = await extractImages(res.data);
@@ -1388,6 +1399,7 @@ export async function suggestTags(model: string, prompt: string): Promise<TagSug
       params: { model, prompt },
       headers: { Authorization: `Bearer ${token}` },
       timeout: 5000,
+      ...proxyConfig("nai"),
     });
     const tags = (res.data?.tags ?? []) as TagSuggestion[];
     return tags.length > 0 ? tags : fallback;
@@ -1423,6 +1435,7 @@ async function googleTranslate(
     const res = await axios.get("https://translate.googleapis.com/translate_a/single", {
       params: { client: "gtx", sl: "auto", tl: target, dt: "t", q: text },
       timeout: 8_000,
+      ...proxyConfig("translate"),
     });
     // Response shape: [[[ "translated", "source", ... ], ...], ...]
     const segments = (res.data?.[0] ?? []) as Array<[string, string, ...unknown[]]>;
@@ -1451,6 +1464,7 @@ async function baiduTranslate(
     const res = await axios.get("https://fanyi-api.baidu.com/api/trans/vip/translate", {
       params: { q: text, from: "auto", to, appid, salt, sign },
       timeout: 8_000,
+      ...proxyConfig("translate"),
     });
     if (res.data?.error_code) {
       return { ok: false, error: `百度翻译失败：${res.data.error_code} ${res.data.error_msg ?? ""}` };

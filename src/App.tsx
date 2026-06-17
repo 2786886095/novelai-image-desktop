@@ -2254,6 +2254,40 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                   <span>Image Endpoint（图片接口）</span>
                   <input value={settings.imageBaseUrl} onChange={(e) => void update("imageBaseUrl", e.target.value)} />
                 </label>
+
+                <div className="proxy-card">
+                  <label className="field">
+                    <span>代理地址（Proxy）</span>
+                    <input
+                      value={settings.proxyUrl}
+                      placeholder="留空=直连；如 http://127.0.0.1:7890 或 socks5://127.0.0.1:10808"
+                      onChange={(e) => void update("proxyUrl", e.target.value)}
+                    />
+                  </label>
+                  <p className="settings-hint" style={{ margin: "2px 0 8px" }}>
+                    国内直连 NovelAI 常超时，可填本地代理。支持 HTTP 与 SOCKS5；不写协议默认按 <code>http://</code> 处理。留空即直连。
+                  </p>
+                  <div className="proxy-scope" style={{ opacity: settings.proxyUrl.trim() ? 1 : 0.5 }}>
+                    <span className="proxy-scope-title">走代理的请求（关掉则该项直连）</span>
+                    {([
+                      ["proxyForNai", "NovelAI API（验证 / 生图 / 超分等）"],
+                      ["proxyForAi", "AI 反推 / 转换（OpenAI 兼容）"],
+                      ["proxyForMcp", "MCP / Tag 服务"],
+                      ["proxyForTranslate", "翻译（谷歌 / 百度）"],
+                      ["proxyForUpdate", "GitHub 更新检查"],
+                    ] as [keyof AppSettings, string][]).map(([key, label]) => (
+                      <label className="checkbox-line" key={key}>
+                        <input
+                          type="checkbox"
+                          disabled={!settings.proxyUrl.trim()}
+                          checked={settings[key] as boolean}
+                          onChange={(e) => void update(key, e.target.checked as never)}
+                        />
+                        <span>{label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
               </div>
             )}
             {section === "storage" && (

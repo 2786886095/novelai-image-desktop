@@ -1,6 +1,7 @@
 import { app } from "electron";
 import axios from "axios";
 import type { UpdateInfo } from "../../src/types";
+import { proxyConfig } from "./proxy";
 
 const REPO = "2786886095/novelai-image-desktop";
 
@@ -31,6 +32,7 @@ export async function checkUpdate(): Promise<UpdateInfo> {
     const res = await axios.get(`https://api.github.com/repos/${REPO}/releases/latest`, {
       headers: { Accept: "application/vnd.github+json" },
       timeout: 10_000,
+      ...proxyConfig("update"),
     });
     const tag: string = res.data?.tag_name ?? "";
     const latestVersion = tag.replace(/^v/, "");

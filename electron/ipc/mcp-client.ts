@@ -14,6 +14,7 @@
 import axios from "axios";
 import { spawn } from "child_process";
 import { EventEmitter } from "events";
+import { proxyConfig } from "./proxy";
 
 const CLIENT_INFO = { name: "langbai-novelai-studio", version: "0.7.7" };
 const PROTOCOL_VERSION = "2024-11-05";
@@ -117,6 +118,7 @@ function makePost(url: string, headers: Record<string, string>, getSid: () => st
       responseType: "text",
       transformResponse: (d) => d,
       validateStatus: () => true,
+      ...proxyConfig("mcp"),
     });
     const newSid = resp.headers["mcp-session-id"];
     if (newSid) setSid(String(newSid));
@@ -199,6 +201,7 @@ async function callSse(
     headers: { ...headers, Accept: "text/event-stream" },
     responseType: "stream",
     timeout: 0,
+    ...proxyConfig("mcp"),
   });
 
   const emitter = new EventEmitter();
@@ -259,7 +262,7 @@ async function callSse(
         });
       }
       try {
-        await axios.post(postUrl, body, { headers: { ...headers, "Content-Type": "application/json" }, timeout: 20_000 });
+        await axios.post(postUrl, body, { headers: { ...headers, "Content-Type": "application/json" }, timeout: 20_000, ...proxyConfig("mcp") });
         if (expectId === undefined) resolve(null);
       } catch (e) {
         if (timer) clearTimeout(timer);

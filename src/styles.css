@@ -3168,6 +3168,29 @@ button.prompt-chip-head {
   padding: 12px 18px 16px;
 }
 
+/* ── Proxy settings card ─────────────────────────────────────────────────────── */
+.proxy-card {
+  margin-top: 6px;
+  padding: 12px 14px;
+  border: 1px solid rgba(124, 58, 237, 0.16);
+  border-radius: 14px;
+  background: rgba(124, 58, 237, 0.05);
+}
+.proxy-scope {
+  display: grid;
+  gap: 4px;
+  margin-top: 4px;
+  transition: opacity 0.15s;
+}
+.proxy-scope-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 2px;
+}
+.proxy-scope .checkbox-line { font-size: 13px; }
+.theme-dark .proxy-card { background: rgba(167, 139, 250, 0.08); border-color: rgba(167, 139, 250, 0.2); }
+
 /* ── Line-icon set (SVG, inherits text color + size) ─────────────────────────── */
 .ui-icon {
   display: inline-block;

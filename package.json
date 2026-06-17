@@ -31,9 +31,12 @@
     "axios": "^1.13.2",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
+    "http-proxy-agent": "^5.0.0",
+    "https-proxy-agent": "^5.0.1",
     "jszip": "^3.10.1",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
+    "socks-proxy-agent": "^7.0.0",
     "zustand": "^5.0.9"
   },
   "devDependencies": {

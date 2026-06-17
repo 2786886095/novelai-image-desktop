@@ -282,7 +282,15 @@ export interface AppSettings {
   outputDir: string;
   apiBaseUrl: string;
   imageBaseUrl: string;
+  // Proxy for outbound requests. Empty = direct. Accepts http://host:port or
+  // socks5://host:port (scheme defaults to http:// when omitted).
   proxyUrl: string;
+  // Per-category proxy opt-out (all default true = everything goes through proxy).
+  proxyForNai: boolean;
+  proxyForMcp: boolean;
+  proxyForAi: boolean;
+  proxyForUpdate: boolean;
+  proxyForTranslate: boolean;
   theme: "light" | "dark" | "system";
   autoComplete: boolean;
   weightHighlight: boolean;
