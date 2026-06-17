@@ -1008,10 +1008,20 @@ export async function reversePromptImage(
   );
 
   if (result.ok) {
-    const hints = await queryTagServer(result.content ?? "", 16);
+    const hints = settings.mcpForReverse ? await queryTagServer(result.content ?? "", 16) : [];
     return { ok: true, prompt: mergeTagHints(result.content ?? "", hints), message: "反推成功" };
   }
   return { ok: false, message: `反推失败：${result.message}` };
+}
+
+/**
+ * Tag/MCP search used by the inspiration capsule. Returns server suggestions
+ * only when the service is enabled AND the capsule is allowed to use it.
+ */
+export async function searchTagServer(query: string, limit = 16): Promise<TagSuggestion[]> {
+  const settings = getSettings();
+  if (!settings.mcpForCapsule) return [];
+  return queryTagServer(query, limit);
 }
 
 export async function convertPromptText(
@@ -1024,8 +1034,9 @@ export async function convertPromptText(
     settings.convertSystemPrompt.trim() ||
     CONVERT_SYSTEM_PROMPTS[mode];
 
-  // Tag-server hints only make sense for tag-style output.
-  const tagHints = mode === "natural" ? [] : await queryTagServer(chineseText, 24);
+  // Tag-server hints only make sense for tag-style output, and only when the
+  // user opted convert into using the MCP/tag service.
+  const tagHints = mode === "natural" || !settings.mcpForConvert ? [] : await queryTagServer(chineseText, 24);
   const hintText = tagHints.length
     ? `\n\nCandidate Danbooru tags from the configured tag server:\n${tagHints.map((tag) => tag.tag).join(", ")}`
     : "";

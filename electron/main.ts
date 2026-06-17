@@ -14,6 +14,7 @@ import {
   listAiModels,
   refreshStoredAccount,
   reversePromptImage,
+  searchTagServer,
   suggestTags,
   testTagServer,
   translateText,
@@ -161,6 +162,7 @@ function registerIpc() {
   ipcMain.handle("nai:listModels", (_event, kind: "reverse" | "convert") => listAiModels(kind));
   ipcMain.handle("nai:testTagServer", (_event, query: string) => testTagServer(query));
   ipcMain.handle("nai:suggestTags", (_event, model: string, prompt: string) => suggestTags(model, prompt));
+  ipcMain.handle("nai:searchTagServer", (_event, query: string, limit?: number) => searchTagServer(query, limit));
   ipcMain.handle("nai:translate", (_event, text: string, target?: string) => translateText(text, target));
   ipcMain.handle("nai:cancel", () => cancelGeneration());
 

@@ -532,6 +532,8 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
   const [showWeights, setShowWeights] = useState(false);
   const [translating, setTranslating] = useState(false);
   const [promptChips, setPromptChips] = useState<PromptChip[]>(() => pickPromptChips());
+  const [serverChips, setServerChips] = useState<{ tag: string; zh: string }[]>([]);
+  const capsuleUsesMcp = Boolean(settings?.tagServerEnabled && settings?.mcpForCapsule);
   const promptValue = promptTab === "positive" ? params.positivePrompt : params.negativePrompt;
   const promptKey = promptTab === "positive" ? "positivePrompt" : "negativePrompt";
   const templates: PromptTemplate[] = settings?.promptTemplates ?? [];
@@ -595,6 +597,29 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
     setPromptChips(pickPromptChips(24, chipQuery));
   }, [chipQuery]);
 
+  // When the MCP/tag service is enabled for the capsule, search it (debounced)
+  // and show server-backed tags alongside the offline dictionary chips.
+  useEffect(() => {
+    const q = chipQuery.trim();
+    if (!q || !capsuleUsesMcp) {
+      setServerChips([]);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const res = await window.naiDesktop.searchTagServer(q, 16);
+        if (!cancelled) setServerChips(res.map((r) => ({ tag: r.tag, zh: r.description ?? "" })));
+      } catch {
+        if (!cancelled) setServerChips([]);
+      }
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [chipQuery, capsuleUsesMcp]);
+
   const tagCount = useMemo(
     () => promptValue.trim().split(",").filter((s) => s.trim().length > 0).length,
     [promptValue],
@@ -629,7 +654,7 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
             <span className={clsx("chip-caret", chipOpen && "open")}>▸</span>
             灵感胶囊
           </span>
-          <small className="chip-head-hint">{chipOpen ? "中文搜索 → 点击插入标签" : "点击展开 · 中文搜 Danbooru 标签"}</small>
+          <small className="chip-head-hint">{capsuleUsesMcp ? "MCP 已启用 · 中文搜索标签" : chipOpen ? "中文搜索 → 点击插入标签" : "点击展开 · 中文搜 Danbooru 标签"}</small>
         </button>
         {chipOpen && (
           <>
@@ -642,6 +667,19 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
               />
               <button type="button" className="chip-refresh" onClick={() => setPromptChips(pickPromptChips(24, chipQuery))}>换一组</button>
             </div>
+            {serverChips.length > 0 && (
+              <div className="related-tags">
+                <div className="related-tags-head">🔌 MCP 推荐（{settings?.tagServerTool || "search_tags"}）</div>
+                <div className="prompt-chip-list">
+                  {serverChips.map((c) => (
+                    <button key={`mcp-${c.tag}`} type="button" onClick={() => appendChip(c.tag)} title={`${c.tag}：${c.zh}`}>
+                      <span>{c.tag}</span>
+                      {c.zh && <small>{c.zh}</small>}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="prompt-chip-list">
               {promptChips.length === 0 ? (
                 <span className="chip-empty">没有匹配的标签，换个中文词试试（如「猫耳」「赛博朋克」）</span>
@@ -1524,7 +1562,7 @@ function PromptConverterPanel() {
         {!convertResult && (
           <div className="inspect-hint">
             <p>输入任意语言的图像描述，AI 将分析语义并输出符合 NovelAI 风格的 Danbooru 标签组合。</p>
-            <p>需要在 <strong>设置 › AI 反推</strong> 中配置视觉模型 API。</p>
+            <p>需要在 <strong>设置 › 转换 API</strong> 中配置文本模型 API。</p>
           </div>
         )}
       </div>
@@ -2221,6 +2259,11 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                       {tagTestTags.length > 0 && <small>{tagTestTags.map((tag) => tag.tag).join(", ")}</small>}
                     </div>
                   )}
+                  <div className="toggle-list" style={{ marginTop: 4 }}>
+                    <Toggle checked={settings.mcpForCapsule} onChange={(v) => void update("mcpForCapsule", v)} label="用于灵感胶囊" description="配置并启用服务后默认开启：在灵感胶囊中按中文搜索返回 MCP 标签。" />
+                    <Toggle checked={settings.mcpForReverse} onChange={(v) => void update("mcpForReverse", v)} label="用于 AI 反推" description="反推图片后，用 MCP 标签补强结果（默认关闭）。" />
+                    <Toggle checked={settings.mcpForConvert} onChange={(v) => void update("mcpForConvert", v)} label="用于提示词转换" description="转换中文描述时，用 MCP 标签补强结果（默认关闭）。" />
+                  </div>
                 </div>
                 <div className="tag-server-card">
                   <p className="settings-hint" style={{ margin: 0 }}>提示词「🌐 中→英翻译」按钮使用的翻译引擎。</p>

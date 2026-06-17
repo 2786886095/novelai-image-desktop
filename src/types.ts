@@ -311,6 +311,11 @@ export interface AppSettings {
   tagServerArgs: string;
   // MCP tool name to call for tag search (DanbooruSearchOnline: search_tags).
   tagServerTool: string;
+  // Which features consume the tag/MCP service. The capsule defaults on once the
+  // service is configured; reverse / convert are opt-in.
+  mcpForCapsule: boolean;
+  mcpForReverse: boolean;
+  mcpForConvert: boolean;
   // Translation
   translateProvider: TranslateProvider;
   baiduAppId: string;
@@ -392,6 +397,7 @@ export interface NaiDesktopApi {
   listAiModels: (kind: "reverse" | "convert") => Promise<AiModelListResult>;
   testTagServer: (query: string) => Promise<{ ok: boolean; message: string; tags: TagSuggestion[] }>;
   suggestTags: (model: string, prompt: string) => Promise<TagSuggestion[]>;
+  searchTagServer: (query: string, limit?: number) => Promise<TagSuggestion[]>;
   translate: (text: string, target?: string) => Promise<{ ok: boolean; text?: string; error?: string }>;
   checkUpdate: () => Promise<UpdateInfo>;
   minimize: () => Promise<void>;

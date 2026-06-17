@@ -30,6 +30,7 @@ contextBridge.exposeInMainWorld("naiDesktop", {
   listAiModels: (kind: "reverse" | "convert") => ipcRenderer.invoke("nai:listModels", kind),
   testTagServer: (query: string) => ipcRenderer.invoke("nai:testTagServer", query),
   suggestTags: (model: string, prompt: string) => ipcRenderer.invoke("nai:suggestTags", model, prompt),
+  searchTagServer: (query: string, limit?: number) => ipcRenderer.invoke("nai:searchTagServer", query, limit),
   translate: (text: string, target?: string) => ipcRenderer.invoke("nai:translate", text, target),
   loadImage: () => ipcRenderer.invoke("nai:loadImage"),
   loadImageFromPath: (filePath: string) => ipcRenderer.invoke("nai:loadImageFromPath", filePath),
