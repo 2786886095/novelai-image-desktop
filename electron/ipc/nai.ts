@@ -36,6 +36,7 @@ import {
 import { TAG_DICTIONARY } from "../data/tag-dictionary";
 import { mcpSearch } from "./mcp-client";
 import { zhForTag } from "../../src/prompt-data";
+import { REVERSE_SYSTEM_PROMPTS, CONVERT_SYSTEM_PROMPTS } from "../data/prompt-templates";
 
 let currentAbort: AbortController | null = null;
 let workbenchImagePath: string | null = null;
@@ -645,58 +646,6 @@ export function clearWorkbenchImage() {
   return { ok: true };
 }
 
-const REVERSE_SYSTEM_PROMPTS = {
-  tags: `You are a Danbooru tag expert for NovelAI. Analyze the image and output a comma-separated list of Danbooru-style tags.
-Rules:
-- Use standard Danbooru format: lowercase, underscores for multi-word tags (e.g. long_hair, blue_eyes, 1girl)
-- Order: quality tags → character count → character features → clothing → setting/background → mood/atmosphere → style
-- Include: character features (hair, eyes, expression), clothing, pose, background, art style
-- Add quality tags: masterpiece, best quality, ultra-detailed
-- Output ONLY the tags separated by commas. No explanation, no extra text.`,
-
-  natural: `You are an AI art prompt writer. Analyze the image and write a detailed natural language description for AI image generation.
-Rules:
-- Write in flowing descriptive sentences
-- Cover: subject, clothing, expression, pose, setting, lighting, colors, art style, mood
-- Be specific and vivid with descriptive adjectives
-- Output ONLY the description. No explanation, no meta-commentary.`,
-
-  mixed: `You are a NovelAI prompt specialist. Analyze the image and create a hybrid prompt combining Danbooru tags with natural language.
-Rules:
-- Begin with Danbooru quality/style tags (masterpiece, best quality, anime style...)
-- Follow with key Danbooru character/scene tags (1girl, long_hair, blue_eyes...)
-- Use natural language phrases for complex elements (e.g. "bathed in golden afternoon light", "intricate floral embroidery")
-- Separate all elements with commas
-- Output ONLY the prompt. No explanation.`,
-};
-
-// Text-only conversion (description -> prompt) system prompts, one per output mode.
-const CONVERT_SYSTEM_PROMPTS = {
-  tags: `You are a Danbooru tag translator for NovelAI image generation.
-Convert the user's description (may be Chinese or other language) into Danbooru-style English tags.
-Rules:
-1. Output ONLY comma-separated Danbooru tags in English. No explanation, no translation notes.
-2. Use Danbooru format: lowercase, underscores for spaces (e.g. long_hair, blue_eyes, 1girl)
-3. Start with quality tags: masterpiece, best quality, ultra-detailed
-4. Break the description into specific individual Danbooru tags
-5. Add relevant style, medium, and atmosphere tags inferred from context
-6. If no clear subject is specified, add appropriate general tags`,
-
-  natural: `You are an AI art prompt writer for NovelAI.
-Rewrite the user's description (may be Chinese or other language) into a vivid English natural-language prompt.
-Rules:
-- Output flowing descriptive English sentences, faithfully expanding the user's intent.
-- Cover subject, appearance, clothing, pose, setting, lighting, colors, mood and art style when implied.
-- Output ONLY the description. No explanation, no translation notes.`,
-
-  mixed: `You are a NovelAI prompt specialist.
-Convert the user's description (may be Chinese or other language) into a hybrid English prompt mixing Danbooru tags and natural language.
-Rules:
-- Begin with Danbooru quality/style tags (masterpiece, best quality, ...).
-- Follow with key Danbooru character/scene tags (1girl, long_hair, blue_eyes...).
-- Use natural-language phrases for complex elements, comma-separated.
-- Output ONLY the prompt. No explanation, no translation notes.`,
-};
 
 async function callVisionApi(
   systemPrompt: string,
