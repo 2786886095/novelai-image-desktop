@@ -62,6 +62,11 @@ export function defaultSettings(): AppSettings {
     baiduAppId: "",
     baiduSecret: "",
     activeHistoryGroupId: "",
+    modelMode: "anime" as const,
+    lockStylePrompt: false,
+    lockNegativePrompt: false,
+    savedStylePrompt: "",
+    savedNegativePrompt: "",
     imageNameTemplate: "{date}_{seq}_{model}",
     promptTemplates: [],
   };

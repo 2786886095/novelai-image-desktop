@@ -34,6 +34,8 @@ import {
   NAI_MODELS,
   NAI_SAMPLERS,
   NAI_UC_PRESETS,
+  DEFAULT_MODEL_FOR_MODE,
+  type ModelMode,
   type AppSettings,
   type HistoryGroup,
   type HistoryItem,
@@ -276,6 +278,7 @@ function TabBar() {
 function AdvancedParamsModal({ onClose }: { onClose: () => void }) {
   const params = useAppStore((state) => state.params);
   const setParam = useAppStore((state) => state.setParam);
+  const settings = useAppStore((state) => state.settings);
 
   return (
     <AppPortal>
@@ -323,6 +326,8 @@ function AdvancedParamsModal({ onClose }: { onClose: () => void }) {
           <Button
             onClick={() => {
               for (const [key, value] of Object.entries(DEFAULT_PARAMS) as [keyof GenerateParams, any][]) {
+                if (key === "stylePrompt" && settings?.lockStylePrompt) continue;
+                if (key === "negativePrompt" && settings?.lockNegativePrompt) continue;
                 setParam(key, value);
               }
             }}
@@ -554,7 +559,9 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
     const current = params.positivePrompt.trim();
     const parts = [tpl.prefix.trim(), current, tpl.suffix.trim()].filter(Boolean);
     setParam("positivePrompt", parts.join(", "));
-    if (tpl.negativePrompt.trim()) setParam("negativePrompt", tpl.negativePrompt.trim());
+    if (tpl.negativePrompt.trim() && !(settings?.lockNegativePrompt ?? false)) {
+      setParam("negativePrompt", tpl.negativePrompt.trim());
+    }
     setToast(`已应用模板「${tpl.name}」`);
   }
 
@@ -582,6 +589,40 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
     await refreshSettings();
     setToast(next ? "已开启输入提词" : "已关闭输入提词");
   }
+
+  const modelMode: ModelMode = settings?.modelMode ?? "anime";
+  async function switchModelMode(mode: ModelMode) {
+    if (mode === modelMode) return;
+    await window.naiDesktop.setSetting("modelMode", mode);
+    await refreshSettings();
+    setParam("model", DEFAULT_MODEL_FOR_MODE[mode]);
+    setToast(mode === "furry" ? "已切换到 Furry 模式" : "已切换到动漫模式");
+  }
+
+  // Save + lock the style / negative prompt so it persists and survives
+  // resets / template applies.
+  async function toggleLock(which: "style" | "neg") {
+    const lockKey = which === "style" ? "lockStylePrompt" : "lockNegativePrompt";
+    const savedKey = which === "style" ? "savedStylePrompt" : "savedNegativePrompt";
+    const next = !(settings?.[lockKey] ?? false);
+    if (next) {
+      await window.naiDesktop.setSetting(savedKey, which === "style" ? params.stylePrompt : params.negativePrompt);
+    }
+    await window.naiDesktop.setSetting(lockKey, next);
+    await refreshSettings();
+    setToast(next ? "已锁定并保存为默认（重置/模板不会改动）" : "已解锁");
+  }
+  // Keep the saved copy in sync while a field is locked.
+  function setLockedAwareParam(key: "stylePrompt" | "positivePrompt" | "negativePrompt", value: string) {
+    setParam(key, value);
+    if (key === "stylePrompt" && settings?.lockStylePrompt) {
+      void window.naiDesktop.setSetting("savedStylePrompt", value);
+    } else if (key === "negativePrompt" && settings?.lockNegativePrompt) {
+      void window.naiDesktop.setSetting("savedNegativePrompt", value);
+    }
+  }
+  const styleLocked = settings?.lockStylePrompt ?? false;
+  const negLocked = settings?.lockNegativePrompt ?? false;
 
   async function translatePrompt() {
     const text = promptValue.trim();
@@ -649,19 +690,37 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
       {includeModel && (
         <label className="field">
           <span>模型</span>
+          <div className="model-mode-switch">
+            <button type="button" className={clsx(modelMode === "anime" && "active")} onClick={() => void switchModelMode("anime")}>
+              🎨 动漫模式
+            </button>
+            <button type="button" className={clsx(modelMode === "furry" && "active")} onClick={() => void switchModelMode("furry")}>
+              🐾 Furry 模式
+            </button>
+          </div>
           <select value={params.model} onChange={(e) => setParam("model", e.target.value as GenerateParams["model"])}>
-            {NAI_MODELS.map((m) => (
+            {NAI_MODELS.filter((m) => m.mode === modelMode).map((m) => (
               <option value={m.value} key={m.value}>{m.label}</option>
             ))}
           </select>
         </label>
       )}
       <label className="field">
-        <span>风格提示词（Style Prompt）</span>
+        <span className="field-label-row">
+          风格提示词（Style Prompt）
+          <button
+            type="button"
+            className={clsx("lock-btn", styleLocked && "locked")}
+            title={styleLocked ? "已锁定：重置/模板不会改动，重启保留。点击解锁" : "锁定并保存当前风格提示词，使其固定不变"}
+            onClick={() => void toggleLock("style")}
+          >
+            {styleLocked ? "🔒 已锁定" : "🔓 锁定"}
+          </button>
+        </span>
         <input
           value={params.stylePrompt}
           placeholder="输入风格提示词，如 anime style, watercolor..."
-          onChange={(e) => setParam("stylePrompt", e.target.value)}
+          onChange={(e) => setLockedAwareParam("stylePrompt", e.target.value)}
         />
       </label>
       <div className={clsx("prompt-chip-zone", !chipOpen && "collapsed")}>
@@ -729,12 +788,22 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
           正面提示词
         </button>
         <button className={clsx(promptTab === "negative" && "active")} onClick={() => setPromptTab("negative")}>
-          负面提示词
+          负面提示词{negLocked ? " 🔒" : ""}
         </button>
+        {promptTab === "negative" && (
+          <button
+            type="button"
+            className={clsx("lock-btn", negLocked && "locked")}
+            title={negLocked ? "已锁定：重置/模板不会改动，重启保留。点击解锁" : "锁定并保存当前负面提示词，使其固定不变"}
+            onClick={() => void toggleLock("neg")}
+          >
+            {negLocked ? "🔒 已锁定" : "🔓 锁定"}
+          </button>
+        )}
       </div>
       <PromptTextarea
         value={promptValue}
-        onChange={(v) => setParam(promptKey, v)}
+        onChange={(v) => setLockedAwareParam(promptKey, v)}
         model={params.model}
         enabled={settings?.autoComplete ?? true}
         placeholder={promptTab === "positive" ? "输入正面提示词..." : "输入不希望出现的内容..."}
@@ -830,15 +899,33 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
         <button onClick={() => { setParam("width", 1536); setParam("height", 1024); }}>1536×1024</button>
         <button onClick={() => { setParam("width", 1472); setParam("height", 1472); }}>1472×1472</button>
       </div>
-      <div className="seed-row">
-        <NumberInput label="种子（0 = 随机）" value={params.seed} min={0} onChange={(v) => setParam("seed", v)} />
-        <Button title="随机种子" onClick={() => setParam("seed", Math.floor(Math.random() * 2_147_483_647))}>
-          ⇄
-        </Button>
-        <Button title="重置为随机" onClick={() => setParam("seed", 0)}>
-          ↺
-        </Button>
+      <div className="seed-mode-switch">
+        <button
+          type="button"
+          className={clsx(params.seedMode === "random" && "active")}
+          onClick={() => setParam("seedMode", "random")}
+        >
+          🎲 随机种子
+        </button>
+        <button
+          type="button"
+          className={clsx(params.seedMode === "fixed" && "active")}
+          onClick={() => {
+            setParam("seedMode", "fixed");
+            if (params.seed <= 0) setParam("seed", Math.floor(Math.random() * 2_147_483_647));
+          }}
+        >
+          📌 固定种子
+        </button>
       </div>
+      {params.seedMode === "fixed" && (
+        <div className="seed-row">
+          <NumberInput label="固定种子值" value={params.seed} min={1} onChange={(v) => setParam("seed", v)} />
+          <Button title="随机一个新种子值" onClick={() => setParam("seed", Math.floor(Math.random() * 2_147_483_647))}>
+            ⇄
+          </Button>
+        </div>
+      )}
       <label className="checkbox-line">
         <input type="checkbox" checked={params.variety} onChange={(e) => setParam("variety", e.target.checked)} />
         <span>多样化（Variety+）</span>

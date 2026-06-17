@@ -225,6 +225,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     const selectedDate = dates[0] ?? "";
     const selectedGroupId = settings.activeHistoryGroupId ?? "";
     const history = await window.naiDesktop.getHistory(selectedDate || undefined, selectedGroupId || undefined);
+    // Restore locked/saved style + negative prompts so they persist across sessions.
+    const restored: Partial<GenerateParams> = {};
+    if (settings.lockStylePrompt) restored.stylePrompt = settings.savedStylePrompt ?? "";
+    if (settings.lockNegativePrompt) restored.negativePrompt = settings.savedNegativePrompt ?? "";
+    set((state) => ({ params: { ...state.params, ...restored } }));
     set({
       bootDone: true,
       settings,

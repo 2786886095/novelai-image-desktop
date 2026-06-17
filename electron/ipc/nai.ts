@@ -1139,7 +1139,9 @@ export async function generateImage(params: GenerateParams, extras?: GenerateExt
   currentAbort?.abort();
   currentAbort = new AbortController();
 
-  const actualSeed = params.seed > 0 ? params.seed : crypto.randomInt(1, 2_147_483_647);
+  // "fixed" mode honors the chosen seed; "random" (or seed<=0) rolls a new one.
+  const useFixedSeed = params.seedMode !== "random" && params.seed > 0;
+  const actualSeed = useFixedSeed ? params.seed : crypto.randomInt(1, 2_147_483_647);
 
   try {
     const preparedExtras = await prepareExtras(params, extras);
@@ -1165,7 +1167,8 @@ export async function generateI2I(params: GenerateParams, i2i: I2IParams, extras
   currentAbort?.abort();
   currentAbort = new AbortController();
 
-  const actualSeed = params.seed > 0 ? params.seed : crypto.randomInt(1, 2_147_483_647);
+  const actualSeed =
+    params.seedMode !== "random" && params.seed > 0 ? params.seed : crypto.randomInt(1, 2_147_483_647);
   const preparedExtras = await prepareExtras(params, extras);
   const payload = buildPayload(params, actualSeed, preparedExtras);
   payload.action = "img2img";
@@ -1203,7 +1206,8 @@ export async function inpaintImage(
   currentAbort = new AbortController();
 
   const { base64, image } = await readWorkbenchImage();
-  const actualSeed = params.seed > 0 ? params.seed : crypto.randomInt(1, 2_147_483_647);
+  const actualSeed =
+    params.seedMode !== "random" && params.seed > 0 ? params.seed : crypto.randomInt(1, 2_147_483_647);
   const inpaintParams: GenerateParams = {
     ...params,
     model: inpaintModel as unknown as NAIModel,

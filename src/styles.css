@@ -3168,6 +3168,63 @@ button.prompt-chip-head {
   padding: 12px 18px 16px;
 }
 
+/* ── Model mode + seed mode switches ─────────────────────────────────────────── */
+.model-mode-switch,
+.seed-mode-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.model-mode-switch button,
+.seed-mode-switch button {
+  padding: 7px 8px;
+  border: 1px solid rgba(124, 58, 237, 0.18);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.6);
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.14s, color 0.14s, border-color 0.14s;
+}
+.model-mode-switch button:hover,
+.seed-mode-switch button:hover { border-color: rgba(124, 58, 237, 0.4); }
+.model-mode-switch button.active,
+.seed-mode-switch button.active {
+  background: rgba(124, 58, 237, 0.14);
+  color: var(--accent);
+  border-color: rgba(124, 58, 237, 0.45);
+}
+.theme-dark .model-mode-switch button,
+.theme-dark .seed-mode-switch button { background: rgba(23, 20, 42, 0.55); }
+
+/* ── Lock (save/pin) button for style + negative prompts ─────────────────────── */
+.field-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.lock-btn {
+  border: 1px solid rgba(124, 58, 237, 0.2);
+  border-radius: 8px;
+  padding: 2px 8px;
+  background: rgba(255, 255, 255, 0.6);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.lock-btn:hover { border-color: rgba(124, 58, 237, 0.45); color: var(--accent); }
+.lock-btn.locked {
+  background: rgba(245, 158, 11, 0.16);
+  border-color: rgba(245, 158, 11, 0.5);
+  color: #b45309;
+}
+.theme-dark .lock-btn { background: rgba(23, 20, 42, 0.55); }
+.theme-dark .lock-btn.locked { color: #fbbf24; }
+
 /* ── Prompt standardization modal ────────────────────────────────────────────── */
 .normalize-modal { width: 520px; max-width: 94vw; }
 .normalize-body { display: grid; gap: 14px; padding: 16px 18px 6px; }

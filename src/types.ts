@@ -15,16 +15,24 @@ export interface ModePromptTemplates {
 
 export const EMPTY_MODE_TEMPLATES: ModePromptTemplates = { tags: "", natural: "", mixed: "" };
 
+export type ModelMode = "anime" | "furry";
+
 export const NAI_MODELS = [
-  { label: "NAI Diffusion 4.5 Full（完整模型）", value: "nai-diffusion-4-5-full" },
-  { label: "NAI Diffusion 4.5 Curated（精选模型）", value: "nai-diffusion-4-5-curated" },
-  { label: "NAI Diffusion 4 Full（完整模型）", value: "nai-diffusion-4-full" },
-  { label: "NAI Diffusion 4 Curated（精选模型）", value: "nai-diffusion-4-curated" },
-  { label: "NAI Diffusion 3（旧版通用）", value: "nai-diffusion-3" },
-  { label: "NAI Diffusion Furry 3（兽人模型）", value: "nai-diffusion-furry-3" },
+  { label: "NAI Diffusion 4.5 Full（完整模型）", value: "nai-diffusion-4-5-full", mode: "anime" },
+  { label: "NAI Diffusion 4.5 Curated（精选模型）", value: "nai-diffusion-4-5-curated", mode: "anime" },
+  { label: "NAI Diffusion 4 Full（完整模型）", value: "nai-diffusion-4-full", mode: "anime" },
+  { label: "NAI Diffusion 4 Curated（精选模型）", value: "nai-diffusion-4-curated", mode: "anime" },
+  { label: "NAI Diffusion 3（旧版通用）", value: "nai-diffusion-3", mode: "anime" },
+  { label: "NAI Diffusion Furry 3（兽人模型）", value: "nai-diffusion-furry-3", mode: "furry" },
 ] as const;
 
 export type NAIModel = (typeof NAI_MODELS)[number]["value"];
+
+/** Default model selected when switching into each mode. */
+export const DEFAULT_MODEL_FOR_MODE: Record<ModelMode, NAIModel> = {
+  anime: "nai-diffusion-4-5-full",
+  furry: "nai-diffusion-furry-3",
+};
 
 export const NAI_SAMPLERS = [
   { label: "Euler Ancestral（欧拉祖先，推荐）", value: "k_euler_ancestral" },
@@ -60,6 +68,8 @@ export interface GenerateParams {
   sampler: NAISampler;
   noiseSchedule: string;
   seed: number;
+  /** "fixed" uses the seed number every time; "random" rolls a new seed each run. */
+  seedMode: "fixed" | "random";
   ucPreset: UcPreset;
   qualityToggle: boolean;
   smea: boolean;
@@ -82,6 +92,7 @@ export const DEFAULT_PARAMS: GenerateParams = {
   sampler: "k_euler_ancestral",
   noiseSchedule: "native",
   seed: 0,
+  seedMode: "random",
   ucPreset: 0,
   qualityToggle: true,
   smea: false,
@@ -321,6 +332,14 @@ export interface AppSettings {
   baiduAppId: string;
   baiduSecret: string;
   activeHistoryGroupId: string;
+  // Anime vs Furry model family (official site offers both; anime is default).
+  modelMode: ModelMode;
+  // Saved/locked style + negative prompts. When locked, they persist across
+  // sessions and are protected from reset / template overwrites.
+  lockStylePrompt: boolean;
+  lockNegativePrompt: boolean;
+  savedStylePrompt: string;
+  savedNegativePrompt: string;
   // Filename template for saved images. Tokens: {date} {time} {seq} {seed} {model} {ext}
   imageNameTemplate: string;
   // Prompt templates
