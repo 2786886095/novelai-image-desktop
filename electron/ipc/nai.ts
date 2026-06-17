@@ -225,13 +225,52 @@ function mergePrompt(...segments: string[]) {
   return result.join(", ");
 }
 
-function buildPayload(params: GenerateParams, actualSeed: number, extras?: GenerateExtras) {
+type CharCaptionMode = "structured" | "pipe";
+
+function finiteClamped(value: number, fallback: number) {
+  return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : fallback;
+}
+
+function normalizedCharCaptions(extras?: GenerateExtras) {
+  return (extras?.charCaptions ?? [])
+    .map((c) => ({
+      prompt: c.prompt.trim(),
+      useCoords: Boolean(c.useCoords),
+      x: finiteClamped(Number(c.x), 0.5),
+      y: finiteClamped(Number(c.y), 0.5),
+    }))
+    .filter((c) => c.prompt.length > 0)
+    .slice(0, 6);
+}
+
+function hasCharCaptions(extras?: GenerateExtras) {
+  return normalizedCharCaptions(extras).length > 0;
+}
+
+function shouldRetryCharCaptionsAsPipe(error: any, params: GenerateParams, extras?: GenerateExtras) {
+  const status = error?.response?.status;
+  return isV4Plus(params.model) && hasCharCaptions(extras) && (status === 400 || status === 422);
+}
+
+function withPipeCharCaptions(basePrompt: string, captions: ReturnType<typeof normalizedCharCaptions>) {
+  if (captions.length === 0) return basePrompt;
+  return [basePrompt, ...captions.map((c) => c.prompt)].filter(Boolean).join(" | ");
+}
+
+function buildPayload(
+  params: GenerateParams,
+  actualSeed: number,
+  extras?: GenerateExtras,
+  charCaptionMode: CharCaptionMode = "structured",
+) {
   const basePrompt = mergePrompt(params.stylePrompt, params.positivePrompt);
   const effectivePrompt = params.qualityToggle
     ? mergePrompt(basePrompt, qualityTags(params.model))
     : basePrompt;
   const effectiveNegative = mergePrompt(params.negativePrompt, ucPresetText(params.model, params.ucPreset));
   const v4Plus = isV4Plus(params.model);
+  const cleanedCharCaptions = normalizedCharCaptions(extras);
+  const inputPrompt = charCaptionMode === "pipe" ? withPipeCharCaptions(effectivePrompt, cleanedCharCaptions) : effectivePrompt;
 
   const parameters: Record<string, unknown> = {
     params_version: 3,
@@ -264,18 +303,19 @@ function buildPayload(params: GenerateParams, actualSeed: number, extras?: Gener
   }
 
   if (v4Plus) {
-    // Build char_captions for V4+ (only non-empty prompts)
-    const charCaptionsPayload = (extras?.charCaptions ?? [])
-      .filter((c) => c.prompt.trim().length > 0)
-      .map((c) => ({
-        char_caption: c.prompt,
-        centers: c.useCoords ? [{ x: c.x, y: c.y }] : [],
-      }));
-    const useCoords = charCaptionsPayload.some((c) => c.centers.length > 0);
+    const charCaptionsPayload = cleanedCharCaptions.map((c) => ({
+      char_caption: c.prompt,
+      centers: c.useCoords ? [{ x: c.x, y: c.y }] : [],
+    }));
+    const useStructuredChars = charCaptionMode === "structured";
+    const useCoords = useStructuredChars && charCaptionsPayload.some((c) => c.centers.length > 0);
 
     parameters.use_coords = useCoords;
     parameters.v4_prompt = {
-      caption: { base_caption: effectivePrompt, char_captions: charCaptionsPayload },
+      caption: {
+        base_caption: charCaptionMode === "pipe" ? inputPrompt : effectivePrompt,
+        char_captions: useStructuredChars ? charCaptionsPayload : [],
+      },
       use_coords: useCoords,
       use_order: true,
     };
@@ -298,7 +338,7 @@ function buildPayload(params: GenerateParams, actualSeed: number, extras?: Gener
   }
 
   return {
-    input: effectivePrompt,
+    input: inputPrompt,
     model: params.model,
     action: "generate",
     parameters,
@@ -1104,13 +1144,20 @@ export async function generateImage(params: GenerateParams, extras?: GenerateExt
   try {
     const preparedExtras = await prepareExtras(params, extras);
     const payload = buildPayload(params, actualSeed, preparedExtras);
-    const buffers = await postGenerateImage(payload);
+    let buffers: Buffer[];
+    try {
+      buffers = await postGenerateImage(payload);
+    } catch (error: any) {
+      if (!shouldRetryCharCaptionsAsPipe(error, params, preparedExtras)) throw error;
+      const pipePayload = buildPayload(params, actualSeed, preparedExtras, "pipe");
+      buffers = await postGenerateImage(pipePayload);
+    }
     if (buffers.length === 0) return { ok: false, message: "API 返回成功，但压缩包中没有图片。", items: [] };
     const items = await saveBuffers(buffers, params, actualSeed, "t2i");
     void refreshStoredAccount();
     return { ok: true, message: `生成完成，已保存 ${items.length} 张图片。`, items, actualSeed };
   } catch (error: any) {
-    return handleGenerateError(error, "生成失败");
+    return handleGenerateError(error, "图片生成失败");
   } finally {
     currentAbort = null;
   }
@@ -1127,17 +1174,26 @@ export async function generateI2I(params: GenerateParams, i2i: I2IParams, extras
 
   const actualSeed =
     params.seedMode !== "random" && params.seed > 0 ? params.seed : crypto.randomInt(1, 2_147_483_647);
-  const preparedExtras = await prepareExtras(params, extras);
-  const payload = buildPayload(params, actualSeed, preparedExtras);
-  payload.action = "img2img";
-  payload.parameters.image = await readWorkbenchBase64();
-  payload.parameters.strength = Math.min(1, Math.max(0, i2i.strength));
-  payload.parameters.noise = Math.min(0.99, Math.max(0, i2i.noise));
-  payload.parameters.extra_noise_seed =
-    i2i.extraNoiseSeed > 0 ? i2i.extraNoiseSeed : crypto.randomInt(1, 2_147_483_647);
-
   try {
-    const buffers = await postGenerateImage(payload);
+    const preparedExtras = await prepareExtras(params, extras);
+    const base64Image = await readWorkbenchBase64();
+    const applyI2I = (payload: ReturnType<typeof buildPayload>) => {
+      payload.action = "img2img";
+      payload.parameters.image = base64Image;
+      payload.parameters.strength = Math.min(1, Math.max(0, i2i.strength));
+      payload.parameters.noise = Math.min(0.99, Math.max(0, i2i.noise));
+      payload.parameters.extra_noise_seed =
+        i2i.extraNoiseSeed > 0 ? i2i.extraNoiseSeed : crypto.randomInt(1, 2_147_483_647);
+      return payload;
+    };
+
+    let buffers: Buffer[];
+    try {
+      buffers = await postGenerateImage(applyI2I(buildPayload(params, actualSeed, preparedExtras)));
+    } catch (error: any) {
+      if (!shouldRetryCharCaptionsAsPipe(error, params, preparedExtras)) throw error;
+      buffers = await postGenerateImage(applyI2I(buildPayload(params, actualSeed, preparedExtras, "pipe")));
+    }
     if (buffers.length === 0) return { ok: false, message: "图生图成功但无图片返回。", items: [] };
     const items = await saveBuffers(buffers, params, actualSeed, "i2i");
     void refreshStoredAccount();

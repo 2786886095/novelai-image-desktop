@@ -167,6 +167,11 @@ function buildExtras(state: AppState): GenerateExtras {
   };
 }
 
+function imageGenerationFailureMessage(message?: string) {
+  const detail = message?.trim() || "未知错误";
+  return detail.includes("图片生成失败") ? detail : `图片生成失败：${detail}`;
+}
+
 export const useAppStore = create<AppState>((set, get) => ({
   bootDone: false,
   showOnboarding: false,
@@ -602,17 +607,23 @@ export const useAppStore = create<AppState>((set, get) => ({
         ? Math.max(0, anlasBefore - anlasAfter)
         : null;
     const spentText = spent && spent > 0 ? `，实扣 ${spent} Anlas` : "";
+    // A user cancellation surfaces as a failed result; don't mislabel it as an error.
+    const cancelled = completed === 0 && failed > 0 && /取消|cancel/i.test(lastError);
     const finalMsg =
-      failed > 0
-        ? `完成：成功 ${completed} 张，失败 ${failed} 张${spentText}`
-        : completed > 1
-          ? `批量生成完成，共 ${completed} 张${spentText}。`
-          : `生成完成，已保存 1 张图片${spentText}。`;
+      cancelled
+        ? "已取消生成。"
+        : failed > 0 && completed === 0
+          ? imageGenerationFailureMessage(lastError)
+          : failed > 0
+            ? `完成：成功 ${completed} 张，失败 ${failed} 张${spentText}；最后一次错误：${lastError || "未知错误"}`
+            : completed > 1
+              ? `批量生成完成，共 ${completed} 张${spentText}。`
+              : `生成完成，已保存 1 张图片${spentText}。`;
     set({
       isGenerating: false,
       queuePaused: false,
       lastAnlasSpent: spent,
-      lastError: failed > 0 ? lastError : "",
+      lastError: cancelled ? "" : failed > 0 ? lastError : "",
       statusText: finalMsg,
       toast: finalMsg,
     });
