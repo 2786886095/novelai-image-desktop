@@ -15,7 +15,7 @@ import axios from "axios";
 import { spawn } from "child_process";
 import { EventEmitter } from "events";
 
-const CLIENT_INFO = { name: "langbai-novelai-studio", version: "0.7.1" };
+const CLIENT_INFO = { name: "langbai-novelai-studio", version: "0.7.2" };
 const PROTOCOL_VERSION = "2024-11-05";
 
 interface JsonRpcMessage {
