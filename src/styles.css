@@ -2127,7 +2127,10 @@ html, body, #root {
 .app-shell {
   position: relative;
   isolation: isolate;
-  grid-template-rows: 38px 44px 54px 1fr 26px;
+  /* Rows: title · update-banner (auto, 0 when hidden) · menu · tabs · workspace · status.
+     Must keep the banner row or a new-version banner shifts every row and the
+     workspace collapses. This rule overrides the base one above, so it needs it too. */
+  grid-template-rows: 38px auto 44px 54px 1fr 26px;
   background:
     linear-gradient(135deg, rgba(255,255,255,0.42), rgba(255,255,255,0.05)),
     transparent;
