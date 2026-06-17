@@ -261,7 +261,130 @@ export const PROMPT_CHIP_POOL: PromptChip[] = [
   { tag: "monochrome", zh: "单色", aliases: ["单色", "黑白", "灰度"] },
   { tag: "muted colors", zh: "低饱和", aliases: ["低饱和", "灰调", "莫兰迪"] },
   { tag: "colorful", zh: "多彩", aliases: ["多彩", "彩色", "五彩"] },
+
+  // ── 发型补充 ──────────────────────────────────────────────────
+  { tag: "very long hair", zh: "超长发", aliases: ["超长发", "及腰长发"] },
+  { tag: "wavy hair", zh: "波浪卷发", aliases: ["卷发", "波浪发", "大波浪"] },
+  { tag: "curly hair", zh: "卷发", aliases: ["卷发", "蓬卷"] },
+  { tag: "hime cut", zh: "公主切", aliases: ["公主切", "姬发式"] },
+  { tag: "side ponytail", zh: "侧马尾", aliases: ["侧马尾"] },
+  { tag: "drill hair", zh: "钻头卷", aliases: ["钻头", "麻花卷", "螺旋卷"] },
+  { tag: "ahoge", zh: "呆毛", aliases: ["呆毛", "翘毛"] },
+  { tag: "bangs", zh: "刘海", aliases: ["刘海", "齐刘海"] },
+  { tag: "two-tone hair", zh: "双色发", aliases: ["双色发", "撞色发"] },
+
+  // ── 五官 / 身体 ───────────────────────────────────────────────
+  { tag: "freckles", zh: "雀斑", aliases: ["雀斑", "斑点"] },
+  { tag: "fang", zh: "虎牙", aliases: ["虎牙", "尖牙"] },
+  { tag: "mole under eye", zh: "泪痣", aliases: ["泪痣", "眼下痣"] },
+  { tag: "pointy ears", zh: "尖耳朵", aliases: ["尖耳", "精灵耳"] },
+  { tag: "large breasts", zh: "大胸", aliases: ["大胸", "丰满"] },
+  { tag: "small breasts", zh: "小胸", aliases: ["小胸", "平胸"] },
+  { tag: "thighs", zh: "大腿", aliases: ["大腿", "腿"] },
+  { tag: "collarbone", zh: "锁骨", aliases: ["锁骨"] },
+  { tag: "muscular", zh: "肌肉", aliases: ["肌肉", "健壮", "强壮"] },
+  { tag: "tail", zh: "尾巴", aliases: ["尾巴", "兽尾"] },
+
+  // ── 服饰补充 ──────────────────────────────────────────────────
+  { tag: "thighhighs", zh: "过膝袜", aliases: ["过膝袜", "大腿袜", "黑丝"] },
+  { tag: "pantyhose", zh: "连裤袜", aliases: ["连裤袜", "丝袜"] },
+  { tag: "shirt", zh: "衬衫", aliases: ["衬衫", "上衣"] },
+  { tag: "t-shirt", zh: "T恤", aliases: ["T恤", "短袖"] },
+  { tag: "jacket", zh: "夹克", aliases: ["夹克", "外套"] },
+  { tag: "coat", zh: "大衣", aliases: ["大衣", "风衣"] },
+  { tag: "sweater", zh: "毛衣", aliases: ["毛衣", "针织衫"] },
+  { tag: "shorts", zh: "短裤", aliases: ["短裤"] },
+  { tag: "pants", zh: "长裤", aliases: ["长裤", "裤子"] },
+  { tag: "jeans", zh: "牛仔裤", aliases: ["牛仔裤"] },
+  { tag: "miniskirt", zh: "迷你裙", aliases: ["迷你裙", "短裙"] },
+  { tag: "pleated skirt", zh: "百褶裙", aliases: ["百褶裙", "JK裙"] },
+  { tag: "necktie", zh: "领带", aliases: ["领带"] },
+  { tag: "scarf", zh: "围巾", aliases: ["围巾"] },
+  { tag: "boots", zh: "靴子", aliases: ["靴子", "长靴"] },
+  { tag: "high heels", zh: "高跟鞋", aliases: ["高跟鞋", "高跟"] },
+  { tag: "crop top", zh: "短上衣", aliases: ["短上衣", "露脐装"] },
+  { tag: "off shoulder", zh: "露肩", aliases: ["露肩", "一字肩"] },
+  { tag: "garter belt", zh: "吊袜带", aliases: ["吊袜带", "吊带"] },
+  { tag: "witch hat", zh: "女巫帽", aliases: ["女巫帽", "巫师帽", "尖帽"] },
+  { tag: "crown", zh: "皇冠", aliases: ["皇冠", "王冠"] },
+  { tag: "veil", zh: "面纱", aliases: ["面纱", "头纱"] },
+  { tag: "mask", zh: "面具", aliases: ["面具", "口罩"] },
+
+  // ── 配饰补充 ──────────────────────────────────────────────────
+  { tag: "fox ears", zh: "狐耳", aliases: ["狐耳", "狐狸耳朵"] },
+  { tag: "animal ears", zh: "兽耳", aliases: ["兽耳", "动物耳朵"] },
+  { tag: "demon horns", zh: "恶魔角", aliases: ["恶魔角"] },
+  { tag: "angel wings", zh: "天使翅膀", aliases: ["天使翼", "白翼"] },
+  { tag: "tattoo", zh: "纹身", aliases: ["纹身", "刺青"] },
+  { tag: "choker", zh: "项圈", aliases: ["项圈", "颈环"] },
+  { tag: "headphones", zh: "耳机", aliases: ["耳机", "头戴耳机"] },
+  { tag: "bag", zh: "包", aliases: ["包", "背包", "书包"] },
+  { tag: "umbrella", zh: "雨伞", aliases: ["伞", "雨伞", "油纸伞"] },
+
+  // ── 道具 / 物件 ───────────────────────────────────────────────
+  { tag: "sword", zh: "剑", aliases: ["剑", "刀剑", "武器"] },
+  { tag: "katana", zh: "武士刀", aliases: ["武士刀", "日本刀"] },
+  { tag: "gun", zh: "枪", aliases: ["枪", "手枪"] },
+  { tag: "staff", zh: "法杖", aliases: ["法杖", "魔杖"] },
+  { tag: "book", zh: "书", aliases: ["书", "书本"] },
+  { tag: "flower", zh: "花朵", aliases: ["花", "花朵"] },
+  { tag: "cherry blossoms", zh: "樱花", aliases: ["樱花", "樱"] },
+  { tag: "rose", zh: "玫瑰", aliases: ["玫瑰", "蔷薇"] },
+  { tag: "sword and shield", zh: "剑与盾", aliases: ["盾牌", "剑盾"] },
+  { tag: "cup", zh: "杯子", aliases: ["杯子", "茶杯", "咖啡杯"] },
+  { tag: "food", zh: "食物", aliases: ["食物", "美食"] },
+  { tag: "phone", zh: "手机", aliases: ["手机", "电话"] },
+  { tag: "guitar", zh: "吉他", aliases: ["吉他", "乐器"] },
+  { tag: "balloon", zh: "气球", aliases: ["气球"] },
+  { tag: "lantern", zh: "灯笼", aliases: ["灯笼", "纸灯"] },
+
+  // ── 场景补充 ──────────────────────────────────────────────────
+  { tag: "cafe", zh: "咖啡厅", aliases: ["咖啡厅", "咖啡馆"] },
+  { tag: "street", zh: "街道", aliases: ["街道", "马路", "街头"] },
+  { tag: "rooftop", zh: "屋顶", aliases: ["屋顶", "天台"] },
+  { tag: "shrine", zh: "神社", aliases: ["神社", "鸟居"] },
+  { tag: "temple", zh: "寺庙", aliases: ["寺庙", "庙宇"] },
+  { tag: "castle", zh: "城堡", aliases: ["城堡", "宫殿"] },
+  { tag: "garden", zh: "花园", aliases: ["花园", "庭院"] },
+  { tag: "park", zh: "公园", aliases: ["公园"] },
+  { tag: "snowfield", zh: "雪原", aliases: ["雪原", "雪地"] },
+  { tag: "desert", zh: "沙漠", aliases: ["沙漠", "荒漠"] },
+  { tag: "underwater", zh: "水下", aliases: ["水下", "海底"] },
+  { tag: "space", zh: "太空", aliases: ["太空", "宇宙", "星际"] },
+  { tag: "waterfall", zh: "瀑布", aliases: ["瀑布"] },
+  { tag: "lake", zh: "湖", aliases: ["湖", "湖泊"] },
+  { tag: "bridge", zh: "桥", aliases: ["桥", "桥梁"] },
+  { tag: "train interior", zh: "车厢内", aliases: ["车厢", "电车内"] },
+  { tag: "autumn leaves", zh: "秋叶", aliases: ["秋叶", "红叶", "枫叶"] },
+  { tag: "snowing", zh: "下雪", aliases: ["下雪", "飘雪"] },
+
+  // ── 氛围 / 主题 ───────────────────────────────────────────────
+  { tag: "steampunk", zh: "蒸汽朋克", aliases: ["蒸汽朋克"] },
+  { tag: "post-apocalyptic", zh: "末世", aliases: ["末世", "废土"] },
+  { tag: "magical girl", zh: "魔法少女", aliases: ["魔法少女", "魔女"] },
+  { tag: "mecha", zh: "机甲", aliases: ["机甲", "机器人"] },
+  { tag: "gothic", zh: "哥特", aliases: ["哥特", "暗黑"] },
+  { tag: "horror", zh: "恐怖", aliases: ["恐怖", "惊悚"] },
+  { tag: "dreamy", zh: "梦幻", aliases: ["梦幻", "梦境", "唯美"] },
+  { tag: "ethereal", zh: "空灵", aliases: ["空灵", "缥缈"] },
 ];
+
+// English-tag -> Chinese lookup, used to give MCP/server tags a 中文 label.
+const EN_TO_ZH = new Map<string, string>();
+for (const chip of PROMPT_CHIP_POOL) {
+  EN_TO_ZH.set(chip.tag.toLowerCase(), chip.zh);
+  for (const a of chip.aliases) if (/[一-鿿]/.test(a) && !EN_TO_ZH.has(chip.tag.toLowerCase())) EN_TO_ZH.set(chip.tag.toLowerCase(), a);
+}
+for (const [k, v] of Object.entries(TAG_ZH)) {
+  const key = k.toLowerCase();
+  if (!EN_TO_ZH.has(key)) EN_TO_ZH.set(key, v);
+}
+
+/** Best-effort Chinese gloss for an English Danbooru tag ("" if unknown). */
+export function zhForTag(tag: string): string {
+  const norm = tag.toLowerCase().trim().replace(/_/g, " ");
+  return EN_TO_ZH.get(norm) ?? "";
+}
 
 /**
  * Pick chips for the inspiration capsule. With a query, score every chip against

@@ -15,6 +15,7 @@ import {
   TAB_ITEMS,
   pickPromptChips,
   tagDescription,
+  zhForTag,
   type PromptChip,
 } from "./prompt-data";
 import {
@@ -523,6 +524,7 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
   const charCaptions = useAppStore((state) => state.charCaptions);
   const settings = useAppStore((state) => state.settings);
   const setToast = useAppStore((state) => state.setToast);
+  const refreshSettings = useAppStore((state) => state.refreshSettings);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showVibeModal, setShowVibeModal] = useState(false);
   const [showCharModal, setShowCharModal] = useState(false);
@@ -567,6 +569,13 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
     setParam(promptKey, setTagLevelInPrompt(promptValue, index, tag.level + delta));
   }
 
+  async function toggleAutoComplete() {
+    const next = !(settings?.autoComplete ?? true);
+    await window.naiDesktop.setSetting("autoComplete", next);
+    await refreshSettings();
+    setToast(next ? "已开启输入提词" : "已关闭输入提词");
+  }
+
   async function translatePrompt() {
     const text = promptValue.trim();
     if (!text) {
@@ -601,7 +610,7 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
   // and show server-backed tags alongside the offline dictionary chips.
   useEffect(() => {
     const q = chipQuery.trim();
-    if (!q || !capsuleUsesMcp) {
+    if (q.length < 2 || !capsuleUsesMcp) {
       setServerChips([]);
       return;
     }
@@ -609,11 +618,11 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
     const timer = setTimeout(async () => {
       try {
         const res = await window.naiDesktop.searchTagServer(q, 16);
-        if (!cancelled) setServerChips(res.map((r) => ({ tag: r.tag, zh: r.description ?? "" })));
+        if (!cancelled) setServerChips(res.map((r) => ({ tag: r.tag, zh: (r.description ?? "").trim() || zhForTag(r.tag) })));
       } catch {
         if (!cancelled) setServerChips([]);
       }
-    }, 250);
+    }, 400);
     return () => {
       cancelled = true;
       clearTimeout(timer);
@@ -729,6 +738,14 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
         </button>
         <button type="button" className="prompt-tool-btn" onClick={() => void translatePrompt()} disabled={translating}>
           {translating ? "翻译中…" : "🌐 中→英翻译"}
+        </button>
+        <button
+          type="button"
+          className={clsx("prompt-tool-btn", (settings?.autoComplete ?? true) && "tool-on")}
+          title="输入英文时推测候选 tag 的功能"
+          onClick={() => void toggleAutoComplete()}
+        >
+          {(settings?.autoComplete ?? true) ? "💡 提词：开" : "💡 提词：关"}
         </button>
       </div>
       {showWeights && weightTags.length > 0 && (
@@ -1727,6 +1744,55 @@ function ImageCanvas() {
   );
 }
 
+// ── Reusable in-app input modal (Electron has no window.prompt) ────────────────
+function InputModal({
+  title,
+  label,
+  initial,
+  confirmText = "确定",
+  onConfirm,
+  onClose,
+}: {
+  title: string;
+  label: string;
+  initial: string;
+  confirmText?: string;
+  onConfirm: (value: string) => void;
+  onClose: () => void;
+}) {
+  const [value, setValue] = useState(initial);
+  return (
+    <AppPortal>
+      <div className="modal-backdrop" onMouseDown={onClose}>
+        <div className="modal input-modal" onMouseDown={(e) => e.stopPropagation()}>
+          <header>
+            <h2>{title}</h2>
+            <button onClick={onClose}>×</button>
+          </header>
+          <div className="input-modal-body">
+            <label className="field">
+              <span>{label}</span>
+              <input
+                autoFocus
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") onConfirm(value);
+                  else if (e.key === "Escape") onClose();
+                }}
+              />
+            </label>
+          </div>
+          <footer className="input-modal-footer">
+            <Button onClick={onClose}>取消</Button>
+            <Button variant="primary" onClick={() => onConfirm(value)}>{confirmText}</Button>
+          </footer>
+        </div>
+      </div>
+    </AppPortal>
+  );
+}
+
 // ── History panel ─────────────────────────────────────────────────────────────
 function HistoryPanel() {
   const history = useAppStore((state) => state.history);
@@ -1745,11 +1811,14 @@ function HistoryPanel() {
   const deleteHistory = useAppStore((state) => state.deleteHistory);
   const renameHistoryItem = useAppStore((state) => state.renameHistoryItem);
   const [newGroupName, setNewGroupName] = useState("");
+  // window.prompt() is unsupported in Electron, so use an in-app input modal.
+  const [renameTarget, setRenameTarget] = useState<
+    { kind: "item" | "group"; id: string; initial: string; title: string; label: string } | null
+  >(null);
 
   function renameItem(item: HistoryItem) {
     const current = item.filePath.split(/[\\/]/).pop()?.replace(/\.[^.]+$/, "") ?? "";
-    const next = window.prompt("重命名图片（不含扩展名，会同步重命名本地文件）", current);
-    if (next && next.trim()) void renameHistoryItem(item.id, next.trim());
+    setRenameTarget({ kind: "item", id: item.id, initial: current, title: "重命名图片", label: "新文件名（不含扩展名，会同步重命名本地文件）" });
   }
 
   function submitGroup() {
@@ -1764,8 +1833,16 @@ function HistoryPanel() {
 
   function renameActiveGroup() {
     if (!activeGroup) return;
-    const next = window.prompt("重命名分组", activeGroup.name);
-    if (next && next.trim()) void renameHistoryGroup(activeGroup.id, next.trim());
+    setRenameTarget({ kind: "group", id: activeGroup.id, initial: activeGroup.name, title: "重命名分组", label: "分组名称" });
+  }
+
+  function confirmRename(value: string) {
+    const name = value.trim();
+    const target = renameTarget;
+    setRenameTarget(null);
+    if (!name || !target) return;
+    if (target.kind === "item") void renameHistoryItem(target.id, name);
+    else void renameHistoryGroup(target.id, name);
   }
 
   function deleteActiveGroup() {
@@ -1856,6 +1933,16 @@ function HistoryPanel() {
           </div>
         ))}
       </div>
+      {renameTarget && (
+        <InputModal
+          title={renameTarget.title}
+          label={renameTarget.label}
+          initial={renameTarget.initial}
+          confirmText="重命名"
+          onConfirm={confirmRename}
+          onClose={() => setRenameTarget(null)}
+        />
+      )}
     </aside>
   );
 }

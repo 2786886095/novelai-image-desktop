@@ -96,6 +96,35 @@ function resultToText(result: any): string {
 }
 
 // ── Streamable HTTP transport ──────────────────────────────────────────────────
+// Cache the handshake (session id + tool arg schema) per endpoint so repeated
+// capsule searches only cost ONE round-trip (tools/call) instead of three.
+interface HttpSession {
+  sessionId: string;
+  argSchema: any;
+  ts: number;
+}
+const httpSessions = new Map<string, HttpSession>();
+const SESSION_TTL_MS = 5 * 60 * 1000;
+
+function makePost(url: string, headers: Record<string, string>, getSid: () => string, setSid: (s: string) => void) {
+  return async (body: JsonRpcMessage): Promise<JsonRpcMessage | null> => {
+    const h = { ...headers };
+    const sid = getSid();
+    if (sid) h["Mcp-Session-Id"] = sid;
+    const resp = await axios.post(url, body, {
+      headers: h,
+      timeout: 20_000,
+      responseType: "text",
+      transformResponse: (d) => d,
+      validateStatus: () => true,
+    });
+    const newSid = resp.headers["mcp-session-id"];
+    if (newSid) setSid(String(newSid));
+    const data = typeof resp.data === "string" ? resp.data : JSON.stringify(resp.data);
+    return parseBody(data);
+  };
+}
+
 async function callHttp(
   endpoint: string,
   apiKey: string,
@@ -109,23 +138,26 @@ async function callHttp(
     Accept: "application/json, text/event-stream",
   };
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
-  let sessionId = "";
+  const cacheKey = `${url}|${tool}|${apiKey}`;
 
-  const post = async (body: JsonRpcMessage): Promise<JsonRpcMessage | null> => {
-    const h = { ...headers };
-    if (sessionId) h["Mcp-Session-Id"] = sessionId;
-    const resp = await axios.post(url, body, {
-      headers: h,
-      timeout: 20_000,
-      responseType: "text",
-      transformResponse: (d) => d,
-      validateStatus: () => true,
-    });
-    const sid = resp.headers["mcp-session-id"];
-    if (sid) sessionId = String(sid);
-    const data = typeof resp.data === "string" ? resp.data : JSON.stringify(resp.data);
-    return parseBody(data);
-  };
+  let sessionId = "";
+  const post = makePost(url, headers, () => sessionId, (s) => { sessionId = s; });
+
+  // Fast path: reuse a warm session and skip initialize + tools/list.
+  const cached = httpSessions.get(cacheKey);
+  if (cached && Date.now() - cached.ts < SESSION_TTL_MS) {
+    sessionId = cached.sessionId;
+    try {
+      const call = await post(rpc("tools/call", { name: tool, arguments: buildArgs(cached.argSchema, query, limit) }, 3));
+      if (call?.error) throw new Error(call.error.message || "MCP tools/call 失败");
+      cached.ts = Date.now();
+      cached.sessionId = sessionId;
+      return resultToText(call?.result);
+    } catch {
+      httpSessions.delete(cacheKey); // stale session — fall through to full handshake
+      sessionId = "";
+    }
+  }
 
   await post(rpc("initialize", { protocolVersion: PROTOCOL_VERSION, capabilities: {}, clientInfo: CLIENT_INFO }, 1));
   try {
@@ -146,6 +178,7 @@ async function callHttp(
 
   const call = await post(rpc("tools/call", { name: tool, arguments: buildArgs(argSchema, query, limit) }, 3));
   if (call?.error) throw new Error(call.error.message || "MCP tools/call 失败");
+  httpSessions.set(cacheKey, { sessionId, argSchema, ts: Date.now() });
   return resultToText(call?.result);
 }
 

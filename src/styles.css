@@ -3131,6 +3131,21 @@ button.prompt-chip-head {
 }
 .prompt-tool-btn:hover:not(:disabled) { background: #fff; color: var(--accent); border-color: rgba(124,58,237,0.4); }
 .prompt-tool-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.prompt-tool-btn.tool-on {
+  background: rgba(124, 58, 237, 0.12);
+  color: var(--accent);
+  border-color: rgba(124, 58, 237, 0.4);
+}
+
+/* ── In-app input modal (rename) ─────────────────────────────────────────────── */
+.input-modal { width: 440px; max-width: 92vw; }
+.input-modal-body { padding: 16px 18px 4px; }
+.input-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 18px 16px;
+}
 
 .weight-editor {
   margin: 8px 0 4px;
