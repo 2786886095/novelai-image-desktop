@@ -8,6 +8,12 @@ import { relatedTags } from "./related-tags";
 import { fmtCount, wordAtCursor } from "./text-utils";
 import { parsePngMeta, parseImportedParams } from "./png-meta";
 import { splitPromptTags, parseWeightedTag, formatMultiplier, setTagLevelInPrompt } from "./prompt-weight";
+import {
+  normalizePrompt,
+  DEFAULT_NORMALIZE_OPTIONS,
+  NORMALIZE_LABELS,
+  type NormalizeOptions,
+} from "./prompt-normalize";
 import { Button, IconText, AppPortal, Toggle, NumberInput, SliderInput } from "./components/ui";
 import {
   CAT_COLOR,
@@ -532,6 +538,7 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
   const [chipQuery, setChipQuery] = useState("");
   const [chipOpen, setChipOpen] = useState(false);
   const [showWeights, setShowWeights] = useState(false);
+  const [showNormalize, setShowNormalize] = useState(false);
   const [translating, setTranslating] = useState(false);
   const [promptChips, setPromptChips] = useState<PromptChip[]>(() => pickPromptChips());
   const [serverChips, setServerChips] = useState<{ tag: string; zh: string }[]>([]);
@@ -739,6 +746,9 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
         <button type="button" className="prompt-tool-btn" onClick={() => void translatePrompt()} disabled={translating}>
           {translating ? "翻译中…" : "🌐 中→英翻译"}
         </button>
+        <button type="button" className="prompt-tool-btn" onClick={() => setShowNormalize(true)} disabled={!promptValue.trim()}>
+          ✨ 标准化
+        </button>
         <button
           type="button"
           className={clsx("prompt-tool-btn", (settings?.autoComplete ?? true) && "tool-on")}
@@ -839,7 +849,68 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
       {showAdvanced && <AdvancedParamsModal onClose={() => setShowAdvanced(false)} />}
       {showVibeModal && <VibeTransferModal onClose={() => setShowVibeModal(false)} />}
       {showCharModal && <CharCaptionsModal onClose={() => setShowCharModal(false)} />}
+      {showNormalize && (
+        <PromptNormalizeModal
+          value={promptValue}
+          onApply={(next) => {
+            setParam(promptKey, next);
+            setShowNormalize(false);
+            setToast("提示词已标准化");
+          }}
+          onClose={() => setShowNormalize(false)}
+        />
+      )}
     </>
+  );
+}
+
+// ── Prompt standardization modal ──────────────────────────────────────────────
+function PromptNormalizeModal({
+  value,
+  onApply,
+  onClose,
+}: {
+  value: string;
+  onApply: (next: string) => void;
+  onClose: () => void;
+}) {
+  const [opts, setOpts] = useState<NormalizeOptions>(DEFAULT_NORMALIZE_OPTIONS);
+  const preview = useMemo(() => normalizePrompt(value, opts), [value, opts]);
+  return (
+    <AppPortal>
+      <div className="modal-backdrop" onMouseDown={onClose}>
+        <div className="modal normalize-modal" onMouseDown={(e) => e.stopPropagation()}>
+          <header>
+            <h2>提示词标准化</h2>
+            <button onClick={onClose}>×</button>
+          </header>
+          <div className="normalize-body">
+            <div className="normalize-options">
+              {NORMALIZE_LABELS.map(({ key, label }) => (
+                <label key={key} className="checkbox-line">
+                  <input
+                    type="checkbox"
+                    checked={opts[key]}
+                    onChange={(e) => setOpts((o) => ({ ...o, [key]: e.target.checked }))}
+                  />
+                  <span>{label}</span>
+                </label>
+              ))}
+            </div>
+            <div className="normalize-preview">
+              <small>预览</small>
+              <div className="normalize-preview-box">{preview || "（结果为空）"}</div>
+            </div>
+          </div>
+          <footer>
+            <Button onClick={onClose}>取消</Button>
+            <Button variant="primary" disabled={!preview.trim()} onClick={() => onApply(preview)}>
+              应用
+            </Button>
+          </footer>
+        </div>
+      </div>
+    </AppPortal>
   );
 }
 

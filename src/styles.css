@@ -2666,8 +2666,17 @@ html, body, #root {
   font-weight: 800;
 }
 .history-item-group {
-  width: calc(100% - 12px);
-  margin: 0 6px 6px;
+  width: 100%;
+  margin: 0;
+  border: none;
+  border-top: 1px solid rgba(124, 58, 237, 0.12);
+  border-radius: 0;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.55);
+}
+.theme-dark .history-item-group {
+  border-top-color: rgba(167, 139, 250, 0.18);
+  background: rgba(23, 20, 42, 0.55);
 }
 .model-check-result small {
   display: block;
@@ -3146,6 +3155,33 @@ button.prompt-chip-head {
   gap: 8px;
   padding: 12px 18px 16px;
 }
+
+/* ── Prompt standardization modal ────────────────────────────────────────────── */
+.normalize-modal { width: 520px; max-width: 94vw; }
+.normalize-body { display: grid; gap: 14px; padding: 16px 18px 6px; }
+.normalize-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 14px;
+}
+.normalize-options .checkbox-line { font-size: 13px; }
+.normalize-preview { display: grid; gap: 6px; }
+.normalize-preview small { color: var(--text-muted); font-size: 11px; }
+.normalize-preview-box {
+  min-height: 64px;
+  max-height: 160px;
+  overflow: auto;
+  padding: 10px 12px;
+  border: 1px solid rgba(124, 58, 237, 0.16);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.6);
+  font-size: 12.5px;
+  line-height: 1.6;
+  word-break: break-word;
+  white-space: pre-wrap;
+  color: var(--text-secondary);
+}
+.theme-dark .normalize-preview-box { background: rgba(23, 20, 42, 0.55); border-color: rgba(167, 139, 250, 0.2); }
 
 .weight-editor {
   margin: 8px 0 4px;

@@ -35,6 +35,7 @@ import {
 } from "./store";
 import { TAG_DICTIONARY } from "../data/tag-dictionary";
 import { mcpSearch } from "./mcp-client";
+import { zhForTag } from "../../src/prompt-data";
 
 let currentAbort: AbortController | null = null;
 let workbenchImagePath: string | null = null;
@@ -1014,14 +1015,72 @@ export async function reversePromptImage(
   return { ok: false, message: `反推失败：${result.message}` };
 }
 
+const CJK_RE = /[一-鿿぀-ゟ゠-ヿ]/;
+// English-tag -> Chinese gloss cache, so we only translate a given tag once.
+const tagZhCache = new Map<string, string>();
+
+/**
+ * Make sure every tag carries a Chinese gloss in `description`. Resolution
+ * order: existing CJK description → offline dictionary → translation cache →
+ * batch online translation (EN→中文) for whatever is still missing. Results are
+ * cached so repeat searches stay instant.
+ */
+async function enrichTagsWithChinese(tags: TagSuggestion[]): Promise<TagSuggestion[]> {
+  if (tags.length === 0) return tags;
+  const misses: string[] = [];
+  for (const t of tags) {
+    const existing = (t.description ?? "").trim();
+    if (existing && CJK_RE.test(existing)) continue;
+    const local = zhForTag(t.tag);
+    if (local) {
+      t.description = local;
+      continue;
+    }
+    const cached = tagZhCache.get(t.tag.toLowerCase());
+    if (cached) {
+      t.description = cached;
+      continue;
+    }
+    misses.push(t.tag);
+  }
+  // Translate the leftovers in ONE batched request (newline-delimited) so we
+  // stay fast and avoid rate-limiting the translation endpoint.
+  const todo = [...new Set(misses)].slice(0, 24);
+  if (todo.length > 0) {
+    try {
+      const res = await translateText(todo.map((t) => t.replace(/_/g, " ")).join("\n"), "zh");
+      if (res.ok && res.text) {
+        const lines = res.text.split("\n").map((l) => l.trim());
+        // Only trust a clean 1:1 mapping; otherwise leave the English tags.
+        if (lines.length === todo.length) {
+          todo.forEach((tag, i) => {
+            const zh = lines[i];
+            if (zh && CJK_RE.test(zh)) tagZhCache.set(tag.toLowerCase(), zh);
+          });
+        }
+      }
+    } catch {
+      // leave untranslated; the English tag still shows.
+    }
+    for (const t of tags) {
+      if ((t.description ?? "").trim() && CJK_RE.test(t.description ?? "")) continue;
+      const zh = tagZhCache.get(t.tag.toLowerCase());
+      if (zh) t.description = zh;
+    }
+  }
+  return tags;
+}
+
 /**
  * Tag/MCP search used by the inspiration capsule. Returns server suggestions
- * only when the service is enabled AND the capsule is allowed to use it.
+ * only when the service is enabled AND the capsule is allowed to use it. Every
+ * returned tag is annotated with a Chinese gloss.
  */
 export async function searchTagServer(query: string, limit = 16): Promise<TagSuggestion[]> {
   const settings = getSettings();
   if (!settings.mcpForCapsule) return [];
-  return queryTagServer(query, limit);
+  const tags = await queryTagServer(query, limit);
+  return enrichTagsWithChinese(tags);
 }
 
 export async function convertPromptText(
