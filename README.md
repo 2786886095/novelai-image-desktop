@@ -6,7 +6,8 @@
 [![Release](https://img.shields.io/badge/release-v0.7.0-7c5cfa.svg)](https://github.com/2786886095/novelai-image-desktop/releases/tag/v0.7.0)
 [![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android%20%7C%20iOS-20b7d8.svg)](#下载)
 
-![Langbai NovelAI Studio hero](./docs/assets/hero.png)
+![Uploading ChatGPT Image 2026年6月17日 11_27_47.png…]()
+
 
 中文 **API-only** NovelAI 图像创作工作台。桌面端基于 Electron + React + TypeScript，移动端基于 Flutter。
 
