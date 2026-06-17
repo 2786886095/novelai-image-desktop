@@ -4,14 +4,20 @@
 
 | 系统 | 安装包 | 安装说明 |
 | --- | --- | --- |
-| 🪟 **Windows** (x64) | `Langbai-NovelAI-Studio-0.7.4.exe` | 便携版，双击即用，无需安装 |
-| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-0.7.4-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
-| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-0.7.4.zip` | 解压后即为 `.app`，同样需右键「打开」 |
-| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-0.7.4.AppImage` | `chmod +x` 后直接运行 |
+| 🪟 **Windows** (x64) | `Langbai-NovelAI-Studio-0.7.5.exe` | 便携版，双击即用，无需安装 |
+| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-0.7.5-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
+| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-0.7.5.zip` | 解压后即为 `.app`，同样需右键「打开」 |
+| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-0.7.5.AppImage` | `chmod +x` 后直接运行 |
 | 🤖 **Android** | `app-release.apk` | 直接安装；未签名，需允许「未知来源」 |
 | 📱 **iOS** | `novelai-mobile-unsigned.ipa` | **未签名**，需用 AltStore / Sideloadly 等工具自行侧载 |
 
 > 桌面端与移动端均为 **API-only** 客户端，需自备 NovelAI Persistent API Token。
+
+### v0.7.5 更新内容
+
+- **去掉提示词红色波浪线**：关闭原生拼写检查，英文 tag 不再被标红。
+- **文本框右键菜单**：在任意输入框 / 文本域右键，可使用 剪切 / 复制 / 粘贴 / 全选。
+- **历史面板可滑动**：右侧图片列表改为明确的滚动容器（带细滚动条、行不再被拉伸），图片多了也能顺畅滑动查看，不再挤成一团。
 
 ### v0.7.4 更新内容
 
