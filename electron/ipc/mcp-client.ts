@@ -12,6 +12,7 @@
 // result's text content is returned to the caller for tag parsing.
 
 import axios from "axios";
+import { getAxiosConfig } from "./nai";
 import { spawn } from "child_process";
 import { EventEmitter } from "events";
 
@@ -111,7 +112,7 @@ function makePost(url: string, headers: Record<string, string>, getSid: () => st
     const h = { ...headers };
     const sid = getSid();
     if (sid) h["Mcp-Session-Id"] = sid;
-    const resp = await axios.post(url, body, {
+    const resp = await axios.post(url, body, { ...await getAxiosConfig(),
       headers: h,
       timeout: 20_000,
       responseType: "text",
@@ -195,7 +196,7 @@ async function callSse(
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
 
   // Open the SSE stream; the server's first "endpoint" event tells us where to POST.
-  const streamResp = await axios.get(url, {
+  const streamResp = await axios.get(url, { ...await getAxiosConfig(),
     headers: { ...headers, Accept: "text/event-stream" },
     responseType: "stream",
     timeout: 0,
@@ -259,7 +260,7 @@ async function callSse(
         });
       }
       try {
-        await axios.post(postUrl, body, { headers: { ...headers, "Content-Type": "application/json" }, timeout: 20_000 });
+        await axios.post(postUrl, body, { ...await getAxiosConfig(), headers: { ...headers, "Content-Type": "application/json" }, timeout: 20_000 });
         if (expectId === undefined) resolve(null);
       } catch (e) {
         if (timer) clearTimeout(timer);

@@ -1,5 +1,6 @@
 import { app } from "electron";
 import axios from "axios";
+import { getAxiosConfig } from "./nai";
 import type { UpdateInfo } from "../../src/types";
 
 const REPO = "2786886095/novelai-image-desktop";
@@ -28,7 +29,7 @@ function compareVersions(a: string, b: string): number {
 export async function checkUpdate(): Promise<UpdateInfo> {
   const currentVersion = app.getVersion();
   try {
-    const res = await axios.get(`https://api.github.com/repos/${REPO}/releases/latest`, {
+    const res = await axios.get(`https://api.github.com/repos/${REPO}/releases/latest`, { ...await getAxiosConfig(),
       headers: { Accept: "application/vnd.github+json" },
       timeout: 10_000,
     });

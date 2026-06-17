@@ -2253,6 +2253,10 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                   <span>Image Endpoint（图片接口）</span>
                   <input value={settings.imageBaseUrl} onChange={(e) => void update("imageBaseUrl", e.target.value)} />
                 </label>
+                <label className="field">
+                  <span>代理地址（留空直连，HTTP 填 http://IP:端口，SOCKS5 填 socks5://IP:端口）</span>
+                  <input value={settings.proxyUrl} placeholder="socks5://127.0.0.1:10808" onChange={(e) => void update("proxyUrl", e.target.value)} />
+                </label>
               </div>
             )}
             {section === "storage" && (

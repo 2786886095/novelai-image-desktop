@@ -1,5 +1,7 @@
 import { dialog } from "electron";
 import axios from "axios";
+import { HttpsProxyAgent } from "https-proxy-agent";
+import { createRequire } from "node:module";
 import JSZip from "jszip";
 import crypto from "crypto";
 import fs from "fs/promises";
@@ -50,6 +52,41 @@ function tierName(tier?: number) {
   return tier === 3 ? "Opus" : tier === 2 ? "Scroll" : tier === 1 ? "Tablet" : tier === 0 ? "Paper" : "未知";
 }
 
+interface SocksProxyAgentLike { new (url: string): any; }
+let _SocksProxyAgent: SocksProxyAgentLike | null = null;
+function getSocksAgentClass(): SocksProxyAgentLike | null {
+  if (_SocksProxyAgent) return _SocksProxyAgent;
+  try {
+    const req = createRequire(__filename);
+    _SocksProxyAgent = req("socks-proxy-agent").SocksProxyAgent;
+    return _SocksProxyAgent;
+  } catch (e: any) {
+    console.error("[proxy] Failed to load socks-proxy-agent:", e?.message ?? e);
+    return null;
+  }
+}
+
+export async function getAxiosConfig(): Promise<{ httpsAgent?: HttpsProxyAgent<string>; httpAgent?: HttpsProxyAgent<string> }> {
+  const raw = getSettings().proxyUrl?.trim();
+  if (!raw) return {};
+  // Auto-prepend http:// if no protocol
+  const proxyUrl = /^https?:\/\/|^socks/i.test(raw) ? raw : `http://${raw}`;
+  const isSocks = /^socks/i.test(proxyUrl);
+  try {
+    if (isSocks) {
+      const SocksAgent = getSocksAgentClass();
+      if (!SocksAgent) return {};
+      const agent = new SocksAgent(proxyUrl) as unknown as HttpsProxyAgent<string>;
+      return { httpsAgent: agent, httpAgent: agent };
+    }
+    const agent = new HttpsProxyAgent(proxyUrl);
+    return { httpsAgent: agent, httpAgent: agent };
+  } catch (e: any) {
+    console.error("[proxy] Failed to create proxy agent:", e?.message ?? e);
+    return {};
+  }
+}
+
 function readNumber(value: unknown): number | undefined {
   if (typeof value === "number" && Number.isFinite(value)) return Math.round(value);
   if (typeof value === "string") {
@@ -92,7 +129,7 @@ function parseAccount(data: any): Omit<AccountSummary, "hasToken"> {
 async function fetchAccount(token: string): Promise<Omit<AccountSummary, "hasToken">> {
   const settings = getSettings();
   const apiBaseUrl = normalizeBaseUrl(settings.apiBaseUrl, "https://api.novelai.net");
-  const res = await axios.get(`${apiBaseUrl}/user/data`, {
+  const res = await axios.get(`${apiBaseUrl}/user/data`, { ...await getAxiosConfig(), 
     headers: { Authorization: `Bearer ${token}` },
     timeout: 15_000,
   });
@@ -108,7 +145,7 @@ export async function verifyToken(token: string): Promise<TokenStatus> {
   try {
     const settings = getSettings();
     const apiBaseUrl = normalizeBaseUrl(settings.apiBaseUrl, "https://api.novelai.net");
-    await axios.get(`${apiBaseUrl}/user/information`, {
+    await axios.get(`${apiBaseUrl}/user/information`, { ...await getAxiosConfig(), 
       headers: { Authorization: `Bearer ${normalized}` },
       timeout: 15_000,
     });
@@ -323,7 +360,7 @@ async function prepareExtras(params: GenerateParams, extras?: GenerateExtras): P
     extras.vibeImages.map(async (vibe) => {
       try {
         const res = await requestWithRetry(
-          () =>
+          async () =>
             axios.post(
               `${imageBaseUrl}/ai/encode-vibe`,
               {
@@ -331,7 +368,7 @@ async function prepareExtras(params: GenerateParams, extras?: GenerateExtras): P
                 information_extracted: vibe.infoExtracted,
                 model: params.model,
               },
-              {
+              { ...await getAxiosConfig(),
                 headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
                 responseType: "arraybuffer",
                 timeout: 60_000,
@@ -598,8 +635,8 @@ async function postGenerateImage(payload: ReturnType<typeof buildPayload>) {
   const settings = getSettings();
   const imageBaseUrl = normalizeBaseUrl(settings.imageBaseUrl, "https://image.novelai.net");
   const res = await requestWithRetry(
-    () =>
-      axios.post(`${imageBaseUrl}/ai/generate-image`, payload, {
+    async () =>
+      axios.post(`${imageBaseUrl}/ai/generate-image`, payload, { ...await getAxiosConfig(), 
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
@@ -669,7 +706,7 @@ async function callVisionApi(
   };
 
   try {
-    const resp = await axios.post(`${base}/chat/completions`, body, {
+    const resp = await axios.post(`${base}/chat/completions`, body, { ...await getAxiosConfig(), 
       headers: { Authorization: `Bearer ${visionApiKey}`, "Content-Type": "application/json" },
       timeout: 60_000,
     });
@@ -710,7 +747,7 @@ async function callConvertApi(
   };
 
   try {
-    const resp = await axios.post(`${base}/chat/completions`, body, {
+    const resp = await axios.post(`${base}/chat/completions`, body, { ...await getAxiosConfig(), 
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       timeout: 60_000,
     });
@@ -736,7 +773,7 @@ export async function listAiModels(kind: "reverse" | "convert"): Promise<AiModel
 
   try {
     const base = apiUrl.replace(/\/+$/, "");
-    const resp = await axios.get(`${base}/models`, {
+    const resp = await axios.get(`${base}/models`, { ...await getAxiosConfig(), 
       headers: { Authorization: `Bearer ${apiKey}` },
       timeout: 20_000,
     });
@@ -868,11 +905,11 @@ async function queryTagServer(query: string, limit = 12): Promise<TagSuggestion[
   const headers: Record<string, string> = {};
   if (settings.tagServerApiKey.trim()) headers.Authorization = `Bearer ${settings.tagServerApiKey.trim()}`;
 
-  const attempts = [
-    () => axios.get(`${base}/search`, { params: { q: query, query, limit }, headers, timeout: 8_000 }),
-    () => axios.get(`${base}/tags`, { params: { q: query, query, limit }, headers, timeout: 8_000 }),
-    () => axios.post(`${base}/search`, { query, limit }, { headers, timeout: 8_000 }),
-    () =>
+  const attempts: Array<() => Promise<any>> = [
+    async () => axios.get(`${base}/search`, { ...await getAxiosConfig(),  params: { q: query, query, limit }, headers, timeout: 8_000 }),
+    async () => axios.get(`${base}/tags`, { ...await getAxiosConfig(),  params: { q: query, query, limit }, headers, timeout: 8_000 }),
+    async () => axios.post(`${base}/search`, { query, limit }, { ...await getAxiosConfig(), headers, timeout: 8_000 }),
+    async () =>
       axios.post(
         base,
         {
@@ -881,7 +918,7 @@ async function queryTagServer(query: string, limit = 12): Promise<TagSuggestion[
           method: "tools/call",
           params: { name: "search_tags", arguments: { query, limit } },
         },
-        { headers: { ...headers, "Content-Type": "application/json" }, timeout: 8_000 },
+        { ...await getAxiosConfig(), headers: { ...headers, "Content-Type": "application/json" }, timeout: 8_000 },
       ),
   ];
 
@@ -1203,7 +1240,7 @@ export async function upscaleImg(scale: UpscaleScale): Promise<SingleImageResult
     // returns a ZIP archive (same as generate-image), not a raw PNG.
     const apiBaseUrl = normalizeBaseUrl(settings.apiBaseUrl, "https://api.novelai.net");
     const res = await requestWithRetry(
-      () =>
+      async () =>
         axios.post(
           `${apiBaseUrl}/ai/upscale`,
           {
@@ -1212,7 +1249,7 @@ export async function upscaleImg(scale: UpscaleScale): Promise<SingleImageResult
             height: image.height,
             scale,
           },
-          {
+          { ...await getAxiosConfig(),
             headers: {
               Authorization: `Bearer ${token}`,
               "Content-Type": "application/json",
@@ -1296,7 +1333,7 @@ export async function augmentImg(tool: DirectorTool, options: AugmentOptions): P
       payload.prompt = `${options.emotion};;${Math.min(5, Math.max(0, options.emotionLevel))}`;
     }
 
-    const res = await axios.post(`${imageBaseUrl}/ai/augment-image`, payload, {
+    const res = await axios.post(`${imageBaseUrl}/ai/augment-image`, payload, { ...await getAxiosConfig(), 
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
@@ -1384,7 +1421,7 @@ export async function suggestTags(model: string, prompt: string): Promise<TagSug
   const settings = getSettings();
   const apiBaseUrl = normalizeBaseUrl(settings.apiBaseUrl, "https://api.novelai.net");
   try {
-    const res = await axios.get(`${apiBaseUrl}/ai/generate-image/suggest-tags`, {
+    const res = await axios.get(`${apiBaseUrl}/ai/generate-image/suggest-tags`, { ...await getAxiosConfig(), 
       params: { model, prompt },
       headers: { Authorization: `Bearer ${token}` },
       timeout: 5000,
@@ -1420,7 +1457,7 @@ async function googleTranslate(
   target: string,
 ): Promise<{ ok: boolean; text?: string; error?: string }> {
   try {
-    const res = await axios.get("https://translate.googleapis.com/translate_a/single", {
+    const res = await axios.get("https://translate.googleapis.com/translate_a/single", { ...await getAxiosConfig(), 
       params: { client: "gtx", sl: "auto", tl: target, dt: "t", q: text },
       timeout: 8_000,
     });
@@ -1448,7 +1485,7 @@ async function baiduTranslate(
   const salt = String(Date.now());
   const sign = crypto.createHash("md5").update(appid + text + salt + secret).digest("hex");
   try {
-    const res = await axios.get("https://fanyi-api.baidu.com/api/trans/vip/translate", {
+    const res = await axios.get("https://fanyi-api.baidu.com/api/trans/vip/translate", { ...await getAxiosConfig(), 
       params: { q: text, from: "auto", to, appid, salt, sign },
       timeout: 8_000,
     });

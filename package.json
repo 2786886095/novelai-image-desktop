@@ -34,6 +34,7 @@
     "jszip": "^3.10.1",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
+    "socks-proxy-agent": "^10.1.0",
     "zustand": "^5.0.9"
   },
   "devDependencies": {
