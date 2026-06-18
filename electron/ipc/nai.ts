@@ -8,8 +8,19 @@ import { pathToFileURL } from "url";
 import {
   DEFAULT_PARAMS,
   type AccountSummary,
+  type AiCallLogEntry,
   type AugmentOptions,
   type AiModelListResult,
+  type ComicAnalyzeRequest,
+  type ComicAnalyzeResult,
+  type ComicConsistencyRequest,
+  type ComicConsistencyResult,
+  type ComicConvertRequest,
+  type ComicConvertResult,
+  type ComicDesiredPanelCount,
+  type ComicGeneratePanelRequest,
+  type ComicProject,
+  type ComicReferenceAsset,
   type DirectorTool,
   type GenerateExtras,
   type GenerateParams,
@@ -19,6 +30,7 @@ import {
   type LoadImageResult,
   type NAIInpaintModel,
   type NAIModel,
+  type ReversePromptScope,
   type SingleImageResult,
   type TagSuggestion,
   type TokenStatus,
@@ -32,12 +44,17 @@ import {
   getToken,
   setAccountSummary,
   setToken,
+  updateHistoryItem,
 } from "./store";
 import { TAG_DICTIONARY } from "../data/tag-dictionary";
 import { mcpSearch } from "./mcp-client";
 import { zhForTag } from "../../src/prompt-data";
 import { proxyConfig } from "./proxy";
-import { REVERSE_SYSTEM_PROMPTS, CONVERT_SYSTEM_PROMPTS } from "../../src/data/prompt-templates";
+import {
+  COMIC_ANALYZE_SYSTEM_PROMPT,
+  CONVERT_SYSTEM_PROMPTS,
+  SCOPED_REVERSE_SYSTEM_PROMPTS,
+} from "../../src/data/prompt-templates";
 import {
   buildConvertUserText,
   buildModeRepairUserText,
@@ -700,11 +717,39 @@ export function clearWorkbenchImage() {
   return { ok: true };
 }
 
+// ── AI call log ───────────────────────────────────────────────────────────────
+// Ring buffer of every text LLM request the app makes (反推 / 转换 / 拆分镜 /
+// 一致性检测 …). Captures the exact system + user content we send and the raw
+// response, so the user can inspect what was sent and what came back. Kept in
+// the main process and surfaced to the renderer via the `ai:getLog` IPC.
+const aiCallLog: AiCallLogEntry[] = [];
+const AI_LOG_LIMIT = 200;
+
+function summarizeUserContent(userContent: Array<{ type: string; [k: string]: any }>): string {
+  return userContent
+    .map((part) => (part.type === "text" ? String(part.text ?? "") : `[${part.type === "image_url" ? "图片" : part.type}]`))
+    .join("\n");
+}
+
+function recordAiCall(entry: Omit<AiCallLogEntry, "id" | "time">): void {
+  aiCallLog.push({ ...entry, id: crypto.randomUUID(), time: Date.now() });
+  if (aiCallLog.length > AI_LOG_LIMIT) aiCallLog.shift();
+}
+
+export function getAiCallLog(): AiCallLogEntry[] {
+  return [...aiCallLog].reverse();
+}
+
+export function clearAiCallLog(): { ok: boolean } {
+  aiCallLog.length = 0;
+  return { ok: true };
+}
 
 async function callVisionApi(
   systemPrompt: string,
   userContent: Array<{ type: string; [k: string]: any }>,
   maxTokens = 800,
+  label = "AI 反推",
 ): Promise<{ ok: boolean; content?: string; message: string }> {
   const settings = getSettings();
   const { visionApiUrl, visionApiKey, visionApiModel } = settings;
@@ -713,8 +758,9 @@ async function callVisionApi(
   if (!visionApiUrl.trim()) return { ok: false, message: "请先在 设置 › AI 反推 中填写 API 地址。" };
 
   const base = visionApiUrl.replace(/\/+$/, "");
+  const model = visionApiModel || "gpt-4o";
   const body = {
-    model: visionApiModel || "gpt-4o",
+    model,
     max_tokens: maxTokens,
     messages: [
       { role: "system", content: systemPrompt },
@@ -731,21 +777,23 @@ async function callVisionApi(
     const content: string = resp.data?.choices?.[0]?.message?.content ?? "";
     if (!content.trim()) {
       const fin = resp.data?.choices?.[0]?.finish_reason;
-      return {
-        ok: false,
-        message:
-          fin === "length"
-            ? "API 返回被长度截断（内容为空）：该模型可能把额度用在了推理上，请换非推理模型。"
-            : "API 返回内容为空：请确认「模型」填的是该服务支持的模型名（例如 xAI 用 grok-4.3，而非默认 gpt-4o-mini），可点「检测模型」选择。",
-      };
+      const message =
+        fin === "length"
+          ? "API 返回被长度截断（内容为空）：该模型可能把额度用在了推理上，请换非推理模型。"
+          : "API 返回内容为空：请确认「模型」填的是该服务支持的模型名（例如 xAI 用 grok-4.3，而非默认 gpt-4o-mini），可点「检测模型」选择。";
+      recordAiCall({ label, api: "vision", model, systemPrompt, userText: summarizeUserContent(userContent), ok: false, response: message });
+      return { ok: false, message };
     }
-    return { ok: true, content: cleanPromptOutput(content), message: "成功" };
+    const cleaned = cleanPromptOutput(content);
+    recordAiCall({ label, api: "vision", model, systemPrompt, userText: summarizeUserContent(userContent), ok: true, response: cleaned });
+    return { ok: true, content: cleaned, message: "成功" };
   } catch (error: any) {
     const msg =
       error?.response?.data?.error?.message ??
       error?.response?.data?.message ??
       error?.message ??
       "未知错误";
+    recordAiCall({ label, api: "vision", model, systemPrompt, userText: summarizeUserContent(userContent), ok: false, response: String(msg) });
     return { ok: false, message: msg };
   }
 }
@@ -754,6 +802,7 @@ async function callConvertApi(
   systemPrompt: string,
   userText: string,
   maxTokens = 2000,
+  label = "提示词转换",
 ): Promise<{ ok: boolean; content?: string; message: string }> {
   const settings = getSettings();
   const apiUrl = settings.convertApiUrl.trim();
@@ -782,21 +831,23 @@ async function callConvertApi(
     const content: string = resp.data?.choices?.[0]?.message?.content ?? "";
     if (!content.trim()) {
       const fin = resp.data?.choices?.[0]?.finish_reason;
-      return {
-        ok: false,
-        message:
-          fin === "length"
-            ? "API 返回被长度截断（内容为空）：该模型可能把额度用在了推理上，请换非推理模型。"
-            : "API 返回内容为空：请确认「模型」填的是该服务支持的模型名（例如 xAI 用 grok-4.3，而非默认 gpt-4o-mini），可点「检测模型」选择。",
-      };
+      const message =
+        fin === "length"
+          ? "API 返回被长度截断（内容为空）：该模型可能把额度用在了推理上，请换非推理模型。"
+          : "API 返回内容为空：请确认「模型」填的是该服务支持的模型名（例如 xAI 用 grok-4.3，而非默认 gpt-4o-mini），可点「检测模型」选择。";
+      recordAiCall({ label, api: "convert", model, systemPrompt, userText, ok: false, response: message });
+      return { ok: false, message };
     }
-    return { ok: true, content: cleanPromptOutput(content), message: "成功" };
+    const cleaned = cleanPromptOutput(content);
+    recordAiCall({ label, api: "convert", model, systemPrompt, userText, ok: true, response: cleaned });
+    return { ok: true, content: cleaned, message: "成功" };
   } catch (error: any) {
     const msg =
       error?.response?.data?.error?.message ??
       error?.response?.data?.message ??
       error?.message ??
       "未知错误";
+    recordAiCall({ label, api: "convert", model, systemPrompt, userText, ok: false, response: String(msg) });
     return { ok: false, message: msg };
   }
 }
@@ -1015,22 +1066,38 @@ export async function testTagServer(query: string): Promise<{ ok: boolean; messa
 export async function reversePromptImage(
   imageBase64: string,
   mode: "tags" | "natural" | "mixed" = "tags",
+  scope: string = "full",
+  hint: string = "",
 ): Promise<{ ok: boolean; prompt?: string; message: string }> {
   const settings = getSettings();
+  const safeScope = (["full", "character", "object", "scene"].includes(scope) ? scope : "full") as ReversePromptScope;
+  const scopeLabel =
+    safeScope === "character" ? "角色" :
+    safeScope === "object" ? "物品" :
+    safeScope === "scene" ? "场景" :
+    "整张图片";
+  const userScopeText = [
+    `反推范围：${scopeLabel}`,
+    hint.trim() ? `目标/角色提示：${hint.trim()}` : "",
+    `请严格只围绕“${scopeLabel}”输出结果。`,
+  ].filter(Boolean).join("\n");
   const systemPrompt = resolveModePrompt(
     mode,
     settings.reversePromptTemplates,
     settings.visionSystemPrompt,
-    REVERSE_SYSTEM_PROMPTS,
-  );
+    SCOPED_REVERSE_SYSTEM_PROMPTS,
+  )
+    .replace(/\{\{input\}\}/g, userScopeText)
+    .replace(/\{\{image\}\}/g, "<uploaded image>");
 
   const result = await callVisionApi(
     systemPrompt,
     [
       { type: "image_url", image_url: { url: `data:image/png;base64,${imageBase64}`, detail: "high" } },
-      { type: "text", text: `Generate the prompt for this image.\n\n${modeUserInstruction(mode, "reverse")}` },
+      { type: "text", text: `${userScopeText}\n\nGenerate the prompt for this image.\n\n${modeUserInstruction(mode, "reverse")}` },
     ],
     2000,
+    `AI 反推 · ${mode} · ${scopeLabel}`,
   );
 
   if (result.ok) {
@@ -1040,9 +1107,10 @@ export async function reversePromptImage(
         modeRepairSystemPrompt(mode),
         [
           { type: "image_url", image_url: { url: `data:image/png;base64,${imageBase64}`, detail: "high" } },
-          { type: "text", text: buildModeRepairUserText(mode, "Image reverse-prompt request", content) },
+          { type: "text", text: buildModeRepairUserText(mode, userScopeText || "Image reverse-prompt request", content) },
         ],
         900,
+        `AI 反推修复 · ${mode}`,
       );
       // Best-effort: adopt the repaired output when available, but never hard-fail
       // on a heuristic mismatch — modeNeedsRepair can false-positive and we must
@@ -1124,6 +1192,437 @@ export async function searchTagServer(query: string, limit = 16): Promise<TagSug
   return enrichTagsWithChinese(tags);
 }
 
+function extractJsonObject(text: string): any | null {
+  const cleaned = (text ?? "").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    const match = cleaned.match(/\{[\s\S]*\}/);
+    if (!match) return null;
+    try {
+      return JSON.parse(match[0]);
+    } catch {
+      return null;
+    }
+  }
+}
+
+function normalizeComicTarget(value: ComicDesiredPanelCount): number | null {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) return Math.min(500, Math.round(value));
+  return null;
+}
+
+function inferPanelCountFromRanges(script: string): number | null {
+  const ends = [...script.matchAll(/(\d+)\s*[-~]\s*(\d+)/g)]
+    .map((match) => Number(match[2]))
+    .filter(Number.isFinite);
+  if (!ends.length) return null;
+  return Math.min(500, Math.max(...ends));
+}
+
+function fallbackComicPanelsV2(script: string, desiredPanelCount: ComicDesiredPanelCount = "auto") {
+  const panels: Array<{ cnPrompt: string; contextSummary: string }> = [];
+  const lines = script.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  for (const line of lines) {
+    const range = line.match(/^(\d+)\s*[-~]\s*(\d+)\s*[.。:：、]?\s*(.+)$/);
+    if (!range) continue;
+    const start = Number(range[1]);
+    const end = Number(range[2]);
+    const desc = range[3].trim();
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end < start || end - start > 1000) continue;
+    for (let i = start; i <= end; i += 1) {
+      panels.push({
+        cnPrompt: `第 ${i} 格：${desc}。补足镜头动作、场景、人物状态、构图、情绪和连续性。`,
+        contextSummary: desc.slice(0, 180),
+      });
+    }
+  }
+  if (panels.length > 0) return panels;
+
+  const target = normalizeComicTarget(desiredPanelCount);
+  const chunks = script.split(/(?<=[。！？!?])\s*/).map((x) => x.trim()).filter(Boolean);
+  const source = chunks.length ? chunks : [script.trim()];
+  const count = target ?? source.length;
+  for (let i = 0; i < count; i += 1) {
+    const chunk = source[Math.min(source.length - 1, Math.floor((i / Math.max(1, count)) * source.length))] ?? script.trim();
+    panels.push({
+      cnPrompt: `第 ${i + 1} 格：${chunk}。设计成独立漫画分镜，包含镜头景别、人物动作、场景细节、构图和情绪递进。`,
+      contextSummary: chunk.slice(0, 180),
+    });
+  }
+  return panels;
+}
+
+async function analyzeComicScriptV2(request: ComicAnalyzeRequest): Promise<ComicAnalyzeResult> {
+  const text = request.script.trim();
+  if (!text) return { ok: false, message: "请先输入漫画故事或分镜文本。" };
+  const settings = getSettings();
+  const targetCount = normalizeComicTarget(request.desiredPanelCount) ?? inferPanelCountFromRanges(text);
+  const localPanels = fallbackComicPanelsV2(text, targetCount ?? request.desiredPanelCount);
+  if (!settings.convertApiKey.trim() || !settings.convertApiUrl.trim()) {
+    const referenceText = request.referencePrompts?.filter(Boolean).join("\n") || "";
+    return {
+      ok: true,
+      message: "未配置转换 API，已使用本地规则解析分镜。",
+      title: "未命名漫画项目",
+      globalPrompt: text,
+      globalCharacterSetting: referenceText,
+      continuityBible: "",
+      panels: localPanels,
+    };
+  }
+
+  const referenceText = request.referencePrompts?.filter(Boolean).join("\n") || "(none)";
+  const systemPrompt = [
+    settings.comicAnalyzePromptTemplate?.trim() || COMIC_ANALYZE_SYSTEM_PROMPT,
+    targetCount ? `Target panel count: ${targetCount}. Keep the final panels as close to this count as possible.` : "Panel count: auto.",
+    `Later prompt mode: ${request.mode}. Make each panel detailed enough for that mode.`,
+    "Use the reference-image notes below to build the global character / scene / object setting.",
+    "Safety: keep all panels non-explicit, non-gory, and suitable for general image generation.",
+  ].join("\n\n");
+  const result = await callConvertApi(
+    systemPrompt,
+    [
+      "用户故事：",
+      text,
+      "",
+      "参考图反推 / 用户说明：",
+      referenceText,
+      "",
+      "请只返回 JSON。字段：title, globalPrompt, globalCharacterSetting, panels。panels 每项包含 cnPrompt 和 contextSummary。",
+    ].join("\n"),
+    4000,
+    "漫画拆分镜",
+  );
+  if (!result.ok) {
+    return {
+      ok: true,
+      message: `AI 拆分失败，已回退本地解析：${result.message}`,
+      title: "未命名漫画项目",
+      globalPrompt: text,
+      globalCharacterSetting: request.referencePrompts?.filter(Boolean).join("\n") || "",
+      continuityBible: "",
+      panels: localPanels,
+    };
+  }
+
+  const parsed = extractJsonObject(result.content ?? "");
+  const panels = (Array.isArray(parsed?.panels) ? parsed.panels : [])
+    .map((p: any) => ({
+      cnPrompt: String(p?.cnPrompt ?? p?.prompt ?? "").trim(),
+      contextSummary: String(p?.contextSummary ?? p?.summary ?? "").trim(),
+    }))
+    .filter((p: any) => p.cnPrompt);
+  const finalPanels = panels.length > 0 && (!targetCount || panels.length >= Math.max(1, Math.floor(targetCount * 0.6)))
+    ? panels
+    : localPanels;
+  return {
+    ok: true,
+    message: `已拆分 ${finalPanels.length} 个分镜。`,
+    title: String(parsed?.title ?? "未命名漫画项目").trim(),
+    globalPrompt: String(parsed?.globalPrompt ?? text).trim(),
+    globalCharacterSetting:
+      String(parsed?.globalCharacterSetting ?? "").trim() || request.referencePrompts?.filter(Boolean).join("\n") || "",
+    continuityBible: "",
+    panels: finalPanels,
+  };
+}
+
+export async function analyzeComicScript(request: ComicAnalyzeRequest): Promise<ComicAnalyzeResult> {
+  return analyzeComicScriptV2(request);
+}
+
+export async function convertComicPanels(request: ComicConvertRequest): Promise<ComicConvertResult> {
+  if (!request.panels.length) return { ok: false, message: "没有需要转换的分镜。", panels: [] };
+  const settings = getSettings();
+  if (!settings.convertApiKey.trim() || !settings.convertApiUrl.trim()) {
+    return { ok: false, message: "请先在设置 > 转换 API 中填写 API 地址、模型和 Key。", panels: [] };
+  }
+  const mode = request.mode;
+  const systemPrompt = [
+    resolveModePrompt(mode, settings.convertPromptTemplates, settings.convertSystemPrompt, CONVERT_SYSTEM_PROMPTS),
+    "",
+    "你正在为连续漫画生成 NovelAI 生图提示词。必须保持角色、服装、地点、时间线和关键道具前后一致。",
+    "每次只输出当前分镜的最终英文提示词，不要解释，不要 Markdown。",
+    "必须参考全局设定、参考图反推描述、上一个/当前/下一个中文分镜描述，保持同一角色、场景、物品的英文表达一致。",
+    "避免色情、裸露、夸张身体特写。",
+  ].join("\n");
+
+  const out: ComicConvertResult["panels"] = [];
+  for (const panel of request.panels) {
+    const tagHints = mode === "natural" || !settings.mcpForConvert ? [] : await queryTagServer(panel.cnPrompt, 16);
+    const userText = [
+      `Output mode: ${mode}`,
+      "Global story prompt:",
+      request.globalPrompt || "(empty)",
+      "Global character setting:",
+      request.globalCharacterSetting || "(empty)",
+      "Global style prompt:",
+      request.globalStylePrompt || "(empty)",
+      "Reference image reverse prompts:",
+      request.referencePrompts.length ? request.referencePrompts.join("\n") : "(none)",
+      "Previous Chinese panel:",
+      panel.previousCnPrompt || "(none)",
+      "Current panel Chinese description:",
+      panel.cnPrompt,
+      "Next Chinese panel:",
+      panel.nextCnPrompt || "(none)",
+      "Previous panel summaries:",
+      panel.previousSummaries.length ? panel.previousSummaries.join("\n") : "(none)",
+      "Next panel summaries:",
+      panel.nextSummaries.length ? panel.nextSummaries.join("\n") : "(none)",
+      "Previous final prompts:",
+      panel.previousPrompts.length ? panel.previousPrompts.join("\n") : "(none)",
+      modeUserInstruction(mode, "convert"),
+      tagHints.length ? `Candidate tags: ${tagHints.map((x) => x.tag).join(", ")}` : "",
+    ].join("\n\n");
+    const result = await callConvertApi(systemPrompt, userText, 1800, `漫画分镜转换 #${panel.index}`);
+    if (!result.ok) {
+      out.push({ panelId: panel.panelId, enPrompt: "", error: result.message });
+      continue;
+    }
+    let content = cleanPromptOutput(result.content ?? "");
+    if (modeNeedsRepair(mode, content)) {
+      const repaired = await callConvertApi(modeRepairSystemPrompt(mode), buildModeRepairUserText(mode, panel.cnPrompt, content), 900, `漫画分镜转换修复 #${panel.index}`);
+      if (repaired.ok && repaired.content) content = cleanPromptOutput(repaired.content);
+    }
+    out.push({ panelId: panel.panelId, enPrompt: mode === "natural" ? content : mergeTagHints(content, tagHints) });
+  }
+  const failed = out.filter((p) => p.error).length;
+  return { ok: failed < out.length, message: `转换完成：成功 ${out.length - failed}，失败 ${failed}。`, panels: out };
+}
+
+export async function checkComicConsistency(request: ComicConsistencyRequest): Promise<ComicConsistencyResult> {
+  const reviewable = request.panels.filter((panel) => panel.enPrompt.trim());
+  if (!reviewable.length) {
+    return { ok: false, message: "没有可检测的分镜英文提示词，请先转换。", panels: [] };
+  }
+  const settings = getSettings();
+  if (!settings.convertApiKey.trim() || !settings.convertApiUrl.trim()) {
+    return { ok: false, message: "请先在设置 > 转换 API 中填写 API 地址、模型和 Key。", panels: [] };
+  }
+
+  const systemPrompt = [
+    "你是连续漫画提示词的一致性审校。下面给出一组按顺序排列的分镜英文提示词（用于 NovelAI 生图）。",
+    "请检查角色外貌、发色、服装、配饰、场景、时间线和关键道具在所有分镜间是否保持一致。",
+    "修正不一致之处：补齐缺失的角色/服装特征、统一命名与风格，但不要改变每个分镜本身的镜头动作与剧情。",
+    `保持原有提示词模式（${request.mode}），不要新增解释，不要 Markdown。`,
+    '严格只返回 JSON：{"panels":[{"panelId":"...","enPrompt":"修正后的完整英文提示词","note":"中文说明本次改动，没改动则留空"}]}。',
+    "panelId 必须与输入完全一致；未改动的分镜也要原样返回其 enPrompt。",
+  ].join("\n");
+
+  const userText = [
+    `Output mode: ${request.mode}`,
+    "Global story prompt:",
+    request.globalPrompt || "(empty)",
+    "Global character setting:",
+    request.globalCharacterSetting || "(empty)",
+    "Reference image reverse prompts:",
+    request.referencePrompts.length ? request.referencePrompts.join("\n") : "(none)",
+    "Panels (in order):",
+    JSON.stringify(
+      reviewable.map((panel) => ({ panelId: panel.id, index: panel.index, cnPrompt: panel.cnPrompt, enPrompt: panel.enPrompt })),
+      null,
+      2,
+    ),
+    "请返回 JSON。",
+  ].join("\n\n");
+
+  const result = await callConvertApi(systemPrompt, userText, 4000, "漫画一致性检测");
+  if (!result.ok) {
+    return { ok: false, message: `一致性检测失败：${result.message}`, panels: [] };
+  }
+
+  const parsed = extractJsonObject(result.content ?? "");
+  const items = Array.isArray(parsed?.panels) ? parsed.panels : [];
+  const byId = new Map<string, string>();
+  const notes = new Map<string, string>();
+  for (const item of items) {
+    const panelId = String(item?.panelId ?? "").trim();
+    if (!panelId) continue;
+    const enPrompt = cleanPromptOutput(String(item?.enPrompt ?? "").trim());
+    if (!enPrompt) continue;
+    byId.set(panelId, enPrompt);
+    const note = String(item?.note ?? "").trim();
+    if (note) notes.set(panelId, note);
+  }
+  if (!byId.size) {
+    return { ok: false, message: "一致性检测未返回有效结果，提示词保持不变。", panels: [] };
+  }
+
+  const panels: ComicConsistencyResult["panels"] = [];
+  let changed = 0;
+  for (const panel of reviewable) {
+    const enPrompt = byId.get(panel.id);
+    if (!enPrompt) continue;
+    if (enPrompt.trim() !== panel.enPrompt.trim()) changed += 1;
+    panels.push({ panelId: panel.id, enPrompt, note: notes.get(panel.id) });
+  }
+  return {
+    ok: true,
+    message: `一致性检测完成：复核 ${panels.length} 个分镜，调整 ${changed} 个。`,
+    panels,
+  };
+}
+
+function comicReferencesToExtras(request: ComicGeneratePanelRequest): GenerateExtras {
+  return {
+    vibeImages: request.references
+      .filter((ref) => ref.base64)
+      .map((ref) => ({
+        base64: stripBase64Prefix(ref.base64),
+        infoExtracted: Math.min(1, Math.max(0, Number(ref.infoExtracted) || (ref.kind === "precise" ? 1 : 0.7))),
+        strength: Math.min(1, Math.max(0, Number(ref.strength) || (ref.kind === "precise" ? 0.65 : 0.45))),
+      })),
+    charCaptions: [],
+  };
+}
+
+export async function generateComicPanel(request: ComicGeneratePanelRequest): Promise<GenerateResult> {
+  const params: GenerateParams = {
+    ...request.params,
+    fileNamePrefix: request.params.fileNamePrefix || `comic-${request.panelIndex}`,
+    positivePrompt: mergePrompt(request.globalStylePrompt, request.panelPrompt),
+    negativePrompt:
+      request.negativeMode === "override"
+        ? request.localNegativePrompt
+        : mergePrompt(request.globalNegativePrompt, request.localNegativePrompt),
+  };
+  const extras = comicReferencesToExtras(request);
+  const result = await generateImage(params, extras);
+  if (result.ok && result.items.length > 0) {
+    result.items = result.items.map((item) => {
+      const updated = updateHistoryItem(item.id, {
+        feature: "comic",
+        comicProjectId: request.projectId,
+        comicPanelNo: request.panelIndex,
+      });
+      return updated ?? { ...item, feature: "comic", comicProjectId: request.projectId, comicPanelNo: request.panelIndex };
+    });
+  }
+  return result;
+}
+
+function safeZipName(name: string) {
+  return (name || "comic-project").replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, "_").slice(0, 80) || "comic-project";
+}
+
+function referenceSummary(ref: ComicReferenceAsset) {
+  return `- ${ref.name} / ${ref.kind} / strength=${ref.strength} / info=${ref.infoExtracted}\n${ref.reversePrompt || "(no reverse prompt)"}`;
+}
+
+// Strict image-magic check (detectExt() defaults to "png" and is NOT a validator).
+function isImageBuffer(buffer: Buffer): boolean {
+  if (buffer.length < 6) return false;
+  if (buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return true; // png
+  if (buffer.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff]))) return true; // jpeg
+  if (buffer.subarray(0, 4).toString("ascii") === "RIFF") return true; // webp
+  const gif = buffer.subarray(0, 6).toString("ascii");
+  if (gif === "GIF87a" || gif === "GIF89a") return true;
+  return false;
+}
+
+// True only when `child` resolves to a path inside `parent` (blocks `..`
+// traversal and absolute paths pointing elsewhere).
+function isInsideDir(child: string, parent: string): boolean {
+  const rel = path.relative(path.resolve(parent), path.resolve(child));
+  return rel.length > 0 && !rel.startsWith("..") && !path.isAbsolute(rel);
+}
+
+export async function exportComicProjectZip(project: ComicProject): Promise<{ ok: boolean; message: string; path?: string }> {
+  const generated = [...project.panels].sort((a, b) => a.index - b.index).filter((panel) => panel.outputPath);
+  if (!generated.length) return { ok: false, message: "暂无可打包图片。" };
+  const settings = getSettings();
+  const outputRoot = path.resolve(settings.outputDir);
+  const zip = new JSZip();
+  const imageFolder = zip.folder("images");
+  const zipNameByPanelId = new Map<string, string>();
+  let imageCount = 0;
+  for (const panel of generated) {
+    const outputPath = panel.outputPath;
+    if (!outputPath) continue;
+    // SECURITY: only read files that live inside the app's own output directory.
+    // An imported project JSON is untrusted and could point outputPath at an
+    // arbitrary local file (e.g. C:\Users\...\secret.txt) to smuggle it into the ZIP.
+    if (!isInsideDir(outputPath, outputRoot)) continue;
+    try {
+      const buffer = await fs.readFile(outputPath);
+      if (!isImageBuffer(buffer)) continue;
+      const zipName = `${String(panel.index).padStart(3, "0")}.${detectExt(buffer)}`;
+      imageFolder?.file(zipName, buffer);
+      zipNameByPanelId.set(panel.id, `images/${zipName}`);
+      imageCount += 1;
+    } catch {
+      // Missing/unreadable files are skipped, but prompt metadata still records them.
+    }
+  }
+  if (imageCount === 0) return { ok: false, message: "未找到位于输出目录内的有效图片，无法打包。" };
+
+  // Strip machine-local absolute paths and history ids from the exported project;
+  // point each panel at its relative in-zip image name instead.
+  const exportProject = {
+    ...project,
+    panels: [...project.panels]
+      .sort((a, b) => a.index - b.index)
+      .map((panel) => ({
+        ...panel,
+        outputPath: zipNameByPanelId.get(panel.id) ?? "",
+        outputUrl: undefined,
+        historyItemId: undefined,
+      })),
+  };
+  zip.file("project.json", JSON.stringify(exportProject, null, 2));
+  zip.file(
+    "prompts.md",
+    [
+      `# ${project.title || "Comic Project"}`,
+      "",
+      "## Global",
+      "",
+      `Mode: ${project.mode}`,
+      `Desired panels: ${project.desiredPanelCount}`,
+      "",
+      "### Global prompt",
+      project.globalPrompt || "(empty)",
+      "",
+      "### Character / scene setting",
+      project.globalCharacterSetting || "(empty)",
+      "",
+      "### References",
+      project.references.length ? project.references.map(referenceSummary).join("\n\n") : "(none)",
+      "",
+      "## Panels",
+      "",
+      ...[...project.panels]
+        .sort((a, b) => a.index - b.index)
+        .map((panel) => [
+          `### ${String(panel.index).padStart(3, "0")}`,
+          "",
+          `Status: ${panel.status}`,
+          `Output: ${zipNameByPanelId.get(panel.id) || "(not generated)"}`,
+          "",
+          "**Chinese description**",
+          panel.cnPrompt || "(empty)",
+          "",
+          "**English prompt**",
+          panel.enPrompt || "(empty)",
+          "",
+          "**Negative prompt**",
+          panel.negativeMode === "override"
+            ? panel.localNegativePrompt || "(empty)"
+            : mergePrompt(project.globalNegativePrompt, panel.localNegativePrompt) || "(empty)",
+          "",
+        ].join("\n")),
+    ].join("\n"),
+  );
+
+  const dir = path.join(settings.outputDir, "Comic Exports");
+  await fs.mkdir(dir, { recursive: true });
+  const filePath = await uniqueFilePath(dir, `${safeZipName(project.title)}_${dateStamp(new Date())}`, "zip");
+  await fs.writeFile(filePath, await zip.generateAsync({ type: "nodebuffer" }));
+  return { ok: true, message: `已导出 ${imageCount} 张分镜图片。`, path: filePath };
+}
+
 export async function convertPromptText(
   chineseText: string,
   mode: "tags" | "natural" | "mixed" = "tags",
@@ -1142,7 +1641,7 @@ export async function convertPromptText(
   const hintText = tagHints.length
     ? `\n\nCandidate Danbooru tags from the configured tag server:\n${tagHints.map((tag) => tag.tag).join(", ")}`
     : "";
-  const result = await callConvertApi(systemPrompt, buildConvertUserText(chineseText, mode, hintText), 2000);
+  const result = await callConvertApi(systemPrompt, buildConvertUserText(chineseText, mode, hintText), 2000, `提示词转换 · ${mode}`);
 
   if (result.ok) {
     let content = cleanPromptOutput(result.content ?? "");
@@ -1151,6 +1650,7 @@ export async function convertPromptText(
         modeRepairSystemPrompt(mode),
         buildModeRepairUserText(mode, chineseText, content),
         900,
+        `提示词转换修复 · ${mode}`,
       );
       // Best-effort: adopt the repaired output when available, but never hard-fail
       // on a heuristic mismatch — modeNeedsRepair can false-positive and we must
@@ -1265,6 +1765,8 @@ export async function inpaintImage(
   params: GenerateParams,
   inpaintModel: NAIInpaintModel,
   maskBase64: string,
+  strength = 0.55,
+  noise = 0,
 ): Promise<GenerateResult> {
   const token = getToken();
   if (!token) return { ok: false, message: "请先配置 API Token。", items: [] };
@@ -1278,24 +1780,43 @@ export async function inpaintImage(
   const { base64, image } = await readWorkbenchImage();
   const actualSeed =
     params.seedMode !== "random" && params.seed > 0 ? params.seed : crypto.randomInt(1, 2_147_483_647);
-  const inpaintParams: GenerateParams = {
-    ...params,
-    model: inpaintModel as unknown as NAIModel,
-    width: image.width || params.width,
-    height: image.height || params.height,
+  const normalizedStrength = Math.max(0, Math.min(1, Number.isFinite(strength) ? strength : 0.55));
+  const normalizedNoise = Math.max(0, Math.min(0.99, Number.isFinite(noise) ? noise : 0));
+  const buildInpaintPayload = (model: NAIModel) => {
+    const inpaintParams: GenerateParams = {
+      ...params,
+      model,
+      width: image.width || params.width,
+      height: image.height || params.height,
+    };
+    const payload = buildPayload(inpaintParams, actualSeed);
+    payload.action = "infill";
+    payload.parameters.image = base64;
+    payload.parameters.mask = stripBase64Prefix(maskBase64);
+    payload.parameters.add_original_image = true;
+    payload.parameters.strength = normalizedStrength;
+    payload.parameters.noise = normalizedNoise;
+    payload.parameters.extra_noise_seed = crypto.randomInt(1, 2_147_483_647);
+    return { payload, inpaintParams };
   };
-  const payload = buildPayload(inpaintParams, actualSeed);
-  payload.action = "infill";
-  payload.parameters.image = base64;
-  payload.parameters.mask = stripBase64Prefix(maskBase64);
-  payload.parameters.add_original_image = true;
-  payload.parameters.strength = 1;
-  payload.parameters.noise = 0;
 
   try {
-    const buffers = await postGenerateImage(payload);
+    const primaryModel = inpaintModel as unknown as NAIModel;
+    const fallbackModel = normalizeModel(inpaintModel) as NAIModel;
+    let chosen = buildInpaintPayload(primaryModel);
+    let buffers: Buffer[];
+    try {
+      buffers = await postGenerateImage(chosen.payload);
+    } catch (error: any) {
+      const status = error?.response?.status;
+      const canRetryWithBaseModel =
+        (status === 401 || status === 403 || status === 400 || status === 422) && fallbackModel !== primaryModel;
+      if (!canRetryWithBaseModel) throw error;
+      chosen = buildInpaintPayload(fallbackModel);
+      buffers = await postGenerateImage(chosen.payload);
+    }
     if (buffers.length === 0) return { ok: false, message: "重绘成功但无图片返回。", items: [] };
-    const items = await saveBuffers(buffers, inpaintParams, actualSeed, "inpaint", inpaintModel);
+    const items = await saveBuffers(buffers, chosen.inpaintParams, actualSeed, "inpaint", String(chosen.inpaintParams.model));
     void refreshStoredAccount();
     return { ok: true, message: `重绘完成，已保存 ${items.length} 张图片。`, items, actualSeed };
   } catch (error: any) {

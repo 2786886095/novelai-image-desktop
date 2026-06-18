@@ -10,8 +10,10 @@ import type {
   HistoryGroup,
   HistoryItem,
   I2IParams,
+  LastGenerationState,
   NAIInpaintModel,
   ReversePromptMode,
+  ReversePromptScope,
   UpdateInfo,
   UpscaleScale,
   VibeTransferImage,
@@ -20,7 +22,7 @@ import type {
 import { DEFAULT_AUGMENT_OPTIONS, DEFAULT_I2I_PARAMS, DEFAULT_PARAMS } from "./types";
 import { expandWildcards } from "./wildcards";
 
-type ActiveTab = "generate" | "inpaint" | "upscale" | "postprocess" | "inspect" | "convert";
+type ActiveTab = "generate" | "inpaint" | "upscale" | "postprocess" | "inspect" | "convert" | "tools" | "records";
 type PromptTab = "positive" | "negative";
 type BrushMode = "paint" | "erase";
 
@@ -42,7 +44,10 @@ interface AppState {
   workbenchImage: WorkingImage | null;
   i2iParams: I2IParams;
   inpaintModel: NAIInpaintModel;
+  inpaintStrength: number;
+  inpaintNoise: number;
   brushSize: number;
+  brushOpacity: number;
   brushMode: BrushMode;
   inpaintMask: string | null;
   maskRevision: number;
@@ -57,6 +62,8 @@ interface AppState {
   inspectImageBase64: string;
   reversePromptText: string;
   reversePromptMode: ReversePromptMode;
+  reversePromptScope: ReversePromptScope;
+  reversePromptHint: string;
   reversePrompting: boolean;
   convertInput: string;
   convertResult: string;
@@ -95,7 +102,10 @@ interface AppState {
   clearWorkbenchImage: () => Promise<void>;
   setI2IParam: <K extends keyof I2IParams>(key: K, value: I2IParams[K]) => void;
   setInpaintModel: (model: NAIInpaintModel) => void;
+  setInpaintStrength: (value: number) => void;
+  setInpaintNoise: (value: number) => void;
   setBrushSize: (size: number) => void;
+  setBrushOpacity: (opacity: number) => void;
   setBrushMode: (mode: BrushMode) => void;
   setInpaintMask: (mask: string | null) => void;
   clearInpaintMask: () => void;
@@ -118,6 +128,8 @@ interface AppState {
   clearInspect: () => void;
   setReversePromptText: (text: string) => void;
   setReversePromptMode: (mode: ReversePromptMode) => void;
+  setReversePromptScope: (scope: ReversePromptScope) => void;
+  setReversePromptHint: (hint: string) => void;
   runReversePrompt: () => Promise<void>;
   setConvertInput: (text: string) => void;
   setConvertResult: (text: string) => void;
@@ -172,6 +184,28 @@ function imageGenerationFailureMessage(message?: string) {
   return detail.includes("图片生成失败") ? detail : `图片生成失败：${detail}`;
 }
 
+function buildLastGenerationState(state: AppState): LastGenerationState {
+  return {
+    params: { ...state.params, positivePrompt: "" },
+    batchCount: state.batchCount,
+    i2iParams: state.i2iParams,
+    inpaintModel: state.inpaintModel,
+    inpaintStrength: state.inpaintStrength,
+    inpaintNoise: state.inpaintNoise,
+    brushSize: state.brushSize,
+    brushOpacity: state.brushOpacity,
+    upscaleScale: state.upscaleScale,
+    directorTool: state.directorTool,
+    augmentOptions: state.augmentOptions,
+  };
+}
+
+function persistGenerationState(get: () => AppState) {
+  const state = get();
+  if (!state.settings) return;
+  void window.naiDesktop.setSetting("lastGenerationState", buildLastGenerationState(state));
+}
+
 export const useAppStore = create<AppState>((set, get) => ({
   bootDone: false,
   showOnboarding: false,
@@ -190,7 +224,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   workbenchImage: null,
   i2iParams: { ...DEFAULT_I2I_PARAMS },
   inpaintModel: "nai-diffusion-4-5-curated-inpainting",
-  brushSize: 32,
+  inpaintStrength: 1,
+  inpaintNoise: 0,
+  brushSize: 64,
+  brushOpacity: 0.55,
   brushMode: "paint",
   inpaintMask: null,
   maskRevision: 0,
@@ -205,6 +242,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   inspectImageBase64: "",
   reversePromptText: "",
   reversePromptMode: "tags" as ReversePromptMode,
+  reversePromptScope: "full" as ReversePromptScope,
+  reversePromptHint: "",
   reversePrompting: false,
   convertInput: "",
   convertResult: "",
@@ -230,7 +269,23 @@ export const useAppStore = create<AppState>((set, get) => ({
     const selectedDate = dates[0] ?? "";
     const selectedGroupId = settings.activeHistoryGroupId ?? "";
     const history = await window.naiDesktop.getHistory(selectedDate || undefined, selectedGroupId || undefined);
-    // Restore locked/saved style + negative prompts so they persist across sessions.
+    const last = settings.lastGenerationState;
+    if (last) {
+      set((state) => ({
+        params: { ...state.params, ...last.params, positivePrompt: "" },
+        batchCount: Math.max(1, Math.min(16, last.batchCount ?? state.batchCount)),
+        i2iParams: { ...state.i2iParams, ...(last.i2iParams ?? {}) },
+        inpaintModel: last.inpaintModel ?? state.inpaintModel,
+        inpaintStrength: last.inpaintStrength ?? state.inpaintStrength,
+        inpaintNoise: last.inpaintNoise ?? state.inpaintNoise,
+        brushSize: last.brushSize ?? state.brushSize,
+        brushOpacity: last.brushOpacity ?? state.brushOpacity,
+        upscaleScale: last.upscaleScale ?? state.upscaleScale,
+        directorTool: last.directorTool ?? state.directorTool,
+        augmentOptions: { ...state.augmentOptions, ...(last.augmentOptions ?? {}) },
+      }));
+    }
+    // Locks only protect fields from template/reset overwrites; persistence uses lastGenerationState.
     const restored: Partial<GenerateParams> = {};
     if (settings.lockStylePrompt) restored.stylePrompt = settings.savedStylePrompt ?? "";
     if (settings.lockNegativePrompt) restored.negativePrompt = settings.savedNegativePrompt ?? "";
@@ -268,10 +323,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setParam(key, value) {
     set((state) => ({ params: { ...state.params, [key]: value } }));
+    persistGenerationState(get);
   },
 
   applyParams(patch) {
     set((state) => ({ params: { ...state.params, ...patch } }));
+    persistGenerationState(get);
   },
 
   async checkUpdate() {
@@ -391,14 +448,32 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setI2IParam(key, value) {
     set((state) => ({ i2iParams: { ...state.i2iParams, [key]: value } }));
+    persistGenerationState(get);
   },
 
   setInpaintModel(model) {
     set({ inpaintModel: model });
+    persistGenerationState(get);
+  },
+
+  setInpaintStrength(value) {
+    set({ inpaintStrength: Math.max(0, Math.min(1, value)) });
+    persistGenerationState(get);
+  },
+
+  setInpaintNoise(value) {
+    set({ inpaintNoise: Math.max(0, Math.min(0.99, value)) });
+    persistGenerationState(get);
   },
 
   setBrushSize(size) {
     set({ brushSize: Math.max(1, Math.min(128, size)) });
+    persistGenerationState(get);
+  },
+
+  setBrushOpacity(opacity) {
+    set({ brushOpacity: Math.max(0.05, Math.min(1, opacity)) });
+    persistGenerationState(get);
   },
 
   setBrushMode(mode) {
@@ -415,14 +490,17 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setUpscaleScale(scale) {
     set({ upscaleScale: scale });
+    persistGenerationState(get);
   },
 
   setDirectorTool(tool) {
     set({ directorTool: tool });
+    persistGenerationState(get);
   },
 
   setAugmentOption(key, value) {
     set((state) => ({ augmentOptions: { ...state.augmentOptions, [key]: value } }));
+    persistGenerationState(get);
   },
 
   // ── Vibe Transfer / Precise Reference ──────────────────────────────────────
@@ -472,6 +550,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   // ── Batch + Inspect ────────────────────────────────────────────────────────
   setBatchCount(count) {
     set({ batchCount: Math.max(1, Math.min(16, count)) });
+    persistGenerationState(get);
   },
 
   setInspectImage(url, meta, base64 = "") {
@@ -490,14 +569,27 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ reversePromptMode: mode });
   },
 
+  setReversePromptScope(scope) {
+    set({ reversePromptScope: scope });
+  },
+
+  setReversePromptHint(hint) {
+    set({ reversePromptHint: hint });
+  },
+
   async runReversePrompt() {
-    const { inspectImageBase64, reversePromptMode } = get();
+    const { inspectImageBase64, reversePromptMode, reversePromptScope, reversePromptHint } = get();
     if (!inspectImageBase64) {
       set({ toast: "请先选择图片。" });
       return;
     }
     set({ reversePrompting: true });
-    const result = await window.naiDesktop.reversePrompt(inspectImageBase64, reversePromptMode);
+    const result = await window.naiDesktop.reversePrompt(
+      inspectImageBase64,
+      reversePromptMode,
+      reversePromptScope,
+      reversePromptHint,
+    );
     set({ reversePrompting: false });
     if (result.ok && result.prompt) {
       set({ reversePromptText: result.prompt, toast: "反推完成！" });
@@ -659,7 +751,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       return;
     }
     set({ isGenerating: true, lastError: "", statusText: "正在局部重绘..." });
-    const result = await window.naiDesktop.inpaint(state.params, state.inpaintModel, state.inpaintMask);
+    const result = await window.naiDesktop.inpaint(
+      state.params,
+      state.inpaintModel,
+      state.inpaintMask,
+      state.inpaintStrength,
+      state.inpaintNoise,
+    );
     if (result.ok && result.items.length > 0) {
       const current = result.items[0];
       set({ isGenerating: false, statusText: result.message, toast: result.message });

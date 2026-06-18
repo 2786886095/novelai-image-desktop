@@ -3,6 +3,7 @@ import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import type { AccountSummary, AppSettings, HistoryGroup, HistoryItem, SettingKey } from "../../src/types";
+import { COMIC_ANALYZE_SYSTEM_PROMPT, SCOPED_REVERSE_SYSTEM_PROMPTS } from "../../src/data/prompt-templates";
 
 interface PersistedData {
   token?: string;
@@ -18,7 +19,77 @@ function storePath() {
   return path.join(app.getPath("userData"), "novelai-image-desktop.json");
 }
 
+function emptyModeTemplates(): AppSettings["reversePromptTemplates"] {
+  return { tags: "", natural: "", mixed: "" };
+}
+
+function parseScopedReverseTemplateFile(text: string): AppSettings["reversePromptTemplates"] | null {
+  const normalized = text.replace(/^\uFEFF/, "");
+  const tagsMarker = "danbooru标签｜支持反推范围选择";
+  const naturalMarker = "自然语言｜支持反推范围选择";
+  const mixedMarker = "混合模式｜支持反推范围选择";
+  const tagsIndex = normalized.indexOf(tagsMarker);
+  const naturalIndex = normalized.indexOf(naturalMarker);
+  const mixedIndex = normalized.indexOf(mixedMarker);
+  if (tagsIndex < 0 || naturalIndex < 0 || mixedIndex < 0) return null;
+  if (!(tagsIndex < naturalIndex && naturalIndex < mixedIndex)) return null;
+  return {
+    tags: normalized.slice(tagsIndex, naturalIndex).trim(),
+    natural: normalized.slice(naturalIndex, mixedIndex).trim(),
+    mixed: normalized.slice(mixedIndex).trim(),
+  };
+}
+
+function loadOwnerScopedReverseTemplates(): AppSettings["reversePromptTemplates"] {
+  const candidates = [
+    "D:\\Downloads\\ai反推提示词模版_支持范围选择版.txt",
+    path.join(app.getPath("downloads"), "ai反推提示词模版_支持范围选择版.txt"),
+  ];
+  for (const file of candidates) {
+    try {
+      if (!fs.existsSync(file)) continue;
+      const parsed = parseScopedReverseTemplateFile(fs.readFileSync(file, "utf8"));
+      if (parsed) return parsed;
+    } catch {
+      // Ignore unreadable optional owner template files and fall back safely.
+    }
+  }
+  return emptyModeTemplates();
+}
+
+// Canonical defaults for the AI-reverse templates: the owner-provided file when
+// present, otherwise the built-in SCOPED_REVERSE_SYSTEM_PROMPTS. The settings page
+// uses this for "restore default" so it never mistakes a user's customized
+// template for the default.
+export function getReversePromptTemplateDefaults(): AppSettings["reversePromptTemplates"] {
+  const owner = loadOwnerScopedReverseTemplates();
+  if (!isEmptyModeTemplates(owner)) return owner;
+  return {
+    tags: SCOPED_REVERSE_SYSTEM_PROMPTS.tags,
+    natural: SCOPED_REVERSE_SYSTEM_PROMPTS.natural,
+    mixed: SCOPED_REVERSE_SYSTEM_PROMPTS.mixed,
+  };
+}
+
+function isEmptyModeTemplates(value: unknown): boolean {
+  if (!value || typeof value !== "object") return true;
+  const next = value as Partial<AppSettings["reversePromptTemplates"]>;
+  return !next.tags?.trim() && !next.natural?.trim() && !next.mixed?.trim();
+}
+
+function isLegacyScopedReverseTemplates(value: unknown): boolean {
+  if (!value || typeof value !== "object") return false;
+  const next = value as Partial<AppSettings["reversePromptTemplates"]>;
+  const text = [next.tags, next.natural, next.mixed].filter(Boolean).join("\n");
+  return (
+    text.includes("You are a NovelAI V4.5 image-to-prompt specialist") &&
+    text.includes("The user message will include an explicit reverse scope") &&
+    text.includes("Scope rules:")
+  );
+}
+
 export function defaultSettings(): AppSettings {
+  const reversePromptTemplates = loadOwnerScopedReverseTemplates();
   return {
     hasOnboarded: false,
     language: "zh-CN",
@@ -46,7 +117,9 @@ export function defaultSettings(): AppSettings {
     visionApiModel: "gpt-4o",
     visionSystemPrompt: "",
     reversePromptMode: "tags" as const,
-    reversePromptTemplates: { tags: "", natural: "", mixed: "" },
+    reversePromptTemplates,
+    comicAnalyzePromptTemplates: { tags: "", natural: "", mixed: "" },
+    comicAnalyzePromptTemplate: COMIC_ANALYZE_SYSTEM_PROMPT,
     convertApiUrl: "https://api.openai.com/v1",
     convertApiKey: "",
     convertApiModel: "gpt-4o-mini",
@@ -74,15 +147,28 @@ export function defaultSettings(): AppSettings {
     savedNegativePrompt: "",
     imageNameTemplate: "{date}_{seq}_{model}",
     promptTemplates: [],
+    lastGenerationState: null,
   };
 }
 
 function normalize(raw: Partial<PersistedData> | null): PersistedData {
   const defaults = defaultSettings();
+  const rawSettings = (raw?.settings ?? {}) as Partial<AppSettings>;
+  const settings = { ...defaults, ...rawSettings };
+  if (isEmptyModeTemplates(rawSettings.reversePromptTemplates) || isLegacyScopedReverseTemplates(rawSettings.reversePromptTemplates)) {
+    settings.reversePromptTemplates = defaults.reversePromptTemplates;
+  }
+  if (!settings.comicAnalyzePromptTemplate?.trim()) {
+    settings.comicAnalyzePromptTemplate =
+      rawSettings.comicAnalyzePromptTemplates?.natural?.trim() ||
+      rawSettings.comicAnalyzePromptTemplates?.tags?.trim() ||
+      rawSettings.comicAnalyzePromptTemplates?.mixed?.trim() ||
+      defaults.comicAnalyzePromptTemplate;
+  }
   return {
     token: typeof raw?.token === "string" ? raw.token : undefined,
     account: raw?.account && typeof raw.account === "object" ? raw.account : undefined,
-    settings: { ...defaults, ...(raw?.settings ?? {}) },
+    settings,
     history: Array.isArray(raw?.history) ? raw.history : [],
     historyGroups: Array.isArray(raw?.historyGroups) ? raw.historyGroups : [],
   };

@@ -67,6 +67,8 @@ export const TAB_ITEMS = [
   { value: "postprocess", label: "后期", icon: "◈", title: "导演工具", desc: "移除背景、线稿、上色、表情" },
   { value: "inspect", label: "反推", icon: "◎", title: "AI 反推提示词", desc: "图片分析与提示词反推" },
   { value: "convert", label: "转换", icon: "⇄", title: "中文描述转标签", desc: "自然语言转 Danbooru 标签" },
+  { value: "tools", label: "工具", icon: "▣", title: "工具板块", desc: "漫画生成器、批量工作流" },
+  { value: "records", label: "记录", icon: "▤", title: "AI 调用记录", desc: "查看反推/转换/拆分镜每次发送与返回" },
 ] as const;
 
 export type PromptChip = {

@@ -2,6 +2,11 @@ import { contextBridge, ipcRenderer } from "electron";
 import type {
   AppSettings,
   AugmentOptions,
+  ComicAnalyzeRequest,
+  ComicConvertRequest,
+  ComicConsistencyRequest,
+  ComicGeneratePanelRequest,
+  ComicProject,
   DirectorTool,
   GenerateExtras,
   GenerateParams,
@@ -19,14 +24,31 @@ contextBridge.exposeInMainWorld("naiDesktop", {
     ipcRenderer.invoke("nai:generate", params, extras),
   generateI2I: (params: GenerateParams, i2i: I2IParams, extras: GenerateExtras) =>
     ipcRenderer.invoke("nai:generateI2I", params, i2i, extras),
-  inpaint: (params: GenerateParams, inpaintModel: NAIInpaintModel, maskBase64: string) =>
-    ipcRenderer.invoke("nai:inpaint", params, inpaintModel, maskBase64),
+  inpaint: (
+    params: GenerateParams,
+    inpaintModel: NAIInpaintModel,
+    maskBase64: string,
+    strength: number,
+    noise: number,
+  ) =>
+    ipcRenderer.invoke("nai:inpaint", params, inpaintModel, maskBase64, strength, noise),
   upscaleImage: (scale: UpscaleScale) => ipcRenderer.invoke("nai:upscale", scale),
   augmentImage: (tool: DirectorTool, options: AugmentOptions) =>
     ipcRenderer.invoke("nai:augment", tool, options),
   cancel: () => ipcRenderer.invoke("nai:cancel"),
-  reversePrompt: (imageBase64: string, mode: string) => ipcRenderer.invoke("nai:reversePrompt", imageBase64, mode),
+  reversePrompt: (imageBase64: string, mode: string, scope?: string, hint?: string) =>
+    ipcRenderer.invoke("nai:reversePrompt", imageBase64, mode, scope, hint),
   convertPrompt: (text: string, mode: string) => ipcRenderer.invoke("nai:convertPrompt", text, mode),
+  comicAnalyzeScript: (request: ComicAnalyzeRequest) => ipcRenderer.invoke("comic:analyzeScript", request),
+  comicConvertPanels: (request: ComicConvertRequest) => ipcRenderer.invoke("comic:convertPanels", request),
+  comicCheckConsistency: (request: ComicConsistencyRequest) => ipcRenderer.invoke("comic:checkConsistency", request),
+  comicReverseAsset: (imageBase64: string, mode: string, scope?: string, hint?: string) =>
+    ipcRenderer.invoke("comic:reverseAsset", imageBase64, mode, scope, hint),
+  comicGeneratePanel: (request: ComicGeneratePanelRequest) => ipcRenderer.invoke("comic:generatePanel", request),
+  comicExportProjectZip: (project: ComicProject) => ipcRenderer.invoke("comic:exportProjectZip", project),
+  getAiCallLog: () => ipcRenderer.invoke("ai:getLog"),
+  clearAiCallLog: () => ipcRenderer.invoke("ai:clearLog"),
+  getReverseTemplateDefaults: () => ipcRenderer.invoke("settings:getReverseDefaults"),
   listAiModels: (kind: "reverse" | "convert") => ipcRenderer.invoke("nai:listModels", kind),
   testTagServer: (query: string) => ipcRenderer.invoke("nai:testTagServer", query),
   suggestTags: (model: string, prompt: string) => ipcRenderer.invoke("nai:suggestTags", model, prompt),

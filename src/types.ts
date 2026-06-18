@@ -1,8 +1,9 @@
-export const APP_VERSION = "0.8.5";
+export const APP_VERSION = "0.9.0";
 export const APP_NAME = "Langbai NovelAI Studio";
 export const PROJECT_REPOSITORY = "https://github.com/2786886095/novelai-image-desktop";
 
 export type ReversePromptMode = "tags" | "natural" | "mixed";
+export type ReversePromptScope = "full" | "character" | "object" | "scene";
 export type TagServerType = "rest" | "http" | "sse" | "stdio";
 export type TranslateProvider = "google" | "baidu";
 
@@ -101,6 +102,20 @@ export const DEFAULT_PARAMS: GenerateParams = {
   fileNamePrefix: "",
 };
 
+export interface LastGenerationState {
+  params: GenerateParams;
+  batchCount: number;
+  i2iParams: I2IParams;
+  inpaintModel: NAIInpaintModel;
+  inpaintStrength: number;
+  inpaintNoise: number;
+  brushSize: number;
+  brushOpacity: number;
+  upscaleScale: UpscaleScale;
+  directorTool: DirectorTool;
+  augmentOptions: AugmentOptions;
+}
+
 export interface WorkingImage {
   filePath: string;
   fileUrl: string;
@@ -150,6 +165,157 @@ export interface CharCaption extends CharCaptionItem {
 export interface GenerateExtras {
   vibeImages: VibeTransferItem[];
   charCaptions: CharCaptionItem[];
+}
+
+export type ComicReferenceKind = "vibe" | "precise" | "character" | "scene" | "object";
+export type ComicPanelStatus = "draft" | "converted" | "generating" | "done" | "failed";
+export type ComicDesiredPanelCount = "auto" | number;
+
+export interface ComicReferenceAsset {
+  id: string;
+  name: string;
+  kind: ComicReferenceKind;
+  scope?: ReversePromptScope;
+  subjectHint?: string;
+  base64: string;
+  previewUrl: string;
+  reversePrompt: string;
+  infoExtracted: number;
+  strength: number;
+}
+
+export interface ComicPanelParamsOverride {
+  enabled: boolean;
+  params: Partial<GenerateParams>;
+}
+
+export interface ComicPanel {
+  id: string;
+  index: number;
+  cnPrompt: string;
+  contextSummary: string;
+  enPrompt: string;
+  localNegativePrompt: string;
+  negativeMode: "append" | "override";
+  paramsOverride: ComicPanelParamsOverride;
+  status: ComicPanelStatus;
+  historyItemId?: string;
+  outputPath?: string;
+  outputUrl?: string;
+  actualAnlas?: number;
+  error?: string;
+}
+
+export interface ComicProject {
+  id: string;
+  title: string;
+  rawScript: string;
+  mode: ReversePromptMode;
+  desiredPanelCount: ComicDesiredPanelCount;
+  globalPrompt: string;
+  globalCharacterSetting: string;
+  continuityBible: string;
+  globalStylePrompt: string;
+  globalNegativePrompt: string;
+  adultBranch: boolean;
+  inheritPreviousFrame: boolean;
+  autoExportZip: boolean;
+  globalParams: GenerateParams;
+  references: ComicReferenceAsset[];
+  panels: ComicPanel[];
+}
+
+export interface ComicAnalyzeRequest {
+  script: string;
+  adultBranch: boolean;
+  mode: ReversePromptMode;
+  desiredPanelCount: ComicDesiredPanelCount;
+  referencePrompts?: string[];
+}
+
+export interface ComicAnalyzeResult {
+  ok: boolean;
+  message: string;
+  title?: string;
+  globalPrompt?: string;
+  globalCharacterSetting?: string;
+  continuityBible?: string;
+  panels?: Array<Pick<ComicPanel, "cnPrompt" | "contextSummary">>;
+}
+
+export interface ComicConvertPanelInput {
+  panelId: string;
+  index: number;
+  cnPrompt: string;
+  previousCnPrompt?: string;
+  nextCnPrompt?: string;
+  previousPrompts: string[];
+  previousSummaries: string[];
+  nextSummaries: string[];
+}
+
+export interface ComicConvertRequest {
+  mode: ReversePromptMode;
+  globalPrompt: string;
+  globalCharacterSetting: string;
+  continuityBible: string;
+  globalStylePrompt: string;
+  referencePrompts: string[];
+  adultBranch: boolean;
+  panels: ComicConvertPanelInput[];
+}
+
+export interface ComicConvertResult {
+  ok: boolean;
+  message: string;
+  panels: Array<{ panelId: string; enPrompt: string; contextSummary?: string; error?: string }>;
+}
+
+export interface ComicConsistencyRequest {
+  mode: ReversePromptMode;
+  globalPrompt: string;
+  globalCharacterSetting: string;
+  referencePrompts: string[];
+  panels: Array<Pick<ComicPanel, "id" | "index" | "cnPrompt" | "enPrompt">>;
+}
+
+export interface ComicConsistencyResult {
+  ok: boolean;
+  message: string;
+  panels: Array<{ panelId: string; enPrompt: string; note?: string }>;
+}
+
+export interface ComicGeneratePanelRequest {
+  projectId: string;
+  panelId: string;
+  panelIndex: number;
+  params: GenerateParams;
+  globalStylePrompt: string;
+  panelPrompt: string;
+  globalNegativePrompt: string;
+  localNegativePrompt: string;
+  negativeMode: "append" | "override";
+  references: ComicReferenceAsset[];
+  previousImagePath?: string;
+  inheritPreviousFrame: boolean;
+}
+
+export interface ComicExportZipResult {
+  ok: boolean;
+  message: string;
+  path?: string;
+}
+
+export interface AiCallLogEntry {
+  id: string;
+  time: number;
+  label: string;
+  api: "vision" | "convert";
+  model: string;
+  systemPrompt: string;
+  userText: string;
+  ok: boolean;
+  response: string;
 }
 
 export const NAI_INPAINT_MODELS = [
@@ -231,6 +397,9 @@ export interface HistoryItem {
   model: string;
   width: number;
   height: number;
+  feature?: string;
+  comicProjectId?: string;
+  comicPanelNo?: number;
 }
 
 export interface HistoryGroup {
@@ -309,6 +478,10 @@ export interface AppSettings {
   reversePromptMode: ReversePromptMode;
   // Per-mode reverse-prompt system templates (empty string = use built-in default).
   reversePromptTemplates: ModePromptTemplates;
+  // Legacy per-mode comic storyboard templates. Kept for migration only.
+  comicAnalyzePromptTemplates: ModePromptTemplates;
+  // Current single storyboard analysis template used by the comic generator.
+  comicAnalyzePromptTemplate: string;
   // Text-only prompt conversion API, intentionally separated from vision reverse-prompt.
   convertApiUrl: string;
   convertApiKey: string;
@@ -352,6 +525,7 @@ export interface AppSettings {
   imageNameTemplate: string;
   // Prompt templates
   promptTemplates: PromptTemplate[];
+  lastGenerationState: LastGenerationState | null;
 }
 
 export type SettingKey = keyof AppSettings;
@@ -395,7 +569,13 @@ export interface NaiDesktopApi {
   clearToken: () => Promise<{ ok: boolean }>;
   generate: (params: GenerateParams, extras: GenerateExtras) => Promise<GenerateResult>;
   generateI2I: (params: GenerateParams, i2i: I2IParams, extras: GenerateExtras) => Promise<GenerateResult>;
-  inpaint: (params: GenerateParams, inpaintModel: NAIInpaintModel, maskBase64: string) => Promise<GenerateResult>;
+  inpaint: (
+    params: GenerateParams,
+    inpaintModel: NAIInpaintModel,
+    maskBase64: string,
+    strength: number,
+    noise: number,
+  ) => Promise<GenerateResult>;
   upscaleImage: (scale: UpscaleScale) => Promise<SingleImageResult>;
   augmentImage: (tool: DirectorTool, options: AugmentOptions) => Promise<GenerateResult>;
   cancel: () => Promise<{ ok: boolean }>;
@@ -419,8 +599,27 @@ export interface NaiDesktopApi {
   getSettings: () => Promise<AppSettings>;
   isFirstRun: () => Promise<boolean>;
   completeSetup: () => Promise<{ ok: boolean }>;
-  reversePrompt: (imageBase64: string, mode: ReversePromptMode) => Promise<{ ok: boolean; prompt?: string; message: string }>;
+  reversePrompt: (
+    imageBase64: string,
+    mode: ReversePromptMode,
+    scope?: ReversePromptScope,
+    hint?: string,
+  ) => Promise<{ ok: boolean; prompt?: string; message: string }>;
   convertPrompt: (text: string, mode: ReversePromptMode) => Promise<{ ok: boolean; result?: string; message: string }>;
+  comicAnalyzeScript: (request: ComicAnalyzeRequest) => Promise<ComicAnalyzeResult>;
+  comicConvertPanels: (request: ComicConvertRequest) => Promise<ComicConvertResult>;
+  comicCheckConsistency: (request: ComicConsistencyRequest) => Promise<ComicConsistencyResult>;
+  comicReverseAsset: (
+    imageBase64: string,
+    mode: ReversePromptMode,
+    scope?: ReversePromptScope,
+    hint?: string,
+  ) => Promise<{ ok: boolean; prompt?: string; message: string }>;
+  comicGeneratePanel: (request: ComicGeneratePanelRequest) => Promise<GenerateResult>;
+  comicExportProjectZip: (project: ComicProject) => Promise<ComicExportZipResult>;
+  getAiCallLog: () => Promise<AiCallLogEntry[]>;
+  clearAiCallLog: () => Promise<{ ok: boolean }>;
+  getReverseTemplateDefaults: () => Promise<ModePromptTemplates>;
   listAiModels: (kind: "reverse" | "convert") => Promise<AiModelListResult>;
   testTagServer: (query: string) => Promise<{ ok: boolean; message: string; tags: TagSuggestion[] }>;
   suggestTags: (model: string, prompt: string) => Promise<TagSuggestion[]>;

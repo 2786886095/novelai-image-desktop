@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import { format } from "date-fns";
+import { ToolsHub } from "./ComicGenerator";
 import { InpaintCanvas } from "./InpaintCanvas";
 import { useAppStore } from "./store";
 import { estimateAnlas } from "./anlas";
@@ -14,7 +15,11 @@ import {
   NORMALIZE_LABELS,
   type NormalizeOptions,
 } from "./prompt-normalize";
-import { REVERSE_SYSTEM_PROMPTS, CONVERT_SYSTEM_PROMPTS } from "./data/prompt-templates";
+import {
+  COMIC_ANALYZE_SYSTEM_PROMPT,
+  CONVERT_SYSTEM_PROMPTS,
+  SCOPED_REVERSE_SYSTEM_PROMPTS,
+} from "./data/prompt-templates";
 import { Button, IconText, AppPortal, Toggle, NumberInput, SliderInput } from "./components/ui";
 import { Icon } from "./components/icons";
 import {
@@ -38,6 +43,7 @@ import {
   NAI_UC_PRESETS,
   DEFAULT_MODEL_FOR_MODE,
   type ModelMode,
+  type AiCallLogEntry,
   type AppSettings,
   type HistoryGroup,
   type HistoryItem,
@@ -45,6 +51,7 @@ import {
   type ModePromptTemplates,
   type PromptTemplate,
   type ReversePromptMode,
+  type ReversePromptScope,
   type TagSuggestion,
   type TokenStatus,
 } from "./types";
@@ -1230,8 +1237,14 @@ function I2IPanel({ openSettings }: { openSettings: () => void }) {
 function InpaintPanel({ openSettings }: { openSettings: () => void }) {
   const inpaintModel = useAppStore((state) => state.inpaintModel);
   const setInpaintModel = useAppStore((state) => state.setInpaintModel);
+  const inpaintStrength = useAppStore((state) => state.inpaintStrength);
+  const setInpaintStrength = useAppStore((state) => state.setInpaintStrength);
+  const inpaintNoise = useAppStore((state) => state.inpaintNoise);
+  const setInpaintNoise = useAppStore((state) => state.setInpaintNoise);
   const brushSize = useAppStore((state) => state.brushSize);
   const setBrushSize = useAppStore((state) => state.setBrushSize);
+  const brushOpacity = useAppStore((state) => state.brushOpacity);
+  const setBrushOpacity = useAppStore((state) => state.setBrushOpacity);
   const brushMode = useAppStore((state) => state.brushMode);
   const setBrushMode = useAppStore((state) => state.setBrushMode);
   const clearInpaintMask = useAppStore((state) => state.clearInpaintMask);
@@ -1248,7 +1261,10 @@ function InpaintPanel({ openSettings }: { openSettings: () => void }) {
             ))}
           </select>
         </label>
-        <SliderInput label="画笔大小" value={brushSize} min={2} max={128} step={1} onChange={setBrushSize} />
+        <SliderInput label="重绘强度（1=完全按提示词重画，越低越贴近原图）" value={inpaintStrength} min={0.1} max={1} step={0.01} onChange={setInpaintStrength} />
+        <SliderInput label="重绘噪声（一般保持 0）" value={inpaintNoise} min={0} max={0.99} step={0.01} onChange={setInpaintNoise} />
+        <SliderInput label="画笔大小（蒙版自动对齐 64px 方块，与官网一致）" value={brushSize} min={2} max={128} step={1} onChange={setBrushSize} />
+        <SliderInput label="画笔透明度（仅影响画面涂抹显示）" value={brushOpacity} min={0.05} max={1} step={0.01} onChange={setBrushOpacity} />
         <div className="mode-buttons">
           <Button variant={brushMode === "paint" ? "primary" : "secondary"} onClick={() => setBrushMode("paint")}>
             <IconText icon="✎">画笔（白=重绘）</IconText>
@@ -1349,10 +1365,12 @@ function ModeTemplateEditor({
   value,
   defaults,
   onChange,
+  title = "提示词模板",
 }: {
   value: ModePromptTemplates;
   defaults: ModePromptTemplates;
   onChange: (next: ModePromptTemplates) => void;
+  title?: string;
 }) {
   const [mode, setMode] = useState<ReversePromptMode>("tags");
   const labels: [ReversePromptMode, string][] = [
@@ -1361,12 +1379,14 @@ function ModeTemplateEditor({
     ["mixed", "混合模式"],
   ];
   const override = value?.[mode]?.trim() ?? "";
-  const isCustom = override.length > 0;
+  const defaultText = defaults[mode] ?? "";
+  const isCustom = override.length > 0 && override !== defaultText.trim();
   // Show the built-in default text when there's no override, so it's never hidden.
-  const shown = isCustom ? value[mode] : defaults[mode];
+  const shown = override.length > 0 ? value[mode] : defaultText;
   return (
     <div className="field">
       <span className="field-label-row">
+        <strong>{title}</strong>
         提示词模板（三种模式各自独立，绝不混用）
         <span className={clsx("tpl-state", isCustom && "custom")}>{isCustom ? "已自定义" : "默认"}</span>
       </span>
@@ -1392,9 +1412,9 @@ function ModeTemplateEditor({
         <button
           type="button"
           className="prompt-tool-btn"
-          disabled={!isCustom}
+          disabled={override.length > 0 && !isCustom}
           title="把当前模式恢复为内置默认模板"
-          onClick={() => onChange({ ...value, [mode]: "" })}
+          onClick={() => onChange({ ...value, [mode]: defaultText })}
         >
           ↺ 恢复默认（{labels.find(([v]) => v === mode)?.[1]}）
         </button>
@@ -1406,6 +1426,51 @@ function ModeTemplateEditor({
   );
 }
 
+function SingleTemplateEditor({
+  value,
+  defaultValue,
+  onChange,
+  title,
+  description,
+}: {
+  value: string;
+  defaultValue: string;
+  onChange: (next: string) => void;
+  title: string;
+  description?: string;
+}) {
+  const override = value?.trim() ?? "";
+  const isCustom = override.length > 0 && override !== defaultValue.trim();
+  const shown = override.length > 0 ? value : defaultValue;
+  return (
+    <div className="field">
+      <span className="field-label-row">
+        <strong>{title}</strong>
+        {description}
+        <span className={clsx("tpl-state", isCustom && "custom")}>{isCustom ? "已自定义" : "默认"}</span>
+      </span>
+      <textarea
+        className="prompt-box"
+        style={{ minHeight: 180 }}
+        value={shown}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      <div className="tpl-actions">
+        <button
+          type="button"
+          className="prompt-tool-btn"
+          disabled={override.length > 0 && !isCustom}
+          title="恢复为内置默认模板"
+          onClick={() => onChange(defaultValue)}
+        >
+          ↺ 恢复默认
+        </button>
+      </div>
+      <small className="settings-hint">漫画拆分分镜只使用这一套模板；反推和转换仍按三种模式分别读取上方模板。</small>
+    </div>
+  );
+}
+
 function ReversePanel() {
   const setInspectImage = useAppStore((state) => state.setInspectImage);
   const clearInspect = useAppStore((state) => state.clearInspect);
@@ -1413,7 +1478,11 @@ function ReversePanel() {
   const reversePromptText = useAppStore((state) => state.reversePromptText);
   const reversePrompting = useAppStore((state) => state.reversePrompting);
   const reversePromptMode = useAppStore((state) => state.reversePromptMode);
+  const reversePromptScope = useAppStore((state) => state.reversePromptScope);
+  const reversePromptHint = useAppStore((state) => state.reversePromptHint);
   const setReversePromptMode = useAppStore((state) => state.setReversePromptMode);
+  const setReversePromptScope = useAppStore((state) => state.setReversePromptScope);
+  const setReversePromptHint = useAppStore((state) => state.setReversePromptHint);
   const runReversePrompt = useAppStore((state) => state.runReversePrompt);
   const setReversePromptText = useAppStore((state) => state.setReversePromptText);
   const setParam = useAppStore((state) => state.setParam);
@@ -1442,6 +1511,12 @@ function ReversePanel() {
     ["tags", "Danbooru 标签", "输出标准 Danbooru tag 格式"],
     ["natural", "自然语言", "输出流畅的描述性文字"],
     ["mixed", "混合模式", "Tag + 自然语言结合"],
+  ];
+  const scopes: [ReversePromptScope, string, string][] = [
+    ["full", "整张图片", "反推完整画面、人物、场景和构图"],
+    ["character", "角色", "只反推指定角色的外观、服装、姿态"],
+    ["object", "物品", "只反推指定物品或道具"],
+    ["scene", "场景", "只反推背景、光照、空间和氛围"],
   ];
 
   function handleFile(file: File) {
@@ -1538,6 +1613,30 @@ function ReversePanel() {
               {label}
             </button>
           ))}
+        </div>
+
+        <div className="reverse-scope-card">
+          <span className="field-label-row">反推范围选择</span>
+          <div className="mode-selector compact">
+            {scopes.map(([val, label, tip]) => (
+              <button
+                key={val}
+                className={clsx("mode-btn", reversePromptScope === val && "active")}
+                title={tip}
+                onClick={() => setReversePromptScope(val)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <label className="field">
+            <span>目标/角色提示（可选）</span>
+            <input
+              value={reversePromptHint}
+              placeholder="例如：这是芙宁娜 / 只反推右侧角色 / 只反推桌上的盒子"
+              onChange={(e) => setReversePromptHint(e.target.value)}
+            />
+          </label>
         </div>
 
         {hasImage && (
@@ -1779,6 +1878,107 @@ function PromptConverterPanel() {
         </div>
       </div>
     </>
+  );
+}
+
+// ── AI call log panel ─────────────────────────────────────────────────────────
+function AiLogPanel() {
+  const [entries, setEntries] = useState<AiCallLogEntry[]>([]);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const list = await window.naiDesktop.getAiCallLog();
+      setEntries(Array.isArray(list) ? list : []);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  function toggle(id: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function clearAll() {
+    await window.naiDesktop.clearAiCallLog();
+    setExpanded(new Set());
+    await load();
+  }
+
+  return (
+    <main className="ai-log-panel">
+      <div className="ai-log-head">
+        <div>
+          <strong>AI 调用记录</strong>
+          <small>反推 / 转换 / 拆分镜 / 一致性检测每次发送给 AI 的内容与原始返回（最多保留最近 200 条，重启后清空）。</small>
+        </div>
+        <div className="ai-log-actions">
+          <button className="btn btn-ghost" onClick={() => void load()} disabled={loading}>
+            {loading ? "刷新中..." : "刷新"}
+          </button>
+          <button className="btn btn-danger" onClick={() => void clearAll()} disabled={!entries.length}>
+            清空
+          </button>
+        </div>
+      </div>
+      {entries.length === 0 ? (
+        <div className="ai-log-empty">暂无记录。进行一次 AI 反推 / 转换 / 漫画拆分镜后，这里会显示发送与返回内容。</div>
+      ) : (
+        <div className="ai-log-list">
+          {entries.map((entry) => {
+            const open = expanded.has(entry.id);
+            return (
+              <div className={clsx("ai-log-item", entry.ok ? "ok" : "fail")} key={entry.id}>
+                <button type="button" className="ai-log-item-head" onClick={() => toggle(entry.id)}>
+                  <span className="ai-log-caret">{open ? "▾" : "▸"}</span>
+                  <span className={clsx("ai-log-badge", entry.ok ? "ok" : "fail")}>{entry.ok ? "成功" : "失败"}</span>
+                  <span className="ai-log-label">{entry.label}</span>
+                  <span className="ai-log-meta">{entry.api === "vision" ? "反推API" : "转换API"} · {entry.model}</span>
+                  <span className="ai-log-time">{format(new Date(entry.time), "HH:mm:ss")}</span>
+                </button>
+                {open && (
+                  <div className="ai-log-body">
+                    <AiLogField title="System Prompt（系统指令）" text={entry.systemPrompt} />
+                    <AiLogField title="User（发送内容）" text={entry.userText} />
+                    <AiLogField title={entry.ok ? "返回（原始输出）" : "返回（错误信息）"} text={entry.response} />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </main>
+  );
+}
+
+function AiLogField({ title, text }: { title: string; text: string }) {
+  return (
+    <div className="ai-log-field">
+      <div className="ai-log-field-head">
+        <span>{title}</span>
+        <button
+          type="button"
+          className="btn btn-ghost btn-mini"
+          onClick={() => void navigator.clipboard.writeText(text)}
+          disabled={!text}
+        >
+          复制
+        </button>
+      </div>
+      <pre className="ai-log-pre">{text || "（空）"}</pre>
+    </div>
   );
 }
 
@@ -2099,6 +2299,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
   const account = useAppStore((state) => state.account);
   const refreshAccount = useAppStore((state) => state.refreshAccount);
   const refreshSettings = useAppStore((state) => state.refreshSettings);
+  const [reverseTemplateDefaults, setReverseTemplateDefaults] = useState(SCOPED_REVERSE_SYSTEM_PROMPTS);
   const [token, setToken] = useState("");
   const [status, setStatus] = useState<TokenStatus | null>(null);
   const [checking, setChecking] = useState(false);
@@ -2114,6 +2315,17 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
   const [tagTestMessage, setTagTestMessage] = useState("");
   const [tagTestTags, setTagTestTags] = useState<TagSuggestion[]>([]);
   const [tagTesting, setTagTesting] = useState(false);
+
+  // Pull the canonical reverse-template defaults from the main process (owner file
+  // or built-in), never from current settings — otherwise a user's customized
+  // template would be treated as the default by "restore default".
+  useEffect(() => {
+    void window.naiDesktop.getReverseTemplateDefaults().then((defaults) => {
+      if (defaults && (defaults.tags || defaults.natural || defaults.mixed)) {
+        setReverseTemplateDefaults(defaults);
+      }
+    });
+  }, []);
 
   if (!settings) return null;
 
@@ -2182,6 +2394,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
     ["storage", "存储"],
     ["ai-reverse", "AI 反推"],
     ["convert-api", "转换 API"],
+    ["templates", "提示词模板"],
     ["prompt", "提示词/补全"],
     ["appearance", "外观"],
     ["performance", "性能"],
@@ -2383,11 +2596,10 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                     </select>
                   </label>
                 )}
-                <ModeTemplateEditor
-                  value={settings.reversePromptTemplates}
-                  defaults={REVERSE_SYSTEM_PROMPTS}
-                  onChange={(next) => void update("reversePromptTemplates", next)}
-                />
+                <div className="info-card">
+                  <strong>反推模板</strong>
+                  <span>已集中到「提示词模板」版块，避免同一模板在多个页面重复维护。</span>
+                </div>
               </div>
             )}
             {section === "convert-api" && (
@@ -2435,17 +2647,43 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                     </select>
                   </label>
                 )}
-                <ModeTemplateEditor
-                  value={settings.convertPromptTemplates}
-                  defaults={CONVERT_SYSTEM_PROMPTS}
-                  onChange={(next) => void update("convertPromptTemplates", next)}
-                />
+                <div className="info-card">
+                  <strong>转换模板</strong>
+                  <span>已集中到「提示词模板」版块，避免同一模板在多个页面重复维护。</span>
+                </div>
               </div>
             )}
             {modelCheckMessage && (section === "ai-reverse" || section === "convert-api") && (
               <div className="status-box ok model-check-result">
                 <strong>{modelCheckMessage}</strong>
                 {detectedModels.length > 0 && <small>{detectedModels.join(", ")}</small>}
+              </div>
+            )}
+            {section === "templates" && (
+              <div className="settings-form">
+                <div className="info-card">
+                  <strong>统一提示词模板</strong>
+                  <span>AI 反推和提示词转换各自读取三套模式模板；漫画 AI 拆分分镜读取下方单模板，漫画生成器不再维护隐藏模板。</span>
+                </div>
+                <ModeTemplateEditor
+                  title="AI 反推模板"
+                  value={settings.reversePromptTemplates}
+                  defaults={reverseTemplateDefaults}
+                  onChange={(next) => void update("reversePromptTemplates", next)}
+                />
+                <ModeTemplateEditor
+                  title="提示词转换模板"
+                  value={settings.convertPromptTemplates}
+                  defaults={CONVERT_SYSTEM_PROMPTS}
+                  onChange={(next) => void update("convertPromptTemplates", next)}
+                />
+                <SingleTemplateEditor
+                  title="AI 拆分分镜模板"
+                  description="单模板，全模式共用"
+                  value={settings.comicAnalyzePromptTemplate}
+                  defaultValue={COMIC_ANALYZE_SYSTEM_PROMPT}
+                  onChange={(next) => void update("comicAnalyzePromptTemplate", next)}
+                />
               </div>
             )}
             {section === "prompt" && (
@@ -2801,10 +3039,18 @@ function MainPage() {
       <UpdateBanner />
       <MenuBar openSettings={() => setShowSettings(true)} />
       <TabBar />
-      <div className="workspace">
-        <LeftPanel openSettings={() => setShowSettings(true)} />
-        {activeTab === "inpaint" ? <InpaintCanvas /> : <ImageCanvas />}
-        <HistoryPanel />
+      <div className={clsx("workspace", (activeTab === "tools" || activeTab === "records") && "workspace-tools")}>
+        {activeTab === "tools" ? (
+        <ToolsHub />
+        ) : activeTab === "records" ? (
+          <AiLogPanel />
+        ) : (
+          <>
+            <LeftPanel openSettings={() => setShowSettings(true)} />
+            {activeTab === "inpaint" ? <InpaintCanvas /> : <ImageCanvas />}
+            <HistoryPanel />
+          </>
+        )}
       </div>
       <footer className="status-bar">
         <span>{statusText}</span>

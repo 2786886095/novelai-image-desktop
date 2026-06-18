@@ -3,9 +3,16 @@ import path from "path";
 import fs from "fs";
 import {
   augmentImg,
+  analyzeComicScript,
   cancelGeneration,
+  checkComicConsistency,
+  clearAiCallLog,
   clearWorkbenchImage,
+  getAiCallLog,
+  convertComicPanels,
   convertPromptText,
+  exportComicProjectZip,
+  generateComicPanel,
   generateI2I,
   generateImage,
   inpaintImage,
@@ -21,11 +28,23 @@ import {
   upscaleImg,
   verifyToken,
 } from "./ipc/nai";
-import type { AugmentOptions, DirectorTool, I2IParams, NAIInpaintModel, UpscaleScale } from "../src/types";
+import type {
+  AugmentOptions,
+  ComicAnalyzeRequest,
+  ComicConsistencyRequest,
+  ComicConvertRequest,
+  ComicGeneratePanelRequest,
+  ComicProject,
+  DirectorTool,
+  I2IParams,
+  NAIInpaintModel,
+  UpscaleScale,
+} from "../src/types";
 import {
   clearToken,
   completeSetup,
   getAccountSummary,
+  getReversePromptTemplateDefaults,
   getSetting,
   getSettings,
   readStore,
@@ -173,20 +192,30 @@ function registerIpc() {
   });
   ipcMain.handle("nai:generate", (_event, params, extras) => generateImage(params, extras));
   ipcMain.handle("nai:generateI2I", (_event, params, i2i: I2IParams, extras) => generateI2I(params, i2i, extras));
-  ipcMain.handle("nai:inpaint", (_event, params, inpaintModel: NAIInpaintModel, maskBase64: string) =>
-    inpaintImage(params, inpaintModel, maskBase64),
+  ipcMain.handle("nai:inpaint", (_event, params, inpaintModel: NAIInpaintModel, maskBase64: string, strength: number, noise: number) =>
+    inpaintImage(params, inpaintModel, maskBase64, strength, noise),
   );
   ipcMain.handle("nai:upscale", (_event, scale: UpscaleScale) => upscaleImg(scale));
   ipcMain.handle("nai:augment", (_event, tool: DirectorTool, options: AugmentOptions) => augmentImg(tool, options));
   ipcMain.handle("nai:loadImage", () => loadImageFile());
   ipcMain.handle("nai:loadImageFromPath", (_event, filePath: string) => loadImageFromPath(filePath));
   ipcMain.handle("nai:clearWorkbenchImage", () => clearWorkbenchImage());
-  ipcMain.handle("nai:reversePrompt", (_event, imageBase64: string, mode: string) =>
-    reversePromptImage(imageBase64, (mode as "tags" | "natural" | "mixed") ?? "tags"),
+  ipcMain.handle("nai:reversePrompt", (_event, imageBase64: string, mode: string, scope?: string, hint?: string) =>
+    reversePromptImage(imageBase64, (mode as "tags" | "natural" | "mixed") ?? "tags", scope, hint),
   );
   ipcMain.handle("nai:convertPrompt", (_event, text: string, mode: string) =>
     convertPromptText(text, (mode as "tags" | "natural" | "mixed") ?? "tags"),
   );
+  ipcMain.handle("comic:analyzeScript", (_event, request: ComicAnalyzeRequest) => analyzeComicScript(request));
+  ipcMain.handle("comic:convertPanels", (_event, request: ComicConvertRequest) => convertComicPanels(request));
+  ipcMain.handle("comic:checkConsistency", (_event, request: ComicConsistencyRequest) => checkComicConsistency(request));
+  ipcMain.handle("comic:reverseAsset", (_event, imageBase64: string, mode: string, scope?: string, hint?: string) =>
+    reversePromptImage(imageBase64, (mode as "tags" | "natural" | "mixed") ?? "tags", scope, hint),
+  );
+  ipcMain.handle("comic:generatePanel", (_event, request: ComicGeneratePanelRequest) => generateComicPanel(request));
+  ipcMain.handle("comic:exportProjectZip", (_event, project: ComicProject) => exportComicProjectZip(project));
+  ipcMain.handle("ai:getLog", () => getAiCallLog());
+  ipcMain.handle("ai:clearLog", () => clearAiCallLog());
   ipcMain.handle("nai:listModels", (_event, kind: "reverse" | "convert") => listAiModels(kind));
   ipcMain.handle("nai:testTagServer", (_event, query: string) => testTagServer(query));
   ipcMain.handle("nai:suggestTags", (_event, model: string, prompt: string) => suggestTags(model, prompt));
@@ -210,6 +239,7 @@ function registerIpc() {
   ipcMain.handle("settings:get", (_event, key) => getSetting(key));
   ipcMain.handle("settings:set", (_event, key, value) => setSetting(key, value));
   ipcMain.handle("settings:getAll", () => getSettings());
+  ipcMain.handle("settings:getReverseDefaults", () => getReversePromptTemplateDefaults());
   ipcMain.handle("settings:isFirstRun", () => !getSettings().hasOnboarded);
   ipcMain.handle("settings:completeSetup", () => {
     completeSetup();
@@ -223,7 +253,19 @@ function registerIpc() {
     else mainWindow.maximize();
   });
   ipcMain.handle("window:close", () => mainWindow?.close());
-  ipcMain.handle("window:openExternal", (_event, url: string) => shell.openExternal(url));
+  ipcMain.handle("window:openExternal", (_event, url: string) => {
+    // Only ever hand http(s) URLs to the OS — never file:, javascript:, or other
+    // schemes that a crafted link in the renderer could abuse.
+    let parsed: URL;
+    try {
+      parsed = new URL(String(url));
+    } catch {
+      return { ok: false };
+    }
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return { ok: false };
+    void shell.openExternal(parsed.toString());
+    return { ok: true };
+  });
   ipcMain.handle("app:checkUpdate", () => checkUpdate());
 }
 
