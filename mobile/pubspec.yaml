@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 0.8.5+17
+version: 0.9.0+18
 
 environment:
   sdk: ^3.5.0
@@ -35,8 +35,11 @@ dependencies:
   http: ^1.2.2              # NovelAI REST API calls
   provider: ^6.1.2          # state management (ChangeNotifier)
   shared_preferences: ^2.3.2 # token + settings persistence
+  flutter_secure_storage: ^9.2.2 # token / AI keys
   archive: ^3.6.1           # unzip the generate-image response
   path_provider: ^2.1.4     # app document / cache dirs
+  image_picker: ^1.1.2      # gallery image input
+  share_plus: ^10.0.2       # export/share generated images
 
 dev_dependencies:
   flutter_test:
