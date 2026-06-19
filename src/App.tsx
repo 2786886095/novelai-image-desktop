@@ -4,7 +4,6 @@ import { format } from "date-fns";
 import { ToolsHub } from "./ComicGenerator";
 import { InpaintCanvas } from "./InpaintCanvas";
 import { useAppStore } from "./store";
-import { estimateAnlas } from "./anlas";
 import { relatedTags } from "./related-tags";
 import { fmtCount, wordAtCursor } from "./text-utils";
 import { parsePngMeta, parseImportedParams } from "./png-meta";
@@ -38,11 +37,15 @@ import {
   DEFAULT_PARAMS,
   DIRECTOR_TOOLS,
   EMOTION_OPTIONS,
+  MAX_NAI_DIRECTOR_INPUT_PIXELS,
+  MAX_NAI_UPSCALE_INPUT_PIXELS,
   NAI_INPAINT_MODELS,
   NAI_MODELS,
   NAI_SAMPLERS,
   NAI_UC_PRESETS,
   DEFAULT_MODEL_FOR_MODE,
+  type AnlasQuoteFeature,
+  type AnlasQuoteResult,
   type ModelMode,
   type AiCallLogEntry,
   type AppSettings,
@@ -61,6 +64,17 @@ import {
 const docsUrl = "https://docs.novelai.net/en/image/";
 const tokenHelpUrl = "https://docs.novelai.net/en/api/";
 const appIconUrl = "./icon.png";
+
+function fitSizeWithinPixels(width: number, height: number, maxPixels: number) {
+  const pixels = width * height;
+  if (!width || !height || pixels <= maxPixels) return { width, height, resized: false };
+  const ratio = Math.sqrt(maxPixels / pixels);
+  return {
+    width: Math.max(1, Math.floor(width * ratio)),
+    height: Math.max(1, Math.floor(height * ratio)),
+    resized: true,
+  };
+}
 
 // ── PromptTextarea: textarea with Danbooru tag autocomplete ───────────────────
 function PromptTextarea({
@@ -1084,49 +1098,141 @@ function WorkbenchImageUpload() {
 }
 
 // ── Account + Run button ──────────────────────────────────────────────────────
-type CostFeature = "generate" | "i2i" | "inpaint" | "upscale" | "director";
 
 function FeatureCostCard({
-  feature,
-  batchCount = 1,
   label,
+  feature,
 }: {
-  feature: CostFeature;
-  batchCount?: number;
   label: string;
+  feature: AnlasQuoteFeature;
 }) {
-  const params = useAppStore((state) => state.params);
   const account = useAppStore((state) => state.account);
+  const params = useAppStore((state) => state.params);
+  const batchCount = useAppStore((state) => state.batchCount);
+  const i2iParams = useAppStore((state) => state.i2iParams);
+  const inpaintStrength = useAppStore((state) => state.inpaintStrength);
+  const inpaintNoise = useAppStore((state) => state.inpaintNoise);
+  const inpaintModel = useAppStore((state) => state.inpaintModel);
+  const inpaintMask = useAppStore((state) => state.inpaintMask);
   const upscaleScale = useAppStore((state) => state.upscaleScale);
   const directorTool = useAppStore((state) => state.directorTool);
-  const base = estimateAnlas(params, batchCount, account.tierLevel);
-  let estimated = base.total;
-  let detail = base.free ? "Opus 免费条件命中" : `${base.perImage}/张 × ${Math.max(1, batchCount)}`;
-
-  if (feature === "i2i") {
-    detail = `${detail}，图生图按尺寸/步数另有控制成本风险`;
-  } else if (feature === "inpaint") {
-    detail = `${detail}，局部重绘按重绘模型与尺寸计费`;
-  } else if (feature === "upscale") {
-    estimated = upscaleScale === 4 ? 8 : 4;
-    detail = `${upscaleScale}x 云端超分，实际扣费以 API 返回后的余额为准`;
-  } else if (feature === "director") {
-    estimated = 4;
-    detail = `${directorTool} 后期处理，部分工具可能按图像尺寸调整`;
-  }
-
+  const workbenchImage = useAppStore((state) => state.workbenchImage);
+  const vibeCount = useAppStore((state) => state.vibeImages.length);
+  const isGenerating = useAppStore((state) => state.isGenerating);
+  const currentAnlasSpent = useAppStore((state) => state.currentAnlasSpent);
+  const lastAnlasSpent = useAppStore((state) => state.lastAnlasSpent);
+  const [quote, setQuote] = useState<AnlasQuoteResult | null>(null);
+  const [loading, setLoading] = useState(false);
   const balance = account.anlasBalance;
-  const insufficient = typeof balance === "number" && estimated > balance;
+  const quoteKey = JSON.stringify({
+    feature,
+    model: params.model,
+    width: params.width,
+    height: params.height,
+    steps: params.steps,
+    smea: params.smea,
+    smeaDyn: params.smeaDyn,
+    batchCount,
+    strength: i2iParams.strength,
+    inpaintStrength,
+    inpaintNoise,
+    inpaintModel,
+    hasMask: Boolean(inpaintMask),
+    upscaleScale,
+    directorTool,
+    workbenchPath: workbenchImage?.filePath ?? "",
+    workbenchWidth: workbenchImage?.width ?? 0,
+    workbenchHeight: workbenchImage?.height ?? 0,
+    vibeCount,
+    hasToken: account.hasToken,
+    tierLevel: account.tierLevel,
+    active: account.hasActiveSubscription,
+    balance,
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!account.hasToken) {
+      setQuote(null);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    const timer = window.setTimeout(() => {
+      const quoteParams = { ...params, stylePrompt: "", positivePrompt: "quote", negativePrompt: "" };
+      const extras = {
+        vibeImages: Array.from({ length: vibeCount }, () => ({ base64: "", infoExtracted: 0.7, strength: 0.5 })),
+        charCaptions: [],
+      };
+      void window.naiDesktop
+        .quoteAnlas({
+          feature,
+          params: quoteParams,
+          extras,
+          batchCount,
+          i2iParams,
+          inpaintStrength,
+          inpaintNoise,
+          inpaintModel,
+          maskBase64: inpaintMask,
+          upscaleScale,
+          directorTool,
+          account,
+        })
+        .then((result) => {
+          if (!cancelled) setQuote(result);
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    }, 250);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [quoteKey]);
+
+  const sourceLabel =
+    quote?.source === "official-api"
+      ? "NovelAI 官方报价接口"
+      : quote?.source === "official-formula"
+        ? "NovelAI 官网前端公式"
+        : quote?.source === "official-fixed"
+          ? "NovelAI 固定扣费规则"
+          : "";
+  const primary =
+    quote?.ok && typeof quote.amount === "number"
+      ? quote.amount === 0
+        ? "本次 0 Anlas"
+        : `本次将扣 ${quote.amount} Anlas`
+      : loading
+        ? "正在读取扣费..."
+        : quote?.message || "暂时无法报价";
+  const actualText = isGenerating
+    ? currentAnlasSpent != null
+      ? `当前已实扣 ${currentAnlasSpent} Anlas`
+      : "执行中，等待余额校验"
+    : lastAnlasSpent != null
+      ? `上次实扣 ${lastAnlasSpent} Anlas`
+      : "执行后会用余额差再次核对";
 
   return (
-    <div className={clsx("cost-row cost-card", estimated === 0 && "cost-free", insufficient && "cost-warn")}>
+    <div
+      className={clsx(
+        "cost-row cost-card",
+        isGenerating && "cost-live",
+        quote?.amount === 0 && "cost-free",
+        quote?.insufficient && "cost-warn",
+      )}
+    >
       <div>
         <span>{label}</span>
-        <small>{detail}</small>
+        <small>{sourceLabel || "读取当前配置对应的官方扣费"}</small>
       </div>
-      <strong>{estimated === 0 ? "预计免费" : `约 ${estimated} Anlas`}</strong>
+      <strong>{primary}</strong>
       <small className="cost-balance">
-        当前余额：{balance ?? "未知"} Anlas{insufficient ? " · 可能不足" : ""}
+        当前余额：{balance ?? "未知"} Anlas · {actualText}
+        {quote?.insufficient ? " · 余额不足，执行时会被阻止" : ""}
       </small>
     </div>
   );
@@ -1136,10 +1242,14 @@ function AccountAndRunButton({
   label,
   onRun,
   openSettings,
+  disabled = false,
+  disabledReason = "",
 }: {
   label: string;
   onRun: () => void;
   openSettings: () => void;
+  disabled?: boolean;
+  disabledReason?: string;
 }) {
   const account = useAppStore((state) => state.account);
   const isGenerating = useAppStore((state) => state.isGenerating);
@@ -1147,6 +1257,7 @@ function AccountAndRunButton({
   const togglePause = useAppStore((state) => state.togglePause);
   const queuePaused = useAppStore((state) => state.queuePaused);
   const queueProgress = useAppStore((state) => state.queueProgress);
+  const currentAnlasSpent = useAppStore((state) => state.currentAnlasSpent);
   const lastAnlasSpent = useAppStore((state) => state.lastAnlasSpent);
   const refreshAccount = useAppStore((state) => state.refreshAccount);
   const [refreshingAccount, setRefreshingAccount] = useState(false);
@@ -1184,6 +1295,9 @@ function AccountAndRunButton({
               {queueProgress.failed > 0 ? ` · 失败 ${queueProgress.failed}` : ""}
             </div>
           )}
+          <div className="anlas-spent">
+            {currentAnlasSpent != null ? `本次已实扣 ${currentAnlasSpent} Anlas` : "本次实扣读取中"}
+          </div>
           <div className="run-button-row">
             <Button variant="secondary" className="run-row-btn" onClick={togglePause}>
               {queuePaused ? "▶ 继续生成" : "⏸ 暂停"}
@@ -1195,10 +1309,11 @@ function AccountAndRunButton({
         </>
       ) : (
         <>
-          {lastAnlasSpent != null && lastAnlasSpent > 0 && (
+          {lastAnlasSpent != null && (
             <div className="anlas-spent">上次实扣 {lastAnlasSpent} Anlas</div>
           )}
-          <Button variant="primary" className="full" onClick={onRun}>
+          {disabled && disabledReason ? <div className="run-disabled-reason">{disabledReason}</div> : null}
+          <Button variant="primary" className="full" onClick={onRun} disabled={disabled}>
             <IconText icon="▶">{label}</IconText>
           </Button>
         </>
@@ -1242,7 +1357,7 @@ function GeneratePanel({ openSettings }: { openSettings: () => void }) {
         <p className="wildcard-hint">
           <Icon name="bulb" /> 支持动态提示词通配符 <code>{"{red|blue|green} hair"}</code>，批量时每张随机取一项；NovelAI 的 <code>{"{tag}"}</code> 权重语法不受影响。
         </p>
-        <FeatureCostCard feature="generate" batchCount={batchCount} label="文生图预计消耗" />
+        <FeatureCostCard label="生成前扣费" feature="generate" />
       </div>
       <AccountAndRunButton
         label={batchCount > 1 ? `批量生成 ${batchCount} 张` : "生成"}
@@ -1267,7 +1382,7 @@ function I2IPanel({ openSettings }: { openSettings: () => void }) {
         <NumberInput label="Extra Noise Seed（0 = 随机）" value={i2iParams.extraNoiseSeed} min={0} onChange={(v) => setI2IParam("extraNoiseSeed", v)} />
         <div className="panel-divider" />
         <PromptAndParams />
-        <FeatureCostCard feature="i2i" label="图生图预计消耗" />
+        <FeatureCostCard label="生成前扣费" feature="i2i" />
       </div>
       <AccountAndRunButton label="图生图" onRun={() => void generateI2I()} openSettings={openSettings} />
     </>
@@ -1319,7 +1434,7 @@ function InpaintPanel({ openSettings }: { openSettings: () => void }) {
         </Button>
         <div className="panel-divider" />
         <PromptAndParams includeModel={false} />
-        <FeatureCostCard feature="inpaint" label="局部重绘预计消耗" />
+        <FeatureCostCard label="生成前扣费" feature="inpaint" />
       </div>
       <AccountAndRunButton label="局部重绘" onRun={() => void inpaint()} openSettings={openSettings} />
     </>
@@ -1332,6 +1447,9 @@ function UpscalePanel({ openSettings }: { openSettings: () => void }) {
   const scale = useAppStore((state) => state.upscaleScale);
   const setScale = useAppStore((state) => state.setUpscaleScale);
   const upscale = useAppStore((state) => state.upscaleCurrentImage);
+  const preparedSize = workbenchImage
+    ? fitSizeWithinPixels(workbenchImage.width, workbenchImage.height, MAX_NAI_UPSCALE_INPUT_PIXELS)
+    : null;
   return (
     <>
       <div className="panel-scroll">
@@ -1341,14 +1459,19 @@ function UpscalePanel({ openSettings }: { openSettings: () => void }) {
           <Button variant={scale === 4 ? "primary" : "secondary"} onClick={() => setScale(4)}>4×</Button>
         </div>
         {workbenchImage && (
-          <div className="info-card">
+          <div className={clsx("info-card", preparedSize?.resized && "limit-card")}>
             <strong>输出尺寸预估</strong>
             <span>
-              {workbenchImage.width}×{workbenchImage.height} → {workbenchImage.width * scale}×{workbenchImage.height * scale}
+              {preparedSize?.resized
+                ? `${workbenchImage.width}×${workbenchImage.height} → 预缩至 ${preparedSize.width}×${preparedSize.height} → ${preparedSize.width * scale}×${preparedSize.height * scale}`
+                : `${workbenchImage.width}×${workbenchImage.height} → ${workbenchImage.width * scale}×${workbenchImage.height * scale}`}
             </span>
+            {preparedSize?.resized ? (
+              <small>NovelAI 云端超分只接受约 1024×1024 等效面积以内的输入，程序会自动预缩后再超分。</small>
+            ) : null}
           </div>
         )}
-        <FeatureCostCard feature="upscale" label="超分预计消耗" />
+        <FeatureCostCard label="生成前扣费" feature="upscale" />
       </div>
       <AccountAndRunButton label={`云端超分 ${scale}×`} onRun={() => void upscale()} openSettings={openSettings} />
     </>
@@ -1357,11 +1480,15 @@ function UpscalePanel({ openSettings }: { openSettings: () => void }) {
 
 // ── Director Tools panel ──────────────────────────────────────────────────────
 function DirectorPanel({ openSettings }: { openSettings: () => void }) {
+  const workbenchImage = useAppStore((state) => state.workbenchImage);
   const tool = useAppStore((state) => state.directorTool);
   const setTool = useAppStore((state) => state.setDirectorTool);
   const options = useAppStore((state) => state.augmentOptions);
   const setOption = useAppStore((state) => state.setAugmentOption);
   const run = useAppStore((state) => state.runDirectorTool);
+  const preparedSize = workbenchImage
+    ? fitSizeWithinPixels(workbenchImage.width, workbenchImage.height, MAX_NAI_DIRECTOR_INPUT_PIXELS)
+    : null;
   return (
     <>
       <div className="panel-scroll">
@@ -1393,7 +1520,16 @@ function DirectorPanel({ openSettings }: { openSettings: () => void }) {
           </>
         )}
         <SliderInput label="Defry（去噪强度）" value={options.defry} min={0} max={5} step={1} onChange={(v) => setOption("defry", v)} />
-        <FeatureCostCard feature="director" label="后期工具预计消耗" />
+        {workbenchImage && preparedSize?.resized ? (
+          <div className="info-card limit-card">
+            <strong>后期尺寸保护</strong>
+            <span>
+              {workbenchImage.width}×{workbenchImage.height} → 预缩至 {preparedSize.width}×{preparedSize.height} 处理 → 恢复到原尺寸保存
+            </span>
+            <small>大图或透明 PNG 直接送入后期接口容易返回 500，程序会自动转换为白底 PNG 并限制输入尺寸。</small>
+          </div>
+        ) : null}
+        <FeatureCostCard label="生成前扣费" feature="director" />
       </div>
       <AccountAndRunButton label="执行后期处理" onRun={() => void run()} openSettings={openSettings} />
     </>

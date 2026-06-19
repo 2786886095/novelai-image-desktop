@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
 import type {
+  AnlasQuoteRequest,
   AppSettings,
   AugmentOptions,
   ComicAnalyzeRequest,
@@ -20,6 +21,7 @@ contextBridge.exposeInMainWorld("naiDesktop", {
   hasToken: () => ipcRenderer.invoke("nai:hasToken"),
   verifyToken: (token: string) => ipcRenderer.invoke("nai:verify", token),
   clearToken: () => ipcRenderer.invoke("nai:clearToken"),
+  quoteAnlas: (request: AnlasQuoteRequest) => ipcRenderer.invoke("nai:quoteAnlas", request),
   generate: (params: GenerateParams, extras: GenerateExtras) =>
     ipcRenderer.invoke("nai:generate", params, extras),
   generateI2I: (params: GenerateParams, i2i: I2IParams, extras: GenerateExtras) =>

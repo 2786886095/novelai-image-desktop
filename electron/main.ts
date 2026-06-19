@@ -19,6 +19,7 @@ import {
   loadImageFile,
   loadImageFromPath,
   listAiModels,
+  quoteAnlasCost,
   refreshStoredAccount,
   reversePromptImage,
   searchTagServer,
@@ -29,6 +30,7 @@ import {
   verifyToken,
 } from "./ipc/nai";
 import type {
+  AnlasQuoteRequest,
   AugmentOptions,
   ComicAnalyzeRequest,
   ComicConsistencyRequest,
@@ -190,6 +192,7 @@ function registerIpc() {
     clearToken();
     return { ok: true };
   });
+  ipcMain.handle("nai:quoteAnlas", (_event, request: AnlasQuoteRequest) => quoteAnlasCost(request));
   ipcMain.handle("nai:generate", (_event, params, extras) => generateImage(params, extras));
   ipcMain.handle("nai:generateI2I", (_event, params, i2i: I2IParams, extras) => generateI2I(params, i2i, extras));
   ipcMain.handle("nai:inpaint", (_event, params, inpaintModel: NAIInpaintModel, maskBase64: string, strength: number, noise: number) =>

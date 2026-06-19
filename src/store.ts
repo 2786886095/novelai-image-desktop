@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import type {
   AccountSummary,
+  AnlasQuoteRequest,
+  AnlasQuoteResult,
   AppSettings,
   AugmentOptions,
   CharCaption,
@@ -78,6 +80,7 @@ interface AppState {
   isGenerating: boolean;
   queuePaused: boolean;
   queueProgress: { done: number; failed: number; total: number } | null;
+  currentAnlasSpent: number | null;
   lastAnlasSpent: number | null;
   statusText: string;
   lastError: string;
@@ -102,7 +105,7 @@ interface AppState {
   setHistoryItemGroup: (id: string, groupId?: string) => Promise<void>;
   refreshHistory: (date?: string) => Promise<void>;
   refreshSettings: () => Promise<void>;
-  refreshAccount: () => Promise<void>;
+  refreshAccount: () => Promise<AccountSummary>;
   loadWorkbenchImage: () => Promise<void>;
   loadWorkbenchFromPath: (filePath: string, options?: { silent?: boolean }) => Promise<void>;
   clearWorkbenchImage: () => Promise<void>;
@@ -199,6 +202,37 @@ function imageGenerationFailureMessage(message?: string) {
   return detail.includes("图片生成失败") ? detail : `图片生成失败：${detail}`;
 }
 
+function anlasSpent(before?: number, after?: number) {
+  if (typeof before !== "number" || typeof after !== "number") return null;
+  return Math.max(0, before - after);
+}
+
+function withAnlasSpent(message: string, spent: number | null) {
+  if (spent == null) return `${message} 实扣读取失败，请刷新积分确认。`;
+  return `${message} 实扣 ${spent} Anlas。`;
+}
+
+async function ensureAnlasBeforeRun(
+  set: (state: Partial<AppState>) => void,
+  request: AnlasQuoteRequest,
+  actionLabel: string,
+): Promise<AnlasQuoteResult | null> {
+  const quote = await window.naiDesktop.quoteAnlas(request);
+  if (!quote.ok || typeof quote.amount !== "number") {
+    const message = quote.message || `${actionLabel}扣费读取失败，请稍后重试。`;
+    set({ statusText: "无法读取生成前扣费", toast: message, lastError: message });
+    return null;
+  }
+  if (quote.insufficient) {
+    const balance = quote.balance ?? "未知";
+    const message = `${actionLabel}需要 ${quote.amount} Anlas，当前余额 ${balance} Anlas，已阻止执行。`;
+    set({ statusText: "Anlas 余额不足", toast: message, lastError: message });
+    return null;
+  }
+  set({ statusText: `${actionLabel}将在执行前扣除 ${quote.amount} Anlas。`, lastError: "" });
+  return quote;
+}
+
 function buildLastGenerationState(state: AppState): LastGenerationState {
   return {
     params: { ...state.params, positivePrompt: "" },
@@ -272,6 +306,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   isGenerating: false,
   queuePaused: false,
   queueProgress: null,
+  currentAnlasSpent: null,
   lastAnlasSpent: null,
   statusText: "就绪",
   lastError: "",
@@ -425,6 +460,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   async refreshAccount() {
     const account = await window.naiDesktop.hasToken();
     set({ account, statusText: account.hasToken ? "API 已配置" : "请先设置 API Token" });
+    return account;
   },
 
   async loadWorkbenchImage() {
@@ -685,15 +721,32 @@ export const useAppStore = create<AppState>((set, get) => ({
     const total = Math.max(1, state.batchCount);
     const extras = buildExtras(state);
     const initialSeed = state.params.seed;
-    const anlasBefore = state.account.anlasBalance;
+    const freshAccount = await get().refreshAccount();
+    const quote = await ensureAnlasBeforeRun(
+      set,
+      {
+        feature: "generate",
+        params: state.params,
+        extras,
+        batchCount: total,
+        account: freshAccount,
+      },
+      total > 1 ? `批量生成 ${total} 张` : "生成图片",
+    );
+    if (!quote) return;
+    const anlasBefore = freshAccount.anlasBalance;
     set({
       isGenerating: true,
       queuePaused: false,
       queueProgress: { done: 0, failed: 0, total },
       comparisonBeforeImage: null,
+      currentAnlasSpent: null,
       lastAnlasSpent: null,
       lastError: "",
-      statusText: total > 1 ? `批量生成 1/${total}...` : "正在调用 NovelAI API 生成图片...",
+      statusText:
+        total > 1
+          ? `批量生成 1/${total}，生成前报价 ${quote.amount} Anlas...`
+          : `正在生成，生成前报价 ${quote.amount} Anlas...`,
     });
 
     let completed = 0;
@@ -730,6 +783,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         const current = result.items[0];
         set({ params: { ...get().params, seed: result.actualSeed ?? current.actualSeed } });
         await refreshAfterImage(set, get, current);
+        const currentSpent = anlasSpent(anlasBefore, get().account.anlasBalance);
+        set({ currentAnlasSpent: currentSpent });
       } else {
         // Skip the failed image and continue the batch instead of aborting.
         failed++;
@@ -738,12 +793,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ queueProgress: { done: completed, failed, total } });
     }
 
-    const anlasAfter = get().account.anlasBalance;
-    const spent =
-      typeof anlasBefore === "number" && typeof anlasAfter === "number"
-        ? Math.max(0, anlasBefore - anlasAfter)
-        : null;
-    const spentText = spent && spent > 0 ? `，实扣 ${spent} Anlas` : "";
+    const finalAccount = await get().refreshAccount();
+    const spent = anlasSpent(anlasBefore, finalAccount.anlasBalance);
+    const spentText = spent != null ? `，实扣 ${spent} Anlas` : "，实扣读取失败";
     // A user cancellation surfaces as a failed result; don't mislabel it as an error.
     const cancelled = completed === 0 && failed > 0 && /取消|cancel/i.test(lastError);
     const finalMsg =
@@ -759,6 +811,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({
       isGenerating: false,
       queuePaused: false,
+      currentAnlasSpent: null,
       lastAnlasSpent: spent,
       lastError: cancelled ? "" : failed > 0 ? lastError : "",
       statusText: finalMsg,
@@ -773,14 +826,39 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ toast: "请先加载参考图片。", statusText: "缺少参考图" });
       return;
     }
-    set({ isGenerating: true, lastError: "", statusText: "正在图生图..." });
+    const freshAccount = await get().refreshAccount();
+    const quote = await ensureAnlasBeforeRun(
+      set,
+      {
+        feature: "i2i",
+        params: state.params,
+        extras: buildExtras(state),
+        i2iParams: state.i2iParams,
+        account: freshAccount,
+      },
+      "图生图",
+    );
+    if (!quote) return;
+    const anlasBefore = freshAccount.anlasBalance;
+    set({
+      isGenerating: true,
+      currentAnlasSpent: null,
+      lastAnlasSpent: null,
+      lastError: "",
+      statusText: `正在图生图，生成前报价 ${quote.amount} Anlas...`,
+    });
     const result = await window.naiDesktop.generateI2I(state.params, state.i2iParams, buildExtras(state));
     if (result.ok && result.items.length > 0) {
       const current = result.items[0];
-      set({ isGenerating: false, statusText: result.message, toast: result.message });
       await refreshAfterImage(set, get, current, { compareBefore: state.workbenchImage });
+      const spent = anlasSpent(anlasBefore, get().account.anlasBalance);
+      const message = withAnlasSpent(result.message, spent);
+      set({ isGenerating: false, currentAnlasSpent: null, lastAnlasSpent: spent, statusText: message, toast: message });
     } else {
-      set({ isGenerating: false, lastError: result.message, statusText: "图生图失败", toast: result.message });
+      const finalAccount = await get().refreshAccount();
+      const spent = anlasSpent(anlasBefore, finalAccount.anlasBalance);
+      const message = withAnlasSpent(result.message, spent);
+      set({ isGenerating: false, currentAnlasSpent: null, lastAnlasSpent: spent, lastError: message, statusText: "图生图失败", toast: message });
     }
   },
 
@@ -795,7 +873,29 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ toast: "请先用画笔标记要重绘的区域。", statusText: "缺少蒙版" });
       return;
     }
-    set({ isGenerating: true, lastError: "", statusText: "正在局部重绘..." });
+    const freshAccount = await get().refreshAccount();
+    const quote = await ensureAnlasBeforeRun(
+      set,
+      {
+        feature: "inpaint",
+        params: state.params,
+        inpaintModel: state.inpaintModel,
+        inpaintStrength: state.inpaintStrength,
+        inpaintNoise: state.inpaintNoise,
+        maskBase64: state.inpaintMask,
+        account: freshAccount,
+      },
+      "局部重绘",
+    );
+    if (!quote) return;
+    const anlasBefore = freshAccount.anlasBalance;
+    set({
+      isGenerating: true,
+      currentAnlasSpent: null,
+      lastAnlasSpent: null,
+      lastError: "",
+      statusText: `正在局部重绘，生成前报价 ${quote.amount} Anlas...`,
+    });
     const result = await window.naiDesktop.inpaint(
       state.params,
       state.inpaintModel,
@@ -805,10 +905,15 @@ export const useAppStore = create<AppState>((set, get) => ({
     );
     if (result.ok && result.items.length > 0) {
       const current = result.items[0];
-      set({ isGenerating: false, statusText: result.message, toast: result.message });
       await refreshAfterImage(set, get, current, { compareBefore: state.workbenchImage, loadWorkbench: true });
+      const spent = anlasSpent(anlasBefore, get().account.anlasBalance);
+      const message = withAnlasSpent(result.message, spent);
+      set({ isGenerating: false, currentAnlasSpent: null, lastAnlasSpent: spent, statusText: message, toast: message });
     } else {
-      set({ isGenerating: false, lastError: result.message, statusText: "重绘失败", toast: result.message });
+      const finalAccount = await get().refreshAccount();
+      const spent = anlasSpent(anlasBefore, finalAccount.anlasBalance);
+      const message = withAnlasSpent(result.message, spent);
+      set({ isGenerating: false, currentAnlasSpent: null, lastAnlasSpent: spent, lastError: message, statusText: "重绘失败", toast: message });
     }
   },
 
@@ -819,13 +924,36 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ toast: "请先加载图片。", statusText: "缺少图片" });
       return;
     }
-    set({ isGenerating: true, lastError: "", statusText: `正在超分 ${state.upscaleScale}x...` });
+    const freshAccount = await get().refreshAccount();
+    const quote = await ensureAnlasBeforeRun(
+      set,
+      {
+        feature: "upscale",
+        upscaleScale: state.upscaleScale,
+        account: freshAccount,
+      },
+      `云端超分 ${state.upscaleScale}x`,
+    );
+    if (!quote) return;
+    const anlasBefore = freshAccount.anlasBalance;
+    set({
+      isGenerating: true,
+      currentAnlasSpent: null,
+      lastAnlasSpent: null,
+      lastError: "",
+      statusText: `正在超分 ${state.upscaleScale}x，生成前报价 ${quote.amount} Anlas...`,
+    });
     const result = await window.naiDesktop.upscaleImage(state.upscaleScale);
     if (result.ok && result.item) {
-      set({ isGenerating: false, statusText: result.message, toast: result.message });
       await refreshAfterImage(set, get, result.item, { compareBefore: state.workbenchImage });
+      const spent = anlasSpent(anlasBefore, get().account.anlasBalance);
+      const message = withAnlasSpent(result.message, spent);
+      set({ isGenerating: false, currentAnlasSpent: null, lastAnlasSpent: spent, statusText: message, toast: message });
     } else {
-      set({ isGenerating: false, lastError: result.message, statusText: "超分失败", toast: result.message });
+      const finalAccount = await get().refreshAccount();
+      const spent = anlasSpent(anlasBefore, finalAccount.anlasBalance);
+      const message = withAnlasSpent(result.message, spent);
+      set({ isGenerating: false, currentAnlasSpent: null, lastAnlasSpent: spent, lastError: message, statusText: "超分失败", toast: message });
     }
   },
 
@@ -836,20 +964,43 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ toast: "请先加载图片。", statusText: "缺少图片" });
       return;
     }
-    set({ isGenerating: true, lastError: "", statusText: `正在运行 ${state.directorTool}...` });
+    const freshAccount = await get().refreshAccount();
+    const quote = await ensureAnlasBeforeRun(
+      set,
+      {
+        feature: "director",
+        directorTool: state.directorTool,
+        account: freshAccount,
+      },
+      "后期处理",
+    );
+    if (!quote) return;
+    const anlasBefore = freshAccount.anlasBalance;
+    set({
+      isGenerating: true,
+      currentAnlasSpent: null,
+      lastAnlasSpent: null,
+      lastError: "",
+      statusText: `正在运行 ${state.directorTool}，生成前报价 ${quote.amount} Anlas...`,
+    });
     const result = await window.naiDesktop.augmentImage(state.directorTool, state.augmentOptions);
     if (result.ok && result.items.length > 0) {
       const current = result.items[0];
-      set({ isGenerating: false, statusText: result.message, toast: result.message });
       await refreshAfterImage(set, get, current, { compareBefore: state.workbenchImage });
+      const spent = anlasSpent(anlasBefore, get().account.anlasBalance);
+      const message = withAnlasSpent(result.message, spent);
+      set({ isGenerating: false, currentAnlasSpent: null, lastAnlasSpent: spent, statusText: message, toast: message });
     } else {
-      set({ isGenerating: false, lastError: result.message, statusText: "后期处理失败", toast: result.message });
+      const finalAccount = await get().refreshAccount();
+      const spent = anlasSpent(anlasBefore, finalAccount.anlasBalance);
+      const message = withAnlasSpent(result.message, spent);
+      set({ isGenerating: false, currentAnlasSpent: null, lastAnlasSpent: spent, lastError: message, statusText: "后期处理失败", toast: message });
     }
   },
 
   async cancel() {
     await window.naiDesktop.cancel();
-    set({ isGenerating: false, queuePaused: false, statusText: "已取消操作" });
+    set({ isGenerating: false, queuePaused: false, currentAnlasSpent: null, statusText: "已取消操作" });
   },
 
   togglePause() {

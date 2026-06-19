@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
-import { estimateAnlas } from "./anlas";
 import { Button, NumberInput, Toggle } from "./components/ui";
 import { createDefaultComicProject } from "./comic-template";
 import {
@@ -33,7 +32,7 @@ const STEPS = [
   { key: "story", label: "故事", hint: "导入剧情，AI 拆分镜" },
   { key: "global", label: "全局设定", hint: "角色 / 风格 / 参数" },
   { key: "panels", label: "分镜", hint: "转换提示词 / 微调" },
-  { key: "generate", label: "生成", hint: "队列出图 / 估算积分" },
+  { key: "generate", label: "生成", hint: "队列出图 / 实扣积分" },
 ] as const;
 type StepKey = (typeof STEPS)[number]["key"];
 
@@ -42,6 +41,11 @@ function uid() {
 }
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+function anlasSpent(before?: number, after?: number) {
+  if (typeof before !== "number" || typeof after !== "number") return null;
+  return Math.max(0, before - after);
+}
 
 function normalizeComicReference(ref: Partial<ComicReferenceAsset>): ComicReferenceAsset {
   const base64 = ref.base64 ?? "";
@@ -279,6 +283,8 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
   const [generationLog, setGenerationLog] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [queue, setQueue] = useState<QueueState>(null);
+  const [queueAnlasQuote, setQueueAnlasQuote] = useState<number | null>(null);
+  const [queueAnlasSpent, setQueueAnlasSpent] = useState<number | null>(null);
   const queueRef = useRef({ paused: false, cancelled: false });
   const mountedRef = useRef(true);
 
@@ -331,10 +337,6 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
       setActivePanelId(panels[0].id);
     }
   }, [activePanelId, panels]);
-
-  const estSingle = estimateAnlas(project.globalParams, 1, account.tierLevel);
-  const estSelected = estimateAnlas(project.globalParams, Math.max(1, selectedPanels.length), account.tierLevel);
-  const estAll = estimateAnlas(project.globalParams, Math.max(1, panels.length), account.tierLevel);
 
   function patchProject(patch: Partial<ComicProject>) {
     setProject((prev) => ({ ...prev, ...patch }));
@@ -681,10 +683,11 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
     }
   }
 
-  async function runQueue(targets: ComicPanel[]) {
+  async function runQueue(targets: ComicPanel[], anlasBefore?: number) {
     if (!targets.length) return;
     queueRef.current = { paused: false, cancelled: false };
     setQueue({ total: targets.length, done: 0, current: 0, paused: false });
+    setQueueAnlasSpent(null);
     // Collect each panel's freshly-generated output here. React state updates are
     // async, so the closure `project` is stale by the time the loop ends — we must
     // build the export target from these collected results, not from `project`.
@@ -701,6 +704,9 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
       if (!mountedRef.current || output.failureKind === "cancelled") break;
       if (output.ok) {
         generatedOutputs.set(targets[i].id, output);
+        const currentAccount = await refreshAccount();
+        const spent = anlasSpent(anlasBefore, currentAccount.anlasBalance);
+        if (spent != null) setQueueAnlasSpent(spent);
       } else if (output.failureKind === "auth") {
         queueRef.current.cancelled = true;
         const message = `队列已停止：${output.message ?? "NovelAI Token 或 Image Endpoint 鉴权失败。"}`;
@@ -710,8 +716,12 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
       setQueue((q) => (q ? { ...q, done: i + 1 } : q));
     }
     if (!mountedRef.current) return;
+    const finalAccount = await refreshAccount();
+    const spent = anlasSpent(anlasBefore, finalAccount.anlasBalance);
+    if (spent != null) setQueueAnlasSpent(spent);
     const cancelled = queueRef.current.cancelled;
     setQueue(null);
+    const spentText = spent != null ? `实扣 ${spent} Anlas。` : "实扣读取失败，请刷新积分确认。";
     if (!cancelled && project.autoExportZip) {
       const exportTarget: ComicProject = {
         ...project,
@@ -722,9 +732,10 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
             : panel;
         }),
       };
-      await exportProjectZip(exportTarget);
+      const exported = await exportProjectZip(exportTarget);
+      setGenerationLog(exported ? `队列已全部生成完成并导出 ZIP。${spentText}` : `队列已全部生成完成，但 ZIP 导出失败。${spentText}`);
     } else {
-      setGenerationLog(cancelled ? "队列已取消。" : "队列已全部生成完成。");
+      setGenerationLog(cancelled ? `队列已取消。${spentText}` : `队列已全部生成完成。${spentText}`);
     }
   }
 
@@ -748,14 +759,58 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
       setToast(`分镜 #${emptyPrompt.index} 缺少可用于生图的提示词。`);
       return;
     }
-    const est = estimateAnlas(project.globalParams, targets.length, freshAccount.tierLevel);
+    const quoteCache = new Map<string, number>();
+    const referenceCount = project.references.filter((ref) => ref.base64 && ref.useForGeneration !== false).length;
+    let totalQuote = 0;
+    for (const panel of targets) {
+      const params = mergePanelParams(project, panel);
+      const key = JSON.stringify({
+        model: params.model,
+        width: params.width,
+        height: params.height,
+        steps: params.steps,
+        smea: params.smea,
+        smeaDyn: params.smeaDyn,
+        referenceCount,
+      });
+      let amount = quoteCache.get(key);
+      if (amount == null) {
+        const quote = await window.naiDesktop.quoteAnlas({
+          feature: "generate",
+          params: { ...params, stylePrompt: "", positivePrompt: "quote", negativePrompt: "" },
+          extras: {
+            vibeImages: Array.from({ length: referenceCount }, () => ({
+              base64: "",
+              infoExtracted: 0.7,
+              strength: 0.5,
+            })),
+            charCaptions: [],
+          },
+          batchCount: 1,
+          account: freshAccount,
+        });
+        if (!quote.ok || typeof quote.amount !== "number") {
+          setToast(`无法读取分镜 #${panel.index} 的生成前扣费：${quote.message}`);
+          return;
+        }
+        amount = quote.amount;
+        quoteCache.set(key, amount);
+      }
+      totalQuote += amount;
+    }
+    setQueueAnlasQuote(totalQuote);
+    if (typeof freshAccount.anlasBalance === "number" && totalQuote > freshAccount.anlasBalance) {
+      setToast(`漫画队列需要 ${totalQuote} Anlas，当前余额 ${freshAccount.anlasBalance} Anlas，已阻止执行。`);
+      return;
+    }
     const ok = window.confirm(
       `将按顺序生成 ${targets.length} 个分镜。\n` +
-        `预计消耗：${est.free ? "可能免费" : `${est.total} Anlas`}\n` +
-        `当前余额：${freshAccount.anlasBalance ?? "未知"} Anlas\n\n是否继续？`,
+        `生成前官方扣费：${totalQuote} Anlas\n` +
+        `当前余额：${freshAccount.anlasBalance ?? "未知"} Anlas\n` +
+        `生成后仍会按 NovelAI 账户余额差显示实际扣费，方便核对。\n\n是否继续？`,
     );
     if (!ok) return;
-    void runQueue(targets);
+    void runQueue(targets, freshAccount.anlasBalance);
   }
 
   function addPanel(afterIndex?: number) {
@@ -1229,20 +1284,20 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
           </div>
           <div className="comic-cost-row">
             <div className="comic-cost-card">
-              <strong>{estSingle.free ? "免费" : `${estSingle.total}`}</strong>
-              <span>单张预估 Anlas</span>
-            </div>
-            <div className="comic-cost-card">
-              <strong>{estSelected.free ? "免费" : `${estSelected.total}`}</strong>
-              <span>选中 {selectedPanels.length} 张预估</span>
-            </div>
-            <div className="comic-cost-card">
-              <strong>{estAll.free ? "免费" : `${estAll.total}`}</strong>
-              <span>全部 {panels.length} 张预估</span>
-            </div>
-            <div className="comic-cost-card">
               <strong>{account.anlasBalance ?? "未知"}</strong>
               <span>当前余额</span>
+            </div>
+            <div className="comic-cost-card">
+              <strong>{queueAnlasQuote != null ? queueAnlasQuote : "待报价"}</strong>
+              <span>生成前将扣 Anlas</span>
+            </div>
+            <div className="comic-cost-card">
+              <strong>{queueAnlasSpent != null ? queueAnlasSpent : "等待"}</strong>
+              <span>本次已实扣 Anlas</span>
+            </div>
+            <div className="comic-cost-card">
+              <strong>{doneCount}/{panels.length}</strong>
+              <span>已完成分镜</span>
             </div>
           </div>
 

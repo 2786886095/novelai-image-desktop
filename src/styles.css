@@ -752,6 +752,16 @@ button { user-select: none; }
   line-height: 1.5;
 }
 .info-card strong { color: var(--text-primary); }
+.info-card.limit-card {
+  border-color: rgba(124, 77, 255, 0.26);
+  background: rgba(124, 77, 255, 0.08);
+}
+.run-disabled-reason {
+  margin-bottom: 8px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
 
 /* ── Director tools ──────────────────────────────────────────────────────────── */
 .director-tools {
@@ -3056,6 +3066,10 @@ html, body, #root {
 }
 .cost-row.cost-warn strong {
   color: var(--danger);
+}
+.cost-row.cost-live {
+  border-color: rgba(6, 182, 212, 0.28);
+  background: rgba(6, 182, 212, 0.08);
 }
 
 .history-filters {

@@ -1,4 +1,4 @@
-export const APP_VERSION = "0.9.3";
+export const APP_VERSION = "0.9.4";
 export const APP_NAME = "Langbai NovelAI Studio";
 export const PROJECT_REPOSITORY = "https://github.com/2786886095/novelai-image-desktop";
 
@@ -335,6 +335,8 @@ export const NAI_INPAINT_MODELS = [
 
 export type NAIInpaintModel = (typeof NAI_INPAINT_MODELS)[number]["value"];
 export type UpscaleScale = 2 | 4;
+export const MAX_NAI_UPSCALE_INPUT_PIXELS = 1024 * 1024;
+export const MAX_NAI_DIRECTOR_INPUT_PIXELS = 1024 * 1024;
 
 export const DIRECTOR_TOOLS = [
   { label: "移除背景", value: "bg-removal", hasPrompt: false },
@@ -391,6 +393,34 @@ export interface AccountSummary {
   anlasBalance?: number;
   expiresAt?: string;
   hasActiveSubscription?: boolean;
+}
+
+export type AnlasQuoteFeature = "generate" | "i2i" | "inpaint" | "upscale" | "director";
+export type AnlasQuoteSource = "official-api" | "official-formula" | "official-fixed" | "unavailable";
+
+export interface AnlasQuoteRequest {
+  feature: AnlasQuoteFeature;
+  params?: GenerateParams;
+  extras?: GenerateExtras;
+  batchCount?: number;
+  i2iParams?: I2IParams;
+  inpaintModel?: NAIInpaintModel;
+  inpaintStrength?: number;
+  inpaintNoise?: number;
+  maskBase64?: string | null;
+  upscaleScale?: UpscaleScale;
+  directorTool?: DirectorTool;
+  account?: AccountSummary;
+}
+
+export interface AnlasQuoteResult {
+  ok: boolean;
+  amount?: number;
+  source?: AnlasQuoteSource;
+  balance?: number;
+  insufficient?: boolean;
+  message: string;
+  details?: string[];
 }
 
 export interface HistoryItem {
@@ -577,6 +607,7 @@ export interface NaiDesktopApi {
   hasToken: () => Promise<AccountSummary>;
   verifyToken: (token: string) => Promise<TokenStatus>;
   clearToken: () => Promise<{ ok: boolean }>;
+  quoteAnlas: (request: AnlasQuoteRequest) => Promise<AnlasQuoteResult>;
   generate: (params: GenerateParams, extras: GenerateExtras) => Promise<GenerateResult>;
   generateI2I: (params: GenerateParams, i2i: I2IParams, extras: GenerateExtras) => Promise<GenerateResult>;
   inpaint: (

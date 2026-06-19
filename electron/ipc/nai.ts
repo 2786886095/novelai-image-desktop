@@ -8,7 +8,11 @@ import path from "path";
 import { pathToFileURL } from "url";
 import {
   DEFAULT_PARAMS,
+  MAX_NAI_DIRECTOR_INPUT_PIXELS,
+  MAX_NAI_UPSCALE_INPUT_PIXELS,
   type AccountSummary,
+  type AnlasQuoteRequest,
+  type AnlasQuoteResult,
   type AiCallLogEntry,
   type AugmentOptions,
   type AiModelListResult,
@@ -38,6 +42,7 @@ import {
   type UpscaleScale,
   type WorkingImage,
 } from "../../src/types";
+import { calculateFeatureAnlasQuote } from "../../src/anlas";
 import {
   addHistory,
   getAccountSummary,
@@ -499,14 +504,79 @@ interface PreparedInpaintAssets {
   padded: boolean;
 }
 
+interface PreparedLimitedImage {
+  base64: string;
+  width: number;
+  height: number;
+  originalWidth: number;
+  originalHeight: number;
+  resized: boolean;
+}
+
 function ceilToMultiple(value: number, multiple: number) {
   return Math.max(multiple, Math.ceil(value / multiple) * multiple);
+}
+
+function fitWithinPixels(width: number, height: number, maxPixels: number) {
+  const pixels = width * height;
+  if (!width || !height || pixels <= maxPixels) return { width, height, resized: false };
+  const ratio = Math.sqrt(maxPixels / pixels);
+  return {
+    width: Math.max(1, Math.floor(width * ratio)),
+    height: Math.max(1, Math.floor(height * ratio)),
+    resized: true,
+  };
 }
 
 function bufferToPng(buffer: Buffer) {
   const image = nativeImage.createFromBuffer(buffer);
   if (image.isEmpty()) throw new Error("无法解码原图，请换用 PNG/JPG/WebP 图片。");
   return image.toPNG();
+}
+
+function flattenPngAlpha(buffer: Buffer, background = { r: 255, g: 255, b: 255 }) {
+  const png = PNG.sync.read(buffer);
+  for (let idx = 0; idx < png.data.length; idx += 4) {
+    const alpha = png.data[idx + 3] / 255;
+    if (alpha >= 1) continue;
+    png.data[idx] = Math.round(png.data[idx] * alpha + background.r * (1 - alpha));
+    png.data[idx + 1] = Math.round(png.data[idx + 1] * alpha + background.g * (1 - alpha));
+    png.data[idx + 2] = Math.round(png.data[idx + 2] * alpha + background.b * (1 - alpha));
+    png.data[idx + 3] = 255;
+  }
+  return PNG.sync.write(png);
+}
+
+function prepareLimitedImage(
+  buffer: Buffer,
+  maxPixels: number,
+  options: { flattenAlpha?: boolean; forcePng?: boolean } = {},
+): PreparedLimitedImage {
+  const source = nativeImage.createFromBuffer(buffer);
+  if (source.isEmpty()) throw new Error("无法解码图片，请换用 PNG/JPG/WebP 图片。");
+  const size = source.getSize();
+  const fitted = fitWithinPixels(size.width, size.height, maxPixels);
+  let output = buffer;
+  if (fitted.resized) {
+    output = source.resize({ width: fitted.width, height: fitted.height, quality: "best" }).toPNG();
+  } else if (options.forcePng || options.flattenAlpha) {
+    output = source.toPNG();
+  }
+  if (options.flattenAlpha) output = flattenPngAlpha(output);
+  return {
+    base64: output.toString("base64"),
+    width: fitted.width,
+    height: fitted.height,
+    originalWidth: size.width,
+    originalHeight: size.height,
+    resized: fitted.resized,
+  };
+}
+
+function resizeImageBufferToPng(buffer: Buffer, width: number, height: number) {
+  const image = nativeImage.createFromBuffer(buffer);
+  if (image.isEmpty()) return buffer;
+  return image.resize({ width, height, quality: "best" }).toPNG();
 }
 
 function padPngWithEdge(source: PNG, targetWidth: number, targetHeight: number) {
@@ -559,6 +629,119 @@ function cropPngTopLeft(buffer: Buffer, width: number, height: number) {
   } catch {
     return buffer;
   }
+}
+
+function extractOfficialAnlasPrice(data: unknown): number | undefined {
+  if (typeof data === "number" && Number.isFinite(data)) return Math.max(0, Math.ceil(data));
+  if (typeof data === "string" && Number.isFinite(Number(data))) return Math.max(0, Math.ceil(Number(data)));
+  if (!data || typeof data !== "object") return undefined;
+  const record = data as Record<string, unknown>;
+  const directKeys = [
+    "price",
+    "cost",
+    "amount",
+    "anlas",
+    "requestPrice",
+    "trainingSteps",
+    "trainingStepsCost",
+  ];
+  for (const key of directKeys) {
+    const value = record[key];
+    const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+    if (Number.isFinite(parsed)) return Math.max(0, Math.ceil(parsed));
+  }
+  for (const key of ["data", "result", "subscription"]) {
+    const nested = extractOfficialAnlasPrice(record[key]);
+    if (nested != null) return nested;
+  }
+  return undefined;
+}
+
+async function requestOfficialGenerationPrice(params: GenerateParams) {
+  const token = getToken();
+  if (!token) return undefined;
+  const settings = getSettings();
+  const apiBaseUrl = normalizeBaseUrl(settings.apiBaseUrl, "https://api.novelai.net");
+  const quoteParams: GenerateParams = {
+    ...params,
+    stylePrompt: params.stylePrompt || "",
+    positivePrompt: params.positivePrompt.trim() || "quote",
+    negativePrompt: params.negativePrompt || "",
+  };
+  const payload = buildPayload(quoteParams, 1, { vibeImages: [], charCaptions: [] });
+  try {
+    const response = await axios.post(`${apiBaseUrl}/ai/generate-image/request-price`, payload, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      timeout: 12_000,
+      ...proxyConfig("nai"),
+    });
+    return extractOfficialAnlasPrice(response.data);
+  } catch {
+    return undefined;
+  }
+}
+
+export async function quoteAnlasCost(request: AnlasQuoteRequest): Promise<AnlasQuoteResult> {
+  const token = getToken();
+  if (!token) {
+    return {
+      ok: false,
+      source: "unavailable",
+      message: "请先配置 NovelAI Token，才能读取生成前扣费。",
+    };
+  }
+
+  const account = request.account?.hasToken ? request.account : await refreshStoredAccount();
+  let image: Pick<WorkingImage, "width" | "height"> | null = null;
+  if (request.feature === "upscale" || request.feature === "inpaint") {
+    try {
+      image = (await readWorkbenchImage()).image;
+    } catch {
+      image = null;
+    }
+  }
+
+  const calculated = calculateFeatureAnlasQuote({
+    feature: request.feature,
+    params: request.params,
+    extras: request.extras,
+    batchCount: request.batchCount,
+    i2iParams: request.i2iParams,
+    inpaintModel: request.inpaintModel,
+    inpaintStrength: request.inpaintStrength,
+    account,
+    image,
+    upscaleScale: request.upscaleScale,
+    directorTool: request.directorTool,
+  });
+  if (!calculated.ok) return calculated;
+
+  const hasVibes = (request.extras?.vibeImages?.length ?? 0) > 0;
+  if (request.feature !== "generate" || !request.params || hasVibes) return calculated;
+
+  const officialPerRequest = await requestOfficialGenerationPrice(request.params);
+  if (officialPerRequest == null) return calculated;
+
+  const amount = officialPerRequest * Math.max(1, Math.floor(request.batchCount ?? 1));
+  const balance = account.anlasBalance;
+  return {
+    ok: true,
+    amount,
+    source: "official-api",
+    balance,
+    insufficient: typeof balance === "number" && amount > balance,
+    message: `生成前官方报价：${amount} Anlas。`,
+    details: [
+      `NovelAI request-price returned ${officialPerRequest} Anlas per request.`,
+      request.batchCount && request.batchCount > 1
+        ? `The desktop app sends ${Math.floor(request.batchCount)} single-image requests: ${officialPerRequest} x ${Math.floor(request.batchCount)}.`
+        : "The desktop app sends one single-image request.",
+    ],
+  };
 }
 
 function prepareInpaintAssets(imageBuffer: Buffer, maskBase64: string): PreparedInpaintAssets {
@@ -2168,10 +2351,11 @@ export async function upscaleImg(scale: UpscaleScale): Promise<SingleImageResult
   currentAbort = abort;
 
   try {
-    const { base64, image } = await readWorkbenchImage();
+    const { buffer, image } = await readWorkbenchImage();
     if (!image.width || !image.height) {
       return { ok: false, message: "无法读取图片尺寸，请重新加载图片。" };
     }
+    const preparedImage = prepareLimitedImage(buffer, MAX_NAI_UPSCALE_INPUT_PIXELS);
     const settings = getSettings();
     // Upscale lives on the API host (api.novelai.net), NOT the image host, and
     // returns a ZIP archive (same as generate-image), not a raw PNG.
@@ -2181,9 +2365,9 @@ export async function upscaleImg(scale: UpscaleScale): Promise<SingleImageResult
         axios.post(
           `${apiBaseUrl}/ai/upscale`,
           {
-            image: stripBase64Prefix(base64),
-            width: image.width,
-            height: image.height,
+            image: preparedImage.base64,
+            width: preparedImage.width,
+            height: preparedImage.height,
             scale,
           },
           {
@@ -2220,25 +2404,35 @@ export async function upscaleImg(scale: UpscaleScale): Promise<SingleImageResult
     const baseName = path.basename(workbenchImagePath, path.extname(workbenchImagePath)).replace(/[^\w.-]+/g, "-");
     const filePath = path.join(dir, `${now.getTime()}-upscale${scale}x-${baseName}.png`);
     await fs.writeFile(filePath, outBuffer);
+    const outDims = readImageDimensions(outBuffer);
+    const outWidth = outDims.width || preparedImage.width * scale;
+    const outHeight = outDims.height || preparedImage.height * scale;
     const item: HistoryItem = {
       id: crypto.randomUUID(),
       filePath,
       fileUrl: pathToFileURL(filePath).toString(),
       date,
       createdAt: now.toISOString(),
-      params: { ...DEFAULT_PARAMS, width: image.width * scale, height: image.height * scale, positivePrompt: "upscale" },
+      params: { ...DEFAULT_PARAMS, width: outWidth, height: outHeight, positivePrompt: "upscale" },
       actualSeed: 0,
       model: "upscale",
-      width: image.width * scale,
-      height: image.height * scale,
+      width: outWidth,
+      height: outHeight,
     };
     addHistory([item]);
     void refreshStoredAccount();
-    return { ok: true, message: `超分 ${scale}x 完成。`, item };
+    const resizeNote = preparedImage.resized
+      ? `原图 ${preparedImage.originalWidth}×${preparedImage.originalHeight} 超过 NovelAI 超分输入上限，已先缩至 ${preparedImage.width}×${preparedImage.height} 后执行。`
+      : "";
+    return { ok: true, message: `超分 ${scale}x 完成。${resizeNote}`, item };
   } catch (error: any) {
     if (axios.isCancel(error) || error?.code === "ERR_CANCELED") return { ok: false, message: "超分已取消。" };
     const status = error?.response?.status;
-    return { ok: false, message: `超分失败${status ? `（HTTP ${status}）` : ""}：${responseErrorText(error) || "未知错误"}` };
+    const detail = responseErrorText(error) || "未知错误";
+    const hint = /resolution too high/i.test(detail)
+      ? "NovelAI 超分只接受约 1024×1024 等效面积以内的输入；程序会自动缩小后重试，如仍失败请换更小的图片。"
+      : "";
+    return { ok: false, message: `超分失败${status ? `（HTTP ${status}）` : ""}：${detail}${hint ? ` ${hint}` : ""}` };
   } finally {
     currentAbort = null;
   }
@@ -2253,13 +2447,20 @@ export async function augmentImg(tool: DirectorTool, options: AugmentOptions): P
   currentAbort = new AbortController();
 
   try {
-    const { base64, image } = await readWorkbenchImage();
+    const { buffer, image } = await readWorkbenchImage();
+    if (!image.width || !image.height) {
+      return { ok: false, message: "无法读取图片尺寸，请重新加载图片。", items: [] };
+    }
+    const preparedImage = prepareLimitedImage(buffer, MAX_NAI_DIRECTOR_INPUT_PIXELS, {
+      flattenAlpha: true,
+      forcePng: true,
+    });
     const settings = getSettings();
     const imageBaseUrl = normalizeBaseUrl(settings.imageBaseUrl, "https://image.novelai.net");
     const payload: Record<string, unknown> = {
-      image: base64,
-      width: image.width,
-      height: image.height,
+      image: preparedImage.base64,
+      width: preparedImage.width,
+      height: preparedImage.height,
       req_type: tool,
       defry: Math.min(5, Math.max(0, options.defry)),
     };
@@ -2285,15 +2486,21 @@ export async function augmentImg(tool: DirectorTool, options: AugmentOptions): P
 
     const buffers = await extractImages(res.data);
     if (buffers.length === 0) return { ok: false, message: "后期处理成功但无图片返回。", items: [] };
+    const outputBuffers = preparedImage.resized
+      ? buffers.map((buffer) => resizeImageBufferToPng(buffer, preparedImage.originalWidth, preparedImage.originalHeight))
+      : buffers;
     const historyParams: GenerateParams = {
       ...DEFAULT_PARAMS,
       positivePrompt: `director:${tool}`,
-      width: image.width,
-      height: image.height,
+      width: preparedImage.originalWidth,
+      height: preparedImage.originalHeight,
     };
-    const items = await saveBuffers(buffers, historyParams, 0, `director-${tool}`, `director-${tool}`);
+    const items = await saveBuffers(outputBuffers, historyParams, 0, `director-${tool}`, `director-${tool}`);
     void refreshStoredAccount();
-    return { ok: true, message: `后期处理完成，已保存 ${items.length} 张图片。`, items };
+    const resizeNote = preparedImage.resized
+      ? `原图 ${preparedImage.originalWidth}×${preparedImage.originalHeight} 超过后期接口稳态尺寸，已先缩至 ${preparedImage.width}×${preparedImage.height} 处理，并恢复到原尺寸。`
+      : "";
+    return { ok: true, message: `后期处理完成，已保存 ${items.length} 张图片。${resizeNote}`, items };
   } catch (error: any) {
     return handleGenerateError(error, "后期处理失败");
   } finally {

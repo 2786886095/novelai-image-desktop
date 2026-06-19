@@ -1,41 +1,253 @@
-import type { GenerateParams } from "./types";
+import {
+  MAX_NAI_UPSCALE_INPUT_PIXELS,
+  type AccountSummary,
+  type AnlasQuoteFeature,
+  type AnlasQuoteResult,
+  type DirectorTool,
+  type GenerateExtras,
+  type GenerateParams,
+  type I2IParams,
+  type NAIInpaintModel,
+  type NAIModel,
+  type UpscaleScale,
+  type WorkingImage,
+} from "./types";
 
-export interface AnlasEstimate {
-  free: boolean;
-  perImage: number;
-  total: number;
+const BASE_PIXEL_COEFFICIENT = 2951823174884865e-21;
+const STEP_PIXEL_COEFFICIENT = 5753298233447344e-22;
+const OPUS_FREE_MAX_PIXELS = 1024 * 1024;
+
+function isV4Plus(model: string) {
+  return model.includes("-4");
 }
 
-const FREE_AREA = 1024 * 1024; // 1048576 px
-const FREE_STEPS = 28;
-const OPUS_TIER = 3;
+function isActiveOpus(account?: AccountSummary) {
+  return Boolean(account?.hasActiveSubscription && (account.tierLevel ?? 0) >= 3);
+}
 
-/**
- * Estimate Anlas cost for a generation. The free-tier rule is exact (Opus
- * accounts get unlimited free generations at ≤1024×1024, ≤28 steps, no SMEA).
- * The paid number is an APPROXIMATION of NovelAI's pricing curve — the
- * authoritative amount is always whatever the account balance reflects after
- * generation. Shown with a「约」(approx.) prefix in the UI.
- */
-export function estimateAnlas(
-  params: GenerateParams,
-  batchCount: number,
-  tierLevel: number | undefined,
-): AnlasEstimate {
-  const area = params.width * params.height;
-  const count = Math.max(1, batchCount);
-  const freeEligible =
-    tierLevel === OPUS_TIER && area <= FREE_AREA && params.steps <= FREE_STEPS && !params.smea;
+function positiveInt(value: unknown, fallback: number) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(1, Math.floor(parsed));
+}
 
-  if (freeEligible) return { free: true, perImage: 0, total: 0 };
+function clamp01(value: unknown, fallback: number) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(1, Math.max(0, parsed));
+}
 
-  // NovelAI opus pricing curve (non-SMEA baseline at 28 steps), scaled linearly
-  // by step count and bumped for SMEA / SMEA DYN.
-  let base = 15.266497014243718 * Math.exp((0.6326248927474729 * area) / FREE_AREA) - 15.266497014243718;
-  base *= Math.max(1, params.steps) / FREE_STEPS;
-  if (params.smea && params.smeaDyn) base *= 1.4;
-  else if (params.smea) base *= 1.2;
+function fitSizeWithinPixels(width: number, height: number, maxPixels: number) {
+  const pixels = width * height;
+  if (!width || !height || pixels <= maxPixels) return { width, height, resized: false };
+  const ratio = Math.sqrt(maxPixels / pixels);
+  return {
+    width: Math.max(1, Math.floor(width * ratio)),
+    height: Math.max(1, Math.floor(height * ratio)),
+    resized: true,
+  };
+}
 
-  const perImage = Math.max(1, Math.ceil(base));
-  return { free: false, perImage, total: perImage * count };
+function finalizeQuote(
+  feature: AnlasQuoteFeature,
+  amount: number,
+  account: AccountSummary | undefined,
+  details: string[],
+  source: AnlasQuoteResult["source"],
+): AnlasQuoteResult {
+  const normalized = Math.max(0, Math.ceil(amount));
+  const balance = account?.anlasBalance;
+  const insufficient = typeof balance === "number" && normalized > balance;
+  return {
+    ok: true,
+    amount: normalized,
+    source,
+    balance,
+    insufficient,
+    message: insufficient
+      ? `${feature} needs ${normalized} Anlas, but balance is ${balance}.`
+      : `${feature} will cost ${normalized} Anlas.`,
+    details,
+  };
+}
+
+export function calculateImageGenerationAnlas({
+  params,
+  account,
+  extras,
+  batchCount = 1,
+  action = "generate",
+  strength = 1,
+  forcePaid = false,
+}: {
+  params: GenerateParams;
+  account?: AccountSummary;
+  extras?: GenerateExtras;
+  batchCount?: number;
+  action?: "generate" | "img2img" | "infill";
+  strength?: number;
+  forcePaid?: boolean;
+}): AnlasQuoteResult {
+  const samples = positiveInt(batchCount, 1);
+  const width = positiveInt(params.width, 512);
+  const height = positiveInt(params.height, 512);
+  const pixels = Math.max(width * height, 65_536);
+  const steps = positiveInt(params.steps, 28);
+  const normalizedStrength = action === "generate" ? 1 : clamp01(strength, 1);
+  const v4Plus = isV4Plus(params.model);
+  const vibeCount = extras?.vibeImages?.length ?? 0;
+  const details: string[] = [];
+
+  let basePerSample = 0;
+  const opusFree =
+    !forcePaid &&
+    action === "generate" &&
+    isActiveOpus(account) &&
+    pixels <= OPUS_FREE_MAX_PIXELS &&
+    steps <= 28;
+
+  if (opusFree) {
+    details.push("Opus active: base text-to-image generation is free for this size/step request.");
+  } else {
+    const smeaMultiplier = !v4Plus && params.smeaDyn ? 1.4 : !v4Plus && params.smea ? 1.2 : 1;
+    const officialBase = Math.ceil(BASE_PIXEL_COEFFICIENT * pixels + STEP_PIXEL_COEFFICIENT * pixels * steps);
+    basePerSample = Math.max(2, Math.ceil(officialBase * smeaMultiplier * normalizedStrength));
+    details.push(`Base image price: ${basePerSample} Anlas each by the official frontend formula.`);
+  }
+
+  let total = basePerSample * samples;
+
+  if (v4Plus && vibeCount > 0) {
+    const encodeCost = 2 * vibeCount * samples;
+    total += encodeCost;
+    details.push(`V4+ Vibe encoding: ${vibeCount} image(s) x 2 Anlas x ${samples} request(s) = ${encodeCost}.`);
+    if (vibeCount > 4) {
+      const multiVibeCost = 2 * (vibeCount - 4) * samples;
+      total += multiVibeCost;
+      details.push(`Extra Vibe fee above 4 references: ${multiVibeCost} Anlas.`);
+    }
+  }
+
+  return finalizeQuote(action === "generate" ? "generate" : action === "img2img" ? "i2i" : "inpaint", total, account, details, "official-formula");
+}
+
+export function calculateUpscaleAnlas({
+  image,
+  account,
+  scale,
+}: {
+  image?: Pick<WorkingImage, "width" | "height"> | null;
+  account?: AccountSummary;
+  scale?: UpscaleScale;
+}): AnlasQuoteResult {
+  if (!image?.width || !image?.height) {
+    return { ok: false, source: "unavailable", message: "Please load an image before quoting upscale cost." };
+  }
+  const prepared = fitSizeWithinPixels(image.width, image.height, MAX_NAI_UPSCALE_INPUT_PIXELS);
+  const pixels = prepared.width * prepared.height;
+  const details = [
+    prepared.resized
+      ? `Input is pre-shrunk for NovelAI upscale: ${image.width}x${image.height} -> ${prepared.width}x${prepared.height}.`
+      : `Input size used for upscale quote: ${prepared.width}x${prepared.height}.`,
+    `Upscale scale: ${scale ?? 4}x.`,
+  ];
+  if (isActiveOpus(account) && pixels <= 409_600) {
+    details.push("Opus active: official upscale tier is free for this input size.");
+    return finalizeQuote("upscale", 0, account, details, "official-formula");
+  }
+  let amount = -3;
+  if (pixels <= 262_144) amount = 1;
+  else if (pixels <= 409_600) amount = 2;
+  else if (pixels <= 524_288) amount = 3;
+  else if (pixels <= 786_432) amount = 5;
+  else if (pixels <= 1_048_576) amount = 7;
+  if (amount < 0) {
+    return {
+      ok: false,
+      source: "unavailable",
+      balance: account?.anlasBalance,
+      message: "Image resolution is too high for NovelAI upscale quote.",
+      details,
+    };
+  }
+  return finalizeQuote("upscale", amount, account, details, "official-formula");
+}
+
+export function calculateDirectorAnlas({
+  tool,
+  account,
+}: {
+  tool?: DirectorTool;
+  account?: AccountSummary;
+}): AnlasQuoteResult {
+  const amount = tool === "bg-removal" ? 65 : 0;
+  const details =
+    tool === "bg-removal"
+      ? ["Background removal is a fixed 65 Anlas director-tool request."]
+      : ["This director tool is currently free in NovelAI's director-tool pricing."];
+  return finalizeQuote("director", amount, account, details, "official-fixed");
+}
+
+export function calculateFeatureAnlasQuote({
+  feature,
+  params,
+  extras,
+  batchCount,
+  i2iParams,
+  inpaintModel,
+  inpaintStrength,
+  account,
+  image,
+  upscaleScale,
+  directorTool,
+}: {
+  feature: AnlasQuoteFeature;
+  params?: GenerateParams;
+  extras?: GenerateExtras;
+  batchCount?: number;
+  i2iParams?: I2IParams;
+  inpaintModel?: NAIInpaintModel;
+  inpaintStrength?: number;
+  account?: AccountSummary;
+  image?: Pick<WorkingImage, "width" | "height"> | null;
+  upscaleScale?: UpscaleScale;
+  directorTool?: DirectorTool;
+}): AnlasQuoteResult {
+  if (feature === "upscale") {
+    return calculateUpscaleAnlas({ image, account, scale: upscaleScale });
+  }
+  if (feature === "director") {
+    return calculateDirectorAnlas({ tool: directorTool, account });
+  }
+  if (!params) {
+    return { ok: false, source: "unavailable", message: "Missing generation parameters for Anlas quote." };
+  }
+  if (feature === "i2i") {
+    return calculateImageGenerationAnlas({
+      params,
+      account,
+      extras,
+      batchCount: 1,
+      action: "img2img",
+      strength: i2iParams?.strength ?? 1,
+    });
+  }
+  if (feature === "inpaint") {
+    const model = (inpaintModel?.replace(/-inpainting$/, "") || params.model) as NAIModel;
+    const inpaintParams = {
+      ...params,
+      model,
+      width: image?.width ? Math.max(64, Math.ceil(image.width / 64) * 64) : params.width,
+      height: image?.height ? Math.max(64, Math.ceil(image.height / 64) * 64) : params.height,
+    };
+    return calculateImageGenerationAnlas({
+      params: inpaintParams,
+      account,
+      extras: { vibeImages: [], charCaptions: [] },
+      batchCount: 1,
+      action: "infill",
+      strength: inpaintStrength ?? 1,
+    });
+  }
+  return calculateImageGenerationAnlas({ params, account, extras, batchCount, action: "generate" });
 }
