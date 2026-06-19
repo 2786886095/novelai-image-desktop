@@ -7,7 +7,7 @@ class NaiOption {
 }
 
 const appName = 'Langbai NovelAI Studio';
-const appVersion = '0.9.0';
+const appVersion = '0.9.1';
 
 const naiModels = <NaiOption>[
   NaiOption('NAI Diffusion 4.5 Full（完整模型）', 'nai-diffusion-4-5-full'),
