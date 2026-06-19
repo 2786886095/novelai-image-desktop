@@ -239,7 +239,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   workbenchImage: null,
   comparisonBeforeImage: null,
   i2iParams: { ...DEFAULT_I2I_PARAMS },
-  inpaintModel: "nai-diffusion-4-5-curated-inpainting",
+  inpaintModel: "nai-diffusion-4-5-full-inpainting",
   inpaintStrength: 1,
   inpaintNoise: 0,
   brushSize: 64,

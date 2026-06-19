@@ -4,14 +4,23 @@
 
 | 系统 | 安装包 | 安装说明 |
 | --- | --- | --- |
-| 🪟 **Windows** (x64) | `Langbai-NovelAI-Studio-0.9.2.exe` | 便携版，双击即用，无需安装 |
-| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-0.9.2-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
-| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-0.9.2.zip` | 解压后即为 `.app`，同样需右键「打开」 |
-| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-0.9.2.AppImage` | `chmod +x` 后直接运行 |
+| 🪟 **Windows** (x64) | `Langbai-NovelAI-Studio-0.9.3.exe` | 便携版，双击即用，无需安装 |
+| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-0.9.3-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
+| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-0.9.3.zip` | 解压后即为 `.app`，同样需右键「打开」 |
+| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-0.9.3.AppImage` | `chmod +x` 后直接运行 |
 | 🤖 **Android** | `app-release.apk` | 直接安装；未签名，需允许「未知来源」 |
 | 📱 **iOS** | `novelai-mobile-unsigned.ipa` | **未签名**，需用 AltStore / Sideloadly 等工具自行侧载 |
 
 > 桌面端与移动端均为 **API-only** 客户端，需自备 NovelAI Persistent API Token。
+
+### v0.9.3 更新内容
+
+- **修复局部重绘 HTTP 400 / 500**：
+  - 400 根因是失败兜底时把 `action: "infill"` 发给了不支持 inpaint 的普通模型（如 `nai-diffusion-4-5-curated`）；现移除该错误方向，仅在 `*-inpainting` 模型间兜底（curated inpainting → full inpainting）。默认重绘模型改为 **NAI Diffusion 4.5 Full Inpainting** 并置顶推荐。
+  - 500 常见于原图尺寸非 64 倍数。现在重绘前**自动把原图与蒙版同步补边到 64 的整数倍**（原图按边缘像素延展、蒙版补黑色不重绘新增边缘），NovelAI 返回后**自动裁回原始尺寸**再保存，例如 `739×1078` 会以 `768×1088` 发送、保存仍是 `739×1078`，无需手动改图。
+  - 补边后仍 500 时给出更可读诊断（已补边尺寸、实际重绘模型）。
+- **图生图 / 重绘支持拖入图片**：左侧工作台图片卡片、生成 / 超分 / 后期中央预览区、重绘空白区与已有原图画布均支持直接拖入图片加载；拖入新图自动重置旧蒙版。修复新版 Electron 下 `File.path` 为空导致拖入无效的问题（改用 `webUtils.getPathForFile`）。
+- 主进程新增轻量依赖 `pngjs` 用于 PNG 像素级补边 / 裁剪；JPG/WebP 原图先解码为 PNG 再处理。
 
 ### v0.9.2 更新内容
 

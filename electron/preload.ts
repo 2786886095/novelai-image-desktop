@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer, webUtils } from "electron";
 import type {
   AppSettings,
   AugmentOptions,
@@ -57,6 +57,7 @@ contextBridge.exposeInMainWorld("naiDesktop", {
   translate: (text: string, target?: string) => ipcRenderer.invoke("nai:translate", text, target),
   loadImage: () => ipcRenderer.invoke("nai:loadImage"),
   loadImageFromPath: (filePath: string) => ipcRenderer.invoke("nai:loadImageFromPath", filePath),
+  getPathForFile: (file: File) => webUtils.getPathForFile(file),
   clearWorkbenchImage: () => ipcRenderer.invoke("nai:clearWorkbenchImage"),
 
   getHistory: (date?: string, groupId?: string) => ipcRenderer.invoke("storage:getHistory", date, groupId),

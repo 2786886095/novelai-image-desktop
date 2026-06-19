@@ -1,6 +1,7 @@
-import { dialog } from "electron";
+import { dialog, nativeImage } from "electron";
 import axios from "axios";
 import JSZip from "jszip";
+import { PNG } from "pngjs";
 import crypto from "crypto";
 import fs from "fs/promises";
 import path from "path";
@@ -189,6 +190,24 @@ function normalizeModel(model: string) {
   return model.endsWith("-inpainting") ? model.slice(0, -"-inpainting".length) : model;
 }
 
+function inpaintSizeHint(image: Pick<WorkingImage, "width" | "height">) {
+  const width = image.width || 0;
+  const height = image.height || 0;
+  if (!width || !height) return "无法读取原图尺寸，请重新加载原图后再试。";
+  if (width % 64 === 0 && height % 64 === 0) return "";
+  return `当前原图尺寸为 ${width}×${height}，不是 64 的整数倍；NovelAI 重绘接口对非 64 倍数尺寸经常返回 HTTP 500。请先换用 64 倍数尺寸的原图，例如宽高都能被 64 整除。`;
+}
+
+function inpaintModelCandidates(model: NAIInpaintModel) {
+  const candidates = [model];
+  if (model === "nai-diffusion-4-5-curated-inpainting") {
+    candidates.push("nai-diffusion-4-5-full-inpainting");
+  } else if (model === "nai-diffusion-4-curated-inpainting") {
+    candidates.push("nai-diffusion-4-full-inpainting");
+  }
+  return [...new Set(candidates)];
+}
+
 function qualityTags(model: string) {
   switch (normalizeModel(model)) {
     case "nai-diffusion-4-5-full":
@@ -285,8 +304,10 @@ function withPipeCharCaptions(basePrompt: string, captions: ReturnType<typeof no
   return [basePrompt, ...captions.map((c) => c.prompt)].filter(Boolean).join(" | ");
 }
 
+type PayloadParams = Omit<GenerateParams, "model"> & { model: string };
+
 function buildPayload(
-  params: GenerateParams,
+  params: PayloadParams,
   actualSeed: number,
   extras?: GenerateExtras,
   charCaptionMode: CharCaptionMode = "structured",
@@ -464,6 +485,126 @@ function responseErrorText(error: any) {
 function stripBase64Prefix(value: string) {
   const idx = value.indexOf(",");
   return idx >= 0 ? value.slice(idx + 1) : value;
+}
+
+const INPAINT_SIZE_MULTIPLE = 64;
+
+interface PreparedInpaintAssets {
+  imageBase64: string;
+  maskBase64: string;
+  width: number;
+  height: number;
+  originalWidth: number;
+  originalHeight: number;
+  padded: boolean;
+}
+
+function ceilToMultiple(value: number, multiple: number) {
+  return Math.max(multiple, Math.ceil(value / multiple) * multiple);
+}
+
+function bufferToPng(buffer: Buffer) {
+  const image = nativeImage.createFromBuffer(buffer);
+  if (image.isEmpty()) throw new Error("无法解码原图，请换用 PNG/JPG/WebP 图片。");
+  return image.toPNG();
+}
+
+function padPngWithEdge(source: PNG, targetWidth: number, targetHeight: number) {
+  const target = new PNG({ width: targetWidth, height: targetHeight });
+  for (let y = 0; y < targetHeight; y += 1) {
+    const sy = Math.min(source.height - 1, y);
+    for (let x = 0; x < targetWidth; x += 1) {
+      const sx = Math.min(source.width - 1, x);
+      const src = (sy * source.width + sx) * 4;
+      const dst = (y * targetWidth + x) * 4;
+      target.data[dst] = source.data[src];
+      target.data[dst + 1] = source.data[src + 1];
+      target.data[dst + 2] = source.data[src + 2];
+      target.data[dst + 3] = source.data[src + 3];
+    }
+  }
+  return PNG.sync.write(target);
+}
+
+function padMaskPng(mask: PNG, targetWidth: number, targetHeight: number) {
+  const target = new PNG({ width: targetWidth, height: targetHeight });
+  for (let i = 0; i < target.data.length; i += 4) {
+    target.data[i] = 0;
+    target.data[i + 1] = 0;
+    target.data[i + 2] = 0;
+    target.data[i + 3] = 255;
+  }
+  const copyWidth = Math.min(mask.width, targetWidth);
+  const copyHeight = Math.min(mask.height, targetHeight);
+  for (let y = 0; y < copyHeight; y += 1) {
+    const srcStart = y * mask.width * 4;
+    const dstStart = y * targetWidth * 4;
+    mask.data.copy(target.data, dstStart, srcStart, srcStart + copyWidth * 4);
+  }
+  return PNG.sync.write(target);
+}
+
+function cropPngTopLeft(buffer: Buffer, width: number, height: number) {
+  try {
+    const source = PNG.sync.read(buffer);
+    if (source.width === width && source.height === height) return buffer;
+    if (source.width < width || source.height < height) return buffer;
+    const target = new PNG({ width, height });
+    for (let y = 0; y < height; y += 1) {
+      const srcStart = y * source.width * 4;
+      const dstStart = y * width * 4;
+      source.data.copy(target.data, dstStart, srcStart, srcStart + width * 4);
+    }
+    return PNG.sync.write(target);
+  } catch {
+    return buffer;
+  }
+}
+
+function prepareInpaintAssets(imageBuffer: Buffer, maskBase64: string): PreparedInpaintAssets {
+  const sourcePng = PNG.sync.read(bufferToPng(imageBuffer));
+  const originalWidth = sourcePng.width;
+  const originalHeight = sourcePng.height;
+  const width = ceilToMultiple(originalWidth, INPAINT_SIZE_MULTIPLE);
+  const height = ceilToMultiple(originalHeight, INPAINT_SIZE_MULTIPLE);
+  const padded = width !== originalWidth || height !== originalHeight;
+  if (!padded) {
+    return {
+      imageBase64: imageBuffer.toString("base64"),
+      maskBase64: stripBase64Prefix(maskBase64),
+      width,
+      height,
+      originalWidth,
+      originalHeight,
+      padded: false,
+    };
+  }
+
+  const maskPng = PNG.sync.read(Buffer.from(stripBase64Prefix(maskBase64), "base64"));
+  return {
+    imageBase64: padPngWithEdge(sourcePng, width, height).toString("base64"),
+    maskBase64: padMaskPng(maskPng, width, height).toString("base64"),
+    width,
+    height,
+    originalWidth,
+    originalHeight,
+    padded: true,
+  };
+}
+
+function cropInpaintBuffers(buffers: Buffer[], assets: PreparedInpaintAssets) {
+  if (!assets.padded) return buffers;
+  return buffers.map((buffer) => cropPngTopLeft(buffer, assets.originalWidth, assets.originalHeight));
+}
+
+function annotateInpaintError(error: any, assets: PreparedInpaintAssets, model: string) {
+  if (!assets.padded || error?.response?.status !== 500) return;
+  const message =
+    `重绘失败（HTTP 500）：程序已自动将原图 ${assets.originalWidth}×${assets.originalHeight} ` +
+    `补边到 ${assets.width}×${assets.height} 后发送，但 NovelAI 重绘接口仍返回内部错误。` +
+    `请尝试重新加载原图、重画蒙版、缩小重绘区域，或稍后再试。模型：${model}。`;
+  if (error.response) error.response.data = message;
+  error.langbaiMessage = message;
 }
 
 function readImageDimensions(buf: Buffer): { width: number; height: number } {
@@ -693,6 +834,16 @@ async function postGenerateImage(payload: ReturnType<typeof buildPayload>) {
     if ((error?.response?.status === 401 || error?.response?.status === 403) && imageBaseUrl !== defaultImageBaseUrl) {
       res = await postTo(defaultImageBaseUrl);
     } else {
+      if (error?.response?.status === 500 && payload.action === "infill") {
+        const width = Number(payload.parameters?.width);
+        const height = Number(payload.parameters?.height);
+        const sizeHint = inpaintSizeHint({ width, height });
+        error.langbaiMessage =
+          `重绘失败（HTTP 500）：NovelAI 重绘接口返回内部错误。` +
+          (sizeHint || "已自动重试；请尝试切换重绘模型、重新加载原图并重画蒙版，或稍后再试。") +
+          ` 模型：${String(payload.model)}。`;
+        if (error.response) error.response.data = error.langbaiMessage;
+      }
       throw error;
     }
   }
@@ -1942,48 +2093,64 @@ export async function inpaintImage(
   currentAbort?.abort();
   currentAbort = new AbortController();
 
-  const { base64, image } = await readWorkbenchImage();
+  const { buffer } = await readWorkbenchImage();
+  const preparedAssets = prepareInpaintAssets(buffer, maskBase64);
   const actualSeed =
     params.seedMode !== "random" && params.seed > 0 ? params.seed : crypto.randomInt(1, 2_147_483_647);
   const normalizedStrength = Math.max(0, Math.min(1, Number.isFinite(strength) ? strength : 0.55));
   const normalizedNoise = Math.max(0, Math.min(0.99, Number.isFinite(noise) ? noise : 0));
-  const buildInpaintPayload = (model: NAIModel) => {
-    const inpaintParams: GenerateParams = {
+  const buildInpaintPayload = (model: NAIInpaintModel) => {
+    const inpaintParams: PayloadParams = {
       ...params,
       model,
-      width: image.width || params.width,
-      height: image.height || params.height,
+      width: preparedAssets.width,
+      height: preparedAssets.height,
+    };
+    const historyParams: GenerateParams = {
+      ...params,
+      width: preparedAssets.originalWidth,
+      height: preparedAssets.originalHeight,
     };
     const payload = buildPayload(inpaintParams, actualSeed);
     payload.action = "infill";
-    payload.parameters.image = base64;
-    payload.parameters.mask = stripBase64Prefix(maskBase64);
+    payload.parameters.image = preparedAssets.imageBase64;
+    payload.parameters.mask = preparedAssets.maskBase64;
     payload.parameters.add_original_image = true;
     payload.parameters.strength = normalizedStrength;
     payload.parameters.noise = normalizedNoise;
     payload.parameters.extra_noise_seed = crypto.randomInt(1, 2_147_483_647);
-    return { payload, inpaintParams };
+    return { payload, historyParams, model };
   };
 
   try {
-    const primaryModel = inpaintModel as unknown as NAIModel;
-    const fallbackModel = normalizeModel(inpaintModel) as NAIModel;
-    let chosen = buildInpaintPayload(primaryModel);
-    let buffers: Buffer[];
-    try {
-      buffers = await postGenerateImage(chosen.payload);
-    } catch (error: any) {
-      const status = error?.response?.status;
-      const canRetryWithBaseModel =
-        (status === 401 || status === 403 || status === 400 || status === 422) && fallbackModel !== primaryModel;
-      if (!canRetryWithBaseModel) throw error;
-      chosen = buildInpaintPayload(fallbackModel);
-      buffers = await postGenerateImage(chosen.payload);
+    let chosen: ReturnType<typeof buildInpaintPayload> | null = null;
+    let buffers: Buffer[] | null = null;
+    let lastError: any = null;
+    const candidates = inpaintModelCandidates(inpaintModel);
+    for (let index = 0; index < candidates.length; index += 1) {
+      chosen = buildInpaintPayload(candidates[index]);
+      try {
+        buffers = await postGenerateImage(chosen.payload);
+        break;
+      } catch (error: any) {
+        lastError = error;
+        const status = error?.response?.status;
+        const retryable = status === 400 || status === 422 || status === 500 || status === 502 || status === 503 || status === 524;
+        if (!retryable || index >= candidates.length - 1) {
+          annotateInpaintError(error, preparedAssets, candidates[index]);
+          throw error;
+        }
+      }
     }
+    if (!chosen || !buffers) throw lastError ?? new Error("重绘请求未返回结果。");
     if (buffers.length === 0) return { ok: false, message: "重绘成功但无图片返回。", items: [] };
-    const items = await saveBuffers(buffers, chosen.inpaintParams, actualSeed, "inpaint", String(chosen.inpaintParams.model));
+    const outputBuffers = cropInpaintBuffers(buffers, preparedAssets);
+    const items = await saveBuffers(outputBuffers, chosen.historyParams, actualSeed, "inpaint", chosen.model);
     void refreshStoredAccount();
-    return { ok: true, message: `重绘完成，已保存 ${items.length} 张图片。`, items, actualSeed };
+    const paddedNote = preparedAssets.padded
+      ? `已自动补边 ${preparedAssets.originalWidth}×${preparedAssets.originalHeight} → ${preparedAssets.width}×${preparedAssets.height}，并裁回原尺寸。`
+      : "";
+    return { ok: true, message: `重绘完成，已保存 ${items.length} 张图片。${paddedNote}`, items, actualSeed };
   } catch (error: any) {
     return handleGenerateError(error, "重绘失败");
   } finally {

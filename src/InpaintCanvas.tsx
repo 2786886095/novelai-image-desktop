@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { droppedImagePath, hasDraggedFiles } from "./drag-drop";
 import { useAppStore } from "./store";
 
 function clampZoom(value: number) {
@@ -13,6 +14,7 @@ export function InpaintCanvas() {
   const brushMode = useAppStore((state) => state.brushMode);
   const maskRevision = useAppStore((state) => state.maskRevision);
   const setInpaintMask = useAppStore((state) => state.setInpaintMask);
+  const loadWorkbenchFromPath = useAppStore((state) => state.loadWorkbenchFromPath);
   const stageRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawingRef = useRef(false);
@@ -29,6 +31,7 @@ export function InpaintCanvas() {
   const [compareEnabled, setCompareEnabled] = useState(Boolean(comparisonBeforeImage));
   const [compareX, setCompareX] = useState(50);
   const [compareDragging, setCompareDragging] = useState(false);
+  const [dropOver, setDropOver] = useState(false);
   const canCompare = Boolean(comparisonBeforeImage?.fileUrl && workbenchImage?.fileUrl);
 
   useEffect(() => {
@@ -258,16 +261,50 @@ export function InpaintCanvas() {
     setCompareX(Math.min(100, Math.max(0, next)));
   }
 
+  function handleImageDragOver(event: React.DragEvent<HTMLElement>) {
+    if (!hasDraggedFiles(event.dataTransfer)) return;
+    event.preventDefault();
+    setDropOver(true);
+  }
+
+  async function handleImageDrop(event: React.DragEvent<HTMLElement>) {
+    if (!hasDraggedFiles(event.dataTransfer)) return;
+    event.preventDefault();
+    setDropOver(false);
+    const filePath = await droppedImagePath(event.dataTransfer);
+    if (filePath) void loadWorkbenchFromPath(filePath);
+  }
+
   if (!workbenchImage) {
     return (
-      <main className="canvas-area">
+      <main
+        className="canvas-area"
+        onDragOver={handleImageDragOver}
+        onDragLeave={() => setDropOver(false)}
+        onDrop={handleImageDrop}
+      >
+        {dropOver && (
+          <div className="superdrop-overlay">
+            <span>松开以加载图片</span>
+          </div>
+        )}
         <div className="inpaint-empty">在左侧点击“加载图片”后，即可在这里绘制局部重绘蒙版。</div>
       </main>
     );
   }
 
   return (
-    <main className="canvas-area inpaint-canvas-area">
+    <main
+      className="canvas-area inpaint-canvas-area"
+      onDragOver={handleImageDragOver}
+      onDragLeave={() => setDropOver(false)}
+      onDrop={handleImageDrop}
+    >
+      {dropOver && (
+        <div className="superdrop-overlay">
+          <span>松开以加载图片</span>
+        </div>
+      )}
       <div className="inpaint-mask-toolbar">
         <button
           type="button"

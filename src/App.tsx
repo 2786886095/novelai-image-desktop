@@ -8,6 +8,7 @@ import { estimateAnlas } from "./anlas";
 import { relatedTags } from "./related-tags";
 import { fmtCount, wordAtCursor } from "./text-utils";
 import { parsePngMeta, parseImportedParams } from "./png-meta";
+import { droppedImagePath, hasDraggedFiles } from "./drag-drop";
 import { splitPromptTags, parseWeightedTag, formatMultiplier, setTagLevelInPrompt } from "./prompt-weight";
 import {
   normalizePrompt,
@@ -1032,10 +1033,31 @@ function PromptNormalizeModal({
 function WorkbenchImageUpload() {
   const workbenchImage = useAppStore((state) => state.workbenchImage);
   const loadWorkbenchImage = useAppStore((state) => state.loadWorkbenchImage);
+  const loadWorkbenchFromPath = useAppStore((state) => state.loadWorkbenchFromPath);
   const clearWorkbenchImage = useAppStore((state) => state.clearWorkbenchImage);
+  const [dragging, setDragging] = useState(false);
+
+  function handleDragOver(event: React.DragEvent<HTMLDivElement>) {
+    if (!hasDraggedFiles(event.dataTransfer)) return;
+    event.preventDefault();
+    setDragging(true);
+  }
+
+  async function handleDrop(event: React.DragEvent<HTMLDivElement>) {
+    if (!hasDraggedFiles(event.dataTransfer)) return;
+    event.preventDefault();
+    setDragging(false);
+    const filePath = await droppedImagePath(event.dataTransfer);
+    if (filePath) void loadWorkbenchFromPath(filePath);
+  }
 
   return (
-    <div className="wb-upload">
+    <div
+      className={clsx("wb-upload", dragging && "dragging")}
+      onDragOver={handleDragOver}
+      onDragLeave={() => setDragging(false)}
+      onDrop={handleDrop}
+    >
       {workbenchImage ? (
         <>
           <img src={workbenchImage.fileUrl} alt="已加载图片" className="wb-thumb" />
@@ -1056,6 +1078,7 @@ function WorkbenchImageUpload() {
           <IconText icon={<Icon name="folderOpen" />}>加载图片...</IconText>
         </Button>
       )}
+      <small className="wb-drop-hint">拖入图片可直接加载</small>
     </div>
   );
 }
@@ -2289,21 +2312,19 @@ function ImageCanvas() {
   const loadWorkbenchFromPath = useAppStore((state) => state.loadWorkbenchFromPath);
   const [dropOver, setDropOver] = useState(false);
   const superDrop = settings?.superDrop ?? false;
+  const dropEnabled = superDrop || activeTab === "generate" || activeTab === "upscale" || activeTab === "postprocess";
 
   function handleDragOver(e: React.DragEvent) {
-    if (!superDrop) return;
+    if (!dropEnabled || !hasDraggedFiles(e.dataTransfer)) return;
     e.preventDefault();
     setDropOver(true);
   }
 
-  function handleDrop(e: React.DragEvent) {
+  async function handleDrop(e: React.DragEvent) {
     e.preventDefault();
     setDropOver(false);
-    if (!superDrop) return;
-    const file = e.dataTransfer.files[0];
-    if (!file) return;
-    // Electron exposes file.path on dropped files
-    const filePath = (file as any).path as string | undefined;
+    if (!dropEnabled) return;
+    const filePath = await droppedImagePath(e.dataTransfer);
     if (filePath) {
       void loadWorkbenchFromPath(filePath);
     }
@@ -2369,7 +2390,7 @@ function ImageCanvas() {
           </span>
           <span className="empty-shortcuts">
             <span>Tag 自动补全</span>
-            <span>{superDrop ? "支持拖入图片到工作台" : "API-only 生成"}</span>
+            <span>{dropEnabled ? "支持拖入图片到工作台" : "API-only 生成"}</span>
             <span>历史一键复用</span>
           </span>
         </button>

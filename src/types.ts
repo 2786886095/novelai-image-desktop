@@ -1,4 +1,4 @@
-export const APP_VERSION = "0.9.2";
+export const APP_VERSION = "0.9.3";
 export const APP_NAME = "Langbai NovelAI Studio";
 export const PROJECT_REPOSITORY = "https://github.com/2786886095/novelai-image-desktop";
 
@@ -326,9 +326,10 @@ export interface AiCallLogEntry {
 }
 
 export const NAI_INPAINT_MODELS = [
-  { label: "NAI Diffusion 4.5 Curated（推荐）", value: "nai-diffusion-4-5-curated-inpainting" },
-  { label: "NAI Diffusion 4 Curated", value: "nai-diffusion-4-curated-inpainting" },
+  { label: "NAI Diffusion 4.5 Full（推荐）", value: "nai-diffusion-4-5-full-inpainting" },
+  { label: "NAI Diffusion 4.5 Curated", value: "nai-diffusion-4-5-curated-inpainting" },
   { label: "NAI Diffusion 4 Full", value: "nai-diffusion-4-full-inpainting" },
+  { label: "NAI Diffusion 4 Curated", value: "nai-diffusion-4-curated-inpainting" },
   { label: "NAI Diffusion 3", value: "nai-diffusion-3-inpainting" },
 ] as const;
 
@@ -590,6 +591,7 @@ export interface NaiDesktopApi {
   cancel: () => Promise<{ ok: boolean }>;
   loadImage: () => Promise<LoadImageResult>;
   loadImageFromPath: (filePath: string) => Promise<LoadImageResult>;
+  getPathForFile: (file: File) => string;
   clearWorkbenchImage: () => Promise<{ ok: boolean }>;
   getHistory: (date?: string, groupId?: string) => Promise<HistoryItem[]>;
   getHistoryDates: () => Promise<string[]>;
