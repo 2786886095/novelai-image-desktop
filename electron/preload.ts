@@ -36,14 +36,15 @@ contextBridge.exposeInMainWorld("naiDesktop", {
   augmentImage: (tool: DirectorTool, options: AugmentOptions) =>
     ipcRenderer.invoke("nai:augment", tool, options),
   cancel: () => ipcRenderer.invoke("nai:cancel"),
-  reversePrompt: (imageBase64: string, mode: string, scope?: string, hint?: string) =>
-    ipcRenderer.invoke("nai:reversePrompt", imageBase64, mode, scope, hint),
-  convertPrompt: (text: string, mode: string) => ipcRenderer.invoke("nai:convertPrompt", text, mode),
+  reversePrompt: (imageBase64: string, mode: string, scope?: string, hint?: string, knownCharacter?: boolean) =>
+    ipcRenderer.invoke("nai:reversePrompt", imageBase64, mode, scope, hint, knownCharacter),
+  convertPrompt: (text: string, mode: string, knownCharacter?: boolean) =>
+    ipcRenderer.invoke("nai:convertPrompt", text, mode, knownCharacter),
   comicAnalyzeScript: (request: ComicAnalyzeRequest) => ipcRenderer.invoke("comic:analyzeScript", request),
   comicConvertPanels: (request: ComicConvertRequest) => ipcRenderer.invoke("comic:convertPanels", request),
   comicCheckConsistency: (request: ComicConsistencyRequest) => ipcRenderer.invoke("comic:checkConsistency", request),
-  comicReverseAsset: (imageBase64: string, mode: string, scope?: string, hint?: string) =>
-    ipcRenderer.invoke("comic:reverseAsset", imageBase64, mode, scope, hint),
+  comicReverseAsset: (imageBase64: string, mode: string, scope?: string, hint?: string, knownCharacter?: boolean) =>
+    ipcRenderer.invoke("comic:reverseAsset", imageBase64, mode, scope, hint, knownCharacter),
   comicGeneratePanel: (request: ComicGeneratePanelRequest) => ipcRenderer.invoke("comic:generatePanel", request),
   comicExportProjectZip: (project: ComicProject) => ipcRenderer.invoke("comic:exportProjectZip", project),
   getAiCallLog: () => ipcRenderer.invoke("ai:getLog"),

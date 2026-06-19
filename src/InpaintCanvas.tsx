@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAppStore } from "./store";
 
+function clampZoom(value: number) {
+  return Math.min(8, Math.max(1, value));
+}
+
 export function InpaintCanvas() {
   const workbenchImage = useAppStore((state) => state.workbenchImage);
+  const comparisonBeforeImage = useAppStore((state) => state.comparisonBeforeImage);
   const brushSize = useAppStore((state) => state.brushSize);
   const brushOpacity = useAppStore((state) => state.brushOpacity);
   const brushMode = useAppStore((state) => state.brushMode);
@@ -19,6 +24,12 @@ export function InpaintCanvas() {
   const [showExportPreview, setShowExportPreview] = useState(false);
   const [historyCount, setHistoryCount] = useState(0);
   const [redoCount, setRedoCount] = useState(0);
+  const [stageZoom, setStageZoom] = useState(1);
+  const [stagePan, setStagePan] = useState({ x: 0, y: 0 });
+  const [compareEnabled, setCompareEnabled] = useState(Boolean(comparisonBeforeImage));
+  const [compareX, setCompareX] = useState(50);
+  const [compareDragging, setCompareDragging] = useState(false);
+  const canCompare = Boolean(comparisonBeforeImage?.fileUrl && workbenchImage?.fileUrl);
 
   useEffect(() => {
     if (!canvasRef.current || !workbenchImage) return;
@@ -38,6 +49,28 @@ export function InpaintCanvas() {
     setPreviewMaskUrl("");
     setShowExportPreview(false);
   }, [workbenchImage, maskRevision, setInpaintMask]);
+
+  useEffect(() => {
+    setStageZoom(1);
+    setStagePan({ x: 0, y: 0 });
+  }, [workbenchImage?.fileUrl]);
+
+  useEffect(() => {
+    setCompareX(50);
+    setCompareEnabled(Boolean(comparisonBeforeImage?.fileUrl && workbenchImage?.fileUrl));
+  }, [comparisonBeforeImage?.fileUrl, workbenchImage?.fileUrl]);
+
+  useEffect(() => {
+    if (!compareDragging) return;
+    const move = (event: PointerEvent) => updateComparePosition(event.clientX);
+    const up = () => setCompareDragging(false);
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    return () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    };
+  }, [compareDragging]);
 
   // NovelAI's official inpaint quantizes the drawn mask to a coarse 64px grid
   // (the visible "blocky" mask on the website) before sending it to the API.
@@ -192,6 +225,39 @@ export function InpaintCanvas() {
     exportMask();
   }, [exportMask]);
 
+  const imageZoomStyle = { transform: `translate(${stagePan.x}px, ${stagePan.y}px) scale(${stageZoom})` };
+  const canvasZoomStyle = {
+    transform: `translate(-50%, -50%) translate(${stagePan.x}px, ${stagePan.y}px) scale(${stageZoom})`,
+  };
+  const compareClip = `inset(0 0 0 ${compareX}%)`;
+
+  function handleStageWheel(event: React.WheelEvent<HTMLDivElement>) {
+    event.preventDefault();
+    const rect = canvasRef.current?.getBoundingClientRect();
+    const next = clampZoom(stageZoom * (event.deltaY < 0 ? 1.16 : 1 / 1.16));
+    if (!rect || next === 1) {
+      setStageZoom(next);
+      setStagePan({ x: 0, y: 0 });
+      return;
+    }
+    const baseLeft = rect.left - stagePan.x;
+    const baseTop = rect.top - stagePan.y;
+    const imageX = Math.min(rect.width / stageZoom, Math.max(0, (event.clientX - rect.left) / stageZoom));
+    const imageY = Math.min(rect.height / stageZoom, Math.max(0, (event.clientY - rect.top) / stageZoom));
+    setStageZoom(next);
+    setStagePan({
+      x: event.clientX - baseLeft - imageX * next,
+      y: event.clientY - baseTop - imageY * next,
+    });
+  }
+
+  function updateComparePosition(clientX: number) {
+    const rect = canvasRef.current?.getBoundingClientRect() ?? stageRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const next = ((clientX - rect.left) / Math.max(1, rect.width)) * 100;
+    setCompareX(Math.min(100, Math.max(0, next)));
+  }
+
   if (!workbenchImage) {
     return (
       <main className="canvas-area">
@@ -230,13 +296,81 @@ export function InpaintCanvas() {
         >
           {showExportPreview ? "返回涂抹视图" : "预览发送遮罩"}
         </button>
+        {canCompare ? (
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={() => setCompareEnabled((value) => !value)}
+            title="拖动中线查看处理前后差异"
+          >
+            {compareEnabled ? "关闭对比" : "前后对比"}
+          </button>
+        ) : null}
+        <span className="inpaint-zoom-readout">{Math.round(stageZoom * 100)}%</span>
+        <button
+          type="button"
+          className="btn btn-ghost"
+          disabled={stageZoom === 1 && stagePan.x === 0 && stagePan.y === 0}
+          onClick={() => {
+            setStageZoom(1);
+            setStagePan({ x: 0, y: 0 });
+          }}
+          title="复位缩放"
+        >
+          复位缩放
+        </button>
       </div>
-      <div className="inpaint-stage" ref={stageRef}>
-        <img className="inpaint-base-img" src={workbenchImage.fileUrl} alt="局部重绘原图" draggable={false} />
+      <div className="inpaint-stage" ref={stageRef} onWheel={handleStageWheel}>
+        <img
+          className="inpaint-base-img"
+          src={workbenchImage.fileUrl}
+          alt="局部重绘原图"
+          draggable={false}
+          style={{ ...imageZoomStyle, opacity: compareEnabled && canCompare ? 0 : 1 }}
+        />
+        {compareEnabled && canCompare ? (
+          <>
+            <img
+              className="inpaint-compare-img inpaint-compare-before"
+              src={comparisonBeforeImage!.fileUrl}
+              alt="重绘前图片"
+              draggable={false}
+              style={imageZoomStyle}
+            />
+            <div className="inpaint-compare-after-clip" style={{ clipPath: compareClip }}>
+              <img
+                className="inpaint-compare-img"
+                src={workbenchImage.fileUrl}
+                alt="重绘后图片"
+                draggable={false}
+                style={imageZoomStyle}
+              />
+            </div>
+            <button
+              type="button"
+              className="compare-divider inpaint-compare-divider"
+              style={{ left: `${compareX}%` }}
+              onPointerDown={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                setCompareDragging(true);
+                updateComparePosition(event.clientX);
+              }}
+              aria-label="拖动查看重绘前后差异"
+              title="拖动查看重绘前后差异"
+            >
+              <span />
+            </button>
+          </>
+        ) : null}
         <canvas
           ref={canvasRef}
           className="inpaint-mask-canvas"
-          style={{ opacity: showExportPreview ? 0 : brushOpacity }}
+          style={{
+            opacity: showExportPreview || (compareEnabled && canCompare) ? 0 : brushOpacity,
+            pointerEvents: compareEnabled && canCompare ? "none" : undefined,
+            ...canvasZoomStyle,
+          }}
           onMouseDown={(event) => {
             updateCursor(event);
             pushHistory();
@@ -262,7 +396,7 @@ export function InpaintCanvas() {
           }}
         />
         {showExportPreview && previewMaskUrl ? (
-          <img className="inpaint-export-preview" src={previewMaskUrl} alt="发送给 NovelAI 的二值遮罩预览" draggable={false} />
+          <img className="inpaint-export-preview" src={previewMaskUrl} alt="发送给 NovelAI 的二值遮罩预览" draggable={false} style={canvasZoomStyle} />
         ) : null}
         <div
           className="inpaint-cursor"

@@ -200,17 +200,17 @@ function registerIpc() {
   ipcMain.handle("nai:loadImage", () => loadImageFile());
   ipcMain.handle("nai:loadImageFromPath", (_event, filePath: string) => loadImageFromPath(filePath));
   ipcMain.handle("nai:clearWorkbenchImage", () => clearWorkbenchImage());
-  ipcMain.handle("nai:reversePrompt", (_event, imageBase64: string, mode: string, scope?: string, hint?: string) =>
-    reversePromptImage(imageBase64, (mode as "tags" | "natural" | "mixed") ?? "tags", scope, hint),
+  ipcMain.handle("nai:reversePrompt", (_event, imageBase64: string, mode: string, scope?: string, hint?: string, knownCharacter?: boolean) =>
+    reversePromptImage(imageBase64, (mode as "tags" | "natural" | "mixed") ?? "tags", scope, hint, knownCharacter),
   );
-  ipcMain.handle("nai:convertPrompt", (_event, text: string, mode: string) =>
-    convertPromptText(text, (mode as "tags" | "natural" | "mixed") ?? "tags"),
+  ipcMain.handle("nai:convertPrompt", (_event, text: string, mode: string, knownCharacter?: boolean) =>
+    convertPromptText(text, (mode as "tags" | "natural" | "mixed") ?? "tags", knownCharacter),
   );
   ipcMain.handle("comic:analyzeScript", (_event, request: ComicAnalyzeRequest) => analyzeComicScript(request));
   ipcMain.handle("comic:convertPanels", (_event, request: ComicConvertRequest) => convertComicPanels(request));
   ipcMain.handle("comic:checkConsistency", (_event, request: ComicConsistencyRequest) => checkComicConsistency(request));
-  ipcMain.handle("comic:reverseAsset", (_event, imageBase64: string, mode: string, scope?: string, hint?: string) =>
-    reversePromptImage(imageBase64, (mode as "tags" | "natural" | "mixed") ?? "tags", scope, hint),
+  ipcMain.handle("comic:reverseAsset", (_event, imageBase64: string, mode: string, scope?: string, hint?: string, knownCharacter?: boolean) =>
+    reversePromptImage(imageBase64, (mode as "tags" | "natural" | "mixed") ?? "tags", scope, hint, knownCharacter),
   );
   ipcMain.handle("comic:generatePanel", (_event, request: ComicGeneratePanelRequest) => generateComicPanel(request));
   ipcMain.handle("comic:exportProjectZip", (_event, project: ComicProject) => exportComicProjectZip(project));

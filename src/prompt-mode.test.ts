@@ -6,9 +6,11 @@ import {
   cleanPromptOutput,
   isLikelyTagListPrompt,
   isLikelyNaturalLanguagePrompt,
+  knownCharacterRuntimeInstruction,
   modeNeedsRepair,
   modeRepairSystemPrompt,
   naturalRepairSystemPrompt,
+  parsePromptVariantResponse,
   resolveModePrompt,
 } from "./prompt-mode";
 
@@ -96,5 +98,33 @@ describe("prompt mode output handling", () => {
     const prose = "Two boys are in a classroom while one boy is drawing and another boy is juggling balls.";
     expect(modeNeedsRepair("mixed", prose)).toBe(true);
     expect(modeRepairSystemPrompt("mixed")).toContain("mostly Danbooru tags");
+  });
+
+  it("parses known-character JSON variants", () => {
+    const parsed = parsePromptVariantResponse(
+      JSON.stringify({
+        namePrompt: "1girl, solo, furina (genshin impact), drinking tea",
+        featurePrompt: "1girl, solo, white hair, blue eyes, blue outfit, drinking tea",
+      }),
+      true,
+    );
+    expect(parsed.primary).toBe("1girl, solo, furina (genshin impact), drinking tea");
+    expect(parsed.variants?.featurePrompt).toContain("white hair");
+  });
+
+  it("parses labeled known-character variants", () => {
+    const parsed = parsePromptVariantResponse(
+      "角色名版：1girl, solo, furina (genshin impact)\n特征版：1girl, solo, white hair, blue eyes, blue outfit",
+      true,
+    );
+    expect(parsed.variants?.namePrompt).toContain("furina (genshin impact)");
+    expect(parsed.variants?.featurePrompt).not.toContain("furina");
+  });
+
+  it("adds concise no-name guidance when known character mode is off", () => {
+    const instruction = knownCharacterRuntimeInstruction("tags", "convert", false);
+    expect(instruction).toContain("Known network/game/anime character mode is OFF.");
+    expect(instruction).toContain("Do not rely on character name tags");
+    expect(instruction).toContain("Keep the prompt concise");
   });
 });

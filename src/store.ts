@@ -12,6 +12,7 @@ import type {
   I2IParams,
   LastGenerationState,
   NAIInpaintModel,
+  PromptVariants,
   ReversePromptMode,
   ReversePromptScope,
   UpdateInfo,
@@ -42,6 +43,7 @@ interface AppState {
   selectedGroupId: string;
   currentImage: HistoryItem | null;
   workbenchImage: WorkingImage | null;
+  comparisonBeforeImage: WorkingImage | null;
   i2iParams: I2IParams;
   inpaintModel: NAIInpaintModel;
   inpaintStrength: number;
@@ -64,10 +66,14 @@ interface AppState {
   reversePromptMode: ReversePromptMode;
   reversePromptScope: ReversePromptScope;
   reversePromptHint: string;
+  reverseKnownCharacter: boolean;
+  reversePromptVariants: PromptVariants | null;
   reversePrompting: boolean;
   convertInput: string;
   convertResult: string;
   convertMode: ReversePromptMode;
+  convertKnownCharacter: boolean;
+  convertResultVariants: PromptVariants | null;
   converting: boolean;
   isGenerating: boolean;
   queuePaused: boolean;
@@ -98,7 +104,7 @@ interface AppState {
   refreshSettings: () => Promise<void>;
   refreshAccount: () => Promise<void>;
   loadWorkbenchImage: () => Promise<void>;
-  loadWorkbenchFromPath: (filePath: string) => Promise<void>;
+  loadWorkbenchFromPath: (filePath: string, options?: { silent?: boolean }) => Promise<void>;
   clearWorkbenchImage: () => Promise<void>;
   setI2IParam: <K extends keyof I2IParams>(key: K, value: I2IParams[K]) => void;
   setInpaintModel: (model: NAIInpaintModel) => void;
@@ -130,12 +136,15 @@ interface AppState {
   setReversePromptMode: (mode: ReversePromptMode) => void;
   setReversePromptScope: (scope: ReversePromptScope) => void;
   setReversePromptHint: (hint: string) => void;
+  setReverseKnownCharacter: (known: boolean) => void;
   runReversePrompt: () => Promise<void>;
   setConvertInput: (text: string) => void;
   setConvertResult: (text: string) => void;
   setConvertMode: (mode: ReversePromptMode) => void;
+  setConvertKnownCharacter: (known: boolean) => void;
   runConvertPrompt: () => Promise<void>;
   setToast: (message: string) => void;
+  clearImageComparison: () => void;
   // Core actions
   generate: () => Promise<void>;
   generateI2I: () => Promise<void>;
@@ -157,10 +166,16 @@ function requireToken(set: (state: Partial<AppState>) => void, hasToken: boolean
   return false;
 }
 
-async function refreshAfterImage(set: (state: Partial<AppState>) => void, get: () => AppState, item: HistoryItem) {
-  set({ currentImage: item });
+async function refreshAfterImage(
+  set: (state: Partial<AppState>) => void,
+  get: () => AppState,
+  item: HistoryItem,
+  options: { compareBefore?: WorkingImage | null; loadWorkbench?: boolean } = {},
+) {
+  set({ currentImage: item, comparisonBeforeImage: options.compareBefore ?? null });
   await get().refreshHistory(item.date);
   await get().refreshAccount();
+  if (options.loadWorkbench) await get().loadWorkbenchFromPath(item.filePath, { silent: true });
 }
 
 function buildExtras(state: AppState): GenerateExtras {
@@ -222,6 +237,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   selectedGroupId: "",
   currentImage: null,
   workbenchImage: null,
+  comparisonBeforeImage: null,
   i2iParams: { ...DEFAULT_I2I_PARAMS },
   inpaintModel: "nai-diffusion-4-5-curated-inpainting",
   inpaintStrength: 1,
@@ -244,10 +260,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   reversePromptMode: "tags" as ReversePromptMode,
   reversePromptScope: "full" as ReversePromptScope,
   reversePromptHint: "",
+  reverseKnownCharacter: false,
+  reversePromptVariants: null,
   reversePrompting: false,
   convertInput: "",
   convertResult: "",
   convertMode: "tags" as ReversePromptMode,
+  convertKnownCharacter: false,
+  convertResultVariants: null,
   converting: false,
   isGenerating: false,
   queuePaused: false,
@@ -323,7 +343,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setParam(key, value) {
     set((state) => ({ params: { ...state.params, [key]: value } }));
-    persistGenerationState(get);
+    if (key !== "positivePrompt") persistGenerationState(get);
   },
 
   applyParams(patch) {
@@ -412,6 +432,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (result.ok && result.image) {
       set({
         workbenchImage: result.image,
+        comparisonBeforeImage: null,
         inpaintMask: null,
         maskRevision: get().maskRevision + 1,
         statusText: `已加载图片：${result.image.width}×${result.image.height}`,
@@ -421,11 +442,20 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
-  async loadWorkbenchFromPath(filePath) {
+  async loadWorkbenchFromPath(filePath, options) {
     const result = await window.naiDesktop.loadImageFromPath(filePath);
     if (result.ok && result.image) {
+      if (options?.silent) {
+        set({
+          workbenchImage: result.image,
+          inpaintMask: null,
+          maskRevision: get().maskRevision + 1,
+        });
+        return;
+      }
       set({
         workbenchImage: result.image,
+        comparisonBeforeImage: null,
         inpaintMask: null,
         maskRevision: get().maskRevision + 1,
         statusText: `已加载图片：${result.image.width}×${result.image.height}`,
@@ -440,6 +470,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     await window.naiDesktop.clearWorkbenchImage();
     set({
       workbenchImage: null,
+      comparisonBeforeImage: null,
       inpaintMask: null,
       maskRevision: get().maskRevision + 1,
       statusText: "已清除工作台图片",
@@ -554,11 +585,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   setInspectImage(url, meta, base64 = "") {
-    set({ inspectImageUrl: url, inspectMeta: meta, inspectImageBase64: base64, reversePromptText: "" });
+    set({ inspectImageUrl: url, inspectMeta: meta, inspectImageBase64: base64, reversePromptText: "", reversePromptVariants: null });
   },
 
   clearInspect() {
-    set({ inspectImageUrl: "", inspectMeta: null, inspectImageBase64: "", reversePromptText: "" });
+    set({ inspectImageUrl: "", inspectMeta: null, inspectImageBase64: "", reversePromptText: "", reversePromptVariants: null });
   },
 
   setReversePromptText(text) {
@@ -577,22 +608,27 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ reversePromptHint: hint });
   },
 
+  setReverseKnownCharacter(known) {
+    set({ reverseKnownCharacter: known, reversePromptVariants: known ? get().reversePromptVariants : null });
+  },
+
   async runReversePrompt() {
-    const { inspectImageBase64, reversePromptMode, reversePromptScope, reversePromptHint } = get();
+    const { inspectImageBase64, reversePromptMode, reversePromptScope, reversePromptHint, reverseKnownCharacter } = get();
     if (!inspectImageBase64) {
       set({ toast: "请先选择图片。" });
       return;
     }
-    set({ reversePrompting: true });
+    set({ reversePrompting: true, reversePromptVariants: null });
     const result = await window.naiDesktop.reversePrompt(
       inspectImageBase64,
       reversePromptMode,
       reversePromptScope,
       reversePromptHint,
+      reverseKnownCharacter,
     );
     set({ reversePrompting: false });
     if (result.ok && result.prompt) {
-      set({ reversePromptText: result.prompt, toast: "反推完成！" });
+      set({ reversePromptText: result.prompt, reversePromptVariants: result.variants ?? null, toast: "反推完成！" });
     } else {
       set({ toast: result.message });
     }
@@ -610,17 +646,21 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ convertMode: mode });
   },
 
+  setConvertKnownCharacter(known) {
+    set({ convertKnownCharacter: known, convertResultVariants: known ? get().convertResultVariants : null });
+  },
+
   async runConvertPrompt() {
-    const { convertInput, convertMode } = get();
+    const { convertInput, convertMode, convertKnownCharacter } = get();
     if (!convertInput.trim()) {
       set({ toast: "请先输入描述文字。" });
       return;
     }
-    set({ converting: true });
-    const result = await window.naiDesktop.convertPrompt(convertInput, convertMode);
+    set({ converting: true, convertResultVariants: null });
+    const result = await window.naiDesktop.convertPrompt(convertInput, convertMode, convertKnownCharacter);
     set({ converting: false });
     if (result.ok && result.result) {
-      set({ convertResult: result.result, toast: "转换完成！" });
+      set({ convertResult: result.result, convertResultVariants: result.variants ?? null, toast: "转换完成！" });
     } else {
       set({ toast: result.message });
     }
@@ -628,6 +668,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setToast(message) {
     set({ toast: message });
+  },
+
+  clearImageComparison() {
+    set({ comparisonBeforeImage: null });
   },
 
   // ── Generation ─────────────────────────────────────────────────────────────
@@ -646,6 +690,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       isGenerating: true,
       queuePaused: false,
       queueProgress: { done: 0, failed: 0, total },
+      comparisonBeforeImage: null,
       lastAnlasSpent: null,
       lastError: "",
       statusText: total > 1 ? `批量生成 1/${total}...` : "正在调用 NovelAI API 生成图片...",
@@ -733,7 +778,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (result.ok && result.items.length > 0) {
       const current = result.items[0];
       set({ isGenerating: false, statusText: result.message, toast: result.message });
-      await refreshAfterImage(set, get, current);
+      await refreshAfterImage(set, get, current, { compareBefore: state.workbenchImage });
     } else {
       set({ isGenerating: false, lastError: result.message, statusText: "图生图失败", toast: result.message });
     }
@@ -761,7 +806,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (result.ok && result.items.length > 0) {
       const current = result.items[0];
       set({ isGenerating: false, statusText: result.message, toast: result.message });
-      await refreshAfterImage(set, get, current);
+      await refreshAfterImage(set, get, current, { compareBefore: state.workbenchImage, loadWorkbench: true });
     } else {
       set({ isGenerating: false, lastError: result.message, statusText: "重绘失败", toast: result.message });
     }
@@ -778,7 +823,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const result = await window.naiDesktop.upscaleImage(state.upscaleScale);
     if (result.ok && result.item) {
       set({ isGenerating: false, statusText: result.message, toast: result.message });
-      await refreshAfterImage(set, get, result.item);
+      await refreshAfterImage(set, get, result.item, { compareBefore: state.workbenchImage });
     } else {
       set({ isGenerating: false, lastError: result.message, statusText: "超分失败", toast: result.message });
     }
@@ -796,7 +841,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (result.ok && result.items.length > 0) {
       const current = result.items[0];
       set({ isGenerating: false, statusText: result.message, toast: result.message });
-      await refreshAfterImage(set, get, current);
+      await refreshAfterImage(set, get, current, { compareBefore: state.workbenchImage });
     } else {
       set({ isGenerating: false, lastError: result.message, statusText: "后期处理失败", toast: result.message });
     }
@@ -813,7 +858,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   selectImage(item) {
-    set({ currentImage: item, statusText: `已选择历史图片：${item.date}` });
+    set({ currentImage: item, comparisonBeforeImage: null, statusText: `已选择历史图片：${item.date}` });
     void get().loadWorkbenchFromPath(item.filePath);
   },
 
@@ -825,6 +870,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       params: { ...state.params, ...item.params, seed },
       activeTab: "generate",
       currentImage: item,
+      comparisonBeforeImage: null,
       toast: seed > 0 ? `已载入参数并锁定种子 ${seed}，改提示词后生成即为变体` : "已载入参数",
     }));
   },
@@ -833,7 +879,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     await window.naiDesktop.deleteHistory(id);
     await get().refreshHistory();
     const current = get().currentImage;
-    if (current?.id === id) set({ currentImage: get().history[0] ?? null });
+    if (current?.id === id) set({ currentImage: get().history[0] ?? null, comparisonBeforeImage: null });
   },
 
   async renameHistoryItem(id, name) {

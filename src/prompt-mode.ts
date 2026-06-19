@@ -1,4 +1,4 @@
-import type { ModePromptTemplates, ReversePromptMode } from "./types";
+import type { ModePromptTemplates, PromptVariants, ReversePromptMode } from "./types";
 
 type ModePromptDefaults = Record<ReversePromptMode, string>;
 
@@ -27,6 +27,127 @@ export function cleanPromptOutput(raw: string) {
   text = text.replace(/\s*\|\s*/g, " | ");
   text = text.replace(/\s*,\s*/g, ", ");
   return text.trim();
+}
+
+function cleanVariantValue(value: unknown) {
+  return cleanPromptOutput(typeof value === "string" ? value : "");
+}
+
+function extractLooseJson(text: string): Record<string, unknown> | null {
+  const cleaned = (text ?? "").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
+  try {
+    const parsed = JSON.parse(cleaned);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null;
+  } catch {
+    const match = cleaned.match(/\{[\s\S]*\}/);
+    if (!match) return null;
+    try {
+      const parsed = JSON.parse(match[0]);
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null;
+    } catch {
+      return null;
+    }
+  }
+}
+
+function pickFirstString(source: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = source[key];
+    if (typeof value === "string" && value.trim()) return value;
+  }
+  return "";
+}
+
+function parseLabeledVariant(text: string, label: RegExp, stop: RegExp) {
+  const match = text.match(label);
+  if (!match || match.index === undefined) return "";
+  const start = match.index + match[0].length;
+  const rest = text.slice(start);
+  const stopMatch = rest.match(stop);
+  return (stopMatch?.index === undefined ? rest : rest.slice(0, stopMatch.index)).trim();
+}
+
+export function parsePromptVariantResponse(raw: string, knownCharacter: boolean) {
+  if (!knownCharacter) {
+    return { primary: cleanPromptOutput(raw) };
+  }
+
+  const json = extractLooseJson(raw);
+  if (json) {
+    const namePrompt = cleanVariantValue(
+      pickFirstString(json, ["namePrompt", "characterNamePrompt", "name_version", "character_name_version", "versionA"]),
+    );
+    const featurePrompt = cleanVariantValue(
+      pickFirstString(json, ["featurePrompt", "featureTagPrompt", "feature_version", "tag_version", "versionB"]),
+    );
+    if (namePrompt || featurePrompt) {
+      return {
+        primary: namePrompt || featurePrompt,
+        variants: { namePrompt, featurePrompt } satisfies PromptVariants,
+      };
+    }
+  }
+
+  const text = (raw ?? "").trim().replace(/^```(?:text|txt|prompt|markdown)?\s*/i, "").replace(/\s*```$/i, "");
+  const namePrompt = cleanPromptOutput(
+    parseLabeledVariant(
+      text,
+      /(?:角色名版|角色名版本|namePrompt|name prompt|character name version|version a)\s*[:：-]\s*/i,
+      /(?:特征版|特征版本|featurePrompt|feature prompt|feature tag version|version b)\s*[:：-]\s*/i,
+    ),
+  );
+  const featurePrompt = cleanPromptOutput(
+    parseLabeledVariant(
+      text,
+      /(?:特征版|特征版本|featurePrompt|feature prompt|feature tag version|version b)\s*[:：-]\s*/i,
+      /(?:角色名版|角色名版本|namePrompt|name prompt|character name version|version a)\s*[:：-]\s*/i,
+    ),
+  );
+  if (namePrompt || featurePrompt) {
+    return {
+      primary: namePrompt || featurePrompt,
+      variants: { namePrompt, featurePrompt } satisfies PromptVariants,
+    };
+  }
+
+  return { primary: cleanPromptOutput(raw) };
+}
+
+export function knownCharacterRuntimeInstruction(
+  mode: ReversePromptMode,
+  source: "reverse" | "convert",
+  knownCharacter: boolean,
+) {
+  const modeText =
+    mode === "natural"
+      ? "Use concise English natural-language NovelAI prompts."
+      : mode === "mixed"
+        ? "Use concise mixed NovelAI prompts: mostly Danbooru tags with only short natural-language clauses when needed."
+        : "Use concise comma-separated Danbooru / NovelAI tags.";
+
+  if (knownCharacter) {
+    return [
+      "Known network/game/anime character mode is ON.",
+      "Return strict JSON only, with exactly these string keys: namePrompt and featurePrompt.",
+      "namePrompt: use the accurate character tag/name as the character identity. Do not repeat default hair, eyes, outfit, or accessories when the default character tag already covers them.",
+      "featurePrompt: do not use the character name. Use only short visible identity features and outfit tags, for cases where the model library does not know the character.",
+      "Only add outfit, feature, pose, action, or atmosphere details when the image/user request explicitly needs them.",
+      "Keep both prompts short. Avoid long feature lists because they reduce image quality.",
+      "For Furina, the minimal tag-style identity form should look like: 1girl, solo, furina (genshin impact).",
+      modeText,
+      source === "reverse"
+        ? "If the reverse scope is character, do not describe the full scene unless it is needed to identify a visible special outfit or state."
+        : "If the user only says a known character is doing something, do not invent extra default clothing or appearance tags.",
+    ].join("\n");
+  }
+
+  return [
+    "Known network/game/anime character mode is OFF.",
+    "Do not rely on character name tags or copyrighted character names as the identity.",
+    "Describe the subject with short visible appearance, outfit, pose, action, and atmosphere cues instead.",
+    "Keep the prompt concise and avoid long feature or clothing lists.",
+    modeText,
+  ].join("\n");
 }
 
 function tagTokenRatio(text: string) {

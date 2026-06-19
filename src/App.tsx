@@ -50,6 +50,7 @@ import {
   type GenerateParams,
   type ModePromptTemplates,
   type PromptTemplate,
+  type PromptVariants,
   type ReversePromptMode,
   type ReversePromptScope,
   type TagSuggestion,
@@ -78,8 +79,15 @@ function PromptTextarea({
 }) {
   const [suggestions, setSuggestions] = useState<TagSuggestion[]>([]);
   const [activeIdx, setActiveIdx] = useState(0);
+  const composingRef = useRef(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
 
   function clearSuggestions() { setSuggestions([]); }
 
@@ -88,7 +96,7 @@ function PromptTextarea({
     const cursor = e.target.selectionStart ?? text.length;
     onChange(text);
     setActiveIdx(0);
-    if (!enabled) {
+    if (!enabled || composingRef.current) {
       clearSuggestions();
       if (timerRef.current) clearTimeout(timerRef.current);
       return;
@@ -130,6 +138,7 @@ function PromptTextarea({
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.nativeEvent.isComposing || composingRef.current) return;
     if (!suggestions.length) return;
     if (e.key === "ArrowDown") { e.preventDefault(); setActiveIdx((i) => Math.min(i + 1, suggestions.length - 1)); }
     else if (e.key === "ArrowUp") { e.preventDefault(); setActiveIdx((i) => Math.max(i - 1, 0)); }
@@ -146,6 +155,15 @@ function PromptTextarea({
         placeholder={placeholder}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
+        onCompositionStart={() => {
+          composingRef.current = true;
+          clearSuggestions();
+          if (timerRef.current) clearTimeout(timerRef.current);
+        }}
+        onCompositionEnd={(event) => {
+          composingRef.current = false;
+          handleChange(event as unknown as React.ChangeEvent<HTMLTextAreaElement>);
+        }}
         onBlur={() => { if (timerRef.current) clearTimeout(timerRef.current); setTimeout(clearSuggestions, 180); }}
       />
       {suggestions.length > 0 && (
@@ -1471,6 +1489,36 @@ function SingleTemplateEditor({
   );
 }
 
+function PromptVariantCards({
+  variants,
+  onUse,
+}: {
+  variants: PromptVariants | null;
+  onUse: (text: string) => void;
+}) {
+  if (!variants || (!variants.namePrompt.trim() && !variants.featurePrompt.trim())) return null;
+  const cards = [
+    ["角色名版", "适合模型库认识该角色时使用。", variants.namePrompt],
+    ["特征版", "适合模型库不认识该角色时使用。", variants.featurePrompt],
+  ] as const;
+  return (
+    <div className="prompt-variant-grid">
+      {cards.map(([title, hint, text]) => (
+        <div className="prompt-variant-card" key={title}>
+          <div>
+            <strong>{title}</strong>
+            <small>{hint}</small>
+          </div>
+          <textarea readOnly value={text} />
+          <Button className="full" disabled={!text.trim()} onClick={() => onUse(text)}>
+            使用这一版
+          </Button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function ReversePanel() {
   const setInspectImage = useAppStore((state) => state.setInspectImage);
   const clearInspect = useAppStore((state) => state.clearInspect);
@@ -1480,9 +1528,12 @@ function ReversePanel() {
   const reversePromptMode = useAppStore((state) => state.reversePromptMode);
   const reversePromptScope = useAppStore((state) => state.reversePromptScope);
   const reversePromptHint = useAppStore((state) => state.reversePromptHint);
+  const reverseKnownCharacter = useAppStore((state) => state.reverseKnownCharacter);
+  const reversePromptVariants = useAppStore((state) => state.reversePromptVariants);
   const setReversePromptMode = useAppStore((state) => state.setReversePromptMode);
   const setReversePromptScope = useAppStore((state) => state.setReversePromptScope);
   const setReversePromptHint = useAppStore((state) => state.setReversePromptHint);
+  const setReverseKnownCharacter = useAppStore((state) => state.setReverseKnownCharacter);
   const runReversePrompt = useAppStore((state) => state.runReversePrompt);
   const setReversePromptText = useAppStore((state) => state.setReversePromptText);
   const setParam = useAppStore((state) => state.setParam);
@@ -1637,6 +1688,14 @@ function ReversePanel() {
               onChange={(e) => setReversePromptHint(e.target.value)}
             />
           </label>
+          <label className="checkbox-line prompt-character-toggle">
+            <input
+              type="checkbox"
+              checked={reverseKnownCharacter}
+              onChange={(e) => setReverseKnownCharacter(e.target.checked)}
+            />
+            <span>这是网络/游戏/动漫角色，生成角色名版和特征版</span>
+          </label>
         </div>
 
         {hasImage && (
@@ -1659,6 +1718,7 @@ function ReversePanel() {
               value={reversePromptText}
               onChange={(e) => setReversePromptText(e.target.value)}
             />
+            <PromptVariantCards variants={reversePromptVariants} onUse={setReversePromptText} />
             {templates.length > 0 && (
               <div className="template-apply-row">
                 <span style={{ fontSize: 12 }}>应用模板</span>
@@ -1758,7 +1818,10 @@ function PromptConverterPanel() {
   const setConvertInput = useAppStore((state) => state.setConvertInput);
   const setConvertResult = useAppStore((state) => state.setConvertResult);
   const convertMode = useAppStore((state) => state.convertMode);
+  const convertKnownCharacter = useAppStore((state) => state.convertKnownCharacter);
+  const convertResultVariants = useAppStore((state) => state.convertResultVariants);
   const setConvertMode = useAppStore((state) => state.setConvertMode);
+  const setConvertKnownCharacter = useAppStore((state) => state.setConvertKnownCharacter);
   const runConvertPrompt = useAppStore((state) => state.runConvertPrompt);
   const setParam = useAppStore((state) => state.setParam);
   const setToast = useAppStore((state) => state.setToast);
@@ -1817,6 +1880,15 @@ function PromptConverterPanel() {
           ))}
         </div>
 
+        <label className="checkbox-line prompt-character-toggle">
+          <input
+            type="checkbox"
+            checked={convertKnownCharacter}
+            onChange={(e) => setConvertKnownCharacter(e.target.checked)}
+          />
+          <span>这是网络/游戏/动漫角色，生成角色名版和特征版</span>
+        </label>
+
         <Button
           variant="primary"
           className="full"
@@ -1841,6 +1913,7 @@ function PromptConverterPanel() {
               value={convertResult}
               onChange={(e) => setConvertResult(e.target.value)}
             />
+            <PromptVariantCards variants={convertResultVariants} onUse={setConvertResult} />
             {templates.length > 0 && (
               <div className="template-apply-row">
                 <span style={{ fontSize: 12 }}>叠加模板</span>
@@ -1983,8 +2056,231 @@ function AiLogField({ title, text }: { title: string; text: string }) {
 }
 
 // ── Image canvas (center) ─────────────────────────────────────────────────────
+type ViewableImage = { fileUrl: string; width: number; height: number };
+
+function clampNumber(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function ZoomableImageStage({
+  image,
+  compareBeforeImage,
+  alt,
+}: {
+  image: ViewableImage;
+  compareBeforeImage?: ViewableImage | null;
+  alt: string;
+}) {
+  const shellRef = useRef<HTMLDivElement>(null);
+  const frameRef = useRef<HTMLDivElement>(null);
+  const panStartRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [shellSize, setShellSize] = useState({ width: 0, height: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const [compareEnabled, setCompareEnabled] = useState(Boolean(compareBeforeImage));
+  const [compareX, setCompareX] = useState(50);
+  const [isCompareDragging, setIsCompareDragging] = useState(false);
+  const canCompare = Boolean(compareBeforeImage?.fileUrl);
+  const compareClip = `inset(0 0 0 ${compareX}%)`;
+  const frameSize = useMemo(() => {
+    const shellWidth = shellSize.width;
+    const shellHeight = shellSize.height;
+    const imageWidth = Math.max(1, image.width || 1);
+    const imageHeight = Math.max(1, image.height || 1);
+    if (shellWidth <= 0 || shellHeight <= 0) return undefined;
+    const aspect = imageWidth / imageHeight;
+    let width = shellWidth;
+    let height = width / aspect;
+    if (height > shellHeight) {
+      height = shellHeight;
+      width = height * aspect;
+    }
+    return { width, height };
+  }, [image.height, image.width, shellSize.height, shellSize.width]);
+
+  useEffect(() => {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+    setCompareX(50);
+    setCompareEnabled(Boolean(compareBeforeImage));
+  }, [image.fileUrl, compareBeforeImage?.fileUrl]);
+
+  useEffect(() => {
+    const element = shellRef.current;
+    if (!element) return;
+    const update = () => {
+      const rect = element.getBoundingClientRect();
+      setShellSize({ width: rect.width, height: rect.height });
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!isCompareDragging) return;
+    const move = (event: PointerEvent) => updateComparePosition(event.clientX);
+    const up = () => setIsCompareDragging(false);
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    return () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    };
+  }, [isCompareDragging]);
+
+  function resetView() {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+  }
+
+  function clampPanForZoom(nextPan: { x: number; y: number }, nextZoom: number) {
+    if (!frameSize || shellSize.width <= 0 || shellSize.height <= 0) return nextPan;
+    const baseLeft = (shellSize.width - frameSize.width) / 2;
+    const baseTop = (shellSize.height - frameSize.height) / 2;
+    const scaledWidth = frameSize.width * nextZoom;
+    const scaledHeight = frameSize.height * nextZoom;
+    const centeredX = (shellSize.width - scaledWidth) / 2 - baseLeft;
+    const centeredY = (shellSize.height - scaledHeight) / 2 - baseTop;
+    const minX = scaledWidth > shellSize.width ? shellSize.width - baseLeft - scaledWidth : centeredX;
+    const maxX = scaledWidth > shellSize.width ? -baseLeft : centeredX;
+    const minY = scaledHeight > shellSize.height ? shellSize.height - baseTop - scaledHeight : centeredY;
+    const maxY = scaledHeight > shellSize.height ? -baseTop : centeredY;
+    return {
+      x: clampNumber(nextPan.x, minX, maxX),
+      y: clampNumber(nextPan.y, minY, maxY),
+    };
+  }
+
+  function updateComparePosition(clientX: number) {
+    const rect = frameRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const next = ((clientX - rect.left) / Math.max(1, rect.width)) * 100;
+    setCompareX(clampNumber(next, 0, 100));
+  }
+
+  function handleWheel(event: React.WheelEvent<HTMLDivElement>) {
+    event.preventDefault();
+    const rect = frameRef.current?.getBoundingClientRect();
+    const next = clampNumber(zoom * (event.deltaY < 0 ? 1.16 : 1 / 1.16), 1, 8);
+    if (!rect || next === 1) {
+      setZoom(next);
+      setPan({ x: 0, y: 0 });
+      return;
+    }
+    const baseLeft = rect.left - pan.x;
+    const baseTop = rect.top - pan.y;
+    const imageX = clampNumber((event.clientX - rect.left) / zoom, 0, rect.width / zoom);
+    const imageY = clampNumber((event.clientY - rect.top) / zoom, 0, rect.height / zoom);
+    setZoom(next);
+    setPan(clampPanForZoom({
+      x: event.clientX - baseLeft - imageX * next,
+      y: event.clientY - baseTop - imageY * next,
+    }, next));
+  }
+
+  function handlePointerDown(event: React.PointerEvent<HTMLDivElement>) {
+    if (zoom <= 1) return;
+    if (event.button !== 1) return;
+    const target = event.target as HTMLElement;
+    if (target.closest("button")) return;
+    event.preventDefault();
+    panStartRef.current = { x: event.clientX, y: event.clientY, panX: pan.x, panY: pan.y };
+    setIsPanning(true);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function handlePointerMove(event: React.PointerEvent<HTMLDivElement>) {
+    if (!isPanning || !panStartRef.current) return;
+    const start = panStartRef.current;
+    setPan(clampPanForZoom({
+      x: start.panX + event.clientX - start.x,
+      y: start.panY + event.clientY - start.y,
+    }, zoom));
+  }
+
+  function stopPanning(event: React.PointerEvent<HTMLDivElement>) {
+    setIsPanning(false);
+    panStartRef.current = null;
+    try {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    } catch {
+      // Pointer capture may already be released when the pointer leaves the app window.
+    }
+  }
+
+  return (
+    <div className="image-stage">
+      <div className="image-viewer-toolbar">
+        <span>{Math.round(zoom * 100)}%</span>
+        <button type="button" className="btn btn-ghost btn-mini" onClick={resetView} disabled={zoom === 1 && pan.x === 0 && pan.y === 0}>
+          复位
+        </button>
+        {canCompare ? (
+          <button
+            type="button"
+            className={clsx("btn btn-ghost btn-mini", compareEnabled && "active")}
+            onClick={() => setCompareEnabled((value) => !value)}
+          >
+            对比
+          </button>
+        ) : null}
+      </div>
+      <div
+        ref={shellRef}
+        className={clsx("zoom-frame-shell", zoom > 1 && "is-zoomed", isPanning && "is-panning")}
+        onWheel={handleWheel}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={stopPanning}
+        onPointerCancel={stopPanning}
+        onAuxClick={(event) => event.preventDefault()}
+      >
+        <div
+          ref={frameRef}
+          className="zoom-frame"
+          style={{ ...frameSize, transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}
+        >
+          <img
+            className={clsx("zoom-image", compareEnabled && canCompare && "zoom-image-measure")}
+            src={image.fileUrl}
+            alt={alt}
+            draggable={false}
+          />
+          {compareEnabled && canCompare ? (
+            <>
+              <img className="zoom-image zoom-image-absolute" src={compareBeforeImage!.fileUrl} alt="处理前图片" draggable={false} />
+              <div className="compare-after-clip" style={{ clipPath: compareClip }}>
+                <img className="zoom-image zoom-image-absolute" src={image.fileUrl} alt="处理后图片" draggable={false} />
+              </div>
+              <button
+                type="button"
+                className="compare-divider"
+                style={{ left: `${compareX}%` }}
+                onPointerDown={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setIsCompareDragging(true);
+                  updateComparePosition(event.clientX);
+                }}
+                aria-label="拖动查看处理前后差异"
+                title="拖动查看处理前后差异"
+              >
+                <span />
+              </button>
+            </>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ImageCanvas() {
   const currentImage = useAppStore((state) => state.currentImage);
+  const comparisonBeforeImage = useAppStore((state) => state.comparisonBeforeImage);
   const isGenerating = useAppStore((state) => state.isGenerating);
   const activeTab = useAppStore((state) => state.activeTab);
   const generate = useAppStore((state) => state.generate);
@@ -2017,9 +2313,7 @@ function ImageCanvas() {
     return (
       <main className="canvas-area">
         {inspectImageUrl ? (
-          <div className="image-stage">
-            <img src={inspectImageUrl} alt="反推图片" />
-          </div>
+          <ZoomableImageStage image={{ fileUrl: inspectImageUrl, width: 1, height: 1 }} alt="反推图片" />
         ) : (
           <div className="coming-soon">
             <div className="coming-soon-icon">✦</div>
@@ -2080,11 +2374,7 @@ function ImageCanvas() {
           </span>
         </button>
       )}
-      {currentImage && (
-        <div className="image-stage">
-          <img src={currentImage.fileUrl} alt="生成结果" />
-        </div>
-      )}
+      {currentImage && <ZoomableImageStage image={currentImage} compareBeforeImage={comparisonBeforeImage} alt="生成结果" />}
     </main>
   );
 }
@@ -2254,7 +2544,7 @@ function HistoryPanel() {
           <div className="history-item" key={item.id}>
             <button onClick={() => selectImage(item)}>
               <div className="history-thumb-frame">
-                <img src={item.fileUrl} alt="历史缩略图" loading="lazy" decoding="async" />
+                <img src={item.fileUrl} alt="历史缩略图" />
               </div>
               <span className="history-meta">{item.model} · {item.width}×{item.height}</span>
             </button>

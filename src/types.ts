@@ -1,4 +1,4 @@
-export const APP_VERSION = "0.9.1";
+export const APP_VERSION = "0.9.2";
 export const APP_NAME = "Langbai NovelAI Studio";
 export const PROJECT_REPOSITORY = "https://github.com/2786886095/novelai-image-desktop";
 
@@ -167,9 +167,15 @@ export interface GenerateExtras {
   charCaptions: CharCaptionItem[];
 }
 
+export interface PromptVariants {
+  namePrompt: string;
+  featurePrompt: string;
+}
+
 export type ComicReferenceKind = "vibe" | "precise" | "character" | "scene" | "object";
 export type ComicPanelStatus = "draft" | "converted" | "generating" | "done" | "failed";
 export type ComicDesiredPanelCount = "auto" | number;
+export type GenerateFailureKind = "auth" | "reference" | "validation" | "api" | "cancelled";
 
 export interface ComicReferenceAsset {
   id: string;
@@ -182,6 +188,7 @@ export interface ComicReferenceAsset {
   reversePrompt: string;
   infoExtracted: number;
   strength: number;
+  useForGeneration: boolean;
 }
 
 export interface ComicPanelParamsOverride {
@@ -413,6 +420,8 @@ export interface GenerateResult {
   message: string;
   items: HistoryItem[];
   actualSeed?: number;
+  failureKind?: GenerateFailureKind;
+  statusCode?: number;
 }
 
 export interface SingleImageResult {
@@ -604,8 +613,13 @@ export interface NaiDesktopApi {
     mode: ReversePromptMode,
     scope?: ReversePromptScope,
     hint?: string,
-  ) => Promise<{ ok: boolean; prompt?: string; message: string }>;
-  convertPrompt: (text: string, mode: ReversePromptMode) => Promise<{ ok: boolean; result?: string; message: string }>;
+    knownCharacter?: boolean,
+  ) => Promise<{ ok: boolean; prompt?: string; variants?: PromptVariants; message: string }>;
+  convertPrompt: (
+    text: string,
+    mode: ReversePromptMode,
+    knownCharacter?: boolean,
+  ) => Promise<{ ok: boolean; result?: string; variants?: PromptVariants; message: string }>;
   comicAnalyzeScript: (request: ComicAnalyzeRequest) => Promise<ComicAnalyzeResult>;
   comicConvertPanels: (request: ComicConvertRequest) => Promise<ComicConvertResult>;
   comicCheckConsistency: (request: ComicConsistencyRequest) => Promise<ComicConsistencyResult>;
@@ -614,7 +628,8 @@ export interface NaiDesktopApi {
     mode: ReversePromptMode,
     scope?: ReversePromptScope,
     hint?: string,
-  ) => Promise<{ ok: boolean; prompt?: string; message: string }>;
+    knownCharacter?: boolean,
+  ) => Promise<{ ok: boolean; prompt?: string; variants?: PromptVariants; message: string }>;
   comicGeneratePanel: (request: ComicGeneratePanelRequest) => Promise<GenerateResult>;
   comicExportProjectZip: (project: ComicProject) => Promise<ComicExportZipResult>;
   getAiCallLog: () => Promise<AiCallLogEntry[]>;

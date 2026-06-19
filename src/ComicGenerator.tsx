@@ -18,6 +18,7 @@ import {
   type ComicProject,
   type ComicReferenceAsset,
   type ComicReferenceKind,
+  type GenerateFailureKind,
   type GenerateParams,
   type NAIModel,
   type NAISampler,
@@ -55,6 +56,7 @@ function normalizeComicReference(ref: Partial<ComicReferenceAsset>): ComicRefere
     reversePrompt: ref.reversePrompt ?? "",
     infoExtracted: typeof ref.infoExtracted === "number" ? ref.infoExtracted : 0.7,
     strength: typeof ref.strength === "number" ? ref.strength : 0.45,
+    useForGeneration: ref.useForGeneration ?? true,
   };
 }
 
@@ -104,6 +106,18 @@ function normalizeComicProject(
     globalParams: { ...params, ...(source.globalParams ?? {}), positivePrompt: "" },
     references: (source.references ?? []).map((ref) => normalizeComicReference(ref)),
     panels: (source.panels ?? []).map((panel, index) => normalizeComicPanelData(panel, index, options.trustOutputs)),
+  };
+}
+
+function makeStoredComicProject(project: ComicProject): ComicProject {
+  return {
+    ...project,
+    references: project.references.map((ref) => ({
+      ...ref,
+      // previewUrl duplicates base64 as a data URL and can double localStorage work.
+      // normalizeComicReference rebuilds it from base64 when the project is loaded.
+      previewUrl: "",
+    })),
   };
 }
 
@@ -217,7 +231,14 @@ function updateReference(
 }
 
 type QueueState = { total: number; done: number; current: number; paused: boolean } | null;
-type PanelOutput = { historyItemId?: string; outputPath?: string; outputUrl?: string; date?: string };
+type PanelOutput = {
+  ok: boolean;
+  historyItemId?: string;
+  outputPath?: string;
+  outputUrl?: string;
+  failureKind?: GenerateFailureKind;
+  message?: string;
+};
 
 export function ToolsHub() {
   const [activeTool, setActiveTool] = useState<"hub" | "comic">("hub");
@@ -259,26 +280,42 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [queue, setQueue] = useState<QueueState>(null);
   const queueRef = useRef({ paused: false, cancelled: false });
+  const mountedRef = useRef(true);
 
   useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+      queueRef.current.cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      if (cancelled) return;
     // Reference images are stored as base64; a few large ones can blow past the
     // localStorage quota. Guard the write and fall back to persisting references
     // without their image data rather than letting the page state go unstable.
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(project));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(makeStoredComicProject(project)));
     } catch {
       try {
-        const slim = {
+        const slim = makeStoredComicProject({
           ...project,
           references: project.references.map((ref) => ({ ...ref, base64: "", previewUrl: "" })),
-        };
+        });
         localStorage.setItem(STORAGE_KEY, JSON.stringify(slim));
         setToast("参考图过大，已只保存项目文本（参考图需重新上传）。建议精简参考图数量或尺寸。");
       } catch {
         setToast("项目过大，无法保存到本地缓存，请导出项目 JSON 备份。");
       }
     }
-  }, [project]);
+    }, 700);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [project, setToast]);
 
   const panels = useMemo(() => sortedPanels(project), [project]);
   const activePanel = useMemo(() => panels.find((panel) => panel.id === activePanelId) ?? panels[0], [panels, activePanelId]);
@@ -418,6 +455,7 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
         subjectHint: "",
         infoExtracted: 1,
         strength: 0.65,
+        useForGeneration: true,
       });
     }
     setProject((prev) => ({ ...prev, references: [...prev.references, ...refs] }));
@@ -586,8 +624,9 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
     }
   }
 
-  async function generatePanel(panel: ComicPanel): Promise<PanelOutput | undefined> {
+  async function generatePanel(panel: ComicPanel): Promise<PanelOutput> {
     setBusy(`generate:${panel.id}`);
+    setProject((prev) => updatePanel(prev, panel.id, (old) => ({ ...old, status: "generating", error: undefined })));
     try {
       const result = await window.naiDesktop.comicGeneratePanel({
         projectId: project.id,
@@ -603,6 +642,9 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
         previousImagePath: undefined,
         inheritPreviousFrame: false,
       });
+      if (!mountedRef.current || queueRef.current.cancelled) {
+        return { ok: false, failureKind: "cancelled", message: "已取消漫画生图队列。" };
+      }
       const item = result.items[0];
       setProject((prev) =>
         updatePanel(prev, panel.id, (old) => ({
@@ -614,16 +656,16 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
           error: result.ok ? undefined : result.message,
         })),
       );
-      // history/account are refreshed ONCE per batch in runQueue, not per panel.
-      // Refreshing after every panel reloaded the whole history list each time and
-      // left a huge, freshly-grown history grid that blocked the main thread (and
-      // froze the prompt input) the moment the user returned to the 生成/重绘 tab.
-      if (result.ok && item) {
-        return { historyItemId: item.id, outputPath: item.filePath, outputUrl: item.fileUrl, date: item.date };
+      if (item && mountedRef.current) {
+        await refreshHistory(item.date);
+        await refreshAccount();
       }
-      return undefined;
+      if (result.ok && item) {
+        return { ok: true, historyItemId: item.id, outputPath: item.filePath, outputUrl: item.fileUrl };
+      }
+      return { ok: false, failureKind: result.failureKind, message: result.message };
     } finally {
-      setBusy("");
+      if (mountedRef.current) setBusy("");
     }
   }
 
@@ -635,7 +677,7 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
       if (result.ok && result.path) setGenerationLog(`ZIP 已导出：${result.path}`);
       return result.ok;
     } finally {
-      setBusy("");
+      if (mountedRef.current) setBusy("");
     }
   }
 
@@ -656,17 +698,20 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
       setQueue((q) => (q ? { ...q, current: i + 1 } : q));
       setGenerationLog(`正在生成第 ${targets[i].index} 张（${i + 1}/${targets.length}）...`);
       const output = await generatePanel(targets[i]);
-      if (output) generatedOutputs.set(targets[i].id, output);
+      if (!mountedRef.current || output.failureKind === "cancelled") break;
+      if (output.ok) {
+        generatedOutputs.set(targets[i].id, output);
+      } else if (output.failureKind === "auth") {
+        queueRef.current.cancelled = true;
+        const message = `队列已停止：${output.message ?? "NovelAI Token 或 Image Endpoint 鉴权失败。"}`;
+        setGenerationLog(message);
+        setToast(message);
+      }
       setQueue((q) => (q ? { ...q, done: i + 1 } : q));
     }
+    if (!mountedRef.current) return;
     const cancelled = queueRef.current.cancelled;
     setQueue(null);
-    // Refresh shared history/account once for the whole batch (see generatePanel).
-    if (generatedOutputs.size > 0) {
-      const lastDate = [...generatedOutputs.values()].map((o) => o.date).filter(Boolean).pop();
-      await refreshHistory(lastDate);
-      await refreshAccount();
-    }
     if (!cancelled && project.autoExportZip) {
       const exportTarget: ComicProject = {
         ...project,
@@ -683,16 +728,31 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
     }
   }
 
-  function startQueue(targets: ComicPanel[]) {
+  async function startQueue(targets: ComicPanel[]) {
     if (!targets.length) {
       setToast("没有可生成的分镜。");
       return;
     }
-    const est = estimateAnlas(project.globalParams, targets.length, account.tierLevel);
+    const freshAccount = await window.naiDesktop.hasToken();
+    if (!freshAccount.hasToken) {
+      setToast("请先在设置中配置 NovelAI API Token。");
+      await refreshAccount();
+      return;
+    }
+    if (!settings?.imageBaseUrl?.trim()) {
+      setToast("请先在设置中填写 NovelAI Image Endpoint。");
+      return;
+    }
+    const emptyPrompt = targets.find((panel) => !(panel.enPrompt || panel.cnPrompt).trim());
+    if (emptyPrompt) {
+      setToast(`分镜 #${emptyPrompt.index} 缺少可用于生图的提示词。`);
+      return;
+    }
+    const est = estimateAnlas(project.globalParams, targets.length, freshAccount.tierLevel);
     const ok = window.confirm(
       `将按顺序生成 ${targets.length} 个分镜。\n` +
         `预计消耗：${est.free ? "可能免费" : `${est.total} Anlas`}\n` +
-        `当前余额：${account.anlasBalance ?? "未知"} Anlas\n\n是否继续？`,
+        `当前余额：${freshAccount.anlasBalance ?? "未知"} Anlas\n\n是否继续？`,
     );
     if (!ok) return;
     void runQueue(targets);
@@ -874,6 +934,17 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
                         />
                       </label>
                     </div>
+                    <label className="checkbox-line comic-reference-generate-toggle">
+                      <input
+                        type="checkbox"
+                        checked={ref.useForGeneration !== false}
+                        onChange={(event) => setProject((prev) => updateReference(prev, ref.id, (item) => ({
+                          ...item,
+                          useForGeneration: event.target.checked,
+                        })))}
+                      />
+                      <span>参与最终生图参考（关闭后仍保留说明和反推结果）</span>
+                    </label>
                     <div className="comic-actions">
                       <Button onClick={() => reverseReference(ref)} disabled={busy === `reverse:${ref.id}`}>
                         {busy === `reverse:${ref.id}` ? "反推中..." : "反推参考图"}
@@ -1034,7 +1105,7 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
                   <span>{activePanel.error || (activePanel.outputPath ? "已出图" : "尚未生成")}</span>
                   <div className="comic-actions">
                     <Button onClick={() => convertPanels([activePanel])} disabled={busy === "convert"}>转换本张</Button>
-                    <Button onClick={() => startQueue([activePanel])} disabled={Boolean(busy) || queueRunning} variant="primary">
+                    <Button onClick={() => void startQueue([activePanel])} disabled={Boolean(busy) || queueRunning} variant="primary">
                       {busy === `generate:${activePanel.id}` ? "生成中..." : "生成本张"}
                     </Button>
                   </div>
@@ -1138,7 +1209,7 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
                     <span>{panel.error || (panel.outputPath ? "已出图" : "尚未生成")}</span>
                     <div className="comic-actions">
                       <Button onClick={() => convertPanels([panel])} disabled={busy === "convert"}>转换</Button>
-                      <Button onClick={() => startQueue([panel])} disabled={Boolean(busy) || queueRunning} variant="primary">
+                      <Button onClick={() => void startQueue([panel])} disabled={Boolean(busy) || queueRunning} variant="primary">
                         {busy === `generate:${panel.id}` ? "生成中..." : "生成本张"}
                       </Button>
                     </div>
@@ -1190,8 +1261,8 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
                   导入参考图 / 素材图
                   <input type="file" accept="image/*" multiple onChange={(event) => addReferences(event.target.files)} />
                 </label>
-                <Button onClick={() => startQueue(panels)} variant="primary">生成全部（{panels.length}）</Button>
-                <Button onClick={() => startQueue(selectedPanels)} disabled={!selectedIds.size}>
+                <Button onClick={() => void startQueue(panels)} variant="primary">生成全部（{panels.length}）</Button>
+                <Button onClick={() => void startQueue(selectedPanels)} disabled={!selectedIds.size}>
                   生成选中（{selectedPanels.length}）
                 </Button>
                 <Button onClick={() => void exportProjectZip()} disabled={!doneCount || busy === "exportZip"}>
@@ -1249,13 +1320,13 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
             {panels.map((panel) => (
               <div className={clsx("comic-thumb", panel.status)} key={panel.id} title={panel.error || panel.cnPrompt}>
                 {panel.outputUrl ? (
-                  <img src={panel.outputUrl} alt={`#${panel.index}`} loading="lazy" decoding="async" />
+                  <img src={panel.outputUrl} alt={`#${panel.index}`} />
                 ) : (
                   <div className="comic-thumb-empty">#{panel.index}</div>
                 )}
                 <span>#{panel.index}</span>
                 {panel.status === "failed" && (
-                  <Button variant="danger" onClick={() => startQueue([panel])} disabled={queueRunning}>重试</Button>
+                  <Button variant="danger" onClick={() => void startQueue([panel])} disabled={queueRunning}>重试</Button>
                 )}
               </div>
             ))}

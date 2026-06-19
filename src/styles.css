@@ -942,24 +942,156 @@ button { user-select: none; }
 
 /* ── Image stage ─────────────────────────────────────────────────────────────── */
 .image-stage {
-  /* Absolute inset gives a DEFINITE box (canvas minus a margin). Use FLEX (not
-     grid) to center: a grid's implicit auto row grows to the image's content
-     height, so max-height:100% on the img wouldn't constrain and a tall
-     portrait overflowed/clipped. Flex resolves max-height:100% against this box. */
   position: absolute;
   inset: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 10px;
   overflow: hidden;
 }
-.image-stage img {
+.image-stage > img {
   display: block;
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-xl);
+}
+.image-viewer-toolbar {
+  position: relative;
+  justify-self: end;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid rgba(124, 58, 237, 0.16);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(14px);
+  box-shadow: var(--shadow-sm);
+}
+.image-viewer-toolbar > span {
+  min-width: 42px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+.image-viewer-toolbar .btn.active {
+  border-color: transparent;
+  background: var(--accent);
+  color: #fff;
+}
+.zoom-frame-shell {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  touch-action: none;
+  cursor: zoom-in;
+}
+.zoom-frame-shell.is-zoomed { cursor: zoom-in; }
+.zoom-frame-shell.is-panning { cursor: grabbing; }
+.zoom-frame {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  transform-origin: top left;
+  transition: transform 0.12s var(--ease-out);
+}
+.zoom-frame-shell.is-panning .zoom-frame { transition: none; }
+.zoom-image {
+  display: block;
+  grid-area: 1 / 1;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  object-fit: contain;
+  border-radius: var(--radius-md);
+  filter: drop-shadow(0 20px 36px rgba(42, 31, 84, 0.20));
+  user-select: none;
+  pointer-events: none;
+}
+.zoom-image-measure { opacity: 0; }
+.zoom-image-absolute,
+.compare-after-clip {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.zoom-image-absolute {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.compare-after-clip {
+  overflow: hidden;
+  pointer-events: none;
+}
+.compare-divider {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 4;
+  width: 34px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: ew-resize;
+  transform: translateX(-50%);
+}
+.compare-divider::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow:
+    0 0 0 1px rgba(124, 58, 237, 0.58),
+    0 0 18px rgba(124, 58, 237, 0.28);
+}
+.compare-divider span {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 24px;
+  height: 42px;
+  border: 1px solid rgba(124, 58, 237, 0.34);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: var(--shadow-sm);
+  transform: translate(-50%, -50%);
+}
+.compare-divider span::before,
+.compare-divider span::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  border-top: 1.6px solid var(--accent);
+  border-left: 1.6px solid var(--accent);
+}
+.compare-divider span::before {
+  left: 6px;
+  transform: translateY(-50%) rotate(-45deg);
+}
+.compare-divider span::after {
+  right: 6px;
+  transform: translateY(-50%) rotate(135deg);
 }
 
 /* ── Generating overlay ──────────────────────────────────────────────────────── */
@@ -1032,6 +1164,8 @@ button { user-select: none; }
   box-shadow: var(--shadow-xl);
   user-select: none;
   pointer-events: none;
+  transform-origin: top left;
+  transition: transform 0.12s var(--ease-out);
 }
 .inpaint-mask-canvas {
   position: absolute;
@@ -1045,6 +1179,8 @@ button { user-select: none; }
   touch-action: none;
   mix-blend-mode: screen;
   opacity: 0.62;
+  transform-origin: top left;
+  transition: transform 0.12s var(--ease-out);
 }
 .inpaint-cursor {
   position: absolute;
@@ -1057,6 +1193,29 @@ button { user-select: none; }
   pointer-events: none;
   transform: translate(-50%, -50%);
   transition: width 0.08s ease, height 0.08s ease, opacity 0.08s ease;
+}
+.inpaint-compare-img,
+.inpaint-compare-after-clip {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.inpaint-compare-img {
+  z-index: 1;
+  object-fit: contain;
+  border-radius: var(--radius-md);
+  filter: drop-shadow(0 20px 36px rgba(42, 31, 84, 0.20));
+  transform-origin: top left;
+  transition: transform 0.12s var(--ease-out);
+}
+.inpaint-compare-after-clip {
+  z-index: 2;
+  overflow: hidden;
+}
+.inpaint-compare-divider {
+  z-index: 6;
 }
 /* Inpaint workspace: stack a static tool bar above the canvas so the buttons
    never sit on top of (and occlude) the image being masked. */
@@ -1078,6 +1237,8 @@ button { user-select: none; }
   flex: 0 0 auto;
   align-self: center;
   display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 8px;
   padding: 6px;
   border: 1px solid rgba(124, 58, 237, 0.16);
@@ -1090,6 +1251,14 @@ button { user-select: none; }
   font-size: 16px;
   line-height: 1;
   vertical-align: -1px;
+}
+.inpaint-zoom-readout {
+  align-self: center;
+  min-width: 44px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
 }
 .inpaint-export-preview {
   position: absolute;
@@ -1104,6 +1273,8 @@ button { user-select: none; }
   opacity: 0.72;
   mix-blend-mode: multiply;
   pointer-events: none;
+  transform-origin: top left;
+  transition: transform 0.12s var(--ease-out);
 }
 .inpaint-empty {
   max-width: 420px;
@@ -1778,6 +1949,41 @@ button { user-select: none; }
 .template-chip:active { transform: scale(0.95); }
 .template-dropdown { position: relative; }
 .template-pop { position: absolute; top: calc(100% + 4px); left: 0; z-index: 200; min-width: 160px; }
+.prompt-character-toggle {
+  margin: 8px 0;
+  font-size: 12px;
+}
+.prompt-variant-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+.prompt-variant-card {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(124, 58, 237, 0.16);
+  background: rgba(255, 255, 255, 0.62);
+}
+.prompt-variant-card strong,
+.prompt-variant-card small { display: block; }
+.prompt-variant-card small {
+  margin-top: 3px;
+  color: var(--text-muted);
+}
+.prompt-variant-card textarea {
+  width: 100%;
+  min-height: 82px;
+  resize: vertical;
+  border: 1px solid rgba(124, 58, 237, 0.14);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--text-secondary);
+  padding: 8px;
+  line-height: 1.5;
+}
 
 /* ── Inspect / Reverse Prompt panel ─────────────────────────────────────────── */
 .inspect-drop-zone {
@@ -1942,6 +2148,7 @@ button { user-select: none; }
   right: 20px;
   bottom: 34px;
   z-index: 2000;
+  pointer-events: none;
   max-width: 480px;
   border: 1px solid rgba(109, 40, 217, 0.18);
   border-radius: var(--radius-xl);
@@ -2693,7 +2900,7 @@ html, body, #root {
   background: rgba(255,255,255,0.70);
   box-shadow: inset 0 0 0 1px rgba(255,255,255,0.68);
 }
-.image-stage img {
+.image-stage > img {
   border-radius: 24px;
   box-shadow: 0 34px 100px rgba(38, 20, 84, 0.28);
 }
@@ -3061,6 +3268,10 @@ html, body, #root {
 
   .settings-nav button {
     min-width: max-content;
+  }
+
+  .image-viewer-toolbar {
+    justify-self: center;
   }
 }
 @keyframes splash-fade {
@@ -3837,11 +4048,12 @@ button.prompt-chip-head {
 .comic-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
 .comic-panels-card {
-    min-height: calc(100vh - 235px);
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-  }
+  min-height: calc(100vh - 235px);
+  min-width: 0;
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+}
 .comic-panel-list {
   display: grid;
   gap: 14px;
@@ -3976,18 +4188,24 @@ button.prompt-chip-head {
   padding: 9px 10px;
   outline: none;
 }
+.comic-reference-generate-toggle {
+  margin-top: 8px;
+  font-size: 12px;
+}
 .comic-panel-workspace {
-    display: grid;
-    grid-template-columns: 190px minmax(0, 1fr);
-    gap: 14px;
-    flex: 1;
-    min-height: min(70vh, 720px);
-  }
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr);
+  gap: 14px;
+  flex: 1;
+  min-height: 0;
+  height: min(72vh, 720px);
+}
 .comic-panel-sidebar {
   display: grid;
   align-content: start;
   gap: 8px;
-    max-height: min(70vh, 720px);
+  min-height: 0;
+  max-height: none;
   overflow-y: auto;
   padding-right: 6px;
 }
@@ -4011,8 +4229,11 @@ button.prompt-chip-head {
 .comic-panel-nav-item small { color: var(--text-muted); }
 .comic-panel-editor {
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 12px;
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
   padding: 14px;
   border-radius: 24px;
   border: 1px solid rgba(124, 58, 237, 0.12);
@@ -4025,13 +4246,23 @@ button.prompt-chip-head {
   align-items: center;
   gap: 12px;
 }
-.comic-panel-editor .comic-panel-grid textarea { min-height: 260px; }
+.comic-panel-editor > header,
+.comic-panel-editor > footer {
+  flex-wrap: wrap;
+}
+.comic-panel-editor .comic-panel-grid {
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+  align-content: start;
+}
+.comic-panel-editor .comic-panel-grid textarea { min-height: 300px; }
 .comic-panels-card > .comic-panel-list { display: none; }
 
 /* Step wizard nav */
 .comic-steps {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
 }
 .comic-step-btn {
@@ -4115,8 +4346,10 @@ button.prompt-chip-head {
 }
 .comic-thumb {
   display: grid;
+  grid-template-rows: auto auto auto;
   gap: 4px;
   justify-items: center;
+  align-content: start;
   font-size: 11px;
   color: var(--text-muted);
 }
@@ -4137,9 +4370,23 @@ button.prompt-chip-head {
 .comic-thumb.done img { border-color: rgba(22, 163, 74, 0.5); }
 .comic-thumb.failed .comic-thumb-empty,
 .comic-thumb.failed img { border-color: rgba(239, 68, 68, 0.5); }
+.comic-thumb .btn {
+  min-height: 30px;
+  padding: 0 12px;
+  font-size: 12px;
+}
 
 .theme-dark .comic-step-btn { background: rgba(24, 20, 44, 0.7); border-color: rgba(168, 139, 250, 0.16); }
 .theme-dark .comic-step-btn.active { background: rgba(30, 25, 54, 0.95); }
+.theme-dark .image-viewer-toolbar,
+.theme-dark .inpaint-mask-toolbar {
+  background: rgba(24, 20, 44, 0.82);
+  border-color: rgba(168, 139, 250, 0.16);
+}
+.theme-dark .compare-divider span {
+  background: rgba(24, 20, 44, 0.92);
+  border-color: rgba(168, 139, 250, 0.28);
+}
 
 .theme-dark .comic-hero,
 .theme-dark .comic-card,
@@ -4151,7 +4398,8 @@ button.prompt-chip-head {
 .theme-dark .tool-card,
 .theme-dark .comic-api-info div,
 .theme-dark .comic-inline-help,
-.theme-dark .comic-template-preview {
+.theme-dark .comic-template-preview,
+.theme-dark .prompt-variant-card {
   background: rgba(24, 20, 44, 0.86);
   border-color: rgba(168, 139, 250, 0.16);
 }
@@ -4162,7 +4410,8 @@ button.prompt-chip-head {
 .theme-dark .comic-panel-options select,
 .theme-dark .comic-reference select,
 .theme-dark .comic-reference textarea,
-.theme-dark .comic-upload-btn {
+.theme-dark .comic-upload-btn,
+.theme-dark .prompt-variant-card textarea {
   background: rgba(18, 15, 33, 0.88);
   border-color: rgba(168, 139, 250, 0.16);
   color: var(--text-primary);
@@ -4177,4 +4426,14 @@ button.prompt-chip-head {
   }
   .comic-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .comic-cost-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .comic-panel-workspace,
+  .prompt-variant-grid {
+    grid-template-columns: 1fr;
+  }
+  .comic-panel-workspace {
+    height: auto;
+  }
+  .comic-panel-sidebar {
+    max-height: 240px;
+  }
 }

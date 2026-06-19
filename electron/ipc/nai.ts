@@ -59,9 +59,11 @@ import {
   buildConvertUserText,
   buildModeRepairUserText,
   cleanPromptOutput,
+  knownCharacterRuntimeInstruction,
   modeNeedsRepair,
   modeUserInstruction,
   modeRepairSystemPrompt,
+  parsePromptVariantResponse,
   resolveModePrompt,
 } from "../../src/prompt-mode";
 
@@ -667,21 +669,33 @@ async function postGenerateImage(payload: ReturnType<typeof buildPayload>) {
   if (!token) throw new Error("请先配置 API Token。");
   const settings = getSettings();
   const imageBaseUrl = normalizeBaseUrl(settings.imageBaseUrl, "https://image.novelai.net");
-  const res = await requestWithRetry(
-    () =>
-      axios.post(`${imageBaseUrl}/ai/generate-image`, payload, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-          Accept: "application/zip, application/octet-stream",
-        },
-        responseType: "arraybuffer",
-        timeout: 180_000,
-        signal: currentAbort?.signal,
-        ...proxyConfig("nai"),
-      }),
-    { signal: currentAbort?.signal ?? undefined },
-  );
+  const postTo = (baseUrl: string) =>
+    requestWithRetry(
+      () =>
+        axios.post(`${baseUrl}/ai/generate-image`, payload, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+            Accept: "application/zip, application/octet-stream",
+          },
+          responseType: "arraybuffer",
+          timeout: 180_000,
+          signal: currentAbort?.signal,
+          ...proxyConfig("nai"),
+        }),
+      { signal: currentAbort?.signal ?? undefined },
+    );
+  let res;
+  try {
+    res = await postTo(imageBaseUrl);
+  } catch (error: any) {
+    const defaultImageBaseUrl = "https://image.novelai.net";
+    if ((error?.response?.status === 401 || error?.response?.status === 403) && imageBaseUrl !== defaultImageBaseUrl) {
+      res = await postTo(defaultImageBaseUrl);
+    } else {
+      throw error;
+    }
+  }
   return extractImages(res.data);
 }
 
@@ -1063,12 +1077,28 @@ export async function testTagServer(query: string): Promise<{ ok: boolean; messa
     : { ok: false, message: "Tag 服务没有返回结果，请检查地址、鉴权或接口路径。", tags: [] };
 }
 
+function hasCompletePromptVariants(parsed: ReturnType<typeof parsePromptVariantResponse>) {
+  return Boolean(parsed.variants?.namePrompt.trim() && parsed.variants?.featurePrompt.trim());
+}
+
+function variantRepairSystemPrompt(mode: "tags" | "natural" | "mixed", source: "reverse" | "convert") {
+  return [
+    "Rewrite the previous output into strict JSON only.",
+    "Return exactly this shape: {\"namePrompt\":\"...\",\"featurePrompt\":\"...\"}.",
+    "namePrompt must use the known character name/tag concisely.",
+    "featurePrompt must not use the character name; replace it with short visible features and outfit cues.",
+    "Do not add explanations, Markdown, or extra keys.",
+    knownCharacterRuntimeInstruction(mode, source, true),
+  ].join("\n\n");
+}
+
 export async function reversePromptImage(
   imageBase64: string,
   mode: "tags" | "natural" | "mixed" = "tags",
   scope: string = "full",
   hint: string = "",
-): Promise<{ ok: boolean; prompt?: string; message: string }> {
+  knownCharacter = false,
+): Promise<{ ok: boolean; prompt?: string; variants?: { namePrompt: string; featurePrompt: string }; message: string }> {
   const settings = getSettings();
   const safeScope = (["full", "character", "object", "scene"].includes(scope) ? scope : "full") as ReversePromptScope;
   const scopeLabel =
@@ -1081,27 +1111,64 @@ export async function reversePromptImage(
     hint.trim() ? `目标/角色提示：${hint.trim()}` : "",
     `请严格只围绕“${scopeLabel}”输出结果。`,
   ].filter(Boolean).join("\n");
-  const systemPrompt = resolveModePrompt(
-    mode,
-    settings.reversePromptTemplates,
-    settings.visionSystemPrompt,
-    SCOPED_REVERSE_SYSTEM_PROMPTS,
-  )
-    .replace(/\{\{input\}\}/g, userScopeText)
-    .replace(/\{\{image\}\}/g, "<uploaded image>");
+  const systemPrompt = [
+    resolveModePrompt(
+      mode,
+      settings.reversePromptTemplates,
+      settings.visionSystemPrompt,
+      SCOPED_REVERSE_SYSTEM_PROMPTS,
+    )
+      .replace(/\{\{input\}\}/g, userScopeText)
+      .replace(/\{\{image\}\}/g, "<uploaded image>"),
+    knownCharacterRuntimeInstruction(mode, "reverse", knownCharacter),
+  ].join("\n\n");
 
   const result = await callVisionApi(
     systemPrompt,
     [
       { type: "image_url", image_url: { url: `data:image/png;base64,${imageBase64}`, detail: "high" } },
-      { type: "text", text: `${userScopeText}\n\nGenerate the prompt for this image.\n\n${modeUserInstruction(mode, "reverse")}` },
+      {
+        type: "text",
+        text: [
+          userScopeText,
+          "",
+          "Generate the prompt for this image.",
+          "",
+          modeUserInstruction(mode, "reverse"),
+          knownCharacterRuntimeInstruction(mode, "reverse", knownCharacter),
+        ].join("\n"),
+      },
     ],
     2000,
     `AI 反推 · ${mode} · ${scopeLabel}`,
   );
 
   if (result.ok) {
-    let content = cleanPromptOutput(result.content ?? "");
+    let parsed = parsePromptVariantResponse(result.content ?? "", knownCharacter);
+    if (knownCharacter && !hasCompletePromptVariants(parsed)) {
+      const repaired = await callVisionApi(
+        variantRepairSystemPrompt(mode, "reverse"),
+        [
+          { type: "image_url", image_url: { url: `data:image/png;base64,${imageBase64}`, detail: "high" } },
+          {
+            type: "text",
+            text: [
+              userScopeText,
+              "",
+              "Previous output that must be rewritten into two variants:",
+              result.content ?? "",
+            ].join("\n"),
+          },
+        ],
+        1400,
+        `AI 反推双版本修复 · ${mode}`,
+      );
+      if (repaired.ok && repaired.content) {
+        const fixed = parsePromptVariantResponse(repaired.content, true);
+        if (hasCompletePromptVariants(fixed)) parsed = fixed;
+      }
+    }
+    let content = parsed.primary;
     if (modeNeedsRepair(mode, content)) {
       const repaired = await callVisionApi(
         modeRepairSystemPrompt(mode),
@@ -1118,8 +1185,13 @@ export async function reversePromptImage(
       if (repaired.ok && repaired.content) content = cleanPromptOutput(repaired.content);
     }
 
-    const hints = mode === "natural" || !settings.mcpForReverse ? [] : await queryTagServer(content, 16);
-    return { ok: true, prompt: mode === "natural" ? content : mergeTagHints(content, hints), message: "反推成功" };
+    const hints = knownCharacter || mode === "natural" || !settings.mcpForReverse ? [] : await queryTagServer(content, 16);
+    return {
+      ok: true,
+      prompt: mode === "natural" || knownCharacter ? content : mergeTagHints(content, hints),
+      variants: parsed.variants,
+      message: "反推成功",
+    };
   }
   return { ok: false, message: `反推失败：${result.message}` };
 }
@@ -1392,23 +1464,33 @@ export async function convertComicPanels(request: ComicConvertRequest): Promise<
   return { ok: failed < out.length, message: `转换完成：成功 ${out.length - failed}，失败 ${failed}。`, panels: out };
 }
 
-export async function checkComicConsistency(request: ComicConsistencyRequest): Promise<ComicConsistencyResult> {
-  const reviewable = request.panels.filter((panel) => panel.enPrompt.trim());
-  if (!reviewable.length) {
-    return { ok: false, message: "没有可检测的分镜英文提示词，请先转换。", panels: [] };
-  }
-  const settings = getSettings();
-  if (!settings.convertApiKey.trim() || !settings.convertApiUrl.trim()) {
-    return { ok: false, message: "请先在设置 > 转换 API 中填写 API 地址、模型和 Key。", panels: [] };
-  }
+const COMIC_CONSISTENCY_CHUNK_SIZE = 6;
+type ConsistencyPanelInput = ComicConsistencyRequest["panels"][number];
+type ConsistencyChunkResult = {
+  ok: boolean;
+  message: string;
+  panels: ComicConsistencyResult["panels"];
+};
 
+function chunkPanels<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));
+  return chunks;
+}
+
+async function checkComicConsistencyChunk(
+  request: ComicConsistencyRequest,
+  chunk: ConsistencyPanelInput[],
+  allPanels: ConsistencyPanelInput[],
+  labelSuffix: string,
+): Promise<ConsistencyChunkResult> {
   const systemPrompt = [
-    "你是连续漫画提示词的一致性审校。下面给出一组按顺序排列的分镜英文提示词（用于 NovelAI 生图）。",
-    "请检查角色外貌、发色、服装、配饰、场景、时间线和关键道具在所有分镜间是否保持一致。",
-    "修正不一致之处：补齐缺失的角色/服装特征、统一命名与风格，但不要改变每个分镜本身的镜头动作与剧情。",
+    "你是连续漫画提示词的一致性审校。下面会给出全部分镜的简要上下文，以及本次需要修正的一小组英文提示词。",
+    "检查同一角色、场景、物品、发色、服装、配饰、时间线和关键道具是否前后一致。",
+    "只修正不一致之处：补齐缺失的角色/服装特征、统一命名与风格，但不要改变每个分镜本身的镜头、动作与剧情。",
     `保持原有提示词模式（${request.mode}），不要新增解释，不要 Markdown。`,
     '严格只返回 JSON：{"panels":[{"panelId":"...","enPrompt":"修正后的完整英文提示词","note":"中文说明本次改动，没改动则留空"}]}。',
-    "panelId 必须与输入完全一致；未改动的分镜也要原样返回其 enPrompt。",
+    "panelId 必须与输入完全一致；未改动的分镜也要原样返回完整 enPrompt。",
   ].join("\n");
 
   const userText = [
@@ -1419,19 +1501,20 @@ export async function checkComicConsistency(request: ComicConsistencyRequest): P
     request.globalCharacterSetting || "(empty)",
     "Reference image reverse prompts:",
     request.referencePrompts.length ? request.referencePrompts.join("\n") : "(none)",
-    "Panels (in order):",
+    "All panel outline:",
+    JSON.stringify(allPanels.map((panel) => ({ panelId: panel.id, index: panel.index, cnPrompt: panel.cnPrompt })), null, 2),
+    "Target panels to review in this call:",
     JSON.stringify(
-      reviewable.map((panel) => ({ panelId: panel.id, index: panel.index, cnPrompt: panel.cnPrompt, enPrompt: panel.enPrompt })),
+      chunk.map((panel) => ({ panelId: panel.id, index: panel.index, cnPrompt: panel.cnPrompt, enPrompt: panel.enPrompt })),
       null,
       2,
     ),
-    "请返回 JSON。",
+    "请只返回 JSON。",
   ].join("\n\n");
 
-  const result = await callConvertApi(systemPrompt, userText, 4000, "漫画一致性检测");
-  if (!result.ok) {
-    return { ok: false, message: `一致性检测失败：${result.message}`, panels: [] };
-  }
+  const maxTokens = Math.min(3200, Math.max(1400, 700 + chunk.length * 420));
+  const result = await callConvertApi(systemPrompt, userText, maxTokens, `漫画一致性检测 ${labelSuffix}`);
+  if (!result.ok) return { ok: false, message: result.message, panels: [] };
 
   const parsed = extractJsonObject(result.content ?? "");
   const items = Array.isArray(parsed?.panels) ? parsed.panels : [];
@@ -1446,18 +1529,59 @@ export async function checkComicConsistency(request: ComicConsistencyRequest): P
     const note = String(item?.note ?? "").trim();
     if (note) notes.set(panelId, note);
   }
-  if (!byId.size) {
-    return { ok: false, message: "一致性检测未返回有效结果，提示词保持不变。", panels: [] };
+  if (!byId.size) return { ok: false, message: "模型未返回可解析的 panels JSON。", panels: [] };
+
+  return {
+    ok: true,
+    message: "ok",
+    panels: chunk.map((panel) => ({
+      panelId: panel.id,
+      enPrompt: byId.get(panel.id) ?? panel.enPrompt,
+      note: notes.get(panel.id),
+    })),
+  };
+}
+
+async function checkComicConsistencyWithFallback(
+  request: ComicConsistencyRequest,
+  chunk: ConsistencyPanelInput[],
+  allPanels: ConsistencyPanelInput[],
+  labelSuffix: string,
+): Promise<ConsistencyChunkResult> {
+  const direct = await checkComicConsistencyChunk(request, chunk, allPanels, labelSuffix);
+  if (direct.ok || chunk.length === 1) return direct;
+  const mid = Math.ceil(chunk.length / 2);
+  const left = await checkComicConsistencyWithFallback(request, chunk.slice(0, mid), allPanels, `${labelSuffix}-a`);
+  if (!left.ok) return left;
+  const right = await checkComicConsistencyWithFallback(request, chunk.slice(mid), allPanels, `${labelSuffix}-b`);
+  if (!right.ok) return right;
+  return { ok: true, message: "ok", panels: [...left.panels, ...right.panels] };
+}
+
+export async function checkComicConsistency(request: ComicConsistencyRequest): Promise<ComicConsistencyResult> {
+  const reviewable = request.panels.filter((panel) => panel.enPrompt.trim());
+  if (!reviewable.length) {
+    return { ok: false, message: "没有可检测的分镜英文提示词，请先转换。", panels: [] };
+  }
+  const settings = getSettings();
+  if (!settings.convertApiKey.trim() || !settings.convertApiUrl.trim()) {
+    return { ok: false, message: "请先在设置 > 转换 API 中填写 API 地址、模型和 Key。", panels: [] };
   }
 
   const panels: ComicConsistencyResult["panels"] = [];
-  let changed = 0;
-  for (const panel of reviewable) {
-    const enPrompt = byId.get(panel.id);
-    if (!enPrompt) continue;
-    if (enPrompt.trim() !== panel.enPrompt.trim()) changed += 1;
-    panels.push({ panelId: panel.id, enPrompt, note: notes.get(panel.id) });
+  for (const [chunkIndex, chunk] of chunkPanels(reviewable, COMIC_CONSISTENCY_CHUNK_SIZE).entries()) {
+    const checked = await checkComicConsistencyWithFallback(request, chunk, reviewable, `#${chunkIndex + 1}`);
+    if (!checked.ok) {
+      return {
+        ok: false,
+        message: `一致性检测失败：${checked.message}。已保留原英文提示词，未覆盖任何分镜。`,
+        panels: [],
+      };
+    }
+    panels.push(...checked.panels);
   }
+  const originalById = new Map(reviewable.map((panel) => [panel.id, panel.enPrompt.trim()]));
+  const changed = panels.filter((panel) => panel.enPrompt.trim() !== (originalById.get(panel.panelId) ?? "")).length;
   return {
     ok: true,
     message: `一致性检测完成：复核 ${panels.length} 个分镜，调整 ${changed} 个。`,
@@ -1468,7 +1592,7 @@ export async function checkComicConsistency(request: ComicConsistencyRequest): P
 function comicReferencesToExtras(request: ComicGeneratePanelRequest): GenerateExtras {
   return {
     vibeImages: request.references
-      .filter((ref) => ref.base64)
+      .filter((ref) => ref.base64 && ref.useForGeneration !== false)
       .map((ref) => ({
         base64: stripBase64Prefix(ref.base64),
         infoExtracted: Math.min(1, Math.max(0, Number(ref.infoExtracted) || (ref.kind === "precise" ? 1 : 0.7))),
@@ -1489,7 +1613,20 @@ export async function generateComicPanel(request: ComicGeneratePanelRequest): Pr
         : mergePrompt(request.globalNegativePrompt, request.localNegativePrompt),
   };
   const extras = comicReferencesToExtras(request);
-  const result = await generateImage(params, extras);
+  const hasGenerationReferences = (extras.vibeImages?.length ?? 0) > 0;
+  let result = await generateImage(params, extras);
+  if (!result.ok && hasGenerationReferences && result.failureKind === "reference") {
+    const fallback = await generateImage(params, { vibeImages: [], charCaptions: [] });
+    result = fallback.ok
+      ? {
+          ...fallback,
+          message: `${fallback.message}（参考图生成失败，已自动无参考图重试成功。）`,
+        }
+      : {
+          ...fallback,
+          message: `带参考图生成失败：${result.message}\n无参考图重试仍失败：${fallback.message}`,
+        };
+  }
   if (result.ok && result.items.length > 0) {
     result.items = result.items.map((item) => {
       const updated = updateHistoryItem(item.id, {
@@ -1508,7 +1645,7 @@ function safeZipName(name: string) {
 }
 
 function referenceSummary(ref: ComicReferenceAsset) {
-  return `- ${ref.name} / ${ref.kind} / strength=${ref.strength} / info=${ref.infoExtracted}\n${ref.reversePrompt || "(no reverse prompt)"}`;
+  return `- ${ref.name} / ${ref.kind} / generation=${ref.useForGeneration !== false ? "on" : "off"} / strength=${ref.strength} / info=${ref.infoExtracted}\n${ref.reversePrompt || "(no reverse prompt)"}`;
 }
 
 // Strict image-magic check (detectExt() defaults to "png" and is NOT a validator).
@@ -1626,25 +1763,52 @@ export async function exportComicProjectZip(project: ComicProject): Promise<{ ok
 export async function convertPromptText(
   chineseText: string,
   mode: "tags" | "natural" | "mixed" = "tags",
-): Promise<{ ok: boolean; result?: string; message: string }> {
+  knownCharacter = false,
+): Promise<{ ok: boolean; result?: string; variants?: { namePrompt: string; featurePrompt: string }; message: string }> {
   const settings = getSettings();
-  const systemPrompt = resolveModePrompt(
-    mode,
-    settings.convertPromptTemplates,
-    settings.convertSystemPrompt,
-    CONVERT_SYSTEM_PROMPTS,
-  );
+  const systemPrompt = [
+    resolveModePrompt(
+      mode,
+      settings.convertPromptTemplates,
+      settings.convertSystemPrompt,
+      CONVERT_SYSTEM_PROMPTS,
+    ),
+    knownCharacterRuntimeInstruction(mode, "convert", knownCharacter),
+  ].join("\n\n");
 
   // Tag-server hints only make sense for tag-style output, and only when the
   // user opted convert into using the MCP/tag service.
-  const tagHints = mode === "natural" || !settings.mcpForConvert ? [] : await queryTagServer(chineseText, 24);
+  const tagHints = knownCharacter || mode === "natural" || !settings.mcpForConvert ? [] : await queryTagServer(chineseText, 24);
   const hintText = tagHints.length
     ? `\n\nCandidate Danbooru tags from the configured tag server:\n${tagHints.map((tag) => tag.tag).join(", ")}`
     : "";
-  const result = await callConvertApi(systemPrompt, buildConvertUserText(chineseText, mode, hintText), 2000, `提示词转换 · ${mode}`);
+  const userText = [
+    buildConvertUserText(chineseText, mode, knownCharacter ? "" : hintText),
+    knownCharacterRuntimeInstruction(mode, "convert", knownCharacter),
+  ].join("\n\n");
+  const result = await callConvertApi(systemPrompt, userText, knownCharacter ? 2400 : 2000, `提示词转换 · ${mode}`);
 
   if (result.ok) {
-    let content = cleanPromptOutput(result.content ?? "");
+    let parsed = parsePromptVariantResponse(result.content ?? "", knownCharacter);
+    if (knownCharacter && !hasCompletePromptVariants(parsed)) {
+      const repaired = await callConvertApi(
+        variantRepairSystemPrompt(mode, "convert"),
+        [
+          "Original user description:",
+          chineseText,
+          "",
+          "Previous output that must be rewritten into two variants:",
+          result.content ?? "",
+        ].join("\n"),
+        1600,
+        `提示词转换双版本修复 · ${mode}`,
+      );
+      if (repaired.ok && repaired.content) {
+        const fixed = parsePromptVariantResponse(repaired.content, true);
+        if (hasCompletePromptVariants(fixed)) parsed = fixed;
+      }
+    }
+    let content = parsed.primary;
     if (modeNeedsRepair(mode, content)) {
       const repaired = await callConvertApi(
         modeRepairSystemPrompt(mode),
@@ -1659,7 +1823,8 @@ export async function convertPromptText(
     }
     return {
       ok: true,
-      result: mode === "natural" ? content : mergeTagHints(content, tagHints),
+      result: mode === "natural" || knownCharacter ? content : mergeTagHints(content, tagHints),
+      variants: parsed.variants,
       message: "转换成功",
     };
   }
@@ -1971,13 +2136,28 @@ export async function augmentImg(tool: DirectorTool, options: AugmentOptions): P
 
 function handleGenerateError(error: any, prefix: string): GenerateResult {
   if (axios.isCancel(error) || error?.code === "ERR_CANCELED") {
-    return { ok: false, message: "操作已取消。", items: [] };
+    return { ok: false, message: "操作已取消。", items: [], failureKind: "cancelled" };
   }
   const status = error?.response?.status;
+  const failureKind =
+    status === 401 || status === 403
+      ? "auth"
+      : status === 400 || status === 422
+        ? "reference"
+        : status
+          ? "api"
+          : "validation";
+  const authHint =
+    failureKind === "auth"
+      ? `NovelAI 鉴权失败${status ? `（HTTP ${status}）` : ""}：请在设置页重新粘贴并验证 Persistent API Token，并确认 Image Endpoint 为 https://image.novelai.net。`
+      : "";
+  const detail = responseErrorText(error) || "未知错误";
   return {
     ok: false,
-    message: `${prefix}${status ? `（HTTP ${status}）` : ""}：${responseErrorText(error) || "未知错误"}`,
+    message: authHint || `${prefix}${status ? `（HTTP ${status}）` : ""}：${detail}`,
     items: [],
+    failureKind,
+    statusCode: status,
   };
 }
 
