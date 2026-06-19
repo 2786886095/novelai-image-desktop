@@ -2254,7 +2254,7 @@ function HistoryPanel() {
           <div className="history-item" key={item.id}>
             <button onClick={() => selectImage(item)}>
               <div className="history-thumb-frame">
-                <img src={item.fileUrl} alt="历史缩略图" />
+                <img src={item.fileUrl} alt="历史缩略图" loading="lazy" decoding="async" />
               </div>
               <span className="history-meta">{item.model} · {item.width}×{item.height}</span>
             </button>

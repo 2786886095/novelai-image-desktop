@@ -217,7 +217,7 @@ function updateReference(
 }
 
 type QueueState = { total: number; done: number; current: number; paused: boolean } | null;
-type PanelOutput = { historyItemId?: string; outputPath?: string; outputUrl?: string };
+type PanelOutput = { historyItemId?: string; outputPath?: string; outputUrl?: string; date?: string };
 
 export function ToolsHub() {
   const [activeTool, setActiveTool] = useState<"hub" | "comic">("hub");
@@ -614,12 +614,12 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
           error: result.ok ? undefined : result.message,
         })),
       );
-      if (item) {
-        await refreshHistory(item.date);
-        await refreshAccount();
-      }
+      // history/account are refreshed ONCE per batch in runQueue, not per panel.
+      // Refreshing after every panel reloaded the whole history list each time and
+      // left a huge, freshly-grown history grid that blocked the main thread (and
+      // froze the prompt input) the moment the user returned to the 生成/重绘 tab.
       if (result.ok && item) {
-        return { historyItemId: item.id, outputPath: item.filePath, outputUrl: item.fileUrl };
+        return { historyItemId: item.id, outputPath: item.filePath, outputUrl: item.fileUrl, date: item.date };
       }
       return undefined;
     } finally {
@@ -661,6 +661,12 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
     }
     const cancelled = queueRef.current.cancelled;
     setQueue(null);
+    // Refresh shared history/account once for the whole batch (see generatePanel).
+    if (generatedOutputs.size > 0) {
+      const lastDate = [...generatedOutputs.values()].map((o) => o.date).filter(Boolean).pop();
+      await refreshHistory(lastDate);
+      await refreshAccount();
+    }
     if (!cancelled && project.autoExportZip) {
       const exportTarget: ComicProject = {
         ...project,
@@ -1243,7 +1249,7 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
             {panels.map((panel) => (
               <div className={clsx("comic-thumb", panel.status)} key={panel.id} title={panel.error || panel.cnPrompt}>
                 {panel.outputUrl ? (
-                  <img src={panel.outputUrl} alt={`#${panel.index}`} />
+                  <img src={panel.outputUrl} alt={`#${panel.index}`} loading="lazy" decoding="async" />
                 ) : (
                   <div className="comic-thumb-empty">#{panel.index}</div>
                 )}
