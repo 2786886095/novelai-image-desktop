@@ -26,6 +26,7 @@ import {
   type ComicGeneratePanelRequest,
   type ComicProject,
   type ComicReferenceAsset,
+  type ComicReferenceKind,
   type DirectorTool,
   type GenerateExtras,
   type GenerateParams,
@@ -35,7 +36,10 @@ import {
   type LoadImageResult,
   type NAIInpaintModel,
   type NAIModel,
+  type PreciseReferenceItem,
+  type PreciseReferenceType,
   type ReversePromptScope,
+  type VibeTransferItem,
   type SingleImageResult,
   type TagSuggestion,
   type TokenStatus,
@@ -45,6 +49,7 @@ import {
 import { calculateFeatureAnlasQuote } from "../../src/anlas";
 import {
   addHistory,
+  ensureHistoryGroup,
   getAccountSummary,
   getSettings,
   getToken,
@@ -79,6 +84,38 @@ let workbenchImagePath: string | null = null;
 function normalizeBaseUrl(url: string, fallback: string) {
   const value = (url || fallback).trim().replace(/\/+$/, "");
   return value.length > 0 ? value : fallback;
+}
+
+// Only official NovelAI hosts (and localhost, for local proxies/mirrors a user
+// runs themselves) may receive the Bearer token unless the user explicitly opts
+// into a custom endpoint. Prevents a mistyped/hostile endpoint from exfiltrating
+// the token.
+function isOfficialNaiHost(baseUrl: string): boolean {
+  try {
+    const { hostname } = new URL(baseUrl);
+    const host = hostname.toLowerCase();
+    return (
+      host === "novelai.net" ||
+      host.endsWith(".novelai.net") ||
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host === "::1"
+    );
+  } catch {
+    return false;
+  }
+}
+
+// Returns a token-safe base URL: the configured endpoint when it is trusted (or
+// the user opted into custom endpoints), otherwise the official fallback.
+function tokenSafeBaseUrl(rawUrl: string, fallback: string): string {
+  const resolved = normalizeBaseUrl(rawUrl, fallback);
+  if (isOfficialNaiHost(resolved)) return resolved;
+  if (getSettings().allowCustomEndpoint) return resolved;
+  if (getSettings().debugLogs) {
+    console.warn(`[security] refusing to send token to non-official endpoint ${resolved}; using ${fallback}.`);
+  }
+  return fallback;
 }
 
 function tierName(tier?: number) {
@@ -126,7 +163,7 @@ function parseAccount(data: any): Omit<AccountSummary, "hasToken"> {
 
 async function fetchAccount(token: string): Promise<Omit<AccountSummary, "hasToken">> {
   const settings = getSettings();
-  const apiBaseUrl = normalizeBaseUrl(settings.apiBaseUrl, "https://api.novelai.net");
+  const apiBaseUrl = tokenSafeBaseUrl(settings.apiBaseUrl, "https://api.novelai.net");
   const res = await axios.get(`${apiBaseUrl}/user/data`, {
     headers: { Authorization: `Bearer ${token}` },
     timeout: 15_000,
@@ -143,7 +180,7 @@ export async function verifyToken(token: string): Promise<TokenStatus> {
 
   try {
     const settings = getSettings();
-    const apiBaseUrl = normalizeBaseUrl(settings.apiBaseUrl, "https://api.novelai.net");
+    const apiBaseUrl = tokenSafeBaseUrl(settings.apiBaseUrl, "https://api.novelai.net");
     await axios.get(`${apiBaseUrl}/user/information`, {
       headers: { Authorization: `Bearer ${normalized}` },
       timeout: 15_000,
@@ -179,7 +216,9 @@ export async function refreshStoredAccount(): Promise<AccountSummary> {
     setAccountSummary(account);
     return { hasToken: true, ...account };
   } catch {
-    return getAccountSummary();
+    // Live refresh failed — return the last known summary but flag it as stale so
+    // the UI can show "缓存余额" instead of presenting an outdated number as current.
+    return { ...getAccountSummary(), stale: true };
   }
 }
 
@@ -326,11 +365,16 @@ function buildPayload(
   const cleanedCharCaptions = normalizedCharCaptions(extras);
   const inputPrompt = charCaptionMode === "pipe" ? withPipeCharCaptions(effectivePrompt, cleanedCharCaptions) : effectivePrompt;
 
+  // Defensive clamp: NovelAI rejects CFG above its supported range. Dimensions
+  // are snapped in the UI (img2img/inpaint override them with image-matched
+  // sizes, so we must not re-snap here).
+  const safeScale = Math.min(10, Math.max(0, Number(params.cfgScale) || 0));
+
   const parameters: Record<string, unknown> = {
     params_version: 3,
     width: params.width,
     height: params.height,
-    scale: params.cfgScale,
+    scale: safeScale,
     sampler: params.sampler,
     steps: params.steps,
     n_samples: 1,
@@ -349,7 +393,9 @@ function buildPayload(
     quality_toggle: params.qualityToggle,
   };
 
-  if (params.variety) parameters.variety = true;
+  // "Variety+" is implemented by skipping CFG above a sigma threshold — NovelAI
+  // has no boolean `variety` field, so the previous `variety: true` was a no-op.
+  if (params.variety) parameters.skip_cfg_above_sigma = 58;
 
   if (params.sampler === "k_euler_ancestral" && params.noiseSchedule !== "native") {
     parameters.deliberate_euler_ancestral_bug = false;
@@ -384,11 +430,29 @@ function buildPayload(
     parameters.sm_dyn = params.smea && params.smeaDyn;
   }
 
-  // Vibe Transfer / Precise Reference
+  // Vibe Transfer (reference_image_multiple) — legacy reference conditioning.
   if (extras?.vibeImages && extras.vibeImages.length > 0) {
     parameters.reference_image_multiple = extras.vibeImages.map((v) => v.base64);
     parameters.reference_information_extracted_multiple = extras.vibeImages.map((v) => v.infoExtracted);
     parameters.reference_strength_multiple = extras.vibeImages.map((v) => v.strength);
+  }
+
+  // Precise / Director Reference — V4.5 only. Distinct from Vibe Transfer: uses
+  // the director_reference_* fields with a type (character/style/character&style),
+  // strength, and secondary strength derived from fidelity (1 - fidelity).
+  const preciseRefs = extras?.preciseReferences ?? [];
+  if (v4Plus && isV45(params.model) && preciseRefs.length > 0) {
+    parameters.director_reference_images = preciseRefs.map((r) => r.base64);
+    parameters.director_reference_descriptions = preciseRefs.map((r) => ({
+      // Match the SDK exactly: ReferenceCaption carries only base_caption. The
+      // earlier extra `char_captions: []` was a speculative field that an API
+      // rejecting unknown keys could 400 on.
+      caption: { base_caption: r.type },
+      legacy_uc: false,
+    }));
+    parameters.director_reference_strength_values = preciseRefs.map((r) => round2(clamp01(r.strength, 1)));
+    parameters.director_reference_secondary_strength_values = preciseRefs.map((r) => round2(clamp01(1 - r.fidelity, 0)));
+    parameters.director_reference_information_extracted = preciseRefs.map(() => 1.0);
   }
 
   return {
@@ -400,31 +464,116 @@ function buildPayload(
 }
 
 /**
+ * Cache of encode-vibe results. encode-vibe is a paid, deterministic endpoint:
+ * the same raw image + model + information_extracted always yields the same vibe
+ * encoding, so we cache by their hash to avoid re-encoding (and re-charging) the
+ * same reference for every panel in a comic batch.
+ */
+const vibeEncodeCache = new Map<string, string>();
+
+function clamp01(value: number, fallback = 0): number {
+  if (!Number.isFinite(value)) return fallback;
+  return Math.min(1, Math.max(0, value));
+}
+
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+// NovelAI always resizes a precise/director reference to one of these three
+// canonical resolutions (portrait / square / landscape). We center-crop to the
+// nearest aspect ratio, then resize, matching the official preprocessing.
+const DIRECTOR_REFERENCE_SIZES: Array<{ width: number; height: number }> = [
+  { width: 1024, height: 1536 },
+  { width: 1472, height: 1472 },
+  { width: 1536, height: 1024 },
+];
+
+function prepareDirectorReferenceImage(rawBase64: string): string {
+  try {
+    const img = nativeImage.createFromBuffer(Buffer.from(rawBase64, "base64"));
+    const { width, height } = img.getSize();
+    if (!width || !height) return rawBase64;
+    const aspect = width / height;
+    const target = DIRECTOR_REFERENCE_SIZES.reduce((best, candidate) => {
+      const bestDiff = Math.abs(best.width / best.height - aspect);
+      const candidateDiff = Math.abs(candidate.width / candidate.height - aspect);
+      return candidateDiff < bestDiff ? candidate : best;
+    }, DIRECTOR_REFERENCE_SIZES[0]);
+
+    // Center-crop the source to the target aspect ratio before resizing so we
+    // don't distort the reference.
+    const targetAspect = target.width / target.height;
+    let cropW = width;
+    let cropH = height;
+    if (aspect > targetAspect) {
+      cropW = Math.round(height * targetAspect);
+    } else {
+      cropH = Math.round(width / targetAspect);
+    }
+    const cropX = Math.max(0, Math.round((width - cropW) / 2));
+    const cropY = Math.max(0, Math.round((height - cropH) / 2));
+    const cropped = img.crop({ x: cropX, y: cropY, width: cropW, height: cropH });
+    const resized = cropped.resize({ width: target.width, height: target.height });
+    return resized.toPNG().toString("base64");
+  } catch {
+    return rawBase64; // fall back to the original on any image-decoding failure
+  }
+}
+
+function vibeCacheKey(rawBase64: string, model: string, infoExtracted: number): string {
+  const hash = crypto.createHash("sha256").update(rawBase64).digest("hex");
+  return `${model}|${infoExtracted}|${hash}`;
+}
+
+/**
  * V4/V4.5 Vibe Transfer requires reference images to be pre-encoded through the
  * /ai/encode-vibe endpoint (legacy V3 accepted raw image bytes directly). For
- * V4+ models we encode each vibe; if the endpoint is unavailable we fall back to
- * the raw base64 so behavior never regresses versus the previous version.
+ * V4+ models we encode each vibe and cache the result. If the endpoint fails we
+ * now abort with a clear error instead of silently sending the raw image bytes —
+ * the raw fallback produced a second downstream failure (or a silently wrong /
+ * reference-less result) rather than a usable image.
  *
  * NOTE: needs verification against a live V4.5 token — the encode-vibe payload
  * shape is based on the NovelAI web client and may need adjustment.
  */
 async function prepareExtras(params: GenerateParams, extras?: GenerateExtras): Promise<GenerateExtras | undefined> {
-  if (!extras || !extras.vibeImages || extras.vibeImages.length === 0) return extras;
-  if (!isV4Plus(params.model)) return extras; // V3 path unchanged
+  if (!extras) return extras;
+
+  // Precise/director references (V4.5) are resized to a canonical resolution and
+  // sent raw — they do NOT go through encode-vibe. Drop them on non-V4.5 models.
+  let preciseReferences = extras.preciseReferences;
+  if (preciseReferences && preciseReferences.length > 0) {
+    preciseReferences = isV45(params.model)
+      ? preciseReferences.map((ref) => ({
+          ...ref,
+          base64: prepareDirectorReferenceImage(stripBase64Prefix(ref.base64)),
+        }))
+      : [];
+  }
+
+  if (!extras.vibeImages || extras.vibeImages.length === 0) {
+    return { ...extras, preciseReferences };
+  }
+  if (!isV4Plus(params.model)) return { ...extras, preciseReferences }; // V3 path unchanged
 
   const token = getToken();
   const settings = getSettings();
-  const imageBaseUrl = normalizeBaseUrl(settings.imageBaseUrl, "https://image.novelai.net");
+  const imageBaseUrl = tokenSafeBaseUrl(settings.imageBaseUrl, "https://image.novelai.net");
 
   const encoded = await Promise.all(
     extras.vibeImages.map(async (vibe) => {
+      const rawBase64 = stripBase64Prefix(vibe.base64);
+      const cacheKey = vibeCacheKey(rawBase64, params.model, vibe.infoExtracted);
+      const cached = vibeEncodeCache.get(cacheKey);
+      if (cached) return { ...vibe, base64: cached };
       try {
         const res = await requestWithRetry(
           () =>
             axios.post(
               `${imageBaseUrl}/ai/encode-vibe`,
               {
-                image: stripBase64Prefix(vibe.base64),
+                image: rawBase64,
                 information_extracted: vibe.infoExtracted,
                 model: params.model,
               },
@@ -436,20 +585,27 @@ async function prepareExtras(params: GenerateParams, extras?: GenerateExtras): P
                 ...proxyConfig("nai"),
               },
             ),
-          { retries: 2, signal: currentAbort?.signal ?? undefined },
+          // encode-vibe is a paid endpoint; only retry pre-charge 429s.
+          { retries: 2, signal: currentAbort?.signal ?? undefined, retryStatuses: [429] },
         );
-        return { ...vibe, base64: Buffer.from(res.data).toString("base64") };
+        const encodedBase64 = Buffer.from(res.data).toString("base64");
+        vibeEncodeCache.set(cacheKey, encodedBase64);
+        return { ...vibe, base64: encodedBase64 };
       } catch (error: any) {
         if (currentAbort?.signal.aborted) throw error;
+        const detail = responseErrorText(error) || "未知错误";
         if (getSettings().debugLogs) {
-          console.warn("[vibe] encode-vibe failed, falling back to raw image:", responseErrorText(error));
+          console.warn("[vibe] encode-vibe failed:", detail);
         }
-        return vibe; // fallback: raw base64
+        // Abort rather than send raw bytes — a failed encode cannot produce a
+        // correct vibe-transfer result, so surface it instead of charging for
+        // a wrong (or reference-less) image.
+        throw new Error(`参考图编码失败（encode-vibe）：${detail}`);
       }
     }),
   );
 
-  return { ...extras, vibeImages: encoded };
+  return { ...extras, vibeImages: encoded, preciseReferences };
 }
 
 async function extractImages(zipBytes: ArrayBuffer | Buffer): Promise<Buffer[]> {
@@ -661,7 +817,7 @@ async function requestOfficialGenerationPrice(params: GenerateParams) {
   const token = getToken();
   if (!token) return undefined;
   const settings = getSettings();
-  const apiBaseUrl = normalizeBaseUrl(settings.apiBaseUrl, "https://api.novelai.net");
+  const apiBaseUrl = tokenSafeBaseUrl(settings.apiBaseUrl, "https://api.novelai.net");
   const quoteParams: GenerateParams = {
     ...params,
     stylePrompt: params.stylePrompt || "",
@@ -696,12 +852,14 @@ export async function quoteAnlasCost(request: AnlasQuoteRequest): Promise<AnlasQ
   }
 
   const account = request.account?.hasToken ? request.account : await refreshStoredAccount();
-  let image: Pick<WorkingImage, "width" | "height"> | null = null;
+  let image: Pick<WorkingImage, "width" | "height"> | null = request.image ?? null;
   if (request.feature === "upscale" || request.feature === "inpaint") {
-    try {
-      image = (await readWorkbenchImage()).image;
-    } catch {
-      image = null;
+    if (!image) {
+      try {
+        image = (await readWorkbenchImage()).image;
+      } catch {
+        image = null;
+      }
     }
   }
 
@@ -968,7 +1126,12 @@ function sleep(ms: number, signal?: AbortSignal) {
  */
 async function requestWithRetry<T>(
   fn: () => Promise<T>,
-  { retries = 3, baseDelay = 2_000, signal }: { retries?: number; baseDelay?: number; signal?: AbortSignal } = {},
+  {
+    retries = 3,
+    baseDelay = 2_000,
+    signal,
+    retryStatuses = [429, 500, 502, 503, 524],
+  }: { retries?: number; baseDelay?: number; signal?: AbortSignal; retryStatuses?: number[] } = {},
 ): Promise<T> {
   let attempt = 0;
   for (;;) {
@@ -977,7 +1140,7 @@ async function requestWithRetry<T>(
     } catch (error: any) {
       if (signal?.aborted || axios.isCancel?.(error) || error?.code === "ERR_CANCELED") throw error;
       const status = error?.response?.status;
-      const retryable = status === 429 || status === 500 || status === 502 || status === 503 || status === 524;
+      const retryable = typeof status === "number" && retryStatuses.includes(status);
       if (!retryable || attempt >= retries) throw error;
 
       const retryAfter = Number(error?.response?.headers?.["retry-after"]);
@@ -992,7 +1155,7 @@ async function postGenerateImage(payload: ReturnType<typeof buildPayload>) {
   const token = getToken();
   if (!token) throw new Error("请先配置 API Token。");
   const settings = getSettings();
-  const imageBaseUrl = normalizeBaseUrl(settings.imageBaseUrl, "https://image.novelai.net");
+  const imageBaseUrl = tokenSafeBaseUrl(settings.imageBaseUrl, "https://image.novelai.net");
   const postTo = (baseUrl: string) =>
     requestWithRetry(
       () =>
@@ -1007,7 +1170,10 @@ async function postGenerateImage(payload: ReturnType<typeof buildPayload>) {
           signal: currentAbort?.signal,
           ...proxyConfig("nai"),
         }),
-      { signal: currentAbort?.signal ?? undefined },
+      // A paid generate POST may have already produced (and charged for) an image
+      // even when the gateway reports a 5xx, so we never auto-retry server errors
+      // here — only 429 rate-limits, which are rejected before any work is done.
+      { signal: currentAbort?.signal ?? undefined, retryStatuses: [429] },
     );
   let res;
   try {
@@ -1923,17 +2089,52 @@ export async function checkComicConsistency(request: ComicConsistencyRequest): P
   };
 }
 
+// Map a comic reference kind to a NovelAI V4.5 Precise (Director) Reference type.
+// "vibe" stays Vibe Transfer; the others are precise references on V4.5.
+function preciseTypeForKind(kind: ComicReferenceKind): PreciseReferenceType | null {
+  switch (kind) {
+    case "character":
+      return "character";
+    case "scene":
+    case "object":
+      return "style";
+    case "precise":
+      return "character&style";
+    default:
+      return null; // "vibe" -> Vibe Transfer
+  }
+}
+
 function comicReferencesToExtras(request: ComicGeneratePanelRequest): GenerateExtras {
-  return {
-    vibeImages: request.references
-      .filter((ref) => ref.base64 && ref.useForGeneration !== false)
-      .map((ref) => ({
-        base64: stripBase64Prefix(ref.base64),
-        infoExtracted: Math.min(1, Math.max(0, Number(ref.infoExtracted) || (ref.kind === "precise" ? 1 : 0.7))),
-        strength: Math.min(1, Math.max(0, Number(ref.strength) || (ref.kind === "precise" ? 0.65 : 0.45))),
-      })),
-    charCaptions: [],
-  };
+  const usable = request.references.filter((ref) => ref.base64 && ref.useForGeneration !== false);
+  // Precise/Director references are only available on V4.5 models. On other
+  // models we fall back to Vibe Transfer so the reference still has an effect
+  // instead of being silently dropped.
+  const supportsPrecise = isV45(request.params.model);
+
+  const vibeImages: VibeTransferItem[] = [];
+  const preciseReferences: PreciseReferenceItem[] = [];
+
+  for (const ref of usable) {
+    const base64 = stripBase64Prefix(ref.base64);
+    const preciseType = supportsPrecise ? preciseTypeForKind(ref.kind) : null;
+    if (preciseType) {
+      preciseReferences.push({
+        base64,
+        type: preciseType,
+        strength: clamp01(Number(ref.strength) || 1, 1),
+        fidelity: clamp01(Number(ref.infoExtracted) || 1, 1),
+      });
+    } else {
+      vibeImages.push({
+        base64,
+        infoExtracted: clamp01(Number(ref.infoExtracted) || (ref.kind === "precise" ? 1 : 0.7), 0.7),
+        strength: clamp01(Number(ref.strength) || (ref.kind === "precise" ? 0.65 : 0.45), 0.45),
+      });
+    }
+  }
+
+  return { vibeImages, charCaptions: [], preciseReferences };
 }
 
 export async function generateComicPanel(request: ComicGeneratePanelRequest): Promise<GenerateResult> {
@@ -1962,13 +2163,21 @@ export async function generateComicPanel(request: ComicGeneratePanelRequest): Pr
         };
   }
   if (result.ok && result.items.length > 0) {
+    const historyGroup = ensureHistoryGroup(request.projectTitle, request.historyGroupId);
     result.items = result.items.map((item) => {
       const updated = updateHistoryItem(item.id, {
         feature: "comic",
+        groupId: historyGroup.id,
         comicProjectId: request.projectId,
         comicPanelNo: request.panelIndex,
       });
-      return updated ?? { ...item, feature: "comic", comicProjectId: request.projectId, comicPanelNo: request.panelIndex };
+      return updated ?? {
+        ...item,
+        feature: "comic",
+        groupId: historyGroup.id,
+        comicProjectId: request.projectId,
+        comicPanelNo: request.panelIndex,
+      };
     });
   }
   return result;
@@ -2231,12 +2440,20 @@ export async function generateI2I(params: GenerateParams, i2i: I2IParams, extras
     params.seedMode !== "random" && params.seed > 0 ? params.seed : crypto.randomInt(1, 2_147_483_647);
   try {
     const preparedExtras = await prepareExtras(params, extras);
-    const base64Image = await readWorkbenchBase64();
+    // Resize the source to the requested output dimensions — NovelAI's img2img
+    // expects the input image to match width×height; sending an arbitrary size
+    // risks a 400/500 or a misaligned composition.
+    const { buffer: workbenchBuffer } = await readWorkbenchImage();
+    const base64Image = resizeImageBufferToPng(workbenchBuffer, params.width, params.height).toString("base64");
+    const strength = clamp01(i2i.strength, 0.7);
     const applyI2I = (payload: ReturnType<typeof buildPayload>) => {
       payload.action = "img2img";
       payload.parameters.image = base64Image;
-      payload.parameters.strength = Math.min(1, Math.max(0, i2i.strength));
+      payload.parameters.strength = strength;
       payload.parameters.noise = Math.min(0.99, Math.max(0, i2i.noise));
+      // NOTE: the unofficial SDK's nested `img2img` descriptor was dropped — it
+      // is unverified and the same change regressed inpaint. We keep the standard
+      // flat strength/noise img2img payload plus the source-resize fix above.
       payload.parameters.extra_noise_seed =
         i2i.extraNoiseSeed > 0 ? i2i.extraNoiseSeed : crypto.randomInt(1, 2_147_483_647);
       return payload;
@@ -2298,6 +2515,10 @@ export async function inpaintImage(
     payload.action = "infill";
     payload.parameters.image = preparedAssets.imageBase64;
     payload.parameters.mask = preparedAssets.maskBase64;
+    // Known-good v0.9.3 infill structure. The unofficial-SDK variant
+    // (add_original_image=false + nested img2img + inpaintImg2ImgStrength +
+    // noise=0) regressed real inpainting, so we keep the standard infill payload:
+    // composite the original back outside the mask, honor the user's strength/noise.
     payload.parameters.add_original_image = true;
     payload.parameters.strength = normalizedStrength;
     payload.parameters.noise = normalizedNoise;
@@ -2359,7 +2580,7 @@ export async function upscaleImg(scale: UpscaleScale): Promise<SingleImageResult
     const settings = getSettings();
     // Upscale lives on the API host (api.novelai.net), NOT the image host, and
     // returns a ZIP archive (same as generate-image), not a raw PNG.
-    const apiBaseUrl = normalizeBaseUrl(settings.apiBaseUrl, "https://api.novelai.net");
+    const apiBaseUrl = tokenSafeBaseUrl(settings.apiBaseUrl, "https://api.novelai.net");
     const res = await requestWithRetry(
       () =>
         axios.post(
@@ -2382,7 +2603,8 @@ export async function upscaleImg(scale: UpscaleScale): Promise<SingleImageResult
             ...proxyConfig("nai"),
           },
         ),
-      { signal: abort.signal },
+      // Paid upscale POST — only retry pre-charge 429s, never 5xx.
+      { signal: abort.signal, retryStatuses: [429] },
     );
 
     // Response is usually a ZIP containing the upscaled PNG; fall back to raw bytes.
@@ -2456,7 +2678,7 @@ export async function augmentImg(tool: DirectorTool, options: AugmentOptions): P
       forcePng: true,
     });
     const settings = getSettings();
-    const imageBaseUrl = normalizeBaseUrl(settings.imageBaseUrl, "https://image.novelai.net");
+    const imageBaseUrl = tokenSafeBaseUrl(settings.imageBaseUrl, "https://image.novelai.net");
     const payload: Record<string, unknown> = {
       image: preparedImage.base64,
       width: preparedImage.width,
@@ -2508,16 +2730,28 @@ export async function augmentImg(tool: DirectorTool, options: AugmentOptions): P
   }
 }
 
+// Only treat a 400/422 as a reference problem when the server error actually
+// names a reference field. A generic 400 (bad size, model, prompt, etc.) must
+// NOT be classified as "reference", otherwise callers (e.g. the comic queue)
+// fire a second *paid* reference-less retry that both wastes Anlas and hides the
+// real cause.
+function looksLikeReferenceError(detail: string): boolean {
+  return /reference|vibe|director_reference|encode|information_extracted|controlnet/i.test(detail);
+}
+
 function handleGenerateError(error: any, prefix: string): GenerateResult {
   if (axios.isCancel(error) || error?.code === "ERR_CANCELED") {
     return { ok: false, message: "操作已取消。", items: [], failureKind: "cancelled" };
   }
   const status = error?.response?.status;
+  const detail = responseErrorText(error) || error?.message || "未知错误";
   const failureKind =
     status === 401 || status === 403
       ? "auth"
       : status === 400 || status === 422
-        ? "reference"
+        ? looksLikeReferenceError(detail)
+          ? "reference"
+          : "validation"
         : status
           ? "api"
           : "validation";
@@ -2525,7 +2759,6 @@ function handleGenerateError(error: any, prefix: string): GenerateResult {
     failureKind === "auth"
       ? `NovelAI 鉴权失败${status ? `（HTTP ${status}）` : ""}：请在设置页重新粘贴并验证 Persistent API Token，并确认 Image Endpoint 为 https://image.novelai.net。`
       : "";
-  const detail = responseErrorText(error) || "未知错误";
   return {
     ok: false,
     message: authHint || `${prefix}${status ? `（HTTP ${status}）` : ""}：${detail}`,
@@ -2580,7 +2813,7 @@ export async function suggestTags(model: string, prompt: string): Promise<TagSug
   if (serverTags.length > 0) return serverTags;
   if (!token) return fallback;
   const settings = getSettings();
-  const apiBaseUrl = normalizeBaseUrl(settings.apiBaseUrl, "https://api.novelai.net");
+  const apiBaseUrl = tokenSafeBaseUrl(settings.apiBaseUrl, "https://api.novelai.net");
   try {
     const res = await axios.get(`${apiBaseUrl}/ai/generate-image/suggest-tags`, {
       params: { model, prompt },

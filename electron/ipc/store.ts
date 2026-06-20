@@ -1,4 +1,4 @@
-import { app } from "electron";
+import { app, safeStorage } from "electron";
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
@@ -17,6 +17,71 @@ let cache: PersistedData | null = null;
 
 function storePath() {
   return path.join(app.getPath("userData"), "novelai-image-desktop.json");
+}
+
+// --- At-rest encryption for credentials -------------------------------------
+// The NovelAI token and the third-party AI keys are encrypted with Electron's
+// safeStorage (OS keychain / DPAPI) before being written to disk. The in-memory
+// cache always holds plaintext; only the JSON file holds ciphertext. Existing
+// plaintext stores are transparently migrated on the next write.
+const ENC_PREFIX = "enc:v1:";
+const SENSITIVE_SETTING_KEYS: SettingKey[] = [
+  "visionApiKey",
+  "convertApiKey",
+  "tagServerApiKey",
+  "baiduSecret",
+];
+
+function canEncrypt(): boolean {
+  try {
+    return safeStorage.isEncryptionAvailable();
+  } catch {
+    return false;
+  }
+}
+
+function encField(value: unknown): unknown {
+  if (typeof value !== "string" || value === "" || value.startsWith(ENC_PREFIX)) return value;
+  if (!canEncrypt()) return value;
+  try {
+    return ENC_PREFIX + safeStorage.encryptString(value).toString("base64");
+  } catch {
+    return value;
+  }
+}
+
+function decField(value: unknown): unknown {
+  if (typeof value !== "string" || !value.startsWith(ENC_PREFIX)) return value;
+  if (!canEncrypt()) return value;
+  try {
+    return safeStorage.decryptString(Buffer.from(value.slice(ENC_PREFIX.length), "base64"));
+  } catch {
+    return value;
+  }
+}
+
+function encryptForDisk(data: PersistedData): PersistedData {
+  const clone: PersistedData = { ...data, settings: { ...data.settings } };
+  if (clone.token) clone.token = encField(clone.token) as string;
+  const settings = clone.settings as unknown as Record<string, unknown>;
+  for (const key of SENSITIVE_SETTING_KEYS) {
+    settings[key] = encField(settings[key]);
+  }
+  return clone;
+}
+
+function decryptFromDisk(raw: Partial<PersistedData>): Partial<PersistedData> {
+  const clone: Partial<PersistedData> = { ...raw };
+  if (typeof clone.token === "string") clone.token = decField(clone.token) as string;
+  if (clone.settings) {
+    clone.settings = { ...clone.settings };
+    const settings = clone.settings as unknown as Record<string, unknown>;
+    for (const key of SENSITIVE_SETTING_KEYS) {
+      const current = settings[key];
+      if (typeof current === "string") settings[key] = decField(current);
+    }
+  }
+  return clone;
 }
 
 function emptyModeTemplates(): AppSettings["reversePromptTemplates"] {
@@ -96,7 +161,9 @@ export function defaultSettings(): AppSettings {
     outputDir: path.join(app.getPath("pictures"), "Langbai NovelAI Studio"),
     apiBaseUrl: "https://api.novelai.net",
     imageBaseUrl: "https://image.novelai.net",
-    proxyUrl: "",
+    allowCustomEndpoint: false,
+    proxyMode: "http",
+    proxyUrl: "http://127.0.0.1:7890",
     proxyForNai: true,
     proxyForMcp: true,
     proxyForAi: true,
@@ -109,7 +176,6 @@ export function defaultSettings(): AppSettings {
     superDrop: true,
     showFloatingToolbar: true,
     historyJumpAfterGenerate: true,
-    deleteProtectionSeconds: 1,
     historyRetentionDays: 30,
     debugLogs: false,
     visionApiUrl: "https://api.openai.com/v1",
@@ -151,10 +217,37 @@ export function defaultSettings(): AppSettings {
   };
 }
 
+// Drop history-list entries older than the configured retention window. This
+// only trims the in-app history index — the saved image FILES on disk are never
+// deleted, so nothing irreversible happens. Entries with an unparseable date are
+// always kept as a safety net.
+function pruneHistoryByRetention(history: HistoryItem[], retentionDays: number): HistoryItem[] {
+  if (!Array.isArray(history) || history.length === 0) return history;
+  if (!Number.isFinite(retentionDays) || retentionDays <= 0) return history;
+  const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
+  return history.filter((item) => {
+    const stamp = Date.parse(item?.createdAt || item?.date || "");
+    return Number.isNaN(stamp) || stamp >= cutoff;
+  });
+}
+
 function normalize(raw: Partial<PersistedData> | null): PersistedData {
   const defaults = defaultSettings();
   const rawSettings = (raw?.settings ?? {}) as Partial<AppSettings>;
   const settings = { ...defaults, ...rawSettings };
+  if (!rawSettings.proxyMode) {
+    const legacyProxy = rawSettings.proxyUrl?.trim() ?? "";
+    if (!legacyProxy) {
+      settings.proxyMode = "http";
+      settings.proxyUrl = defaults.proxyUrl;
+    } else if (/^socks/i.test(legacyProxy)) {
+      settings.proxyMode = "socks";
+    } else if (legacyProxy.toLowerCase().replace(/\/$/, "") === defaults.proxyUrl) {
+      settings.proxyMode = "http";
+    } else {
+      settings.proxyMode = "custom";
+    }
+  }
   if (isEmptyModeTemplates(rawSettings.reversePromptTemplates) || isLegacyScopedReverseTemplates(rawSettings.reversePromptTemplates)) {
     settings.reversePromptTemplates = defaults.reversePromptTemplates;
   }
@@ -169,7 +262,7 @@ function normalize(raw: Partial<PersistedData> | null): PersistedData {
     token: typeof raw?.token === "string" ? raw.token : undefined,
     account: raw?.account && typeof raw.account === "object" ? raw.account : undefined,
     settings,
-    history: Array.isArray(raw?.history) ? raw.history : [],
+    history: pruneHistoryByRetention(Array.isArray(raw?.history) ? raw.history : [], settings.historyRetentionDays),
     historyGroups: Array.isArray(raw?.historyGroups) ? raw.historyGroups : [],
   };
 }
@@ -185,7 +278,7 @@ export function readStore(): PersistedData {
       return cache;
     }
 
-    const raw = JSON.parse(fs.readFileSync(file, "utf8")) as Partial<PersistedData>;
+    const raw = decryptFromDisk(JSON.parse(fs.readFileSync(file, "utf8")) as Partial<PersistedData>);
     cache = normalize(raw);
     return cache;
   } catch {
@@ -204,10 +297,10 @@ export function readStore(): PersistedData {
 }
 
 export function writeStore(next: PersistedData) {
-  cache = next;
+  cache = next; // in-memory cache stays plaintext
   const file = storePath();
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, JSON.stringify(next, null, 2), "utf8");
+  fs.writeFileSync(file, JSON.stringify(encryptForDisk(next), null, 2), "utf8");
 }
 
 export function getSettings(): AppSettings {
@@ -259,9 +352,10 @@ export function setAccountSummary(account: Omit<AccountSummary, "hasToken">) {
 
 export function addHistory(items: HistoryItem[]) {
   const data = readStore();
-  const groupId = data.settings.activeHistoryGroupId || undefined;
-  const nextItems = groupId ? items.map((item) => ({ ...item, groupId })) : items;
-  data.history = [...nextItems, ...data.history];
+  // The selected history group is a view filter, not a save destination.
+  // Callers that own a destination (for example a comic project) set groupId
+  // explicitly on their history items.
+  data.history = [...items, ...data.history];
   writeStore(data);
 }
 
@@ -301,6 +395,27 @@ export function updateHistoryItem(id: string, patch: Partial<HistoryItem>): Hist
 
 export function getHistoryGroups(): HistoryGroup[] {
   return readStore().historyGroups;
+}
+
+export function ensureHistoryGroup(name: string, preferredId?: string): HistoryGroup {
+  const normalizedName = name.replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 80) || "未命名漫画项目";
+  const data = readStore();
+  const preferred = preferredId ? data.historyGroups.find((group) => group.id === preferredId) : undefined;
+  if (preferred) {
+    if (preferred.name !== normalizedName) {
+      const updated = { ...preferred, name: normalizedName };
+      data.historyGroups = data.historyGroups.map((group) => (group.id === preferred.id ? updated : group));
+      writeStore(data);
+      return updated;
+    }
+    return preferred;
+  }
+  const existing = data.historyGroups.find((group) => group.name.toLowerCase() === normalizedName.toLowerCase());
+  if (existing) return existing;
+  const created = { id: crypto.randomUUID(), name: normalizedName, createdAt: new Date().toISOString() };
+  data.historyGroups = [...data.historyGroups, created];
+  writeStore(data);
+  return created;
 }
 
 export function createHistoryGroup(name: string): HistoryGroup[] {

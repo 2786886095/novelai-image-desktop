@@ -101,6 +101,7 @@ function normalizeComicProject(
   return {
     ...createDefaultComicProject(params),
     ...source,
+    historyGroupId: options.trustOutputs ? source.historyGroupId : undefined,
     mode: source.mode ?? "natural",
     desiredPanelCount: source.desiredPanelCount ?? "auto",
     autoExportZip: source.autoExportZip ?? false,
@@ -195,6 +196,17 @@ function labelForScope(scope: ReversePromptScope) {
   }
 }
 
+function labelForPanelStatus(status: ComicPanel["status"]) {
+  switch (status) {
+    case "draft": return "草稿";
+    case "converted": return "已转换";
+    case "generating": return "生成中";
+    case "done": return "已出图";
+    case "failed": return "失败";
+    default: return status;
+  }
+}
+
 // Character / scene / object references describe persistent subjects, so their
 // reverse-engineered prompts belong in the global setting (they should appear in
 // every panel). Vibe / precise references are visual-only and are not folded in.
@@ -282,16 +294,25 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
   const [activePanelId, setActivePanelId] = useState("");
   const [generationLog, setGenerationLog] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [panelEditorTab, setPanelEditorTab] = useState<"content" | "params" | "weights">("content");
+  const [translatingPanel, setTranslatingPanel] = useState("");
   const [queue, setQueue] = useState<QueueState>(null);
   const [queueAnlasQuote, setQueueAnlasQuote] = useState<number | null>(null);
+  const [queueQuoteError, setQueueQuoteError] = useState("");
+  const [queueQuoteLoading, setQueueQuoteLoading] = useState(false);
   const [queueAnlasSpent, setQueueAnlasSpent] = useState<number | null>(null);
   const queueRef = useRef({ paused: false, cancelled: false });
   const mountedRef = useRef(true);
+  const comicRootRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     return () => {
       mountedRef.current = false;
+      const wasRunning = !queueRef.current.cancelled;
       queueRef.current.cancelled = true;
+      // Leaving the comic tab mid-queue must abort the in-flight paid request,
+      // otherwise it keeps generating, billing, and saving in the background.
+      if (wasRunning) void window.naiDesktop.cancel();
     };
   }, []);
 
@@ -323,14 +344,96 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
     };
   }, [project, setToast]);
 
+  useEffect(() => {
+    comicRootRef.current?.scrollTo({ top: 0 });
+  }, [step]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void window.naiDesktop.getHistory().then((history) => {
+      if (cancelled) return;
+      const byId = new Map(history.map((item) => [item.id, item]));
+      const byPanel = new Map<number, (typeof history)[number]>();
+      for (const item of history) {
+        if (
+          item.comicProjectId === project.id &&
+          typeof item.comicPanelNo === "number" &&
+          !byPanel.has(item.comicPanelNo)
+        ) {
+          byPanel.set(item.comicPanelNo, item);
+        }
+      }
+      setProject((prev) => {
+        let changed = false;
+        const nextPanels = prev.panels.map((panel) => {
+          const item = (panel.historyItemId ? byId.get(panel.historyItemId) : undefined) ?? byPanel.get(panel.index);
+          if (!item || (panel.outputUrl === item.fileUrl && panel.historyItemId === item.id)) return panel;
+          changed = true;
+          return {
+            ...panel,
+            status: "done" as const,
+            historyItemId: item.id,
+            outputPath: item.filePath,
+            outputUrl: item.fileUrl,
+            error: undefined,
+          };
+        });
+        return changed ? { ...prev, panels: nextPanels } : prev;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [project.id]);
+
   const panels = useMemo(() => sortedPanels(project), [project]);
   const activePanel = useMemo(() => panels.find((panel) => panel.id === activePanelId) ?? panels[0], [panels, activePanelId]);
+  const activePanelTags = useMemo(
+    () => (activePanel ? splitPromptTags(activePanel.enPrompt).slice(0, 48) : []),
+    [activePanel],
+  );
   const selectedPanels = useMemo(
     () => (selectedIds.size ? panels.filter((panel) => selectedIds.has(panel.id)) : panels),
     [panels, selectedIds],
   );
+  const explicitlySelectedPanels = useMemo(
+    () => panels.filter((panel) => selectedIds.has(panel.id)),
+    [panels, selectedIds],
+  );
+  const ungeneratedPanels = useMemo(
+    () => panels.filter((panel) => !panel.outputUrl),
+    [panels],
+  );
+  const quotePreviewTargets = explicitlySelectedPanels.length ? explicitlySelectedPanels : ungeneratedPanels;
+  const quoteTargetLabel = explicitlySelectedPanels.length
+    ? `已选 ${explicitlySelectedPanels.length} 张`
+    : `未生成 ${ungeneratedPanels.length} 张`;
   const convertedCount = panels.filter((panel) => panel.enPrompt.trim()).length;
   const doneCount = panels.filter((panel) => panel.status === "done").length;
+  const queueRunning = Boolean(queue);
+  const quotePreviewKey = JSON.stringify({
+    step,
+    queueRunning,
+    account: {
+      hasToken: account.hasToken,
+      tierLevel: account.tierLevel,
+      active: account.hasActiveSubscription,
+      balance: account.anlasBalance,
+    },
+    references: project.references.filter((ref) => ref.base64 && ref.useForGeneration !== false).length,
+    panels: quotePreviewTargets.map((panel) => {
+      const params = mergePanelParams(project, panel);
+      return {
+        id: panel.id,
+        model: params.model,
+        width: params.width,
+        height: params.height,
+        steps: params.steps,
+        smea: params.smea,
+        smeaDyn: params.smeaDyn,
+      };
+    }),
+  });
 
   useEffect(() => {
     if (panels.length > 0 && !panels.some((panel) => panel.id === activePanelId)) {
@@ -338,12 +441,57 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
     }
   }, [activePanelId, panels]);
 
+  useEffect(() => {
+    let cancelled = false;
+    if (step !== "generate" || !account.hasToken) {
+      setQueueAnlasQuote(null);
+      setQueueQuoteError("");
+      setQueueQuoteLoading(false);
+      return;
+    }
+    if (queueRunning) return;
+    if (!quotePreviewTargets.length) {
+      setQueueAnlasQuote(0);
+      setQueueQuoteError("");
+      setQueueQuoteLoading(false);
+      return;
+    }
+    setQueueAnlasQuote(null);
+    setQueueQuoteError("");
+    setQueueQuoteLoading(true);
+    const timer = window.setTimeout(() => {
+      void quotePanelTargets(quotePreviewTargets, account)
+        .then((result) => {
+          if (cancelled) return;
+          if (result.ok) setQueueAnlasQuote(result.amount);
+          else setQueueQuoteError(result.message);
+        })
+        .finally(() => {
+          if (!cancelled) setQueueQuoteLoading(false);
+        });
+    }, 250);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [quotePreviewKey]);
+
   function patchProject(patch: Partial<ComicProject>) {
     setProject((prev) => ({ ...prev, ...patch }));
   }
 
   function patchGlobalParam<K extends keyof GenerateParams>(key: K, value: GenerateParams[K]) {
     setProject((prev) => ({ ...prev, globalParams: { ...prev.globalParams, [key]: value, positivePrompt: "" } }));
+  }
+
+  function patchPanelParam<K extends keyof GenerateParams>(panelId: string, key: K, value: GenerateParams[K]) {
+    setProject((prev) => updatePanel(prev, panelId, (panel) => ({
+      ...panel,
+      paramsOverride: {
+        ...panel.paramsOverride,
+        params: { ...panel.paramsOverride.params, [key]: value },
+      },
+    })));
   }
 
   function setDesiredPanelCount(value: number) {
@@ -626,12 +774,36 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
     }
   }
 
+  async function translatePanelText(panel: ComicPanel, direction: "to-en" | "to-zh") {
+    const source = direction === "to-en" ? panel.cnPrompt.trim() : panel.enPrompt.trim();
+    if (!source) {
+      setToast(direction === "to-en" ? "当前分镜没有中文描述。" : "当前分镜没有英文提示词。");
+      return;
+    }
+    setTranslatingPanel(`${panel.id}:${direction}`);
+    try {
+      const result = await window.naiDesktop.translate(source, direction === "to-en" ? "en" : "zh");
+      if (!result.ok || !result.text?.trim()) {
+        setToast(result.error ?? "翻译失败，请检查翻译设置和网络。");
+        return;
+      }
+      setProject((prev) => updatePanel(prev, panel.id, (old) => direction === "to-en"
+        ? { ...old, enPrompt: result.text!.trim(), status: "converted", error: undefined }
+        : { ...old, cnPrompt: result.text!.trim(), error: undefined }));
+      setToast(direction === "to-en" ? `分镜 #${panel.index} 已直译为英文。` : `分镜 #${panel.index} 已回译为中文。`);
+    } finally {
+      setTranslatingPanel("");
+    }
+  }
+
   async function generatePanel(panel: ComicPanel): Promise<PanelOutput> {
     setBusy(`generate:${panel.id}`);
     setProject((prev) => updatePanel(prev, panel.id, (old) => ({ ...old, status: "generating", error: undefined })));
     try {
       const result = await window.naiDesktop.comicGeneratePanel({
         projectId: project.id,
+        projectTitle: project.title,
+        historyGroupId: project.historyGroupId,
         panelId: panel.id,
         panelIndex: panel.index,
         params: mergePanelParams(project, panel),
@@ -648,8 +820,8 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
         return { ok: false, failureKind: "cancelled", message: "已取消漫画生图队列。" };
       }
       const item = result.items[0];
-      setProject((prev) =>
-        updatePanel(prev, panel.id, (old) => ({
+      setProject((prev) => ({
+        ...updatePanel(prev, panel.id, (old) => ({
           ...old,
           status: result.ok && item ? "done" : "failed",
           historyItemId: item?.id ?? old.historyItemId,
@@ -657,7 +829,8 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
           outputUrl: item?.fileUrl ?? old.outputUrl,
           error: result.ok ? undefined : result.message,
         })),
-      );
+        historyGroupId: item?.groupId ?? prev.historyGroupId,
+      }));
       if (item && mountedRef.current) {
         await refreshHistory(item.date);
         await refreshAccount();
@@ -739,6 +912,62 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
     }
   }
 
+  async function quotePanelTargets(targets: ComicPanel[], quoteAccount = account) {
+    const quoteCache = new Map<string, number>();
+    const usableRefs = project.references.filter((ref) => ref.base64 && ref.useForGeneration !== false);
+    const vibeKindCount = usableRefs.filter((ref) => ref.kind === "vibe").length;
+    const preciseKindCount = usableRefs.length - vibeKindCount;
+    let amount = 0;
+    for (const panel of targets) {
+      const params = mergePanelParams(project, panel);
+      // Precise (director) references only bill on V4.5; on other models they
+      // fall back to Vibe Transfer, so count them as vibe there.
+      const supportsPrecise = params.model.includes("4-5");
+      const vibeCount = supportsPrecise ? vibeKindCount : vibeKindCount + preciseKindCount;
+      const preciseCount = supportsPrecise ? preciseKindCount : 0;
+      const key = JSON.stringify({
+        model: params.model,
+        width: params.width,
+        height: params.height,
+        steps: params.steps,
+        smea: params.smea,
+        smeaDyn: params.smeaDyn,
+        vibeCount,
+        preciseCount,
+      });
+      let panelAmount = quoteCache.get(key);
+      if (panelAmount == null) {
+        const quote = await window.naiDesktop.quoteAnlas({
+          feature: "generate",
+          params: { ...params, stylePrompt: "", positivePrompt: "quote", negativePrompt: "" },
+          extras: {
+            vibeImages: Array.from({ length: vibeCount }, () => ({
+              base64: "",
+              infoExtracted: 0.7,
+              strength: 0.5,
+            })),
+            charCaptions: [],
+            preciseReferences: Array.from({ length: preciseCount }, () => ({
+              base64: "",
+              type: "character" as const,
+              strength: 1,
+              fidelity: 1,
+            })),
+          },
+          batchCount: 1,
+          account: quoteAccount,
+        });
+        if (!quote.ok || typeof quote.amount !== "number") {
+          return { ok: false as const, amount: 0, message: `分镜 #${panel.index}：${quote.message}` };
+        }
+        panelAmount = quote.amount;
+        quoteCache.set(key, panelAmount);
+      }
+      amount += panelAmount;
+    }
+    return { ok: true as const, amount, message: "" };
+  }
+
   async function startQueue(targets: ComicPanel[]) {
     if (!targets.length) {
       setToast("没有可生成的分镜。");
@@ -759,45 +988,12 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
       setToast(`分镜 #${emptyPrompt.index} 缺少可用于生图的提示词。`);
       return;
     }
-    const quoteCache = new Map<string, number>();
-    const referenceCount = project.references.filter((ref) => ref.base64 && ref.useForGeneration !== false).length;
-    let totalQuote = 0;
-    for (const panel of targets) {
-      const params = mergePanelParams(project, panel);
-      const key = JSON.stringify({
-        model: params.model,
-        width: params.width,
-        height: params.height,
-        steps: params.steps,
-        smea: params.smea,
-        smeaDyn: params.smeaDyn,
-        referenceCount,
-      });
-      let amount = quoteCache.get(key);
-      if (amount == null) {
-        const quote = await window.naiDesktop.quoteAnlas({
-          feature: "generate",
-          params: { ...params, stylePrompt: "", positivePrompt: "quote", negativePrompt: "" },
-          extras: {
-            vibeImages: Array.from({ length: referenceCount }, () => ({
-              base64: "",
-              infoExtracted: 0.7,
-              strength: 0.5,
-            })),
-            charCaptions: [],
-          },
-          batchCount: 1,
-          account: freshAccount,
-        });
-        if (!quote.ok || typeof quote.amount !== "number") {
-          setToast(`无法读取分镜 #${panel.index} 的生成前扣费：${quote.message}`);
-          return;
-        }
-        amount = quote.amount;
-        quoteCache.set(key, amount);
-      }
-      totalQuote += amount;
+    const quoted = await quotePanelTargets(targets, freshAccount);
+    if (!quoted.ok) {
+      setToast(`无法读取生成前扣费：${quoted.message}`);
+      return;
     }
+    const totalQuote = quoted.amount;
     setQueueAnlasQuote(totalQuote);
     if (typeof freshAccount.anlasBalance === "number" && totalQuote > freshAccount.anlasBalance) {
       setToast(`漫画队列需要 ${totalQuote} Anlas，当前余额 ${freshAccount.anlasBalance} Anlas，已阻止执行。`);
@@ -805,9 +1001,9 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
     }
     const ok = window.confirm(
       `将按顺序生成 ${targets.length} 个分镜。\n` +
-        `生成前官方扣费：${totalQuote} Anlas\n` +
+        `生成前扣费（本地估算，非 NovelAI 官方报价）：约 ${totalQuote} Anlas\n` +
         `当前余额：${freshAccount.anlasBalance ?? "未知"} Anlas\n` +
-        `生成后仍会按 NovelAI 账户余额差显示实际扣费，方便核对。\n\n是否继续？`,
+        `生成后会按 NovelAI 账户余额差显示实际扣费，以实际为准。\n\n是否继续？`,
     );
     if (!ok) return;
     void runQueue(targets, freshAccount.anlasBalance);
@@ -844,6 +1040,17 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
     });
   }
 
+  function markPanelImageUnavailable(panelId: string) {
+    setProject((prev) => updatePanel(prev, panelId, (panel) => ({
+      ...panel,
+      status: "failed",
+      historyItemId: undefined,
+      outputPath: undefined,
+      outputUrl: undefined,
+      error: "本地成图文件不可读取，请重新生成本分镜。",
+    })));
+  }
+
   function toggleSelected(panelId: string) {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -853,10 +1060,8 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
     });
   }
 
-  const queueRunning = Boolean(queue);
-
   return (
-    <main className="comic-generator">
+    <main ref={comicRootRef} className={clsx("comic-generator", step === "panels" && "comic-generator-panels")}>
       <div className="comic-page-title">
         <span className="eyebrow">工具 / 漫画生成器</span>
         <strong>{project.title || "未命名漫画项目"}</strong>
@@ -878,17 +1083,18 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
         ))}
       </nav>
 
-      <div className="comic-step-actions">
-        {onBack ? <Button onClick={onBack} variant="ghost">返回工具首页</Button> : null}
-        <Button onClick={createNewProject} variant="ghost">新建项目</Button>
-        <Button onClick={clearPanels} variant="ghost" disabled={!panels.length}>清空分镜</Button>
-        <Button onClick={exportProjectJson} variant="ghost">另存项目 JSON</Button>
-        <label className="comic-upload-btn">
-          导入项目 JSON
-          <input type="file" accept=".json,application/json" onChange={(event) => void importProjectJson(event.currentTarget.files?.[0] ?? null)} />
-        </label>
-        <Button onClick={syncCurrentParams} variant="ghost">同步当前生图参数</Button>
-      </div>
+      {step === "story" && (
+        <div className="comic-step-actions">
+          {onBack ? <Button onClick={onBack} variant="ghost">返回工具首页</Button> : null}
+          <Button onClick={createNewProject} variant="ghost">新建项目</Button>
+          <Button onClick={clearPanels} variant="ghost" disabled={!panels.length}>清空分镜</Button>
+          <Button onClick={exportProjectJson} variant="ghost">另存项目 JSON</Button>
+          <label className="comic-upload-btn">
+            导入项目 JSON
+            <input type="file" accept=".json,application/json" onChange={(event) => void importProjectJson(event.currentTarget.files?.[0] ?? null)} />
+          </label>
+        </div>
+      )}
 
       {step === "story" && (
         <section className="comic-card">
@@ -1024,7 +1230,10 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
         <section className="comic-card">
           <div className="comic-section-title">
             <strong>第 2 步 · 全局设定</strong>
-            <span>所有分镜共享</span>
+            <div className="comic-actions">
+              <span>所有分镜共享</span>
+              <Button onClick={syncCurrentParams} variant="ghost">同步当前生图参数</Button>
+            </div>
           </div>
           <label className="comic-field">
             <span>全局角色设定（角色/皮套/限制等，会参与每个分镜转换）</span>
@@ -1061,10 +1270,10 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
           {showAdvanced && (
             <>
               <div className="comic-param-grid">
-                <NumberInput label="宽度" value={project.globalParams.width} min={64} max={2048} step={64} onChange={(v) => patchGlobalParam("width", v)} />
-                <NumberInput label="高度" value={project.globalParams.height} min={64} max={2048} step={64} onChange={(v) => patchGlobalParam("height", v)} />
+                <NumberInput label="宽度" value={project.globalParams.width} min={64} max={1600} step={64} onChange={(v) => patchGlobalParam("width", v)} />
+                <NumberInput label="高度" value={project.globalParams.height} min={64} max={1600} step={64} onChange={(v) => patchGlobalParam("height", v)} />
                 <NumberInput label="步数" value={project.globalParams.steps} min={1} max={50} onChange={(v) => patchGlobalParam("steps", v)} />
-                <NumberInput label="CFG" value={project.globalParams.cfgScale} min={1} max={20} step={0.5} onChange={(v) => patchGlobalParam("cfgScale", v)} />
+                <NumberInput label="CFG" value={project.globalParams.cfgScale} min={1} max={10} step={0.5} onChange={(v) => patchGlobalParam("cfgScale", v)} />
               </div>
               <label className="comic-field">
                 <span>采样器</span>
@@ -1124,7 +1333,7 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
                     onClick={() => setActivePanelId(panel.id)}
                   >
                     <span>#{panel.index}</span>
-                    <small>{panel.status}</small>
+                    <small>{labelForPanelStatus(panel.status)}</small>
                   </button>
                 ))}
               </aside>
@@ -1134,145 +1343,103 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
                     <input type="checkbox" checked={selectedIds.has(activePanel.id)} onChange={() => toggleSelected(activePanel.id)} />
                     <strong>分镜 #{activePanel.index}</strong>
                   </label>
-                  <span className={clsx("comic-status", activePanel.status)}>{activePanel.status}</span>
-                  <div className="comic-actions">
-                    <Button onClick={() => addPanel(activePanel.index)}>插入</Button>
-                    <Button variant="danger" onClick={() => removePanel(activePanel.id)}>删除</Button>
-                  </div>
-                </header>
-                <div className="comic-panel-grid">
-                  <label className="comic-field">
-                    <span>中文分镜描述</span>
-                    <textarea
-                      value={activePanel.cnPrompt}
-                      onChange={(event) => setProject((prev) => updatePanel(prev, activePanel.id, (old) => ({ ...old, cnPrompt: event.target.value })))}
-                    />
-                  </label>
-                  <label className="comic-field">
-                    <span>英文生图提示词</span>
-                    <textarea
-                      value={activePanel.enPrompt}
-                      onChange={(event) => setProject((prev) => updatePanel(prev, activePanel.id, (old) => ({ ...old, enPrompt: event.target.value, status: "converted" })))}
-                    />
-                  </label>
-                </div>
-                <footer>
-                  <span>{activePanel.error || (activePanel.outputPath ? "已出图" : "尚未生成")}</span>
+                  <span className={clsx("comic-status", activePanel.status)}>{labelForPanelStatus(activePanel.status)}</span>
                   <div className="comic-actions">
                     <Button onClick={() => convertPanels([activePanel])} disabled={busy === "convert"}>转换本张</Button>
                     <Button onClick={() => void startQueue([activePanel])} disabled={Boolean(busy) || queueRunning} variant="primary">
                       {busy === `generate:${activePanel.id}` ? "生成中..." : "生成本张"}
                     </Button>
+                    <Button onClick={() => addPanel(activePanel.index)}>插入</Button>
+                    <Button variant="danger" onClick={() => removePanel(activePanel.id)}>删除</Button>
                   </div>
-                </footer>
+                </header>
+                <div className="comic-panel-editor-tabs" role="tablist" aria-label="分镜编辑视图">
+                  <button type="button" className={panelEditorTab === "content" ? "active" : ""} onClick={() => setPanelEditorTab("content")}>分镜内容</button>
+                  <button type="button" className={panelEditorTab === "params" ? "active" : ""} onClick={() => setPanelEditorTab("params")}>独立参数</button>
+                  <button type="button" className={panelEditorTab === "weights" ? "active" : ""} onClick={() => setPanelEditorTab("weights")}>提示词权重</button>
+                </div>
+                <div className="comic-panel-editor-body">
+                  {activePanel.error ? <div className="comic-panel-error">{activePanel.error}</div> : null}
+                  {panelEditorTab === "content" ? (
+                    <>
+                      {activePanel.outputUrl ? (
+                        <div className="comic-panel-result">
+                          <img src={activePanel.outputUrl} alt={`分镜 #${activePanel.index} 生成结果`} onError={() => markPanelImageUnavailable(activePanel.id)} />
+                          <div><strong>分镜 #{activePanel.index} 成图</strong><span>重新生成会替换本分镜当前成图记录。</span></div>
+                        </div>
+                      ) : <div className="comic-panel-no-result">本分镜尚未生成图片</div>}
+                      <div className="comic-panel-grid">
+                        <div className="comic-field">
+                          <div className="comic-field-heading">
+                            <span>中文分镜描述</span>
+                            <Button variant="ghost" onClick={() => void translatePanelText(activePanel, "to-en")} disabled={Boolean(translatingPanel)}>
+                              {translatingPanel === `${activePanel.id}:to-en` ? "翻译中..." : "直译英文"}
+                            </Button>
+                          </div>
+                          <textarea value={activePanel.cnPrompt} onChange={(event) => setProject((prev) => updatePanel(prev, activePanel.id, (old) => ({ ...old, cnPrompt: event.target.value })))} />
+                        </div>
+                        <div className="comic-field">
+                          <div className="comic-field-heading">
+                            <span>英文生图提示词</span>
+                            <Button variant="ghost" onClick={() => void translatePanelText(activePanel, "to-zh")} disabled={Boolean(translatingPanel)}>
+                              {translatingPanel === `${activePanel.id}:to-zh` ? "翻译中..." : "回译中文"}
+                            </Button>
+                          </div>
+                          <textarea value={activePanel.enPrompt} onChange={(event) => setProject((prev) => updatePanel(prev, activePanel.id, (old) => ({ ...old, enPrompt: event.target.value, status: "converted" })))} />
+                        </div>
+                      </div>
+                      <div className="comic-panel-negative-row">
+                        <label className="comic-field"><span>本分镜负面提示词</span><textarea value={activePanel.localNegativePrompt} placeholder="留空则只使用全局负面提示词" onChange={(event) => setProject((prev) => updatePanel(prev, activePanel.id, (old) => ({ ...old, localNegativePrompt: event.target.value })))} /></label>
+                        <label className="comic-field"><span>负面词组合方式</span><select value={activePanel.negativeMode} onChange={(event) => setProject((prev) => updatePanel(prev, activePanel.id, (old) => ({ ...old, negativeMode: event.target.value as ComicPanel["negativeMode"] })))}><option value="append">追加到全局负面词</option><option value="override">覆盖全局负面词</option></select></label>
+                      </div>
+                    </>
+                  ) : null}
+                  {panelEditorTab === "params" ? (
+                    <section className="comic-panel-params">
+                      <Toggle checked={activePanel.paramsOverride.enabled} onChange={(enabled) => setProject((prev) => updatePanel(prev, activePanel.id, (old) => ({ ...old, paramsOverride: { ...old.paramsOverride, enabled } })))} label="本分镜独立生图参数" description="开启后只覆盖当前分镜；关闭时继续使用第 2 步全局参数。" />
+                      {activePanel.paramsOverride.enabled ? (
+                        <div className="comic-panel-param-controls">
+                          <label className="comic-field"><span>模型</span><select value={activePanel.paramsOverride.params.model ?? project.globalParams.model} onChange={(event) => patchPanelParam(activePanel.id, "model", event.target.value as NAIModel)}>{NAI_MODELS.map((model) => <option key={model.value} value={model.value}>{model.label}</option>)}</select></label>
+                          <label className="comic-field"><span>采样器</span><select value={activePanel.paramsOverride.params.sampler ?? project.globalParams.sampler} onChange={(event) => patchPanelParam(activePanel.id, "sampler", event.target.value as NAISampler)}>{NAI_SAMPLERS.map((sampler) => <option key={sampler.value} value={sampler.value}>{sampler.label}</option>)}</select></label>
+                          <NumberInput label="宽度" value={activePanel.paramsOverride.params.width ?? project.globalParams.width} min={64} max={1600} step={64} onChange={(value) => patchPanelParam(activePanel.id, "width", value)} />
+                          <NumberInput label="高度" value={activePanel.paramsOverride.params.height ?? project.globalParams.height} min={64} max={1600} step={64} onChange={(value) => patchPanelParam(activePanel.id, "height", value)} />
+                          <NumberInput label="步数" value={activePanel.paramsOverride.params.steps ?? project.globalParams.steps} min={1} max={50} onChange={(value) => patchPanelParam(activePanel.id, "steps", value)} />
+                          <NumberInput label="提示词引导" value={activePanel.paramsOverride.params.cfgScale ?? project.globalParams.cfgScale} min={1} max={10} step={0.1} onChange={(value) => patchPanelParam(activePanel.id, "cfgScale", value)} />
+                          <NumberInput label="CFG Rescale" value={activePanel.paramsOverride.params.cfgRescale ?? project.globalParams.cfgRescale} min={0} max={1} step={0.01} onChange={(value) => patchPanelParam(activePanel.id, "cfgRescale", value)} />
+                          <NumberInput label="种子（0=随机）" value={activePanel.paramsOverride.params.seed ?? project.globalParams.seed} min={0} max={4294967295} onChange={(value) => patchPanelParam(activePanel.id, "seed", value)} />
+                          <label className="comic-field"><span>负面预设</span><select value={activePanel.paramsOverride.params.ucPreset ?? project.globalParams.ucPreset} onChange={(event) => patchPanelParam(activePanel.id, "ucPreset", Number(event.target.value) as UcPreset)}>{NAI_UC_PRESETS.map((preset) => <option key={preset.value} value={preset.value}>{preset.label}</option>)}</select></label>
+                          <div className="comic-panel-param-toggles">
+                            <Toggle checked={activePanel.paramsOverride.params.qualityToggle ?? project.globalParams.qualityToggle} onChange={(value) => patchPanelParam(activePanel.id, "qualityToggle", value)} label="Quality Tags" description="质量词增强" />
+                            <Toggle checked={activePanel.paramsOverride.params.variety ?? project.globalParams.variety} onChange={(value) => patchPanelParam(activePanel.id, "variety", value)} label="Variety+" description="增加采样多样性" />
+                            <Toggle checked={activePanel.paramsOverride.params.smea ?? project.globalParams.smea} onChange={(value) => patchPanelParam(activePanel.id, "smea", value)} label="SMEA" description="V3 高分辨率优化" />
+                            <Toggle checked={activePanel.paramsOverride.params.smeaDyn ?? project.globalParams.smeaDyn} onChange={(value) => patchPanelParam(activePanel.id, "smeaDyn", value)} label="SMEA Dyn" description="V3 动态优化" />
+                          </div>
+                        </div>
+                      ) : <p className="comic-empty">当前分镜正在使用第 2 步的全局生图参数。</p>}
+                    </section>
+                  ) : null}
+                  {panelEditorTab === "weights" ? (
+                    activePanelTags.length > 0 ? (
+                      <div className="comic-weight-tags">
+                        {activePanelTags.map((tag, index) => {
+                          const parsed = parseWeightedTag(tag);
+                          return (
+                            <span className="comic-weight-tag" key={`${activePanel.id}-${index}-${tag}`}>
+                              <b>{parsed.core}</b>
+                              <small>{formatMultiplier(parsed.level) || "x1.00"}</small>
+                              <button onClick={() => setProject((prev) => updatePanel(prev, activePanel.id, (old) => setPanelTagLevel(old, index, parsed.level + 1)))}>+</button>
+                              <button onClick={() => setProject((prev) => updatePanel(prev, activePanel.id, (old) => setPanelTagLevel(old, index, parsed.level - 1)))}>-</button>
+                              <button onClick={() => setProject((prev) => updatePanel(prev, activePanel.id, (old) => setPanelTagLevel(old, index, 0)))}>重置</button>
+                            </span>
+                          );
+                        })}
+                      </div>
+                    ) : <p className="comic-empty">当前英文提示词没有可调整的标签。</p>
+                  ) : null}
+                </div>
               </article>
             </div>
           )}
-          <div className="comic-panel-list">
-            {panels.map((panel, arrayIndex) => {
-              const tags = splitPromptTags(panel.enPrompt).slice(0, 48);
-              return (
-                <article className={clsx("comic-panel", selectedIds.has(panel.id) && "selected")} key={panel.id}>
-                  <header>
-                    <label className="comic-check">
-                      <input type="checkbox" checked={selectedIds.has(panel.id)} onChange={() => toggleSelected(panel.id)} />
-                      <strong>#{panel.index}</strong>
-                    </label>
-                    <span className={clsx("comic-status", panel.status)}>{panel.status}</span>
-                    <div className="comic-actions">
-                      <Button onClick={() => addPanel(arrayIndex + 1)}>插入</Button>
-                      <Button variant="danger" onClick={() => removePanel(panel.id)}>删除</Button>
-                    </div>
-                  </header>
-                  <div className="comic-panel-grid">
-                    <label className="comic-field">
-                      <span>中文分镜描述</span>
-                      <textarea
-                        value={panel.cnPrompt}
-                        onChange={(event) => setProject((prev) => updatePanel(prev, panel.id, (old) => ({ ...old, cnPrompt: event.target.value })))}
-                      />
-                    </label>
-                    <label className="comic-field">
-                      <span>英文生图提示词</span>
-                      <textarea
-                        value={panel.enPrompt}
-                        onChange={(event) => setProject((prev) => updatePanel(prev, panel.id, (old) => ({ ...old, enPrompt: event.target.value, status: "converted" })))}
-                      />
-                    </label>
-                  </div>
-                  <div className="comic-panel-options">
-                    <Toggle
-                      checked={panel.paramsOverride.enabled}
-                      onChange={(enabled) => setProject((prev) => updatePanel(prev, panel.id, (old) => ({ ...old, paramsOverride: { ...old.paramsOverride, enabled } })))}
-                      label="局部参数覆盖"
-                      description="只影响当前分镜。"
-                    />
-                    {panel.paramsOverride.enabled && (
-                      <div className="comic-param-grid mini">
-                        <NumberInput
-                          label="宽度"
-                          value={panel.paramsOverride.params.width ?? project.globalParams.width}
-                          min={64}
-                          max={2048}
-                          step={64}
-                          onChange={(value) => setProject((prev) => updatePanel(prev, panel.id, (old) => ({
-                            ...old,
-                            paramsOverride: { ...old.paramsOverride, params: { ...old.paramsOverride.params, width: value } },
-                          })))}
-                        />
-                        <NumberInput
-                          label="高度"
-                          value={panel.paramsOverride.params.height ?? project.globalParams.height}
-                          min={64}
-                          max={2048}
-                          step={64}
-                          onChange={(value) => setProject((prev) => updatePanel(prev, panel.id, (old) => ({
-                            ...old,
-                            paramsOverride: { ...old.paramsOverride, params: { ...old.paramsOverride.params, height: value } },
-                          })))}
-                        />
-                        <NumberInput
-                          label="步数"
-                          value={panel.paramsOverride.params.steps ?? project.globalParams.steps}
-                          min={1}
-                          max={50}
-                          onChange={(value) => setProject((prev) => updatePanel(prev, panel.id, (old) => ({
-                            ...old,
-                            paramsOverride: { ...old.paramsOverride, params: { ...old.paramsOverride.params, steps: value } },
-                          })))}
-                        />
-                      </div>
-                    )}
-                  </div>
-                  {tags.length > 0 && (
-                    <div className="comic-weight-tags">
-                      {tags.map((tag, index) => {
-                        const parsed = parseWeightedTag(tag);
-                        return (
-                          <span className="comic-weight-tag" key={`${panel.id}-${index}-${tag}`}>
-                            <b>{parsed.core}</b>
-                            <small>{formatMultiplier(parsed.level) || "x1.00"}</small>
-                            <button onClick={() => setProject((prev) => updatePanel(prev, panel.id, (old) => setPanelTagLevel(old, index, parsed.level + 1)))}>+</button>
-                            <button onClick={() => setProject((prev) => updatePanel(prev, panel.id, (old) => setPanelTagLevel(old, index, parsed.level - 1)))}>-</button>
-                            <button onClick={() => setProject((prev) => updatePanel(prev, panel.id, (old) => setPanelTagLevel(old, index, 0)))}>重置</button>
-                          </span>
-                        );
-                      })}
-                    </div>
-                  )}
-                  <footer>
-                    <span>{panel.error || (panel.outputPath ? "已出图" : "尚未生成")}</span>
-                    <div className="comic-actions">
-                      <Button onClick={() => convertPanels([panel])} disabled={busy === "convert"}>转换</Button>
-                      <Button onClick={() => void startQueue([panel])} disabled={Boolean(busy) || queueRunning} variant="primary">
-                        {busy === `generate:${panel.id}` ? "生成中..." : "生成本张"}
-                      </Button>
-                    </div>
-                  </footer>
-                </article>
-              );
-            })}
-          </div>
         </section>
       )}
 
@@ -1288,8 +1455,8 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
               <span>当前余额</span>
             </div>
             <div className="comic-cost-card">
-              <strong>{queueAnlasQuote != null ? queueAnlasQuote : "待报价"}</strong>
-              <span>生成前将扣 Anlas</span>
+              <strong>{queueQuoteLoading ? "报价中" : queueAnlasQuote != null ? queueAnlasQuote : "不可用"}</strong>
+              <span>{quoteTargetLabel} · 生成前将扣 Anlas</span>
             </div>
             <div className="comic-cost-card">
               <strong>{queueAnlasSpent != null ? queueAnlasSpent : "等待"}</strong>
@@ -1312,19 +1479,20 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
                 />
               </div>
               <div className="comic-actions" style={{ marginTop: 4 }}>
-                <label className="comic-upload-btn">
-                  导入参考图 / 素材图
-                  <input type="file" accept="image/*" multiple onChange={(event) => addReferences(event.target.files)} />
-                </label>
-                <Button onClick={() => void startQueue(panels)} variant="primary">生成全部（{panels.length}）</Button>
-                <Button onClick={() => void startQueue(selectedPanels)} disabled={!selectedIds.size}>
-                  生成选中（{selectedPanels.length}）
+                <Button onClick={() => void startQueue(ungeneratedPanels)} variant="primary" disabled={!ungeneratedPanels.length}>
+                  生成全部未生成（{ungeneratedPanels.length}）
                 </Button>
+                <Button onClick={() => void startQueue(explicitlySelectedPanels)} disabled={!explicitlySelectedPanels.length}>
+                  生成 / 重试选中（{explicitlySelectedPanels.length}）
+                </Button>
+                <Button onClick={() => setSelectedIds(new Set(panels.map((panel) => panel.id)))}>全选</Button>
+                <Button onClick={() => setSelectedIds(new Set())} disabled={!selectedIds.size}>清空选择</Button>
                 <Button onClick={() => void exportProjectZip()} disabled={!doneCount || busy === "exportZip"}>
                   {busy === "exportZip" ? "导出中..." : "导出已生成 ZIP"}
                 </Button>
-                <span className="comic-empty">未转换的分镜会回退用中文描述出图，建议先在第 3 步转换。</span>
+                <span className="comic-empty">勾选已有成图后仍可重新生成；未转换分镜会回退使用中文描述。</span>
               </div>
+              {queueQuoteError ? <div className="comic-quote-error">报价失败：{queueQuoteError}</div> : null}
             </>
           ) : (
             <div className="comic-queue">
@@ -1363,6 +1531,9 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
                   onClick={() => {
                     queueRef.current.cancelled = true;
                     queueRef.current.paused = false;
+                    // Abort the panel that is mid-flight, not just the queue —
+                    // otherwise the current paid request keeps running and bills.
+                    void window.naiDesktop.cancel();
                   }}
                 >
                   取消
@@ -1373,16 +1544,24 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
 
           <div className="comic-thumbs">
             {panels.map((panel) => (
-              <div className={clsx("comic-thumb", panel.status)} key={panel.id} title={panel.error || panel.cnPrompt}>
+              <div className={clsx("comic-thumb", panel.status, selectedIds.has(panel.id) && "selected")} key={panel.id} title={panel.error || panel.cnPrompt}>
+                <label className="comic-thumb-select">
+                  <input type="checkbox" checked={selectedIds.has(panel.id)} onChange={() => toggleSelected(panel.id)} />
+                  <span>选择 #{panel.index}</span>
+                </label>
                 {panel.outputUrl ? (
-                  <img src={panel.outputUrl} alt={`#${panel.index}`} />
+                  <img src={panel.outputUrl} alt={`#${panel.index}`} onError={() => markPanelImageUnavailable(panel.id)} />
                 ) : (
                   <div className="comic-thumb-empty">#{panel.index}</div>
                 )}
                 <span>#{panel.index}</span>
-                {panel.status === "failed" && (
-                  <Button variant="danger" onClick={() => void startQueue([panel])} disabled={queueRunning}>重试</Button>
-                )}
+                <Button
+                  variant={panel.outputUrl ? "secondary" : panel.status === "failed" ? "danger" : "secondary"}
+                  onClick={() => void startQueue([panel])}
+                  disabled={queueRunning}
+                >
+                  {panel.outputUrl ? "重新生成" : panel.status === "failed" ? "重试" : "生成"}
+                </Button>
               </div>
             ))}
           </div>

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { droppedImagePath, hasDraggedFiles } from "./drag-drop";
+import { buildLatentMaskCells } from "./inpaint-mask";
 import { useAppStore } from "./store";
 
 function clampZoom(value: number) {
@@ -75,14 +76,9 @@ export function InpaintCanvas() {
     };
   }, [compareDragging]);
 
-  // NovelAI's official inpaint quantizes the drawn mask to a coarse 64px grid
-  // (the visible "blocky" mask on the website) before sending it to the API.
-  // Any cell that overlaps a latent block which is only partially painted —
-  // or that carries an anti-aliased gray edge — is exactly what produces the
-  // dirty color-block artifacts and "ignores the prompt" behavior. We replicate
-  // the official behavior: collapse the stroke to whole 64px cells, binarize to
-  // pure black/white, and repaint the visible canvas so it is WYSIWYG with what
-  // actually gets sent.
+  // Editing stays pixel-precise, but NovelAI inpainting works on a 64px latent
+  // grid. Expand touched cells only in the exported mask; this preserves the
+  // free round brush feel while restoring the cleaner API result.
   const MASK_CELL = 64;
   const exportMask = useCallback(() => {
     const canvas = canvasRef.current;
@@ -92,22 +88,7 @@ export function InpaintCanvas() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     const data = ctx.getImageData(0, 0, w, h).data;
-    const cols = Math.ceil(w / MASK_CELL);
-    const rows = Math.ceil(h / MASK_CELL);
-    const cellOn = new Uint8Array(cols * rows);
-    let any = false;
-    for (let y = 0; y < h; y += 1) {
-      const rowBase = y * w;
-      const cellRow = Math.floor(y / MASK_CELL) * cols;
-      for (let x = 0; x < w; x += 1) {
-        const idx = (rowBase + x) * 4;
-        if (data[idx] + data[idx + 1] + data[idx + 2] > 32) {
-          cellOn[cellRow + Math.floor(x / MASK_CELL)] = 1;
-          any = true;
-        }
-      }
-    }
-
+    const { cells: cellOn, cols, rows, any } = buildLatentMaskCells(data, w, h, MASK_CELL);
     const maskCanvas = document.createElement("canvas");
     maskCanvas.width = w;
     maskCanvas.height = h;
@@ -116,17 +97,19 @@ export function InpaintCanvas() {
     maskCtx.globalCompositeOperation = "source-over";
     maskCtx.fillStyle = "black";
     maskCtx.fillRect(0, 0, w, h);
+    maskCtx.fillStyle = "white";
+    for (let row = 0; row < rows; row += 1) {
+      for (let col = 0; col < cols; col += 1) {
+        if (cellOn[row * cols + col]) {
+          maskCtx.fillRect(col * MASK_CELL, row * MASK_CELL, MASK_CELL, MASK_CELL);
+        }
+      }
+    }
     if (!any) {
       setInpaintMask(null);
       setPreviewMaskUrl("");
       setShowExportPreview(false);
       return;
-    }
-    maskCtx.fillStyle = "white";
-    for (let r = 0; r < rows; r += 1) {
-      for (let c = 0; c < cols; c += 1) {
-        if (cellOn[r * cols + c]) maskCtx.fillRect(c * MASK_CELL, r * MASK_CELL, MASK_CELL, MASK_CELL);
-      }
     }
     const dataUrl = maskCanvas.toDataURL("image/png");
     setPreviewMaskUrl(dataUrl);
@@ -436,7 +419,7 @@ export function InpaintCanvas() {
           <img className="inpaint-export-preview" src={previewMaskUrl} alt="发送给 NovelAI 的二值遮罩预览" draggable={false} style={canvasZoomStyle} />
         ) : null}
         <div
-          className="inpaint-cursor"
+          className="inpaint-cursor soft"
           style={{
             left: cursor.x,
             top: cursor.y,

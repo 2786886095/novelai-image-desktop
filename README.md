@@ -3,7 +3,7 @@
 [![Build](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build.yml/badge.svg)](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build.yml)
 [![Build Mobile](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build-mobile.yml/badge.svg)](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build-mobile.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
-[![Release](https://img.shields.io/badge/release-v0.9.4-7c5cfa.svg)](https://github.com/2786886095/novelai-image-desktop/releases/tag/v0.9.4)
+[![Release](https://img.shields.io/badge/release-v0.9.5-7c5cfa.svg)](https://github.com/2786886095/novelai-image-desktop/releases/tag/v0.9.5)
 [![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android%20%7C%20iOS-20b7d8.svg)](#下载)
 
 <img width="1672" height="941" alt="ChatGPT Image 2026年6月17日 11_27_47" src="https://github.com/user-attachments/assets/66a6caef-3007-479b-9006-1c6f50570655" />
@@ -16,14 +16,14 @@
 
 ## 下载
 
-- **v0.9.4 本地版**：[GitHub Releases](https://github.com/2786886095/novelai-image-desktop/releases/tag/v0.9.4)
+- **v0.9.5 本地版**：[GitHub Releases](https://github.com/2786886095/novelai-image-desktop/releases/tag/v0.9.5)
 - **持续构建产物**：[GitHub Actions](https://github.com/2786886095/novelai-image-desktop/actions)
 
 Release 目标产物：
 
 | 平台 | 文件 |
 | --- | --- |
-| Windows | `Langbai-NovelAI-Studio-0.9.4.exe` |
+| Windows | `Langbai-NovelAI-Studio-0.9.5.exe` |
 | macOS | universal `.dmg` + `.zip` |
 | Linux | `.AppImage` |
 | Android | `app-release.apk` |
@@ -67,8 +67,9 @@ npm run dev
 
 首次启动后：
 
-1. 打开“设置 > API 配置”，粘贴 NovelAI Persistent API Token。
-2. 点击“验证 Token / 刷新积分”确认账号与余额。
+1. 确认本机代理已启动；默认地址为 `http://127.0.0.1:7890`，也可在首次向导或“设置 > API 配置”中选择直连、SOCKS5 或自定义地址。
+2. 打开“设置 > API 配置”，按应用内图文教程获取并粘贴 NovelAI Persistent API Token。
+3. 点击“验证 Token / 刷新积分”确认账号与余额。
 3. 选择模型，填写提示词与参数。
 4. 点击生成；图片会自动保存到输出目录，并进入右侧历史与素材库。
 5. 可在历史面板创建分组、复用参数、发送到图生图 / 重绘 / 超分 / 后期。
@@ -85,7 +86,7 @@ npm run pack
 本地 Windows 便携包输出：
 
 ```text
-release\Langbai-NovelAI-Studio-0.9.4.exe
+release\Langbai-NovelAI-Studio-0.9.5.exe
 release\Langbai-NovelAI-Studio.exe
 ```
 
@@ -106,9 +107,9 @@ release\NovelAI-Image-Desktop.exe
 推送 `v*` tag 会触发桌面端与移动端两个 workflow，并把所有平台产物汇总到同一个 Release：
 
 ```powershell
-git tag v0.9.4
+git tag v0.9.5
 git push origin main
-git push origin v0.9.4
+git push origin v0.9.5
 ```
 
 如果 Release 上传时报 403，请在仓库 `Settings -> Actions -> General -> Workflow permissions` 中启用 `Read and write permissions`。

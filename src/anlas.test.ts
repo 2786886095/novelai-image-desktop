@@ -65,6 +65,20 @@ describe("official Anlas pricing", () => {
     expect(quote.amount).toBe(12);
   });
 
+  it("charges 5 Anlas per precise reference per request", () => {
+    const quote = calculateImageGenerationAnlas({
+      params: DEFAULT_PARAMS,
+      account: opusAccount, // base image is free for Opus, so only the reference fee remains
+      batchCount: 2,
+      extras: {
+        vibeImages: [],
+        charCaptions: [],
+        preciseReferences: [{ base64: "", type: "character", strength: 1, fidelity: 1 }],
+      },
+    });
+    expect(quote.amount).toBe(10); // 5 Anlas x 1 reference x 2 requests
+  });
+
   it("uses the official upscale pixel tier", () => {
     const quote = calculateUpscaleAnlas({
       image: { width: 1024, height: 1024 },

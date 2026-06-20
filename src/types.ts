@@ -1,4 +1,4 @@
-export const APP_VERSION = "0.9.4";
+export const APP_VERSION = "0.9.5";
 export const APP_NAME = "Langbai NovelAI Studio";
 export const PROJECT_REPOSITORY = "https://github.com/2786886095/novelai-image-desktop";
 
@@ -148,6 +148,22 @@ export interface VibeTransferImage extends VibeTransferItem {
   previewUrl: string; // data URL, never sent to main process
 }
 
+/** NovelAI V4.5 Precise (Director) Reference — distinct from Vibe Transfer.
+ * Sent over IPC; the main process emits director_reference_* fields. */
+export type PreciseReferenceType = "character" | "style" | "character&style";
+export interface PreciseReferenceItem {
+  base64: string;               // pure base64 (resized to an official reference resolution in main)
+  type: PreciseReferenceType;   // -> director_reference_descriptions[].caption.base_caption
+  strength: number;             // 0.0 – 1.0 -> director_reference_strength_values
+  fidelity: number;             // 0.0 – 1.0 -> secondary = round(1 - fidelity, 2)
+}
+
+/** Renderer store representation of a precise reference (adds id + preview) */
+export interface PreciseReferenceImage extends PreciseReferenceItem {
+  id: string;
+  previewUrl: string; // data URL, never sent to main process
+}
+
 /** Character prompt item — slim type sent over IPC */
 export interface CharCaptionItem {
   prompt: string;
@@ -165,6 +181,7 @@ export interface CharCaption extends CharCaptionItem {
 export interface GenerateExtras {
   vibeImages: VibeTransferItem[];
   charCaptions: CharCaptionItem[];
+  preciseReferences?: PreciseReferenceItem[];
 }
 
 export interface PromptVariants {
@@ -216,6 +233,7 @@ export interface ComicPanel {
 export interface ComicProject {
   id: string;
   title: string;
+  historyGroupId?: string;
   rawScript: string;
   mode: ReversePromptMode;
   desiredPanelCount: ComicDesiredPanelCount;
@@ -294,6 +312,8 @@ export interface ComicConsistencyResult {
 
 export interface ComicGeneratePanelRequest {
   projectId: string;
+  projectTitle: string;
+  historyGroupId?: string;
   panelId: string;
   panelIndex: number;
   params: GenerateParams;
@@ -393,10 +413,16 @@ export interface AccountSummary {
   anlasBalance?: number;
   expiresAt?: string;
   hasActiveSubscription?: boolean;
+  // True when this summary is a cached copy returned because a live refresh
+  // failed — the balance may be out of date and must be labelled as such.
+  stale?: boolean;
 }
 
 export type AnlasQuoteFeature = "generate" | "i2i" | "inpaint" | "upscale" | "director";
-export type AnlasQuoteSource = "official-api" | "official-formula" | "official-fixed" | "unavailable";
+// "official-api" = price returned by NovelAI's /request-price endpoint (authoritative).
+// "estimate-formula"/"estimate-fixed" = our local web-frontend formula / fixed rules,
+// which are close but NOT guaranteed to match the final charge — must be shown as estimates.
+export type AnlasQuoteSource = "official-api" | "estimate-formula" | "estimate-fixed" | "unavailable";
 
 export interface AnlasQuoteRequest {
   feature: AnlasQuoteFeature;
@@ -410,6 +436,7 @@ export interface AnlasQuoteRequest {
   maskBase64?: string | null;
   upscaleScale?: UpscaleScale;
   directorTool?: DirectorTool;
+  image?: Pick<WorkingImage, "width" | "height"> | null;
   account?: AccountSummary;
 }
 
@@ -491,6 +518,11 @@ export interface AppSettings {
   outputDir: string;
   apiBaseUrl: string;
   imageBaseUrl: string;
+  // Opt-in to sending the NovelAI Bearer token to a non-official endpoint host.
+  // Default false: a custom (non *.novelai.net) endpoint is refused to avoid
+  // leaking the token to an untrusted server.
+  allowCustomEndpoint: boolean;
+  proxyMode: "http" | "direct" | "socks" | "custom";
   // Proxy for outbound requests. Empty = direct. Accepts http://host:port or
   // socks5://host:port (scheme defaults to http:// when omitted).
   proxyUrl: string;
@@ -507,7 +539,6 @@ export interface AppSettings {
   superDrop: boolean;
   showFloatingToolbar: boolean;
   historyJumpAfterGenerate: boolean;
-  deleteProtectionSeconds: number;
   historyRetentionDays: number;
   debugLogs: boolean;
   // Vision / Reverse-prompt

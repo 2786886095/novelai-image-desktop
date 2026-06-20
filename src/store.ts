@@ -20,6 +20,7 @@ import type {
   UpdateInfo,
   UpscaleScale,
   VibeTransferImage,
+  PreciseReferenceImage,
   WorkingImage,
 } from "./types";
 import { DEFAULT_AUGMENT_OPTIONS, DEFAULT_I2I_PARAMS, DEFAULT_PARAMS } from "./types";
@@ -59,6 +60,7 @@ interface AppState {
   directorTool: DirectorTool;
   augmentOptions: AugmentOptions;
   vibeImages: VibeTransferImage[];
+  preciseReferences: PreciseReferenceImage[];
   charCaptions: CharCaption[];
   batchCount: number;
   inspectImageUrl: string;
@@ -126,6 +128,10 @@ interface AppState {
   removeVibeImage: (id: string) => void;
   updateVibeImage: (id: string, patch: Partial<Pick<VibeTransferImage, "infoExtracted" | "strength">>) => void;
   clearVibeImages: () => void;
+  addPreciseReference: (image: PreciseReferenceImage) => void;
+  removePreciseReference: (id: string) => void;
+  updatePreciseReference: (id: string, patch: Partial<Pick<PreciseReferenceImage, "type" | "strength" | "fidelity">>) => void;
+  clearPreciseReferences: () => void;
   // Character Prompt
   addCharCaption: () => void;
   removeCharCaption: (id: string) => void;
@@ -187,6 +193,12 @@ function buildExtras(state: AppState): GenerateExtras {
       base64,
       infoExtracted,
       strength,
+    })),
+    preciseReferences: state.preciseReferences.map(({ base64, type, strength, fidelity }) => ({
+      base64,
+      type,
+      strength,
+      fidelity,
     })),
     charCaptions: state.charCaptions.map(({ prompt, useCoords, x, y }) => ({
       prompt,
@@ -285,6 +297,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   directorTool: "bg-removal",
   augmentOptions: { ...DEFAULT_AUGMENT_OPTIONS },
   vibeImages: [],
+  preciseReferences: [],
   charCaptions: [],
   batchCount: 1,
   inspectImageUrl: "",
@@ -370,6 +383,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setActiveTab(tab) {
     set({ activeTab: tab });
+    const state = get();
+    if (
+      (tab === "inpaint" || tab === "upscale" || tab === "postprocess") &&
+      !state.workbenchImage &&
+      state.currentImage?.filePath
+    ) {
+      void get().loadWorkbenchFromPath(state.currentImage.filePath, { silent: true });
+    }
   },
 
   setPromptTab(tab) {
@@ -589,6 +610,24 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ vibeImages: [] });
   },
 
+  addPreciseReference(image) {
+    set((state) => ({ preciseReferences: [...state.preciseReferences, image] }));
+  },
+
+  removePreciseReference(id) {
+    set((state) => ({ preciseReferences: state.preciseReferences.filter((v) => v.id !== id) }));
+  },
+
+  updatePreciseReference(id, patch) {
+    set((state) => ({
+      preciseReferences: state.preciseReferences.map((v) => (v.id === id ? { ...v, ...patch } : v)),
+    }));
+  },
+
+  clearPreciseReferences() {
+    set({ preciseReferences: [] });
+  },
+
   // ── Character Prompt ───────────────────────────────────────────────────────
   addCharCaption() {
     const id = crypto.randomUUID();
@@ -771,12 +810,11 @@ export const useAppStore = create<AppState>((set, get) => ({
         seed: initialSeed > 0 ? initialSeed + i : 0,
       };
 
-      // One in-loop retry on top of the main process's HTTP-level 429/5xx retry.
-      let result = await window.naiDesktop.generate(currentParams, extras);
-      if ((!result.ok || result.items.length === 0) && get().isGenerating) {
-        await new Promise((r) => setTimeout(r, 1200));
-        result = await window.naiDesktop.generate(currentParams, extras);
-      }
+      // No renderer-side resend: a failed generate POST may already have produced
+      // and charged for an image on NovelAI's side, so resending here risked
+      // double-charging (up to 8 paid POSTs per image when stacked on the old
+      // main-process retry). The main process now retries only pre-charge 429s.
+      const result = await window.naiDesktop.generate(currentParams, extras);
 
       if (result.ok && result.items.length > 0) {
         completed++;
@@ -883,6 +921,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         inpaintStrength: state.inpaintStrength,
         inpaintNoise: state.inpaintNoise,
         maskBase64: state.inpaintMask,
+        image: { width: state.workbenchImage.width, height: state.workbenchImage.height },
         account: freshAccount,
       },
       "局部重绘",
@@ -930,6 +969,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       {
         feature: "upscale",
         upscaleScale: state.upscaleScale,
+        image: { width: state.workbenchImage.width, height: state.workbenchImage.height },
         account: freshAccount,
       },
       `云端超分 ${state.upscaleScale}x`,
@@ -970,6 +1010,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       {
         feature: "director",
         directorTool: state.directorTool,
+        image: { width: state.workbenchImage.width, height: state.workbenchImage.height },
         account: freshAccount,
       },
       "后期处理",

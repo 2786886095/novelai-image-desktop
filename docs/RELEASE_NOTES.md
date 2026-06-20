@@ -4,14 +4,26 @@
 
 | 系统 | 安装包 | 安装说明 |
 | --- | --- | --- |
-| 🪟 **Windows** (x64) | `Langbai-NovelAI-Studio-0.9.4.exe` | 便携版，双击即用，无需安装 |
-| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-0.9.4-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
-| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-0.9.4.zip` | 解压后即为 `.app`，同样需右键「打开」 |
-| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-0.9.4.AppImage` | `chmod +x` 后直接运行 |
+| 🪟 **Windows** (x64) | `Langbai-NovelAI-Studio-0.9.5.exe` | 便携版，双击即用，无需安装 |
+| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-0.9.5-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
+| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-0.9.5.zip` | 解压后即为 `.app`，同样需右键「打开」 |
+| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-0.9.5.AppImage` | `chmod +x` 后直接运行 |
 | 🤖 **Android** | `app-release.apk` | 直接安装；未签名，需允许「未知来源」 |
 | 📱 **iOS** | `novelai-mobile-unsigned.ipa` | **未签名**，需用 AltStore / Sideloadly 等工具自行侧载 |
 
 > 桌面端与移动端均为 **API-only** 客户端，需自备 NovelAI Persistent API Token。
+
+### v0.9.5 更新内容
+
+- **付费请求安全（防重复扣费）**：文生图 / 图生图 / 重绘 / 超分 / Vibe 编码等付费 POST **仅在 429（限流，发生在扣费前）重试，永不在 5xx 重试**；同时移除渲染层的二次重发、漫画「取消」与离开漫画页会中止在途付费请求 —— 杜绝单图最多被发送 8 次重复扣费的风险。
+- **报价来源诚实标注**：只有命中 NovelAI 官方报价接口才标注「官方（实际扣费）」；本地前端公式 / 固定规则一律标注「估算（非实际扣费）」，漫画确认弹窗同步措辞。
+- **Vibe 编码缓存 + 失败即报错**：相同图像 + 模型 + 提取值的 `encode-vibe` 结果按哈希缓存，避免漫画批量重复编码重复扣费；编码失败时**直接报错**而不再静默改发原图。
+- **错误分类更准**：仅当报错确实指向参考字段时才按「参考图错误」无参考重试，避免对尺寸 / 模型 / 提示词错误浪费一次付费重试并掩盖真实原因；余额刷新失败时标注「缓存」。
+- **新增「精准参考 Precise Reference」（V4.5）**：主界面参考图弹窗新增精准参考区，可选参考类型（角色 / 风格 / 角色和风格）+ Strength + Fidelity，发送官方 `director_reference_*` 字段，参考图自动裁剪缩放到官方分辨率；漫画参考图按类型自动路由；按 5 Anlas / 张计入生成前报价。*（依赖真实 V4.5 Token 验证。）*
+- **安全加固**：NovelAI Token 与视觉 / 转换 / 百度等 AI 密钥使用 Electron `safeStorage` 加密落盘（内存仍为明文，旧明文自动迁移）；自定义 Endpoint 默认**拒绝向非 `*.novelai.net` 地址发送 Token**，可在设置中显式开启。
+- **参数校验**：生成尺寸吸附到 64 的整数倍（64–1600），CFG 上限 10，并在主进程二次兜底；「多样化 Variety+」改为发送真实的 `skip_cfg_above_sigma`（此前的 `variety:true` 为空操作）；V4/V4.5 下隐藏无效的 SMEA 开关。
+- **历史保留天数现真正生效**：启动时自动清理超过设定天数的应用内历史记录；**仅清理列表，不删除已保存到本地的图片文件**。移除无效的 `deleteProtectionSeconds` 死设置。
+- **修复**：重绘 / 图生图请求结构回退到稳定可用版本（图生图保留「原图缩放到目标输出尺寸」修复）。
 
 ### v0.9.4 更新内容
 

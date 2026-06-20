@@ -54,6 +54,7 @@ import {
   type GenerateParams,
   type ModePromptTemplates,
   type PromptTemplate,
+  type PreciseReferenceType,
   type PromptVariants,
   type ReversePromptMode,
   type ReversePromptScope,
@@ -61,8 +62,17 @@ import {
   type TokenStatus,
 } from "./types";
 
+// NovelAI requires generation dimensions to be a multiple of 64, in the
+// 64–1600 range. Snap user input so we never send an invalid size (→ HTTP 400).
+function snapDimension(value: number): number {
+  if (!Number.isFinite(value)) return 1024;
+  return Math.min(1600, Math.max(64, Math.round(value / 64) * 64));
+}
+
 const docsUrl = "https://docs.novelai.net/en/image/";
-const tokenHelpUrl = "https://docs.novelai.net/en/api/";
+const novelAiImageUrl = "https://novelai.net/image";
+const DEFAULT_HTTP_PROXY = "http://127.0.0.1:7890";
+const DEFAULT_SOCKS_PROXY = "socks5://127.0.0.1:10808";
 const appIconUrl = "./icon.png";
 
 function fitSizeWithinPixels(width: number, height: number, maxPixels: number) {
@@ -259,7 +269,7 @@ function TitleBar() {
       <div className={clsx("title-account", account.hasToken && "online")}>
         <span className="pulse-dot" />
         {account.hasToken
-          ? `${account.tierName ?? "已连接"} · Anlas ${account.anlasBalance ?? "未知"}`
+          ? `${account.tierName ?? "已连接"} · Anlas ${account.anlasBalance ?? "未知"}${account.stale ? "（缓存）" : ""}`
           : "未连接 API"}
       </div>
       <div className="window-controls">
@@ -332,7 +342,7 @@ function AdvancedParamsModal({ onClose }: { onClose: () => void }) {
         </header>
         <div className="advanced-grid">
           <NumberInput label="Steps（采样步数）" value={params.steps} min={1} max={50} onChange={(v) => setParam("steps", v)} />
-          <NumberInput label="CFG Scale（提示词引导）" value={params.cfgScale} min={1} max={12} step={0.1} onChange={(v) => setParam("cfgScale", v)} />
+          <NumberInput label="CFG Scale（提示词引导）" value={params.cfgScale} min={1} max={10} step={0.1} onChange={(v) => setParam("cfgScale", Math.min(10, Math.max(1, v)))} />
           <NumberInput label="CFG Rescale（重缩放）" value={params.cfgRescale} min={0} max={1} step={0.01} onChange={(v) => setParam("cfgRescale", v)} />
           <label className="field">
             <span>Sampler（采样器）</span>
@@ -361,8 +371,14 @@ function AdvancedParamsModal({ onClose }: { onClose: () => void }) {
         </div>
         <div className="toggle-list compact">
           <Toggle checked={params.qualityToggle} onChange={(v) => setParam("qualityToggle", v)} label="Quality Toggle（质量词）" description="自动追加官方常用质量提示词。" />
-          <Toggle checked={params.smea} onChange={(v) => setParam("smea", v)} label="SMEA（高级采样）" description="旧模型可用；V4/V4.5 会按 API 兼容策略处理。" />
-          <Toggle checked={params.smeaDyn} onChange={(v) => setParam("smeaDyn", v)} label="SMEA Dyn（动态 SMEA）" description="仅在 SMEA 开启时生效。" />
+          {/* SMEA / SMEA Dyn only exist on V3-era models; V4/V4.5 ignore them, so
+              we hide the toggles there instead of showing a control with no effect. */}
+          {!params.model.includes("-4") && (
+            <>
+              <Toggle checked={params.smea} onChange={(v) => setParam("smea", v)} label="SMEA（高级采样）" description="仅 V3 及更早模型可用。" />
+              <Toggle checked={params.smeaDyn} onChange={(v) => setParam("smeaDyn", v)} label="SMEA Dyn（动态 SMEA）" description="仅在 SMEA 开启时生效。" />
+            </>
+          )}
         </div>
         <footer>
           <Button
@@ -387,14 +403,27 @@ function AdvancedParamsModal({ onClose }: { onClose: () => void }) {
 }
 
 // ── Vibe Transfer modal ───────────────────────────────────────────────────────
+const PRECISE_TYPE_LABELS: Record<PreciseReferenceType, string> = {
+  character: "角色",
+  style: "风格",
+  "character&style": "角色和风格",
+};
+
 function VibeTransferModal({ onClose }: { onClose: () => void }) {
   const vibeImages = useAppStore((state) => state.vibeImages);
   const addVibeImage = useAppStore((state) => state.addVibeImage);
   const removeVibeImage = useAppStore((state) => state.removeVibeImage);
   const updateVibeImage = useAppStore((state) => state.updateVibeImage);
   const clearVibeImages = useAppStore((state) => state.clearVibeImages);
+  const preciseReferences = useAppStore((state) => state.preciseReferences);
+  const addPreciseReference = useAppStore((state) => state.addPreciseReference);
+  const removePreciseReference = useAppStore((state) => state.removePreciseReference);
+  const updatePreciseReference = useAppStore((state) => state.updatePreciseReference);
+  const clearPreciseReferences = useAppStore((state) => state.clearPreciseReferences);
+  const model = useAppStore((state) => state.params.model);
+  const isV45 = model.includes("4-5");
 
-  function handleFile(file: File, infoExtracted: number, strength: number) {
+  function handleVibeFile(file: File, infoExtracted: number, strength: number) {
     const reader = new FileReader();
     reader.onload = (ev) => {
       const dataUrl = ev.target?.result as string;
@@ -404,16 +433,34 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
     reader.readAsDataURL(file);
   }
 
+  function handlePreciseFile(file: File) {
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target?.result as string;
+      const base64 = dataUrl.split(",")[1] ?? "";
+      addPreciseReference({
+        id: crypto.randomUUID(),
+        previewUrl: dataUrl,
+        base64,
+        type: "character&style",
+        strength: 1,
+        fidelity: 1,
+      });
+    };
+    reader.readAsDataURL(file);
+  }
+
   return (
     <AppPortal>
       <div className="modal-backdrop">
       <div className="modal vibe-modal">
         <header>
-          <h2>参考图管理（氛围迁移 / 精确参考）</h2>
+          <h2>参考图管理（氛围迁移 / 精准参考）</h2>
           <button onClick={onClose}>×</button>
         </header>
         <div className="vibe-body">
-          {vibeImages.length === 0 && <p className="vibe-empty">还没有参考图，使用下方按钮添加。</p>}
+          <h3 className="vibe-section-title">氛围迁移（Vibe Transfer）</h3>
+          {vibeImages.length === 0 && <p className="vibe-empty">还没有氛围迁移图。</p>}
           {vibeImages.map((img) => (
             <div className="vibe-row" key={img.id}>
               <img src={img.previewUrl} className="vibe-thumb" alt="参考图" />
@@ -440,35 +487,79 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
               </button>
             </div>
           ))}
+
+          <h3 className="vibe-section-title">
+            精准参考（Precise Reference）
+            {!isV45 && <span className="vibe-hint"> · 仅 V4.5 模型生效，当前模型不支持</span>}
+          </h3>
+          {preciseReferences.length === 0 && <p className="vibe-empty">还没有精准参考图。</p>}
+          {preciseReferences.map((ref) => (
+            <div className="vibe-row" key={ref.id}>
+              <img src={ref.previewUrl} className="vibe-thumb" alt="精准参考图" />
+              <div className="vibe-row-sliders">
+                <label className="field">
+                  <span>参考类型</span>
+                  <select
+                    value={ref.type}
+                    onChange={(e) => updatePreciseReference(ref.id, { type: e.target.value as PreciseReferenceType })}
+                  >
+                    {(Object.keys(PRECISE_TYPE_LABELS) as PreciseReferenceType[]).map((t) => (
+                      <option key={t} value={t}>{PRECISE_TYPE_LABELS[t]}</option>
+                    ))}
+                  </select>
+                </label>
+                <SliderInput
+                  label="参考强度 Strength"
+                  value={ref.strength}
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  onChange={(v) => updatePreciseReference(ref.id, { strength: v })}
+                />
+                <SliderInput
+                  label="保真度 Fidelity"
+                  value={ref.fidelity}
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  onChange={(v) => updatePreciseReference(ref.id, { fidelity: v })}
+                />
+              </div>
+              <button className="vibe-remove" title="移除" onClick={() => removePreciseReference(ref.id)}>
+                ×
+              </button>
+            </div>
+          ))}
+
           <div className="vibe-add-row">
             <label className="btn btn-secondary vibe-add-btn">
-              <IconText icon="+">氛围迁移图（提取 0.7）</IconText>
+              <IconText icon="+">氛围迁移图</IconText>
               <input
                 type="file"
                 hidden
                 accept="image/png,image/jpeg,image/webp"
                 onChange={(e) => {
                   const f = e.target.files?.[0];
-                  if (f) { handleFile(f, 0.7, 0.6); e.target.value = ""; }
+                  if (f) { handleVibeFile(f, 0.7, 0.6); e.target.value = ""; }
                 }}
               />
             </label>
             <label className="btn btn-secondary vibe-add-btn">
-              <IconText icon="+">精确参考图（提取 1.0）</IconText>
+              <IconText icon="+">精准参考图（V4.5）</IconText>
               <input
                 type="file"
                 hidden
                 accept="image/png,image/jpeg,image/webp"
                 onChange={(e) => {
                   const f = e.target.files?.[0];
-                  if (f) { handleFile(f, 1.0, 1.0); e.target.value = ""; }
+                  if (f) { handlePreciseFile(f); e.target.value = ""; }
                 }}
               />
             </label>
           </div>
         </div>
         <footer>
-          <Button onClick={clearVibeImages}>
+          <Button onClick={() => { clearVibeImages(); clearPreciseReferences(); }}>
             <IconText icon="⌧">清空所有</IconText>
           </Button>
           <Button variant="primary" onClick={onClose}>
@@ -574,6 +665,7 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
   const promptTab = useAppStore((state) => state.promptTab);
   const setPromptTab = useAppStore((state) => state.setPromptTab);
   const vibeImages = useAppStore((state) => state.vibeImages);
+  const preciseRefCount = useAppStore((state) => state.preciseReferences.length);
   const charCaptions = useAppStore((state) => state.charCaptions);
   const settings = useAppStore((state) => state.settings);
   const setToast = useAppStore((state) => state.setToast);
@@ -909,7 +1001,7 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
           <IconText icon="◒">氛围迁移{vibeImages.length > 0 ? ` · ${vibeImages.length}` : ""}</IconText>
         </Button>
         <Button onClick={() => setShowVibeModal(true)}>
-          <IconText icon="◇">精确参考</IconText>
+          <IconText icon="◇">精准参考{preciseRefCount > 0 ? ` · ${preciseRefCount}` : ""}</IconText>
         </Button>
         {templates.length > 0 && (
           <div className="template-dropdown" style={{ position: "relative" }}>
@@ -929,9 +1021,9 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
         )}
       </div>
       <div className="size-row">
-        <NumberInput label="宽度" value={params.width} min={64} max={2048} onChange={(v) => setParam("width", v)} />
+        <NumberInput label="宽度" value={params.width} min={64} max={1600} step={64} onChange={(v) => setParam("width", snapDimension(v))} />
         <span>×</span>
-        <NumberInput label="高度" value={params.height} min={64} max={2048} onChange={(v) => setParam("height", v)} />
+        <NumberInput label="高度" value={params.height} min={64} max={1600} step={64} onChange={(v) => setParam("height", snapDimension(v))} />
       </div>
       <div className="preset-row">
         <button onClick={() => { setParam("width", 1024); setParam("height", 1024); }}>1024×1024</button>
@@ -1118,6 +1210,7 @@ function FeatureCostCard({
   const directorTool = useAppStore((state) => state.directorTool);
   const workbenchImage = useAppStore((state) => state.workbenchImage);
   const vibeCount = useAppStore((state) => state.vibeImages.length);
+  const preciseCount = useAppStore((state) => state.preciseReferences.length);
   const isGenerating = useAppStore((state) => state.isGenerating);
   const currentAnlasSpent = useAppStore((state) => state.currentAnlasSpent);
   const lastAnlasSpent = useAppStore((state) => state.lastAnlasSpent);
@@ -1144,6 +1237,7 @@ function FeatureCostCard({
     workbenchWidth: workbenchImage?.width ?? 0,
     workbenchHeight: workbenchImage?.height ?? 0,
     vibeCount,
+    preciseCount,
     hasToken: account.hasToken,
     tierLevel: account.tierLevel,
     active: account.hasActiveSubscription,
@@ -1163,6 +1257,12 @@ function FeatureCostCard({
       const extras = {
         vibeImages: Array.from({ length: vibeCount }, () => ({ base64: "", infoExtracted: 0.7, strength: 0.5 })),
         charCaptions: [],
+        preciseReferences: Array.from({ length: preciseCount }, () => ({
+          base64: "",
+          type: "character" as const,
+          strength: 1,
+          fidelity: 1,
+        })),
       };
       void window.naiDesktop
         .quoteAnlas({
@@ -1177,6 +1277,9 @@ function FeatureCostCard({
           maskBase64: inpaintMask,
           upscaleScale,
           directorTool,
+          image: workbenchImage
+            ? { width: workbenchImage.width, height: workbenchImage.height }
+            : null,
           account,
         })
         .then((result) => {
@@ -1194,17 +1297,20 @@ function FeatureCostCard({
 
   const sourceLabel =
     quote?.source === "official-api"
-      ? "NovelAI 官方报价接口"
-      : quote?.source === "official-formula"
-        ? "NovelAI 官网前端公式"
-        : quote?.source === "official-fixed"
-          ? "NovelAI 固定扣费规则"
+      ? "NovelAI 官方报价接口（实际扣费）"
+      : quote?.source === "estimate-formula"
+        ? "本地估算（官网前端公式，非实际扣费）"
+        : quote?.source === "estimate-fixed"
+          ? "本地估算（固定规则，非实际扣费）"
           : "";
+  const isEstimate = quote?.source === "estimate-formula" || quote?.source === "estimate-fixed";
   const primary =
     quote?.ok && typeof quote.amount === "number"
       ? quote.amount === 0
         ? "本次 0 Anlas"
-        : `本次将扣 ${quote.amount} Anlas`
+        : isEstimate
+          ? `本次约扣 ${quote.amount} Anlas（估算）`
+          : `本次将扣 ${quote.amount} Anlas`
       : loading
         ? "正在读取扣费..."
         : quote?.message || "暂时无法报价";
@@ -1227,11 +1333,11 @@ function FeatureCostCard({
     >
       <div>
         <span>{label}</span>
-        <small>{sourceLabel || "读取当前配置对应的官方扣费"}</small>
+        <small>{sourceLabel || "读取当前配置对应的扣费估算"}</small>
       </div>
       <strong>{primary}</strong>
       <small className="cost-balance">
-        当前余额：{balance ?? "未知"} Anlas · {actualText}
+        当前余额：{balance ?? "未知"} Anlas{account.stale ? "（缓存）" : ""} · {actualText}
         {quote?.insufficient ? " · 余额不足，执行时会被阻止" : ""}
       </small>
     </div>
@@ -1419,7 +1525,14 @@ function InpaintPanel({ openSettings }: { openSettings: () => void }) {
         </label>
         <SliderInput label="重绘强度（1=完全按提示词重画，越低越贴近原图）" value={inpaintStrength} min={0.1} max={1} step={0.01} onChange={setInpaintStrength} />
         <SliderInput label="重绘噪声（一般保持 0）" value={inpaintNoise} min={0} max={0.99} step={0.01} onChange={setInpaintNoise} />
-        <SliderInput label="画笔大小（蒙版自动对齐 64px 方块，与官网一致）" value={brushSize} min={2} max={128} step={1} onChange={setBrushSize} />
+        <SliderInput
+          label="圆形画笔大小"
+          value={brushSize}
+          min={2}
+          max={128}
+          step={1}
+          onChange={setBrushSize}
+        />
         <SliderInput label="画笔透明度（仅影响画面涂抹显示）" value={brushOpacity} min={0.05} max={1} step={0.01} onChange={setBrushOpacity} />
         <div className="mode-buttons">
           <Button variant={brushMode === "paint" ? "primary" : "secondary"} onClick={() => setBrushMode("paint")}>
@@ -2585,6 +2698,131 @@ function InputModal({
   );
 }
 
+type ProxyPreset = "direct" | "http" | "socks" | "custom";
+
+function proxyPresetFor(value: string): ProxyPreset {
+  const normalized = value.trim().toLowerCase().replace(/\/$/, "");
+  if (!normalized) return "direct";
+  if (normalized === DEFAULT_HTTP_PROXY) return "http";
+  if (normalized === DEFAULT_SOCKS_PROXY) return "socks";
+  return "custom";
+}
+
+function ProxyPresetControl({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const [preset, setPreset] = useState<ProxyPreset>(() => proxyPresetFor(value));
+  const [customValue, setCustomValue] = useState(value);
+
+  useEffect(() => {
+    setCustomValue(value);
+    const next = proxyPresetFor(value);
+    if (next !== "custom") setPreset(next);
+  }, [value]);
+
+  function selectPreset(next: ProxyPreset) {
+    setPreset(next);
+    if (next === "direct") onChange("");
+    if (next === "http") onChange(DEFAULT_HTTP_PROXY);
+    if (next === "socks") onChange(DEFAULT_SOCKS_PROXY);
+  }
+
+  return (
+    <div className="proxy-preset-control">
+      <label className="field">
+        <span>代理连接方式</span>
+        <select value={preset} onChange={(event) => selectPreset(event.target.value as ProxyPreset)}>
+          <option value="http">HTTP 本地代理（推荐） · 127.0.0.1:7890</option>
+          <option value="direct">直连（不使用代理）</option>
+          <option value="socks">SOCKS5 本地代理 · 127.0.0.1:10808</option>
+          <option value="custom">自定义代理地址</option>
+        </select>
+      </label>
+      {preset === "custom" && (
+        <label className="field">
+          <span>自定义代理地址</span>
+          <input
+            value={customValue}
+            placeholder="例如 http://127.0.0.1:7890"
+            onChange={(event) => {
+              setCustomValue(event.target.value);
+              onChange(event.target.value);
+            }}
+          />
+        </label>
+      )}
+      <div className={clsx("proxy-current", preset === "direct" && "direct")}>
+        <strong>{preset === "direct" ? "当前为直连" : "当前代理"}</strong>
+        <code>{preset === "direct" ? "不经过本地代理" : (preset === "custom" ? customValue : value) || "尚未填写"}</code>
+      </div>
+    </div>
+  );
+}
+
+function TokenGuideModal({ onClose }: { onClose: () => void }) {
+  const [previewImage, setPreviewImage] = useState("");
+  const steps = [
+    {
+      image: "./tutorial/token-step-1.webp",
+      title: "打开左上角菜单",
+      description: "登录 NovelAI 生图页面后，点击左上角蓝圈标出的三横线菜单。",
+    },
+    {
+      image: "./tutorial/token-step-2.webp",
+      title: "进入 Account Settings",
+      description: "菜单展开后，在 Account 区域点击蓝圈标出的 Account Settings。",
+    },
+    {
+      image: "./tutorial/token-step-3.webp",
+      title: "获取 Persistent API Token",
+      description: "在 User Settings 的 Account 页面点击蓝圈标出的 Get Persistent API Token，并复制完整 Token。",
+    },
+  ];
+  return (
+    <AppPortal>
+      <div className="modal-backdrop token-guide-backdrop">
+        <div className="modal token-guide-modal">
+          <header>
+            <div>
+              <h2>获取 NovelAI Persistent API Token</h2>
+              <p>按 NovelAI 当前网页界面操作，无需打开旧 API 文档。</p>
+            </div>
+            <button type="button" aria-label="关闭 Token 教程" onClick={onClose}>×</button>
+          </header>
+          <div className="token-guide-body">
+            {steps.map((item, index) => (
+              <figure className="token-guide-step" key={item.image}>
+                <figcaption>
+                  <span className="token-guide-number">{index + 1}</span>
+                  <div>
+                    <strong>{item.title}</strong>
+                    <p>{item.description}</p>
+                  </div>
+                </figcaption>
+                <button type="button" className="token-guide-image-button" onClick={() => setPreviewImage(item.image)}>
+                  <img src={item.image} alt={`Token 获取教程第 ${index + 1} 步：${item.title}`} loading="lazy" draggable={false} />
+                  <span>点击查看大图</span>
+                </button>
+              </figure>
+            ))}
+            <div className="token-guide-warning">
+              Token 等同账号凭证，只粘贴到本软件，不要截图、分享或写入项目文件。
+            </div>
+          </div>
+          <footer>
+            <Button onClick={() => window.naiDesktop.openExternal(novelAiImageUrl)}>打开 NovelAI 生图页</Button>
+            <Button variant="primary" onClick={onClose}>我知道了</Button>
+          </footer>
+        </div>
+        {previewImage && (
+          <div className="token-guide-preview" onMouseDown={() => setPreviewImage("")}>
+            <button type="button" aria-label="关闭大图" onClick={() => setPreviewImage("")}>×</button>
+            <img src={previewImage} alt="Token 教程大图" onMouseDown={(event) => event.stopPropagation()} draggable={false} />
+          </div>
+        )}
+      </div>
+    </AppPortal>
+  );
+}
+
 // ── History panel ─────────────────────────────────────────────────────────────
 function HistoryPanel() {
   const history = useAppStore((state) => state.history);
@@ -2750,6 +2988,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
   const [token, setToken] = useState("");
   const [status, setStatus] = useState<TokenStatus | null>(null);
   const [checking, setChecking] = useState(false);
+  const [showTokenGuide, setShowTokenGuide] = useState(false);
   const [newTplName, setNewTplName] = useState("");
   const [newTplPrefix, setNewTplPrefix] = useState("");
   const [newTplSuffix, setNewTplSuffix] = useState("");
@@ -2778,6 +3017,11 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
 
   const update = async <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
     await window.naiDesktop.setSetting(key, value);
+    await refreshSettings();
+  };
+  const updateProxy = async (value: string) => {
+    await window.naiDesktop.setSetting("proxyMode", proxyPresetFor(value));
+    await window.naiDesktop.setSetting("proxyUrl", value);
     await refreshSettings();
   };
   const verify = async () => {
@@ -2878,7 +3122,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                   <Button variant="primary" disabled={checking} onClick={verify}>
                     {checking ? <IconText icon="…">验证中...</IconText> : <IconText icon="✓">验证并保存 Token</IconText>}
                   </Button>
-                  <Button onClick={() => window.naiDesktop.openExternal(tokenHelpUrl)}>
+                  <Button onClick={() => setShowTokenGuide(true)}>
                     <IconText icon="❔">如何获取 Token</IconText>
                   </Button>
                   <Button
@@ -2900,18 +3144,21 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                   <span>Image Endpoint（图片接口）</span>
                   <input value={settings.imageBaseUrl} onChange={(e) => void update("imageBaseUrl", e.target.value)} />
                 </label>
+                <label className="field-inline">
+                  <input
+                    type="checkbox"
+                    checked={settings.allowCustomEndpoint}
+                    onChange={(e) => void update("allowCustomEndpoint", e.target.checked)}
+                  />
+                  <span>
+                    允许向非官方 Endpoint 发送 Token（默认关闭）。关闭时，若 Endpoint 不是 *.novelai.net，会自动改用官方地址以防 Token 泄露。
+                  </span>
+                </label>
 
                 <div className="proxy-card">
-                  <label className="field">
-                    <span>代理地址（Proxy）</span>
-                    <input
-                      value={settings.proxyUrl}
-                      placeholder="留空=直连；如 http://127.0.0.1:7890 或 socks5://127.0.0.1:10808"
-                      onChange={(e) => void update("proxyUrl", e.target.value)}
-                    />
-                  </label>
+                  <ProxyPresetControl value={settings.proxyUrl} onChange={(value) => void updateProxy(value)} />
                   <p className="settings-hint" style={{ margin: "2px 0 8px" }}>
-                    国内直连 NovelAI 常超时，可填本地代理。支持 HTTP 与 SOCKS5；不写协议默认按 <code>http://</code> 处理。留空即直连。
+                    NovelAI、AI 反推、谷歌翻译及更新检查等联网功能可能需要代理。请确保所选端口与本机代理软件一致。
                   </p>
                   <div className="proxy-scope" style={{ opacity: settings.proxyUrl.trim() ? 1 : 0.5 }}>
                     <span className="proxy-scope-title">走代理的请求（关掉则该项直连）</span>
@@ -2961,7 +3208,12 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                     可用占位符：{"{date} {time} {seq} {seed} {model} {type} {ts}"}。同样应用于分组 ZIP 导出。
                   </small>
                 </label>
-                <NumberInput label="历史记录保留天数" value={settings.historyRetentionDays} min={1} max={3650} onChange={(v) => void update("historyRetentionDays", v)} />
+                <label className="field">
+                  <NumberInput label="历史记录保留天数" value={settings.historyRetentionDays} min={1} max={3650} onChange={(v) => void update("historyRetentionDays", v)} />
+                  <small className="settings-hint">
+                    启动时自动清理超过该天数的应用内历史记录；仅清理列表，不会删除已保存到本地的图片文件。
+                  </small>
+                </label>
               </div>
             )}
             {section === "performance" && (
@@ -3298,6 +3550,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
         </footer>
       </div>
       </div>
+      {showTokenGuide && <TokenGuideModal onClose={() => setShowTokenGuide(false)} />}
     </AppPortal>
   );
 }
@@ -3308,17 +3561,23 @@ function OnboardingWizard() {
   const [token, setToken] = useState("");
   const [tokenStatus, setTokenStatus] = useState<TokenStatus | null>(null);
   const [checking, setChecking] = useState(false);
+  const [showTokenGuide, setShowTokenGuide] = useState(false);
+  const [onboardingProxyUrl, setOnboardingProxyUrl] = useState(DEFAULT_HTTP_PROXY);
   const settings = useAppStore((state) => state.settings);
   const load = useAppStore((state) => state.load);
   const setShowOnboarding = useAppStore((state) => state.setShowOnboarding);
   const refreshAccount = useAppStore((state) => state.refreshAccount);
   const cards = [
+    ["网络", "先确认代理连接", "NovelAI、AI 反推、谷歌翻译及更新检查等大部分联网功能通常需要可用代理。默认使用本机 HTTP 代理 127.0.0.1:7890。"],
     ["欢迎", "设置用户语言", "已根据系统语言检测为简体中文。"],
     ["API", "配置 NovelAI API Token", "Token 只保存在本机主进程存储中，渲染层不会直接持有。"],
     ["保存", "选择图片保存位置", "生成图片会自动保存到此目录并写入右侧历史。"],
     ["界面", "了解主界面", "左侧参数、中间画布、右侧历史；英文输入会自动推测 tag。"],
     ["完成", "一切就绪", "之后可随时在设置中修改 API、输出目录和偏好。"],
   ];
+  useEffect(() => {
+    if (settings) setOnboardingProxyUrl(settings.proxyUrl);
+  }, [settings?.proxyUrl]);
   const finish = async () => {
     await window.naiDesktop.completeSetup();
     await load();
@@ -3348,7 +3607,7 @@ function OnboardingWizard() {
           <aside className="onboarding-card">
             <div className="card-head">
               <strong>{APP_NAME}</strong>
-              <span>第 {step + 1}/5 步</span>
+              <span>第 {step + 1}/{cards.length} 步</span>
             </div>
             <div className="chibi">N</div>
             <div className="card-foot">ⓘ {cards[step][0]}</div>
@@ -3357,6 +3616,23 @@ function OnboardingWizard() {
             <h2>{cards[step][1]}</h2>
             <p>{cards[step][2]}</p>
             {step === 0 && (
+              <div className="onboarding-proxy">
+                <div className="onboarding-network-warning">
+                  请先启动本机代理软件，并确认端口与下方选择一致；如果你的网络可以直接访问 NovelAI，可选择“直连”。
+                </div>
+                <ProxyPresetControl
+                  value={onboardingProxyUrl}
+                  onChange={(value) => {
+                    setOnboardingProxyUrl(value);
+                    void (async () => {
+                      await window.naiDesktop.setSetting("proxyMode", proxyPresetFor(value));
+                      await window.naiDesktop.setSetting("proxyUrl", value);
+                    })();
+                  }}
+                />
+              </div>
+            )}
+            {step === 1 && (
               <label className="field wide">
                 <span>语言</span>
                 <select defaultValue="zh-CN" onChange={(e) => window.naiDesktop.setSetting("language", e.target.value as AppSettings["language"])}>
@@ -3366,7 +3642,7 @@ function OnboardingWizard() {
                 </select>
               </label>
             )}
-            {step === 1 && (
+            {step === 2 && (
               <div className="settings-form">
                 <label className="field wide">
                   <span>Persistent API Token（持久 API 令牌）</span>
@@ -3376,14 +3652,14 @@ function OnboardingWizard() {
                   <Button variant="primary" onClick={verify} disabled={checking}>
                     {checking ? <IconText icon="…">验证中...</IconText> : <IconText icon="✓">验证并保存</IconText>}
                   </Button>
-                  <Button onClick={() => window.naiDesktop.openExternal(tokenHelpUrl)}>
+                  <Button onClick={() => setShowTokenGuide(true)}>
                     <IconText icon="❔">如何获取 Token</IconText>
                   </Button>
                 </div>
                 {tokenStatus && <div className={clsx("status-box", tokenStatus.valid ? "ok" : "bad")}>{tokenStatus.message}</div>}
               </div>
             )}
-            {step === 2 && (
+            {step === 3 && (
               <div className="settings-form">
                 <label className="field wide">
                   <span>当前输出目录</span>
@@ -3399,7 +3675,7 @@ function OnboardingWizard() {
                 </Button>
               </div>
             )}
-            {step === 3 && (
+            {step === 4 && (
               <div className="intro-grid">
                 <div><strong>左侧</strong><span>提示词、模型、图片输入、功能参数</span></div>
                 <div><strong>中间</strong><span>生成预览、重绘画布、定位文件</span></div>
@@ -3407,17 +3683,18 @@ function OnboardingWizard() {
                 <div><strong>补全</strong><span>输入 g / glo 等英文片段，Tab 或 Enter 插入 tag</span></div>
               </div>
             )}
-            {step === 4 && <div className="done-mark">✓</div>}
+            {step === 5 && <div className="done-mark">✓</div>}
           </section>
         </div>
         <div className="onboarding-footer">
           <Button disabled={step === 0} onClick={() => setStep((v) => Math.max(0, v - 1))}>上一步</Button>
-          {step < 4
-            ? <Button variant="primary" onClick={() => setStep((v) => Math.min(4, v + 1))}>下一步</Button>
+          {step < cards.length - 1
+            ? <Button variant="primary" onClick={() => setStep((v) => Math.min(cards.length - 1, v + 1))}>下一步</Button>
             : <Button variant="primary" onClick={finish}>开始使用</Button>}
         </div>
       </div>
       </div>
+      {showTokenGuide && <TokenGuideModal onClose={() => setShowTokenGuide(false)} />}
     </AppPortal>
   );
 }

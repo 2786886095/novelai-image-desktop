@@ -111,7 +111,8 @@ export function calculateImageGenerationAnlas({
   } else {
     const smeaMultiplier = !v4Plus && params.smeaDyn ? 1.4 : !v4Plus && params.smea ? 1.2 : 1;
     const officialBase = Math.ceil(BASE_PIXEL_COEFFICIENT * pixels + STEP_PIXEL_COEFFICIENT * pixels * steps);
-    basePerSample = Math.max(2, Math.ceil(officialBase * smeaMultiplier * normalizedStrength));
+    // NovelAI caps a single image's base generation cost at 140 Anlas.
+    basePerSample = Math.min(140, Math.max(2, Math.ceil(officialBase * smeaMultiplier * normalizedStrength)));
     details.push(`Base image price: ${basePerSample} Anlas each by the official frontend formula.`);
   }
 
@@ -128,7 +129,15 @@ export function calculateImageGenerationAnlas({
     }
   }
 
-  return finalizeQuote(action === "generate" ? "generate" : action === "img2img" ? "i2i" : "inpaint", total, account, details, "official-formula");
+  // Precise / Director references (V4.5) add a flat 5 Anlas per reference image.
+  const preciseCount = extras?.preciseReferences?.length ?? 0;
+  if (v4Plus && preciseCount > 0) {
+    const preciseCost = 5 * preciseCount * samples;
+    total += preciseCost;
+    details.push(`Precise reference: ${preciseCount} image(s) x 5 Anlas x ${samples} request(s) = ${preciseCost}.`);
+  }
+
+  return finalizeQuote(action === "generate" ? "generate" : action === "img2img" ? "i2i" : "inpaint", total, account, details, "estimate-formula");
 }
 
 export function calculateUpscaleAnlas({
@@ -141,7 +150,7 @@ export function calculateUpscaleAnlas({
   scale?: UpscaleScale;
 }): AnlasQuoteResult {
   if (!image?.width || !image?.height) {
-    return { ok: false, source: "unavailable", message: "Please load an image before quoting upscale cost." };
+    return { ok: false, source: "unavailable", message: "请先加载要超分的图片，才能读取生成前扣费。" };
   }
   const prepared = fitSizeWithinPixels(image.width, image.height, MAX_NAI_UPSCALE_INPUT_PIXELS);
   const pixels = prepared.width * prepared.height;
@@ -153,7 +162,7 @@ export function calculateUpscaleAnlas({
   ];
   if (isActiveOpus(account) && pixels <= 409_600) {
     details.push("Opus active: official upscale tier is free for this input size.");
-    return finalizeQuote("upscale", 0, account, details, "official-formula");
+    return finalizeQuote("upscale", 0, account, details, "estimate-formula");
   }
   let amount = -3;
   if (pixels <= 262_144) amount = 1;
@@ -166,11 +175,11 @@ export function calculateUpscaleAnlas({
       ok: false,
       source: "unavailable",
       balance: account?.anlasBalance,
-      message: "Image resolution is too high for NovelAI upscale quote.",
+      message: "图片分辨率超过 NovelAI 云端超分的报价范围。",
       details,
     };
   }
-  return finalizeQuote("upscale", amount, account, details, "official-formula");
+  return finalizeQuote("upscale", amount, account, details, "estimate-formula");
 }
 
 export function calculateDirectorAnlas({
@@ -185,7 +194,7 @@ export function calculateDirectorAnlas({
     tool === "bg-removal"
       ? ["Background removal is a fixed 65 Anlas director-tool request."]
       : ["This director tool is currently free in NovelAI's director-tool pricing."];
-  return finalizeQuote("director", amount, account, details, "official-fixed");
+  return finalizeQuote("director", amount, account, details, "estimate-fixed");
 }
 
 export function calculateFeatureAnlasQuote({
