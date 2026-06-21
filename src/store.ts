@@ -30,10 +30,14 @@ type ActiveTab = "generate" | "inpaint" | "upscale" | "postprocess" | "inspect" 
 type PromptTab = "positive" | "negative";
 type BrushMode = "paint" | "erase";
 
-interface QueuedGenerationJob {
+export interface QueuedGenerationJob {
+  id: string;
   params: GenerateParams;
   extras: GenerateExtras;
   quotedAnlas: number;
+  addedAt: number;
+  /** Short prompt preview for the queue panel. */
+  label: string;
 }
 
 interface AppState {
@@ -90,6 +94,13 @@ interface AppState {
   activeGenerationRunId: string | null;
   queueAdding: boolean;
   generationQueue: QueuedGenerationJob[];
+  queueCollapsed: boolean;
+  /** Set by 清空排队 to also stop the remaining initial-batch images. */
+  clearQueueRequested: boolean;
+  /** Bumped whenever the queue is cleared/cancelled — invalidates in-flight enqueue quotes. */
+  queueVersion: number;
+  /** Vibe identity keys used by the active run, so duplicate queued refs aren't re-quoted for encoding. */
+  activeVibeKeys: string[];
   queuePaused: boolean;
   queueProgress: { done: number; failed: number; total: number } | null;
   currentAnlasSpent: number | null;
@@ -167,6 +178,9 @@ interface AppState {
   // Core actions
   generate: () => Promise<void>;
   enqueueGeneration: () => Promise<void>;
+  removeQueueJob: (id: string) => void;
+  clearQueue: () => void;
+  toggleQueueCollapsed: () => void;
   generateI2I: () => Promise<void>;
   inpaint: () => Promise<void>;
   upscaleCurrentImage: () => Promise<void>;
@@ -218,6 +232,17 @@ function buildExtras(state: AppState): GenerateExtras {
       y,
     })),
   };
+}
+
+// Identity of a vibe reference for encode-dedup, mirroring the main process cache
+// key (model + information_extracted + image bytes). Used so several queued jobs
+// sharing the same reference are only quoted for ONE encode.
+function vibeKeyOf(model: string, vibe: { base64: string; infoExtracted: number }): string {
+  return `${model}|${vibe.infoExtracted}|${vibe.base64}`;
+}
+
+function extrasVibeKeys(model: string, extras: GenerateExtras): string[] {
+  return (extras.vibeImages ?? []).map((v) => vibeKeyOf(model, v));
 }
 
 function imageGenerationFailureMessage(message?: string) {
@@ -332,6 +357,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   activeGenerationRunId: null,
   queueAdding: false,
   generationQueue: [],
+  queueCollapsed: false,
+  clearQueueRequested: false,
+  queueVersion: 0,
+  activeVibeKeys: [],
   queuePaused: false,
   queueProgress: null,
   currentAnlasSpent: null,
@@ -780,6 +809,19 @@ export const useAppStore = create<AppState>((set, get) => ({
     const params = { ...state.params };
     const extras = buildExtras(state);
     const runId = state.activeGenerationRunId;
+    const queueVersion = state.queueVersion;
+    // Vibes already covered by the active run or earlier queued jobs will only be
+    // encoded once, so don't quote their 2-Anlas encode fee again.
+    const coveredVibes = new Set<string>(state.activeVibeKeys);
+    for (const job of state.generationQueue) {
+      for (const key of extrasVibeKeys(job.params.model, job.extras)) coveredVibes.add(key);
+    }
+    let alreadyQueuedVibes = 0;
+    const newJobSeen = new Set<string>();
+    for (const key of extrasVibeKeys(params.model, extras)) {
+      if (coveredVibes.has(key) || newJobSeen.has(key)) alreadyQueuedVibes += 1;
+      newJobSeen.add(key);
+    }
     set({ queueAdding: true });
     try {
       const freshAccount = await get().refreshAccount();
@@ -789,6 +831,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         extras,
         batchCount: 1,
         account: freshAccount,
+        alreadyQueuedVibes,
       });
       if (!quote.ok || typeof quote.amount !== "number") {
         const message = quote.message || "无法读取这张队列图片的生成前扣费。";
@@ -811,16 +854,21 @@ export const useAppStore = create<AppState>((set, get) => ({
         !get().isGenerating ||
         !get().isGenerateQueueRunning ||
         !runId ||
-        get().activeGenerationRunId !== runId
+        get().activeGenerationRunId !== runId ||
+        get().queueVersion !== queueVersion
       ) {
-        set({ toast: "当前图片已经生成完毕，请重新点击生成。" });
+        // Cancelled, superseded, or the queue was cleared while we were quoting.
+        set({ toast: "队列已变化，本次加入已取消。" });
         return;
       }
 
       const job: QueuedGenerationJob = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         params,
         extras,
         quotedAnlas: quote.amount,
+        addedAt: Date.now(),
+        label: params.positivePrompt.trim().slice(0, 60) || "(无提示词)",
       };
       set((current) => ({
         generationQueue: [...current.generationQueue, job],
@@ -837,6 +885,50 @@ export const useAppStore = create<AppState>((set, get) => ({
     } finally {
       set({ queueAdding: false });
     }
+  },
+
+  removeQueueJob(id) {
+    set((current) => {
+      if (!current.generationQueue.some((job) => job.id === id)) return {};
+      const generationQueue = current.generationQueue.filter((job) => job.id !== id);
+      // Shrink the total so progress stays accurate, but never below what's done.
+      const queueProgress = current.queueProgress
+        ? {
+            ...current.queueProgress,
+            total: Math.max(
+              current.queueProgress.done + current.queueProgress.failed,
+              current.queueProgress.total - 1,
+            ),
+          }
+        : current.queueProgress;
+      return { generationQueue, queueProgress, toast: "已移出队列。" };
+    });
+  },
+
+  clearQueue() {
+    set((current) => {
+      // Drop all manually-queued jobs, and signal the run loop to skip the rest
+      // of the initial batch. Shrink total to "everything done + the running one"
+      // so the panel shows 0 排队.
+      const running = current.isGenerating ? 1 : 0;
+      const queueProgress = current.queueProgress
+        ? {
+            ...current.queueProgress,
+            total: current.queueProgress.done + current.queueProgress.failed + running,
+          }
+        : current.queueProgress;
+      return {
+        generationQueue: [],
+        clearQueueRequested: current.isGenerating,
+        queueVersion: current.queueVersion + 1, // invalidate any in-flight enqueue quote
+        queueProgress,
+        toast: current.isGenerating ? "已清空排队（当前图生成完成后停止）。" : "已清空排队。",
+      };
+    });
+  },
+
+  toggleQueueCollapsed() {
+    set((current) => ({ queueCollapsed: !current.queueCollapsed }));
   },
 
   async generate() {
@@ -871,6 +963,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       activeGenerationRunId: runId,
       queueAdding: false,
       generationQueue: [],
+      clearQueueRequested: false,
+      activeVibeKeys: extrasVibeKeys(initialParams.model, initialExtras),
       queuePaused: false,
       queueProgress: { done: 0, failed: 0, total: initialTotal },
       comparisonBeforeImage: null,
@@ -887,8 +981,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     let failed = 0;
     let lastError = "";
     let initialIndex = 0;
-    while (initialIndex < initialTotal || get().generationQueue.length > 0 || get().queueAdding) {
+    let skipInitial = false;
+    while ((!skipInitial && initialIndex < initialTotal) || get().generationQueue.length > 0 || get().queueAdding) {
       if (!get().isGenerating || get().activeGenerationRunId !== runId) break; // cancelled or superseded
+      // 清空排队: stop pulling remaining initial-batch images (queue already cleared).
+      if (get().clearQueueRequested) {
+        skipInitial = true;
+        set({ clearQueueRequested: false });
+      }
       // Honor pause: hold here until resumed or cancelled.
       while (get().queuePaused && get().isGenerating && get().activeGenerationRunId === runId) {
         const progressTotal = get().queueProgress?.total ?? initialTotal;
@@ -899,7 +999,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       let base: GenerateParams;
       let extras: GenerateExtras;
-      if (initialIndex < initialTotal) {
+      if (!skipInitial && initialIndex < initialTotal) {
         base = initialParams;
         extras = initialExtras;
         base = {
@@ -1174,17 +1274,18 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   async cancel() {
     const wasGenerateQueue = get().isGenerateQueueRunning;
-    set({
+    set((current) => ({
       isGenerating: false,
       isGenerateQueueRunning: false,
       activeGenerationRunId: null,
       queueAdding: false,
       generationQueue: [],
+      queueVersion: current.queueVersion + 1, // invalidate any in-flight enqueue quote
       queuePaused: false,
       queueProgress: null,
       currentAnlasSpent: null,
       statusText: wasGenerateQueue ? "正在取消生成并清空队列..." : "正在取消操作...",
-    });
+    }));
     await window.naiDesktop.cancel();
     if (!get().isGenerating) {
       set({ statusText: wasGenerateQueue ? "已取消生成，队列已清空。" : "已取消操作" });

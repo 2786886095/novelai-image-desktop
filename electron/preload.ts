@@ -10,6 +10,7 @@ import type {
   ComicProject,
   DirectorTool,
   GenerateExtras,
+  TagSuggestion,
   GenerateParams,
   I2IParams,
   NAIInpaintModel,
@@ -56,6 +57,12 @@ contextBridge.exposeInMainWorld("naiDesktop", {
   testTagServer: (query: string) => ipcRenderer.invoke("nai:testTagServer", query),
   suggestTags: (model: string, prompt: string) => ipcRenderer.invoke("nai:suggestTags", model, prompt),
   searchTagServer: (query: string, limit?: number) => ipcRenderer.invoke("nai:searchTagServer", query, limit),
+  danbooruStatus: () => ipcRenderer.invoke("nai:danbooruStatus") as Promise<{ downloaded: boolean; sizeBytes: number; count: number }>,
+  downloadDanbooru: () => ipcRenderer.invoke("nai:downloadDanbooru") as Promise<{ ok: boolean; message: string; count?: number }>,
+  danbooruBrowse: (category: number, offset: number, limit: number) =>
+    ipcRenderer.invoke("nai:danbooruBrowse", category, offset, limit) as Promise<TagSuggestion[]>,
+  danbooruSearch: (query: string, limit: number) =>
+    ipcRenderer.invoke("nai:danbooruSearch", query, limit) as Promise<TagSuggestion[]>,
   translate: (text: string, target?: string) => ipcRenderer.invoke("nai:translate", text, target),
   loadImage: () => ipcRenderer.invoke("nai:loadImage"),
   loadImageFromPath: (filePath: string) => ipcRenderer.invoke("nai:loadImageFromPath", filePath),
@@ -87,4 +94,10 @@ contextBridge.exposeInMainWorld("naiDesktop", {
   maximize: () => ipcRenderer.invoke("window:maximize"),
   close: () => ipcRenderer.invoke("window:close"),
   openExternal: (url: string) => ipcRenderer.invoke("window:openExternal", url),
+  getLogInfo: () =>
+    ipcRenderer.invoke("log:getInfo") as Promise<{ path: string; dir: string; exists: boolean; sizeBytes: number }>,
+  selectLogDir: () => ipcRenderer.invoke("log:selectDir") as Promise<string | null>,
+  openLogFile: () => ipcRenderer.invoke("log:openFile") as Promise<{ ok: boolean; message?: string }>,
+  openLogDir: () => ipcRenderer.invoke("log:openDir") as Promise<{ ok: boolean; message?: string }>,
+  readLog: () => ipcRenderer.invoke("log:read") as Promise<string>,
 });

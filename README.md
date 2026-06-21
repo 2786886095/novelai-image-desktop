@@ -3,7 +3,7 @@
 [![Build](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build.yml/badge.svg)](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build.yml)
 [![Build Mobile](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build-mobile.yml/badge.svg)](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build-mobile.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
-[![Release](https://img.shields.io/badge/release-v0.9.7-7c5cfa.svg)](https://github.com/2786886095/novelai-image-desktop/releases/tag/v0.9.7)
+[![Release](https://img.shields.io/badge/release-v0.9.8-7c5cfa.svg)](https://github.com/2786886095/novelai-image-desktop/releases/tag/v0.9.8)
 [![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android%20%7C%20iOS-20b7d8.svg)](#下载)
 
 <img width="1672" height="941" alt="ChatGPT Image 2026年6月17日 11_27_47" src="https://github.com/user-attachments/assets/66a6caef-3007-479b-9006-1c6f50570655" />
@@ -16,14 +16,14 @@
 
 ## 下载
 
-- **v0.9.7 本地版**：[GitHub Releases](https://github.com/2786886095/novelai-image-desktop/releases/tag/v0.9.7)
+- **v0.9.8 本地版**：[GitHub Releases](https://github.com/2786886095/novelai-image-desktop/releases/tag/v0.9.8)
 - **持续构建产物**：[GitHub Actions](https://github.com/2786886095/novelai-image-desktop/actions)
 
 Release 目标产物：
 
 | 平台 | 文件 |
 | --- | --- |
-| Windows | `Langbai-NovelAI-Studio-0.9.7.exe` |
+| Windows | `Langbai-NovelAI-Studio-0.9.8.exe` |
 | macOS | universal `.dmg` + `.zip` |
 | Linux | `.AppImage` |
 | Android | `app-release.apk` |
@@ -86,7 +86,7 @@ npm run pack
 本地 Windows 便携包输出：
 
 ```text
-release\Langbai-NovelAI-Studio-0.9.7.exe
+release\Langbai-NovelAI-Studio-0.9.8.exe
 release\Langbai-NovelAI-Studio.exe
 ```
 
@@ -107,9 +107,9 @@ release\NovelAI-Image-Desktop.exe
 推送 `v*` tag 会触发桌面端与移动端两个 workflow，并把所有平台产物汇总到同一个 Release：
 
 ```powershell
-git tag v0.9.7
+git tag v0.9.8
 git push origin main
-git push origin v0.9.7
+git push origin v0.9.8
 ```
 
 如果 Release 上传时报 403，请在仓库 `Settings -> Actions -> General -> Workflow permissions` 中启用 `Read and write permissions`。

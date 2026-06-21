@@ -151,4 +151,50 @@ describe("main generation queue", () => {
     expect(useAppStore.getState().isGenerating).toBe(false);
     expect(useAppStore.getState().queueProgress).toEqual({ done: 1, failed: 0, total: 1 });
   });
+
+  it("does not enqueue a job whose quote resolves after 清空排队", async () => {
+    const first = deferred<ReturnType<typeof generationResult>>();
+    const quote = deferred<{ ok: boolean; amount: number; balance: number }>();
+    const generate = vi
+      .fn()
+      .mockImplementationOnce(() => first.promise)
+      .mockResolvedValue(generationResult("queued", 22));
+    const naiDesktop = {
+      hasToken: vi.fn().mockResolvedValue({ hasToken: true, anlasBalance: 100, tierName: "Opus" }),
+      // First call (generate pre-run) resolves; second (enqueue) stays pending.
+      quoteAnlas: vi
+        .fn()
+        .mockResolvedValueOnce({ ok: true, amount: 1, balance: 100 })
+        .mockReturnValueOnce(quote.promise),
+      generate,
+      getHistoryDates: vi.fn().mockResolvedValue(["2026-06-21"]),
+      getHistoryGroups: vi.fn().mockResolvedValue([]),
+      getHistory: vi.fn().mockResolvedValue([]),
+      cancel: vi.fn().mockResolvedValue(undefined),
+    };
+    vi.stubGlobal("window", { naiDesktop });
+    useAppStore.setState((state) => ({
+      account: { hasToken: true, anlasBalance: 100, tierName: "Opus" },
+      params: { ...state.params, positivePrompt: "first prompt" },
+      batchCount: 1,
+    }));
+
+    const running = useAppStore.getState().generate();
+    await vi.waitFor(() => expect(generate).toHaveBeenCalledTimes(1));
+
+    useAppStore.setState((state) => ({ params: { ...state.params, positivePrompt: "queued prompt" } }));
+    const enqueuing = useAppStore.getState().enqueueGeneration();
+    // Clear the queue while the enqueue quote is still in flight.
+    useAppStore.getState().clearQueue();
+    quote.resolve({ ok: true, amount: 1, balance: 100 });
+    await enqueuing;
+
+    // The job must NOT have been added despite its quote resolving successfully.
+    expect(useAppStore.getState().generationQueue).toHaveLength(0);
+
+    first.resolve(generationResult("first", 11));
+    await running;
+    expect(generate).toHaveBeenCalledTimes(1); // only the initial image ran
+    expect(useAppStore.getState().generationQueue).toHaveLength(0);
+  });
 });

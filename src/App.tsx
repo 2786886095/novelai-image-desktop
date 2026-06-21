@@ -25,11 +25,10 @@ import { Icon } from "./components/icons";
 import {
   CAT_COLOR,
   CAT_LABEL,
+  CAPSULE_TAXONOMY,
+  CAPSULE_GROUPS,
   TAB_ITEMS,
-  pickPromptChips,
   tagDescription,
-  zhForTag,
-  type PromptChip,
 } from "./prompt-data";
 import {
   APP_NAME,
@@ -86,6 +85,285 @@ function fitSizeWithinPixels(width: number, height: number, maxPixels: number) {
   };
 }
 
+// Settings section: download/manage the local Danbooru Chinese tag library. The
+// data is an optional download (GPL-3.0 source kept out of this MIT app's
+// bundle); once present, both the tag autocomplete and the inspiration capsule
+// use it. Exposed via an onChange callback so the capsule can refresh.
+function TagLibrarySettingsSection({ onChanged }: { onChanged?: () => void }) {
+  const setToast = useAppStore((state) => state.setToast);
+  const [status, setStatus] = useState<{ downloaded: boolean; count: number } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const refresh = useCallback(() => {
+    void window.naiDesktop.danbooruStatus().then((s) => setStatus({ downloaded: s.downloaded, count: s.count }));
+  }, []);
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  async function download() {
+    if (busy) return;
+    setBusy(true);
+    setToast("正在下载中文标签库（约 7MB，每个标签均含中文）…");
+    try {
+      const res = await window.naiDesktop.downloadDanbooru();
+      setToast(res.message);
+      if (res.ok) {
+        setStatus({ downloaded: true, count: res.count ?? 0 });
+        onChanged?.();
+      }
+    } catch (error) {
+      setToast(`下载失败：${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <label className="field">
+        <span>中文标签库（自动补全 / 灵感胶囊）</span>
+        <input
+          readOnly
+          value={
+            status?.downloaded
+              ? `已下载${status.count ? `（${status.count} 条，均含中文）` : ""}`
+              : "未下载（补全与灵感胶囊将使用内置精简词库）"
+          }
+        />
+      </label>
+      <p className="field-hint">
+        来源 DanbooruSearchOnline（GPL-3.0，已固定版本），单独下载、不打包进程序。下载后可用中文或英文补全并显示热度。
+      </p>
+      <div className="row-actions">
+        <Button onClick={() => void download()} disabled={busy}>
+          <IconText icon={<Icon name="globe" />}>
+            {busy ? "下载中…" : status?.downloaded ? "重新下载" : "下载标签库"}
+          </IconText>
+        </Button>
+      </div>
+    </>
+  );
+}
+
+// Inspiration capsule browser, backed by the LOCAL Danbooru tag library, with a
+// FINE semantic taxonomy (人物 → 对象/身份/头发/眼睛/… like the reference UI):
+// each subgroup carries English seed keywords; we substring-search the local
+// library for them and show every matching tag (with Chinese) by frequency — so
+// 头发 yields hundreds of real hair tags. Search box overrides with a direct
+// query. Falls back to the built-in taxonomy when the library isn't downloaded.
+// Generous per-seed cap so common substring matches (e.g. long_hair for the
+// "hair" seed) aren't dropped before mergeTagResults re-sorts by frequency.
+const CAPSULE_SEED_LIMIT = 200;
+const CAPSULE_MAX = 400;
+
+function mergeTagResults(lists: TagSuggestion[][]): TagSuggestion[] {
+  const seen = new Set<string>();
+  const out: TagSuggestion[] = [];
+  for (const list of lists) {
+    for (const t of list) {
+      if (seen.has(t.tag)) continue;
+      seen.add(t.tag);
+      out.push(t);
+    }
+  }
+  out.sort((a, b) => b.count - a.count);
+  return out.slice(0, CAPSULE_MAX);
+}
+
+function CapsuleBrowser({ query, onPick }: { query: string; onPick: (tag: string) => void }) {
+  const [downloaded, setDownloaded] = useState<boolean | null>(null);
+  const [catIdx, setCatIdx] = useState(0);
+  const [subIdx, setSubIdx] = useState(0);
+  const [items, setItems] = useState<TagSuggestion[]>([]);
+  const [loading, setLoading] = useState(false);
+  const q = query.trim();
+  const category = CAPSULE_GROUPS[catIdx] ?? CAPSULE_GROUPS[0];
+  const subgroup = category.subgroups[subIdx] ?? category.subgroups[0];
+
+  useEffect(() => {
+    void window.naiDesktop.danbooruStatus().then((s) => setDownloaded(s.downloaded));
+  }, [query, catIdx, subIdx]);
+
+  useEffect(() => {
+    if (downloaded === false) return;
+    let alive = true;
+    setLoading(true);
+    setItems([]);
+    const run = async (): Promise<TagSuggestion[]> => {
+      if (q) return window.naiDesktop.danbooruSearch(q, 120);
+      const lists = await Promise.all(
+        subgroup.seeds.map((s) => window.naiDesktop.danbooruSearch(s, CAPSULE_SEED_LIMIT)),
+      );
+      return mergeTagResults(lists);
+    };
+    void run().then((res) => {
+      if (!alive) return;
+      setItems(res);
+      setLoading(false);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [q, catIdx, subIdx, downloaded]);
+
+  if (downloaded === false) {
+    return (
+      <div className="capsule-tax">
+        <p className="chip-empty">
+          灵感胶囊可使用本地标签库（按热度细分展示上万标签）。请前往「设置 → 中文标签库」下载。以下为内置精简分类：
+        </p>
+        <CapsuleTaxonomy onPick={onPick} />
+      </div>
+    );
+  }
+  return (
+    <div className="capsule-browser">
+      {!q && (
+        <>
+          <div className="capsule-tax-cats capsule-scroll-row">
+            {CAPSULE_GROUPS.map((c, i) => (
+              <button
+                key={c.name}
+                type="button"
+                className={clsx("capsule-tax-cat", i === catIdx && "active")}
+                onClick={() => {
+                  setCatIdx(i);
+                  setSubIdx(0);
+                }}
+              >
+                {c.name}
+              </button>
+            ))}
+          </div>
+          <div className="capsule-tax-subs capsule-scroll-row">
+            {category.subgroups.map((s, i) => (
+              <button
+                key={s.name}
+                type="button"
+                className={clsx("capsule-tax-sub", i === subIdx && "active")}
+                onClick={() => setSubIdx(i)}
+              >
+                {s.name}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+      <div className="capsule-browser-list">
+        {items.map((t) => {
+          const zh = t.description?.split(/[ ，,]/)[0] || t.tag;
+          return (
+            <button
+              key={t.tag}
+              type="button"
+              className="capsule-tax-chip"
+              onClick={() => onPick(t.tag)}
+              title={`${t.tag}｜${t.description ?? ""}｜热度 ${fmtCount(t.count)}`}
+            >
+              <span className="capsule-tax-zh">{zh}</span>
+              <span className="capsule-tax-en">{t.tag}</span>
+            </button>
+          );
+        })}
+        {items.length === 0 && !loading && <span className="chip-empty">该分类暂无匹配标签</span>}
+        {loading && <span className="chip-empty">加载中…</span>}
+      </div>
+    </div>
+  );
+}
+
+// Inspiration capsule taxonomy: category tabs → subgroup tabs → bilingual chips.
+// Built-in fallback used when the local library isn't downloaded.
+function CapsuleTaxonomy({ onPick }: { onPick: (tag: string) => void }) {
+  const [catIdx, setCatIdx] = useState(0);
+  const [subIdx, setSubIdx] = useState(0);
+  const category = CAPSULE_TAXONOMY[catIdx] ?? CAPSULE_TAXONOMY[0];
+  const subgroup = category.subgroups[subIdx] ?? category.subgroups[0];
+  return (
+    <div className="capsule-tax">
+      <div className="capsule-tax-cats">
+        {CAPSULE_TAXONOMY.map((c, i) => (
+          <button
+            key={c.name}
+            type="button"
+            className={clsx("capsule-tax-cat", i === catIdx && "active")}
+            onClick={() => {
+              setCatIdx(i);
+              setSubIdx(0);
+            }}
+          >
+            {c.name}
+          </button>
+        ))}
+      </div>
+      <div className="capsule-tax-subs">
+        {category.subgroups.map((s, i) => (
+          <button
+            key={s.name}
+            type="button"
+            className={clsx("capsule-tax-sub", i === subIdx && "active")}
+            onClick={() => setSubIdx(i)}
+          >
+            {s.name}
+          </button>
+        ))}
+      </div>
+      <div className="capsule-tax-chips">
+        {subgroup.tags.map((t) => (
+          <button
+            key={t.en}
+            type="button"
+            className="capsule-tax-chip"
+            onClick={() => onPick(t.en)}
+            title={`${t.en}：${t.zh}`}
+          >
+            <span className="capsule-tax-zh">{t.zh}</span>
+            <span className="capsule-tax-en">{t.en}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Pixel position of the caret inside a textarea (relative to the textarea's own
+// top-left), via a hidden mirror element — used to anchor the autocomplete
+// dropdown right under the character being typed instead of at the box bottom.
+function caretCoordinates(el: HTMLTextAreaElement, position: number): { top: number; left: number; height: number } {
+  const computed = window.getComputedStyle(el);
+  const div = document.createElement("div");
+  const copyProps = [
+    "boxSizing", "width", "borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth",
+    "paddingTop", "paddingRight", "paddingBottom", "paddingLeft",
+    "fontStyle", "fontVariant", "fontWeight", "fontStretch", "fontSize", "fontSizeAdjust",
+    "lineHeight", "fontFamily", "textAlign", "textTransform", "textIndent", "letterSpacing", "wordSpacing", "tabSize",
+  ] as const;
+  div.style.position = "absolute";
+  div.style.visibility = "hidden";
+  div.style.whiteSpace = "pre-wrap";
+  div.style.wordWrap = "break-word";
+  div.style.overflow = "hidden";
+  for (const prop of copyProps) {
+    (div.style as unknown as Record<string, string>)[prop] = computed.getPropertyValue(
+      prop.replace(/[A-Z]/g, (m) => "-" + m.toLowerCase()),
+    );
+  }
+  div.textContent = el.value.slice(0, position);
+  const span = document.createElement("span");
+  span.textContent = el.value.slice(position) || ".";
+  div.appendChild(span);
+  document.body.appendChild(div);
+  const lineHeight = parseFloat(computed.lineHeight) || parseFloat(computed.fontSize) * 1.3;
+  const result = {
+    top: span.offsetTop + parseFloat(computed.borderTopWidth || "0"),
+    left: span.offsetLeft + parseFloat(computed.borderLeftWidth || "0"),
+    height: lineHeight,
+  };
+  document.body.removeChild(div);
+  return result;
+}
+
 // ── PromptTextarea: textarea with Danbooru tag autocomplete ───────────────────
 function PromptTextarea({
   value,
@@ -103,6 +381,9 @@ function PromptTextarea({
   className?: string;
 }) {
   const [suggestions, setSuggestions] = useState<TagSuggestion[]>([]);
+  // Only the vertical caret position — the dropdown stays full-width so long tag
+  // text never overflows/clips horizontally.
+  const [acTop, setAcTop] = useState<number | null>(null);
   const [activeIdx, setActiveIdx] = useState(0);
   const composingRef = useRef(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
@@ -114,7 +395,7 @@ function PromptTextarea({
     };
   }, []);
 
-  function clearSuggestions() { setSuggestions([]); }
+  function clearSuggestions() { setSuggestions([]); setAcTop(null); }
 
   function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
     const text = e.target.value;
@@ -139,6 +420,12 @@ function PromptTextarea({
       try {
         const res = await window.naiDesktop.suggestTags(model, word);
         setSuggestions(res.slice(0, 8));
+        const ta = taRef.current;
+        if (ta && res.length > 0) {
+          const c = caretCoordinates(ta, cursor);
+          // Anchor just below the caret line (vertical only); full-width horizontally.
+          setAcTop(c.top - ta.scrollTop + c.height + 2);
+        }
       } catch {
         setSuggestions([]);
       }
@@ -192,7 +479,10 @@ function PromptTextarea({
         onBlur={() => { if (timerRef.current) clearTimeout(timerRef.current); setTimeout(clearSuggestions, 180); }}
       />
       {suggestions.length > 0 && (
-        <div className="ac-dropdown">
+        <div
+          className={clsx("ac-dropdown", acTop != null && "ac-dropdown-caret")}
+          style={acTop != null ? { top: acTop } : undefined}
+        >
           {suggestions.map((s, i) => (
             <button
               key={s.tag}
@@ -409,6 +699,29 @@ const PRECISE_TYPE_LABELS: Record<PreciseReferenceType, string> = {
   "character&style": "角色和风格",
 };
 
+// The three official precise-reference sizes. Given a source image, recommend the
+// one whose aspect ratio is closest (which the main process will scale+pad to),
+// and estimate how much black bar that leaves — so the user can pre-resize to
+// the recommended size to avoid padding entirely.
+const PRECISE_REF_SIZES = [
+  { width: 1024, height: 1536 },
+  { width: 1472, height: 1472 },
+  { width: 1536, height: 1024 },
+];
+function recommendPreciseSize(w?: number, h?: number) {
+  if (!w || !h) return null;
+  const aspect = w / h;
+  const target = PRECISE_REF_SIZES.reduce(
+    (best, c) =>
+      Math.abs(c.width / c.height - aspect) < Math.abs(best.width / best.height - aspect) ? c : best,
+    PRECISE_REF_SIZES[0],
+  );
+  const exact = w === target.width && h === target.height;
+  const scale = Math.min(target.width / w, target.height / h);
+  const padPercent = Math.round((1 - (Math.round(w * scale) * Math.round(h * scale)) / (target.width * target.height)) * 100);
+  return { target, exact, padPercent };
+}
+
 function VibeTransferModal({ onClose }: { onClose: () => void }) {
   const vibeImages = useAppStore((state) => state.vibeImages);
   const addVibeImage = useAppStore((state) => state.addVibeImage);
@@ -438,18 +751,10 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
     const reader = new FileReader();
     reader.onload = (ev) => {
       const dataUrl = ev.target?.result as string;
+      // Any decodable image is accepted — the main process preprocesses it to the
+      // nearest official size (scale-to-fit + black pad), matching NovelAI.
       const probe = new Image();
       probe.onload = () => {
-        const width = probe.naturalWidth;
-        const height = probe.naturalHeight;
-        const inRange = width >= 64 && height >= 64 && width <= 1600 && height <= 1600;
-        const aligned = width % 64 === 0 && height % 64 === 0;
-        if (!inRange || !aligned) {
-          setToast(
-            `精准参考图尺寸 ${width}×${height} 不符合要求。请先调整为宽高均为 64 的整数倍、每边不超过 1600；程序不会自动缩放参考图。`,
-          );
-          return;
-        }
         const base64 = dataUrl.split(",")[1] ?? "";
         addPreciseReference({
           id: crypto.randomUUID(),
@@ -458,6 +763,8 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
           type: "character&style",
           strength: 1,
           fidelity: 1,
+          srcWidth: probe.naturalWidth,
+          srcHeight: probe.naturalHeight,
         });
       };
       probe.onerror = () => setToast("无法读取精准参考图，请换用有效的 PNG、JPG 或 WebP 图片。");
@@ -509,7 +816,7 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
             精准参考（Precise Reference）
             {!isV45 && <span className="vibe-hint"> · 仅 V4.5 模型生效，当前模型不支持</span>}
           </h3>
-          <p className="vibe-hint">原图直传，不自动缩放；宽高须为 64 的整数倍，且每边不超过 1600。</p>
+          <p className="vibe-hint">任意尺寸均可：程序会按官方策略等比缩放并黑边填充到最接近的官方尺寸（1024×1536 / 1472×1472 / 1536×1024）。建议参考图比例贴近三者之一以减少黑边。</p>
           {preciseReferences.length === 0 && <p className="vibe-empty">还没有精准参考图。</p>}
           {preciseReferences.map((ref) => (
             <div className="vibe-row" key={ref.id}>
@@ -542,6 +849,18 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
                   step={0.01}
                   onChange={(v) => updatePreciseReference(ref.id, { fidelity: v })}
                 />
+                {(() => {
+                  const rec = recommendPreciseSize(ref.srcWidth, ref.srcHeight);
+                  if (!rec) return null;
+                  return (
+                    <p className={clsx("precise-size-hint", rec.exact && "ok")}>
+                      {ref.srcWidth}×{ref.srcHeight} → 推荐尺寸 {rec.target.width}×{rec.target.height}
+                      {rec.exact
+                        ? "（已匹配，无黑边）"
+                        : `（将缩放并填充约 ${rec.padPercent}% 黑边；裁/缩到推荐尺寸可消除黑边）`}
+                    </p>
+                  );
+                })()}
               </div>
               <button className="vibe-remove" title="移除" onClick={() => removePreciseReference(ref.id)}>
                 ×
@@ -697,9 +1016,8 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
   const [showWeights, setShowWeights] = useState(false);
   const [showNormalize, setShowNormalize] = useState(false);
   const [translating, setTranslating] = useState(false);
-  const [promptChips, setPromptChips] = useState<PromptChip[]>(() => pickPromptChips());
-  const [serverChips, setServerChips] = useState<{ tag: string; zh: string }[]>([]);
-  const capsuleUsesMcp = Boolean(settings?.tagServerEnabled && settings?.mcpForCapsule);
+  // Original prompt text kept per tab so a translation can be reverted (还原).
+  const [translateBackup, setTranslateBackup] = useState<Record<string, string>>({});
   const promptValue = promptTab === "positive" ? params.positivePrompt : params.negativePrompt;
   const promptKey = promptTab === "positive" ? "positivePrompt" : "negativePrompt";
   const templates: PromptTemplate[] = settings?.promptTemplates ?? [];
@@ -721,7 +1039,6 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
     const current = promptValue.trim();
     const next = current ? `${current.replace(/\s*,?\s*$/, "")}, ${tag}, ` : `${tag}, `;
     setParam(promptKey, next);
-    setPromptChips(pickPromptChips(24, chipQuery));
   }
 
   // Per-tag weight editor: parse the active prompt into { core, level } chips.
@@ -787,14 +1104,27 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
       return;
     }
     setTranslating(true);
+    const original = promptValue;
     try {
-      const res = await window.naiDesktop.translate(text, "en");
-      if (res.ok && res.text) {
-        setParam(promptKey, res.text.trim() + (res.text.trim().endsWith(",") ? " " : ", "));
-        setToast("已翻译为英文，请检查标签");
-      } else {
-        setToast(res.error ?? "翻译失败");
-      }
+      // Translate only the comma-separated segments that contain Chinese, leaving
+      // existing English tags untouched — a mixed CN/EN prompt would otherwise be
+      // mistranslated or fail as a whole.
+      const segments = text.split(",");
+      let failed = false;
+      const translated = await Promise.all(
+        segments.map(async (seg) => {
+          const trimmed = seg.trim();
+          if (!trimmed || !/[一-鿿]/.test(trimmed)) return trimmed;
+          const res = await window.naiDesktop.translate(trimmed, "en");
+          if (res.ok && res.text) return res.text.trim();
+          failed = true;
+          return trimmed;
+        }),
+      );
+      const joined = translated.filter(Boolean).join(", ");
+      setParam(promptKey, joined + (joined.endsWith(",") ? " " : ", "));
+      setTranslateBackup((b) => ({ ...b, [promptKey]: original }));
+      setToast(failed ? "部分中文翻译失败，已尽力翻译；可点还原" : "已翻译中文标签（英文保留），可点还原");
     } catch {
       setToast("翻译失败，请检查网络");
     } finally {
@@ -802,32 +1132,17 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
     }
   }
 
-  useEffect(() => {
-    setPromptChips(pickPromptChips(24, chipQuery));
-  }, [chipQuery]);
-
-  // When the MCP/tag service is enabled for the capsule, search it (debounced)
-  // and show server-backed tags alongside the offline dictionary chips.
-  useEffect(() => {
-    const q = chipQuery.trim();
-    if (q.length < 2 || !capsuleUsesMcp) {
-      setServerChips([]);
-      return;
-    }
-    let cancelled = false;
-    const timer = setTimeout(async () => {
-      try {
-        const res = await window.naiDesktop.searchTagServer(q, 16);
-        if (!cancelled) setServerChips(res.map((r) => ({ tag: r.tag, zh: (r.description ?? "").trim() || zhForTag(r.tag) })));
-      } catch {
-        if (!cancelled) setServerChips([]);
-      }
-    }, 400);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [chipQuery, capsuleUsesMcp]);
+  function restoreTranslate() {
+    const backup = translateBackup[promptKey];
+    if (backup == null) return;
+    setParam(promptKey, backup);
+    setTranslateBackup((b) => {
+      const next = { ...b };
+      delete next[promptKey];
+      return next;
+    });
+    setToast("已还原翻译前的提示词");
+  }
 
   const tagCount = useMemo(
     () => promptValue.trim().split(",").filter((s) => s.trim().length > 0).length,
@@ -881,7 +1196,7 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
             <span className={clsx("chip-caret", chipOpen && "open")}>▸</span>
             灵感胶囊
           </span>
-          <small className="chip-head-hint">{capsuleUsesMcp ? "MCP 已启用 · 中文搜索标签" : chipOpen ? "中文搜索 → 点击插入标签" : "点击展开 · 中文搜 Danbooru 标签"}</small>
+          <small className="chip-head-hint">{chipOpen ? "本地标签库 · 中/英文搜索 → 点击插入" : "点击展开 · 本地 Danbooru 标签库（按热度）"}</small>
         </button>
         {chipOpen && (
           <>
@@ -889,36 +1204,11 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
               <input
                 className="prompt-chip-search"
                 value={chipQuery}
-                placeholder="输入中文大概意思，例如：蓝眼白发、夜景城市、水彩风格"
+                placeholder="搜索标签：中文或英文，如 双马尾 / twintails / 夜景"
                 onChange={(e) => setChipQuery(e.target.value)}
               />
-              <button type="button" className="chip-refresh" onClick={() => setPromptChips(pickPromptChips(24, chipQuery))}>换一组</button>
             </div>
-            {serverChips.length > 0 && (
-              <div className="related-tags">
-                <div className="related-tags-head"><Icon name="plug" /> MCP 推荐（{settings?.tagServerTool || "search_tags"}）</div>
-                <div className="prompt-chip-list">
-                  {serverChips.map((c) => (
-                    <button key={`mcp-${c.tag}`} type="button" onClick={() => appendChip(c.tag)} title={`${c.tag}：${c.zh}`}>
-                      <span>{c.tag}</span>
-                      {c.zh && <small>{c.zh}</small>}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-            <div className="prompt-chip-list">
-              {promptChips.length === 0 ? (
-                <span className="chip-empty">没有匹配的标签，换个中文词试试（如「猫耳」「赛博朋克」）</span>
-              ) : (
-                promptChips.map((chip) => (
-                  <button key={chip.tag} type="button" onClick={() => appendChip(chip.tag)} title={`${chip.tag}：${chip.zh}`}>
-                    <span>{chip.tag}</span>
-                    <small>{chip.zh}</small>
-                  </button>
-                ))
-              )}
-            </div>
+            <CapsuleBrowser query={chipQuery} onPick={appendChip} />
             {related.length > 0 && (
               <div className="related-tags">
                 <div className="related-tags-head"><Icon name="link" /> 相关推荐（常一起使用）</div>
@@ -967,6 +1257,11 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
         <button type="button" className="prompt-tool-btn" onClick={() => void translatePrompt()} disabled={translating}>
           {translating ? "翻译中…" : <><Icon name="globe" /> 中→英翻译</>}
         </button>
+        {translateBackup[promptKey] != null && (
+          <button type="button" className="prompt-tool-btn" onClick={restoreTranslate} disabled={translating} title="还原翻译前的提示词">
+            <Icon name="sparkles" /> 还原
+          </button>
+        )}
         <button type="button" className="prompt-tool-btn" onClick={() => setShowNormalize(true)} disabled={!promptValue.trim()}>
           <Icon name="sparkles" /> 标准化
         </button>
@@ -1362,6 +1657,177 @@ function FeatureCostCard({
   );
 }
 
+// Collapsible queue panel shown while a main-generate queue is running. Adapted
+// to the app's compact left-footer style rather than a full-screen queue board.
+function QueuePanel() {
+  const queue = useAppStore((state) => state.generationQueue);
+  const collapsed = useAppStore((state) => state.queueCollapsed);
+  const toggleCollapsed = useAppStore((state) => state.toggleQueueCollapsed);
+  const removeJob = useAppStore((state) => state.removeQueueJob);
+  const clearQueue = useAppStore((state) => state.clearQueue);
+  const progress = useAppStore((state) => state.queueProgress);
+  const queuePaused = useAppStore((state) => state.queuePaused);
+  const queueAdding = useAppStore((state) => state.queueAdding);
+
+  const done = progress ? progress.done + progress.failed : 0;
+  const total = progress?.total ?? 1 + queue.length;
+  const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
+  // Everything not yet done and not the single running image is "queued" — this
+  // includes both manually-enqueued jobs AND the remaining initial-batch images.
+  const queued = Math.max(0, total - done - 1);
+  // The initial-batch remainder has no per-item snapshot; show it as a summary.
+  const batchPending = Math.max(0, queued - queue.length);
+
+  return (
+    <div className="queue-panel">
+      <div className="queue-panel-head">
+        <span className="queue-panel-title">
+          队列 · 1 运行{queued > 0 ? ` / ${queued} 排队` : ""}
+        </span>
+        <div className="queue-panel-actions">
+          {queued > 0 && (
+            <button type="button" className="queue-mini-btn" onClick={() => clearQueue()}>
+              清空排队
+            </button>
+          )}
+          <button
+            type="button"
+            className="queue-mini-btn queue-collapse-btn"
+            onClick={toggleCollapsed}
+            aria-label={collapsed ? "展开队列" : "折叠队列"}
+          >
+            {collapsed ? "▸" : "▾"}
+          </button>
+        </div>
+      </div>
+      <div className="queue-progressbar">
+        <div className="queue-progressbar-fill" style={{ width: `${pct}%` }} />
+      </div>
+      {!collapsed && (
+        <ul className="queue-list">
+          <li className="queue-item queue-item-running">
+            <span className="queue-spinner" />
+            <span className="queue-item-label">
+              {queuePaused ? "已暂停" : queueAdding ? "正在加入排队…" : "正在执行…"}
+            </span>
+          </li>
+          {queue.map((job) => (
+            <li className="queue-item" key={job.id}>
+              <span className="queue-item-label" title={job.label}>
+                {job.label}
+              </span>
+              <span className="queue-item-time">
+                {new Date(job.addedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
+              </span>
+              <button
+                type="button"
+                className="queue-item-remove"
+                onClick={() => removeJob(job.id)}
+                aria-label="移出队列"
+                title="移出队列"
+              >
+                ✕
+              </button>
+            </li>
+          ))}
+          {batchPending > 0 && (
+            <li className="queue-item queue-item-batch">
+              <span className="queue-item-label">批量待生成 · {batchPending} 张</span>
+            </li>
+          )}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// Settings section: configurable error-log path + open/view actions.
+function LogSettingsSection({
+  logDir,
+  loggingEnabled,
+  refreshSettings,
+}: {
+  logDir: string;
+  loggingEnabled: boolean;
+  refreshSettings: () => Promise<void>;
+}) {
+  const setToast = useAppStore((state) => state.setToast);
+  const [info, setInfo] = useState<{ path: string; exists: boolean; sizeBytes: number } | null>(null);
+  const refresh = useCallback(() => {
+    void window.naiDesktop
+      .getLogInfo()
+      .then((i) => setInfo({ path: i.path, exists: i.exists, sizeBytes: i.sizeBytes }));
+  }, []);
+  useEffect(() => {
+    refresh();
+  }, [refresh, logDir]);
+
+  const setDir = async (dir: string) => {
+    await window.naiDesktop.setSetting("logDir", dir);
+    await refreshSettings();
+  };
+  const choose = async () => {
+    const dir = await window.naiDesktop.selectLogDir();
+    if (dir) {
+      await setDir(dir);
+      setToast("已更新日志路径");
+    }
+  };
+  const openFile = async () => {
+    const r = await window.naiDesktop.openLogFile();
+    if (!r.ok) setToast(r.message || "无法打开日志文件");
+  };
+  const openDir = async () => {
+    const r = await window.naiDesktop.openLogDir();
+    if (!r.ok) setToast(r.message || "无法打开日志文件夹");
+  };
+
+  const toggleEnabled = async (v: boolean) => {
+    await window.naiDesktop.setSetting("loggingEnabled", v);
+    await refreshSettings();
+    setToast(v ? "已开启运行日志" : "已关闭运行日志");
+  };
+
+  return (
+    <>
+      <Toggle
+        checked={loggingEnabled}
+        onChange={(v) => void toggleEnabled(v)}
+        label="运行日志"
+        description="记录软件的各类调用信息与错误（生成 / 图生图 / 超分 / 导演工具 / 异常等），写入 app.log，便于排查问题。"
+      />
+      <label className="field">
+        <span>日志存放路径</span>
+        <input
+          value={logDir}
+          placeholder="默认：用户数据目录 / logs"
+          disabled={!loggingEnabled}
+          onChange={(e) => void setDir(e.target.value)}
+        />
+      </label>
+      <p className="field-hint">
+        {info ? (info.exists ? `当前：${info.path}（${Math.max(1, Math.round(info.sizeBytes / 1024))} KB）` : `当前：${info.path}（暂无日志）`) : ""}
+      </p>
+      <div className="row-actions">
+        <Button onClick={choose}>
+          <IconText icon={<Icon name="folder" />}>选择文件夹...</IconText>
+        </Button>
+        <Button onClick={openFile}>
+          <IconText icon="↗">打开日志文件</IconText>
+        </Button>
+        <Button onClick={openDir}>
+          <IconText icon="↗">打开日志文件夹</IconText>
+        </Button>
+        {logDir ? (
+          <Button onClick={() => void setDir("")}>
+            <IconText icon="↺">恢复默认</IconText>
+          </Button>
+        ) : null}
+      </div>
+    </>
+  );
+}
+
 function AccountAndRunButton({
   label,
   onRun,
@@ -1382,7 +1848,6 @@ function AccountAndRunButton({
   const cancel = useAppStore((state) => state.cancel);
   const togglePause = useAppStore((state) => state.togglePause);
   const queuePaused = useAppStore((state) => state.queuePaused);
-  const queueProgress = useAppStore((state) => state.queueProgress);
   const isGenerateQueueRunning = useAppStore((state) => state.isGenerateQueueRunning);
   const generationQueueLength = useAppStore((state) => state.generationQueue.length);
   const queueAdding = useAppStore((state) => state.queueAdding);
@@ -1419,12 +1884,7 @@ function AccountAndRunButton({
         </Button>
       ) : isGenerating ? (
         <>
-          {isGenerateQueueRunning && queueProgress && queueProgress.total > 1 && (
-            <div className="queue-progress">
-              进度 {queueProgress.done + queueProgress.failed}/{queueProgress.total}
-              {queueProgress.failed > 0 ? ` · 失败 ${queueProgress.failed}` : ""}
-            </div>
-          )}
+          {isGenerateQueueRunning && <QueuePanel />}
           <div className="anlas-spent">
             {currentAnlasSpent != null ? `本次已实扣 ${currentAnlasSpent} Anlas` : "本次实扣读取中"}
           </div>
@@ -3025,6 +3485,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
   const account = useAppStore((state) => state.account);
   const refreshAccount = useAppStore((state) => state.refreshAccount);
   const refreshSettings = useAppStore((state) => state.refreshSettings);
+  const setShowOnboarding = useAppStore((state) => state.setShowOnboarding);
   const [reverseTemplateDefaults, setReverseTemplateDefaults] = useState(SCOPED_REVERSE_SYSTEM_PROMPTS);
   const [token, setToken] = useState("");
   const [status, setStatus] = useState<TokenStatus | null>(null);
@@ -3238,6 +3699,22 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                     <IconText icon="↗">打开输出目录</IconText>
                   </Button>
                 </div>
+                <LogSettingsSection
+                  logDir={settings.logDir ?? ""}
+                  loggingEnabled={settings.loggingEnabled ?? true}
+                  refreshSettings={refreshSettings}
+                />
+                <TagLibrarySettingsSection />
+                <div className="row-actions">
+                  <Button
+                    onClick={() => {
+                      onClose();
+                      setShowOnboarding(true);
+                    }}
+                  >
+                    <IconText icon="❔">重新查看新手引导</IconText>
+                  </Button>
+                </div>
                 <label className="field">
                   <span>图片命名模板</span>
                   <input
@@ -3264,7 +3741,6 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                   <span>当前版本使用单任务顺序执行：批量生成会逐张调用 API，避免并发导致取消和历史写入异常。</span>
                 </div>
                 <div className="toggle-list">
-                  <Toggle checked={settings.debugLogs} onChange={(v) => void update("debugLogs", v)} label="调试日志" description="记录 API 请求诊断信息，默认关闭。" />
                   <Toggle checked={settings.superDrop} onChange={(v) => void update("superDrop", v)} label="中央画布拖拽加载" description="将图片拖入中央画布即可加载为工作台图片。" />
                 </div>
               </div>
@@ -3609,12 +4085,14 @@ function OnboardingWizard() {
   const setShowOnboarding = useAppStore((state) => state.setShowOnboarding);
   const refreshAccount = useAppStore((state) => state.refreshAccount);
   const cards = [
+    ["介绍", "欢迎使用 Langbai NovelAI Studio", "中文 API-only 的 NovelAI 图像创作工作台：文生图 / 图生图 / 局部重绘 / 云端超分 / 导演工具 / 漫画生成，本地中文标签补全与灵感胶囊。"],
     ["网络", "先确认代理连接", "NovelAI、AI 反推、谷歌翻译及更新检查等大部分联网功能通常需要可用代理。默认使用本机 HTTP 代理 127.0.0.1:7890。"],
-    ["欢迎", "设置用户语言", "已根据系统语言检测为简体中文。"],
     ["API", "配置 NovelAI API Token", "Token 只保存在本机主进程存储中，渲染层不会直接持有。"],
+    ["选填", "可选的第三方 AI 服务", "反推（图→提示词）、转换（中文→标签）、翻译都依赖你自备的第三方接口，不填也能正常生成图片，之后可在设置中再配置。"],
     ["保存", "选择图片保存位置", "生成图片会自动保存到此目录并写入右侧历史。"],
+    ["标签库", "下载中文标签库（可选）", "下载后，提示词补全与灵感胶囊将使用上万条带中文的 Danbooru 标签（按热度）。不下载则使用内置精简词库。"],
     ["界面", "了解主界面", "左侧参数、中间画布、右侧历史；英文输入会自动推测 tag。"],
-    ["完成", "一切就绪", "之后可随时在设置中修改 API、输出目录和偏好。"],
+    ["完成", "一切就绪", "之后可随时在设置中修改 API、输出目录和偏好，也能重新查看本向导。"],
   ];
   useEffect(() => {
     if (settings) setOnboardingProxyUrl(settings.proxyUrl);
@@ -3657,6 +4135,29 @@ function OnboardingWizard() {
             <h2>{cards[step][1]}</h2>
             <p>{cards[step][2]}</p>
             {step === 0 && (
+              <div className="settings-form">
+                <div className="intro-grid">
+                  <div><strong>文生图 / 图生图</strong><span>提示词、参考图、批量与队列</span></div>
+                  <div><strong>重绘 / 超分</strong><span>局部重绘、2×/4× 云端放大</span></div>
+                  <div><strong>导演工具 / 漫画</strong><span>去背景、线稿、上色、表情、漫画生成</span></div>
+                  <div><strong>中文标签</strong><span>本地中文补全与灵感胶囊</span></div>
+                </div>
+                <div className="row-actions">
+                  <Button onClick={() => window.naiDesktop.openExternal("https://github.com/2786886095/novelai-image-desktop")}>
+                    <IconText icon="↗">GitHub 项目主页</IconText>
+                  </Button>
+                </div>
+                <label className="field wide">
+                  <span>语言</span>
+                  <select defaultValue="zh-CN" onChange={(e) => window.naiDesktop.setSetting("language", e.target.value as AppSettings["language"])}>
+                    <option value="zh-CN">简体中文</option>
+                    <option value="en-US">English（英文）</option>
+                    <option value="ja-JP">日本語（日文）</option>
+                  </select>
+                </label>
+              </div>
+            )}
+            {step === 1 && (
               <div className="onboarding-proxy">
                 <div className="onboarding-network-warning">
                   请先启动本机代理软件，并确认端口与下方选择一致；如果你的网络可以直接访问 NovelAI，可选择“直连”。
@@ -3672,16 +4173,6 @@ function OnboardingWizard() {
                   }}
                 />
               </div>
-            )}
-            {step === 1 && (
-              <label className="field wide">
-                <span>语言</span>
-                <select defaultValue="zh-CN" onChange={(e) => window.naiDesktop.setSetting("language", e.target.value as AppSettings["language"])}>
-                  <option value="zh-CN">简体中文</option>
-                  <option value="en-US">English（英文）</option>
-                  <option value="ja-JP">日本語（日文）</option>
-                </select>
-              </label>
             )}
             {step === 2 && (
               <div className="settings-form">
@@ -3702,6 +4193,39 @@ function OnboardingWizard() {
             )}
             {step === 3 && (
               <div className="settings-form">
+                <p className="settings-hint" style={{ margin: 0 }}>以下全部可选，可直接「下一步」跳过，稍后在设置中配置。</p>
+                <label className="field wide">
+                  <span>反推（图→提示词）Vision API Key</span>
+                  <input
+                    type="password"
+                    defaultValue={settings?.visionApiKey ?? ""}
+                    placeholder="选填：用于「AI 反推」，默认 OpenAI 兼容接口"
+                    onChange={(e) => void window.naiDesktop.setSetting("visionApiKey", e.target.value)}
+                  />
+                </label>
+                <label className="field wide">
+                  <span>转换（中文→标签）API Key</span>
+                  <input
+                    type="password"
+                    defaultValue={settings?.convertApiKey ?? ""}
+                    placeholder="选填：用于「中文描述转标签」"
+                    onChange={(e) => void window.naiDesktop.setSetting("convertApiKey", e.target.value)}
+                  />
+                </label>
+                <label className="field wide">
+                  <span>翻译引擎（中→英按钮）</span>
+                  <select
+                    defaultValue={settings?.translateProvider ?? "google"}
+                    onChange={(e) => void window.naiDesktop.setSetting("translateProvider", e.target.value as AppSettings["translateProvider"])}
+                  >
+                    <option value="google">谷歌翻译（免费，可能需要代理）</option>
+                    <option value="baidu">百度翻译（需在设置中填 APP ID/密钥）</option>
+                  </select>
+                </label>
+              </div>
+            )}
+            {step === 4 && (
+              <div className="settings-form">
                 <label className="field wide">
                   <span>当前输出目录</span>
                   <input readOnly value={settings?.outputDir ?? ""} />
@@ -3716,7 +4240,12 @@ function OnboardingWizard() {
                 </Button>
               </div>
             )}
-            {step === 4 && (
+            {step === 5 && (
+              <div className="settings-form">
+                <TagLibrarySettingsSection />
+              </div>
+            )}
+            {step === 6 && (
               <div className="intro-grid">
                 <div><strong>左侧</strong><span>提示词、模型、图片输入、功能参数</span></div>
                 <div><strong>中间</strong><span>生成预览、重绘画布、定位文件</span></div>
@@ -3724,7 +4253,7 @@ function OnboardingWizard() {
                 <div><strong>补全</strong><span>输入 g / glo 等英文片段，Tab 或 Enter 插入 tag</span></div>
               </div>
             )}
-            {step === 5 && <div className="done-mark">✓</div>}
+            {step === 7 && <div className="done-mark">✓</div>}
           </section>
         </div>
         <div className="onboarding-footer">

@@ -79,6 +79,7 @@ export function calculateImageGenerationAnlas({
   action = "generate",
   strength = 1,
   forcePaid = false,
+  alreadyEncodedVibes = 0,
 }: {
   params: GenerateParams;
   account?: AccountSummary;
@@ -87,6 +88,8 @@ export function calculateImageGenerationAnlas({
   action?: "generate" | "img2img" | "infill";
   strength?: number;
   forcePaid?: boolean;
+  /** How many of the vibe references are already encoded+cached (no re-charge). */
+  alreadyEncodedVibes?: number;
 }): AnlasQuoteResult {
   const samples = positiveInt(batchCount, 1);
   const width = positiveInt(params.width, 512);
@@ -119,22 +122,36 @@ export function calculateImageGenerationAnlas({
   let total = basePerSample * samples;
 
   if (v4Plus && vibeCount > 0) {
-    const encodeCost = 2 * vibeCount * samples;
+    // Per the official docs, encoding an image into a vibe is a ONE-TIME fee of
+    // 2 Anlas (the encoding is deterministic and cached), so it is NOT multiplied
+    // by the batch/request count — and references already encoded+cached this
+    // session incur NO further encode charge, so only count the un-encoded ones.
+    const toEncode = Math.max(0, vibeCount - Math.min(vibeCount, alreadyEncodedVibes));
+    const encodeCost = 2 * toEncode;
     total += encodeCost;
-    details.push(`V4+ Vibe encoding: ${vibeCount} image(s) x 2 Anlas x ${samples} request(s) = ${encodeCost}.`);
+    details.push(
+      `V4+ Vibe encoding (one-time): ${toEncode} of ${vibeCount} image(s) x 2 Anlas = ${encodeCost}` +
+        `${alreadyEncodedVibes > 0 ? `（${Math.min(vibeCount, alreadyEncodedVibes)} 张已缓存，不再计费）` : ""}.`,
+    );
     if (vibeCount > 4) {
+      // The >4-vibe surcharge is added "to the generation", i.e. per request.
       const multiVibeCost = 2 * (vibeCount - 4) * samples;
       total += multiVibeCost;
       details.push(`Extra Vibe fee above 4 references: ${multiVibeCost} Anlas.`);
     }
   }
 
-  // Precise / Director references (V4.5) add a flat 5 Anlas per reference image.
+  // Precise / Director references (V4.5): the official docs charge "an additional
+  // cost of 5 Anlas to each image generation" — a FLAT 5 per generated image when
+  // the feature is used, NOT per reference. So it scales with the request/batch
+  // count only, regardless of how many references are attached.
+  // Precise Reference is V4.5-only (per the docs), and the main process drops it
+  // on other models — so only charge it for V4.5 to avoid over-quoting.
   const preciseCount = extras?.preciseReferences?.length ?? 0;
-  if (v4Plus && preciseCount > 0) {
-    const preciseCost = 5 * preciseCount * samples;
+  if (v4Plus && params.model.includes("4-5") && preciseCount > 0) {
+    const preciseCost = 5 * samples;
     total += preciseCost;
-    details.push(`Precise reference: ${preciseCount} image(s) x 5 Anlas x ${samples} request(s) = ${preciseCost}.`);
+    details.push(`Precise reference: 5 Anlas x ${samples} image(s) = ${preciseCost} (flat per image, ${preciseCount} ref attached).`);
   }
 
   return finalizeQuote(action === "generate" ? "generate" : action === "img2img" ? "i2i" : "inpaint", total, account, details, "estimate-formula");
@@ -209,6 +226,7 @@ export function calculateFeatureAnlasQuote({
   image,
   upscaleScale,
   directorTool,
+  alreadyEncodedVibes = 0,
 }: {
   feature: AnlasQuoteFeature;
   params?: GenerateParams;
@@ -221,6 +239,7 @@ export function calculateFeatureAnlasQuote({
   image?: Pick<WorkingImage, "width" | "height"> | null;
   upscaleScale?: UpscaleScale;
   directorTool?: DirectorTool;
+  alreadyEncodedVibes?: number;
 }): AnlasQuoteResult {
   if (feature === "upscale") {
     return calculateUpscaleAnlas({ image, account, scale: upscaleScale });
@@ -236,6 +255,7 @@ export function calculateFeatureAnlasQuote({
       params,
       account,
       extras,
+      alreadyEncodedVibes,
       batchCount: 1,
       action: "img2img",
       strength: i2iParams?.strength ?? 1,
@@ -258,5 +278,5 @@ export function calculateFeatureAnlasQuote({
       strength: inpaintStrength ?? 1,
     });
   }
-  return calculateImageGenerationAnlas({ params, account, extras, batchCount, action: "generate" });
+  return calculateImageGenerationAnlas({ params, account, extras, batchCount, action: "generate", alreadyEncodedVibes });
 }

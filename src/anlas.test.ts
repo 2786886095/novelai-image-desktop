@@ -49,7 +49,7 @@ describe("official Anlas pricing", () => {
     expect(quote.amount).toBe(14);
   });
 
-  it("includes V4 vibe encoding on every desktop request", () => {
+  it("charges V4 vibe encoding as a one-time fee, not per batch image", () => {
     const quote = calculateImageGenerationAnlas({
       params: DEFAULT_PARAMS,
       account: opusAccount,
@@ -62,11 +62,32 @@ describe("official Anlas pricing", () => {
         charCaptions: [],
       },
     });
-    expect(quote.amount).toBe(12);
+    // 2 vibes x 2 Anlas one-time = 4 (NOT multiplied by the 3-image batch).
+    expect(quote.amount).toBe(4);
   });
 
-  it("charges 5 Anlas per precise reference per request", () => {
-    const quote = calculateImageGenerationAnlas({
+  it("does not re-charge vibe encoding for already-cached references", () => {
+    const vibes = {
+      vibeImages: [
+        { base64: "", infoExtracted: 0.7, strength: 0.5 },
+        { base64: "", infoExtracted: 0.7, strength: 0.5 },
+      ],
+      charCaptions: [],
+    };
+    // Both already encoded+cached → no encode charge.
+    expect(
+      calculateImageGenerationAnlas({ params: DEFAULT_PARAMS, account: opusAccount, extras: vibes, alreadyEncodedVibes: 2 })
+        .amount,
+    ).toBe(0);
+    // One cached, one new → only the new one is charged (2 Anlas).
+    expect(
+      calculateImageGenerationAnlas({ params: DEFAULT_PARAMS, account: opusAccount, extras: vibes, alreadyEncodedVibes: 1 })
+        .amount,
+    ).toBe(2);
+  });
+
+  it("charges a flat 5 Anlas per image for precise reference, regardless of reference count", () => {
+    const oneRef = calculateImageGenerationAnlas({
       params: DEFAULT_PARAMS,
       account: opusAccount, // base image is free for Opus, so only the reference fee remains
       batchCount: 2,
@@ -76,7 +97,23 @@ describe("official Anlas pricing", () => {
         preciseReferences: [{ base64: "", type: "character", strength: 1, fidelity: 1 }],
       },
     });
-    expect(quote.amount).toBe(10); // 5 Anlas x 1 reference x 2 requests
+    expect(oneRef.amount).toBe(10); // 5 Anlas x 2 images (flat per image)
+
+    const twoRefs = calculateImageGenerationAnlas({
+      params: DEFAULT_PARAMS,
+      account: opusAccount,
+      batchCount: 2,
+      extras: {
+        vibeImages: [],
+        charCaptions: [],
+        preciseReferences: [
+          { base64: "", type: "character", strength: 1, fidelity: 1 },
+          { base64: "", type: "style", strength: 1, fidelity: 1 },
+        ],
+      },
+    });
+    // Official docs: "5 Anlas to each image generation" — flat, NOT per reference.
+    expect(twoRefs.amount).toBe(10);
   });
 
   it("uses the official upscale pixel tier", () => {

@@ -29,6 +29,7 @@ import {
   upscaleImg,
   verifyToken,
 } from "./ipc/nai";
+import { danbooruStatus, downloadDanbooruTags, browseDanbooru, searchDanbooru } from "./ipc/danbooru-tags";
 import type {
   AnlasQuoteRequest,
   AugmentOptions,
@@ -67,6 +68,14 @@ import {
   selectOutputDir,
 } from "./ipc/storage";
 import { checkUpdate } from "./ipc/update";
+import {
+  installGlobalLogging,
+  getLogInfo,
+  selectLogDir,
+  openLogFile,
+  openLogDir,
+  readRecentLog,
+} from "./ipc/logger";
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -223,6 +232,12 @@ function registerIpc() {
   ipcMain.handle("nai:testTagServer", (_event, query: string) => testTagServer(query));
   ipcMain.handle("nai:suggestTags", (_event, model: string, prompt: string) => suggestTags(model, prompt));
   ipcMain.handle("nai:searchTagServer", (_event, query: string, limit?: number) => searchTagServer(query, limit));
+  ipcMain.handle("nai:danbooruStatus", () => danbooruStatus());
+  ipcMain.handle("nai:downloadDanbooru", () => downloadDanbooruTags());
+  ipcMain.handle("nai:danbooruBrowse", (_event, category: number, offset: number, limit: number) =>
+    browseDanbooru(category, offset, limit),
+  );
+  ipcMain.handle("nai:danbooruSearch", (_event, query: string, limit: number) => searchDanbooru(query, limit));
   ipcMain.handle("nai:translate", (_event, text: string, target?: string) => translateText(text, target));
   ipcMain.handle("nai:cancel", () => cancelGeneration());
 
@@ -238,6 +253,12 @@ function registerIpc() {
   ipcMain.handle("storage:renameItem", (_event, id: string, name: string) => renameHistoryItem(id, name));
   ipcMain.handle("storage:open", (_event, targetPath: string) => openTarget(targetPath));
   ipcMain.handle("storage:selectDir", () => selectOutputDir());
+
+  ipcMain.handle("log:getInfo", () => getLogInfo());
+  ipcMain.handle("log:selectDir", () => selectLogDir());
+  ipcMain.handle("log:openFile", () => openLogFile());
+  ipcMain.handle("log:openDir", () => openLogDir());
+  ipcMain.handle("log:read", () => readRecentLog());
 
   ipcMain.handle("settings:get", (_event, key) => getSetting(key));
   ipcMain.handle("settings:set", (_event, key, value) => setSetting(key, value));
@@ -275,6 +296,7 @@ function registerIpc() {
 app.whenReady().then(() => {
   pinUserDataAndMigrate();
   readStore();
+  installGlobalLogging();
   registerIpc();
   createWindow();
 

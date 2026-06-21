@@ -1,4 +1,4 @@
-export const APP_VERSION = "0.9.7";
+export const APP_VERSION = "0.9.8";
 export const APP_NAME = "Langbai NovelAI Studio";
 export const PROJECT_REPOSITORY = "https://github.com/2786886095/novelai-image-desktop";
 
@@ -162,6 +162,8 @@ export interface PreciseReferenceItem {
 export interface PreciseReferenceImage extends PreciseReferenceItem {
   id: string;
   previewUrl: string; // data URL, never sent to main process
+  srcWidth?: number; // original pixel size (renderer-only, for the size hint)
+  srcHeight?: number;
 }
 
 /** Character prompt item — slim type sent over IPC */
@@ -438,6 +440,8 @@ export interface AnlasQuoteRequest {
   directorTool?: DirectorTool;
   image?: Pick<WorkingImage, "width" | "height"> | null;
   account?: AccountSummary;
+  /** Vibe refs already covered by the active run / earlier queued jobs (encoded once). */
+  alreadyQueuedVibes?: number;
 }
 
 export interface AnlasQuoteResult {
@@ -516,6 +520,8 @@ export interface AppSettings {
   hasOnboarded: boolean;
   language: "zh-CN" | "en-US" | "ja-JP";
   outputDir: string;
+  /** Folder for the app.log error log. Empty = default <userData>/logs. */
+  logDir: string;
   apiBaseUrl: string;
   imageBaseUrl: string;
   // Opt-in to sending the NovelAI Bearer token to a non-official endpoint host.
@@ -540,7 +546,8 @@ export interface AppSettings {
   showFloatingToolbar: boolean;
   historyJumpAfterGenerate: boolean;
   historyRetentionDays: number;
-  debugLogs: boolean;
+  /** Write app.log (errors + call info). Default on. */
+  loggingEnabled: boolean;
   // Vision / Reverse-prompt
   visionApiUrl: string;
   visionApiKey: string;
@@ -703,10 +710,19 @@ export interface NaiDesktopApi {
   testTagServer: (query: string) => Promise<{ ok: boolean; message: string; tags: TagSuggestion[] }>;
   suggestTags: (model: string, prompt: string) => Promise<TagSuggestion[]>;
   searchTagServer: (query: string, limit?: number) => Promise<TagSuggestion[]>;
+  danbooruStatus: () => Promise<{ downloaded: boolean; sizeBytes: number; count: number }>;
+  downloadDanbooru: () => Promise<{ ok: boolean; message: string; count?: number }>;
+  danbooruBrowse: (category: number, offset: number, limit: number) => Promise<TagSuggestion[]>;
+  danbooruSearch: (query: string, limit: number) => Promise<TagSuggestion[]>;
   translate: (text: string, target?: string) => Promise<{ ok: boolean; text?: string; error?: string }>;
   checkUpdate: () => Promise<UpdateInfo>;
   minimize: () => Promise<void>;
   maximize: () => Promise<void>;
   close: () => Promise<void>;
   openExternal: (url: string) => Promise<void>;
+  getLogInfo: () => Promise<{ path: string; dir: string; exists: boolean; sizeBytes: number }>;
+  selectLogDir: () => Promise<string | null>;
+  openLogFile: () => Promise<{ ok: boolean; message?: string }>;
+  openLogDir: () => Promise<{ ok: boolean; message?: string }>;
+  readLog: () => Promise<string>;
 }

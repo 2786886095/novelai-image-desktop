@@ -60,6 +60,8 @@ import {
 } from "./store";
 import { TAG_DICTIONARY } from "../data/tag-dictionary";
 import { mcpSearch } from "./mcp-client";
+import { searchDanbooru } from "./danbooru-tags";
+import { logError, logInfo, appendLog } from "./logger";
 import { zhForTag } from "../../src/prompt-data";
 import { proxyConfig } from "./proxy";
 import {
@@ -113,9 +115,7 @@ function tokenSafeBaseUrl(rawUrl: string, fallback: string): string {
   const resolved = normalizeBaseUrl(rawUrl, fallback);
   if (isOfficialNaiHost(resolved)) return resolved;
   if (getSettings().allowCustomEndpoint) return resolved;
-  if (getSettings().debugLogs) {
-    console.warn(`[security] refusing to send token to non-official endpoint ${resolved}; using ${fallback}.`);
-  }
+  appendLog("WARN", `[security] refusing to send token to non-official endpoint ${resolved}; using ${fallback}.`);
   return fallback;
 }
 
@@ -482,35 +482,81 @@ function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-const DIRECTOR_REFERENCE_MIN_SIDE = 64;
-const DIRECTOR_REFERENCE_MAX_SIDE = 1600;
-const DIRECTOR_REFERENCE_SIZE_STEP = 64;
+// Precise/Director reference: accept ANY size and replicate the OFFICIAL client
+// preprocessing (per https://docs.novelai.net/en/image/precisereference): the
+// feature "always uses one of those three image sizes" — 1024×1536 / 1472×1472 /
+// 1536×1024 — and a smaller/bigger image is "upscaled/downscaled AND padded" to
+// reach one of them. We pick the size whose ASPECT RATIO is closest to the
+// source (so padding is minimal — the earlier grid artifacts came from forcing
+// every image into 1024×1536, which over-padded landscapes), scale to fit, then
+// black-pad the remainder. No cropping.
+const DIRECTOR_REFERENCE_SIZES: Array<{ width: number; height: number }> = [
+  { width: 1024, height: 1536 },
+  { width: 1472, height: 1472 },
+  { width: 1536, height: 1024 },
+];
 
-function validateDirectorReferenceImage(rawBase64: string, index: number): string {
+function prepareDirectorReferenceImage(rawBase64: string, index: number): string {
   const image = nativeImage.createFromBuffer(Buffer.from(rawBase64, "base64"));
   if (image.isEmpty()) {
     throw new Error(`精准参考图 #${index + 1} 无法解码，请换用有效的 PNG、JPG 或 WebP 图片。`);
   }
   const { width, height } = image.getSize();
-  const inRange =
-    width >= DIRECTOR_REFERENCE_MIN_SIDE &&
-    height >= DIRECTOR_REFERENCE_MIN_SIDE &&
-    width <= DIRECTOR_REFERENCE_MAX_SIDE &&
-    height <= DIRECTOR_REFERENCE_MAX_SIDE;
-  const aligned = width % DIRECTOR_REFERENCE_SIZE_STEP === 0 && height % DIRECTOR_REFERENCE_SIZE_STEP === 0;
-  if (!inRange || !aligned) {
-    throw new Error(
-      `精准参考图 #${index + 1} 的尺寸 ${width}×${height} 不符合要求。` +
-        `请先在其它图片工具中调整为宽高均为 64 的整数倍、且每边位于 64–1600 之间，` +
-        `例如 832×1216、1024×1024 或 1216×832。程序不会自动缩放参考图，以免降低精准参考质量。`,
-    );
+  if (!width || !height) {
+    throw new Error(`精准参考图 #${index + 1} 尺寸无效，请换用有效的 PNG、JPG 或 WebP 图片。`);
   }
-  return rawBase64;
+
+  // Pick the official target whose aspect ratio best matches the source.
+  const sourceAspect = width / height;
+  const target = DIRECTOR_REFERENCE_SIZES.reduce((best, candidate) => {
+    const bestDiff = Math.abs(best.width / best.height - sourceAspect);
+    const candidateDiff = Math.abs(candidate.width / candidate.height - sourceAspect);
+    return candidateDiff < bestDiff ? candidate : best;
+  }, DIRECTOR_REFERENCE_SIZES[0]);
+
+  // Scale to FIT inside the target (preserve aspect), then center on a black canvas.
+  const scale = Math.min(target.width / width, target.height / height);
+  const fitW = Math.max(1, Math.round(width * scale));
+  const fitH = Math.max(1, Math.round(height * scale));
+  const fg = PNG.sync.read(image.resize({ width: fitW, height: fitH, quality: "best" }).toPNG());
+  const canvas = new PNG({ width: target.width, height: target.height });
+  for (let i = 0; i < canvas.data.length; i += 4) {
+    canvas.data[i] = 0;
+    canvas.data[i + 1] = 0;
+    canvas.data[i + 2] = 0;
+    canvas.data[i + 3] = 255;
+  }
+  const offsetX = Math.floor((target.width - fg.width) / 2);
+  const offsetY = Math.floor((target.height - fg.height) / 2);
+  for (let y = 0; y < fg.height; y += 1) {
+    for (let x = 0; x < fg.width; x += 1) {
+      const src = (y * fg.width + x) * 4;
+      const dst = ((y + offsetY) * target.width + (x + offsetX)) * 4;
+      canvas.data[dst] = fg.data[src];
+      canvas.data[dst + 1] = fg.data[src + 1];
+      canvas.data[dst + 2] = fg.data[src + 2];
+      canvas.data[dst + 3] = 255;
+    }
+  }
+  return PNG.sync.write(canvas).toString("base64");
 }
 
 function vibeCacheKey(rawBase64: string, model: string, infoExtracted: number): string {
   const hash = crypto.createHash("sha256").update(rawBase64).digest("hex");
   return `${model}|${infoExtracted}|${hash}`;
+}
+
+// How many of the request's vibe references are already encoded+cached this
+// session (so they incur NO further encode charge). Used to make the pre-run
+// quote accurate — re-generating with the same references won't re-encode.
+function countCachedVibes(extras: GenerateExtras | undefined, params: GenerateParams | undefined): number {
+  if (!extras?.vibeImages?.length || !params) return 0;
+  let cached = 0;
+  for (const vibe of extras.vibeImages) {
+    const key = vibeCacheKey(stripBase64Prefix(vibe.base64), params.model, vibe.infoExtracted);
+    if (vibeEncodeCache.has(key)) cached += 1;
+  }
+  return cached;
 }
 
 /**
@@ -527,16 +573,15 @@ function vibeCacheKey(rawBase64: string, model: string, infoExtracted: number): 
 async function prepareExtras(params: GenerateParams, extras?: GenerateExtras): Promise<GenerateExtras | undefined> {
   if (!extras) return extras;
 
-  // Precise/director references are always sent as their original image bytes.
-  // Validate locally before the paid generation request, but never resize or
-  // letterbox the source because resampling artifacts are strongly amplified by
-  // precise-reference conditioning.
+  // Precise/director references: any size accepted, preprocessed to the nearest
+  // of NovelAI's three official sizes (scale-to-fit + black pad), matching the
+  // official client.
   let preciseReferences = extras.preciseReferences;
   if (preciseReferences && preciseReferences.length > 0) {
     preciseReferences = isV45(params.model)
       ? preciseReferences.map((ref, index) => ({
           ...ref,
-          base64: validateDirectorReferenceImage(stripBase64Prefix(ref.base64), index),
+          base64: prepareDirectorReferenceImage(stripBase64Prefix(ref.base64), index),
         }))
       : [];
   }
@@ -583,9 +628,7 @@ async function prepareExtras(params: GenerateParams, extras?: GenerateExtras): P
       } catch (error: any) {
         if (currentAbort?.signal.aborted) throw error;
         const detail = responseErrorText(error) || "未知错误";
-        if (getSettings().debugLogs) {
-          console.warn("[vibe] encode-vibe failed:", detail);
-        }
+        logError("[vibe] encode-vibe failed", detail);
         // Abort rather than send raw bytes — a failed encode cannot produce a
         // correct vibe-transfer result, so surface it instead of charging for
         // a wrong (or reference-less) image.
@@ -864,6 +907,13 @@ export async function quoteAnlasCost(request: AnlasQuoteRequest): Promise<AnlasQ
     image,
     upscaleScale: request.upscaleScale,
     directorTool: request.directorTool,
+    // Encoded = already in the session cache, OR already covered by an earlier
+    // queued job / the active run (the renderer's hint). Take the larger of the
+    // two (they refer to the same references) and cap at the vibe count.
+    alreadyEncodedVibes: Math.min(
+      request.extras?.vibeImages?.length ?? 0,
+      Math.max(countCachedVibes(request.extras, request.params), request.alreadyQueuedVibes ?? 0),
+    ),
   });
   if (!calculated.ok) return calculated;
 
@@ -2422,6 +2472,10 @@ export async function generateImage(
   if (!token) return { ok: false, message: "请先在 设置 > 网络/API 中配置 NovelAI API Token。", items: [] };
   if (!params.positivePrompt.trim()) return { ok: false, message: "请输入正面提示词。", items: [] };
 
+  logInfo(
+    `generate: model=${params.model} size=${params.width}x${params.height} steps=${params.steps} ` +
+      `cfg=${params.cfgScale} vibe=${extras?.vibeImages?.length ?? 0} precise=${extras?.preciseReferences?.length ?? 0}`,
+  );
   currentAbort?.abort();
   currentAbort = new AbortController();
 
@@ -2456,6 +2510,7 @@ export async function generateI2I(params: GenerateParams, i2i: I2IParams, extras
   if (!token) return { ok: false, message: "请先配置 API Token。", items: [] };
   if (!params.positivePrompt.trim()) return { ok: false, message: "请输入正面提示词。", items: [] };
   if (!workbenchImagePath) return { ok: false, message: "请先加载参考图片。", items: [] };
+  logInfo(`img2img: model=${params.model} size=${params.width}x${params.height} strength=${i2i?.strength}`);
 
   currentAbort?.abort();
   currentAbort = new AbortController();
@@ -2590,6 +2645,7 @@ export async function upscaleImg(scale: UpscaleScale): Promise<SingleImageResult
   const token = getToken();
   if (!token) return { ok: false, message: "请先配置 API Token。" };
   if (!workbenchImagePath) return { ok: false, message: "请先加载图片。" };
+  logInfo(`upscale: scale=${scale}x`);
 
   currentAbort?.abort();
   const abort = new AbortController();
@@ -2692,6 +2748,7 @@ export async function augmentImg(tool: DirectorTool, options: AugmentOptions): P
   const token = getToken();
   if (!token) return { ok: false, message: "请先配置 API Token。", items: [] };
   if (!workbenchImagePath) return { ok: false, message: "请先加载图片。", items: [] };
+  logInfo(`director: tool=${tool}`);
 
   currentAbort?.abort();
   currentAbort = new AbortController();
@@ -2773,6 +2830,7 @@ function handleGenerateError(error: any, prefix: string): GenerateResult {
   }
   const status = error?.response?.status;
   const detail = responseErrorText(error) || error?.message || "未知错误";
+  logError(`${prefix}${status ? `（HTTP ${status}）` : ""}`, detail);
   const failureKind =
     status === 401 || status === 403
       ? "auth"
@@ -2836,6 +2894,10 @@ function localSuggestTags(prompt: string): TagSuggestion[] {
 export async function suggestTags(model: string, prompt: string): Promise<TagSuggestion[]> {
   const token = getToken();
   if (!prompt.trim()) return [];
+  // Prefer the local Danbooru index when the user has downloaded it: it is
+  // offline, Chinese-aware, has full tag coverage and real post counts.
+  const danbooru = await searchDanbooru(prompt, 12);
+  if (danbooru.length > 0) return danbooru;
   const fallback = localSuggestTags(prompt);
   const serverTags = await queryTagServer(prompt, 12);
   if (serverTags.length > 0) return serverTags;
