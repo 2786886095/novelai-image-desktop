@@ -51,6 +51,7 @@ import {
   addHistory,
   ensureHistoryGroup,
   getAccountSummary,
+  getHistoryGroups,
   getSettings,
   getToken,
   setAccountSummary,
@@ -481,52 +482,30 @@ function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-// NovelAI's V4.5 director-reference encoder accepts ONE canonical resolution:
-// 1024×1536. (The earlier 1472×1472 / 1536×1024 variants are NOT valid encoder
-// inputs and caused "Error encoding v4 director references: non-200 response:
-// 422".) The official SDK's crop_and_resize aspect-preserves the source and
-// black-letterboxes it to exactly 1024×1536, so we do the same: scale to fit,
-// then pad onto a black 1024×1536 canvas (no distortion, no crop).
-const DIRECTOR_REFERENCE_WIDTH = 1024;
-const DIRECTOR_REFERENCE_HEIGHT = 1536;
+const DIRECTOR_REFERENCE_MIN_SIDE = 64;
+const DIRECTOR_REFERENCE_MAX_SIDE = 1600;
+const DIRECTOR_REFERENCE_SIZE_STEP = 64;
 
-function prepareDirectorReferenceImage(rawBase64: string): string {
-  try {
-    const img = nativeImage.createFromBuffer(Buffer.from(rawBase64, "base64"));
-    const { width, height } = img.getSize();
-    if (!width || !height) return rawBase64;
-
-    // Scale to fit within 1024×1536 while preserving aspect ratio.
-    const scale = Math.min(DIRECTOR_REFERENCE_WIDTH / width, DIRECTOR_REFERENCE_HEIGHT / height);
-    const fitW = Math.max(1, Math.round(width * scale));
-    const fitH = Math.max(1, Math.round(height * scale));
-    const resizedPng = img.resize({ width: fitW, height: fitH, quality: "best" }).toPNG();
-    const fg = PNG.sync.read(resizedPng);
-
-    // Composite onto a black, fully-opaque 1024×1536 canvas (letterbox padding).
-    const canvas = new PNG({ width: DIRECTOR_REFERENCE_WIDTH, height: DIRECTOR_REFERENCE_HEIGHT });
-    for (let i = 0; i < canvas.data.length; i += 4) {
-      canvas.data[i] = 0;
-      canvas.data[i + 1] = 0;
-      canvas.data[i + 2] = 0;
-      canvas.data[i + 3] = 255;
-    }
-    const offsetX = Math.floor((DIRECTOR_REFERENCE_WIDTH - fg.width) / 2);
-    const offsetY = Math.floor((DIRECTOR_REFERENCE_HEIGHT - fg.height) / 2);
-    for (let y = 0; y < fg.height; y++) {
-      for (let x = 0; x < fg.width; x++) {
-        const src = (y * fg.width + x) * 4;
-        const dst = ((y + offsetY) * DIRECTOR_REFERENCE_WIDTH + (x + offsetX)) * 4;
-        canvas.data[dst] = fg.data[src];
-        canvas.data[dst + 1] = fg.data[src + 1];
-        canvas.data[dst + 2] = fg.data[src + 2];
-        canvas.data[dst + 3] = 255;
-      }
-    }
-    return PNG.sync.write(canvas).toString("base64");
-  } catch {
-    return rawBase64; // fall back to the original on any image-decoding failure
+function validateDirectorReferenceImage(rawBase64: string, index: number): string {
+  const image = nativeImage.createFromBuffer(Buffer.from(rawBase64, "base64"));
+  if (image.isEmpty()) {
+    throw new Error(`精准参考图 #${index + 1} 无法解码，请换用有效的 PNG、JPG 或 WebP 图片。`);
   }
+  const { width, height } = image.getSize();
+  const inRange =
+    width >= DIRECTOR_REFERENCE_MIN_SIDE &&
+    height >= DIRECTOR_REFERENCE_MIN_SIDE &&
+    width <= DIRECTOR_REFERENCE_MAX_SIDE &&
+    height <= DIRECTOR_REFERENCE_MAX_SIDE;
+  const aligned = width % DIRECTOR_REFERENCE_SIZE_STEP === 0 && height % DIRECTOR_REFERENCE_SIZE_STEP === 0;
+  if (!inRange || !aligned) {
+    throw new Error(
+      `精准参考图 #${index + 1} 的尺寸 ${width}×${height} 不符合要求。` +
+        `请先在其它图片工具中调整为宽高均为 64 的整数倍、且每边位于 64–1600 之间，` +
+        `例如 832×1216、1024×1024 或 1216×832。程序不会自动缩放参考图，以免降低精准参考质量。`,
+    );
+  }
+  return rawBase64;
 }
 
 function vibeCacheKey(rawBase64: string, model: string, infoExtracted: number): string {
@@ -548,14 +527,16 @@ function vibeCacheKey(rawBase64: string, model: string, infoExtracted: number): 
 async function prepareExtras(params: GenerateParams, extras?: GenerateExtras): Promise<GenerateExtras | undefined> {
   if (!extras) return extras;
 
-  // Precise/director references (V4.5) are resized to a canonical resolution and
-  // sent raw — they do NOT go through encode-vibe. Drop them on non-V4.5 models.
+  // Precise/director references are always sent as their original image bytes.
+  // Validate locally before the paid generation request, but never resize or
+  // letterbox the source because resampling artifacts are strongly amplified by
+  // precise-reference conditioning.
   let preciseReferences = extras.preciseReferences;
   if (preciseReferences && preciseReferences.length > 0) {
     preciseReferences = isV45(params.model)
-      ? preciseReferences.map((ref) => ({
+      ? preciseReferences.map((ref, index) => ({
           ...ref,
-          base64: prepareDirectorReferenceImage(stripBase64Prefix(ref.base64)),
+          base64: validateDirectorReferenceImage(stripBase64Prefix(ref.base64), index),
         }))
       : [];
   }
@@ -1066,17 +1047,47 @@ async function uniqueFilePath(dir: string, base: string, ext: string): Promise<s
   }
 }
 
+// Sanitize a user group name into a safe folder segment (strip path-illegal
+// characters, collapse whitespace, drop leading dots so we never produce a
+// hidden/`..`-like folder, cap length).
+function sanitizeGroupFolderName(name: string): string {
+  const cleaned = name
+    .replace(/[\\/:*?"<>|]+/g, "-")
+    .replace(/\s+/g, "_")
+    .replace(/^\.+/, "")
+    .trim()
+    .slice(0, 80);
+  return cleaned || "group";
+}
+
+// When the user has actively selected a history group, newly generated images
+// default into that group: they get the group's id (so the history view keeps
+// showing them) and are written to a per-group subfolder under the date folder.
+// "" / "__ungrouped" or a stale id mean "no destination group" → save flat.
+function resolveActiveSaveGroup(): { groupId: string; folderName: string } | undefined {
+  const activeId = getSettings().activeHistoryGroupId;
+  if (!activeId || activeId === "__ungrouped") return undefined;
+  const group = getHistoryGroups().find((g) => g.id === activeId);
+  if (!group) return undefined;
+  return { groupId: group.id, folderName: sanitizeGroupFolderName(group.name) };
+}
+
 async function saveBuffers(
   buffers: Buffer[],
   params: GenerateParams,
   actualSeed: number,
   prefix: string,
   modelOverride?: string,
+  saveOptions?: { ignoreActiveGroup?: boolean },
 ): Promise<HistoryItem[]> {
   const settings = getSettings();
   const now = new Date();
   const date = dateStamp(now);
-  const dir = path.join(settings.outputDir, date);
+  // Comic generation owns its own destination group, so it opts out here.
+  const activeGroup = saveOptions?.ignoreActiveGroup ? undefined : resolveActiveSaveGroup();
+  const dir = activeGroup
+    ? path.join(settings.outputDir, date, activeGroup.folderName)
+    : path.join(settings.outputDir, date);
   await fs.mkdir(dir, { recursive: true });
 
   const items: HistoryItem[] = [];
@@ -1106,6 +1117,7 @@ async function saveBuffers(
       model: modelOverride ?? params.model,
       width: params.width,
       height: params.height,
+      groupId: activeGroup?.groupId,
     });
   }
   addHistory(items);
@@ -2157,9 +2169,9 @@ export async function generateComicPanel(request: ComicGeneratePanelRequest): Pr
   };
   const extras = comicReferencesToExtras(request);
   const hasGenerationReferences = (extras.vibeImages?.length ?? 0) > 0;
-  let result = await generateImage(params, extras);
+  let result = await generateImage(params, extras, { ignoreActiveGroup: true });
   if (!result.ok && hasGenerationReferences && result.failureKind === "reference") {
-    const fallback = await generateImage(params, { vibeImages: [], charCaptions: [] });
+    const fallback = await generateImage(params, { vibeImages: [], charCaptions: [] }, { ignoreActiveGroup: true });
     result = fallback.ok
       ? {
           ...fallback,
@@ -2401,7 +2413,11 @@ export async function loadImageFromPath(filePath: string): Promise<LoadImageResu
   }
 }
 
-export async function generateImage(params: GenerateParams, extras?: GenerateExtras): Promise<GenerateResult> {
+export async function generateImage(
+  params: GenerateParams,
+  extras?: GenerateExtras,
+  saveOptions?: { ignoreActiveGroup?: boolean },
+): Promise<GenerateResult> {
   const token = getToken();
   if (!token) return { ok: false, message: "请先在 设置 > 网络/API 中配置 NovelAI API Token。", items: [] };
   if (!params.positivePrompt.trim()) return { ok: false, message: "请输入正面提示词。", items: [] };
@@ -2425,7 +2441,7 @@ export async function generateImage(params: GenerateParams, extras?: GenerateExt
       buffers = await postGenerateImage(pipePayload);
     }
     if (buffers.length === 0) return { ok: false, message: "API 返回成功，但压缩包中没有图片。", items: [] };
-    const items = await saveBuffers(buffers, params, actualSeed, "t2i");
+    const items = await saveBuffers(buffers, params, actualSeed, "t2i", undefined, saveOptions);
     void refreshStoredAccount();
     return { ok: true, message: `生成完成，已保存 ${items.length} 张图片。`, items, actualSeed };
   } catch (error: any) {
@@ -2629,7 +2645,10 @@ export async function upscaleImg(scale: UpscaleScale): Promise<SingleImageResult
 
     const now = new Date();
     const date = dateStamp(now);
-    const dir = path.join(settings.outputDir, date);
+    const activeGroup = resolveActiveSaveGroup();
+    const dir = activeGroup
+      ? path.join(settings.outputDir, date, activeGroup.folderName)
+      : path.join(settings.outputDir, date);
     await fs.mkdir(dir, { recursive: true });
     const baseName = path.basename(workbenchImagePath, path.extname(workbenchImagePath)).replace(/[^\w.-]+/g, "-");
     const filePath = path.join(dir, `${now.getTime()}-upscale${scale}x-${baseName}.png`);
@@ -2648,6 +2667,7 @@ export async function upscaleImg(scale: UpscaleScale): Promise<SingleImageResult
       model: "upscale",
       width: outWidth,
       height: outHeight,
+      groupId: activeGroup?.groupId,
     };
     addHistory([item]);
     void refreshStoredAccount();

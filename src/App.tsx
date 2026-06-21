@@ -420,6 +420,7 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
   const removePreciseReference = useAppStore((state) => state.removePreciseReference);
   const updatePreciseReference = useAppStore((state) => state.updatePreciseReference);
   const clearPreciseReferences = useAppStore((state) => state.clearPreciseReferences);
+  const setToast = useAppStore((state) => state.setToast);
   const model = useAppStore((state) => state.params.model);
   const isV45 = model.includes("4-5");
 
@@ -437,16 +438,32 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
     const reader = new FileReader();
     reader.onload = (ev) => {
       const dataUrl = ev.target?.result as string;
-      const base64 = dataUrl.split(",")[1] ?? "";
-      addPreciseReference({
-        id: crypto.randomUUID(),
-        previewUrl: dataUrl,
-        base64,
-        type: "character&style",
-        strength: 1,
-        fidelity: 1,
-      });
+      const probe = new Image();
+      probe.onload = () => {
+        const width = probe.naturalWidth;
+        const height = probe.naturalHeight;
+        const inRange = width >= 64 && height >= 64 && width <= 1600 && height <= 1600;
+        const aligned = width % 64 === 0 && height % 64 === 0;
+        if (!inRange || !aligned) {
+          setToast(
+            `精准参考图尺寸 ${width}×${height} 不符合要求。请先调整为宽高均为 64 的整数倍、每边不超过 1600；程序不会自动缩放参考图。`,
+          );
+          return;
+        }
+        const base64 = dataUrl.split(",")[1] ?? "";
+        addPreciseReference({
+          id: crypto.randomUUID(),
+          previewUrl: dataUrl,
+          base64,
+          type: "character&style",
+          strength: 1,
+          fidelity: 1,
+        });
+      };
+      probe.onerror = () => setToast("无法读取精准参考图，请换用有效的 PNG、JPG 或 WebP 图片。");
+      probe.src = dataUrl;
     };
+    reader.onerror = () => setToast("读取精准参考图失败，请重新选择图片。");
     reader.readAsDataURL(file);
   }
 
@@ -492,6 +509,7 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
             精准参考（Precise Reference）
             {!isV45 && <span className="vibe-hint"> · 仅 V4.5 模型生效，当前模型不支持</span>}
           </h3>
+          <p className="vibe-hint">原图直传，不自动缩放；宽高须为 64 的整数倍，且每边不超过 1600。</p>
           {preciseReferences.length === 0 && <p className="vibe-empty">还没有精准参考图。</p>}
           {preciseReferences.map((ref) => (
             <div className="vibe-row" key={ref.id}>
@@ -1348,12 +1366,14 @@ function AccountAndRunButton({
   label,
   onRun,
   openSettings,
+  allowQueue = false,
   disabled = false,
   disabledReason = "",
 }: {
   label: string;
   onRun: () => void;
   openSettings: () => void;
+  allowQueue?: boolean;
   disabled?: boolean;
   disabledReason?: string;
 }) {
@@ -1363,6 +1383,10 @@ function AccountAndRunButton({
   const togglePause = useAppStore((state) => state.togglePause);
   const queuePaused = useAppStore((state) => state.queuePaused);
   const queueProgress = useAppStore((state) => state.queueProgress);
+  const isGenerateQueueRunning = useAppStore((state) => state.isGenerateQueueRunning);
+  const generationQueueLength = useAppStore((state) => state.generationQueue.length);
+  const queueAdding = useAppStore((state) => state.queueAdding);
+  const enqueueGeneration = useAppStore((state) => state.enqueueGeneration);
   const currentAnlasSpent = useAppStore((state) => state.currentAnlasSpent);
   const lastAnlasSpent = useAppStore((state) => state.lastAnlasSpent);
   const refreshAccount = useAppStore((state) => state.refreshAccount);
@@ -1395,7 +1419,7 @@ function AccountAndRunButton({
         </Button>
       ) : isGenerating ? (
         <>
-          {queueProgress && queueProgress.total > 1 && (
+          {isGenerateQueueRunning && queueProgress && queueProgress.total > 1 && (
             <div className="queue-progress">
               进度 {queueProgress.done + queueProgress.failed}/{queueProgress.total}
               {queueProgress.failed > 0 ? ` · 失败 ${queueProgress.failed}` : ""}
@@ -1404,10 +1428,26 @@ function AccountAndRunButton({
           <div className="anlas-spent">
             {currentAnlasSpent != null ? `本次已实扣 ${currentAnlasSpent} Anlas` : "本次实扣读取中"}
           </div>
-          <div className="run-button-row">
-            <Button variant="secondary" className="run-row-btn" onClick={togglePause}>
-              {queuePaused ? "▶ 继续生成" : "⏸ 暂停"}
+          {allowQueue && isGenerateQueueRunning ? (
+            <Button
+              variant="primary"
+              className="full queue-add-button"
+              onClick={() => void enqueueGeneration()}
+              disabled={queueAdding}
+            >
+              {queueAdding
+                ? "正在读取扣费..."
+                : generationQueueLength > 0
+                  ? `＋ 加入队列（等待 ${generationQueueLength}）`
+                  : "＋ 加入队列"}
             </Button>
+          ) : null}
+          <div className={clsx("run-button-row", !isGenerateQueueRunning && "single-action")}>
+            {isGenerateQueueRunning ? (
+              <Button variant="secondary" className="run-row-btn" onClick={togglePause}>
+                {queuePaused ? "▶ 继续生成" : "⏸ 暂停"}
+              </Button>
+            ) : null}
             <Button variant="danger" className="run-row-btn" onClick={() => void cancel()}>
               ✕ 停止
             </Button>
@@ -1469,6 +1509,7 @@ function GeneratePanel({ openSettings }: { openSettings: () => void }) {
         label={batchCount > 1 ? `批量生成 ${batchCount} 张` : "生成"}
         onRun={() => void generate()}
         openSettings={openSettings}
+        allowQueue
       />
     </>
   );

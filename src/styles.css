@@ -3506,6 +3506,10 @@ html, body, #root {
   text-align: center;
   margin-bottom: 6px;
 }
+.queue-add-button {
+  min-height: 38px;
+  margin-bottom: 8px;
+}
 
 /* ── Related tag recommendations ───────────────────────────────────────────── */
 .related-tags { margin-top: 10px; }
@@ -3952,6 +3956,9 @@ button.prompt-chip-head {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
+}
+.run-button-row.single-action {
+  grid-template-columns: 1fr;
 }
 .run-row-btn {
   width: 100%;

@@ -30,6 +30,12 @@ type ActiveTab = "generate" | "inpaint" | "upscale" | "postprocess" | "inspect" 
 type PromptTab = "positive" | "negative";
 type BrushMode = "paint" | "erase";
 
+interface QueuedGenerationJob {
+  params: GenerateParams;
+  extras: GenerateExtras;
+  quotedAnlas: number;
+}
+
 interface AppState {
   bootDone: boolean;
   showOnboarding: boolean;
@@ -80,6 +86,10 @@ interface AppState {
   convertResultVariants: PromptVariants | null;
   converting: boolean;
   isGenerating: boolean;
+  isGenerateQueueRunning: boolean;
+  activeGenerationRunId: string | null;
+  queueAdding: boolean;
+  generationQueue: QueuedGenerationJob[];
   queuePaused: boolean;
   queueProgress: { done: number; failed: number; total: number } | null;
   currentAnlasSpent: number | null;
@@ -156,6 +166,7 @@ interface AppState {
   clearImageComparison: () => void;
   // Core actions
   generate: () => Promise<void>;
+  enqueueGeneration: () => Promise<void>;
   generateI2I: () => Promise<void>;
   inpaint: () => Promise<void>;
   upscaleCurrentImage: () => Promise<void>;
@@ -317,6 +328,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   convertResultVariants: null,
   converting: false,
   isGenerating: false,
+  isGenerateQueueRunning: false,
+  activeGenerationRunId: null,
+  queueAdding: false,
+  generationQueue: [],
   queuePaused: false,
   queueProgress: null,
   currentAnlasSpent: null,
@@ -750,6 +765,80 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   // ── Generation ─────────────────────────────────────────────────────────────
+  async enqueueGeneration() {
+    const state = get();
+    if (!state.isGenerating || !state.isGenerateQueueRunning) {
+      set({ toast: "当前没有正在执行的生图队列。" });
+      return;
+    }
+    if (state.queueAdding) return;
+    if (!state.params.positivePrompt.trim()) {
+      set({ toast: "请输入正面提示词后再加入队列。", statusText: "缺少提示词" });
+      return;
+    }
+
+    const params = { ...state.params };
+    const extras = buildExtras(state);
+    const runId = state.activeGenerationRunId;
+    set({ queueAdding: true });
+    try {
+      const freshAccount = await get().refreshAccount();
+      const quote = await window.naiDesktop.quoteAnlas({
+        feature: "generate",
+        params,
+        extras,
+        batchCount: 1,
+        account: freshAccount,
+      });
+      if (!quote.ok || typeof quote.amount !== "number") {
+        const message = quote.message || "无法读取这张队列图片的生成前扣费。";
+        set({ toast: message, lastError: message });
+        return;
+      }
+      if (quote.insufficient) {
+        const message = `这张图片需要 ${quote.amount} Anlas，当前余额 ${quote.balance ?? "未知"} Anlas，未加入队列。`;
+        set({ toast: message, lastError: message });
+        return;
+      }
+      const pendingQuotedAnlas = get().generationQueue.reduce((sum, job) => sum + job.quotedAnlas, 0);
+      const knownBalance = quote.balance ?? freshAccount.anlasBalance;
+      if (typeof knownBalance === "number" && pendingQuotedAnlas + quote.amount > knownBalance) {
+        const message = `队列中待生成图片预计还需 ${pendingQuotedAnlas} Anlas；加入本张后将超过当前余额 ${knownBalance} Anlas，未加入队列。`;
+        set({ toast: message, lastError: message });
+        return;
+      }
+      if (
+        !get().isGenerating ||
+        !get().isGenerateQueueRunning ||
+        !runId ||
+        get().activeGenerationRunId !== runId
+      ) {
+        set({ toast: "当前图片已经生成完毕，请重新点击生成。" });
+        return;
+      }
+
+      const job: QueuedGenerationJob = {
+        params,
+        extras,
+        quotedAnlas: quote.amount,
+      };
+      set((current) => ({
+        generationQueue: [...current.generationQueue, job],
+        queueProgress: current.queueProgress
+          ? { ...current.queueProgress, total: current.queueProgress.total + 1 }
+          : { done: 0, failed: 0, total: 1 },
+        statusText: `已加入队列，等待 ${current.generationQueue.length + 1} 张。`,
+        toast: `已加入队列，生成前报价 ${quote.amount} Anlas。`,
+        lastError: "",
+      }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      set({ toast: `加入队列失败：${message}`, lastError: message });
+    } finally {
+      set({ queueAdding: false });
+    }
+  },
+
   async generate() {
     const state = get();
     if (!requireToken(set, state.account.hasToken)) return;
@@ -757,57 +846,90 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ toast: "请输入正面提示词。", statusText: "缺少提示词" });
       return;
     }
-    const total = Math.max(1, state.batchCount);
-    const extras = buildExtras(state);
-    const initialSeed = state.params.seed;
+    const initialTotal = Math.max(1, state.batchCount);
+    const initialParams = { ...state.params };
+    const initialExtras = buildExtras(state);
+    const initialSeed = initialParams.seed;
     const freshAccount = await get().refreshAccount();
     const quote = await ensureAnlasBeforeRun(
       set,
       {
         feature: "generate",
-        params: state.params,
-        extras,
-        batchCount: total,
+        params: initialParams,
+        extras: initialExtras,
+        batchCount: initialTotal,
         account: freshAccount,
       },
-      total > 1 ? `批量生成 ${total} 张` : "生成图片",
+      initialTotal > 1 ? `批量生成 ${initialTotal} 张` : "生成图片",
     );
     if (!quote) return;
+    const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const anlasBefore = freshAccount.anlasBalance;
     set({
       isGenerating: true,
+      isGenerateQueueRunning: true,
+      activeGenerationRunId: runId,
+      queueAdding: false,
+      generationQueue: [],
       queuePaused: false,
-      queueProgress: { done: 0, failed: 0, total },
+      queueProgress: { done: 0, failed: 0, total: initialTotal },
       comparisonBeforeImage: null,
       currentAnlasSpent: null,
       lastAnlasSpent: null,
       lastError: "",
       statusText:
-        total > 1
-          ? `批量生成 1/${total}，生成前报价 ${quote.amount} Anlas...`
+        initialTotal > 1
+          ? `批量生成 1/${initialTotal}，生成前报价 ${quote.amount} Anlas...`
           : `正在生成，生成前报价 ${quote.amount} Anlas...`,
     });
 
     let completed = 0;
     let failed = 0;
     let lastError = "";
-    for (let i = 0; i < total; i++) {
-      if (!get().isGenerating) break; // cancelled
+    let initialIndex = 0;
+    while (initialIndex < initialTotal || get().generationQueue.length > 0 || get().queueAdding) {
+      if (!get().isGenerating || get().activeGenerationRunId !== runId) break; // cancelled or superseded
       // Honor pause: hold here until resumed or cancelled.
-      while (get().queuePaused && get().isGenerating) {
-        set({ statusText: `已暂停（${completed}/${total}），点击继续` });
+      while (get().queuePaused && get().isGenerating && get().activeGenerationRunId === runId) {
+        const progressTotal = get().queueProgress?.total ?? initialTotal;
+        set({ statusText: `已暂停（${completed + failed}/${progressTotal}），点击继续` });
         await new Promise((r) => setTimeout(r, 250));
       }
-      if (!get().isGenerating) break;
-      if (total > 1) set({ statusText: `批量生成 ${i + 1}/${total}（成功 ${completed}，失败 ${failed}）...` });
+      if (!get().isGenerating || get().activeGenerationRunId !== runId) break;
 
-      const base = get().params;
+      let base: GenerateParams;
+      let extras: GenerateExtras;
+      if (initialIndex < initialTotal) {
+        base = initialParams;
+        extras = initialExtras;
+        base = {
+          ...base,
+          seed: initialSeed > 0 ? initialSeed + initialIndex : 0,
+        };
+        initialIndex++;
+      } else {
+        const queued = get().generationQueue[0];
+        if (!queued && get().queueAdding) {
+          set({ statusText: "当前图片已完成，正在等待队列任务报价..." });
+          await new Promise((resolve) => setTimeout(resolve, 100));
+          continue;
+        }
+        if (!queued) break;
+        base = queued.params;
+        extras = queued.extras;
+        set((current) => ({ generationQueue: current.generationQueue.slice(1) }));
+      }
+
+      const progressTotal = get().queueProgress?.total ?? initialTotal;
+      const currentNumber = completed + failed + 1;
+      set({
+        statusText: `正在生成 ${currentNumber}/${progressTotal}（成功 ${completed}，失败 ${failed}，等待 ${get().generationQueue.length}）...`,
+      });
       const currentParams = {
         ...base,
         // Expand {a|b|c} wildcards independently per image so batches vary.
         positivePrompt: expandWildcards(base.positivePrompt),
         negativePrompt: expandWildcards(base.negativePrompt),
-        seed: initialSeed > 0 ? initialSeed + i : 0,
       };
 
       // No renderer-side resend: a failed generate POST may already have produced
@@ -815,6 +937,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       // double-charging (up to 8 paid POSTs per image when stacked on the old
       // main-process retry). The main process now retries only pre-charge 429s.
       const result = await window.naiDesktop.generate(currentParams, extras);
+      if (get().activeGenerationRunId !== runId) return;
 
       if (result.ok && result.items.length > 0) {
         completed++;
@@ -828,17 +951,23 @@ export const useAppStore = create<AppState>((set, get) => ({
         failed++;
         lastError = result.message;
       }
-      set({ queueProgress: { done: completed, failed, total } });
+      set((current) => ({
+        queueProgress: {
+          done: completed,
+          failed,
+          total: current.queueProgress?.total ?? initialTotal,
+        },
+      }));
     }
 
+    const cancelled = !get().isGenerating;
     const finalAccount = await get().refreshAccount();
+    if (get().activeGenerationRunId !== runId) return;
     const spent = anlasSpent(anlasBefore, finalAccount.anlasBalance);
     const spentText = spent != null ? `，实扣 ${spent} Anlas` : "，实扣读取失败";
-    // A user cancellation surfaces as a failed result; don't mislabel it as an error.
-    const cancelled = completed === 0 && failed > 0 && /取消|cancel/i.test(lastError);
     const finalMsg =
       cancelled
-        ? "已取消生成。"
+        ? `已取消生成，队列已清空${spentText}。`
         : failed > 0 && completed === 0
           ? imageGenerationFailureMessage(lastError)
           : failed > 0
@@ -848,6 +977,10 @@ export const useAppStore = create<AppState>((set, get) => ({
               : `生成完成，已保存 1 张图片${spentText}。`;
     set({
       isGenerating: false,
+      isGenerateQueueRunning: false,
+      activeGenerationRunId: null,
+      queueAdding: false,
+      generationQueue: [],
       queuePaused: false,
       currentAnlasSpent: null,
       lastAnlasSpent: spent,
@@ -1040,8 +1173,22 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   async cancel() {
+    const wasGenerateQueue = get().isGenerateQueueRunning;
+    set({
+      isGenerating: false,
+      isGenerateQueueRunning: false,
+      activeGenerationRunId: null,
+      queueAdding: false,
+      generationQueue: [],
+      queuePaused: false,
+      queueProgress: null,
+      currentAnlasSpent: null,
+      statusText: wasGenerateQueue ? "正在取消生成并清空队列..." : "正在取消操作...",
+    });
     await window.naiDesktop.cancel();
-    set({ isGenerating: false, queuePaused: false, currentAnlasSpent: null, statusText: "已取消操作" });
+    if (!get().isGenerating) {
+      set({ statusText: wasGenerateQueue ? "已取消生成，队列已清空。" : "已取消操作" });
+    }
   },
 
   togglePause() {
