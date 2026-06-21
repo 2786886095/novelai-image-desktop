@@ -4,14 +4,20 @@
 
 | 系统 | 安装包 | 安装说明 |
 | --- | --- | --- |
-| 🪟 **Windows** (x64) | `Langbai-NovelAI-Studio-0.9.5.exe` | 便携版，双击即用，无需安装 |
-| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-0.9.5-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
-| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-0.9.5.zip` | 解压后即为 `.app`，同样需右键「打开」 |
-| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-0.9.5.AppImage` | `chmod +x` 后直接运行 |
+| 🪟 **Windows** (x64) | `Langbai-NovelAI-Studio-0.9.6.exe` | 便携版，双击即用，无需安装 |
+| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-0.9.6-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
+| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-0.9.6.zip` | 解压后即为 `.app`，同样需右键「打开」 |
+| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-0.9.6.AppImage` | `chmod +x` 后直接运行 |
 | 🤖 **Android** | `app-release.apk` | 直接安装；未签名，需允许「未知来源」 |
 | 📱 **iOS** | `novelai-mobile-unsigned.ipa` | **未签名**，需用 AltStore / Sideloadly 等工具自行侧载 |
 
 > 桌面端与移动端均为 **API-only** 客户端，需自备 NovelAI Persistent API Token。
+
+### v0.9.6 更新内容
+
+- **修复精准参考报错 `Error encoding v4 director references: non-200 response: 422`**：此前精准参考图会按长宽比裁切到 `1024×1536` / `1472×1472` / `1536×1024` 三种尺寸之一，但 NovelAI 的 V4.5 director-reference 编码器**只接受唯一分辨率 `1024×1536`**（`1472×1472` 等并非合法输入），方形 / 横图参考因此被服务器编码器拒绝（422）。现改为对齐官方 SDK：参考图**等比缩放后黑边填充到固定 `1024×1536`**（不裁切、不拉伸变形）。
+- 同时补回 director-reference 描述中的 `char_captions: []` 字段，与官方 SDK 序列化结果完全一致（此前漏发该键，编码器 schema 校验更易失败）。
+- *（付费接口改动，请用真实 V4.5 Token 实跑一张精准参考确认 422 消失。）*
 
 ### v0.9.5 更新内容
 

@@ -444,10 +444,11 @@ function buildPayload(
   if (v4Plus && isV45(params.model) && preciseRefs.length > 0) {
     parameters.director_reference_images = preciseRefs.map((r) => r.base64);
     parameters.director_reference_descriptions = preciseRefs.map((r) => ({
-      // Match the SDK exactly: ReferenceCaption carries only base_caption. The
-      // earlier extra `char_captions: []` was a speculative field that an API
-      // rejecting unknown keys could 400 on.
-      caption: { base_caption: r.type },
+      // Match the SDK's serialized ReferenceConditionInput exactly. The SDK's
+      // pydantic ReferenceCaption ALWAYS emits char_captions (default []), so
+      // the encoder's schema expects the key present — omitting it was a likely
+      // contributor to the encoder's 422. base_caption is the type literal.
+      caption: { base_caption: r.type, char_captions: [] },
       legacy_uc: false,
     }));
     parameters.director_reference_strength_values = preciseRefs.map((r) => round2(clamp01(r.strength, 1)));
@@ -480,42 +481,49 @@ function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-// NovelAI always resizes a precise/director reference to one of these three
-// canonical resolutions (portrait / square / landscape). We center-crop to the
-// nearest aspect ratio, then resize, matching the official preprocessing.
-const DIRECTOR_REFERENCE_SIZES: Array<{ width: number; height: number }> = [
-  { width: 1024, height: 1536 },
-  { width: 1472, height: 1472 },
-  { width: 1536, height: 1024 },
-];
+// NovelAI's V4.5 director-reference encoder accepts ONE canonical resolution:
+// 1024×1536. (The earlier 1472×1472 / 1536×1024 variants are NOT valid encoder
+// inputs and caused "Error encoding v4 director references: non-200 response:
+// 422".) The official SDK's crop_and_resize aspect-preserves the source and
+// black-letterboxes it to exactly 1024×1536, so we do the same: scale to fit,
+// then pad onto a black 1024×1536 canvas (no distortion, no crop).
+const DIRECTOR_REFERENCE_WIDTH = 1024;
+const DIRECTOR_REFERENCE_HEIGHT = 1536;
 
 function prepareDirectorReferenceImage(rawBase64: string): string {
   try {
     const img = nativeImage.createFromBuffer(Buffer.from(rawBase64, "base64"));
     const { width, height } = img.getSize();
     if (!width || !height) return rawBase64;
-    const aspect = width / height;
-    const target = DIRECTOR_REFERENCE_SIZES.reduce((best, candidate) => {
-      const bestDiff = Math.abs(best.width / best.height - aspect);
-      const candidateDiff = Math.abs(candidate.width / candidate.height - aspect);
-      return candidateDiff < bestDiff ? candidate : best;
-    }, DIRECTOR_REFERENCE_SIZES[0]);
 
-    // Center-crop the source to the target aspect ratio before resizing so we
-    // don't distort the reference.
-    const targetAspect = target.width / target.height;
-    let cropW = width;
-    let cropH = height;
-    if (aspect > targetAspect) {
-      cropW = Math.round(height * targetAspect);
-    } else {
-      cropH = Math.round(width / targetAspect);
+    // Scale to fit within 1024×1536 while preserving aspect ratio.
+    const scale = Math.min(DIRECTOR_REFERENCE_WIDTH / width, DIRECTOR_REFERENCE_HEIGHT / height);
+    const fitW = Math.max(1, Math.round(width * scale));
+    const fitH = Math.max(1, Math.round(height * scale));
+    const resizedPng = img.resize({ width: fitW, height: fitH, quality: "best" }).toPNG();
+    const fg = PNG.sync.read(resizedPng);
+
+    // Composite onto a black, fully-opaque 1024×1536 canvas (letterbox padding).
+    const canvas = new PNG({ width: DIRECTOR_REFERENCE_WIDTH, height: DIRECTOR_REFERENCE_HEIGHT });
+    for (let i = 0; i < canvas.data.length; i += 4) {
+      canvas.data[i] = 0;
+      canvas.data[i + 1] = 0;
+      canvas.data[i + 2] = 0;
+      canvas.data[i + 3] = 255;
     }
-    const cropX = Math.max(0, Math.round((width - cropW) / 2));
-    const cropY = Math.max(0, Math.round((height - cropH) / 2));
-    const cropped = img.crop({ x: cropX, y: cropY, width: cropW, height: cropH });
-    const resized = cropped.resize({ width: target.width, height: target.height });
-    return resized.toPNG().toString("base64");
+    const offsetX = Math.floor((DIRECTOR_REFERENCE_WIDTH - fg.width) / 2);
+    const offsetY = Math.floor((DIRECTOR_REFERENCE_HEIGHT - fg.height) / 2);
+    for (let y = 0; y < fg.height; y++) {
+      for (let x = 0; x < fg.width; x++) {
+        const src = (y * fg.width + x) * 4;
+        const dst = ((y + offsetY) * DIRECTOR_REFERENCE_WIDTH + (x + offsetX)) * 4;
+        canvas.data[dst] = fg.data[src];
+        canvas.data[dst + 1] = fg.data[src + 1];
+        canvas.data[dst + 2] = fg.data[src + 2];
+        canvas.data[dst + 3] = 255;
+      }
+    }
+    return PNG.sync.write(canvas).toString("base64");
   } catch {
     return rawBase64; // fall back to the original on any image-decoding failure
   }
