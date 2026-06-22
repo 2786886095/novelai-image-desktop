@@ -1,4 +1,4 @@
-export const APP_VERSION = "0.9.9";
+export const APP_VERSION = "1.0.0";
 export const APP_NAME = "Langbai NovelAI Studio";
 export const PROJECT_REPOSITORY = "https://github.com/2786886095/novelai-image-desktop";
 
@@ -167,6 +167,10 @@ export interface PreciseReferenceItem {
   type: PreciseReferenceType;   // -> director_reference_descriptions[].caption.base_caption
   strength: number;             // 0.0 – 1.0 -> director_reference_strength_values
   fidelity: number;             // 0.0 – 1.0 -> secondary = round(1 - fidelity, 2)
+  /** 0.0 – 1.0 -> director_reference_information_extracted. High = pull more
+   * detail (incl. high-frequency texture like screentone/hatching). Optional for
+   * backward compat; defaults to 1.0 in the main process. */
+  informationExtracted?: number;
 }
 
 /** Renderer store representation of a precise reference (adds id + preview) */
@@ -195,6 +199,64 @@ export interface GenerateExtras {
   vibeImages: VibeTransferItem[];
   charCaptions: CharCaptionItem[];
   preciseReferences?: PreciseReferenceItem[];
+}
+
+// ── Batch img2img (批量图生图) project — persisted in the store so switching
+// tools/tabs never loses work; serialised verbatim by 导出/导入项目. ───────────
+export type BatchRedrawStep = "import" | "params" | "prompts" | "generate";
+export type BatchRedrawItemStatus = "pending" | "generating" | "done" | "failed";
+
+export interface BatchRedrawItem {
+  id: string;
+  name: string;
+  base64: string; // pure source base64 (preview is derived from this)
+  prompt: string;
+  /** null → use the global change strength */
+  strength: number | null;
+  /** Per-image advanced parameter overrides (model/size/sampler/steps/cfg…). */
+  overrideParams: boolean;
+  params: Partial<GenerateParams>;
+  status: BatchRedrawItemStatus;
+  resultUrl?: string; // file:// url of the latest img2img output (for display)
+  resultPath?: string;
+  historyItemId?: string; // so 重试 can delete the previous output
+  error?: string;
+}
+
+export interface BatchRedrawProject {
+  groupName: string;
+  items: BatchRedrawItem[];
+  globalStrength: number;
+  /** Defaults to the main generate screen's positive prompt ("locked" style). */
+  globalStyle: string;
+  /** Defaults to the main generate screen's negative prompt. */
+  globalNegative: string;
+  /** Full editable params for ALL models — defaults to the main screen params. */
+  globalParams: GenerateParams;
+  preciseReferences: PreciseReferenceItem[];
+  vibeImages: VibeTransferItem[];
+  aiMode: ReversePromptMode;
+  promptBulk: string;
+  step: BatchRedrawStep;
+  /** Whether globals were seeded from the main screen at least once. */
+  seededFromMain: boolean;
+}
+
+export function createDefaultBatchRedraw(params: GenerateParams = DEFAULT_PARAMS): BatchRedrawProject {
+  return {
+    groupName: "批量图生图",
+    items: [],
+    globalStrength: 0.4,
+    globalStyle: "",
+    globalNegative: "",
+    globalParams: { ...params, fileNamePrefix: "" },
+    preciseReferences: [],
+    vibeImages: [],
+    aiMode: "tags",
+    promptBulk: "",
+    step: "import",
+    seededFromMain: false,
+  };
 }
 
 export interface PromptVariants {
@@ -559,6 +621,10 @@ export interface AppSettings {
   historyRetentionDays: number;
   /** Write app.log (errors + call info). Default on. */
   loggingEnabled: boolean;
+  /** Keep the generation metadata (prompt / seed / params, embedded in the saved
+   * PNG) on disk. Default on. Turn off to save clean images with the embedded
+   * info stripped — useful before sharing. */
+  keepImageMetadata: boolean;
   // Vision / Reverse-prompt
   visionApiUrl: string;
   visionApiKey: string;
@@ -685,6 +751,8 @@ export interface NaiDesktopApi {
   deleteHistory: (id: string) => Promise<{ ok: boolean }>;
   renameHistoryItem: (id: string, name: string) => Promise<{ ok: boolean; message?: string; item?: HistoryItem }>;
   openInExplorer: (targetPath: string) => Promise<{ ok: boolean }>;
+  /** Native OS drag-out of a saved image file (drag to desktop / Explorer / other apps). */
+  startImageDrag: (filePath: string) => void;
   selectOutputDir: () => Promise<string | null>;
   getSetting: <K extends SettingKey>(key: K) => Promise<AppSettings[K]>;
   setSetting: <K extends SettingKey>(key: K, value: AppSettings[K]) => Promise<AppSettings[K]>;

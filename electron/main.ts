@@ -1,6 +1,7 @@
-import { app, BrowserWindow, ipcMain, Menu, shell } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, nativeImage, shell } from "electron";
 import path from "path";
 import fs from "fs";
+import { fileURLToPath } from "url";
 import {
   augmentImg,
   analyzeComicScript,
@@ -256,6 +257,21 @@ function registerIpc() {
   ipcMain.handle("storage:renameItem", (_event, id: string, name: string) => renameHistoryItem(id, name));
   ipcMain.handle("storage:open", (_event, targetPath: string) => openTarget(targetPath));
   ipcMain.handle("storage:selectDir", () => selectOutputDir());
+
+  // Native drag-out: drag a generated/history image straight to the desktop,
+  // Explorer, Photoshop, a chat window, etc. as a real PNG file. Uses the saved
+  // file on disk; the drag icon is a downscaled copy of the image itself.
+  ipcMain.on("image:startDrag", (event, filePathOrUrl: string) => {
+    try {
+      if (!filePathOrUrl) return;
+      const filePath = filePathOrUrl.startsWith("file://") ? fileURLToPath(filePathOrUrl) : filePathOrUrl;
+      const icon = nativeImage.createFromPath(filePath);
+      if (icon.isEmpty()) return; // startDrag throws on an empty icon
+      event.sender.startDrag({ file: filePath, icon: icon.resize({ height: 96 }) });
+    } catch {
+      /* ignore — a failed drag must never crash the main process */
+    }
+  });
 
   ipcMain.handle("log:getInfo", () => getLogInfo());
   ipcMain.handle("log:selectDir", () => selectLogDir());

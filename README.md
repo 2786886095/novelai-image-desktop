@@ -3,7 +3,7 @@
 [![Build](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build.yml/badge.svg)](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build.yml)
 [![Build Mobile](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build-mobile.yml/badge.svg)](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build-mobile.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
-[![Release](https://img.shields.io/badge/release-v0.9.9-7c5cfa.svg)](https://github.com/2786886095/novelai-image-desktop/releases/tag/v0.9.9)
+[![Release](https://img.shields.io/badge/release-v1.0.0-7c5cfa.svg)](https://github.com/2786886095/novelai-image-desktop/releases/tag/v1.0.0)
 [![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android%20%7C%20iOS-20b7d8.svg)](#下载)
 
 <img width="1672" height="941" alt="ChatGPT Image 2026年6月17日 11_27_47" src="https://github.com/user-attachments/assets/66a6caef-3007-479b-9006-1c6f50570655" />
@@ -16,14 +16,14 @@
 
 ## 下载
 
-- **v0.9.9 本地版**：[GitHub Releases](https://github.com/2786886095/novelai-image-desktop/releases/tag/v0.9.9)
+- **v1.0.0 本地版**：[GitHub Releases](https://github.com/2786886095/novelai-image-desktop/releases/tag/v1.0.0)
 - **持续构建产物**：[GitHub Actions](https://github.com/2786886095/novelai-image-desktop/actions)
 
 Release 目标产物：
 
 | 平台 | 文件 |
 | --- | --- |
-| Windows | `Langbai-NovelAI-Studio-0.9.9.exe` |
+| Windows | `Langbai-NovelAI-Studio-1.0.0.exe` |
 | macOS | universal `.dmg` + `.zip` |
 | Linux | `.AppImage` |
 | Android | `app-release.apk` |
@@ -47,7 +47,7 @@ Release 目标产物：
 - **云端超分**：2x / 4x 超分。
 - **Director Tools 后期**：移除背景、线稿、草图、上色、表情迁移、去杂乱。
 - **Tag 自动补全**：输入英文时自动推测 Danbooru / NovelAI 常用 tag；失败时使用本地高频词库兜底。
-- **灵感胶囊**：可折叠（默认收起为一行），内置约 190 个中文概念词库，支持「蓝眼白发夜景」这类复合中文查询，一键插入对应 Danbooru 标签。
+- **灵感胶囊**：内置 4000+ 个中文概念词库（按 14 大类 + 细分子类归好，每个 tag 都对应正确分类），支持「蓝眼白发夜景」这类复合中文查询，一键插入对应 Danbooru 标签。
 - **标签权重微调**：提示词下方按标签提供 − / ＋ 控件，基于 NovelAI 的 `{}` / `[]` 语法增减权重并显示近似倍率。
 - **中英翻译**：一键将中文提示词翻译为英文，可在设置中选择谷歌翻译（免费）或百度翻译 API（填 APP ID 与密钥）。
 - **Tag/MCP 服务**：支持普通 HTTP 接口，以及 MCP 的 Streamable HTTP / SSE / stdio 三种传输（可直连 DanbooruSearchOnline 的 `search_tags`），补强自动补全、AI 反推和中文转换。
@@ -86,7 +86,7 @@ npm run pack
 本地 Windows 便携包输出：
 
 ```text
-release\Langbai-NovelAI-Studio-0.9.9.exe
+release\Langbai-NovelAI-Studio-1.0.0.exe
 release\Langbai-NovelAI-Studio.exe
 ```
 
@@ -107,9 +107,9 @@ release\NovelAI-Image-Desktop.exe
 推送 `v*` tag 会触发桌面端与移动端两个 workflow，并把所有平台产物汇总到同一个 Release：
 
 ```powershell
-git tag v0.9.9
+git tag v1.0.0
 git push origin main
-git push origin v0.9.9
+git push origin v1.0.0
 ```
 
 如果 Release 上传时报 403，请在仓库 `Settings -> Actions -> General -> Workflow permissions` 中启用 `Read and write permissions`。

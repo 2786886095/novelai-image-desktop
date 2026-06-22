@@ -1,6 +1,7 @@
 // Tag-autocomplete data: category colors/labels, Chinese tag glosses, and the
 // 灵感胶囊 chip pool. Pure data + helpers, extracted from App.tsx for clarity.
 import type { TagSuggestion } from "./types";
+import { CAPSULE_EXTRA, CAPSULE_EXTRA2, CAPSULE_EXTRA3, mergeCapsules, type CapsuleCategory } from "./capsule-data";
 
 /** CSS color per Danbooru tag category */
 export const CAT_COLOR: Record<number, string> = {
@@ -435,20 +436,12 @@ export function tagDescription(s: TagSuggestion): string {
 // so the capsule works WITHOUT the optional Danbooru download; tags are seeded
 // from official NovelAI documentation examples (quality tags, view/angle terms,
 // lighting) plus common Danbooru tags. Extend freely — it is plain data.
-export interface CapsuleTag {
-  en: string; // Danbooru/NovelAI tag inserted into the prompt
-  zh: string; // Chinese label shown on the chip
-}
-export interface CapsuleSubgroup {
-  name: string; // Chinese subgroup label (e.g. 对象)
-  tags: CapsuleTag[];
-}
-export interface CapsuleCategory {
-  name: string; // Chinese category label (e.g. 人物)
-  subgroups: CapsuleSubgroup[];
-}
+// Capsule data types live in ./capsule-data (where the large authored library is).
+export type { CapsuleTag, CapsuleSubgroup, CapsuleCategory } from "./capsule-data";
 
-export const CAPSULE_TAXONOMY: CapsuleCategory[] = [
+// Curated builtin capsule — kept small and hand-verified so every tag sits in the
+// right category; merged with the big authored CAPSULE_EXTRA below.
+const CAPSULE_BUILTIN: CapsuleCategory[] = [
   {
     name: "人物",
     subgroups: [
@@ -719,3 +712,10 @@ export const CAPSULE_TAXONOMY: CapsuleCategory[] = [
     ],
   },
 ];
+
+// Final 灵感胶囊 taxonomy = curated builtin (accurate categories) + the large
+// authored library, merged by category/subgroup and de-duplicated by tag.
+export const CAPSULE_TAXONOMY: CapsuleCategory[] = [CAPSULE_EXTRA, CAPSULE_EXTRA2, CAPSULE_EXTRA3].reduce(
+  (acc, batch) => mergeCapsules(acc, batch),
+  CAPSULE_BUILTIN,
+);

@@ -3247,8 +3247,68 @@ html, body, #root {
 }
 
 .workspace {
-  grid-template-columns: minmax(300px, 344px) minmax(340px, 1fr) minmax(260px, 306px);
+  /* 5 tracks: left rail | resizer | centre | resizer | right rail. Rail widths come
+     from --ws-left / --ws-right (set inline from the store + persisted to
+     localStorage); the centre fills the rest. The resizers live in their own tracks
+     so gap is 0. Drag a resizer to resize, double-click to restore defaults. */
+  grid-template-columns:
+    var(--ws-left, 380px) var(--ws-handle, 14px) minmax(320px, 1fr)
+    var(--ws-handle, 14px) var(--ws-right, 340px);
+  gap: 0;
   min-width: 0;
+}
+.ws-resizer {
+  position: relative;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+  z-index: 2;
+}
+.ws-resizer-reset {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong, rgba(124, 58, 237, 0.3));
+  background: var(--bg-panel, #fff);
+  color: var(--accent, #7c3aed);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  box-shadow: var(--shadow-sm);
+  transition: opacity 0.14s var(--ease-out), background 0.14s, color 0.14s;
+}
+.ws-resizer:hover .ws-resizer-reset {
+  opacity: 1;
+  pointer-events: auto;
+}
+.ws-resizer-reset:hover {
+  background: var(--accent, #7c3aed);
+  color: #fff;
+}
+.ws-resizer-grip {
+  width: 3px;
+  height: 46px;
+  max-height: 56%;
+  border-radius: 999px;
+  background: var(--border-strong, rgba(124, 58, 237, 0.28));
+  transition: background 0.14s var(--ease-out), height 0.14s var(--ease-out);
+}
+.ws-resizer:hover .ws-resizer-grip,
+.ws-resizer:active .ws-resizer-grip {
+  background: var(--accent, #7c3aed);
+  height: 76px;
 }
 
 .left-panel,
@@ -3257,12 +3317,14 @@ html, body, #root {
   min-width: 0;
 }
 
+/* Narrow: drop the right rail and its resizer → left rail | resizer | centre. */
 @media (max-width: 1180px) {
   .workspace {
-    grid-template-columns: minmax(300px, 360px) minmax(340px, 1fr);
+    grid-template-columns: var(--ws-left, 360px) var(--ws-handle, 14px) minmax(340px, 1fr);
   }
 
-  .history-panel {
+  .history-panel,
+  .ws-resizer.right {
     display: none;
   }
 }
@@ -3278,6 +3340,10 @@ html, body, #root {
 
   .workspace {
     grid-template-columns: 1fr;
+  }
+
+  .ws-resizer {
+    display: none;
   }
 
   .left-panel,
@@ -3822,6 +3888,278 @@ html, body, #root {
   font-variant-numeric: tabular-nums;
   color: var(--text-dim, #9aa3b2);
   font-size: 13px;
+}
+
+/* ── 批量图生图 v2 (store-backed, storyboard-style cards) ───────────────────── */
+.redraw-flow-hint {
+  font-size: 12px;
+  color: var(--text-dim, #9aa3b2);
+}
+/* Params step is now a stacked column (head + globals + param fields + refs). */
+.redraw-globals {
+  display: flex;
+  flex-direction: column;
+}
+.redraw-globals-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.redraw-globals-head strong { font-size: 13.5px; }
+.redraw-global-prompts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+.redraw-global-text {
+  width: 100%;
+  min-height: 60px;
+  resize: vertical;
+  font-size: 12.5px;
+  border-radius: 8px;
+  border: 1px solid var(--border, #2a2f3a);
+  background: var(--bg-input, rgba(0, 0, 0, 0.18));
+  color: inherit;
+  padding: 8px 10px;
+}
+.batch-params {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.batch-size-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.batch-chip {
+  border: 1px solid var(--border, #2a2f3a);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  color: inherit;
+  cursor: pointer;
+}
+.batch-chip.active {
+  background: var(--accent, #7c5cfa);
+  border-color: var(--accent, #7c5cfa);
+  color: #fff;
+}
+.batch-ref-block {
+  border: 1px solid var(--border, #2a2f3a);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.02);
+}
+.batch-ref-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12.5px;
+  color: var(--text-dim, #9aa3b2);
+}
+.batch-ref-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.batch-ref-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.batch-ref-row img {
+  width: 52px;
+  height: 52px;
+  object-fit: cover;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+.batch-ref-row label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  color: var(--text-dim, #9aa3b2);
+}
+.batch-ref-row input[type="number"] { width: 64px; }
+.btn-sm {
+  min-height: 28px !important;
+  padding: 0 10px !important;
+  font-size: 12px !important;
+}
+
+/* Responsive card grid — fills the full-width tools view instead of one column. */
+.redraw-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  gap: 12px;
+  max-height: 64vh;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.redraw-card-item {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border, #2a2f3a);
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.03);
+}
+.redraw-card-item.status-done { border-color: rgba(74, 222, 128, 0.5); }
+.redraw-card-item.status-failed { border-color: rgba(248, 113, 113, 0.55); }
+.redraw-card-item.status-generating { border-color: var(--accent, #7c5cfa); }
+.redraw-card-thumb {
+  position: relative;
+  background: rgba(0, 0, 0, 0.22);
+  cursor: zoom-in;
+}
+.redraw-card-thumb img {
+  width: 100%;
+  height: 190px;
+  object-fit: contain;
+  display: block;
+}
+.redraw-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #fff;
+}
+.redraw-badge.done { background: #16a34a; }
+.redraw-badge.run { background: var(--accent, #7c5cfa); }
+.redraw-badge.fail { background: #dc2626; }
+.redraw-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px 10px;
+  flex: 1;
+}
+.redraw-card-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.redraw-card-head b { color: var(--accent, #7c5cfa); font-variant-numeric: tabular-nums; }
+.redraw-card-head span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.redraw-card-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.redraw-card-row .btn,
+.redraw-card-row > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+}
+.redraw-strength-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: var(--text-dim, #9aa3b2);
+}
+.redraw-strength-inline input { width: 66px; }
+.redraw-override-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: var(--text-dim, #9aa3b2);
+  cursor: pointer;
+}
+.redraw-override-panel {
+  border: 1px solid var(--border, #2a2f3a);
+  border-radius: 10px;
+  padding: 8px;
+  margin-top: 2px;
+}
+.redraw-override-panel > summary {
+  cursor: pointer;
+  font-size: 11.5px;
+  color: var(--text-dim, #9aa3b2);
+  margin-bottom: 6px;
+}
+.redraw-card-error {
+  margin: 0;
+  font-size: 11.5px;
+  color: #f87171;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.redraw-card-prompt {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--text-dim, #9aa3b2);
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.redraw-generate-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.redraw-generate-bar .redraw-footer { margin-top: 0; flex-wrap: wrap; }
+
+/* Full-screen image preview (double-click / 查看大图). */
+.redraw-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 32px;
+  background: rgba(8, 10, 20, 0.82);
+  backdrop-filter: blur(6px);
+  cursor: zoom-out;
+}
+.redraw-lightbox img {
+  max-width: 96vw;
+  max-height: 92vh;
+  object-fit: contain;
+  border-radius: 10px;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.55);
+}
+.redraw-lightbox-close {
+  position: absolute;
+  top: 18px;
+  right: 22px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 0;
+  font-size: 22px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.14);
+  cursor: pointer;
 }
 
 /* ── Precise reference size recommendation ─────────────────────────────────── */

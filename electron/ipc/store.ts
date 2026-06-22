@@ -179,6 +179,7 @@ export function defaultSettings(): AppSettings {
     historyJumpAfterGenerate: true,
     historyRetentionDays: 30,
     loggingEnabled: true,
+    keepImageMetadata: true,
     visionApiUrl: "https://api.openai.com/v1",
     visionApiKey: "",
     visionApiModel: "gpt-4o",

@@ -5,6 +5,7 @@ import type {
   AnlasQuoteResult,
   AppSettings,
   AugmentOptions,
+  BatchRedrawProject,
   CharCaption,
   DirectorTool,
   GenerateExtras,
@@ -23,12 +24,29 @@ import type {
   PreciseReferenceImage,
   WorkingImage,
 } from "./types";
-import { DEFAULT_AUGMENT_OPTIONS, DEFAULT_I2I_PARAMS, DEFAULT_PARAMS } from "./types";
+import { createDefaultBatchRedraw, DEFAULT_AUGMENT_OPTIONS, DEFAULT_I2I_PARAMS, DEFAULT_PARAMS } from "./types";
 import { expandWildcards } from "./wildcards";
 
 type ActiveTab = "generate" | "inpaint" | "upscale" | "postprocess" | "inspect" | "convert" | "tools" | "records";
 type PromptTab = "positive" | "negative";
 type BrushMode = "paint" | "erase";
+
+// Workspace column widths (left operations rail / right history rail) — persisted
+// in localStorage so the layout is identical on next launch. Center fills the rest.
+const WS_LEFT_DEFAULT = 380;
+const WS_RIGHT_DEFAULT = 340;
+const WS_LEFT_MIN = 260;
+const WS_LEFT_MAX = 560;
+const WS_RIGHT_MIN = 220;
+const WS_RIGHT_MAX = 480;
+function readWsWidth(key: string, fallback: number): number {
+  try {
+    const v = Number(localStorage.getItem(key));
+    return Number.isFinite(v) && v > 0 ? v : fallback;
+  } catch {
+    return fallback;
+  }
+}
 
 export interface QueuedGenerationJob {
   id: string;
@@ -46,6 +64,9 @@ interface AppState {
   showSettings: boolean;
   activeTab: ActiveTab;
   promptTab: PromptTab;
+  /** Workspace rail widths (px); center fills the rest. Persisted to localStorage. */
+  wsLeftWidth: number;
+  wsRightWidth: number;
   params: GenerateParams;
   settings: AppSettings | null;
   account: AccountSummary;
@@ -72,6 +93,11 @@ interface AppState {
   vibeImages: VibeTransferImage[];
   preciseReferences: PreciseReferenceImage[];
   charCaptions: CharCaption[];
+  /** 批量图生图 project — lives in the store so switching tools/tabs never loses it. */
+  batchRedraw: BatchRedrawProject;
+  /** Transient run state (not exported with the project). */
+  batchRunning: boolean;
+  batchProgress: { done: number; total: number } | null;
   batchCount: number;
   inspectImageUrl: string;
   inspectMeta: Record<string, string> | null;
@@ -115,6 +141,9 @@ interface AppState {
   setShowSettings: (value: boolean) => void;
   setActiveTab: (tab: ActiveTab) => void;
   setPromptTab: (tab: PromptTab) => void;
+  setWsWidth: (edge: "left" | "right", px: number) => void;
+  saveWsWidths: () => void;
+  resetWsWidths: () => void;
   setParam: <K extends keyof GenerateParams>(key: K, value: GenerateParams[K]) => void;
   applyParams: (patch: Partial<GenerateParams>) => void;
   checkUpdate: () => Promise<void>;
@@ -151,13 +180,17 @@ interface AppState {
   clearVibeImages: () => void;
   addPreciseReference: (image: PreciseReferenceImage) => void;
   removePreciseReference: (id: string) => void;
-  updatePreciseReference: (id: string, patch: Partial<Pick<PreciseReferenceImage, "type" | "strength" | "fidelity">>) => void;
+  updatePreciseReference: (id: string, patch: Partial<Pick<PreciseReferenceImage, "type" | "strength" | "fidelity" | "informationExtracted">>) => void;
   clearPreciseReferences: () => void;
   // Character Prompt
   addCharCaption: () => void;
   removeCharCaption: (id: string) => void;
   updateCharCaption: (id: string, patch: Partial<Omit<CharCaption, "id">>) => void;
   clearCharCaptions: () => void;
+  // Batch img2img project
+  setBatchRedraw: (updater: (prev: BatchRedrawProject) => BatchRedrawProject) => void;
+  resetBatchRedraw: () => void;
+  setBatchRunning: (running: boolean, progress?: { done: number; total: number } | null) => void;
   // Batch + Inspect + Convert
   setBatchCount: (count: number) => void;
   setInspectImage: (url: string, meta: Record<string, string>, base64?: string) => void;
@@ -309,6 +342,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   showSettings: false,
   activeTab: "generate",
   promptTab: "positive",
+  wsLeftWidth: readWsWidth("langbai.ws.left", WS_LEFT_DEFAULT),
+  wsRightWidth: readWsWidth("langbai.ws.right", WS_RIGHT_DEFAULT),
   params: { ...DEFAULT_PARAMS },
   settings: null,
   account: { hasToken: false },
@@ -335,6 +370,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   vibeImages: [],
   preciseReferences: [],
   charCaptions: [],
+  batchRedraw: createDefaultBatchRedraw(),
+  batchRunning: false,
+  batchProgress: null,
   batchCount: 1,
   inspectImageUrl: "",
   inspectMeta: null,
@@ -439,6 +477,32 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setPromptTab(tab) {
     set({ promptTab: tab });
+  },
+
+  setWsWidth(edge, px) {
+    const clamped =
+      edge === "left"
+        ? Math.round(Math.max(WS_LEFT_MIN, Math.min(WS_LEFT_MAX, px)))
+        : Math.round(Math.max(WS_RIGHT_MIN, Math.min(WS_RIGHT_MAX, px)));
+    set(edge === "left" ? { wsLeftWidth: clamped } : { wsRightWidth: clamped });
+  },
+  saveWsWidths() {
+    const { wsLeftWidth, wsRightWidth } = get();
+    try {
+      localStorage.setItem("langbai.ws.left", String(wsLeftWidth));
+      localStorage.setItem("langbai.ws.right", String(wsRightWidth));
+    } catch {
+      /* ignore persistence failure */
+    }
+  },
+  resetWsWidths() {
+    set({ wsLeftWidth: WS_LEFT_DEFAULT, wsRightWidth: WS_RIGHT_DEFAULT });
+    try {
+      localStorage.setItem("langbai.ws.left", String(WS_LEFT_DEFAULT));
+      localStorage.setItem("langbai.ws.right", String(WS_RIGHT_DEFAULT));
+    } catch {
+      /* ignore persistence failure */
+    }
   },
 
   setParam(key, value) {
@@ -695,6 +759,17 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   clearCharCaptions() {
     set({ charCaptions: [] });
+  },
+
+  // ── Batch img2img project ──────────────────────────────────────────────────
+  setBatchRedraw(updater) {
+    set({ batchRedraw: updater(get().batchRedraw) });
+  },
+  resetBatchRedraw() {
+    set({ batchRedraw: createDefaultBatchRedraw(get().params), batchRunning: false, batchProgress: null });
+  },
+  setBatchRunning(running, progress) {
+    set({ batchRunning: running, batchProgress: progress === undefined ? get().batchProgress : progress });
   },
 
   // ── Batch + Inspect ────────────────────────────────────────────────────────

@@ -83,6 +83,7 @@ contextBridge.exposeInMainWorld("naiDesktop", {
   renameHistoryItem: (id: string, name: string) => ipcRenderer.invoke("storage:renameItem", id, name),
   openInExplorer: (targetPath: string) => ipcRenderer.invoke("storage:open", targetPath),
   selectOutputDir: () => ipcRenderer.invoke("storage:selectDir"),
+  startImageDrag: (filePath: string) => ipcRenderer.send("image:startDrag", filePath),
 
   getSetting: <K extends SettingKey>(key: K) => ipcRenderer.invoke("settings:get", key),
   setSetting: <K extends SettingKey>(key: K, value: AppSettings[K]) =>

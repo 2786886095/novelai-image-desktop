@@ -10,9 +10,12 @@ import {
 import { parseWeightedTag, setTagLevelInPrompt, splitPromptTags, formatMultiplier } from "./prompt-weight";
 import { useAppStore } from "./store";
 import {
+  createDefaultBatchRedraw,
   NAI_MODELS,
   NAI_SAMPLERS,
   NAI_UC_PRESETS,
+  type BatchRedrawItem,
+  type BatchRedrawProject,
   type ComicPanel,
   type ComicProject,
   type ComicReferenceAsset,
@@ -21,9 +24,11 @@ import {
   type GenerateParams,
   type NAIModel,
   type NAISampler,
+  type PreciseReferenceItem,
   type ReversePromptMode,
   type ReversePromptScope,
   type UcPreset,
+  type VibeTransferItem,
 } from "./types";
 
 const STORAGE_KEY = "langbai.novelai.comic-project.v1";
@@ -286,88 +291,285 @@ export function ToolsHub() {
   );
 }
 
-// ── 图片批量重绘 (batch img2img) ──────────────────────────────────────────────
-interface RedrawItem {
-  id: string;
-  name: string;
-  previewUrl: string;
-  base64: string; // pure base64
-  prompt: string;
-  strength: number | null; // null → use global strength
+// ── 批量图生图 (batch img2img) ────────────────────────────────────────────────
+// The whole project lives in the store (state.batchRedraw) so switching tools or
+// tabs never loses imported images / prompts / params / references. 导出/导入项目
+// give durable file-based save-restore (localStorage would overflow on many imgs).
+
+const REDRAW_STEPS = [
+  { key: "import", label: "导入", hint: "分组名 · 选图 · 项目" },
+  { key: "params", label: "参数", hint: "全模型 · 精准参考 · 氛围" },
+  { key: "prompts", label: "提示词", hint: "导入 · AI 反推 · 逐张" },
+  { key: "generate", label: "生成", hint: "逐张图生图 · 重试 · 打包" },
+] as const;
+
+function batchItemParams(project: BatchRedrawProject, item: BatchRedrawItem): GenerateParams {
+  const base = item.overrideParams ? { ...project.globalParams, ...item.params } : project.globalParams;
+  const positive = [project.globalStyle.trim(), item.prompt.trim()].filter(Boolean).join(", ");
+  return {
+    ...base,
+    positivePrompt: positive,
+    negativePrompt: project.globalNegative.trim() || base.negativePrompt,
+    fileNamePrefix: item.name,
+  };
+}
+
+function normalizeBatchItem(raw: Partial<BatchRedrawItem>, index: number): BatchRedrawItem {
+  return {
+    id: raw.id ?? uid(),
+    name: String(raw.name ?? `image_${index + 1}`),
+    base64: String(raw.base64 ?? ""),
+    prompt: String(raw.prompt ?? ""),
+    strength: raw.strength == null ? null : Number(raw.strength),
+    overrideParams: Boolean(raw.overrideParams),
+    params: raw.params ?? {},
+    status: raw.status === "done" ? "done" : "pending",
+    resultUrl: raw.resultUrl,
+    resultPath: raw.resultPath,
+    historyItemId: raw.historyItemId,
+  };
+}
+
+function normalizeBatchProject(parsed: unknown, fallback: BatchRedrawProject): BatchRedrawProject {
+  if (!parsed || typeof parsed !== "object") return fallback;
+  const p = parsed as Partial<BatchRedrawProject>;
+  return {
+    ...fallback,
+    ...p,
+    globalParams: { ...fallback.globalParams, ...(p.globalParams ?? {}) },
+    items: Array.isArray(p.items) ? p.items.map((it, i) => normalizeBatchItem(it, i)).filter((it) => it.base64) : [],
+    preciseReferences: Array.isArray(p.preciseReferences) ? p.preciseReferences : [],
+    vibeImages: Array.isArray(p.vibeImages) ? p.vibeImages : [],
+    seededFromMain: true,
+  };
+}
+
+function BatchStatusBadge({ status }: { status: BatchRedrawItem["status"] }) {
+  if (status === "done") return <span className="redraw-badge done">已生成</span>;
+  if (status === "generating") return <span className="redraw-badge run">生成中…</span>;
+  if (status === "failed") return <span className="redraw-badge fail">失败</span>;
+  return null;
+}
+
+// Reusable parameter editor — drives both the global params and per-image overrides.
+function BatchParamFields({ value, onPatch }: { value: GenerateParams; onPatch: (patch: Partial<GenerateParams>) => void }) {
+  const SIZE_PRESETS = [
+    { label: "竖图 832×1216", w: 832, h: 1216 },
+    { label: "方图 1024×1024", w: 1024, h: 1024 },
+    { label: "横图 1216×832", w: 1216, h: 832 },
+  ];
+  return (
+    <div className="batch-params">
+      <div className="batch-size-presets">
+        {SIZE_PRESETS.map((s) => (
+          <button
+            type="button"
+            key={s.label}
+            className={clsx("batch-chip", value.width === s.w && value.height === s.h && "active")}
+            onClick={() => onPatch({ width: s.w, height: s.h })}
+          >
+            {s.label}
+          </button>
+        ))}
+      </div>
+      <div className="comic-panel-param-controls">
+        <label className="comic-field"><span>模型（全模型可选）</span>
+          <select value={value.model} onChange={(e) => onPatch({ model: e.target.value as NAIModel })}>
+            {NAI_MODELS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+          </select>
+        </label>
+        <label className="comic-field"><span>采样器</span>
+          <select value={value.sampler} onChange={(e) => onPatch({ sampler: e.target.value as NAISampler })}>
+            {NAI_SAMPLERS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+          </select>
+        </label>
+        <NumberInput label="宽度" value={value.width} min={64} max={1600} step={64} onChange={(v) => onPatch({ width: v })} />
+        <NumberInput label="高度" value={value.height} min={64} max={1600} step={64} onChange={(v) => onPatch({ height: v })} />
+        <NumberInput label="步数" value={value.steps} min={1} max={50} onChange={(v) => onPatch({ steps: v })} />
+        <NumberInput label="提示词引导" value={value.cfgScale} min={1} max={10} step={0.1} onChange={(v) => onPatch({ cfgScale: v })} />
+        <NumberInput label="CFG Rescale" value={value.cfgRescale} min={0} max={1} step={0.01} onChange={(v) => onPatch({ cfgRescale: v })} />
+        <NumberInput label="种子（0=随机）" value={value.seed} min={0} max={4294967295} onChange={(v) => onPatch({ seed: v, seedMode: v > 0 ? "fixed" : "random" })} />
+        <label className="comic-field"><span>负面预设</span>
+          <select value={value.ucPreset} onChange={(e) => onPatch({ ucPreset: Number(e.target.value) as UcPreset })}>
+            {NAI_UC_PRESETS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+          </select>
+        </label>
+      </div>
+      <div className="comic-panel-param-toggles">
+        <Toggle checked={value.qualityToggle} onChange={(v) => onPatch({ qualityToggle: v })} label="Quality Tags" description="质量词增强" />
+        <Toggle checked={value.variety} onChange={(v) => onPatch({ variety: v })} label="Variety+" description="增加采样多样性" />
+        <Toggle checked={value.smea} onChange={(v) => onPatch({ smea: v })} label="SMEA" description="V3 高分辨率优化" />
+        <Toggle checked={value.smeaDyn} onChange={(v) => onPatch({ smeaDyn: v })} label="SMEA Dyn" description="V3 动态优化" />
+      </div>
+    </div>
+  );
+}
+
+function BatchPrecisePicker({ refs, onChange }: { refs: PreciseReferenceItem[]; onChange: (next: PreciseReferenceItem[]) => void }) {
+  async function add(files: FileList | null) {
+    if (!files) return;
+    const next = [...refs];
+    for (const f of Array.from(files)) {
+      if (!f.type.startsWith("image/")) continue;
+      next.push({ base64: await toBase64(f), type: "character", strength: 1, fidelity: 1, informationExtracted: 1 });
+    }
+    onChange(next);
+  }
+  return (
+    <div className="batch-ref-block">
+      <div className="batch-ref-head">
+        <span>全局精准参考 · 仅 V4 / V4.5（每图 +5 Anlas）</span>
+        <label className="btn btn-secondary btn-sm">＋ 添加<input type="file" hidden multiple accept="image/*" onChange={(e) => { void add(e.target.files); e.target.value = ""; }} /></label>
+      </div>
+      {refs.length === 0 ? (
+        <p className="settings-hint" style={{ margin: 0 }}>未添加。用于在每张重绘中保持角色 / 画风一致。</p>
+      ) : (
+        <div className="batch-ref-list">
+          {refs.map((r, i) => (
+            <div className="batch-ref-row" key={i}>
+              <img src={dataUrlFromBase64(r.base64)} alt={`precise-${i}`} />
+              <select value={r.type} onChange={(e) => onChange(refs.map((x, j) => (j === i ? { ...x, type: e.target.value as PreciseReferenceItem["type"] } : x)))}>
+                <option value="character">角色</option>
+                <option value="style">画风</option>
+                <option value="character&style">角色+画风</option>
+              </select>
+              <label>强度<input type="number" min={0} max={1} step={0.05} value={r.strength} onChange={(e) => onChange(refs.map((x, j) => (j === i ? { ...x, strength: Number(e.target.value) } : x)))} /></label>
+              <label>保真<input type="number" min={0} max={1} step={0.05} value={r.fidelity} onChange={(e) => onChange(refs.map((x, j) => (j === i ? { ...x, fidelity: Number(e.target.value) } : x)))} /></label>
+              <label title="高=带更多纹理/网点，调低可减弱">信息<input type="number" min={0} max={1} step={0.05} value={r.informationExtracted ?? 1} onChange={(e) => onChange(refs.map((x, j) => (j === i ? { ...x, informationExtracted: Number(e.target.value) } : x)))} /></label>
+              <button className="vibe-remove" onClick={() => onChange(refs.filter((_, j) => j !== i))}>×</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BatchVibePicker({ vibes, onChange }: { vibes: VibeTransferItem[]; onChange: (next: VibeTransferItem[]) => void }) {
+  async function add(files: FileList | null) {
+    if (!files) return;
+    const next = [...vibes];
+    for (const f of Array.from(files)) {
+      if (!f.type.startsWith("image/")) continue;
+      next.push({ base64: await toBase64(f), infoExtracted: 1, strength: 0.6 });
+    }
+    onChange(next);
+  }
+  return (
+    <div className="batch-ref-block">
+      <div className="batch-ref-head">
+        <span>全局氛围迁移 · Vibe Transfer（首次编码会扣 Anlas）</span>
+        <label className="btn btn-secondary btn-sm">＋ 添加<input type="file" hidden multiple accept="image/*" onChange={(e) => { void add(e.target.files); e.target.value = ""; }} /></label>
+      </div>
+      {vibes.length === 0 ? (
+        <p className="settings-hint" style={{ margin: 0 }}>未添加。把参考图的整体氛围迁移到每张重绘。</p>
+      ) : (
+        <div className="batch-ref-list">
+          {vibes.map((v, i) => (
+            <div className="batch-ref-row" key={i}>
+              <img src={dataUrlFromBase64(v.base64)} alt={`vibe-${i}`} />
+              <label>信息量<input type="number" min={0} max={1} step={0.05} value={v.infoExtracted} onChange={(e) => onChange(vibes.map((x, j) => (j === i ? { ...x, infoExtracted: Number(e.target.value) } : x)))} /></label>
+              <label>强度<input type="number" min={0} max={1} step={0.05} value={v.strength} onChange={(e) => onChange(vibes.map((x, j) => (j === i ? { ...x, strength: Number(e.target.value) } : x)))} /></label>
+              <button className="vibe-remove" onClick={() => onChange(vibes.filter((_, j) => j !== i))}>×</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function BatchRedraw({ onBack }: { onBack?: () => void }) {
   const params = useAppStore((state) => state.params);
-  const preciseReferences = useAppStore((state) => state.preciseReferences);
-  const settings = useAppStore((state) => state.settings);
+  const project = useAppStore((state) => state.batchRedraw);
+  const setBatchRedraw = useAppStore((state) => state.setBatchRedraw);
+  const resetBatchRedraw = useAppStore((state) => state.resetBatchRedraw);
+  const running = useAppStore((state) => state.batchRunning);
+  const progress = useAppStore((state) => state.batchProgress);
+  const setBatchRunning = useAppStore((state) => state.setBatchRunning);
   const setToast = useAppStore((state) => state.setToast);
   const refreshHistory = useAppStore((state) => state.refreshHistory);
   const refreshAccount = useAppStore((state) => state.refreshAccount);
 
-  const [groupName, setGroupName] = useState("批量图生图");
-  const [items, setItems] = useState<RedrawItem[]>([]);
-  const [globalStrength, setGlobalStrength] = useState(0.4);
-  const [globalStyle, setGlobalStyle] = useState("");
-  const [globalNegative, setGlobalNegative] = useState("");
-  const [promptBulk, setPromptBulk] = useState("");
-  const [aiMode, setAiMode] = useState<ReversePromptMode>(settings?.reversePromptMode ?? "tags");
-  const [running, setRunning] = useState(false);
   const [aiFilling, setAiFilling] = useState(false);
-  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
-  const [groupId, setGroupId] = useState<string | null>(null);
-  const [step, setStep] = useState<"import" | "prompts" | "params" | "generate">("import");
+  const [lightbox, setLightbox] = useState<string | null>(null);
   const cancelRef = useRef(false);
-  const REDRAW_STEPS = [
-    { key: "import", label: "导入", hint: "分组名 + 选图" },
-    { key: "prompts", label: "提示词", hint: "导入 / AI 反推 / 编辑" },
-    { key: "params", label: "参数", hint: "改图强度 / 风格 / 负面" },
-    { key: "generate", label: "生成", hint: "逐张图生图 / 打包" },
-  ] as const;
-  const readyCount = items.filter((it) => it.prompt.trim()).length;
 
-  function readDataUrl(file: File): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const r = new FileReader();
-      r.onload = () => resolve(r.result as string);
-      r.onerror = () => reject(new Error("读取失败"));
-      r.readAsDataURL(file);
+  const { items, globalStrength, step } = project;
+  const globalParams = project.globalParams;
+  const readyCount = items.filter((it) => it.prompt.trim()).length;
+  const doneCount = items.filter((it) => it.status === "done").length;
+  const pendingReady = items.filter((it) => it.status !== "done" && it.prompt.trim()).length;
+
+  // Seed global style / negative / params from the main 生成 screen the first time
+  // the tool is opened with an empty project ("默认为生成中锁定的，可自行修改").
+  useEffect(() => {
+    if (project.seededFromMain || project.items.length > 0) return;
+    setBatchRedraw((prev) => ({
+      ...prev,
+      globalParams: { ...params, fileNamePrefix: "" },
+      globalStyle: params.positivePrompt,
+      globalNegative: params.negativePrompt,
+      seededFromMain: true,
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function patch(p: Partial<BatchRedrawProject>) {
+    setBatchRedraw((prev) => ({ ...prev, ...p }));
+  }
+  function setStep(next: BatchRedrawProject["step"]) {
+    patch({ step: next });
+  }
+  function patchItem(id: string, p: Partial<BatchRedrawItem>) {
+    setBatchRedraw((prev) => ({ ...prev, items: prev.items.map((it) => (it.id === id ? { ...it, ...p } : it)) }));
+  }
+  function syncFromMain() {
+    patch({
+      globalParams: { ...params, fileNamePrefix: "" },
+      globalStyle: params.positivePrompt,
+      globalNegative: params.negativePrompt,
+      seededFromMain: true,
     });
+    setToast("已同步主界面的模型 / 参数 / 风格 / 负面词");
   }
 
   async function importImages(files: FileList | null) {
     if (!files || files.length === 0) return;
     const arr = Array.from(files).filter((f) => f.type.startsWith("image/"));
     arr.sort((a, b) => a.name.localeCompare(b.name, "zh-CN", { numeric: true }));
-    const next: RedrawItem[] = [];
+    const next: BatchRedrawItem[] = [];
     for (const f of arr) {
-      const dataUrl = await readDataUrl(f);
       next.push({
         id: uid(),
         name: f.name.replace(/\.[^.]+$/, ""),
-        previewUrl: dataUrl,
-        base64: dataUrl.split(",")[1] ?? "",
+        base64: await toBase64(f),
         prompt: "",
         strength: null,
+        overrideParams: false,
+        params: {},
+        status: "pending",
       });
     }
-    setItems((prev) => [...prev, ...next]);
-    setToast(`已导入 ${next.length} 张图片（按名称排序）`);
+    setBatchRedraw((prev) => ({ ...prev, items: [...prev.items, ...next] }));
+    setToast(`已导入 ${next.length} 张图片（按名称升序）`);
   }
 
   function assignPromptLines(lines: string[]): number {
     const clean = lines.map((l) => l.trim()).filter(Boolean);
     let n = 0;
-    setItems((prev) =>
-      prev.map((it, i) => {
+    setBatchRedraw((prev) => ({
+      ...prev,
+      items: prev.items.map((it, i) => {
         if (clean[i] == null) return it;
         n += 1;
         return { ...it, prompt: clean[i] };
       }),
-    );
+    }));
     return Math.min(clean.length, items.length);
   }
 
-  async function importPrompts(file: File | null) {
+  async function importPromptsFile(file: File | null) {
     if (!file) return;
     const text = await file.text();
     const n = assignPromptLines(text.split(/\r?\n/));
@@ -375,7 +577,7 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
   }
 
   function importBulkPrompts() {
-    if (!promptBulk.trim()) {
+    if (!project.promptBulk.trim()) {
       setToast("请先在文本框粘贴/输入提示词（每行一条）");
       return;
     }
@@ -383,28 +585,25 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
       setToast("请先在「导入」步骤导入图片");
       return;
     }
-    const n = assignPromptLines(promptBulk.split(/\r?\n/));
+    const n = assignPromptLines(project.promptBulk.split(/\r?\n/));
     setToast(`已按顺序导入 ${n} 条提示词`);
   }
 
   async function aiFill() {
     if (aiFilling || running) return;
-    if (!items.some((it) => !it.prompt.trim())) {
+    const targets = useAppStore.getState().batchRedraw.items.filter((it) => !it.prompt.trim());
+    if (targets.length === 0) {
       setToast("所有图片都已有提示词");
       return;
     }
     setAiFilling(true);
     cancelRef.current = false;
-    const mode = aiMode;
+    const mode = useAppStore.getState().batchRedraw.aiMode;
     try {
-      for (const it of items) {
+      for (const it of targets) {
         if (cancelRef.current) break;
-        if (it.prompt.trim()) continue;
         const res = await window.naiDesktop.reversePrompt(it.base64, mode);
-        if (res.ok && res.prompt) {
-          const filled = res.prompt.trim();
-          setItems((prev) => prev.map((p) => (p.id === it.id ? { ...p, prompt: filled } : p)));
-        }
+        if (res.ok && res.prompt) patchItem(it.id, { prompt: res.prompt.trim() });
       }
       setToast("AI 反推填充完成");
     } catch (error) {
@@ -414,39 +613,34 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
     }
   }
 
-  async function run() {
+  // Run img2img serially over the given items. Regenerating an item first deletes
+  // its previous output (磁盘 + 历史记录) so 重试 never leaves the old image behind.
+  async function runTargets(targets: BatchRedrawItem[]) {
     if (running) return;
-    if (!groupName.trim()) {
+    const proj = useAppStore.getState().batchRedraw;
+    if (!proj.groupName.trim()) {
       setToast("请先填写分组名称");
+      setStep("import");
       return;
     }
-    const ready = items.filter((it) => it.prompt.trim());
+    const ready = targets.filter((it) => it.prompt.trim());
     if (ready.length === 0) {
-      setToast("没有可重绘的图片（每张图片需要提示词）");
+      setToast("没有可生成的图片（每张需要提示词）");
       return;
     }
     cancelRef.current = false;
-    setRunning(true);
-    setProgress({ done: 0, total: ready.length });
+    setBatchRunning(true, { done: 0, total: ready.length });
 
-    let gid: string | null = null;
     try {
-      const groups = await window.naiDesktop.createHistoryGroup(groupName.trim());
-      gid = groups.find((g) => g.name.trim().toLowerCase() === groupName.trim().toLowerCase())?.id ?? null;
-      setGroupId(gid);
+      await window.naiDesktop.createHistoryGroup(proj.groupName.trim());
     } catch {
       /* group ensured by the main process anyway */
     }
 
     const extras = {
-      vibeImages: [],
+      vibeImages: proj.vibeImages,
       charCaptions: [],
-      preciseReferences: preciseReferences.map(({ base64, type, strength, fidelity }) => ({
-        base64,
-        type,
-        strength,
-        fidelity,
-      })),
+      preciseReferences: proj.preciseReferences,
     };
 
     let done = 0;
@@ -454,38 +648,43 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
     let lastError = "";
     for (const it of ready) {
       if (cancelRef.current) break;
-      const reqParams: GenerateParams = {
-        ...params,
-        seed: 0, // random per image
-        positivePrompt: [globalStyle.trim(), it.prompt.trim()].filter(Boolean).join(", "),
-        negativePrompt: globalNegative.trim() || params.negativePrompt,
-        fileNamePrefix: it.name,
-      };
+      if (it.historyItemId) {
+        try {
+          await window.naiDesktop.deleteHistory(it.historyItemId);
+        } catch {
+          /* previous output already gone */
+        }
+      }
+      patchItem(it.id, { status: "generating", error: undefined, resultUrl: undefined, resultPath: undefined, historyItemId: undefined });
       const res = await window.naiDesktop.redrawImage({
         imageBase64: it.base64,
-        params: reqParams,
-        strength: it.strength ?? globalStrength,
+        params: batchItemParams(proj, it),
+        strength: it.strength ?? proj.globalStrength,
         extras,
-        groupName: groupName.trim(),
+        groupName: proj.groupName.trim(),
         fileNamePrefix: it.name,
       });
-      if (res.ok) done += 1;
-      else {
+      const out = res.ok ? res.items[0] : undefined;
+      if (res.ok && out) {
+        patchItem(it.id, { status: "done", resultUrl: out.fileUrl, resultPath: out.filePath, historyItemId: out.id, error: undefined });
+        done += 1;
+      } else {
+        patchItem(it.id, { status: "failed", error: res.message });
         failed += 1;
         lastError = res.message;
       }
-      setProgress({ done: done + failed, total: ready.length });
+      setBatchRunning(true, { done: done + failed, total: ready.length });
     }
 
     await refreshHistory();
     await refreshAccount();
-    setRunning(false);
+    setBatchRunning(false, null);
     setToast(
       cancelRef.current
         ? `已停止（完成 ${done} 张）`
         : failed > 0
           ? `完成 ${done} 张，失败 ${failed} 张：${lastError}`
-          : `全部完成，共 ${done} 张，已存入分组「${groupName.trim()}」`,
+          : `全部完成，共 ${done} 张，已存入分组「${proj.groupName.trim()}」`,
     );
   }
 
@@ -495,20 +694,62 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
   }
 
   async function exportZip() {
-    if (!groupId) {
+    const name = project.groupName.trim();
+    if (!name) {
+      setToast("请先填写分组名称");
+      return;
+    }
+    let gid: string | undefined;
+    try {
+      const groups = await window.naiDesktop.createHistoryGroup(name);
+      gid = groups.find((g) => g.name.trim().toLowerCase() === name.toLowerCase())?.id;
+    } catch {
+      /* ignore */
+    }
+    if (!gid) {
       setToast("请先生成后再打包");
       return;
     }
-    const res = await window.naiDesktop.exportHistoryGroup(groupId);
+    const res = await window.naiDesktop.exportHistoryGroup(gid);
     setToast(res.ok ? `已打包 ZIP：${res.path ?? "完成"}` : res.message);
+  }
+
+  function exportProject() {
+    const data = JSON.stringify(useAppStore.getState().batchRedraw, null, 2);
+    const blob = new Blob([data], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${project.groupName.trim() || "批量图生图"}.batch.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setToast("已导出项目（含图片与参数）");
+  }
+
+  async function importProject(file: File | null) {
+    if (!file) return;
+    try {
+      const parsed = JSON.parse(await file.text());
+      const next = normalizeBatchProject(parsed, createDefaultBatchRedraw(params));
+      setBatchRedraw(() => next);
+      setToast(`已导入项目（${next.items.length} 张图片）`);
+    } catch (error) {
+      setToast(`导入失败：${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  function clearProject() {
+    if (running) return;
+    resetBatchRedraw();
+    setToast("已清除当前项目");
   }
 
   return (
     <main className="comic-generator redraw-wizard">
       <div className="comic-page-title">
-        <span className="eyebrow">工具 / 图片批量重绘</span>
-        <strong>{groupName.trim() || "未命名重绘任务"}</strong>
-        <small>{items.length} 张 · {readyCount} 已配提示词 · 改图强度 {globalStrength.toFixed(2)}</small>
+        <span className="eyebrow">工具 / 批量图生图</span>
+        <strong>{project.groupName.trim() || "未命名批量任务"}</strong>
+        <small>{items.length} 张 · {readyCount} 已配提示词 · {doneCount} 已生成 · 强度 {globalStrength.toFixed(2)}</small>
       </div>
 
       <nav className="comic-steps">
@@ -528,32 +769,66 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
 
       <div className="comic-step-actions">
         {onBack ? <Button onClick={onBack} variant="ghost">返回工具首页</Button> : null}
-        {items.length > 0 ? <Button onClick={() => setItems([])} variant="ghost" disabled={running}>清空图片</Button> : null}
+        <span className="redraw-flow-hint">流程：导入 → 参数 → 提示词 → 生成（项目自动保存，切换不丢失）</span>
       </div>
 
       {step === "import" && (
         <section className="redraw-card">
           <label className="field">
             <span>分组名称（最终图片全部存入此分组，并作为打包来源）</span>
-            <input value={groupName} onChange={(e) => setGroupName(e.target.value)} placeholder="例如：重绘_0622" />
+            <input value={project.groupName} onChange={(e) => patch({ groupName: e.target.value })} placeholder="例如：重绘_0622" />
           </label>
           <div className="redraw-actions">
             <label className="btn btn-primary">
               ＋ 导入图片
               <input type="file" hidden multiple accept="image/png,image/jpeg,image/webp" onChange={(e) => { void importImages(e.target.files); e.target.value = ""; }} />
             </label>
-            <span className="settings-hint" style={{ margin: 0 }}>默认按文件名排序（1 / 2 / 10 正确顺序）。</span>
+            <Button variant="secondary" onClick={exportProject} disabled={items.length === 0}>导出项目</Button>
+            <label className="btn btn-secondary redraw-file-btn">
+              导入项目
+              <input type="file" hidden accept=".json,application/json" onChange={(e) => { void importProject(e.target.files?.[0] ?? null); e.target.value = ""; }} />
+            </label>
+            <Button variant="ghost" onClick={clearProject} disabled={running || items.length === 0}>清除当前项目</Button>
           </div>
+          <p className="settings-hint" style={{ margin: 0 }}>
+            默认按文件名升序（1 / 2 / 10 正确顺序）。项目（图片+提示词+参数+参考）会自动保存，切换工具/标签不会丢失；「导出项目」可跨重启备份/迁移。
+          </p>
           <div className="redraw-grid">
             {items.length === 0 && <p className="vibe-empty">还没有导入图片。点「导入图片」开始。</p>}
             {items.map((it, idx) => (
               <div className="redraw-thumb-card" key={it.id}>
-                <img src={it.previewUrl} alt={it.name} />
+                <img src={dataUrlFromBase64(it.base64)} alt={it.name} title="双击放大" onDoubleClick={() => setLightbox(dataUrlFromBase64(it.base64))} />
                 <span className="redraw-thumb-name" title={it.name}>#{idx + 1} {it.name}</span>
-                <button className="vibe-remove" title="移除" onClick={() => setItems((prev) => prev.filter((p) => p.id !== it.id))}>×</button>
+                <button className="vibe-remove" title="移除" onClick={() => setBatchRedraw((prev) => ({ ...prev, items: prev.items.filter((p) => p.id !== it.id) }))}>×</button>
               </div>
             ))}
           </div>
+        </section>
+      )}
+
+      {step === "params" && (
+        <section className="redraw-card redraw-globals">
+          <div className="redraw-globals-head">
+            <strong>全局参数 · 默认取自主界面「生成」，可自行修改</strong>
+            <Button variant="ghost" onClick={syncFromMain}>同步主界面参数</Button>
+          </div>
+          <label className="field">
+            <span>全局改图强度：{globalStrength.toFixed(2)}（越低越保留原图）</span>
+            <input type="range" min={0.1} max={0.99} step={0.01} value={globalStrength} onChange={(e) => patch({ globalStrength: Number(e.target.value) })} />
+          </label>
+          <div className="redraw-global-prompts">
+            <label className="field">
+              <span>全局风格提示词（拼在每张图提示词前）</span>
+              <textarea className="redraw-global-text" value={project.globalStyle} onChange={(e) => patch({ globalStyle: e.target.value })} placeholder="如 masterpiece, best quality, anime" />
+            </label>
+            <label className="field">
+              <span>全局负面提示词（留空用模型默认负面词）</span>
+              <textarea className="redraw-global-text" value={project.globalNegative} onChange={(e) => patch({ globalNegative: e.target.value })} placeholder="如 lowres, bad anatomy" />
+            </label>
+          </div>
+          <BatchParamFields value={globalParams} onPatch={(p) => patch({ globalParams: { ...globalParams, ...p } })} />
+          <BatchPrecisePicker refs={project.preciseReferences} onChange={(next) => patch({ preciseReferences: next })} />
+          <BatchVibePicker vibes={project.vibeImages} onChange={(next) => patch({ vibeImages: next })} />
         </section>
       )}
 
@@ -563,22 +838,20 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
             <span>批量输入提示词（每行一条，按顺序对应图片）→ 点「导入文本」</span>
             <textarea
               className="redraw-bulk"
-              value={promptBulk}
+              value={project.promptBulk}
               placeholder={"第 1 张的提示词\n第 2 张的提示词\n第 3 张的提示词\n..."}
-              onChange={(e) => setPromptBulk(e.target.value)}
+              onChange={(e) => patch({ promptBulk: e.target.value })}
             />
           </label>
           <div className="redraw-actions">
-            <Button variant="primary" onClick={importBulkPrompts} disabled={running || items.length === 0}>
-              导入文本
-            </Button>
+            <Button variant="primary" onClick={importBulkPrompts} disabled={running || items.length === 0}>导入文本</Button>
             <label className="btn btn-secondary redraw-file-btn">
               导入 .txt 文件
-              <input type="file" hidden accept=".txt,text/plain" onChange={(e) => { void importPrompts(e.target.files?.[0] ?? null); e.target.value = ""; }} />
+              <input type="file" hidden accept=".txt,text/plain" onChange={(e) => { void importPromptsFile(e.target.files?.[0] ?? null); e.target.value = ""; }} />
             </label>
             <span className="redraw-ai-mode">
               反推模式
-              <select value={aiMode} onChange={(e) => setAiMode(e.target.value as ReversePromptMode)}>
+              <select value={project.aiMode} onChange={(e) => patch({ aiMode: e.target.value as ReversePromptMode })}>
                 <option value="tags">标签 (Danbooru)</option>
                 <option value="natural">自然语言</option>
                 <option value="mixed">混合</option>
@@ -588,86 +861,139 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
               {aiFilling ? "AI 反推中…" : "AI 反推填充空缺"}
             </Button>
           </div>
-          <p className="settings-hint" style={{ margin: 0 }}>导入优先（每行按顺序对应一张图）；空缺可用所选模式的 AI 反推按顺序补全。</p>
-          <div className="redraw-list">
+          <p className="settings-hint" style={{ margin: 0 }}>导入优先（每行对应一张）；空缺可用所选模式 AI 反推补全。双击图片放大；每张可单独改图强度 / 单独参数后立即「重新生成」。</p>
+          <div className="redraw-cards">
             {items.length === 0 && <p className="vibe-empty">请先在「导入」步骤导入图片。</p>}
             {items.map((it, idx) => (
-              <div className="redraw-row" key={it.id}>
-                <img className="redraw-thumb" src={it.previewUrl} alt={it.name} />
-                <div className="redraw-row-main">
-                  <div className="redraw-row-head">
-                    <span className="redraw-idx">#{idx + 1}</span>
-                    <span className="redraw-name" title={it.name}>{it.name}</span>
-                  </div>
+              <article className={clsx("redraw-card-item", `status-${it.status}`)} key={it.id}>
+                <div className="redraw-card-thumb" title="双击放大" onDoubleClick={() => setLightbox(it.resultUrl || dataUrlFromBase64(it.base64))}>
+                  <img
+                    src={it.resultUrl || dataUrlFromBase64(it.base64)}
+                    alt={it.name}
+                    draggable={Boolean(it.resultUrl)}
+                    title={it.resultUrl ? "可拖出到桌面 / 其他程序" : undefined}
+                    onDragStart={(e) => {
+                      if (!it.resultUrl) return;
+                      e.preventDefault();
+                      window.naiDesktop.startImageDrag(it.resultUrl);
+                    }}
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).src = dataUrlFromBase64(it.base64); }}
+                  />
+                  <BatchStatusBadge status={it.status} />
+                </div>
+                <div className="redraw-card-body">
+                  <div className="redraw-card-head"><b>#{idx + 1}</b><span title={it.name}>{it.name}</span></div>
                   <textarea
                     className="redraw-prompt"
                     value={it.prompt}
                     placeholder="该图片的提示词（导入 / AI 反推 / 手动编辑）"
-                    onChange={(e) => setItems((prev) => prev.map((p) => (p.id === it.id ? { ...p, prompt: e.target.value } : p)))}
+                    onChange={(e) => patchItem(it.id, { prompt: e.target.value })}
                   />
-                  <label className="redraw-strength">
-                    单独改图强度（留空用全局 {globalStrength.toFixed(2)}）
-                    <input
-                      type="number"
-                      min={0.1}
-                      max={0.99}
-                      step={0.01}
-                      value={it.strength ?? ""}
-                      placeholder={globalStrength.toFixed(2)}
-                      onChange={(e) =>
-                        setItems((prev) =>
-                          prev.map((p) => (p.id === it.id ? { ...p, strength: e.target.value === "" ? null : Number(e.target.value) } : p)),
-                        )
-                      }
-                    />
-                  </label>
+                  <div className="redraw-card-row">
+                    <label className="redraw-strength-inline">
+                      强度
+                      <input
+                        type="number"
+                        min={0.1}
+                        max={0.99}
+                        step={0.01}
+                        value={it.strength ?? ""}
+                        placeholder={globalStrength.toFixed(2)}
+                        onChange={(e) => patchItem(it.id, { strength: e.target.value === "" ? null : Number(e.target.value) })}
+                      />
+                    </label>
+                    <label className="redraw-override-toggle">
+                      <input
+                        type="checkbox"
+                        checked={it.overrideParams}
+                        onChange={(e) => patchItem(it.id, { overrideParams: e.target.checked, params: e.target.checked && Object.keys(it.params).length === 0 ? { ...globalParams } : it.params })}
+                      />
+                      单独参数
+                    </label>
+                    <Button variant="secondary" onClick={() => void runTargets([it])} disabled={running || !it.prompt.trim()}>
+                      {it.status === "done" ? "重新生成" : it.status === "failed" ? "重试" : "生成此张"}
+                    </Button>
+                  </div>
+                  {it.overrideParams && (
+                    <details className="redraw-override-panel" open>
+                      <summary>本图独立高级参数（覆盖全局）</summary>
+                      <BatchParamFields value={{ ...globalParams, ...it.params }} onPatch={(p) => patchItem(it.id, { params: { ...it.params, ...p } })} />
+                    </details>
+                  )}
                 </div>
-              </div>
+              </article>
             ))}
           </div>
         </section>
       )}
 
-      {step === "params" && (
-        <section className="redraw-card redraw-globals">
-          <label className="field">
-            <span>全局改图强度：{globalStrength.toFixed(2)}（越低越保留原图）</span>
-            <input type="range" min={0.1} max={0.99} step={0.01} value={globalStrength} onChange={(e) => setGlobalStrength(Number(e.target.value))} />
-          </label>
-          <label className="field">
-            <span>全局风格提示词</span>
-            <input value={globalStyle} onChange={(e) => setGlobalStyle(e.target.value)} placeholder="如 masterpiece, best quality, anime" />
-          </label>
-          <label className="field">
-            <span>全局负面提示词（留空用主界面负面词）</span>
-            <input value={globalNegative} onChange={(e) => setGlobalNegative(e.target.value)} placeholder="如 lowres, bad anatomy" />
-          </label>
-          <p className="settings-hint">
-            模型 / 尺寸 / 采样沿用主界面参数（当前：{params.model}，{params.width}×{params.height}）。
-            全图精准参考沿用主界面「参考图」弹窗中设置的精准参考（当前 {preciseReferences.length} 张）。
-          </p>
+      {step === "generate" && (
+        <section className="redraw-card">
+          <div className="redraw-generate-bar">
+            <p className="settings-hint" style={{ margin: 0 }}>
+              对 {readyCount} 张已配提示词的图片逐张图生图，存入分组「{project.groupName.trim() || "未命名"}」。结果实时显示；可单张「重试 / 重新生成」（自动删除上一次成图），完成后打包 ZIP（按名称升序）。
+            </p>
+            <div className="redraw-footer">
+              {progress && <div className="redraw-progress">进度 {progress.done}/{progress.total}</div>}
+              {running ? (
+                <Button variant="danger" onClick={stop}>✕ 停止</Button>
+              ) : (
+                <>
+                  <Button variant="primary" onClick={() => void runTargets(items)} disabled={readyCount === 0}>
+                    ▶ 开始批量（{readyCount} 张）
+                  </Button>
+                  <Button variant="secondary" onClick={() => void runTargets(items.filter((it) => it.status !== "done"))} disabled={pendingReady === 0}>
+                    生成未完成（{pendingReady}）
+                  </Button>
+                </>
+              )}
+              <Button variant="secondary" onClick={() => void exportZip()} disabled={running || doneCount === 0}>打包 ZIP</Button>
+            </div>
+          </div>
+          <div className="redraw-cards">
+            {items.length === 0 && <p className="vibe-empty">请先导入图片并配置提示词。</p>}
+            {items.map((it, idx) => (
+              <article className={clsx("redraw-card-item", `status-${it.status}`)} key={it.id}>
+                <div className="redraw-card-thumb" title="双击放大" onDoubleClick={() => setLightbox(it.resultUrl || dataUrlFromBase64(it.base64))}>
+                  <img
+                    src={it.resultUrl || dataUrlFromBase64(it.base64)}
+                    alt={it.name}
+                    draggable={Boolean(it.resultUrl)}
+                    title={it.resultUrl ? "可拖出到桌面 / 其他程序" : undefined}
+                    onDragStart={(e) => {
+                      if (!it.resultUrl) return;
+                      e.preventDefault();
+                      window.naiDesktop.startImageDrag(it.resultUrl);
+                    }}
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).src = dataUrlFromBase64(it.base64); }}
+                  />
+                  <BatchStatusBadge status={it.status} />
+                </div>
+                <div className="redraw-card-body">
+                  <div className="redraw-card-head"><b>#{idx + 1}</b><span title={it.name}>{it.name}</span></div>
+                  {it.error ? (
+                    <p className="redraw-card-error" title={it.error}>{it.error}</p>
+                  ) : (
+                    <p className="redraw-card-prompt" title={it.prompt}>{it.prompt || "（无提示词，将被跳过）"}</p>
+                  )}
+                  <div className="redraw-card-row">
+                    <Button variant="secondary" onClick={() => void runTargets([it])} disabled={running || !it.prompt.trim()}>
+                      {it.status === "done" ? "重新生成" : it.status === "failed" ? "重试" : "生成此张"}
+                    </Button>
+                    {it.resultUrl && <Button variant="ghost" onClick={() => setLightbox(it.resultUrl!)}>查看大图</Button>}
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
         </section>
       )}
 
-      {step === "generate" && (
-        <section className="redraw-card">
-          <p className="settings-hint">
-            将对 {readyCount} 张已配提示词的图片，按全局/单张改图强度逐张图生图，存入分组「{groupName.trim() || "未命名"}」，可在完成后打包 ZIP。
-          </p>
-          <div className="redraw-footer">
-            {progress && <div className="redraw-progress">进度 {progress.done}/{progress.total}</div>}
-            {running ? (
-              <Button variant="danger" onClick={stop}>✕ 停止</Button>
-            ) : (
-              <Button variant="primary" onClick={() => void run()} disabled={readyCount === 0}>
-                ▶ 开始批量重绘（{readyCount} 张）
-              </Button>
-            )}
-            <Button variant="secondary" onClick={() => void exportZip()} disabled={running || !groupId}>
-              打包 ZIP
-            </Button>
-          </div>
-        </section>
+      {lightbox && (
+        <div className="redraw-lightbox" role="presentation" onClick={() => setLightbox(null)}>
+          <img src={lightbox} alt="预览" />
+          <button className="redraw-lightbox-close" onClick={() => setLightbox(null)}>×</button>
+        </div>
       )}
     </main>
   );
@@ -1757,7 +2083,17 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
                     <>
                       {activePanel.outputUrl ? (
                         <div className="comic-panel-result">
-                          <img src={activePanel.outputUrl} alt={`分镜 #${activePanel.index} 生成结果`} onError={() => markPanelImageUnavailable(activePanel.id)} />
+                          <img
+                            src={activePanel.outputUrl}
+                            alt={`分镜 #${activePanel.index} 生成结果`}
+                            draggable
+                            title="可拖出到桌面 / 其他程序"
+                            onDragStart={(e) => {
+                              e.preventDefault();
+                              if (activePanel.outputUrl) window.naiDesktop.startImageDrag(activePanel.outputUrl);
+                            }}
+                            onError={() => markPanelImageUnavailable(activePanel.id)}
+                          />
                           <div><strong>分镜 #{activePanel.index} 成图</strong><span>重新生成会替换本分镜当前成图记录。</span></div>
                         </div>
                       ) : <div className="comic-panel-no-result">本分镜尚未生成图片</div>}

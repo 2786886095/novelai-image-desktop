@@ -51,7 +51,11 @@ export function removeGroup(id: string) {
 
 /** Bundle all images in a group into a ZIP at a user-chosen location. */
 export async function exportGroup(groupId: string) {
-  const items = getHistory(undefined, groupId || undefined);
+  // Pack in ascending file-name order (1, 2, 10…) — history is stored newest-first,
+  // which would otherwise zip the images in descending order.
+  const items = [...getHistory(undefined, groupId || undefined)].sort((a, b) =>
+    path.basename(a.filePath).localeCompare(path.basename(b.filePath), "zh-CN", { numeric: true }),
+  );
   if (items.length === 0) return { ok: false, message: "该分组没有可导出的图片。" };
 
   const groups = getHistoryGroups();

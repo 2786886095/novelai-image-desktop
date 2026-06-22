@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import clsx from "clsx";
 import { format } from "date-fns";
 import { ToolsHub } from "./ComicGenerator";
@@ -696,9 +696,13 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
           id: crypto.randomUUID(),
           previewUrl: dataUrl,
           base64,
-          type: "character&style",
+          // Default to character-only: "character&style" copies the reference's
+          // rendering style (a prime cause of unwanted texture/halftone bleed when
+          // the art style is meant to come from the prompt's artist tags instead).
+          type: "character",
           strength: 1,
           fidelity: 1,
+          informationExtracted: 1,
           srcWidth: probe.naturalWidth,
           srcHeight: probe.naturalHeight,
         });
@@ -752,7 +756,7 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
             精准参考（Precise Reference）
             {!isV45 && <span className="vibe-hint"> · 仅 V4.5 模型生效，当前模型不支持</span>}
           </h3>
-          <p className="vibe-hint">任意尺寸均可：程序会按官方策略等比缩放并黑边填充到最接近的官方尺寸（1024×1536 / 1472×1472 / 1536×1024）。建议参考图比例贴近三者之一以减少黑边。</p>
+          <p className="vibe-hint">任意尺寸均可：程序会按官方策略等比缩放并<b>白边</b>填充到最接近的官方尺寸（1024×1536 / 1472×1472 / 1536×1024），RGBA 透明图会先以白底拍平。建议参考图比例贴近三者之一以减少留白；想要角色而非画风时选「角色」并把「信息提取」调低。</p>
           {preciseReferences.length === 0 && <p className="vibe-empty">还没有精准参考图。</p>}
           {preciseReferences.map((ref) => (
             <div className="vibe-row" key={ref.id}>
@@ -785,6 +789,14 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
                   step={0.01}
                   onChange={(v) => updatePreciseReference(ref.id, { fidelity: v })}
                 />
+                <SliderInput
+                  label="信息提取 Information Extracted（高=带更多纹理/网点，调低可减弱）"
+                  value={ref.informationExtracted ?? 1}
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  onChange={(v) => updatePreciseReference(ref.id, { informationExtracted: v })}
+                />
                 {(() => {
                   const rec = recommendPreciseSize(ref.srcWidth, ref.srcHeight);
                   if (!rec) return null;
@@ -792,8 +804,8 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
                     <p className={clsx("precise-size-hint", rec.exact && "ok")}>
                       {ref.srcWidth}×{ref.srcHeight} → 推荐尺寸 {rec.target.width}×{rec.target.height}
                       {rec.exact
-                        ? "（已匹配，无黑边）"
-                        : `（将缩放并填充约 ${rec.padPercent}% 黑边；裁/缩到推荐尺寸可消除黑边）`}
+                        ? "（已匹配，无留白）"
+                        : `（将缩放并填充约 ${rec.padPercent}% 白边；裁/缩到推荐尺寸可消除白边）`}
                     </p>
                   );
                 })()}
@@ -2956,7 +2968,13 @@ function ZoomableImageStage({
             className={clsx("zoom-image", compareEnabled && canCompare && "zoom-image-measure")}
             src={image.fileUrl}
             alt={alt}
-            draggable={false}
+            // Draggable only when not zoomed; while zoomed the pointer drives panning.
+            draggable={zoom === 1}
+            title="可拖出到桌面 / 资源管理器 / 其他程序"
+            onDragStart={(e) => {
+              e.preventDefault();
+              window.naiDesktop.startImageDrag(image.fileUrl);
+            }}
           />
           {compareEnabled && canCompare ? (
             <>
@@ -3376,7 +3394,17 @@ function HistoryPanel() {
           <div className="history-item" key={item.id}>
             <button onClick={() => selectImage(item)}>
               <div className="history-thumb-frame">
-                <img src={item.fileUrl} alt="历史缩略图" />
+                <img
+                  src={item.fileUrl}
+                  alt="历史缩略图"
+                  draggable
+                  title="可拖出到桌面 / 资源管理器 / 其他程序"
+                  onDragStart={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    window.naiDesktop.startImageDrag(item.filePath);
+                  }}
+                />
               </div>
               <span className="history-meta">{item.model} · {item.width}×{item.height}</span>
             </button>
@@ -3635,6 +3663,12 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                     <IconText icon="↗">打开输出目录</IconText>
                   </Button>
                 </div>
+                <Toggle
+                  checked={settings.keepImageMetadata ?? true}
+                  onChange={(v) => void update("keepImageMetadata", v)}
+                  label="保留图片元数据（提示词 / 种子 / 参数）"
+                  description="开启：保存的 PNG 内嵌生成信息，便于日后反查或重新导入参数。关闭：保存「干净」图片、抹除内嵌的提示词/种子/参数，适合对外分享（不影响画面，无损）。"
+                />
                 <LogSettingsSection
                   logDir={settings.logDir ?? ""}
                   loggingEnabled={settings.loggingEnabled ?? true}
@@ -3699,7 +3733,14 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                     <option value="ja-JP">日本語（日文，即将完善）</option>
                   </select>
                 </label>
-                <div className="toggle-list">
+                <div className="field">
+                  <span>工作台布局</span>
+                  <div className="row-actions">
+                    <Button onClick={() => useAppStore.getState().resetWsWidths()}>
+                      <IconText icon="⟲">恢复默认分栏宽度</IconText>
+                    </Button>
+                  </div>
+                  <p className="field-hint">把左右两栏宽度恢复默认。也可直接在工作台拖动两栏之间的分隔条调整，双击分隔条或点其上的 ⟲ 也能恢复。</p>
                 </div>
               </div>
             )}
@@ -4025,7 +4066,7 @@ function OnboardingWizard() {
     ["网络", "先确认代理连接", "NovelAI、AI 反推、谷歌翻译及更新检查等大部分联网功能通常需要可用代理。默认使用本机 HTTP 代理 127.0.0.1:7890。"],
     ["API", "配置 NovelAI API Token", "Token 只保存在本机主进程存储中，渲染层不会直接持有。"],
     ["选填", "可选的第三方 AI 服务", "反推（图→提示词）、转换（中文→标签）、翻译都依赖你自备的第三方接口，不填也能正常生成图片，之后可在设置中再配置。"],
-    ["保存", "选择图片保存位置", "生成图片会自动保存到此目录并写入右侧历史。"],
+    ["保存", "选择图片保存位置", "生成图片会自动保存到此目录并写入右侧历史。可选择是否在图片中保留生成元数据（提示词/种子/参数）——保留便于日后反查，关闭则导出「干净」图片便于分享。"],
     ["标签库", "下载中文标签库（可选）", "下载后，提示词补全与灵感胶囊将使用上万条带中文的 Danbooru 标签（按热度）。不下载则使用内置精简词库。"],
     ["界面", "了解主界面", "左侧参数、中间画布、右侧历史；英文输入会自动推测 tag。"],
     ["完成", "一切就绪", "之后可随时在设置中修改 API、输出目录和偏好，也能重新查看本向导。"],
@@ -4174,6 +4215,17 @@ function OnboardingWizard() {
                 >
                   <IconText icon={<Icon name="folder" />}>浏览...</IconText>
                 </Button>
+                <Toggle
+                  checked={settings?.keepImageMetadata ?? true}
+                  onChange={(v) =>
+                    void (async () => {
+                      await window.naiDesktop.setSetting("keepImageMetadata", v);
+                      await load();
+                    })()
+                  }
+                  label="保留图片元数据（提示词 / 种子 / 参数）"
+                  description="开启：图片内嵌生成信息，便于日后反查/重导参数。关闭：导出「干净」图片、抹除内嵌信息，适合分享。可随时在设置中更改。"
+                />
               </div>
             )}
             {step === 5 && (
@@ -4233,6 +4285,56 @@ function UpdateBanner() {
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────
+// Draggable splitter between workspace rails. Drag = resize; double-click = reset.
+// Width changes apply live (store) and persist to localStorage on release.
+function WorkspaceResizer({ edge }: { edge: "left" | "right" }) {
+  const width = useAppStore((s) => (edge === "left" ? s.wsLeftWidth : s.wsRightWidth));
+  const setWsWidth = useAppStore((s) => s.setWsWidth);
+  const saveWsWidths = useAppStore((s) => s.saveWsWidths);
+  const resetWsWidths = useAppStore((s) => s.resetWsWidths);
+  const drag = useRef<{ startX: number; startW: number } | null>(null);
+
+  return (
+    <div
+      className={clsx("ws-resizer", edge)}
+      role="separator"
+      aria-orientation="vertical"
+      title="拖动调整宽度 · 双击恢复默认"
+      onPointerDown={(e) => {
+        e.preventDefault();
+        e.currentTarget.setPointerCapture(e.pointerId);
+        drag.current = { startX: e.clientX, startW: width };
+      }}
+      onPointerMove={(e) => {
+        if (!drag.current) return;
+        const dx = e.clientX - drag.current.startX;
+        setWsWidth(edge, drag.current.startW + (edge === "left" ? dx : -dx));
+      }}
+      onPointerUp={(e) => {
+        if (!drag.current) return;
+        drag.current = null;
+        e.currentTarget.releasePointerCapture(e.pointerId);
+        saveWsWidths();
+      }}
+      onDoubleClick={() => resetWsWidths()}
+    >
+      <span className="ws-resizer-grip" />
+      <button
+        type="button"
+        className="ws-resizer-reset"
+        title="恢复默认布局宽度"
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation();
+          resetWsWidths();
+        }}
+      >
+        ⟲
+      </button>
+    </div>
+  );
+}
+
 function MainPage() {
   const showSettings = useAppStore((state) => state.showSettings);
   const setShowSettings = useAppStore((state) => state.setShowSettings);
@@ -4243,6 +4345,8 @@ function MainPage() {
   const currentImage = useAppStore((state) => state.currentImage);
   const activeTab = useAppStore((state) => state.activeTab);
   const settings = useAppStore((state) => state.settings);
+  const wsLeftWidth = useAppStore((state) => state.wsLeftWidth);
+  const wsRightWidth = useAppStore((state) => state.wsRightWidth);
 
   // Apply theme class
   useEffect(() => {
@@ -4269,7 +4373,10 @@ function MainPage() {
       <UpdateBanner />
       <MenuBar openSettings={() => setShowSettings(true)} />
       <TabBar />
-      <div className={clsx("workspace", (activeTab === "tools" || activeTab === "records") && "workspace-tools")}>
+      <div
+        className={clsx("workspace", (activeTab === "tools" || activeTab === "records") && "workspace-tools")}
+        style={{ "--ws-left": `${wsLeftWidth}px`, "--ws-right": `${wsRightWidth}px` } as CSSProperties}
+      >
         {activeTab === "tools" ? (
         <ToolsHub />
         ) : activeTab === "records" ? (
@@ -4277,7 +4384,9 @@ function MainPage() {
         ) : (
           <>
             <LeftPanel openSettings={() => setShowSettings(true)} />
+            <WorkspaceResizer edge="left" />
             {activeTab === "inpaint" ? <InpaintCanvas /> : <ImageCanvas />}
+            <WorkspaceResizer edge="right" />
             <HistoryPanel />
           </>
         )}

@@ -445,17 +445,34 @@ function buildPayload(
   const preciseRefs = extras?.preciseReferences ?? [];
   if (v4Plus && isV45(params.model) && preciseRefs.length > 0) {
     parameters.director_reference_images = preciseRefs.map((r) => r.base64);
-    parameters.director_reference_descriptions = preciseRefs.map((r) => ({
-      // Match the SDK's serialized ReferenceConditionInput exactly. The SDK's
-      // pydantic ReferenceCaption ALWAYS emits char_captions (default []), so
-      // the encoder's schema expects the key present — omitting it was a likely
-      // contributor to the encoder's 422. base_caption is the type literal.
-      caption: { base_caption: r.type, char_captions: [] },
+    parameters.director_reference_descriptions = preciseRefs.map(() => ({
+      // base_caption is a TEXT caption field (the same one that carries the prompt
+      // in v4_prompt). A reference image has no user caption, so it must be EMPTY.
+      // We previously stuffed the type literal ("character"/"style") in here, which
+      // fed stray text into the reference conditioning — the likely cause of the
+      // all-over halftone/cross-hatch overlay at full settings. The TYPE is instead
+      // expressed by the strength channels below. char_captions is always emitted
+      // (the SDK's pydantic ReferenceCaption serializes it as []).
+      caption: { base_caption: "", char_captions: [] },
       legacy_uc: false,
     }));
     parameters.director_reference_strength_values = preciseRefs.map((r) => round2(clamp01(r.strength, 1)));
     parameters.director_reference_secondary_strength_values = preciseRefs.map((r) => round2(clamp01(1 - r.fidelity, 0)));
-    parameters.director_reference_information_extracted = preciseRefs.map(() => 1.0);
+    parameters.director_reference_information_extracted = preciseRefs.map((r) => round2(clamp01(r.informationExtracted ?? 1, 1)));
+    // Log the EXACT precise-reference fields we send (sans base64) so it can be
+    // diffed against the official client's F12 "Copy request payload". This is an
+    // unverified reverse-engineered shape — the log is how we confirm/correct it.
+    logInfo(
+      "precise-ref payload → " +
+        JSON.stringify({
+          model: params.model,
+          director_reference_descriptions: parameters.director_reference_descriptions,
+          director_reference_strength_values: parameters.director_reference_strength_values,
+          director_reference_secondary_strength_values: parameters.director_reference_secondary_strength_values,
+          director_reference_information_extracted: parameters.director_reference_information_extracted,
+          director_reference_images: preciseRefs.map((r) => `<base64 ${r.base64.length} chars>`),
+        }),
+    );
   }
 
   return {
@@ -520,25 +537,34 @@ function prepareDirectorReferenceImage(rawBase64: string, index: number): string
   const fitW = Math.max(1, Math.round(width * scale));
   const fitH = Math.max(1, Math.round(height * scale));
   const fg = PNG.sync.read(image.resize({ width: fitW, height: fitH, quality: "best" }).toPNG());
+  // Flatten any alpha onto WHITE and pad with WHITE. The reference encoder is fed
+  // RGB only; transparent pixels in an RGBA PNG otherwise carry undefined/black
+  // RGB that bleeds in as dark blotches, and a BLACK letterbox reads as image
+  // content (the source of the earlier grid/line artifacts). White is the neutral
+  // choice. (Hypothesis for the halftone/cross-hatch overlay — verify against the
+  // official F12 payload before treating as settled.)
+  let alphaPresent = false;
   const canvas = new PNG({ width: target.width, height: target.height });
-  for (let i = 0; i < canvas.data.length; i += 4) {
-    canvas.data[i] = 0;
-    canvas.data[i + 1] = 0;
-    canvas.data[i + 2] = 0;
-    canvas.data[i + 3] = 255;
-  }
+  canvas.data.fill(255); // white, fully opaque
   const offsetX = Math.floor((target.width - fg.width) / 2);
   const offsetY = Math.floor((target.height - fg.height) / 2);
   for (let y = 0; y < fg.height; y += 1) {
     for (let x = 0; x < fg.width; x += 1) {
       const src = (y * fg.width + x) * 4;
       const dst = ((y + offsetY) * target.width + (x + offsetX)) * 4;
-      canvas.data[dst] = fg.data[src];
-      canvas.data[dst + 1] = fg.data[src + 1];
-      canvas.data[dst + 2] = fg.data[src + 2];
+      const a = fg.data[src + 3] / 255;
+      if (a < 1) alphaPresent = true;
+      canvas.data[dst] = Math.round(fg.data[src] * a + 255 * (1 - a));
+      canvas.data[dst + 1] = Math.round(fg.data[src + 1] * a + 255 * (1 - a));
+      canvas.data[dst + 2] = Math.round(fg.data[src + 2] * a + 255 * (1 - a));
       canvas.data[dst + 3] = 255;
     }
   }
+  logInfo(
+    `precise-ref image #${index + 1}: src ${width}x${height}` +
+      `${alphaPresent ? " RGBA→RGB(white-flattened)" : " RGB"} → ${target.width}x${target.height}` +
+      ` (fit ${fitW}x${fitH}, white pad)`,
+  );
   return PNG.sync.write(canvas).toString("base64");
 }
 
@@ -1123,6 +1149,31 @@ function resolveActiveSaveGroup(): { groupId: string; folderName: string } | und
   return { groupId: group.id, folderName: sanitizeGroupFolderName(group.name) };
 }
 
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+// PNG chunk types that carry human-readable / embedded generation metadata.
+const PNG_METADATA_CHUNKS = new Set(["tEXt", "iTXt", "zTXt", "eXIf"]);
+
+/**
+ * Remove embedded metadata (tEXt/iTXt/zTXt/eXIf — where NovelAI stores the
+ * prompt / seed / parameters JSON) from a PNG WITHOUT re-encoding the pixels, so
+ * it stays lossless. Non-PNG buffers are returned untouched.
+ */
+function stripPngMetadata(buffer: Buffer): Buffer {
+  if (buffer.length < 8 || !buffer.subarray(0, 8).equals(PNG_SIGNATURE)) return buffer;
+  const out: Buffer[] = [buffer.subarray(0, 8)];
+  let offset = 8;
+  while (offset + 12 <= buffer.length) {
+    const length = buffer.readUInt32BE(offset);
+    const type = buffer.toString("ascii", offset + 4, offset + 8);
+    const chunkEnd = offset + 12 + length; // length(4) + type(4) + data + crc(4)
+    if (chunkEnd > buffer.length) break; // malformed — keep the rest as-is
+    if (!PNG_METADATA_CHUNKS.has(type)) out.push(buffer.subarray(offset, chunkEnd));
+    offset = chunkEnd;
+    if (type === "IEND") break;
+  }
+  return Buffer.concat(out);
+}
+
 async function saveBuffers(
   buffers: Buffer[],
   params: GenerateParams,
@@ -1158,7 +1209,9 @@ async function saveBuffers(
       name: params.fileNamePrefix,
     });
     const filePath = await uniqueFilePath(dir, base, ext);
-    await fs.writeFile(filePath, buffers[index]);
+    // Optionally strip embedded generation metadata before writing to disk.
+    const outBuffer = settings.keepImageMetadata === false ? stripPngMetadata(buffers[index]) : buffers[index];
+    await fs.writeFile(filePath, outBuffer);
     items.push({
       id,
       filePath,
