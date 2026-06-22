@@ -3,6 +3,7 @@ import type {
   AnlasQuoteRequest,
   AppSettings,
   AugmentOptions,
+  BatchRedrawRequest,
   ComicAnalyzeRequest,
   ComicConvertRequest,
   ComicConsistencyRequest,
@@ -27,6 +28,7 @@ contextBridge.exposeInMainWorld("naiDesktop", {
     ipcRenderer.invoke("nai:generate", params, extras),
   generateI2I: (params: GenerateParams, i2i: I2IParams, extras: GenerateExtras) =>
     ipcRenderer.invoke("nai:generateI2I", params, i2i, extras),
+  redrawImage: (request: BatchRedrawRequest) => ipcRenderer.invoke("nai:redrawImage", request),
   inpaint: (
     params: GenerateParams,
     inpaintModel: NAIInpaintModel,

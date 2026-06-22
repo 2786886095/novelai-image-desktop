@@ -15,6 +15,7 @@ import {
   generateComicPanel,
   generateI2I,
   generateImage,
+  redrawImage,
   inpaintImage,
   loadImageFile,
   loadImageFromPath,
@@ -33,6 +34,7 @@ import { danbooruStatus, downloadDanbooruTags, browseDanbooru, searchDanbooru } 
 import type {
   AnlasQuoteRequest,
   AugmentOptions,
+  BatchRedrawRequest,
   ComicAnalyzeRequest,
   ComicConsistencyRequest,
   ComicConvertRequest,
@@ -204,6 +206,7 @@ function registerIpc() {
   ipcMain.handle("nai:quoteAnlas", (_event, request: AnlasQuoteRequest) => quoteAnlasCost(request));
   ipcMain.handle("nai:generate", (_event, params, extras) => generateImage(params, extras));
   ipcMain.handle("nai:generateI2I", (_event, params, i2i: I2IParams, extras) => generateI2I(params, i2i, extras));
+  ipcMain.handle("nai:redrawImage", (_event, request: BatchRedrawRequest) => redrawImage(request));
   ipcMain.handle("nai:inpaint", (_event, params, inpaintModel: NAIInpaintModel, maskBase64: string, strength: number, noise: number) =>
     inpaintImage(params, inpaintModel, maskBase64, strength, noise),
   );

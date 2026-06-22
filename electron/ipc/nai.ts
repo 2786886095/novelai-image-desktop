@@ -27,6 +27,7 @@ import {
   type ComicProject,
   type ComicReferenceAsset,
   type ComicReferenceKind,
+  type BatchRedrawRequest,
   type DirectorTool,
   type GenerateExtras,
   type GenerateParams,
@@ -1128,13 +1129,15 @@ async function saveBuffers(
   actualSeed: number,
   prefix: string,
   modelOverride?: string,
-  saveOptions?: { ignoreActiveGroup?: boolean },
+  saveOptions?: { ignoreActiveGroup?: boolean; groupOverride?: { groupId: string; folderName: string } },
 ): Promise<HistoryItem[]> {
   const settings = getSettings();
   const now = new Date();
   const date = dateStamp(now);
-  // Comic generation owns its own destination group, so it opts out here.
-  const activeGroup = saveOptions?.ignoreActiveGroup ? undefined : resolveActiveSaveGroup();
+  // An explicit groupOverride (batch redraw / comic) wins; otherwise use the
+  // user's actively-selected group unless the caller opts out.
+  const activeGroup =
+    saveOptions?.groupOverride ?? (saveOptions?.ignoreActiveGroup ? undefined : resolveActiveSaveGroup());
   const dir = activeGroup
     ? path.join(settings.outputDir, date, activeGroup.folderName)
     : path.join(settings.outputDir, date);
@@ -2219,9 +2222,15 @@ export async function generateComicPanel(request: ComicGeneratePanelRequest): Pr
   };
   const extras = comicReferencesToExtras(request);
   const hasGenerationReferences = (extras.vibeImages?.length ?? 0) > 0;
-  let result = await generateImage(params, extras, { ignoreActiveGroup: true });
+  // Ensure the comic's history group UP FRONT so panels are saved INTO its disk
+  // subfolder (outputDir/<date>/<group>/) and tagged with its groupId at save
+  // time — previously they landed in the flat date folder and only got the
+  // groupId reassigned afterwards (disk folder didn't match the group).
+  const historyGroup = ensureHistoryGroup(request.projectTitle, request.historyGroupId);
+  const groupOverride = { groupId: historyGroup.id, folderName: sanitizeGroupFolderName(historyGroup.name) };
+  let result = await generateImage(params, extras, { groupOverride });
   if (!result.ok && hasGenerationReferences && result.failureKind === "reference") {
-    const fallback = await generateImage(params, { vibeImages: [], charCaptions: [] }, { ignoreActiveGroup: true });
+    const fallback = await generateImage(params, { vibeImages: [], charCaptions: [] }, { groupOverride });
     result = fallback.ok
       ? {
           ...fallback,
@@ -2233,7 +2242,6 @@ export async function generateComicPanel(request: ComicGeneratePanelRequest): Pr
         };
   }
   if (result.ok && result.items.length > 0) {
-    const historyGroup = ensureHistoryGroup(request.projectTitle, request.historyGroupId);
     result.items = result.items.map((item) => {
       const updated = updateHistoryItem(item.id, {
         feature: "comic",
@@ -2466,7 +2474,7 @@ export async function loadImageFromPath(filePath: string): Promise<LoadImageResu
 export async function generateImage(
   params: GenerateParams,
   extras?: GenerateExtras,
-  saveOptions?: { ignoreActiveGroup?: boolean },
+  saveOptions?: { ignoreActiveGroup?: boolean; groupOverride?: { groupId: string; folderName: string } },
 ): Promise<GenerateResult> {
   const token = getToken();
   if (!token) return { ok: false, message: "请先在 设置 > 网络/API 中配置 NovelAI API Token。", items: [] };
@@ -2551,6 +2559,56 @@ export async function generateI2I(params: GenerateParams, i2i: I2IParams, extras
     return { ok: true, message: `图生图完成，已保存 ${items.length} 张图片。`, items, actualSeed };
   } catch (error: any) {
     return handleGenerateError(error, "图生图失败");
+  } finally {
+    currentAbort = null;
+  }
+}
+
+// Batch redraw = img2img on an EXPLICIT source image (not the workbench image),
+// saved into a named history group (created if missing) on disk + in history.
+// Driven serially by the 图片批量重绘 tool, one call per image.
+export async function redrawImage(request: BatchRedrawRequest): Promise<GenerateResult> {
+  const token = getToken();
+  if (!token) return { ok: false, message: "请先配置 API Token。", items: [] };
+  if (!request.imageBase64) return { ok: false, message: "缺少待重绘的图片。", items: [] };
+  if (!request.params.positivePrompt.trim()) return { ok: false, message: "该图片缺少提示词。", items: [] };
+
+  currentAbort?.abort();
+  currentAbort = new AbortController();
+  const params = { ...request.params, fileNamePrefix: request.fileNamePrefix || request.params.fileNamePrefix || "redraw" };
+  const actualSeed =
+    params.seedMode !== "random" && params.seed > 0 ? params.seed : crypto.randomInt(1, 2_147_483_647);
+  try {
+    const preparedExtras = await prepareExtras(params, request.extras);
+    const srcBuffer = Buffer.from(stripBase64Prefix(request.imageBase64), "base64");
+    const base64Image = resizeImageBufferToPng(srcBuffer, params.width, params.height).toString("base64");
+    const strength = clamp01(request.strength, 0.4);
+    const group = ensureHistoryGroup(request.groupName);
+    const groupOverride = { groupId: group.id, folderName: sanitizeGroupFolderName(group.name) };
+
+    const applyI2I = (payload: ReturnType<typeof buildPayload>) => {
+      payload.action = "img2img";
+      payload.parameters.image = base64Image;
+      payload.parameters.strength = strength;
+      payload.parameters.noise = Math.min(0.99, Math.max(0, request.noise ?? 0));
+      payload.parameters.extra_noise_seed = crypto.randomInt(1, 2_147_483_647);
+      return payload;
+    };
+
+    let buffers: Buffer[];
+    try {
+      buffers = await postGenerateImage(applyI2I(buildPayload(params, actualSeed, preparedExtras)));
+    } catch (error: any) {
+      if (!shouldRetryCharCaptionsAsPipe(error, params, preparedExtras)) throw error;
+      buffers = await postGenerateImage(applyI2I(buildPayload(params, actualSeed, preparedExtras, "pipe")));
+    }
+    if (buffers.length === 0) return { ok: false, message: "重绘成功但无图片返回。", items: [] };
+    const items = await saveBuffers(buffers, params, actualSeed, "redraw", undefined, { groupOverride });
+    void refreshStoredAccount();
+    logInfo(`batch-redraw: model=${params.model} ${params.width}x${params.height} strength=${strength} group=${request.groupName}`);
+    return { ok: true, message: `重绘完成，已保存到分组「${group.name}」。`, items, actualSeed };
+  } catch (error: any) {
+    return handleGenerateError(error, "批量重绘失败");
   } finally {
     currentAbort = null;
   }

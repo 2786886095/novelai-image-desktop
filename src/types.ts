@@ -1,4 +1,4 @@
-export const APP_VERSION = "0.9.8";
+export const APP_VERSION = "0.9.9";
 export const APP_NAME = "Langbai NovelAI Studio";
 export const PROJECT_REPOSITORY = "https://github.com/2786886095/novelai-image-desktop";
 
@@ -127,6 +127,17 @@ export interface I2IParams {
   strength: number;
   noise: number;
   extraNoiseSeed: number;
+}
+
+/** One image's batch-redraw (img2img) request, sent per image to the main process. */
+export interface BatchRedrawRequest {
+  imageBase64: string; // source image (pure base64)
+  params: GenerateParams; // model/size/sampler/steps/seed/cfg + merged positive/negative prompt
+  strength: number; // img2img change strength (0–1, default 0.4)
+  noise?: number;
+  extras?: GenerateExtras; // precise references etc.
+  groupName: string; // target history group (created if missing); images saved into it
+  fileNamePrefix?: string;
 }
 
 export const DEFAULT_I2I_PARAMS: I2IParams = {
@@ -648,6 +659,7 @@ export interface NaiDesktopApi {
   quoteAnlas: (request: AnlasQuoteRequest) => Promise<AnlasQuoteResult>;
   generate: (params: GenerateParams, extras: GenerateExtras) => Promise<GenerateResult>;
   generateI2I: (params: GenerateParams, i2i: I2IParams, extras: GenerateExtras) => Promise<GenerateResult>;
+  redrawImage: (request: BatchRedrawRequest) => Promise<GenerateResult>;
   inpaint: (
     params: GenerateParams,
     inpaintModel: NAIInpaintModel,

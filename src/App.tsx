@@ -26,7 +26,6 @@ import {
   CAT_COLOR,
   CAT_LABEL,
   CAPSULE_TAXONOMY,
-  CAPSULE_GROUPS,
   TAB_ITEMS,
   tagDescription,
 } from "./prompt-data";
@@ -146,58 +145,29 @@ function TagLibrarySettingsSection({ onChanged }: { onChanged?: () => void }) {
   );
 }
 
-// Inspiration capsule browser, backed by the LOCAL Danbooru tag library, with a
-// FINE semantic taxonomy (人物 → 对象/身份/头发/眼睛/… like the reference UI):
-// each subgroup carries English seed keywords; we substring-search the local
-// library for them and show every matching tag (with Chinese) by frequency — so
-// 头发 yields hundreds of real hair tags. Search box overrides with a direct
-// query. Falls back to the built-in taxonomy when the library isn't downloaded.
-// Generous per-seed cap so common substring matches (e.g. long_hair for the
-// "hair" seed) aren't dropped before mergeTagResults re-sorts by frequency.
-const CAPSULE_SEED_LIMIT = 200;
-const CAPSULE_MAX = 400;
-
-function mergeTagResults(lists: TagSuggestion[][]): TagSuggestion[] {
-  const seen = new Set<string>();
-  const out: TagSuggestion[] = [];
-  for (const list of lists) {
-    for (const t of list) {
-      if (seen.has(t.tag)) continue;
-      seen.add(t.tag);
-      out.push(t);
-    }
-  }
-  out.sort((a, b) => b.count - a.count);
-  return out.slice(0, CAPSULE_MAX);
-}
-
+// Inspiration capsule browser. BROWSE (no search) uses the curated, accurate
+// CAPSULE_TAXONOMY — every tag genuinely belongs to its category (the old
+// substring-seed approach leaked cross-category tags, e.g. cropped_jacket under
+// 构图). SEARCH queries the local Danbooru library for breadth. Browse works
+// offline; search needs the downloaded library.
 function CapsuleBrowser({ query, onPick }: { query: string; onPick: (tag: string) => void }) {
   const [downloaded, setDownloaded] = useState<boolean | null>(null);
-  const [catIdx, setCatIdx] = useState(0);
-  const [subIdx, setSubIdx] = useState(0);
   const [items, setItems] = useState<TagSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
   const q = query.trim();
-  const category = CAPSULE_GROUPS[catIdx] ?? CAPSULE_GROUPS[0];
-  const subgroup = category.subgroups[subIdx] ?? category.subgroups[0];
 
   useEffect(() => {
     void window.naiDesktop.danbooruStatus().then((s) => setDownloaded(s.downloaded));
-  }, [query, catIdx, subIdx]);
+  }, [query]);
 
   useEffect(() => {
-    if (downloaded === false) return;
+    if (!q) {
+      setItems([]);
+      return;
+    }
     let alive = true;
     setLoading(true);
-    setItems([]);
-    const run = async (): Promise<TagSuggestion[]> => {
-      if (q) return window.naiDesktop.danbooruSearch(q, 120);
-      const lists = await Promise.all(
-        subgroup.seeds.map((s) => window.naiDesktop.danbooruSearch(s, CAPSULE_SEED_LIMIT)),
-      );
-      return mergeTagResults(lists);
-    };
-    void run().then((res) => {
+    void window.naiDesktop.danbooruSearch(q, 150).then((res) => {
       if (!alive) return;
       setItems(res);
       setLoading(false);
@@ -205,72 +175,38 @@ function CapsuleBrowser({ query, onPick }: { query: string; onPick: (tag: string
     return () => {
       alive = false;
     };
-  }, [q, catIdx, subIdx, downloaded]);
+  }, [q]);
 
-  if (downloaded === false) {
+  if (q) {
+    if (downloaded === false) {
+      return <p className="chip-empty">搜索需要本地标签库，请前往「设置 → 中文标签库」下载后再搜索。下方分类可离线使用。</p>;
+    }
     return (
-      <div className="capsule-tax">
-        <p className="chip-empty">
-          灵感胶囊可使用本地标签库（按热度细分展示上万标签）。请前往「设置 → 中文标签库」下载。以下为内置精简分类：
-        </p>
-        <CapsuleTaxonomy onPick={onPick} />
+      <div className="capsule-browser">
+        <div className="capsule-browser-list">
+          {items.map((t) => {
+            const zh = t.description?.split(/[ ，,]/)[0] || t.tag;
+            return (
+              <button
+                key={t.tag}
+                type="button"
+                className="capsule-tax-chip"
+                onClick={() => onPick(t.tag)}
+                title={`${t.tag}｜${t.description ?? ""}｜热度 ${fmtCount(t.count)}`}
+              >
+                <span className="capsule-tax-zh">{zh}</span>
+                <span className="capsule-tax-en">{t.tag}</span>
+              </button>
+            );
+          })}
+          {items.length === 0 && !loading && <span className="chip-empty">没有匹配的标签</span>}
+          {loading && <span className="chip-empty">加载中…</span>}
+        </div>
       </div>
     );
   }
-  return (
-    <div className="capsule-browser">
-      {!q && (
-        <>
-          <div className="capsule-tax-cats capsule-scroll-row">
-            {CAPSULE_GROUPS.map((c, i) => (
-              <button
-                key={c.name}
-                type="button"
-                className={clsx("capsule-tax-cat", i === catIdx && "active")}
-                onClick={() => {
-                  setCatIdx(i);
-                  setSubIdx(0);
-                }}
-              >
-                {c.name}
-              </button>
-            ))}
-          </div>
-          <div className="capsule-tax-subs capsule-scroll-row">
-            {category.subgroups.map((s, i) => (
-              <button
-                key={s.name}
-                type="button"
-                className={clsx("capsule-tax-sub", i === subIdx && "active")}
-                onClick={() => setSubIdx(i)}
-              >
-                {s.name}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-      <div className="capsule-browser-list">
-        {items.map((t) => {
-          const zh = t.description?.split(/[ ，,]/)[0] || t.tag;
-          return (
-            <button
-              key={t.tag}
-              type="button"
-              className="capsule-tax-chip"
-              onClick={() => onPick(t.tag)}
-              title={`${t.tag}｜${t.description ?? ""}｜热度 ${fmtCount(t.count)}`}
-            >
-              <span className="capsule-tax-zh">{zh}</span>
-              <span className="capsule-tax-en">{t.tag}</span>
-            </button>
-          );
-        })}
-        {items.length === 0 && !loading && <span className="chip-empty">该分类暂无匹配标签</span>}
-        {loading && <span className="chip-empty">加载中…</span>}
-      </div>
-    </div>
-  );
+
+  return <CapsuleTaxonomy onPick={onPick} />;
 }
 
 // Inspiration capsule taxonomy: category tabs → subgroup tabs → bilingual chips.

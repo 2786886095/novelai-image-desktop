@@ -452,492 +452,270 @@ export const CAPSULE_TAXONOMY: CapsuleCategory[] = [
   {
     name: "人物",
     subgroups: [
-      {
-        name: "对象",
-        tags: [
-          { en: "1girl", zh: "1女孩" },
-          { en: "1boy", zh: "1男孩" },
-          { en: "2girls", zh: "2女孩" },
-          { en: "solo", zh: "单人" },
-          { en: "multiple_girls", zh: "多个女孩" },
-          { en: "couple", zh: "情侣" },
-        ],
-      },
-      {
-        name: "身份",
-        tags: [
-          { en: "loli", zh: "萝莉" },
-          { en: "shota", zh: "正太" },
-          { en: "maid", zh: "女仆" },
-          { en: "nun", zh: "修女" },
-          { en: "witch", zh: "女巫" },
-          { en: "knight", zh: "骑士" },
-          { en: "idol", zh: "偶像" },
-        ],
-      },
-      {
-        name: "头发",
-        tags: [
-          { en: "long_hair", zh: "长发" },
-          { en: "short_hair", zh: "短发" },
-          { en: "twintails", zh: "双马尾" },
-          { en: "ponytail", zh: "马尾" },
-          { en: "blonde_hair", zh: "金发" },
-          { en: "black_hair", zh: "黑发" },
-          { en: "blue_hair", zh: "蓝发" },
-          { en: "white_hair", zh: "白发" },
-        ],
-      },
-      {
-        name: "眼睛",
-        tags: [
-          { en: "blue_eyes", zh: "蓝眼" },
-          { en: "red_eyes", zh: "红眼" },
-          { en: "green_eyes", zh: "绿眼" },
-          { en: "yellow_eyes", zh: "黄眼" },
-          { en: "heterochromia", zh: "异色瞳" },
-        ],
-      },
+      { name: "对象", tags: [
+        { en: "1girl", zh: "1女孩" }, { en: "2girls", zh: "2女孩" }, { en: "3girls", zh: "3女孩" },
+        { en: "1boy", zh: "1男孩" }, { en: "2boys", zh: "2男孩" }, { en: "solo", zh: "单人" },
+        { en: "multiple_girls", zh: "多个女孩" }, { en: "multiple_boys", zh: "多个男孩" },
+        { en: "1other", zh: "1其他" }, { en: "couple", zh: "情侣" }, { en: "group", zh: "群像" } ] },
+      { name: "身份", tags: [
+        { en: "maid", zh: "女仆" }, { en: "nun", zh: "修女" }, { en: "witch", zh: "女巫" },
+        { en: "idol", zh: "偶像" }, { en: "nurse", zh: "护士" }, { en: "police", zh: "警察" },
+        { en: "knight", zh: "骑士" }, { en: "samurai", zh: "武士" }, { en: "ninja", zh: "忍者" },
+        { en: "schoolgirl", zh: "女学生" }, { en: "teacher", zh: "教师" }, { en: "office_lady", zh: "OL" },
+        { en: "princess", zh: "公主" }, { en: "queen", zh: "女王" }, { en: "angel", zh: "天使" }, { en: "demon_girl", zh: "恶魔娘" } ] },
+      { name: "年龄", tags: [
+        { en: "loli", zh: "萝莉" }, { en: "shota", zh: "正太" }, { en: "child", zh: "儿童" },
+        { en: "teenage_girl", zh: "少女" }, { en: "mature_female", zh: "成熟女性" }, { en: "milf", zh: "御姐/熟女" },
+        { en: "old_woman", zh: "老妇" }, { en: "old_man", zh: "老人" }, { en: "aged_down", zh: "幼年化" } ] },
+      { name: "体型", tags: [
+        { en: "petite", zh: "娇小" }, { en: "slim", zh: "纤细" }, { en: "curvy", zh: "丰满曲线" },
+        { en: "muscular_female", zh: "肌肉女性" }, { en: "plump", zh: "丰腴" }, { en: "tall_female", zh: "高个女性" },
+        { en: "wide_hips", zh: "宽臀" }, { en: "thick_thighs", zh: "粗腿" }, { en: "toned", zh: "结实" } ] },
+      { name: "肤色", tags: [
+        { en: "pale_skin", zh: "白皙皮肤" }, { en: "dark_skin", zh: "深色皮肤" }, { en: "tan", zh: "小麦色" },
+        { en: "dark-skinned_female", zh: "深肤色女性" }, { en: "freckles", zh: "雀斑" }, { en: "shiny_skin", zh: "光泽皮肤" } ] },
+      { name: "发型", tags: [
+        { en: "long_hair", zh: "长发" }, { en: "short_hair", zh: "短发" }, { en: "very_long_hair", zh: "超长发" },
+        { en: "twintails", zh: "双马尾" }, { en: "ponytail", zh: "马尾" }, { en: "braid", zh: "辫子" },
+        { en: "twin_braids", zh: "双辫" }, { en: "hair_bun", zh: "丸子头" }, { en: "bob_cut", zh: "波波头" },
+        { en: "ahoge", zh: "呆毛" }, { en: "drill_hair", zh: "钻头卷" }, { en: "messy_hair", zh: "凌乱发" },
+        { en: "wavy_hair", zh: "波浪发" }, { en: "curly_hair", zh: "卷发" }, { en: "hime_cut", zh: "公主切" } ] },
+      { name: "发色", tags: [
+        { en: "blonde_hair", zh: "金发" }, { en: "black_hair", zh: "黑发" }, { en: "brown_hair", zh: "棕发" },
+        { en: "white_hair", zh: "白发" }, { en: "silver_hair", zh: "银发" }, { en: "blue_hair", zh: "蓝发" },
+        { en: "red_hair", zh: "红发" }, { en: "pink_hair", zh: "粉发" }, { en: "purple_hair", zh: "紫发" },
+        { en: "green_hair", zh: "绿发" }, { en: "grey_hair", zh: "灰发" }, { en: "orange_hair", zh: "橙发" },
+        { en: "multicolored_hair", zh: "多色发" }, { en: "gradient_hair", zh: "渐变发" }, { en: "two-tone_hair", zh: "双色发" } ] },
+      { name: "眼睛", tags: [
+        { en: "blue_eyes", zh: "蓝眼" }, { en: "red_eyes", zh: "红眼" }, { en: "green_eyes", zh: "绿眼" },
+        { en: "yellow_eyes", zh: "黄眼" }, { en: "purple_eyes", zh: "紫眼" }, { en: "pink_eyes", zh: "粉眼" },
+        { en: "brown_eyes", zh: "棕眼" }, { en: "black_eyes", zh: "黑眼" }, { en: "heterochromia", zh: "异色瞳" },
+        { en: "closed_eyes", zh: "闭眼" }, { en: "half-closed_eyes", zh: "半闭眼" }, { en: "glowing_eyes", zh: "发光眼" } ] },
+      { name: "瞳孔", tags: [
+        { en: "slit_pupils", zh: "竖瞳" }, { en: "heart-shaped_pupils", zh: "心形瞳" }, { en: "star-shaped_pupils", zh: "星形瞳" },
+        { en: "sparkling_eyes", zh: "闪亮眼" }, { en: "ringed_eyes", zh: "环状瞳" } ] },
+      { name: "耳朵", tags: [
+        { en: "pointy_ears", zh: "尖耳" }, { en: "animal_ears", zh: "兽耳" }, { en: "cat_ears", zh: "猫耳" },
+        { en: "fox_ears", zh: "狐耳" }, { en: "rabbit_ears", zh: "兔耳" }, { en: "dog_ears", zh: "狗耳" } ] },
+      { name: "口齿", tags: [
+        { en: "open_mouth", zh: "张嘴" }, { en: "closed_mouth", zh: "闭嘴" }, { en: "lips", zh: "嘴唇" },
+        { en: "fang", zh: "虎牙" }, { en: "tongue_out", zh: "吐舌" }, { en: "teeth", zh: "牙齿" }, { en: "lipstick", zh: "口红" } ] },
+      { name: "胸部", tags: [
+        { en: "small_breasts", zh: "小胸" }, { en: "medium_breasts", zh: "中胸" }, { en: "large_breasts", zh: "大胸" },
+        { en: "huge_breasts", zh: "巨乳" }, { en: "flat_chest", zh: "平胸" }, { en: "cleavage", zh: "事业线" } ] },
+      { name: "翅膀尾角", tags: [
+        { en: "wings", zh: "翅膀" }, { en: "angel_wings", zh: "天使翼" }, { en: "demon_wings", zh: "恶魔翼" },
+        { en: "tail", zh: "尾巴" }, { en: "cat_tail", zh: "猫尾" }, { en: "horns", zh: "角" }, { en: "halo", zh: "光环" } ] },
     ],
   },
   {
     name: "服饰",
     subgroups: [
-      {
-        name: "套装",
-        tags: [
-          { en: "school_uniform", zh: "校服" },
-          { en: "dress", zh: "连衣裙" },
-          { en: "kimono", zh: "和服" },
-          { en: "swimsuit", zh: "泳装" },
-          { en: "suit", zh: "西装" },
-          { en: "hoodie", zh: "连帽衫" },
-        ],
-      },
-      {
-        name: "配饰",
-        tags: [
-          { en: "glasses", zh: "眼镜" },
-          { en: "hair_ornament", zh: "发饰" },
-          { en: "ribbon", zh: "丝带" },
-          { en: "necklace", zh: "项链" },
-          { en: "gloves", zh: "手套" },
-        ],
-      },
+      { name: "上衣", tags: [
+        { en: "shirt", zh: "衬衫" }, { en: "t-shirt", zh: "T恤" }, { en: "blouse", zh: "女衬衫" },
+        { en: "sweater", zh: "毛衣" }, { en: "hoodie", zh: "连帽衫" }, { en: "jacket", zh: "夹克" },
+        { en: "coat", zh: "外套" }, { en: "cardigan", zh: "开衫" }, { en: "vest", zh: "马甲" }, { en: "crop_top", zh: "露脐上衣" } ] },
+      { name: "下装", tags: [
+        { en: "skirt", zh: "裙子" }, { en: "pleated_skirt", zh: "百褶裙" }, { en: "miniskirt", zh: "迷你裙" },
+        { en: "long_skirt", zh: "长裙" }, { en: "shorts", zh: "短裤" }, { en: "pants", zh: "长裤" }, { en: "jeans", zh: "牛仔裤" } ] },
+      { name: "连衣裙", tags: [
+        { en: "dress", zh: "连衣裙" }, { en: "sundress", zh: "吊带裙" }, { en: "evening_gown", zh: "晚礼服" },
+        { en: "wedding_dress", zh: "婚纱" }, { en: "china_dress", zh: "旗袍" }, { en: "frilled_dress", zh: "荷叶边裙" } ] },
+      { name: "制服", tags: [
+        { en: "school_uniform", zh: "校服" }, { en: "serafuku", zh: "水手服" }, { en: "sailor_collar", zh: "水手领" },
+        { en: "military_uniform", zh: "军装" }, { en: "maid_apron", zh: "女仆围裙" }, { en: "gym_uniform", zh: "体操服" } ] },
+      { name: "泳装内衣", tags: [
+        { en: "swimsuit", zh: "泳装" }, { en: "bikini", zh: "比基尼" }, { en: "school_swimsuit", zh: "学校泳装" },
+        { en: "one-piece_swimsuit", zh: "连体泳装" }, { en: "underwear", zh: "内衣" }, { en: "bra", zh: "胸罩" },
+        { en: "panties", zh: "内裤" }, { en: "lingerie", zh: "情趣内衣" }, { en: "leotard", zh: "紧身衣" } ] },
+      { name: "腿袜鞋", tags: [
+        { en: "thighhighs", zh: "过膝袜" }, { en: "pantyhose", zh: "连裤袜" }, { en: "socks", zh: "袜子" },
+        { en: "kneehighs", zh: "及膝袜" }, { en: "boots", zh: "靴子" }, { en: "high_heels", zh: "高跟鞋" },
+        { en: "sneakers", zh: "运动鞋" }, { en: "sandals", zh: "凉鞋" }, { en: "mary_janes", zh: "玛丽珍鞋" } ] },
+      { name: "头饰", tags: [
+        { en: "hat", zh: "帽子" }, { en: "hair_ribbon", zh: "发带" }, { en: "hair_ornament", zh: "发饰" },
+        { en: "hairband", zh: "发箍" }, { en: "hairclip", zh: "发夹" }, { en: "headband", zh: "头带" },
+        { en: "beret", zh: "贝雷帽" }, { en: "witch_hat", zh: "女巫帽" }, { en: "crown", zh: "皇冠" }, { en: "maid_headdress", zh: "女仆头饰" } ] },
+      { name: "配饰", tags: [
+        { en: "glasses", zh: "眼镜" }, { en: "gloves", zh: "手套" }, { en: "necklace", zh: "项链" },
+        { en: "earrings", zh: "耳环" }, { en: "choker", zh: "颈圈" }, { en: "scarf", zh: "围巾" },
+        { en: "bracelet", zh: "手镯" }, { en: "belt", zh: "腰带" }, { en: "bag", zh: "包" }, { en: "ribbon", zh: "丝带" } ] },
+      { name: "和风汉服", tags: [
+        { en: "kimono", zh: "和服" }, { en: "yukata", zh: "浴衣" }, { en: "hakama", zh: "袴" },
+        { en: "japanese_clothes", zh: "和风服饰" }, { en: "hanfu", zh: "汉服" }, { en: "chinese_clothes", zh: "中式服装" } ] },
     ],
   },
   {
-    name: "表情动作",
+    name: "表情",
     subgroups: [
-      {
-        name: "表情",
-        tags: [
-          { en: "smile", zh: "微笑" },
-          { en: "open_mouth", zh: "张嘴" },
-          { en: "blush", zh: "脸红" },
-          { en: "crying", zh: "哭泣" },
-          { en: "angry", zh: "生气" },
-          { en: "expressionless", zh: "面无表情" },
-        ],
-      },
-      {
-        name: "动作",
-        tags: [
-          { en: "looking_at_viewer", zh: "看向观众" },
-          { en: "standing", zh: "站立" },
-          { en: "sitting", zh: "坐姿" },
-          { en: "lying", zh: "躺卧" },
-          { en: "running", zh: "奔跑" },
-          { en: "waving", zh: "挥手" },
-        ],
-      },
+      { name: "情绪", tags: [
+        { en: "smile", zh: "微笑" }, { en: "grin", zh: "咧嘴笑" }, { en: "laughing", zh: "大笑" },
+        { en: "blush", zh: "脸红" }, { en: "crying", zh: "哭泣" }, { en: "tears", zh: "泪水" },
+        { en: "angry", zh: "生气" }, { en: "pout", zh: "嘟嘴" }, { en: "surprised", zh: "惊讶" },
+        { en: "expressionless", zh: "面无表情" }, { en: "smug", zh: "得意" }, { en: "embarrassed", zh: "害羞" },
+        { en: "sad", zh: "悲伤" }, { en: "serious", zh: "严肃" }, { en: "seductive_smile", zh: "魅惑笑" } ] },
+      { name: "视线", tags: [
+        { en: "looking_at_viewer", zh: "看向观众" }, { en: "looking_away", zh: "看向别处" }, { en: "looking_back", zh: "回眸" },
+        { en: "looking_up", zh: "向上看" }, { en: "looking_down", zh: "向下看" }, { en: "eye_contact", zh: "对视" } ] },
     ],
   },
   {
-    name: "画面",
+    name: "动作姿势",
     subgroups: [
-      {
-        // NovelAI docs use these composition terms in their examples.
-        name: "构图",
-        tags: [
-          { en: "full_body", zh: "全身" },
-          { en: "upper_body", zh: "上半身" },
-          { en: "portrait", zh: "肖像" },
-          { en: "close-up", zh: "特写" },
-          { en: "from_above", zh: "俯视" },
-          { en: "from_below", zh: "仰视" },
-          { en: "dutch_angle", zh: "倾斜构图" },
-          { en: "wide_shot", zh: "远景" },
-        ],
-      },
-      {
-        name: "光影",
-        tags: [
-          { en: "cinematic_lighting", zh: "电影光" },
-          { en: "backlighting", zh: "逆光" },
-          { en: "rim_lighting", zh: "轮廓光" },
-          { en: "dappled_sunlight", zh: "斑驳阳光" },
-          { en: "god_rays", zh: "丁达尔光" },
-        ],
-      },
+      { name: "姿势", tags: [
+        { en: "standing", zh: "站立" }, { en: "sitting", zh: "坐姿" }, { en: "lying", zh: "躺卧" },
+        { en: "kneeling", zh: "跪姿" }, { en: "squatting", zh: "蹲姿" }, { en: "crossed_legs", zh: "翘腿" },
+        { en: "on_back", zh: "仰卧" }, { en: "on_stomach", zh: "俯卧" }, { en: "leaning_forward", zh: "前倾" },
+        { en: "arched_back", zh: "弓背" } ] },
+      { name: "手部", tags: [
+        { en: "hand_up", zh: "举手" }, { en: "hands_on_hips", zh: "叉腰" }, { en: "peace_sign", zh: "比耶" },
+        { en: "waving", zh: "挥手" }, { en: "pointing", zh: "指向" }, { en: "thumbs_up", zh: "点赞" },
+        { en: "hand_on_own_cheek", zh: "托腮" }, { en: "covering_mouth", zh: "捂嘴" } ] },
+      { name: "动作", tags: [
+        { en: "holding", zh: "持物" }, { en: "running", zh: "奔跑" }, { en: "jumping", zh: "跳跃" },
+        { en: "walking", zh: "行走" }, { en: "dancing", zh: "跳舞" }, { en: "hug", zh: "拥抱" },
+        { en: "sleeping", zh: "睡觉" }, { en: "stretching", zh: "伸展" }, { en: "falling", zh: "坠落" } ] },
     ],
   },
   {
-    name: "环境",
+    name: "画面构图",
     subgroups: [
-      {
-        name: "时间天气",
-        tags: [
-          { en: "day", zh: "白天" },
-          { en: "night", zh: "夜晚" },
-          { en: "sunset", zh: "日落" },
-          { en: "rain", zh: "雨" },
-          { en: "snow", zh: "雪" },
-          { en: "starry_sky", zh: "星空" },
-        ],
-      },
-      {
-        name: "场景",
-        tags: [
-          { en: "outdoors", zh: "户外" },
-          { en: "indoors", zh: "室内" },
-          { en: "city", zh: "城市" },
-          { en: "forest", zh: "森林" },
-          { en: "beach", zh: "海滩" },
-          { en: "classroom", zh: "教室" },
-        ],
-      },
+      { name: "景别", tags: [
+        { en: "portrait", zh: "肖像" }, { en: "close-up", zh: "特写" }, { en: "upper_body", zh: "上半身" },
+        { en: "cowboy_shot", zh: "七分身" }, { en: "full_body", zh: "全身" }, { en: "wide_shot", zh: "远景" },
+        { en: "feet_out_of_frame", zh: "脚出框" } ] },
+      { name: "视角", tags: [
+        { en: "from_above", zh: "俯视" }, { en: "from_below", zh: "仰视" }, { en: "from_side", zh: "侧面" },
+        { en: "from_behind", zh: "背后视角" }, { en: "dutch_angle", zh: "倾斜构图" }, { en: "pov", zh: "第一人称" },
+        { en: "profile", zh: "侧脸" }, { en: "three-quarter_view", zh: "四分之三视角" } ] },
+      { name: "构图", tags: [
+        { en: "rule_of_thirds", zh: "三分构图" }, { en: "depth_of_field", zh: "景深" }, { en: "scenery", zh: "风景构图" },
+        { en: "symmetry", zh: "对称" }, { en: "silhouette", zh: "剪影" }, { en: "backlighting", zh: "逆光" } ] },
     ],
   },
   {
-    name: "风格画风",
+    name: "光影画质",
     subgroups: [
-      {
-        name: "媒介",
-        tags: [
-          { en: "watercolor_(medium)", zh: "水彩" },
-          { en: "oil_painting_(medium)", zh: "油画" },
-          { en: "sketch", zh: "素描" },
-          { en: "pixel_art", zh: "像素画" },
-          { en: "3d", zh: "3D 渲染" },
-          { en: "lineart", zh: "线稿" },
-        ],
-      },
-      {
-        name: "流派",
-        tags: [
-          { en: "anime", zh: "动漫" },
-          { en: "realistic", zh: "写实" },
-          { en: "cyberpunk", zh: "赛博朋克" },
-          { en: "steampunk", zh: "蒸汽朋克" },
-          { en: "ukiyo-e", zh: "浮世绘" },
-          { en: "art_nouveau", zh: "新艺术" },
-          { en: "chibi", zh: "Q版" },
-        ],
-      },
+      { name: "光照", tags: [
+        { en: "cinematic_lighting", zh: "电影光" }, { en: "rim_lighting", zh: "轮廓光" }, { en: "volumetric_lighting", zh: "体积光" },
+        { en: "sunlight", zh: "阳光" }, { en: "dappled_sunlight", zh: "斑驳阳光" }, { en: "god_rays", zh: "丁达尔光" },
+        { en: "lens_flare", zh: "镜头光晕" }, { en: "bloom", zh: "泛光" }, { en: "soft_lighting", zh: "柔光" } ] },
+      { name: "质量词", tags: [
+        { en: "masterpiece", zh: "杰作" }, { en: "best_quality", zh: "最佳质量" }, { en: "very_aesthetic", zh: "高审美" },
+        { en: "absurdres", zh: "超高分辨率" }, { en: "highres", zh: "高分辨率" }, { en: "very_detailed", zh: "高细节" },
+        { en: "official_art", zh: "官方画风" }, { en: "extremely_detailed", zh: "极致细节" } ] },
     ],
   },
   {
-    name: "镜头视角",
+    name: "环境天气",
     subgroups: [
-      {
-        name: "景别",
-        tags: [
-          { en: "extreme_closeup", zh: "大特写" },
-          { en: "cowboy_shot", zh: "七分身" },
-          { en: "full_body", zh: "全身" },
-          { en: "wide_shot", zh: "远景" },
-          { en: "panorama", zh: "全景" },
-        ],
-      },
-      {
-        name: "视角",
-        tags: [
-          { en: "profile", zh: "侧脸" },
-          { en: "three-quarter_view", zh: "四分之三视角" },
-          { en: "pov", zh: "第一人称视角" },
-          { en: "from_side", zh: "侧面" },
-          { en: "looking_back", zh: "回眸" },
-        ],
-      },
-    ],
-  },
-  {
-    name: "色彩",
-    subgroups: [
-      {
-        name: "色调",
-        tags: [
-          { en: "monochrome", zh: "单色" },
-          { en: "pastel_colors", zh: "粉彩色" },
-          { en: "vivid_colors", zh: "鲜艳色" },
-          { en: "muted_color", zh: "低饱和" },
-          { en: "limited_palette", zh: "有限配色" },
-          { en: "gradient", zh: "渐变" },
-        ],
-      },
-    ],
-  },
-  {
-    name: "光效特效",
-    subgroups: [
-      {
-        name: "光",
-        tags: [
-          { en: "lens_flare", zh: "镜头光晕" },
-          { en: "volumetric_lighting", zh: "体积光" },
-          { en: "bloom", zh: "泛光" },
-          { en: "bioluminescence", zh: "生物荧光" },
-        ],
-      },
-      {
-        name: "特效",
-        tags: [
-          { en: "depth_of_field", zh: "景深" },
-          { en: "bokeh", zh: "背景虚化" },
-          { en: "motion_blur", zh: "动态模糊" },
-          { en: "sparkle", zh: "闪光粒子" },
-          { en: "glowing", zh: "发光" },
-        ],
-      },
-    ],
-  },
-  {
-    name: "生物",
-    subgroups: [
-      {
-        name: "动物",
-        tags: [
-          { en: "cat", zh: "猫" },
-          { en: "dog", zh: "狗" },
-          { en: "bird", zh: "鸟" },
-          { en: "fox", zh: "狐狸" },
-          { en: "horse", zh: "马" },
-        ],
-      },
-      {
-        name: "幻想生物",
-        tags: [
-          { en: "dragon", zh: "龙" },
-          { en: "fairy", zh: "妖精" },
-          { en: "mermaid", zh: "美人鱼" },
-          { en: "angel", zh: "天使" },
-          { en: "demon", zh: "恶魔" },
-        ],
-      },
-    ],
-  },
-  {
-    name: "道具",
-    subgroups: [
-      {
-        name: "武器",
-        tags: [
-          { en: "sword", zh: "剑" },
-          { en: "gun", zh: "枪" },
-          { en: "bow_(weapon)", zh: "弓" },
-          { en: "katana", zh: "武士刀" },
-          { en: "staff", zh: "法杖" },
-        ],
-      },
-      {
-        name: "物品",
-        tags: [
-          { en: "book", zh: "书" },
-          { en: "flower", zh: "花" },
-          { en: "umbrella", zh: "伞" },
-          { en: "cup", zh: "杯子" },
-          { en: "smartphone", zh: "手机" },
-        ],
-      },
-    ],
-  },
-  {
-    name: "氛围",
-    subgroups: [
-      {
-        name: "情绪氛围",
-        tags: [
-          { en: "serene", zh: "宁静" },
-          { en: "dramatic", zh: "戏剧化" },
-          { en: "melancholic", zh: "忧郁" },
-          { en: "cheerful", zh: "欢快" },
-          { en: "dreamy", zh: "梦幻" },
-          { en: "ethereal", zh: "空灵" },
-        ],
-      },
-    ],
-  },
-  {
-    name: "奇幻科幻",
-    subgroups: [
-      {
-        name: "奇幻",
-        tags: [
-          { en: "magic", zh: "魔法" },
-          { en: "castle", zh: "城堡" },
-          { en: "elf", zh: "精灵" },
-          { en: "floating_island", zh: "浮空岛" },
-          { en: "rune", zh: "符文" },
-        ],
-      },
-      {
-        name: "科幻",
-        tags: [
-          { en: "robot", zh: "机器人" },
-          { en: "mecha", zh: "机甲" },
-          { en: "spaceship", zh: "飞船" },
-          { en: "neon_lights", zh: "霓虹灯" },
-          { en: "hologram", zh: "全息投影" },
-        ],
-      },
-    ],
-  },
-  {
-    name: "质量修饰",
-    subgroups: [
-      {
-        // Official NovelAI quality tags (from the docs' quality-tags guidance).
-        name: "官方质量词",
-        tags: [
-          { en: "very aesthetic", zh: "高审美" },
-          { en: "masterpiece", zh: "杰作" },
-          { en: "best quality", zh: "最佳质量" },
-          { en: "absurdres", zh: "超高分辨率" },
-          { en: "very detailed", zh: "高细节" },
-          { en: "official art", zh: "官方画风" },
-        ],
-      },
-    ],
-  },
-  {
-    name: "反向提示词",
-    subgroups: [
-      {
-        name: "常用负面",
-        tags: [
-          { en: "lowres", zh: "低分辨率" },
-          { en: "bad anatomy", zh: "解剖错误" },
-          { en: "bad hands", zh: "畸形手" },
-          { en: "extra digits", zh: "多余手指" },
-          { en: "jpeg artifacts", zh: "压缩失真" },
-          { en: "watermark", zh: "水印" },
-          { en: "blurry", zh: "模糊" },
-        ],
-      },
-    ],
-  },
-];
-
-// ── 灵感胶囊精细分类（seed → 本地标签库）────────────────────────────────────────
-// Fine-grained capsule taxonomy modelled on the reference UI: each category has
-// many subgroups, and each subgroup carries English "seed" keywords. The capsule
-// substring-searches the LOCAL Danbooru library for those seeds and shows every
-// matching tag (with Chinese) sorted by post-count — so a single 头发 subgroup
-// yields hundreds of real hair tags instead of a handful of hardcoded ones.
-export interface CapsuleSeedGroup {
-  name: string;        // Chinese subgroup label
-  seeds: string[];     // English substring seeds matched against danbooru tag names
-}
-export interface CapsuleSeedCategory {
-  name: string;
-  subgroups: CapsuleSeedGroup[];
-}
-
-export const CAPSULE_GROUPS: CapsuleSeedCategory[] = [
-  {
-    name: "人物",
-    subgroups: [
-      { name: "对象", seeds: ["1girl", "2girls", "1boy", "solo", "multiple_girls", "multiple_boys", "couple"] },
-      { name: "身份", seeds: ["maid", "nun", "witch", "idol", "nurse", "police", "knight", "samurai", "ninja", "teacher", "student"] },
-      { name: "二次元角色", seeds: ["girl", "boy", "loli", "shota", "kemonomimi", "monster_girl"] },
-      { name: "年龄", seeds: ["loli", "shota", "mature", "milf", "old", "child", "aged", "teenage"] },
-      { name: "皮肤", seeds: ["skin", "tan", "dark_skin", "pale", "freckles"] },
-      { name: "身材", seeds: ["breasts", "muscular", "curvy", "plump", "thin", "tall", "petite", "abs", "wide_hips"] },
-      { name: "脸型", seeds: ["face", "cheek", "jaw", "chin", "facial"] },
-      { name: "头发", seeds: ["hair", "bangs", "ponytail", "twintails", "braid", "bun"] },
-      { name: "眼睛", seeds: ["eyes", "eyelashes", "eyeshadow", "heterochromia"] },
-      { name: "瞳孔", seeds: ["pupils", "pupil"] },
-      { name: "耳朵", seeds: ["ears", "earrings"] },
-      { name: "眉毛", seeds: ["eyebrows", "eyebrow"] },
-      { name: "鼻子", seeds: ["nose"] },
-      { name: "嘴巴", seeds: ["mouth", "lips", "teeth", "tongue", "fang"] },
-      { name: "指甲", seeds: ["nails", "nail_polish"] },
-      { name: "胸部", seeds: ["breasts", "cleavage", "chest"] },
-      { name: "腰腹", seeds: ["waist", "navel", "stomach", "hips"] },
-      { name: "翅膀尾巴", seeds: ["wings", "tail", "halo", "horns"] },
-    ],
-  },
-  {
-    name: "服饰",
-    subgroups: [
-      { name: "上衣", seeds: ["shirt", "jacket", "coat", "sweater", "hoodie", "blouse", "vest", "top"] },
-      { name: "下装", seeds: ["skirt", "pants", "shorts", "trousers", "jeans"] },
-      { name: "连衣裙", seeds: ["dress", "gown"] },
-      { name: "制服", seeds: ["uniform", "school_uniform", "military_uniform", "serafuku"] },
-      { name: "泳装内衣", seeds: ["swimsuit", "bikini", "underwear", "bra", "panties", "lingerie", "leotard"] },
-      { name: "鞋袜", seeds: ["shoes", "boots", "socks", "thighhighs", "sandals", "heels", "pantyhose"] },
-      { name: "头饰", seeds: ["hat", "headwear", "hair_ornament", "ribbon", "headband", "helmet", "hairclip", "crown"] },
-      { name: "配饰", seeds: ["glasses", "gloves", "necklace", "earrings", "scarf", "jewelry", "choker", "bracelet", "belt"] },
-      { name: "和风汉服", seeds: ["kimono", "yukata", "hakama", "japanese_clothes", "hanfu", "qipao"] },
-    ],
-  },
-  {
-    name: "表情动作",
-    subgroups: [
-      { name: "表情", seeds: ["smile", "blush", "crying", "angry", "surprised", "grin", "pout", "expressionless", "smug"] },
-      { name: "视线", seeds: ["looking_at_viewer", "looking_back", "looking_away", "eye_contact"] },
-      { name: "姿势", seeds: ["standing", "sitting", "lying", "kneeling", "squatting", "pose", "crossed_legs", "arms_up"] },
-      { name: "手势", seeds: ["hand", "fingers", "peace_sign", "waving", "pointing", "thumbs_up"] },
-      { name: "动作", seeds: ["holding", "running", "jumping", "dancing", "walking", "hugging"] },
-    ],
-  },
-  {
-    name: "画面",
-    subgroups: [
-      { name: "构图", seeds: ["close-up", "portrait", "full_body", "upper_body", "cowboy_shot", "wide_shot", "cropped"] },
-      { name: "视角", seeds: ["from_above", "from_below", "from_side", "from_behind", "dutch_angle", "pov", "profile"] },
-      { name: "光影", seeds: ["lighting", "backlighting", "shadow", "sunlight", "rim_light", "bloom"] },
-      { name: "画质", seeds: ["highres", "detailed", "masterpiece", "absurdres", "quality"] },
-    ],
-  },
-  {
-    name: "环境",
-    subgroups: [
-      { name: "天气", seeds: ["rain", "snow", "cloud", "sunny", "fog", "storm", "rainbow"] },
-      { name: "时间", seeds: ["day", "night", "sunset", "morning", "evening", "dusk", "twilight"] },
-      { name: "自然", seeds: ["sky", "tree", "flower", "mountain", "ocean", "forest", "grass", "water", "star"] },
+      { name: "天气", tags: [
+        { en: "rain", zh: "雨" }, { en: "snow", zh: "雪" }, { en: "clouds", zh: "云" },
+        { en: "fog", zh: "雾" }, { en: "thunderstorm", zh: "雷暴" }, { en: "rainbow", zh: "彩虹" }, { en: "wind", zh: "风" } ] },
+      { name: "时间", tags: [
+        { en: "day", zh: "白天" }, { en: "night", zh: "夜晚" }, { en: "sunset", zh: "日落" },
+        { en: "sunrise", zh: "日出" }, { en: "dusk", zh: "黄昏" }, { en: "morning", zh: "清晨" } ] },
+      { name: "天空", tags: [
+        { en: "sky", zh: "天空" }, { en: "blue_sky", zh: "蓝天" }, { en: "starry_sky", zh: "星空" },
+        { en: "night_sky", zh: "夜空" }, { en: "cloudy_sky", zh: "多云天空" }, { en: "moon", zh: "月亮" }, { en: "full_moon", zh: "满月" } ] },
     ],
   },
   {
     name: "场景",
     subgroups: [
-      { name: "室内", seeds: ["room", "indoors", "classroom", "kitchen", "bedroom", "bathroom", "cafe", "library"] },
-      { name: "室外", seeds: ["outdoors", "city", "street", "building", "park", "beach", "garden", "rooftop"] },
-      { name: "幻想", seeds: ["castle", "ruins", "fantasy", "temple", "shrine", "dungeon"] },
+      { name: "室内", tags: [
+        { en: "indoors", zh: "室内" }, { en: "classroom", zh: "教室" }, { en: "bedroom", zh: "卧室" },
+        { en: "kitchen", zh: "厨房" }, { en: "bathroom", zh: "浴室" }, { en: "cafe", zh: "咖啡馆" },
+        { en: "library", zh: "图书馆" }, { en: "office", zh: "办公室" }, { en: "living_room", zh: "客厅" } ] },
+      { name: "室外", tags: [
+        { en: "outdoors", zh: "户外" }, { en: "cityscape", zh: "城市景观" }, { en: "street", zh: "街道" },
+        { en: "rooftop", zh: "屋顶" }, { en: "park", zh: "公园" }, { en: "beach", zh: "海滩" },
+        { en: "garden", zh: "花园" }, { en: "alley", zh: "小巷" }, { en: "shopping_district", zh: "商业街" } ] },
+      { name: "自然", tags: [
+        { en: "forest", zh: "森林" }, { en: "mountain", zh: "山" }, { en: "ocean", zh: "海洋" },
+        { en: "lake", zh: "湖" }, { en: "river", zh: "河流" }, { en: "field", zh: "田野" },
+        { en: "flower_field", zh: "花田" }, { en: "waterfall", zh: "瀑布" }, { en: "cherry_blossoms", zh: "樱花" } ] },
+      { name: "幻想场景", tags: [
+        { en: "castle", zh: "城堡" }, { en: "ruins", zh: "废墟" }, { en: "temple", zh: "神殿" },
+        { en: "shrine", zh: "神社" }, { en: "dungeon", zh: "地牢" }, { en: "floating_island", zh: "浮空岛" }, { en: "fantasy", zh: "幻想世界" } ] },
     ],
   },
   {
-    name: "物品",
+    name: "物品道具",
     subgroups: [
-      { name: "武器", seeds: ["sword", "gun", "weapon", "bow", "knife", "staff", "spear", "shield", "katana"] },
-      { name: "食物", seeds: ["food", "cake", "fruit", "drink", "candy", "ice_cream", "coffee"] },
-      { name: "日常", seeds: ["book", "phone", "umbrella", "bag", "cup", "flower", "balloon", "stuffed_toy"] },
-      { name: "乐器", seeds: ["instrument", "guitar", "piano", "violin", "drum"] },
+      { name: "武器", tags: [
+        { en: "sword", zh: "剑" }, { en: "katana", zh: "武士刀" }, { en: "gun", zh: "枪" },
+        { en: "rifle", zh: "步枪" }, { en: "bow_(weapon)", zh: "弓" }, { en: "knife", zh: "刀" },
+        { en: "staff", zh: "法杖" }, { en: "polearm", zh: "长柄武器" }, { en: "shield", zh: "盾" }, { en: "scythe", zh: "镰刀" } ] },
+      { name: "食物", tags: [
+        { en: "food", zh: "食物" }, { en: "cake", zh: "蛋糕" }, { en: "ice_cream", zh: "冰淇淋" },
+        { en: "fruit", zh: "水果" }, { en: "candy", zh: "糖果" }, { en: "coffee", zh: "咖啡" },
+        { en: "bento", zh: "便当" }, { en: "ramen", zh: "拉面" }, { en: "drink", zh: "饮料" } ] },
+      { name: "日常", tags: [
+        { en: "book", zh: "书" }, { en: "smartphone", zh: "手机" }, { en: "umbrella", zh: "伞" },
+        { en: "cup", zh: "杯子" }, { en: "bag", zh: "包" }, { en: "balloon", zh: "气球" },
+        { en: "stuffed_toy", zh: "玩偶" }, { en: "headphones", zh: "耳机" }, { en: "camera", zh: "相机" } ] },
+      { name: "植物乐器", tags: [
+        { en: "flower", zh: "花" }, { en: "rose", zh: "玫瑰" }, { en: "petals", zh: "花瓣" },
+        { en: "leaf", zh: "叶子" }, { en: "guitar", zh: "吉他" }, { en: "piano", zh: "钢琴" }, { en: "violin", zh: "小提琴" } ] },
     ],
   },
   {
-    name: "镜头特效",
+    name: "色彩特效",
     subgroups: [
-      { name: "景别", seeds: ["close-up", "wide_shot", "full_body", "portrait", "panorama"] },
-      { name: "特效", seeds: ["depth_of_field", "blurry", "bokeh", "motion_blur", "lens_flare", "chromatic_aberration"] },
+      { name: "色调", tags: [
+        { en: "monochrome", zh: "单色" }, { en: "greyscale", zh: "灰阶" }, { en: "pastel_colors", zh: "粉彩色" },
+        { en: "vivid_colors", zh: "鲜艳色" }, { en: "muted_color", zh: "低饱和" }, { en: "limited_palette", zh: "有限配色" },
+        { en: "gradient", zh: "渐变" }, { en: "colorful", zh: "多彩" } ] },
+      { name: "特效", tags: [
+        { en: "bokeh", zh: "背景虚化" }, { en: "motion_blur", zh: "动态模糊" }, { en: "chromatic_aberration", zh: "色差" },
+        { en: "sparkle", zh: "闪光粒子" }, { en: "glowing", zh: "发光" }, { en: "film_grain", zh: "胶片颗粒" }, { en: "light_particles", zh: "光粒子" } ] },
     ],
   },
   {
-    name: "魔法系",
+    name: "生物",
     subgroups: [
-      { name: "魔法", seeds: ["magic", "spell", "glowing", "aura", "rune", "summoning", "energy"] },
-      { name: "生物", seeds: ["dragon", "fairy", "angel", "demon", "mermaid", "elf", "monster", "slime"] },
+      { name: "动物", tags: [
+        { en: "cat", zh: "猫" }, { en: "dog", zh: "狗" }, { en: "bird", zh: "鸟" },
+        { en: "fox", zh: "狐狸" }, { en: "rabbit", zh: "兔子" }, { en: "horse", zh: "马" },
+        { en: "wolf", zh: "狼" }, { en: "fish", zh: "鱼" }, { en: "butterfly", zh: "蝴蝶" } ] },
+      { name: "幻想生物", tags: [
+        { en: "dragon", zh: "龙" }, { en: "fairy", zh: "妖精" }, { en: "mermaid", zh: "美人鱼" },
+        { en: "elf", zh: "精灵" }, { en: "slime_(creature)", zh: "史莱姆" }, { en: "phoenix", zh: "凤凰" }, { en: "monster", zh: "怪物" } ] },
+    ],
+  },
+  {
+    name: "风格画风",
+    subgroups: [
+      { name: "媒介", tags: [
+        { en: "watercolor_(medium)", zh: "水彩" }, { en: "oil_painting_(medium)", zh: "油画" }, { en: "sketch", zh: "素描" },
+        { en: "lineart", zh: "线稿" }, { en: "pixel_art", zh: "像素画" }, { en: "3d", zh: "3D渲染" }, { en: "traditional_media", zh: "传统媒介" } ] },
+      { name: "流派", tags: [
+        { en: "anime", zh: "动漫" }, { en: "realistic", zh: "写实" }, { en: "cyberpunk", zh: "赛博朋克" },
+        { en: "steampunk", zh: "蒸汽朋克" }, { en: "ukiyo-e", zh: "浮世绘" }, { en: "art_nouveau", zh: "新艺术" },
+        { en: "chibi", zh: "Q版" }, { en: "retro_artstyle", zh: "复古画风" } ] },
+    ],
+  },
+  {
+    name: "魔法奇幻",
+    subgroups: [
+      { name: "魔法", tags: [
+        { en: "magic", zh: "魔法" }, { en: "magic_circle", zh: "魔法阵" }, { en: "aura", zh: "气场" },
+        { en: "energy", zh: "能量" }, { en: "rune", zh: "符文" }, { en: "summoning", zh: "召唤" }, { en: "spell", zh: "法术" } ] },
+      { name: "科幻", tags: [
+        { en: "robot", zh: "机器人" }, { en: "mecha", zh: "机甲" }, { en: "spaceship", zh: "飞船" },
+        { en: "neon_lights", zh: "霓虹灯" }, { en: "hologram", zh: "全息投影" }, { en: "cyborg", zh: "改造人" } ] },
+    ],
+  },
+  {
+    name: "反向提示词",
+    subgroups: [
+      { name: "常用负面", tags: [
+        { en: "lowres", zh: "低分辨率" }, { en: "bad_anatomy", zh: "解剖错误" }, { en: "bad_hands", zh: "畸形手" },
+        { en: "extra_digits", zh: "多余手指" }, { en: "fewer_digits", zh: "缺少手指" }, { en: "missing_fingers", zh: "缺指" },
+        { en: "jpeg_artifacts", zh: "压缩失真" }, { en: "watermark", zh: "水印" }, { en: "signature", zh: "签名" },
+        { en: "blurry", zh: "模糊" }, { en: "worst_quality", zh: "最差质量" }, { en: "low_quality", zh: "低质量" },
+        { en: "bad_proportions", zh: "比例错误" }, { en: "extra_limbs", zh: "多余肢体" }, { en: "text", zh: "文字乱入" } ] },
     ],
   },
 ];

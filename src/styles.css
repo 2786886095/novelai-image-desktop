@@ -3630,6 +3630,200 @@ html, body, #root {
   to { transform: rotate(360deg); }
 }
 
+/* ── 图片批量重绘 (batch redraw tool, comic-generator style wizard) ─────────── */
+/* A step card inside the wizard. */
+.redraw-card {
+  border: 1px solid var(--border, #2a2f3a);
+  border-radius: 14px;
+  background: var(--bg-card, rgba(255, 255, 255, 0.55));
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 4px;
+}
+/* Thumbnail grid for the import step. */
+.redraw-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(116px, 1fr));
+  gap: 10px;
+  max-height: 56vh;
+  overflow-y: auto;
+}
+.redraw-thumb-card {
+  position: relative;
+  border: 1px solid var(--border, #2a2f3a);
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.04);
+}
+.redraw-thumb-card img {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  display: block;
+}
+.redraw-thumb-name {
+  display: block;
+  padding: 5px 7px;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.redraw-thumb-card .vibe-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+}
+.redraw-globals {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px 18px;
+  margin: 0;
+  padding: 16px;
+  border: 1px solid var(--border, #2a2f3a);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.redraw-globals .field span {
+  font-size: 12.5px;
+}
+.redraw-globals .settings-hint {
+  grid-column: 1 / -1;
+  margin: 0;
+  line-height: 1.6;
+}
+.redraw-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+/* Make file-input labels and <Button>s the same height so the row aligns. */
+.redraw-actions .btn,
+.redraw-actions > button,
+.redraw-actions label.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  line-height: 1;
+  margin: 0;
+}
+.redraw-ai-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--text-dim, #9aa3b2);
+}
+.redraw-ai-mode select {
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid var(--border, #2a2f3a);
+  background: var(--bg-input, rgba(0, 0, 0, 0.18));
+  color: inherit;
+  padding: 0 8px;
+}
+.redraw-bulk {
+  width: 100%;
+  min-height: 96px;
+  resize: vertical;
+  font-size: 12.5px;
+  border-radius: 8px;
+  border: 1px solid var(--border, #2a2f3a);
+  background: var(--bg-input, rgba(0, 0, 0, 0.18));
+  color: inherit;
+  padding: 8px 10px;
+}
+.redraw-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 52vh;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.redraw-row {
+  display: flex;
+  gap: 10px;
+  padding: 8px;
+  border: 1px solid var(--border, #2a2f3a);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.redraw-thumb {
+  width: 84px;
+  height: 84px;
+  object-fit: cover;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+.redraw-row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.redraw-row-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.redraw-idx {
+  font-variant-numeric: tabular-nums;
+  color: var(--accent, #7c5cfa);
+  font-weight: 700;
+  font-size: 12px;
+}
+.redraw-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+}
+.redraw-prompt {
+  width: 100%;
+  min-height: 46px;
+  resize: vertical;
+  font-size: 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border, #2a2f3a);
+  background: var(--bg-input, rgba(0, 0, 0, 0.2));
+  color: inherit;
+  padding: 6px 8px;
+}
+.redraw-strength {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--text-dim, #9aa3b2);
+}
+.redraw-strength input {
+  width: 80px;
+}
+.redraw-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+}
+.redraw-progress {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim, #9aa3b2);
+  font-size: 13px;
+}
+
 /* ── Precise reference size recommendation ─────────────────────────────────── */
 .precise-size-hint {
   margin: 4px 0 0;
@@ -3663,23 +3857,25 @@ html, body, #root {
   cursor: pointer;
 }
 .capsule-tax-sub {
-  font-size: 11px;
-  padding: 2px 8px;
+  font-size: 11.5px;
+  padding: 3px 10px;
   border-radius: 12px;
+  border: 1px solid var(--border, #2a2f3a);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-dim, #aab1c0);
 }
 .capsule-tax-cat:hover,
 .capsule-tax-sub:hover {
   color: var(--text, #d8dce6);
+  border-color: var(--accent, #7c5cfa);
 }
-.capsule-tax-cat.active {
+/* Selected category / subgroup: SOLID accent fill so the choice is obvious. */
+.capsule-tax-cat.active,
+.capsule-tax-sub.active {
   background: var(--accent, #7c5cfa);
   border-color: var(--accent, #7c5cfa);
   color: #fff;
-}
-.capsule-tax-sub.active {
-  background: rgba(124, 92, 250, 0.18);
-  border-color: var(--accent, #7c5cfa);
-  color: var(--text, #d8dce6);
+  font-weight: 600;
 }
 .capsule-tax-subs {
   padding-bottom: 4px;
@@ -3697,51 +3893,67 @@ html, body, #root {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  min-width: 0; /* allow shrinking inside the grid/flex parent — no h-overflow */
+  max-width: 100%;
 }
-/* Category / subgroup tab strips: single horizontal scrolling row to save space. */
-.capsule-scroll-row {
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: thin;
-  padding-bottom: 3px;
-}
-.capsule-scroll-row > button {
-  flex: 0 0 auto;
-  white-space: nowrap;
+/* Category / subgroup tab strips WRAP so every category stays visible (no
+   off-screen horizontal scrolling). They must not grow the panel width. */
+.capsule-tax-cats,
+.capsule-tax-subs {
+  flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
 }
 .capsule-browser-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(82px, 1fr));
-  gap: 5px;
-  max-height: 300px;
-  overflow-y: auto;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 6px;
+  max-height: 320px;
+  overflow-y: auto; /* vertical scroll for the tags */
+  min-width: 0;
+  max-width: 100%;
   padding: 2px 2px 4px;
+}
+/* Grid children of the chip zone must be allowed to shrink, otherwise an
+   intrinsically-wide child pushes the whole capsule past the panel edge. */
+.prompt-chip-zone {
+  min-width: 0;
+}
+.prompt-chip-zone > * {
+  min-width: 0;
 }
 .capsule-tax-chip {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1px;
-  padding: 5px 4px;
-  border-radius: 7px;
-  border: 1px solid transparent;
-  background: linear-gradient(180deg, #c8763e 0%, #b8632f 100%);
+  justify-content: center;
+  gap: 2px;
+  padding: 7px 6px;
+  min-height: 42px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+  background: linear-gradient(180deg, #d98a4e 0%, #c06a2f 100%);
   color: #fff;
   cursor: pointer;
-  line-height: 1.2;
+  line-height: 1.25;
+  min-width: 0;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
 }
 .capsule-tax-chip:hover {
-  filter: brightness(1.08);
-  border-color: rgba(255, 255, 255, 0.35);
+  filter: brightness(1.1);
+  border-color: rgba(255, 255, 255, 0.55);
 }
 .capsule-tax-zh {
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 12.5px;
+  font-weight: 700;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .capsule-tax-en {
   font-size: 10.5px;
-  opacity: 0.85;
+  opacity: 0.92;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

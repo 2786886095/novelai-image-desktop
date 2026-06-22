@@ -257,8 +257,9 @@ type PanelOutput = {
 };
 
 export function ToolsHub() {
-  const [activeTool, setActiveTool] = useState<"hub" | "comic">("hub");
+  const [activeTool, setActiveTool] = useState<"hub" | "comic" | "redraw">("hub");
   if (activeTool === "comic") return <ComicGenerator onBack={() => setActiveTool("hub")} />;
+  if (activeTool === "redraw") return <BatchRedraw onBack={() => setActiveTool("hub")} />;
 
   return (
     <main className="tools-hub">
@@ -266,7 +267,7 @@ export function ToolsHub() {
         <div>
           <span className="eyebrow">Tools</span>
           <h2>工具板块</h2>
-          <p>把复杂流程收进专用工具里。当前只开放已经能使用的漫画生成器，未完成工具不再占位干扰。</p>
+          <p>把复杂流程收进专用工具里。</p>
         </div>
       </section>
       <section className="tool-card-grid">
@@ -275,7 +276,399 @@ export function ToolsHub() {
           <span>故事拆分、参考图反推、分镜转换、队列出图与 ZIP 打包。</span>
           <small>已接入</small>
         </button>
+        <button type="button" className="tool-card ready" onClick={() => setActiveTool("redraw")}>
+          <b>批量图生图</b>
+          <span>导入图片 + 对应提示词，按改图强度逐张图生图，存入分组并打包 ZIP。</span>
+          <small>已接入</small>
+        </button>
       </section>
+    </main>
+  );
+}
+
+// ── 图片批量重绘 (batch img2img) ──────────────────────────────────────────────
+interface RedrawItem {
+  id: string;
+  name: string;
+  previewUrl: string;
+  base64: string; // pure base64
+  prompt: string;
+  strength: number | null; // null → use global strength
+}
+
+function BatchRedraw({ onBack }: { onBack?: () => void }) {
+  const params = useAppStore((state) => state.params);
+  const preciseReferences = useAppStore((state) => state.preciseReferences);
+  const settings = useAppStore((state) => state.settings);
+  const setToast = useAppStore((state) => state.setToast);
+  const refreshHistory = useAppStore((state) => state.refreshHistory);
+  const refreshAccount = useAppStore((state) => state.refreshAccount);
+
+  const [groupName, setGroupName] = useState("批量图生图");
+  const [items, setItems] = useState<RedrawItem[]>([]);
+  const [globalStrength, setGlobalStrength] = useState(0.4);
+  const [globalStyle, setGlobalStyle] = useState("");
+  const [globalNegative, setGlobalNegative] = useState("");
+  const [promptBulk, setPromptBulk] = useState("");
+  const [aiMode, setAiMode] = useState<ReversePromptMode>(settings?.reversePromptMode ?? "tags");
+  const [running, setRunning] = useState(false);
+  const [aiFilling, setAiFilling] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const [groupId, setGroupId] = useState<string | null>(null);
+  const [step, setStep] = useState<"import" | "prompts" | "params" | "generate">("import");
+  const cancelRef = useRef(false);
+  const REDRAW_STEPS = [
+    { key: "import", label: "导入", hint: "分组名 + 选图" },
+    { key: "prompts", label: "提示词", hint: "导入 / AI 反推 / 编辑" },
+    { key: "params", label: "参数", hint: "改图强度 / 风格 / 负面" },
+    { key: "generate", label: "生成", hint: "逐张图生图 / 打包" },
+  ] as const;
+  const readyCount = items.filter((it) => it.prompt.trim()).length;
+
+  function readDataUrl(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result as string);
+      r.onerror = () => reject(new Error("读取失败"));
+      r.readAsDataURL(file);
+    });
+  }
+
+  async function importImages(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    const arr = Array.from(files).filter((f) => f.type.startsWith("image/"));
+    arr.sort((a, b) => a.name.localeCompare(b.name, "zh-CN", { numeric: true }));
+    const next: RedrawItem[] = [];
+    for (const f of arr) {
+      const dataUrl = await readDataUrl(f);
+      next.push({
+        id: uid(),
+        name: f.name.replace(/\.[^.]+$/, ""),
+        previewUrl: dataUrl,
+        base64: dataUrl.split(",")[1] ?? "",
+        prompt: "",
+        strength: null,
+      });
+    }
+    setItems((prev) => [...prev, ...next]);
+    setToast(`已导入 ${next.length} 张图片（按名称排序）`);
+  }
+
+  function assignPromptLines(lines: string[]): number {
+    const clean = lines.map((l) => l.trim()).filter(Boolean);
+    let n = 0;
+    setItems((prev) =>
+      prev.map((it, i) => {
+        if (clean[i] == null) return it;
+        n += 1;
+        return { ...it, prompt: clean[i] };
+      }),
+    );
+    return Math.min(clean.length, items.length);
+  }
+
+  async function importPrompts(file: File | null) {
+    if (!file) return;
+    const text = await file.text();
+    const n = assignPromptLines(text.split(/\r?\n/));
+    setToast(`已按顺序导入 ${n} 条提示词`);
+  }
+
+  function importBulkPrompts() {
+    if (!promptBulk.trim()) {
+      setToast("请先在文本框粘贴/输入提示词（每行一条）");
+      return;
+    }
+    if (items.length === 0) {
+      setToast("请先在「导入」步骤导入图片");
+      return;
+    }
+    const n = assignPromptLines(promptBulk.split(/\r?\n/));
+    setToast(`已按顺序导入 ${n} 条提示词`);
+  }
+
+  async function aiFill() {
+    if (aiFilling || running) return;
+    if (!items.some((it) => !it.prompt.trim())) {
+      setToast("所有图片都已有提示词");
+      return;
+    }
+    setAiFilling(true);
+    cancelRef.current = false;
+    const mode = aiMode;
+    try {
+      for (const it of items) {
+        if (cancelRef.current) break;
+        if (it.prompt.trim()) continue;
+        const res = await window.naiDesktop.reversePrompt(it.base64, mode);
+        if (res.ok && res.prompt) {
+          const filled = res.prompt.trim();
+          setItems((prev) => prev.map((p) => (p.id === it.id ? { ...p, prompt: filled } : p)));
+        }
+      }
+      setToast("AI 反推填充完成");
+    } catch (error) {
+      setToast(`AI 填充失败：${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setAiFilling(false);
+    }
+  }
+
+  async function run() {
+    if (running) return;
+    if (!groupName.trim()) {
+      setToast("请先填写分组名称");
+      return;
+    }
+    const ready = items.filter((it) => it.prompt.trim());
+    if (ready.length === 0) {
+      setToast("没有可重绘的图片（每张图片需要提示词）");
+      return;
+    }
+    cancelRef.current = false;
+    setRunning(true);
+    setProgress({ done: 0, total: ready.length });
+
+    let gid: string | null = null;
+    try {
+      const groups = await window.naiDesktop.createHistoryGroup(groupName.trim());
+      gid = groups.find((g) => g.name.trim().toLowerCase() === groupName.trim().toLowerCase())?.id ?? null;
+      setGroupId(gid);
+    } catch {
+      /* group ensured by the main process anyway */
+    }
+
+    const extras = {
+      vibeImages: [],
+      charCaptions: [],
+      preciseReferences: preciseReferences.map(({ base64, type, strength, fidelity }) => ({
+        base64,
+        type,
+        strength,
+        fidelity,
+      })),
+    };
+
+    let done = 0;
+    let failed = 0;
+    let lastError = "";
+    for (const it of ready) {
+      if (cancelRef.current) break;
+      const reqParams: GenerateParams = {
+        ...params,
+        seed: 0, // random per image
+        positivePrompt: [globalStyle.trim(), it.prompt.trim()].filter(Boolean).join(", "),
+        negativePrompt: globalNegative.trim() || params.negativePrompt,
+        fileNamePrefix: it.name,
+      };
+      const res = await window.naiDesktop.redrawImage({
+        imageBase64: it.base64,
+        params: reqParams,
+        strength: it.strength ?? globalStrength,
+        extras,
+        groupName: groupName.trim(),
+        fileNamePrefix: it.name,
+      });
+      if (res.ok) done += 1;
+      else {
+        failed += 1;
+        lastError = res.message;
+      }
+      setProgress({ done: done + failed, total: ready.length });
+    }
+
+    await refreshHistory();
+    await refreshAccount();
+    setRunning(false);
+    setToast(
+      cancelRef.current
+        ? `已停止（完成 ${done} 张）`
+        : failed > 0
+          ? `完成 ${done} 张，失败 ${failed} 张：${lastError}`
+          : `全部完成，共 ${done} 张，已存入分组「${groupName.trim()}」`,
+    );
+  }
+
+  function stop() {
+    cancelRef.current = true;
+    void window.naiDesktop.cancel();
+  }
+
+  async function exportZip() {
+    if (!groupId) {
+      setToast("请先生成后再打包");
+      return;
+    }
+    const res = await window.naiDesktop.exportHistoryGroup(groupId);
+    setToast(res.ok ? `已打包 ZIP：${res.path ?? "完成"}` : res.message);
+  }
+
+  return (
+    <main className="comic-generator redraw-wizard">
+      <div className="comic-page-title">
+        <span className="eyebrow">工具 / 图片批量重绘</span>
+        <strong>{groupName.trim() || "未命名重绘任务"}</strong>
+        <small>{items.length} 张 · {readyCount} 已配提示词 · 改图强度 {globalStrength.toFixed(2)}</small>
+      </div>
+
+      <nav className="comic-steps">
+        {REDRAW_STEPS.map((s, i) => (
+          <button
+            key={s.key}
+            type="button"
+            className={clsx("comic-step-btn", step === s.key && "active")}
+            onClick={() => setStep(s.key)}
+          >
+            <b>{i + 1}</b>
+            <span>{s.label}</span>
+            <small>{s.hint}</small>
+          </button>
+        ))}
+      </nav>
+
+      <div className="comic-step-actions">
+        {onBack ? <Button onClick={onBack} variant="ghost">返回工具首页</Button> : null}
+        {items.length > 0 ? <Button onClick={() => setItems([])} variant="ghost" disabled={running}>清空图片</Button> : null}
+      </div>
+
+      {step === "import" && (
+        <section className="redraw-card">
+          <label className="field">
+            <span>分组名称（最终图片全部存入此分组，并作为打包来源）</span>
+            <input value={groupName} onChange={(e) => setGroupName(e.target.value)} placeholder="例如：重绘_0622" />
+          </label>
+          <div className="redraw-actions">
+            <label className="btn btn-primary">
+              ＋ 导入图片
+              <input type="file" hidden multiple accept="image/png,image/jpeg,image/webp" onChange={(e) => { void importImages(e.target.files); e.target.value = ""; }} />
+            </label>
+            <span className="settings-hint" style={{ margin: 0 }}>默认按文件名排序（1 / 2 / 10 正确顺序）。</span>
+          </div>
+          <div className="redraw-grid">
+            {items.length === 0 && <p className="vibe-empty">还没有导入图片。点「导入图片」开始。</p>}
+            {items.map((it, idx) => (
+              <div className="redraw-thumb-card" key={it.id}>
+                <img src={it.previewUrl} alt={it.name} />
+                <span className="redraw-thumb-name" title={it.name}>#{idx + 1} {it.name}</span>
+                <button className="vibe-remove" title="移除" onClick={() => setItems((prev) => prev.filter((p) => p.id !== it.id))}>×</button>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {step === "prompts" && (
+        <section className="redraw-card">
+          <label className="field">
+            <span>批量输入提示词（每行一条，按顺序对应图片）→ 点「导入文本」</span>
+            <textarea
+              className="redraw-bulk"
+              value={promptBulk}
+              placeholder={"第 1 张的提示词\n第 2 张的提示词\n第 3 张的提示词\n..."}
+              onChange={(e) => setPromptBulk(e.target.value)}
+            />
+          </label>
+          <div className="redraw-actions">
+            <Button variant="primary" onClick={importBulkPrompts} disabled={running || items.length === 0}>
+              导入文本
+            </Button>
+            <label className="btn btn-secondary redraw-file-btn">
+              导入 .txt 文件
+              <input type="file" hidden accept=".txt,text/plain" onChange={(e) => { void importPrompts(e.target.files?.[0] ?? null); e.target.value = ""; }} />
+            </label>
+            <span className="redraw-ai-mode">
+              反推模式
+              <select value={aiMode} onChange={(e) => setAiMode(e.target.value as ReversePromptMode)}>
+                <option value="tags">标签 (Danbooru)</option>
+                <option value="natural">自然语言</option>
+                <option value="mixed">混合</option>
+              </select>
+            </span>
+            <Button variant="secondary" onClick={() => void aiFill()} disabled={aiFilling || running || items.length === 0}>
+              {aiFilling ? "AI 反推中…" : "AI 反推填充空缺"}
+            </Button>
+          </div>
+          <p className="settings-hint" style={{ margin: 0 }}>导入优先（每行按顺序对应一张图）；空缺可用所选模式的 AI 反推按顺序补全。</p>
+          <div className="redraw-list">
+            {items.length === 0 && <p className="vibe-empty">请先在「导入」步骤导入图片。</p>}
+            {items.map((it, idx) => (
+              <div className="redraw-row" key={it.id}>
+                <img className="redraw-thumb" src={it.previewUrl} alt={it.name} />
+                <div className="redraw-row-main">
+                  <div className="redraw-row-head">
+                    <span className="redraw-idx">#{idx + 1}</span>
+                    <span className="redraw-name" title={it.name}>{it.name}</span>
+                  </div>
+                  <textarea
+                    className="redraw-prompt"
+                    value={it.prompt}
+                    placeholder="该图片的提示词（导入 / AI 反推 / 手动编辑）"
+                    onChange={(e) => setItems((prev) => prev.map((p) => (p.id === it.id ? { ...p, prompt: e.target.value } : p)))}
+                  />
+                  <label className="redraw-strength">
+                    单独改图强度（留空用全局 {globalStrength.toFixed(2)}）
+                    <input
+                      type="number"
+                      min={0.1}
+                      max={0.99}
+                      step={0.01}
+                      value={it.strength ?? ""}
+                      placeholder={globalStrength.toFixed(2)}
+                      onChange={(e) =>
+                        setItems((prev) =>
+                          prev.map((p) => (p.id === it.id ? { ...p, strength: e.target.value === "" ? null : Number(e.target.value) } : p)),
+                        )
+                      }
+                    />
+                  </label>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {step === "params" && (
+        <section className="redraw-card redraw-globals">
+          <label className="field">
+            <span>全局改图强度：{globalStrength.toFixed(2)}（越低越保留原图）</span>
+            <input type="range" min={0.1} max={0.99} step={0.01} value={globalStrength} onChange={(e) => setGlobalStrength(Number(e.target.value))} />
+          </label>
+          <label className="field">
+            <span>全局风格提示词</span>
+            <input value={globalStyle} onChange={(e) => setGlobalStyle(e.target.value)} placeholder="如 masterpiece, best quality, anime" />
+          </label>
+          <label className="field">
+            <span>全局负面提示词（留空用主界面负面词）</span>
+            <input value={globalNegative} onChange={(e) => setGlobalNegative(e.target.value)} placeholder="如 lowres, bad anatomy" />
+          </label>
+          <p className="settings-hint">
+            模型 / 尺寸 / 采样沿用主界面参数（当前：{params.model}，{params.width}×{params.height}）。
+            全图精准参考沿用主界面「参考图」弹窗中设置的精准参考（当前 {preciseReferences.length} 张）。
+          </p>
+        </section>
+      )}
+
+      {step === "generate" && (
+        <section className="redraw-card">
+          <p className="settings-hint">
+            将对 {readyCount} 张已配提示词的图片，按全局/单张改图强度逐张图生图，存入分组「{groupName.trim() || "未命名"}」，可在完成后打包 ZIP。
+          </p>
+          <div className="redraw-footer">
+            {progress && <div className="redraw-progress">进度 {progress.done}/{progress.total}</div>}
+            {running ? (
+              <Button variant="danger" onClick={stop}>✕ 停止</Button>
+            ) : (
+              <Button variant="primary" onClick={() => void run()} disabled={readyCount === 0}>
+                ▶ 开始批量重绘（{readyCount} 张）
+              </Button>
+            )}
+            <Button variant="secondary" onClick={() => void exportZip()} disabled={running || !groupId}>
+              打包 ZIP
+            </Button>
+          </div>
+        </section>
+      )}
     </main>
   );
 }
