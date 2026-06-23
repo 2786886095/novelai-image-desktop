@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 0.9.9+27
+version: 1.0.1+29
 
 environment:
   sdk: ^3.5.0
@@ -33,6 +33,7 @@ dependencies:
 
   cupertino_icons: ^1.0.8
   http: ^1.2.2              # NovelAI REST API calls
+  http_parser: ^4.0.2       # MediaType for multipart precise-reference upload
   provider: ^6.1.2          # state management (ChangeNotifier)
   shared_preferences: ^2.3.2 # token + settings persistence
   flutter_secure_storage: ^9.2.2 # token / AI keys
@@ -40,6 +41,13 @@ dependencies:
   path_provider: ^2.1.4     # app document / cache dirs
   image_picker: ^1.1.2      # gallery image input
   share_plus: ^10.0.2       # export/share generated images
+  socks5_proxy: ^2.1.1      # HTTPS over SOCKS5 proxy
+  image: ^4.3.0             # decode dimensions + safe upscale preparation
+  file_picker: 8.1.7       # comic project JSON import; compatible with Flutter 3.24
+  url_launcher: 6.3.1      # official NovelAI page from the Token guide
+  flutter_foreground_task: ^9.2.2 # keep long serial queues alive on Android
+  crypto: ^3.0.3            # Baidu translation request signatures
+  gal: ^2.3.2               # save generated images to the system gallery
 
 dev_dependencies:
   flutter_test:
@@ -52,6 +60,24 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^4.0.0
 
+  # Generates Android launcher icons (legacy mipmaps + adaptive) from the
+  # project icon. Run: dart run flutter_launcher_icons
+  flutter_launcher_icons: ^0.14.1
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/icon/app_icon.png"
+  min_sdk_android: 23
+  # The art is a full-bleed illustration, so the adaptive foreground is the full
+  # image (filling the masked shape) rather than an inset logo — otherwise the
+  # launcher renders it small with a black border around it.
+  adaptive_icon_background: "#1b1633"
+  adaptive_icon_foreground: "assets/icon/app_icon.png"
+  # 0 = no inset, so the full-bleed illustration fills the masked icon shape
+  # instead of floating inside a 16% margin (the default) that shows as a border.
+  adaptive_icon_foreground_inset: 0
+
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
 
@@ -62,6 +88,10 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+  assets:
+    - assets/capsule_taxonomy.json
+    - assets/prompt_templates.json
+    - assets/token_guide/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

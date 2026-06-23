@@ -47,7 +47,6 @@ import {
   type ModelMode,
   type AiCallLogEntry,
   type AppSettings,
-  type HistoryGroup,
   type HistoryItem,
   type GenerateParams,
   type ModePromptTemplates,
@@ -756,7 +755,7 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
             精准参考（Precise Reference）
             {!isV45 && <span className="vibe-hint"> · 仅 V4.5 模型生效，当前模型不支持</span>}
           </h3>
-          <p className="vibe-hint">任意尺寸均可：程序会按官方策略等比缩放并<b>白边</b>填充到最接近的官方尺寸（1024×1536 / 1472×1472 / 1536×1024），RGBA 透明图会先以白底拍平。建议参考图比例贴近三者之一以减少留白；想要角色而非画风时选「角色」并把「信息提取」调低。</p>
+          <p className="vibe-hint">任意尺寸均可：程序会按官方策略等比缩放并<b>白边</b>填充到最接近的官方尺寸（1024×1536 / 1472×1472 / 1536×1024），RGBA 透明图会先以白底拍平。建议参考图比例贴近三者之一以减少留白；想要角色而非画风时把类型选「角色」。</p>
           {preciseReferences.length === 0 && <p className="vibe-empty">还没有精准参考图。</p>}
           {preciseReferences.map((ref) => (
             <div className="vibe-row" key={ref.id}>
@@ -788,14 +787,6 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
                   max={1}
                   step={0.01}
                   onChange={(v) => updatePreciseReference(ref.id, { fidelity: v })}
-                />
-                <SliderInput
-                  label="信息提取 Information Extracted（高=带更多纹理/网点，调低可减弱）"
-                  value={ref.informationExtracted ?? 1}
-                  min={0}
-                  max={1}
-                  step={0.01}
-                  onChange={(v) => updatePreciseReference(ref.id, { informationExtracted: v })}
                 />
                 {(() => {
                   const rec = recommendPreciseSize(ref.srcWidth, ref.srcHeight);

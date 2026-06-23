@@ -7,7 +7,7 @@ class NaiOption {
 }
 
 const appName = 'Langbai NovelAI Studio';
-const appVersion = '0.9.9';
+const appVersion = '1.0.1';
 
 const naiModels = <NaiOption>[
   NaiOption('NAI Diffusion 4.5 Full（完整模型）', 'nai-diffusion-4-5-full'),
@@ -19,10 +19,20 @@ const naiModels = <NaiOption>[
 ];
 
 const naiInpaintModels = <NaiOption>[
-  NaiOption('NAI Diffusion 4.5 Curated Inpaint（推荐）', 'nai-diffusion-4-5-curated-inpainting'),
-  NaiOption('NAI Diffusion 4 Curated Inpaint', 'nai-diffusion-4-curated-inpainting'),
+  NaiOption('NAI Diffusion 4.5 Full Inpaint（推荐）',
+      'nai-diffusion-4-5-full-inpainting'),
+  NaiOption('NAI Diffusion 4.5 Curated Inpaint',
+      'nai-diffusion-4-5-curated-inpainting'),
+  NaiOption(
+      'NAI Diffusion 4 Curated Inpaint', 'nai-diffusion-4-curated-inpainting'),
   NaiOption('NAI Diffusion 4 Full Inpaint', 'nai-diffusion-4-full-inpainting'),
   NaiOption('NAI Diffusion 3 Inpaint', 'nai-diffusion-3-inpainting'),
+];
+
+const naiNoiseSchedules = <NaiOption>[
+  NaiOption('Native（原生）', 'native'),
+  NaiOption('Karras（常用）', 'karras'),
+  NaiOption('Exponential（指数）', 'exponential'),
 ];
 
 const naiSamplers = <NaiOption>[
@@ -75,6 +85,7 @@ const sizePresets = <SizePreset>[
   SizePreset('纵向 832×1216', 832, 1216),
   SizePreset('竖图 1024×1536', 1024, 1536),
   SizePreset('宽图 1536×1024', 1536, 1024),
+  SizePreset('大方图 1472×1472', 1472, 1472),
 ];
 
 class GenerateParams {
@@ -116,7 +127,7 @@ class GenerateParams {
     this.qualityToggle = true,
     this.smea = false,
     this.smeaDyn = false,
-    this.variety = false,
+    this.variety = true,
     this.fileNamePrefix = '',
   });
 
@@ -163,7 +174,7 @@ class GenerateParams {
         qualityToggle: j['qualityToggle'] ?? true,
         smea: j['smea'] ?? false,
         smeaDyn: j['smeaDyn'] ?? false,
-        variety: j['variety'] ?? false,
+        variety: j['variety'] ?? true,
         fileNamePrefix: j['fileNamePrefix'] ?? '',
       );
 
@@ -175,9 +186,11 @@ class CharCaptionItem {
   bool useCoords;
   double x;
   double y;
-  CharCaptionItem({this.prompt = '', this.useCoords = false, this.x = 0.5, this.y = 0.5});
+  CharCaptionItem(
+      {this.prompt = '', this.useCoords = false, this.x = 0.5, this.y = 0.5});
 
-  Map<String, dynamic> toJson() => {'prompt': prompt, 'useCoords': useCoords, 'x': x, 'y': y};
+  Map<String, dynamic> toJson() =>
+      {'prompt': prompt, 'useCoords': useCoords, 'x': x, 'y': y};
   factory CharCaptionItem.fromJson(Map<String, dynamic> j) => CharCaptionItem(
         prompt: j['prompt'] ?? '',
         useCoords: j['useCoords'] ?? false,
@@ -190,21 +203,189 @@ class VibeTransferItem {
   final String base64;
   final double infoExtracted;
   final double strength;
-  const VibeTransferItem({required this.base64, this.infoExtracted = 0.7, this.strength = 0.6});
-  Map<String, dynamic> toJson() => {'base64': base64, 'infoExtracted': infoExtracted, 'strength': strength};
+  final String sourcePath;
+  const VibeTransferItem({
+    required this.base64,
+    this.infoExtracted = 0.7,
+    this.strength = 0.6,
+    this.sourcePath = '',
+  });
+  Map<String, dynamic> toJson() => {
+        'base64': base64,
+        'infoExtracted': infoExtracted,
+        'strength': strength,
+        'sourcePath': sourcePath,
+      };
+  VibeTransferItem copyWith({double? infoExtracted, double? strength}) =>
+      VibeTransferItem(
+        base64: base64,
+        infoExtracted: infoExtracted ?? this.infoExtracted,
+        strength: strength ?? this.strength,
+        sourcePath: sourcePath,
+      );
+
+  factory VibeTransferItem.fromJson(Map<String, dynamic> json) =>
+      VibeTransferItem(
+        base64: json['base64']?.toString() ?? '',
+        infoExtracted: (json['infoExtracted'] as num?)?.toDouble() ?? 0.7,
+        strength: (json['strength'] as num?)?.toDouble() ?? 0.6,
+        sourcePath: json['sourcePath']?.toString() ?? '',
+      );
+}
+
+class PreciseReferenceItem {
+  final String base64;
+  final String type;
+  final double strength;
+  final double fidelity;
+  final double informationExtracted;
+  final String sourcePath;
+  final int width;
+  final int height;
+
+  const PreciseReferenceItem({
+    required this.base64,
+    this.type = 'character&style',
+    this.strength = 1,
+    this.fidelity = 1,
+    this.informationExtracted = 1,
+    this.sourcePath = '',
+    this.width = 0,
+    this.height = 0,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'base64': base64,
+        'type': type,
+        'strength': strength,
+        'fidelity': fidelity,
+        'informationExtracted': informationExtracted,
+        'sourcePath': sourcePath,
+        'width': width,
+        'height': height,
+      };
+
+  PreciseReferenceItem copyWith({
+    String? type,
+    double? strength,
+    double? fidelity,
+    double? informationExtracted,
+  }) =>
+      PreciseReferenceItem(
+        base64: base64,
+        type: type ?? this.type,
+        strength: strength ?? this.strength,
+        fidelity: fidelity ?? this.fidelity,
+        informationExtracted: informationExtracted ?? this.informationExtracted,
+        sourcePath: sourcePath,
+        width: width,
+        height: height,
+      );
+
+  factory PreciseReferenceItem.fromJson(Map<String, dynamic> json) =>
+      PreciseReferenceItem(
+        base64: json['base64']?.toString() ?? '',
+        type: json['type']?.toString() ?? 'character&style',
+        strength: (json['strength'] as num?)?.toDouble() ?? 1,
+        fidelity: (json['fidelity'] as num?)?.toDouble() ?? 1,
+        informationExtracted:
+            (json['informationExtracted'] as num?)?.toDouble() ?? 1,
+        sourcePath: json['sourcePath']?.toString() ?? '',
+        width: (json['width'] as num?)?.toInt() ?? 0,
+        height: (json['height'] as num?)?.toInt() ?? 0,
+      );
 }
 
 class GenerateExtras {
   List<VibeTransferItem> vibeImages;
   List<CharCaptionItem> charCaptions;
-  GenerateExtras({List<VibeTransferItem>? vibeImages, List<CharCaptionItem>? charCaptions})
-      : vibeImages = vibeImages ?? [],
-        charCaptions = charCaptions ?? [];
+  List<PreciseReferenceItem> preciseReferences;
+  GenerateExtras({
+    List<VibeTransferItem>? vibeImages,
+    List<CharCaptionItem>? charCaptions,
+    List<PreciseReferenceItem>? preciseReferences,
+  })  : vibeImages = vibeImages ?? [],
+        charCaptions = charCaptions ?? [],
+        preciseReferences = preciseReferences ?? [];
 
   Map<String, dynamic> toJson() => {
         'vibeImages': vibeImages.map((e) => e.toJson()).toList(),
         'charCaptions': charCaptions.map((e) => e.toJson()).toList(),
+        'preciseReferences': preciseReferences.map((e) => e.toJson()).toList(),
       };
+
+  GenerateExtras copy() => GenerateExtras(
+        vibeImages: vibeImages
+            .map((item) => VibeTransferItem(
+                  base64: item.base64,
+                  infoExtracted: item.infoExtracted,
+                  strength: item.strength,
+                  sourcePath: item.sourcePath,
+                ))
+            .toList(),
+        charCaptions: charCaptions
+            .map((item) => CharCaptionItem(
+                  prompt: item.prompt,
+                  useCoords: item.useCoords,
+                  x: item.x,
+                  y: item.y,
+                ))
+            .toList(),
+        preciseReferences: preciseReferences
+            .map((item) => PreciseReferenceItem(
+                  base64: item.base64,
+                  type: item.type,
+                  strength: item.strength,
+                  fidelity: item.fidelity,
+                  informationExtracted: item.informationExtracted,
+                  sourcePath: item.sourcePath,
+                  width: item.width,
+                  height: item.height,
+                ))
+            .toList(),
+      );
+}
+
+class GenerationQueueJob {
+  final String id;
+  final GenerateParams params;
+  final GenerateExtras extras;
+  final int quotedAnlas;
+  final DateTime addedAt;
+
+  const GenerationQueueJob({
+    required this.id,
+    required this.params,
+    required this.extras,
+    required this.quotedAnlas,
+    required this.addedAt,
+  });
+
+  String get label {
+    final value = params.positivePrompt.trim();
+    return value.isEmpty
+        ? '（无提示词）'
+        : value.substring(0, value.length > 60 ? 60 : value.length);
+  }
+}
+
+class GenerationQueueProgress {
+  final int done;
+  final int failed;
+  final int total;
+
+  const GenerationQueueProgress({
+    this.done = 0,
+    this.failed = 0,
+    this.total = 0,
+  });
+
+  GenerationQueueProgress copyWith({int? done, int? failed, int? total}) =>
+      GenerationQueueProgress(
+        done: done ?? this.done,
+        failed: failed ?? this.failed,
+        total: total ?? this.total,
+      );
 }
 
 class I2IParams {
@@ -219,7 +400,11 @@ class AugmentOptions {
   String colorizePrompt;
   String emotion;
   double emotionLevel;
-  AugmentOptions({this.defry = 0, this.colorizePrompt = '', this.emotion = 'happy', this.emotionLevel = 0});
+  AugmentOptions(
+      {this.defry = 0,
+      this.colorizePrompt = '',
+      this.emotion = 'happy',
+      this.emotionLevel = 0});
 }
 
 class WorkingImage {
@@ -255,11 +440,13 @@ class HistoryGroup {
   final String id;
   final String name;
   final String createdAt;
-  const HistoryGroup({required this.id, required this.name, required this.createdAt});
+  const HistoryGroup(
+      {required this.id, required this.name, required this.createdAt});
 
-  Map<String, dynamic> toJson() => {'id': id, 'name': name, 'createdAt': createdAt};
-  factory HistoryGroup.fromJson(Map<String, dynamic> j) =>
-      HistoryGroup(id: j['id'], name: j['name'] ?? '', createdAt: j['createdAt'] ?? '');
+  Map<String, dynamic> toJson() =>
+      {'id': id, 'name': name, 'createdAt': createdAt};
+  factory HistoryGroup.fromJson(Map<String, dynamic> j) => HistoryGroup(
+      id: j['id'], name: j['name'] ?? '', createdAt: j['createdAt'] ?? '');
 }
 
 class HistoryItem {
@@ -318,13 +505,15 @@ class HistoryItem {
         prompt: j['prompt'] ?? '',
         feature: j['feature'] ?? 't2i',
         groupId: j['groupId'],
-        params: (j['params'] is Map) ? Map<String, dynamic>.from(j['params']) : {},
+        params:
+            (j['params'] is Map) ? Map<String, dynamic>.from(j['params']) : {},
       );
 }
 
 class AppSettings {
   String apiBaseUrl;
   String imageBaseUrl;
+  bool allowCustomEndpoint;
   String visionApiUrl;
   String visionApiModel;
   String convertApiUrl;
@@ -332,13 +521,53 @@ class AppSettings {
   bool autoComplete;
   String tagServerUrl;
   String tagServerType;
+  String tagServerTool;
+  bool tagServerEnabled;
+  bool mcpForCapsule;
   bool mcpForReverse;
   bool mcpForConvert;
-  bool darkMode;
+  String theme;
+  String modelMode;
+  String proxyMode;
+  String proxyUrl;
+  bool proxyForNai;
+  bool proxyForMcp;
+  bool proxyForAi;
+  bool proxyForUpdate;
+  bool proxyForTranslate;
+  String translateProvider;
+  String baiduAppId;
+  int historyRetentionDays;
+  bool keepImageMetadata;
+  bool saveToGallery;
+  String activeHistoryGroupId;
+  bool lockStylePrompt;
+  bool lockNegativePrompt;
+  String savedStylePrompt;
+  String savedNegativePrompt;
+  String imageNameTemplate;
+  List<PromptShortcutTemplate> promptShortcuts;
+  Map<String, String> reversePromptTemplates;
+  Map<String, String> convertPromptTemplates;
+  String comicPromptTemplate;
+  // Last-used tool selections, persisted so they survive an app restart
+  // (mirrors the desktop "last generation state").
+  String reversePromptMode;
+  String convertPromptMode;
+  String inpaintModel;
+  double inpaintStrength;
+  double inpaintNoise;
+  int upscaleScale;
+  String directorTool;
+  double augmentDefry;
+  String augmentColorizePrompt;
+  String augmentEmotion;
+  double augmentEmotionLevel;
 
   AppSettings({
     this.apiBaseUrl = 'https://api.novelai.net',
     this.imageBaseUrl = 'https://image.novelai.net',
+    this.allowCustomEndpoint = false,
     this.visionApiUrl = 'https://api.openai.com/v1',
     this.visionApiModel = 'gpt-4o',
     this.convertApiUrl = 'https://api.openai.com/v1',
@@ -346,14 +575,56 @@ class AppSettings {
     this.autoComplete = true,
     this.tagServerUrl = '',
     this.tagServerType = 'rest',
+    this.tagServerTool = 'search_tags',
+    this.tagServerEnabled = false,
+    this.mcpForCapsule = false,
     this.mcpForReverse = false,
     this.mcpForConvert = false,
-    this.darkMode = false,
-  });
+    this.theme = 'system',
+    this.modelMode = 'anime',
+    this.proxyMode = 'direct',
+    this.proxyUrl = 'http://127.0.0.1:7890',
+    this.proxyForNai = true,
+    this.proxyForMcp = true,
+    this.proxyForAi = true,
+    this.proxyForUpdate = true,
+    this.proxyForTranslate = true,
+    this.translateProvider = 'google',
+    this.baiduAppId = '',
+    this.historyRetentionDays = 365,
+    this.keepImageMetadata = true,
+    this.saveToGallery = true,
+    this.activeHistoryGroupId = '',
+    this.lockStylePrompt = false,
+    this.lockNegativePrompt = false,
+    this.savedStylePrompt = '',
+    this.savedNegativePrompt = '',
+    this.imageNameTemplate = '{date}_{seq}_{model}',
+    List<PromptShortcutTemplate>? promptShortcuts,
+    Map<String, String>? reversePromptTemplates,
+    Map<String, String>? convertPromptTemplates,
+    this.comicPromptTemplate = '',
+    this.reversePromptMode = 'tags',
+    this.convertPromptMode = 'natural',
+    this.inpaintModel = 'nai-diffusion-4-5-full-inpainting',
+    this.inpaintStrength = 0.55,
+    this.inpaintNoise = 0,
+    this.upscaleScale = 2,
+    this.directorTool = 'bg-removal',
+    this.augmentDefry = 0,
+    this.augmentColorizePrompt = '',
+    this.augmentEmotion = 'happy',
+    this.augmentEmotionLevel = 0,
+  })  : reversePromptTemplates = reversePromptTemplates ?? {},
+        convertPromptTemplates = convertPromptTemplates ?? {},
+        promptShortcuts = promptShortcuts ?? [];
+
+  bool get darkMode => theme == 'dark';
 
   Map<String, dynamic> toJson() => {
         'apiBaseUrl': apiBaseUrl,
         'imageBaseUrl': imageBaseUrl,
+        'allowCustomEndpoint': allowCustomEndpoint,
         'visionApiUrl': visionApiUrl,
         'visionApiModel': visionApiModel,
         'convertApiUrl': convertApiUrl,
@@ -361,14 +632,53 @@ class AppSettings {
         'autoComplete': autoComplete,
         'tagServerUrl': tagServerUrl,
         'tagServerType': tagServerType,
+        'tagServerTool': tagServerTool,
+        'tagServerEnabled': tagServerEnabled,
+        'mcpForCapsule': mcpForCapsule,
         'mcpForReverse': mcpForReverse,
         'mcpForConvert': mcpForConvert,
-        'darkMode': darkMode,
+        'theme': theme,
+        'modelMode': modelMode,
+        'proxyMode': proxyMode,
+        'proxyUrl': proxyUrl,
+        'proxyForNai': proxyForNai,
+        'proxyForMcp': proxyForMcp,
+        'proxyForAi': proxyForAi,
+        'proxyForUpdate': proxyForUpdate,
+        'proxyForTranslate': proxyForTranslate,
+        'translateProvider': translateProvider,
+        'baiduAppId': baiduAppId,
+        'historyRetentionDays': historyRetentionDays,
+        'keepImageMetadata': keepImageMetadata,
+        'saveToGallery': saveToGallery,
+        'activeHistoryGroupId': activeHistoryGroupId,
+        'lockStylePrompt': lockStylePrompt,
+        'lockNegativePrompt': lockNegativePrompt,
+        'savedStylePrompt': savedStylePrompt,
+        'savedNegativePrompt': savedNegativePrompt,
+        'imageNameTemplate': imageNameTemplate,
+        'promptShortcuts':
+            promptShortcuts.map((item) => item.toJson()).toList(),
+        'reversePromptTemplates': reversePromptTemplates,
+        'convertPromptTemplates': convertPromptTemplates,
+        'comicPromptTemplate': comicPromptTemplate,
+        'reversePromptMode': reversePromptMode,
+        'convertPromptMode': convertPromptMode,
+        'inpaintModel': inpaintModel,
+        'inpaintStrength': inpaintStrength,
+        'inpaintNoise': inpaintNoise,
+        'upscaleScale': upscaleScale,
+        'directorTool': directorTool,
+        'augmentDefry': augmentDefry,
+        'augmentColorizePrompt': augmentColorizePrompt,
+        'augmentEmotion': augmentEmotion,
+        'augmentEmotionLevel': augmentEmotionLevel,
       };
 
   factory AppSettings.fromJson(Map<String, dynamic> j) => AppSettings(
         apiBaseUrl: j['apiBaseUrl'] ?? 'https://api.novelai.net',
         imageBaseUrl: j['imageBaseUrl'] ?? 'https://image.novelai.net',
+        allowCustomEndpoint: j['allowCustomEndpoint'] ?? false,
         visionApiUrl: j['visionApiUrl'] ?? 'https://api.openai.com/v1',
         visionApiModel: j['visionApiModel'] ?? 'gpt-4o',
         convertApiUrl: j['convertApiUrl'] ?? 'https://api.openai.com/v1',
@@ -376,24 +686,128 @@ class AppSettings {
         autoComplete: j['autoComplete'] ?? true,
         tagServerUrl: j['tagServerUrl'] ?? '',
         tagServerType: j['tagServerType'] ?? 'rest',
+        tagServerTool: j['tagServerTool'] ?? 'search_tags',
+        tagServerEnabled: j['tagServerEnabled'] ??
+            (j['tagServerUrl']?.toString().trim().isNotEmpty ?? false),
+        mcpForCapsule: j['mcpForCapsule'] ?? false,
         mcpForReverse: j['mcpForReverse'] ?? false,
         mcpForConvert: j['mcpForConvert'] ?? false,
-        darkMode: j['darkMode'] ?? false,
+        theme: j['theme'] ?? ((j['darkMode'] ?? false) ? 'dark' : 'system'),
+        modelMode: j['modelMode'] ?? 'anime',
+        proxyMode: j['proxyMode'] ?? 'direct',
+        proxyUrl: j['proxyUrl'] ?? 'http://127.0.0.1:7890',
+        proxyForNai: j['proxyForNai'] ?? true,
+        proxyForMcp: j['proxyForMcp'] ?? true,
+        proxyForAi: j['proxyForAi'] ?? true,
+        proxyForUpdate: j['proxyForUpdate'] ?? true,
+        proxyForTranslate: j['proxyForTranslate'] ?? true,
+        translateProvider: j['translateProvider'] ?? 'google',
+        baiduAppId: j['baiduAppId'] ?? '',
+        historyRetentionDays: j['historyRetentionDays'] ?? 365,
+        keepImageMetadata: j['keepImageMetadata'] ?? true,
+        saveToGallery: j['saveToGallery'] ?? true,
+        activeHistoryGroupId: j['activeHistoryGroupId'] ?? '',
+        lockStylePrompt: j['lockStylePrompt'] ?? false,
+        lockNegativePrompt: j['lockNegativePrompt'] ?? false,
+        savedStylePrompt: j['savedStylePrompt'] ?? '',
+        savedNegativePrompt: j['savedNegativePrompt'] ?? '',
+        imageNameTemplate: j['imageNameTemplate'] ?? '{date}_{seq}_{model}',
+        promptShortcuts: (j['promptShortcuts'] as List?)
+                ?.whereType<Map>()
+                .map((item) => PromptShortcutTemplate.fromJson(
+                    Map<String, dynamic>.from(item)))
+                .toList() ??
+            [],
+        reversePromptTemplates: _stringMap(j['reversePromptTemplates']),
+        convertPromptTemplates: _stringMap(j['convertPromptTemplates']),
+        comicPromptTemplate: j['comicPromptTemplate'] ?? '',
+        reversePromptMode: j['reversePromptMode'] ?? 'tags',
+        convertPromptMode: j['convertPromptMode'] ?? 'natural',
+        inpaintModel: j['inpaintModel'] ?? 'nai-diffusion-4-5-full-inpainting',
+        inpaintStrength: (j['inpaintStrength'] as num?)?.toDouble() ?? 0.55,
+        inpaintNoise: (j['inpaintNoise'] as num?)?.toDouble() ?? 0,
+        upscaleScale: (j['upscaleScale'] as num?)?.toInt() ?? 2,
+        directorTool: j['directorTool'] ?? 'bg-removal',
+        augmentDefry: (j['augmentDefry'] as num?)?.toDouble() ?? 0,
+        augmentColorizePrompt: j['augmentColorizePrompt'] ?? '',
+        augmentEmotion: j['augmentEmotion'] ?? 'happy',
+        augmentEmotionLevel: (j['augmentEmotionLevel'] as num?)?.toDouble() ?? 0,
       );
+}
+
+class PromptShortcutTemplate {
+  final String id;
+  String name;
+  String prefix;
+  String suffix;
+  String negativePrompt;
+
+  PromptShortcutTemplate({
+    required this.id,
+    required this.name,
+    this.prefix = '',
+    this.suffix = '',
+    this.negativePrompt = '',
+  });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'prefix': prefix,
+        'suffix': suffix,
+        'negativePrompt': negativePrompt,
+      };
+
+  factory PromptShortcutTemplate.fromJson(Map<String, dynamic> json) =>
+      PromptShortcutTemplate(
+        id: json['id']?.toString() ?? '',
+        name: json['name']?.toString() ?? '',
+        prefix: json['prefix']?.toString() ?? '',
+        suffix: json['suffix']?.toString() ?? '',
+        negativePrompt: json['negativePrompt']?.toString() ?? '',
+      );
+}
+
+Map<String, String> _stringMap(dynamic value) {
+  if (value is! Map) return {};
+  return value.map(
+    (key, value) => MapEntry(key.toString(), value?.toString() ?? ''),
+  );
 }
 
 enum ReversePromptMode { tags, natural, mixed }
 
+enum ReversePromptScope { full, character, object, scene }
+
+extension ReversePromptScopeLabel on ReversePromptScope {
+  String get value => name;
+  String get label => switch (this) {
+        ReversePromptScope.full => '整张图片',
+        ReversePromptScope.character => '角色',
+        ReversePromptScope.object => '物品',
+        ReversePromptScope.scene => '场景',
+      };
+}
+
 extension ReversePromptModeLabel on ReversePromptMode {
-  String get value => switch (this) { ReversePromptMode.tags => 'tags', ReversePromptMode.natural => 'natural', ReversePromptMode.mixed => 'mixed' };
-  String get label => switch (this) { ReversePromptMode.tags => '标签', ReversePromptMode.natural => '自然语言', ReversePromptMode.mixed => '混合' };
+  String get value => switch (this) {
+        ReversePromptMode.tags => 'tags',
+        ReversePromptMode.natural => 'natural',
+        ReversePromptMode.mixed => 'mixed'
+      };
+  String get label => switch (this) {
+        ReversePromptMode.tags => '标签',
+        ReversePromptMode.natural => '自然语言',
+        ReversePromptMode.mixed => '混合'
+      };
 }
 
 class GenerateResult {
   final bool ok;
   final String message;
   final List<HistoryItem> items;
-  const GenerateResult({required this.ok, required this.message, this.items = const []});
+  const GenerateResult(
+      {required this.ok, required this.message, this.items = const []});
 }
 
 class SingleImageResult {
@@ -401,4 +815,28 @@ class SingleImageResult {
   final String message;
   final HistoryItem? item;
   const SingleImageResult({required this.ok, required this.message, this.item});
+}
+
+class AiCallLogEntry {
+  final String id;
+  final DateTime time;
+  final String label;
+  final String api;
+  final String model;
+  final String systemPrompt;
+  final String userText;
+  final bool ok;
+  final String response;
+
+  const AiCallLogEntry({
+    required this.id,
+    required this.time,
+    required this.label,
+    required this.api,
+    required this.model,
+    required this.systemPrompt,
+    required this.userText,
+    required this.ok,
+    required this.response,
+  });
 }

@@ -1,5 +1,6 @@
 import { dialog, nativeImage } from "electron";
 import axios from "axios";
+import FormData from "form-data";
 import JSZip from "jszip";
 import { PNG } from "pngjs";
 import crypto from "crypto";
@@ -36,7 +37,6 @@ import {
   type I2IParams,
   type LoadImageResult,
   type NAIInpaintModel,
-  type NAIModel,
   type PreciseReferenceItem,
   type PreciseReferenceType,
   type ReversePromptScope,
@@ -444,16 +444,25 @@ function buildPayload(
   // strength, and secondary strength derived from fidelity (1 - fidelity).
   const preciseRefs = extras?.preciseReferences ?? [];
   if (v4Plus && isV45(params.model) && preciseRefs.length > 0) {
-    parameters.director_reference_images = preciseRefs.map((r) => r.base64);
-    parameters.director_reference_descriptions = preciseRefs.map(() => ({
-      // base_caption is a TEXT caption field (the same one that carries the prompt
-      // in v4_prompt). A reference image has no user caption, so it must be EMPTY.
-      // We previously stuffed the type literal ("character"/"style") in here, which
-      // fed stray text into the reference conditioning — the likely cause of the
-      // all-over halftone/cross-hatch overlay at full settings. The TYPE is instead
-      // expressed by the strength channels below. char_captions is always emitted
-      // (the SDK's pydantic ReferenceCaption serializes it as []).
-      caption: { base_caption: "", char_captions: [] },
+    // Confirmed against the official client's real request (F12 HAR): V4.5 precise
+    // references are uploaded as multipart BINARY parts named director_ref_N (done
+    // in postGenerateImage); the JSON references them via
+    // director_reference_images_cached = [{cache_secret_key: sha256(bytes), data}],
+    // and base_caption carries the TYPE. Our old director_reference_images:[base64]
+    // in a JSON POST is silently ignored by the API — which is exactly why precise
+    // reference had no effect regardless of base_caption. We keep the (preprocessed)
+    // base64 here only as the byte source for the multipart parts.
+    parameters.director_reference_images = preciseRefs.map((r) => stripBase64Prefix(r.base64));
+    parameters.director_reference_images_cached = preciseRefs.map((r, index) => ({
+      cache_secret_key: crypto
+        .createHash("sha256")
+        .update(Buffer.from(stripBase64Prefix(r.base64), "base64"))
+        .digest("hex"),
+      data: `director_ref_${index}`,
+    }));
+    parameters.normalize_reference_strength_multiple = true;
+    parameters.director_reference_descriptions = preciseRefs.map((r) => ({
+      caption: { base_caption: r.type || "character&style", char_captions: [] },
       legacy_uc: false,
     }));
     parameters.director_reference_strength_values = preciseRefs.map((r) => round2(clamp01(r.strength, 1)));
@@ -1054,16 +1063,6 @@ function readImageDimensions(buf: Buffer): { width: number; height: number } {
   return { width: 0, height: 0 };
 }
 
-async function readWorkbenchBuffer() {
-  if (!workbenchImagePath) throw new Error("请先加载图片。");
-  return fs.readFile(workbenchImagePath);
-}
-
-async function readWorkbenchBase64() {
-  const buf = await readWorkbenchBuffer();
-  return buf.toString("base64");
-}
-
 async function readWorkbenchImage(): Promise<{ base64: string; buffer: Buffer; image: WorkingImage }> {
   if (!workbenchImagePath) throw new Error("请先加载图片。");
   const buffer = await fs.readFile(workbenchImagePath);
@@ -1282,17 +1281,48 @@ async function postGenerateImage(payload: ReturnType<typeof buildPayload>) {
   if (!token) throw new Error("请先配置 API Token。");
   const settings = getSettings();
   const imageBaseUrl = tokenSafeBaseUrl(settings.imageBaseUrl, "https://image.novelai.net");
+
+  // V4.5 precise references ride as multipart binary parts (director_ref_N); the
+  // JSON "request" part references them via director_reference_images_cached. This
+  // matches the official client's wire format. Every other generation stays JSON.
+  const params = payload.parameters as Record<string, unknown>;
+  const cached = params?.director_reference_images_cached;
+  const useMultipart = Array.isArray(cached) && cached.length > 0;
+  let body: unknown = payload;
+  let bodyHeaders: Record<string, string> = { "Content-Type": "application/json" };
+  if (useMultipart) {
+    const images = Array.isArray(params.director_reference_images)
+      ? (params.director_reference_images as string[])
+      : [];
+    // The JSON request part must NOT carry the base64 images (they ride as binary
+    // parts named director_ref_N); _cached references them by name.
+    const requestJson = { ...payload, parameters: { ...params } };
+    delete (requestJson.parameters as Record<string, unknown>).director_reference_images;
+    const form = new FormData();
+    form.append("request", JSON.stringify(requestJson), { contentType: "application/json" });
+    images.forEach((b64, index) => {
+      form.append(`director_ref_${index}`, Buffer.from(stripBase64Prefix(b64), "base64"), {
+        filename: "blob",
+        contentType: "image/png",
+      });
+    });
+    body = form;
+    bodyHeaders = form.getHeaders();
+  }
+
   const postTo = (baseUrl: string) =>
     requestWithRetry(
       () =>
-        axios.post(`${baseUrl}/ai/generate-image`, payload, {
+        axios.post(`${baseUrl}/ai/generate-image`, body, {
           headers: {
             Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
+            ...bodyHeaders,
             Accept: "application/zip, application/octet-stream",
           },
           responseType: "arraybuffer",
           timeout: 180_000,
+          maxBodyLength: Infinity,
+          maxContentLength: Infinity,
           signal: currentAbort?.signal,
           ...proxyConfig("nai"),
         }),

@@ -435,7 +435,6 @@ function BatchPrecisePicker({ refs, onChange }: { refs: PreciseReferenceItem[]; 
               </select>
               <label>强度<input type="number" min={0} max={1} step={0.05} value={r.strength} onChange={(e) => onChange(refs.map((x, j) => (j === i ? { ...x, strength: Number(e.target.value) } : x)))} /></label>
               <label>保真<input type="number" min={0} max={1} step={0.05} value={r.fidelity} onChange={(e) => onChange(refs.map((x, j) => (j === i ? { ...x, fidelity: Number(e.target.value) } : x)))} /></label>
-              <label title="高=带更多纹理/网点，调低可减弱">信息<input type="number" min={0} max={1} step={0.05} value={r.informationExtracted ?? 1} onChange={(e) => onChange(refs.map((x, j) => (j === i ? { ...x, informationExtracted: Number(e.target.value) } : x)))} /></label>
               <button className="vibe-remove" onClick={() => onChange(refs.filter((_, j) => j !== i))}>×</button>
             </div>
           ))}

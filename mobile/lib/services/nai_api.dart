@@ -3,15 +3,28 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
+import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart' show MediaType;
 
+import '../billing/anlas.dart';
+import '../images/image_processing.dart';
 import '../models/nai_models.dart';
+import '../prompts/prompt_mode.dart';
+import 'mcp_tag_client.dart';
+import 'proxy_http_client.dart';
 
 class AiTextResult {
   final bool ok;
   final String message;
   final String text;
-  const AiTextResult({required this.ok, required this.message, this.text = ''});
+  final PromptVariants? variants;
+  const AiTextResult({
+    required this.ok,
+    required this.message,
+    this.text = '',
+    this.variants,
+  });
 }
 
 class TagSuggestion {
@@ -21,10 +34,215 @@ class TagSuggestion {
   const TagSuggestion({required this.tag, this.count = 0, this.description});
 }
 
+class GenerationCancelledException implements Exception {
+  const GenerationCancelledException();
+
+  @override
+  String toString() => '操作已取消';
+}
+
+class NaiHttpException implements Exception {
+  final int statusCode;
+  final String message;
+
+  const NaiHttpException(this.statusCode, this.message);
+
+  @override
+  String toString() => message;
+}
+
+String resolveNovelAiBaseUrl(
+  String value,
+  String fallback,
+  AppSettings settings,
+) {
+  final candidate = value.trim().isEmpty ? fallback : value.trim();
+  final normalized = candidate.replaceAll(RegExp(r'/+$'), '');
+  if (settings.allowCustomEndpoint) return normalized;
+  final uri = Uri.tryParse(normalized);
+  final host = uri?.host.toLowerCase() ?? '';
+  final official = uri?.scheme == 'https' &&
+      (host == 'novelai.net' || host.endsWith('.novelai.net'));
+  return official ? normalized : fallback;
+}
+
 class NaiApi {
   final _rng = Random.secure();
+  final Map<String, String> _vibeEncodeCache = {};
+  final List<AiCallLogEntry> _aiCallLog = [];
+  http.Client? _activeGenerationClient;
+  bool _generationCancelled = false;
 
   int randomSeed() => 1 + _rng.nextInt(2147483646);
+
+  List<AiCallLogEntry> get aiCallLog => List.unmodifiable(_aiCallLog.reversed);
+
+  void clearAiCallLog() => _aiCallLog.clear();
+
+  int countCachedVibes(String model, GenerateExtras extras) => extras.vibeImages
+      .where((vibe) => _vibeEncodeCache.containsKey(_vibeCacheKey(model, vibe)))
+      .length;
+
+  void cancelActiveGeneration() {
+    _generationCancelled = true;
+    _activeGenerationClient?.close();
+  }
+
+  Future<int?> requestOfficialGenerationPrice(
+    String token,
+    AppSettings settings,
+    GenerateParams params,
+  ) async {
+    final quoteParams = params.copy()
+      ..positivePrompt = params.positivePrompt.trim().isEmpty
+          ? 'quote'
+          : params.positivePrompt.trim();
+    try {
+      final payload = await buildPayload(
+        token,
+        settings,
+        quoteParams,
+        1,
+        GenerateExtras(),
+      );
+      final response = await _withClient(
+        settings,
+        (client) => client
+            .post(
+              Uri.parse(
+                '${_naiBase(settings.apiBaseUrl, 'https://api.novelai.net', settings)}/ai/generate-image/request-price',
+              ),
+              headers: {
+                'Authorization': 'Bearer $token',
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+              },
+              body: jsonEncode(payload),
+            )
+            .timeout(const Duration(seconds: 12)),
+      );
+      if (response.statusCode < 200 || response.statusCode >= 300) return null;
+      return extractOfficialAnlasPrice(jsonDecode(response.body));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<AiTextResult> translateText(String text, AppSettings settings,
+      {String target = 'en', String baiduSecret = ''}) async {
+    final input = text.trim();
+    if (input.isEmpty) {
+      return const AiTextResult(ok: false, message: '没有可翻译的内容');
+    }
+    if (settings.translateProvider == 'baidu') {
+      return _translateWithBaidu(
+        input,
+        settings,
+        target,
+        baiduSecret,
+      );
+    }
+    try {
+      final uri = Uri.https(
+        'translate.googleapis.com',
+        '/translate_a/single',
+        {'client': 'gtx', 'sl': 'auto', 'tl': target, 'dt': 't', 'q': input},
+      );
+      final response = await _withClient(
+        settings,
+        (client) => client.get(uri).timeout(const Duration(seconds: 8)),
+        scope: ProxyScope.translate,
+      );
+      if (response.statusCode >= 400) {
+        return AiTextResult(
+          ok: false,
+          message: '谷歌翻译失败（HTTP ${response.statusCode}）',
+        );
+      }
+      final data = jsonDecode(response.body);
+      final segments = data is List && data.isNotEmpty && data.first is List
+          ? data.first as List
+          : const [];
+      final translated = segments
+          .whereType<List>()
+          .map((segment) =>
+              segment.isEmpty ? '' : segment.first?.toString() ?? '')
+          .join()
+          .trim();
+      return translated.isEmpty
+          ? const AiTextResult(ok: false, message: '谷歌翻译结果为空')
+          : AiTextResult(ok: true, message: '翻译完成', text: translated);
+    } catch (error) {
+      return AiTextResult(
+        ok: false,
+        message: '谷歌翻译失败，请检查网络或代理：$error',
+      );
+    }
+  }
+
+  Future<AiTextResult> _translateWithBaidu(
+    String input,
+    AppSettings settings,
+    String target,
+    String secret,
+  ) async {
+    final appId = settings.baiduAppId.trim();
+    final cleanSecret = secret.trim();
+    if (appId.isEmpty || cleanSecret.isEmpty) {
+      return const AiTextResult(
+        ok: false,
+        message: '请先在设置中填写百度翻译 APP ID 并保存密钥',
+      );
+    }
+    final salt = '${DateTime.now().microsecondsSinceEpoch}';
+    final sign = md5.convert(utf8.encode('$appId$input$salt$cleanSecret'));
+    try {
+      final response = await _withClient(
+        settings,
+        (client) => client.post(
+          Uri.https('fanyi-api.baidu.com', '/api/trans/vip/translate'),
+          headers: const {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: {
+            'q': input,
+            'from': 'auto',
+            'to': target.toLowerCase().startsWith('zh') ? 'zh' : 'en',
+            'appid': appId,
+            'salt': salt,
+            'sign': '$sign',
+          },
+        ).timeout(const Duration(seconds: 12)),
+        scope: ProxyScope.translate,
+      );
+      final data = jsonDecode(response.body);
+      if (response.statusCode >= 400 || data is! Map) {
+        return AiTextResult(
+          ok: false,
+          message: '百度翻译失败（HTTP ${response.statusCode}）',
+        );
+      }
+      if (data['error_code'] != null) {
+        return AiTextResult(
+          ok: false,
+          message: '百度翻译失败：${data['error_msg'] ?? data['error_code']}',
+        );
+      }
+      final rows = data['trans_result'];
+      final translated = rows is List
+          ? rows
+              .whereType<Map>()
+              .map((row) => row['dst']?.toString() ?? '')
+              .where((value) => value.isNotEmpty)
+              .join('\n')
+          : '';
+      return translated.isEmpty
+          ? const AiTextResult(ok: false, message: '百度翻译未返回结果')
+          : AiTextResult(ok: true, message: '翻译完成', text: translated);
+    } catch (error) {
+      return AiTextResult(ok: false, message: '百度翻译失败：$error');
+    }
+  }
 
   String _tierName(int? tier) {
     switch (tier) {
@@ -44,21 +262,32 @@ class NaiApi {
   Future<AccountSummary> verifyToken(String token, AppSettings settings) async {
     final t = token.trim();
     if (t.isEmpty) return const AccountSummary(hasToken: false);
-    final info = await http.get(
-      Uri.parse('${_base(settings.apiBaseUrl, 'https://api.novelai.net')}/user/information'),
-      headers: {'Authorization': 'Bearer $t'},
-    ).timeout(const Duration(seconds: 15));
+    final info = await _withClient(
+      settings,
+      (client) => client.get(
+        Uri.parse(
+            '${_naiBase(settings.apiBaseUrl, 'https://api.novelai.net', settings)}/user/information'),
+        headers: {'Authorization': 'Bearer $t'},
+      ).timeout(const Duration(seconds: 15)),
+    );
     if (info.statusCode == 401) throw Exception('Token 无效或已过期。');
-    if (info.statusCode >= 400) throw Exception('Token 验证失败（HTTP ${info.statusCode}）。');
+    if (info.statusCode >= 400) {
+      throw Exception('Token 验证失败（HTTP ${info.statusCode}）。');
+    }
     return fetchAccount(t, settings);
   }
 
-  Future<AccountSummary> fetchAccount(String token, AppSettings settings) async {
+  Future<AccountSummary> fetchAccount(
+      String token, AppSettings settings) async {
     try {
-      final res = await http.get(
-        Uri.parse('${_base(settings.apiBaseUrl, 'https://api.novelai.net')}/user/data'),
-        headers: {'Authorization': 'Bearer $token'},
-      ).timeout(const Duration(seconds: 15));
+      final res = await _withClient(
+        settings,
+        (client) => client.get(
+          Uri.parse(
+              '${_naiBase(settings.apiBaseUrl, 'https://api.novelai.net', settings)}/user/data'),
+          headers: {'Authorization': 'Bearer $token'},
+        ).timeout(const Duration(seconds: 15)),
+      );
       final data = jsonDecode(res.body) as Map<String, dynamic>;
       final sub = (data['subscription'] ?? {}) as Map<String, dynamic>;
       final tier = sub['tier'] as int?;
@@ -75,7 +304,8 @@ class NaiApi {
         tierName: _tierName(tier),
         tierLevel: tier,
         anlasBalance: anlas,
-        hasActiveSubscription: sub['active'] is bool ? sub['active'] as bool : null,
+        hasActiveSubscription:
+            sub['active'] is bool ? sub['active'] as bool : null,
       );
     } catch (_) {
       return const AccountSummary(hasToken: true, tierName: '已验证');
@@ -88,9 +318,25 @@ class NaiApi {
     GenerateParams params,
     GenerateExtras extras,
   ) async {
-    final seed = params.seedMode != 'random' && params.seed > 0 ? params.seed : randomSeed();
-    final payload = await buildPayload(token, settings, params, seed, extras);
-    final bytes = await _postGenerate(token, settings, payload);
+    final seed = params.seedMode != 'random' && params.seed > 0
+        ? params.seed
+        : randomSeed();
+    var payload = await buildPayload(token, settings, params, seed, extras);
+    Uint8List bytes;
+    try {
+      bytes = await _postGenerate(token, settings, payload);
+    } on NaiHttpException catch (error) {
+      if (!_shouldRetryCharactersAsPipe(error, params, extras)) rethrow;
+      payload = await buildPayload(
+        token,
+        settings,
+        params,
+        seed,
+        extras,
+        structuredCharacters: false,
+      );
+      bytes = await _postGenerate(token, settings, payload);
+    }
     return (_extractImages(bytes), seed);
   }
 
@@ -102,19 +348,43 @@ class NaiApi {
     Uint8List imageBytes,
     I2IParams i2i,
   ) async {
-    final seed = params.seedMode != 'random' && params.seed > 0 ? params.seed : randomSeed();
-    final payload = await buildPayload(token, settings, params, seed, extras);
-    payload['action'] = 'img2img';
-    final p = payload['parameters'] as Map<String, dynamic>;
-    p['image'] = base64Encode(imageBytes);
-    p['strength'] = i2i.strength.clamp(0, 1);
-    p['noise'] = i2i.noise.clamp(0, 0.99);
-    p['extra_noise_seed'] = i2i.extraNoiseSeed > 0 ? i2i.extraNoiseSeed : randomSeed();
-    final bytes = await _postGenerate(token, settings, payload);
+    final seed = params.seedMode != 'random' && params.seed > 0
+        ? params.seed
+        : randomSeed();
+    Future<Map<String, dynamic>> makePayload(bool structuredCharacters) async {
+      final payload = await buildPayload(
+        token,
+        settings,
+        params,
+        seed,
+        extras,
+        structuredCharacters: structuredCharacters,
+      );
+      payload['action'] = 'img2img';
+      final p = payload['parameters'] as Map<String, dynamic>;
+      p['image'] = base64Encode(
+        resizeImageToSize(imageBytes, params.width, params.height),
+      );
+      p['strength'] = i2i.strength.clamp(0, 1);
+      p['noise'] = i2i.noise.clamp(0, 0.99);
+      p['extra_noise_seed'] =
+          i2i.extraNoiseSeed > 0 ? i2i.extraNoiseSeed : randomSeed();
+      return payload;
+    }
+
+    var payload = await makePayload(true);
+    Uint8List bytes;
+    try {
+      bytes = await _postGenerate(token, settings, payload);
+    } on NaiHttpException catch (error) {
+      if (!_shouldRetryCharactersAsPipe(error, params, extras)) rethrow;
+      payload = await makePayload(false);
+      bytes = await _postGenerate(token, settings, payload);
+    }
     return (_extractImages(bytes), seed);
   }
 
-  Future<(List<Uint8List>, int)> inpaint(
+  Future<(List<Uint8List>, int, String)> inpaint(
     String token,
     AppSettings settings,
     GenerateParams params,
@@ -123,35 +393,82 @@ class NaiApi {
     String inpaintModel,
     int width,
     int height,
+    double strength,
+    double noise,
   ) async {
-    final seed = params.seedMode != 'random' && params.seed > 0 ? params.seed : randomSeed();
-    final p = params.copy()
-      ..model = inpaintModel
-      ..width = width
-      ..height = height;
-    final payload = await buildPayload(token, settings, p, seed, GenerateExtras());
-    payload['action'] = 'infill';
-    final parameters = payload['parameters'] as Map<String, dynamic>;
-    parameters['image'] = base64Encode(imageBytes);
-    parameters['mask'] = base64Encode(maskBytes);
-    parameters['add_original_image'] = true;
-    parameters['strength'] = 1;
-    parameters['noise'] = 0;
-    final bytes = await _postGenerate(token, settings, payload);
-    return (_extractImages(bytes), seed);
+    final seed = params.seedMode != 'random' && params.seed > 0
+        ? params.seed
+        : randomSeed();
+    final prepared = prepareInpaintAssets(imageBytes, maskBytes);
+    final candidates = <String>[inpaintModel];
+    if (inpaintModel == 'nai-diffusion-4-5-curated-inpainting') {
+      candidates.add('nai-diffusion-4-5-full-inpainting');
+    } else if (inpaintModel == 'nai-diffusion-4-curated-inpainting') {
+      candidates.add('nai-diffusion-4-full-inpainting');
+    }
+    Uint8List? bytes;
+    var usedModel = inpaintModel;
+    for (var index = 0; index < candidates.length; index++) {
+      final candidate = candidates[index];
+      final p = params.copy()
+        ..model = candidate
+        ..width = prepared.width
+        ..height = prepared.height;
+      final payload =
+          await buildPayload(token, settings, p, seed, GenerateExtras());
+      payload['action'] = 'infill';
+      final parameters = payload['parameters'] as Map<String, dynamic>;
+      parameters['image'] = base64Encode(prepared.imageBytes);
+      parameters['mask'] = base64Encode(prepared.maskBytes);
+      parameters['add_original_image'] = true;
+      parameters['strength'] = strength.clamp(0.1, 1);
+      parameters['noise'] = noise.clamp(0, 0.99);
+      parameters['extra_noise_seed'] = randomSeed();
+      try {
+        bytes = await _postGenerate(token, settings, payload);
+        usedModel = candidate;
+        break;
+      } on NaiHttpException catch (error) {
+        final canTryCompatibleModel = index + 1 < candidates.length &&
+            (error.statusCode == 400 || error.statusCode == 422) &&
+            RegExp(
+              r"(?:doesn'?t|does not|not)\s+support|unsupported|invalid\s+model|action\s+infill",
+              caseSensitive: false,
+            ).hasMatch(error.message);
+        if (!canTryCompatibleModel) rethrow;
+      }
+    }
+    if (bytes == null) throw StateError('重绘请求未返回结果');
+    final images = _extractImages(bytes)
+        .map((image) => cropImageToSize(image, width, height))
+        .toList();
+    return (images, seed, usedModel);
   }
 
-  Future<Uint8List> upscale(String token, AppSettings settings, Uint8List imageBytes, int width, int height, int scale) async {
-    final res = await _postWithRetry(
-      () => http.post(
-        Uri.parse('${_base(settings.apiBaseUrl, 'https://api.novelai.net')}/ai/upscale'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-          'Accept': 'application/zip, application/octet-stream, image/png',
-        },
-        body: jsonEncode({'image': base64Encode(imageBytes), 'width': width, 'height': height, 'scale': scale}),
-      ).timeout(const Duration(seconds: 180)),
+  Future<Uint8List> upscale(String token, AppSettings settings,
+      Uint8List imageBytes, int width, int height, int scale) async {
+    final res = await _withClient(
+      settings,
+      (client) => _postWithRetry(
+        () => client
+            .post(
+              Uri.parse(
+                  '${_naiBase(settings.apiBaseUrl, 'https://api.novelai.net', settings)}/ai/upscale'),
+              headers: {
+                'Authorization': 'Bearer $token',
+                'Content-Type': 'application/json',
+                'Accept':
+                    'application/zip, application/octet-stream, image/png',
+              },
+              body: jsonEncode({
+                'image': base64Encode(imageBytes),
+                'width': width,
+                'height': height,
+                'scale': scale
+              }),
+            )
+            .timeout(const Duration(seconds: 180)),
+      ),
     );
     final images = _extractImages(res.bodyBytes);
     return images.isNotEmpty ? images.first : res.bodyBytes;
@@ -174,18 +491,27 @@ class NaiApi {
       'defry': options.defry.clamp(0, 5),
     };
     if (tool == 'colorize') payload['prompt'] = options.colorizePrompt;
-    if (tool == 'emotion') payload['prompt'] = '${options.emotion};;${options.emotionLevel.clamp(0, 5)}';
+    if (tool == 'emotion') {
+      payload['prompt'] =
+          '${options.emotion};;${options.emotionLevel.clamp(0, 5)}';
+    }
 
-    final res = await _postWithRetry(
-      () => http.post(
-        Uri.parse('${_base(settings.imageBaseUrl, 'https://image.novelai.net')}/ai/augment-image'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-          'Accept': 'application/zip, application/octet-stream',
-        },
-        body: jsonEncode(payload),
-      ).timeout(const Duration(seconds: 180)),
+    final res = await _withClient(
+      settings,
+      (client) => _postWithRetry(
+        () => client
+            .post(
+              Uri.parse(
+                  '${_naiBase(settings.imageBaseUrl, 'https://image.novelai.net', settings)}/ai/augment-image'),
+              headers: {
+                'Authorization': 'Bearer $token',
+                'Content-Type': 'application/json',
+                'Accept': 'application/zip, application/octet-stream',
+              },
+              body: jsonEncode(payload),
+            )
+            .timeout(const Duration(seconds: 180)),
+      ),
     );
     return _extractImages(res.bodyBytes);
   }
@@ -195,11 +521,15 @@ class NaiApi {
     AppSettings settings,
     GenerateParams params,
     int seed,
-    GenerateExtras extras,
-  ) async {
+    GenerateExtras extras, {
+    bool structuredCharacters = true,
+  }) async {
     final basePrompt = _merge(params.stylePrompt, params.positivePrompt);
-    final effectivePrompt = params.qualityToggle ? _merge(basePrompt, _qualityTags(params.model)) : basePrompt;
-    final effectiveNegative = _merge(params.negativePrompt, _ucPresetText(params.model, params.ucPreset));
+    final effectivePrompt = params.qualityToggle
+        ? _merge(basePrompt, _qualityTags(params.model))
+        : basePrompt;
+    final effectiveNegative = _merge(
+        params.negativePrompt, _ucPresetText(params.model, params.ucPreset));
     final charCaptions = extras.charCaptions
         .where((c) => c.prompt.trim().isNotEmpty)
         .take(6)
@@ -212,18 +542,26 @@ class NaiApi {
                   : [],
             })
         .toList();
-    final hasCoords = charCaptions.any((c) => (c['centers'] as List).isNotEmpty);
+    final hasCoords = structuredCharacters &&
+        charCaptions.any((c) => (c['centers'] as List).isNotEmpty);
+    final inputPrompt = structuredCharacters || charCaptions.isEmpty
+        ? effectivePrompt
+        : [
+            effectivePrompt,
+            ...charCaptions.map((caption) => caption['char_caption'] as String),
+          ].where((value) => value.trim().isNotEmpty).join(' | ');
 
     final parameters = <String, dynamic>{
       'params_version': 3,
       'width': params.width,
       'height': params.height,
-      'scale': params.cfgScale,
+      'scale': params.cfgScale.clamp(0, 10),
       'sampler': params.sampler,
       'steps': params.steps,
       'n_samples': 1,
       'seed': seed,
-      'noise_schedule': params.noiseSchedule.isEmpty ? 'native' : params.noiseSchedule,
+      'noise_schedule':
+          params.noiseSchedule.isEmpty ? 'native' : params.noiseSchedule,
       'uc': effectiveNegative,
       'negative_prompt': effectiveNegative,
       'ucPreset': params.ucPreset,
@@ -236,12 +574,20 @@ class NaiApi {
       'qualityToggle': params.qualityToggle,
       'quality_toggle': params.qualityToggle,
     };
-    if (params.variety) parameters['variety'] = true;
+    if (params.variety) parameters['skip_cfg_above_sigma'] = 58;
+    if (params.sampler == 'k_euler_ancestral' &&
+        params.noiseSchedule != 'native') {
+      parameters['deliberate_euler_ancestral_bug'] = false;
+      parameters['prefer_brownian'] = true;
+    }
 
     if (params.isV4Plus) {
       parameters['use_coords'] = hasCoords;
       parameters['v4_prompt'] = {
-        'caption': {'base_caption': effectivePrompt, 'char_captions': charCaptions},
+        'caption': {
+          'base_caption': inputPrompt,
+          'char_captions': structuredCharacters ? charCaptions : <Object>[]
+        },
         'use_coords': hasCoords,
         'use_order': true,
       };
@@ -259,27 +605,126 @@ class NaiApi {
     if (extras.vibeImages.isNotEmpty) {
       final encoded = <VibeTransferItem>[];
       for (final vibe in extras.vibeImages) {
-        encoded.add(await _encodeVibeOrRaw(token, settings, params.model, vibe));
+        encoded
+            .add(await _encodeVibeOrRaw(token, settings, params.model, vibe));
       }
-      parameters['reference_image_multiple'] = encoded.map((e) => e.base64).toList();
-      parameters['reference_information_extracted_multiple'] = encoded.map((e) => e.infoExtracted).toList();
-      parameters['reference_strength_multiple'] = encoded.map((e) => e.strength).toList();
+      parameters['reference_image_multiple'] =
+          encoded.map((e) => e.base64).toList();
+      parameters['reference_information_extracted_multiple'] =
+          encoded.map((e) => e.infoExtracted).toList();
+      parameters['reference_strength_multiple'] =
+          encoded.map((e) => e.strength).toList();
     }
 
-    return {'input': effectivePrompt, 'model': params.model, 'action': 'generate', 'parameters': parameters};
+    final precise = extras.preciseReferences;
+    if (params.isV45 && precise.isNotEmpty) {
+      // Confirmed against the official client's real request (multipart HAR):
+      // precise references are uploaded as binary parts (director_ref_N) in
+      // _sendGenerate; the JSON references them via director_reference_images_cached
+      // and base_caption carries the TYPE. The old director_reference_images:[base64]
+      // in a JSON POST is silently ignored — the image was never applied (which is
+      // why precise reference had no effect). Each image is preprocessed to an
+      // opaque RGB official size; we keep that base64 here only as the byte source.
+      final processed = precise
+          .map((item) => base64Encode(prepareDirectorReferenceImage(
+              base64Decode(_stripBase64(item.base64)))))
+          .toList();
+      parameters['director_reference_images'] = processed;
+      parameters['director_reference_images_cached'] = [
+        for (var i = 0; i < processed.length; i++)
+          {
+            'cache_secret_key':
+                sha256.convert(base64Decode(processed[i])).toString(),
+            'data': 'director_ref_$i',
+          }
+      ];
+      parameters['normalize_reference_strength_multiple'] = true;
+      parameters['director_reference_descriptions'] = precise
+          .map((item) => {
+                'caption': {
+                  'base_caption':
+                      item.type.isEmpty ? 'character&style' : item.type,
+                  'char_captions': <Object>[],
+                },
+                'legacy_uc': false,
+              })
+          .toList();
+      parameters['director_reference_strength_values'] =
+          precise.map((item) => _round2(item.strength.clamp(0, 1))).toList();
+      parameters['director_reference_secondary_strength_values'] = precise
+          .map((item) => _round2(1 - item.fidelity.clamp(0, 1)))
+          .toList();
+      parameters['director_reference_information_extracted'] =
+          precise.map((_) => 1.0).toList();
+    }
+
+    return {
+      'input': inputPrompt,
+      'model': params.model,
+      'action': 'generate',
+      'parameters': parameters
+    };
   }
 
-  Future<List<String>> listModels(String apiUrl, String apiKey) async {
+  bool _shouldRetryCharactersAsPipe(
+    NaiHttpException error,
+    GenerateParams params,
+    GenerateExtras extras,
+  ) =>
+      params.isV4Plus &&
+      (error.statusCode == 400 || error.statusCode == 422) &&
+      extras.charCaptions.any((caption) => caption.prompt.trim().isNotEmpty);
+
+  Future<List<String>> listModels(
+      AppSettings settings, String apiUrl, String apiKey) async {
     if (apiUrl.trim().isEmpty || apiKey.trim().isEmpty) return [];
-    final res = await http.get(
-      Uri.parse('${_base(apiUrl, apiUrl)}/models'),
-      headers: {'Authorization': 'Bearer $apiKey'},
-    ).timeout(const Duration(seconds: 20));
-    if (res.statusCode >= 400) throw Exception('模型检测失败（HTTP ${res.statusCode}）');
+    final res = await _withClient(
+      settings,
+      (client) => client.get(
+        Uri.parse('${_base(apiUrl, apiUrl)}/models'),
+        headers: {'Authorization': 'Bearer $apiKey'},
+      ).timeout(const Duration(seconds: 20)),
+      scope: ProxyScope.ai,
+    );
+    if (res.statusCode >= 400) {
+      throw Exception('模型检测失败（HTTP ${res.statusCode}）');
+    }
     final data = jsonDecode(res.body);
     final raw = data is Map ? data['data'] : data;
     if (raw is! List) return [];
-    return raw.map((e) => e is String ? e : e['id']).whereType<String>().toList()..sort();
+    return raw
+        .map((e) => e is String ? e : e['id'])
+        .whereType<String>()
+        .toList()
+      ..sort();
+  }
+
+  Future<AiTextResult> runTextAi({
+    required AppSettings settings,
+    required String apiKey,
+    required String apiUrl,
+    required String model,
+    required String system,
+    required String user,
+    int maxTokens = 2000,
+    String label = '文本 AI 调用',
+  }) {
+    if (apiKey.trim().isEmpty) {
+      return Future.value(
+        const AiTextResult(ok: false, message: '请先填写转换 API Key'),
+      );
+    }
+    return _chat(
+      settings,
+      apiUrl,
+      apiKey,
+      model,
+      system,
+      user,
+      maxTokens: maxTokens,
+      label: label,
+      apiKind: 'convert',
+    );
   }
 
   Future<AiTextResult> reversePrompt({
@@ -287,17 +732,63 @@ class NaiApi {
     required String apiKey,
     required Uint8List image,
     required ReversePromptMode mode,
+    required ReversePromptScope scope,
+    required String hint,
+    required bool knownCharacter,
+    required String systemTemplate,
   }) async {
-    if (apiKey.trim().isEmpty) return const AiTextResult(ok: false, message: '请先填写 AI 反推 API Key');
-    final system = _modeSystemPrompt(mode, reverse: true);
+    if (apiKey.trim().isEmpty) {
+      return const AiTextResult(ok: false, message: '请先填写 AI 反推 API Key');
+    }
+    final system = [
+      systemTemplate.trim().isEmpty
+          ? _modeSystemPrompt(mode, reverse: true)
+          : systemTemplate.trim(),
+      knownCharacterRuntimeInstruction(mode, 'reverse', knownCharacter),
+    ].join('\n\n');
+    final scopeText = switch (scope) {
+      ReversePromptScope.full => 'full image',
+      ReversePromptScope.character => 'character only',
+      ReversePromptScope.object => 'object only',
+      ReversePromptScope.scene => 'scene/background only',
+    };
+    final hints = !settings.tagServerEnabled ||
+            !settings.mcpForReverse ||
+            hint.trim().isEmpty
+        ? <TagSuggestion>[]
+        : await searchTags(settings, hint, 16);
+    final tagHints = hints.isEmpty
+        ? ''
+        : '\nCandidate Danbooru tags: ${hints.map((e) => e.tag).join(', ')}';
     final user = [
       {
         'type': 'image_url',
-        'image_url': {'url': 'data:image/png;base64,${base64Encode(image)}', 'detail': 'high'}
+        'image_url': {
+          'url': 'data:${_imageMime(image)};base64,${base64Encode(image)}',
+          'detail': 'high'
+        }
       },
-      {'type': 'text', 'text': 'Generate the prompt for this image.\n${_modeInstruction(mode)}'}
+      {
+        'type': 'text',
+        'text': [
+          'Reverse scope: $scopeText.',
+          if (hint.trim().isNotEmpty) 'Subject hint: ${hint.trim()}',
+          modeUserInstruction(mode, 'reverse'),
+          if (tagHints.isNotEmpty) tagHints,
+        ].join('\n')
+      }
     ];
-    return _chat(settings.visionApiUrl, apiKey, settings.visionApiModel, system, user);
+    return _promptChat(
+      settings: settings,
+      apiUrl: settings.visionApiUrl,
+      apiKey: apiKey,
+      model: settings.visionApiModel,
+      system: system,
+      user: user,
+      mode: mode,
+      source: 'reverse',
+      knownCharacter: knownCharacter,
+    );
   }
 
   Future<AiTextResult> convertPrompt({
@@ -305,117 +796,415 @@ class NaiApi {
     required String apiKey,
     required String text,
     required ReversePromptMode mode,
+    required bool knownCharacter,
+    required String systemTemplate,
   }) async {
-    if (apiKey.trim().isEmpty) return const AiTextResult(ok: false, message: '请先填写转换 API Key');
-    final hints = mode == ReversePromptMode.natural || !settings.mcpForConvert ? <TagSuggestion>[] : await searchTags(settings, text, 16);
-    final hintText = hints.isEmpty ? '' : '\nCandidate Danbooru tags:\n${hints.map((e) => e.tag).join(', ')}';
-    final user = 'User description:\n$text\n\n${_modeInstruction(mode)}$hintText';
-    return _chat(settings.convertApiUrl, apiKey, settings.convertApiModel, _modeSystemPrompt(mode, reverse: false), user);
+    if (apiKey.trim().isEmpty) {
+      return const AiTextResult(ok: false, message: '请先填写转换 API Key');
+    }
+    final hints = mode == ReversePromptMode.natural ||
+            !settings.tagServerEnabled ||
+            !settings.mcpForConvert
+        ? <TagSuggestion>[]
+        : await searchTags(settings, text, 16);
+    final hintText = hints.isEmpty
+        ? ''
+        : '\nCandidate Danbooru tags:\n${hints.map((e) => e.tag).join(', ')}';
+    final user =
+        'User description:\n$text\n\n${modeUserInstruction(mode, 'convert')}$hintText';
+    final system = [
+      systemTemplate.trim().isEmpty
+          ? _modeSystemPrompt(mode, reverse: false)
+          : systemTemplate.trim(),
+      knownCharacterRuntimeInstruction(mode, 'convert', knownCharacter),
+    ].join('\n\n');
+    return _promptChat(
+      settings: settings,
+      apiUrl: settings.convertApiUrl,
+      apiKey: apiKey,
+      model: settings.convertApiModel,
+      system: system,
+      user: user,
+      mode: mode,
+      source: 'convert',
+      knownCharacter: knownCharacter,
+    );
   }
 
-  Future<List<TagSuggestion>> searchTags(AppSettings settings, String query, int limit, {String apiKey = ''}) async {
-    if (settings.tagServerUrl.trim().isEmpty || query.trim().isEmpty) return _localTags(query, limit);
+  Future<AiTextResult> _promptChat({
+    required AppSettings settings,
+    required String apiUrl,
+    required String apiKey,
+    required String model,
+    required String system,
+    required Object user,
+    required ReversePromptMode mode,
+    required String source,
+    required bool knownCharacter,
+  }) async {
+    var raw = await _chat(
+      settings,
+      apiUrl,
+      apiKey,
+      model,
+      system,
+      user,
+      label: source == 'reverse' ? 'AI 反推' : '提示词转换',
+      apiKind: source == 'reverse' ? 'vision' : 'convert',
+    );
+    if (!raw.ok) return raw;
+    var parsed = parsePromptVariantResponse(raw.text, knownCharacter);
+    if (knownCharacter && !(parsed.variants?.isComplete ?? false)) {
+      raw = await _chat(
+        settings,
+        apiUrl,
+        apiKey,
+        model,
+        [
+          'Repair a NovelAI prompt response.',
+          knownCharacterRuntimeInstruction(mode, source, true),
+          'Return strict JSON only. Preserve the useful content from the previous response.',
+        ].join('\n'),
+        'Previous incomplete response:\n${raw.text}',
+        label: source == 'reverse' ? 'AI 反推双版本修复' : '提示词转换双版本修复',
+        apiKind: source == 'reverse' ? 'vision' : 'convert',
+      );
+      if (!raw.ok) return raw;
+      parsed = parsePromptVariantResponse(raw.text, true);
+      if (!(parsed.variants?.isComplete ?? false)) {
+        return AiTextResult(
+          ok: false,
+          message: 'AI 未按要求返回完整的角色名版和特征版，请重试或更换模型。',
+          text: parsed.primary,
+          variants: parsed.variants,
+        );
+      }
+    }
+    return AiTextResult(
+      ok: true,
+      message: '成功',
+      text: parsed.primary,
+      variants: parsed.variants,
+    );
+  }
+
+  Future<List<TagSuggestion>> searchTags(
+      AppSettings settings, String query, int limit,
+      {String apiKey = '',
+      bool fallbackLocal = true,
+      bool forceRemote = false}) async {
+    if ((!settings.tagServerEnabled && !forceRemote) ||
+        settings.tagServerUrl.trim().isEmpty ||
+        query.trim().isEmpty) {
+      return fallbackLocal ? _localTags(query, limit) : [];
+    }
     final base = _base(settings.tagServerUrl, settings.tagServerUrl);
     final headers = <String, String>{};
-    if (apiKey.trim().isNotEmpty) headers['Authorization'] = 'Bearer ${apiKey.trim()}';
-    final attempts = <Future<http.Response> Function()>[
-      () => http.get(Uri.parse('$base/search?q=${Uri.encodeQueryComponent(query)}&limit=$limit'), headers: headers),
-      () => http.get(Uri.parse('$base/tags?q=${Uri.encodeQueryComponent(query)}&limit=$limit'), headers: headers),
-      () => http.post(Uri.parse('$base/search'), headers: {...headers, 'Content-Type': 'application/json'}, body: jsonEncode({'query': query, 'limit': limit})),
-      () => http.post(
-            Uri.parse(base),
-            headers: {...headers, 'Content-Type': 'application/json'},
-            body: jsonEncode({
-              'jsonrpc': '2.0',
-              'id': DateTime.now().millisecondsSinceEpoch,
-              'method': 'tools/call',
-              'params': {
-                'name': 'search_tags',
-                'arguments': {'query': query, 'limit': limit}
-              }
-            }),
-          ),
-    ];
-    for (final attempt in attempts) {
-      try {
-        final res = await attempt().timeout(const Duration(seconds: 8));
-        final tags = _parseTagPayload(jsonDecode(res.body)).take(limit).toList();
-        if (tags.isNotEmpty) return tags;
-      } catch (_) {}
+    if (apiKey.trim().isNotEmpty) {
+      headers['Authorization'] = 'Bearer ${apiKey.trim()}';
     }
-    return _localTags(query, limit);
-  }
-
-  Future<VibeTransferItem> _encodeVibeOrRaw(String token, AppSettings settings, String model, VibeTransferItem vibe) async {
-    try {
-      final res = await http.post(
-        Uri.parse('${_base(settings.imageBaseUrl, 'https://image.novelai.net')}/ai/encode-vibe'),
-        headers: {'Authorization': 'Bearer $token', 'Content-Type': 'application/json'},
-        body: jsonEncode({'image': _stripBase64(vibe.base64), 'information_extracted': vibe.infoExtracted, 'model': model}),
-      ).timeout(const Duration(seconds: 60));
-      if (res.statusCode >= 200 && res.statusCode < 300) {
-        return VibeTransferItem(base64: base64Encode(res.bodyBytes), infoExtracted: vibe.infoExtracted, strength: vibe.strength);
+    return _withClient(settings, (client) async {
+      if (settings.tagServerType == 'http' || settings.tagServerType == 'sse') {
+        try {
+          final result = await callMcpTagSearch(
+            client: client,
+            endpoint: base,
+            transport: settings.tagServerType,
+            apiKey: apiKey,
+            preferredTool: settings.tagServerTool,
+            query: query,
+            limit: limit,
+          );
+          final tags = _parseTagPayload(result).take(limit).toList();
+          if (tags.isNotEmpty) return tags;
+        } catch (_) {}
+        return fallbackLocal ? _localTags(query, limit) : [];
       }
-    } catch (_) {}
-    return vibe;
+      final attempts = <Future<http.Response> Function()>[
+        () => client.get(
+            Uri.parse(
+                '$base/search?q=${Uri.encodeQueryComponent(query)}&limit=$limit'),
+            headers: headers),
+        () => client.get(
+            Uri.parse(
+                '$base/tags?q=${Uri.encodeQueryComponent(query)}&limit=$limit'),
+            headers: headers),
+        () => client.post(Uri.parse('$base/search'),
+            headers: {...headers, 'Content-Type': 'application/json'},
+            body: jsonEncode({'query': query, 'limit': limit})),
+      ];
+      for (final attempt in attempts) {
+        try {
+          final res = await attempt().timeout(const Duration(seconds: 8));
+          final tags =
+              _parseTagPayload(jsonDecode(res.body)).take(limit).toList();
+          if (tags.isNotEmpty) return tags;
+        } catch (_) {}
+      }
+      return fallbackLocal ? _localTags(query, limit) : [];
+    }, scope: ProxyScope.mcp);
   }
 
-  Future<Uint8List> _postGenerate(String token, AppSettings settings, Map<String, dynamic> payload) async {
-    final res = await _postWithRetry(
-      () => http.post(
-        Uri.parse('${_base(settings.imageBaseUrl, 'https://image.novelai.net')}/ai/generate-image'),
+  Future<VibeTransferItem> _encodeVibeOrRaw(String token, AppSettings settings,
+      String model, VibeTransferItem vibe) async {
+    if (!model.contains('-4')) return vibe;
+    final cacheKey = _vibeCacheKey(model, vibe);
+    final cached = _vibeEncodeCache[cacheKey];
+    if (cached != null) {
+      return VibeTransferItem(
+        base64: cached,
+        infoExtracted: vibe.infoExtracted,
+        strength: vibe.strength,
+        sourcePath: vibe.sourcePath,
+      );
+    }
+    try {
+      final res = await _withClient(
+        settings,
+        (client) => client
+            .post(
+              Uri.parse(
+                  '${_naiBase(settings.imageBaseUrl, 'https://image.novelai.net', settings)}/ai/encode-vibe'),
+              headers: {
+                'Authorization': 'Bearer $token',
+                'Content-Type': 'application/json'
+              },
+              body: jsonEncode({
+                'image': _stripBase64(vibe.base64),
+                'information_extracted': vibe.infoExtracted,
+                'model': model
+              }),
+            )
+            .timeout(const Duration(seconds: 60)),
+      );
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        final encoded = base64Encode(res.bodyBytes);
+        _vibeEncodeCache[cacheKey] = encoded;
+        return VibeTransferItem(
+          base64: encoded,
+          infoExtracted: vibe.infoExtracted,
+          strength: vibe.strength,
+          sourcePath: vibe.sourcePath,
+        );
+      }
+      throw Exception('HTTP ${res.statusCode}：${res.body}');
+    } catch (error) {
+      throw Exception(
+        '参考图编码失败（encode-vibe）：${error.toString().replaceFirst('Exception: ', '')}',
+      );
+    }
+  }
+
+  String _vibeCacheKey(String model, VibeTransferItem vibe) =>
+      '$model|${vibe.infoExtracted.toStringAsFixed(3)}|${vibe.base64.length}|${vibe.base64.hashCode}';
+
+  double _round2(num value) => (value * 100).round() / 100;
+
+  // Sends the generate-image request. With precise references present it must be
+  // multipart/form-data — a JSON "request" part + the images as binary
+  // director_ref_N parts — matching the official client (base64-in-JSON ignored).
+  Future<http.Response> _sendGenerate(
+    http.Client client,
+    Uri uri,
+    String token,
+    Map<String, dynamic> payload,
+    bool useMultipart,
+  ) async {
+    if (!useMultipart) {
+      return client.post(
+        uri,
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
           'Accept': 'application/zip, application/octet-stream',
         },
         body: jsonEncode(payload),
-      ).timeout(const Duration(seconds: 180)),
-    );
-    return res.bodyBytes;
+      );
+    }
+    final params = Map<String, dynamic>.from(payload['parameters'] as Map);
+    final images =
+        ((params.remove('director_reference_images') as List?) ?? const [])
+            .cast<String>();
+    final requestJson = {...payload, 'parameters': params};
+    final request = http.MultipartRequest('POST', uri)
+      ..headers['Authorization'] = 'Bearer $token'
+      ..headers['Accept'] = 'application/zip, application/octet-stream'
+      ..files.add(http.MultipartFile.fromString(
+        'request',
+        jsonEncode(requestJson),
+        contentType: MediaType('application', 'json'),
+      ));
+    for (var index = 0; index < images.length; index++) {
+      request.files.add(http.MultipartFile.fromBytes(
+        'director_ref_$index',
+        base64Decode(images[index]),
+        filename: 'blob',
+        contentType: MediaType('image', 'png'),
+      ));
+    }
+    final streamed = await client.send(request);
+    return http.Response.fromStream(streamed);
   }
 
-  Future<http.Response> _postWithRetry(Future<http.Response> Function() fn, {int retries = 3}) async {
-    var attempt = 0;
-    while (true) {
-      try {
-        final res = await fn();
-        if (res.statusCode == 200 || res.statusCode == 201) return res;
-        final retryable = [429, 500, 502, 503, 524].contains(res.statusCode);
-        if (!retryable || attempt >= retries) throw Exception(_errorText(res));
-        final retryAfter = int.tryParse(res.headers['retry-after'] ?? '');
-        final waitMs = retryAfter != null && retryAfter > 0 ? retryAfter * 1000 : 2000 * (1 << attempt);
-        attempt++;
-        await Future.delayed(Duration(milliseconds: min(waitMs, 30000)));
-      } on Exception {
-        if (attempt >= retries) rethrow;
-        attempt++;
-        await Future.delayed(Duration(milliseconds: 2000 * (1 << (attempt - 1))));
+  Future<Uint8List> _postGenerate(
+      String token, AppSettings settings, Map<String, dynamic> payload) async {
+    _generationCancelled = false;
+    final client = createProxyHttpClient(settings, scope: ProxyScope.nai);
+    _activeGenerationClient = client;
+    final uri = Uri.parse(
+      '${_naiBase(settings.imageBaseUrl, 'https://image.novelai.net', settings)}/ai/generate-image',
+    );
+    final cached =
+        (payload['parameters'] as Map?)?['director_reference_images_cached'];
+    final useMultipart = cached is List && cached.isNotEmpty;
+    try {
+      for (var attempt = 0; attempt <= 3; attempt++) {
+        if (_generationCancelled) throw const GenerationCancelledException();
+        try {
+          final response =
+              await _sendGenerate(client, uri, token, payload, useMultipart)
+                  .timeout(const Duration(seconds: 180));
+          if (response.statusCode == 200 || response.statusCode == 201) {
+            return response.bodyBytes;
+          }
+          if (response.statusCode != 429 || attempt >= 3) {
+            throw NaiHttpException(response.statusCode, _errorText(response));
+          }
+          final retryAfter =
+              int.tryParse(response.headers['retry-after'] ?? '');
+          final waitMs = retryAfter != null && retryAfter > 0
+              ? retryAfter * 1000
+              : 2000 * (1 << attempt);
+          await Future.delayed(Duration(milliseconds: min(waitMs, 30000)));
+        } catch (_) {
+          if (_generationCancelled) throw const GenerationCancelledException();
+          rethrow;
+        }
       }
+      throw StateError('生成请求未完成');
+    } finally {
+      if (identical(_activeGenerationClient, client)) {
+        _activeGenerationClient = null;
+      }
+      client.close();
     }
   }
 
-  Future<AiTextResult> _chat(String apiUrl, String apiKey, String model, String system, Object user) async {
+  Future<http.Response> _postWithRetry(Future<http.Response> Function() fn,
+      {int retries = 3}) async {
+    for (var attempt = 0; attempt <= retries; attempt++) {
+      final res = await fn();
+      if (res.statusCode == 200 || res.statusCode == 201) return res;
+      if (res.statusCode != 429 || attempt >= retries) {
+        throw NaiHttpException(res.statusCode, _errorText(res));
+      }
+      final retryAfter = int.tryParse(res.headers['retry-after'] ?? '');
+      final waitMs = retryAfter != null && retryAfter > 0
+          ? retryAfter * 1000
+          : 2000 * (1 << attempt);
+      await Future.delayed(Duration(milliseconds: min(waitMs, 30000)));
+    }
+    throw StateError('请求未完成');
+  }
+
+  Future<AiTextResult> _chat(AppSettings settings, String apiUrl, String apiKey,
+      String model, String system, Object user,
+      {int maxTokens = 2000,
+      String label = 'AI 调用',
+      String apiKind = 'convert'}) async {
+    final effectiveModel = model.trim().isEmpty ? 'gpt-4o-mini' : model.trim();
+    final userSummary = _summarizeAiUser(user);
     try {
       final body = {
-        'model': model.trim().isEmpty ? 'gpt-4o-mini' : model.trim(),
-        'max_tokens': 2000,
+        'model': effectiveModel,
+        'max_tokens': maxTokens,
         'messages': [
           {'role': 'system', 'content': system},
           {'role': 'user', 'content': user},
         ],
       };
-      final res = await http.post(
-        Uri.parse('${_base(apiUrl, apiUrl)}/chat/completions'),
-        headers: {'Authorization': 'Bearer $apiKey', 'Content-Type': 'application/json'},
-        body: jsonEncode(body),
-      ).timeout(const Duration(seconds: 60));
-      if (res.statusCode >= 400) return AiTextResult(ok: false, message: 'AI 调用失败（HTTP ${res.statusCode}）：${res.body}');
+      final res = await _withClient(
+        settings,
+        (client) => client
+            .post(
+              Uri.parse('${_base(apiUrl, apiUrl)}/chat/completions'),
+              headers: {
+                'Authorization': 'Bearer $apiKey',
+                'Content-Type': 'application/json'
+              },
+              body: jsonEncode(body),
+            )
+            .timeout(const Duration(seconds: 60)),
+        scope: ProxyScope.ai,
+      );
+      if (res.statusCode >= 400) {
+        final result = AiTextResult(
+            ok: false, message: 'AI 调用失败（HTTP ${res.statusCode}）：${res.body}');
+        _addAiLog(label, apiKind, effectiveModel, system, userSummary, result);
+        return result;
+      }
       final data = jsonDecode(res.body);
-      final content = data['choices']?[0]?['message']?['content']?.toString().trim() ?? '';
-      return content.isEmpty ? const AiTextResult(ok: false, message: 'AI 返回内容为空') : AiTextResult(ok: true, message: '成功', text: _cleanPrompt(content));
+      final content =
+          data['choices']?[0]?['message']?['content']?.toString().trim() ?? '';
+      final result = content.isEmpty
+          ? const AiTextResult(ok: false, message: 'AI 返回内容为空')
+          : AiTextResult(ok: true, message: '成功', text: _cleanPrompt(content));
+      _addAiLog(label, apiKind, effectiveModel, system, userSummary, result);
+      return result;
     } catch (e) {
-      return AiTextResult(ok: false, message: e.toString().replaceFirst('Exception: ', ''));
+      final result = AiTextResult(
+          ok: false, message: e.toString().replaceFirst('Exception: ', ''));
+      _addAiLog(label, apiKind, effectiveModel, system, userSummary, result);
+      return result;
+    }
+  }
+
+  void _addAiLog(
+    String label,
+    String apiKind,
+    String model,
+    String system,
+    String user,
+    AiTextResult result,
+  ) {
+    _aiCallLog.add(AiCallLogEntry(
+      id: '${DateTime.now().microsecondsSinceEpoch}',
+      time: DateTime.now(),
+      label: label,
+      api: apiKind,
+      model: model,
+      systemPrompt: system,
+      userText: user,
+      ok: result.ok,
+      response: result.ok ? result.text : result.message,
+    ));
+    if (_aiCallLog.length > 200) _aiCallLog.removeAt(0);
+  }
+
+  String _summarizeAiUser(Object user) {
+    if (user is String) return user;
+    if (user is List) {
+      return user.map((item) {
+        if (item is Map && item['type'] == 'image_url') return '[图片已省略]';
+        if (item is Map && item['type'] == 'text') {
+          return item['text']?.toString() ?? '';
+        }
+        return item.toString();
+      }).join('\n');
+    }
+    return user.toString();
+  }
+
+  Future<T> _withClient<T>(
+    AppSettings settings,
+    Future<T> Function(http.Client client) action, {
+    ProxyScope scope = ProxyScope.nai,
+  }) async {
+    final client = createProxyHttpClient(settings, scope: scope);
+    try {
+      return await action(client);
+    } finally {
+      client.close();
     }
   }
 
@@ -431,7 +1220,9 @@ class NaiApi {
       }
       return out;
     } catch (_) {
-      if (bytes.length > 8 && bytes[0] == 0x89 && bytes[1] == 0x50) return [bytes];
+      if (bytes.length > 8 && bytes[0] == 0x89 && bytes[1] == 0x50) {
+        return [bytes];
+      }
       return [];
     }
   }
@@ -439,7 +1230,9 @@ class NaiApi {
   String _errorText(http.Response res) {
     try {
       final body = jsonDecode(res.body);
-      if (body is Map && body['message'] != null) return '请求失败（${res.statusCode}）：${body['message']}';
+      if (body is Map && body['message'] != null) {
+        return '请求失败（${res.statusCode}）：${body['message']}';
+      }
     } catch (_) {}
     return '请求失败（HTTP ${res.statusCode}）。';
   }
@@ -449,51 +1242,98 @@ class NaiApi {
     return v.replaceAll(RegExp(r'/+$'), '');
   }
 
+  String _naiBase(
+    String value,
+    String fallback,
+    AppSettings settings,
+  ) =>
+      resolveNovelAiBaseUrl(value, fallback, settings);
+
   String _merge(String a, String b) {
-    final left = a.trim();
-    final right = b.trim();
-    if (left.isEmpty) return right;
-    if (right.isEmpty) return left;
-    return '$left, $right';
+    final seen = <String>{};
+    final result = <String>[];
+    for (final segment in [a, b]) {
+      for (final part in segment.split(',').map((value) => value.trim())) {
+        if (part.isEmpty) continue;
+        if (seen.add(part.toLowerCase())) result.add(part);
+      }
+    }
+    return result.join(', ');
   }
 
   String _qualityTags(String model) {
-    if (model.startsWith('nai-diffusion-4-5')) return 'location, very aesthetic, masterpiece, no text';
-    if (model.startsWith('nai-diffusion-4')) return 'no text, best quality, very aesthetic, absurdres';
-    return 'best quality, amazing quality, very aesthetic, absurdres';
+    return switch (_normalizeModel(model)) {
+      'nai-diffusion-4-5-full' => 'very aesthetic, masterpiece, no text',
+      'nai-diffusion-4-5-curated' =>
+        'masterpiece, no text, -0.8::feet::, rating:general',
+      'nai-diffusion-4-full' =>
+        'no text, best quality, very aesthetic, absurdres',
+      'nai-diffusion-4-curated' =>
+        'rating:general, amazing quality, very aesthetic, absurdres',
+      'nai-diffusion-3' =>
+        'best quality, amazing quality, very aesthetic, absurdres',
+      _ => '',
+    };
   }
 
   String _ucPresetText(String model, int preset) {
-    if (preset == 3) return '';
-    if (model.startsWith('nai-diffusion-4-5')) {
-      return preset == 0
-          ? 'blurry, lowres, upscaled, artistic error, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, logo, too many watermarks'
-          : 'blurry, lowres, upscaled, artistic error, scan artifacts, jpeg artifacts, logo, too many watermarks';
-    }
-    return preset == 0 ? 'lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality' : '';
+    if (preset == 2 || preset == 3) return '';
+    final heavy = preset == 0;
+    return switch (_normalizeModel(model)) {
+      'nai-diffusion-4-5-full' => heavy
+          ? 'lowres, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, dithering, halftone, screentone, multiple views, logo, too many watermarks, negative space, blank page'
+          : 'lowres, artistic error, scan artifacts, worst quality, bad quality, jpeg artifacts, multiple views, very displeasing, too many watermarks, negative space, blank page',
+      'nai-diffusion-4-5-curated' => heavy
+          ? 'blurry, lowres, upscaled, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, halftone, multiple views, logo, too many watermarks, negative space, blank page'
+          : 'blurry, lowres, upscaled, artistic error, scan artifacts, jpeg artifacts, logo, too many watermarks, negative space, blank page',
+      'nai-diffusion-4-full' => heavy
+          ? 'blurry, lowres, error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, multiple views, logo, too many watermarks'
+          : 'blurry, lowres, error, worst quality, bad quality, jpeg artifacts, very displeasing',
+      'nai-diffusion-4-curated' => heavy
+          ? 'blurry, lowres, error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, logo, dated, signature, multiple views, gigantic breasts'
+          : 'blurry, lowres, error, worst quality, bad quality, jpeg artifacts, very displeasing, logo, dated, signature',
+      'nai-diffusion-3' => heavy
+          ? 'lowres, {bad}, error, fewer, extra, missing, worst quality, jpeg artifacts, bad quality, watermark, unfinished, displeasing, chromatic aberration, signature, extra digits, artistic error, username, scan, [abstract]'
+          : 'lowres, jpeg artifacts, worst quality, watermark, blurry, very displeasing',
+      _ => '',
+    };
   }
 
-  String _stripBase64(String value) => value.contains(',') ? value.split(',').last : value;
+  String _normalizeModel(String model) => model.endsWith('-inpainting')
+      ? model.substring(0, model.length - '-inpainting'.length)
+      : model;
+
+  String _stripBase64(String value) =>
+      value.contains(',') ? value.split(',').last : value;
+
+  String _imageMime(Uint8List bytes) {
+    if (bytes.length >= 3 &&
+        bytes[0] == 0xff &&
+        bytes[1] == 0xd8 &&
+        bytes[2] == 0xff) {
+      return 'image/jpeg';
+    }
+    if (bytes.length >= 12 &&
+        String.fromCharCodes(bytes.sublist(0, 4)) == 'RIFF' &&
+        String.fromCharCodes(bytes.sublist(8, 12)) == 'WEBP') {
+      return 'image/webp';
+    }
+    return 'image/png';
+  }
 
   String _cleanPrompt(String raw) => raw
       .trim()
-      .replaceFirst(RegExp(r'^```(?:text|txt|prompt|markdown)?\s*', caseSensitive: false), '')
+      .replaceFirst(
+          RegExp(r'^```(?:text|txt|prompt|markdown)?\s*', caseSensitive: false),
+          '')
       .replaceFirst(RegExp(r'\s*```$'), '')
-      .replaceFirst(RegExp(r'^(?:output|prompt|result|答案|输出|结果)\s*[:：]\s*', caseSensitive: false), '')
+      .replaceFirst(
+          RegExp(r'^(?:output|prompt|result|答案|输出|结果)\s*[:：]\s*',
+              caseSensitive: false),
+          '')
       .replaceAll('\\n', ' ')
       .replaceAll(RegExp(r'\s+'), ' ')
       .trim();
-
-  String _modeInstruction(ReversePromptMode mode) {
-    switch (mode) {
-      case ReversePromptMode.natural:
-        return 'Output one English natural-language NovelAI V4.5 prompt. Do not output comma-separated Danbooru tags. For multiple original characters, use: base scene | A boy/girl ... | A boy/girl ...';
-      case ReversePromptMode.mixed:
-        return 'Output one mixed NovelAI V4.5 prompt: mostly Danbooru tags plus short natural-language clauses for composition.';
-      case ReversePromptMode.tags:
-        return 'Output one comma-separated Danbooru / NovelAI tag prompt. Do not output pure prose.';
-    }
-  }
 
   String _modeSystemPrompt(ReversePromptMode mode, {required bool reverse}) {
     final task = reverse ? '根据图片反推出' : '把用户输入转换成';
@@ -509,18 +1349,27 @@ class NaiApi {
 
   List<TagSuggestion> _parseTagPayload(Object? payload) {
     if (payload == null) return [];
-    if (payload is List) return payload.map(_tagFromAny).whereType<TagSuggestion>().toList();
+    if (payload is List) {
+      return payload.map(_tagFromAny).whereType<TagSuggestion>().toList();
+    }
     if (payload is String) {
       try {
         return _parseTagPayload(jsonDecode(payload));
       } catch (_) {
-        return payload.split(RegExp(r'[\n,]')).map(_tagFromAny).whereType<TagSuggestion>().toList();
+        return payload
+            .split(RegExp(r'[\n,]'))
+            .map(_tagFromAny)
+            .whereType<TagSuggestion>()
+            .toList();
       }
     }
     if (payload is Map) {
       final content = payload['content'];
       if (content is List) {
-        final text = content.map((e) => e is Map ? e['text'] : e).whereType<String>().join('\n');
+        final text = content
+            .map((e) => e is Map ? e['text'] : e)
+            .whereType<String>()
+            .join('\n');
         final parsed = _parseTagPayload(text);
         if (parsed.isNotEmpty) return parsed;
       }
@@ -538,10 +1387,20 @@ class NaiApi {
       return tag.isEmpty ? null : TagSuggestion(tag: tag);
     }
     if (item is Map) {
-      final tag = (item['tag'] ?? item['name'] ?? item['value'] ?? item['label'] ?? item['text'])?.toString().trim();
+      final tag = (item['tag'] ??
+              item['name'] ??
+              item['value'] ??
+              item['label'] ??
+              item['text'])
+          ?.toString()
+          .trim();
       if (tag == null || tag.isEmpty) return null;
-      final count = int.tryParse((item['count'] ?? item['post_count'] ?? item['posts'] ?? 0).toString()) ?? 0;
-      final desc = (item['description'] ?? item['translation'] ?? item['zh'])?.toString();
+      final count = int.tryParse(
+              (item['count'] ?? item['post_count'] ?? item['posts'] ?? 0)
+                  .toString()) ??
+          0;
+      final desc = (item['description'] ?? item['translation'] ?? item['zh'])
+          ?.toString();
       return TagSuggestion(tag: tag, count: count, description: desc);
     }
     return null;

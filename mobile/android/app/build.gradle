@@ -10,7 +10,7 @@ android {
     // Pinned explicitly (not flutter.compileSdkVersion) because the gal plugin
     // reads compileSdk directly and fails when it's left to the Flutter default.
     compileSdk = 35
-    ndkVersion = "25.1.8937393"
+    ndkVersion = "26.1.10909125"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

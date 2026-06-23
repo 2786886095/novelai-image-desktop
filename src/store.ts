@@ -1017,7 +1017,19 @@ export const useAppStore = create<AppState>((set, get) => ({
     const initialParams = { ...state.params };
     const initialExtras = buildExtras(state);
     const initialSeed = initialParams.seed;
+    // Instant feedback: enter the generating state BEFORE the balance refresh and
+    // price quote (two network round-trips). Without this the button looks frozen
+    // for a second or two after a click. A cancel during prep clears the run id,
+    // which we honor below so the click can still be aborted.
+    const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    set({
+      isGenerating: true,
+      isGenerateQueueRunning: true,
+      activeGenerationRunId: runId,
+      statusText: "正在准备生成（读取余额与报价）…",
+    });
     const freshAccount = await get().refreshAccount();
+    if (get().activeGenerationRunId !== runId) return; // cancelled during prep
     const quote = await ensureAnlasBeforeRun(
       set,
       {
@@ -1029,8 +1041,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       },
       initialTotal > 1 ? `批量生成 ${initialTotal} 张` : "生成图片",
     );
-    if (!quote) return;
-    const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    if (!quote || get().activeGenerationRunId !== runId) {
+      if (get().activeGenerationRunId === runId) {
+        set({ isGenerating: false, isGenerateQueueRunning: false, activeGenerationRunId: null });
+      }
+      return;
+    }
     const anlasBefore = freshAccount.anlasBalance;
     set({
       isGenerating: true,

@@ -361,7 +361,30 @@ export function addHistory(items: HistoryItem[]) {
   writeStore(data);
 }
 
+// Drop history entries whose image file no longer exists on disk (e.g. the user
+// deleted it in Explorer), so the in-app library stays in sync. Runs once per
+// app session — statting every item on every getHistory call would be slow.
+let historyPrunedThisSession = false;
+function pruneMissingHistoryFiles(): void {
+  if (historyPrunedThisSession) return;
+  historyPrunedThisSession = true;
+  const data = readStore();
+  const kept = data.history.filter((item) => {
+    if (!item.filePath) return true;
+    try {
+      return fs.existsSync(item.filePath);
+    } catch {
+      return true; // a stat error shouldn't silently delete a record
+    }
+  });
+  if (kept.length !== data.history.length) {
+    data.history = kept;
+    writeStore(data);
+  }
+}
+
 export function getHistory(date?: string, groupId?: string): HistoryItem[] {
+  pruneMissingHistoryFiles();
   const history = readStore().history;
   return history.filter((item) => {
     if (date && item.date !== date) return false;

@@ -4,14 +4,25 @@
 
 | 系统 | 安装包 | 安装说明 |
 | --- | --- | --- |
-| 🪟 **Windows** (x64) | `Langbai-NovelAI-Studio-1.0.0.exe` | 便携版，双击即用，无需安装 |
-| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-1.0.0-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
-| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-1.0.0.zip` | 解压后即为 `.app`，同样需右键「打开」 |
-| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-1.0.0.AppImage` | `chmod +x` 后直接运行 |
+| 🪟 **Windows** (x64) | `Langbai-NovelAI-Studio-1.0.1.exe` | 便携版，双击即用，无需安装 |
+| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-1.0.1-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
+| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-1.0.1.zip` | 解压后即为 `.app`，同样需右键「打开」 |
+| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-1.0.1.AppImage` | `chmod +x` 后直接运行 |
 | 🤖 **Android** | `app-release.apk` | 直接安装；未签名，需允许「未知来源」 |
 | 📱 **iOS** | `novelai-mobile-unsigned.ipa` | **未签名**，需用 AltStore / Sideloadly 等工具自行侧载 |
 
 > 桌面端与移动端均为 **API-only** 客户端，需自备 NovelAI Persistent API Token。
+
+### v1.0.1 更新内容
+
+- **精准参考改用官方 multipart 上传（关键修复）**：对照官方网页端真实请求（F12 抓包）发现，精准参考图必须以 `multipart/form-data` 的二进制分块（`director_ref_N`）上传，再在 JSON 里用 `director_reference_images_cached` 按 sha256 + 名称引用，`base_caption` 携带类型。此前桌面/移动端把图当 base64 塞进 JSON，接口直接忽略 → 参考图从未生效。现已逐字段对齐官方格式，桌面与移动端同步修复。
+- **首个正式包含 Android / iOS 移动端的发布**：移动端基于 Flutter，与桌面共享能力（文生图 / 图生图 / 局部重绘 / 超分 / 后期 / AI 反推与转换 / 漫画 / 批量 / 历史 / 设置 / 新手引导），手机与平板自适应布局。iOS 由 CI 在 macOS 上从同一套代码构建为**未签名 IPA**（需自行侧载）。
+- **点击生成立即响应**：桌面端此前在显示「生成中」之前会先串行完成「刷新余额 + 官方报价」两个网络请求，按钮看起来卡住。现改为点击即进入生成态并显示「正在准备生成…」，报价在后台进行（保留取消能力）。
+- **默认参数优化**：默认开启 **Variety+（多样化）**，配合质量词提升默认出图质量。
+- **精简精准参考**：移除作用不大的「信息提取」滑块（请求仍按官方固定发送）。
+- **历史与本地同步**：在本地（资源管理器 / 文件管理器）删除的图片，启动时会自动从应用历史中移除。
+- **自适应完善**：修复手机端若干固定宽度弹窗在小屏溢出的问题；布局在 320 宽小屏、横屏手机、手机与平板尺寸下均通过校验。
+- 代码清理：移除死代码并开启编译期未使用检查，避免后续堆积。
 
 ### v1.0.0 更新内容
 

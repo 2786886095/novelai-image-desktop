@@ -10,6 +10,20 @@ subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
 }
 subprojects {
+    // Some third-party Flutter plugins (e.g. gal) read `flutter.compileSdkVersion`
+    // directly in their own android/build.gradle, but the Flutter Gradle plugin only
+    // registers the `flutter` extension on the :app project. Provide a matching shim on
+    // the other subprojects so those plugins configure against the same SDK levels as
+    // the app instead of failing with "compileSdkVersion is not specified".
+    if (project.name != "app") {
+        project.ext.flutter = [
+            compileSdkVersion: 35,
+            minSdkVersion    : 23,
+            targetSdkVersion : 34,
+        ]
+    }
+}
+subprojects {
     project.evaluationDependsOn(":app")
 }
 
