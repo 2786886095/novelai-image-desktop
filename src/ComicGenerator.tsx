@@ -388,6 +388,13 @@ function BatchParamFields({ value, onPatch }: { value: GenerateParams; onPatch: 
         <NumberInput label="步数" value={value.steps} min={1} max={50} onChange={(v) => onPatch({ steps: v })} />
         <NumberInput label="提示词引导" value={value.cfgScale} min={1} max={10} step={0.1} onChange={(v) => onPatch({ cfgScale: v })} />
         <NumberInput label="CFG Rescale" value={value.cfgRescale} min={0} max={1} step={0.01} onChange={(v) => onPatch({ cfgRescale: v })} />
+        <label className="comic-field"><span>噪声计划</span>
+          <select value={value.noiseSchedule} onChange={(e) => onPatch({ noiseSchedule: e.target.value })}>
+            <option value="native">Native（原生）</option>
+            <option value="karras">Karras（常用）</option>
+            <option value="exponential">Exponential（指数）</option>
+          </select>
+        </label>
         <NumberInput label="种子（0=随机）" value={value.seed} min={0} max={4294967295} onChange={(v) => onPatch({ seed: v, seedMode: v > 0 ? "fixed" : "random" })} />
         <label className="comic-field"><span>负面预设</span>
           <select value={value.ucPreset} onChange={(e) => onPatch({ ucPreset: Number(e.target.value) as UcPreset })}>
@@ -2002,6 +2009,14 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
                 </select>
               </label>
               <label className="comic-field">
+                <span>噪声计划</span>
+                <select value={project.globalParams.noiseSchedule} onChange={(event) => patchGlobalParam("noiseSchedule", event.target.value)}>
+                  <option value="native">Native（原生）</option>
+                  <option value="karras">Karras（常用）</option>
+                  <option value="exponential">Exponential（指数）</option>
+                </select>
+              </label>
+              <label className="comic-field">
                 <span>UC 预设</span>
                 <select value={project.globalParams.ucPreset} onChange={(event) => patchGlobalParam("ucPreset", Number(event.target.value) as UcPreset)}>
                   {NAI_UC_PRESETS.map((preset) => (
@@ -2129,6 +2144,7 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
                         <div className="comic-panel-param-controls">
                           <label className="comic-field"><span>模型</span><select value={activePanel.paramsOverride.params.model ?? project.globalParams.model} onChange={(event) => patchPanelParam(activePanel.id, "model", event.target.value as NAIModel)}>{NAI_MODELS.map((model) => <option key={model.value} value={model.value}>{model.label}</option>)}</select></label>
                           <label className="comic-field"><span>采样器</span><select value={activePanel.paramsOverride.params.sampler ?? project.globalParams.sampler} onChange={(event) => patchPanelParam(activePanel.id, "sampler", event.target.value as NAISampler)}>{NAI_SAMPLERS.map((sampler) => <option key={sampler.value} value={sampler.value}>{sampler.label}</option>)}</select></label>
+                          <label className="comic-field"><span>噪声计划</span><select value={activePanel.paramsOverride.params.noiseSchedule ?? project.globalParams.noiseSchedule} onChange={(event) => patchPanelParam(activePanel.id, "noiseSchedule", event.target.value)}><option value="native">Native（原生）</option><option value="karras">Karras（常用）</option><option value="exponential">Exponential（指数）</option></select></label>
                           <NumberInput label="宽度" value={activePanel.paramsOverride.params.width ?? project.globalParams.width} min={64} max={1600} step={64} onChange={(value) => patchPanelParam(activePanel.id, "width", value)} />
                           <NumberInput label="高度" value={activePanel.paramsOverride.params.height ?? project.globalParams.height} min={64} max={1600} step={64} onChange={(value) => patchPanelParam(activePanel.id, "height", value)} />
                           <NumberInput label="步数" value={activePanel.paramsOverride.params.steps ?? project.globalParams.steps} min={1} max={50} onChange={(value) => patchPanelParam(activePanel.id, "steps", value)} />
