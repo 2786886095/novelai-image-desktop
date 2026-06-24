@@ -1,8 +1,12 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/nai_models.dart';
+import '../services/storage_permission.dart';
 import '../state/app_state.dart';
 import '../ui/studio_shell.dart';
 
@@ -468,6 +472,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onChanged: (value) =>
                   state.setSettings((x) => x.saveToGallery = value),
             ),
+            if (Platform.isAndroid)
+              _ImageOutputDirSetting(
+                value: s.imageOutputDir,
+                onChanged: (value) =>
+                    state.setSettings((x) => x.imageOutputDir = value),
+              ),
           ]),
           _Section(title: '外观 / 安全', children: [
             DropdownButtonFormField<String>(
@@ -753,6 +763,85 @@ class _TextSetting extends StatelessWidget {
       decoration:
           InputDecoration(labelText: label, border: const OutlineInputBorder()),
       onChanged: onChanged);
+}
+
+// Lets the user choose a custom base folder for saved originals (Android). Images
+// are stored as <base>/<date>/<group>/ — the same date/group layout as the
+// desktop client. On Android 11+ an arbitrary folder needs "All files access",
+// so we prompt for it; until granted, saves fall back to the app folder.
+class _ImageOutputDirSetting extends StatelessWidget {
+  const _ImageOutputDirSetting(
+      {required this.value, required this.onChanged});
+  final String value;
+  final ValueChanged<String> onChanged;
+
+  Future<void> _pick(BuildContext context) async {
+    final picked = await FilePicker.platform
+        .getDirectoryPath(dialogTitle: '选择图片存放文件夹');
+    if (picked == null || picked.trim().isEmpty) return;
+    final granted = await StoragePermission.hasAllFilesAccess();
+    if (!granted && context.mounted) {
+      final go = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('需要文件访问权限'),
+          content: const Text(
+              '保存到自定义文件夹需要「所有文件访问权限」。点「去授权」后在系统设置中开启，再返回应用即可生效；未授权时图片仍会存到应用目录。'),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('稍后')),
+            FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('去授权')),
+          ],
+        ),
+      );
+      if (go == true) await StoragePermission.requestAllFilesAccess();
+    }
+    // Remember the choice regardless — saving falls back gracefully until the
+    // permission is granted.
+    onChanged(picked.trim());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final custom = value.trim();
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('图片存放路径', style: theme.textTheme.bodyLarge),
+        const SizedBox(height: 4),
+        Text(
+          custom.isEmpty ? '应用默认目录（按 日期/分组 归档）' : custom,
+          style: theme.textTheme.bodySmall,
+        ),
+        const SizedBox(height: 2),
+        Text(
+          '图片按 日期/分组 归档，与电脑端一致。自定义路径在 Android 11+ 需「所有文件访问权限」。',
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: theme.colorScheme.outline),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          children: [
+            OutlinedButton.icon(
+              onPressed: () => _pick(context),
+              icon: const Icon(Icons.folder_open),
+              label: const Text('选择文件夹'),
+            ),
+            if (custom.isNotEmpty)
+              TextButton(
+                onPressed: () => onChanged(''),
+                child: const Text('恢复默认'),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
 }
 
 class _TokenGuideScreen extends StatelessWidget {

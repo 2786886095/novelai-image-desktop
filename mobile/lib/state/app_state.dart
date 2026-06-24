@@ -134,15 +134,13 @@ class AppState extends ChangeNotifier {
         Duration(days: settings.historyRetentionDays.clamp(1, 3650)),
       );
       final retained = history.where((item) {
-        // Drop entries older than the retention window, and entries whose image
-        // file was deleted on disk (keep the in-app library in sync).
+        // Drop entries older than the retention window only. Missing-file
+        // cleanup is deliberately NOT done here: statting every file
+        // synchronously would stall startup on a large library. The gallery
+        // removes broken thumbnails on demand (dropMissingImage) instead.
         final created = DateTime.tryParse(item.createdAt);
         final tooOld = created != null && created.isBefore(cutoff);
-        if (tooOld) return false;
-        if (item.filePath.isNotEmpty && !File(item.filePath).existsSync()) {
-          return false;
-        }
-        return true;
+        return !tooOld;
       }).toList();
       if (retained.length != history.length) {
         history = retained;
@@ -169,12 +167,11 @@ class AppState extends ChangeNotifier {
       current = history.isNotEmpty ? history.first : null;
       final token = await storage.getToken();
       if (token != null && token.isNotEmpty) {
-        try {
-          account = await api.fetchAccount(token, settings);
-        } catch (error) {
-          account = const AccountSummary(hasToken: true);
-          status = '账号信息暂时无法读取，请检查代理后刷新：${_cleanError(error)}';
-        }
+        // Show a token-present placeholder immediately. The real account fetch
+        // is a NovelAI network call — awaiting it here would stall startup (and
+        // hang indefinitely when there's no proxy), so it runs off the boot
+        // path in the finally block and refreshes the UI when it lands.
+        account = const AccountSummary(hasToken: true);
       }
     } catch (error) {
       status = '启动数据读取失败，已使用安全默认值：${_cleanError(error)}';
@@ -183,7 +180,24 @@ class AppState extends ChangeNotifier {
       notifyListeners();
       _scheduleGenerationQuote();
       unawaited(checkUpdate());
+      unawaited(_refreshAccountAtBoot());
     }
+  }
+
+  // Fetch the account after boot so a slow or blocked network never delays the
+  // first frame. Mirrors the old inline fetch: placeholder + status note on
+  // failure, no success toast.
+  Future<void> _refreshAccountAtBoot() async {
+    final token = await storage.getToken();
+    if (token == null || token.isEmpty) return;
+    try {
+      account = await api.fetchAccount(token, settings);
+    } catch (error) {
+      account = const AccountSummary(hasToken: true);
+      status = '账号信息暂时无法读取，请检查代理后刷新：${_cleanError(error)}';
+    }
+    notifyListeners();
+    _scheduleGenerationQuote();
   }
 
   Future<void> dismissNetworkOnboarding() async {
@@ -1579,6 +1593,21 @@ class AppState extends ChangeNotifier {
     await storage.deleteHistory(id);
     history.removeWhere((e) => e.id == id);
     if (current?.id == id) current = history.isNotEmpty ? history.first : null;
+    notifyListeners();
+  }
+
+  // Drop a history record whose image file is gone from disk (called when a
+  // gallery tile can't find its file mid-session). Re-checks existence so a
+  // present file is never removed; only the record is dropped (file already
+  // gone), keeping the in-app library in sync without showing broken tiles.
+  Future<void> dropMissingImage(String id) async {
+    final idx = history.indexWhere((e) => e.id == id);
+    if (idx < 0) return;
+    final item = history[idx];
+    if (item.filePath.isNotEmpty && File(item.filePath).existsSync()) return;
+    history.removeAt(idx);
+    if (current?.id == id) current = history.isNotEmpty ? history.first : null;
+    await storage.writeHistory(history);
     notifyListeners();
   }
 

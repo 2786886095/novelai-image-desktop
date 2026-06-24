@@ -1,8 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import clsx from "clsx";
 import { format } from "date-fns";
-import { ToolsHub } from "./ComicGenerator";
-import { InpaintCanvas } from "./InpaintCanvas";
+// Code-split the heavy tool screens: they're only rendered when their tab is
+// opened, so keeping them out of the initial bundle speeds cold start. The whole
+// ComicGenerator module (comic + batch redraw) becomes its own chunk.
+const ToolsHub = lazy(() => import("./ComicGenerator").then((m) => ({ default: m.ToolsHub })));
+const InpaintCanvas = lazy(() => import("./InpaintCanvas").then((m) => ({ default: m.InpaintCanvas })));
 import { useAppStore } from "./store";
 import { relatedTags } from "./related-tags";
 import { fmtCount, wordAtCursor } from "./text-utils";
@@ -2768,7 +2771,7 @@ function AiLogField({ title, text }: { title: string; text: string }) {
 }
 
 // ── Image canvas (center) ─────────────────────────────────────────────────────
-type ViewableImage = { fileUrl: string; width: number; height: number };
+type ViewableImage = { id?: string; fileUrl: string; width: number; height: number };
 
 function clampNumber(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
@@ -2965,6 +2968,11 @@ function ZoomableImageStage({
             onDragStart={(e) => {
               e.preventDefault();
               window.naiDesktop.startImageDrag(image.fileUrl);
+            }}
+            // The previewed file was deleted on disk → drop it from the library
+            // (clears this preview too); main re-checks before removing.
+            onError={() => {
+              if (image.id) void useAppStore.getState().dropMissingImage(image.id);
             }}
           />
           {compareEnabled && canCompare ? (
@@ -3389,12 +3397,20 @@ function HistoryPanel() {
                   src={item.fileUrl}
                   alt="历史缩略图"
                   draggable
+                  // Decode only when scrolled into view and off the main thread —
+                  // otherwise a large library decodes every full-res PNG at once,
+                  // which freezes the UI and balloons memory.
+                  loading="lazy"
+                  decoding="async"
                   title="可拖出到桌面 / 资源管理器 / 其他程序"
                   onDragStart={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
                     window.naiDesktop.startImageDrag(item.filePath);
                   }}
+                  // File deleted/moved on disk → drop it from the library instead
+                  // of showing a broken thumbnail (main re-checks before removing).
+                  onError={() => void useAppStore.getState().dropMissingImage(item.id)}
                 />
               </div>
               <span className="history-meta">{item.model} · {item.width}×{item.height}</span>
@@ -4369,14 +4385,22 @@ function MainPage() {
         style={{ "--ws-left": `${wsLeftWidth}px`, "--ws-right": `${wsRightWidth}px` } as CSSProperties}
       >
         {activeTab === "tools" ? (
-        <ToolsHub />
+          <Suspense fallback={<div className="lazy-tool-loading">正在加载工具…</div>}>
+            <ToolsHub />
+          </Suspense>
         ) : activeTab === "records" ? (
           <AiLogPanel />
         ) : (
           <>
             <LeftPanel openSettings={() => setShowSettings(true)} />
             <WorkspaceResizer edge="left" />
-            {activeTab === "inpaint" ? <InpaintCanvas /> : <ImageCanvas />}
+            {activeTab === "inpaint" ? (
+              <Suspense fallback={<div className="lazy-tool-loading">正在加载重绘…</div>}>
+                <InpaintCanvas />
+              </Suspense>
+            ) : (
+              <ImageCanvas />
+            )}
             <WorkspaceResizer edge="right" />
             <HistoryPanel />
           </>
@@ -4405,7 +4429,7 @@ export default function App() {
   useEffect(() => {
     void load();
     void checkUpdate();
-    const timer = window.setTimeout(() => setSplash(false), 2500);
+    const timer = window.setTimeout(() => setSplash(false), 800);
     return () => window.clearTimeout(timer);
   }, [load, checkUpdate]);
 

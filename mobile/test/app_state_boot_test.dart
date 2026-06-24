@@ -18,8 +18,20 @@ void main() {
 
     await state.load();
 
+    // Boot must complete without ever awaiting the network: a saved token plus
+    // an offline API must not trap the app on the loading spinner. The account
+    // fetch is deferred off the boot path, so booted + a token placeholder are
+    // available immediately.
     expect(state.booted, isTrue);
     expect(state.account.hasToken, isTrue, reason: state.status);
+
+    // The deferred account refresh fails and surfaces a non-fatal status note;
+    // wait for it to land (it runs after load() returns).
+    for (var i = 0;
+        i < 200 && !state.status.contains('账号信息暂时无法读取');
+        i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+    }
     expect(state.status, contains('账号信息暂时无法读取'));
   });
 }

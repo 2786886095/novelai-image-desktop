@@ -3997,11 +3997,21 @@ html, body, #root {
 }
 
 /* Responsive card grid — fills the full-width tools view instead of one column. */
+.lazy-tool-loading {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 13px;
+  padding: 40px;
+}
+
 .redraw-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
-  gap: 12px;
-  max-height: 64vh;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 14px;
+  max-height: 70vh;
   overflow-y: auto;
   padding-right: 4px;
 }
@@ -4023,7 +4033,7 @@ html, body, #root {
 }
 .redraw-card-thumb img {
   width: 100%;
-  height: 190px;
+  height: 260px;
   object-fit: contain;
   display: block;
 }

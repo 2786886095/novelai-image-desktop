@@ -519,6 +519,14 @@ class _HistoryTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final file = File(item.filePath);
+    if (!file.existsSync()) {
+      // File deleted/moved on disk → drop it from the library instead of showing
+      // a broken tile. Scheduled post-frame so we never mutate state mid-build.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (context.mounted) context.read<AppState>().dropMissingImage(item.id);
+      });
+      return const SizedBox.shrink();
+    }
     return Material(
       color: Theme.of(context).colorScheme.surfaceContainerLow,
       borderRadius: BorderRadius.circular(8),
@@ -529,18 +537,12 @@ class _HistoryTile extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Expanded(
-              child: file.existsSync()
-                  ? Image.file(
-                      file,
-                      fit: BoxFit.cover,
-                      cacheWidth: 360,
-                      filterQuality: FilterQuality.low,
-                    )
-                  : ColoredBox(
-                      color:
-                          Theme.of(context).colorScheme.surfaceContainerHighest,
-                      child: const Icon(Icons.broken_image_outlined),
-                    ),
+              child: Image.file(
+                file,
+                fit: BoxFit.cover,
+                cacheWidth: 360,
+                filterQuality: FilterQuality.low,
+              ),
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),

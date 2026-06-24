@@ -362,29 +362,57 @@ export function addHistory(items: HistoryItem[]) {
 }
 
 // Drop history entries whose image file no longer exists on disk (e.g. the user
-// deleted it in Explorer), so the in-app library stays in sync. Runs once per
-// app session — statting every item on every getHistory call would be slow.
-let historyPrunedThisSession = false;
-function pruneMissingHistoryFiles(): void {
-  if (historyPrunedThisSession) return;
-  historyPrunedThisSession = true;
-  const data = readStore();
-  const kept = data.history.filter((item) => {
-    if (!item.filePath) return true;
+// deleted it in Explorer), so the in-app library stays in sync. Scheduled once
+// per session, OFF the boot path: statting a large library synchronously inside
+// the first getHistory call would stall startup. The renderer also removes
+// broken thumbnails at render time (dropMissingImage), so a slightly delayed
+// sweep is invisible.
+let historyPruneScheduled = false;
+function scheduleHistoryPrune(): void {
+  if (historyPruneScheduled) return;
+  historyPruneScheduled = true;
+  setTimeout(() => {
     try {
-      return fs.existsSync(item.filePath);
+      const data = readStore();
+      const kept = data.history.filter((item) => {
+        if (!item.filePath) return true;
+        try {
+          return fs.existsSync(item.filePath);
+        } catch {
+          return true; // a stat error shouldn't silently delete a record
+        }
+      });
+      if (kept.length !== data.history.length) {
+        data.history = kept;
+        writeStore(data);
+      }
     } catch {
-      return true; // a stat error shouldn't silently delete a record
+      // A failed sweep is non-fatal; it retries next session.
     }
-  });
-  if (kept.length !== data.history.length) {
-    data.history = kept;
-    writeStore(data);
+  }, 2000);
+}
+
+// Remove a single history record when its image file is gone from disk (called
+// when the renderer fails to load a thumbnail/preview mid-session). Never
+// deletes a file — only drops the record, and only after confirming the file is
+// actually missing, so a transient decode error for a present file can't erase
+// it. Returns true if a record was removed.
+export function pruneMissingHistoryItem(id: string): boolean {
+  const data = readStore();
+  const item = data.history.find((h) => h.id === id);
+  if (!item || !item.filePath) return false;
+  try {
+    if (fs.existsSync(item.filePath)) return false;
+  } catch {
+    return false;
   }
+  data.history = data.history.filter((h) => h.id !== id);
+  writeStore(data);
+  return true;
 }
 
 export function getHistory(date?: string, groupId?: string): HistoryItem[] {
-  pruneMissingHistoryFiles();
+  scheduleHistoryPrune();
   const history = readStore().history;
   return history.filter((item) => {
     if (date && item.date !== date) return false;

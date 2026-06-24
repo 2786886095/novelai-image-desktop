@@ -7,7 +7,7 @@ class NaiOption {
 }
 
 const appName = 'Langbai NovelAI Studio';
-const appVersion = '1.0.2';
+const appVersion = '1.0.3';
 
 const naiModels = <NaiOption>[
   NaiOption('NAI Diffusion 4.5 Full（完整模型）', 'nai-diffusion-4-5-full'),
@@ -540,6 +540,9 @@ class AppSettings {
   int historyRetentionDays;
   bool keepImageMetadata;
   bool saveToGallery;
+  // Custom base folder for saved originals. Empty = app documents/images.
+  // Images are organised as <base>/<date>/<group>/ like the desktop client.
+  String imageOutputDir;
   String activeHistoryGroupId;
   bool lockStylePrompt;
   bool lockNegativePrompt;
@@ -594,6 +597,7 @@ class AppSettings {
     this.historyRetentionDays = 365,
     this.keepImageMetadata = true,
     this.saveToGallery = true,
+    this.imageOutputDir = '',
     this.activeHistoryGroupId = '',
     this.lockStylePrompt = false,
     this.lockNegativePrompt = false,
@@ -651,6 +655,7 @@ class AppSettings {
         'historyRetentionDays': historyRetentionDays,
         'keepImageMetadata': keepImageMetadata,
         'saveToGallery': saveToGallery,
+        'imageOutputDir': imageOutputDir,
         'activeHistoryGroupId': activeHistoryGroupId,
         'lockStylePrompt': lockStylePrompt,
         'lockNegativePrompt': lockNegativePrompt,
@@ -706,6 +711,7 @@ class AppSettings {
         historyRetentionDays: j['historyRetentionDays'] ?? 365,
         keepImageMetadata: j['keepImageMetadata'] ?? true,
         saveToGallery: j['saveToGallery'] ?? true,
+        imageOutputDir: j['imageOutputDir'] ?? '',
         activeHistoryGroupId: j['activeHistoryGroupId'] ?? '',
         lockStylePrompt: j['lockStylePrompt'] ?? false,
         lockNegativePrompt: j['lockNegativePrompt'] ?? false,

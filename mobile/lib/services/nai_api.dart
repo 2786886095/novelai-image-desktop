@@ -1115,39 +1115,59 @@ class NaiApi {
     final effectiveModel = model.trim().isEmpty ? 'gpt-4o-mini' : model.trim();
     final userSummary = _summarizeAiUser(user);
     try {
-      final body = {
-        'model': effectiveModel,
-        'max_tokens': maxTokens,
-        'messages': [
-          {'role': 'system', 'content': system},
-          {'role': 'user', 'content': user},
-        ],
-      };
-      final res = await _withClient(
-        settings,
-        (client) => client
-            .post(
-              Uri.parse('${_base(apiUrl, apiUrl)}/chat/completions'),
-              headers: {
-                'Authorization': 'Bearer $apiKey',
-                'Content-Type': 'application/json'
-              },
-              body: jsonEncode(body),
-            )
-            .timeout(const Duration(seconds: 60)),
-        scope: ProxyScope.ai,
-      );
+      Future<http.Response> postChat(int tokens) => _withClient(
+            settings,
+            (client) => client
+                .post(
+                  Uri.parse('${_base(apiUrl, apiUrl)}/chat/completions'),
+                  headers: {
+                    'Authorization': 'Bearer $apiKey',
+                    'Content-Type': 'application/json'
+                  },
+                  body: jsonEncode({
+                    'model': effectiveModel,
+                    'max_tokens': tokens,
+                    'messages': [
+                      {'role': 'system', 'content': system},
+                      {'role': 'user', 'content': user},
+                    ],
+                  }),
+                )
+                .timeout(const Duration(seconds: 180)),
+            scope: ProxyScope.ai,
+          );
+
+      var res = await postChat(maxTokens);
       if (res.statusCode >= 400) {
         final result = AiTextResult(
             ok: false, message: 'AI 调用失败（HTTP ${res.statusCode}）：${res.body}');
         _addAiLog(label, apiKind, effectiveModel, system, userSummary, result);
         return result;
       }
-      final data = jsonDecode(res.body);
-      final content =
+      var data = jsonDecode(res.body);
+      var content =
           data['choices']?[0]?['message']?['content']?.toString().trim() ?? '';
+      var finish = data['choices']?[0]?['finish_reason']?.toString();
+      // Reasoning models spend the whole budget on hidden reasoning, returning
+      // empty content with finish_reason "length". Retry once with a much larger
+      // budget so the actual answer has room (billed per real token).
+      if (content.isEmpty && finish == 'length') {
+        res = await postChat(max(maxTokens * 8, 32000));
+        if (res.statusCode < 400) {
+          data = jsonDecode(res.body);
+          content = data['choices']?[0]?['message']?['content']
+                  ?.toString()
+                  .trim() ??
+              '';
+          finish = data['choices']?[0]?['finish_reason']?.toString();
+        }
+      }
       final result = content.isEmpty
-          ? const AiTextResult(ok: false, message: 'AI 返回内容为空')
+          ? AiTextResult(
+              ok: false,
+              message: finish == 'length'
+                  ? 'API 返回被长度截断（内容为空）：该模型把配额全用在了推理上，请改用非推理模型，或调高最大输出长度。'
+                  : 'AI 返回内容为空')
           : AiTextResult(ok: true, message: '成功', text: _cleanPrompt(content));
       _addAiLog(label, apiKind, effectiveModel, system, userSummary, result);
       return result;

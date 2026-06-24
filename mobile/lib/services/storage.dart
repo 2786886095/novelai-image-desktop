@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:gal/gal.dart';
 import 'package:path_provider/path_provider.dart';
@@ -12,6 +12,13 @@ import '../images/png_metadata.dart';
 import '../comic/comic_models.dart';
 import '../batch/batch_redraw_models.dart';
 import '../models/nai_models.dart';
+
+// Run history JSON (de)serialisation on a background isolate once the payload is
+// large, so a big library never janks the UI thread at boot or on a save. Small
+// payloads stay inline — spawning an isolate isn't worth it.
+const int _kIsolateJsonThreshold = 64 * 1024;
+List<dynamic> _decodeJsonList(String raw) => jsonDecode(raw) as List<dynamic>;
+String _encodeJsonList(List<dynamic> data) => jsonEncode(data);
 
 class Storage {
   static const _kParams = 'gen_params';
@@ -28,6 +35,12 @@ class Storage {
 
   final _secure = const FlutterSecureStorage();
   int _saveSequence = 0;
+  // In-memory mirror of the history index. saveImage/deleteHistory previously
+  // re-decoded the whole list from prefs on every call (and re-encoded it),
+  // which is O(N) per save → O(M·N) during a batch. The cache keeps reads free;
+  // only writeHistory touches disk. All persists go through writeHistory, so the
+  // cache never drifts.
+  List<HistoryItem>? _historyCache;
   Future<SharedPreferences> get _prefs => SharedPreferences.getInstance();
 
   Future<String?> getToken() => _secure.read(key: _kToken);
@@ -117,20 +130,35 @@ class Storage {
           .setString(_kBatchRedrawProject, jsonEncode(project.toJson()));
 
   Future<List<HistoryItem>> getHistory() async {
+    if (_historyCache != null) return List.of(_historyCache!);
     final raw = (await _prefs).getString(_kHistory);
-    if (raw == null) return [];
+    if (raw == null) {
+      _historyCache = [];
+      return [];
+    }
     try {
-      final list = jsonDecode(raw) as List;
-      return list
+      // Parse off the UI isolate for large libraries so boot doesn't jank.
+      final list = raw.length > _kIsolateJsonThreshold
+          ? await compute(_decodeJsonList, raw)
+          : _decodeJsonList(raw);
+      final items = list
           .map((e) => HistoryItem.fromJson(e as Map<String, dynamic>))
           .toList();
+      _historyCache = items;
+      return List.of(items);
     } catch (_) {
+      _historyCache = [];
       return [];
     }
   }
 
   Future<void> writeHistory(List<HistoryItem> items) async {
-    final raw = jsonEncode(items.map((e) => e.toJson()).toList());
+    _historyCache = List.of(items);
+    final data = items.map((e) => e.toJson()).toList();
+    // Encode off the UI isolate when the list is large enough to matter.
+    final raw = items.length > 200
+        ? await compute(_encodeJsonList, data)
+        : _encodeJsonList(data);
     await (await _prefs).setString(_kHistory, raw);
   }
 
@@ -159,6 +187,54 @@ class Storage {
     return imagesDir;
   }
 
+  // Filesystem-safe folder name for a history group (mirrors the desktop
+  // sanitizeGroupFolderName). Falls back to a stable label when empty.
+  static String sanitizeFolderName(String name) {
+    final cleaned = name
+        .trim()
+        .replaceAll(RegExp(r'[\\/:*?"<>|\x00-\x1f]'), '_')
+        .replaceAll(RegExp(r'\.+$'), '')
+        .trim();
+    return cleaned.isEmpty ? '未命名分组' : cleaned;
+  }
+
+  // Resolve where a generated image is written: <base>/<date>/<group>/, where
+  // base is the user's custom path (if set and writable) or app documents.
+  // Mirrors the desktop layout (outputDir/<date>/<folderName>). Falls through to
+  // the next base when a target can't be created (e.g. a custom path that is no
+  // longer accessible on Android 11+), so a save can never fail outright.
+  Future<Directory> _imageSaveDir(
+    AppSettings settings,
+    String date,
+    String? groupId,
+  ) async {
+    String? groupFolder;
+    if (groupId != null && groupId.isNotEmpty) {
+      final groups = await getGroups();
+      final group = groups.where((g) => g.id == groupId).firstOrNull;
+      if (group != null && group.name.trim().isNotEmpty) {
+        groupFolder = sanitizeFolderName(group.name);
+      }
+    }
+    final defaultBase = (await imagesDir()).path;
+    final custom = settings.imageOutputDir.trim();
+    for (final base in <String>[if (custom.isNotEmpty) custom, defaultBase]) {
+      final dir = Directory(
+        [base, date, if (groupFolder != null) groupFolder].join('/'),
+      );
+      try {
+        if (!dir.existsSync()) dir.createSync(recursive: true);
+        return dir;
+      } catch (_) {
+        // Try the next base (a custom path may be unwritable without all-files
+        // access on Android 11+).
+      }
+    }
+    final fallback = Directory(defaultBase);
+    if (!fallback.existsSync()) fallback.createSync(recursive: true);
+    return fallback;
+  }
+
   Future<HistoryItem> saveImage(
     Uint8List bytes,
     GenerateParams p,
@@ -169,7 +245,6 @@ class Storage {
     int? height,
     String? groupId,
   }) async {
-    final images = await imagesDir();
     final now = DateTime.now();
     final date = '${now.year}-${_pad(now.month)}-${_pad(now.day)}';
     final id = '${now.microsecondsSinceEpoch}';
@@ -185,6 +260,8 @@ class Storage {
       model ?? p.model,
       feature,
     );
+    // Save into <base>/<date>/<group>/ (custom path or app documents).
+    final images = await _imageSaveDir(settings, date, groupId);
     final filePath = await _uniqueFilePath(images, baseName, 'png');
     final output = settings.keepImageMetadata ? bytes : stripPngMetadata(bytes);
     await File(filePath).writeAsBytes(output, flush: true);

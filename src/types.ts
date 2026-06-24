@@ -1,4 +1,4 @@
-export const APP_VERSION = "1.0.2";
+export const APP_VERSION = "1.0.3";
 export const APP_NAME = "Langbai NovelAI Studio";
 export const PROJECT_REPOSITORY = "https://github.com/2786886095/novelai-image-desktop";
 
@@ -720,6 +720,7 @@ export interface ImportedParams {
 
 export interface NaiDesktopApi {
   hasToken: () => Promise<AccountSummary>;
+  accountCached: () => Promise<AccountSummary>;
   verifyToken: (token: string) => Promise<TokenStatus>;
   clearToken: () => Promise<{ ok: boolean }>;
   quoteAnlas: (request: AnlasQuoteRequest) => Promise<AnlasQuoteResult>;
@@ -749,6 +750,7 @@ export interface NaiDesktopApi {
   exportHistoryGroup: (groupId: string) => Promise<{ ok: boolean; message: string; path?: string }>;
   setHistoryGroup: (id: string, groupId?: string) => Promise<{ ok: boolean }>;
   deleteHistory: (id: string) => Promise<{ ok: boolean }>;
+  pruneMissingHistoryItem: (id: string) => Promise<boolean>;
   renameHistoryItem: (id: string, name: string) => Promise<{ ok: boolean; message?: string; item?: HistoryItem }>;
   openInExplorer: (targetPath: string) => Promise<{ ok: boolean }>;
   /** Native OS drag-out of a saved image file (drag to desktop / Explorer / other apps). */

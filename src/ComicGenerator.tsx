@@ -153,8 +153,21 @@ function toBase64(file: File): Promise<string> {
   });
 }
 
+// Cache data-URLs by their source bytes so the same image always yields the
+// SAME string instance. Without this, every re-render builds a fresh data-URL
+// → the <img src> identity changes → the browser re-decodes the (full-size)
+// image. During a batch run, patchItem re-renders the whole grid on every
+// status change, so that re-decode storm froze the UI. Bounded to avoid growing
+// without limit across repeated imports.
+const dataUrlCache = new Map<string, string>();
 function dataUrlFromBase64(base64: string) {
-  return base64.startsWith("data:") ? base64 : `data:image/png;base64,${base64}`;
+  if (base64.startsWith("data:")) return base64;
+  const cached = dataUrlCache.get(base64);
+  if (cached) return cached;
+  const url = `data:image/png;base64,${base64}`;
+  if (dataUrlCache.size > 300) dataUrlCache.clear();
+  dataUrlCache.set(base64, url);
+  return url;
 }
 
 function sortedPanels(project: ComicProject) {
@@ -357,6 +370,9 @@ function BatchParamFields({ value, onPatch }: { value: GenerateParams; onPatch: 
     { label: "竖图 832×1216", w: 832, h: 1216 },
     { label: "方图 1024×1024", w: 1024, h: 1024 },
     { label: "横图 1216×832", w: 1216, h: 832 },
+    { label: "高竖 1024×1536", w: 1024, h: 1536 },
+    { label: "宽横 1536×1024", w: 1536, h: 1024 },
+    { label: "大方 1472×1472", w: 1472, h: 1472 },
   ];
   return (
     <div className="batch-params">
@@ -622,7 +638,12 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
   // Run img2img serially over the given items. Regenerating an item first deletes
   // its previous output (磁盘 + 历史记录) so 重试 never leaves the old image behind.
   async function runTargets(targets: BatchRedrawItem[]) {
-    if (running) return;
+    // Read the live store flag, not the captured `running` closure: a fast
+    // double-click would otherwise start a second concurrent run, and because
+    // each redrawImage call aborts the previous in-flight request, the two runs
+    // cancel each other → every panel "fails". The store flag is set
+    // synchronously below before the first await, so this guard is race-free.
+    if (useAppStore.getState().batchRunning) return;
     const proj = useAppStore.getState().batchRedraw;
     if (!proj.groupName.trim()) {
       setToast("请先填写分组名称");
@@ -637,54 +658,70 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
     cancelRef.current = false;
     setBatchRunning(true, { done: 0, total: ready.length });
 
-    try {
-      await window.naiDesktop.createHistoryGroup(proj.groupName.trim());
-    } catch {
-      /* group ensured by the main process anyway */
-    }
-
-    const extras = {
-      vibeImages: proj.vibeImages,
-      charCaptions: [],
-      preciseReferences: proj.preciseReferences,
-    };
-
     let done = 0;
     let failed = 0;
     let lastError = "";
-    for (const it of ready) {
-      if (cancelRef.current) break;
-      if (it.historyItemId) {
-        try {
-          await window.naiDesktop.deleteHistory(it.historyItemId);
-        } catch {
-          /* previous output already gone */
-        }
+    // Everything below runs inside try/finally: a throw anywhere (IPC, network,
+    // history/account refresh) must never leave the UI stuck in "running" with
+    // every button disabled — finally always clears the running flag.
+    try {
+      try {
+        await window.naiDesktop.createHistoryGroup(proj.groupName.trim());
+      } catch {
+        /* group ensured by the main process anyway */
       }
-      patchItem(it.id, { status: "generating", error: undefined, resultUrl: undefined, resultPath: undefined, historyItemId: undefined });
-      const res = await window.naiDesktop.redrawImage({
-        imageBase64: it.base64,
-        params: batchItemParams(proj, it),
-        strength: it.strength ?? proj.globalStrength,
-        extras,
-        groupName: proj.groupName.trim(),
-        fileNamePrefix: it.name,
-      });
-      const out = res.ok ? res.items[0] : undefined;
-      if (res.ok && out) {
-        patchItem(it.id, { status: "done", resultUrl: out.fileUrl, resultPath: out.filePath, historyItemId: out.id, error: undefined });
-        done += 1;
-      } else {
-        patchItem(it.id, { status: "failed", error: res.message });
-        failed += 1;
-        lastError = res.message;
-      }
-      setBatchRunning(true, { done: done + failed, total: ready.length });
-    }
 
-    await refreshHistory();
-    await refreshAccount();
-    setBatchRunning(false, null);
+      const extras = {
+        vibeImages: proj.vibeImages,
+        charCaptions: [],
+        preciseReferences: proj.preciseReferences,
+      };
+
+      for (const it of ready) {
+        if (cancelRef.current) break;
+        if (it.historyItemId) {
+          try {
+            await window.naiDesktop.deleteHistory(it.historyItemId);
+          } catch {
+            /* previous output already gone */
+          }
+        }
+        patchItem(it.id, { status: "generating", error: undefined, resultUrl: undefined, resultPath: undefined, historyItemId: undefined });
+        const res = await window.naiDesktop.redrawImage({
+          imageBase64: it.base64,
+          params: batchItemParams(proj, it),
+          strength: it.strength ?? proj.globalStrength,
+          extras,
+          groupName: proj.groupName.trim(),
+          fileNamePrefix: it.name,
+        });
+        const out = res.ok ? res.items[0] : undefined;
+        if (res.ok && out) {
+          patchItem(it.id, { status: "done", resultUrl: out.fileUrl, resultPath: out.filePath, historyItemId: out.id, error: undefined });
+          done += 1;
+        } else {
+          patchItem(it.id, { status: "failed", error: res.message });
+          failed += 1;
+          lastError = res.message;
+        }
+        setBatchRunning(true, { done: done + failed, total: ready.length });
+      }
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+      failed = Math.max(failed, ready.length - done);
+    } finally {
+      try {
+        await refreshHistory();
+      } catch {
+        /* keep going — never strand the running flag */
+      }
+      try {
+        await refreshAccount();
+      } catch {
+        /* ignore */
+      }
+      setBatchRunning(false, null);
+    }
     setToast(
       cancelRef.current
         ? `已停止（完成 ${done} 张）`
@@ -803,7 +840,7 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
             {items.length === 0 && <p className="vibe-empty">还没有导入图片。点「导入图片」开始。</p>}
             {items.map((it, idx) => (
               <div className="redraw-thumb-card" key={it.id}>
-                <img src={dataUrlFromBase64(it.base64)} alt={it.name} title="双击放大" onDoubleClick={() => setLightbox(dataUrlFromBase64(it.base64))} />
+                <img src={dataUrlFromBase64(it.base64)} alt={it.name} loading="lazy" decoding="async" title="双击放大" onDoubleClick={() => setLightbox(dataUrlFromBase64(it.base64))} />
                 <span className="redraw-thumb-name" title={it.name}>#{idx + 1} {it.name}</span>
                 <button className="vibe-remove" title="移除" onClick={() => setBatchRedraw((prev) => ({ ...prev, items: prev.items.filter((p) => p.id !== it.id) }))}>×</button>
               </div>
@@ -876,6 +913,8 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
                   <img
                     src={it.resultUrl || dataUrlFromBase64(it.base64)}
                     alt={it.name}
+                    loading="lazy"
+                    decoding="async"
                     draggable={Boolean(it.resultUrl)}
                     title={it.resultUrl ? "可拖出到桌面 / 其他程序" : undefined}
                     onDragStart={(e) => {
@@ -964,6 +1003,8 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
                   <img
                     src={it.resultUrl || dataUrlFromBase64(it.base64)}
                     alt={it.name}
+                    loading="lazy"
+                    decoding="async"
                     draggable={Boolean(it.resultUrl)}
                     title={it.resultUrl ? "可拖出到桌面 / 其他程序" : undefined}
                     onDragStart={(e) => {
@@ -1127,6 +1168,12 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
   );
   const ungeneratedPanels = useMemo(
     () => panels.filter((panel) => !panel.outputUrl),
+    [panels],
+  );
+  // Panels that have no English prompt yet (conversion failed/skipped) and aren't
+  // generated — generated directly from their Chinese description.
+  const unconvertedPanels = useMemo(
+    () => panels.filter((panel) => !panel.outputUrl && !panel.enPrompt.trim()),
     [panels],
   );
   const quotePreviewTargets = explicitlySelectedPanels.length ? explicitlySelectedPanels : ungeneratedPanels;
@@ -1457,7 +1504,13 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
           };
         }),
       }));
-      setToast(result.message);
+      const okCount = result.panels.filter((item) => !item.error && (item.enPrompt ?? "").trim()).length;
+      const failCount = Math.max(0, targets.length - okCount);
+      setToast(
+        okCount === 0
+          ? `分镜转换全部失败（${failCount} 个）：${result.message}`
+          : `分镜转换完成：成功 ${okCount} 个，失败 ${failCount} 个${failCount ? "（失败的可重试，或在设置改用非推理模型）" : ""}。`,
+      );
     } finally {
       setBusy("");
     }
@@ -2226,6 +2279,9 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
                 <Button onClick={() => void startQueue(ungeneratedPanels)} variant="primary" disabled={!ungeneratedPanels.length}>
                   生成全部未生成（{ungeneratedPanels.length}）
                 </Button>
+                <Button onClick={() => void startQueue(unconvertedPanels)} disabled={!unconvertedPanels.length}>
+                  生成未转换分镜（{unconvertedPanels.length}）
+                </Button>
                 <Button onClick={() => void startQueue(explicitlySelectedPanels)} disabled={!explicitlySelectedPanels.length}>
                   生成 / 重试选中（{explicitlySelectedPanels.length}）
                 </Button>
@@ -2294,7 +2350,7 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
                   <span>选择 #{panel.index}</span>
                 </label>
                 {panel.outputUrl ? (
-                  <img src={panel.outputUrl} alt={`#${panel.index}`} onError={() => markPanelImageUnavailable(panel.id)} />
+                  <img src={panel.outputUrl} alt={`#${panel.index}`} loading="lazy" decoding="async" onError={() => markPanelImageUnavailable(panel.id)} />
                 ) : (
                   <div className="comic-thumb-empty">#{panel.index}</div>
                 )}

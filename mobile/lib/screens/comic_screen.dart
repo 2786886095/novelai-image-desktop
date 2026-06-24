@@ -1246,6 +1246,12 @@ class _GenerateStep extends StatelessWidget {
     final selected = controller.selectedPanels;
     final ungenerated =
         project.panels.where((panel) => panel.outputPath.isEmpty).toList();
+    // Panels that were never converted to an English prompt and aren't generated
+    // yet. Generating them falls back to the Chinese prompt (see generateOne).
+    final unconverted = project.panels
+        .where((panel) =>
+            panel.outputPath.isEmpty && panel.enPrompt.trim().isEmpty)
+        .toList();
     final quoteTargets = selected.isNotEmpty ? selected : ungenerated;
     final width = MediaQuery.sizeOf(context).width;
     final columns = width >= 1180
@@ -1286,6 +1292,13 @@ class _GenerateStep extends StatelessWidget {
                           : () => controller.startQueue(ungenerated),
                       icon: const Icon(Icons.playlist_play),
                       label: Text('生成未生成（${ungenerated.length}）'),
+                    ),
+                    FilledButton.tonalIcon(
+                      onPressed: controller.queueRunning || unconverted.isEmpty
+                          ? null
+                          : () => controller.startQueue(unconverted),
+                      icon: const Icon(Icons.auto_fix_high),
+                      label: Text('生成未转换分镜（${unconverted.length}）'),
                     ),
                     FilledButton.tonalIcon(
                       onPressed: controller.queueRunning || selected.isEmpty

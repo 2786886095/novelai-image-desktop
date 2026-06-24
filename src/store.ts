@@ -223,6 +223,7 @@ interface AppState {
   selectImage: (item: HistoryItem) => void;
   variationFromImage: (item: HistoryItem) => void;
   deleteHistory: (id: string) => Promise<void>;
+  dropMissingImage: (id: string) => Promise<void>;
   renameHistoryItem: (id: string, name: string) => Promise<void>;
   clearToast: () => void;
 }
@@ -411,7 +412,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   async load() {
     const [settings, account, firstRun, dates, groups] = await Promise.all([
       window.naiDesktop.getSettings(),
-      window.naiDesktop.hasToken(),
+      // Cached, local-only summary — never a network call, so boot stays fast
+      // even with no proxy. Live balance is refreshed after bootDone below.
+      window.naiDesktop.accountCached(),
       window.naiDesktop.isFirstRun(),
       window.naiDesktop.getHistoryDates(),
       window.naiDesktop.getHistoryGroups(),
@@ -453,6 +456,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       currentImage: history[0] ?? null,
       statusText: account.hasToken ? "API 已配置" : "请先设置 API Token",
     });
+    // Refresh the live balance off the boot path so a slow network never delays
+    // the first frame (refreshAccount swallows network errors → cached/stale).
+    if (account.hasToken) void get().refreshAccount();
   },
 
   setShowOnboarding(value) {
@@ -1408,6 +1414,19 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   async deleteHistory(id) {
     await window.naiDesktop.deleteHistory(id);
+    await get().refreshHistory();
+    const current = get().currentImage;
+    if (current?.id === id) set({ currentImage: get().history[0] ?? null, comparisonBeforeImage: null });
+  },
+
+  // Called when a thumbnail/preview fails to load because its file was deleted
+  // or moved on disk. The main process re-checks existence before dropping the
+  // record (never deletes a present file), so this is safe to fire on any load
+  // error — the image simply disappears from the library instead of showing
+  // a broken placeholder.
+  async dropMissingImage(id) {
+    const removed = await window.naiDesktop.pruneMissingHistoryItem(id);
+    if (!removed) return;
     await get().refreshHistory();
     const current = get().currentImage;
     if (current?.id === id) set({ currentImage: get().history[0] ?? null, comparisonBeforeImage: null });

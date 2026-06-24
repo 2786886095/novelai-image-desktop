@@ -6,6 +6,9 @@
     <!-- Saving generated images to the gallery (Android 12 and below). -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="29"/>
+    <!-- Writing originals into a user-chosen folder (date/group subfolders) on
+         Android 11+ requires all-files access; granted by the user in Settings. -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"/>
     <application
         android:label="Langbai NovelAI Studio"
         android:name="${applicationName}"

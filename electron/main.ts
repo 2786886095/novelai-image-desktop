@@ -53,6 +53,7 @@ import {
   getReversePromptTemplateDefaults,
   getSetting,
   getSettings,
+  pruneMissingHistoryItem,
   readStore,
   setSetting,
 } from "./ipc/store";
@@ -199,6 +200,10 @@ function registerIpc() {
     if (!summary.hasToken) return summary;
     return refreshStoredAccount();
   });
+  // Local-only summary (token presence + last cached balance), no network. Used
+  // at boot so a slow/blocked NovelAI connection can't delay app startup; the
+  // renderer refreshes the live balance via nai:hasToken after the first frame.
+  ipcMain.handle("nai:accountCached", () => getAccountSummary());
   ipcMain.handle("nai:verify", (_event, token: string) => verifyToken(token));
   ipcMain.handle("nai:clearToken", () => {
     clearToken();
@@ -254,6 +259,7 @@ function registerIpc() {
   ipcMain.handle("storage:exportGroup", (_event, groupId: string) => exportGroup(groupId));
   ipcMain.handle("storage:setHistoryGroup", (_event, id: string, groupId?: string) => assignHistoryGroup(id, groupId));
   ipcMain.handle("storage:delete", (_event, id: string) => deleteHistoryItem(id));
+  ipcMain.handle("storage:pruneMissing", (_event, id: string) => pruneMissingHistoryItem(id));
   ipcMain.handle("storage:renameItem", (_event, id: string, name: string) => renameHistoryItem(id, name));
   ipcMain.handle("storage:open", (_event, targetPath: string) => openTarget(targetPath));
   ipcMain.handle("storage:selectDir", () => selectOutputDir());

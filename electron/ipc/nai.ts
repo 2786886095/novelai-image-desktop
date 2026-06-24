@@ -1438,18 +1438,32 @@ async function callVisionApi(
     ],
   };
 
+  const post = (tokens: number) =>
+    axios.post(
+      `${base}/chat/completions`,
+      { ...body, max_tokens: tokens },
+      {
+        headers: { Authorization: `Bearer ${visionApiKey}`, "Content-Type": "application/json" },
+        timeout: 180_000,
+        ...proxyConfig("ai"),
+      },
+    );
+
   try {
-    const resp = await axios.post(`${base}/chat/completions`, body, {
-      headers: { Authorization: `Bearer ${visionApiKey}`, "Content-Type": "application/json" },
-      timeout: 60_000,
-      ...proxyConfig("ai"),
-    });
-    const content: string = resp.data?.choices?.[0]?.message?.content ?? "";
+    let resp = await post(maxTokens);
+    let content: string = resp.data?.choices?.[0]?.message?.content ?? "";
+    let fin = resp.data?.choices?.[0]?.finish_reason;
+    // Reasoning models burn the whole budget on hidden reasoning → empty content
+    // with finish_reason "length". Retry once with a much larger budget.
+    if (!content.trim() && fin === "length") {
+      resp = await post(Math.max(maxTokens * 8, 32000));
+      content = resp.data?.choices?.[0]?.message?.content ?? "";
+      fin = resp.data?.choices?.[0]?.finish_reason;
+    }
     if (!content.trim()) {
-      const fin = resp.data?.choices?.[0]?.finish_reason;
       const message =
         fin === "length"
-          ? "API 返回被长度截断（内容为空）：该模型可能把额度用在了推理上，请换非推理模型。"
+          ? "API 返回被长度截断（内容为空）：该模型把配额全用在了推理上，请改用非推理模型，或在该服务调高最大输出长度。"
           : "API 返回内容为空：请确认「模型」填的是该服务支持的模型名（例如 xAI 用 grok-4.3，而非默认 gpt-4o-mini），可点「检测模型」选择。";
       recordAiCall({ label, api: "vision", model, systemPrompt, userText: summarizeUserContent(userContent), ok: false, response: message });
       return { ok: false, message };
@@ -1492,18 +1506,34 @@ async function callConvertApi(
     ],
   };
 
+  const post = (tokens: number) =>
+    axios.post(
+      `${base}/chat/completions`,
+      { ...body, max_tokens: tokens },
+      {
+        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        timeout: 180_000,
+        ...proxyConfig("ai"),
+      },
+    );
+
   try {
-    const resp = await axios.post(`${base}/chat/completions`, body, {
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      timeout: 60_000,
-      ...proxyConfig("ai"),
-    });
-    const content: string = resp.data?.choices?.[0]?.message?.content ?? "";
+    let resp = await post(maxTokens);
+    let content: string = resp.data?.choices?.[0]?.message?.content ?? "";
+    let fin = resp.data?.choices?.[0]?.finish_reason;
+    // Reasoning models spend the whole token budget on hidden reasoning tokens
+    // and return empty content with finish_reason "length". Retry once with a
+    // much larger budget so the actual answer has room (billed per real token,
+    // so this only costs more on the genuinely-reasoning case).
+    if (!content.trim() && fin === "length") {
+      resp = await post(Math.max(maxTokens * 8, 32000));
+      content = resp.data?.choices?.[0]?.message?.content ?? "";
+      fin = resp.data?.choices?.[0]?.finish_reason;
+    }
     if (!content.trim()) {
-      const fin = resp.data?.choices?.[0]?.finish_reason;
       const message =
         fin === "length"
-          ? "API 返回被长度截断（内容为空）：该模型可能把额度用在了推理上，请换非推理模型。"
+          ? "API 返回被长度截断（内容为空）：该模型把配额全用在了推理上，请改用非推理模型，或在该服务调高最大输出长度。"
           : "API 返回内容为空：请确认「模型」填的是该服务支持的模型名（例如 xAI 用 grok-4.3，而非默认 gpt-4o-mini），可点「检测模型」选择。";
       recordAiCall({ label, api: "convert", model, systemPrompt, userText, ok: false, response: message });
       return { ok: false, message };
@@ -2104,7 +2134,7 @@ export async function convertComicPanels(request: ComicConvertRequest): Promise<
       modeUserInstruction(mode, "convert"),
       tagHints.length ? `Candidate tags: ${tagHints.map((x) => x.tag).join(", ")}` : "",
     ].join("\n\n");
-    const result = await callConvertApi(systemPrompt, userText, 1800, `漫画分镜转换 #${panel.index}`);
+    const result = await callConvertApi(systemPrompt, userText, 4096, `漫画分镜转换 #${panel.index}`);
     if (!result.ok) {
       out.push({ panelId: panel.panelId, enPrompt: "", error: result.message });
       continue;
