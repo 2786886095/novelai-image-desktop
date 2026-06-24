@@ -515,13 +515,48 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
 
   const [aiFilling, setAiFilling] = useState(false);
   const [lightbox, setLightbox] = useState<string | null>(null);
+  const [activeItemId, setActiveItemId] = useState<string | null>(null);
+  const [resultFilter, setResultFilter] = useState<"all" | "done" | "failed" | "pending">("all");
   const cancelRef = useRef(false);
 
   const { items, globalStrength, step } = project;
   const globalParams = project.globalParams;
   const readyCount = items.filter((it) => it.prompt.trim()).length;
   const doneCount = items.filter((it) => it.status === "done").length;
+  const failedCount = items.filter((it) => it.status === "failed").length;
+  const generatingCount = items.filter((it) => it.status === "generating").length;
   const pendingReady = items.filter((it) => it.status !== "done" && it.prompt.trim()).length;
+  const pendingCount = items.filter((it) => it.status !== "done" && it.status !== "failed").length;
+  const progressDone = progress?.done ?? doneCount;
+  const progressTotal = progress?.total ?? readyCount;
+  const progressPercent = progressTotal > 0 ? Math.min(100, Math.round((progressDone / progressTotal) * 100)) : 0;
+  const visibleGenerationItems = useMemo(
+    () =>
+      items
+        .map((item, index) => ({ item, index }))
+        .filter(({ item }) => {
+          if (resultFilter === "done") return item.status === "done";
+          if (resultFilter === "failed") return item.status === "failed";
+          if (resultFilter === "pending") return item.status !== "done" && item.status !== "failed";
+          return true;
+        }),
+    [items, resultFilter],
+  );
+  // Master-detail editing in the prompts step (like the comic generator): the
+  // left sidebar selects an image, the editor on the right edits that one.
+  // Falls back to the first image when nothing (or a removed item) is selected.
+  const activeItem = items.find((it) => it.id === activeItemId) ?? items[0] ?? null;
+  const activeItemIndex = activeItem ? items.findIndex((it) => it.id === activeItem.id) : -1;
+  const batchStatusLabel = (it: BatchRedrawItem) =>
+    it.status === "done"
+      ? "已生成"
+      : it.status === "generating"
+        ? "生成中…"
+        : it.status === "failed"
+          ? "失败"
+          : it.prompt.trim()
+            ? "已配词"
+            : "待配词";
 
   // Seed global style / negative / params from the main 生成 screen the first time
   // the tool is opened with an empty project ("默认为生成中锁定的，可自行修改").
@@ -530,7 +565,7 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
     setBatchRedraw((prev) => ({
       ...prev,
       globalParams: { ...params, fileNamePrefix: "" },
-      globalStyle: params.positivePrompt,
+      globalStyle: params.stylePrompt,
       globalNegative: params.negativePrompt,
       seededFromMain: true,
     }));
@@ -549,7 +584,7 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
   function syncFromMain() {
     patch({
       globalParams: { ...params, fileNamePrefix: "" },
-      globalStyle: params.positivePrompt,
+      globalStyle: params.stylePrompt,
       globalNegative: params.negativePrompt,
       seededFromMain: true,
     });
@@ -904,135 +939,222 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
               {aiFilling ? "AI 反推中…" : "AI 反推填充空缺"}
             </Button>
           </div>
-          <p className="settings-hint" style={{ margin: 0 }}>导入优先（每行对应一张）；空缺可用所选模式 AI 反推补全。双击图片放大；每张可单独改图强度 / 单独参数后立即「重新生成」。</p>
-          <div className="redraw-cards">
-            {items.length === 0 && <p className="vibe-empty">请先在「导入」步骤导入图片。</p>}
-            {items.map((it, idx) => (
-              <article className={clsx("redraw-card-item", `status-${it.status}`)} key={it.id}>
-                <div className="redraw-card-thumb" title="双击放大" onDoubleClick={() => setLightbox(it.resultUrl || dataUrlFromBase64(it.base64))}>
-                  <img
-                    src={it.resultUrl || dataUrlFromBase64(it.base64)}
-                    alt={it.name}
-                    loading="lazy"
-                    decoding="async"
-                    draggable={Boolean(it.resultUrl)}
-                    title={it.resultUrl ? "可拖出到桌面 / 其他程序" : undefined}
-                    onDragStart={(e) => {
-                      if (!it.resultUrl) return;
-                      e.preventDefault();
-                      window.naiDesktop.startImageDrag(it.resultUrl);
-                    }}
-                    onError={(e) => { (e.currentTarget as HTMLImageElement).src = dataUrlFromBase64(it.base64); }}
-                  />
-                  <BatchStatusBadge status={it.status} />
-                </div>
-                <div className="redraw-card-body">
-                  <div className="redraw-card-head"><b>#{idx + 1}</b><span title={it.name}>{it.name}</span></div>
-                  <textarea
-                    className="redraw-prompt"
-                    value={it.prompt}
-                    placeholder="该图片的提示词（导入 / AI 反推 / 手动编辑）"
-                    onChange={(e) => patchItem(it.id, { prompt: e.target.value })}
-                  />
-                  <div className="redraw-card-row">
-                    <label className="redraw-strength-inline">
-                      强度
+          <p className="settings-hint" style={{ margin: 0 }}>导入优先（每行对应一张）；空缺可用所选模式 AI 反推补全。左侧选择图片，右侧编辑该图的提示词 / 改图强度 / 单独高级参数，可单张「生成 / 重试」。双击大图放大。</p>
+          {items.length === 0 ? (
+            <p className="vibe-empty">请先在「导入」步骤导入图片。</p>
+          ) : activeItem ? (
+            <div className="comic-panel-workspace">
+              <aside className="comic-panel-sidebar">
+                {items.map((it, idx) => (
+                  <button
+                    key={it.id}
+                    type="button"
+                    className={clsx("comic-panel-nav-item", activeItem.id === it.id && "active", it.status === "done" && "selected")}
+                    onClick={() => setActiveItemId(it.id)}
+                    title={it.name}
+                  >
+                    <span>#{idx + 1}</span>
+                    <small>{batchStatusLabel(it)}</small>
+                  </button>
+                ))}
+              </aside>
+              <article className="comic-panel-editor">
+                <header>
+                  <strong>#{activeItemIndex + 1} · {activeItem.name}</strong>
+                  <span className={clsx("comic-status", activeItem.status)}>{batchStatusLabel(activeItem)}</span>
+                  <div className="comic-actions">
+                    <Button variant="primary" onClick={() => void runTargets([activeItem])} disabled={running || !activeItem.prompt.trim()}>
+                      {activeItem.status === "done" ? "重新生成" : activeItem.status === "failed" ? "重试" : "生成此张"}
+                    </Button>
+                  </div>
+                </header>
+                <div className="comic-panel-editor-body">
+                  {activeItem.error ? <div className="comic-panel-error">{activeItem.error}</div> : null}
+                  <div className="comic-panel-result" title="双击放大" onDoubleClick={() => setLightbox(activeItem.resultUrl || dataUrlFromBase64(activeItem.base64))}>
+                    <img
+                      src={activeItem.resultUrl || dataUrlFromBase64(activeItem.base64)}
+                      alt={activeItem.name}
+                      loading="lazy"
+                      decoding="async"
+                      draggable={Boolean(activeItem.resultUrl)}
+                      title={activeItem.resultUrl ? "可拖出到桌面 / 其他程序" : "双击放大"}
+                      onDragStart={(e) => {
+                        if (!activeItem.resultUrl) return;
+                        e.preventDefault();
+                        window.naiDesktop.startImageDrag(activeItem.resultUrl);
+                      }}
+                      onError={(e) => { (e.currentTarget as HTMLImageElement).src = dataUrlFromBase64(activeItem.base64); }}
+                    />
+                    <div>
+                      <strong>{activeItem.resultUrl ? "当前成图" : "待重绘原图"}</strong>
+                      <span>{activeItem.resultUrl ? "重新生成会替换本图当前成图。" : "双击放大查看；生成后这里显示成图。"}</span>
+                    </div>
+                  </div>
+                  <label className="comic-field">
+                    <span>该图片的提示词（导入 / AI 反推 / 手动编辑）</span>
+                    <textarea
+                      style={{ minHeight: 120 }}
+                      value={activeItem.prompt}
+                      placeholder="该图片的提示词"
+                      onChange={(e) => patchItem(activeItem.id, { prompt: e.target.value })}
+                    />
+                  </label>
+                  <div className="comic-panel-negative-row">
+                    <label className="comic-field">
+                      <span>改图强度（留空用全局 {globalStrength.toFixed(2)}）</span>
                       <input
                         type="number"
                         min={0.1}
                         max={0.99}
                         step={0.01}
-                        value={it.strength ?? ""}
+                        value={activeItem.strength ?? ""}
                         placeholder={globalStrength.toFixed(2)}
-                        onChange={(e) => patchItem(it.id, { strength: e.target.value === "" ? null : Number(e.target.value) })}
+                        onChange={(e) => patchItem(activeItem.id, { strength: e.target.value === "" ? null : Number(e.target.value) })}
                       />
                     </label>
-                    <label className="redraw-override-toggle">
-                      <input
-                        type="checkbox"
-                        checked={it.overrideParams}
-                        onChange={(e) => patchItem(it.id, { overrideParams: e.target.checked, params: e.target.checked && Object.keys(it.params).length === 0 ? { ...globalParams } : it.params })}
-                      />
-                      单独参数
-                    </label>
-                    <Button variant="secondary" onClick={() => void runTargets([it])} disabled={running || !it.prompt.trim()}>
-                      {it.status === "done" ? "重新生成" : it.status === "failed" ? "重试" : "生成此张"}
-                    </Button>
+                    <div className="comic-field">
+                      <span>单独高级参数</span>
+                      <label className="redraw-override-toggle">
+                        <input
+                          type="checkbox"
+                          checked={activeItem.overrideParams}
+                          onChange={(e) => patchItem(activeItem.id, { overrideParams: e.target.checked, params: e.target.checked && Object.keys(activeItem.params).length === 0 ? { ...globalParams } : activeItem.params })}
+                        />
+                        覆盖全局参数（可逐项修改）
+                      </label>
+                    </div>
                   </div>
-                  {it.overrideParams && (
-                    <details className="redraw-override-panel" open>
-                      <summary>本图独立高级参数（覆盖全局）</summary>
-                      <BatchParamFields value={{ ...globalParams, ...it.params }} onPatch={(p) => patchItem(it.id, { params: { ...it.params, ...p } })} />
-                    </details>
+                  {activeItem.overrideParams && (
+                    <BatchParamFields value={{ ...globalParams, ...activeItem.params }} onPatch={(p) => patchItem(activeItem.id, { params: { ...activeItem.params, ...p } })} />
                   )}
                 </div>
               </article>
-            ))}
-          </div>
+            </div>
+          ) : null}
         </section>
       )}
 
       {step === "generate" && (
-        <section className="redraw-card">
-          <div className="redraw-generate-bar">
-            <p className="settings-hint" style={{ margin: 0 }}>
-              对 {readyCount} 张已配提示词的图片逐张图生图，存入分组「{project.groupName.trim() || "未命名"}」。结果实时显示；可单张「重试 / 重新生成」（自动删除上一次成图），完成后打包 ZIP（按名称升序）。
-            </p>
-            <div className="redraw-footer">
-              {progress && <div className="redraw-progress">进度 {progress.done}/{progress.total}</div>}
+        <section className="redraw-card redraw-results-stage">
+          <header className="redraw-results-toolbar">
+            <div className="redraw-results-overview">
+              <div className="redraw-results-title-row">
+                <div>
+                  <span className="eyebrow">Batch output</span>
+                  <strong>批量生成结果</strong>
+                  <small>分组：{project.groupName.trim() || "未命名"}</small>
+                </div>
+                <b>{progressDone}<i>/</i>{progressTotal}</b>
+              </div>
+              <div className="redraw-results-progress" aria-label={`生成进度 ${progressPercent}%`}>
+                <i style={{ width: `${progressPercent}%` }} />
+              </div>
+              <div className="redraw-results-stats">
+                <span className="done">完成 <b>{doneCount}</b></span>
+                <span className="running">生成中 <b>{generatingCount}</b></span>
+                <span className="failed">失败 <b>{failedCount}</b></span>
+                <span>待处理 <b>{Math.max(0, readyCount - doneCount - failedCount - generatingCount)}</b></span>
+              </div>
+            </div>
+            <div className="redraw-results-actions">
               {running ? (
-                <Button variant="danger" onClick={stop}>✕ 停止</Button>
+                <Button variant="danger" onClick={stop}>✕ 停止任务</Button>
               ) : (
                 <>
                   <Button variant="primary" onClick={() => void runTargets(items)} disabled={readyCount === 0}>
-                    ▶ 开始批量（{readyCount} 张）
+                    ▶ 开始批量（{readyCount}）
                   </Button>
                   <Button variant="secondary" onClick={() => void runTargets(items.filter((it) => it.status !== "done"))} disabled={pendingReady === 0}>
-                    生成未完成（{pendingReady}）
+                    继续未完成（{pendingReady}）
                   </Button>
                 </>
               )}
-              <Button variant="secondary" onClick={() => void exportZip()} disabled={running || doneCount === 0}>打包 ZIP</Button>
+              <Button variant="secondary" onClick={() => void exportZip()} disabled={running || doneCount === 0}>
+                打包 ZIP（{doneCount}）
+              </Button>
             </div>
-          </div>
-          <div className="redraw-cards">
-            {items.length === 0 && <p className="vibe-empty">请先导入图片并配置提示词。</p>}
-            {items.map((it, idx) => (
-              <article className={clsx("redraw-card-item", `status-${it.status}`)} key={it.id}>
-                <div className="redraw-card-thumb" title="双击放大" onDoubleClick={() => setLightbox(it.resultUrl || dataUrlFromBase64(it.base64))}>
-                  <img
-                    src={it.resultUrl || dataUrlFromBase64(it.base64)}
-                    alt={it.name}
-                    loading="lazy"
-                    decoding="async"
-                    draggable={Boolean(it.resultUrl)}
-                    title={it.resultUrl ? "可拖出到桌面 / 其他程序" : undefined}
-                    onDragStart={(e) => {
-                      if (!it.resultUrl) return;
-                      e.preventDefault();
-                      window.naiDesktop.startImageDrag(it.resultUrl);
-                    }}
-                    onError={(e) => { (e.currentTarget as HTMLImageElement).src = dataUrlFromBase64(it.base64); }}
-                  />
-                  <BatchStatusBadge status={it.status} />
-                </div>
-                <div className="redraw-card-body">
-                  <div className="redraw-card-head"><b>#{idx + 1}</b><span title={it.name}>{it.name}</span></div>
-                  {it.error ? (
-                    <p className="redraw-card-error" title={it.error}>{it.error}</p>
-                  ) : (
-                    <p className="redraw-card-prompt" title={it.prompt}>{it.prompt || "（无提示词，将被跳过）"}</p>
-                  )}
-                  <div className="redraw-card-row">
-                    <Button variant="secondary" onClick={() => void runTargets([it])} disabled={running || !it.prompt.trim()}>
-                      {it.status === "done" ? "重新生成" : it.status === "failed" ? "重试" : "生成此张"}
-                    </Button>
-                    {it.resultUrl && <Button variant="ghost" onClick={() => setLightbox(it.resultUrl!)}>查看大图</Button>}
-                  </div>
-                </div>
-              </article>
+          </header>
+
+          <div className="redraw-result-filters" role="tablist" aria-label="筛选生成结果">
+            {([
+              ["all", "全部", items.length],
+              ["done", "已完成", doneCount],
+              ["failed", "失败", failedCount],
+              ["pending", "待处理", pendingCount],
+            ] as const).map(([key, label, count]) => (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={resultFilter === key}
+                className={clsx(resultFilter === key && "active", key)}
+                key={key}
+                onClick={() => setResultFilter(key)}
+              >
+                {label}<b>{count}</b>
+              </button>
             ))}
+            <span>点击缩略图查看大图；成图可直接拖到桌面或其他程序。</span>
           </div>
+
+          {items.length === 0 ? (
+            <div className="redraw-results-empty">
+              <b>还没有待生成图片</b>
+              <span>请先回到「导入」和「提示词」步骤完成配置。</span>
+            </div>
+          ) : visibleGenerationItems.length === 0 ? (
+            <div className="redraw-results-empty">
+              <b>当前筛选没有图片</b>
+              <button type="button" onClick={() => setResultFilter("all")}>查看全部</button>
+            </div>
+          ) : (
+            <div className="redraw-results-grid">
+              {visibleGenerationItems.map(({ item: it, index: idx }) => (
+                <article className={clsx("redraw-result-card", `status-${it.status}`)} key={it.id} aria-busy={it.status === "generating"}>
+                  <button
+                    type="button"
+                    className="redraw-result-preview"
+                    title="点击查看大图"
+                    onClick={() => setLightbox(it.resultUrl || dataUrlFromBase64(it.base64))}
+                  >
+                    <img
+                      src={it.resultUrl || dataUrlFromBase64(it.base64)}
+                      alt={it.name}
+                      loading="lazy"
+                      decoding="async"
+                      draggable={Boolean(it.resultUrl)}
+                      onDragStart={(e) => {
+                        if (!it.resultUrl) return;
+                        e.preventDefault();
+                        window.naiDesktop.startImageDrag(it.resultUrl);
+                      }}
+                      onError={(e) => { (e.currentTarget as HTMLImageElement).src = dataUrlFromBase64(it.base64); }}
+                    />
+                    <span className="redraw-result-index">#{idx + 1}</span>
+                    <span className="redraw-result-origin">{it.resultUrl ? "成图" : "原图"}</span>
+                    <BatchStatusBadge status={it.status} />
+                    {it.status === "generating" && <i className="redraw-result-shimmer" />}
+                  </button>
+                  <div className="redraw-result-body">
+                    <div className="redraw-result-name">
+                      <strong title={it.name}>{it.name}</strong>
+                      <span>强度 {(it.strength ?? globalStrength).toFixed(2)}</span>
+                    </div>
+                    {it.error ? (
+                      <p className="redraw-card-error" title={it.error}>{it.error}</p>
+                    ) : (
+                      <p className="redraw-card-prompt" title={it.prompt}>{it.prompt || "（无提示词，将被跳过）"}</p>
+                    )}
+                    <div className="redraw-result-card-actions">
+                      <Button variant={it.status === "failed" ? "danger" : "secondary"} onClick={() => void runTargets([it])} disabled={running || !it.prompt.trim()}>
+                        {it.status === "done" ? "重新生成" : it.status === "failed" ? "重试" : "生成此张"}
+                      </Button>
+                      <Button variant="ghost" onClick={() => setLightbox(it.resultUrl || dataUrlFromBase64(it.base64))}>放大</Button>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
         </section>
       )}
 
@@ -1061,6 +1183,10 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
   const [generationLog, setGenerationLog] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [panelEditorTab, setPanelEditorTab] = useState<"content" | "params" | "weights">("content");
+  // Direct tag-prompt import: each line becomes one panel's English prompt
+  // (status "converted"), skipping AI script-splitting + reverse — same idea as
+  // the batch img2img bulk-prompt import.
+  const [tagBulk, setTagBulk] = useState("");
   const [translatingPanel, setTranslatingPanel] = useState("");
   const [queue, setQueue] = useState<QueueState>(null);
   const [queueAnlasQuote, setQueueAnlasQuote] = useState<number | null>(null);
@@ -1460,6 +1586,45 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
     } finally {
       setBusy("");
     }
+  }
+
+  // Create panels straight from imported tag prompts (one per line). Each line
+  // is the panel's English prompt and is marked "converted", so the user can go
+  // straight to generating without the story → split → reverse flow.
+  function importTagPanels(text: string) {
+    const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    if (lines.length === 0) {
+      setToast("请粘贴 / 输入 Tag 提示词，每行一个分镜。");
+      return;
+    }
+    if (panels.length > 0 && !window.confirm(`将用这 ${lines.length} 行 Tag 替换现有 ${panels.length} 个分镜，确定？`)) {
+      return;
+    }
+    setProject((prev) => ({
+      ...prev,
+      panels: lines.map((line, index) => ({
+        id: uid(),
+        index: index + 1,
+        cnPrompt: "",
+        contextSummary: "",
+        enPrompt: line,
+        localNegativePrompt: "",
+        negativeMode: "append",
+        paramsOverride: { enabled: false, params: {} },
+        status: "converted",
+      })),
+    }));
+    setSelectedIds(new Set());
+    setActivePanelId("");
+    setTagBulk("");
+    setToast(`已按 Tag 直接创建 ${lines.length} 个分镜，可前往「生成」。`);
+    setStep("panels");
+  }
+
+  async function importTagFile(file: File | null) {
+    if (!file) return;
+    const text = await file.text();
+    importTagPanels(text);
   }
 
   async function convertPanels(targets = selectedPanels) {
@@ -2000,6 +2165,24 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
               {busy === "analyze" ? "拆分中..." : "AI 拆分分镜 →"}
             </Button>
             <span className="comic-empty">拆分后会自动跳到「全局设定」。</span>
+          </div>
+          <div className="comic-field" style={{ marginTop: 14 }}>
+            <div className="comic-field-heading">
+              <span>或：直接导入 Tag 提示词生成漫画（每行一个分镜，跳过 AI 拆分 / 反推）</span>
+            </div>
+            <textarea
+              value={tagBulk}
+              placeholder={"第 1 个分镜的英文 tag\n第 2 个分镜的英文 tag\n..."}
+              onChange={(event) => setTagBulk(event.target.value)}
+            />
+            <div className="comic-actions">
+              <Button onClick={() => importTagPanels(tagBulk)} disabled={!tagBulk.trim()}>导入为分镜 →</Button>
+              <label className="btn btn-secondary redraw-file-btn">
+                导入 .txt 文件
+                <input type="file" hidden accept=".txt,text/plain" onChange={(event) => { void importTagFile(event.target.files?.[0] ?? null); event.target.value = ""; }} />
+              </label>
+              <span className="comic-empty">每行作为一个分镜的英文提示词，直接进入「分镜」步骤。</span>
+            </div>
           </div>
         </section>
       )}

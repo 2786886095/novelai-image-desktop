@@ -295,8 +295,84 @@ class _StoryStep extends StatelessWidget {
             icon: const Icon(Icons.auto_fix_high),
             label: const Text('AI 拆分分镜'),
           ),
+          const SizedBox(height: 20),
+          const Divider(),
+          const _TagImportBlock(),
         ],
       ),
+    );
+  }
+}
+
+// Direct tag-prompt import (mirrors batch img2img): each line becomes one panel's
+// English prompt (status converted), skipping AI script-splitting + reverse.
+class _TagImportBlock extends StatefulWidget {
+  const _TagImportBlock();
+
+  @override
+  State<_TagImportBlock> createState() => _TagImportBlockState();
+}
+
+class _TagImportBlockState extends State<_TagImportBlock> {
+  final _ctrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _import() async {
+    final text = _ctrl.text;
+    if (text.trim().isEmpty) return;
+    final controller = context.read<ComicController>();
+    final existing = controller.project.panels.length;
+    if (existing > 0) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('替换现有分镜？'),
+          content: Text('将用导入的 Tag 替换现有 $existing 个分镜。'),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('取消')),
+            FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('替换')),
+          ],
+        ),
+      );
+      if (ok != true) return;
+    }
+    controller.importTagPanels(text);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: 8),
+        const Text('或：直接导入 Tag 提示词（每行一个分镜，跳过 AI 拆分 / 反推）',
+            style: TextStyle(fontWeight: FontWeight.w600)),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _ctrl,
+          minLines: 3,
+          maxLines: 10,
+          decoration: const InputDecoration(
+            hintText: '第 1 个分镜的英文 tag\n第 2 个分镜的英文 tag\n...',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 8),
+        FilledButton.tonalIcon(
+          onPressed: _import,
+          icon: const Icon(Icons.playlist_add),
+          label: const Text('导入为分镜'),
+        ),
+      ],
     );
   }
 }

@@ -1294,11 +1294,27 @@ async function postGenerateImage(payload: ReturnType<typeof buildPayload>) {
     const images = Array.isArray(params.director_reference_images)
       ? (params.director_reference_images as string[])
       : [];
-    // The JSON request part must NOT carry the base64 images (they ride as binary
-    // parts named director_ref_N); _cached references them by name.
+    // In multipart mode NovelAI treats image-bearing JSON fields as the NAME of a
+    // binary form part, not as base64. Director references ride as director_ref_N
+    // (referenced via director_reference_images_cached). The img2img / inpaint
+    // source image + mask must ALSO be uploaded as parts and referenced by name —
+    // otherwise the API rejects with "image field references unknown form part".
     const requestJson = { ...payload, parameters: { ...params } };
-    delete (requestJson.parameters as Record<string, unknown>).director_reference_images;
+    const rp = requestJson.parameters as Record<string, unknown>;
+    delete rp.director_reference_images;
     const form = new FormData();
+    const attachImagePart = (field: "image" | "mask") => {
+      const b64 = rp[field];
+      if (typeof b64 === "string" && b64) {
+        form.append(field, Buffer.from(stripBase64Prefix(b64), "base64"), {
+          filename: field,
+          contentType: "image/png",
+        });
+        rp[field] = field; // reference the binary part by name
+      }
+    };
+    attachImagePart("image");
+    attachImagePart("mask");
     form.append("request", JSON.stringify(requestJson), { contentType: "application/json" });
     images.forEach((b64, index) => {
       form.append(`director_ref_${index}`, Buffer.from(stripBase64Prefix(b64), "base64"), {

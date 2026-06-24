@@ -5,6 +5,17 @@ plugins {
     id "dev.flutter.flutter-gradle-plugin"
 }
 
+// Release signing: when android/key.properties exists (CI writes it from repo
+// secrets — see .github/workflows/build-mobile.yml) the release APK is signed
+// with a STABLE key, so every published version installs over the previous one
+// instead of forcing an uninstall. Without it (local dev / forks) we fall back
+// to the debug key.
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
 android {
     namespace = "com.codex.novelai.novelai_mobile"
     // Pinned explicitly (not flutter.compileSdkVersion) because the gal plugin
@@ -32,11 +43,22 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        release {
+            if (keystorePropertiesFile.exists()) {
+                keyAlias = keystoreProperties["keyAlias"]
+                keyPassword = keystoreProperties["keyPassword"]
+                storeFile = keystoreProperties["storeFile"] ? file(keystoreProperties["storeFile"]) : null
+                storePassword = keystoreProperties["storePassword"]
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.debug
+            // Stable release key when key.properties is present; otherwise the
+            // debug key so `flutter run --release` and forks still build.
+            signingConfig = keystorePropertiesFile.exists() ? signingConfigs.release : signingConfigs.debug
         }
     }
 }

@@ -4139,6 +4139,333 @@ html, body, #root {
 }
 .redraw-generate-bar .redraw-footer { margin-top: 0; flex-wrap: wrap; }
 
+/* Batch output console. It deliberately uses its own class namespace: the old
+   redraw card grid allowed implicit rows to shrink against max-height, turning
+   portrait previews into thin horizontal slices when a batch had many items. */
+.redraw-results-stage {
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 0 0, rgba(6, 182, 212, 0.08), transparent 30%),
+    radial-gradient(circle at 100% 0, rgba(124, 58, 237, 0.08), transparent 34%),
+    rgba(255, 255, 255, 0.58);
+}
+.redraw-results-toolbar {
+  display: grid;
+  grid-template-columns: minmax(360px, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+  padding: 18px 20px;
+  border-bottom: 1px solid rgba(124, 58, 237, 0.13);
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(18px);
+}
+.redraw-results-overview {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+}
+.redraw-results-title-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+}
+.redraw-results-title-row > div {
+  display: flex;
+  align-items: baseline;
+  gap: 8px 12px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.redraw-results-title-row .eyebrow {
+  width: 100%;
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.redraw-results-title-row strong {
+  color: var(--text-primary);
+  font-size: 18px;
+}
+.redraw-results-title-row small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.redraw-results-title-row > b {
+  flex-shrink: 0;
+  color: var(--accent);
+  font-size: 25px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.redraw-results-title-row > b i {
+  padding: 0 3px;
+  color: var(--text-muted);
+  font-size: 15px;
+  font-style: normal;
+  font-weight: 500;
+}
+.redraw-results-progress {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(124, 58, 237, 0.10);
+  box-shadow: inset 0 1px 2px rgba(60, 40, 120, 0.08);
+}
+.redraw-results-progress i {
+  display: block;
+  height: 100%;
+  min-width: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #06b6d4, #7c3aed 70%, #a855f7);
+  box-shadow: 0 0 14px rgba(124, 58, 237, 0.34);
+  transition: width 0.28s ease;
+}
+.redraw-results-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.redraw-results-stats span {
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(100, 116, 139, 0.08);
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+.redraw-results-stats span.done { background: rgba(22, 163, 74, 0.10); color: #15803d; }
+.redraw-results-stats span.running { background: rgba(124, 58, 237, 0.10); color: var(--accent); }
+.redraw-results-stats span.failed { background: rgba(220, 38, 38, 0.09); color: #dc2626; }
+.redraw-results-stats b { font-variant-numeric: tabular-nums; }
+.redraw-results-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: 520px;
+}
+.redraw-results-actions .btn { min-height: 36px; }
+
+.redraw-result-filters {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(124, 58, 237, 0.10);
+  background: rgba(255, 255, 255, 0.45);
+}
+.redraw-result-filters button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: rgba(100, 116, 139, 0.08);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+.redraw-result-filters button b {
+  display: grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.68);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.redraw-result-filters button:hover { border-color: rgba(124, 58, 237, 0.25); }
+.redraw-result-filters button.active {
+  border-color: rgba(124, 58, 237, 0.38);
+  background: rgba(124, 58, 237, 0.12);
+  color: var(--accent);
+  box-shadow: 0 3px 10px rgba(124, 58, 237, 0.09);
+}
+.redraw-result-filters button.failed.active { color: #dc2626; }
+.redraw-result-filters > span {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.redraw-results-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-auto-rows: max-content;
+  align-content: start;
+  align-items: start;
+  gap: 14px;
+  padding: 14px;
+}
+.redraw-result-card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid rgba(124, 58, 237, 0.14);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 10px 28px rgba(60, 40, 120, 0.08);
+  transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+}
+.redraw-result-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(124, 58, 237, 0.32);
+  box-shadow: 0 16px 36px rgba(60, 40, 120, 0.13);
+}
+.redraw-result-card.status-done { border-color: rgba(22, 163, 74, 0.32); }
+.redraw-result-card.status-failed { border-color: rgba(220, 38, 38, 0.42); }
+.redraw-result-card.status-generating {
+  border-color: rgba(124, 58, 237, 0.62);
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.10), 0 16px 36px rgba(60, 40, 120, 0.14);
+}
+.redraw-result-preview {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid rgba(124, 58, 237, 0.10);
+  background:
+    linear-gradient(135deg, rgba(226, 232, 240, 0.92), rgba(203, 213, 225, 0.70)),
+    repeating-conic-gradient(rgba(255, 255, 255, 0.2) 0 25%, transparent 0 50%) 50% / 16px 16px;
+  cursor: zoom-in;
+}
+.redraw-result-preview img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  transition: transform 0.2s ease;
+}
+.redraw-result-preview:hover img { transform: scale(1.015); }
+.redraw-result-index,
+.redraw-result-origin {
+  position: absolute;
+  z-index: 2;
+  left: 8px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  color: #fff;
+  background: rgba(15, 23, 42, 0.72);
+  backdrop-filter: blur(8px);
+  font-size: 10px;
+  font-weight: 750;
+  pointer-events: none;
+}
+.redraw-result-index { top: 8px; }
+.redraw-result-origin { bottom: 8px; }
+.redraw-result-preview .redraw-badge { top: 8px; right: 8px; z-index: 3; }
+.redraw-result-shimmer {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.34) 48%, transparent 66%);
+  animation: redraw-result-sweep 1.35s linear infinite;
+  pointer-events: none;
+}
+@keyframes redraw-result-sweep {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
+}
+.redraw-result-body {
+  display: grid;
+  grid-template-rows: auto minmax(34px, auto) auto;
+  gap: 8px;
+  min-height: 126px;
+  padding: 10px 11px 11px;
+}
+.redraw-result-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.redraw-result-name strong {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.redraw-result-name span {
+  flex-shrink: 0;
+  padding: 2px 6px;
+  border-radius: 7px;
+  background: rgba(124, 58, 237, 0.08);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.redraw-result-body .redraw-card-prompt,
+.redraw-result-body .redraw-card-error {
+  min-height: 34px;
+  -webkit-line-clamp: 2;
+}
+.redraw-result-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.redraw-result-card-actions .btn {
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: 11px;
+}
+.redraw-results-empty {
+  display: grid;
+  place-items: center;
+  gap: 6px;
+  min-height: 280px;
+  padding: 30px;
+  color: var(--text-muted);
+  text-align: center;
+}
+.redraw-results-empty b { color: var(--text-primary); font-size: 16px; }
+.redraw-results-empty button {
+  margin-top: 6px;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  font: inherit;
+}
+
+.theme-dark .redraw-results-stage { background: rgba(18, 15, 33, 0.72); }
+.theme-dark .redraw-results-toolbar,
+.theme-dark .redraw-result-filters { background: rgba(18, 15, 33, 0.82); }
+.theme-dark .redraw-result-card { background: rgba(28, 24, 48, 0.92); }
+.theme-dark .redraw-result-preview {
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.92));
+}
+.theme-dark .redraw-result-filters button b { background: rgba(255, 255, 255, 0.08); }
+.theme-dark .redraw-results-stats span.done { color: #4ade80; }
+.theme-dark .redraw-results-stats span.failed,
+.theme-dark .redraw-result-filters button.failed.active { color: #f87171; }
+
+@media (max-width: 1180px) {
+  .redraw-results-toolbar { grid-template-columns: 1fr; }
+  .redraw-results-actions { justify-content: flex-start; max-width: none; }
+  .redraw-results-grid { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
+  .redraw-result-filters > span { width: 100%; margin-left: 0; }
+}
+
 /* Full-screen image preview (double-click / 查看大图). */
 .redraw-lightbox {
   position: fixed;

@@ -1025,15 +1025,36 @@ class NaiApi {
     final images =
         ((params.remove('director_reference_images') as List?) ?? const [])
             .cast<String>();
-    final requestJson = {...payload, 'parameters': params};
     final request = http.MultipartRequest('POST', uri)
       ..headers['Authorization'] = 'Bearer $token'
-      ..headers['Accept'] = 'application/zip, application/octet-stream'
-      ..files.add(http.MultipartFile.fromString(
-        'request',
-        jsonEncode(requestJson),
-        contentType: MediaType('application', 'json'),
+      ..headers['Accept'] = 'application/zip, application/octet-stream';
+
+    // Once precise references switch the request to multipart, NovelAI treats
+    // image-bearing JSON fields as form-part NAMES rather than inline base64.
+    // Upload img2img/inpaint assets as binary parts and point the JSON fields at
+    // those names; otherwise the API reports "image field references unknown
+    // form part <base64>". This also covers mobile batch redraw, which calls the
+    // same img2img method.
+    void attachImagePart(String field) {
+      final encoded = params[field];
+      if (encoded is! String || encoded.isEmpty) return;
+      request.files.add(http.MultipartFile.fromBytes(
+        field,
+        base64Decode(_stripBase64(encoded)),
+        filename: field,
+        contentType: MediaType('image', 'png'),
       ));
+      params[field] = field;
+    }
+
+    attachImagePart('image');
+    attachImagePart('mask');
+    final requestJson = {...payload, 'parameters': params};
+    request.files.add(http.MultipartFile.fromString(
+      'request',
+      jsonEncode(requestJson),
+      contentType: MediaType('application', 'json'),
+    ));
     for (var index = 0; index < images.length; index++) {
       request.files.add(http.MultipartFile.fromBytes(
         'director_ref_$index',

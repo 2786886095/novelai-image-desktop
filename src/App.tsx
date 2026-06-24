@@ -4429,7 +4429,7 @@ export default function App() {
   useEffect(() => {
     void load();
     void checkUpdate();
-    const timer = window.setTimeout(() => setSplash(false), 800);
+    const timer = window.setTimeout(() => setSplash(false), 300);
     return () => window.clearTimeout(timer);
   }, [load, checkUpdate]);
 

@@ -41,7 +41,30 @@ jobs:
       - name: Run tests
         run: flutter test
 
-      - name: Build APK (release, unsigned)
+      # Sign the release APK with a STABLE key (from repo secrets) so every
+      # published version installs over the previous one. If the secrets aren't
+      # set, this no-ops and the build falls back to the debug key (build.gradle).
+      - name: Configure Android signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "::warning::ANDROID_KEYSTORE_BASE64 not set — release APK uses the debug key, so in-place updates will still conflict. Add the keystore secrets to fix."
+            exit 0
+          fi
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/release.keystore
+          cat > android/key.properties <<EOF
+          storeFile=release.keystore
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          keyPassword=$ANDROID_KEY_PASSWORD
+          EOF
+          echo "Release signing configured with a stable key."
+
+      - name: Build APK (release)
         run: flutter build apk --release
 
       - name: Upload APK

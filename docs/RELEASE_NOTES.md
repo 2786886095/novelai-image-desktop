@@ -4,14 +4,23 @@
 
 | 系统 | 安装包 | 安装说明 |
 | --- | --- | --- |
-| 🪟 **Windows** (x64) | `Langbai-NovelAI-Studio-1.0.3.exe` | 便携版，双击即用，无需安装 |
-| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-1.0.3-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
-| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-1.0.3.zip` | 解压后即为 `.app`，同样需右键「打开」 |
-| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-1.0.3.AppImage` | `chmod +x` 后直接运行 |
+| 🪟 **Windows** (x64) | `Langbai-NovelAI-Studio-1.0.4.exe` | 便携版，双击即用，无需安装 |
+| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-1.0.4-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
+| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-1.0.4.zip` | 解压后即为 `.app`，同样需右键「打开」 |
+| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-1.0.4.AppImage` | `chmod +x` 后直接运行 |
 | 🤖 **Android** | `app-release.apk` | 直接安装；未签名，需允许「未知来源」 |
 | 📱 **iOS** | `novelai-mobile-unsigned.ipa` | **未签名**，需用 AltStore / Sideloadly 等工具自行侧载 |
 
 > 桌面端与移动端均为 **API-only** 客户端，需自备 NovelAI Persistent API Token。
+
+### v1.0.4 更新内容
+
+- **批量图生图「提示词」改为图文编辑卡**：左侧图片列表 + 右侧大图与编辑区（提示词 / 改图强度 / 单独高级参数），图片按原比例显示不再被裁切，逐张编辑更顺手（与漫画生成器一致）。
+- **修复批量图生图带「精准参考」时报错 400「image field references unknown form part」**：精准参考会让请求改用 multipart，此前图生图的原图 / 蒙版仍以 base64 放在 JSON 里、被接口当成分块名 → 报错。现已把原图 / 蒙版作为二进制分块上传并按名引用（桌面 + 手机端同修，含回归测试）。
+- **「同步主界面参数」修正全局风格提示词**：批量图生图同步时，全局风格提示词现在取自主界面的「风格提示词」（此前误取正面词）。
+- **漫画生成器支持直接导入 Tag 提示词生成**：第 1 步可粘贴或导入 .txt（每行一个分镜的英文 tag），跳过「写故事 → AI 拆分 → 反推」，直接创建分镜即可生成（桌面 + 手机端）。
+- **手机端版本更新不再冲突**：发布 APK 改用固定签名密钥（CI 从仓库 Secret 读取），新版本可直接覆盖安装。注意：切换到固定密钥后，本次需先卸载旧版再装一次，之后即可一直覆盖更新。
+- **桌面端启动更快**：启动页最短等待从 0.8 秒进一步缩短到 0.3 秒。
 
 ### v1.0.3 更新内容
 

@@ -704,6 +704,36 @@ class ComicController extends ChangeNotifier {
     selectedPanelIds.clear();
   }
 
+  // Create panels straight from imported tag prompts (one per line). Each line
+  // is the panel's English prompt (status converted), so the user can generate
+  // without the story → split → reverse flow — same idea as batch img2img import.
+  void importTagPanels(String text) {
+    final lines = text
+        .split(RegExp(r'\r?\n'))
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
+        .toList();
+    if (lines.isEmpty) {
+      changed('请粘贴 / 输入 Tag 提示词，每行一个分镜。');
+      return;
+    }
+    project.panels = lines
+        .asMap()
+        .entries
+        .map((entry) => ComicPanel(
+              id: _id(),
+              index: entry.key + 1,
+              enPrompt: entry.value,
+              status: ComicPanelStatus.converted,
+              params: project.globalParams.copy(),
+            ))
+        .toList();
+    activePanelId = project.panels.first.id;
+    selectedPanelIds.clear();
+    step = ComicStep.panels;
+    changed('已按 Tag 直接创建 ${lines.length} 个分镜，可前往「生成」。');
+  }
+
   List<(String, String)> _fallbackPanels(String script, int desiredCount) {
     final ranges = <(String, String)>[];
     for (final raw in script.split(RegExp(r'\r?\n'))) {

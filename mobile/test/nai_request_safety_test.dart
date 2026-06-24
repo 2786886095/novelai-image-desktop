@@ -55,6 +55,85 @@ void main() {
     expect((sentImage.width, sentImage.height), (64, 96));
   });
 
+  test('img2img with precise reference uploads image as a multipart part',
+      () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(server.close);
+    Map<String, dynamic>? received;
+    String? multipartBody;
+    server.listen((request) async {
+      final contentType = request.headers.contentType!;
+      final boundary = contentType.parameters['boundary']!;
+      final bodyBytes = await request.fold<List<int>>(
+        <int>[],
+        (buffer, chunk) => buffer..addAll(chunk),
+      );
+      multipartBody = latin1.decode(bodyBytes);
+      final requestPart = RegExp(
+        'name="request".*?\\r\\n\\r\\n'
+        '(.*?)\\r\\n--${RegExp.escape(boundary)}',
+        caseSensitive: false,
+        dotAll: true,
+      ).firstMatch(multipartBody!)!;
+      received = jsonDecode(
+        utf8.decode(latin1.encode(requestPart.group(1)!)),
+      ) as Map<String, dynamic>;
+      final png = Uint8List.fromList(
+        image_lib.encodePng(image_lib.Image(width: 64, height: 96)),
+      );
+      final zip = ZipEncoder().encode(
+        Archive()..addFile(ArchiveFile('image.png', png.length, png)),
+      )!;
+      request.response
+        ..statusCode = 200
+        ..headers.contentType = ContentType.binary
+        ..add(zip);
+      await request.response.close();
+    });
+    final source = Uint8List.fromList(
+      image_lib.encodePng(image_lib.Image(width: 32, height: 32)),
+    );
+    final precise = base64Encode(
+      image_lib.encodePng(image_lib.Image(width: 64, height: 64)),
+    );
+
+    await NaiApi().img2img(
+      'test-token',
+      AppSettings(
+        imageBaseUrl: 'http://${server.address.host}:${server.port}',
+        allowCustomEndpoint: true,
+        proxyMode: 'direct',
+      ),
+      GenerateParams(
+        positivePrompt: 'test',
+        width: 64,
+        height: 96,
+      ),
+      GenerateExtras(
+        preciseReferences: [
+          PreciseReferenceItem(
+            base64: precise,
+            type: 'character&style',
+          ),
+        ],
+      ),
+      source,
+      I2IParams(),
+    );
+
+    expect(multipartBody, contains('name="request"'));
+    expect(multipartBody, contains('name="image"'));
+    expect(multipartBody, contains('name="director_ref_0"'));
+    final parameters = received!['parameters'] as Map<String, dynamic>;
+    expect(parameters['image'], 'image');
+    expect(parameters.containsKey('director_reference_images'), isFalse);
+    expect(
+      ((parameters['director_reference_images_cached'] as List).single
+          as Map)['data'],
+      'director_ref_0',
+    );
+  });
+
   test('V4 character 400 falls back once to pipe prompts', () async {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     addTearDown(server.close);
