@@ -63,7 +63,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       appBar: AppBar(title: const Text('设置')),
       body: StudioContent(
           child: ListView(
-        padding: const EdgeInsets.all(16),
+        // Add the keyboard inset to the bottom so the lower fields/buttons can
+        // always scroll clear of the on-screen keyboard (nested Scaffold + bottom
+        // nav can otherwise leave them covered).
+        padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.viewInsetsOf(context).bottom),
         children: [
           Card(
             child: ListTile(
