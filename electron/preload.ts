@@ -17,6 +17,11 @@ import type {
   NAIInpaintModel,
   SettingKey,
   UpscaleScale,
+  TuiwenExportJianYingRequest,
+  TuiwenImportFileRequest,
+  TuiwenProject,
+  TuiwenSaveImportedAudioRequest,
+  TuiwenTtsRequest,
 } from "../src/types";
 
 contextBridge.exposeInMainWorld("naiDesktop", {
@@ -53,6 +58,13 @@ contextBridge.exposeInMainWorld("naiDesktop", {
     ipcRenderer.invoke("comic:reverseAsset", imageBase64, mode, scope, hint, knownCharacter),
   comicGeneratePanel: (request: ComicGeneratePanelRequest) => ipcRenderer.invoke("comic:generatePanel", request),
   comicExportProjectZip: (project: ComicProject) => ipcRenderer.invoke("comic:exportProjectZip", project),
+  tuiwenImportFile: (request: TuiwenImportFileRequest) => ipcRenderer.invoke("tuiwen:importFile", request),
+  tuiwenTtsProviders: () => ipcRenderer.invoke("tuiwen:ttsProviders"),
+  tuiwenTts: (request: TuiwenTtsRequest) => ipcRenderer.invoke("tuiwen:tts", request),
+  tuiwenSaveImportedAudio: (request: TuiwenSaveImportedAudioRequest) => ipcRenderer.invoke("tuiwen:saveImportedAudio", request),
+  tuiwenExportJianYing: (request: TuiwenExportJianYingRequest) => ipcRenderer.invoke("tuiwen:exportJianYing", request),
+  tuiwenSaveProjectSnapshot: (project: TuiwenProject) => ipcRenderer.invoke("tuiwen:saveProjectSnapshot", project),
+  tuiwenLoadProjectSnapshot: () => ipcRenderer.invoke("tuiwen:loadProjectSnapshot"),
   getAiCallLog: () => ipcRenderer.invoke("ai:getLog"),
   clearAiCallLog: () => ipcRenderer.invoke("ai:clearLog"),
   getReverseTemplateDefaults: () => ipcRenderer.invoke("settings:getReverseDefaults"),

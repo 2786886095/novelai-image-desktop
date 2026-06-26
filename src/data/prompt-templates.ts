@@ -815,13 +815,14 @@ Return JSON only:
   "globalCharacterSetting": "persistent character / costume / object / scene bible",
   "continuityBible": "continuity notes for recurring characters, locations, objects, and visual rules",
   "panels": [
-    { "cnPrompt": "Chinese panel description with shot, action, character state, scene, composition", "contextSummary": "short continuity summary" }
+    { "narration": "original story/subtitle text covered by this panel", "cnPrompt": "Chinese panel description with shot, action, character state, scene, composition", "contextSummary": "short continuity summary" }
   ]
 }
 
 Rules:
 - Respect desiredPanelCount when provided; if auto, choose the smallest panel count that preserves every important beat.
 - If the script contains ranges like 1-7 / 8-15 / 16-24, expand them into concrete numbered panels instead of summarizing the range.
+- Each panel must preserve the source narration separately from the visual prompt: narration is for voice/subtitles, cnPrompt is for image generation.
 - Each panel must be drawable: include scene, action, character state, camera/composition, and continuity cue.
 - Keep content non-explicit and non-gory.
 - Do not output Markdown or commentary.`,
@@ -835,13 +836,14 @@ Return JSON only:
   "globalCharacterSetting": "persistent character / costume / object / scene bible",
   "continuityBible": "continuity notes for recurring characters, locations, objects, and visual rules",
   "panels": [
-    { "cnPrompt": "Chinese panel description with shot, action, character state, scene, composition", "contextSummary": "short continuity summary" }
+    { "narration": "original story/subtitle text covered by this panel", "cnPrompt": "Chinese panel description with shot, action, character state, scene, composition", "contextSummary": "short continuity summary" }
   ]
 }
 
 Rules:
 - Use desiredPanelCount when provided.
 - Expand written ranges such as 1-7 / 8-15 / 16-24 into individual panels.
+- Preserve the source narration separately from the visual prompt: narration is for voice/subtitles, cnPrompt is for image generation.
 - Do not simply split sentences; create cinematic beats with action, setting, emotion, camera, and continuity.
 - Keep content non-explicit and non-gory.
 - Do not output Markdown or commentary.`,
@@ -855,13 +857,14 @@ Return JSON only:
   "globalCharacterSetting": "persistent character / costume / object / scene bible",
   "continuityBible": "continuity notes for recurring characters, locations, objects, and visual rules",
   "panels": [
-    { "cnPrompt": "Chinese panel description with shot, action, character state, scene, composition", "contextSummary": "short continuity summary" }
+    { "narration": "original story/subtitle text covered by this panel", "cnPrompt": "Chinese panel description with shot, action, character state, scene, composition", "contextSummary": "short continuity summary" }
   ]
 }
 
 Rules:
 - Respect desiredPanelCount when provided.
 - Expand written panel ranges into concrete panels.
+- Preserve the source narration separately from the visual prompt: narration is for voice/subtitles, cnPrompt is for image generation.
 - Every panel must include enough visual detail for later prompt conversion.
 - Keep content non-explicit and non-gory.
 - Do not output Markdown or commentary.`,
@@ -876,8 +879,10 @@ export const COMIC_ANALYZE_SYSTEM_PROMPT = `生成故事中所有角色外貌特
   "title": "漫画项目标题",
   "globalPrompt": "故事整体设定，包含时间线、主要场景、故事基调",
   "globalCharacterSetting": "所有角色的外貌、服装、道具、参考图对应关系、物品和场景设定",
+  "continuityBible": "跨分镜连续性规则",
   "panels": [
     {
+      "narration": "该分镜对应的小说/字幕原文片段，用于配音和字幕",
       "cnPrompt": "单个分镜的中文提示词，必须包含镜头动作、场景、人物状态、构图、情绪和连续性提示",
       "contextSummary": "该分镜的简短摘要"
     }
@@ -887,7 +892,7 @@ export const COMIC_ANALYZE_SYSTEM_PROMPT = `生成故事中所有角色外貌特
 拆分规则：
 1. 如果用户指定目标分镜数量，尽量严格接近该数量。
 2. 如果用户写了 1-7、8-15、16-24 这类范围，必须展开成具体编号分镜，不要只概括范围。
-3. 每个分镜都要能独立生图：写清楚场景、角色、动作、构图、镜头距离、视角、情绪、关键道具。
+3. 每个分镜都要保留 narration 与 cnPrompt 两层：narration 尽量忠实原文，cnPrompt 负责补足可生图的镜头画面。
 4. 保持同一角色、服装、物品、场景名称在所有分镜中的描述一致。
 5. 不要输出成人色情、裸露、血腥、恐怖重口内容；如果故事里有敏感桥段，用非露骨、悬疑或剧情向方式表达。
 6. 分镜描述使用中文；不要在分镜里提前堆英文 tag。`;

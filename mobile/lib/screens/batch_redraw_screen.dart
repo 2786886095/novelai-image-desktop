@@ -103,28 +103,118 @@ class _BatchStepBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const labels = ['导入', '参数', '提示词', '生成'];
-    return Padding(
-      padding: const EdgeInsets.all(8),
-      child: Row(
-        children: [
-          for (var index = 0; index < labels.length; index++) ...[
-            if (index > 0) const SizedBox(width: 6),
-            Expanded(
-              child: FilledButton.tonal(
-                style: FilledButton.styleFrom(
-                  backgroundColor: controller.step.index == index
-                      ? Theme.of(context).colorScheme.primaryContainer
-                      : null,
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
+    final theme = Theme.of(context);
+    return Material(
+      color: theme.colorScheme.surface,
+      elevation: 0,
+      child: SafeArea(
+        top: false,
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxWidth < 560;
+              final chips = [
+                for (var index = 0; index < labels.length; index++)
+                  _BatchStepChip(
+                    index: index,
+                    label: labels[index],
+                    selected: controller.step.index == index,
+                    compact: compact,
+                    onPressed: () =>
+                        controller.setStep(BatchRedrawStep.values[index]),
+                  ),
+              ];
+              if (!compact) {
+                return Row(
+                  children: [
+                    for (var index = 0; index < chips.length; index++) ...[
+                      if (index > 0) const SizedBox(width: 8),
+                      Expanded(child: chips[index]),
+                    ],
+                  ],
+                );
+              }
+              return SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    for (var index = 0; index < chips.length; index++) ...[
+                      if (index > 0) const SizedBox(width: 8),
+                      SizedBox(width: 112, child: chips[index]),
+                    ],
+                  ],
                 ),
-                onPressed: () =>
-                    controller.setStep(BatchRedrawStep.values[index]),
-                child: Text('${index + 1} ${labels[index]}',
-                    maxLines: 1, overflow: TextOverflow.ellipsis),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BatchStepChip extends StatelessWidget {
+  final int index;
+  final String label;
+  final bool selected;
+  final bool compact;
+  final VoidCallback onPressed;
+
+  const _BatchStepChip({
+    required this.index,
+    required this.label,
+    required this.selected,
+    required this.compact,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Material(
+      color:
+          selected ? colors.primaryContainer : colors.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onPressed,
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 10 : 14,
+            vertical: 10,
+          ),
+          child: Row(
+            mainAxisAlignment:
+                compact ? MainAxisAlignment.start : MainAxisAlignment.center,
+            children: [
+              CircleAvatar(
+                radius: 14,
+                backgroundColor: selected ? colors.primary : colors.surface,
+                foregroundColor:
+                    selected ? colors.onPrimary : colors.onSurfaceVariant,
+                child: Text('${index + 1}',
+                    style: const TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.w800)),
               ),
-            ),
-          ],
-        ],
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: selected
+                        ? colors.onPrimaryContainer
+                        : colors.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -687,131 +777,366 @@ class _BatchGenerateStep extends StatelessWidget {
     final quoteTargets = selected.isNotEmpty ? selected : pending;
     final width = MediaQuery.sizeOf(context).width;
     final columns = width >= 1180
-        ? 6
-        : width >= 800
+        ? 5
+        : width >= 840
             ? 4
-            : width >= 520
+            : width >= 560
                 ? 3
                 : 2;
+    final done = project.items
+        .where((item) => item.status == BatchItemStatus.done)
+        .length;
+    final failed = project.items
+        .where((item) => item.status == BatchItemStatus.failed)
+        .length;
+    final generating = project.items
+        .where((item) => item.status == BatchItemStatus.generating)
+        .length;
+    final ready =
+        project.items.where((item) => item.prompt.trim().isNotEmpty).length;
+    final progress = controller.queueTotal == 0
+        ? null
+        : controller.queueDone / controller.queueTotal;
     return ListView(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 100),
       children: [
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text('生成前预计扣费：${controller.quote(quoteTargets)} Anlas'),
-                Text('余额：${controller.app.account.anlasBalance ?? '未知'} Anlas'),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    FilledButton.icon(
-                      onPressed: controller.queueRunning || pending.isEmpty
-                          ? null
-                          : () => controller.startQueue(pending),
-                      icon: const Icon(Icons.playlist_play),
-                      label: Text('生成未生成（${pending.length}）'),
-                    ),
-                    FilledButton.tonalIcon(
-                      onPressed: controller.queueRunning || selected.isEmpty
-                          ? null
-                          : () => controller.startQueue(selected),
-                      icon: const Icon(Icons.refresh),
-                      label: Text('重试选中（${selected.length}）'),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: controller.exportZip,
-                      icon: const Icon(Icons.archive_outlined),
-                      label: const Text('导出 ZIP'),
-                    ),
-                  ],
-                ),
-                if (controller.queueRunning) ...[
-                  const SizedBox(height: 8),
-                  LinearProgressIndicator(
-                    value: controller.queueTotal == 0
-                        ? null
-                        : controller.queueDone / controller.queueTotal,
-                  ),
-                  Row(
-                    children: [
-                      Expanded(
-                          child: Text(
-                              '${controller.queueDone}/${controller.queueTotal}')),
-                      IconButton.filledTonal(
-                        onPressed: controller.togglePause,
-                        icon: Icon(controller.queuePaused
-                            ? Icons.play_arrow
-                            : Icons.pause),
-                      ),
-                      const SizedBox(width: 6),
-                      IconButton.filled(
-                        onPressed: controller.cancelQueue,
-                        icon: const Icon(Icons.stop),
-                      ),
-                    ],
-                  ),
-                ],
-              ],
-            ),
-          ),
+        _BatchGenerateConsole(
+          quote: controller.quote(quoteTargets),
+          balance: controller.app.account.anlasBalance,
+          total: project.items.length,
+          ready: ready,
+          done: done,
+          failed: failed,
+          generating: generating,
+          queueRunning: controller.queueRunning,
+          queuePaused: controller.queuePaused,
+          queueDone: controller.queueDone,
+          queueTotal: controller.queueTotal,
+          progress: progress,
+          pendingCount: pending.length,
+          selectedCount: selected.length,
+          onStartPending: controller.queueRunning || pending.isEmpty
+              ? null
+              : () => controller.startQueue(pending),
+          onRetrySelected: controller.queueRunning || selected.isEmpty
+              ? null
+              : () => controller.startQueue(selected),
+          onExportZip: project.items.any((item) => item.outputPath.isNotEmpty)
+              ? controller.exportZip
+              : null,
+          onTogglePause: controller.togglePause,
+          onCancel: controller.cancelQueue,
         ),
+        const SizedBox(height: 12),
         GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: columns,
-            mainAxisSpacing: 8,
-            crossAxisSpacing: 8,
-            childAspectRatio: 0.68,
+            mainAxisSpacing: 10,
+            crossAxisSpacing: 10,
+            childAspectRatio: 0.72,
           ),
           itemCount: project.items.length,
           itemBuilder: (context, index) {
             final item = project.items[index];
-            return Card(
-              clipBehavior: Clip.antiAlias,
-              margin: EdgeInsets.zero,
-              child: InkWell(
-                onTap: () {
-                  item.selected = !item.selected;
-                  controller.changed();
-                },
-                child: Column(
-                  children: [
-                    Expanded(
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          _BatchImage(item: item, output: true),
-                          Positioned(
-                            top: 3,
-                            left: 3,
-                            child: Checkbox(
-                              value: item.selected,
-                              onChanged: (value) {
-                                item.selected = value ?? false;
-                                controller.changed();
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.all(6),
-                      child: Text('${index + 1} · ${item.status.name}',
-                          maxLines: 1, overflow: TextOverflow.ellipsis),
-                    ),
-                  ],
-                ),
-              ),
+            return _BatchResultTile(
+              item: item,
+              index: index,
+              onTap: () {
+                item.selected = !item.selected;
+                controller.changed();
+              },
+              onSelected: (value) {
+                item.selected = value ?? false;
+                controller.changed();
+              },
             );
           },
         ),
       ],
+    );
+  }
+}
+
+class _BatchGenerateConsole extends StatelessWidget {
+  final int quote;
+  final int? balance;
+  final int total;
+  final int ready;
+  final int done;
+  final int failed;
+  final int generating;
+  final bool queueRunning;
+  final bool queuePaused;
+  final int queueDone;
+  final int queueTotal;
+  final double? progress;
+  final int pendingCount;
+  final int selectedCount;
+  final VoidCallback? onStartPending;
+  final VoidCallback? onRetrySelected;
+  final VoidCallback? onExportZip;
+  final VoidCallback onTogglePause;
+  final VoidCallback onCancel;
+
+  const _BatchGenerateConsole({
+    required this.quote,
+    required this.balance,
+    required this.total,
+    required this.ready,
+    required this.done,
+    required this.failed,
+    required this.generating,
+    required this.queueRunning,
+    required this.queuePaused,
+    required this.queueDone,
+    required this.queueTotal,
+    required this.progress,
+    required this.pendingCount,
+    required this.selectedCount,
+    required this.onStartPending,
+    required this.onRetrySelected,
+    required this.onExportZip,
+    required this.onTogglePause,
+    required this.onCancel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Card(
+      elevation: 0,
+      color: colors.surfaceContainerLow,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+        side: BorderSide(color: colors.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('批量生成结果',
+                          style: Theme.of(context).textTheme.titleMedium),
+                      const SizedBox(height: 3),
+                      Text('预计 $quote Anlas · 余额 ${balance ?? '未知'} Anlas',
+                          style: Theme.of(context).textTheme.bodySmall),
+                    ],
+                  ),
+                ),
+                Text(
+                  '$done/$total',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: colors.primary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            LinearProgressIndicator(value: progress),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 7,
+              runSpacing: 7,
+              children: [
+                _BatchStatChip(label: '可生成', value: ready),
+                _BatchStatChip(label: '完成', value: done),
+                _BatchStatChip(label: '生成中', value: generating),
+                _BatchStatChip(label: '失败', value: failed),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FilledButton.icon(
+                  onPressed: onStartPending,
+                  icon: const Icon(Icons.playlist_play),
+                  label: Text('生成未生成（$pendingCount）'),
+                ),
+                FilledButton.tonalIcon(
+                  onPressed: onRetrySelected,
+                  icon: const Icon(Icons.refresh),
+                  label: Text('重试选中（$selectedCount）'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: onExportZip,
+                  icon: const Icon(Icons.archive_outlined),
+                  label: const Text('导出 ZIP'),
+                ),
+              ],
+            ),
+            if (queueRunning) ...[
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '队列 $queueDone/$queueTotal',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  IconButton.filledTonal(
+                    tooltip: queuePaused ? '继续队列' : '暂停队列',
+                    onPressed: onTogglePause,
+                    icon: Icon(queuePaused ? Icons.play_arrow : Icons.pause),
+                  ),
+                  const SizedBox(width: 6),
+                  IconButton.filled(
+                    tooltip: '停止队列',
+                    onPressed: onCancel,
+                    icon: const Icon(Icons.stop),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BatchStatChip extends StatelessWidget {
+  final String label;
+  final int value;
+  const _BatchStatChip({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Chip(
+      visualDensity: VisualDensity.compact,
+      side: BorderSide(color: colors.outlineVariant),
+      backgroundColor: colors.surface,
+      label: Text('$label $value'),
+    );
+  }
+}
+
+class _BatchResultTile extends StatelessWidget {
+  final BatchRedrawItem item;
+  final int index;
+  final VoidCallback onTap;
+  final ValueChanged<bool?> onSelected;
+
+  const _BatchResultTile({
+    required this.item,
+    required this.index,
+    required this.onTap,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final statusColor = switch (item.status) {
+      BatchItemStatus.done => Colors.green,
+      BatchItemStatus.failed => colors.error,
+      BatchItemStatus.generating => colors.primary,
+      BatchItemStatus.pending => colors.outline,
+    };
+    final statusLabel = switch (item.status) {
+      BatchItemStatus.done => '已完成',
+      BatchItemStatus.failed => '失败',
+      BatchItemStatus.generating => '生成中',
+      BatchItemStatus.pending => item.prompt.trim().isEmpty ? '待配词' : '待生成',
+    };
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      margin: EdgeInsets.zero,
+      elevation: item.selected ? 2 : 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(
+          color: item.selected ? colors.primary : colors.outlineVariant,
+          width: item.selected ? 1.5 : 1,
+        ),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        child: Column(
+          children: [
+            Expanded(
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  ColoredBox(
+                    color: colors.surfaceContainerHighest,
+                    child: Padding(
+                      padding: const EdgeInsets.all(6),
+                      child: _BatchImage(item: item, output: true),
+                    ),
+                  ),
+                  Positioned(
+                    top: 6,
+                    left: 6,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: colors.surface.withOpacity(0.88),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Checkbox(
+                        visualDensity: VisualDensity.compact,
+                        value: item.selected,
+                        onChanged: onSelected,
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    right: 8,
+                    bottom: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: statusColor.withOpacity(0.92),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        statusLabel,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 7, 8, 8),
+              child: Row(
+                children: [
+                  Text('#${index + 1}',
+                      style: TextStyle(
+                          color: colors.primary, fontWeight: FontWeight.w800)),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      item.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -827,7 +1152,7 @@ class _BatchImage extends StatelessWidget {
     if (path.isNotEmpty && File(path).existsSync()) {
       return Image.file(
         File(path),
-        fit: BoxFit.cover,
+        fit: BoxFit.contain,
         cacheWidth: 480,
         filterQuality: FilterQuality.low,
       );
@@ -835,7 +1160,7 @@ class _BatchImage extends StatelessWidget {
     if (!output || item.outputPath.isEmpty) {
       return Image.memory(
         base64Decode(item.base64),
-        fit: BoxFit.cover,
+        fit: BoxFit.contain,
         cacheWidth: 480,
         filterQuality: FilterQuality.low,
       );

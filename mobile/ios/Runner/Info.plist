@@ -3,13 +3,17 @@
 <plist version="1.0">
 <dict>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>保存生成的图片到相册</string>
+	<string>用于把生成图、重绘结果和批量任务输出保存到系统相册。</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>访问相册以保存或选择图片</string>
+	<string>用于选择基图、参考图、局部重绘图片和批量图生图素材。</string>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
+	<key>UIFileSharingEnabled</key>
+	<true/>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>NovelAI Studio</string>
+	<string>Langbai Studio</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -17,7 +21,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>novelai_mobile</string>
+	<string>Langbai Studio</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>

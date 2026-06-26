@@ -4,14 +4,23 @@
 
 | 系统 | 安装包 | 安装说明 |
 | --- | --- | --- |
-| 🪟 **Windows** (x64) | `Langbai-NovelAI-Studio-1.0.5.exe` | 便携版，双击即用，无需安装 |
-| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-1.0.5-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
-| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-1.0.5.zip` | 解压后即为 `.app`，同样需右键「打开」 |
-| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-1.0.5.AppImage` | `chmod +x` 后直接运行 |
+| 🪟 **Windows** (x64) | `Langbai-NovelAI-Studio-1.0.6.exe` | 便携版，双击即用，无需安装 |
+| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-1.0.6-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
+| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-1.0.6.zip` | 解压后即为 `.app`，同样需右键「打开」 |
+| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-1.0.6.AppImage` | `chmod +x` 后直接运行 |
 | 🤖 **Android** | `app-release.apk` | 直接安装；未签名，需允许「未知来源」 |
 | 📱 **iOS** | `novelai-mobile-unsigned.ipa` | **未签名**，需用 AltStore / Sideloadly 等工具自行侧载 |
 
 > 桌面端与移动端均为 **API-only** 客户端，需自备 NovelAI Persistent API Token。
+
+### v1.0.6 更新内容
+
+- **新增「小说推文」工具（桌面端）**：把小说 / 字幕一键做成竖屏推文视频草稿——导入 TXT/SRT/ASS/LRC → LLM 自动分镜与旁白（未配置转换 API 或被模型拒答时用本地英文 tag 模板兜底，不再整批卡死）→ 复用全局精准参考保持角色一致 → 批量生图（可续跑、单镜重试、按尺寸/步数/模型分组报价）→ edge-tts 配音或导入音频、可按字幕时间码切分一条长音频 → 运镜 / 转场预览 → 一键导出 **剪映 10.9.0 草稿**（锁定 draft 版本、素材复制进草稿目录、导出前 12 项完整性自检）。项目写入磁盘快照，长队列中途关程序后可恢复。
+- **批量图生图界面重做为分步向导**：导入 → 参数 → 提示词 → 生成，每步底部有「下一步」与进度提示，导入区改为拖拽式，顶部任务概览指标更清晰。
+- **iOS 应用图标**：CI 现会生成 iOS 图标（去除 alpha 通道以符合 App Store 规范）。
+- 启动页停留时间微调（约 0.9 秒，转场更从容）。
+
+> 说明：「小说推文」的真实环境硬前置（V4.5 精准参考跨镜一致性、完整真实端到端）见 `docs/TUIWEN_VALIDATION_STATUS.md`；剪映草稿已在剪映专业版 10.9.0.14196 真实打开验证。
 
 ### v1.0.5 更新内容
 

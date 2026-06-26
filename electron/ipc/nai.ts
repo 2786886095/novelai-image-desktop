@@ -48,6 +48,7 @@ import {
   type WorkingImage,
 } from "../../src/types";
 import { calculateFeatureAnlasQuote } from "../../src/anlas";
+import { buildTuiwenLocalPrompt, isTuiwenPromptRefusal } from "../../src/tuiwen/prompt-fallback";
 import {
   addHistory,
   ensureHistoryGroup,
@@ -1276,20 +1277,13 @@ async function requestWithRetry<T>(
   }
 }
 
-async function postGenerateImage(payload: ReturnType<typeof buildPayload>) {
-  const token = getToken();
-  if (!token) throw new Error("请先配置 API Token。");
-  const settings = getSettings();
-  const imageBaseUrl = tokenSafeBaseUrl(settings.imageBaseUrl, "https://image.novelai.net");
-
-  // V4.5 precise references ride as multipart binary parts (director_ref_N); the
-  // JSON "request" part references them via director_reference_images_cached. This
-  // matches the official client's wire format. Every other generation stays JSON.
+export function buildGenerateImageHttpBody(payload: ReturnType<typeof buildPayload>) {
   const params = payload.parameters as Record<string, unknown>;
   const cached = params?.director_reference_images_cached;
   const useMultipart = Array.isArray(cached) && cached.length > 0;
   let body: unknown = payload;
   let bodyHeaders: Record<string, string> = { "Content-Type": "application/json" };
+
   if (useMultipart) {
     const images = Array.isArray(params.director_reference_images)
       ? (params.director_reference_images as string[])
@@ -1325,6 +1319,20 @@ async function postGenerateImage(payload: ReturnType<typeof buildPayload>) {
     body = form;
     bodyHeaders = form.getHeaders();
   }
+
+  return { body, bodyHeaders, useMultipart };
+}
+
+async function postGenerateImage(payload: ReturnType<typeof buildPayload>) {
+  const token = getToken();
+  if (!token) throw new Error("请先配置 API Token。");
+  const settings = getSettings();
+  const imageBaseUrl = tokenSafeBaseUrl(settings.imageBaseUrl, "https://image.novelai.net");
+
+  // V4.5 precise references ride as multipart binary parts (director_ref_N); the
+  // JSON "request" part references them via director_reference_images_cached. This
+  // matches the official client's wire format. Every other generation stays JSON.
+  const { body, bodyHeaders } = buildGenerateImageHttpBody(payload);
 
   const postTo = (baseUrl: string) =>
     requestWithRetry(
@@ -1995,7 +2003,7 @@ function inferPanelCountFromRanges(script: string): number | null {
 }
 
 function fallbackComicPanelsV2(script: string, desiredPanelCount: ComicDesiredPanelCount = "auto") {
-  const panels: Array<{ cnPrompt: string; contextSummary: string }> = [];
+  const panels: Array<{ narration: string; cnPrompt: string; contextSummary: string }> = [];
   const lines = script.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   for (const line of lines) {
     const range = line.match(/^(\d+)\s*[-~]\s*(\d+)\s*[.。:：、]?\s*(.+)$/);
@@ -2006,6 +2014,7 @@ function fallbackComicPanelsV2(script: string, desiredPanelCount: ComicDesiredPa
     if (!Number.isFinite(start) || !Number.isFinite(end) || end < start || end - start > 1000) continue;
     for (let i = start; i <= end; i += 1) {
       panels.push({
+        narration: desc,
         cnPrompt: `第 ${i} 格：${desc}。补足镜头动作、场景、人物状态、构图、情绪和连续性。`,
         contextSummary: desc.slice(0, 180),
       });
@@ -2020,6 +2029,7 @@ function fallbackComicPanelsV2(script: string, desiredPanelCount: ComicDesiredPa
   for (let i = 0; i < count; i += 1) {
     const chunk = source[Math.min(source.length - 1, Math.floor((i / Math.max(1, count)) * source.length))] ?? script.trim();
     panels.push({
+      narration: chunk,
       cnPrompt: `第 ${i + 1} 格：${chunk}。设计成独立漫画分镜，包含镜头景别、人物动作、场景细节、构图和情绪递进。`,
       contextSummary: chunk.slice(0, 180),
     });
@@ -2063,7 +2073,7 @@ async function analyzeComicScriptV2(request: ComicAnalyzeRequest): Promise<Comic
       "参考图反推 / 用户说明：",
       referenceText,
       "",
-      "请只返回 JSON。字段：title, globalPrompt, globalCharacterSetting, panels。panels 每项包含 cnPrompt 和 contextSummary。",
+      "请只返回 JSON。字段：title, globalPrompt, globalCharacterSetting, continuityBible, panels。panels 每项必须包含 narration, cnPrompt, contextSummary；narration 是该镜对应的小说/字幕原文片段，cnPrompt 是可用于生图的画面描述。",
     ].join("\n"),
     4000,
     "漫画拆分镜",
@@ -2083,6 +2093,7 @@ async function analyzeComicScriptV2(request: ComicAnalyzeRequest): Promise<Comic
   const parsed = extractJsonObject(result.content ?? "");
   const panels = (Array.isArray(parsed?.panels) ? parsed.panels : [])
     .map((p: any) => ({
+      narration: String(p?.narration ?? p?.originalText ?? p?.sourceText ?? p?.text ?? "").trim(),
       cnPrompt: String(p?.cnPrompt ?? p?.prompt ?? "").trim(),
       contextSummary: String(p?.contextSummary ?? p?.summary ?? "").trim(),
     }))
@@ -2097,7 +2108,7 @@ async function analyzeComicScriptV2(request: ComicAnalyzeRequest): Promise<Comic
     globalPrompt: String(parsed?.globalPrompt ?? text).trim(),
     globalCharacterSetting:
       String(parsed?.globalCharacterSetting ?? "").trim() || request.referencePrompts?.filter(Boolean).join("\n") || "",
-    continuityBible: "",
+    continuityBible: String(parsed?.continuityBible ?? "").trim(),
     panels: finalPanels,
   };
 }
@@ -2110,7 +2121,14 @@ export async function convertComicPanels(request: ComicConvertRequest): Promise<
   if (!request.panels.length) return { ok: false, message: "没有需要转换的分镜。", panels: [] };
   const settings = getSettings();
   if (!settings.convertApiKey.trim() || !settings.convertApiUrl.trim()) {
-    return { ok: false, message: "请先在设置 > 转换 API 中填写 API 地址、模型和 Key。", panels: [] };
+    return {
+      ok: true,
+      message: `未配置转换 API，已使用本地模板兜底生成 ${request.panels.length} 镜英文提示词；建议配置宽松的转换模型以获得更精确的剧情画面。`,
+      panels: request.panels.map((panel) => ({
+        panelId: panel.panelId,
+        enPrompt: buildTuiwenLocalPrompt(request, panel),
+      })),
+    };
   }
   const mode = request.mode;
   const systemPrompt = [
@@ -2123,6 +2141,7 @@ export async function convertComicPanels(request: ComicConvertRequest): Promise<
   ].join("\n");
 
   const out: ComicConvertResult["panels"] = [];
+  let fallbackCount = 0;
   for (const panel of request.panels) {
     const tagHints = mode === "natural" || !settings.mcpForConvert ? [] : await queryTagServer(panel.cnPrompt, 16);
     const userText = [
@@ -2152,7 +2171,12 @@ export async function convertComicPanels(request: ComicConvertRequest): Promise<
     ].join("\n\n");
     const result = await callConvertApi(systemPrompt, userText, 4096, `漫画分镜转换 #${panel.index}`);
     if (!result.ok) {
-      out.push({ panelId: panel.panelId, enPrompt: "", error: result.message });
+      fallbackCount += 1;
+      out.push({
+        panelId: panel.panelId,
+        enPrompt: buildTuiwenLocalPrompt(request, panel),
+        error: undefined,
+      });
       continue;
     }
     let content = cleanPromptOutput(result.content ?? "");
@@ -2160,10 +2184,18 @@ export async function convertComicPanels(request: ComicConvertRequest): Promise<
       const repaired = await callConvertApi(modeRepairSystemPrompt(mode), buildModeRepairUserText(mode, panel.cnPrompt, content), 900, `漫画分镜转换修复 #${panel.index}`);
       if (repaired.ok && repaired.content) content = cleanPromptOutput(repaired.content);
     }
+    if (!content.trim() || isTuiwenPromptRefusal(content)) {
+      fallbackCount += 1;
+      content = buildTuiwenLocalPrompt(request, panel);
+    }
     out.push({ panelId: panel.panelId, enPrompt: mode === "natural" ? content : mergeTagHints(content, tagHints) });
   }
   const failed = out.filter((p) => p.error).length;
-  return { ok: failed < out.length, message: `转换完成：成功 ${out.length - failed}，失败 ${failed}。`, panels: out };
+  return {
+    ok: failed < out.length,
+    message: `转换完成：成功 ${out.length - failed}，失败 ${failed}${fallbackCount ? `；其中 ${fallbackCount} 镜使用本地模板兜底` : ""}。`,
+    panels: out,
+  };
 }
 
 const COMIC_CONSISTENCY_CHUNK_SIZE = 6;

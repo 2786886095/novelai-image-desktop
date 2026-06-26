@@ -1,4 +1,4 @@
-export const APP_VERSION = "1.0.5";
+export const APP_VERSION = "1.0.6";
 export const APP_NAME = "Langbai NovelAI Studio";
 export const PROJECT_REPOSITORY = "https://github.com/2786886095/novelai-image-desktop";
 
@@ -325,6 +325,202 @@ export interface ComicProject {
   panels: ComicPanel[];
 }
 
+export type TuiwenSourceType = "novel" | "subtitle";
+export type TuiwenSubtitleFormat = "srt" | "ass" | "lrc";
+export type TuiwenAspectRatio = "9:16" | "16:9" | "1:1" | "4:3" | "3:4";
+export type TuiwenKeyframePreset =
+  | "none"
+  | "zoomIn"
+  | "zoomOut"
+  | "panLeft"
+  | "panRight"
+  | "panUp"
+  | "panDown"
+  | "kenBurns"
+  | "custom";
+
+export interface TuiwenAudio {
+  filePath: string;
+  fileUrl: string;
+  durationMs: number;
+  source: "import" | "tts";
+  ttsVoice?: string;
+}
+
+export type TuiwenTtsProviderId = "edge" | "cloud";
+
+export interface TuiwenTtsProviderInfo {
+  id: TuiwenTtsProviderId;
+  label: string;
+  available: boolean;
+  requiresApiKey: boolean;
+  description: string;
+}
+
+export interface TuiwenTtsVoice {
+  id: string;
+  label: string;
+  locale: string;
+  gender: "female" | "male";
+}
+
+export interface TuiwenTtsRequest {
+  projectId: string;
+  projectTitle: string;
+  provider: TuiwenTtsProviderId;
+  voice: string;
+  ratePercent: number;
+  volumePercent: number;
+  shots: Array<{ shotId: string; index: number; narration: string }>;
+}
+
+export interface TuiwenTtsItemResult {
+  shotId: string;
+  index: number;
+  ok: boolean;
+  audio?: TuiwenAudio;
+  error?: string;
+  warning?: string;
+}
+
+export interface TuiwenTtsResult {
+  ok: boolean;
+  provider: TuiwenTtsProviderId;
+  message: string;
+  items: TuiwenTtsItemResult[];
+  warnings?: string[];
+}
+
+export interface TuiwenSaveImportedAudioRequest {
+  projectId: string;
+  projectTitle: string;
+  shotId: string;
+  index: number;
+  durationMs: number;
+  sourceName: string;
+  wavData: ArrayBuffer;
+}
+
+export interface TuiwenSaveImportedAudioResult {
+  ok: boolean;
+  message: string;
+  audio?: TuiwenAudio;
+}
+
+export interface TuiwenSubtitle {
+  text: string;
+  enabled: boolean;
+  style?: {
+    fontSize?: number;
+    color?: string;
+    strokeColor?: string;
+    position?: "bottom" | "top" | "center";
+  };
+}
+
+export interface TuiwenKeyframeConfig {
+  preset: TuiwenKeyframePreset;
+  keys: Array<{ timeRatio: number; scale: number; x: number; y: number; alpha: number; rotation: number }>;
+}
+
+export interface TuiwenTransition {
+  preset: "none" | "fade" | "slideLeft" | "slideRight" | "zoom" | "wipe";
+  durationMs: number;
+}
+
+export interface TuiwenShot extends ComicPanel {
+  narration: string;
+  startMs?: number;
+  durationMs: number;
+  audio?: TuiwenAudio;
+  subtitle: TuiwenSubtitle;
+  keyframe: TuiwenKeyframeConfig;
+  transition?: TuiwenTransition;
+}
+
+export interface TuiwenExportSettings {
+  aspectRatio: TuiwenAspectRatio;
+  width: number;
+  height: number;
+  fps: number;
+  defaultShotDurationMs: number;
+  subtitleDefault: TuiwenSubtitle["style"];
+  bgm?: { filePath: string; volume: number; loop: boolean; fadeMs: number };
+  intro?: { text: string; durationMs: number };
+  outro?: { text: string; durationMs: number };
+  jianyingDraftDir?: string;
+}
+
+export interface TuiwenPreflightState {
+  preciseReferenceVerified: boolean;
+  jianyingGoldenSampleReady: boolean;
+  jianyingMediaBundleVerified: boolean;
+  desktopOnlyAcknowledged: boolean;
+}
+
+export interface TuiwenProject extends Omit<ComicProject, "panels"> {
+  source: { type: TuiwenSourceType; fileName: string; subtitleFormat?: TuiwenSubtitleFormat };
+  panels: TuiwenShot[];
+  exportSettings: TuiwenExportSettings;
+  preflight: TuiwenPreflightState;
+}
+
+export interface TuiwenImportFileRequest {
+  filePath: string;
+  fileName?: string;
+  defaultShotDurationMs?: number;
+}
+
+export interface TuiwenImportFileResult {
+  ok: boolean;
+  message: string;
+  source?: TuiwenProject["source"];
+  rawScript?: string;
+  shots?: TuiwenShot[];
+}
+
+export interface TuiwenExportJianYingRequest {
+  project: TuiwenProject;
+  outDir?: string;
+}
+
+export type TuiwenDraftValidationStatus = "pass" | "warning" | "error";
+
+export interface TuiwenDraftValidationCheck {
+  id: string;
+  label: string;
+  status: TuiwenDraftValidationStatus;
+  detail: string;
+}
+
+export interface TuiwenDraftValidationResult {
+  ok: boolean;
+  targetVersion: string;
+  checkedAt: number;
+  errorCount: number;
+  warningCount: number;
+  checks: TuiwenDraftValidationCheck[];
+}
+
+export interface TuiwenExportJianYingResult {
+  ok: boolean;
+  message: string;
+  draftPath?: string;
+  contentPath?: string;
+  metaPath?: string;
+  mediaCount?: number;
+  warnings?: string[];
+  validation?: TuiwenDraftValidationResult;
+}
+
+export interface TuiwenProjectSnapshotResult {
+  ok: boolean;
+  message: string;
+  project?: TuiwenProject;
+  savedAt?: number;
+  path?: string;
+}
+
 export interface ComicAnalyzeRequest {
   script: string;
   adultBranch: boolean;
@@ -340,7 +536,7 @@ export interface ComicAnalyzeResult {
   globalPrompt?: string;
   globalCharacterSetting?: string;
   continuityBible?: string;
-  panels?: Array<Pick<ComicPanel, "cnPrompt" | "contextSummary">>;
+  panels?: Array<Pick<ComicPanel, "cnPrompt" | "contextSummary"> & { narration?: string }>;
 }
 
 export interface ComicConvertPanelInput {
@@ -785,6 +981,13 @@ export interface NaiDesktopApi {
   ) => Promise<{ ok: boolean; prompt?: string; variants?: PromptVariants; message: string }>;
   comicGeneratePanel: (request: ComicGeneratePanelRequest) => Promise<GenerateResult>;
   comicExportProjectZip: (project: ComicProject) => Promise<ComicExportZipResult>;
+  tuiwenImportFile: (request: TuiwenImportFileRequest) => Promise<TuiwenImportFileResult>;
+  tuiwenTtsProviders: () => Promise<{ providers: TuiwenTtsProviderInfo[]; voices: TuiwenTtsVoice[] }>;
+  tuiwenTts: (request: TuiwenTtsRequest) => Promise<TuiwenTtsResult>;
+  tuiwenSaveImportedAudio: (request: TuiwenSaveImportedAudioRequest) => Promise<TuiwenSaveImportedAudioResult>;
+  tuiwenExportJianYing: (request: TuiwenExportJianYingRequest) => Promise<TuiwenExportJianYingResult>;
+  tuiwenSaveProjectSnapshot: (project: TuiwenProject) => Promise<TuiwenProjectSnapshotResult>;
+  tuiwenLoadProjectSnapshot: () => Promise<TuiwenProjectSnapshotResult>;
   getAiCallLog: () => Promise<AiCallLogEntry[]>;
   clearAiCallLog: () => Promise<{ ok: boolean }>;
   getReverseTemplateDefaults: () => Promise<ModePromptTemplates>;

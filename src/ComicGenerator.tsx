@@ -9,6 +9,7 @@ import {
 } from "./data/prompt-templates";
 import { parseWeightedTag, setTagLevelInPrompt, splitPromptTags, formatMultiplier } from "./prompt-weight";
 import { useAppStore } from "./store";
+import { NovelTuiwenStudio } from "./tuiwen/NovelTuiwenStudio";
 import {
   createDefaultBatchRedraw,
   NAI_MODELS,
@@ -275,9 +276,10 @@ type PanelOutput = {
 };
 
 export function ToolsHub() {
-  const [activeTool, setActiveTool] = useState<"hub" | "comic" | "redraw">("hub");
+  const [activeTool, setActiveTool] = useState<"hub" | "comic" | "redraw" | "tuiwen">("hub");
   if (activeTool === "comic") return <ComicGenerator onBack={() => setActiveTool("hub")} />;
   if (activeTool === "redraw") return <BatchRedraw onBack={() => setActiveTool("hub")} />;
+  if (activeTool === "tuiwen") return <NovelTuiwenStudio onBack={() => setActiveTool("hub")} />;
 
   return (
     <main className="tools-hub">
@@ -298,6 +300,11 @@ export function ToolsHub() {
           <b>批量图生图</b>
           <span>导入图片 + 对应提示词，按改图强度逐张图生图，存入分组并打包 ZIP。</span>
           <small>已接入</small>
+        </button>
+        <button type="button" className="tool-card ready" onClick={() => setActiveTool("tuiwen")}>
+          <b>小说推文</b>
+          <span>桌面专属：小说/字幕转分镜旁白，叠加全局精准参考，最终导出剪映草稿。</span>
+          <small>P0 底座</small>
         </button>
       </section>
     </main>
@@ -824,10 +831,18 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
 
   return (
     <main className="comic-generator redraw-wizard">
-      <div className="comic-page-title">
-        <span className="eyebrow">工具 / 批量图生图</span>
-        <strong>{project.groupName.trim() || "未命名批量任务"}</strong>
-        <small>{items.length} 张 · {readyCount} 已配提示词 · {doneCount} 已生成 · 强度 {globalStrength.toFixed(2)}</small>
+      <div className="comic-page-title redraw-page-title">
+        <div>
+          <span className="eyebrow">工具 / 批量图生图</span>
+          <strong>{project.groupName.trim() || "未命名批量任务"}</strong>
+          <small>导入图片 → 统一参数 → 逐张提示词 → 队列生成 / 打包</small>
+        </div>
+        <div className="redraw-page-metrics" aria-label="批量任务概览">
+          <span><b>{items.length}</b> 图片</span>
+          <span><b>{readyCount}</b> 已配词</span>
+          <span><b>{doneCount}</b> 已生成</span>
+          <span><b>{globalStrength.toFixed(2)}</b> 强度</span>
+        </div>
       </div>
 
       <nav className="comic-steps">
@@ -851,28 +866,41 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
       </div>
 
       {step === "import" && (
-        <section className="redraw-card">
+        <section className="redraw-card redraw-import-stage">
           <label className="field">
             <span>分组名称（最终图片全部存入此分组，并作为打包来源）</span>
             <input value={project.groupName} onChange={(e) => patch({ groupName: e.target.value })} placeholder="例如：重绘_0622" />
           </label>
-          <div className="redraw-actions">
-            <label className="btn btn-primary">
-              ＋ 导入图片
+          <div className="redraw-import-hero">
+            <label className="redraw-dropzone">
+              <span>＋</span>
+              <strong>导入需要批量重绘的图片</strong>
+              <small>支持 PNG / JPG / WEBP，会按文件名自然升序排列，项目会自动保存。</small>
               <input type="file" hidden multiple accept="image/png,image/jpeg,image/webp" onChange={(e) => { void importImages(e.target.files); e.target.value = ""; }} />
             </label>
-            <Button variant="secondary" onClick={exportProject} disabled={items.length === 0}>导出项目</Button>
-            <label className="btn btn-secondary redraw-file-btn">
-              导入项目
-              <input type="file" hidden accept=".json,application/json" onChange={(e) => { void importProject(e.target.files?.[0] ?? null); e.target.value = ""; }} />
-            </label>
-            <Button variant="ghost" onClick={clearProject} disabled={running || items.length === 0}>清除当前项目</Button>
+            <div className="redraw-import-side">
+              <strong>项目管理</strong>
+              <small>适合长队列：导出 JSON 后可跨重启继续。</small>
+              <div className="redraw-actions">
+                <Button variant="secondary" onClick={exportProject} disabled={items.length === 0}>导出项目</Button>
+                <label className="btn btn-secondary redraw-file-btn">
+                  导入项目
+                  <input type="file" hidden accept=".json,application/json" onChange={(e) => { void importProject(e.target.files?.[0] ?? null); e.target.value = ""; }} />
+                </label>
+                <Button variant="ghost" onClick={clearProject} disabled={running || items.length === 0}>清除</Button>
+              </div>
+            </div>
           </div>
           <p className="settings-hint" style={{ margin: 0 }}>
             默认按文件名升序（1 / 2 / 10 正确顺序）。项目（图片+提示词+参数+参考）会自动保存，切换工具/标签不会丢失；「导出项目」可跨重启备份/迁移。
           </p>
           <div className="redraw-grid">
-            {items.length === 0 && <p className="vibe-empty">还没有导入图片。点「导入图片」开始。</p>}
+            {items.length === 0 && (
+              <div className="redraw-empty-state">
+                <b>还没有导入图片</b>
+                <span>先放进一批原图，再进入参数和提示词步骤。</span>
+              </div>
+            )}
             {items.map((it, idx) => (
               <div className="redraw-thumb-card" key={it.id}>
                 <img src={dataUrlFromBase64(it.base64)} alt={it.name} loading="lazy" decoding="async" title="双击放大" onDoubleClick={() => setLightbox(dataUrlFromBase64(it.base64))} />
@@ -881,11 +909,15 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
               </div>
             ))}
           </div>
+          <div className="redraw-step-footer">
+            <span>{items.length > 0 ? `已导入 ${items.length} 张，可以继续设置统一参数。` : "导入后会在这里显示缩略图，可随时移除单张。"}</span>
+            <Button variant="primary" onClick={() => setStep("params")} disabled={items.length === 0}>下一步：参数</Button>
+          </div>
         </section>
       )}
 
       {step === "params" && (
-        <section className="redraw-card redraw-globals">
+        <section className="redraw-card redraw-globals redraw-params-stage">
           <div className="redraw-globals-head">
             <strong>全局参数 · 默认取自主界面「生成」，可自行修改</strong>
             <Button variant="ghost" onClick={syncFromMain}>同步主界面参数</Button>
@@ -907,11 +939,15 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
           <BatchParamFields value={globalParams} onPatch={(p) => patch({ globalParams: { ...globalParams, ...p } })} />
           <BatchPrecisePicker refs={project.preciseReferences} onChange={(next) => patch({ preciseReferences: next })} />
           <BatchVibePicker vibes={project.vibeImages} onChange={(next) => patch({ vibeImages: next })} />
+          <div className="redraw-step-footer">
+            <span>参数会作为每张图的默认值；单张覆盖可在下一步细调。</span>
+            <Button variant="primary" onClick={() => setStep("prompts")} disabled={items.length === 0}>下一步：提示词</Button>
+          </div>
         </section>
       )}
 
       {step === "prompts" && (
-        <section className="redraw-card">
+        <section className="redraw-card redraw-prompts-stage">
           <label className="field">
             <span>批量输入提示词（每行一条，按顺序对应图片）→ 点「导入文本」</span>
             <textarea
@@ -1031,6 +1067,10 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
               </article>
             </div>
           ) : null}
+          <div className="redraw-step-footer">
+            <span>{readyCount > 0 ? `${readyCount}/${items.length} 张已有提示词。` : "每张图至少需要一条提示词才能进入生成队列。"}</span>
+            <Button variant="primary" onClick={() => setStep("generate")} disabled={readyCount === 0}>下一步：生成</Button>
+          </div>
         </section>
       )}
 

@@ -4421,6 +4421,7 @@ function MainPage() {
 
 // ── Root ──────────────────────────────────────────────────────────────────────
 export default function App() {
+  const SPLASH_MIN_VISIBLE_MS = 900;
   const [splash, setSplash] = useState(true);
   const bootDone = useAppStore((state) => state.bootDone);
   const load = useAppStore((state) => state.load);
@@ -4429,7 +4430,10 @@ export default function App() {
   useEffect(() => {
     void load();
     void checkUpdate();
-    const timer = window.setTimeout(() => setSplash(false), 300);
+    // Keep the real boot path fast, but let the entrance breathe. 300ms felt
+    // like a flash-cut from the splash artwork into the workbench; ~0.9s keeps
+    // the app feeling responsive while making the transition intentional.
+    const timer = window.setTimeout(() => setSplash(false), SPLASH_MIN_VISIBLE_MS);
     return () => window.clearTimeout(timer);
   }, [load, checkUpdate]);
 

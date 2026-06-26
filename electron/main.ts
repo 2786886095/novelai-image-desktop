@@ -32,6 +32,13 @@ import {
   verifyToken,
 } from "./ipc/nai";
 import { danbooruStatus, downloadDanbooruTags, browseDanbooru, searchDanbooru } from "./ipc/danbooru-tags";
+import { getTuiwenTtsCatalog, saveTuiwenImportedAudio, synthesizeTuiwenSpeech } from "./ipc/tuiwen-audio";
+import { importTuiwenFile } from "./ipc/tuiwen-import";
+import { detectJianYingDraftRoot, exportTuiwenJianYingDraft } from "./ipc/tuiwen-jianying";
+import {
+  loadTuiwenProjectSnapshot as loadTuiwenProjectSnapshotFile,
+  saveTuiwenProjectSnapshot as saveTuiwenProjectSnapshotFile,
+} from "./ipc/tuiwen-snapshot";
 import type {
   AnlasQuoteRequest,
   AugmentOptions,
@@ -45,6 +52,11 @@ import type {
   I2IParams,
   NAIInpaintModel,
   UpscaleScale,
+  TuiwenExportJianYingRequest,
+  TuiwenImportFileRequest,
+  TuiwenProject,
+  TuiwenSaveImportedAudioRequest,
+  TuiwenTtsRequest,
 } from "../src/types";
 import {
   clearToken,
@@ -72,6 +84,7 @@ import {
   selectOutputDir,
 } from "./ipc/storage";
 import { checkUpdate } from "./ipc/update";
+import { proxyConfig } from "./ipc/proxy";
 import {
   installGlobalLogging,
   getLogInfo,
@@ -235,6 +248,28 @@ function registerIpc() {
   );
   ipcMain.handle("comic:generatePanel", (_event, request: ComicGeneratePanelRequest) => generateComicPanel(request));
   ipcMain.handle("comic:exportProjectZip", (_event, project: ComicProject) => exportComicProjectZip(project));
+  ipcMain.handle("tuiwen:importFile", (_event, request: TuiwenImportFileRequest) => importTuiwenFile(request));
+  ipcMain.handle("tuiwen:ttsProviders", () => getTuiwenTtsCatalog());
+  ipcMain.handle("tuiwen:tts", (_event, request: TuiwenTtsRequest) => {
+    const proxy = proxyConfig("ai");
+    return synthesizeTuiwenSpeech(request, {
+      outputRoot: getSetting("outputDir"),
+      agent: (proxy.httpsAgent ?? proxy.httpAgent) as import("http").Agent | undefined,
+    });
+  });
+  ipcMain.handle("tuiwen:saveImportedAudio", (_event, request: TuiwenSaveImportedAudioRequest) =>
+    saveTuiwenImportedAudio(request, getSetting("outputDir")));
+  ipcMain.handle("tuiwen:exportJianYing", (_event, request: TuiwenExportJianYingRequest) => {
+    const outDir = request.outDir?.trim()
+      || request.project.exportSettings.jianyingDraftDir?.trim()
+      || detectJianYingDraftRoot()
+      || path.join(getSetting("outputDir"), "Jianying Drafts");
+    fs.mkdirSync(outDir, { recursive: true });
+    return exportTuiwenJianYingDraft(request.project, outDir);
+  });
+  ipcMain.handle("tuiwen:saveProjectSnapshot", (_event, project: TuiwenProject) =>
+    saveTuiwenProjectSnapshotFile(project, app.getPath("userData")));
+  ipcMain.handle("tuiwen:loadProjectSnapshot", () => loadTuiwenProjectSnapshotFile(app.getPath("userData")));
   ipcMain.handle("ai:getLog", () => getAiCallLog());
   ipcMain.handle("ai:clearLog", () => clearAiCallLog());
   ipcMain.handle("nai:listModels", (_event, kind: "reverse" | "convert") => listAiModels(kind));

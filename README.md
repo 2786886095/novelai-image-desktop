@@ -3,7 +3,7 @@
 [![Build](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build.yml/badge.svg)](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build.yml)
 [![Build Mobile](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build-mobile.yml/badge.svg)](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build-mobile.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
-[![Release](https://img.shields.io/badge/release-v1.0.5-7c5cfa.svg)](https://github.com/2786886095/novelai-image-desktop/releases/tag/v1.0.5)
+[![Release](https://img.shields.io/badge/release-v1.0.6-7c5cfa.svg)](https://github.com/2786886095/novelai-image-desktop/releases/tag/v1.0.6)
 [![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android%20%7C%20iOS-20b7d8.svg)](#下载)
 
 <img width="1672" height="941" alt="ChatGPT Image 2026年6月17日 11_27_47" src="https://github.com/user-attachments/assets/66a6caef-3007-479b-9006-1c6f50570655" />
@@ -16,14 +16,14 @@
 
 ## 下载
 
-- **v1.0.5 本地版**：[GitHub Releases](https://github.com/2786886095/novelai-image-desktop/releases/tag/v1.0.5)
+- **v1.0.6 本地版**：[GitHub Releases](https://github.com/2786886095/novelai-image-desktop/releases/tag/v1.0.6)
 - **持续构建产物**：[GitHub Actions](https://github.com/2786886095/novelai-image-desktop/actions)
 
 Release 目标产物：
 
 | 平台 | 文件 |
 | --- | --- |
-| Windows | `Langbai-NovelAI-Studio-1.0.5.exe` |
+| Windows | `Langbai-NovelAI-Studio-1.0.6.exe` |
 | macOS | universal `.dmg` + `.zip` |
 | Linux | `.AppImage` |
 | Android | `app-release.apk` |
@@ -54,6 +54,7 @@ Release 目标产物：
 - **AI 反推 / 提示词转换**：反推使用视觉模型 API；转换使用文本模型 API，二者独立配置；检测接口后可在下拉列表中切换模型。
 - **历史与素材分组**：按日期和分组筛选，新建 / 重命名 / 删除分组，给图片分组，一键 ZIP 导出。
 - **生成队列**：批量任务可暂停 / 继续，失败后重试并跳过，记录实扣 Anlas。
+- **小说推文（桌面端）**：导入小说/字幕 → LLM 分镜旁白（无 API/拒答时本地模板兜底）→ 全局精准参考/角色库 → 批量生图续跑 → TTS/逐镜配音/按字幕切分长音频 → 运镜转场预览 → 写入剪映 10.9 草稿；项目会写磁盘快照，长队列中断后可恢复。
 - **锁种变体**：复用历史图参数并锁定 seed，适合微调单个 tag。
 - **图片命名**：生成面板可填写文件名前缀；历史面板每张图片可单独重命名（同步重命名本地文件）。
 - **动态提示词通配符**：支持 `{red|blue|green} hair` 这种本地随机展开。
@@ -86,7 +87,7 @@ npm run pack
 本地 Windows 便携包输出：
 
 ```text
-release\Langbai-NovelAI-Studio-1.0.5.exe
+release\Langbai-NovelAI-Studio-1.0.6.exe
 release\Langbai-NovelAI-Studio.exe
 ```
 
@@ -107,9 +108,9 @@ release\NovelAI-Image-Desktop.exe
 推送 `v*` tag 会触发桌面端与移动端两个 workflow，并把所有平台产物汇总到同一个 Release：
 
 ```powershell
-git tag v1.0.5
+git tag v1.0.6
 git push origin main
-git push origin v1.0.5
+git push origin v1.0.6
 ```
 
 如果 Release 上传时报 403，请在仓库 `Settings -> Actions -> General -> Workflow permissions` 中启用 `Read and write permissions`。
@@ -126,11 +127,16 @@ git push origin v1.0.5
 
 - `electron/main.ts`：Electron 窗口与 IPC 注册。
 - `electron/ipc/nai.ts`：NovelAI API、AI 反推、提示词转换、模型检测。
+- `electron/ipc/tuiwen-audio.ts`：小说推文 TTS Provider、Edge Read Aloud 合成与音频落盘。
+- `electron/ipc/tuiwen-import.ts`：桌面端小说/字幕文件导入、编码识别与分镜初始化。
+- `electron/ipc/tuiwen-jianying.ts`：小说推文剪映 10.9.0.14196 草稿导出（draft version 400000 / 164.0.0）。
 - `electron/ipc/store.ts`：设置、Token 摘要、历史索引、素材分组。
 - `electron/ipc/storage.ts`：历史删除、目录选择、分组操作。
 - `electron/preload.ts`：安全暴露 `window.naiDesktop`。
 - `src/App.tsx`：主 UI、设置、历史、反推、转换。
 - `src/components/ui.tsx`：共享 UI 基础组件。
+- `src/tuiwen/`：小说推文画幅映射、导入解析、旁白节奏、项目模型与主界面。
+- `docs/TUIWEN_VALIDATION_STATUS.md`：小说推文自动化证据、真实环境硬前置与追版状态。
 - `src/prompt-data.ts`：标签分类、中文含义、灵感胶囊词条。
 - `src/InpaintCanvas.tsx`：局部重绘蒙版画布。
 - `src/store.ts`：Zustand 前端状态。

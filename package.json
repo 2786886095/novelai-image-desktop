@@ -1,6 +1,6 @@
 {
   "name": "langbai-novelai-studio",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "private": true,
   "description": "Langbai NovelAI Studio: API-only NovelAI image generation desktop client with Chinese UI.",
   "author": "Langbai",
@@ -21,6 +21,7 @@
     "typecheck": "tsc --noEmit && tsc -p tsconfig.electron.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "validate:jianying-draft": "npm run build:electron && node scripts/create-tuiwen-jianying-validation.mjs",
     "start": "npm run build && electron .",
     "pack": "node scripts/cleanup-portable-release.mjs && npm run build && electron-builder --win portable && node scripts/copy-ascii-release.mjs && node scripts/cleanup-portable-release.mjs",
     "pack:dir": "npm run build && electron-builder --dir",
@@ -34,6 +35,7 @@
     "http-proxy-agent": "^5.0.0",
     "https-proxy-agent": "^5.0.1",
     "jszip": "^3.10.1",
+    "msedge-tts": "^2.0.6",
     "pngjs": "^7.0.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",

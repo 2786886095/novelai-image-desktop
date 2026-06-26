@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
@@ -18,7 +20,9 @@ import 'ui/studio_theme.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  FlutterForegroundTask.initCommunicationPort();
+  if (Platform.isAndroid) {
+    FlutterForegroundTask.initCommunicationPort();
+  }
   BackgroundQueueService.initialize();
   runApp(ChangeNotifierProvider(
       create: (_) => AppState()..load(), child: const NovelAIApp()));
