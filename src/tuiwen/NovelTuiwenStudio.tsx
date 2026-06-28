@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import { Button, NumberInput } from "../components/ui";
+import { getTuiwenStudioText } from "../i18n";
 import { useAppStore } from "../store";
 import type {
   AnlasQuoteResult,
@@ -203,8 +204,10 @@ async function readAudioDurationMs(file: File) {
 
 export function NovelTuiwenStudio({ onBack }: { onBack?: () => void }) {
   const params = useAppStore((state) => state.params);
+  const language = useAppStore((state) => state.settings?.language);
   const setToast = useAppStore((state) => state.setToast);
   const refreshAccount = useAppStore((state) => state.refreshAccount);
+  const tuiwenText = useMemo(() => getTuiwenStudioText(language), [language]);
   const [project, setProject] = useState<TuiwenProject>(() => createDefaultTuiwenProject(params));
   const [step, setStep] = useState<TuiwenStepKey>("import");
   const [activeShotId, setActiveShotId] = useState<string | null>(null);
@@ -1088,12 +1091,12 @@ export function NovelTuiwenStudio({ onBack }: { onBack?: () => void }) {
     <main className="comic-generator tuiwen-studio">
       <div className="comic-page-title tuiwen-page-title">
         <div>
-          <span className="eyebrow">工具 / 小说推文</span>
+          <span className="eyebrow">{tuiwenText.page.eyebrow}</span>
           <strong>{project.title}</strong>
-          <small>桌面专属 · 小说/字幕 → 分镜旁白 → 生图/配音 → 剪映草稿</small>
+          <small>{tuiwenText.page.subtitle}</small>
         </div>
         <div className="redraw-page-metrics">
-          <span><b>{project.panels.length}</b> 分镜</span>
+          <span><b>{project.panels.length}</b> {tuiwenText.page.shotsMetric}</span>
           <span><b>{aspectPlan.nai.width}×{aspectPlan.nai.height}</b> NAI</span>
         </div>
       </div>
@@ -1107,52 +1110,52 @@ export function NovelTuiwenStudio({ onBack }: { onBack?: () => void }) {
             onClick={() => setStep(item.key)}
           >
             <b>{index + 1}</b>
-            <span>{item.label}</span>
-            <small>{item.hint}</small>
+            <span>{tuiwenText.steps[item.key].label}</span>
+            <small>{tuiwenText.steps[item.key].hint}</small>
           </button>
         ))}
       </nav>
 
       <div className="comic-step-actions tuiwen-actions">
-        {onBack ? <Button onClick={onBack} variant="ghost">返回工具首页</Button> : null}
-        <Button onClick={() => downloadProject(project)} variant="secondary">导出项目 JSON</Button>
+        {onBack ? <Button onClick={onBack} variant="ghost">{tuiwenText.page.backToTools}</Button> : null}
+        <Button onClick={() => downloadProject(project)} variant="secondary">{tuiwenText.page.exportProjectJson}</Button>
         <label className="btn btn-secondary redraw-file-btn">
-          导入项目 JSON
+          {tuiwenText.page.importProjectJson}
           <input type="file" hidden accept=".json,application/json" onChange={(event) => { void importProject(event.target.files?.[0] ?? null); event.target.value = ""; }} />
         </label>
         <label className="btn btn-secondary redraw-file-btn">
-          导入小说/字幕
+          {tuiwenText.page.importNovelSubtitle}
           <input type="file" hidden accept=".txt,.srt,.ass,.lrc,text/plain" onChange={(event) => { void importSourceFile(event.target.files?.[0] ?? null); event.target.value = ""; }} />
         </label>
-        <span className="redraw-flow-hint">当前可导入文本/字幕、复用漫画 LLM 管线，并直接进入生图、配音与剪映导出流程。</span>
+        <span className="redraw-flow-hint">{tuiwenText.page.flowHint}</span>
       </div>
 
       {step === "import" && (
         <section className="redraw-card tuiwen-import-stage">
           <div className="redraw-global-prompts">
             <label className="comic-field">
-              <span>项目标题</span>
+              <span>{tuiwenText.importStage.projectTitle}</span>
               <input value={project.title} onChange={(event) => patchProject({ title: event.target.value })} />
             </label>
             <label className="comic-field">
-              <span>源类型</span>
+              <span>{tuiwenText.importStage.sourceType}</span>
               <select value={project.source.type} onChange={(event) => setProject((prev) => ({ ...prev, source: { ...prev.source, type: event.target.value as TuiwenProject["source"]["type"] } }))}>
-                <option value="novel">小说 / 推文文案</option>
-                <option value="subtitle">字幕（SRT / ASS / LRC）</option>
+                <option value="novel">{tuiwenText.importStage.sourceNovel}</option>
+                <option value="subtitle">{tuiwenText.importStage.sourceSubtitle}</option>
               </select>
             </label>
           </div>
           <div className="tuiwen-aspect-grid">
             <label className="comic-field">
-              <span>视频画幅</span>
+              <span>{tuiwenText.importStage.aspectRatio}</span>
               <select value={project.exportSettings.aspectRatio} onChange={(event) => setAspect(event.target.value as TuiwenAspectRatio)}>
                 {Object.entries(TUIWEN_CANVAS_PRESETS).map(([key, value]) => (
-                  <option value={key} key={key}>{value.label}</option>
+                  <option value={key} key={key}>{tuiwenText.importStage.aspectLabels[key as TuiwenAspectRatio] ?? value.label}</option>
                 ))}
               </select>
             </label>
             <NumberInput
-              label="默认镜头时长(ms)"
+              label={tuiwenText.importStage.defaultShotDuration}
               value={project.exportSettings.defaultShotDurationMs}
               min={1000}
               max={20000}
@@ -1168,27 +1171,34 @@ export function NovelTuiwenStudio({ onBack }: { onBack?: () => void }) {
             />
           </div>
           <div className="tuiwen-aspect-plan">
-            <span>画布 {aspectPlan.canvas.width}×{aspectPlan.canvas.height}</span>
+            <span>{tuiwenText.importStage.canvas} {aspectPlan.canvas.width}×{aspectPlan.canvas.height}</span>
             <span>NAI {aspectPlan.nai.width}×{aspectPlan.nai.height}</span>
             <span>Scale-to-cover ×{aspectPlan.cover.scaleToCover}</span>
-            <span>Ken Burns 建议 ×{aspectPlan.cover.recommendedKenBurnsScale}</span>
-            {aspectPlan.opusFreeWarning ? <b>{aspectPlan.opusFreeWarning}</b> : <em>当前默认尺寸/步数未越过 Opus 免费线。</em>}
+            <span>{tuiwenText.importStage.kenBurnsSuggestion} ×{aspectPlan.cover.recommendedKenBurnsScale}</span>
+            {aspectPlan.opusFreeWarning ? (
+              <b>
+                {tuiwenText.importStage.opusFreeExceeded}：{aspectPlan.nai.width}×{aspectPlan.nai.height}，
+                {project.globalParams.steps} {tuiwenText.importStage.stepsUnit}。
+              </b>
+            ) : (
+              <em>{tuiwenText.importStage.opusFreeOk}</em>
+            )}
           </div>
           <label className="comic-field">
-            <span>粘贴小说 / 字幕文本（可本地快速拆段，也可交给 LLM 智能分镜）</span>
+            <span>{tuiwenText.importStage.scriptLabel}</span>
             <textarea
               value={project.rawScript}
               onChange={(event) => patchProject({ rawScript: event.target.value, globalPrompt: event.target.value })}
-              placeholder="把小说正文、推文文案或字幕文本粘贴到这里。"
+              placeholder={tuiwenText.importStage.scriptPlaceholder}
               style={{ minHeight: 220 }}
             />
           </label>
           <div className="redraw-step-footer">
-            <span>本地草稿适合快速拆段；LLM 分镜会复用漫画分析接口，额外生成全局设定与连续性信息。</span>
+            <span>{tuiwenText.importStage.footerHint}</span>
             <div className="comic-inline-actions">
-              <Button variant="secondary" onClick={rebuildDraftShots} disabled={Boolean(busy)}>创建旁白分镜草稿</Button>
+              <Button variant="secondary" onClick={rebuildDraftShots} disabled={Boolean(busy)}>{tuiwenText.importStage.createDraft}</Button>
               <Button variant="primary" onClick={() => { void analyzeWithLlm(); }} disabled={Boolean(busy)}>
-                {busy === "analyze" ? "LLM 分镜中..." : "LLM 智能分镜"}
+                {busy === "analyze" ? tuiwenText.importStage.llmAnalyzing : tuiwenText.importStage.llmAnalyze}
               </Button>
             </div>
           </div>
@@ -1699,7 +1709,7 @@ export function NovelTuiwenStudio({ onBack }: { onBack?: () => void }) {
 
       {step !== "import" && step !== "storyboard" && step !== "references" && step !== "generate" && step !== "audio" && step !== "motion" && (
         <section className="redraw-card tuiwen-placeholder-stage">
-          <strong>{TUIWEN_STEPS.find((item) => item.key === step)?.label}</strong>
+          <strong>{tuiwenText.steps[step].label}</strong>
           {step === "export" && (
             <>
               <p>

@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../billing/anlas.dart';
+import '../i18n/app_locales.dart';
 import '../models/nai_models.dart';
 import '../prompts/capsule_data.dart';
 import '../prompts/prompt_tools.dart';
@@ -30,6 +31,7 @@ class GenerateScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final p = state.params;
+    final text = generateScreenTextFor(state.settings.language);
     final wide = StudioBreakpoints.classify(MediaQuery.sizeOf(context).width) !=
         StudioWindowClass.phone;
 
@@ -50,7 +52,7 @@ class GenerateScreen extends StatelessWidget {
         const SizedBox(height: 12),
       ],
       PromptEditor(
-        label: '风格提示词',
+        label: text.stylePrompt,
         value: p.stylePrompt,
         lockKind: 'style',
         onChanged: (value) =>
@@ -58,7 +60,7 @@ class GenerateScreen extends StatelessWidget {
       ),
       const SizedBox(height: 12),
       PromptEditor(
-        label: '正面提示词',
+        label: text.positivePrompt,
         value: p.positivePrompt,
         maxLines: 5,
         hintText: '1girl, masterpiece, ...',
@@ -69,7 +71,7 @@ class GenerateScreen extends StatelessWidget {
       ),
       const SizedBox(height: 12),
       PromptEditor(
-        label: '负面提示词',
+        label: text.negativePrompt,
         value: p.negativePrompt,
         maxLines: 3,
         lockKind: 'negative',
@@ -92,14 +94,16 @@ class GenerateScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(state.workbenchImage == null ? '文生图 / 图生图' : '图生图 · 已加载基图'),
+        title: Text(state.workbenchImage == null
+            ? text.titleTextToImage
+            : text.titleImageLoaded),
         actions: [
           TextButton.icon(
             onPressed: state.refreshAnlas,
             icon: const Icon(Icons.refresh),
             label: Text(state.account.hasToken
                 ? '${state.account.tierName ?? "API"} · ${state.account.anlasBalance ?? "—"}'
-                : '未配置'),
+                : text.notConfigured),
           ),
         ],
       ),
@@ -546,6 +550,7 @@ class PromptEditorState extends State<PromptEditor> {
         : widget.lockKind == 'negative'
             ? state.settings.lockNegativePrompt
             : false;
+    final text = generateScreenTextFor(state.settings.language);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -595,11 +600,11 @@ class PromptEditorState extends State<PromptEditor> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.translate, size: 18),
-                label: Text(translating ? '翻译中' : '中英翻译'),
+                label: Text(translating ? text.translateBusy : text.translate),
               ),
               if (translationBackup != null)
                 IconButton(
-                  tooltip: '撤回翻译',
+                  tooltip: text.undoTranslation,
                   onPressed: () {
                     final backup = translationBackup;
                     if (backup == null) return;
@@ -611,29 +616,29 @@ class PromptEditorState extends State<PromptEditor> {
               TextButton.icon(
                 onPressed: _openNormalize,
                 icon: const Icon(Icons.auto_fix_high, size: 18),
-                label: const Text('标准化'),
+                label: Text(text.normalize),
               ),
               TextButton.icon(
                 onPressed: _editWeights,
                 icon: const Icon(Icons.tune, size: 18),
-                label: const Text('权重'),
+                label: Text(text.weight),
               ),
             ],
             if (hasPromptWildcards(controller.text))
               TextButton.icon(
                 onPressed: _previewWildcard,
                 icon: const Icon(Icons.casino_outlined, size: 18),
-                label: const Text('随机预览'),
+                label: Text(text.randomPreview),
               ),
             if (widget.showRelatedTags)
               TextButton.icon(
                 onPressed: _pickRelatedTag,
                 icon: const Icon(Icons.hub_outlined, size: 18),
-                label: const Text('相关 Tag'),
+                label: Text(text.relatedTag),
               ),
             if (widget.lockKind != null)
               IconButton(
-                tooltip: locked ? '解除锁定' : '锁定提示词',
+                tooltip: locked ? text.unlockPrompt : text.lockPrompt,
                 onPressed: () => state.setPromptLock(widget.lockKind!, !locked),
                 icon: Icon(locked ? Icons.lock : Icons.lock_open),
               ),
@@ -648,15 +653,16 @@ class _PromptShortcutBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
+    final text = generateScreenTextFor(state.settings.language);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              '提示词快捷模板',
-              style: TextStyle(fontWeight: FontWeight.bold),
+            Text(
+              text.promptShortcuts,
+              style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             Wrap(
@@ -686,6 +692,7 @@ class _PreviewCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
+    final text = generateScreenTextFor(state.settings.language);
     final current = state.current;
     final work = state.workbenchImage;
     final path = work?.filePath ?? current?.filePath;
@@ -701,7 +708,7 @@ class _PreviewCard extends StatelessWidget {
                 image: Image.file(File(path), fit: BoxFit.contain),
               )
             else
-              const Center(child: Text('生成结果 / 工作台图片会显示在这里')),
+              Center(child: Text(text.previewEmpty)),
             if (state.busy)
               Container(
                   color: Colors.black38,
@@ -715,12 +722,12 @@ class _PreviewCard extends StatelessWidget {
                   FilledButton.tonalIcon(
                       onPressed: onPick,
                       icon: const Icon(Icons.image),
-                      label: const Text('加载图片')),
+                      label: Text(text.loadImage)),
                   if (work != null)
                     FilledButton.tonalIcon(
                         onPressed: state.clearWorkbench,
                         icon: const Icon(Icons.close),
-                        label: const Text('文生图')),
+                        label: Text(text.switchToTextToImage)),
                 ],
               ),
             ),
@@ -768,9 +775,11 @@ class _TagSearchBoxState extends State<_TagSearchBox> {
   Future<void> _openCapsules() async {
     final categories = await taxonomy;
     if (!mounted) return;
+    final text =
+        generateScreenTextFor(context.read<AppState>().settings.language);
     if (categories.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('灵感胶囊数据加载失败')),
+        SnackBar(content: Text(text.capsuleLoadFailed)),
       );
       return;
     }
@@ -788,6 +797,7 @@ class _TagSearchBoxState extends State<_TagSearchBox> {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
+    final text = generateScreenTextFor(state.settings.language);
     final hasOfflineTags = state.offlineTagStatus.downloaded;
     return Card(
       child: Padding(
@@ -797,11 +807,11 @@ class _TagSearchBoxState extends State<_TagSearchBox> {
           children: [
             TextField(
               controller: ctrl,
-              decoration: const InputDecoration(
-                  prefixIcon: Icon(Icons.search),
-                  labelText: 'Tag / 灵感胶囊搜索',
-                  hintText: '输入 g、蓝眼、教室...',
-                  border: OutlineInputBorder()),
+              decoration: InputDecoration(
+                  prefixIcon: const Icon(Icons.search),
+                  labelText: text.tagSearchLabel,
+                  hintText: text.tagSearchHint,
+                  border: const OutlineInputBorder()),
               onChanged: _search,
             ),
             const SizedBox(height: 8),
@@ -813,24 +823,25 @@ class _TagSearchBoxState extends State<_TagSearchBox> {
                 OutlinedButton.icon(
                   onPressed: _openCapsules,
                   icon: const Icon(Icons.category_outlined),
-                  label: const Text('分类浏览'),
+                  label: Text(text.browseCategories),
                 ),
                 if (!hasOfflineTags)
                   FilledButton.tonalIcon(
-                    onPressed: state.offlineTagBusy
-                        ? null
-                        : state.downloadOfflineTags,
+                    onPressed:
+                        state.offlineTagBusy ? null : state.downloadOfflineTags,
                     icon: state.offlineTagBusy
                         ? const SizedBox.square(
                             dimension: 16,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.download_for_offline_outlined),
-                    label: Text(state.offlineTagBusy ? '下载中...' : '下载中文标签库'),
+                    label: Text(state.offlineTagBusy
+                        ? text.downloadBusy
+                        : text.downloadChineseTags),
                   )
                 else
                   Text(
-                    '已接入标签库 · ${state.offlineTagStatus.count} 条',
+                    '${text.tagsReadyPrefix}${state.offlineTagStatus.count}${text.tagsReadySuffix}',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
               ],
@@ -839,7 +850,7 @@ class _TagSearchBoxState extends State<_TagSearchBox> {
               Padding(
                 padding: const EdgeInsets.only(top: 6),
                 child: Text(
-                  '下载后输入中文或英文都会自动补全 Danbooru 标签（与桌面端同源，仅本机保存）。',
+                  text.offlineTagHint,
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ),
@@ -888,6 +899,8 @@ class _CapsulePickerSheetState extends State<_CapsulePickerSheet> {
   Widget build(BuildContext context) {
     final category = widget.categories[categoryIndex];
     final subgroup = category.subgroups[subgroupIndex];
+    final text =
+        generateScreenTextFor(context.watch<AppState>().settings.language);
     return SafeArea(
       child: SizedBox(
         height: MediaQuery.sizeOf(context).height * 0.84,
@@ -897,7 +910,7 @@ class _CapsulePickerSheetState extends State<_CapsulePickerSheet> {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: Text(
-                '灵感胶囊',
+                text.inspirationCapsules,
                 style: Theme.of(context).textTheme.titleMedium,
               ),
             ),
@@ -998,6 +1011,7 @@ class _ParamControls extends StatelessWidget {
     final state = context.read<AppState>();
     final watched = context.watch<AppState>();
     final p = watched.params;
+    final text = generateScreenTextFor(watched.settings.language);
     final mode = p.model == 'nai-diffusion-furry-3'
         ? 'furry'
         : watched.settings.modelMode;
@@ -1009,16 +1023,16 @@ class _ParamControls extends StatelessWidget {
     return Column(
       children: [
         SegmentedButton<String>(
-          segments: const [
+          segments: [
             ButtonSegment(
               value: 'anime',
-              icon: Icon(Icons.face_outlined),
-              label: Text('动漫模式'),
+              icon: const Icon(Icons.face_outlined),
+              label: Text(text.animeMode),
             ),
             ButtonSegment(
               value: 'furry',
-              icon: Icon(Icons.pets_outlined),
-              label: Text('Furry 模式'),
+              icon: const Icon(Icons.pets_outlined),
+              label: Text(text.furryMode),
             ),
           ],
           selected: {mode},
@@ -1035,8 +1049,8 @@ class _ParamControls extends StatelessWidget {
         const SizedBox(height: 12),
         DropdownButtonFormField<String>(
           value: p.model,
-          decoration: const InputDecoration(
-              labelText: '模型', border: OutlineInputBorder()),
+          decoration: InputDecoration(
+              labelText: text.model, border: const OutlineInputBorder()),
           isExpanded: true,
           items: visibleModels
               .map((m) => DropdownMenuItem(
@@ -1065,7 +1079,7 @@ class _ParamControls extends StatelessWidget {
           children: [
             Expanded(
               child: _SyncedNumberField(
-                label: '宽度',
+                label: text.width,
                 value: p.width,
                 onChanged: (value) => state.setParam(
                   (x) => x.width = _snapDimension(value),
@@ -1075,7 +1089,7 @@ class _ParamControls extends StatelessWidget {
             const SizedBox(width: 10),
             Expanded(
               child: _SyncedNumberField(
-                label: '高度',
+                label: text.height,
                 value: p.height,
                 onChanged: (value) => state.setParam(
                   (x) => x.height = _snapDimension(value),
@@ -1087,8 +1101,8 @@ class _ParamControls extends StatelessWidget {
         const SizedBox(height: 12),
         DropdownButtonFormField<String>(
           value: p.sampler,
-          decoration: const InputDecoration(
-              labelText: '采样器', border: OutlineInputBorder()),
+          decoration: InputDecoration(
+              labelText: text.sampler, border: const OutlineInputBorder()),
           isExpanded: true,
           items: naiSamplers
               .map(
@@ -1126,8 +1140,9 @@ class _ParamControls extends StatelessWidget {
         const SizedBox(height: 6),
         DropdownButtonFormField<String>(
           value: p.noiseSchedule,
-          decoration: const InputDecoration(
-              labelText: 'Noise Schedule（噪声计划）', border: OutlineInputBorder()),
+          decoration: InputDecoration(
+              labelText: text.noiseSchedule,
+              border: const OutlineInputBorder()),
           items: naiNoiseSchedules
               .map((option) => DropdownMenuItem(
                     value: option.value,
@@ -1141,8 +1156,8 @@ class _ParamControls extends StatelessWidget {
         const SizedBox(height: 10),
         DropdownButtonFormField<int>(
           value: p.ucPreset,
-          decoration: const InputDecoration(
-              labelText: 'UC Preset（负面预设）', border: OutlineInputBorder()),
+          decoration: InputDecoration(
+              labelText: text.ucPreset, border: const OutlineInputBorder()),
           items: ucPresets
               .map((option) => DropdownMenuItem(
                     value: int.parse(option.value),
@@ -1154,15 +1169,15 @@ class _ParamControls extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         SegmentedButton<String>(
-          segments: const [
+          segments: [
             ButtonSegment(
                 value: 'random',
-                icon: Icon(Icons.casino_outlined),
-                label: Text('随机 Seed')),
+                icon: const Icon(Icons.casino_outlined),
+                label: Text(text.randomSeed)),
             ButtonSegment(
                 value: 'fixed',
-                icon: Icon(Icons.push_pin_outlined),
-                label: Text('固定 Seed')),
+                icon: const Icon(Icons.push_pin_outlined),
+                label: Text(text.fixedSeed)),
           ],
           selected: {p.seedMode},
           onSelectionChanged: (selection) => state.setParam((x) {
@@ -1186,7 +1201,7 @@ class _ParamControls extends StatelessWidget {
               ),
             if (p.seedMode == 'fixed')
               IconButton(
-                tooltip: '随机一个固定 Seed',
+                tooltip: text.fixedSeedTooltip,
                 onPressed: () => state.setParam(
                   (x) => x.seed = Random.secure().nextInt(2147483646) + 1,
                 ),
@@ -1195,7 +1210,7 @@ class _ParamControls extends StatelessWidget {
             if (p.seedMode == 'fixed') const SizedBox(width: 12),
             Expanded(
               child: _SyncedNumberField(
-                label: '批量（1-16）',
+                label: text.batch,
                 value: context.watch<AppState>().batchCount,
                 onChanged: state.setBatchCount,
               ),
@@ -1204,12 +1219,12 @@ class _ParamControls extends StatelessWidget {
         ),
         SwitchListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('Quality Toggle（质量词）'),
+            title: Text(text.qualityToggle),
             value: p.qualityToggle,
             onChanged: (v) => state.setParam((x) => x.qualityToggle = v)),
         SwitchListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('Variety+'),
+            title: Text(text.variety),
             value: p.variety,
             onChanged: (v) => state.setParam((x) => x.variety = v)),
         if (!p.isV4Plus) ...[
@@ -1240,17 +1255,18 @@ class _I2IControls extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = context.watch<AppState>();
+    final text = generateScreenTextFor(s.settings.language);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
           children: [
-            const Align(
+            Align(
                 alignment: Alignment.centerLeft,
-                child: Text('图生图参数',
-                    style: TextStyle(fontWeight: FontWeight.bold))),
+                child: Text(text.i2iParams,
+                    style: const TextStyle(fontWeight: FontWeight.bold))),
             _Slider(
-                label: 'Strength（重绘幅度）',
+                label: text.strength,
                 value: s.i2i.strength,
                 min: 0,
                 max: 1,
@@ -1261,7 +1277,7 @@ class _I2IControls extends StatelessWidget {
                   s.markChanged();
                 }),
             _Slider(
-                label: 'Noise（噪声）',
+                label: text.noise,
                 value: s.i2i.noise,
                 min: 0,
                 max: 0.99,
@@ -1273,7 +1289,7 @@ class _I2IControls extends StatelessWidget {
                 }),
             const SizedBox(height: 8),
             _SyncedNumberField(
-              label: 'Extra Noise Seed（0 = 随机）',
+              label: text.extraNoiseSeed,
               value: s.i2i.extraNoiseSeed,
               onChanged: (value) {
                 s.i2i.extraNoiseSeed = value.clamp(0, 2147483647);
@@ -1291,6 +1307,7 @@ class _OutputControls extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
+    final text = generateScreenTextFor(state.settings.language);
     final selectedExists = state.selectedGroupId.isEmpty ||
         state.groups.any((group) => group.id == state.selectedGroupId);
     final selected = selectedExists ? state.selectedGroupId : '';
@@ -1300,13 +1317,14 @@ class _OutputControls extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text('输出', style: TextStyle(fontWeight: FontWeight.bold)),
+            Text(text.output,
+                style: const TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 10),
             TextFormField(
               initialValue: state.params.fileNamePrefix,
-              decoration: const InputDecoration(
-                labelText: '图片命名（文件名前缀，可留空）',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: text.imagePrefix,
+                border: const OutlineInputBorder(),
               ),
               onChanged: (value) =>
                   state.setParam((params) => params.fileNamePrefix = value),
@@ -1315,12 +1333,12 @@ class _OutputControls extends StatelessWidget {
             DropdownButtonFormField<String>(
               value: selected,
               isExpanded: true,
-              decoration: const InputDecoration(
-                labelText: '保存到历史分组',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: text.historyGroup,
+                border: const OutlineInputBorder(),
               ),
               items: [
-                const DropdownMenuItem(value: '', child: Text('未分组')),
+                DropdownMenuItem(value: '', child: Text(text.ungrouped)),
                 ...state.groups.map(
                   (group) => DropdownMenuItem(
                     value: group.id,
@@ -1775,6 +1793,7 @@ class _RunBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
+    final text = generateScreenTextFor(state.settings.language);
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
@@ -1800,14 +1819,14 @@ class _RunBar extends StatelessWidget {
                           : const Icon(Icons.add_to_photos_outlined),
                       label: Text(
                         state.queueAdding
-                            ? '正在报价...'
-                            : '加入队列（等待 ${state.generationQueue.length}）',
+                            ? text.quoting
+                            : '${text.addToQueue}（${text.waiting} ${state.generationQueue.length}）',
                       ),
                     ),
                   ),
                   const SizedBox(width: 6),
                   IconButton.filledTonal(
-                    tooltip: state.queuePaused ? '继续' : '暂停',
+                    tooltip: state.queuePaused ? text.resume : text.pause,
                     onPressed: state.toggleQueuePause,
                     icon: Icon(
                       state.queuePaused ? Icons.play_arrow : Icons.pause,
@@ -1815,7 +1834,7 @@ class _RunBar extends StatelessWidget {
                   ),
                   const SizedBox(width: 4),
                   IconButton.filled(
-                    tooltip: '取消生成并清空队列',
+                    tooltip: text.cancelAndClear,
                     onPressed: state.cancelGeneration,
                     icon: const Icon(Icons.stop),
                   ),
@@ -1833,16 +1852,16 @@ class _RunBar extends StatelessWidget {
                       : Icons.image_search),
                   label: Text(state.workbenchImage == null
                       ? (state.batchCount > 1
-                          ? '生成 ${state.batchCount} 张'
-                          : '生成图片')
-                      : '使用当前图片图生图'),
+                          ? '${text.generateCountPrefix}${state.batchCount}${text.generateCountSuffix}'
+                          : text.generateImage)
+                      : text.useCurrentImage),
                 ),
               ),
             const SizedBox(height: 4),
             Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                state.status,
+                state.status == '就绪' ? text.ready : state.status,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.bodySmall,
@@ -1863,12 +1882,13 @@ class _AnlasQuoteBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final quote = state.generationQuote;
+    final text = generateScreenTextFor(state.settings.language);
     final scheme = Theme.of(context).colorScheme;
     final source = quote?.source == AnlasQuoteSource.officialApi
-        ? '官方报价'
+        ? text.officialQuote
         : quote?.source == AnlasQuoteSource.estimateFormula
-            ? '公式估算'
-            : '待报价';
+            ? text.formulaQuote
+            : text.pendingQuote;
     final amount = quote?.amount;
     final warning = quote?.insufficient == true;
     return DecoratedBox(
@@ -1891,8 +1911,8 @@ class _AnlasQuoteBar extends StatelessWidget {
             Expanded(
               child: Text(
                 amount == null
-                    ? '生成前扣费：${state.account.hasToken ? '读取中' : '请先配置 Token'}'
-                    : '生成前扣费：$amount Anlas · $source',
+                    ? '${text.precharge}: ${state.account.hasToken ? text.reading : text.configureToken}'
+                    : '${text.precharge}: $amount Anlas · $source',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontWeight: FontWeight.w600),
@@ -1907,7 +1927,7 @@ class _AnlasQuoteBar extends StatelessWidget {
                 ),
               ),
             Text(
-              '余额 ${state.account.anlasBalance ?? '未知'}',
+              '${text.balance} ${state.account.anlasBalance ?? text.unknown}',
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ],
@@ -1925,6 +1945,7 @@ class _GenerationQueuePanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final progress = state.queueProgress ?? const GenerationQueueProgress();
+    final text = generateScreenTextFor(state.settings.language);
     final finished = progress.done + progress.failed;
     final pending = (progress.total - finished - 1).clamp(0, progress.total);
     final manuallyQueued = state.generationQueue.length;
@@ -1946,19 +1967,21 @@ class _GenerationQueuePanel extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    '队列 · 1 运行${pending > 0 ? ' / $pending 排队' : ''}',
+                    '${text.queue} · ${text.running}${pending > 0 ? ' / $pending ${text.queued}' : ''}',
                     style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
                 ),
                 if (pending > 0)
                   IconButton(
-                    tooltip: '清空等待项',
+                    tooltip: text.clearPending,
                     visualDensity: VisualDensity.compact,
                     onPressed: state.clearPendingGenerationQueue,
                     icon: const Icon(Icons.playlist_remove, size: 20),
                   ),
                 IconButton(
-                  tooltip: state.queueCollapsed ? '展开队列' : '折叠队列',
+                  tooltip: state.queueCollapsed
+                      ? text.expandQueue
+                      : text.collapseQueue,
                   visualDensity: VisualDensity.compact,
                   onPressed: state.toggleQueueCollapsed,
                   icon: Icon(
@@ -1978,17 +2001,21 @@ class _GenerationQueuePanel extends StatelessWidget {
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  state.queuePaused ? '当前任务完成后暂停' : '正在执行当前任务',
+                  state.queuePaused
+                      ? text.pauseAfterCurrent
+                      : text.runningCurrent,
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ),
               if (batchPending > 0)
-                _QueueLine(label: '批量待生成 · $batchPending 张'),
+                _QueueLine(
+                    label:
+                        '${text.batchPendingPrefix}$batchPending${text.batchPendingSuffix}'),
               for (final job in state.generationQueue)
                 _QueueLine(
                   label: job.label,
                   trailing: IconButton(
-                    tooltip: '移出队列',
+                    tooltip: text.removeFromQueue,
                     visualDensity: VisualDensity.compact,
                     onPressed: () => state.removeQueueJob(job.id),
                     icon: const Icon(Icons.close, size: 18),

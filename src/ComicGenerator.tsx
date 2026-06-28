@@ -8,6 +8,7 @@ import {
   SCOPED_REVERSE_SYSTEM_PROMPTS,
 } from "./data/prompt-templates";
 import { parseWeightedTag, setTagLevelInPrompt, splitPromptTags, formatMultiplier } from "./prompt-weight";
+import { getToolsHubText } from "./i18n";
 import { useAppStore } from "./store";
 import { NovelTuiwenStudio } from "./tuiwen/NovelTuiwenStudio";
 import {
@@ -276,6 +277,8 @@ type PanelOutput = {
 };
 
 export function ToolsHub() {
+  const language = useAppStore((state) => state.settings?.language);
+  const text = useMemo(() => getToolsHubText(language), [language]);
   const [activeTool, setActiveTool] = useState<"hub" | "comic" | "redraw" | "tuiwen">("hub");
   if (activeTool === "comic") return <ComicGenerator onBack={() => setActiveTool("hub")} />;
   if (activeTool === "redraw") return <BatchRedraw onBack={() => setActiveTool("hub")} />;
@@ -285,26 +288,26 @@ export function ToolsHub() {
     <main className="tools-hub">
       <section className="tools-hero">
         <div>
-          <span className="eyebrow">Tools</span>
-          <h2>工具板块</h2>
-          <p>把复杂流程收进专用工具里。</p>
+          <span className="eyebrow">{text.eyebrow}</span>
+          <h2>{text.title}</h2>
+          <p>{text.subtitle}</p>
         </div>
       </section>
       <section className="tool-card-grid">
         <button type="button" className="tool-card ready" onClick={() => setActiveTool("comic")}>
-          <b>漫画生成器</b>
-          <span>故事拆分、参考图反推、分镜转换、队列出图与 ZIP 打包。</span>
-          <small>已接入</small>
+          <b>{text.comicTitle}</b>
+          <span>{text.comicDesc}</span>
+          <small>{text.ready}</small>
         </button>
         <button type="button" className="tool-card ready" onClick={() => setActiveTool("redraw")}>
-          <b>批量图生图</b>
-          <span>导入图片 + 对应提示词，按改图强度逐张图生图，存入分组并打包 ZIP。</span>
-          <small>已接入</small>
+          <b>{text.batchTitle}</b>
+          <span>{text.batchDesc}</span>
+          <small>{text.ready}</small>
         </button>
         <button type="button" className="tool-card ready" onClick={() => setActiveTool("tuiwen")}>
-          <b>小说推文</b>
-          <span>桌面专属：小说/字幕转分镜旁白，叠加全局精准参考，最终导出剪映草稿。</span>
-          <small>P0 底座</small>
+          <b>{text.tuiwenTitle}</b>
+          <span>{text.tuiwenDesc}</span>
+          <small>{text.foundation}</small>
         </button>
       </section>
     </main>

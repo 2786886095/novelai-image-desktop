@@ -48,6 +48,8 @@ class StudioAdaptiveShell extends StatelessWidget {
   final ValueChanged<int> onDestinationSelected;
   final List<StudioDestination> destinations;
   final List<Widget> pages;
+  final String moreLabel;
+  final String allFeaturesLabel;
 
   const StudioAdaptiveShell({
     super.key,
@@ -55,6 +57,8 @@ class StudioAdaptiveShell extends StatelessWidget {
     required this.onDestinationSelected,
     required this.destinations,
     required this.pages,
+    this.moreLabel = '更多',
+    this.allFeaturesLabel = '全部功能',
   }) : assert(destinations.length == pages.length);
 
   static const _phonePrimaryIndexes = [0, 1, 6];
@@ -69,6 +73,8 @@ class StudioAdaptiveShell extends StatelessWidget {
         onDestinationSelected: onDestinationSelected,
         destinations: destinations,
         pages: pages,
+        moreLabel: moreLabel,
+        allFeaturesLabel: allFeaturesLabel,
       );
     }
     return _TabletShell(
@@ -86,12 +92,16 @@ class _PhoneShell extends StatelessWidget {
   final ValueChanged<int> onDestinationSelected;
   final List<StudioDestination> destinations;
   final List<Widget> pages;
+  final String moreLabel;
+  final String allFeaturesLabel;
 
   const _PhoneShell({
     required this.selectedIndex,
     required this.onDestinationSelected,
     required this.destinations,
     required this.pages,
+    required this.moreLabel,
+    required this.allFeaturesLabel,
   });
 
   @override
@@ -118,10 +128,10 @@ class _PhoneShell extends StatelessWidget {
               selectedIcon: Icon(destinations[index].selectedIcon),
               label: destinations[index].label,
             ),
-          const NavigationDestination(
-            icon: Icon(Icons.apps_outlined),
-            selectedIcon: Icon(Icons.apps),
-            label: '更多',
+          NavigationDestination(
+            icon: const Icon(Icons.apps_outlined),
+            selectedIcon: const Icon(Icons.apps),
+            label: moreLabel,
           ),
         ],
       ),
@@ -141,7 +151,7 @@ class _PhoneShell extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('全部功能', style: Theme.of(context).textTheme.titleMedium),
+              Text(allFeaturesLabel, style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 12),
               GridView.count(
                 shrinkWrap: true,

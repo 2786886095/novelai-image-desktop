@@ -25,11 +25,11 @@ import {
 } from "./data/prompt-templates";
 import { Button, IconText, AppPortal, Toggle, NumberInput, SliderInput } from "./components/ui";
 import { Icon } from "./components/icons";
+import { getChromeText, getGeneratePanelText, getLocalizedTabItems, getSettingsSectionText, getSettingsShellText, SUPPORTED_APP_LANGUAGES } from "./i18n";
 import {
   CAT_COLOR,
   CAT_LABEL,
   CAPSULE_TAXONOMY,
-  TAB_ITEMS,
   tagDescription,
 } from "./prompt-data";
 import {
@@ -514,6 +514,7 @@ function TitleBar() {
 // ── Menu bar ──────────────────────────────────────────────────────────────────
 function MenuBar({ openSettings }: { openSettings: () => void }) {
   const settings = useAppStore((state) => state.settings);
+  const chromeText = getChromeText(settings?.language);
 
   return (
     <nav className="menu-bar compact-toolbar">
@@ -521,13 +522,13 @@ function MenuBar({ openSettings }: { openSettings: () => void }) {
         className="menu-action"
         onClick={() => settings?.outputDir && window.naiDesktop.openInExplorer(settings.outputDir)}
       >
-        <IconText icon={<Icon name="folder" />}>输出目录</IconText>
+        <IconText icon={<Icon name="folder" />}>{chromeText.outputDir}</IconText>
       </button>
       <button className="menu-action" onClick={openSettings}>
-        <IconText icon="⚙">设置</IconText>
+        <IconText icon="⚙">{chromeText.settings}</IconText>
       </button>
       <button className="menu-action" onClick={() => window.naiDesktop.openExternal(docsUrl)}>
-        <IconText icon="❔">文档</IconText>
+        <IconText icon="❔">{chromeText.docs}</IconText>
       </button>
     </nav>
   );
@@ -537,9 +538,11 @@ function MenuBar({ openSettings }: { openSettings: () => void }) {
 function TabBar() {
   const activeTab = useAppStore((state) => state.activeTab);
   const setActiveTab = useAppStore((state) => state.setActiveTab);
+  const language = useAppStore((state) => state.settings?.language);
+  const tabItems = useMemo(() => getLocalizedTabItems(language), [language]);
   return (
     <div className="tab-bar">
-      {TAB_ITEMS.map(({ value, label, icon, title }) => (
+      {tabItems.map(({ value, label, icon, title }) => (
         <button
           key={value}
           className={clsx(activeTab === value && "active")}
@@ -963,6 +966,7 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
   const promptValue = promptTab === "positive" ? params.positivePrompt : params.negativePrompt;
   const promptKey = promptTab === "positive" ? "positivePrompt" : "negativePrompt";
   const templates: PromptTemplate[] = settings?.promptTemplates ?? [];
+  const generateText = useMemo(() => getGeneratePanelText(settings?.language), [settings?.language]);
   // Co-occurrence: tags commonly used alongside what's already in the prompt.
   const related = useMemo(() => relatedTags(params.positivePrompt, 8), [params.positivePrompt]);
 
@@ -1098,13 +1102,13 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
     <>
       {includeModel && (
         <label className="field">
-          <span>模型</span>
+          <span>{generateText.prompt.model}</span>
           <div className="model-mode-switch">
             <button type="button" className={clsx(modelMode === "anime" && "active")} onClick={() => void switchModelMode("anime")}>
-              <Icon name="palette" /> 动漫模式
+              <Icon name="palette" /> {generateText.prompt.animeMode}
             </button>
             <button type="button" className={clsx(modelMode === "furry" && "active")} onClick={() => void switchModelMode("furry")}>
-              <Icon name="paw" /> Furry 模式
+              <Icon name="paw" /> {generateText.prompt.furryMode}
             </button>
           </div>
           <select value={params.model} onChange={(e) => setParam("model", e.target.value as GenerateParams["model"])}>
@@ -1116,19 +1120,19 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
       )}
       <label className="field">
         <span className="field-label-row">
-          风格提示词（Style Prompt）
+          {generateText.prompt.stylePrompt}
           <button
             type="button"
             className={clsx("lock-btn", styleLocked && "locked")}
-            title={styleLocked ? "已锁定：重置/模板不会改动，重启保留。点击解锁" : "锁定并保存当前风格提示词，使其固定不变"}
+            title={styleLocked ? generateText.prompt.lockSavedTitle : generateText.prompt.lockCurrentTitle}
             onClick={() => void toggleLock("style")}
           >
-            {styleLocked ? <><Icon name="lock" /> 已锁定</> : <><Icon name="unlock" /> 锁定</>}
+            {styleLocked ? <><Icon name="lock" /> {generateText.prompt.locked}</> : <><Icon name="unlock" /> {generateText.prompt.lock}</>}
           </button>
         </span>
         <input
           value={params.stylePrompt}
-          placeholder="输入风格提示词，如 anime style, watercolor..."
+          placeholder={generateText.prompt.stylePlaceholder}
           onChange={(e) => setLockedAwareParam("stylePrompt", e.target.value)}
         />
       </label>
@@ -1136,9 +1140,9 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
         <button type="button" className="prompt-chip-head" onClick={() => setChipOpen((v) => !v)}>
           <span className="chip-head-title">
             <span className={clsx("chip-caret", chipOpen && "open")}>▸</span>
-            灵感胶囊
+            {generateText.prompt.capsuleTitle}
           </span>
-          <small className="chip-head-hint">{chipOpen ? "本地标签库 · 中/英文搜索 → 点击插入" : "点击展开 · 本地 Danbooru 标签库（按热度）"}</small>
+          <small className="chip-head-hint">{chipOpen ? generateText.prompt.capsuleHintOpen : generateText.prompt.capsuleHintClosed}</small>
         </button>
         {chipOpen && (
           <>
@@ -1146,14 +1150,14 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
               <input
                 className="prompt-chip-search"
                 value={chipQuery}
-                placeholder="搜索标签：中文或英文，如 双马尾 / twintails / 夜景"
+                placeholder={generateText.prompt.capsuleSearchPlaceholder}
                 onChange={(e) => setChipQuery(e.target.value)}
               />
             </div>
             <CapsuleBrowser query={chipQuery} onPick={appendChip} />
             {related.length > 0 && (
               <div className="related-tags">
-                <div className="related-tags-head"><Icon name="link" /> 相关推荐（常一起使用）</div>
+                <div className="related-tags-head"><Icon name="link" /> {generateText.prompt.relatedTitle}</div>
                 <div className="prompt-chip-list">
                   {related.map((r) => (
                     <button key={r.tag} type="button" onClick={() => appendChip(r.tag)} title={`${r.tag}：${r.zh}`}>
@@ -1169,19 +1173,19 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
       </div>
       <div className="prompt-tabs">
         <button className={clsx(promptTab === "positive" && "active")} onClick={() => setPromptTab("positive")}>
-          正面提示词
+          {generateText.prompt.positivePrompt}
         </button>
         <button className={clsx(promptTab === "negative" && "active")} onClick={() => setPromptTab("negative")}>
-          负面提示词{negLocked ? <> <Icon name="lock" /></> : ""}
+          {generateText.prompt.negativePrompt}{negLocked ? <> <Icon name="lock" /></> : ""}
         </button>
         {promptTab === "negative" && (
           <button
             type="button"
             className={clsx("lock-btn", negLocked && "locked")}
-            title={negLocked ? "已锁定：重置/模板不会改动，重启保留。点击解锁" : "锁定并保存当前负面提示词，使其固定不变"}
+            title={negLocked ? generateText.prompt.lockSavedTitle : generateText.prompt.lockCurrentTitle}
             onClick={() => void toggleLock("neg")}
           >
-            {negLocked ? <><Icon name="lock" /> 已锁定</> : <><Icon name="unlock" /> 锁定</>}
+            {negLocked ? <><Icon name="lock" /> {generateText.prompt.locked}</> : <><Icon name="unlock" /> {generateText.prompt.lock}</>}
           </button>
         )}
       </div>
@@ -1190,44 +1194,44 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
         onChange={(v) => setLockedAwareParam(promptKey, v)}
         model={params.model}
         enabled={settings?.autoComplete ?? true}
-        placeholder={promptTab === "positive" ? "输入正面提示词..." : "输入不希望出现的内容..."}
+        placeholder={promptTab === "positive" ? generateText.prompt.positivePlaceholder : generateText.prompt.negativePlaceholder}
       />
       <div className="prompt-toolbar-row">
         <button type="button" className="prompt-tool-btn" onClick={() => setShowWeights((v) => !v)} disabled={weightTags.length === 0}>
-          ⚖ 权重微调{weightTags.length ? ` (${weightTags.length})` : ""} {showWeights ? "▲" : "▼"}
+          ⚖ {generateText.prompt.weightAdjust}{weightTags.length ? ` (${weightTags.length})` : ""} {showWeights ? "▲" : "▼"}
         </button>
         <button type="button" className="prompt-tool-btn" onClick={() => void translatePrompt()} disabled={translating}>
-          {translating ? "翻译中…" : <><Icon name="globe" /> 中→英翻译</>}
+          {translating ? generateText.prompt.translating : <><Icon name="globe" /> {generateText.prompt.translate}</>}
         </button>
         {translateBackup[promptKey] != null && (
-          <button type="button" className="prompt-tool-btn" onClick={restoreTranslate} disabled={translating} title="还原翻译前的提示词">
-            <Icon name="sparkles" /> 还原
+          <button type="button" className="prompt-tool-btn" onClick={restoreTranslate} disabled={translating} title={generateText.prompt.restoreTitle}>
+            <Icon name="sparkles" /> {generateText.prompt.restore}
           </button>
         )}
         <button type="button" className="prompt-tool-btn" onClick={() => setShowNormalize(true)} disabled={!promptValue.trim()}>
-          <Icon name="sparkles" /> 标准化
+          <Icon name="sparkles" /> {generateText.prompt.normalize}
         </button>
         <button
           type="button"
           className={clsx("prompt-tool-btn", (settings?.autoComplete ?? true) && "tool-on")}
-          title="输入英文时推测候选 tag 的功能"
+          title={generateText.prompt.autocompleteTitle}
           onClick={() => void toggleAutoComplete()}
         >
-          <Icon name="bulb" /> {(settings?.autoComplete ?? true) ? "提词：开" : "提词：关"}
+          <Icon name="bulb" /> {(settings?.autoComplete ?? true) ? generateText.prompt.autocompleteOn : generateText.prompt.autocompleteOff}
         </button>
       </div>
       {showWeights && weightTags.length > 0 && (
         <div className="weight-editor">
-          <div className="weight-editor-hint">点击 − / ＋ 调整该标签权重（基于 NovelAI 的 {"{}"} / [] 语法）</div>
+          <div className="weight-editor-hint">{generateText.prompt.weightHint}</div>
           <div className="weight-tag-list">
             {weightTags.map((wt, i) => (
               <div key={`${wt.core}-${i}`} className={clsx("weight-tag", wt.level > 0 && "up", wt.level < 0 && "down")}>
-                <button type="button" className="weight-btn" title="降低权重" onClick={() => bumpWeight(i, -1)}>−</button>
+                <button type="button" className="weight-btn" title={generateText.prompt.decreaseWeight} onClick={() => bumpWeight(i, -1)}>−</button>
                 <span className="weight-tag-core" title={wt.raw}>
-                  {wt.core || "(空)"}
+                  {wt.core || generateText.prompt.emptyTag}
                   {wt.level !== 0 && <em>{formatMultiplier(wt.level)}</em>}
                 </span>
-                <button type="button" className="weight-btn" title="提高权重" onClick={() => bumpWeight(i, 1)}>＋</button>
+                <button type="button" className="weight-btn" title={generateText.prompt.increaseWeight} onClick={() => bumpWeight(i, 1)}>＋</button>
               </div>
             ))}
           </div>
@@ -1235,33 +1239,33 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
       )}
       <div className="prompt-helper">
         {settings?.autoComplete ?? true
-          ? "英文输入 1 个字符即可推测 tag；↑↓ 选择，Tab/Enter 插入，Esc 关闭。"
-          : "Tag 自动补全已关闭，可在设置 › 提示词/补全 中开启。"}
+          ? generateText.prompt.helperOn
+          : generateText.prompt.helperOff}
       </div>
       <div className="token-counter">
         {tagCount > 0 && (
           <>
-            <span>{tagCount} 个标签</span>
+            <span>{tagCount} {generateText.prompt.tagUnit}</span>
             <span className={clsx(tokenWarn && "token-warn")}>
-              ≈{tokenEst} tokens{tokenWarn ? <> <Icon name="warning" /> 超出225限制</> : ""}
+              ≈{tokenEst} tokens{tokenWarn ? <> <Icon name="warning" /> {generateText.prompt.tokenLimitExceeded}</> : ""}
             </span>
           </>
         )}
       </div>
       <div className="quick-actions">
         <Button onClick={() => setShowCharModal(true)}>
-          <IconText icon="♙">角色提示{charCaptions.length > 0 ? ` · ${charCaptions.length}` : ""}</IconText>
+          <IconText icon="♙">{generateText.prompt.characterPrompt}{charCaptions.length > 0 ? ` · ${charCaptions.length}` : ""}</IconText>
         </Button>
         <Button onClick={() => setShowVibeModal(true)}>
-          <IconText icon="◒">氛围迁移{vibeImages.length > 0 ? ` · ${vibeImages.length}` : ""}</IconText>
+          <IconText icon="◒">{generateText.prompt.vibeTransfer}{vibeImages.length > 0 ? ` · ${vibeImages.length}` : ""}</IconText>
         </Button>
         <Button onClick={() => setShowVibeModal(true)}>
-          <IconText icon="◇">精准参考{preciseRefCount > 0 ? ` · ${preciseRefCount}` : ""}</IconText>
+          <IconText icon="◇">{generateText.prompt.preciseReference}{preciseRefCount > 0 ? ` · ${preciseRefCount}` : ""}</IconText>
         </Button>
         {templates.length > 0 && (
           <div className="template-dropdown" style={{ position: "relative" }}>
             <Button onClick={() => setShowTemplateMenu((v) => !v)}>
-              <IconText icon="▣">模板{showTemplateMenu ? " ▲" : " ▼"}</IconText>
+              <IconText icon="▣">{generateText.prompt.template}{showTemplateMenu ? " ▲" : " ▼"}</IconText>
             </Button>
             {showTemplateMenu && (
               <div className="menu-pop template-pop">
@@ -1276,9 +1280,9 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
         )}
       </div>
       <div className="size-row">
-        <NumberInput label="宽度" value={params.width} min={64} max={1600} step={64} onChange={(v) => setParam("width", snapDimension(v))} />
+        <NumberInput label={generateText.prompt.width} value={params.width} min={64} max={1600} step={64} onChange={(v) => setParam("width", snapDimension(v))} />
         <span>×</span>
-        <NumberInput label="高度" value={params.height} min={64} max={1600} step={64} onChange={(v) => setParam("height", snapDimension(v))} />
+        <NumberInput label={generateText.prompt.height} value={params.height} min={64} max={1600} step={64} onChange={(v) => setParam("height", snapDimension(v))} />
       </div>
       <div className="preset-row">
         <button onClick={() => { setParam("width", 1024); setParam("height", 1024); }}>1024×1024</button>
@@ -1294,7 +1298,7 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
           className={clsx(params.seedMode === "random" && "active")}
           onClick={() => setParam("seedMode", "random")}
         >
-          <Icon name="dice" /> 随机种子
+          <Icon name="dice" /> {generateText.prompt.randomSeed}
         </button>
         <button
           type="button"
@@ -1304,23 +1308,23 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
             if (params.seed <= 0) setParam("seed", Math.floor(Math.random() * 2_147_483_647));
           }}
         >
-          <Icon name="pin" /> 固定种子
+          <Icon name="pin" /> {generateText.prompt.fixedSeed}
         </button>
       </div>
       {params.seedMode === "fixed" && (
         <div className="seed-row">
-          <NumberInput label="固定种子值" value={params.seed} min={1} onChange={(v) => setParam("seed", v)} />
-          <Button title="随机一个新种子值" onClick={() => setParam("seed", Math.floor(Math.random() * 2_147_483_647))}>
+          <NumberInput label={generateText.prompt.fixedSeedValue} value={params.seed} min={1} onChange={(v) => setParam("seed", v)} />
+          <Button title={generateText.prompt.randomizeSeedTitle} onClick={() => setParam("seed", Math.floor(Math.random() * 2_147_483_647))}>
             ⇄
           </Button>
         </div>
       )}
       <label className="checkbox-line">
         <input type="checkbox" checked={params.variety} onChange={(e) => setParam("variety", e.target.checked)} />
-        <span>多样化（Variety+）</span>
+        <span>{generateText.prompt.variety}</span>
       </label>
       <Button className="full" onClick={() => setShowAdvanced(true)}>
-        <IconText icon="⚙">高级参数...</IconText>
+        <IconText icon="⚙">{generateText.prompt.advancedParams}</IconText>
       </Button>
       {showAdvanced && <AdvancedParamsModal onClose={() => setShowAdvanced(false)} />}
       {showVibeModal && <VibeTransferModal onClose={() => setShowVibeModal(false)} />}
@@ -2484,8 +2488,11 @@ function ReversePanel() {
 // ── Left panel ────────────────────────────────────────────────────────────────
 function LeftPanel({ openSettings }: { openSettings: () => void }) {
   const activeTab = useAppStore((state) => state.activeTab);
+  const language = useAppStore((state) => state.settings?.language);
   const [generateMode, setGenerateMode] = useState<"t2i" | "i2i">("t2i");
-  const meta = TAB_ITEMS.find((item) => item.value === activeTab) ?? TAB_ITEMS[0];
+  const tabItems = useMemo(() => getLocalizedTabItems(language), [language]);
+  const generateText = useMemo(() => getGeneratePanelText(language), [language]);
+  const meta = tabItems.find((item) => item.value === activeTab) ?? tabItems[0];
   return (
     <aside className="left-panel">
       <div className="panel-head">
@@ -2502,13 +2509,13 @@ function LeftPanel({ openSettings }: { openSettings: () => void }) {
               className={clsx(generateMode === "t2i" && "active")}
               onClick={() => setGenerateMode("t2i")}
             >
-              文生图
+              {generateText.modeSwitch.textToImage}
             </button>
             <button
               className={clsx(generateMode === "i2i" && "active")}
               onClick={() => setGenerateMode("i2i")}
             >
-              图生图
+              {generateText.modeSwitch.imageToImage}
             </button>
           </div>
           {generateMode === "t2i"
@@ -3553,15 +3560,17 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
     setTagTestTags(result.tags.slice(0, 12));
   }
 
+  const settingsShellText = getSettingsShellText(settings.language);
+  const settingsSectionText = getSettingsSectionText(settings.language);
   const nav = [
-    ["api", "API 配置"],
-    ["storage", "存储"],
-    ["ai-reverse", "AI 反推"],
-    ["convert-api", "转换 API"],
-    ["templates", "提示词模板"],
-    ["prompt", "提示词/补全"],
-    ["appearance", "外观"],
-    ["performance", "性能"],
+    ["api", settingsShellText.nav.api],
+    ["storage", settingsShellText.nav.storage],
+    ["ai-reverse", settingsShellText.nav["ai-reverse"]],
+    ["convert-api", settingsShellText.nav["convert-api"]],
+    ["templates", settingsShellText.nav.templates],
+    ["prompt", settingsShellText.nav.prompt],
+    ["appearance", settingsShellText.nav.appearance],
+    ["performance", settingsShellText.nav.performance],
   ];
 
   return (
@@ -3569,7 +3578,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
       <div className="modal-backdrop">
       <div className="modal settings-modal">
         <header>
-          <h2>设置</h2>
+          <h2>{settingsShellText.title}</h2>
           <button onClick={onClose}>×</button>
         </header>
         <div className="settings-body">
@@ -3714,40 +3723,47 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
             {section === "performance" && (
               <div className="settings-form">
                 <div className="info-card">
-                  <strong>执行策略</strong>
-                  <span>当前版本使用单任务顺序执行：批量生成会逐张调用 API，避免并发导致取消和历史写入异常。</span>
+                  <strong>{settingsSectionText.performance.strategyTitle}</strong>
+                  <span>{settingsSectionText.performance.strategyDesc}</span>
                 </div>
                 <div className="toggle-list">
-                  <Toggle checked={settings.superDrop} onChange={(v) => void update("superDrop", v)} label="中央画布拖拽加载" description="将图片拖入中央画布即可加载为工作台图片。" />
+                  <Toggle
+                    checked={settings.superDrop}
+                    onChange={(v) => void update("superDrop", v)}
+                    label={settingsSectionText.performance.superDropLabel}
+                    description={settingsSectionText.performance.superDropDesc}
+                  />
                 </div>
               </div>
             )}
             {section === "appearance" && (
               <div className="settings-form">
                 <label className="field">
-                  <span>主题</span>
+                  <span>{settingsSectionText.appearance.theme}</span>
                   <select value={settings.theme} onChange={(e) => void update("theme", e.target.value as AppSettings["theme"])}>
-                    <option value="light">浅色</option>
-                    <option value="dark">深色</option>
-                    <option value="system">跟随系统</option>
+                    <option value="light">{settingsSectionText.appearance.themeLight}</option>
+                    <option value="dark">{settingsSectionText.appearance.themeDark}</option>
+                    <option value="system">{settingsSectionText.appearance.themeSystem}</option>
                   </select>
                 </label>
                 <label className="field">
-                  <span>语言</span>
+                  <span>{settingsSectionText.appearance.language}</span>
                   <select value={settings.language} onChange={(e) => void update("language", e.target.value as AppSettings["language"])}>
-                    <option value="zh-CN">简体中文</option>
-                    <option value="en-US">English（英文，即将完善）</option>
-                    <option value="ja-JP">日本語（日文，即将完善）</option>
+                    {SUPPORTED_APP_LANGUAGES.map((language) => (
+                      <option value={language.code} key={language.code}>
+                        {language.menuLabel}
+                      </option>
+                    ))}
                   </select>
                 </label>
                 <div className="field">
-                  <span>工作台布局</span>
+                  <span>{settingsSectionText.appearance.workspaceLayout}</span>
                   <div className="row-actions">
                     <Button onClick={() => useAppStore.getState().resetWsWidths()}>
-                      <IconText icon="⟲">恢复默认分栏宽度</IconText>
+                      <IconText icon="⟲">{settingsSectionText.appearance.resetWorkspace}</IconText>
                     </Button>
                   </div>
-                  <p className="field-hint">把左右两栏宽度恢复默认。也可直接在工作台拖动两栏之间的分隔条调整，双击分隔条或点其上的 ⟲ 也能恢复。</p>
+                  <p className="field-hint">{settingsSectionText.appearance.workspaceHint}</p>
                 </div>
               </div>
             )}
@@ -4134,9 +4150,11 @@ function OnboardingWizard() {
                 <label className="field wide">
                   <span>语言</span>
                   <select defaultValue="zh-CN" onChange={(e) => window.naiDesktop.setSetting("language", e.target.value as AppSettings["language"])}>
-                    <option value="zh-CN">简体中文</option>
-                    <option value="en-US">English（英文）</option>
-                    <option value="ja-JP">日本語（日文）</option>
+                    {SUPPORTED_APP_LANGUAGES.map((language) => (
+                      <option value={language.code} key={language.code}>
+                        {language.menuLabel}
+                      </option>
+                    ))}
                   </select>
                 </label>
               </div>

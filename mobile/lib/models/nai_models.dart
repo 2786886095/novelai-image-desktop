@@ -1,5 +1,7 @@
 library;
 
+import '../i18n/app_locales.dart';
+
 class NaiOption {
   final String label;
   final String value;
@@ -7,7 +9,7 @@ class NaiOption {
 }
 
 const appName = 'Langbai NovelAI Studio';
-const appVersion = '1.0.8';
+const appVersion = '1.0.9';
 
 const naiModels = <NaiOption>[
   NaiOption('NAI Diffusion 4.5 Full（完整模型）', 'nai-diffusion-4-5-full'),
@@ -526,6 +528,7 @@ class AppSettings {
   bool mcpForCapsule;
   bool mcpForReverse;
   bool mcpForConvert;
+  String language;
   String theme;
   String modelMode;
   String proxyMode;
@@ -583,6 +586,7 @@ class AppSettings {
     this.mcpForCapsule = false,
     this.mcpForReverse = false,
     this.mcpForConvert = false,
+    this.language = 'zh-CN',
     this.theme = 'system',
     this.modelMode = 'anime',
     this.proxyMode = 'direct',
@@ -641,6 +645,7 @@ class AppSettings {
         'mcpForCapsule': mcpForCapsule,
         'mcpForReverse': mcpForReverse,
         'mcpForConvert': mcpForConvert,
+        'language': normalizeAppLocaleCode(language),
         'theme': theme,
         'modelMode': modelMode,
         'proxyMode': proxyMode,
@@ -697,6 +702,7 @@ class AppSettings {
         mcpForCapsule: j['mcpForCapsule'] ?? false,
         mcpForReverse: j['mcpForReverse'] ?? false,
         mcpForConvert: j['mcpForConvert'] ?? false,
+        language: normalizeAppLocaleCode(j['language']),
         theme: j['theme'] ?? ((j['darkMode'] ?? false) ? 'dark' : 'system'),
         modelMode: j['modelMode'] ?? 'anime',
         proxyMode: j['proxyMode'] ?? 'direct',

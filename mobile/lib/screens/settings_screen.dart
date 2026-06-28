@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../i18n/app_locales.dart';
 import '../models/nai_models.dart';
 import '../services/storage_permission.dart';
 import '../state/app_state.dart';
@@ -50,6 +51,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final s = state.settings;
+    final settingsText = settingsScreenTextFor(s.language);
+    final appearanceText = settingsAppearanceTextFor(s.language);
     final account = state.account;
     final retentionOptions = <int>{
       30,
@@ -60,13 +63,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }.toList()
       ..sort();
     return Scaffold(
-      appBar: AppBar(title: const Text('设置')),
+      appBar: AppBar(title: Text(settingsText.title)),
       body: StudioContent(
           child: ListView(
         // Add the keyboard inset to the bottom so the lower fields/buttons can
         // always scroll clear of the on-screen keyboard (nested Scaffold + bottom
         // nav can otherwise leave them covered).
-        padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.viewInsetsOf(context).bottom),
+        padding: EdgeInsets.fromLTRB(
+            16, 16, 16, 16 + MediaQuery.viewInsetsOf(context).bottom),
         children: [
           Card(
             child: ListTile(
@@ -74,11 +78,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   account.hasToken ? Icons.check_circle : Icons.error_outline,
                   color: account.hasToken ? Colors.green : Colors.orange),
               title: Text(account.hasToken
-                  ? '已配置（${account.tierName ?? "已验证"}）'
-                  : '未配置 NovelAI API Token'),
+                  ? '${settingsText.accountConfigured} (${account.tierName ?? settingsText.verified})'
+                  : settingsText.accountUnconfigured),
               subtitle: Text(account.anlasBalance == null
-                  ? 'Anlas：未知'
-                  : 'Anlas：${account.anlasBalance}'),
+                  ? '${settingsText.anlas}: ${settingsText.unknown}'
+                  : '${settingsText.anlas}: ${account.anlasBalance}'),
               trailing: IconButton(
                   icon: const Icon(Icons.refresh),
                   onPressed: state.refreshAnlas),
@@ -90,11 +94,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ? Icons.system_update_alt
                   : Icons.verified_outlined),
               title: Text(state.updateInfo?.hasUpdate == true
-                  ? '发现新版本 v${state.updateInfo?.latestVersion}'
-                  : '版本更新'),
+                  ? '${settingsText.updateAvailable} v${state.updateInfo?.latestVersion}'
+                  : settingsText.versionUpdate),
               subtitle: Text(state.updateInfo?.error != null
-                  ? '检查失败：${state.updateInfo?.error}'
-                  : '当前版本 v$appVersion'),
+                  ? '${settingsText.checkFailed}: ${state.updateInfo?.error}'
+                  : '${settingsText.currentVersion} v$appVersion'),
               trailing: state.updateInfo?.hasUpdate == true &&
                       state.updateInfo?.releaseUrl != null
                   ? FilledButton.tonal(
@@ -102,10 +106,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         Uri.parse(state.updateInfo!.releaseUrl!),
                         mode: LaunchMode.externalApplication,
                       ),
-                      child: const Text('查看'),
+                      child: Text(settingsText.view),
                     )
                   : IconButton(
-                      tooltip: '检查更新',
+                      tooltip: settingsText.checkUpdate,
                       onPressed: state.updateChecking
                           ? null
                           : () => state.checkUpdate(manual: true),
@@ -118,7 +122,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
             ),
           ),
-          _Section(title: '网络连接', children: [
+          _Section(title: settingsText.networkSection, children: [
             const ListTile(
               contentPadding: EdgeInsets.zero,
               leading: Icon(Icons.vpn_key_outlined),
@@ -138,7 +142,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               label: Text(testingProxy ? '正在测试...' : '测试网络连接'),
             ),
           ]),
-          _Section(title: 'NovelAI API', children: [
+          _Section(title: settingsText.novelAiSection, children: [
             _TextSetting(
                 label: 'API Base URL',
                 value: s.apiBaseUrl,
@@ -174,7 +178,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               OutlinedButton(
                   onPressed: state.clearToken, child: const Text('清除 Token')),
           ]),
-          _Section(title: 'AI 反推', children: [
+          _Section(title: settingsText.reverseSection, children: [
             _TextSetting(
                 label: '视觉 API 地址',
                 value: s.visionApiUrl,
@@ -203,7 +207,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       child: const Text('检测模型'))),
             ]),
           ]),
-          _Section(title: '转换 API', children: [
+          _Section(title: settingsText.convertSection, children: [
             _TextSetting(
                 label: '文本 API 地址',
                 value: s.convertApiUrl,
@@ -233,7 +237,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       child: const Text('检测模型'))),
             ]),
           ]),
-          _Section(title: 'Tag / MCP', children: [
+          _Section(title: settingsText.tagSection, children: [
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('启用远程 Tag / MCP 服务'),
@@ -310,7 +314,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 title: const Text('灵感胶囊使用 MCP 标签搜索'),
                 subtitle: const Text('开启后优先用远程服务补全；关闭仍可用内置胶囊和已下载标签库。'),
                 value: s.mcpForCapsule,
-                onChanged: (v) => state.setSettings((x) => x.mcpForCapsule = v)),
+                onChanged: (v) =>
+                    state.setSettings((x) => x.mcpForCapsule = v)),
             SwitchListTile(
                 title: const Text('转换使用 MCP 标签补强'),
                 value: s.mcpForConvert,
@@ -322,7 +327,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onChanged: (v) =>
                     state.setSettings((x) => x.mcpForReverse = v)),
           ]),
-          _Section(title: '翻译服务', children: [
+          _Section(title: settingsText.translateSection, children: [
             DropdownButtonFormField<String>(
               value: s.translateProvider,
               isExpanded: true,
@@ -369,7 +374,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ],
           ]),
-          _Section(title: '提示词模板', children: [
+          _Section(title: settingsText.promptTemplatesSection, children: [
             const Text('AI 反推模板'),
             ...ReversePromptMode.values.map((mode) => _TemplateTile(
                   title: mode.label,
@@ -396,7 +401,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             const Text('恢复默认会重新使用桌面端同步的完整模板，不会回到旧版短模板。'),
           ]),
-          _Section(title: '提示词快捷模板', children: [
+          _Section(title: settingsText.promptShortcutsSection, children: [
             if (s.promptShortcuts.isEmpty)
               const Text('暂无快捷模板。可保存常用前缀、后缀和负面提示词，在生成页一键应用。'),
             ...s.promptShortcuts.map(
@@ -424,7 +429,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               label: const Text('新建快捷模板'),
             ),
           ]),
-          _Section(title: '存储与历史', children: [
+          _Section(title: settingsText.storageSection, children: [
             DropdownButtonFormField<int>(
               value: s.historyRetentionDays,
               isExpanded: true,
@@ -482,48 +487,71 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     state.setSettings((x) => x.imageOutputDir = value),
               ),
           ]),
-          _Section(title: '外观 / 安全', children: [
+          _Section(title: appearanceText.sectionTitle, children: [
             DropdownButtonFormField<String>(
               value: s.theme,
               isExpanded: true,
-              decoration: const InputDecoration(
-                labelText: '主题',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: appearanceText.themeLabel,
+                border: const OutlineInputBorder(),
               ),
-              items: const [
-                DropdownMenuItem(value: 'system', child: Text('跟随系统')),
-                DropdownMenuItem(value: 'light', child: Text('浅色')),
-                DropdownMenuItem(value: 'dark', child: Text('深色')),
+              items: [
+                DropdownMenuItem(
+                    value: 'system', child: Text(appearanceText.themeSystem)),
+                DropdownMenuItem(
+                    value: 'light', child: Text(appearanceText.themeLight)),
+                DropdownMenuItem(
+                    value: 'dark', child: Text(appearanceText.themeDark)),
               ],
               onChanged: (value) => value == null
                   ? null
                   : state.setSettings((x) => x.theme = value),
             ),
+            DropdownButtonFormField<String>(
+              value: normalizeAppLocaleCode(s.language),
+              isExpanded: true,
+              decoration: InputDecoration(
+                labelText: appearanceText.languageLabel,
+                border: const OutlineInputBorder(),
+              ),
+              items: [
+                for (final locale in supportedAppLocales)
+                  DropdownMenuItem(
+                    value: locale.code,
+                    child: Text(locale.menuLabel),
+                  ),
+              ],
+              onChanged: (value) => value == null
+                  ? null
+                  : state.setSettings(
+                      (x) => x.language = normalizeAppLocaleCode(value)),
+            ),
             SwitchListTile(
-                title: const Text('Tag 自动补全'),
+                title: Text(appearanceText.tagAutocomplete),
                 value: s.autoComplete,
                 onChanged: (v) => state.setSettings((x) => x.autoComplete = v)),
             SwitchListTile(
-              title: const Text('锁定风格提示词'),
-              subtitle: const Text('应用重启和复用参数时继续保留当前风格提示词。'),
+              title: Text(appearanceText.lockStyleTitle),
+              subtitle: Text(appearanceText.lockStyleSubtitle),
               value: s.lockStylePrompt,
               onChanged: (value) => state.setPromptLock('style', value),
             ),
             SwitchListTile(
-              title: const Text('锁定负面提示词'),
-              subtitle: const Text('应用快捷模板时不会覆盖锁定的负面提示词。'),
+              title: Text(appearanceText.lockNegativeTitle),
+              subtitle: Text(appearanceText.lockNegativeSubtitle),
               value: s.lockNegativePrompt,
               onChanged: (value) => state.setPromptLock('negative', value),
             ),
-            const ListTile(
-              leading: Icon(Icons.security),
-              title: Text('密钥只保存在本机安全存储'),
-              subtitle: Text(
-                  '移动端不支持 stdio MCP；iOS 不支持任意输出目录，使用 App Documents + 分享/Files/相册替代。'),
+            ListTile(
+              leading: const Icon(Icons.security),
+              title: Text(appearanceText.secureTitle),
+              subtitle: Text(appearanceText.secureSubtitle),
             ),
           ]),
-          const ListTile(
-              title: Text(appName), subtitle: Text('移动端全量移植版 · v$appVersion')),
+          ListTile(
+              title: const Text(appName),
+              subtitle:
+                  Text('${appearanceText.appInfoSubtitle} · v$appVersion')),
         ],
       )),
     );
@@ -587,7 +615,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         content: SizedBox(
           // Wide on tablets, but never wider than the dialog on a phone (the old
           // fixed 720 overflowed small screens).
-          width: MediaQuery.sizeOf(dialogContext).width > 800 ? 720 : double.maxFinite,
+          width: MediaQuery.sizeOf(dialogContext).width > 800
+              ? 720
+              : double.maxFinite,
           child: TextField(
             controller: controller,
             minLines: 12,
@@ -641,7 +671,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (dialogContext) => AlertDialog(
         title: const Text('新建提示词快捷模板'),
         content: SizedBox(
-          width: MediaQuery.sizeOf(dialogContext).width > 800 ? 560 : double.maxFinite,
+          width: MediaQuery.sizeOf(dialogContext).width > 800
+              ? 560
+              : double.maxFinite,
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -746,10 +778,9 @@ class _Section extends StatelessWidget {
           collapsedShape: const Border(),
           childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
           expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
-          children: children
-              .expand((w) => [w, const SizedBox(height: 8)])
-              .toList()
-            ..removeLast(),
+          children:
+              children.expand((w) => [w, const SizedBox(height: 8)]).toList()
+                ..removeLast(),
         ),
       );
 }
@@ -773,14 +804,13 @@ class _TextSetting extends StatelessWidget {
 // desktop client. On Android 11+ an arbitrary folder needs "All files access",
 // so we prompt for it; until granted, saves fall back to the app folder.
 class _ImageOutputDirSetting extends StatelessWidget {
-  const _ImageOutputDirSetting(
-      {required this.value, required this.onChanged});
+  const _ImageOutputDirSetting({required this.value, required this.onChanged});
   final String value;
   final ValueChanged<String> onChanged;
 
   Future<void> _pick(BuildContext context) async {
-    final picked = await FilePicker.platform
-        .getDirectoryPath(dialogTitle: '选择图片存放文件夹');
+    final picked =
+        await FilePicker.platform.getDirectoryPath(dialogTitle: '选择图片存放文件夹');
     if (picked == null || picked.trim().isEmpty) return;
     final granted = await StoragePermission.hasAllFilesAccess();
     if (!granted && context.mounted) {

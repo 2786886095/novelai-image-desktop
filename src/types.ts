@@ -1,4 +1,4 @@
-export const APP_VERSION = "1.0.8";
+export const APP_VERSION = "1.0.9";
 export const APP_NAME = "Langbai NovelAI Studio";
 export const PROJECT_REPOSITORY = "https://github.com/2786886095/novelai-image-desktop";
 
@@ -785,9 +785,11 @@ export interface TagSuggestion {
   description?: string;
 }
 
+export type AppLanguage = "zh-CN" | "zh-TW" | "en-US" | "ja-JP" | "ko-KR";
+
 export interface AppSettings {
   hasOnboarded: boolean;
-  language: "zh-CN" | "en-US" | "ja-JP";
+  language: AppLanguage;
   outputDir: string;
   /** Folder for the app.log error log. Empty = default <userData>/logs. */
   logDir: string;

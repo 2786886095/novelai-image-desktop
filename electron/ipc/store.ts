@@ -32,6 +32,12 @@ const SENSITIVE_SETTING_KEYS: SettingKey[] = [
   "baiduSecret",
 ];
 
+const SUPPORTED_LANGUAGES = new Set(["zh-CN", "zh-TW", "en-US", "ja-JP", "ko-KR"]);
+
+function normalizeLanguage(value: unknown): AppSettings["language"] {
+  return typeof value === "string" && SUPPORTED_LANGUAGES.has(value) ? (value as AppSettings["language"]) : "zh-CN";
+}
+
 function canEncrypt(): boolean {
   try {
     return safeStorage.isEncryptionAvailable();
@@ -237,6 +243,7 @@ function normalize(raw: Partial<PersistedData> | null): PersistedData {
   const defaults = defaultSettings();
   const rawSettings = (raw?.settings ?? {}) as Partial<AppSettings>;
   const settings = { ...defaults, ...rawSettings };
+  settings.language = normalizeLanguage(settings.language);
   if (!rawSettings.proxyMode) {
     const legacyProxy = rawSettings.proxyUrl?.trim() ?? "";
     if (!legacyProxy) {
@@ -315,7 +322,10 @@ export function getSetting<K extends SettingKey>(key: K): AppSettings[K] {
 
 export function setSetting<K extends SettingKey>(key: K, value: AppSettings[K]): AppSettings[K] {
   const data = readStore();
-  data.settings = { ...data.settings, [key]: value };
+  data.settings = {
+    ...data.settings,
+    [key]: key === "language" ? normalizeLanguage(value) : value,
+  };
   writeStore(data);
   return data.settings[key];
 }
