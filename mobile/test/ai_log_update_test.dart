@@ -49,7 +49,7 @@ void main() {
     );
     expect(result.ok, isTrue);
     expect(api.aiCallLog, hasLength(1));
-    expect(api.aiCallLog.single.userText, contains('[图片已省略]'));
+    expect(api.aiCallLog.single.userText, contains('[image omitted]'));
     expect(api.aiCallLog.single.userText, isNot(contains('iVBOR')));
     api.clearAiCallLog();
     expect(api.aiCallLog, isEmpty);

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../models/nai_models.dart';
+import '../i18n/app_locales.dart';
 import '../state/app_state.dart';
 import '../ui/studio_shell.dart';
 
@@ -13,17 +14,20 @@ class AiLogScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final logs = state.aiCallLog;
+    final language = state.settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
     return Scaffold(
       appBar: AppBar(
-        title: Text('AI 调用记录 · ${logs.length}'),
+        title: Text(
+            mobileUiFormatFor(language, 'aiLog.title', {'count': logs.length})),
         actions: [
           IconButton(
-            tooltip: '刷新',
+            tooltip: t('aiLog.refresh'),
             onPressed: state.markChanged,
             icon: const Icon(Icons.refresh),
           ),
           IconButton(
-            tooltip: '清空',
+            tooltip: t('aiLog.clear'),
             onPressed: logs.isEmpty ? null : state.clearAiCallLog,
             icon: const Icon(Icons.delete_sweep_outlined),
           ),
@@ -32,7 +36,7 @@ class AiLogScreen extends StatelessWidget {
       body: StudioContent(
         maxWidth: 980,
         child: logs.isEmpty
-            ? const Center(child: Text('还没有 AI 调用记录'))
+            ? Center(child: Text(t('aiLog.empty')))
             : ListView.builder(
                 padding: const EdgeInsets.fromLTRB(12, 8, 12, 80),
                 itemCount: logs.length,
@@ -52,6 +56,8 @@ class _LogCard extends StatelessWidget {
     final color = entry.ok
         ? Theme.of(context).colorScheme.primary
         : Theme.of(context).colorScheme.error;
+    final language = context.watch<AppState>().settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
     return Card(
       child: ExpansionTile(
         leading: Icon(
@@ -68,7 +74,7 @@ class _LogCard extends StatelessWidget {
           _LogSection(title: 'System Prompt', text: entry.systemPrompt),
           _LogSection(title: 'User', text: entry.userText),
           _LogSection(
-            title: entry.ok ? '返回' : '错误',
+            title: entry.ok ? t('aiLog.returned') : t('aiLog.error'),
             text: entry.response,
           ),
         ],
@@ -105,7 +111,9 @@ class _LogSection extends StatelessWidget {
                           style: const TextStyle(fontWeight: FontWeight.bold)),
                     ),
                     IconButton(
-                      tooltip: '复制',
+                      tooltip: mobileUiTextFor(
+                          context.watch<AppState>().settings.language,
+                          'aiLog.copy'),
                       visualDensity: VisualDensity.compact,
                       onPressed: () =>
                           Clipboard.setData(ClipboardData(text: text)),

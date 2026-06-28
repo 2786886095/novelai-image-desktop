@@ -3,6 +3,7 @@ import type {
   AccountSummary,
   AnlasQuoteRequest,
   AnlasQuoteResult,
+  AppLanguage,
   AppSettings,
   AugmentOptions,
   BatchRedrawProject,
@@ -25,6 +26,7 @@ import type {
   WorkingImage,
 } from "./types";
 import { createDefaultBatchRedraw, DEFAULT_AUGMENT_OPTIONS, DEFAULT_I2I_PARAMS, DEFAULT_PARAMS } from "./types";
+import { normalizeAppLanguage } from "./i18n";
 import { expandWildcards } from "./wildcards";
 
 type ActiveTab = "generate" | "inpaint" | "upscale" | "postprocess" | "inspect" | "convert" | "tools" | "records";
@@ -46,6 +48,195 @@ function readWsWidth(key: string, fallback: number): number {
   } catch {
     return fallback;
   }
+}
+
+const STORE_TEXT: Record<AppLanguage, Record<string, string>> = {
+  "zh-CN": {
+    "status.ready": "就绪",
+    "status.apiConfigured": "API 已配置",
+    "status.needApiToken": "请先设置 API Token",
+    "status.quoteFailed": "无法读取生成前扣费",
+    "status.insufficient": "Anlas 余额不足",
+    "status.imageLoaded": "已加载图片：{width}×{height}",
+    "status.imageLoadFailed": "加载图片失败",
+    "status.workbenchCleared": "已清除工作台图片",
+    "status.missingPrompt": "缺少提示词",
+    "status.preparing": "正在准备生成（读取余额与报价）…",
+    "status.paused": "已暂停（{done}/{total}），点击继续",
+    "status.waitingQueueQuote": "当前图片已完成，正在等待队列任务报价...",
+    "status.generatingProgress": "正在生成 {current}/{total}（成功 {done}，失败 {failed}，等待 {waiting}）...",
+    "status.i2iFailed": "图生图失败",
+    "status.inpaintFailed": "重绘失败",
+    "status.upscaleFailed": "超分失败",
+    "status.postFailed": "后期处理失败",
+    "status.cancelGenerate": "正在取消生成并清空队列...",
+    "status.cancelOperation": "正在取消操作...",
+    "status.cancelGenerateDone": "已取消生成，队列已清空。",
+    "status.cancelOperationDone": "已取消操作",
+    "status.historySelected": "已选择历史图片：{date}",
+    "status.needImage": "缺少图片",
+    "status.needOriginal": "缺少原图",
+    "status.needMask": "缺少蒙版",
+    "toast.needApiToken": "请先在设置中配置 API Token。",
+    "toast.imageLoaded": "已加载：{width}×{height}",
+    "toast.needImage": "请先选择图片。",
+    "toast.inspectDone": "反推完成！",
+    "toast.needConvertInput": "请先输入描述文字。",
+    "toast.convertDone": "转换完成！",
+    "toast.noQueue": "当前没有正在执行的生图队列。",
+    "toast.queueNeedPrompt": "请输入正面提示词后再加入队列。",
+    "toast.queueChanged": "队列已变化，本次加入已取消。",
+    "toast.queueAdded": "已加入队列，生成前报价 {amount} Anlas。",
+    "toast.queueAddFailed": "加入队列失败：{message}",
+    "toast.queueRemoved": "已移出队列。",
+    "toast.queueClearedStop": "已清空排队（当前图生成完成后停止）。",
+    "toast.queueCleared": "已清空排队。",
+    "toast.needPrompt": "请输入正面提示词。",
+    "toast.needReference": "请先加载参考图片。",
+    "toast.needOriginal": "请先加载原图。",
+    "toast.needMask": "请先用画笔标记要重绘的区域。",
+    "toast.needLoadedImage": "请先加载图片。",
+    "toast.paramsLoadedSeed": "已载入参数并锁定种子 {seed}，改提示词后生成即为变体",
+    "toast.paramsLoaded": "已载入参数",
+    "toast.renameFailed": "重命名失败",
+    "toast.renamed": "已重命名图片",
+    "group.created": "已创建分组：{name}",
+    "group.nameRequired": "分组名称不能为空",
+    "group.renamed": "已重命名分组：{name}",
+    "group.deleted": "已删除分组（图片已转为未分组）",
+    "group.packing": "正在打包分组...",
+    "error.unknown": "未知错误",
+    "error.generationFailed": "图片生成失败：{detail}",
+    "anlas.spent": "{message} 实扣 {spent} Anlas。",
+    "anlas.spentFailed": "{message} 实扣读取失败，请刷新积分确认。",
+    "quote.readFailed": "{action}扣费读取失败，请稍后重试。",
+    "quote.insufficient": "{action}需要 {amount} Anlas，当前余额 {balance} Anlas，已阻止执行。",
+    "quote.deduct": "{action}将在执行前扣除 {amount} Anlas。",
+    "queue.itemQuoteFailed": "无法读取这张队列图片的生成前扣费。",
+    "queue.itemInsufficient": "这张图片需要 {amount} Anlas，当前余额 {balance} Anlas，未加入队列。",
+    "queue.totalInsufficient": "队列中待生成图片预计还需 {pending} Anlas；加入本张后将超过当前余额 {balance} Anlas，未加入队列。",
+    "queue.noPromptLabel": "(无提示词)",
+    "queue.addedStatus": "已加入队列，等待 {count} 张。",
+    "action.batchGenerate": "批量生成 {count} 张",
+    "action.generateImage": "生成图片",
+    "action.i2i": "图生图",
+    "action.inpaint": "局部重绘",
+    "action.upscale": "云端超分 {scale}x",
+    "action.postprocess": "后期处理",
+    "generate.batchQuoteStatus": "批量生成 1/{total}，生成前报价 {amount} Anlas...",
+    "generate.quoteStatus": "正在生成，生成前报价 {amount} Anlas...",
+    "generate.cancelled": "已取消生成，队列已清空{spent}。",
+    "generate.doneFailed": "完成：成功 {done} 张，失败 {failed} 张{spent}；最后一次错误：{error}",
+    "generate.batchDone": "批量生成完成，共 {done} 张{spent}。",
+    "generate.singleDone": "生成完成，已保存 1 张图片{spent}。",
+    "generate.spent": "，实扣 {spent} Anlas",
+    "generate.spentFailed": "，实扣读取失败",
+    "i2i.status": "正在图生图，生成前报价 {amount} Anlas...",
+    "inpaint.status": "正在局部重绘，生成前报价 {amount} Anlas...",
+    "upscale.status": "正在超分 {scale}x，生成前报价 {amount} Anlas...",
+    "post.status": "正在运行 {tool}，生成前报价 {amount} Anlas...",
+  },
+  "zh-TW": {},
+  "en-US": {
+    "status.ready": "Ready",
+    "status.apiConfigured": "API configured",
+    "status.needApiToken": "Set API Token first",
+    "status.quoteFailed": "Unable to read pre-generation cost",
+    "status.insufficient": "Insufficient Anlas balance",
+    "status.imageLoaded": "Loaded image: {width}×{height}",
+    "status.imageLoadFailed": "Failed to load image",
+    "status.workbenchCleared": "Workbench image cleared",
+    "status.missingPrompt": "Missing prompt",
+    "status.preparing": "Preparing generation (checking balance and quote)…",
+    "status.paused": "Paused ({done}/{total}); click Continue",
+    "status.waitingQueueQuote": "Current image finished; waiting for queued job quote...",
+    "status.generatingProgress": "Generating {current}/{total} (success {done}, failed {failed}, waiting {waiting})...",
+    "status.i2iFailed": "Img2img failed",
+    "status.inpaintFailed": "Inpaint failed",
+    "status.upscaleFailed": "Upscale failed",
+    "status.postFailed": "Post-process failed",
+    "status.cancelGenerate": "Cancelling generation and clearing queue...",
+    "status.cancelOperation": "Cancelling operation...",
+    "status.cancelGenerateDone": "Generation cancelled and queue cleared.",
+    "status.cancelOperationDone": "Operation cancelled",
+    "status.historySelected": "Selected history image: {date}",
+    "status.needImage": "Missing image",
+    "status.needOriginal": "Missing source image",
+    "status.needMask": "Missing mask",
+    "toast.needApiToken": "Configure API Token in Settings first.",
+    "toast.imageLoaded": "Loaded: {width}×{height}",
+    "toast.needImage": "Select an image first.",
+    "toast.inspectDone": "Reverse prompt complete!",
+    "toast.needConvertInput": "Enter description text first.",
+    "toast.convertDone": "Conversion complete!",
+    "toast.noQueue": "No generation queue is currently running.",
+    "toast.queueNeedPrompt": "Enter a positive prompt before adding to queue.",
+    "toast.queueChanged": "Queue changed; this add was cancelled.",
+    "toast.queueAdded": "Added to queue; quoted {amount} Anlas.",
+    "toast.queueAddFailed": "Failed to add to queue: {message}",
+    "toast.queueRemoved": "Removed from queue.",
+    "toast.queueClearedStop": "Queue cleared; current image will finish then stop.",
+    "toast.queueCleared": "Queue cleared.",
+    "toast.needPrompt": "Enter a positive prompt.",
+    "toast.needReference": "Load a reference image first.",
+    "toast.needOriginal": "Load the source image first.",
+    "toast.needMask": "Mark the repaint area with the brush first.",
+    "toast.needLoadedImage": "Load an image first.",
+    "toast.paramsLoadedSeed": "Parameters loaded and seed locked to {seed}; edit the prompt to generate a variant",
+    "toast.paramsLoaded": "Parameters loaded",
+    "toast.renameFailed": "Rename failed",
+    "toast.renamed": "Image renamed",
+    "group.created": "Created group: {name}",
+    "group.nameRequired": "Group name cannot be empty",
+    "group.renamed": "Renamed group: {name}",
+    "group.deleted": "Group deleted; images moved to Ungrouped",
+    "group.packing": "Packaging group...",
+    "error.unknown": "Unknown error",
+    "error.generationFailed": "Image generation failed: {detail}",
+    "anlas.spent": "{message} Spent {spent} Anlas.",
+    "anlas.spentFailed": "{message} Could not read actual cost; refresh balance to confirm.",
+    "quote.readFailed": "{action} cost quote failed; try again later.",
+    "quote.insufficient": "{action} requires {amount} Anlas; current balance is {balance} Anlas. Blocked.",
+    "quote.deduct": "{action} will deduct {amount} Anlas before execution.",
+    "queue.itemQuoteFailed": "Unable to quote this queued image before generation.",
+    "queue.itemInsufficient": "This image requires {amount} Anlas; current balance is {balance} Anlas. Not queued.",
+    "queue.totalInsufficient": "Queued pending images need about {pending} Anlas; adding this one would exceed current balance {balance} Anlas. Not queued.",
+    "queue.noPromptLabel": "(no prompt)",
+    "queue.addedStatus": "Added to queue; {count} waiting.",
+    "action.batchGenerate": "Batch generate {count} images",
+    "action.generateImage": "Generate image",
+    "action.i2i": "Img2img",
+    "action.inpaint": "Inpaint",
+    "action.upscale": "Cloud upscale {scale}x",
+    "action.postprocess": "Post-process",
+    "generate.batchQuoteStatus": "Batch generation 1/{total}, quoted {amount} Anlas...",
+    "generate.quoteStatus": "Generating, quoted {amount} Anlas...",
+    "generate.cancelled": "Generation cancelled and queue cleared{spent}.",
+    "generate.doneFailed": "Done: {done} success, {failed} failed{spent}; last error: {error}",
+    "generate.batchDone": "Batch generation complete: {done} images{spent}.",
+    "generate.singleDone": "Generation complete; saved 1 image{spent}.",
+    "generate.spent": ", spent {spent} Anlas",
+    "generate.spentFailed": ", actual cost unavailable",
+    "i2i.status": "Running img2img, quoted {amount} Anlas...",
+    "inpaint.status": "Running inpaint, quoted {amount} Anlas...",
+    "upscale.status": "Upscaling {scale}x, quoted {amount} Anlas...",
+    "post.status": "Running {tool}, quoted {amount} Anlas...",
+  },
+  "ja-JP": {},
+  "ko-KR": {},
+};
+
+STORE_TEXT["zh-TW"] = STORE_TEXT["en-US"];
+STORE_TEXT["ja-JP"] = STORE_TEXT["en-US"];
+STORE_TEXT["ko-KR"] = STORE_TEXT["en-US"];
+
+function storeText(settings: AppSettings | null | undefined, key: string) {
+  const language = normalizeAppLanguage(settings?.language);
+  return STORE_TEXT[language][key] ?? STORE_TEXT["en-US"][key] ?? STORE_TEXT["zh-CN"][key] ?? key;
+}
+
+function storeFormat(settings: AppSettings | null | undefined, key: string, values: Record<string, unknown>) {
+  return storeText(settings, key).replace(/\{(\w+)\}/g, (_, name: string) => String(values[name] ?? ""));
 }
 
 export interface QueuedGenerationJob {
@@ -228,9 +419,9 @@ interface AppState {
   clearToast: () => void;
 }
 
-function requireToken(set: (state: Partial<AppState>) => void, hasToken: boolean) {
+function requireToken(set: (state: Partial<AppState>) => void, hasToken: boolean, settings?: AppSettings | null) {
   if (hasToken) return true;
-  set({ showSettings: true, statusText: "请先设置 API Token", toast: "请先在设置中配置 API Token。" });
+  set({ showSettings: true, statusText: storeText(settings, "status.needApiToken"), toast: storeText(settings, "toast.needApiToken") });
   return false;
 }
 
@@ -279,9 +470,11 @@ function extrasVibeKeys(model: string, extras: GenerateExtras): string[] {
   return (extras.vibeImages ?? []).map((v) => vibeKeyOf(model, v));
 }
 
-function imageGenerationFailureMessage(message?: string) {
-  const detail = message?.trim() || "未知错误";
-  return detail.includes("图片生成失败") ? detail : `图片生成失败：${detail}`;
+function imageGenerationFailureMessage(settings: AppSettings | null | undefined, message?: string) {
+  const detail = message?.trim() || storeText(settings, "error.unknown");
+  return detail.includes("图片生成失败") || detail.includes("Image generation failed")
+    ? detail
+    : storeFormat(settings, "error.generationFailed", { detail });
 }
 
 function anlasSpent(before?: number, after?: number) {
@@ -289,29 +482,30 @@ function anlasSpent(before?: number, after?: number) {
   return Math.max(0, before - after);
 }
 
-function withAnlasSpent(message: string, spent: number | null) {
-  if (spent == null) return `${message} 实扣读取失败，请刷新积分确认。`;
-  return `${message} 实扣 ${spent} Anlas。`;
+function withAnlasSpent(settings: AppSettings | null | undefined, message: string, spent: number | null) {
+  if (spent == null) return storeFormat(settings, "anlas.spentFailed", { message });
+  return storeFormat(settings, "anlas.spent", { message, spent });
 }
 
 async function ensureAnlasBeforeRun(
   set: (state: Partial<AppState>) => void,
   request: AnlasQuoteRequest,
   actionLabel: string,
+  settings?: AppSettings | null,
 ): Promise<AnlasQuoteResult | null> {
   const quote = await window.naiDesktop.quoteAnlas(request);
   if (!quote.ok || typeof quote.amount !== "number") {
-    const message = quote.message || `${actionLabel}扣费读取失败，请稍后重试。`;
-    set({ statusText: "无法读取生成前扣费", toast: message, lastError: message });
+    const message = quote.message || storeFormat(settings, "quote.readFailed", { action: actionLabel });
+    set({ statusText: storeText(settings, "status.quoteFailed"), toast: message, lastError: message });
     return null;
   }
   if (quote.insufficient) {
-    const balance = quote.balance ?? "未知";
-    const message = `${actionLabel}需要 ${quote.amount} Anlas，当前余额 ${balance} Anlas，已阻止执行。`;
-    set({ statusText: "Anlas 余额不足", toast: message, lastError: message });
+    const balance = quote.balance ?? storeText(settings, "error.unknown");
+    const message = storeFormat(settings, "quote.insufficient", { action: actionLabel, amount: quote.amount, balance });
+    set({ statusText: storeText(settings, "status.insufficient"), toast: message, lastError: message });
     return null;
   }
-  set({ statusText: `${actionLabel}将在执行前扣除 ${quote.amount} Anlas。`, lastError: "" });
+  set({ statusText: storeFormat(settings, "quote.deduct", { action: actionLabel, amount: quote.amount }), lastError: "" });
   return quote;
 }
 
@@ -404,7 +598,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   queueProgress: null,
   currentAnlasSpent: null,
   lastAnlasSpent: null,
-  statusText: "就绪",
+  statusText: storeText(null, "status.ready"),
   lastError: "",
   toast: "",
   updateInfo: null,
@@ -454,7 +648,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       selectedGroupId,
       history,
       currentImage: history[0] ?? null,
-      statusText: account.hasToken ? "API 已配置" : "请先设置 API Token",
+      statusText: account.hasToken ? storeText(settings, "status.apiConfigured") : storeText(settings, "status.needApiToken"),
     });
     // Refresh the live balance off the boot path so a slow network never delays
     // the first frame (refreshAccount swallows network errors → cached/stale).
@@ -548,13 +742,19 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   async createHistoryGroup(name) {
     const groups = await window.naiDesktop.createHistoryGroup(name);
-    set({ historyGroups: groups, toast: name.trim() ? `已创建分组：${name.trim()}` : "分组名称不能为空" });
+    const settings = get().settings;
+    set({
+      historyGroups: groups,
+      toast: name.trim()
+        ? storeFormat(settings, "group.created", { name: name.trim() })
+        : storeText(settings, "group.nameRequired"),
+    });
   },
 
   async renameHistoryGroup(id, name) {
     if (!name.trim()) return;
     const groups = await window.naiDesktop.renameHistoryGroup(id, name);
-    set({ historyGroups: groups, toast: `已重命名分组：${name.trim()}` });
+    set({ historyGroups: groups, toast: storeFormat(get().settings, "group.renamed", { name: name.trim() }) });
   },
 
   async deleteHistoryGroup(id) {
@@ -562,11 +762,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     const selectedGroupId = get().selectedGroupId === id ? "" : get().selectedGroupId;
     set({ historyGroups: groups, selectedGroupId });
     await get().refreshHistory();
-    set({ toast: "已删除分组（图片已转为未分组）" });
+    set({ toast: storeText(get().settings, "group.deleted") });
   },
 
   async exportHistoryGroup(groupId) {
-    set({ toast: "正在打包分组..." });
+    set({ toast: storeText(get().settings, "group.packing") });
     const result = await window.naiDesktop.exportHistoryGroup(groupId);
     set({ toast: result.message });
   },
@@ -594,7 +794,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   async refreshAccount() {
     const account = await window.naiDesktop.hasToken();
-    set({ account, statusText: account.hasToken ? "API 已配置" : "请先设置 API Token" });
+    const settings = get().settings;
+    set({ account, statusText: account.hasToken ? storeText(settings, "status.apiConfigured") : storeText(settings, "status.needApiToken") });
     return account;
   },
 
@@ -606,10 +807,10 @@ export const useAppStore = create<AppState>((set, get) => ({
         comparisonBeforeImage: null,
         inpaintMask: null,
         maskRevision: get().maskRevision + 1,
-        statusText: `已加载图片：${result.image.width}×${result.image.height}`,
+        statusText: storeFormat(get().settings, "status.imageLoaded", { width: result.image.width, height: result.image.height }),
       });
     } else if (result.message) {
-      set({ toast: result.message, statusText: "加载图片失败" });
+      set({ toast: result.message, statusText: storeText(get().settings, "status.imageLoadFailed") });
     }
   },
 
@@ -629,11 +830,11 @@ export const useAppStore = create<AppState>((set, get) => ({
         comparisonBeforeImage: null,
         inpaintMask: null,
         maskRevision: get().maskRevision + 1,
-        statusText: `已加载图片：${result.image.width}×${result.image.height}`,
-        toast: `已加载：${result.image.width}×${result.image.height}`,
+        statusText: storeFormat(get().settings, "status.imageLoaded", { width: result.image.width, height: result.image.height }),
+        toast: storeFormat(get().settings, "toast.imageLoaded", { width: result.image.width, height: result.image.height }),
       });
     } else if (result.message) {
-      set({ toast: result.message, statusText: "加载图片失败" });
+      set({ toast: result.message, statusText: storeText(get().settings, "status.imageLoadFailed") });
     }
   },
 
@@ -644,7 +845,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       comparisonBeforeImage: null,
       inpaintMask: null,
       maskRevision: get().maskRevision + 1,
-      statusText: "已清除工作台图片",
+      statusText: storeText(get().settings, "status.workbenchCleared"),
     });
   },
 
@@ -815,7 +1016,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   async runReversePrompt() {
     const { inspectImageBase64, reversePromptMode, reversePromptScope, reversePromptHint, reverseKnownCharacter } = get();
     if (!inspectImageBase64) {
-      set({ toast: "请先选择图片。" });
+      set({ toast: storeText(get().settings, "toast.needImage") });
       return;
     }
     set({ reversePrompting: true, reversePromptVariants: null });
@@ -828,7 +1029,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     );
     set({ reversePrompting: false });
     if (result.ok && result.prompt) {
-      set({ reversePromptText: result.prompt, reversePromptVariants: result.variants ?? null, toast: "反推完成！" });
+      set({ reversePromptText: result.prompt, reversePromptVariants: result.variants ?? null, toast: storeText(get().settings, "toast.inspectDone") });
     } else {
       set({ toast: result.message });
     }
@@ -853,14 +1054,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   async runConvertPrompt() {
     const { convertInput, convertMode, convertKnownCharacter } = get();
     if (!convertInput.trim()) {
-      set({ toast: "请先输入描述文字。" });
+      set({ toast: storeText(get().settings, "toast.needConvertInput") });
       return;
     }
     set({ converting: true, convertResultVariants: null });
     const result = await window.naiDesktop.convertPrompt(convertInput, convertMode, convertKnownCharacter);
     set({ converting: false });
     if (result.ok && result.result) {
-      set({ convertResult: result.result, convertResultVariants: result.variants ?? null, toast: "转换完成！" });
+      set({ convertResult: result.result, convertResultVariants: result.variants ?? null, toast: storeText(get().settings, "toast.convertDone") });
     } else {
       set({ toast: result.message });
     }
@@ -878,12 +1079,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   async enqueueGeneration() {
     const state = get();
     if (!state.isGenerating || !state.isGenerateQueueRunning) {
-      set({ toast: "当前没有正在执行的生图队列。" });
+      set({ toast: storeText(state.settings, "toast.noQueue") });
       return;
     }
     if (state.queueAdding) return;
     if (!state.params.positivePrompt.trim()) {
-      set({ toast: "请输入正面提示词后再加入队列。", statusText: "缺少提示词" });
+      set({ toast: storeText(state.settings, "toast.queueNeedPrompt"), statusText: storeText(state.settings, "status.missingPrompt") });
       return;
     }
 
@@ -915,19 +1116,19 @@ export const useAppStore = create<AppState>((set, get) => ({
         alreadyQueuedVibes,
       });
       if (!quote.ok || typeof quote.amount !== "number") {
-        const message = quote.message || "无法读取这张队列图片的生成前扣费。";
+        const message = quote.message || storeText(get().settings, "queue.itemQuoteFailed");
         set({ toast: message, lastError: message });
         return;
       }
       if (quote.insufficient) {
-        const message = `这张图片需要 ${quote.amount} Anlas，当前余额 ${quote.balance ?? "未知"} Anlas，未加入队列。`;
+        const message = storeFormat(get().settings, "queue.itemInsufficient", { amount: quote.amount, balance: quote.balance ?? storeText(get().settings, "error.unknown") });
         set({ toast: message, lastError: message });
         return;
       }
       const pendingQuotedAnlas = get().generationQueue.reduce((sum, job) => sum + job.quotedAnlas, 0);
       const knownBalance = quote.balance ?? freshAccount.anlasBalance;
       if (typeof knownBalance === "number" && pendingQuotedAnlas + quote.amount > knownBalance) {
-        const message = `队列中待生成图片预计还需 ${pendingQuotedAnlas} Anlas；加入本张后将超过当前余额 ${knownBalance} Anlas，未加入队列。`;
+        const message = storeFormat(get().settings, "queue.totalInsufficient", { pending: pendingQuotedAnlas, balance: knownBalance });
         set({ toast: message, lastError: message });
         return;
       }
@@ -939,7 +1140,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         get().queueVersion !== queueVersion
       ) {
         // Cancelled, superseded, or the queue was cleared while we were quoting.
-        set({ toast: "队列已变化，本次加入已取消。" });
+        set({ toast: storeText(get().settings, "toast.queueChanged") });
         return;
       }
 
@@ -949,20 +1150,20 @@ export const useAppStore = create<AppState>((set, get) => ({
         extras,
         quotedAnlas: quote.amount,
         addedAt: Date.now(),
-        label: params.positivePrompt.trim().slice(0, 60) || "(无提示词)",
+        label: params.positivePrompt.trim().slice(0, 60) || storeText(get().settings, "queue.noPromptLabel"),
       };
       set((current) => ({
         generationQueue: [...current.generationQueue, job],
         queueProgress: current.queueProgress
           ? { ...current.queueProgress, total: current.queueProgress.total + 1 }
           : { done: 0, failed: 0, total: 1 },
-        statusText: `已加入队列，等待 ${current.generationQueue.length + 1} 张。`,
-        toast: `已加入队列，生成前报价 ${quote.amount} Anlas。`,
+        statusText: storeFormat(current.settings, "queue.addedStatus", { count: current.generationQueue.length + 1 }),
+        toast: storeFormat(current.settings, "toast.queueAdded", { amount: quote.amount }),
         lastError: "",
       }));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      set({ toast: `加入队列失败：${message}`, lastError: message });
+      set({ toast: storeFormat(get().settings, "toast.queueAddFailed", { message }), lastError: message });
     } finally {
       set({ queueAdding: false });
     }
@@ -982,7 +1183,7 @@ export const useAppStore = create<AppState>((set, get) => ({
             ),
           }
         : current.queueProgress;
-      return { generationQueue, queueProgress, toast: "已移出队列。" };
+      return { generationQueue, queueProgress, toast: storeText(current.settings, "toast.queueRemoved") };
     });
   },
 
@@ -1003,7 +1204,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         clearQueueRequested: current.isGenerating,
         queueVersion: current.queueVersion + 1, // invalidate any in-flight enqueue quote
         queueProgress,
-        toast: current.isGenerating ? "已清空排队（当前图生成完成后停止）。" : "已清空排队。",
+        toast: current.isGenerating ? storeText(current.settings, "toast.queueClearedStop") : storeText(current.settings, "toast.queueCleared"),
       };
     });
   },
@@ -1014,9 +1215,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   async generate() {
     const state = get();
-    if (!requireToken(set, state.account.hasToken)) return;
+    if (!requireToken(set, state.account.hasToken, state.settings)) return;
     if (!state.params.positivePrompt.trim()) {
-      set({ toast: "请输入正面提示词。", statusText: "缺少提示词" });
+      set({ toast: storeText(state.settings, "toast.needPrompt"), statusText: storeText(state.settings, "status.missingPrompt") });
       return;
     }
     const initialTotal = Math.max(1, state.batchCount);
@@ -1032,7 +1233,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       isGenerating: true,
       isGenerateQueueRunning: true,
       activeGenerationRunId: runId,
-      statusText: "正在准备生成（读取余额与报价）…",
+      statusText: storeText(state.settings, "status.preparing"),
     });
     const freshAccount = await get().refreshAccount();
     if (get().activeGenerationRunId !== runId) return; // cancelled during prep
@@ -1045,7 +1246,10 @@ export const useAppStore = create<AppState>((set, get) => ({
         batchCount: initialTotal,
         account: freshAccount,
       },
-      initialTotal > 1 ? `批量生成 ${initialTotal} 张` : "生成图片",
+      initialTotal > 1
+        ? storeFormat(state.settings, "action.batchGenerate", { count: initialTotal })
+        : storeText(state.settings, "action.generateImage"),
+      state.settings,
     );
     if (!quote || get().activeGenerationRunId !== runId) {
       if (get().activeGenerationRunId === runId) {
@@ -1070,8 +1274,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       lastError: "",
       statusText:
         initialTotal > 1
-          ? `批量生成 1/${initialTotal}，生成前报价 ${quote.amount} Anlas...`
-          : `正在生成，生成前报价 ${quote.amount} Anlas...`,
+          ? storeFormat(state.settings, "generate.batchQuoteStatus", { total: initialTotal, amount: quote.amount })
+          : storeFormat(state.settings, "generate.quoteStatus", { amount: quote.amount }),
     });
 
     let completed = 0;
@@ -1089,7 +1293,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       // Honor pause: hold here until resumed or cancelled.
       while (get().queuePaused && get().isGenerating && get().activeGenerationRunId === runId) {
         const progressTotal = get().queueProgress?.total ?? initialTotal;
-        set({ statusText: `已暂停（${completed + failed}/${progressTotal}），点击继续` });
+        set({ statusText: storeFormat(get().settings, "status.paused", { done: completed + failed, total: progressTotal }) });
         await new Promise((r) => setTimeout(r, 250));
       }
       if (!get().isGenerating || get().activeGenerationRunId !== runId) break;
@@ -1107,7 +1311,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       } else {
         const queued = get().generationQueue[0];
         if (!queued && get().queueAdding) {
-          set({ statusText: "当前图片已完成，正在等待队列任务报价..." });
+          set({ statusText: storeText(get().settings, "status.waitingQueueQuote") });
           await new Promise((resolve) => setTimeout(resolve, 100));
           continue;
         }
@@ -1120,7 +1324,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       const progressTotal = get().queueProgress?.total ?? initialTotal;
       const currentNumber = completed + failed + 1;
       set({
-        statusText: `正在生成 ${currentNumber}/${progressTotal}（成功 ${completed}，失败 ${failed}，等待 ${get().generationQueue.length}）...`,
+        statusText: storeFormat(get().settings, "status.generatingProgress", {
+          current: currentNumber,
+          total: progressTotal,
+          done: completed,
+          failed,
+          waiting: get().generationQueue.length,
+        }),
       });
       const currentParams = {
         ...base,
@@ -1161,17 +1371,20 @@ export const useAppStore = create<AppState>((set, get) => ({
     const finalAccount = await get().refreshAccount();
     if (get().activeGenerationRunId !== runId) return;
     const spent = anlasSpent(anlasBefore, finalAccount.anlasBalance);
-    const spentText = spent != null ? `，实扣 ${spent} Anlas` : "，实扣读取失败";
+    const settings = get().settings;
+    const spentText = spent != null
+      ? storeFormat(settings, "generate.spent", { spent })
+      : storeText(settings, "generate.spentFailed");
     const finalMsg =
       cancelled
-        ? `已取消生成，队列已清空${spentText}。`
+        ? storeFormat(settings, "generate.cancelled", { spent: spentText })
         : failed > 0 && completed === 0
-          ? imageGenerationFailureMessage(lastError)
+          ? imageGenerationFailureMessage(settings, lastError)
           : failed > 0
-            ? `完成：成功 ${completed} 张，失败 ${failed} 张${spentText}；最后一次错误：${lastError || "未知错误"}`
+            ? storeFormat(settings, "generate.doneFailed", { done: completed, failed, spent: spentText, error: lastError || storeText(settings, "error.unknown") })
             : completed > 1
-              ? `批量生成完成，共 ${completed} 张${spentText}。`
-              : `生成完成，已保存 1 张图片${spentText}。`;
+              ? storeFormat(settings, "generate.batchDone", { done: completed, spent: spentText })
+              : storeFormat(settings, "generate.singleDone", { spent: spentText });
     set({
       isGenerating: false,
       isGenerateQueueRunning: false,
@@ -1189,9 +1402,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   async generateI2I() {
     const state = get();
-    if (!requireToken(set, state.account.hasToken)) return;
+    if (!requireToken(set, state.account.hasToken, state.settings)) return;
     if (!state.workbenchImage) {
-      set({ toast: "请先加载参考图片。", statusText: "缺少参考图" });
+      set({ toast: storeText(state.settings, "toast.needReference"), statusText: storeText(state.settings, "status.needImage") });
       return;
     }
     const freshAccount = await get().refreshAccount();
@@ -1204,7 +1417,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         i2iParams: state.i2iParams,
         account: freshAccount,
       },
-      "图生图",
+      storeText(state.settings, "action.i2i"),
+      state.settings,
     );
     if (!quote) return;
     const anlasBefore = freshAccount.anlasBalance;
@@ -1213,32 +1427,32 @@ export const useAppStore = create<AppState>((set, get) => ({
       currentAnlasSpent: null,
       lastAnlasSpent: null,
       lastError: "",
-      statusText: `正在图生图，生成前报价 ${quote.amount} Anlas...`,
+      statusText: storeFormat(state.settings, "i2i.status", { amount: quote.amount }),
     });
     const result = await window.naiDesktop.generateI2I(state.params, state.i2iParams, buildExtras(state));
     if (result.ok && result.items.length > 0) {
       const current = result.items[0];
       await refreshAfterImage(set, get, current, { compareBefore: state.workbenchImage });
       const spent = anlasSpent(anlasBefore, get().account.anlasBalance);
-      const message = withAnlasSpent(result.message, spent);
+      const message = withAnlasSpent(get().settings, result.message, spent);
       set({ isGenerating: false, currentAnlasSpent: null, lastAnlasSpent: spent, statusText: message, toast: message });
     } else {
       const finalAccount = await get().refreshAccount();
       const spent = anlasSpent(anlasBefore, finalAccount.anlasBalance);
-      const message = withAnlasSpent(result.message, spent);
-      set({ isGenerating: false, currentAnlasSpent: null, lastAnlasSpent: spent, lastError: message, statusText: "图生图失败", toast: message });
+      const message = withAnlasSpent(get().settings, result.message, spent);
+      set({ isGenerating: false, currentAnlasSpent: null, lastAnlasSpent: spent, lastError: message, statusText: storeText(get().settings, "status.i2iFailed"), toast: message });
     }
   },
 
   async inpaint() {
     const state = get();
-    if (!requireToken(set, state.account.hasToken)) return;
+    if (!requireToken(set, state.account.hasToken, state.settings)) return;
     if (!state.workbenchImage) {
-      set({ toast: "请先加载原图。", statusText: "缺少原图" });
+      set({ toast: storeText(state.settings, "toast.needOriginal"), statusText: storeText(state.settings, "status.needOriginal") });
       return;
     }
     if (!state.inpaintMask) {
-      set({ toast: "请先用画笔标记要重绘的区域。", statusText: "缺少蒙版" });
+      set({ toast: storeText(state.settings, "toast.needMask"), statusText: storeText(state.settings, "status.needMask") });
       return;
     }
     const freshAccount = await get().refreshAccount();
@@ -1254,7 +1468,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         image: { width: state.workbenchImage.width, height: state.workbenchImage.height },
         account: freshAccount,
       },
-      "局部重绘",
+      storeText(state.settings, "action.inpaint"),
+      state.settings,
     );
     if (!quote) return;
     const anlasBefore = freshAccount.anlasBalance;
@@ -1263,7 +1478,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       currentAnlasSpent: null,
       lastAnlasSpent: null,
       lastError: "",
-      statusText: `正在局部重绘，生成前报价 ${quote.amount} Anlas...`,
+      statusText: storeFormat(state.settings, "inpaint.status", { amount: quote.amount }),
     });
     const result = await window.naiDesktop.inpaint(
       state.params,
@@ -1276,21 +1491,21 @@ export const useAppStore = create<AppState>((set, get) => ({
       const current = result.items[0];
       await refreshAfterImage(set, get, current, { compareBefore: state.workbenchImage, loadWorkbench: true });
       const spent = anlasSpent(anlasBefore, get().account.anlasBalance);
-      const message = withAnlasSpent(result.message, spent);
+      const message = withAnlasSpent(get().settings, result.message, spent);
       set({ isGenerating: false, currentAnlasSpent: null, lastAnlasSpent: spent, statusText: message, toast: message });
     } else {
       const finalAccount = await get().refreshAccount();
       const spent = anlasSpent(anlasBefore, finalAccount.anlasBalance);
-      const message = withAnlasSpent(result.message, spent);
-      set({ isGenerating: false, currentAnlasSpent: null, lastAnlasSpent: spent, lastError: message, statusText: "重绘失败", toast: message });
+      const message = withAnlasSpent(get().settings, result.message, spent);
+      set({ isGenerating: false, currentAnlasSpent: null, lastAnlasSpent: spent, lastError: message, statusText: storeText(get().settings, "status.inpaintFailed"), toast: message });
     }
   },
 
   async upscaleCurrentImage() {
     const state = get();
-    if (!requireToken(set, state.account.hasToken)) return;
+    if (!requireToken(set, state.account.hasToken, state.settings)) return;
     if (!state.workbenchImage) {
-      set({ toast: "请先加载图片。", statusText: "缺少图片" });
+      set({ toast: storeText(state.settings, "toast.needLoadedImage"), statusText: storeText(state.settings, "status.needImage") });
       return;
     }
     const freshAccount = await get().refreshAccount();
@@ -1302,7 +1517,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         image: { width: state.workbenchImage.width, height: state.workbenchImage.height },
         account: freshAccount,
       },
-      `云端超分 ${state.upscaleScale}x`,
+      storeFormat(state.settings, "action.upscale", { scale: state.upscaleScale }),
+      state.settings,
     );
     if (!quote) return;
     const anlasBefore = freshAccount.anlasBalance;
@@ -1311,27 +1527,27 @@ export const useAppStore = create<AppState>((set, get) => ({
       currentAnlasSpent: null,
       lastAnlasSpent: null,
       lastError: "",
-      statusText: `正在超分 ${state.upscaleScale}x，生成前报价 ${quote.amount} Anlas...`,
+      statusText: storeFormat(state.settings, "upscale.status", { scale: state.upscaleScale, amount: quote.amount }),
     });
     const result = await window.naiDesktop.upscaleImage(state.upscaleScale);
     if (result.ok && result.item) {
       await refreshAfterImage(set, get, result.item, { compareBefore: state.workbenchImage });
       const spent = anlasSpent(anlasBefore, get().account.anlasBalance);
-      const message = withAnlasSpent(result.message, spent);
+      const message = withAnlasSpent(get().settings, result.message, spent);
       set({ isGenerating: false, currentAnlasSpent: null, lastAnlasSpent: spent, statusText: message, toast: message });
     } else {
       const finalAccount = await get().refreshAccount();
       const spent = anlasSpent(anlasBefore, finalAccount.anlasBalance);
-      const message = withAnlasSpent(result.message, spent);
-      set({ isGenerating: false, currentAnlasSpent: null, lastAnlasSpent: spent, lastError: message, statusText: "超分失败", toast: message });
+      const message = withAnlasSpent(get().settings, result.message, spent);
+      set({ isGenerating: false, currentAnlasSpent: null, lastAnlasSpent: spent, lastError: message, statusText: storeText(get().settings, "status.upscaleFailed"), toast: message });
     }
   },
 
   async runDirectorTool() {
     const state = get();
-    if (!requireToken(set, state.account.hasToken)) return;
+    if (!requireToken(set, state.account.hasToken, state.settings)) return;
     if (!state.workbenchImage) {
-      set({ toast: "请先加载图片。", statusText: "缺少图片" });
+      set({ toast: storeText(state.settings, "toast.needLoadedImage"), statusText: storeText(state.settings, "status.needImage") });
       return;
     }
     const freshAccount = await get().refreshAccount();
@@ -1343,7 +1559,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         image: { width: state.workbenchImage.width, height: state.workbenchImage.height },
         account: freshAccount,
       },
-      "后期处理",
+      storeText(state.settings, "action.postprocess"),
+      state.settings,
     );
     if (!quote) return;
     const anlasBefore = freshAccount.anlasBalance;
@@ -1352,20 +1569,20 @@ export const useAppStore = create<AppState>((set, get) => ({
       currentAnlasSpent: null,
       lastAnlasSpent: null,
       lastError: "",
-      statusText: `正在运行 ${state.directorTool}，生成前报价 ${quote.amount} Anlas...`,
+      statusText: storeFormat(state.settings, "post.status", { tool: state.directorTool, amount: quote.amount }),
     });
     const result = await window.naiDesktop.augmentImage(state.directorTool, state.augmentOptions);
     if (result.ok && result.items.length > 0) {
       const current = result.items[0];
       await refreshAfterImage(set, get, current, { compareBefore: state.workbenchImage });
       const spent = anlasSpent(anlasBefore, get().account.anlasBalance);
-      const message = withAnlasSpent(result.message, spent);
+      const message = withAnlasSpent(get().settings, result.message, spent);
       set({ isGenerating: false, currentAnlasSpent: null, lastAnlasSpent: spent, statusText: message, toast: message });
     } else {
       const finalAccount = await get().refreshAccount();
       const spent = anlasSpent(anlasBefore, finalAccount.anlasBalance);
-      const message = withAnlasSpent(result.message, spent);
-      set({ isGenerating: false, currentAnlasSpent: null, lastAnlasSpent: spent, lastError: message, statusText: "后期处理失败", toast: message });
+      const message = withAnlasSpent(get().settings, result.message, spent);
+      set({ isGenerating: false, currentAnlasSpent: null, lastAnlasSpent: spent, lastError: message, statusText: storeText(get().settings, "status.postFailed"), toast: message });
     }
   },
 
@@ -1381,11 +1598,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       queuePaused: false,
       queueProgress: null,
       currentAnlasSpent: null,
-      statusText: wasGenerateQueue ? "正在取消生成并清空队列..." : "正在取消操作...",
+      statusText: wasGenerateQueue ? storeText(current.settings, "status.cancelGenerate") : storeText(current.settings, "status.cancelOperation"),
     }));
     await window.naiDesktop.cancel();
     if (!get().isGenerating) {
-      set({ statusText: wasGenerateQueue ? "已取消生成，队列已清空。" : "已取消操作" });
+      set({ statusText: wasGenerateQueue ? storeText(get().settings, "status.cancelGenerateDone") : storeText(get().settings, "status.cancelOperationDone") });
     }
   },
 
@@ -1395,7 +1612,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   selectImage(item) {
-    set({ currentImage: item, comparisonBeforeImage: null, statusText: `已选择历史图片：${item.date}` });
+    set({ currentImage: item, comparisonBeforeImage: null, statusText: storeFormat(get().settings, "status.historySelected", { date: item.date }) });
     void get().loadWorkbenchFromPath(item.filePath);
   },
 
@@ -1408,7 +1625,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       activeTab: "generate",
       currentImage: item,
       comparisonBeforeImage: null,
-      toast: seed > 0 ? `已载入参数并锁定种子 ${seed}，改提示词后生成即为变体` : "已载入参数",
+      toast: seed > 0
+        ? storeFormat(state.settings, "toast.paramsLoadedSeed", { seed })
+        : storeText(state.settings, "toast.paramsLoaded"),
     }));
   },
 
@@ -1435,13 +1654,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   async renameHistoryItem(id, name) {
     const res = await window.naiDesktop.renameHistoryItem(id, name);
     if (!res.ok) {
-      set({ toast: res.message ?? "重命名失败" });
+      set({ toast: res.message ?? storeText(get().settings, "toast.renameFailed") });
       return;
     }
     await get().refreshHistory();
     const current = get().currentImage;
     if (current?.id === id && res.item) set({ currentImage: res.item });
-    set({ toast: "已重命名图片" });
+    set({ toast: storeText(get().settings, "toast.renamed") });
   },
 
   clearToast() {

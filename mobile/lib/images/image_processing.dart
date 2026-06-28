@@ -65,7 +65,7 @@ PreparedImage prepareImageWithinPixels(
   int maxPixels = 1024 * 1024,
 }) {
   final source = image_lib.decodeImage(bytes);
-  if (source == null) throw const FormatException('无法读取图片内容');
+  if (source == null) throw const FormatException('Could not read image data');
   final pixels = source.width * source.height;
   if (pixels <= maxPixels) {
     return PreparedImage(
@@ -96,7 +96,9 @@ PreparedDirectorImage prepareDirectorImage(
   int maxPixels = 1024 * 1024,
 }) {
   final source = image_lib.decodeImage(bytes);
-  if (source == null) throw const FormatException('无法读取后期处理图片');
+  if (source == null) {
+    throw const FormatException('Could not read postprocess image');
+  }
   final originalWidth = source.width;
   final originalHeight = source.height;
   final pixels = originalWidth * originalHeight;
@@ -132,10 +134,12 @@ PreparedDirectorImage prepareDirectorImage(
 /// (1024x1536 / 1472x1472 / 1536x1024), letterbox onto an opaque BLACK canvas,
 /// and drop the alpha channel (RGB, 3 channels). Sending the raw image — wrong
 /// size or with an alpha channel — is what produces the screentone / halftone
-/// (网点/排线) texture on the output.
+/// (halftone / hatching) texture on the output.
 Uint8List prepareDirectorReferenceImage(Uint8List bytes) {
   final source = image_lib.decodeImage(bytes);
-  if (source == null) throw const FormatException('无法读取精准参考图');
+  if (source == null) {
+    throw const FormatException('Could not read precise reference image');
+  }
   const sizes = <(int, int)>[(1024, 1536), (1472, 1472), (1536, 1024)];
   final aspect = source.width / source.height;
   var target = sizes.first;
@@ -191,8 +195,12 @@ PreparedInpaintAssets prepareInpaintAssets(
 ) {
   final source = image_lib.decodeImage(imageBytes);
   final mask = image_lib.decodeImage(maskBytes);
-  if (source == null) throw const FormatException('无法读取重绘原图');
-  if (mask == null) throw const FormatException('无法读取重绘蒙版');
+  if (source == null) {
+    throw const FormatException('Could not read inpaint source image');
+  }
+  if (mask == null) {
+    throw const FormatException('Could not read inpaint mask');
+  }
   final width = max(64, (source.width / 64).ceil() * 64);
   final height = max(64, (source.height / 64).ceil() * 64);
   final padded = width != source.width || height != source.height;

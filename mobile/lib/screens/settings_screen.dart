@@ -39,11 +39,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _saveToken() async {
     setState(() => verifying = true);
-    final err = await context.read<AppState>().setToken(tokenCtrl.text);
+    final appState = context.read<AppState>();
+    final detailText = settingsDetailTextFor(appState.settings.language);
+    final err = await appState.setToken(tokenCtrl.text);
     if (!mounted) return;
     setState(() => verifying = false);
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(err ?? 'Token 验证成功')));
+    ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(err ?? detailText.tokenVerifiedSuccess)));
     if (err == null) tokenCtrl.clear();
   }
 
@@ -52,6 +54,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final state = context.watch<AppState>();
     final s = state.settings;
     final settingsText = settingsScreenTextFor(s.language);
+    final settingsDetailText = settingsDetailTextFor(s.language);
+    final languageText = settingsLanguageTextFor(s.language);
     final appearanceText = settingsAppearanceTextFor(s.language);
     final account = state.account;
     final retentionOptions = <int>{
@@ -122,14 +126,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
             ),
           ),
-          _Section(title: settingsText.networkSection, children: [
-            const ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: Icon(Icons.vpn_key_outlined),
-              title: Text('请使用系统 VPN / 全局代理（梯子）'),
-              subtitle: Text(
-                '移动端已移除应用内代理设置：在系统里开启 VPN 或全局代理后，NovelAI、AI 反推 / 转换、翻译、标签库和更新检查都会走系统网络。',
+          _Section(title: languageText.sectionTitle, children: [
+            DropdownButtonFormField<String>(
+              value: normalizeAppLocaleCode(s.language),
+              isExpanded: true,
+              decoration: InputDecoration(
+                labelText: languageText.languageLabel,
+                border: const OutlineInputBorder(),
               ),
+              items: [
+                for (final locale in supportedAppLocales)
+                  DropdownMenuItem(
+                    value: locale.code,
+                    child: Text(locale.menuLabel),
+                  ),
+              ],
+              onChanged: (value) => value == null
+                  ? null
+                  : state.setSettings(
+                      (x) => x.language = normalizeAppLocaleCode(value)),
+            ),
+            Text(languageText.hint),
+          ]),
+          _Section(title: settingsText.networkSection, children: [
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.vpn_key_outlined),
+              title: Text(settingsDetailText.networkSystemVpnTitle),
+              subtitle: Text(settingsDetailText.networkSystemVpnSubtitle),
             ),
             FilledButton.tonalIcon(
               onPressed: testingProxy ? null : _testProxy,
@@ -139,7 +163,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.wifi_tethering),
-              label: Text(testingProxy ? '正在测试...' : '测试网络连接'),
+              label: Text(testingProxy
+                  ? settingsDetailText.networkTesting
+                  : settingsDetailText.networkTest),
             ),
           ]),
           _Section(title: settingsText.novelAiSection, children: [
@@ -153,8 +179,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onChanged: (v) => state.setSettings((x) => x.imageBaseUrl = v)),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('允许自定义 NovelAI 端点'),
-              subtitle: const Text('仅在使用可信中转服务时开启；关闭时会强制使用 NovelAI 官方域名。'),
+              title: Text(settingsDetailText.allowCustomEndpointTitle),
+              subtitle: Text(settingsDetailText.allowCustomEndpointSubtitle),
               value: s.allowCustomEndpoint,
               onChanged: (value) =>
                   state.setSettings((x) => x.allowCustomEndpoint = value),
@@ -168,80 +194,85 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 8),
             FilledButton(
                 onPressed: verifying ? null : _saveToken,
-                child: Text(verifying ? '验证中...' : '验证并保存 Token')),
+                child: Text(verifying
+                    ? settingsDetailText.verifying
+                    : settingsDetailText.verifyAndSaveToken)),
             OutlinedButton.icon(
               onPressed: () => _showTokenGuide(context),
               icon: const Icon(Icons.help_outline),
-              label: const Text('如何获取 Token'),
+              label: Text(settingsDetailText.howToGetToken),
             ),
             if (account.hasToken)
               OutlinedButton(
-                  onPressed: state.clearToken, child: const Text('清除 Token')),
+                  onPressed: state.clearToken,
+                  child: Text(settingsDetailText.clearToken)),
           ]),
           _Section(title: settingsText.reverseSection, children: [
             _TextSetting(
-                label: '视觉 API 地址',
+                label: settingsDetailText.visionApiUrl,
                 value: s.visionApiUrl,
                 onChanged: (v) => state.setSettings((x) => x.visionApiUrl = v)),
             _TextSetting(
-                label: '视觉模型',
+                label: settingsDetailText.visionModel,
                 value: s.visionApiModel,
                 onChanged: (v) =>
                     state.setSettings((x) => x.visionApiModel = v)),
             TextField(
                 controller: visionKeyCtrl,
                 obscureText: true,
-                decoration: const InputDecoration(
-                    labelText: '视觉 API Key', border: OutlineInputBorder())),
+                decoration: InputDecoration(
+                    labelText: settingsDetailText.visionApiKey,
+                    border: const OutlineInputBorder())),
             const SizedBox(height: 8),
             Row(children: [
               Expanded(
                   child: FilledButton.tonal(
                       onPressed: () =>
                           state.setSecret('vision', visionKeyCtrl.text),
-                      child: const Text('保存 Key'))),
+                      child: Text(settingsDetailText.saveKey))),
               const SizedBox(width: 8),
               Expanded(
                   child: OutlinedButton(
                       onPressed: () => _detect(context, 'reverse'),
-                      child: const Text('检测模型'))),
+                      child: Text(settingsDetailText.detectModel))),
             ]),
           ]),
           _Section(title: settingsText.convertSection, children: [
             _TextSetting(
-                label: '文本 API 地址',
+                label: settingsDetailText.textApiUrl,
                 value: s.convertApiUrl,
                 onChanged: (v) =>
                     state.setSettings((x) => x.convertApiUrl = v)),
             _TextSetting(
-                label: '文本模型',
+                label: settingsDetailText.textModel,
                 value: s.convertApiModel,
                 onChanged: (v) =>
                     state.setSettings((x) => x.convertApiModel = v)),
             TextField(
                 controller: convertKeyCtrl,
                 obscureText: true,
-                decoration: const InputDecoration(
-                    labelText: '文本 API Key', border: OutlineInputBorder())),
+                decoration: InputDecoration(
+                    labelText: settingsDetailText.textApiKey,
+                    border: const OutlineInputBorder())),
             const SizedBox(height: 8),
             Row(children: [
               Expanded(
                   child: FilledButton.tonal(
                       onPressed: () =>
                           state.setSecret('convert', convertKeyCtrl.text),
-                      child: const Text('保存 Key'))),
+                      child: Text(settingsDetailText.saveKey))),
               const SizedBox(width: 8),
               Expanded(
                   child: OutlinedButton(
                       onPressed: () => _detect(context, 'convert'),
-                      child: const Text('检测模型'))),
+                      child: Text(settingsDetailText.detectModel))),
             ]),
           ]),
           _Section(title: settingsText.tagSection, children: [
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('启用远程 Tag / MCP 服务'),
-              subtitle: const Text('关闭时仅使用已下载标签库和内置离线词库。'),
+              title: Text(settingsDetailText.tagRemoteTitle),
+              subtitle: Text(settingsDetailText.tagRemoteSubtitle),
               value: s.tagServerEnabled,
               onChanged: (value) =>
                   state.setSettings((x) => x.tagServerEnabled = value),
@@ -249,26 +280,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.download_for_offline_outlined),
-              title: const Text('中文 Danbooru 标签库（可选）'),
+              title: Text(settingsDetailText.tagLibraryTitle),
               subtitle: Text(state.offlineTagStatus.downloaded
-                  ? '已下载 ${state.offlineTagStatus.count} 条中文标签'
-                  : '未下载；应用仍会使用内置精简词库'),
+                  ? '${settingsDetailText.downloadedTagsPrefix}${state.offlineTagStatus.count}${settingsDetailText.downloadedTagsSuffix}'
+                  : settingsDetailText.tagLibraryNotDownloaded),
               trailing: FilledButton.tonal(
                 onPressed:
                     state.offlineTagBusy ? null : state.downloadOfflineTags,
-                child: Text(state.offlineTagBusy ? '下载中...' : '下载'),
+                child: Text(state.offlineTagBusy
+                    ? settingsDetailText.downloadBusy
+                    : settingsDetailText.download),
               ),
             ),
-            const Text(
-                '数据来自 DanbooruSearchOnline（GPL-3.0），仅在用户主动下载后存入本机，不随应用分发。'),
+            Text(settingsDetailText.tagDataNotice),
             _TextSetting(
-                label: 'Tag/MCP 地址',
+                label: settingsDetailText.tagMcpUrl,
                 value: s.tagServerUrl,
                 onChanged: (v) => state.setSettings((x) => x.tagServerUrl = v)),
             DropdownButtonFormField<String>(
               value: s.tagServerType,
-              decoration: const InputDecoration(
-                  labelText: '服务类型', border: OutlineInputBorder()),
+              decoration: InputDecoration(
+                  labelText: settingsDetailText.serviceType,
+                  border: const OutlineInputBorder()),
               items: const [
                 DropdownMenuItem(value: 'rest', child: Text('REST')),
                 DropdownMenuItem(
@@ -282,7 +315,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 8),
             if (s.tagServerType != 'rest') ...[
               _TextSetting(
-                label: 'MCP 工具名',
+                label: settingsDetailText.mcpToolName,
                 value: s.tagServerTool,
                 onChanged: (value) =>
                     state.setSettings((x) => x.tagServerTool = value),
@@ -292,12 +325,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
             TextField(
                 controller: tagKeyCtrl,
                 obscureText: true,
-                decoration: const InputDecoration(
-                    labelText: 'Tag 服务 Key（可空）', border: OutlineInputBorder())),
+                decoration: InputDecoration(
+                    labelText: settingsDetailText.tagServiceKey,
+                    border: const OutlineInputBorder())),
             const SizedBox(height: 8),
             FilledButton.tonal(
                 onPressed: () => state.setSecret('tag', tagKeyCtrl.text),
-                child: const Text('保存 Tag Key')),
+                child: Text(settingsDetailText.saveTagKey)),
             const SizedBox(height: 8),
             OutlinedButton.icon(
               onPressed: () async {
@@ -308,21 +342,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 }
               },
               icon: const Icon(Icons.network_check),
-              label: const Text('检测 Tag/MCP 服务'),
+              label: Text(settingsDetailText.testTagMcp),
             ),
             SwitchListTile(
-                title: const Text('灵感胶囊使用 MCP 标签搜索'),
-                subtitle: const Text('开启后优先用远程服务补全；关闭仍可用内置胶囊和已下载标签库。'),
+                title: Text(settingsDetailText.mcpCapsuleTitle),
+                subtitle: Text(settingsDetailText.mcpCapsuleSubtitle),
                 value: s.mcpForCapsule,
                 onChanged: (v) =>
                     state.setSettings((x) => x.mcpForCapsule = v)),
             SwitchListTile(
-                title: const Text('转换使用 MCP 标签补强'),
+                title: Text(settingsDetailText.mcpConvertTitle),
                 value: s.mcpForConvert,
                 onChanged: (v) =>
                     state.setSettings((x) => x.mcpForConvert = v)),
             SwitchListTile(
-                title: const Text('反推使用 MCP 标签补强'),
+                title: Text(settingsDetailText.mcpReverseTitle),
                 value: s.mcpForReverse,
                 onChanged: (v) =>
                     state.setSettings((x) => x.mcpForReverse = v)),
@@ -331,13 +365,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
             DropdownButtonFormField<String>(
               value: s.translateProvider,
               isExpanded: true,
-              decoration: const InputDecoration(
-                labelText: '翻译提供方',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: settingsDetailText.translateProvider,
+                border: const OutlineInputBorder(),
               ),
-              items: const [
-                DropdownMenuItem(value: 'google', child: Text('Google 免费翻译')),
-                DropdownMenuItem(value: 'baidu', child: Text('百度翻译 API')),
+              items: [
+                DropdownMenuItem(
+                    value: 'google',
+                    child: Text(settingsDetailText.googleTranslate)),
+                DropdownMenuItem(
+                    value: 'baidu',
+                    child: Text(settingsDetailText.baiduTranslate)),
               ],
               onChanged: (value) => value == null
                   ? null
@@ -345,7 +383,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             if (s.translateProvider == 'baidu') ...[
               _TextSetting(
-                label: '百度翻译 App ID',
+                label: settingsDetailText.baiduAppId,
                 value: s.baiduAppId,
                 onChanged: (value) =>
                     state.setSettings((x) => x.baiduAppId = value.trim()),
@@ -354,9 +392,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 controller: baiduSecretCtrl,
                 obscureText: true,
                 autocorrect: false,
-                decoration: const InputDecoration(
-                  labelText: '百度翻译密钥',
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText: settingsDetailText.baiduSecret,
+                  border: const OutlineInputBorder(),
                 ),
               ),
               FilledButton.tonalIcon(
@@ -365,28 +403,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   baiduSecretCtrl.clear();
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('百度翻译密钥已保存到安全存储')),
+                      SnackBar(
+                          content: Text(settingsDetailText.baiduSecretSaved)),
                     );
                   }
                 },
                 icon: const Icon(Icons.key_outlined),
-                label: const Text('保存百度翻译密钥'),
+                label: Text(settingsDetailText.saveBaiduSecret),
               ),
             ],
           ]),
           _Section(title: settingsText.promptTemplatesSection, children: [
-            const Text('AI 反推模板'),
+            Text(settingsDetailText.reverseTemplateTitle),
             ...ReversePromptMode.values.map((mode) => _TemplateTile(
                   title: mode.label,
+                  customizedLabel: settingsDetailText.customized,
+                  builtInLabel: settingsDetailText.builtInTemplate,
                   customized:
                       s.reversePromptTemplates[mode.value]?.trim().isNotEmpty ??
                           false,
                   onTap: () => _editTemplate(context, 'reverse', mode),
                 )),
             const Divider(),
-            const Text('提示词转换模板'),
+            Text(settingsDetailText.convertTemplateTitle),
             ...ReversePromptMode.values.map((mode) => _TemplateTile(
                   title: mode.label,
+                  customizedLabel: settingsDetailText.customized,
+                  builtInLabel: settingsDetailText.builtInTemplate,
                   customized:
                       s.convertPromptTemplates[mode.value]?.trim().isNotEmpty ??
                           false,
@@ -394,16 +437,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 )),
             const Divider(),
             _TemplateTile(
-              title: 'AI 拆分分镜模板',
+              title: settingsDetailText.comicTemplateTitle,
+              customizedLabel: settingsDetailText.customized,
+              builtInLabel: settingsDetailText.builtInTemplate,
               customized: s.comicPromptTemplate.trim().isNotEmpty,
               onTap: () =>
                   _editTemplate(context, 'comic', ReversePromptMode.mixed),
             ),
-            const Text('恢复默认会重新使用桌面端同步的完整模板，不会回到旧版短模板。'),
+            Text(settingsDetailText.restoreTemplateNote),
           ]),
           _Section(title: settingsText.promptShortcutsSection, children: [
             if (s.promptShortcuts.isEmpty)
-              const Text('暂无快捷模板。可保存常用前缀、后缀和负面提示词，在生成页一键应用。'),
+              Text(settingsDetailText.promptShortcutEmpty),
             ...s.promptShortcuts.map(
               (template) => ListTile(
                 contentPadding: EdgeInsets.zero,
@@ -417,7 +462,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   overflow: TextOverflow.ellipsis,
                 ),
                 trailing: IconButton(
-                  tooltip: '删除',
+                  tooltip: settingsDetailText.delete,
                   onPressed: () => state.removePromptShortcut(template.id),
                   icon: const Icon(Icons.delete_outline),
                 ),
@@ -426,27 +471,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
             FilledButton.tonalIcon(
               onPressed: () => _addPromptShortcut(context),
               icon: const Icon(Icons.add),
-              label: const Text('新建快捷模板'),
+              label: Text(settingsDetailText.newShortcut),
             ),
           ]),
           _Section(title: settingsText.storageSection, children: [
             DropdownButtonFormField<int>(
               value: s.historyRetentionDays,
               isExpanded: true,
-              decoration: const InputDecoration(
-                labelText: '历史记录保留时间',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: settingsDetailText.historyRetention,
+                border: const OutlineInputBorder(),
               ),
               items: retentionOptions
                   .map(
                     (days) => DropdownMenuItem(
                       value: days,
                       child: Text(switch (days) {
-                        30 => '30 天',
-                        90 => '90 天',
-                        365 => '1 年',
-                        3650 => '长期保留（10 年）',
-                        _ => '$days 天',
+                        30 => settingsDetailText.days30,
+                        90 => settingsDetailText.days90,
+                        365 => settingsDetailText.oneYear,
+                        3650 => settingsDetailText.longRetention,
+                        _ => '$days${settingsDetailText.daysSuffix}',
                       }),
                     ),
                   )
@@ -456,26 +501,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   : state.setSettings((x) => x.historyRetentionDays = value),
             ),
             _TextSetting(
-              label: '图片命名模板',
+              label: settingsDetailText.imageNameTemplate,
               value: s.imageNameTemplate,
               onChanged: (value) =>
                   state.setSettings((x) => x.imageNameTemplate = value),
             ),
-            const Text(
-              '可用变量：{date} {time} {seq} {seed} {model} {type} {name} {ts}',
-            ),
+            Text(settingsDetailText.imageNameVars),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('保留 PNG 元数据'),
-              subtitle: const Text('关闭后保存时移除提示词等文本元数据，便于隐私分享。'),
+              title: Text(settingsDetailText.keepMetadataTitle),
+              subtitle: Text(settingsDetailText.keepMetadataSubtitle),
               value: s.keepImageMetadata,
               onChanged: (value) =>
                   state.setSettings((x) => x.keepImageMetadata = value),
             ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('自动保存到系统相册'),
-              subtitle: const Text('应用内仍保存一份原图；关闭后可从图库手动分享或导出。'),
+              title: Text(settingsDetailText.saveToGalleryTitle),
+              subtitle: Text(settingsDetailText.saveToGallerySubtitle),
               value: s.saveToGallery,
               onChanged: (value) =>
                   state.setSettings((x) => x.saveToGallery = value),
@@ -483,6 +526,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             if (Platform.isAndroid)
               _ImageOutputDirSetting(
                 value: s.imageOutputDir,
+                text: settingsDetailText,
                 onChanged: (value) =>
                     state.setSettings((x) => x.imageOutputDir = value),
               ),
@@ -506,25 +550,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onChanged: (value) => value == null
                   ? null
                   : state.setSettings((x) => x.theme = value),
-            ),
-            DropdownButtonFormField<String>(
-              value: normalizeAppLocaleCode(s.language),
-              isExpanded: true,
-              decoration: InputDecoration(
-                labelText: appearanceText.languageLabel,
-                border: const OutlineInputBorder(),
-              ),
-              items: [
-                for (final locale in supportedAppLocales)
-                  DropdownMenuItem(
-                    value: locale.code,
-                    child: Text(locale.menuLabel),
-                  ),
-              ],
-              onChanged: (value) => value == null
-                  ? null
-                  : state.setSettings(
-                      (x) => x.language = normalizeAppLocaleCode(value)),
             ),
             SwitchListTile(
                 title: Text(appearanceText.tagAutocomplete),
@@ -558,15 +583,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _detect(BuildContext context, String kind) async {
+    final detailText =
+        settingsDetailTextFor(context.read<AppState>().settings.language);
     try {
       final models = await context.read<AppState>().detectModels(kind);
       if (!context.mounted) return;
       showDialog(
           context: context,
           builder: (_) => AlertDialog(
-              title: const Text('模型检测'),
-              content: Text(
-                  models.isEmpty ? '未返回模型列表' : models.take(20).join('\n'))));
+              title: Text(detailText.modelDetection),
+              content: Text(models.isEmpty
+                  ? detailText.noModelList
+                  : models.take(20).join('\n'))));
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context)
@@ -576,6 +604,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _testProxy() async {
+    final detailText =
+        settingsDetailTextFor(context.read<AppState>().settings.language);
     setState(() => testingProxy = true);
     try {
       final message = await context.read<AppState>().testNetworkConnection();
@@ -586,7 +616,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('连接失败：$error')),
+          SnackBar(content: Text('${detailText.connectionFailed}: $error')),
         );
       }
     } finally {
@@ -600,14 +630,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ReversePromptMode mode,
   ) async {
     final state = context.read<AppState>();
+    final detailText = settingsDetailTextFor(state.settings.language);
     final controller = TextEditingController(
       text: state.resolvedPromptTemplate(kind, mode),
     );
     final label = kind == 'reverse'
-        ? 'AI 反推 · ${mode.label}'
+        ? '${detailText.reverseTemplateTitle} · ${mode.label}'
         : kind == 'convert'
-            ? '提示词转换 · ${mode.label}'
-            : 'AI 拆分分镜';
+            ? '${detailText.convertTemplateTitle} · ${mode.label}'
+            : detailText.comicTemplateTitle;
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -634,18 +665,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
               await state.resetPromptTemplate(kind, mode);
               if (dialogContext.mounted) Navigator.pop(dialogContext);
             },
-            child: const Text('恢复默认'),
+            child: Text(detailText.resetDefault),
           ),
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('取消'),
+            child: Text(detailText.cancel),
           ),
           FilledButton(
             onPressed: () async {
               await state.setPromptTemplate(kind, mode, controller.text);
               if (dialogContext.mounted) Navigator.pop(dialogContext);
             },
-            child: const Text('保存'),
+            child: Text(detailText.save),
           ),
         ],
       ),
@@ -653,12 +684,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
     controller.dispose();
   }
 
-  Future<void> _showTokenGuide(BuildContext context) => showDialog<void>(
-        context: context,
-        builder: (context) => const Dialog.fullscreen(
-          child: _TokenGuideScreen(),
-        ),
-      );
+  Future<void> _showTokenGuide(BuildContext context) {
+    final language = context.read<AppState>().settings.language;
+    return showDialog<void>(
+      context: context,
+      builder: (context) => Dialog.fullscreen(
+        child: _TokenGuideScreen(language: language),
+      ),
+    );
+  }
 
   Future<void> _addPromptShortcut(BuildContext context) async {
     final name = TextEditingController();
@@ -666,10 +700,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final suffix = TextEditingController();
     final negative = TextEditingController();
     final state = context.read<AppState>();
+    final detailText = settingsDetailTextFor(state.settings.language);
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('新建提示词快捷模板'),
+        title: Text(detailText.newShortcutTitle),
         content: SizedBox(
           width: MediaQuery.sizeOf(dialogContext).width > 800
               ? 560
@@ -681,22 +716,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 TextField(
                   controller: name,
                   autofocus: true,
-                  decoration: const InputDecoration(labelText: '模板名称'),
+                  decoration:
+                      InputDecoration(labelText: detailText.shortcutName),
                 ),
                 TextField(
                   controller: prefix,
                   maxLines: 2,
-                  decoration: const InputDecoration(labelText: '正面提示词前缀'),
+                  decoration:
+                      InputDecoration(labelText: detailText.shortcutPrefix),
                 ),
                 TextField(
                   controller: suffix,
                   maxLines: 2,
-                  decoration: const InputDecoration(labelText: '正面提示词后缀'),
+                  decoration:
+                      InputDecoration(labelText: detailText.shortcutSuffix),
                 ),
                 TextField(
                   controller: negative,
                   maxLines: 2,
-                  decoration: const InputDecoration(labelText: '附加负面提示词'),
+                  decoration:
+                      InputDecoration(labelText: detailText.shortcutNegative),
                 ),
               ],
             ),
@@ -705,7 +744,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('取消'),
+            child: Text(detailText.cancel),
           ),
           FilledButton(
             onPressed: () async {
@@ -729,7 +768,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 }
               }
             },
-            child: const Text('保存'),
+            child: Text(detailText.save),
           ),
         ],
       ),
@@ -744,10 +783,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
 class _TemplateTile extends StatelessWidget {
   final String title;
   final bool customized;
+  final String customizedLabel;
+  final String builtInLabel;
   final VoidCallback onTap;
   const _TemplateTile({
     required this.title,
     required this.customized,
+    required this.customizedLabel,
+    required this.builtInLabel,
     required this.onTap,
   });
 
@@ -756,7 +799,7 @@ class _TemplateTile extends StatelessWidget {
         contentPadding: EdgeInsets.zero,
         leading: const Icon(Icons.description_outlined),
         title: Text(title),
-        subtitle: Text(customized ? '已自定义' : '使用内置完整模板'),
+        subtitle: Text(customized ? customizedLabel : builtInLabel),
         trailing: const Icon(Icons.edit_outlined),
         onTap: onTap,
       );
@@ -804,29 +847,33 @@ class _TextSetting extends StatelessWidget {
 // desktop client. On Android 11+ an arbitrary folder needs "All files access",
 // so we prompt for it; until granted, saves fall back to the app folder.
 class _ImageOutputDirSetting extends StatelessWidget {
-  const _ImageOutputDirSetting({required this.value, required this.onChanged});
+  const _ImageOutputDirSetting({
+    required this.value,
+    required this.text,
+    required this.onChanged,
+  });
   final String value;
+  final SettingsDetailText text;
   final ValueChanged<String> onChanged;
 
   Future<void> _pick(BuildContext context) async {
-    final picked =
-        await FilePicker.platform.getDirectoryPath(dialogTitle: '选择图片存放文件夹');
+    final picked = await FilePicker.platform
+        .getDirectoryPath(dialogTitle: text.chooseImageFolderDialog);
     if (picked == null || picked.trim().isEmpty) return;
     final granted = await StoragePermission.hasAllFilesAccess();
     if (!granted && context.mounted) {
       final go = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('需要文件访问权限'),
-          content: const Text(
-              '保存到自定义文件夹需要「所有文件访问权限」。点「去授权」后在系统设置中开启，再返回应用即可生效；未授权时图片仍会存到应用目录。'),
+          title: Text(text.fileAccessTitle),
+          content: Text(text.fileAccessContent),
           actions: [
             TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('稍后')),
+                child: Text(text.later)),
             FilledButton(
                 onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('去授权')),
+                child: Text(text.authorize)),
           ],
         ),
       );
@@ -844,15 +891,15 @@ class _ImageOutputDirSetting extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('图片存放路径', style: theme.textTheme.bodyLarge),
+        Text(text.imageOutputPath, style: theme.textTheme.bodyLarge),
         const SizedBox(height: 4),
         Text(
-          custom.isEmpty ? '应用默认目录（按 日期/分组 归档）' : custom,
+          custom.isEmpty ? text.defaultImageDir : custom,
           style: theme.textTheme.bodySmall,
         ),
         const SizedBox(height: 2),
         Text(
-          '图片按 日期/分组 归档，与电脑端一致。自定义路径在 Android 11+ 需「所有文件访问权限」。',
+          text.imagePathHint,
           style: theme.textTheme.bodySmall
               ?.copyWith(color: theme.colorScheme.outline),
         ),
@@ -863,12 +910,12 @@ class _ImageOutputDirSetting extends StatelessWidget {
             OutlinedButton.icon(
               onPressed: () => _pick(context),
               icon: const Icon(Icons.folder_open),
-              label: const Text('选择文件夹'),
+              label: Text(text.chooseFolder),
             ),
             if (custom.isNotEmpty)
               TextButton(
                 onPressed: () => onChanged(''),
-                child: const Text('恢复默认'),
+                child: Text(text.restoreDefault),
               ),
           ],
         ),
@@ -878,134 +925,126 @@ class _ImageOutputDirSetting extends StatelessWidget {
 }
 
 class _TokenGuideScreen extends StatelessWidget {
-  const _TokenGuideScreen();
+  const _TokenGuideScreen({required this.language});
 
-  static const steps = [
-    (
-      image: 'assets/token_guide/token-step-1.webp',
-      title: '打开左上角菜单',
-      description: '登录 NovelAI 生图页面后，点击左上角蓝圈标出的三横线菜单。',
-    ),
-    (
-      image: 'assets/token_guide/token-step-2.webp',
-      title: '进入 Account Settings',
-      description: '菜单展开后，在 Account 区域点击蓝圈标出的 Account Settings。',
-    ),
-    (
-      image: 'assets/token_guide/token-step-3.webp',
-      title: '获取 Persistent API Token',
-      description:
-          '在 User Settings 的 Account 页面点击蓝圈标出的 Get Persistent API Token，并复制完整 Token。',
-    ),
+  final String language;
+
+  static const images = [
+    'assets/token_guide/token-step-1.webp',
+    'assets/token_guide/token-step-2.webp',
+    'assets/token_guide/token-step-3.webp',
   ];
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(
-          title: const Text('获取 NovelAI Persistent API Token'),
-          leading: IconButton(
-            tooltip: '关闭',
-            onPressed: () => Navigator.pop(context),
-            icon: const Icon(Icons.close),
-          ),
+  Widget build(BuildContext context) {
+    final text = tokenGuideTextFor(language);
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(text.title),
+        leading: IconButton(
+          tooltip: text.close,
+          onPressed: () => Navigator.pop(context),
+          icon: const Icon(Icons.close),
         ),
-        body: StudioContent(
-          maxWidth: 980,
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 100),
-            children: [
-              const Text('按 NovelAI 当前网页界面操作，无需打开旧 API 文档。'),
-              for (var index = 0; index < steps.length; index++)
-                Card(
-                  margin: const EdgeInsets.only(top: 12),
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            CircleAvatar(child: Text('${index + 1}')),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(steps[index].title,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleMedium),
-                                  Text(steps[index].description),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        InkWell(
-                          onTap: () => showDialog<void>(
-                            context: context,
-                            builder: (previewContext) => Dialog.fullscreen(
-                              backgroundColor: Colors.black,
-                              child: Stack(
-                                fit: StackFit.expand,
-                                children: [
-                                  InteractiveViewer(
-                                    minScale: 0.5,
-                                    maxScale: 5,
-                                    child: Image.asset(
-                                      steps[index].image,
-                                      fit: BoxFit.contain,
-                                    ),
-                                  ),
-                                  Positioned(
-                                    top: 12,
-                                    right: 12,
-                                    child: SafeArea(
-                                      child: IconButton.filled(
-                                        onPressed: () =>
-                                            Navigator.pop(previewContext),
-                                        icon: const Icon(Icons.close),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
+      ),
+      body: StudioContent(
+        maxWidth: 980,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 100),
+          children: [
+            Text(text.subtitle),
+            for (var index = 0; index < text.steps.length; index++)
+              Card(
+                margin: const EdgeInsets.only(top: 12),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          CircleAvatar(child: Text('${index + 1}')),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(text.steps[index].title,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium),
+                                Text(text.steps[index].description),
+                              ],
                             ),
                           ),
-                          child: AspectRatio(
-                            aspectRatio: 1.92,
-                            child: Image.asset(
-                              steps[index].image,
-                              fit: BoxFit.contain,
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      InkWell(
+                        onTap: () => showDialog<void>(
+                          context: context,
+                          builder: (previewContext) => Dialog.fullscreen(
+                            backgroundColor: Colors.black,
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                InteractiveViewer(
+                                  minScale: 0.5,
+                                  maxScale: 5,
+                                  child: Image.asset(
+                                    images[index],
+                                    fit: BoxFit.contain,
+                                  ),
+                                ),
+                                Positioned(
+                                  top: 12,
+                                  right: 12,
+                                  child: SafeArea(
+                                    child: IconButton.filled(
+                                      onPressed: () =>
+                                          Navigator.pop(previewContext),
+                                      icon: const Icon(Icons.close),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
-                      ],
-                    ),
+                        child: AspectRatio(
+                          aspectRatio: 1.92,
+                          child: Image.asset(
+                            images[index],
+                            fit: BoxFit.contain,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              Card(
-                color: Theme.of(context).colorScheme.errorContainer,
-                margin: const EdgeInsets.only(top: 12),
-                child: const ListTile(
-                  leading: Icon(Icons.security),
-                  title: Text('Token 等同账号凭证'),
-                  subtitle: Text('只粘贴到本软件，不要截图、分享或写入项目文件。'),
-                ),
               ),
-              const SizedBox(height: 12),
-              FilledButton.icon(
-                onPressed: () => launchUrl(
-                  Uri.parse('https://novelai.net/image'),
-                  mode: LaunchMode.externalApplication,
-                ),
-                icon: const Icon(Icons.open_in_new),
-                label: const Text('打开 NovelAI 生图页'),
+            Card(
+              color: Theme.of(context).colorScheme.errorContainer,
+              margin: const EdgeInsets.only(top: 12),
+              child: ListTile(
+                leading: const Icon(Icons.security),
+                title: Text(text.securityTitle),
+                subtitle: Text(text.securitySubtitle),
               ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              onPressed: () => launchUrl(
+                Uri.parse('https://novelai.net/image'),
+                mode: LaunchMode.externalApplication,
+              ),
+              icon: const Icon(Icons.open_in_new),
+              label: Text(text.openNovelAi),
+            ),
+          ],
         ),
-      );
+      ),
+    );
+  }
 }

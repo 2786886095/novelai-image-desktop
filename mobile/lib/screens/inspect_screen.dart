@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../models/nai_models.dart';
+import '../i18n/app_locales.dart';
 import '../prompts/prompt_mode.dart';
 import '../state/app_state.dart';
 import '../ui/zoomable_image.dart';
@@ -71,10 +72,12 @@ class _ReversePanelState extends State<_ReversePanel> {
   @override
   Widget build(BuildContext context) {
     final s = context.watch<AppState>();
+    final language = s.settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
     final path = s.workbenchImage?.filePath;
     _syncController(_resultCtrl, s.reverseResult);
     return Scaffold(
-      appBar: AppBar(title: const Text('AI 反推提示词'), actions: [
+      appBar: AppBar(title: Text(t('inspect.reverseTitle')), actions: [
         IconButton(onPressed: widget.onPick, icon: const Icon(Icons.image))
       ]),
       body: ListView(
@@ -92,7 +95,7 @@ class _ReversePanelState extends State<_ReversePanel> {
                       child: FilledButton.icon(
                           onPressed: widget.onPick,
                           icon: const Icon(Icons.image),
-                          label: const Text('选择反推图片'))),
+                          label: Text(t('inspect.selectReverseImage')))),
             ),
           ),
           const SizedBox(height: 12),
@@ -100,7 +103,7 @@ class _ReversePanelState extends State<_ReversePanel> {
             FilledButton.tonalIcon(
               onPressed: s.applyWorkbenchMetadata,
               icon: const Icon(Icons.settings_backup_restore),
-              label: const Text('从图片元数据还原生成参数'),
+              label: Text(t('inspect.restoreMetadata')),
             ),
             const SizedBox(height: 12),
           ],
@@ -113,14 +116,14 @@ class _ReversePanelState extends State<_ReversePanel> {
           const SizedBox(height: 12),
           DropdownButtonFormField<ReversePromptScope>(
             value: s.reverseScope,
-            decoration: const InputDecoration(
-              labelText: '反推范围',
-              border: OutlineInputBorder(),
+            decoration: InputDecoration(
+              labelText: t('inspect.reverseScope'),
+              border: const OutlineInputBorder(),
             ),
             items: ReversePromptScope.values
                 .map((scope) => DropdownMenuItem(
                       value: scope,
-                      child: Text(scope.label),
+                      child: Text(t('reverseScope.${scope.value}')),
                     ))
                 .toList(),
             onChanged: (scope) {
@@ -132,17 +135,17 @@ class _ReversePanelState extends State<_ReversePanel> {
           const SizedBox(height: 12),
           TextField(
             controller: _hintCtrl,
-            decoration: const InputDecoration(
-              labelText: '主体提示（可选）',
-              hintText: '例如：只分析右侧角色、这是一件特殊服装',
-              border: OutlineInputBorder(),
+            decoration: InputDecoration(
+              labelText: t('inspect.subjectHint'),
+              hintText: t('inspect.subjectHintExample'),
+              border: const OutlineInputBorder(),
             ),
             onChanged: (value) => s.reverseHint = value,
           ),
           CheckboxListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('这是网络 / 游戏 / 动漫角色'),
-            subtitle: const Text('开启后同时生成角色名版与特征版'),
+            title: Text(t('inspect.knownCharacterTitle')),
+            subtitle: Text(t('inspect.knownCharacterSubtitle')),
             value: s.reverseKnownCharacter,
             onChanged: (value) {
               s.reverseKnownCharacter = value ?? false;
@@ -154,17 +157,19 @@ class _ReversePanelState extends State<_ReversePanel> {
               onPressed:
                   s.busy || s.workbenchImage == null ? null : s.reversePrompt,
               icon: const Icon(Icons.visibility),
-              label: const Text('开始反推')),
+              label: Text(t('inspect.startReverse'))),
           const SizedBox(height: 12),
           TextField(
             controller: _resultCtrl,
             maxLines: 8,
-            decoration: const InputDecoration(
-                labelText: '反推结果', border: OutlineInputBorder()),
+            decoration: InputDecoration(
+                labelText: t('inspect.reverseResult'),
+                border: const OutlineInputBorder()),
             onChanged: (v) => s.reverseResult = v,
           ),
           _ResultTemplateChips(
             value: s.reverseResult,
+            language: language,
             onApply: (value) {
               s.reverseResult = value;
               s.reversePromptVariants = null;
@@ -177,10 +182,10 @@ class _ReversePanelState extends State<_ReversePanel> {
                   ? null
                   : () => s.applyPrompt(s.reverseResult),
               icon: const Icon(Icons.send),
-              label: const Text('复用到生成面板')),
+              label: Text(t('inspect.reuseToGenerate'))),
           if (s.reversePromptVariants case final variants?) ...[
             const SizedBox(height: 12),
-            _VariantResults(variants: variants),
+            _VariantResults(variants: variants, language: language),
           ],
           const SizedBox(height: 8),
           Text(s.status),
@@ -219,20 +224,22 @@ class _ConvertPanelState extends State<_ConvertPanel> {
   @override
   Widget build(BuildContext context) {
     final s = context.watch<AppState>();
+    final language = s.settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
     _syncController(_inputCtrl, s.convertInput);
     _syncController(_resultCtrl, s.convertResult);
     return Scaffold(
-      appBar: AppBar(title: const Text('中文 / 自然语言转换')),
+      appBar: AppBar(title: Text(t('inspect.convertTitle'))),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           TextField(
             controller: _inputCtrl,
             maxLines: 5,
-            decoration: const InputDecoration(
-                labelText: '输入描述',
-                hintText: '一个黑发白衬衫男孩坐着画画...',
-                border: OutlineInputBorder()),
+            decoration: InputDecoration(
+                labelText: t('inspect.inputDescription'),
+                hintText: t('inspect.inputDescriptionHint'),
+                border: const OutlineInputBorder()),
             onChanged: (v) => s.convertInput = v,
           ),
           const SizedBox(height: 12),
@@ -245,8 +252,8 @@ class _ConvertPanelState extends State<_ConvertPanel> {
           const SizedBox(height: 12),
           CheckboxListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('这是网络 / 游戏 / 动漫角色'),
-            subtitle: const Text('开启后同时生成角色名版与特征版'),
+            title: Text(t('inspect.knownCharacterTitle')),
+            subtitle: Text(t('inspect.knownCharacterSubtitle')),
             value: s.convertKnownCharacter,
             onChanged: (value) {
               s.convertKnownCharacter = value ?? false;
@@ -259,17 +266,19 @@ class _ConvertPanelState extends State<_ConvertPanel> {
                   ? null
                   : s.convertPrompt,
               icon: const Icon(Icons.translate),
-              label: const Text('开始转换')),
+              label: Text(t('inspect.startConvert'))),
           const SizedBox(height: 12),
           TextField(
             controller: _resultCtrl,
             maxLines: 8,
-            decoration: const InputDecoration(
-                labelText: '转换结果', border: OutlineInputBorder()),
+            decoration: InputDecoration(
+                labelText: t('inspect.convertResult'),
+                border: const OutlineInputBorder()),
             onChanged: (v) => s.convertResult = v,
           ),
           _ResultTemplateChips(
             value: s.convertResult,
+            language: language,
             onApply: (value) {
               s.convertResult = value;
               s.convertResultVariants = null;
@@ -282,10 +291,10 @@ class _ConvertPanelState extends State<_ConvertPanel> {
                   ? null
                   : () => s.applyPrompt(s.convertResult),
               icon: const Icon(Icons.send),
-              label: const Text('复用到生成面板')),
+              label: Text(t('inspect.reuseToGenerate'))),
           if (s.convertResultVariants case final variants?) ...[
             const SizedBox(height: 12),
-            _VariantResults(variants: variants),
+            _VariantResults(variants: variants, language: language),
           ],
           const SizedBox(height: 8),
           Text(s.status),
@@ -297,10 +306,12 @@ class _ConvertPanelState extends State<_ConvertPanel> {
 
 class _ResultTemplateChips extends StatelessWidget {
   final String value;
+  final Object? language;
   final ValueChanged<String> onApply;
 
   const _ResultTemplateChips({
     required this.value,
+    required this.language,
     required this.onApply,
   });
 
@@ -317,7 +328,7 @@ class _ResultTemplateChips extends StatelessWidget {
         runSpacing: 8,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          const Text('应用模板'),
+          Text(mobileUiTextFor(language, 'inspect.applyTemplate')),
           ...templates.map(
             (template) => ActionChip(
               label: Text(template.name),
@@ -339,7 +350,8 @@ class _ResultTemplateChips extends StatelessWidget {
 
 class _VariantResults extends StatelessWidget {
   final PromptVariants variants;
-  const _VariantResults({required this.variants});
+  final Object? language;
+  const _VariantResults({required this.variants, required this.language});
 
   @override
   Widget build(BuildContext context) {
@@ -347,15 +359,17 @@ class _VariantResults extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _VariantCard(
-          title: '角色名版',
-          subtitle: '模型认识该角色时使用',
+          title: mobileUiTextFor(language, 'inspect.nameVariant'),
+          subtitle: mobileUiTextFor(language, 'inspect.nameVariantHint'),
           prompt: variants.namePrompt,
+          language: language,
         ),
         const SizedBox(height: 8),
         _VariantCard(
-          title: '特征版',
-          subtitle: '模型库没有该角色时使用',
+          title: mobileUiTextFor(language, 'inspect.featureVariant'),
+          subtitle: mobileUiTextFor(language, 'inspect.featureVariantHint'),
           prompt: variants.featurePrompt,
+          language: language,
         ),
       ],
     );
@@ -366,10 +380,12 @@ class _VariantCard extends StatelessWidget {
   final String title;
   final String subtitle;
   final String prompt;
+  final Object? language;
   const _VariantCard({
     required this.title,
     required this.subtitle,
     required this.prompt,
+    required this.language,
   });
 
   @override
@@ -384,14 +400,16 @@ class _VariantCard extends StatelessWidget {
             Text(title, style: Theme.of(context).textTheme.titleSmall),
             Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
             const SizedBox(height: 8),
-            SelectableText(prompt.isEmpty ? 'AI 未返回此版本' : prompt),
+            SelectableText(prompt.isEmpty
+                ? mobileUiTextFor(language, 'inspect.variantMissing')
+                : prompt),
             const SizedBox(height: 8),
             OutlinedButton.icon(
               onPressed: prompt.isEmpty
                   ? null
                   : () => context.read<AppState>().applyPrompt(prompt),
               icon: const Icon(Icons.send_outlined),
-              label: const Text('复用到生成面板'),
+              label: Text(mobileUiTextFor(language, 'inspect.reuseToGenerate')),
             ),
           ],
         ),
@@ -407,9 +425,12 @@ class _ModeSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final language = context.watch<AppState>().settings.language;
     return SegmentedButton<ReversePromptMode>(
       segments: ReversePromptMode.values
-          .map((m) => ButtonSegment(value: m, label: Text(m.label)))
+          .map((m) => ButtonSegment(
+              value: m,
+              label: Text(mobileUiTextFor(language, 'promptMode.${m.value}'))))
           .toList(),
       selected: {value},
       onSelectionChanged: (v) => onChanged(v.first),

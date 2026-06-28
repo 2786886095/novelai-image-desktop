@@ -223,7 +223,8 @@ Future<Object?> _callSse({
   try {
     final postUri = await endpointCompleter.future.timeout(
       const Duration(seconds: 10),
-      onTimeout: () => throw TimeoutException('SSE 未返回 endpoint 事件'),
+      onTimeout: () =>
+          throw TimeoutException('SSE did not return an endpoint event'),
     );
 
     Future<Map<String, dynamic>?> send(
@@ -334,7 +335,7 @@ Map<String, dynamic>? _parseRpcBody(String raw) {
 void _throwRpcError(Map<String, dynamic>? response) {
   final error = response?['error'];
   if (error is Map) {
-    throw StateError(error['message']?.toString() ?? 'MCP 调用失败');
+    throw StateError(error['message']?.toString() ?? 'MCP call failed');
   }
 }
 

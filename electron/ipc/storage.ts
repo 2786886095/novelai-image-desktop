@@ -2,7 +2,7 @@ import { dialog, shell } from "electron";
 import fs from "fs/promises";
 import path from "path";
 import JSZip from "jszip";
-import type { HistoryItem } from "../../src/types";
+import type { BatchExportFile, HistoryItem } from "../../src/types";
 import { pathToFileURL } from "url";
 import {
   createHistoryGroup,
@@ -90,6 +90,55 @@ export async function exportGroup(groupId: string) {
     }
   }
   if (added === 0) return { ok: false, message: "分组内的图片文件已不存在。" };
+
+  const content = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
+  await fs.writeFile(result.filePath, content);
+  return { ok: true, message: `已导出 ${added} 张图片。`, path: result.filePath };
+}
+
+/** Bundle an explicit ordered list of files into a ZIP. Used by batch img2img so
+ * the export contains exactly the current run's final outputs, independent of
+ * history groups with the same name or stale history state. */
+export async function exportFiles(files: BatchExportFile[], defaultName = "images") {
+  const requested = Array.isArray(files)
+    ? files.filter((file) => file && typeof file.filePath === "string" && file.filePath.trim())
+    : [];
+  if (requested.length === 0) return { ok: false, message: "没有可打包的图片。" };
+
+  const result = await dialog.showSaveDialog({
+    title: "导出图片为 ZIP",
+    defaultPath: `${safeName(defaultName || "images")}.zip`,
+    filters: [{ name: "ZIP 压缩包", extensions: ["zip"] }],
+  });
+  if (result.canceled || !result.filePath) return { ok: false, message: "已取消导出。" };
+
+  const zip = new JSZip();
+  const used = new Set<string>();
+  let added = 0;
+  for (let i = 0; i < requested.length; i++) {
+    const source = requested[i];
+    try {
+      const filePath = source.filePath.trim();
+      const buf = await fs.readFile(filePath);
+      const ext = path.extname(filePath) || ".png";
+      const rawName = source.name?.trim() || path.basename(filePath, ext) || `image_${i + 1}`;
+      const rawNameExt = path.extname(rawName);
+      const baseInput = rawNameExt ? rawName.slice(0, -rawNameExt.length) : rawName;
+      const seq = String(i + 1).padStart(3, "0");
+      let base = safeName(baseInput);
+      if (!base) base = `image_${seq}`;
+      if (!/^\d{3}[_-]/.test(base)) base = `${seq}_${base}`;
+      let name = `${base}${ext}`;
+      let dup = 1;
+      while (used.has(name)) name = `${base}_${dup++}${ext}`;
+      used.add(name);
+      zip.file(name, buf);
+      added++;
+    } catch {
+      // Skip files that were deleted or moved after generation.
+    }
+  }
+  if (added === 0) return { ok: false, message: "要打包的图片文件已不存在。" };
 
   const content = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
   await fs.writeFile(result.filePath, content);

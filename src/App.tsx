@@ -25,11 +25,14 @@ import {
 } from "./data/prompt-templates";
 import { Button, IconText, AppPortal, Toggle, NumberInput, SliderInput } from "./components/ui";
 import { Icon } from "./components/icons";
-import { getChromeText, getGeneratePanelText, getLocalizedTabItems, getSettingsSectionText, getSettingsShellText, SUPPORTED_APP_LANGUAGES } from "./i18n";
+import { desktopUiFormat, desktopUiText, getChromeText, getGeneratePanelText, getLocalizedTabItems, getSettingsSectionText, getSettingsShellText, getTokenGuideText, localizedDesktopOptionLabel, SUPPORTED_APP_LANGUAGES } from "./i18n";
 import {
   CAT_COLOR,
-  CAT_LABEL,
   CAPSULE_TAXONOMY,
+  localizedCapsuleCategoryName,
+  localizedCapsuleSubgroupName,
+  localizedCategoryLabel,
+  localizedTagLabel,
   tagDescription,
 } from "./prompt-data";
 import {
@@ -92,8 +95,11 @@ function fitSizeWithinPixels(width: number, height: number, maxPixels: number) {
 // use it. Exposed via an onChange callback so the capsule can refresh.
 function TagLibrarySettingsSection({ onChanged }: { onChanged?: () => void }) {
   const setToast = useAppStore((state) => state.setToast);
+  const language = useAppStore((state) => state.settings?.language);
   const [status, setStatus] = useState<{ downloaded: boolean; count: number } | null>(null);
   const [busy, setBusy] = useState(false);
+  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
+  const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
 
   const refresh = useCallback(() => {
     void window.naiDesktop.danbooruStatus().then((s) => setStatus({ downloaded: s.downloaded, count: s.count }));
@@ -105,7 +111,7 @@ function TagLibrarySettingsSection({ onChanged }: { onChanged?: () => void }) {
   async function download() {
     if (busy) return;
     setBusy(true);
-    setToast("正在下载中文标签库（约 7MB，每个标签均含中文）…");
+    setToast(t("tagLibrary.downloadingToast"));
     try {
       const res = await window.naiDesktop.downloadDanbooru();
       setToast(res.message);
@@ -114,7 +120,7 @@ function TagLibrarySettingsSection({ onChanged }: { onChanged?: () => void }) {
         onChanged?.();
       }
     } catch (error) {
-      setToast(`下载失败：${error instanceof Error ? error.message : String(error)}`);
+      setToast(f("tagLibrary.downloadFailed", { message: error instanceof Error ? error.message : String(error) }));
     } finally {
       setBusy(false);
     }
@@ -123,23 +129,23 @@ function TagLibrarySettingsSection({ onChanged }: { onChanged?: () => void }) {
   return (
     <>
       <label className="field">
-        <span>中文标签库（自动补全 / 灵感胶囊）</span>
+        <span>{t("tagLibrary.title")}</span>
         <input
           readOnly
           value={
             status?.downloaded
-              ? `已下载${status.count ? `（${status.count} 条，均含中文）` : ""}`
-              : "未下载（补全与灵感胶囊将使用内置精简词库）"
+              ? `${t("tagLibrary.downloaded")}${status.count ? `（${f("tagLibrary.itemCount", { count: status.count })}）` : ""}`
+              : t("tagLibrary.notDownloaded")
           }
         />
       </label>
       <p className="field-hint">
-        来源 DanbooruSearchOnline（GPL-3.0，已固定版本），单独下载、不打包进程序。下载后可用中文或英文补全并显示热度。
+        {t("tagLibrary.hint")}
       </p>
       <div className="row-actions">
         <Button onClick={() => void download()} disabled={busy}>
           <IconText icon={<Icon name="globe" />}>
-            {busy ? "下载中…" : status?.downloaded ? "重新下载" : "下载标签库"}
+            {busy ? t("tagLibrary.downloading") : status?.downloaded ? t("tagLibrary.redownload") : t("tagLibrary.download")}
           </IconText>
         </Button>
       </div>
@@ -152,11 +158,27 @@ function TagLibrarySettingsSection({ onChanged }: { onChanged?: () => void }) {
 // substring-seed approach leaked cross-category tags, e.g. cropped_jacket under
 // 构图). SEARCH queries the local Danbooru library for breadth. Browse works
 // offline; search needs the downloaded library.
-function CapsuleBrowser({ query, onPick }: { query: string; onPick: (tag: string) => void }) {
+function capsuleBrowserText(language: unknown) {
+  switch (language) {
+    case "zh-TW":
+      return { needsLibrary: "搜尋需要本地標籤庫，請先到設定下載。下方分類可離線使用。", empty: "沒有匹配的標籤", loading: "載入中…" };
+    case "en-US":
+      return { needsLibrary: "Search requires the local tag library. Download it in Settings first. Categories below work offline.", empty: "No matching tags", loading: "Loading…" };
+    case "ja-JP":
+      return { needsLibrary: "検索にはローカルタグライブラリが必要です。先に設定でダウンロードしてください。下のカテゴリはオフラインで使えます。", empty: "一致するタグがありません", loading: "読み込み中…" };
+    case "ko-KR":
+      return { needsLibrary: "검색에는 로컬 태그 라이브러리가 필요합니다. 먼저 설정에서 다운로드하세요. 아래 분류는 오프라인으로 사용할 수 있습니다.", empty: "일치하는 태그 없음", loading: "불러오는 중…" };
+    default:
+      return { needsLibrary: "搜索需要本地标签库，请先到设置下载。下方分类可离线使用。", empty: "没有匹配的标签", loading: "加载中…" };
+  }
+}
+
+function CapsuleBrowser({ query, onPick, language }: { query: string; onPick: (tag: string) => void; language?: unknown }) {
   const [downloaded, setDownloaded] = useState<boolean | null>(null);
   const [items, setItems] = useState<TagSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
   const q = query.trim();
+  const text = capsuleBrowserText(language);
 
   useEffect(() => {
     void window.naiDesktop.danbooruStatus().then((s) => setDownloaded(s.downloaded));
@@ -181,39 +203,39 @@ function CapsuleBrowser({ query, onPick }: { query: string; onPick: (tag: string
 
   if (q) {
     if (downloaded === false) {
-      return <p className="chip-empty">搜索需要本地标签库，请前往「设置 → 中文标签库」下载后再搜索。下方分类可离线使用。</p>;
+      return <p className="chip-empty">{text.needsLibrary}</p>;
     }
     return (
       <div className="capsule-browser">
         <div className="capsule-browser-list">
           {items.map((t) => {
-            const zh = t.description?.split(/[ ，,]/)[0] || t.tag;
+            const label = localizedTagLabel(t.tag, t.description, language);
             return (
               <button
                 key={t.tag}
                 type="button"
                 className="capsule-tax-chip"
                 onClick={() => onPick(t.tag)}
-                title={`${t.tag}｜${t.description ?? ""}｜热度 ${fmtCount(t.count)}`}
+                title={`${t.tag}｜${label}｜${fmtCount(t.count)}`}
               >
-                <span className="capsule-tax-zh">{zh}</span>
+                <span className="capsule-tax-zh">{label}</span>
                 <span className="capsule-tax-en">{t.tag}</span>
               </button>
             );
           })}
-          {items.length === 0 && !loading && <span className="chip-empty">没有匹配的标签</span>}
-          {loading && <span className="chip-empty">加载中…</span>}
+          {items.length === 0 && !loading && <span className="chip-empty">{text.empty}</span>}
+          {loading && <span className="chip-empty">{text.loading}</span>}
         </div>
       </div>
     );
   }
 
-  return <CapsuleTaxonomy onPick={onPick} />;
+  return <CapsuleTaxonomy onPick={onPick} language={language} />;
 }
 
 // Inspiration capsule taxonomy: category tabs → subgroup tabs → bilingual chips.
 // Built-in fallback used when the local library isn't downloaded.
-function CapsuleTaxonomy({ onPick }: { onPick: (tag: string) => void }) {
+function CapsuleTaxonomy({ onPick, language }: { onPick: (tag: string) => void; language?: unknown }) {
   const [catIdx, setCatIdx] = useState(0);
   const [subIdx, setSubIdx] = useState(0);
   const category = CAPSULE_TAXONOMY[catIdx] ?? CAPSULE_TAXONOMY[0];
@@ -231,7 +253,7 @@ function CapsuleTaxonomy({ onPick }: { onPick: (tag: string) => void }) {
               setSubIdx(0);
             }}
           >
-            {c.name}
+            {localizedCapsuleCategoryName(c.name, language)}
           </button>
         ))}
       </div>
@@ -243,7 +265,7 @@ function CapsuleTaxonomy({ onPick }: { onPick: (tag: string) => void }) {
             className={clsx("capsule-tax-sub", i === subIdx && "active")}
             onClick={() => setSubIdx(i)}
           >
-            {s.name}
+            {localizedCapsuleSubgroupName(s.name, language)}
           </button>
         ))}
       </div>
@@ -256,7 +278,7 @@ function CapsuleTaxonomy({ onPick }: { onPick: (tag: string) => void }) {
             onClick={() => onPick(t.en)}
             title={`${t.en}：${t.zh}`}
           >
-            <span className="capsule-tax-zh">{t.zh}</span>
+            <span className="capsule-tax-zh">{localizedTagLabel(t.en, t.zh, language)}</span>
             <span className="capsule-tax-en">{t.en}</span>
           </button>
         ))}
@@ -318,6 +340,7 @@ function PromptTextarea({
   placeholder?: string;
   className?: string;
 }) {
+  const language = useAppStore((state) => state.settings?.language);
   const [suggestions, setSuggestions] = useState<TagSuggestion[]>([]);
   // Only the vertical caret position — the dropdown stays full-width so long tag
   // text never overflows/clips horizontally.
@@ -431,10 +454,10 @@ function PromptTextarea({
               <span className="ac-dot" style={{ background: CAT_COLOR[s.category] ?? "#94a3b8" }} />
               <span className="ac-main">
                 <span className="ac-tag">{s.tag}</span>
-                <span className="ac-desc">{tagDescription(s)}</span>
+                <span className="ac-desc">{tagDescription(s, language)}</span>
               </span>
               <span className="ac-meta">
-                <span>{CAT_LABEL[s.category] ?? "标签"}</span>
+                <span>{localizedCategoryLabel(s.category, language)}</span>
                 <span>{fmtCount(s.count)}</span>
               </span>
             </button>
@@ -451,6 +474,7 @@ function SplashPage() {
   // Show a custom entrance image when public/splash.png exists; otherwise fall
   // back to the built-in animated orbs. The <img> hides itself on load error.
   const [hasCustom, setHasCustom] = useState(true);
+  const language = useAppStore((state) => state.settings?.language);
   return (
     <div className="splash-page splash-animate">
       {hasCustom && (
@@ -477,7 +501,7 @@ function SplashPage() {
           <h1>{APP_NAME}</h1>
         </div>
         <div className="splash-divider" />
-        <p className="splash-sub">NovelAI API 图像创作工作台</p>
+        <p className="splash-sub">{desktopUiText(language, "splash.subtitle")}</p>
         <p className="splash-ver">v{APP_VERSION}</p>
       </div>
     </div>
@@ -487,6 +511,8 @@ function SplashPage() {
 // ── Title bar ─────────────────────────────────────────────────────────────────
 function TitleBar() {
   const account = useAppStore((state) => state.account);
+  const language = useAppStore((state) => state.settings?.language);
+  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   return (
     <header className="title-bar">
       <div className="window-title">
@@ -497,8 +523,8 @@ function TitleBar() {
       <div className={clsx("title-account", account.hasToken && "online")}>
         <span className="pulse-dot" />
         {account.hasToken
-          ? `${account.tierName ?? "已连接"} · Anlas ${account.anlasBalance ?? "未知"}${account.stale ? "（缓存）" : ""}`
-          : "未连接 API"}
+          ? `${account.tierName ?? t("title.connected")} · Anlas ${account.anlasBalance ?? t("common.unknown")}${account.stale ? t("title.cached") : ""}`
+          : t("title.notConnected")}
       </div>
       <div className="window-controls">
         <button onClick={() => window.naiDesktop.minimize()}>—</button>
@@ -562,52 +588,53 @@ function AdvancedParamsModal({ onClose }: { onClose: () => void }) {
   const params = useAppStore((state) => state.params);
   const setParam = useAppStore((state) => state.setParam);
   const settings = useAppStore((state) => state.settings);
+  const t = useCallback((key: string) => desktopUiText(settings?.language, key), [settings?.language]);
 
   return (
     <AppPortal>
       <div className="modal-backdrop">
       <div className="modal advanced-modal">
         <header>
-          <h2>高级参数</h2>
+          <h2>{t("advanced.title")}</h2>
           <button onClick={onClose}>×</button>
         </header>
         <div className="advanced-grid">
-          <NumberInput label="Steps（采样步数）" value={params.steps} min={1} max={50} onChange={(v) => setParam("steps", v)} />
-          <NumberInput label="CFG Scale（提示词引导）" value={params.cfgScale} min={1} max={10} step={0.1} onChange={(v) => setParam("cfgScale", Math.min(10, Math.max(1, v)))} />
-          <NumberInput label="CFG Rescale（重缩放）" value={params.cfgRescale} min={0} max={1} step={0.01} onChange={(v) => setParam("cfgRescale", v)} />
+          <NumberInput label={t("advanced.steps")} value={params.steps} min={1} max={50} onChange={(v) => setParam("steps", v)} />
+          <NumberInput label={t("advanced.cfgScale")} value={params.cfgScale} min={1} max={10} step={0.1} onChange={(v) => setParam("cfgScale", Math.min(10, Math.max(1, v)))} />
+          <NumberInput label={t("advanced.cfgRescale")} value={params.cfgRescale} min={0} max={1} step={0.01} onChange={(v) => setParam("cfgRescale", v)} />
           <label className="field">
-            <span>Sampler（采样器）</span>
+            <span>{t("advanced.sampler")}</span>
             <select value={params.sampler} onChange={(e) => setParam("sampler", e.target.value as GenerateParams["sampler"])}>
               {NAI_SAMPLERS.map((s) => (
-                <option value={s.value} key={s.value}>{s.label}</option>
+                <option value={s.value} key={s.value}>{localizedDesktopOptionLabel(settings?.language, s.value, s.label)}</option>
               ))}
             </select>
           </label>
           <label className="field">
-            <span>Noise Schedule（噪声计划）</span>
+            <span>{t("advanced.noiseSchedule")}</span>
             <select value={params.noiseSchedule} onChange={(e) => setParam("noiseSchedule", e.target.value)}>
-              <option value="native">Native（原生）</option>
-              <option value="karras">Karras（常用）</option>
-              <option value="exponential">Exponential（指数）</option>
+              <option value="native">{localizedDesktopOptionLabel(settings?.language, "native", "Native")}</option>
+              <option value="karras">{localizedDesktopOptionLabel(settings?.language, "karras", "Karras")}</option>
+              <option value="exponential">{localizedDesktopOptionLabel(settings?.language, "exponential", "Exponential")}</option>
             </select>
           </label>
           <label className="field">
-            <span>UC Preset（负面预设）</span>
+            <span>{t("advanced.ucPreset")}</span>
             <select value={params.ucPreset} onChange={(e) => setParam("ucPreset", Number(e.target.value) as GenerateParams["ucPreset"])}>
               {NAI_UC_PRESETS.map((p) => (
-                <option value={p.value} key={p.value}>{p.label}</option>
+                <option value={p.value} key={p.value}>{localizedDesktopOptionLabel(settings?.language, p.value, p.label)}</option>
               ))}
             </select>
           </label>
         </div>
         <div className="toggle-list compact">
-          <Toggle checked={params.qualityToggle} onChange={(v) => setParam("qualityToggle", v)} label="Quality Toggle（质量词）" description="自动追加官方常用质量提示词。" />
+          <Toggle checked={params.qualityToggle} onChange={(v) => setParam("qualityToggle", v)} label={t("advanced.qualityToggle")} description={t("advanced.qualityToggleDesc")} />
           {/* SMEA / SMEA Dyn only exist on V3-era models; V4/V4.5 ignore them, so
               we hide the toggles there instead of showing a control with no effect. */}
           {!params.model.includes("-4") && (
             <>
-              <Toggle checked={params.smea} onChange={(v) => setParam("smea", v)} label="SMEA（高级采样）" description="仅 V3 及更早模型可用。" />
-              <Toggle checked={params.smeaDyn} onChange={(v) => setParam("smeaDyn", v)} label="SMEA Dyn（动态 SMEA）" description="仅在 SMEA 开启时生效。" />
+              <Toggle checked={params.smea} onChange={(v) => setParam("smea", v)} label={t("advanced.smea")} description={t("advanced.smeaDesc")} />
+              <Toggle checked={params.smeaDyn} onChange={(v) => setParam("smeaDyn", v)} label={t("advanced.smeaDyn")} description={t("advanced.smeaDynDesc")} />
             </>
           )}
         </div>
@@ -621,10 +648,10 @@ function AdvancedParamsModal({ onClose }: { onClose: () => void }) {
               }
             }}
           >
-            <IconText icon="↺">重置为默认</IconText>
+            <IconText icon="↺">{t("advanced.reset")}</IconText>
           </Button>
           <Button variant="primary" onClick={onClose}>
-            <IconText icon="✓">确认</IconText>
+            <IconText icon="✓">{t("advanced.confirm")}</IconText>
           </Button>
         </footer>
       </div>
@@ -634,12 +661,6 @@ function AdvancedParamsModal({ onClose }: { onClose: () => void }) {
 }
 
 // ── Vibe Transfer modal ───────────────────────────────────────────────────────
-const PRECISE_TYPE_LABELS: Record<PreciseReferenceType, string> = {
-  character: "角色",
-  style: "风格",
-  "character&style": "角色和风格",
-};
-
 // The three official precise-reference sizes. Given a source image, recommend the
 // one whose aspect ratio is closest (which the main process will scale+pad to),
 // and estimate how much black bar that leaves — so the user can pre-resize to
@@ -664,6 +685,7 @@ function recommendPreciseSize(w?: number, h?: number) {
 }
 
 function VibeTransferModal({ onClose }: { onClose: () => void }) {
+  const language = useAppStore((state) => state.settings?.language);
   const vibeImages = useAppStore((state) => state.vibeImages);
   const addVibeImage = useAppStore((state) => state.addVibeImage);
   const removeVibeImage = useAppStore((state) => state.removeVibeImage);
@@ -677,6 +699,8 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
   const setToast = useAppStore((state) => state.setToast);
   const model = useAppStore((state) => state.params.model);
   const isV45 = model.includes("4-5");
+  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
+  const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
 
   function handleVibeFile(file: File, infoExtracted: number, strength: number) {
     const reader = new FileReader();
@@ -712,10 +736,10 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
           srcHeight: probe.naturalHeight,
         });
       };
-      probe.onerror = () => setToast("无法读取精准参考图，请换用有效的 PNG、JPG 或 WebP 图片。");
+      probe.onerror = () => setToast(t("reference.preciseReadFailed"));
       probe.src = dataUrl;
     };
-    reader.onerror = () => setToast("读取精准参考图失败，请重新选择图片。");
+    reader.onerror = () => setToast(t("reference.preciseLoadFailed"));
     reader.readAsDataURL(file);
   }
 
@@ -724,18 +748,18 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
       <div className="modal-backdrop">
       <div className="modal vibe-modal">
         <header>
-          <h2>参考图管理（氛围迁移 / 精准参考）</h2>
+          <h2>{t("reference.title")}</h2>
           <button onClick={onClose}>×</button>
         </header>
         <div className="vibe-body">
-          <h3 className="vibe-section-title">氛围迁移（Vibe Transfer）</h3>
-          {vibeImages.length === 0 && <p className="vibe-empty">还没有氛围迁移图。</p>}
+          <h3 className="vibe-section-title">{t("reference.vibeTitle")}</h3>
+          {vibeImages.length === 0 && <p className="vibe-empty">{t("reference.emptyVibe")}</p>}
           {vibeImages.map((img) => (
             <div className="vibe-row" key={img.id}>
-              <img src={img.previewUrl} className="vibe-thumb" alt="参考图" />
+              <img src={img.previewUrl} className="vibe-thumb" alt={t("reference.thumbAlt")} />
               <div className="vibe-row-sliders">
                 <SliderInput
-                  label="信息提取量"
+                  label={t("reference.infoExtracted")}
                   value={img.infoExtracted}
                   min={0}
                   max={1}
@@ -743,7 +767,7 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
                   onChange={(v) => updateVibeImage(img.id, { infoExtracted: v })}
                 />
                 <SliderInput
-                  label="参考强度"
+                  label={t("reference.strength")}
                   value={img.strength}
                   min={0}
                   max={1}
@@ -751,35 +775,35 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
                   onChange={(v) => updateVibeImage(img.id, { strength: v })}
                 />
               </div>
-              <button className="vibe-remove" title="移除" onClick={() => removeVibeImage(img.id)}>
+              <button className="vibe-remove" title={t("reference.remove")} onClick={() => removeVibeImage(img.id)}>
                 ×
               </button>
             </div>
           ))}
 
           <h3 className="vibe-section-title">
-            精准参考（Precise Reference）
-            {!isV45 && <span className="vibe-hint"> · 仅 V4.5 模型生效，当前模型不支持</span>}
+            {t("reference.preciseTitle")}
+            {!isV45 && <span className="vibe-hint">{t("reference.preciseUnsupported")}</span>}
           </h3>
-          <p className="vibe-hint">任意尺寸均可：程序会按官方策略等比缩放并<b>白边</b>填充到最接近的官方尺寸（1024×1536 / 1472×1472 / 1536×1024），RGBA 透明图会先以白底拍平。建议参考图比例贴近三者之一以减少留白；想要角色而非画风时把类型选「角色」。</p>
-          {preciseReferences.length === 0 && <p className="vibe-empty">还没有精准参考图。</p>}
+          <p className="vibe-hint">{t("reference.preciseHint")}</p>
+          {preciseReferences.length === 0 && <p className="vibe-empty">{t("reference.emptyPrecise")}</p>}
           {preciseReferences.map((ref) => (
             <div className="vibe-row" key={ref.id}>
-              <img src={ref.previewUrl} className="vibe-thumb" alt="精准参考图" />
+              <img src={ref.previewUrl} className="vibe-thumb" alt={t("reference.preciseAlt")} />
               <div className="vibe-row-sliders">
                 <label className="field">
-                  <span>参考类型</span>
+                  <span>{t("reference.type")}</span>
                   <select
                     value={ref.type}
                     onChange={(e) => updatePreciseReference(ref.id, { type: e.target.value as PreciseReferenceType })}
                   >
-                    {(Object.keys(PRECISE_TYPE_LABELS) as PreciseReferenceType[]).map((t) => (
-                      <option key={t} value={t}>{PRECISE_TYPE_LABELS[t]}</option>
+                    {(["character", "style", "character&style"] as PreciseReferenceType[]).map((type) => (
+                      <option key={type} value={type}>{t(`reference.type.${type}`)}</option>
                     ))}
                   </select>
                 </label>
                 <SliderInput
-                  label="参考强度 Strength"
+                  label={t("reference.preciseStrength")}
                   value={ref.strength}
                   min={0}
                   max={1}
@@ -787,7 +811,7 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
                   onChange={(v) => updatePreciseReference(ref.id, { strength: v })}
                 />
                 <SliderInput
-                  label="保真度 Fidelity"
+                  label={t("reference.fidelity")}
                   value={ref.fidelity}
                   min={0}
                   max={1}
@@ -799,15 +823,18 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
                   if (!rec) return null;
                   return (
                     <p className={clsx("precise-size-hint", rec.exact && "ok")}>
-                      {ref.srcWidth}×{ref.srcHeight} → 推荐尺寸 {rec.target.width}×{rec.target.height}
+                      {f("reference.recommendedSize", {
+                        source: `${ref.srcWidth}×${ref.srcHeight}`,
+                        target: `${rec.target.width}×${rec.target.height}`,
+                      })}
                       {rec.exact
-                        ? "（已匹配，无留白）"
-                        : `（将缩放并填充约 ${rec.padPercent}% 白边；裁/缩到推荐尺寸可消除白边）`}
+                        ? t("reference.sizeExact")
+                        : f("reference.sizePadded", { pad: rec.padPercent })}
                     </p>
                   );
                 })()}
               </div>
-              <button className="vibe-remove" title="移除" onClick={() => removePreciseReference(ref.id)}>
+              <button className="vibe-remove" title={t("reference.remove")} onClick={() => removePreciseReference(ref.id)}>
                 ×
               </button>
             </div>
@@ -815,7 +842,7 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
 
           <div className="vibe-add-row">
             <label className="btn btn-secondary vibe-add-btn">
-              <IconText icon="+">氛围迁移图</IconText>
+              <IconText icon="+">{t("reference.addVibe")}</IconText>
               <input
                 type="file"
                 hidden
@@ -827,7 +854,7 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
               />
             </label>
             <label className="btn btn-secondary vibe-add-btn">
-              <IconText icon="+">精准参考图（V4.5）</IconText>
+              <IconText icon="+">{t("reference.addPrecise")}</IconText>
               <input
                 type="file"
                 hidden
@@ -842,10 +869,10 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
         </div>
         <footer>
           <Button onClick={() => { clearVibeImages(); clearPreciseReferences(); }}>
-            <IconText icon="⌧">清空所有</IconText>
+            <IconText icon="⌧">{t("reference.clearAll")}</IconText>
           </Button>
           <Button variant="primary" onClick={onClose}>
-            <IconText icon="✓">完成</IconText>
+            <IconText icon="✓">{t("reference.done")}</IconText>
           </Button>
         </footer>
       </div>
@@ -856,6 +883,7 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
 
 // ── Character Captions modal ──────────────────────────────────────────────────
 function CharCaptionsModal({ onClose }: { onClose: () => void }) {
+  const language = useAppStore((state) => state.settings?.language);
   const charCaptions = useAppStore((state) => state.charCaptions);
   const params = useAppStore((state) => state.params);
   const addCharCaption = useAppStore((state) => state.addCharCaption);
@@ -863,33 +891,35 @@ function CharCaptionsModal({ onClose }: { onClose: () => void }) {
   const updateCharCaption = useAppStore((state) => state.updateCharCaption);
   const clearCharCaptions = useAppStore((state) => state.clearCharCaptions);
   const isV4 = params.model.includes("-4");
+  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
+  const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
 
   return (
     <AppPortal>
       <div className="modal-backdrop">
       <div className="modal char-modal">
         <header>
-          <h2>角色提示词（Character Prompt）</h2>
+          <h2>{t("character.title")}</h2>
           <button onClick={onClose}>×</button>
         </header>
         <div className="char-body">
           {!isV4 && (
             <div className="status-box bad">
-              角色提示词仅支持 V4 / V4.5 模型，当前模型不兼容，生成时将忽略角色设置。
+              {t("character.unsupported")}
             </div>
           )}
           {charCaptions.map((cc, idx) => (
             <div className="char-row" key={cc.id}>
               <div className="char-row-head">
-                <strong>角色 {idx + 1}</strong>
+                <strong>{f("character.label", { index: idx + 1 })}</strong>
                 <Button variant="ghost" onClick={() => removeCharCaption(cc.id)}>
-                  <IconText icon="✕">删除</IconText>
+                  <IconText icon="✕">{t("character.delete")}</IconText>
                 </Button>
               </div>
               <textarea
                 className="prompt-box char-prompt"
                 value={cc.prompt}
-                placeholder="输入该角色的提示词，例如：girl, blue dress, long hair"
+                placeholder={t("character.placeholder")}
                 onChange={(e) => updateCharCaption(cc.id, { prompt: e.target.value })}
               />
               <label className="checkbox-line">
@@ -898,12 +928,12 @@ function CharCaptionsModal({ onClose }: { onClose: () => void }) {
                   checked={cc.useCoords}
                   onChange={(e) => updateCharCaption(cc.id, { useCoords: e.target.checked })}
                 />
-                <span>指定角色位置（中心点，0 = 左/上，1 = 右/下）</span>
+                <span>{t("character.useCoords")}</span>
               </label>
               {cc.useCoords && (
                 <div className="char-coords">
                   <NumberInput
-                    label="X 位置（左→右）"
+                    label={t("character.x")}
                     value={cc.x}
                     min={0}
                     max={1}
@@ -911,7 +941,7 @@ function CharCaptionsModal({ onClose }: { onClose: () => void }) {
                     onChange={(v) => updateCharCaption(cc.id, { x: v })}
                   />
                   <NumberInput
-                    label="Y 位置（上→下）"
+                    label={t("character.y")}
                     value={cc.y}
                     min={0}
                     max={1}
@@ -923,15 +953,15 @@ function CharCaptionsModal({ onClose }: { onClose: () => void }) {
             </div>
           ))}
           <Button className="full" onClick={addCharCaption}>
-            <IconText icon="+">添加角色</IconText>
+            <IconText icon="+">{t("character.add")}</IconText>
           </Button>
         </div>
         <footer>
           <Button onClick={clearCharCaptions}>
-            <IconText icon="⌧">清空角色</IconText>
+            <IconText icon="⌧">{t("character.clear")}</IconText>
           </Button>
           <Button variant="primary" onClick={onClose}>
-            <IconText icon="✓">完成</IconText>
+            <IconText icon="✓">{t("character.done")}</IconText>
           </Button>
         </footer>
       </div>
@@ -967,6 +997,8 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
   const promptKey = promptTab === "positive" ? "positivePrompt" : "negativePrompt";
   const templates: PromptTemplate[] = settings?.promptTemplates ?? [];
   const generateText = useMemo(() => getGeneratePanelText(settings?.language), [settings?.language]);
+  const t = useCallback((key: string) => desktopUiText(settings?.language, key), [settings?.language]);
+  const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(settings?.language, key, values), [settings?.language]);
   // Co-occurrence: tags commonly used alongside what's already in the prompt.
   const related = useMemo(() => relatedTags(params.positivePrompt, 8), [params.positivePrompt]);
 
@@ -978,7 +1010,7 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
     if (tpl.negativePrompt.trim() && !(settings?.lockNegativePrompt ?? false)) {
       setParam("negativePrompt", tpl.negativePrompt.trim());
     }
-    setToast(`已应用模板「${tpl.name}」`);
+    setToast(f("prompt.templateApplied", { name: tpl.name }));
   }
 
   function appendChip(tag: string) {
@@ -1002,7 +1034,7 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
     const next = !(settings?.autoComplete ?? true);
     await window.naiDesktop.setSetting("autoComplete", next);
     await refreshSettings();
-    setToast(next ? "已开启输入提词" : "已关闭输入提词");
+    setToast(next ? t("prompt.autocompleteOnToast") : t("prompt.autocompleteOffToast"));
   }
 
   const modelMode: ModelMode = settings?.modelMode ?? "anime";
@@ -1011,7 +1043,7 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
     await window.naiDesktop.setSetting("modelMode", mode);
     await refreshSettings();
     setParam("model", DEFAULT_MODEL_FOR_MODE[mode]);
-    setToast(mode === "furry" ? "已切换到 Furry 模式" : "已切换到动漫模式");
+    setToast(mode === "furry" ? t("prompt.modeFurryToast") : t("prompt.modeAnimeToast"));
   }
 
   // Save + lock the style / negative prompt so it persists and survives
@@ -1025,7 +1057,7 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
     }
     await window.naiDesktop.setSetting(lockKey, next);
     await refreshSettings();
-    setToast(next ? "已锁定并保存为默认（重置/模板不会改动）" : "已解锁");
+    setToast(next ? t("prompt.lockedToast") : t("prompt.unlockedToast"));
   }
   // Keep the saved copy in sync while a field is locked.
   function setLockedAwareParam(key: "stylePrompt" | "positivePrompt" | "negativePrompt", value: string) {
@@ -1042,11 +1074,11 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
   async function translatePrompt() {
     const text = promptValue.trim();
     if (!text) {
-      setToast("提示词为空，无需翻译");
+      setToast(t("prompt.emptyTranslate"));
       return;
     }
     if (!/[一-鿿]/.test(text)) {
-      setToast("当前提示词已是英文");
+      setToast(t("prompt.alreadyEnglish"));
       return;
     }
     setTranslating(true);
@@ -1070,9 +1102,9 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
       const joined = translated.filter(Boolean).join(", ");
       setParam(promptKey, joined + (joined.endsWith(",") ? " " : ", "));
       setTranslateBackup((b) => ({ ...b, [promptKey]: original }));
-      setToast(failed ? "部分中文翻译失败，已尽力翻译；可点还原" : "已翻译中文标签（英文保留），可点还原");
+      setToast(failed ? t("prompt.translatePartialFailed") : t("prompt.translateDone"));
     } catch {
-      setToast("翻译失败，请检查网络");
+      setToast(t("prompt.translateFailed"));
     } finally {
       setTranslating(false);
     }
@@ -1087,7 +1119,7 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
       delete next[promptKey];
       return next;
     });
-    setToast("已还原翻译前的提示词");
+    setToast(t("prompt.translateRestored"));
   }
 
   const tagCount = useMemo(
@@ -1113,7 +1145,7 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
           </div>
           <select value={params.model} onChange={(e) => setParam("model", e.target.value as GenerateParams["model"])}>
             {NAI_MODELS.filter((m) => m.mode === modelMode).map((m) => (
-              <option value={m.value} key={m.value}>{m.label}</option>
+              <option value={m.value} key={m.value}>{localizedDesktopOptionLabel(settings?.language, m.value, m.label)}</option>
             ))}
           </select>
         </label>
@@ -1154,15 +1186,20 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
                 onChange={(e) => setChipQuery(e.target.value)}
               />
             </div>
-            <CapsuleBrowser query={chipQuery} onPick={appendChip} />
+            <CapsuleBrowser query={chipQuery} onPick={appendChip} language={settings?.language} />
             {related.length > 0 && (
               <div className="related-tags">
                 <div className="related-tags-head"><Icon name="link" /> {generateText.prompt.relatedTitle}</div>
                 <div className="prompt-chip-list">
                   {related.map((r) => (
-                    <button key={r.tag} type="button" onClick={() => appendChip(r.tag)} title={`${r.tag}：${r.zh}`}>
+                    <button
+                      key={r.tag}
+                      type="button"
+                      onClick={() => appendChip(r.tag)}
+                      title={`${r.tag}: ${localizedTagLabel(r.tag, r.zh, settings?.language)}`}
+                    >
                       <span>{r.tag}</span>
-                      <small>{r.zh}</small>
+                      <small>{localizedTagLabel(r.tag, r.zh, settings?.language)}</small>
                     </button>
                   ))}
                 </div>
@@ -1335,7 +1372,7 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
           onApply={(next) => {
             setParam(promptKey, next);
             setShowNormalize(false);
-            setToast("提示词已标准化");
+            setToast(t("prompt.normalizedToast"));
           }}
           onClose={() => setShowNormalize(false)}
         />
@@ -1354,14 +1391,16 @@ function PromptNormalizeModal({
   onApply: (next: string) => void;
   onClose: () => void;
 }) {
+  const language = useAppStore((state) => state.settings?.language);
   const [opts, setOpts] = useState<NormalizeOptions>(DEFAULT_NORMALIZE_OPTIONS);
   const preview = useMemo(() => normalizePrompt(value, opts), [value, opts]);
+  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   return (
     <AppPortal>
       <div className="modal-backdrop" onMouseDown={onClose}>
         <div className="modal normalize-modal" onMouseDown={(e) => e.stopPropagation()}>
           <header>
-            <h2>提示词标准化</h2>
+            <h2>{t("normalize.title")}</h2>
             <button onClick={onClose}>×</button>
           </header>
           <div className="normalize-body">
@@ -1373,19 +1412,19 @@ function PromptNormalizeModal({
                     checked={opts[key]}
                     onChange={(e) => setOpts((o) => ({ ...o, [key]: e.target.checked }))}
                   />
-                  <span>{label}</span>
+                  <span>{t(`normalize.option.${key}`) || label}</span>
                 </label>
               ))}
             </div>
             <div className="normalize-preview">
-              <small>预览</small>
-              <div className="normalize-preview-box">{preview || "（结果为空）"}</div>
+              <small>{t("normalize.preview")}</small>
+              <div className="normalize-preview-box">{preview || t("normalize.empty")}</div>
             </div>
           </div>
           <footer>
-            <Button onClick={onClose}>取消</Button>
+            <Button onClick={onClose}>{t("common.cancel")}</Button>
             <Button variant="primary" disabled={!preview.trim()} onClick={() => onApply(preview)}>
-              应用
+              {t("common.apply")}
             </Button>
           </footer>
         </div>
@@ -1396,11 +1435,13 @@ function PromptNormalizeModal({
 
 // ── Workbench image upload ────────────────────────────────────────────────────
 function WorkbenchImageUpload() {
+  const language = useAppStore((state) => state.settings?.language);
   const workbenchImage = useAppStore((state) => state.workbenchImage);
   const loadWorkbenchImage = useAppStore((state) => state.loadWorkbenchImage);
   const loadWorkbenchFromPath = useAppStore((state) => state.loadWorkbenchFromPath);
   const clearWorkbenchImage = useAppStore((state) => state.clearWorkbenchImage);
   const [dragging, setDragging] = useState(false);
+  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
 
   function handleDragOver(event: React.DragEvent<HTMLDivElement>) {
     if (!hasDraggedFiles(event.dataTransfer)) return;
@@ -1425,25 +1466,25 @@ function WorkbenchImageUpload() {
     >
       {workbenchImage ? (
         <>
-          <img src={workbenchImage.fileUrl} alt="已加载图片" className="wb-thumb" />
+          <img src={workbenchImage.fileUrl} alt={t("workbench.loadedAlt")} className="wb-thumb" />
           <small>
-            {workbenchImage.width || "未知"} × {workbenchImage.height || "未知"}
+            {workbenchImage.width || t("common.unknown")} × {workbenchImage.height || t("common.unknown")}
           </small>
           <div className="row-actions tight">
           <Button className="full" onClick={loadWorkbenchImage}>
-            <IconText icon="↻">重新加载</IconText>
+            <IconText icon="↻">{t("workbench.reload")}</IconText>
           </Button>
             <Button variant="ghost" onClick={() => void clearWorkbenchImage()}>
-              <IconText icon="✕">清除</IconText>
+              <IconText icon="✕">{t("workbench.clear")}</IconText>
             </Button>
           </div>
         </>
       ) : (
         <Button className="full" onClick={loadWorkbenchImage}>
-          <IconText icon={<Icon name="folderOpen" />}>加载图片...</IconText>
+          <IconText icon={<Icon name="folderOpen" />}>{t("workbench.load")}</IconText>
         </Button>
       )}
-      <small className="wb-drop-hint">拖入图片可直接加载</small>
+      <small className="wb-drop-hint">{t("workbench.dropHint")}</small>
     </div>
   );
 }
@@ -1458,6 +1499,7 @@ function FeatureCostCard({
   feature: AnlasQuoteFeature;
 }) {
   const account = useAppStore((state) => state.account);
+  const language = useAppStore((state) => state.settings?.language);
   const params = useAppStore((state) => state.params);
   const batchCount = useAppStore((state) => state.batchCount);
   const i2iParams = useAppStore((state) => state.i2iParams);
@@ -1476,6 +1518,8 @@ function FeatureCostCard({
   const [quote, setQuote] = useState<AnlasQuoteResult | null>(null);
   const [loading, setLoading] = useState(false);
   const balance = account.anlasBalance;
+  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
+  const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
   const quoteKey = JSON.stringify({
     feature,
     model: params.model,
@@ -1556,30 +1600,30 @@ function FeatureCostCard({
 
   const sourceLabel =
     quote?.source === "official-api"
-      ? "NovelAI 官方报价接口（实际扣费）"
+      ? t("cost.official")
       : quote?.source === "estimate-formula"
-        ? "本地估算（官网前端公式，非实际扣费）"
+        ? t("cost.estimateFormula")
         : quote?.source === "estimate-fixed"
-          ? "本地估算（固定规则，非实际扣费）"
+          ? t("cost.estimateFixed")
           : "";
   const isEstimate = quote?.source === "estimate-formula" || quote?.source === "estimate-fixed";
   const primary =
     quote?.ok && typeof quote.amount === "number"
       ? quote.amount === 0
-        ? "本次 0 Anlas"
+        ? t("cost.zero")
         : isEstimate
-          ? `本次约扣 ${quote.amount} Anlas（估算）`
-          : `本次将扣 ${quote.amount} Anlas`
+          ? f("cost.estimated", { amount: quote.amount })
+          : f("cost.willSpend", { amount: quote.amount })
       : loading
-        ? "正在读取扣费..."
-        : quote?.message || "暂时无法报价";
+        ? t("cost.loading")
+        : quote?.message || t("cost.unavailable");
   const actualText = isGenerating
     ? currentAnlasSpent != null
-      ? `当前已实扣 ${currentAnlasSpent} Anlas`
-      : "执行中，等待余额校验"
+      ? f("cost.currentSpent", { amount: currentAnlasSpent })
+      : t("cost.waitingActual")
     : lastAnlasSpent != null
-      ? `上次实扣 ${lastAnlasSpent} Anlas`
-      : "执行后会用余额差再次核对";
+      ? f("cost.lastSpent", { amount: lastAnlasSpent })
+      : t("cost.actualHint");
 
   return (
     <div
@@ -1592,12 +1636,12 @@ function FeatureCostCard({
     >
       <div>
         <span>{label}</span>
-        <small>{sourceLabel || "读取当前配置对应的扣费估算"}</small>
+        <small>{sourceLabel || t("cost.readingHint")}</small>
       </div>
       <strong>{primary}</strong>
       <small className="cost-balance">
-        当前余额：{balance ?? "未知"} Anlas{account.stale ? "（缓存）" : ""} · {actualText}
-        {quote?.insufficient ? " · 余额不足，执行时会被阻止" : ""}
+        {f("cost.balance", { balance: balance ?? t("common.unknown") })}{account.stale ? t("cost.cached") : ""} · {actualText}
+        {quote?.insufficient ? t("cost.insufficient") : ""}
       </small>
     </div>
   );
@@ -1614,6 +1658,9 @@ function QueuePanel() {
   const progress = useAppStore((state) => state.queueProgress);
   const queuePaused = useAppStore((state) => state.queuePaused);
   const queueAdding = useAppStore((state) => state.queueAdding);
+  const language = useAppStore((state) => state.settings?.language);
+  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
+  const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
 
   const done = progress ? progress.done + progress.failed : 0;
   const total = progress?.total ?? 1 + queue.length;
@@ -1628,19 +1675,19 @@ function QueuePanel() {
     <div className="queue-panel">
       <div className="queue-panel-head">
         <span className="queue-panel-title">
-          队列 · 1 运行{queued > 0 ? ` / ${queued} 排队` : ""}
+          {t("queue.title")}{queued > 0 ? f("queue.queued", { count: queued }) : ""}
         </span>
         <div className="queue-panel-actions">
           {queued > 0 && (
             <button type="button" className="queue-mini-btn" onClick={() => clearQueue()}>
-              清空排队
+              {t("queue.clear")}
             </button>
           )}
           <button
             type="button"
             className="queue-mini-btn queue-collapse-btn"
             onClick={toggleCollapsed}
-            aria-label={collapsed ? "展开队列" : "折叠队列"}
+            aria-label={collapsed ? t("queue.expand") : t("queue.collapse")}
           >
             {collapsed ? "▸" : "▾"}
           </button>
@@ -1654,7 +1701,7 @@ function QueuePanel() {
           <li className="queue-item queue-item-running">
             <span className="queue-spinner" />
             <span className="queue-item-label">
-              {queuePaused ? "已暂停" : queueAdding ? "正在加入排队…" : "正在执行…"}
+              {queuePaused ? t("queue.paused") : queueAdding ? t("queue.adding") : t("queue.running")}
             </span>
           </li>
           {queue.map((job) => (
@@ -1669,8 +1716,8 @@ function QueuePanel() {
                 type="button"
                 className="queue-item-remove"
                 onClick={() => removeJob(job.id)}
-                aria-label="移出队列"
-                title="移出队列"
+                aria-label={t("queue.remove")}
+                title={t("queue.remove")}
               >
                 ✕
               </button>
@@ -1678,7 +1725,7 @@ function QueuePanel() {
           ))}
           {batchPending > 0 && (
             <li className="queue-item queue-item-batch">
-              <span className="queue-item-label">批量待生成 · {batchPending} 张</span>
+              <span className="queue-item-label">{f("queue.batchPending", { count: batchPending })}</span>
             </li>
           )}
         </ul>
@@ -1698,6 +1745,9 @@ function LogSettingsSection({
   refreshSettings: () => Promise<void>;
 }) {
   const setToast = useAppStore((state) => state.setToast);
+  const language = useAppStore((state) => state.settings?.language);
+  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
+  const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
   const [info, setInfo] = useState<{ path: string; exists: boolean; sizeBytes: number } | null>(null);
   const refresh = useCallback(() => {
     void window.naiDesktop
@@ -1716,22 +1766,22 @@ function LogSettingsSection({
     const dir = await window.naiDesktop.selectLogDir();
     if (dir) {
       await setDir(dir);
-      setToast("已更新日志路径");
+      setToast(t("log.updatedPath"));
     }
   };
   const openFile = async () => {
     const r = await window.naiDesktop.openLogFile();
-    if (!r.ok) setToast(r.message || "无法打开日志文件");
+    if (!r.ok) setToast(r.message || t("log.openFileFailed"));
   };
   const openDir = async () => {
     const r = await window.naiDesktop.openLogDir();
-    if (!r.ok) setToast(r.message || "无法打开日志文件夹");
+    if (!r.ok) setToast(r.message || t("log.openDirFailed"));
   };
 
   const toggleEnabled = async (v: boolean) => {
     await window.naiDesktop.setSetting("loggingEnabled", v);
     await refreshSettings();
-    setToast(v ? "已开启运行日志" : "已关闭运行日志");
+    setToast(v ? t("log.enabled") : t("log.disabled"));
   };
 
   return (
@@ -1739,34 +1789,38 @@ function LogSettingsSection({
       <Toggle
         checked={loggingEnabled}
         onChange={(v) => void toggleEnabled(v)}
-        label="运行日志"
-        description="记录软件的各类调用信息与错误（生成 / 图生图 / 超分 / 导演工具 / 异常等），写入 app.log，便于排查问题。"
+        label={t("log.label")}
+        description={t("log.desc")}
       />
       <label className="field">
-        <span>日志存放路径</span>
+        <span>{t("log.path")}</span>
         <input
           value={logDir}
-          placeholder="默认：用户数据目录 / logs"
+          placeholder={t("log.placeholder")}
           disabled={!loggingEnabled}
           onChange={(e) => void setDir(e.target.value)}
         />
       </label>
       <p className="field-hint">
-        {info ? (info.exists ? `当前：${info.path}（${Math.max(1, Math.round(info.sizeBytes / 1024))} KB）` : `当前：${info.path}（暂无日志）`) : ""}
+        {info ? (
+          info.exists
+            ? f("log.currentWithSize", { path: info.path, size: Math.max(1, Math.round(info.sizeBytes / 1024)) })
+            : f("log.currentEmpty", { path: info.path })
+        ) : ""}
       </p>
       <div className="row-actions">
         <Button onClick={choose}>
-          <IconText icon={<Icon name="folder" />}>选择文件夹...</IconText>
+          <IconText icon={<Icon name="folder" />}>{t("log.chooseFolder")}</IconText>
         </Button>
         <Button onClick={openFile}>
-          <IconText icon="↗">打开日志文件</IconText>
+          <IconText icon="↗">{t("log.openFile")}</IconText>
         </Button>
         <Button onClick={openDir}>
-          <IconText icon="↗">打开日志文件夹</IconText>
+          <IconText icon="↗">{t("log.openDir")}</IconText>
         </Button>
         {logDir ? (
           <Button onClick={() => void setDir("")}>
-            <IconText icon="↺">恢复默认</IconText>
+            <IconText icon="↺">{t("log.reset")}</IconText>
           </Button>
         ) : null}
       </div>
@@ -1790,6 +1844,7 @@ function AccountAndRunButton({
   disabledReason?: string;
 }) {
   const account = useAppStore((state) => state.account);
+  const language = useAppStore((state) => state.settings?.language);
   const isGenerating = useAppStore((state) => state.isGenerating);
   const cancel = useAppStore((state) => state.cancel);
   const togglePause = useAppStore((state) => state.togglePause);
@@ -1802,6 +1857,8 @@ function AccountAndRunButton({
   const lastAnlasSpent = useAppStore((state) => state.lastAnlasSpent);
   const refreshAccount = useAppStore((state) => state.refreshAccount);
   const [refreshingAccount, setRefreshingAccount] = useState(false);
+  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
+  const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
   async function refreshBalance() {
     setRefreshingAccount(true);
     try {
@@ -1814,25 +1871,25 @@ function AccountAndRunButton({
     <div className="left-footer">
       <div className="account-mini">
         <div>
-          <strong>{account.hasToken ? account.tierName ?? "已配置 API" : "未设置 API"}</strong>
+          <strong>{account.hasToken ? account.tierName ?? t("account.configured") : t("account.notSet")}</strong>
           <small>
-            Anlas：{account.anlasBalance ?? "未知"}
-            {account.expiresAt ? ` · 到期 ${account.expiresAt}` : ""}
+            {f("account.anlas", { balance: account.anlasBalance ?? t("common.unknown") })}
+            {account.expiresAt ? f("account.expires", { date: account.expiresAt }) : ""}
           </small>
         </div>
         <button type="button" onClick={() => void refreshBalance()} disabled={!account.hasToken || refreshingAccount}>
-          {refreshingAccount ? "刷新中" : "刷新积分"}
+          {refreshingAccount ? t("account.refreshing") : t("account.refresh")}
         </button>
       </div>
       {!account.hasToken ? (
         <Button variant="primary" className="full" onClick={openSettings}>
-          <IconText icon={<Icon name="key" />}>请先设置 API</IconText>
+          <IconText icon={<Icon name="key" />}>{t("account.setupFirst")}</IconText>
         </Button>
       ) : isGenerating ? (
         <>
           {isGenerateQueueRunning && <QueuePanel />}
           <div className="anlas-spent">
-            {currentAnlasSpent != null ? `本次已实扣 ${currentAnlasSpent} Anlas` : "本次实扣读取中"}
+            {currentAnlasSpent != null ? f("account.currentSpent", { amount: currentAnlasSpent }) : t("account.currentReading")}
           </div>
           {allowQueue && isGenerateQueueRunning ? (
             <Button
@@ -1842,27 +1899,27 @@ function AccountAndRunButton({
               disabled={queueAdding}
             >
               {queueAdding
-                ? "正在读取扣费..."
+                ? t("account.addingQueueCost")
                 : generationQueueLength > 0
-                  ? `＋ 加入队列（等待 ${generationQueueLength}）`
-                  : "＋ 加入队列"}
+                  ? f("account.addQueueWaiting", { count: generationQueueLength })
+                  : t("account.addQueue")}
             </Button>
           ) : null}
           <div className={clsx("run-button-row", !isGenerateQueueRunning && "single-action")}>
             {isGenerateQueueRunning ? (
               <Button variant="secondary" className="run-row-btn" onClick={togglePause}>
-                {queuePaused ? "▶ 继续生成" : "⏸ 暂停"}
+                {queuePaused ? t("account.resume") : t("account.pause")}
               </Button>
             ) : null}
             <Button variant="danger" className="run-row-btn" onClick={() => void cancel()}>
-              ✕ 停止
+              {t("account.stop")}
             </Button>
           </div>
         </>
       ) : (
         <>
           {lastAnlasSpent != null && (
-            <div className="anlas-spent">上次实扣 {lastAnlasSpent} Anlas</div>
+            <div className="anlas-spent">{f("account.lastSpent", { amount: lastAnlasSpent })}</div>
           )}
           {disabled && disabledReason ? <div className="run-disabled-reason">{disabledReason}</div> : null}
           <Button variant="primary" className="full" onClick={onRun} disabled={disabled}>
@@ -1876,18 +1933,21 @@ function AccountAndRunButton({
 
 // ── Generate panel (T2I) ──────────────────────────────────────────────────────
 function GeneratePanel({ openSettings }: { openSettings: () => void }) {
+  const language = useAppStore((state) => state.settings?.language);
   const generate = useAppStore((state) => state.generate);
   const batchCount = useAppStore((state) => state.batchCount);
   const setBatchCount = useAppStore((state) => state.setBatchCount);
   const fileNamePrefix = useAppStore((state) => state.params.fileNamePrefix);
   const setParam = useAppStore((state) => state.setParam);
+  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
+  const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
 
   return (
     <>
       <div className="panel-scroll">
         <PromptAndParams />
         <div className="batch-row">
-          <span>批量生成数量</span>
+          <span>{t("generate.batchCount")}</span>
           <input
             type="number"
             className="field"
@@ -1899,20 +1959,20 @@ function GeneratePanel({ openSettings }: { openSettings: () => void }) {
           />
         </div>
         <label className="field">
-          <span>图片命名（文件名前缀，可留空）</span>
+          <span>{t("generate.fileNamePrefix")}</span>
           <input
             value={fileNamePrefix}
-            placeholder="例如：我的角色 → 我的角色_20260617_01.png"
+            placeholder={t("generate.fileNamePlaceholder")}
             onChange={(e) => setParam("fileNamePrefix", e.target.value)}
           />
         </label>
         <p className="wildcard-hint">
-          <Icon name="bulb" /> 支持动态提示词通配符 <code>{"{red|blue|green} hair"}</code>，批量时每张随机取一项；NovelAI 的 <code>{"{tag}"}</code> 权重语法不受影响。
+          <Icon name="bulb" /> {f("generate.wildcardHint", { example: "{red|blue|green} hair", tag: "{tag}" })}
         </p>
-        <FeatureCostCard label="生成前扣费" feature="generate" />
+        <FeatureCostCard label={t("cost.beforeRun")} feature="generate" />
       </div>
       <AccountAndRunButton
-        label={batchCount > 1 ? `批量生成 ${batchCount} 张` : "生成"}
+        label={batchCount > 1 ? f("generate.batchRun", { count: batchCount }) : t("generate.run")}
         onRun={() => void generate()}
         openSettings={openSettings}
         allowQueue
@@ -1923,27 +1983,30 @@ function GeneratePanel({ openSettings }: { openSettings: () => void }) {
 
 // ── I2I panel ─────────────────────────────────────────────────────────────────
 function I2IPanel({ openSettings }: { openSettings: () => void }) {
+  const language = useAppStore((state) => state.settings?.language);
   const i2iParams = useAppStore((state) => state.i2iParams);
   const setI2IParam = useAppStore((state) => state.setI2IParam);
   const generateI2I = useAppStore((state) => state.generateI2I);
+  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   return (
     <>
       <div className="panel-scroll">
         <WorkbenchImageUpload />
-        <SliderInput label="Strength（改图强度）" value={i2iParams.strength} min={0} max={1} step={0.01} onChange={(v) => setI2IParam("strength", v)} />
-        <SliderInput label="Noise（噪声）" value={i2iParams.noise} min={0} max={0.99} step={0.01} onChange={(v) => setI2IParam("noise", v)} />
-        <NumberInput label="Extra Noise Seed（0 = 随机）" value={i2iParams.extraNoiseSeed} min={0} onChange={(v) => setI2IParam("extraNoiseSeed", v)} />
+        <SliderInput label={t("i2i.strength")} value={i2iParams.strength} min={0} max={1} step={0.01} onChange={(v) => setI2IParam("strength", v)} />
+        <SliderInput label={t("i2i.noise")} value={i2iParams.noise} min={0} max={0.99} step={0.01} onChange={(v) => setI2IParam("noise", v)} />
+        <NumberInput label={t("i2i.extraNoiseSeed")} value={i2iParams.extraNoiseSeed} min={0} onChange={(v) => setI2IParam("extraNoiseSeed", v)} />
         <div className="panel-divider" />
         <PromptAndParams />
-        <FeatureCostCard label="生成前扣费" feature="i2i" />
+        <FeatureCostCard label={t("cost.beforeRun")} feature="i2i" />
       </div>
-      <AccountAndRunButton label="图生图" onRun={() => void generateI2I()} openSettings={openSettings} />
+      <AccountAndRunButton label={t("i2i.run")} onRun={() => void generateI2I()} openSettings={openSettings} />
     </>
   );
 }
 
 // ── Inpaint panel ─────────────────────────────────────────────────────────────
 function InpaintPanel({ openSettings }: { openSettings: () => void }) {
+  const language = useAppStore((state) => state.settings?.language);
   const inpaintModel = useAppStore((state) => state.inpaintModel);
   const setInpaintModel = useAppStore((state) => state.setInpaintModel);
   const inpaintStrength = useAppStore((state) => state.inpaintStrength);
@@ -1958,51 +2021,53 @@ function InpaintPanel({ openSettings }: { openSettings: () => void }) {
   const setBrushMode = useAppStore((state) => state.setBrushMode);
   const clearInpaintMask = useAppStore((state) => state.clearInpaintMask);
   const inpaint = useAppStore((state) => state.inpaint);
+  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   return (
     <>
       <div className="panel-scroll">
         <WorkbenchImageUpload />
         <label className="field">
-          <span>重绘模型</span>
+          <span>{t("inpaint.model")}</span>
           <select value={inpaintModel} onChange={(e) => setInpaintModel(e.target.value as typeof inpaintModel)}>
             {NAI_INPAINT_MODELS.map((m) => (
-              <option value={m.value} key={m.value}>{m.label}</option>
+              <option value={m.value} key={m.value}>{localizedDesktopOptionLabel(language, m.value, m.label)}</option>
             ))}
           </select>
         </label>
-        <SliderInput label="重绘强度（1=完全按提示词重画，越低越贴近原图）" value={inpaintStrength} min={0.1} max={1} step={0.01} onChange={setInpaintStrength} />
-        <SliderInput label="重绘噪声（一般保持 0）" value={inpaintNoise} min={0} max={0.99} step={0.01} onChange={setInpaintNoise} />
+        <SliderInput label={t("inpaint.strength")} value={inpaintStrength} min={0.1} max={1} step={0.01} onChange={setInpaintStrength} />
+        <SliderInput label={t("inpaint.noise")} value={inpaintNoise} min={0} max={0.99} step={0.01} onChange={setInpaintNoise} />
         <SliderInput
-          label="圆形画笔大小"
+          label={t("inpaint.brushSize")}
           value={brushSize}
           min={2}
           max={128}
           step={1}
           onChange={setBrushSize}
         />
-        <SliderInput label="画笔透明度（仅影响画面涂抹显示）" value={brushOpacity} min={0.05} max={1} step={0.01} onChange={setBrushOpacity} />
+        <SliderInput label={t("inpaint.brushOpacity")} value={brushOpacity} min={0.05} max={1} step={0.01} onChange={setBrushOpacity} />
         <div className="mode-buttons">
           <Button variant={brushMode === "paint" ? "primary" : "secondary"} onClick={() => setBrushMode("paint")}>
-            <IconText icon="✎">画笔（白=重绘）</IconText>
+            <IconText icon="✎">{t("inpaint.paintBrush")}</IconText>
           </Button>
           <Button variant={brushMode === "erase" ? "primary" : "secondary"} onClick={() => setBrushMode("erase")}>
-            <IconText icon="⌫">橡皮（黑=保留）</IconText>
+            <IconText icon="⌫">{t("inpaint.eraser")}</IconText>
           </Button>
         </div>
         <Button className="full" onClick={clearInpaintMask}>
-          <IconText icon="⌧">清空蒙版</IconText>
+          <IconText icon="⌧">{t("inpaint.clearMask")}</IconText>
         </Button>
         <div className="panel-divider" />
         <PromptAndParams includeModel={false} />
-        <FeatureCostCard label="生成前扣费" feature="inpaint" />
+        <FeatureCostCard label={t("cost.beforeRun")} feature="inpaint" />
       </div>
-      <AccountAndRunButton label="局部重绘" onRun={() => void inpaint()} openSettings={openSettings} />
+      <AccountAndRunButton label={t("inpaint.run")} onRun={() => void inpaint()} openSettings={openSettings} />
     </>
   );
 }
 
 // ── Upscale panel ─────────────────────────────────────────────────────────────
 function UpscalePanel({ openSettings }: { openSettings: () => void }) {
+  const language = useAppStore((state) => state.settings?.language);
   const workbenchImage = useAppStore((state) => state.workbenchImage);
   const scale = useAppStore((state) => state.upscaleScale);
   const setScale = useAppStore((state) => state.setUpscaleScale);
@@ -2010,6 +2075,8 @@ function UpscalePanel({ openSettings }: { openSettings: () => void }) {
   const preparedSize = workbenchImage
     ? fitSizeWithinPixels(workbenchImage.width, workbenchImage.height, MAX_NAI_UPSCALE_INPUT_PIXELS)
     : null;
+  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
+  const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
   return (
     <>
       <div className="panel-scroll">
@@ -2020,26 +2087,27 @@ function UpscalePanel({ openSettings }: { openSettings: () => void }) {
         </div>
         {workbenchImage && (
           <div className={clsx("info-card", preparedSize?.resized && "limit-card")}>
-            <strong>输出尺寸预估</strong>
+            <strong>{t("upscale.sizeEstimate")}</strong>
             <span>
               {preparedSize?.resized
-                ? `${workbenchImage.width}×${workbenchImage.height} → 预缩至 ${preparedSize.width}×${preparedSize.height} → ${preparedSize.width * scale}×${preparedSize.height * scale}`
+                ? `${workbenchImage.width}×${workbenchImage.height} → ${t("upscale.preResize")} ${preparedSize.width}×${preparedSize.height} → ${preparedSize.width * scale}×${preparedSize.height * scale}`
                 : `${workbenchImage.width}×${workbenchImage.height} → ${workbenchImage.width * scale}×${workbenchImage.height * scale}`}
             </span>
             {preparedSize?.resized ? (
-              <small>NovelAI 云端超分只接受约 1024×1024 等效面积以内的输入，程序会自动预缩后再超分。</small>
+              <small>{t("upscale.resizeHint")}</small>
             ) : null}
           </div>
         )}
-        <FeatureCostCard label="生成前扣费" feature="upscale" />
+        <FeatureCostCard label={t("cost.beforeRun")} feature="upscale" />
       </div>
-      <AccountAndRunButton label={`云端超分 ${scale}×`} onRun={() => void upscale()} openSettings={openSettings} />
+      <AccountAndRunButton label={f("upscale.run", { scale })} onRun={() => void upscale()} openSettings={openSettings} />
     </>
   );
 }
 
 // ── Director Tools panel ──────────────────────────────────────────────────────
 function DirectorPanel({ openSettings }: { openSettings: () => void }) {
+  const language = useAppStore((state) => state.settings?.language);
   const workbenchImage = useAppStore((state) => state.workbenchImage);
   const tool = useAppStore((state) => state.directorTool);
   const setTool = useAppStore((state) => state.setDirectorTool);
@@ -2049,6 +2117,8 @@ function DirectorPanel({ openSettings }: { openSettings: () => void }) {
   const preparedSize = workbenchImage
     ? fitSizeWithinPixels(workbenchImage.width, workbenchImage.height, MAX_NAI_DIRECTOR_INPUT_PIXELS)
     : null;
+  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
+  const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
   return (
     <>
       <div className="panel-scroll">
@@ -2056,42 +2126,45 @@ function DirectorPanel({ openSettings }: { openSettings: () => void }) {
         <div className="director-tools">
           {DIRECTOR_TOOLS.map((item) => (
             <button className={clsx(tool === item.value && "active")} key={item.value} onClick={() => setTool(item.value)}>
-              {item.label}
+              {localizedDesktopOptionLabel(language, item.value, item.label)}
             </button>
           ))}
         </div>
         {tool === "colorize" && (
           <label className="field">
-            <span>Colorize Prompt（上色提示）</span>
-            <input value={options.colorizePrompt} placeholder="例如：blue dress, warm sunset light" onChange={(e) => setOption("colorizePrompt", e.target.value)} />
+            <span>{t("director.colorizePrompt")}</span>
+            <input value={options.colorizePrompt} placeholder={t("director.colorizePlaceholder")} onChange={(e) => setOption("colorizePrompt", e.target.value)} />
           </label>
         )}
         {tool === "emotion" && (
           <>
             <label className="field">
-              <span>Emotion（表情）</span>
+              <span>{t("director.emotion")}</span>
               <select value={options.emotion} onChange={(e) => setOption("emotion", e.target.value as typeof options.emotion)}>
                 {EMOTION_OPTIONS.map((em) => (
-                  <option value={em.value} key={em.value}>{em.label}</option>
+                  <option value={em.value} key={em.value}>{localizedDesktopOptionLabel(language, em.value, em.label)}</option>
                 ))}
               </select>
             </label>
-            <SliderInput label="Emotion Level（表情强度）" value={options.emotionLevel} min={0} max={5} step={1} onChange={(v) => setOption("emotionLevel", v)} />
+            <SliderInput label={t("director.emotionLevel")} value={options.emotionLevel} min={0} max={5} step={1} onChange={(v) => setOption("emotionLevel", v)} />
           </>
         )}
-        <SliderInput label="Defry（去噪强度）" value={options.defry} min={0} max={5} step={1} onChange={(v) => setOption("defry", v)} />
+        <SliderInput label={t("director.defry")} value={options.defry} min={0} max={5} step={1} onChange={(v) => setOption("defry", v)} />
         {workbenchImage && preparedSize?.resized ? (
           <div className="info-card limit-card">
-            <strong>后期尺寸保护</strong>
+            <strong>{t("director.sizeProtection")}</strong>
             <span>
-              {workbenchImage.width}×{workbenchImage.height} → 预缩至 {preparedSize.width}×{preparedSize.height} 处理 → 恢复到原尺寸保存
+              {f("director.sizeProtectionPath", {
+                source: `${workbenchImage.width}×${workbenchImage.height}`,
+                prepared: `${preparedSize.width}×${preparedSize.height}`,
+              })}
             </span>
-            <small>大图或透明 PNG 直接送入后期接口容易返回 500，程序会自动转换为白底 PNG 并限制输入尺寸。</small>
+            <small>{t("director.sizeProtectionHint")}</small>
           </div>
         ) : null}
-        <FeatureCostCard label="生成前扣费" feature="director" />
+        <FeatureCostCard label={t("cost.beforeRun")} feature="director" />
       </div>
-      <AccountAndRunButton label="执行后期处理" onRun={() => void run()} openSettings={openSettings} />
+      <AccountAndRunButton label={t("director.run")} onRun={() => void run()} openSettings={openSettings} />
     </>
   );
 }
@@ -2102,30 +2175,34 @@ function ModeTemplateEditor({
   value,
   defaults,
   onChange,
-  title = "提示词模板",
+  title,
 }: {
   value: ModePromptTemplates;
   defaults: ModePromptTemplates;
   onChange: (next: ModePromptTemplates) => void;
   title?: string;
 }) {
+  const language = useAppStore((state) => state.settings?.language);
+  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
+  const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
   const [mode, setMode] = useState<ReversePromptMode>("tags");
   const labels: [ReversePromptMode, string][] = [
-    ["tags", "Danbooru 标签"],
-    ["natural", "自然语言"],
-    ["mixed", "混合模式"],
+    ["tags", t("mode.tags")],
+    ["natural", t("mode.natural")],
+    ["mixed", t("mode.mixed")],
   ];
   const override = value?.[mode]?.trim() ?? "";
   const defaultText = defaults[mode] ?? "";
   const isCustom = override.length > 0 && override !== defaultText.trim();
   // Show the built-in default text when there's no override, so it's never hidden.
   const shown = override.length > 0 ? value[mode] : defaultText;
+  const activeModeLabel = labels.find(([v]) => v === mode)?.[1] ?? t("mode.tags");
   return (
     <div className="field">
       <span className="field-label-row">
-        <strong>{title}</strong>
-        提示词模板（三种模式各自独立，绝不混用）
-        <span className={clsx("tpl-state", isCustom && "custom")}>{isCustom ? "已自定义" : "默认"}</span>
+        <strong>{title ?? t("template.editorTitle")}</strong>
+        {t("template.modeSeparated")}
+        <span className={clsx("tpl-state", isCustom && "custom")}>{isCustom ? t("template.custom") : t("template.default")}</span>
       </span>
       <div className="mode-selector" style={{ marginBottom: 8 }}>
         {labels.map(([val, label]) => (
@@ -2150,15 +2227,13 @@ function ModeTemplateEditor({
           type="button"
           className="prompt-tool-btn"
           disabled={override.length > 0 && !isCustom}
-          title="把当前模式恢复为内置默认模板"
+          title={t("template.restoreModeTitle")}
           onClick={() => onChange({ ...value, [mode]: defaultText })}
         >
-          ↺ 恢复默认（{labels.find(([v]) => v === mode)?.[1]}）
+          {f("template.restoreMode", { mode: activeModeLabel })}
         </button>
       </div>
-      <small className="settings-hint">
-        标签 / 自然语言 / 混合三种输出各用<strong>独立</strong>系统提示词，互不混用。直接编辑即生效；点「恢复默认」可随时还原为内置模板。
-      </small>
+      <small className="settings-hint">{t("template.modeHint")}</small>
     </div>
   );
 }
@@ -2176,6 +2251,8 @@ function SingleTemplateEditor({
   title: string;
   description?: string;
 }) {
+  const language = useAppStore((state) => state.settings?.language);
+  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const override = value?.trim() ?? "";
   const isCustom = override.length > 0 && override !== defaultValue.trim();
   const shown = override.length > 0 ? value : defaultValue;
@@ -2184,7 +2261,7 @@ function SingleTemplateEditor({
       <span className="field-label-row">
         <strong>{title}</strong>
         {description}
-        <span className={clsx("tpl-state", isCustom && "custom")}>{isCustom ? "已自定义" : "默认"}</span>
+        <span className={clsx("tpl-state", isCustom && "custom")}>{isCustom ? t("template.custom") : t("template.default")}</span>
       </span>
       <textarea
         className="prompt-box"
@@ -2197,13 +2274,13 @@ function SingleTemplateEditor({
           type="button"
           className="prompt-tool-btn"
           disabled={override.length > 0 && !isCustom}
-          title="恢复为内置默认模板"
+          title={t("template.restoreTitle")}
           onClick={() => onChange(defaultValue)}
         >
-          ↺ 恢复默认
+          {t("template.restore")}
         </button>
       </div>
-      <small className="settings-hint">漫画拆分分镜只使用这一套模板；反推和转换仍按三种模式分别读取上方模板。</small>
+      <small className="settings-hint">{t("template.comicHint")}</small>
     </div>
   );
 }
@@ -2215,10 +2292,12 @@ function PromptVariantCards({
   variants: PromptVariants | null;
   onUse: (text: string) => void;
 }) {
+  const language = useAppStore((state) => state.settings?.language);
+  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   if (!variants || (!variants.namePrompt.trim() && !variants.featurePrompt.trim())) return null;
   const cards = [
-    ["角色名版", "适合模型库认识该角色时使用。", variants.namePrompt],
-    ["特征版", "适合模型库不认识该角色时使用。", variants.featurePrompt],
+    [t("variant.nameTitle"), t("variant.nameHint"), variants.namePrompt],
+    [t("variant.featureTitle"), t("variant.featureHint"), variants.featurePrompt],
   ] as const;
   return (
     <div className="prompt-variant-grid">
@@ -2230,7 +2309,7 @@ function PromptVariantCards({
           </div>
           <textarea readOnly value={text} />
           <Button className="full" disabled={!text.trim()} onClick={() => onUse(text)}>
-            使用这一版
+            {t("variant.use")}
           </Button>
         </div>
       ))}
@@ -2258,35 +2337,38 @@ function ReversePanel() {
   const setParam = useAppStore((state) => state.setParam);
   const setToast = useAppStore((state) => state.setToast);
   const settings = useAppStore((state) => state.settings);
+  const language = settings?.language;
   const inspectMeta = useAppStore((state) => state.inspectMeta);
   const applyParams = useAppStore((state) => state.applyParams);
   const setActiveTab = useAppStore((state) => state.setActiveTab);
   const [dragging, setDragging] = useState(false);
   const hasImage = Boolean(inspectImageUrl);
+  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
+  const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
 
   const imported = useMemo(() => (inspectMeta ? parseImportedParams(inspectMeta) : {}), [inspectMeta]);
   const hasMeta = Object.keys(imported).length > 0;
 
   function restoreParams() {
     if (!hasMeta) {
-      setToast("该图片不含可识别的 NovelAI 参数。");
+      setToast(t("inspect.noMeta"));
       return;
     }
     applyParams(imported);
     setActiveTab("generate");
-    setToast("已从图片元数据还原参数。");
+    setToast(t("inspect.metaRestored"));
   }
 
   const modes: [ReversePromptMode, string, string][] = [
-    ["tags", "Danbooru 标签", "输出标准 Danbooru tag 格式"],
-    ["natural", "自然语言", "输出流畅的描述性文字"],
-    ["mixed", "混合模式", "Tag + 自然语言结合"],
+    ["tags", t("mode.tags"), t("inspect.mode.tagsTip")],
+    ["natural", t("mode.natural"), t("inspect.mode.naturalTip")],
+    ["mixed", t("mode.mixed"), t("inspect.mode.mixedTip")],
   ];
   const scopes: [ReversePromptScope, string, string][] = [
-    ["full", "整张图片", "反推完整画面、人物、场景和构图"],
-    ["character", "角色", "只反推指定角色的外观、服装、姿态"],
-    ["object", "物品", "只反推指定物品或道具"],
-    ["scene", "场景", "只反推背景、光照、空间和氛围"],
+    ["full", t("inspect.scope.full"), t("inspect.scope.fullTip")],
+    ["character", t("inspect.scope.character"), t("inspect.scope.characterTip")],
+    ["object", t("inspect.scope.object"), t("inspect.scope.objectTip")],
+    ["scene", t("inspect.scope.scene"), t("inspect.scope.sceneTip")],
   ];
 
   function handleFile(file: File) {
@@ -2307,7 +2389,7 @@ function ReversePanel() {
   function applyToPanel() {
     if (!reversePromptText.trim()) return;
     setParam("positivePrompt", reversePromptText.trim());
-    setToast("提示词已复用至生成面板。");
+    setToast(t("shared.reusedToGenerate"));
   }
 
   // Apply selected template to the reverse prompt result
@@ -2316,7 +2398,7 @@ function ReversePanel() {
     const parts = [tpl.prefix.trim(), base, tpl.suffix.trim()].filter(Boolean);
     const merged = parts.join(", ");
     setReversePromptText(merged);
-    setToast(`已应用模板「${tpl.name}」`);
+    setToast(f("prompt.templateApplied", { name: tpl.name }));
   }
 
   const templates: PromptTemplate[] = settings?.promptTemplates ?? [];
@@ -2336,12 +2418,12 @@ function ReversePanel() {
           }}
         >
           {hasImage ? (
-            <img src={inspectImageUrl} className="wb-thumb" style={{ maxHeight: 110 }} alt="检视图" />
+            <img src={inspectImageUrl} className="wb-thumb" style={{ maxHeight: 110 }} alt={t("inspect.imageAlt")} />
           ) : (
-            <span style={{ fontSize: 12 }}>拖入图片到此处，或点击下方按钮打开</span>
+            <span style={{ fontSize: 12 }}>{t("inspect.dropHint")}</span>
           )}
           <label className="btn btn-secondary" style={{ cursor: "pointer", fontSize: 12 }}>
-            <IconText icon={<Icon name="folderOpen" />}>打开文件</IconText>
+            <IconText icon={<Icon name="folderOpen" />}>{t("inspect.openFile")}</IconText>
             <input
               type="file"
               hidden
@@ -2355,19 +2437,19 @@ function ReversePanel() {
         </div>
 
         <div className="info-card">
-          <strong>积分说明</strong>
-          <span>AI 反推不消耗 NovelAI Anlas；只会调用“AI 反推”中配置的视觉模型 API。</span>
+          <strong>{t("inspect.costTitle")}</strong>
+          <span>{t("inspect.costDesc")}</span>
         </div>
 
         {hasImage && (
           <div className="meta-restore">
             <Button variant="secondary" className="full" disabled={!hasMeta} onClick={restoreParams}>
-              ↩ 从图片还原参数
+              {t("inspect.restoreParams")}
             </Button>
             <small>
               {hasMeta
-                ? "读取 NovelAI PNG 内嵌的提示词、种子、采样器等参数并填入生成面板。"
-                : "未检测到 NovelAI 参数（图片可能被压缩或来自其它来源）。"}
+                ? t("inspect.restoreMetaOk")
+                : t("inspect.restoreMetaMissing")}
             </small>
           </div>
         )}
@@ -2386,7 +2468,7 @@ function ReversePanel() {
         </div>
 
         <div className="reverse-scope-card">
-          <span className="field-label-row">反推范围选择</span>
+          <span className="field-label-row">{t("inspect.scopeTitle")}</span>
           <div className="mode-selector compact">
             {scopes.map(([val, label, tip]) => (
               <button
@@ -2400,10 +2482,10 @@ function ReversePanel() {
             ))}
           </div>
           <label className="field">
-            <span>目标/角色提示（可选）</span>
+            <span>{t("inspect.subjectHint")}</span>
             <input
               value={reversePromptHint}
-              placeholder="例如：这是芙宁娜 / 只反推右侧角色 / 只反推桌上的盒子"
+              placeholder={t("inspect.subjectPlaceholder")}
               onChange={(e) => setReversePromptHint(e.target.value)}
             />
           </label>
@@ -2413,7 +2495,7 @@ function ReversePanel() {
               checked={reverseKnownCharacter}
               onChange={(e) => setReverseKnownCharacter(e.target.checked)}
             />
-            <span>这是网络/游戏/动漫角色，生成角色名版和特征版</span>
+            <span>{t("inspect.knownCharacter")}</span>
           </label>
         </div>
 
@@ -2424,13 +2506,13 @@ function ReversePanel() {
             disabled={reversePrompting}
             onClick={() => void runReversePrompt()}
           >
-            {reversePrompting ? <IconText icon="…">反推中...</IconText> : <IconText icon="◎">AI 反推提示词</IconText>}
+            {reversePrompting ? <IconText icon="…">{t("inspect.running")}</IconText> : <IconText icon="◎">{t("inspect.run")}</IconText>}
           </Button>
         )}
 
         {reversePromptText && (
           <>
-            <div className="inspect-result-label">反推结果</div>
+            <div className="inspect-result-label">{t("inspect.result")}</div>
             <textarea
               className="prompt-box"
               style={{ minHeight: 120 }}
@@ -2440,7 +2522,7 @@ function ReversePanel() {
             <PromptVariantCards variants={reversePromptVariants} onUse={setReversePromptText} />
             {templates.length > 0 && (
               <div className="template-apply-row">
-                <span style={{ fontSize: 12 }}>应用模板</span>
+                <span style={{ fontSize: 12 }}>{t("inspect.applyTemplate")}</span>
                 <div className="template-chip-list">
                   {templates.map((tpl) => (
                     <button
@@ -2459,8 +2541,8 @@ function ReversePanel() {
 
         {!hasImage && (
           <div className="inspect-hint">
-            <p>上传图片后，点击「AI 反推提示词」按钮，将使用视觉模型分析图片内容，自动生成适合 NovelAI 的提示词。</p>
-            <p>需要在 <strong>设置 › AI 反推</strong> 中填写视觉模型 API 地址和 Key（支持 OpenAI / 兼容接口）。</p>
+            <p>{t("inspect.emptyHint1")}</p>
+            <p>{t("inspect.emptyHint2")}</p>
           </div>
         )}
       </div>
@@ -2472,11 +2554,11 @@ function ReversePanel() {
             disabled={!reversePromptText.trim()}
             onClick={applyToPanel}
           >
-            <IconText icon="↙">复用至生成面板</IconText>
+            <IconText icon="↙">{t("inspect.reuse")}</IconText>
           </Button>
           {hasImage && (
             <Button className="full" onClick={clearInspect}>
-              <IconText icon="✕">清除图片</IconText>
+              <IconText icon="✕">{t("inspect.clearImage")}</IconText>
             </Button>
           )}
         </div>
@@ -2549,48 +2631,51 @@ function PromptConverterPanel() {
   const setToast = useAppStore((state) => state.setToast);
   const settings = useAppStore((state) => state.settings);
   const templates: PromptTemplate[] = settings?.promptTemplates ?? [];
+  const language = settings?.language;
+  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
+  const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
 
   function applyToPanel() {
     if (!convertResult.trim()) return;
     setParam("positivePrompt", convertResult.trim());
-    setToast("提示词已复用至生成面板。");
+    setToast(t("shared.reusedToGenerate"));
   }
 
   function applyTemplate(tpl: PromptTemplate) {
     const base = convertResult.trim();
     const parts = [tpl.prefix.trim(), base, tpl.suffix.trim()].filter(Boolean);
     setConvertResult(parts.join(", "));
-    setToast(`已应用模板「${tpl.name}」`);
+    setToast(f("prompt.templateApplied", { name: tpl.name }));
   }
 
   return (
     <>
       <div className="panel-scroll">
         <div className="convert-header">
-          <strong>提示词转换</strong>
-          <small>输入中文或自然语言描述，AI 将转换为 Danbooru 风格标签</small>
+          <strong>{t("convert.title")}</strong>
+          <small>{t("convert.subtitle")}</small>
         </div>
         <div className="info-card">
-          <strong>积分说明</strong>
-          <span>转换不消耗 NovelAI Anlas；只会调用“转换 API”中配置的文本模型。</span>
+          <strong>{t("convert.costTitle")}</strong>
+          <span>{t("convert.costDesc")}</span>
         </div>
 
         <label className="field">
-          <span>描述输入</span>
+          <span>{t("convert.input")}</span>
           <textarea
             className="prompt-box"
             style={{ minHeight: 110 }}
             value={convertInput}
-            placeholder={"例如：\n一个短发蓝眼睛的女孩，穿白色连衣裙，站在樱花树下，阳光照射，动漫风格"}
+            placeholder={t("convert.placeholder")}
             onChange={(e) => setConvertInput(e.target.value)}
           />
         </label>
 
         <div className="mode-selector">
           {([
-            ["tags", "Danbooru 标签"],
-            ["natural", "自然语言"],
-            ["mixed", "混合模式"],
+            ["tags", t("mode.tags")],
+            ["natural", t("mode.natural")],
+            ["mixed", t("mode.mixed")],
           ] as [ReversePromptMode, string][]).map(([val, label]) => (
             <button
               key={val}
@@ -2608,7 +2693,7 @@ function PromptConverterPanel() {
             checked={convertKnownCharacter}
             onChange={(e) => setConvertKnownCharacter(e.target.checked)}
           />
-          <span>这是网络/游戏/动漫角色，生成角色名版和特征版</span>
+          <span>{t("convert.knownCharacter")}</span>
         </label>
 
         <Button
@@ -2618,17 +2703,17 @@ function PromptConverterPanel() {
           onClick={() => void runConvertPrompt()}
         >
           {converting ? (
-            <IconText icon="…">转换中...</IconText>
+            <IconText icon="…">{t("convert.running")}</IconText>
           ) : (
             <IconText icon="⇄">
-              {convertMode === "tags" ? "转换为 Danbooru 标签" : convertMode === "natural" ? "转换为自然语言" : "转换为混合提示词"}
+              {t(`convert.run.${convertMode}`)}
             </IconText>
           )}
         </Button>
 
         {convertResult && (
           <>
-            <div className="inspect-result-label">转换结果（可编辑）</div>
+            <div className="inspect-result-label">{t("convert.result")}</div>
             <textarea
               className="prompt-box"
               style={{ minHeight: 130 }}
@@ -2638,7 +2723,7 @@ function PromptConverterPanel() {
             <PromptVariantCards variants={convertResultVariants} onUse={setConvertResult} />
             {templates.length > 0 && (
               <div className="template-apply-row">
-                <span style={{ fontSize: 12 }}>叠加模板</span>
+                <span style={{ fontSize: 12 }}>{t("convert.applyTemplate")}</span>
                 <div className="template-chip-list">
                   {templates.map((tpl) => (
                     <button key={tpl.id} className="template-chip" onClick={() => applyTemplate(tpl)}>
@@ -2653,22 +2738,22 @@ function PromptConverterPanel() {
 
         {!convertResult && (
           <div className="inspect-hint">
-            <p>输入任意语言的图像描述，AI 将分析语义并输出符合 NovelAI 风格的 Danbooru 标签组合。</p>
-            <p>需要在 <strong>设置 › 转换 API</strong> 中配置文本模型 API。</p>
+            <p>{t("convert.emptyHint1")}</p>
+            <p>{t("convert.emptyHint2")}</p>
           </div>
         )}
       </div>
       <div className="left-footer">
         <div style={{ display: "grid", gap: 8 }}>
           <Button variant="primary" className="full" disabled={!convertResult.trim()} onClick={applyToPanel}>
-            <IconText icon="↙">复用至生成面板</IconText>
+            <IconText icon="↙">{t("convert.reuse")}</IconText>
           </Button>
           <Button
             className="full"
             disabled={!convertResult.trim()}
-            onClick={() => { void navigator.clipboard.writeText(convertResult); setToast("已复制到剪贴板"); }}
+            onClick={() => { void navigator.clipboard.writeText(convertResult); setToast(t("convert.copied")); }}
           >
-            <IconText icon="⧉">复制结果</IconText>
+            <IconText icon="⧉">{t("convert.copy")}</IconText>
           </Button>
         </div>
       </div>
@@ -2681,6 +2766,8 @@ function AiLogPanel() {
   const [entries, setEntries] = useState<AiCallLogEntry[]>([]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
+  const language = useAppStore((state) => state.settings?.language);
+  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -2715,20 +2802,20 @@ function AiLogPanel() {
     <main className="ai-log-panel">
       <div className="ai-log-head">
         <div>
-          <strong>AI 调用记录</strong>
-          <small>反推 / 转换 / 拆分镜 / 一致性检测每次发送给 AI 的内容与原始返回（最多保留最近 200 条，重启后清空）。</small>
+          <strong>{t("aiLog.title")}</strong>
+          <small>{t("aiLog.subtitle")}</small>
         </div>
         <div className="ai-log-actions">
           <button className="btn btn-ghost" onClick={() => void load()} disabled={loading}>
-            {loading ? "刷新中..." : "刷新"}
+            {loading ? t("aiLog.refreshing") : t("aiLog.refresh")}
           </button>
           <button className="btn btn-danger" onClick={() => void clearAll()} disabled={!entries.length}>
-            清空
+            {t("aiLog.clear")}
           </button>
         </div>
       </div>
       {entries.length === 0 ? (
-        <div className="ai-log-empty">暂无记录。进行一次 AI 反推 / 转换 / 漫画拆分镜后，这里会显示发送与返回内容。</div>
+        <div className="ai-log-empty">{t("aiLog.empty")}</div>
       ) : (
         <div className="ai-log-list">
           {entries.map((entry) => {
@@ -2737,16 +2824,16 @@ function AiLogPanel() {
               <div className={clsx("ai-log-item", entry.ok ? "ok" : "fail")} key={entry.id}>
                 <button type="button" className="ai-log-item-head" onClick={() => toggle(entry.id)}>
                   <span className="ai-log-caret">{open ? "▾" : "▸"}</span>
-                  <span className={clsx("ai-log-badge", entry.ok ? "ok" : "fail")}>{entry.ok ? "成功" : "失败"}</span>
+                  <span className={clsx("ai-log-badge", entry.ok ? "ok" : "fail")}>{entry.ok ? t("aiLog.ok") : t("aiLog.fail")}</span>
                   <span className="ai-log-label">{entry.label}</span>
-                  <span className="ai-log-meta">{entry.api === "vision" ? "反推API" : "转换API"} · {entry.model}</span>
+                  <span className="ai-log-meta">{entry.api === "vision" ? t("aiLog.visionApi") : t("aiLog.textApi")} · {entry.model}</span>
                   <span className="ai-log-time">{format(new Date(entry.time), "HH:mm:ss")}</span>
                 </button>
                 {open && (
                   <div className="ai-log-body">
-                    <AiLogField title="System Prompt（系统指令）" text={entry.systemPrompt} />
-                    <AiLogField title="User（发送内容）" text={entry.userText} />
-                    <AiLogField title={entry.ok ? "返回（原始输出）" : "返回（错误信息）"} text={entry.response} />
+                    <AiLogField title={t("aiLog.systemPrompt")} text={entry.systemPrompt} />
+                    <AiLogField title={t("aiLog.user")} text={entry.userText} />
+                    <AiLogField title={entry.ok ? t("aiLog.responseOk") : t("aiLog.responseFail")} text={entry.response} />
                   </div>
                 )}
               </div>
@@ -2759,6 +2846,8 @@ function AiLogPanel() {
 }
 
 function AiLogField({ title, text }: { title: string; text: string }) {
+  const language = useAppStore((state) => state.settings?.language);
+  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   return (
     <div className="ai-log-field">
       <div className="ai-log-field-head">
@@ -2769,10 +2858,10 @@ function AiLogField({ title, text }: { title: string; text: string }) {
           onClick={() => void navigator.clipboard.writeText(text)}
           disabled={!text}
         >
-          复制
+          {t("aiLog.copy")}
         </button>
       </div>
-      <pre className="ai-log-pre">{text || "（空）"}</pre>
+      <pre className="ai-log-pre">{text || t("aiLog.emptyValue")}</pre>
     </div>
   );
 }
@@ -2803,6 +2892,8 @@ function ZoomableImageStage({
   const [compareEnabled, setCompareEnabled] = useState(Boolean(compareBeforeImage));
   const [compareX, setCompareX] = useState(50);
   const [isCompareDragging, setIsCompareDragging] = useState(false);
+  const language = useAppStore((state) => state.settings?.language);
+  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const canCompare = Boolean(compareBeforeImage?.fileUrl);
   const compareClip = `inset(0 0 0 ${compareX}%)`;
   const frameSize = useMemo(() => {
@@ -2938,7 +3029,7 @@ function ZoomableImageStage({
       <div className="image-viewer-toolbar">
         <span>{Math.round(zoom * 100)}%</span>
         <button type="button" className="btn btn-ghost btn-mini" onClick={resetView} disabled={zoom === 1 && pan.x === 0 && pan.y === 0}>
-          复位
+          {t("viewer.reset")}
         </button>
         {canCompare ? (
           <button
@@ -2946,7 +3037,7 @@ function ZoomableImageStage({
             className={clsx("btn btn-ghost btn-mini", compareEnabled && "active")}
             onClick={() => setCompareEnabled((value) => !value)}
           >
-            对比
+            {t("viewer.compare")}
           </button>
         ) : null}
       </div>
@@ -2971,7 +3062,7 @@ function ZoomableImageStage({
             alt={alt}
             // Draggable only when not zoomed; while zoomed the pointer drives panning.
             draggable={zoom === 1}
-            title="可拖出到桌面 / 资源管理器 / 其他程序"
+            title={t("viewer.dragTitle")}
             onDragStart={(e) => {
               e.preventDefault();
               window.naiDesktop.startImageDrag(image.fileUrl);
@@ -2984,9 +3075,9 @@ function ZoomableImageStage({
           />
           {compareEnabled && canCompare ? (
             <>
-              <img className="zoom-image zoom-image-absolute" src={compareBeforeImage!.fileUrl} alt="处理前图片" draggable={false} />
+              <img className="zoom-image zoom-image-absolute" src={compareBeforeImage!.fileUrl} alt={t("viewer.beforeAlt")} draggable={false} />
               <div className="compare-after-clip" style={{ clipPath: compareClip }}>
-                <img className="zoom-image zoom-image-absolute" src={image.fileUrl} alt="处理后图片" draggable={false} />
+                <img className="zoom-image zoom-image-absolute" src={image.fileUrl} alt={t("viewer.afterAlt")} draggable={false} />
               </div>
               <button
                 type="button"
@@ -2998,8 +3089,8 @@ function ZoomableImageStage({
                   setIsCompareDragging(true);
                   updateComparePosition(event.clientX);
                 }}
-                aria-label="拖动查看处理前后差异"
-                title="拖动查看处理前后差异"
+                aria-label={t("viewer.compareDividerLabel")}
+                title={t("viewer.compareDividerLabel")}
               >
                 <span />
               </button>
@@ -3018,11 +3109,13 @@ function ImageCanvas() {
   const activeTab = useAppStore((state) => state.activeTab);
   const generate = useAppStore((state) => state.generate);
   const settings = useAppStore((state) => state.settings);
+  const language = settings?.language;
   const inspectImageUrl = useAppStore((state) => state.inspectImageUrl);
   const loadWorkbenchFromPath = useAppStore((state) => state.loadWorkbenchFromPath);
   const [dropOver, setDropOver] = useState(false);
   const superDrop = settings?.superDrop ?? false;
   const dropEnabled = superDrop || activeTab === "generate" || activeTab === "upscale" || activeTab === "postprocess";
+  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
 
   function handleDragOver(e: React.DragEvent) {
     if (!dropEnabled || !hasDraggedFiles(e.dataTransfer)) return;
@@ -3044,12 +3137,12 @@ function ImageCanvas() {
     return (
       <main className="canvas-area">
         {inspectImageUrl ? (
-          <ZoomableImageStage image={{ fileUrl: inspectImageUrl, width: 1, height: 1 }} alt="反推图片" />
+          <ZoomableImageStage image={{ fileUrl: inspectImageUrl, width: 1, height: 1 }} alt={t("inspect.canvasAlt")} />
         ) : (
           <div className="coming-soon">
             <div className="coming-soon-icon">✦</div>
-            <h2>AI 反推提示词</h2>
-            <p>在左侧上传图片，选择输出模式（Danbooru 标签 / 自然语言 / 混合），然后点击反推按钮。</p>
+            <h2>{t("inspect.canvasTitle")}</h2>
+            <p>{t("inspect.canvasHint")}</p>
           </div>
         )}
       </main>
@@ -3061,8 +3154,8 @@ function ImageCanvas() {
       <main className="canvas-area">
         <div className="coming-soon">
           <div className="coming-soon-icon">⇄</div>
-          <h2>提示词转换</h2>
-          <p>在左侧输入中文或自然语言描述，AI 将自动转换为适合 NovelAI 的 Danbooru 风格标签提示词。</p>
+          <h2>{t("convert.title")}</h2>
+          <p>{t("convert.emptyHint1")}</p>
         </div>
       </main>
     );
@@ -3077,14 +3170,14 @@ function ImageCanvas() {
     >
       {dropOver && (
         <div className="superdrop-overlay">
-          <span>放开以加载图片</span>
+          <span>{t("canvas.dropToLoad")}</span>
         </div>
       )}
       {isGenerating && (
         <div className="generating-overlay">
           <div className="spinner" />
-          <strong>正在处理图片...</strong>
-          <small>请求 NovelAI API，完成后会自动保存并写入历史。</small>
+          <strong>{t("canvas.generatingTitle")}</strong>
+          <small>{t("canvas.generatingHint")}</small>
         </div>
       )}
       {!currentImage && !isGenerating && (
@@ -3094,18 +3187,16 @@ function ImageCanvas() {
             <span className="empty-orb empty-orb-b" />
             <span className="empty-gem">✦</span>
           </span>
-          <strong>准备开始创作</strong>
-          <span>
-            在左侧输入英文 tag 或自然提示词，点击下方生成按钮；结果会自动保存并进入右侧历史。
-          </span>
+          <strong>{t("canvas.emptyTitle")}</strong>
+          <span>{t("canvas.emptyHint")}</span>
           <span className="empty-shortcuts">
-            <span>Tag 自动补全</span>
-            <span>{dropEnabled ? "支持拖入图片到工作台" : "API-only 生成"}</span>
-            <span>历史一键复用</span>
+            <span>{t("canvas.shortcutAutocomplete")}</span>
+            <span>{dropEnabled ? t("canvas.shortcutDrop") : t("canvas.shortcutApiOnly")}</span>
+            <span>{t("canvas.shortcutReuse")}</span>
           </span>
         </button>
       )}
-      {currentImage && <ZoomableImageStage image={currentImage} compareBeforeImage={comparisonBeforeImage} alt="生成结果" />}
+      {currentImage && <ZoomableImageStage image={currentImage} compareBeforeImage={comparisonBeforeImage} alt={t("canvas.resultAlt")} />}
     </main>
   );
 }
@@ -3115,7 +3206,7 @@ function InputModal({
   title,
   label,
   initial,
-  confirmText = "确定",
+  confirmText,
   onConfirm,
   onClose,
 }: {
@@ -3127,6 +3218,8 @@ function InputModal({
   onClose: () => void;
 }) {
   const [value, setValue] = useState(initial);
+  const language = useAppStore((state) => state.settings?.language);
+  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   return (
     <AppPortal>
       <div className="modal-backdrop" onMouseDown={onClose}>
@@ -3150,8 +3243,8 @@ function InputModal({
             </label>
           </div>
           <footer className="input-modal-footer">
-            <Button onClick={onClose}>取消</Button>
-            <Button variant="primary" onClick={() => onConfirm(value)}>{confirmText}</Button>
+            <Button onClick={onClose}>{t("common.cancel")}</Button>
+            <Button variant="primary" onClick={() => onConfirm(value)}>{confirmText ?? t("common.confirm")}</Button>
           </footer>
         </div>
       </div>
@@ -3172,6 +3265,8 @@ function proxyPresetFor(value: string): ProxyPreset {
 function ProxyPresetControl({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   const [preset, setPreset] = useState<ProxyPreset>(() => proxyPresetFor(value));
   const [customValue, setCustomValue] = useState(value);
+  const language = useAppStore((state) => state.settings?.language);
+  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
 
   useEffect(() => {
     setCustomValue(value);
@@ -3189,20 +3284,20 @@ function ProxyPresetControl({ value, onChange }: { value: string; onChange: (val
   return (
     <div className="proxy-preset-control">
       <label className="field">
-        <span>代理连接方式</span>
+        <span>{t("proxy.label")}</span>
         <select value={preset} onChange={(event) => selectPreset(event.target.value as ProxyPreset)}>
-          <option value="http">HTTP 本地代理（推荐） · 127.0.0.1:7890</option>
-          <option value="direct">直连（不使用代理）</option>
-          <option value="socks">SOCKS5 本地代理 · 127.0.0.1:10808</option>
-          <option value="custom">自定义代理地址</option>
+          <option value="http">{t("proxy.http")}</option>
+          <option value="direct">{t("proxy.direct")}</option>
+          <option value="socks">{t("proxy.socks")}</option>
+          <option value="custom">{t("proxy.custom")}</option>
         </select>
       </label>
       {preset === "custom" && (
         <label className="field">
-          <span>自定义代理地址</span>
+          <span>{t("proxy.customLabel")}</span>
           <input
             value={customValue}
-            placeholder="例如 http://127.0.0.1:7890"
+            placeholder={t("proxy.placeholder")}
             onChange={(event) => {
               setCustomValue(event.target.value);
               onChange(event.target.value);
@@ -3211,8 +3306,8 @@ function ProxyPresetControl({ value, onChange }: { value: string; onChange: (val
         </label>
       )}
       <div className={clsx("proxy-current", preset === "direct" && "direct")}>
-        <strong>{preset === "direct" ? "当前为直连" : "当前代理"}</strong>
-        <code>{preset === "direct" ? "不经过本地代理" : (preset === "custom" ? customValue : value) || "尚未填写"}</code>
+        <strong>{preset === "direct" ? t("proxy.currentDirect") : t("proxy.currentProxy")}</strong>
+        <code>{preset === "direct" ? t("proxy.directValue") : (preset === "custom" ? customValue : value) || t("proxy.empty")}</code>
       </div>
     </div>
   );
@@ -3220,33 +3315,22 @@ function ProxyPresetControl({ value, onChange }: { value: string; onChange: (val
 
 function TokenGuideModal({ onClose }: { onClose: () => void }) {
   const [previewImage, setPreviewImage] = useState("");
-  const steps = [
-    {
-      image: "./tutorial/token-step-1.webp",
-      title: "打开左上角菜单",
-      description: "登录 NovelAI 生图页面后，点击左上角蓝圈标出的三横线菜单。",
-    },
-    {
-      image: "./tutorial/token-step-2.webp",
-      title: "进入 Account Settings",
-      description: "菜单展开后，在 Account 区域点击蓝圈标出的 Account Settings。",
-    },
-    {
-      image: "./tutorial/token-step-3.webp",
-      title: "获取 Persistent API Token",
-      description: "在 User Settings 的 Account 页面点击蓝圈标出的 Get Persistent API Token，并复制完整 Token。",
-    },
-  ];
+  const language = useAppStore((state) => state.settings?.language);
+  const text = getTokenGuideText(language);
+  const steps = text.steps.map((step, index) => ({
+    ...step,
+    image: `./tutorial/token-step-${index + 1}.webp`,
+  }));
   return (
     <AppPortal>
       <div className="modal-backdrop token-guide-backdrop">
         <div className="modal token-guide-modal">
           <header>
             <div>
-              <h2>获取 NovelAI Persistent API Token</h2>
-              <p>按 NovelAI 当前网页界面操作，无需打开旧 API 文档。</p>
+              <h2>{text.title}</h2>
+              <p>{text.subtitle}</p>
             </div>
-            <button type="button" aria-label="关闭 Token 教程" onClick={onClose}>×</button>
+            <button type="button" aria-label={text.close} onClick={onClose}>×</button>
           </header>
           <div className="token-guide-body">
             {steps.map((item, index) => (
@@ -3259,24 +3343,24 @@ function TokenGuideModal({ onClose }: { onClose: () => void }) {
                   </div>
                 </figcaption>
                 <button type="button" className="token-guide-image-button" onClick={() => setPreviewImage(item.image)}>
-                  <img src={item.image} alt={`Token 获取教程第 ${index + 1} 步：${item.title}`} loading="lazy" draggable={false} />
-                  <span>点击查看大图</span>
+                  <img src={item.image} alt={`${text.stepAltPrefix} ${text.stepAltSuffix} ${index + 1}: ${item.title}`} loading="lazy" draggable={false} />
+                  <span>{text.zoom}</span>
                 </button>
               </figure>
             ))}
             <div className="token-guide-warning">
-              Token 等同账号凭证，只粘贴到本软件，不要截图、分享或写入项目文件。
+              {text.warning}
             </div>
           </div>
           <footer>
-            <Button onClick={() => window.naiDesktop.openExternal(novelAiImageUrl)}>打开 NovelAI 生图页</Button>
-            <Button variant="primary" onClick={onClose}>我知道了</Button>
+            <Button onClick={() => window.naiDesktop.openExternal(novelAiImageUrl)}>{text.openNovelAi}</Button>
+            <Button variant="primary" onClick={onClose}>{text.confirm}</Button>
           </footer>
         </div>
         {previewImage && (
           <div className="token-guide-preview" onMouseDown={() => setPreviewImage("")}>
-            <button type="button" aria-label="关闭大图" onClick={() => setPreviewImage("")}>×</button>
-            <img src={previewImage} alt="Token 教程大图" onMouseDown={(event) => event.stopPropagation()} draggable={false} />
+            <button type="button" aria-label={text.close} onClick={() => setPreviewImage("")}>×</button>
+            <img src={previewImage} alt={text.previewAlt} onMouseDown={(event) => event.stopPropagation()} draggable={false} />
           </div>
         )}
       </div>
@@ -3301,6 +3385,9 @@ function HistoryPanel() {
   const selectImage = useAppStore((state) => state.selectImage);
   const deleteHistory = useAppStore((state) => state.deleteHistory);
   const renameHistoryItem = useAppStore((state) => state.renameHistoryItem);
+  const language = useAppStore((state) => state.settings?.language);
+  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
+  const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
   const [newGroupName, setNewGroupName] = useState("");
   // window.prompt() is unsupported in Electron, so use an in-app input modal.
   const [renameTarget, setRenameTarget] = useState<
@@ -3309,7 +3396,7 @@ function HistoryPanel() {
 
   function renameItem(item: HistoryItem) {
     const current = item.filePath.split(/[\\/]/).pop()?.replace(/\.[^.]+$/, "") ?? "";
-    setRenameTarget({ kind: "item", id: item.id, initial: current, title: "重命名图片", label: "新文件名（不含扩展名，会同步重命名本地文件）" });
+    setRenameTarget({ kind: "item", id: item.id, initial: current, title: t("history.renameImageModal"), label: t("history.renameImageLabel") });
   }
 
   function submitGroup() {
@@ -3324,7 +3411,7 @@ function HistoryPanel() {
 
   function renameActiveGroup() {
     if (!activeGroup) return;
-    setRenameTarget({ kind: "group", id: activeGroup.id, initial: activeGroup.name, title: "重命名分组", label: "分组名称" });
+    setRenameTarget({ kind: "group", id: activeGroup.id, initial: activeGroup.name, title: t("history.renameGroupModal"), label: t("history.renameGroupLabel") });
   }
 
   function confirmRename(value: string) {
@@ -3338,7 +3425,7 @@ function HistoryPanel() {
 
   function deleteActiveGroup() {
     if (!activeGroup) return;
-    if (window.confirm(`删除分组「${activeGroup.name}」？组内图片会转为未分组（文件保留）。`)) {
+    if (window.confirm(f("history.deleteGroupConfirm", { name: activeGroup.name }))) {
       void deleteHistoryGroup(activeGroup.id);
     }
   }
@@ -3347,20 +3434,20 @@ function HistoryPanel() {
     <aside className="history-panel">
       <div className="history-title">
         <div>
-          <strong>历史与素材</strong>
-          <small>{history.length > 0 ? `${history.length} 张可复用图片` : "生成后自动出现在这里"}</small>
+          <strong>{t("history.title")}</strong>
+          <small>{history.length > 0 ? f("history.count", { count: history.length }) : t("history.emptySubtitle")}</small>
         </div>
       </div>
       <div className="history-filters">
-        <select aria-label="选择历史日期" value={selectedDate} onChange={(e) => void setSelectedDate(e.target.value)}>
-          <option value="">全部日期</option>
+        <select aria-label={t("history.dateAria")} value={selectedDate} onChange={(e) => void setSelectedDate(e.target.value)}>
+          <option value="">{t("history.allDates")}</option>
           {dates.map((date) => (
             <option value={date} key={date}>{date}</option>
           ))}
         </select>
-        <select aria-label="选择素材分组" value={selectedGroupId} onChange={(e) => void setSelectedGroupId(e.target.value)}>
-          <option value="">全部分组</option>
-          <option value="__ungrouped">未分组</option>
+        <select aria-label={t("history.groupAria")} value={selectedGroupId} onChange={(e) => void setSelectedGroupId(e.target.value)}>
+          <option value="">{t("history.allGroups")}</option>
+          <option value="__ungrouped">{t("history.ungrouped")}</option>
           {groups.map((group) => (
             <option value={group.id} key={group.id}>{group.name}</option>
           ))}
@@ -3368,23 +3455,23 @@ function HistoryPanel() {
         <div className="history-group-create">
           <input
             value={newGroupName}
-            placeholder="新建分组名"
+            placeholder={t("history.newGroup")}
             onChange={(e) => setNewGroupName(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") submitGroup();
             }}
           />
-          <button type="button" onClick={submitGroup}>创建</button>
+          <button type="button" onClick={submitGroup}>{t("history.create")}</button>
         </div>
         <div className="history-group-actions">
-          <button type="button" disabled={!canExport} title="打包当前分组为 ZIP" onClick={() => void exportHistoryGroup(selectedGroupId)}>
-            <Icon name="download" /> 导出ZIP
+          <button type="button" disabled={!canExport} title={t("history.exportTitle")} onClick={() => void exportHistoryGroup(selectedGroupId)}>
+            <Icon name="download" /> {t("history.export")}
           </button>
-          <button type="button" disabled={!activeGroup} title="重命名当前分组" onClick={renameActiveGroup}>
-            ✎ 重命名
+          <button type="button" disabled={!activeGroup} title={t("history.renameGroupTitle")} onClick={renameActiveGroup}>
+            ✎ {t("history.rename")}
           </button>
-          <button type="button" disabled={!activeGroup} title="删除当前分组" onClick={deleteActiveGroup}>
-            <Icon name="trash" /> 删除
+          <button type="button" disabled={!activeGroup} title={t("history.deleteGroupTitle")} onClick={deleteActiveGroup}>
+            <Icon name="trash" /> {t("history.delete")}
           </button>
         </div>
       </div>
@@ -3392,8 +3479,8 @@ function HistoryPanel() {
         {history.length === 0 && (
           <div className="history-empty">
             <span>◇</span>
-            <strong>暂无历史记录</strong>
-            <small>生成、重绘、超分、后期处理完成后会自动保存到这里。</small>
+            <strong>{t("history.emptyTitle")}</strong>
+            <small>{t("history.emptyHint")}</small>
           </div>
         )}
         {history.map((item) => (
@@ -3402,14 +3489,14 @@ function HistoryPanel() {
               <div className="history-thumb-frame">
                 <img
                   src={item.fileUrl}
-                  alt="历史缩略图"
+                  alt={t("history.thumbAlt")}
                   draggable
                   // Decode only when scrolled into view and off the main thread —
                   // otherwise a large library decodes every full-res PNG at once,
                   // which freezes the UI and balloons memory.
                   loading="lazy"
                   decoding="async"
-                  title="可拖出到桌面 / 资源管理器 / 其他程序"
+                  title={t("history.dragTitle")}
                   onDragStart={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -3425,18 +3512,18 @@ function HistoryPanel() {
             <select
               className="history-item-group"
               value={item.groupId ?? ""}
-              title="设置素材分组"
+              title={t("history.itemGroupTitle")}
               onChange={(e) => void setHistoryItemGroup(item.id, e.target.value || undefined)}
             >
-              <option value="">未分组</option>
+              <option value="">{t("history.ungrouped")}</option>
               {groups.map((group) => (
                 <option value={group.id} key={group.id}>{group.name}</option>
               ))}
             </select>
-            <button className="history-rename" title="重命名图片（同步本地文件）" onClick={() => renameItem(item)}>
+            <button className="history-rename" title={t("history.renameImageTitle")} onClick={() => renameItem(item)}>
               ✎
             </button>
-            <button className="history-delete" title="删除记录和本地文件" onClick={() => void deleteHistory(item.id)}>
+            <button className="history-delete" title={t("history.deleteImageTitle")} onClick={() => void deleteHistory(item.id)}>
               ×
             </button>
           </div>
@@ -3447,7 +3534,7 @@ function HistoryPanel() {
           title={renameTarget.title}
           label={renameTarget.label}
           initial={renameTarget.initial}
-          confirmText="重命名"
+          confirmText={t("history.renameConfirm")}
           onConfirm={confirmRename}
           onClose={() => setRenameTarget(null)}
         />
@@ -3477,10 +3564,13 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
   const [modelCheckMessage, setModelCheckMessage] = useState("");
   const [detectedModels, setDetectedModels] = useState<string[]>([]);
   const [detectedKind, setDetectedKind] = useState<"reverse" | "convert" | "">("");
-  const [tagTestQuery, setTagTestQuery] = useState("蓝眼白发少女");
+  const [tagTestQuery, setTagTestQuery] = useState("");
   const [tagTestMessage, setTagTestMessage] = useState("");
   const [tagTestTags, setTagTestTags] = useState<TagSuggestion[]>([]);
   const [tagTesting, setTagTesting] = useState(false);
+  const language = settings?.language;
+  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
+  const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
 
   // Pull the canonical reverse-template defaults from the main process (owner file
   // or built-in), never from current settings — otherwise a user's customized
@@ -3540,7 +3630,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
 
   async function detectModels(kind: "reverse" | "convert") {
     setModelCheckKind(kind);
-    setModelCheckMessage("正在检测模型...");
+    setModelCheckMessage(t("settings.detectModelsToast"));
     setDetectedModels([]);
     setDetectedKind("");
     const result = await window.naiDesktop.listAiModels(kind);
@@ -3552,7 +3642,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
 
   async function detectTagServer() {
     setTagTesting(true);
-    setTagTestMessage("正在检测 Tag/MCP 服务...");
+    setTagTestMessage(t("settings.detectTagToast"));
     setTagTestTags([]);
     const result = await window.naiDesktop.testTagServer(tagTestQuery);
     setTagTesting(false);
@@ -3569,6 +3659,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
     ["convert-api", settingsShellText.nav["convert-api"]],
     ["templates", settingsShellText.nav.templates],
     ["prompt", settingsShellText.nav.prompt],
+    ["language", settingsShellText.nav.language],
     ["appearance", settingsShellText.nav.appearance],
     ["performance", settingsShellText.nav.performance],
   ];
@@ -3593,19 +3684,19 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
             {section === "api" && (
               <div className="settings-form">
                 <div className="account-card">
-                  <strong>当前账号</strong>
-                  <span>{account.hasToken ? `${account.tierName ?? "已验证"} · Anlas ${account.anlasBalance ?? "未知"}` : "未配置 API Token"}</span>
+                  <strong>{t("settings.accountTitle")}</strong>
+                  <span>{account.hasToken ? `${account.tierName ?? t("settings.verified")} · Anlas ${account.anlasBalance ?? t("title.unknown")}` : t("settings.noToken")}</span>
                 </div>
                 <label className="field">
-                  <span>API Token（Persistent API Token / 持久令牌）</span>
-                  <input type="password" value={token} placeholder="粘贴 NovelAI Persistent API Token" onChange={(e) => setToken(e.target.value)} />
+                  <span>{t("settings.apiTokenLabel")}</span>
+                  <input type="password" value={token} placeholder={t("settings.apiTokenPlaceholder")} onChange={(e) => setToken(e.target.value)} />
                 </label>
                 <div className="row-actions">
                   <Button variant="primary" disabled={checking} onClick={verify}>
-                    {checking ? <IconText icon="…">验证中...</IconText> : <IconText icon="✓">验证并保存 Token</IconText>}
+                    {checking ? <IconText icon="…">{t("settings.verifying")}</IconText> : <IconText icon="✓">{t("settings.verifySave")}</IconText>}
                   </Button>
                   <Button onClick={() => setShowTokenGuide(true)}>
-                    <IconText icon="❔">如何获取 Token</IconText>
+                    <IconText icon="❔">{t("settings.tokenGuide")}</IconText>
                   </Button>
                   <Button
                     variant="danger"
@@ -3614,16 +3705,16 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                       await refreshAccount();
                     }}
                   >
-                    <IconText icon="⇥">退出 API 登录</IconText>
+                    <IconText icon="⇥">{t("settings.logout")}</IconText>
                   </Button>
                 </div>
                 {status && <div className={clsx("status-box", status.valid ? "ok" : "bad")}>{status.message}</div>}
                 <label className="field">
-                  <span>API Endpoint（账户接口）</span>
+                  <span>{t("settings.accountEndpoint")}</span>
                   <input value={settings.apiBaseUrl} onChange={(e) => void update("apiBaseUrl", e.target.value)} />
                 </label>
                 <label className="field">
-                  <span>Image Endpoint（图片接口）</span>
+                  <span>{t("settings.imageEndpoint")}</span>
                   <input value={settings.imageBaseUrl} onChange={(e) => void update("imageBaseUrl", e.target.value)} />
                 </label>
                 <label className="field-inline">
@@ -3633,23 +3724,23 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                     onChange={(e) => void update("allowCustomEndpoint", e.target.checked)}
                   />
                   <span>
-                    允许向非官方 Endpoint 发送 Token（默认关闭）。关闭时，若 Endpoint 不是 *.novelai.net，会自动改用官方地址以防 Token 泄露。
+                    {t("settings.allowCustomEndpoint")}
                   </span>
                 </label>
 
                 <div className="proxy-card">
                   <ProxyPresetControl value={settings.proxyUrl} onChange={(value) => void updateProxy(value)} />
                   <p className="settings-hint" style={{ margin: "2px 0 8px" }}>
-                    NovelAI、AI 反推、谷歌翻译及更新检查等联网功能可能需要代理。请确保所选端口与本机代理软件一致。
+                    {t("settings.proxyHint")}
                   </p>
                   <div className="proxy-scope" style={{ opacity: settings.proxyUrl.trim() ? 1 : 0.5 }}>
-                    <span className="proxy-scope-title">走代理的请求（关掉则该项直连）</span>
+                    <span className="proxy-scope-title">{t("settings.proxyScopeTitle")}</span>
                     {([
-                      ["proxyForNai", "NovelAI API（验证 / 生图 / 超分等）"],
-                      ["proxyForAi", "AI 反推 / 转换（OpenAI 兼容）"],
-                      ["proxyForMcp", "MCP / Tag 服务"],
-                      ["proxyForTranslate", "翻译（谷歌 / 百度）"],
-                      ["proxyForUpdate", "GitHub 更新检查"],
+                      ["proxyForNai", t("settings.proxyForNai")],
+                      ["proxyForAi", t("settings.proxyForAi")],
+                      ["proxyForMcp", t("settings.proxyForMcp")],
+                      ["proxyForTranslate", t("settings.proxyForTranslate")],
+                      ["proxyForUpdate", t("settings.proxyForUpdate")],
                     ] as [keyof AppSettings, string][]).map(([key, label]) => (
                       <label className="checkbox-line" key={key}>
                         <input
@@ -3668,22 +3759,22 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
             {section === "storage" && (
               <div className="settings-form">
                 <label className="field">
-                  <span>输出目录</span>
+                  <span>{t("settings.outputDir")}</span>
                   <input value={settings.outputDir} onChange={(e) => void update("outputDir", e.target.value)} />
                 </label>
                 <div className="row-actions">
                   <Button onClick={selectDir}>
-                    <IconText icon={<Icon name="folder" />}>浏览...</IconText>
+                    <IconText icon={<Icon name="folder" />}>{t("settings.browse")}</IconText>
                   </Button>
                   <Button onClick={() => window.naiDesktop.openInExplorer(settings.outputDir)}>
-                    <IconText icon="↗">打开输出目录</IconText>
+                    <IconText icon="↗">{t("settings.openOutputDir")}</IconText>
                   </Button>
                 </div>
                 <Toggle
                   checked={settings.keepImageMetadata ?? true}
                   onChange={(v) => void update("keepImageMetadata", v)}
-                  label="保留图片元数据（提示词 / 种子 / 参数）"
-                  description="开启：保存的 PNG 内嵌生成信息，便于日后反查或重新导入参数。关闭：保存「干净」图片、抹除内嵌的提示词/种子/参数，适合对外分享（不影响画面，无损）。"
+                  label={t("settings.keepMetadata")}
+                  description={t("settings.keepMetadataDesc")}
                 />
                 <LogSettingsSection
                   logDir={settings.logDir ?? ""}
@@ -3698,24 +3789,24 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                       setShowOnboarding(true);
                     }}
                   >
-                    <IconText icon="❔">重新查看新手引导</IconText>
+                    <IconText icon="❔">{t("settings.onboarding")}</IconText>
                   </Button>
                 </div>
                 <label className="field">
-                  <span>图片命名模板</span>
+                  <span>{t("settings.imageNameTemplate")}</span>
                   <input
                     value={settings.imageNameTemplate}
                     placeholder="{date}_{seq}_{model}"
                     onChange={(e) => void update("imageNameTemplate", e.target.value)}
                   />
                   <small className="settings-hint">
-                    可用占位符：{"{date} {time} {seq} {seed} {model} {type} {ts}"}。同样应用于分组 ZIP 导出。
+                    {f("settings.imageNameHint", { placeholders: "{date} {time} {seq} {seed} {model} {type} {ts}" })}
                   </small>
                 </label>
                 <label className="field">
-                  <NumberInput label="历史记录保留天数" value={settings.historyRetentionDays} min={1} max={3650} onChange={(v) => void update("historyRetentionDays", v)} />
+                  <NumberInput label={t("settings.historyRetentionDays")} value={settings.historyRetentionDays} min={1} max={3650} onChange={(v) => void update("historyRetentionDays", v)} />
                   <small className="settings-hint">
-                    启动时自动清理超过该天数的应用内历史记录；仅清理列表，不会删除已保存到本地的图片文件。
+                    {t("settings.historyRetentionHint")}
                   </small>
                 </label>
               </div>
@@ -3746,16 +3837,6 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                     <option value="system">{settingsSectionText.appearance.themeSystem}</option>
                   </select>
                 </label>
-                <label className="field">
-                  <span>{settingsSectionText.appearance.language}</span>
-                  <select value={settings.language} onChange={(e) => void update("language", e.target.value as AppSettings["language"])}>
-                    {SUPPORTED_APP_LANGUAGES.map((language) => (
-                      <option value={language.code} key={language.code}>
-                        {language.menuLabel}
-                      </option>
-                    ))}
-                  </select>
-                </label>
                 <div className="field">
                   <span>{settingsSectionText.appearance.workspaceLayout}</span>
                   <div className="row-actions">
@@ -3767,11 +3848,26 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                 </div>
               </div>
             )}
+            {section === "language" && (
+              <div className="settings-form">
+                <label className="field">
+                  <span>{settingsSectionText.language.language}</span>
+                  <select value={settings.language} onChange={(e) => void update("language", e.target.value as AppSettings["language"])}>
+                    {SUPPORTED_APP_LANGUAGES.map((language) => (
+                      <option value={language.code} key={language.code}>
+                        {language.menuLabel}
+                      </option>
+                    ))}
+                  </select>
+                  <small className="settings-hint">{settingsSectionText.language.hint}</small>
+                </label>
+              </div>
+            )}
             {section === "ai-reverse" && (
               <div className="settings-form">
-                <p className="settings-hint">配置视觉 AI 模型接口，用于反推面板的「反推提示词」功能。支持 OpenAI 及兼容接口（Gemini、本地 Ollama 等）。</p>
+                <p className="settings-hint">{t("settings.aiReverseHint")}</p>
                 <label className="field">
-                  <span>API 地址</span>
+                  <span>{t("settings.apiUrl")}</span>
                   <input
                     value={settings.visionApiUrl}
                     placeholder="https://api.openai.com/v1"
@@ -3788,7 +3884,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                   />
                 </label>
                 <label className="field">
-                  <span>模型名称</span>
+                  <span>{t("settings.modelName")}</span>
                   <input
                     value={settings.visionApiModel}
                     placeholder="gpt-4o"
@@ -3796,16 +3892,16 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                   />
                 </label>
                 <Button onClick={() => void detectModels("reverse")} disabled={modelCheckKind === "reverse"}>
-                  <IconText icon="◎">{modelCheckKind === "reverse" ? "检测中..." : "检测反推接口模型"}</IconText>
+                  <IconText icon="◎">{modelCheckKind === "reverse" ? t("settings.detecting") : t("settings.detectReverseModels")}</IconText>
                 </Button>
                 {detectedKind === "reverse" && detectedModels.length > 0 && (
                   <label className="field">
-                    <span>选择模型（检测到 {detectedModels.length} 个）</span>
+                    <span>{f("settings.detectedModelLabel", { count: detectedModels.length })}</span>
                     <select
                       value={detectedModels.includes(settings.visionApiModel) ? settings.visionApiModel : ""}
                       onChange={(e) => e.target.value && void update("visionApiModel", e.target.value)}
                     >
-                      <option value="">— 从检测结果选择 —</option>
+                      <option value="">{t("settings.chooseDetected")}</option>
                       {detectedModels.map((m) => (
                         <option value={m} key={m}>{m}</option>
                       ))}
@@ -3813,16 +3909,16 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                   </label>
                 )}
                 <div className="info-card">
-                  <strong>反推模板</strong>
-                  <span>已集中到「提示词模板」版块，避免同一模板在多个页面重复维护。</span>
+                  <strong>{t("settings.reverseTemplate")}</strong>
+                  <span>{t("settings.templateMoved")}</span>
                 </div>
               </div>
             )}
             {section === "convert-api" && (
               <div className="settings-form">
-                <p className="settings-hint">转换 API 只处理文本：把中文或自然语言描述转换为 NovelAI 可用的 Danbooru 英文 tag。它与“AI 反推”的视觉模型 API 分离，可使用更便宜的文本模型。</p>
+                <p className="settings-hint">{t("settings.convertHint")}</p>
                 <label className="field">
-                  <span>API 地址</span>
+                  <span>{t("settings.apiUrl")}</span>
                   <input
                     value={settings.convertApiUrl}
                     placeholder="https://api.openai.com/v1"
@@ -3839,7 +3935,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                   />
                 </label>
                 <label className="field">
-                  <span>模型名称</span>
+                  <span>{t("settings.modelName")}</span>
                   <input
                     value={settings.convertApiModel}
                     placeholder="gpt-4o-mini"
@@ -3847,16 +3943,16 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                   />
                 </label>
                 <Button onClick={() => void detectModels("convert")} disabled={modelCheckKind === "convert"}>
-                  <IconText icon="◎">{modelCheckKind === "convert" ? "检测中..." : "检测转换接口模型"}</IconText>
+                  <IconText icon="◎">{modelCheckKind === "convert" ? t("settings.detecting") : t("settings.detectConvertModels")}</IconText>
                 </Button>
                 {detectedKind === "convert" && detectedModels.length > 0 && (
                   <label className="field">
-                    <span>选择模型（检测到 {detectedModels.length} 个）</span>
+                    <span>{f("settings.detectedModelLabel", { count: detectedModels.length })}</span>
                     <select
                       value={detectedModels.includes(settings.convertApiModel) ? settings.convertApiModel : ""}
                       onChange={(e) => e.target.value && void update("convertApiModel", e.target.value)}
                     >
-                      <option value="">— 从检测结果选择 —</option>
+                      <option value="">{t("settings.chooseDetected")}</option>
                       {detectedModels.map((m) => (
                         <option value={m} key={m}>{m}</option>
                       ))}
@@ -3864,8 +3960,8 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                   </label>
                 )}
                 <div className="info-card">
-                  <strong>转换模板</strong>
-                  <span>已集中到「提示词模板」版块，避免同一模板在多个页面重复维护。</span>
+                  <strong>{t("settings.convertTemplate")}</strong>
+                  <span>{t("settings.templateMoved")}</span>
                 </div>
               </div>
             )}
@@ -3878,24 +3974,24 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
             {section === "templates" && (
               <div className="settings-form">
                 <div className="info-card">
-                  <strong>统一提示词模板</strong>
-                  <span>AI 反推和提示词转换各自读取三套模式模板；漫画 AI 拆分分镜读取下方单模板，漫画生成器不再维护隐藏模板。</span>
+                  <strong>{t("settings.unifiedTemplate")}</strong>
+                  <span>{t("settings.unifiedTemplateDesc")}</span>
                 </div>
                 <ModeTemplateEditor
-                  title="AI 反推模板"
+                  title={t("settings.reverseTemplateTitle")}
                   value={settings.reversePromptTemplates}
                   defaults={reverseTemplateDefaults}
                   onChange={(next) => void update("reversePromptTemplates", next)}
                 />
                 <ModeTemplateEditor
-                  title="提示词转换模板"
+                  title={t("settings.convertTemplateTitle")}
                   value={settings.convertPromptTemplates}
                   defaults={CONVERT_SYSTEM_PROMPTS}
                   onChange={(next) => void update("convertPromptTemplates", next)}
                 />
                 <SingleTemplateEditor
-                  title="AI 拆分分镜模板"
-                  description="单模板，全模式共用"
+                  title={t("settings.comicAnalyzeTemplateTitle")}
+                  description={t("settings.singleTemplateShared")}
                   value={settings.comicAnalyzePromptTemplate}
                   defaultValue={COMIC_ANALYZE_SYSTEM_PROMPT}
                   onChange={(next) => void update("comicAnalyzePromptTemplate", next)}
@@ -3905,34 +4001,34 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
             {section === "prompt" && (
               <div className="settings-form">
                 <div className="toggle-list">
-                  <Toggle checked={settings.autoComplete} onChange={(v) => void update("autoComplete", v)} label="标签自动补全" description="输入英文单词时推测可能需要的 NovelAI / Danbooru tag。" />
-                  <Toggle checked={settings.tagServerEnabled} onChange={(v) => void update("tagServerEnabled", v)} label="启用 Tag/MCP 服务" description="用于中文灵感、Tag 补全、反推和转换提示词的 Danbooru 标签增强。" />
+                  <Toggle checked={settings.autoComplete} onChange={(v) => void update("autoComplete", v)} label={t("settings.autoComplete")} description={t("settings.autoCompleteDesc")} />
+                  <Toggle checked={settings.tagServerEnabled} onChange={(v) => void update("tagServerEnabled", v)} label={t("settings.tagServerEnabled")} description={t("settings.tagServerEnabledDesc")} />
                 </div>
                 <div className="tag-server-card">
                   <label className="field">
-                    <span>服务类型 / MCP 传输</span>
+                    <span>{t("settings.tagServerType")}</span>
                     <select value={settings.tagServerType} onChange={(e) => void update("tagServerType", e.target.value as AppSettings["tagServerType"])}>
-                      <option value="rest">普通 HTTP 接口（REST /search /tags）</option>
-                      <option value="http">MCP · Streamable HTTP（推荐，如 DanbooruSearchOnline）</option>
-                      <option value="sse">MCP · SSE（旧版 HTTP+SSE）</option>
-                      <option value="stdio">MCP · stdio（本地启动子进程）</option>
+                      <option value="rest">{t("settings.transportRest")}</option>
+                      <option value="http">{t("settings.transportHttp")}</option>
+                      <option value="sse">{t("settings.transportSse")}</option>
+                      <option value="stdio">{t("settings.transportStdio")}</option>
                     </select>
                   </label>
                   {settings.tagServerType === "stdio" ? (
                     <>
                       <label className="field">
-                        <span>启动命令</span>
+                        <span>{t("settings.command")}</span>
                         <input
                           value={settings.tagServerCommand}
-                          placeholder="例如：npx 或 mcp-remote 的绝对路径"
+                          placeholder={t("settings.commandPlaceholder")}
                           onChange={(e) => void update("tagServerCommand", e.target.value)}
                         />
                       </label>
                       <label className="field">
-                        <span>命令参数（空格分隔）</span>
+                        <span>{t("settings.args")}</span>
                         <input
                           value={settings.tagServerArgs}
-                          placeholder="例如：-y mcp-remote https://sakizuki-danboorusearch.hf.space/mcp/mcp"
+                          placeholder={t("settings.argsPlaceholder")}
                           onChange={(e) => void update("tagServerArgs", e.target.value)}
                         />
                       </label>
@@ -3940,19 +4036,19 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                   ) : (
                     <>
                       <label className="field">
-                        <span>{settings.tagServerType === "rest" ? "服务地址" : "MCP 服务地址"}</span>
+                        <span>{settings.tagServerType === "rest" ? t("settings.serviceUrl") : t("settings.mcpUrl")}</span>
                         <input
                           value={settings.tagServerUrl}
-                          placeholder={settings.tagServerType === "rest" ? "例如：http://127.0.0.1:8765" : "例如：https://sakizuki-danboorusearch.hf.space/mcp/mcp"}
+                          placeholder={settings.tagServerType === "rest" ? t("settings.serviceUrlPlaceholder") : t("settings.mcpUrlPlaceholder")}
                           onChange={(e) => void update("tagServerUrl", e.target.value)}
                         />
                       </label>
                       <label className="field">
-                        <span>服务 Key（可选）</span>
+                        <span>{t("settings.serviceKey")}</span>
                         <input
                           type="password"
                           value={settings.tagServerApiKey}
-                          placeholder="Bearer Token，可留空"
+                          placeholder={t("settings.serviceKeyPlaceholder")}
                           onChange={(e) => void update("tagServerApiKey", e.target.value)}
                         />
                       </label>
@@ -3960,7 +4056,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                   )}
                   {settings.tagServerType !== "rest" && (
                     <label className="field">
-                      <span>MCP 工具名</span>
+                      <span>{t("settings.mcpTool")}</span>
                       <input
                         value={settings.tagServerTool}
                         placeholder="search_tags"
@@ -3969,9 +4065,9 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                     </label>
                   )}
                   <div className="history-group-create">
-                    <input value={tagTestQuery} onChange={(e) => setTagTestQuery(e.target.value)} placeholder="测试搜索，例如：蓝眼白发少女" />
+                    <input value={tagTestQuery} onChange={(e) => setTagTestQuery(e.target.value)} placeholder={t("settings.testSearchPlaceholder")} />
                     <button type="button" onClick={() => void detectTagServer()} disabled={tagTesting}>
-                      {tagTesting ? "检测中" : "检测"}
+                      {tagTesting ? t("settings.testing") : t("settings.test")}
                     </button>
                   </div>
                   {tagTestMessage && (
@@ -3981,79 +4077,79 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                     </div>
                   )}
                   <div className="toggle-list" style={{ marginTop: 4 }}>
-                    <Toggle checked={settings.mcpForCapsule} onChange={(v) => void update("mcpForCapsule", v)} label="用于灵感胶囊" description="配置并启用服务后默认开启：在灵感胶囊中按中文搜索返回 MCP 标签。" />
-                    <Toggle checked={settings.mcpForReverse} onChange={(v) => void update("mcpForReverse", v)} label="用于 AI 反推" description="反推图片后，用 MCP 标签补强结果（默认关闭）。" />
-                    <Toggle checked={settings.mcpForConvert} onChange={(v) => void update("mcpForConvert", v)} label="用于提示词转换" description="转换中文描述时，用 MCP 标签补强结果（默认关闭）。" />
+                    <Toggle checked={settings.mcpForCapsule} onChange={(v) => void update("mcpForCapsule", v)} label={t("settings.mcpForCapsule")} description={t("settings.mcpForCapsuleDesc")} />
+                    <Toggle checked={settings.mcpForReverse} onChange={(v) => void update("mcpForReverse", v)} label={t("settings.mcpForReverse")} description={t("settings.mcpForReverseDesc")} />
+                    <Toggle checked={settings.mcpForConvert} onChange={(v) => void update("mcpForConvert", v)} label={t("settings.mcpForConvert")} description={t("settings.mcpForConvertDesc")} />
                   </div>
                 </div>
                 <div className="tag-server-card">
-                  <p className="settings-hint" style={{ margin: 0 }}>提示词「中→英翻译」按钮使用的翻译引擎。</p>
+                  <p className="settings-hint" style={{ margin: 0 }}>{t("settings.translateHint")}</p>
                   <label className="field">
-                    <span>翻译引擎</span>
+                    <span>{t("settings.translateEngine")}</span>
                     <select value={settings.translateProvider} onChange={(e) => void update("translateProvider", e.target.value as AppSettings["translateProvider"])}>
-                      <option value="google">谷歌翻译（免费，可能需要代理）</option>
-                      <option value="baidu">百度翻译（需 APP ID 与密钥）</option>
+                      <option value="google">{t("settings.googleTranslate")}</option>
+                      <option value="baidu">{t("settings.baiduTranslate")}</option>
                     </select>
                   </label>
                   {settings.translateProvider === "baidu" && (
                     <>
                       <label className="field">
-                        <span>百度翻译 APP ID</span>
+                        <span>{t("settings.baiduAppId")}</span>
                         <input
                           value={settings.baiduAppId}
-                          placeholder="在 fanyi-api.baidu.com 申请"
+                          placeholder={t("settings.baiduAppIdPlaceholder")}
                           onChange={(e) => void update("baiduAppId", e.target.value)}
                         />
                       </label>
                       <label className="field">
-                        <span>百度翻译密钥</span>
+                        <span>{t("settings.baiduSecret")}</span>
                         <input
                           type="password"
                           value={settings.baiduSecret}
-                          placeholder="开发者密钥"
+                          placeholder={t("settings.baiduSecretPlaceholder")}
                           onChange={(e) => void update("baiduSecret", e.target.value)}
                         />
                       </label>
                     </>
                   )}
                 </div>
-                <p className="settings-hint">提示词模板可以为提示词快速添加前缀/后缀/负面词。在生成面板的提示词区或检视面板可一键应用。</p>
+                <p className="settings-hint">{t("settings.promptTemplateHint")}</p>
                 {(settings.promptTemplates ?? []).length === 0 && (
-                  <p style={{ fontSize: 12, color: "var(--text-muted)" }}>还没有模板，使用下方表单添加。</p>
+                  <p style={{ fontSize: 12, color: "var(--text-muted)" }}>{t("settings.noTemplates")}</p>
                 )}
                 {(settings.promptTemplates ?? []).map((tpl) => (
                   <div className="tpl-item" key={tpl.id}>
                     <div className="tpl-item-head">
                       <strong>{tpl.name}</strong>
                       <Button variant="ghost" onClick={() => deleteTemplate(tpl.id)}>
-                        <IconText icon="✕">删除</IconText>
+                        <IconText icon="✕">{t("settings.delete")}</IconText>
                       </Button>
                     </div>
-                    {tpl.prefix && <small>前缀：{tpl.prefix}</small>}
-                    {tpl.suffix && <small>后缀：{tpl.suffix}</small>}
-                    {tpl.negativePrompt && <small>负面：{tpl.negativePrompt}</small>}
+                    {tpl.prefix && <small>{f("settings.prefix", { value: tpl.prefix })}</small>}
+                    {tpl.suffix && <small>{f("settings.suffix", { value: tpl.suffix })}</small>}
+                    {tpl.negativePrompt && <small>{f("settings.negative", { value: tpl.negativePrompt })}</small>}
                   </div>
                 ))}
                 <div className="tpl-new">
-                  <strong style={{ fontSize: 12 }}>新建模板</strong>
+                  <strong style={{ fontSize: 12 }}>{t("settings.newTemplate")}</strong>
                   <label className="field">
-                    <span>模板名称 *</span>
-                    <input value={newTplName} placeholder="例如：写实质量词" onChange={(e) => setNewTplName(e.target.value)} />
+                    <span>{t("settings.templateName")}</span>
+                    <input value={newTplName} placeholder={t("settings.templateNamePlaceholder")} onChange={(e) => setNewTplName(e.target.value)} />
                   </label>
                   <label className="field">
-                    <span>前缀（Prefix）</span>
+                    <span>{t("settings.prefixLabel")}</span>
                     <input value={newTplPrefix} placeholder="masterpiece, best quality, " onChange={(e) => setNewTplPrefix(e.target.value)} />
                   </label>
                   <label className="field">
-                    <span>后缀（Suffix）</span>
+                    <span>{t("settings.suffixLabel")}</span>
                     <input value={newTplSuffix} placeholder="4k, ultra detail" onChange={(e) => setNewTplSuffix(e.target.value)} />
                   </label>
                   <label className="field">
-                    <span>负面提示词（可选）</span>
+                    <span>{t("settings.negativePromptOptional")}</span>
                     <input value={newTplNeg} placeholder="lowres, bad anatomy, ..." onChange={(e) => setNewTplNeg(e.target.value)} />
                   </label>
                   <Button variant="primary" onClick={saveNewTemplate} disabled={!newTplName.trim()}>
-                    <IconText icon="+">添加模板</IconText>
+                    <IconText icon="+">{t("settings.addTemplate")}</IconText>
                   </Button>
                 </div>
               </div>
@@ -4062,7 +4158,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
         </div>
         <footer>
           <Button variant="primary" onClick={onClose}>
-            <IconText icon="✓">关闭</IconText>
+            <IconText icon="✓">{t("settings.close")}</IconText>
           </Button>
         </footer>
       </div>
@@ -4084,15 +4180,18 @@ function OnboardingWizard() {
   const load = useAppStore((state) => state.load);
   const setShowOnboarding = useAppStore((state) => state.setShowOnboarding);
   const refreshAccount = useAppStore((state) => state.refreshAccount);
+  const language = settings?.language;
+  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
+  const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
   const cards = [
-    ["介绍", "欢迎使用 Langbai NovelAI Studio", "中文 API-only 的 NovelAI 图像创作工作台：文生图 / 图生图 / 局部重绘 / 云端超分 / 导演工具 / 漫画生成，本地中文标签补全与灵感胶囊。"],
-    ["网络", "先确认代理连接", "NovelAI、AI 反推、谷歌翻译及更新检查等大部分联网功能通常需要可用代理。默认使用本机 HTTP 代理 127.0.0.1:7890。"],
-    ["API", "配置 NovelAI API Token", "Token 只保存在本机主进程存储中，渲染层不会直接持有。"],
-    ["选填", "可选的第三方 AI 服务", "反推（图→提示词）、转换（中文→标签）、翻译都依赖你自备的第三方接口，不填也能正常生成图片，之后可在设置中再配置。"],
-    ["保存", "选择图片保存位置", "生成图片会自动保存到此目录并写入右侧历史。可选择是否在图片中保留生成元数据（提示词/种子/参数）——保留便于日后反查，关闭则导出「干净」图片便于分享。"],
-    ["标签库", "下载中文标签库（可选）", "下载后，提示词补全与灵感胶囊将使用上万条带中文的 Danbooru 标签（按热度）。不下载则使用内置精简词库。"],
-    ["界面", "了解主界面", "左侧参数、中间画布、右侧历史；英文输入会自动推测 tag。"],
-    ["完成", "一切就绪", "之后可随时在设置中修改 API、输出目录和偏好，也能重新查看本向导。"],
+    { badge: t("onboarding.card0.badge"), title: t("onboarding.card0.title"), desc: t("onboarding.card0.desc") },
+    { badge: t("onboarding.card1.badge"), title: t("onboarding.card1.title"), desc: t("onboarding.card1.desc") },
+    { badge: t("onboarding.card2.badge"), title: t("onboarding.card2.title"), desc: t("onboarding.card2.desc") },
+    { badge: t("onboarding.card3.badge"), title: t("onboarding.card3.title"), desc: t("onboarding.card3.desc") },
+    { badge: t("onboarding.card4.badge"), title: t("onboarding.card4.title"), desc: t("onboarding.card4.desc") },
+    { badge: t("onboarding.card5.badge"), title: t("onboarding.card5.title"), desc: t("onboarding.card5.desc") },
+    { badge: t("onboarding.card6.badge"), title: t("onboarding.card6.title"), desc: t("onboarding.card6.desc") },
+    { badge: t("onboarding.card7.badge"), title: t("onboarding.card7.title"), desc: t("onboarding.card7.desc") },
   ];
   useEffect(() => {
     if (settings) setOnboardingProxyUrl(settings.proxyUrl);
@@ -4120,36 +4219,36 @@ function OnboardingWizard() {
               <span key={index} className={clsx(index === step && "active")} />
             ))}
           </div>
-          <button onClick={finish}>跳过向导</button>
+          <button onClick={finish}>{t("onboarding.skip")}</button>
         </div>
         <div className="onboarding-body">
           <aside className="onboarding-card">
             <div className="card-head">
               <strong>{APP_NAME}</strong>
-              <span>第 {step + 1}/{cards.length} 步</span>
+              <span>{f("onboarding.step", { current: step + 1, total: cards.length })}</span>
             </div>
             <div className="chibi">N</div>
-            <div className="card-foot">ⓘ {cards[step][0]}</div>
+            <div className="card-foot">ⓘ {cards[step].badge}</div>
           </aside>
           <section className="onboarding-content">
-            <h2>{cards[step][1]}</h2>
-            <p>{cards[step][2]}</p>
+            <h2>{cards[step].title}</h2>
+            <p>{cards[step].desc}</p>
             {step === 0 && (
               <div className="settings-form">
                 <div className="intro-grid">
-                  <div><strong>文生图 / 图生图</strong><span>提示词、参考图、批量与队列</span></div>
-                  <div><strong>重绘 / 超分</strong><span>局部重绘、2×/4× 云端放大</span></div>
-                  <div><strong>导演工具 / 漫画</strong><span>去背景、线稿、上色、表情、漫画生成</span></div>
-                  <div><strong>中文标签</strong><span>本地中文补全与灵感胶囊</span></div>
+                  <div><strong>{t("onboarding.text2imgTitle")}</strong><span>{t("onboarding.text2imgDesc")}</span></div>
+                  <div><strong>{t("onboarding.redrawTitle")}</strong><span>{t("onboarding.redrawDesc")}</span></div>
+                  <div><strong>{t("onboarding.directorTitle")}</strong><span>{t("onboarding.directorDesc")}</span></div>
+                  <div><strong>{t("onboarding.tagsTitle")}</strong><span>{t("onboarding.tagsDesc")}</span></div>
                 </div>
                 <div className="row-actions">
                   <Button onClick={() => window.naiDesktop.openExternal("https://github.com/2786886095/novelai-image-desktop")}>
-                    <IconText icon="↗">GitHub 项目主页</IconText>
+                    <IconText icon="↗">{t("onboarding.github")}</IconText>
                   </Button>
                 </div>
                 <label className="field wide">
-                  <span>语言</span>
-                  <select defaultValue="zh-CN" onChange={(e) => window.naiDesktop.setSetting("language", e.target.value as AppSettings["language"])}>
+                  <span>{t("onboarding.language")}</span>
+                  <select defaultValue={settings?.language ?? "zh-CN"} onChange={(e) => window.naiDesktop.setSetting("language", e.target.value as AppSettings["language"])}>
                     {SUPPORTED_APP_LANGUAGES.map((language) => (
                       <option value={language.code} key={language.code}>
                         {language.menuLabel}
@@ -4162,7 +4261,7 @@ function OnboardingWizard() {
             {step === 1 && (
               <div className="onboarding-proxy">
                 <div className="onboarding-network-warning">
-                  请先启动本机代理软件，并确认端口与下方选择一致；如果你的网络可以直接访问 NovelAI，可选择“直连”。
+                  {t("onboarding.networkWarning")}
                 </div>
                 <ProxyPresetControl
                   value={onboardingProxyUrl}
@@ -4179,15 +4278,15 @@ function OnboardingWizard() {
             {step === 2 && (
               <div className="settings-form">
                 <label className="field wide">
-                  <span>Persistent API Token（持久 API 令牌）</span>
-                  <input type="password" value={token} placeholder="粘贴 NovelAI API Token" onChange={(e) => setToken(e.target.value)} />
+                  <span>{t("settings.apiTokenLabel")}</span>
+                  <input type="password" value={token} placeholder={t("settings.apiTokenPlaceholder")} onChange={(e) => setToken(e.target.value)} />
                 </label>
                 <div className="row-actions">
                   <Button variant="primary" onClick={verify} disabled={checking}>
-                    {checking ? <IconText icon="…">验证中...</IconText> : <IconText icon="✓">验证并保存</IconText>}
+                    {checking ? <IconText icon="…">{t("settings.verifying")}</IconText> : <IconText icon="✓">{t("onboarding.verifySave")}</IconText>}
                   </Button>
                   <Button onClick={() => setShowTokenGuide(true)}>
-                    <IconText icon="❔">如何获取 Token</IconText>
+                    <IconText icon="❔">{t("settings.tokenGuide")}</IconText>
                   </Button>
                 </div>
                 {tokenStatus && <div className={clsx("status-box", tokenStatus.valid ? "ok" : "bad")}>{tokenStatus.message}</div>}
@@ -4195,33 +4294,33 @@ function OnboardingWizard() {
             )}
             {step === 3 && (
               <div className="settings-form">
-                <p className="settings-hint" style={{ margin: 0 }}>以下全部可选，可直接「下一步」跳过，稍后在设置中配置。</p>
+                <p className="settings-hint" style={{ margin: 0 }}>{t("onboarding.optionalHint")}</p>
                 <label className="field wide">
-                  <span>反推（图→提示词）Vision API Key</span>
+                  <span>{t("onboarding.visionKeyLabel")}</span>
                   <input
                     type="password"
                     defaultValue={settings?.visionApiKey ?? ""}
-                    placeholder="选填：用于「AI 反推」，默认 OpenAI 兼容接口"
+                    placeholder={t("onboarding.visionKeyPlaceholder")}
                     onChange={(e) => void window.naiDesktop.setSetting("visionApiKey", e.target.value)}
                   />
                 </label>
                 <label className="field wide">
-                  <span>转换（中文→标签）API Key</span>
+                  <span>{t("onboarding.convertKeyLabel")}</span>
                   <input
                     type="password"
                     defaultValue={settings?.convertApiKey ?? ""}
-                    placeholder="选填：用于「中文描述转标签」"
+                    placeholder={t("onboarding.convertKeyPlaceholder")}
                     onChange={(e) => void window.naiDesktop.setSetting("convertApiKey", e.target.value)}
                   />
                 </label>
                 <label className="field wide">
-                  <span>翻译引擎（中→英按钮）</span>
+                  <span>{t("settings.translateEngine")}</span>
                   <select
                     defaultValue={settings?.translateProvider ?? "google"}
                     onChange={(e) => void window.naiDesktop.setSetting("translateProvider", e.target.value as AppSettings["translateProvider"])}
                   >
-                    <option value="google">谷歌翻译（免费，可能需要代理）</option>
-                    <option value="baidu">百度翻译（需在设置中填 APP ID/密钥）</option>
+                    <option value="google">{t("settings.googleTranslate")}</option>
+                    <option value="baidu">{t("settings.baiduTranslate")}</option>
                   </select>
                 </label>
               </div>
@@ -4229,7 +4328,7 @@ function OnboardingWizard() {
             {step === 4 && (
               <div className="settings-form">
                 <label className="field wide">
-                  <span>当前输出目录</span>
+                  <span>{t("onboarding.currentOutputDir")}</span>
                   <input readOnly value={settings?.outputDir ?? ""} />
                 </label>
                 <Button
@@ -4238,7 +4337,7 @@ function OnboardingWizard() {
                     await load();
                   }}
                 >
-                  <IconText icon={<Icon name="folder" />}>浏览...</IconText>
+                  <IconText icon={<Icon name="folder" />}>{t("settings.browse")}</IconText>
                 </Button>
                 <Toggle
                   checked={settings?.keepImageMetadata ?? true}
@@ -4248,8 +4347,8 @@ function OnboardingWizard() {
                       await load();
                     })()
                   }
-                  label="保留图片元数据（提示词 / 种子 / 参数）"
-                  description="开启：图片内嵌生成信息，便于日后反查/重导参数。关闭：导出「干净」图片、抹除内嵌信息，适合分享。可随时在设置中更改。"
+                  label={t("settings.keepMetadata")}
+                  description={t("settings.keepMetadataDesc")}
                 />
               </div>
             )}
@@ -4260,20 +4359,20 @@ function OnboardingWizard() {
             )}
             {step === 6 && (
               <div className="intro-grid">
-                <div><strong>左侧</strong><span>提示词、模型、图片输入、功能参数</span></div>
-                <div><strong>中间</strong><span>生成预览、重绘画布、定位文件</span></div>
-                <div><strong>右侧</strong><span>按日期查看历史、删除记录</span></div>
-                <div><strong>补全</strong><span>输入 g / glo 等英文片段，Tab 或 Enter 插入 tag</span></div>
+                <div><strong>{t("onboarding.leftTitle")}</strong><span>{t("onboarding.leftDesc")}</span></div>
+                <div><strong>{t("onboarding.centerTitle")}</strong><span>{t("onboarding.centerDesc")}</span></div>
+                <div><strong>{t("onboarding.rightTitle")}</strong><span>{t("onboarding.rightDesc")}</span></div>
+                <div><strong>{t("onboarding.completeTitle")}</strong><span>{t("onboarding.completeDesc")}</span></div>
               </div>
             )}
             {step === 7 && <div className="done-mark">✓</div>}
           </section>
         </div>
         <div className="onboarding-footer">
-          <Button disabled={step === 0} onClick={() => setStep((v) => Math.max(0, v - 1))}>上一步</Button>
+          <Button disabled={step === 0} onClick={() => setStep((v) => Math.max(0, v - 1))}>{t("onboarding.prev")}</Button>
           {step < cards.length - 1
-            ? <Button variant="primary" onClick={() => setStep((v) => Math.min(cards.length - 1, v + 1))}>下一步</Button>
-            : <Button variant="primary" onClick={finish}>开始使用</Button>}
+            ? <Button variant="primary" onClick={() => setStep((v) => Math.min(cards.length - 1, v + 1))}>{t("onboarding.next")}</Button>
+            : <Button variant="primary" onClick={finish}>{t("onboarding.start")}</Button>}
         </div>
       </div>
       </div>
@@ -4286,23 +4385,26 @@ function OnboardingWizard() {
 function UpdateBanner() {
   const updateInfo = useAppStore((state) => state.updateInfo);
   const dismissUpdate = useAppStore((state) => state.dismissUpdate);
+  const language = useAppStore((state) => state.settings?.language);
+  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
+  const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
   // Always render an element so .app-shell keeps a stable 6-row grid; the empty
   // slot collapses to 0 height when there's no update.
   if (!updateInfo?.hasUpdate) return <div className="update-banner-slot" />;
   return (
     <div className="update-banner">
       <span>
-        <Icon name="upgrade" /> 发现新版本 <strong>v{updateInfo.latestVersion}</strong>（当前 v{updateInfo.currentVersion}）
+        <Icon name="upgrade" /> {f("update.newVersion", { latest: updateInfo.latestVersion, current: updateInfo.currentVersion })}
       </span>
       <div className="update-banner-actions">
         <button
           className="btn btn-primary"
           onClick={() => updateInfo.releaseUrl && void window.naiDesktop.openExternal(updateInfo.releaseUrl)}
         >
-          前往下载
+          {t("update.download")}
         </button>
         <button className="btn btn-ghost" onClick={dismissUpdate}>
-          稍后
+          {t("update.later")}
         </button>
       </div>
     </div>
@@ -4317,6 +4419,8 @@ function WorkspaceResizer({ edge }: { edge: "left" | "right" }) {
   const setWsWidth = useAppStore((s) => s.setWsWidth);
   const saveWsWidths = useAppStore((s) => s.saveWsWidths);
   const resetWsWidths = useAppStore((s) => s.resetWsWidths);
+  const language = useAppStore((s) => s.settings?.language);
+  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const drag = useRef<{ startX: number; startW: number } | null>(null);
 
   return (
@@ -4324,7 +4428,7 @@ function WorkspaceResizer({ edge }: { edge: "left" | "right" }) {
       className={clsx("ws-resizer", edge)}
       role="separator"
       aria-orientation="vertical"
-      title="拖动调整宽度 · 双击恢复默认"
+      title={t("workspace.resizeTitle")}
       onPointerDown={(e) => {
         e.preventDefault();
         e.currentTarget.setPointerCapture(e.pointerId);
@@ -4347,7 +4451,7 @@ function WorkspaceResizer({ edge }: { edge: "left" | "right" }) {
       <button
         type="button"
         className="ws-resizer-reset"
-        title="恢复默认布局宽度"
+        title={t("workspace.resetTitle")}
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => {
           e.stopPropagation();
@@ -4370,6 +4474,8 @@ function MainPage() {
   const currentImage = useAppStore((state) => state.currentImage);
   const activeTab = useAppStore((state) => state.activeTab);
   const settings = useAppStore((state) => state.settings);
+  const language = settings?.language;
+  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const wsLeftWidth = useAppStore((state) => state.wsLeftWidth);
   const wsRightWidth = useAppStore((state) => state.wsRightWidth);
 
@@ -4403,7 +4509,7 @@ function MainPage() {
         style={{ "--ws-left": `${wsLeftWidth}px`, "--ws-right": `${wsRightWidth}px` } as CSSProperties}
       >
         {activeTab === "tools" ? (
-          <Suspense fallback={<div className="lazy-tool-loading">正在加载工具…</div>}>
+          <Suspense fallback={<div className="lazy-tool-loading">{t("tool.loadingTools")}</div>}>
             <ToolsHub />
           </Suspense>
         ) : activeTab === "records" ? (
@@ -4413,7 +4519,7 @@ function MainPage() {
             <LeftPanel openSettings={() => setShowSettings(true)} />
             <WorkspaceResizer edge="left" />
             {activeTab === "inpaint" ? (
-              <Suspense fallback={<div className="lazy-tool-loading">正在加载重绘…</div>}>
+              <Suspense fallback={<div className="lazy-tool-loading">{t("tool.loadingInpaint")}</div>}>
                 <InpaintCanvas />
               </Suspense>
             ) : (

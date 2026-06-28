@@ -1,16 +1,21 @@
 import '../models/nai_models.dart';
 
+const legacyComicProjectTitle = '未命名漫画项目';
+const defaultComicProjectTitle = 'Untitled comic project';
+const legacyComicReferenceName = '参考图';
+const defaultComicReferenceName = 'Reference';
+
 enum ComicStep { story, global, panels, generate }
 
 enum ComicPanelStatus { draft, converted, generating, done, failed }
 
 extension ComicPanelStatusLabel on ComicPanelStatus {
   String get label => switch (this) {
-        ComicPanelStatus.draft => '草稿',
-        ComicPanelStatus.converted => '已转换',
-        ComicPanelStatus.generating => '生成中',
-        ComicPanelStatus.done => '已出图',
-        ComicPanelStatus.failed => '失败',
+        ComicPanelStatus.draft => 'Draft',
+        ComicPanelStatus.converted => 'Converted',
+        ComicPanelStatus.generating => 'Generating',
+        ComicPanelStatus.done => 'Done',
+        ComicPanelStatus.failed => 'Failed',
       };
 }
 
@@ -62,7 +67,7 @@ class ComicReference {
 
   factory ComicReference.fromJson(Map<String, dynamic> json) => ComicReference(
         id: json['id']?.toString() ?? _id(),
-        name: json['name']?.toString() ?? '参考图',
+        name: json['name']?.toString() ?? defaultComicReferenceName,
         kind: json['kind']?.toString() ?? 'character',
         scope: json['scope']?.toString() ?? 'full',
         subjectHint: json['subjectHint']?.toString() ?? '',
@@ -174,7 +179,7 @@ class ComicProject {
 
   ComicProject({
     required this.id,
-    this.title = '未命名漫画项目',
+    this.title = defaultComicProjectTitle,
     this.historyGroupId,
     this.rawScript = '',
     this.mode = ReversePromptMode.natural,
@@ -227,7 +232,7 @@ class ComicProject {
     final rawCount = json['desiredPanelCount'];
     final project = ComicProject(
       id: json['id']?.toString() ?? _id(),
-      title: json['title']?.toString() ?? '未命名漫画项目',
+      title: json['title']?.toString() ?? defaultComicProjectTitle,
       historyGroupId: trustOutputs ? json['historyGroupId']?.toString() : null,
       rawScript: json['rawScript']?.toString() ?? '',
       mode: ReversePromptMode.values.firstWhere(

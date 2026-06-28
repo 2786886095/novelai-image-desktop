@@ -52,6 +52,6 @@ describe("tuiwen audio helpers", () => {
 
   it("rejects subtitle slices beyond the decoded audio", () => {
     expect(() => sliceTuiwenPcm([new Float32Array(1_000)], 1_000, 2_000, 500))
-      .toThrow("超出长音频范围");
+      .toThrow("Subtitle timecode is outside the long audio range.");
   });
 });

@@ -9,19 +9,21 @@ class NaiOption {
 }
 
 const appName = 'Langbai NovelAI Studio';
-const appVersion = '1.0.9';
+const appVersion = '1.1.0';
 
 const naiModels = <NaiOption>[
-  NaiOption('NAI Diffusion 4.5 Full（完整模型）', 'nai-diffusion-4-5-full'),
-  NaiOption('NAI Diffusion 4.5 Curated（精选模型）', 'nai-diffusion-4-5-curated'),
-  NaiOption('NAI Diffusion 4 Full（完整模型）', 'nai-diffusion-4-full'),
-  NaiOption('NAI Diffusion 4 Curated（精选模型）', 'nai-diffusion-4-curated'),
-  NaiOption('NAI Diffusion 3（旧版通用）', 'nai-diffusion-3'),
-  NaiOption('NAI Diffusion Furry 3（兽人模型）', 'nai-diffusion-furry-3'),
+  NaiOption('NAI Diffusion 4.5 Full (Full model)', 'nai-diffusion-4-5-full'),
+  NaiOption(
+      'NAI Diffusion 4.5 Curated (Curated model)', 'nai-diffusion-4-5-curated'),
+  NaiOption('NAI Diffusion 4 Full (Full model)', 'nai-diffusion-4-full'),
+  NaiOption(
+      'NAI Diffusion 4 Curated (Curated model)', 'nai-diffusion-4-curated'),
+  NaiOption('NAI Diffusion 3 (legacy general model)', 'nai-diffusion-3'),
+  NaiOption('NAI Diffusion Furry 3', 'nai-diffusion-furry-3'),
 ];
 
 const naiInpaintModels = <NaiOption>[
-  NaiOption('NAI Diffusion 4.5 Full Inpaint（推荐）',
+  NaiOption('NAI Diffusion 4.5 Full Inpaint (Recommended)',
       'nai-diffusion-4-5-full-inpainting'),
   NaiOption('NAI Diffusion 4.5 Curated Inpaint',
       'nai-diffusion-4-5-curated-inpainting'),
@@ -32,13 +34,13 @@ const naiInpaintModels = <NaiOption>[
 ];
 
 const naiNoiseSchedules = <NaiOption>[
-  NaiOption('Native（原生）', 'native'),
-  NaiOption('Karras（常用）', 'karras'),
-  NaiOption('Exponential（指数）', 'exponential'),
+  NaiOption('Native', 'native'),
+  NaiOption('Karras (common)', 'karras'),
+  NaiOption('Exponential', 'exponential'),
 ];
 
 const naiSamplers = <NaiOption>[
-  NaiOption('Euler Ancestral（推荐）', 'k_euler_ancestral'),
+  NaiOption('Euler Ancestral (Recommended)', 'k_euler_ancestral'),
   NaiOption('Euler', 'k_euler'),
   NaiOption('DPM++ 2M', 'k_dpmpp_2m'),
   NaiOption('DPM++ 2M SDE', 'k_dpmpp_2m_sde'),
@@ -48,30 +50,30 @@ const naiSamplers = <NaiOption>[
 ];
 
 const ucPresets = <NaiOption>[
-  NaiOption('Heavy（强负面）', '0'),
-  NaiOption('Light（轻负面）', '1'),
-  NaiOption('Human Focus（人物优先）', '2'),
-  NaiOption('None（不使用预设）', '3'),
+  NaiOption('Heavy (strong negative)', '0'),
+  NaiOption('Light (light negative)', '1'),
+  NaiOption('Human Focus', '2'),
+  NaiOption('None', '3'),
 ];
 
 const directorTools = <NaiOption>[
-  NaiOption('移除背景', 'bg-removal'),
-  NaiOption('线稿提取', 'lineart'),
-  NaiOption('草图化', 'sketch'),
-  NaiOption('上色', 'colorize'),
-  NaiOption('表情迁移', 'emotion'),
-  NaiOption('去除杂乱', 'declutter'),
+  NaiOption('Remove background', 'bg-removal'),
+  NaiOption('Extract lineart', 'lineart'),
+  NaiOption('Sketch', 'sketch'),
+  NaiOption('Colorize', 'colorize'),
+  NaiOption('Emotion transfer', 'emotion'),
+  NaiOption('Declutter', 'declutter'),
 ];
 
 const emotionOptions = <NaiOption>[
-  NaiOption('中性', 'neutral'),
-  NaiOption('开心', 'happy'),
-  NaiOption('悲伤', 'sad'),
-  NaiOption('愤怒', 'angry'),
-  NaiOption('惊讶', 'surprised'),
-  NaiOption('害怕', 'scared'),
-  NaiOption('厌恶', 'disgusted'),
-  NaiOption('惊叹', 'amazed'),
+  NaiOption('Neutral', 'neutral'),
+  NaiOption('Happy', 'happy'),
+  NaiOption('Sad', 'sad'),
+  NaiOption('Angry', 'angry'),
+  NaiOption('Surprised', 'surprised'),
+  NaiOption('Scared', 'scared'),
+  NaiOption('Disgusted', 'disgusted'),
+  NaiOption('Amazed', 'amazed'),
 ];
 
 class SizePreset {
@@ -82,12 +84,12 @@ class SizePreset {
 }
 
 const sizePresets = <SizePreset>[
-  SizePreset('方形 1024×1024', 1024, 1024),
-  SizePreset('横向 1216×832', 1216, 832),
-  SizePreset('纵向 832×1216', 832, 1216),
-  SizePreset('竖图 1024×1536', 1024, 1536),
-  SizePreset('宽图 1536×1024', 1536, 1024),
-  SizePreset('大方图 1472×1472', 1472, 1472),
+  SizePreset('Square 1024×1024', 1024, 1024),
+  SizePreset('Landscape 1216×832', 1216, 832),
+  SizePreset('Portrait 832×1216', 832, 1216),
+  SizePreset('Portrait 1024×1536', 1024, 1536),
+  SizePreset('Landscape 1536×1024', 1536, 1024),
+  SizePreset('Large square 1472×1472', 1472, 1472),
 ];
 
 class GenerateParams {
@@ -366,7 +368,7 @@ class GenerationQueueJob {
   String get label {
     final value = params.positivePrompt.trim();
     return value.isEmpty
-        ? '（无提示词）'
+        ? '(no prompt)'
         : value.substring(0, value.length > 60 ? 60 : value.length);
   }
 }
@@ -743,7 +745,8 @@ class AppSettings {
         augmentDefry: (j['augmentDefry'] as num?)?.toDouble() ?? 0,
         augmentColorizePrompt: j['augmentColorizePrompt'] ?? '',
         augmentEmotion: j['augmentEmotion'] ?? 'happy',
-        augmentEmotionLevel: (j['augmentEmotionLevel'] as num?)?.toDouble() ?? 0,
+        augmentEmotionLevel:
+            (j['augmentEmotionLevel'] as num?)?.toDouble() ?? 0,
       );
 }
 
@@ -794,10 +797,10 @@ enum ReversePromptScope { full, character, object, scene }
 extension ReversePromptScopeLabel on ReversePromptScope {
   String get value => name;
   String get label => switch (this) {
-        ReversePromptScope.full => '整张图片',
-        ReversePromptScope.character => '角色',
-        ReversePromptScope.object => '物品',
-        ReversePromptScope.scene => '场景',
+        ReversePromptScope.full => 'Whole image',
+        ReversePromptScope.character => 'Character',
+        ReversePromptScope.object => 'Object',
+        ReversePromptScope.scene => 'Scene',
       };
 }
 
@@ -808,9 +811,9 @@ extension ReversePromptModeLabel on ReversePromptMode {
         ReversePromptMode.mixed => 'mixed'
       };
   String get label => switch (this) {
-        ReversePromptMode.tags => '标签',
-        ReversePromptMode.natural => '自然语言',
-        ReversePromptMode.mixed => '混合'
+        ReversePromptMode.tags => 'Tags',
+        ReversePromptMode.natural => 'Natural language',
+        ReversePromptMode.mixed => 'Mixed'
       };
 }
 

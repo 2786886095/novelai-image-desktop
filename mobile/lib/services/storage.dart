@@ -7,10 +7,11 @@ import 'package:gal/gal.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../history/history_archive.dart';
-import '../images/png_metadata.dart';
-import '../comic/comic_models.dart';
 import '../batch/batch_redraw_models.dart';
+import '../comic/comic_models.dart';
+import '../history/history_archive.dart';
+import '../i18n/runtime_text.dart';
+import '../images/png_metadata.dart';
 import '../models/nai_models.dart';
 
 // Run history JSON (de)serialisation on a background isolate once the payload is
@@ -195,7 +196,7 @@ class Storage {
         .replaceAll(RegExp(r'[\\/:*?"<>|\x00-\x1f]'), '_')
         .replaceAll(RegExp(r'\.+$'), '')
         .trim();
-    return cleaned.isEmpty ? '未命名分组' : cleaned;
+    return cleaned.isEmpty ? 'Untitled group' : cleaned;
   }
 
   // Resolve where a generated image is written: <base>/<date>/<group>/, where
@@ -313,7 +314,9 @@ class Storage {
     String requestedName,
   ) async {
     final source = File(item.filePath);
-    if (!source.existsSync()) throw StateError('本地图片不存在，无法重命名');
+    if (!source.existsSync()) {
+      throw StateError('Local image does not exist and cannot be renamed');
+    }
 
     final sourceName = source.uri.pathSegments.last;
     final dot = sourceName.lastIndexOf('.');
@@ -338,12 +341,16 @@ class Storage {
     List<HistoryItem> items,
     List<HistoryGroup> groups, {
     String archiveName = 'Langbai-NovelAI-Studio',
+    Object? language,
   }) async {
-    if (items.isEmpty) throw StateError('当前筛选没有可导出的图片');
+    if (items.isEmpty) {
+      throw StateError(runtimeTextFor(language, 'history.noExportImages'));
+    }
     final bytes = await buildHistoryArchive(
       items,
       groups,
       (path) => File(path).readAsBytes(),
+      language,
     );
     final temp = await getTemporaryDirectory();
     final stamp = DateTime.now().millisecondsSinceEpoch;

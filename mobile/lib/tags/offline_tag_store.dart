@@ -89,12 +89,13 @@ class OfflineTagStore {
       client.close();
     }
     if (bytes.length > _maxDownloadBytes) {
-      throw Exception('下载内容超过 20MB 上限，已放弃');
+      throw Exception('Downloaded content exceeds the 20 MB limit');
     }
     final decoded = await decodeGbk(bytes);
     final parsed = parseTagCsv(decoded);
     if (parsed.length < _minimumRecords) {
-      throw Exception('数据校验失败：仅解析出 ${parsed.length} 条中文标签');
+      throw Exception(
+          'Tag data validation failed: only ${parsed.length} records parsed');
     }
     final target = await _dataFile();
     final temporary = File('${target.path}.tmp');
@@ -107,7 +108,7 @@ class OfflineTagStore {
       flush: true,
     );
     _index = parsed;
-    return '已下载中文标签库（${parsed.length} 条，均含中文）';
+    return 'Tag library downloaded (${parsed.length} records with Chinese aliases)';
   }
 
   Future<List<OfflineTagHit>> search(String query, {int limit = 12}) async {
@@ -179,7 +180,8 @@ List<OfflineTagHit> parseTagCsv(String text) {
   if (lines.isEmpty ||
       !lines.first.toLowerCase().contains('name') ||
       !lines.first.toLowerCase().contains('cn_name')) {
-    throw const FormatException('表头不符（缺少 name/cn_name 列）');
+    throw const FormatException(
+        'Invalid header (missing name/cn_name columns)');
   }
   final result = <OfflineTagHit>[];
   for (final line in lines.skip(1)) {

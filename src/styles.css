@@ -4354,6 +4354,10 @@ html, body, #root {
    redraw card grid allowed implicit rows to shrink against max-height, turning
    portrait previews into thin horizontal slices when a batch had many items. */
 .redraw-results-stage {
+  display: flex;
+  flex-direction: column;
+  height: clamp(380px, calc(100vh - 420px), 680px);
+  min-height: 0;
   padding: 0;
   gap: 0;
   overflow: hidden;
@@ -4363,6 +4367,7 @@ html, body, #root {
     rgba(255, 255, 255, 0.58);
 }
 .redraw-results-toolbar {
+  flex: 0 0 auto;
   display: grid;
   grid-template-columns: minmax(360px, 1fr) auto;
   align-items: center;
@@ -4466,6 +4471,7 @@ html, body, #root {
 .redraw-results-actions .btn { min-height: 36px; }
 
 .redraw-result-filters {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -4513,6 +4519,21 @@ html, body, #root {
   font-size: 11px;
 }
 
+.redraw-results-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.redraw-results-scroll::-webkit-scrollbar { width: 10px; }
+.redraw-results-scroll::-webkit-scrollbar-thumb {
+  border: 2px solid rgba(255, 255, 255, 0.45);
+  border-radius: 999px;
+  background: rgba(124, 58, 237, 0.25);
+}
+
 .redraw-results-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
@@ -4521,6 +4542,7 @@ html, body, #root {
   align-items: start;
   gap: 14px;
   padding: 14px;
+  padding-bottom: 22px;
 }
 .redraw-result-card {
   min-width: 0;

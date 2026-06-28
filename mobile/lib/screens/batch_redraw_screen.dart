@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import '../batch/batch_redraw_controller.dart';
 import '../batch/batch_redraw_models.dart';
+import '../i18n/app_locales.dart';
 import '../models/nai_models.dart';
 import '../state/app_state.dart';
 import '../ui/studio_shell.dart';
@@ -39,19 +40,21 @@ class _BatchBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<BatchRedrawController>();
+    final language = context.watch<AppState>().settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
     if (!controller.loaded) {
-      return const Scaffold(body: Center(child: Text('正在加载批量项目...')));
+      return Scaffold(body: Center(child: Text(t('batch.loading'))));
     }
     return Scaffold(
       appBar: AppBar(
         leading: onBack == null
             ? null
             : IconButton(
-                tooltip: '返回工具',
+                tooltip: t('batch.backToTools'),
                 onPressed: onBack,
                 icon: const Icon(Icons.arrow_back),
               ),
-        title: const Text('批量图生图'),
+        title: Text(t('batch.title')),
       ),
       body: Column(
         children: [
@@ -82,7 +85,7 @@ class _BatchBody extends StatelessWidget {
                         ),
                       ),
                     Expanded(
-                      child: Text(controller.status,
+                      child: Text(controller.displayStatus,
                           maxLines: 2, overflow: TextOverflow.ellipsis),
                     ),
                   ],
@@ -102,7 +105,13 @@ class _BatchStepBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const labels = ['导入', '参数', '提示词', '生成'];
+    final language = context.watch<AppState>().settings.language;
+    final labels = [
+      mobileUiTextFor(language, 'batch.step.import'),
+      mobileUiTextFor(language, 'batch.step.params'),
+      mobileUiTextFor(language, 'batch.step.prompts'),
+      mobileUiTextFor(language, 'batch.step.generate'),
+    ];
     final theme = Theme.of(context);
     return Material(
       color: theme.colorScheme.surface,
@@ -238,6 +247,8 @@ class _ImportStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<BatchRedrawController>();
+    final language = context.watch<AppState>().settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
     final project = controller.project;
     return StudioContent(
       maxWidth: 980,
@@ -251,26 +262,27 @@ class _ImportStep extends StatelessWidget {
               OutlinedButton.icon(
                 onPressed: controller.reset,
                 icon: const Icon(Icons.note_add_outlined),
-                label: const Text('新建项目'),
+                label: Text(t('batch.newProject')),
               ),
               OutlinedButton.icon(
                 onPressed: controller.exportJson,
                 icon: const Icon(Icons.save_alt),
-                label: const Text('另存 JSON'),
+                label: Text(t('batch.saveJson')),
               ),
               OutlinedButton.icon(
                 onPressed: controller.importJson,
                 icon: const Icon(Icons.file_open_outlined),
-                label: const Text('导入 JSON'),
+                label: Text(t('batch.importJson')),
               ),
             ],
           ),
           const SizedBox(height: 12),
           TextFormField(
-            initialValue: project.groupName,
-            decoration: const InputDecoration(
-              labelText: '历史分组 / 项目名称',
-              border: OutlineInputBorder(),
+            key: ValueKey('$language:${project.groupName}'),
+            initialValue: controller.displayGroupName,
+            decoration: InputDecoration(
+              labelText: t('batch.projectName'),
+              border: const OutlineInputBorder(),
             ),
             onChanged: (value) {
               project.groupName = value;
@@ -281,7 +293,7 @@ class _ImportStep extends StatelessWidget {
           FilledButton.icon(
             onPressed: () => _pick(context),
             icon: const Icon(Icons.collections_outlined),
-            label: const Text('批量导入图片'),
+            label: Text(t('batch.importImages')),
           ),
           const SizedBox(height: 12),
           for (final item in project.items)
@@ -295,10 +307,10 @@ class _ImportStep extends StatelessWidget {
                     maxLines: 1, overflow: TextOverflow.ellipsis),
                 subtitle: Text('${item.width}x${item.height}'),
                 trailing: IconButton(
-                  tooltip: '移除',
+                  tooltip: t('common.remove'),
                   onPressed: () {
                     project.items.remove(item);
-                    controller.changed('已移除图片');
+                    controller.changed(t('batch.removedImage'));
                   },
                   icon: const Icon(Icons.close),
                 ),
@@ -307,7 +319,8 @@ class _ImportStep extends StatelessWidget {
           if (project.items.isNotEmpty)
             FilledButton.tonal(
               onPressed: () => controller.setStep(BatchRedrawStep.params),
-              child: Text('下一步 · 设置参数（${project.items.length} 张）'),
+              child: Text(mobileUiFormatFor(language, 'batch.nextParams',
+                  {'count': project.items.length})),
             ),
         ],
       ),
@@ -321,6 +334,8 @@ class _ParamsStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<BatchRedrawController>();
+    final language = context.watch<AppState>().settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
     final project = controller.project;
     final params = project.globalParams;
     return StudioContent(
@@ -333,18 +348,18 @@ class _ParamsStep extends StatelessWidget {
             child: OutlinedButton.icon(
               onPressed: controller.syncCurrentParams,
               icon: const Icon(Icons.sync),
-              label: const Text('同步生图页参数'),
+              label: Text(t('batch.syncParams')),
             ),
           ),
           _BatchParamsEditor(
-            title: '全局生图参数',
+            title: t('batch.globalParams'),
             params: params,
             initiallyExpanded: true,
             onChanged: controller.changed,
           ),
           const SizedBox(height: 8),
           _BatchSlider(
-            label: '全局变化强度',
+            label: t('batch.globalStrength'),
             value: project.globalStrength,
             min: 0.05,
             max: 1,
@@ -358,9 +373,9 @@ class _ParamsStep extends StatelessWidget {
             initialValue: project.globalStyle,
             minLines: 2,
             maxLines: 5,
-            decoration: const InputDecoration(
-              labelText: '全局风格提示词',
-              border: OutlineInputBorder(),
+            decoration: InputDecoration(
+              labelText: t('batch.globalStyle'),
+              border: const OutlineInputBorder(),
             ),
             onChanged: (value) {
               project.globalStyle = value;
@@ -372,9 +387,9 @@ class _ParamsStep extends StatelessWidget {
             initialValue: project.globalNegative,
             minLines: 2,
             maxLines: 5,
-            decoration: const InputDecoration(
-              labelText: '全局负面提示词',
-              border: OutlineInputBorder(),
+            decoration: InputDecoration(
+              labelText: t('batch.globalNegative'),
+              border: const OutlineInputBorder(),
             ),
             onChanged: (value) {
               project.globalNegative = value;
@@ -383,9 +398,12 @@ class _ParamsStep extends StatelessWidget {
           ),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('复用生图页当前参考图'),
-            subtitle: Text(
-                'Vibe ${controller.app.extras.vibeImages.length} · 精准参考 ${controller.app.extras.preciseReferences.length}'),
+            title: Text(t('batch.reuseMainReferences')),
+            subtitle:
+                Text(mobileUiFormatFor(language, 'generate.referenceSubtitle', {
+              'vibe': controller.app.extras.vibeImages.length,
+              'precise': controller.app.extras.preciseReferences.length
+            })),
             value: project.reuseMainReferences,
             onChanged: (value) {
               project.reuseMainReferences = value;
@@ -396,7 +414,7 @@ class _ParamsStep extends StatelessWidget {
             OutlinedButton.icon(
               onPressed: controller.copyMainReferences,
               icon: const Icon(Icons.content_copy_outlined),
-              label: const Text('复制生图页当前参考图到项目'),
+              label: Text(t('batch.copyMainReferences')),
             ),
             const SizedBox(height: 8),
             const _BatchReferenceEditor(),
@@ -405,7 +423,7 @@ class _ParamsStep extends StatelessWidget {
             onPressed: project.items.isEmpty
                 ? null
                 : () => controller.setStep(BatchRedrawStep.prompts),
-            child: const Text('下一步 · 编辑提示词'),
+            child: Text(t('batch.nextPrompts')),
           ),
         ],
       ),
@@ -435,13 +453,18 @@ class _BatchReferenceEditor extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<BatchRedrawController>();
+    final language = context.watch<AppState>().settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
     final project = controller.project;
     return ExpansionTile(
       tilePadding: EdgeInsets.zero,
       childrenPadding: EdgeInsets.zero,
-      title: const Text('项目参考图'),
+      title: Text(t('batch.projectReferences')),
       subtitle: Text(
-        'Vibe ${project.vibeImages.length} · 精准参考 ${project.preciseReferences.length}',
+        mobileUiFormatFor(language, 'generate.referenceSubtitle', {
+          'vibe': project.vibeImages.length,
+          'precise': project.preciseReferences.length
+        }),
       ),
       children: [
         for (var index = 0; index < project.vibeImages.length; index++)
@@ -451,13 +474,13 @@ class _BatchReferenceEditor extends StatelessWidget {
           child: OutlinedButton.icon(
             onPressed: () => _pick(context, precise: false),
             icon: const Icon(Icons.add_photo_alternate_outlined),
-            label: const Text('添加 Vibe 参考图'),
+            label: Text(t('generate.addVibe')),
           ),
         ),
         const Divider(height: 24),
-        const Align(
+        Align(
           alignment: Alignment.centerLeft,
-          child: Text('精准参考仅支持 V4.5，且图片必须匹配官方尺寸。'),
+          child: Text(t('batch.preciseOnlyV45')),
         ),
         for (var index = 0; index < project.preciseReferences.length; index++)
           _BatchPreciseRow(index: index),
@@ -466,7 +489,7 @@ class _BatchReferenceEditor extends StatelessWidget {
           child: OutlinedButton.icon(
             onPressed: () => _pick(context, precise: true),
             icon: const Icon(Icons.person_search_outlined),
-            label: const Text('添加精准参考图'),
+            label: Text(t('generate.addPrecise')),
           ),
         ),
       ],
@@ -500,6 +523,8 @@ class _BatchVibeRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<BatchRedrawController>();
+    final language = context.watch<AppState>().settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
     final item = controller.project.vibeImages[index];
     return Padding(
       padding: const EdgeInsets.only(top: 8),
@@ -512,7 +537,7 @@ class _BatchVibeRow extends StatelessWidget {
             child: Column(
               children: [
                 _BatchSlider(
-                  label: '信息提取',
+                  label: t('generate.infoExtracted'),
                   value: item.infoExtracted,
                   min: 0,
                   max: 1,
@@ -523,7 +548,7 @@ class _BatchVibeRow extends StatelessWidget {
                   ),
                 ),
                 _BatchSlider(
-                  label: '参考强度',
+                  label: t('generate.referenceStrength'),
                   value: item.strength,
                   min: 0,
                   max: 1,
@@ -537,7 +562,7 @@ class _BatchVibeRow extends StatelessWidget {
             ),
           ),
           IconButton(
-            tooltip: '移除',
+            tooltip: t('common.remove'),
             onPressed: () => controller.removeVibeReference(index),
             icon: const Icon(Icons.close),
           ),
@@ -554,6 +579,8 @@ class _BatchPreciseRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<BatchRedrawController>();
+    final language = context.watch<AppState>().settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
     final item = controller.project.preciseReferences[index];
     return Padding(
       padding: const EdgeInsets.only(top: 8),
@@ -568,13 +595,18 @@ class _BatchPreciseRow extends StatelessWidget {
                 DropdownButtonFormField<String>(
                   value: item.type,
                   isExpanded: true,
-                  decoration: const InputDecoration(labelText: '参考类型'),
-                  items: const [
-                    DropdownMenuItem(value: 'character', child: Text('角色')),
-                    DropdownMenuItem(value: 'style', child: Text('风格')),
+                  decoration:
+                      InputDecoration(labelText: t('generate.referenceType')),
+                  items: [
+                    DropdownMenuItem(
+                        value: 'character',
+                        child: Text(t('generate.refType.character'))),
+                    DropdownMenuItem(
+                        value: 'style',
+                        child: Text(t('generate.refType.style'))),
                     DropdownMenuItem(
                       value: 'character&style',
-                      child: Text('角色和风格'),
+                      child: Text(t('generate.refType.both')),
                     ),
                   ],
                   onChanged: (value) => value == null
@@ -582,7 +614,7 @@ class _BatchPreciseRow extends StatelessWidget {
                       : controller.updatePreciseReference(index, type: value),
                 ),
                 _BatchSlider(
-                  label: '参考强度',
+                  label: t('generate.referenceStrength'),
                   value: item.strength,
                   min: 0,
                   max: 1,
@@ -593,7 +625,7 @@ class _BatchPreciseRow extends StatelessWidget {
                   ),
                 ),
                 _BatchSlider(
-                  label: '保真度',
+                  label: t('generate.fidelityLabel'),
                   value: item.fidelity,
                   min: 0,
                   max: 1,
@@ -607,7 +639,7 @@ class _BatchPreciseRow extends StatelessWidget {
             ),
           ),
           IconButton(
-            tooltip: '移除',
+            tooltip: t('common.remove'),
             onPressed: () => controller.removePreciseReference(index),
             icon: const Icon(Icons.close),
           ),
@@ -623,19 +655,21 @@ class _PromptsStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<BatchRedrawController>();
+    final language = context.watch<AppState>().settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
     final project = controller.project;
     return ListView(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 100),
       children: [
         DropdownButtonFormField<ReversePromptMode>(
           value: project.aiMode,
-          decoration: const InputDecoration(
-            labelText: 'AI 反推模式',
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            labelText: t('batch.aiMode'),
+            border: const OutlineInputBorder(),
           ),
           items: ReversePromptMode.values
-              .map((mode) =>
-                  DropdownMenuItem(value: mode, child: Text(mode.label)))
+              .map((mode) => DropdownMenuItem(
+                  value: mode, child: Text(t('promptMode.${mode.value}'))))
               .toList(),
           onChanged: (value) {
             if (value == null) return;
@@ -651,14 +685,14 @@ class _PromptsStep extends StatelessWidget {
                 onPressed:
                     controller.busy ? null : controller.reverseMissingPrompts,
                 icon: const Icon(Icons.visibility_outlined),
-                label: const Text('反推缺失提示词'),
+                label: Text(t('batch.reverseMissing')),
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
               child: OutlinedButton(
                 onPressed: controller.applyBulkPrompts,
-                child: const Text('应用批量文本'),
+                child: Text(t('batch.applyBulk')),
               ),
             ),
           ],
@@ -668,9 +702,9 @@ class _PromptsStep extends StatelessWidget {
           initialValue: project.promptBulk,
           minLines: 3,
           maxLines: 8,
-          decoration: const InputDecoration(
-            labelText: '批量提示词（每行对应一张，可用 文件名|提示词）',
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            labelText: t('batch.bulkPrompts'),
+            border: const OutlineInputBorder(),
           ),
           onChanged: (value) {
             project.promptBulk = value;
@@ -683,7 +717,7 @@ class _PromptsStep extends StatelessWidget {
           onPressed: project.items.isEmpty
               ? null
               : () => controller.setStep(BatchRedrawStep.generate),
-          child: const Text('下一步 · 队列生成'),
+          child: Text(t('batch.nextGenerate')),
         ),
       ],
     );
@@ -697,6 +731,8 @@ class _BatchPromptCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<BatchRedrawController>();
+    final language = context.watch<AppState>().settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
     final project = controller.project;
     return Card(
       child: Padding(
@@ -721,9 +757,9 @@ class _BatchPromptCard extends StatelessWidget {
               initialValue: item.prompt,
               minLines: 3,
               maxLines: 7,
-              decoration: const InputDecoration(
-                labelText: '本图提示词',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: t('batch.itemPrompt'),
+                border: const OutlineInputBorder(),
               ),
               onChanged: (value) {
                 item.prompt = value;
@@ -731,7 +767,7 @@ class _BatchPromptCard extends StatelessWidget {
               },
             ),
             _BatchSlider(
-              label: '本图强度',
+              label: t('batch.itemStrength'),
               value: item.strength ?? project.globalStrength,
               min: 0.05,
               max: 1,
@@ -743,7 +779,7 @@ class _BatchPromptCard extends StatelessWidget {
             ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('本图独立参数'),
+              title: Text(t('batch.itemParams')),
               value: item.overrideParams,
               onChanged: (value) {
                 item.overrideParams = value;
@@ -753,7 +789,7 @@ class _BatchPromptCard extends StatelessWidget {
             ),
             if (item.overrideParams)
               _BatchParamsEditor(
-                title: '本图生图参数',
+                title: t('batch.itemParamsTitle'),
                 params: item.params,
                 onChanged: controller.changed,
               ),
@@ -905,6 +941,8 @@ class _BatchGenerateConsole extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final language = context.watch<AppState>().settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
     return Card(
       elevation: 0,
       color: colors.surfaceContainerLow,
@@ -923,10 +961,14 @@ class _BatchGenerateConsole extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('批量生成结果',
+                      Text(t('batch.results'),
                           style: Theme.of(context).textTheme.titleMedium),
                       const SizedBox(height: 3),
-                      Text('预计 $quote Anlas · 余额 ${balance ?? '未知'} Anlas',
+                      Text(
+                          mobileUiFormatFor(language, 'batch.quoteBalance', {
+                            'quote': quote,
+                            'balance': balance ?? t('common.unknown')
+                          }),
                           style: Theme.of(context).textTheme.bodySmall),
                     ],
                   ),
@@ -947,10 +989,10 @@ class _BatchGenerateConsole extends StatelessWidget {
               spacing: 7,
               runSpacing: 7,
               children: [
-                _BatchStatChip(label: '可生成', value: ready),
-                _BatchStatChip(label: '完成', value: done),
-                _BatchStatChip(label: '生成中', value: generating),
-                _BatchStatChip(label: '失败', value: failed),
+                _BatchStatChip(label: t('batch.ready'), value: ready),
+                _BatchStatChip(label: t('batch.done'), value: done),
+                _BatchStatChip(label: t('batch.generating'), value: generating),
+                _BatchStatChip(label: t('batch.failed'), value: failed),
               ],
             ),
             const SizedBox(height: 12),
@@ -961,17 +1003,19 @@ class _BatchGenerateConsole extends StatelessWidget {
                 FilledButton.icon(
                   onPressed: onStartPending,
                   icon: const Icon(Icons.playlist_play),
-                  label: Text('生成未生成（$pendingCount）'),
+                  label: Text(mobileUiFormatFor(language,
+                      'batch.generatePending', {'count': pendingCount})),
                 ),
                 FilledButton.tonalIcon(
                   onPressed: onRetrySelected,
                   icon: const Icon(Icons.refresh),
-                  label: Text('重试选中（$selectedCount）'),
+                  label: Text(mobileUiFormatFor(language, 'batch.retrySelected',
+                      {'count': selectedCount})),
                 ),
                 OutlinedButton.icon(
                   onPressed: onExportZip,
                   icon: const Icon(Icons.archive_outlined),
-                  label: const Text('导出 ZIP'),
+                  label: Text(t('batch.exportZip')),
                 ),
               ],
             ),
@@ -981,19 +1025,22 @@ class _BatchGenerateConsole extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      '队列 $queueDone/$queueTotal',
+                      mobileUiFormatFor(language, 'batch.queue',
+                          {'done': queueDone, 'total': queueTotal}),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   IconButton.filledTonal(
-                    tooltip: queuePaused ? '继续队列' : '暂停队列',
+                    tooltip: queuePaused
+                        ? t('batch.resumeQueue')
+                        : t('batch.pauseQueue'),
                     onPressed: onTogglePause,
                     icon: Icon(queuePaused ? Icons.play_arrow : Icons.pause),
                   ),
                   const SizedBox(width: 6),
                   IconButton.filled(
-                    tooltip: '停止队列',
+                    tooltip: t('batch.stopQueue'),
                     onPressed: onCancel,
                     icon: const Icon(Icons.stop),
                   ),
@@ -1040,6 +1087,8 @@ class _BatchResultTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final language = context.watch<AppState>().settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
     final statusColor = switch (item.status) {
       BatchItemStatus.done => Colors.green,
       BatchItemStatus.failed => colors.error,
@@ -1047,10 +1096,12 @@ class _BatchResultTile extends StatelessWidget {
       BatchItemStatus.pending => colors.outline,
     };
     final statusLabel = switch (item.status) {
-      BatchItemStatus.done => '已完成',
-      BatchItemStatus.failed => '失败',
-      BatchItemStatus.generating => '生成中',
-      BatchItemStatus.pending => item.prompt.trim().isEmpty ? '待配词' : '待生成',
+      BatchItemStatus.done => t('batch.statusDone'),
+      BatchItemStatus.failed => t('batch.failed'),
+      BatchItemStatus.generating => t('batch.generating'),
+      BatchItemStatus.pending => item.prompt.trim().isEmpty
+          ? t('batch.statusPendingPrompt')
+          : t('batch.statusPending'),
     };
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -1220,225 +1271,234 @@ class _BatchParamsEditor extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) => ExpansionTile(
-        tilePadding: EdgeInsets.zero,
-        childrenPadding: EdgeInsets.zero,
-        initiallyExpanded: initiallyExpanded,
-        title: Text(title),
-        children: [
-          DropdownButtonFormField<String>(
-            value: params.model,
-            isExpanded: true,
-            decoration: const InputDecoration(
-              labelText: '模型',
-              border: OutlineInputBorder(),
-            ),
-            items: naiModels
-                .map((model) => DropdownMenuItem(
-                      value: model.value,
-                      child: Text(
-                        model.label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ))
-                .toList(),
-            onChanged: (value) {
-              if (value == null) return;
-              params.model = value;
-              onChanged();
-            },
+  Widget build(BuildContext context) {
+    final language = context.watch<AppState>().settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
+    return ExpansionTile(
+      tilePadding: EdgeInsets.zero,
+      childrenPadding: EdgeInsets.zero,
+      initiallyExpanded: initiallyExpanded,
+      title: Text(title),
+      children: [
+        DropdownButtonFormField<String>(
+          value: params.model,
+          isExpanded: true,
+          decoration: InputDecoration(
+            labelText: t('batch.model'),
+            border: const OutlineInputBorder(),
           ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 7,
-            runSpacing: 7,
-            children: sizePresets
-                .map((size) => ChoiceChip(
-                      label: Text(size.label),
-                      selected: params.width == size.width &&
-                          params.height == size.height,
-                      onSelected: (_) {
-                        params
-                          ..width = size.width
-                          ..height = size.height;
-                        onChanged();
-                      },
-                    ))
-                .toList(),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: _BatchNumberField(
-                  label: '宽度',
-                  value: params.width,
-                  onChanged: (value) {
-                    params.width = _snapBatchDimension(value);
-                    onChanged();
-                  },
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _BatchNumberField(
-                  label: '高度',
-                  value: params.height,
-                  onChanged: (value) {
-                    params.height = _snapBatchDimension(value);
-                    onChanged();
-                  },
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          DropdownButtonFormField<String>(
-            value: params.sampler,
-            isExpanded: true,
-            decoration: const InputDecoration(
-              labelText: '采样器',
-              border: OutlineInputBorder(),
-            ),
-            items: naiSamplers
-                .map((sampler) => DropdownMenuItem(
-                      value: sampler.value,
-                      child: Text(sampler.label),
-                    ))
-                .toList(),
-            onChanged: (value) {
-              if (value == null) return;
-              params.sampler = value;
-              onChanged();
-            },
-          ),
-          _BatchSlider(
-            label: 'Steps',
-            value: params.steps.toDouble(),
-            min: 1,
-            max: 50,
-            divisions: 49,
-            onChanged: (value) {
-              params.steps = value.round();
-              onChanged();
-            },
-          ),
-          _BatchSlider(
-            label: 'CFG',
-            value: params.cfgScale,
-            min: 1,
-            max: 10,
-            divisions: 45,
-            onChanged: (value) {
-              params.cfgScale = value;
-              onChanged();
-            },
-          ),
-          _BatchSlider(
-            label: 'CFG Rescale',
-            value: params.cfgRescale,
-            min: 0,
-            max: 1,
-            divisions: 100,
-            onChanged: (value) {
-              params.cfgRescale = value;
-              onChanged();
-            },
-          ),
-          DropdownButtonFormField<String>(
-            value: params.noiseSchedule,
-            isExpanded: true,
-            decoration: const InputDecoration(
-              labelText: 'Noise Schedule',
-              border: OutlineInputBorder(),
-            ),
-            items: naiNoiseSchedules
-                .map((option) => DropdownMenuItem(
-                      value: option.value,
-                      child: Text(option.label),
-                    ))
-                .toList(),
-            onChanged: (value) {
-              if (value == null) return;
-              params.noiseSchedule = value;
-              onChanged();
-            },
-          ),
-          const SizedBox(height: 8),
-          DropdownButtonFormField<int>(
-            value: params.ucPreset,
-            isExpanded: true,
-            decoration: const InputDecoration(
-              labelText: 'UC Preset',
-              border: OutlineInputBorder(),
-            ),
-            items: ucPresets
-                .map((option) => DropdownMenuItem(
-                      value: int.parse(option.value),
-                      child: Text(option.label),
-                    ))
-                .toList(),
-            onChanged: (value) {
-              if (value == null) return;
-              params.ucPreset = value;
-              onChanged();
-            },
-          ),
-          const SizedBox(height: 8),
-          _BatchNumberField(
-            label: 'Seed（0 = 随机）',
-            value: params.seedMode == 'random' ? 0 : params.seed,
-            onChanged: (value) {
-              params
-                ..seed = value.clamp(0, 2147483647)
-                ..seedMode = value > 0 ? 'fixed' : 'random';
-              onChanged();
-            },
-          ),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Quality Toggle'),
-            value: params.qualityToggle,
-            onChanged: (value) {
-              params.qualityToggle = value;
-              onChanged();
-            },
-          ),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Variety+'),
-            value: params.variety,
-            onChanged: (value) {
-              params.variety = value;
-              onChanged();
-            },
-          ),
-          if (!params.isV4Plus) ...[
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('SMEA'),
-              value: params.smea,
-              onChanged: (value) {
-                params.smea = value;
-                if (!value) params.smeaDyn = false;
-                onChanged();
-              },
-            ),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('SMEA Dyn'),
-              value: params.smeaDyn,
-              onChanged: params.smea
-                  ? (value) {
-                      params.smeaDyn = value;
+          items: naiModels
+              .map((model) => DropdownMenuItem(
+                    value: model.value,
+                    child: Text(
+                      localizedNaiOptionLabel(
+                          language, model.value, model.label),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ))
+              .toList(),
+          onChanged: (value) {
+            if (value == null) return;
+            params.model = value;
+            onChanged();
+          },
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 7,
+          runSpacing: 7,
+          children: sizePresets
+              .map((size) => ChoiceChip(
+                    label: Text(localizedSizePresetLabel(
+                        language, size.width, size.height, size.label)),
+                    selected: params.width == size.width &&
+                        params.height == size.height,
+                    onSelected: (_) {
+                      params
+                        ..width = size.width
+                        ..height = size.height;
                       onChanged();
-                    }
-                  : null,
+                    },
+                  ))
+              .toList(),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: _BatchNumberField(
+                label: t('batch.width'),
+                value: params.width,
+                onChanged: (value) {
+                  params.width = _snapBatchDimension(value);
+                  onChanged();
+                },
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _BatchNumberField(
+                label: t('batch.height'),
+                value: params.height,
+                onChanged: (value) {
+                  params.height = _snapBatchDimension(value);
+                  onChanged();
+                },
+              ),
             ),
           ],
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          value: params.sampler,
+          isExpanded: true,
+          decoration: InputDecoration(
+            labelText: t('batch.sampler'),
+            border: const OutlineInputBorder(),
+          ),
+          items: naiSamplers
+              .map((sampler) => DropdownMenuItem(
+                    value: sampler.value,
+                    child: Text(localizedNaiOptionLabel(
+                        language, sampler.value, sampler.label)),
+                  ))
+              .toList(),
+          onChanged: (value) {
+            if (value == null) return;
+            params.sampler = value;
+            onChanged();
+          },
+        ),
+        _BatchSlider(
+          label: 'Steps',
+          value: params.steps.toDouble(),
+          min: 1,
+          max: 50,
+          divisions: 49,
+          onChanged: (value) {
+            params.steps = value.round();
+            onChanged();
+          },
+        ),
+        _BatchSlider(
+          label: 'CFG',
+          value: params.cfgScale,
+          min: 1,
+          max: 10,
+          divisions: 45,
+          onChanged: (value) {
+            params.cfgScale = value;
+            onChanged();
+          },
+        ),
+        _BatchSlider(
+          label: 'CFG Rescale',
+          value: params.cfgRescale,
+          min: 0,
+          max: 1,
+          divisions: 100,
+          onChanged: (value) {
+            params.cfgRescale = value;
+            onChanged();
+          },
+        ),
+        DropdownButtonFormField<String>(
+          value: params.noiseSchedule,
+          isExpanded: true,
+          decoration: const InputDecoration(
+            labelText: 'Noise Schedule',
+            border: OutlineInputBorder(),
+          ),
+          items: naiNoiseSchedules
+              .map((option) => DropdownMenuItem(
+                    value: option.value,
+                    child: Text(localizedNaiOptionLabel(
+                        language, option.value, option.label)),
+                  ))
+              .toList(),
+          onChanged: (value) {
+            if (value == null) return;
+            params.noiseSchedule = value;
+            onChanged();
+          },
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<int>(
+          value: params.ucPreset,
+          isExpanded: true,
+          decoration: const InputDecoration(
+            labelText: 'UC Preset',
+            border: OutlineInputBorder(),
+          ),
+          items: ucPresets
+              .map((option) => DropdownMenuItem(
+                    value: int.parse(option.value),
+                    child: Text(localizedNaiOptionLabel(
+                        language, option.value, option.label)),
+                  ))
+              .toList(),
+          onChanged: (value) {
+            if (value == null) return;
+            params.ucPreset = value;
+            onChanged();
+          },
+        ),
+        const SizedBox(height: 8),
+        _BatchNumberField(
+          label: t('batch.seed'),
+          value: params.seedMode == 'random' ? 0 : params.seed,
+          onChanged: (value) {
+            params
+              ..seed = value.clamp(0, 2147483647)
+              ..seedMode = value > 0 ? 'fixed' : 'random';
+            onChanged();
+          },
+        ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Quality Toggle'),
+          value: params.qualityToggle,
+          onChanged: (value) {
+            params.qualityToggle = value;
+            onChanged();
+          },
+        ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Variety+'),
+          value: params.variety,
+          onChanged: (value) {
+            params.variety = value;
+            onChanged();
+          },
+        ),
+        if (!params.isV4Plus) ...[
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('SMEA'),
+            value: params.smea,
+            onChanged: (value) {
+              params.smea = value;
+              if (!value) params.smeaDyn = false;
+              onChanged();
+            },
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('SMEA Dyn'),
+            value: params.smeaDyn,
+            onChanged: params.smea
+                ? (value) {
+                    params.smeaDyn = value;
+                    onChanged();
+                  }
+                : null,
+          ),
         ],
-      );
+      ],
+    );
+  }
 }
 
 class _BatchNumberField extends StatelessWidget {

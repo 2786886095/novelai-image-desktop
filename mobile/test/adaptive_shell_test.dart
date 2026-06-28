@@ -56,7 +56,7 @@ void main() {
         find.byKey(const ValueKey('studio-phone-navigation')), findsOneWidget);
     expect(
         find.byKey(const ValueKey('studio-tablet-navigation')), findsNothing);
-    expect(find.text('更多'), findsOneWidget);
+    expect(find.text('More'), findsOneWidget);
   });
 
   testWidgets('tablet uses the complete navigation rail', (tester) async {

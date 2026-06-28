@@ -38,7 +38,7 @@ class GenerationCancelledException implements Exception {
   const GenerationCancelledException();
 
   @override
-  String toString() => '操作已取消';
+  String toString() => 'Operation cancelled';
 }
 
 class NaiHttpException implements Exception {
@@ -132,7 +132,7 @@ class NaiApi {
       {String target = 'en', String baiduSecret = ''}) async {
     final input = text.trim();
     if (input.isEmpty) {
-      return const AiTextResult(ok: false, message: '没有可翻译的内容');
+      return const AiTextResult(ok: false, message: 'Nothing to translate');
     }
     if (settings.translateProvider == 'baidu') {
       return _translateWithBaidu(
@@ -156,7 +156,7 @@ class NaiApi {
       if (response.statusCode >= 400) {
         return AiTextResult(
           ok: false,
-          message: '谷歌翻译失败（HTTP ${response.statusCode}）',
+          message: 'Google Translate failed (HTTP ${response.statusCode})',
         );
       }
       final data = jsonDecode(response.body);
@@ -170,12 +170,16 @@ class NaiApi {
           .join()
           .trim();
       return translated.isEmpty
-          ? const AiTextResult(ok: false, message: '谷歌翻译结果为空')
-          : AiTextResult(ok: true, message: '翻译完成', text: translated);
+          ? const AiTextResult(
+              ok: false,
+              message: 'Google Translate returned an empty result',
+            )
+          : AiTextResult(
+              ok: true, message: 'Translation complete', text: translated);
     } catch (error) {
       return AiTextResult(
         ok: false,
-        message: '谷歌翻译失败，请检查网络或代理：$error',
+        message: 'Google Translate failed. Check your network or proxy: $error',
       );
     }
   }
@@ -191,7 +195,7 @@ class NaiApi {
     if (appId.isEmpty || cleanSecret.isEmpty) {
       return const AiTextResult(
         ok: false,
-        message: '请先在设置中填写百度翻译 APP ID 并保存密钥',
+        message: 'Enter the Baidu Translate APP ID and save the secret first',
       );
     }
     final salt = '${DateTime.now().microsecondsSinceEpoch}';
@@ -219,13 +223,14 @@ class NaiApi {
       if (response.statusCode >= 400 || data is! Map) {
         return AiTextResult(
           ok: false,
-          message: '百度翻译失败（HTTP ${response.statusCode}）',
+          message: 'Baidu Translate failed (HTTP ${response.statusCode})',
         );
       }
       if (data['error_code'] != null) {
         return AiTextResult(
           ok: false,
-          message: '百度翻译失败：${data['error_msg'] ?? data['error_code']}',
+          message:
+              'Baidu Translate failed: ${data['error_msg'] ?? data['error_code']}',
         );
       }
       final rows = data['trans_result'];
@@ -237,10 +242,14 @@ class NaiApi {
               .join('\n')
           : '';
       return translated.isEmpty
-          ? const AiTextResult(ok: false, message: '百度翻译未返回结果')
-          : AiTextResult(ok: true, message: '翻译完成', text: translated);
+          ? const AiTextResult(
+              ok: false,
+              message: 'Baidu Translate returned no result',
+            )
+          : AiTextResult(
+              ok: true, message: 'Translation complete', text: translated);
     } catch (error) {
-      return AiTextResult(ok: false, message: '百度翻译失败：$error');
+      return AiTextResult(ok: false, message: 'Baidu Translate failed: $error');
     }
   }
 
@@ -255,7 +264,7 @@ class NaiApi {
       case 0:
         return 'Paper';
       default:
-        return '已验证';
+        return 'Verified';
     }
   }
 
@@ -270,9 +279,11 @@ class NaiApi {
         headers: {'Authorization': 'Bearer $t'},
       ).timeout(const Duration(seconds: 15)),
     );
-    if (info.statusCode == 401) throw Exception('Token 无效或已过期。');
+    if (info.statusCode == 401) {
+      throw Exception('Token is invalid or expired.');
+    }
     if (info.statusCode >= 400) {
-      throw Exception('Token 验证失败（HTTP ${info.statusCode}）。');
+      throw Exception('Token verification failed (HTTP ${info.statusCode}).');
     }
     return fetchAccount(t, settings);
   }
@@ -308,7 +319,7 @@ class NaiApi {
             sub['active'] is bool ? sub['active'] as bool : null,
       );
     } catch (_) {
-      return const AccountSummary(hasToken: true, tierName: '已验证');
+      return const AccountSummary(hasToken: true, tierName: 'Verified');
     }
   }
 
@@ -438,7 +449,9 @@ class NaiApi {
         if (!canTryCompatibleModel) rethrow;
       }
     }
-    if (bytes == null) throw StateError('重绘请求未返回结果');
+    if (bytes == null) {
+      throw StateError('Inpaint request returned no result');
+    }
     final images = _extractImages(bytes)
         .map((image) => cropImageToSize(image, width, height))
         .toList();
@@ -687,7 +700,7 @@ class NaiApi {
       scope: ProxyScope.ai,
     );
     if (res.statusCode >= 400) {
-      throw Exception('模型检测失败（HTTP ${res.statusCode}）');
+      throw Exception('Model detection failed (HTTP ${res.statusCode})');
     }
     final data = jsonDecode(res.body);
     final raw = data is Map ? data['data'] : data;
@@ -707,11 +720,14 @@ class NaiApi {
     required String system,
     required String user,
     int maxTokens = 2000,
-    String label = '文本 AI 调用',
+    String label = 'Text AI call',
   }) {
     if (apiKey.trim().isEmpty) {
       return Future.value(
-        const AiTextResult(ok: false, message: '请先填写转换 API Key'),
+        const AiTextResult(
+          ok: false,
+          message: 'Enter the conversion API Key first',
+        ),
       );
     }
     return _chat(
@@ -738,7 +754,10 @@ class NaiApi {
     required String systemTemplate,
   }) async {
     if (apiKey.trim().isEmpty) {
-      return const AiTextResult(ok: false, message: '请先填写 AI 反推 API Key');
+      return const AiTextResult(
+        ok: false,
+        message: 'Enter the AI inspect API Key first',
+      );
     }
     final system = [
       systemTemplate.trim().isEmpty
@@ -800,7 +819,10 @@ class NaiApi {
     required String systemTemplate,
   }) async {
     if (apiKey.trim().isEmpty) {
-      return const AiTextResult(ok: false, message: '请先填写转换 API Key');
+      return const AiTextResult(
+        ok: false,
+        message: 'Enter the conversion API Key first',
+      );
     }
     final hints = mode == ReversePromptMode.natural ||
             !settings.tagServerEnabled ||
@@ -849,7 +871,7 @@ class NaiApi {
       model,
       system,
       user,
-      label: source == 'reverse' ? 'AI 反推' : '提示词转换',
+      label: source == 'reverse' ? 'AI inspect' : 'Prompt conversion',
       apiKind: source == 'reverse' ? 'vision' : 'convert',
     );
     if (!raw.ok) return raw;
@@ -866,7 +888,9 @@ class NaiApi {
           'Return strict JSON only. Preserve the useful content from the previous response.',
         ].join('\n'),
         'Previous incomplete response:\n${raw.text}',
-        label: source == 'reverse' ? 'AI 反推双版本修复' : '提示词转换双版本修复',
+        label: source == 'reverse'
+            ? 'AI inspect variant repair'
+            : 'Prompt conversion variant repair',
         apiKind: source == 'reverse' ? 'vision' : 'convert',
       );
       if (!raw.ok) return raw;
@@ -874,7 +898,8 @@ class NaiApi {
       if (!(parsed.variants?.isComplete ?? false)) {
         return AiTextResult(
           ok: false,
-          message: 'AI 未按要求返回完整的角色名版和特征版，请重试或更换模型。',
+          message:
+              'The AI did not return complete name and feature variants. Retry or switch models.',
           text: parsed.primary,
           variants: parsed.variants,
         );
@@ -882,7 +907,7 @@ class NaiApi {
     }
     return AiTextResult(
       ok: true,
-      message: '成功',
+      message: 'Success',
       text: parsed.primary,
       variants: parsed.variants,
     );
@@ -990,7 +1015,7 @@ class NaiApi {
       throw Exception('HTTP ${res.statusCode}：${res.body}');
     } catch (error) {
       throw Exception(
-        '参考图编码失败（encode-vibe）：${error.toString().replaceFirst('Exception: ', '')}',
+        'Reference image encoding failed (encode-vibe): ${error.toString().replaceFirst('Exception: ', '')}',
       );
     }
   }
@@ -1102,7 +1127,7 @@ class NaiApi {
           rethrow;
         }
       }
-      throw StateError('生成请求未完成');
+      throw StateError('Generation request did not complete');
     } finally {
       if (identical(_activeGenerationClient, client)) {
         _activeGenerationClient = null;
@@ -1125,13 +1150,13 @@ class NaiApi {
           : 2000 * (1 << attempt);
       await Future.delayed(Duration(milliseconds: min(waitMs, 30000)));
     }
-    throw StateError('请求未完成');
+    throw StateError('Request did not complete');
   }
 
   Future<AiTextResult> _chat(AppSettings settings, String apiUrl, String apiKey,
       String model, String system, Object user,
       {int maxTokens = 2000,
-      String label = 'AI 调用',
+      String label = 'AI call',
       String apiKind = 'convert'}) async {
     final effectiveModel = model.trim().isEmpty ? 'gpt-4o-mini' : model.trim();
     final userSummary = _summarizeAiUser(user);
@@ -1161,7 +1186,9 @@ class NaiApi {
       var res = await postChat(maxTokens);
       if (res.statusCode >= 400) {
         final result = AiTextResult(
-            ok: false, message: 'AI 调用失败（HTTP ${res.statusCode}）：${res.body}');
+          ok: false,
+          message: 'AI call failed (HTTP ${res.statusCode}): ${res.body}',
+        );
         _addAiLog(label, apiKind, effectiveModel, system, userSummary, result);
         return result;
       }
@@ -1176,10 +1203,9 @@ class NaiApi {
         res = await postChat(max(maxTokens * 8, 32000));
         if (res.statusCode < 400) {
           data = jsonDecode(res.body);
-          content = data['choices']?[0]?['message']?['content']
-                  ?.toString()
-                  .trim() ??
-              '';
+          content =
+              data['choices']?[0]?['message']?['content']?.toString().trim() ??
+                  '';
           finish = data['choices']?[0]?['finish_reason']?.toString();
         }
       }
@@ -1187,9 +1213,13 @@ class NaiApi {
           ? AiTextResult(
               ok: false,
               message: finish == 'length'
-                  ? 'API 返回被长度截断（内容为空）：该模型把配额全用在了推理上，请改用非推理模型，或调高最大输出长度。'
-                  : 'AI 返回内容为空')
-          : AiTextResult(ok: true, message: '成功', text: _cleanPrompt(content));
+                  ? 'The API response was truncated and empty. This model spent the budget on reasoning; use a non-reasoning model or raise max output tokens.'
+                  : 'AI returned empty content')
+          : AiTextResult(
+              ok: true,
+              message: 'Success',
+              text: _cleanPrompt(content),
+            );
       _addAiLog(label, apiKind, effectiveModel, system, userSummary, result);
       return result;
     } catch (e) {
@@ -1226,7 +1256,9 @@ class NaiApi {
     if (user is String) return user;
     if (user is List) {
       return user.map((item) {
-        if (item is Map && item['type'] == 'image_url') return '[图片已省略]';
+        if (item is Map && item['type'] == 'image_url') {
+          return '[image omitted]';
+        }
         if (item is Map && item['type'] == 'text') {
           return item['text']?.toString() ?? '';
         }
@@ -1272,10 +1304,10 @@ class NaiApi {
     try {
       final body = jsonDecode(res.body);
       if (body is Map && body['message'] != null) {
-        return '请求失败（${res.statusCode}）：${body['message']}';
+        return 'Request failed (${res.statusCode}): ${body['message']}';
       }
     } catch (_) {}
-    return '请求失败（HTTP ${res.statusCode}）。';
+    return 'Request failed (HTTP ${res.statusCode}).';
   }
 
   String _base(String value, String fallback) {
@@ -1377,14 +1409,15 @@ class NaiApi {
       .trim();
 
   String _modeSystemPrompt(ReversePromptMode mode, {required bool reverse}) {
-    final task = reverse ? '根据图片反推出' : '把用户输入转换成';
+    final task =
+        reverse ? 'infer from the image' : 'convert the user input into';
     switch (mode) {
       case ReversePromptMode.natural:
-        return '你是 NovelAI V4.5 提示词专家。请$task 100% 英文自然语言 prompt。只输出一行，不要解释，不要 Danbooru tag 列表。多人使用 base scene | character 1 | character 2。';
+        return 'You are a NovelAI V4.5 prompt expert. Please $task a 100% English natural-language prompt. Output one line only, with no explanation and no Danbooru tag list. For multiple characters, use base scene | character 1 | character 2.';
       case ReversePromptMode.mixed:
-        return '你是 NovelAI V4.5 / Danbooru 提示词专家。请$task混合 prompt：80% Danbooru tag + 20% 简短自然语言。只输出一行。';
+        return 'You are a NovelAI V4.5 / Danbooru prompt expert. Please $task a mixed prompt: 80% Danbooru tags + 20% concise natural language. Output one line only.';
       case ReversePromptMode.tags:
-        return '你是 NovelAI V4.5 / Danbooru 提示词专家。请$task英文 Danbooru tag prompt。只输出一行，tag 之间使用英文逗号。';
+        return 'You are a NovelAI V4.5 / Danbooru prompt expert. Please $task an English Danbooru-tag prompt. Output one line only, separated by English commas.';
     }
   }
 

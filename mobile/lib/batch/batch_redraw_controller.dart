@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../billing/anlas.dart';
+import '../i18n/runtime_text.dart';
 import '../models/nai_models.dart';
 import '../services/background_queue_service.dart';
 import '../state/app_state.dart';
@@ -26,12 +27,27 @@ class BatchRedrawController extends ChangeNotifier {
   bool queueCancelled = false;
   int queueDone = 0;
   int queueTotal = 0;
-  String status = '就绪';
+  String status = runtimeTextFor('zh-CN', 'common.ready');
   Timer? _saveTimer;
 
   BatchRedrawController(this.app) {
     BackgroundQueueService.addCancelHandler(cancelQueue);
   }
+
+  String _rt(String key) => runtimeTextFor(app.settings.language, key);
+  String _rf(String key, Map<String, Object?> values) =>
+      runtimeFormatFor(app.settings.language, key, values);
+  String _projectName() => project.groupName.trim().isEmpty ||
+          project.groupName == legacyBatchRedrawGroupName ||
+          project.groupName == defaultBatchRedrawGroupName
+      ? _rt('batch.defaultName')
+      : project.groupName;
+  String get displayStatus =>
+      status == runtimeTextFor('zh-CN', 'common.ready') ||
+              status == runtimeTextFor('en-US', 'common.ready')
+          ? _rt('common.ready')
+          : status;
+  String get displayGroupName => _projectName();
 
   Future<void> load() async {
     try {
@@ -61,7 +77,7 @@ class BatchRedrawController extends ChangeNotifier {
   void reset() {
     project = BatchRedrawProject.empty(app.params);
     step = BatchRedrawStep.import;
-    changed('已新建批量图生图项目');
+    changed(_rt('batch.statusNew'));
   }
 
   Future<String?> addImages(List<String> paths) async {
@@ -83,8 +99,8 @@ class BatchRedrawController extends ChangeNotifier {
         added++;
       } catch (_) {}
     }
-    if (added == 0) return '没有读到有效的 PNG、JPG 或 WebP 图片';
-    changed('已导入 $added 张图片');
+    if (added == 0) return _rt('batch.noValidImages');
+    changed(_rf('batch.imagesImported', {'count': added}));
     return null;
   }
 
@@ -93,7 +109,7 @@ class BatchRedrawController extends ChangeNotifier {
       ..globalParams = (app.params.copy()..positivePrompt = '')
       ..globalStyle = app.params.stylePrompt
       ..globalNegative = app.params.negativePrompt;
-    changed('已同步当前生图参数');
+    changed(_rt('batch.syncedParams'));
   }
 
   GenerateExtras referencesFor(GenerateParams params) {
@@ -112,7 +128,7 @@ class BatchRedrawController extends ChangeNotifier {
       ..reuseMainReferences = false
       ..vibeImages = copied.vibeImages
       ..preciseReferences = copied.preciseReferences;
-    changed('已复制生图页当前参考图到批量项目');
+    changed(_rt('batch.copiedReferences'));
   }
 
   Future<String?> addReference(String path, {required bool precise}) async {
@@ -132,10 +148,10 @@ class BatchRedrawController extends ChangeNotifier {
           sourcePath: path,
         ));
       }
-      changed(precise ? '已添加精准参考图' : '已添加 Vibe 参考图');
+      changed(precise ? _rt('batch.addedPrecise') : _rt('batch.addedVibe'));
       return null;
     } catch (_) {
-      return '无法读取参考图，请换用有效的 PNG、JPG 或 WebP 图片';
+      return _rt('error.readReference');
     }
   }
 
@@ -197,7 +213,9 @@ class BatchRedrawController extends ChangeNotifier {
       project.items[index].prompt =
           pipe >= 0 ? line.substring(pipe + 1).trim() : line;
     }
-    changed('已按顺序写入 ${min(lines.length, project.items.length)} 条提示词');
+    changed(_rf('batch.bulkApplied', {
+      'count': min(lines.length, project.items.length),
+    }));
   }
 
   Future<void> reverseMissingPrompts() async {
@@ -206,7 +224,7 @@ class BatchRedrawController extends ChangeNotifier {
     if (targets.isEmpty || busy) return;
     final key = await app.storage.getVisionKey() ?? '';
     if (key.isEmpty) {
-      status = '请先在设置中配置 AI 反推 Key';
+      status = _rt('batch.visionKeyRequired');
       notifyListeners();
       return;
     }
@@ -214,7 +232,7 @@ class BatchRedrawController extends ChangeNotifier {
     var done = 0;
     try {
       for (final item in targets) {
-        status = '正在反推 ${item.name}...';
+        status = _rf('batch.reversing', {'name': item.name});
         notifyListeners();
         final result = await app.api.reversePrompt(
           settings: app.settings,
@@ -236,7 +254,10 @@ class BatchRedrawController extends ChangeNotifier {
         }
         changed();
       }
-      status = '反推完成：$done/${targets.length}';
+      status = _rf('batch.reverseDone', {
+        'done': done,
+        'total': targets.length,
+      });
     } finally {
       busy = false;
       changed();
@@ -259,6 +280,7 @@ class BatchRedrawController extends ChangeNotifier {
             strength: item.strength ?? project.globalStrength,
             alreadyEncodedVibes: app.api.countCachedVibes(params.model, extras),
             preciseReferenceCount: extras.preciseReferences.length,
+            language: app.settings.language,
           ).amount ??
           0;
     }
@@ -270,7 +292,10 @@ class BatchRedrawController extends ChangeNotifier {
     final amount = quote(targets);
     final balance = app.account.anlasBalance;
     if (balance != null && amount > balance) {
-      status = '预计需要 $amount Anlas，当前余额 $balance，已阻止执行';
+      status = _rf('batch.insufficient', {
+        'amount': amount,
+        'balance': balance,
+      });
       notifyListeners();
       return;
     }
@@ -280,7 +305,7 @@ class BatchRedrawController extends ChangeNotifier {
           !params.isV45;
     });
     if (incompatible) {
-      status = '精准参考仅支持 NovelAI V4.5，请切换模型或移除精准参考图';
+      status = _rt('error.preciseV45Only');
       notifyListeners();
       return;
     }
@@ -292,8 +317,8 @@ class BatchRedrawController extends ChangeNotifier {
     try {
       await BackgroundQueueService.start(
         'batch-redraw',
-        title: 'Langbai 批量图生图',
-        text: '准备生成 0/$queueTotal',
+        title: _rt('notification.batchTitle'),
+        text: _rf('notification.prepare', {'total': queueTotal}),
       );
     } catch (_) {}
     notifyListeners();
@@ -306,10 +331,13 @@ class BatchRedrawController extends ChangeNotifier {
       item
         ..status = BatchItemStatus.generating
         ..error = '';
-      changed('正在生成 ${item.name}...');
+      changed(_rf('batch.generatingItem', {'name': item.name}));
       unawaited(BackgroundQueueService.update(
-        title: 'Langbai 批量图生图',
-        text: '正在生成 ${queueDone + 1}/$queueTotal',
+        title: _rt('notification.batchTitle'),
+        text: _rf('notification.generating', {
+          'current': queueDone + 1,
+          'total': queueTotal,
+        }),
       ));
       try {
         final params =
@@ -322,7 +350,7 @@ class BatchRedrawController extends ChangeNotifier {
           itemParams: params,
           itemExtras: referencesFor(params),
           strength: item.strength ?? project.globalStrength,
-          groupName: project.groupName,
+          groupName: _projectName(),
           historyGroupId: project.historyGroupId,
         );
         project.historyGroupId = history.groupId;
@@ -336,7 +364,7 @@ class BatchRedrawController extends ChangeNotifier {
         final lower = item.error.toLowerCase();
         if (lower.contains('401') || lower.contains('unauthorized')) {
           queueCancelled = true;
-          status = '队列已停止：NovelAI 鉴权失败';
+          status = _rt('batch.authStopped');
         }
       }
       queueDone++;
@@ -345,7 +373,12 @@ class BatchRedrawController extends ChangeNotifier {
     queueRunning = false;
     queuePaused = false;
     await BackgroundQueueService.stop('batch-redraw');
-    if (!queueCancelled) status = '批量图生图完成：$queueDone/$queueTotal';
+    if (!queueCancelled) {
+      status = _rf('batch.queueDone', {
+        'done': queueDone,
+        'total': queueTotal,
+      });
+    }
     changed();
   }
 
@@ -363,7 +396,7 @@ class BatchRedrawController extends ChangeNotifier {
 
   Future<void> exportJson() async {
     final temp = await getTemporaryDirectory();
-    final file = File('${temp.path}/${_safe(project.groupName)}.batch.json');
+    final file = File('${temp.path}/${_safe(_projectName())}.batch.json');
     await file.writeAsString(
       const JsonEncoder.withIndent('  ').convert(project.toJson()),
       flush: true,
@@ -382,14 +415,14 @@ class BatchRedrawController extends ChangeNotifier {
       final picked = result.files.single;
       final bytes = picked.bytes ??
           (picked.path == null ? null : await File(picked.path!).readAsBytes());
-      if (bytes == null) throw const FormatException('无法读取文件');
+      if (bytes == null) throw FormatException(_rt('error.readFile'));
       project = BatchRedrawProject.fromJson(
         Map<String, dynamic>.from(jsonDecode(utf8.decode(bytes))),
         app.params,
       );
-      changed('项目已导入；外部输出路径已清除');
+      changed(_rt('batch.projectImported'));
     } catch (error) {
-      status = '导入失败：$error';
+      status = _rf('batch.importFailed', {'error': error});
       notifyListeners();
     }
   }
@@ -400,7 +433,7 @@ class BatchRedrawController extends ChangeNotifier {
         .encode(const JsonEncoder.withIndent('  ').convert(project.toJson()));
     archive.addFile(
         ArchiveFile('project.batch.json', projectBytes.length, projectBytes));
-    final prompts = StringBuffer('# ${project.groupName}\n\n');
+    final prompts = StringBuffer('# ${_projectName()}\n\n');
     for (var index = 0; index < project.items.length; index++) {
       final item = project.items[index];
       prompts.writeln('${index + 1}. ${item.name}\n${item.prompt}\n');
@@ -416,9 +449,9 @@ class BatchRedrawController extends ChangeNotifier {
     final promptBytes = utf8.encode(prompts.toString());
     archive.addFile(ArchiveFile('prompts.md', promptBytes.length, promptBytes));
     final zip = ZipEncoder().encode(archive);
-    if (zip == null) throw StateError('ZIP 编码失败');
+    if (zip == null) throw StateError(_rt('error.zipEncode'));
     final temp = await getTemporaryDirectory();
-    final file = File('${temp.path}/${_safe(project.groupName)}.zip');
+    final file = File('${temp.path}/${_safe(_projectName())}.zip');
     await file.writeAsBytes(zip, flush: true);
     await Share.shareXFiles([XFile(file.path)]);
   }

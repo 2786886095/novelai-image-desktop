@@ -107,13 +107,13 @@ export function sliceTuiwenPcm(
   durationMs: number,
 ): TuiwenPcmSlice {
   if (!channels.length || !Number.isFinite(sampleRate) || sampleRate <= 0) {
-    throw new Error("音频 PCM 数据无效。");
+    throw new Error("Invalid audio PCM data.");
   }
   const sourceLength = Math.min(...channels.map((channel) => channel.length));
   const startSample = Math.max(0, Math.min(sourceLength, Math.round((Math.max(0, startMs) / 1000) * sampleRate)));
   const requestedSamples = Math.max(1, Math.round((Math.max(0, durationMs) / 1000) * sampleRate));
   const endSample = Math.min(sourceLength, startSample + requestedSamples);
-  if (endSample <= startSample) throw new Error("字幕时间码超出长音频范围。");
+  if (endSample <= startSample) throw new Error("Subtitle timecode is outside the long audio range.");
   const sliced = channels.map((channel) => channel.slice(startSample, endSample));
   return {
     channels: sliced,
@@ -123,12 +123,12 @@ export function sliceTuiwenPcm(
 }
 
 export function encodeTuiwenPcm16Wav(channels: readonly Float32Array[], sampleRate: number) {
-  if (!channels.length || channels.length > 8) throw new Error("WAV 声道数必须在 1–8 之间。");
+  if (!channels.length || channels.length > 8) throw new Error("WAV channel count must be between 1 and 8.");
   if (!Number.isFinite(sampleRate) || sampleRate < 8_000 || sampleRate > 192_000) {
-    throw new Error("WAV 采样率无效。");
+    throw new Error("Invalid WAV sample rate.");
   }
   const frameCount = Math.min(...channels.map((channel) => channel.length));
-  if (frameCount <= 0) throw new Error("WAV 音频片段为空。");
+  if (frameCount <= 0) throw new Error("WAV audio segment is empty.");
   const channelCount = channels.length;
   const bytesPerSample = 2;
   const dataBytes = frameCount * channelCount * bytesPerSample;

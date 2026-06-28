@@ -5,12 +5,18 @@ import {
   getLocalizedTabItems,
   getSettingsSectionText,
   getSettingsShellText,
+  getTokenGuideText,
   getToolsHubText,
   getTuiwenStudioText,
   normalizeAppLanguage,
   SUPPORTED_APP_LANGUAGES,
 } from "./i18n";
-import { TAB_ITEMS } from "./prompt-data";
+import {
+  CAPSULE_TAXONOMY,
+  localizedCapsuleSubgroupName,
+  localizedTagLabel,
+  TAB_ITEMS,
+} from "./prompt-data";
 
 function collectStrings(value: unknown): string[] {
   if (typeof value === "string") return [value];
@@ -50,9 +56,12 @@ describe("desktop i18n resources", () => {
       for (const value of Object.values(getToolsHubText(language.code))) {
         expect(value.trim()).not.toBe("");
       }
+      for (const value of collectStrings(getTokenGuideText(language.code))) {
+        expect(value.trim()).not.toBe("");
+      }
       const settings = getSettingsShellText(language.code);
       expect(settings.title.trim()).not.toBe("");
-      expect(Object.keys(settings.nav)).toEqual(["api", "storage", "ai-reverse", "convert-api", "templates", "prompt", "appearance", "performance"]);
+      expect(Object.keys(settings.nav)).toEqual(["api", "storage", "ai-reverse", "convert-api", "templates", "prompt", "language", "appearance", "performance"]);
       for (const value of Object.values(settings.nav)) {
         expect(value.trim()).not.toBe("");
       }
@@ -85,5 +94,20 @@ describe("desktop i18n resources", () => {
         expect(value.trim()).not.toBe("");
       }
     }
+  });
+
+  it("provides non-Chinese fallback labels for every capsule tag in non-Chinese locales", () => {
+    const capsuleTags = CAPSULE_TAXONOMY.flatMap((category) =>
+      category.subgroups.flatMap((subgroup) => subgroup.tags)
+    );
+    expect(capsuleTags.length).toBeGreaterThan(4000);
+    for (const tag of capsuleTags) {
+      expect(localizedTagLabel(tag.en, tag.zh, "en-US")).not.toMatch(/\p{Script=Han}/u);
+      if (/\p{Script=Han}/u.test(tag.zh)) {
+        expect(localizedTagLabel(tag.en, tag.zh, "ja-JP").trim()).not.toBe("");
+        expect(localizedTagLabel(tag.en, tag.zh, "ko-KR")).not.toBe(tag.zh);
+      }
+    }
+    expect(localizedCapsuleSubgroupName("脸颊嘴部", "en-US")).not.toMatch(/\p{Script=Han}/u);
   });
 });

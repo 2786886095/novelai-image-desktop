@@ -1,4 +1,4 @@
-export const APP_VERSION = "1.0.9";
+export const APP_VERSION = "1.1.0";
 export const APP_NAME = "Langbai NovelAI Studio";
 export const PROJECT_REPOSITORY = "https://github.com/2786886095/novelai-image-desktop";
 
@@ -240,6 +240,12 @@ export interface BatchRedrawProject {
   step: BatchRedrawStep;
   /** Whether globals were seeded from the main screen at least once. */
   seededFromMain: boolean;
+}
+
+export interface BatchExportFile {
+  filePath: string;
+  /** Optional zip entry base name; the main process sanitizes it and keeps the source extension. */
+  name?: string;
 }
 
 export function createDefaultBatchRedraw(params: GenerateParams = DEFAULT_PARAMS): BatchRedrawProject {
@@ -946,6 +952,7 @@ export interface NaiDesktopApi {
   renameHistoryGroup: (id: string, name: string) => Promise<HistoryGroup[]>;
   deleteHistoryGroup: (id: string) => Promise<HistoryGroup[]>;
   exportHistoryGroup: (groupId: string) => Promise<{ ok: boolean; message: string; path?: string }>;
+  exportFiles: (files: BatchExportFile[], defaultName?: string) => Promise<{ ok: boolean; message: string; path?: string }>;
   setHistoryGroup: (id: string, groupId?: string) => Promise<{ ok: boolean }>;
   deleteHistory: (id: string) => Promise<{ ok: boolean }>;
   pruneMissingHistoryItem: (id: string) => Promise<boolean>;

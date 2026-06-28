@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../i18n/app_locales.dart';
+import '../state/app_state.dart';
 
 /// First-launch walkthrough, modelled on the desktop onboarding: intro → network
 /// (system VPN) → API Token (reusing the three desktop token-guide images) →
@@ -31,24 +35,23 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
 
   @override
   Widget build(BuildContext context) {
+    final language = context.watch<AppState>().settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
     final pages = <Widget>[
       _buildPage(
         Icons.auto_awesome,
-        '欢迎使用 Langbai NovelAI Studio',
-        '纯 API 调用的 NovelAI 创作工作台：文生图、图生图、局部重绘、超分、后期、'
-            'AI 反推 / 转换、漫画与批量工具。Token 只保存在本机。',
+        t('onboarding.welcomeTitle'),
+        t('onboarding.welcomeBody'),
       ),
       _buildPage(
         Icons.vpn_key_outlined,
-        '先开启网络（梯子）',
-        '移动端不内置代理。请在系统设置里开启 VPN / 全局代理后再使用——'
-            'NovelAI、AI 反推 / 转换、翻译、标签库与更新检查都会走系统网络。',
+        t('onboarding.networkTitle'),
+        t('onboarding.networkBody'),
       ),
       _buildPage(
         Icons.key_outlined,
-        '获取并填入 API Token',
-        '在 NovelAI 网页登录后：左上角菜单 → Account Settings → '
-            'Get Persistent API Token，复制后粘贴到「设置 → NovelAI API」。',
+        t('onboarding.tokenTitle'),
+        t('onboarding.tokenBody'),
         extra: [
           for (final step in _tokenSteps)
             Padding(
@@ -62,9 +65,8 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
       ),
       _buildPage(
         Icons.style_outlined,
-        '灵感胶囊 & 标签补全',
-        '已内置 4000+ 中文灵感胶囊，按 14 大类浏览，点选即插入英文标签。'
-            '在生成页或设置里下载中文标签库后，输入中文或英文都能自动补全。',
+        t('onboarding.capsuleTitle'),
+        t('onboarding.capsuleBody'),
       ),
     ];
     final isLast = _page == pages.length - 1;
@@ -76,7 +78,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
               alignment: Alignment.centerRight,
               child: TextButton(
                 onPressed: () => _finish(false),
-                child: const Text('跳过'),
+                child: Text(t('onboarding.skip')),
               ),
             ),
             Expanded(
@@ -116,14 +118,14 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
                         duration: const Duration(milliseconds: 250),
                         curve: Curves.easeOut,
                       ),
-                      child: const Text('上一步'),
+                      child: Text(t('onboarding.previous')),
                     ),
                   const Spacer(),
                   if (isLast)
                     FilledButton.icon(
                       onPressed: () => _finish(true),
                       icon: const Icon(Icons.key_outlined),
-                      label: const Text('去设置 Token'),
+                      label: Text(t('onboarding.goSettingsToken')),
                     )
                   else
                     FilledButton(
@@ -131,7 +133,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
                         duration: const Duration(milliseconds: 250),
                         curve: Curves.easeOut,
                       ),
-                      child: const Text('下一步'),
+                      child: Text(t('onboarding.next')),
                     ),
                 ],
               ),

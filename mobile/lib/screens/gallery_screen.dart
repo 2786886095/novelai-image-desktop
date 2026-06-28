@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../models/nai_models.dart';
+import '../i18n/app_locales.dart';
 import '../state/app_state.dart';
 import '../ui/zoomable_image.dart';
 
@@ -33,6 +34,8 @@ class _GalleryScreenState extends State<GalleryScreen> {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
+    final language = state.settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
     if (!groupInitialized) {
       group = state.selectedGroupId;
       groupInitialized = true;
@@ -49,7 +52,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
             (date.isEmpty || item.date == date))
         .toList();
     return Scaffold(
-      appBar: AppBar(title: const Text('历史与素材')),
+      appBar: AppBar(title: Text(t('gallery.title'))),
       body: Column(
         children: [
           Padding(
@@ -62,14 +65,14 @@ class _GalleryScreenState extends State<GalleryScreen> {
                       child: DropdownButtonFormField<String>(
                         value: date,
                         isExpanded: true,
-                        decoration: const InputDecoration(
-                          labelText: '日期',
-                          border: OutlineInputBorder(),
+                        decoration: InputDecoration(
+                          labelText: t('gallery.date'),
+                          border: const OutlineInputBorder(),
                         ),
                         items: [
-                          const DropdownMenuItem(
+                          DropdownMenuItem(
                             value: '',
-                            child: Text('全部日期'),
+                            child: Text(t('gallery.allDates')),
                           ),
                           ...dates.map(
                             (value) => DropdownMenuItem(
@@ -87,18 +90,18 @@ class _GalleryScreenState extends State<GalleryScreen> {
                       child: DropdownButtonFormField<String>(
                         value: group,
                         isExpanded: true,
-                        decoration: const InputDecoration(
-                          labelText: '分组',
-                          border: OutlineInputBorder(),
+                        decoration: InputDecoration(
+                          labelText: t('gallery.group'),
+                          border: const OutlineInputBorder(),
                         ),
                         items: [
-                          const DropdownMenuItem(
+                          DropdownMenuItem(
                             value: '',
-                            child: Text('全部分组'),
+                            child: Text(t('gallery.allGroups')),
                           ),
-                          const DropdownMenuItem(
+                          DropdownMenuItem(
                             value: _ungroupedFilter,
-                            child: Text('未分组'),
+                            child: Text(t('gallery.ungrouped')),
                           ),
                           ...groups.map(
                             (item) => DropdownMenuItem(
@@ -128,12 +131,12 @@ class _GalleryScreenState extends State<GalleryScreen> {
                     spacing: 4,
                     children: [
                       IconButton.filledTonal(
-                        tooltip: '创建分组',
+                        tooltip: t('gallery.createGroup'),
                         onPressed: () => _createGroup(context),
                         icon: const Icon(Icons.create_new_folder_outlined),
                       ),
                       PopupMenuButton<String>(
-                        tooltip: '分组操作',
+                        tooltip: t('gallery.groupActions'),
                         enabled: group.isNotEmpty && group != _ungroupedFilter,
                         onSelected: (action) {
                           if (action == 'rename') {
@@ -143,20 +146,20 @@ class _GalleryScreenState extends State<GalleryScreen> {
                             _deleteSelectedGroup(context);
                           }
                         },
-                        itemBuilder: (_) => const [
+                        itemBuilder: (_) => [
                           PopupMenuItem(
                             value: 'rename',
-                            child: Text('重命名分组'),
+                            child: Text(t('gallery.renameGroup')),
                           ),
                           PopupMenuItem(
                             value: 'delete',
-                            child: Text('删除分组'),
+                            child: Text(t('gallery.deleteGroup')),
                           ),
                         ],
                         icon: const Icon(Icons.folder_open_outlined),
                       ),
                       IconButton.filledTonal(
-                        tooltip: '导出当前筛选 ZIP',
+                        tooltip: t('gallery.exportZip'),
                         onPressed: history.isEmpty
                             ? null
                             : () => _export(context, history),
@@ -172,12 +175,13 @@ class _GalleryScreenState extends State<GalleryScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
             child: Align(
               alignment: Alignment.centerLeft,
-              child: Text('${history.length} 张图片'),
+              child: Text(mobileUiFormatFor(
+                  language, 'gallery.imageCount', {'count': history.length})),
             ),
           ),
           Expanded(
             child: history.isEmpty
-                ? const Center(child: Text('暂无历史记录'))
+                ? Center(child: Text(t('gallery.empty')))
                 : GridView.builder(
                     padding: const EdgeInsets.all(12),
                     gridDelegate:
@@ -198,19 +202,21 @@ class _GalleryScreenState extends State<GalleryScreen> {
   }
 
   Future<void> _createGroup(BuildContext context) async {
+    final language = context.read<AppState>().settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('创建分组'),
+        title: Text(t('gallery.createGroup')),
         content: TextField(
           controller: groupCtrl,
           autofocus: true,
-          decoration: const InputDecoration(labelText: '分组名称'),
+          decoration: InputDecoration(labelText: t('gallery.groupName')),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('取消'),
+            child: Text(t('common.cancel')),
           ),
           FilledButton(
             onPressed: () async {
@@ -218,7 +224,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
               groupCtrl.clear();
               if (dialogContext.mounted) Navigator.pop(dialogContext);
             },
-            child: const Text('创建'),
+            child: Text(t('common.create')),
           ),
         ],
       ),
@@ -229,24 +235,29 @@ class _GalleryScreenState extends State<GalleryScreen> {
     final state = context.read<AppState>();
     final selected = state.groups.where((item) => item.id == group).firstOrNull;
     if (selected == null) return;
-    final value = await _askForName(context, '重命名分组', selected.name);
+    final value = await _askForName(
+        context,
+        mobileUiTextFor(state.settings.language, 'gallery.renameGroup'),
+        selected.name);
     if (value != null) await state.renameGroup(selected.id, value);
   }
 
   Future<void> _deleteSelectedGroup(BuildContext context) async {
+    final language = context.read<AppState>().settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('删除分组'),
-        content: const Text('组内图片会保留并移到“未分组”。'),
+        title: Text(t('gallery.deleteGroup')),
+        content: Text(t('gallery.deleteGroupContent')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('取消'),
+            child: Text(t('common.cancel')),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('删除'),
+            child: Text(t('common.delete')),
           ),
         ],
       ),
@@ -262,17 +273,18 @@ class _GalleryScreenState extends State<GalleryScreen> {
   ) async {
     try {
       final state = context.read<AppState>();
+      final language = state.settings.language;
       final selected =
           state.groups.where((item) => item.id == group).firstOrNull;
       final path = await state.exportHistory(
         items,
         archiveName: group == _ungroupedFilter
-            ? '未分组'
+            ? mobileUiTextFor(language, 'gallery.ungrouped')
             : selected?.name ?? 'Langbai-NovelAI-Studio',
       );
       await Share.shareXFiles(
         [XFile(path)],
-        text: 'Langbai NovelAI Studio 历史导出',
+        text: mobileUiTextFor(language, 'gallery.historyExport'),
       );
     } catch (error) {
       if (context.mounted) {
@@ -285,6 +297,8 @@ class _GalleryScreenState extends State<GalleryScreen> {
   }
 
   void _openDetail(BuildContext context, HistoryItem item) {
+    final language = context.read<AppState>().settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -313,17 +327,19 @@ class _GalleryScreenState extends State<GalleryScreen> {
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 8),
-              _MetaRow('功能', item.feature),
-              _MetaRow('模型', item.model),
-              _MetaRow('种子', '${item.seed}'),
-              _MetaRow('尺寸', '${item.width}x${item.height}'),
+              _MetaRow(t('gallery.feature'), item.feature),
+              _MetaRow(t('gallery.model'), item.model),
+              _MetaRow(t('gallery.seed'), '${item.seed}'),
+              _MetaRow(t('gallery.size'), '${item.width}x${item.height}'),
               _MetaRow(
-                '时间',
+                t('gallery.time'),
                 item.createdAt.replaceFirst('T', ' ').split('.').first,
               ),
               const SizedBox(height: 8),
-              const Text('提示词', style: TextStyle(fontWeight: FontWeight.bold)),
-              SelectableText(item.prompt.isEmpty ? '（无）' : item.prompt),
+              Text(t('gallery.prompt'),
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+              SelectableText(
+                  item.prompt.isEmpty ? t('gallery.noPrompt') : item.prompt),
               const SizedBox(height: 16),
               Wrap(
                 spacing: 8,
@@ -331,7 +347,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
                 children: [
                   FilledButton.tonalIcon(
                     icon: const Icon(Icons.workspaces_outline),
-                    label: const Text('设为工作台'),
+                    label: Text(t('gallery.setWorkbench')),
                     onPressed: () {
                       context.read<AppState>().setWorkbenchFromHistory(item);
                       Navigator.pop(sheetContext);
@@ -339,7 +355,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
                   ),
                   FilledButton.tonalIcon(
                     icon: const Icon(Icons.replay),
-                    label: const Text('复用参数'),
+                    label: Text(t('gallery.reuseParams')),
                     onPressed: () {
                       _reuseParams(context, item);
                       Navigator.pop(sheetContext);
@@ -347,7 +363,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
                   ),
                   FilledButton.tonalIcon(
                     icon: const Icon(Icons.drive_file_rename_outline),
-                    label: const Text('重命名'),
+                    label: Text(t('gallery.rename')),
                     onPressed: () async {
                       await _renameImage(context, item);
                       if (sheetContext.mounted) Navigator.pop(sheetContext);
@@ -355,7 +371,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
                   ),
                   FilledButton.tonalIcon(
                     icon: const Icon(Icons.drive_file_move_outline),
-                    label: const Text('移动分组'),
+                    label: Text(t('gallery.moveGroup')),
                     onPressed: () async {
                       await _moveImage(context, item);
                       if (sheetContext.mounted) Navigator.pop(sheetContext);
@@ -363,7 +379,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
                   ),
                   FilledButton.tonalIcon(
                     icon: const Icon(Icons.share_outlined),
-                    label: const Text('分享'),
+                    label: Text(t('gallery.share')),
                     onPressed: () => Share.shareXFiles(
                       [XFile(item.filePath)],
                       text: item.prompt,
@@ -371,7 +387,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
                   ),
                   OutlinedButton.icon(
                     icon: const Icon(Icons.delete_outline),
-                    label: const Text('删除'),
+                    label: Text(t('common.delete')),
                     onPressed: () async {
                       await context.read<AppState>().deleteHistory(item.id);
                       if (sheetContext.mounted) Navigator.pop(sheetContext);
@@ -420,7 +436,8 @@ class _GalleryScreenState extends State<GalleryScreen> {
   Future<void> _renameImage(BuildContext context, HistoryItem item) async {
     final value = await _askForName(
       context,
-      '重命名图片',
+      mobileUiTextFor(
+          context.read<AppState>().settings.language, 'gallery.renameImage'),
       _fileStem(item.filePath),
     );
     if (value == null || !context.mounted) return;
@@ -438,16 +455,18 @@ class _GalleryScreenState extends State<GalleryScreen> {
 
   Future<void> _moveImage(BuildContext context, HistoryItem item) async {
     var selected = item.groupId ?? '';
+    final language = context.read<AppState>().settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
     final result = await showDialog<String>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('移动到分组'),
+          title: Text(t('gallery.moveToGroup')),
           content: DropdownButtonFormField<String>(
             value: selected,
             isExpanded: true,
             items: [
-              const DropdownMenuItem(value: '', child: Text('未分组')),
+              DropdownMenuItem(value: '', child: Text(t('gallery.ungrouped'))),
               ...context.read<AppState>().groups.map(
                     (group) => DropdownMenuItem(
                       value: group.id,
@@ -460,11 +479,11 @@ class _GalleryScreenState extends State<GalleryScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('取消'),
+              child: Text(t('common.cancel')),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(dialogContext, selected),
-              child: const Text('移动'),
+              child: Text(t('common.move')),
             ),
           ],
         ),
@@ -482,6 +501,8 @@ class _GalleryScreenState extends State<GalleryScreen> {
     String title,
     String initialValue,
   ) async {
+    final language = context.read<AppState>().settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
     final controller = TextEditingController(text: initialValue);
     final result = await showDialog<String>(
       context: context,
@@ -490,16 +511,16 @@ class _GalleryScreenState extends State<GalleryScreen> {
         content: TextField(
           controller: controller,
           autofocus: true,
-          decoration: const InputDecoration(labelText: '名称'),
+          decoration: InputDecoration(labelText: t('gallery.name')),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('取消'),
+            child: Text(t('common.cancel')),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(dialogContext, controller.text),
-            child: const Text('保存'),
+            child: Text(t('common.save')),
           ),
         ],
       ),

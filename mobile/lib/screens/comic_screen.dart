@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import '../comic/comic_controller.dart';
 import '../comic/comic_models.dart';
+import '../i18n/app_locales.dart';
 import '../models/nai_models.dart';
 import '../state/app_state.dart';
 import '../ui/studio_shell.dart';
@@ -39,20 +40,21 @@ class _ComicBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<ComicController>();
+    final language = context.watch<AppState>().settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
     if (!controller.loaded) {
-      return const Scaffold(body: Center(child: Text('正在加载漫画项目...')));
+      return Scaffold(body: Center(child: Text(t('comic.loading'))));
     }
-    final project = controller.project;
     return Scaffold(
       appBar: AppBar(
         leading: onBack == null
             ? null
             : IconButton(
-                tooltip: '返回工具',
+                tooltip: t('batch.backToTools'),
                 onPressed: onBack,
                 icon: const Icon(Icons.arrow_back),
               ),
-        title: Text(project.title.trim().isEmpty ? '漫画生成器' : project.title),
+        title: Text(controller.displayTitle),
       ),
       body: Column(
         children: [
@@ -84,7 +86,7 @@ class _ComicBody extends StatelessWidget {
                       ),
                     Expanded(
                       child: Text(
-                        controller.status,
+                        controller.displayStatus,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -106,7 +108,13 @@ class _StepBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const labels = ['故事', '全局设定', '分镜', '生成'];
+    final language = context.watch<AppState>().settings.language;
+    final labels = [
+      mobileUiTextFor(language, 'comic.step.story'),
+      mobileUiTextFor(language, 'comic.step.global'),
+      mobileUiTextFor(language, 'comic.step.panels'),
+      mobileUiTextFor(language, 'batch.step.generate'),
+    ];
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
       child: Row(
@@ -164,6 +172,8 @@ class _StoryStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<ComicController>();
+    final language = context.watch<AppState>().settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
     final project = controller.project;
     return StudioContent(
       maxWidth: 980,
@@ -177,33 +187,33 @@ class _StoryStep extends StatelessWidget {
               OutlinedButton.icon(
                 onPressed: controller.createNewProject,
                 icon: const Icon(Icons.note_add_outlined),
-                label: const Text('新建项目'),
+                label: Text(t('batch.newProject')),
               ),
               OutlinedButton.icon(
                 onPressed:
                     project.panels.isEmpty ? null : controller.clearPanels,
                 icon: const Icon(Icons.playlist_remove),
-                label: const Text('清空分镜'),
+                label: Text(t('comic.clearPanels')),
               ),
               OutlinedButton.icon(
                 onPressed: controller.exportProjectJson,
                 icon: const Icon(Icons.save_alt),
-                label: const Text('另存项目 JSON'),
+                label: Text(t('comic.saveProjectJson')),
               ),
               OutlinedButton.icon(
                 onPressed: controller.importProjectJson,
                 icon: const Icon(Icons.file_open_outlined),
-                label: const Text('导入项目 JSON'),
+                label: Text(t('comic.importProjectJson')),
               ),
             ],
           ),
           const SizedBox(height: 12),
           TextFormField(
-            key: ValueKey('comic-title-${project.id}'),
-            initialValue: project.title,
-            decoration: const InputDecoration(
-              labelText: '漫画项目名称',
-              border: OutlineInputBorder(),
+            key: ValueKey('comic-title-${project.id}-$language'),
+            initialValue: controller.displayTitle,
+            decoration: InputDecoration(
+              labelText: t('comic.projectName'),
+              border: const OutlineInputBorder(),
             ),
             onChanged: (value) {
               project.title = value;
@@ -216,14 +226,14 @@ class _StoryStep extends StatelessWidget {
               Expanded(
                 child: DropdownButtonFormField<ReversePromptMode>(
                   value: project.mode,
-                  decoration: const InputDecoration(
-                    labelText: '提示词模式',
-                    border: OutlineInputBorder(),
+                  decoration: InputDecoration(
+                    labelText: t('comic.promptMode'),
+                    border: const OutlineInputBorder(),
                   ),
                   items: ReversePromptMode.values
                       .map((mode) => DropdownMenuItem(
                             value: mode,
-                            child: Text(mode.label),
+                            child: Text(t('promptMode.${mode.value}')),
                           ))
                       .toList(),
                   onChanged: (value) {
@@ -241,9 +251,9 @@ class _StoryStep extends StatelessWidget {
                       ? ''
                       : '${project.desiredPanelCount}',
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: '分镜数量（空 = 自动）',
-                    border: OutlineInputBorder(),
+                  decoration: InputDecoration(
+                    labelText: t('comic.panelCount'),
+                    border: const OutlineInputBorder(),
                   ),
                   onChanged: (value) {
                     project.desiredPanelCount =
@@ -260,10 +270,10 @@ class _StoryStep extends StatelessWidget {
             initialValue: project.rawScript,
             minLines: 10,
             maxLines: 20,
-            decoration: const InputDecoration(
-              labelText: '故事 / 剧情 / 已有分镜',
+            decoration: InputDecoration(
+              labelText: t('comic.storyLabel'),
               alignLabelWithHint: true,
-              border: OutlineInputBorder(),
+              border: const OutlineInputBorder(),
             ),
             onChanged: (value) {
               project.rawScript = value;
@@ -273,15 +283,15 @@ class _StoryStep extends StatelessWidget {
           const SizedBox(height: 16),
           Row(
             children: [
-              const Expanded(
-                child: Text('参考图',
-                    style:
-                        TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              Expanded(
+                child: Text(t('comic.references'),
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.bold)),
               ),
               OutlinedButton.icon(
                 onPressed: () => _pickReference(context),
                 icon: const Icon(Icons.add_photo_alternate_outlined),
-                label: const Text('导入'),
+                label: Text(t('comic.import')),
               ),
             ],
           ),
@@ -293,7 +303,7 @@ class _StoryStep extends StatelessWidget {
                 ? null
                 : controller.analyzeStory,
             icon: const Icon(Icons.auto_fix_high),
-            label: const Text('AI 拆分分镜'),
+            label: Text(t('comic.analyzeStory')),
           ),
           const SizedBox(height: 20),
           const Divider(),
@@ -328,18 +338,21 @@ class _TagImportBlockState extends State<_TagImportBlock> {
     final controller = context.read<ComicController>();
     final existing = controller.project.panels.length;
     if (existing > 0) {
+      final language = context.read<AppState>().settings.language;
+      String t(String key) => mobileUiTextFor(language, key);
       final ok = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('替换现有分镜？'),
-          content: Text('将用导入的 Tag 替换现有 $existing 个分镜。'),
+          title: Text(t('comic.replaceTitle')),
+          content: Text(mobileUiFormatFor(
+              language, 'comic.replaceContent', {'count': existing})),
           actions: [
             TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('取消')),
+                child: Text(t('common.cancel'))),
             FilledButton(
                 onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('替换')),
+                child: Text(t('comic.replace'))),
           ],
         ),
       );
@@ -350,27 +363,29 @@ class _TagImportBlockState extends State<_TagImportBlock> {
 
   @override
   Widget build(BuildContext context) {
+    final language = context.watch<AppState>().settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const SizedBox(height: 8),
-        const Text('或：直接导入 Tag 提示词（每行一个分镜，跳过 AI 拆分 / 反推）',
-            style: TextStyle(fontWeight: FontWeight.w600)),
+        Text(t('comic.directTagImport'),
+            style: const TextStyle(fontWeight: FontWeight.w600)),
         const SizedBox(height: 8),
         TextField(
           controller: _ctrl,
           minLines: 3,
           maxLines: 10,
-          decoration: const InputDecoration(
-            hintText: '第 1 个分镜的英文 tag\n第 2 个分镜的英文 tag\n...',
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            hintText: t('comic.tagHint'),
+            border: const OutlineInputBorder(),
           ),
         ),
         const SizedBox(height: 8),
         FilledButton.tonalIcon(
           onPressed: _import,
           icon: const Icon(Icons.playlist_add),
-          label: const Text('导入为分镜'),
+          label: Text(t('comic.importPanels')),
         ),
       ],
     );
@@ -384,6 +399,8 @@ class _ComicReferenceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<ComicController>();
+    final language = context.watch<AppState>().settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
     return Card(
       margin: const EdgeInsets.only(top: 10),
       child: Padding(
@@ -425,21 +442,25 @@ class _ComicReferenceCard extends StatelessWidget {
                       DropdownButtonFormField<String>(
                         value: reference.kind,
                         isExpanded: true,
-                        decoration: const InputDecoration(
-                          labelText: '用途',
-                          border: OutlineInputBorder(),
+                        decoration: InputDecoration(
+                          labelText: t('comic.referenceKind'),
+                          border: const OutlineInputBorder(),
                         ),
-                        items: const [
+                        items: [
                           DropdownMenuItem(
-                              value: 'character', child: Text('角色精准参考')),
+                              value: 'character',
+                              child: Text(t('comic.kind.character'))),
                           DropdownMenuItem(
-                              value: 'scene', child: Text('场景精准参考')),
+                              value: 'scene',
+                              child: Text(t('comic.kind.scene'))),
                           DropdownMenuItem(
-                              value: 'object', child: Text('物品精准参考')),
+                              value: 'object',
+                              child: Text(t('comic.kind.object'))),
                           DropdownMenuItem(
-                              value: 'precise', child: Text('角色和风格精准参考')),
+                              value: 'precise',
+                              child: Text(t('comic.kind.precise'))),
                           DropdownMenuItem(
-                              value: 'vibe', child: Text('Vibe 氛围迁移')),
+                              value: 'vibe', child: Text(t('comic.kind.vibe'))),
                         ],
                         onChanged: (value) {
                           if (value == null) return;
@@ -451,7 +472,7 @@ class _ComicReferenceCard extends StatelessWidget {
                   ),
                 ),
                 IconButton(
-                  tooltip: '移除',
+                  tooltip: t('common.remove'),
                   onPressed: () => controller.removeReference(reference.id),
                   icon: const Icon(Icons.close),
                 ),
@@ -460,14 +481,14 @@ class _ComicReferenceCard extends StatelessWidget {
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
               value: reference.scope,
-              decoration: const InputDecoration(
-                labelText: '反推范围',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: t('inspect.reverseScope'),
+                border: const OutlineInputBorder(),
               ),
               items: ReversePromptScope.values
                   .map((scope) => DropdownMenuItem(
                         value: scope.value,
-                        child: Text(scope.label),
+                        child: Text(t('reverseScope.${scope.value}')),
                       ))
                   .toList(),
               onChanged: (value) {
@@ -479,10 +500,10 @@ class _ComicReferenceCard extends StatelessWidget {
             const SizedBox(height: 8),
             TextFormField(
               initialValue: reference.subjectHint,
-              decoration: const InputDecoration(
-                labelText: '对应说明 / 主体提示',
-                hintText: '例如：这是主角变身后的角色',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: t('comic.subjectHint'),
+                hintText: t('comic.subjectHintExample'),
+                border: const OutlineInputBorder(),
               ),
               onChanged: (value) {
                 reference.subjectHint = value;
@@ -494,9 +515,9 @@ class _ComicReferenceCard extends StatelessWidget {
               initialValue: reference.reversePrompt,
               minLines: 2,
               maxLines: 5,
-              decoration: const InputDecoration(
-                labelText: '反推结果',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: t('comic.reverseResult'),
+                border: const OutlineInputBorder(),
               ),
               onChanged: (value) {
                 reference.reversePrompt = value;
@@ -505,7 +526,7 @@ class _ComicReferenceCard extends StatelessWidget {
             ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('参与最终生图'),
+              title: Text(t('comic.useForGeneration')),
               subtitle: Text('${reference.width}x${reference.height}'),
               value: reference.useForGeneration,
               onChanged: (value) {
@@ -518,7 +539,7 @@ class _ComicReferenceCard extends StatelessWidget {
                   ? null
                   : () => controller.reverseReference(reference),
               icon: const Icon(Icons.visibility_outlined),
-              label: const Text('AI 反推这张参考图'),
+              label: Text(t('comic.reverseReference')),
             ),
           ],
         ),
@@ -533,6 +554,8 @@ class _GlobalStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<ComicController>();
+    final language = context.watch<AppState>().settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
     final project = controller.project;
     return StudioContent(
       maxWidth: 980,
@@ -544,35 +567,35 @@ class _GlobalStep extends StatelessWidget {
             child: OutlinedButton.icon(
               onPressed: controller.syncCurrentParams,
               icon: const Icon(Icons.sync),
-              label: const Text('同步当前生图参数'),
+              label: Text(t('batch.syncParams')),
             ),
           ),
           _ProjectTextField(
-            label: '全局故事设定',
+            label: t('comic.globalStory'),
             value: project.globalPrompt,
             minLines: 6,
             onChanged: (value) => project.globalPrompt = value,
           ),
           _ProjectTextField(
-            label: '全局角色 / 场景 / 物品设定',
+            label: t('comic.globalCharacter'),
             value: project.globalCharacterSetting,
             minLines: 8,
             onChanged: (value) => project.globalCharacterSetting = value,
           ),
           _ProjectTextField(
-            label: '全局风格提示词',
+            label: t('comic.globalStyle'),
             value: project.globalStylePrompt,
             minLines: 3,
             onChanged: (value) => project.globalStylePrompt = value,
           ),
           _ProjectTextField(
-            label: '全局负面提示词',
+            label: t('comic.globalNegative'),
             value: project.globalNegativePrompt,
             minLines: 3,
             onChanged: (value) => project.globalNegativePrompt = value,
           ),
           _ComicParamsEditor(
-            title: '全局生图参数',
+            title: t('batch.globalParams'),
             params: project.globalParams,
             onChanged: controller.changed,
           ),
@@ -582,7 +605,8 @@ class _GlobalStep extends StatelessWidget {
                 ? null
                 : () => controller.setStep(ComicStep.panels),
             icon: const Icon(Icons.view_sidebar_outlined),
-            label: Text('进入分镜编辑（${project.panels.length} 格）'),
+            label: Text(mobileUiFormatFor(language, 'comic.enterPanels',
+                {'count': project.panels.length})),
           ),
         ],
       ),
@@ -628,9 +652,11 @@ class _PanelsStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<ComicController>();
+    final language = context.watch<AppState>().settings.language;
     final panels = controller.project.panels;
     if (panels.isEmpty) {
-      return const Center(child: Text('还没有分镜，请先在第 1 步拆分故事'));
+      return Center(
+          child: Text(mobileUiTextFor(language, 'comic.emptyPanels')));
     }
     final phone = MediaQuery.sizeOf(context).width < StudioBreakpoints.tablet;
     return Column(
@@ -665,6 +691,8 @@ class _PanelActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final language = context.watch<AppState>().settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
     final targets = controller.selectedPanels.isEmpty
         ? controller.project.panels
         : controller.selectedPanels;
@@ -677,12 +705,14 @@ class _PanelActions extends StatelessWidget {
             onPressed: controller.busy
                 ? null
                 : () => controller.convertPanels(targets),
-            child: Text(controller.selectedPanels.isEmpty ? '转换全部' : '转换选中'),
+            child: Text(controller.selectedPanels.isEmpty
+                ? t('comic.convertAll')
+                : t('comic.convertSelected')),
           ),
           const SizedBox(width: 6),
           OutlinedButton(
             onPressed: controller.busy ? null : controller.checkConsistency,
-            child: const Text('AI 一致性检测'),
+            child: Text(t('comic.consistency')),
           ),
           const SizedBox(width: 6),
           OutlinedButton(
@@ -695,9 +725,10 @@ class _PanelActions extends StatelessWidget {
               );
               controller.project.panels.add(panel);
               controller.activePanelId = panel.id;
-              controller.changed('已新增分镜 #$index');
+              controller.changed(mobileUiFormatFor(
+                  language, 'comic.addedPanel', {'index': index}));
             },
-            child: const Text('新增分镜'),
+            child: Text(t('comic.addPanel')),
           ),
           const SizedBox(width: 6),
           OutlinedButton(
@@ -706,7 +737,7 @@ class _PanelActions extends StatelessWidget {
                   controller.project.panels.map((panel) => panel.id).toSet();
               controller.changed();
             },
-            child: const Text('全选'),
+            child: Text(t('comic.selectAll')),
           ),
           const SizedBox(width: 6),
           TextButton(
@@ -714,7 +745,7 @@ class _PanelActions extends StatelessWidget {
               controller.selectedPanelIds.clear();
               controller.changed();
             },
-            child: const Text('清空选择'),
+            child: Text(t('comic.clearSelection')),
           ),
         ],
       ),
@@ -727,26 +758,30 @@ class _HorizontalPanelPicker extends StatelessWidget {
   const _HorizontalPanelPicker({required this.controller});
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-        height: 52,
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          itemCount: controller.project.panels.length,
-          separatorBuilder: (_, __) => const SizedBox(width: 6),
-          itemBuilder: (context, index) {
-            final panel = controller.project.panels[index];
-            return ChoiceChip(
-              selected: controller.activePanelId == panel.id,
-              label: Text('#${panel.index} · ${panel.status.label}'),
-              onSelected: (_) {
-                controller.activePanelId = panel.id;
-                controller.changed();
-              },
-            );
-          },
-        ),
-      );
+  Widget build(BuildContext context) {
+    final language = context.watch<AppState>().settings.language;
+    return SizedBox(
+      height: 52,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        itemCount: controller.project.panels.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 6),
+        itemBuilder: (context, index) {
+          final panel = controller.project.panels[index];
+          return ChoiceChip(
+            selected: controller.activePanelId == panel.id,
+            label: Text(
+                '#${panel.index} · ${_comicStatusText(language, panel.status)}'),
+            onSelected: (_) {
+              controller.activePanelId = panel.id;
+              controller.changed();
+            },
+          );
+        },
+      ),
+    );
+  }
 }
 
 class _VerticalPanelPicker extends StatelessWidget {
@@ -754,31 +789,34 @@ class _VerticalPanelPicker extends StatelessWidget {
   const _VerticalPanelPicker({required this.controller});
 
   @override
-  Widget build(BuildContext context) => ListView.builder(
-        padding: const EdgeInsets.all(8),
-        itemCount: controller.project.panels.length,
-        itemBuilder: (context, index) {
-          final panel = controller.project.panels[index];
-          return ListTile(
-            selected: controller.activePanelId == panel.id,
-            leading: Checkbox(
-              value: controller.selectedPanelIds.contains(panel.id),
-              onChanged: (checked) {
-                checked == true
-                    ? controller.selectedPanelIds.add(panel.id)
-                    : controller.selectedPanelIds.remove(panel.id);
-                controller.changed();
-              },
-            ),
-            title: Text('#${panel.index}'),
-            subtitle: Text(panel.status.label),
-            onTap: () {
-              controller.activePanelId = panel.id;
+  Widget build(BuildContext context) {
+    final language = context.watch<AppState>().settings.language;
+    return ListView.builder(
+      padding: const EdgeInsets.all(8),
+      itemCount: controller.project.panels.length,
+      itemBuilder: (context, index) {
+        final panel = controller.project.panels[index];
+        return ListTile(
+          selected: controller.activePanelId == panel.id,
+          leading: Checkbox(
+            value: controller.selectedPanelIds.contains(panel.id),
+            onChanged: (checked) {
+              checked == true
+                  ? controller.selectedPanelIds.add(panel.id)
+                  : controller.selectedPanelIds.remove(panel.id);
               controller.changed();
             },
-          );
-        },
-      );
+          ),
+          title: Text('#${panel.index}'),
+          subtitle: Text(_comicStatusText(language, panel.status)),
+          onTap: () {
+            controller.activePanelId = panel.id;
+            controller.changed();
+          },
+        );
+      },
+    );
+  }
 }
 
 class _PanelEditor extends StatelessWidget {
@@ -788,6 +826,8 @@ class _PanelEditor extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<ComicController>();
+    final language = context.watch<AppState>().settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
     return ListView(
       key: ValueKey('panel-editor-${panel.id}'),
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 120),
@@ -804,12 +844,14 @@ class _PanelEditor extends StatelessWidget {
               },
             ),
             Expanded(
-              child: Text('分镜 #${panel.index}',
+              child: Text(
+                  mobileUiFormatFor(
+                      language, 'comic.panelTitle', {'index': panel.index}),
                   style: Theme.of(context).textTheme.titleMedium),
             ),
-            Chip(label: Text(panel.status.label)),
+            Chip(label: Text(_comicStatusText(language, panel.status))),
             IconButton(
-              tooltip: '删除分镜',
+              tooltip: t('comic.deletePanel'),
               onPressed: () {
                 controller.project.panels
                     .removeWhere((item) => item.id == panel.id);
@@ -821,7 +863,7 @@ class _PanelEditor extends StatelessWidget {
                 controller.activePanelId = controller.project.panels.isEmpty
                     ? ''
                     : controller.project.panels.first.id;
-                controller.changed('已删除分镜');
+                controller.changed(t('comic.deletedPanel'));
               },
               icon: const Icon(Icons.delete_outline),
             ),
@@ -839,10 +881,10 @@ class _PanelEditor extends StatelessWidget {
           initialValue: panel.cnPrompt,
           minLines: 5,
           maxLines: 10,
-          decoration: const InputDecoration(
-            labelText: '中文分镜描述',
+          decoration: InputDecoration(
+            labelText: t('comic.cnPanel'),
             alignLabelWithHint: true,
-            border: OutlineInputBorder(),
+            border: const OutlineInputBorder(),
           ),
           onChanged: (value) {
             panel.cnPrompt = value;
@@ -858,7 +900,7 @@ class _PanelEditor extends StatelessWidget {
                     ? null
                     : () => controller.translatePanel(panel, toEnglish: true),
                 icon: const Icon(Icons.translate),
-                label: const Text('直译为英文'),
+                label: Text(t('comic.translateToEn')),
               ),
             ),
             const SizedBox(width: 8),
@@ -868,7 +910,7 @@ class _PanelEditor extends StatelessWidget {
                     ? null
                     : () => controller.translatePanel(panel, toEnglish: false),
                 icon: const Icon(Icons.translate),
-                label: const Text('回译为中文'),
+                label: Text(t('comic.translateToCn')),
               ),
             ),
           ],
@@ -878,10 +920,10 @@ class _PanelEditor extends StatelessWidget {
           initialValue: panel.enPrompt,
           minLines: 5,
           maxLines: 10,
-          decoration: const InputDecoration(
-            labelText: '英文生图提示词',
+          decoration: InputDecoration(
+            labelText: t('comic.enPrompt'),
             alignLabelWithHint: true,
-            border: OutlineInputBorder(),
+            border: const OutlineInputBorder(),
           ),
           onChanged: (value) {
             panel
@@ -897,9 +939,9 @@ class _PanelEditor extends StatelessWidget {
           initialValue: panel.localNegativePrompt,
           minLines: 2,
           maxLines: 5,
-          decoration: const InputDecoration(
-            labelText: '本分镜负面提示词',
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            labelText: t('comic.panelNegative'),
+            border: const OutlineInputBorder(),
           ),
           onChanged: (value) {
             panel.localNegativePrompt = value;
@@ -908,8 +950,8 @@ class _PanelEditor extends StatelessWidget {
         ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
-          title: const Text('覆盖全局负面词'),
-          subtitle: const Text('关闭时追加到全局负面提示词'),
+          title: Text(t('comic.overrideNegative')),
+          subtitle: Text(t('comic.appendNegative')),
           value: panel.overrideNegative,
           onChanged: (value) {
             panel.overrideNegative = value;
@@ -918,7 +960,7 @@ class _PanelEditor extends StatelessWidget {
         ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
-          title: const Text('本分镜独立生图参数'),
+          title: Text(t('comic.panelParams')),
           value: panel.overrideParams,
           onChanged: (value) {
             panel.overrideParams = value;
@@ -928,7 +970,7 @@ class _PanelEditor extends StatelessWidget {
         ),
         if (panel.overrideParams)
           _ComicParamsEditor(
-            title: '本分镜生图参数',
+            title: t('comic.panelParamsTitle'),
             params: panel.params,
             onChanged: controller.changed,
           ),
@@ -943,7 +985,7 @@ class _PanelEditor extends StatelessWidget {
                 onPressed: controller.busy
                     ? null
                     : () => controller.convertPanels([panel]),
-                child: const Text('转换本张'),
+                child: Text(t('comic.convertPanel')),
               ),
             ),
             const SizedBox(width: 8),
@@ -952,7 +994,9 @@ class _PanelEditor extends StatelessWidget {
                 onPressed: controller.busy || controller.queueRunning
                     ? null
                     : () => controller.startQueue([panel]),
-                child: Text(panel.outputPath.isEmpty ? '生成本张' : '重试本张'),
+                child: Text(panel.outputPath.isEmpty
+                    ? t('comic.generatePanel')
+                    : t('comic.retryPanel')),
               ),
             ),
           ],
@@ -975,6 +1019,8 @@ class _ComicParamsEditor extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final language = context.watch<AppState>().settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
       child: Padding(
@@ -987,15 +1033,18 @@ class _ComicParamsEditor extends StatelessWidget {
             DropdownButtonFormField<String>(
               value: params.model,
               isExpanded: true,
-              decoration: const InputDecoration(
-                labelText: '模型',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: t('batch.model'),
+                border: const OutlineInputBorder(),
               ),
               items: naiModels
                   .map((model) => DropdownMenuItem(
                         value: model.value,
-                        child: Text(model.label,
-                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                        child: Text(
+                            localizedNaiOptionLabel(
+                                language, model.value, model.label),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis),
                       ))
                   .toList(),
               onChanged: (value) {
@@ -1010,7 +1059,8 @@ class _ComicParamsEditor extends StatelessWidget {
               runSpacing: 6,
               children: sizePresets
                   .map((size) => ChoiceChip(
-                        label: Text(size.label),
+                        label: Text(localizedSizePresetLabel(
+                            language, size.width, size.height, size.label)),
                         selected: params.width == size.width &&
                             params.height == size.height,
                         onSelected: (_) {
@@ -1028,7 +1078,7 @@ class _ComicParamsEditor extends StatelessWidget {
               runSpacing: 8,
               children: [
                 _ComicNumberField(
-                  label: '宽度',
+                  label: t('batch.width'),
                   value: params.width,
                   onChanged: (value) {
                     params.width = _snapComicDimension(value);
@@ -1036,7 +1086,7 @@ class _ComicParamsEditor extends StatelessWidget {
                   },
                 ),
                 _ComicNumberField(
-                  label: '高度',
+                  label: t('batch.height'),
                   value: params.height,
                   onChanged: (value) {
                     params.height = _snapComicDimension(value);
@@ -1044,7 +1094,7 @@ class _ComicParamsEditor extends StatelessWidget {
                   },
                 ),
                 _ComicNumberField(
-                  label: 'Seed（0=随机）',
+                  label: t('batch.seed'),
                   value: params.seedMode == 'random' ? 0 : params.seed,
                   onChanged: (value) {
                     params
@@ -1059,14 +1109,15 @@ class _ComicParamsEditor extends StatelessWidget {
             DropdownButtonFormField<String>(
               value: params.sampler,
               isExpanded: true,
-              decoration: const InputDecoration(
-                labelText: '采样器',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: t('batch.sampler'),
+                border: const OutlineInputBorder(),
               ),
               items: naiSamplers
                   .map((sampler) => DropdownMenuItem(
                         value: sampler.value,
-                        child: Text(sampler.label),
+                        child: Text(localizedNaiOptionLabel(
+                            language, sampler.value, sampler.label)),
                       ))
                   .toList(),
               onChanged: (value) {
@@ -1118,7 +1169,8 @@ class _ComicParamsEditor extends StatelessWidget {
               items: naiNoiseSchedules
                   .map((option) => DropdownMenuItem(
                         value: option.value,
-                        child: Text(option.label),
+                        child: Text(localizedNaiOptionLabel(
+                            language, option.value, option.label)),
                       ))
                   .toList(),
               onChanged: (value) {
@@ -1138,7 +1190,8 @@ class _ComicParamsEditor extends StatelessWidget {
               items: ucPresets
                   .map((option) => DropdownMenuItem(
                         value: int.parse(option.value),
-                        child: Text(option.label),
+                        child: Text(localizedNaiOptionLabel(
+                            language, option.value, option.label)),
                       ))
                   .toList(),
               onChanged: (value) {
@@ -1198,6 +1251,17 @@ class _ComicParamsEditor extends StatelessWidget {
 int _snapComicDimension(int value) {
   final bounded = value.clamp(64, 1600);
   return ((bounded / 64).round() * 64).clamp(64, 1600);
+}
+
+String _comicStatusText(String language, ComicPanelStatus status) {
+  final key = switch (status) {
+    ComicPanelStatus.draft => 'comic.status.draft',
+    ComicPanelStatus.converted => 'comic.status.converted',
+    ComicPanelStatus.generating => 'comic.status.generating',
+    ComicPanelStatus.done => 'comic.status.done',
+    ComicPanelStatus.failed => 'comic.status.failed',
+  };
+  return mobileUiTextFor(language, key);
 }
 
 class _ComicNumberField extends StatefulWidget {
@@ -1318,6 +1382,8 @@ class _GenerateStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<ComicController>();
+    final language = context.watch<AppState>().settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
     final project = controller.project;
     final selected = controller.selectedPanels;
     final ungenerated =
@@ -1346,12 +1412,15 @@ class _GenerateStep extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text('生成前预计扣费：${controller.quotePanels(quoteTargets)} Anlas'),
-                Text(
-                    '当前余额：${controller.app.account.anlasBalance ?? '未知'} Anlas'),
+                Text(mobileUiFormatFor(language, 'comic.quote',
+                    {'amount': controller.quotePanels(quoteTargets)})),
+                Text(mobileUiFormatFor(language, 'comic.balance', {
+                  'balance':
+                      controller.app.account.anlasBalance ?? t('common.unknown')
+                })),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('生成全部后自动导出 ZIP'),
+                  title: Text(t('comic.autoExportZip')),
                   value: project.autoExportZip,
                   onChanged: (value) {
                     project.autoExportZip = value;
@@ -1367,26 +1436,33 @@ class _GenerateStep extends StatelessWidget {
                           ? null
                           : () => controller.startQueue(ungenerated),
                       icon: const Icon(Icons.playlist_play),
-                      label: Text('生成未生成（${ungenerated.length}）'),
+                      label: Text(mobileUiFormatFor(
+                          language,
+                          'comic.generateUngenerated',
+                          {'count': ungenerated.length})),
                     ),
                     FilledButton.tonalIcon(
                       onPressed: controller.queueRunning || unconverted.isEmpty
                           ? null
                           : () => controller.startQueue(unconverted),
                       icon: const Icon(Icons.auto_fix_high),
-                      label: Text('生成未转换分镜（${unconverted.length}）'),
+                      label: Text(mobileUiFormatFor(
+                          language,
+                          'comic.generateUnconverted',
+                          {'count': unconverted.length})),
                     ),
                     FilledButton.tonalIcon(
                       onPressed: controller.queueRunning || selected.isEmpty
                           ? null
                           : () => controller.startQueue(selected),
                       icon: const Icon(Icons.refresh),
-                      label: Text('重试选中（${selected.length}）'),
+                      label: Text(mobileUiFormatFor(language,
+                          'comic.retrySelected', {'count': selected.length})),
                     ),
                     OutlinedButton.icon(
                       onPressed: controller.exportComicZip,
                       icon: const Icon(Icons.archive_outlined),
-                      label: const Text('导出漫画 ZIP'),
+                      label: Text(t('comic.exportZip')),
                     ),
                   ],
                 ),
@@ -1400,12 +1476,15 @@ class _GenerateStep extends StatelessWidget {
                   Row(
                     children: [
                       Expanded(
-                        child: Text(
-                          '生成中 ${controller.queueDone}/${controller.queueTotal}',
-                        ),
+                        child: Text(mobileUiFormatFor(language, 'comic.queue', {
+                          'done': controller.queueDone,
+                          'total': controller.queueTotal,
+                        })),
                       ),
                       IconButton.filledTonal(
-                        tooltip: controller.queuePaused ? '继续' : '暂停',
+                        tooltip: controller.queuePaused
+                            ? t('batch.resumeQueue')
+                            : t('batch.pauseQueue'),
                         onPressed: controller.toggleQueuePause,
                         icon: Icon(controller.queuePaused
                             ? Icons.play_arrow
@@ -1413,7 +1492,7 @@ class _GenerateStep extends StatelessWidget {
                       ),
                       const SizedBox(width: 6),
                       IconButton.filled(
-                        tooltip: '取消',
+                        tooltip: t('common.cancel'),
                         onPressed: controller.cancelQueue,
                         icon: const Icon(Icons.stop),
                       ),
@@ -1487,10 +1566,14 @@ class _GenerateStep extends StatelessWidget {
                       padding: const EdgeInsets.all(6),
                       child: Column(
                         children: [
-                          Text('#${panel.index} · ${panel.status.label}',
-                              maxLines: 1, overflow: TextOverflow.ellipsis),
+                          Text(
+                              '#${panel.index} · ${_comicStatusText(language, panel.status)}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis),
                           if (panel.actualAnlas != null)
-                            Text('实扣 ${panel.actualAnlas} Anlas',
+                            Text(
+                                mobileUiFormatFor(language, 'comic.actualCost',
+                                    {'amount': panel.actualAnlas}),
                                 style: Theme.of(context).textTheme.bodySmall),
                         ],
                       ),

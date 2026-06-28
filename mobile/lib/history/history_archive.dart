@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 
+import '../i18n/runtime_text.dart';
 import '../models/nai_models.dart';
 
 String safeFileStem(String value, {String fallback = 'image'}) {
@@ -18,6 +19,7 @@ Future<Uint8List> buildHistoryArchive(
   List<HistoryItem> items,
   List<HistoryGroup> groups,
   Future<Uint8List> Function(String path) readBytes,
+  Object? language,
 ) async {
   final archive = Archive();
   final groupNames = {for (final group in groups) group.id: group.name};
@@ -34,8 +36,8 @@ Future<Uint8List> buildHistoryArchive(
     final stem =
         safeFileStem(dot >= 0 ? sourceName.substring(0, dot) : sourceName);
     final groupName = safeFileStem(
-      groupNames[item.groupId] ?? '未分组',
-      fallback: '未分组',
+      groupNames[item.groupId] ?? runtimeTextFor(language, 'history.ungrouped'),
+      fallback: runtimeTextFor(language, 'history.ungrouped'),
     );
 
     var relativePath = 'images/$groupName/$stem$extension';
@@ -52,13 +54,17 @@ Future<Uint8List> buildHistoryArchive(
     prompts
       ..writeln('## ${index + 1}. $sourceName')
       ..writeln()
-      ..writeln('- 功能：${item.feature}')
-      ..writeln('- 模型：${item.model}')
-      ..writeln('- 种子：${item.seed}')
-      ..writeln('- 尺寸：${item.width}x${item.height}')
-      ..writeln('- 分组：$groupName')
+      ..writeln(
+          '- ${runtimeTextFor(language, 'history.feature')}：${item.feature}')
+      ..writeln('- ${runtimeTextFor(language, 'history.model')}：${item.model}')
+      ..writeln('- ${runtimeTextFor(language, 'history.seed')}：${item.seed}')
+      ..writeln(
+          '- ${runtimeTextFor(language, 'history.size')}：${item.width}x${item.height}')
+      ..writeln('- ${runtimeTextFor(language, 'history.group')}：$groupName')
       ..writeln()
-      ..writeln(item.prompt.isEmpty ? '（无提示词）' : item.prompt)
+      ..writeln(item.prompt.isEmpty
+          ? runtimeTextFor(language, 'history.noPrompt')
+          : item.prompt)
       ..writeln();
   }
 
@@ -74,6 +80,8 @@ Future<Uint8List> buildHistoryArchive(
     ..addFile(ArchiveFile('prompts.md', promptBytes.length, promptBytes));
 
   final encoded = ZipEncoder().encode(archive);
-  if (encoded == null) throw StateError('无法创建 ZIP 文件');
+  if (encoded == null) {
+    throw StateError(runtimeTextFor(language, 'history.zipFailed'));
+  }
   return Uint8List.fromList(encoded);
 }

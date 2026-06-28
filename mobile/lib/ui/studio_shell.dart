@@ -22,11 +22,14 @@ class StudioContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final phone = StudioBreakpoints.classify(MediaQuery.sizeOf(context).width) == StudioWindowClass.phone;
+    final phone =
+        StudioBreakpoints.classify(MediaQuery.sizeOf(context).width) ==
+            StudioWindowClass.phone;
     if (phone) return child;
     return Align(
       alignment: Alignment.topCenter,
-      child: ConstrainedBox(constraints: BoxConstraints(maxWidth: maxWidth), child: child),
+      child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxWidth), child: child),
     );
   }
 }
@@ -57,8 +60,8 @@ class StudioAdaptiveShell extends StatelessWidget {
     required this.onDestinationSelected,
     required this.destinations,
     required this.pages,
-    this.moreLabel = '更多',
-    this.allFeaturesLabel = '全部功能',
+    this.moreLabel = 'More',
+    this.allFeaturesLabel = 'All features',
   }) : assert(destinations.length == pages.length);
 
   static const _phonePrimaryIndexes = [0, 1, 6];
@@ -151,7 +154,8 @@ class _PhoneShell extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(allFeaturesLabel, style: Theme.of(context).textTheme.titleMedium),
+              Text(allFeaturesLabel,
+                  style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 12),
               GridView.count(
                 shrinkWrap: true,

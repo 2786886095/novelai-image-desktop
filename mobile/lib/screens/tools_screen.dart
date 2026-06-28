@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../billing/anlas.dart';
+import '../i18n/app_locales.dart';
 import '../inpaint/inpaint_mask.dart';
 import '../models/nai_models.dart';
 import '../state/app_state.dart';
@@ -20,10 +21,11 @@ class ToolsScreen extends StatelessWidget {
   final ToolPageKind kind;
   const ToolsScreen({super.key, required this.kind});
 
-  String get title => switch (kind) {
-        ToolPageKind.inpaint => '局部重绘',
-        ToolPageKind.upscale => '云端超分',
-        ToolPageKind.postprocess => 'Director Tools 后期',
+  String titleFor(Object? language) => switch (kind) {
+        ToolPageKind.inpaint => mobileUiTextFor(language, 'tools.inpaintTitle'),
+        ToolPageKind.upscale => mobileUiTextFor(language, 'tools.upscaleTitle'),
+        ToolPageKind.postprocess =>
+          mobileUiTextFor(language, 'tools.postTitle'),
       };
 
   Future<void> _pick(BuildContext context) async {
@@ -37,8 +39,9 @@ class ToolsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
+    final language = state.settings.language;
     return Scaffold(
-      appBar: AppBar(title: Text(title), actions: [
+      appBar: AppBar(title: Text(titleFor(language)), actions: [
         IconButton(
             onPressed: () => _pick(context), icon: const Icon(Icons.image)),
       ]),
@@ -70,6 +73,7 @@ class _WorkbenchPreview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final work = context.watch<AppState>().workbenchImage;
+    final language = context.watch<AppState>().settings.language;
     return AspectRatio(
       aspectRatio: 1,
       child: Card(
@@ -86,7 +90,8 @@ class _WorkbenchPreview extends StatelessWidget {
                 child: FilledButton.icon(
                     onPressed: onPick,
                     icon: const Icon(Icons.image),
-                    label: const Text('加载工作台图片')),
+                    label:
+                        Text(mobileUiTextFor(language, 'tools.loadWorkbench'))),
               ),
           ],
         ),
@@ -211,6 +216,7 @@ class _InpaintPanelState extends State<_InpaintPanel> {
       height: workbench.height,
     );
     if (!mounted) return;
+    final language = context.read<AppState>().settings.language;
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => Dialog(
@@ -219,11 +225,11 @@ class _InpaintPanelState extends State<_InpaintPanel> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Padding(
-              padding: EdgeInsets.all(12),
+            Padding(
+              padding: const EdgeInsets.all(12),
               child: Text(
-                '将发送的遮罩 · 白色区域会被重绘',
-                style: TextStyle(color: Colors.white),
+                mobileUiTextFor(language, 'tools.maskPreviewTitle'),
+                style: const TextStyle(color: Colors.white),
               ),
             ),
             Flexible(
@@ -234,7 +240,7 @@ class _InpaintPanelState extends State<_InpaintPanel> {
             ),
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('关闭'),
+              child: Text(mobileUiTextFor(language, 'common.close')),
             ),
           ],
         ),
@@ -303,35 +309,37 @@ class _InpaintPanelState extends State<_InpaintPanel> {
   }
 
   Widget _buildToolbar(AppState state, WorkingImage? workbench) {
+    final language = state.settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
     return Wrap(
       spacing: 8,
       runSpacing: 8,
       children: [
         IconButton.outlined(
-          tooltip: '撤回上一笔',
+          tooltip: t('tools.undoStroke'),
           onPressed:
               strokes.isEmpty ? null : () => setState(strokes.removeLast),
           icon: const Icon(Icons.undo),
         ),
         IconButton.outlined(
-          tooltip: '清空蒙版',
+          tooltip: t('tools.clearMask'),
           onPressed: strokes.isEmpty ? null : () => setState(strokes.clear),
           icon: const Icon(Icons.delete_outline),
         ),
         IconButton.outlined(
-          tooltip: showMask ? '隐藏蒙版' : '显示蒙版',
+          tooltip: showMask ? t('tools.hideMask') : t('tools.showMask'),
           onPressed: () => setState(() => showMask = !showMask),
           icon: Icon(showMask ? Icons.visibility : Icons.visibility_off),
         ),
         IconButton.outlined(
-          tooltip: '预览将发送的遮罩',
+          tooltip: t('tools.previewMask'),
           onPressed: workbench == null || strokes.isEmpty
               ? null
               : () => _previewMask(workbench),
           icon: const Icon(Icons.preview_outlined),
         ),
         IconButton.outlined(
-          tooltip: '复位缩放',
+          tooltip: t('tools.resetZoom'),
           onPressed: scale == 1 && offset == Offset.zero ? null : _resetView,
           icon: const Icon(Icons.fit_screen),
         ),
@@ -340,7 +348,7 @@ class _InpaintPanelState extends State<_InpaintPanel> {
               ? null
               : () => _runInpaint(state),
           icon: const Icon(Icons.brush),
-          label: const Text('执行重绘'),
+          label: Text(t('tools.runInpaint')),
         ),
       ],
     );
@@ -349,6 +357,8 @@ class _InpaintPanelState extends State<_InpaintPanel> {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
+    final language = state.settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
     final workbench = state.workbenchImage;
     return Card(
       child: Padding(
@@ -357,24 +367,24 @@ class _InpaintPanelState extends State<_InpaintPanel> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             PromptEditor(
-              label: '风格提示词',
+              label: t('tools.stylePrompt'),
               value: state.params.stylePrompt,
               lockKind: 'style',
               onChanged: (v) => state.setParam((p) => p.stylePrompt = v),
             ),
             const SizedBox(height: 12),
             PromptEditor(
-              label: '正面提示词',
+              label: t('tools.positivePrompt'),
               value: state.params.positivePrompt,
               maxLines: 4,
-              hintText: '描述要把涂抹区域重绘成什么',
+              hintText: t('tools.positiveHint'),
               showRelatedTags: true,
               showTextTools: true,
               onChanged: (v) => state.setParam((p) => p.positivePrompt = v),
             ),
             const SizedBox(height: 12),
             PromptEditor(
-              label: '负面提示词',
+              label: t('tools.negativePrompt'),
               value: state.params.negativePrompt,
               maxLines: 3,
               lockKind: 'negative',
@@ -384,15 +394,16 @@ class _InpaintPanelState extends State<_InpaintPanel> {
             DropdownButtonFormField<String>(
               value: state.inpaintModel,
               isExpanded: true,
-              decoration: const InputDecoration(
-                labelText: '重绘模型',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: t('tools.inpaintModel'),
+                border: const OutlineInputBorder(),
               ),
               items: naiInpaintModels
                   .map((model) => DropdownMenuItem(
                         value: model.value,
                         child: Text(
-                          model.label,
+                          localizedNaiOptionLabel(
+                              language, model.value, model.label),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -409,7 +420,7 @@ class _InpaintPanelState extends State<_InpaintPanel> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('重绘强度'),
+                Text(t('tools.inpaintStrength')),
                 Text(state.inpaintStrength.toStringAsFixed(2)),
               ],
             ),
@@ -426,7 +437,7 @@ class _InpaintPanelState extends State<_InpaintPanel> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('重绘噪声'),
+                Text(t('tools.inpaintNoise')),
                 Text(state.inpaintNoise.toStringAsFixed(2)),
               ],
             ),
@@ -448,12 +459,12 @@ class _InpaintPanelState extends State<_InpaintPanel> {
               if (state.comparisonAfter case final after?) ...[
                 Row(
                   children: [
-                    const Expanded(
-                      child: Text('重绘前后对比',
-                          style: TextStyle(fontWeight: FontWeight.bold)),
+                    Expanded(
+                      child: Text(t('tools.beforeAfter'),
+                          style: const TextStyle(fontWeight: FontWeight.bold)),
                     ),
                     IconButton(
-                      tooltip: '关闭对比',
+                      tooltip: t('tools.closeCompare'),
                       onPressed: state.clearComparison,
                       icon: const Icon(Icons.close),
                     ),
@@ -469,7 +480,8 @@ class _InpaintPanelState extends State<_InpaintPanel> {
                 const SizedBox(height: 12),
               ],
             Text(
-              '单指涂抹，双指缩放或移动。白色区域将被重绘。笔刷 ${brush.round()}',
+              mobileUiFormatFor(
+                  language, 'tools.brushHint', {'brush': brush.round()}),
             ),
             Slider(
               value: brush,
@@ -479,9 +491,9 @@ class _InpaintPanelState extends State<_InpaintPanel> {
               onChanged: (value) => setState(() => brush = value),
             ),
             if (workbench == null)
-              const SizedBox(
+              SizedBox(
                 height: 240,
-                child: Center(child: Text('请先从右上角加载需要重绘的图片')),
+                child: Center(child: Text(t('tools.noInpaintImage'))),
               )
             else
               _buildCanvas(context, workbench),
@@ -503,11 +515,13 @@ class _RedrawParams extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.read<AppState>();
     final p = context.watch<AppState>().params;
+    final language = context.watch<AppState>().settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
     return Card(
       margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
       child: ExpansionTile(
-        title: const Text('高级参数'),
+        title: Text(t('tools.advancedParams')),
         shape: const Border(),
         collapsedShape: const Border(),
         childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
@@ -516,11 +530,14 @@ class _RedrawParams extends StatelessWidget {
           DropdownButtonFormField<String>(
             value: p.sampler,
             isExpanded: true,
-            decoration: const InputDecoration(
-                labelText: '采样器', border: OutlineInputBorder()),
+            decoration: InputDecoration(
+                labelText: t('tools.sampler'),
+                border: const OutlineInputBorder()),
             items: naiSamplers
-                .map((s) =>
-                    DropdownMenuItem(value: s.value, child: Text(s.label)))
+                .map((s) => DropdownMenuItem(
+                    value: s.value,
+                    child: Text(
+                        localizedNaiOptionLabel(language, s.value, s.label))))
                 .toList(),
             onChanged: (v) =>
                 v == null ? null : state.setParam((x) => x.sampler = v),
@@ -542,8 +559,8 @@ class _RedrawParams extends StatelessWidget {
             max: 10,
             divisions: 45,
             display: p.cfgScale.toStringAsFixed(1),
-            onChanged: (v) => state
-                .setParam((x) => x.cfgScale = double.parse(v.toStringAsFixed(1))),
+            onChanged: (v) => state.setParam(
+                (x) => x.cfgScale = double.parse(v.toStringAsFixed(1))),
           ),
           _ParamSlider(
             label: 'CFG Rescale',
@@ -559,26 +576,29 @@ class _RedrawParams extends StatelessWidget {
           DropdownButtonFormField<int>(
             value: p.ucPreset,
             isExpanded: true,
-            decoration: const InputDecoration(
-                labelText: 'UC Preset（负面预设）', border: OutlineInputBorder()),
+            decoration: InputDecoration(
+                labelText: t('tools.ucPreset'),
+                border: const OutlineInputBorder()),
             items: ucPresets
                 .map((o) => DropdownMenuItem(
-                    value: int.parse(o.value), child: Text(o.label)))
+                    value: int.parse(o.value),
+                    child: Text(
+                        localizedNaiOptionLabel(language, o.value, o.label))))
                 .toList(),
             onChanged: (v) =>
                 v == null ? null : state.setParam((x) => x.ucPreset = v),
           ),
           const SizedBox(height: 8),
           SegmentedButton<String>(
-            segments: const [
+            segments: [
               ButtonSegment(
                   value: 'random',
-                  icon: Icon(Icons.casino_outlined),
-                  label: Text('随机种子')),
+                  icon: const Icon(Icons.casino_outlined),
+                  label: Text(t('tools.randomSeed'))),
               ButtonSegment(
                   value: 'fixed',
-                  icon: Icon(Icons.lock_outline),
-                  label: Text('固定种子')),
+                  icon: const Icon(Icons.lock_outline),
+                  label: Text(t('tools.fixedSeed'))),
             ],
             selected: {p.seedMode},
             onSelectionChanged: (sel) =>
@@ -597,7 +617,7 @@ class _RedrawParams extends StatelessWidget {
           ],
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('质量增强（Quality Toggle）'),
+            title: Text(t('tools.qualityToggle')),
             value: p.qualityToggle,
             onChanged: (v) => state.setParam((x) => x.qualityToggle = v),
           ),
@@ -694,6 +714,7 @@ class _UpscalePanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = context.watch<AppState>();
+    final language = s.settings.language;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -718,7 +739,8 @@ class _UpscalePanel extends StatelessWidget {
                   onPressed:
                       s.busy || s.workbenchImage == null ? null : s.upscale,
                   icon: const Icon(Icons.open_in_full),
-                  label: const Text('开始超分'))),
+                  label:
+                      Text(mobileUiTextFor(language, 'tools.startUpscale')))),
         ]),
       ),
     );
@@ -730,17 +752,22 @@ class _PostPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = context.watch<AppState>();
+    final language = s.settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(children: [
           DropdownButtonFormField<String>(
             value: s.directorTool,
-            decoration: const InputDecoration(
-                labelText: '后期工具', border: OutlineInputBorder()),
+            decoration: InputDecoration(
+                labelText: t('tools.directorTool'),
+                border: const OutlineInputBorder()),
             items: directorTools
-                .map((t) =>
-                    DropdownMenuItem(value: t.value, child: Text(t.label)))
+                .map((t) => DropdownMenuItem(
+                    value: t.value,
+                    child:
+                        Text(mobileUiTextFor(language, 'director.${t.value}'))))
                 .toList(),
             onChanged: (v) {
               if (v != null) {
@@ -753,19 +780,23 @@ class _PostPanel extends StatelessWidget {
             const SizedBox(height: 12),
             TextFormField(
                 initialValue: s.augmentOptions.colorizePrompt,
-                decoration: const InputDecoration(
-                    labelText: '上色提示词', border: OutlineInputBorder()),
+                decoration: InputDecoration(
+                    labelText: t('tools.colorizePrompt'),
+                    border: const OutlineInputBorder()),
                 onChanged: (v) => s.augmentOptions.colorizePrompt = v),
           ],
           if (s.directorTool == 'emotion') ...[
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
               value: s.augmentOptions.emotion,
-              decoration: const InputDecoration(
-                  labelText: '表情', border: OutlineInputBorder()),
+              decoration: InputDecoration(
+                  labelText: t('tools.emotion'),
+                  border: const OutlineInputBorder()),
               items: emotionOptions
-                  .map((e) =>
-                      DropdownMenuItem(value: e.value, child: Text(e.label)))
+                  .map((e) => DropdownMenuItem(
+                      value: e.value,
+                      child: Text(
+                          mobileUiTextFor(language, 'emotion.${e.value}'))))
                   .toList(),
               onChanged: (v) {
                 if (v != null) {
@@ -775,7 +806,7 @@ class _PostPanel extends StatelessWidget {
               },
             ),
             _DirectorSlider(
-              label: '表情强度',
+              label: t('tools.emotionLevel'),
               value: s.augmentOptions.emotionLevel,
               onChanged: (value) {
                 s.augmentOptions.emotionLevel = value;
@@ -784,7 +815,7 @@ class _PostPanel extends StatelessWidget {
             ),
           ],
           _DirectorSlider(
-            label: 'Defry（去噪强度）',
+            label: t('tools.defry'),
             value: s.augmentOptions.defry,
             onChanged: (value) {
               s.augmentOptions.defry = value;
@@ -796,7 +827,8 @@ class _PostPanel extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: Text(
-                  '尺寸保护：${image.width}x${image.height} 将先缩至约 100 万像素处理，结果再恢复原尺寸。透明区域会铺白底。',
+                  mobileUiFormatFor(language, 'tools.sizeProtection',
+                      {'width': image.width, 'height': image.height}),
                 ),
               ),
           const SizedBox(height: 12),
@@ -808,7 +840,7 @@ class _PostPanel extends StatelessWidget {
                   onPressed:
                       s.busy || s.workbenchImage == null ? null : s.augment,
                   icon: const Icon(Icons.tune),
-                  label: const Text('执行后期处理'))),
+                  label: Text(t('tools.runPost')))),
         ]),
       ),
     );
@@ -853,6 +885,7 @@ class _ToolQuoteBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final language = context.watch<AppState>().settings.language;
     final warning = quote.insufficient || !quote.ok;
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -872,7 +905,8 @@ class _ToolQuoteBar extends StatelessWidget {
               child: Text(
                 quote.amount == null
                     ? quote.message
-                    : '生成前扣费：${quote.amount} Anlas · 公式报价',
+                    : mobileUiFormatFor(language, 'tools.prechargeFormula',
+                        {'amount': quote.amount}),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),

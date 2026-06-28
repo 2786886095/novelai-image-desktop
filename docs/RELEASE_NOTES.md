@@ -4,14 +4,20 @@
 
 | 系统 | 安装包 | 安装说明 |
 | --- | --- | --- |
-| 🪟 **Windows** (x64) | `Langbai-NovelAI-Studio-1.0.9.exe` | 便携版，双击即用，无需安装 |
-| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-1.0.9-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
-| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-1.0.9.zip` | 解压后即为 `.app`，同样需右键「打开」 |
-| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-1.0.9.AppImage` | `chmod +x` 后直接运行 |
+| 🪟 **Windows** (x64) | `Langbai-NovelAI-Studio-1.1.0.exe` | 便携版，双击即用，无需安装 |
+| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-1.1.0-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
+| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-1.1.0.zip` | 解压后即为 `.app`，同样需右键「打开」 |
+| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-1.1.0.AppImage` | `chmod +x` 后直接运行 |
 | 🤖 **Android** | `app-release.apk` | 直接安装；未签名，需允许「未知来源」 |
 | 📱 **iOS** | `novelai-mobile-unsigned.ipa` | **未签名**，需用 AltStore / Sideloadly 等工具自行侧载 |
 
 > 桌面端与移动端均为 **API-only** 客户端，需自备 NovelAI Persistent API Token。
+
+### v1.1.0 更新内容
+
+- **多语言覆盖大幅补全（切换语言不再大面积回退中文/英文）**：在 v1.0.9 多语言底座上补齐了运行时动态文案——移动端新增完整运行时语言包（`zh-CN/zh-TW/en-US/ja-JP/ko-KR` 每种 182 条 key），设置页展开后的正文/按钮/提示也跟随语言；漫画生成器五种语言界面文案（216 条）+ 45 条确认/Toast/状态消息全部本地化；小说推文页面补齐日/韩界面文案与繁中/日/韩运行时状态文案；并修掉移动端模型/模式下拉里残留的中文默认标签。
+- **新增独立「语言」设置区**（移动端设置页顶部），切换更直观。
+- 已知遗留：Electron 后端部分返回消息（剪映导出、TTS、导入、NAI 请求错误等）仍可能显示中文，已列为下一批本地化目标；不影响主流程使用。
 
 ### v1.0.9 更新内容
 

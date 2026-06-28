@@ -42,6 +42,7 @@ import {
 import type {
   AnlasQuoteRequest,
   AugmentOptions,
+  BatchExportFile,
   BatchRedrawRequest,
   ComicAnalyzeRequest,
   ComicConsistencyRequest,
@@ -73,6 +74,7 @@ import {
   assignHistoryGroup,
   createGroup,
   deleteHistoryItem,
+  exportFiles,
   exportGroup,
   listHistory,
   listHistoryDates,
@@ -292,6 +294,7 @@ function registerIpc() {
   ipcMain.handle("storage:renameGroup", (_event, id: string, name: string) => renameGroup(id, name));
   ipcMain.handle("storage:deleteGroup", (_event, id: string) => removeGroup(id));
   ipcMain.handle("storage:exportGroup", (_event, groupId: string) => exportGroup(groupId));
+  ipcMain.handle("storage:exportFiles", (_event, files: BatchExportFile[], defaultName?: string) => exportFiles(files, defaultName));
   ipcMain.handle("storage:setHistoryGroup", (_event, id: string, groupId?: string) => assignHistoryGroup(id, groupId));
   ipcMain.handle("storage:delete", (_event, id: string) => deleteHistoryItem(id));
   ipcMain.handle("storage:pruneMissing", (_event, id: string) => pruneMissingHistoryItem(id));

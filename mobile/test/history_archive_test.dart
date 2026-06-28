@@ -31,6 +31,7 @@ void main() {
         HistoryGroup(id: 'group-1', name: '角色图', createdAt: '2026-06-22'),
       ],
       (_) async => Uint8List.fromList([1, 2, 3]),
+      'zh-CN',
     );
 
     final archive = ZipDecoder().decodeBytes(bytes);

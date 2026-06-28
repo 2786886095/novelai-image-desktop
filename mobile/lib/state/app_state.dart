@@ -6,6 +6,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 
 import '../billing/anlas.dart';
+import '../i18n/runtime_text.dart';
 import '../images/image_processing.dart';
 import '../images/png_metadata.dart';
 import '../models/nai_models.dart';
@@ -50,7 +51,7 @@ class AppState extends ChangeNotifier {
   bool booted = false;
   bool needsNetworkOnboarding = false;
   bool busy = false;
-  String status = '就绪';
+  String status = runtimeTextFor('zh-CN', 'common.ready');
   int batchCount = 1;
   String selectedGroupId = '';
   String inpaintModel = 'nai-diffusion-4-5-full-inpainting';
@@ -92,10 +93,24 @@ class AppState extends ChangeNotifier {
   int _activeTaskQuote = 0;
   int? _pendingAuthorizedBalance;
 
+  String _rt(String key) => runtimeTextFor(settings.language, key);
+  String _rf(String key, Map<String, Object?> values) =>
+      runtimeFormatFor(settings.language, key, values);
+  String _unknown() => _rt('common.unknown');
+  String _spentText(int? amount) => amount == null
+      ? _rt('status.actualSpentUnknown')
+      : _rf('status.actualSpent', {'amount': amount});
+  String get displayStatus =>
+      status == runtimeTextFor('zh-CN', 'common.ready') ||
+              status == runtimeTextFor('en-US', 'common.ready')
+          ? _rt('common.ready')
+          : status;
+
   Future<void> load() async {
     try {
       promptTemplates = await PromptTemplateLibrary.load();
       settings = await storage.getSettings();
+      status = _rt('common.ready');
       params = await storage.getParams();
       final expectedModelMode = params.model == 'nai-diffusion-furry-3'
           ? 'furry'
@@ -174,7 +189,7 @@ class AppState extends ChangeNotifier {
         account = const AccountSummary(hasToken: true);
       }
     } catch (error) {
-      status = '启动数据读取失败，已使用安全默认值：${_cleanError(error)}';
+      status = _rf('status.bootReadFailed', {'error': _cleanError(error)});
     } finally {
       booted = true;
       notifyListeners();
@@ -194,7 +209,7 @@ class AppState extends ChangeNotifier {
       account = await api.fetchAccount(token, settings);
     } catch (error) {
       account = const AccountSummary(hasToken: true);
-      status = '账号信息暂时无法读取，请检查代理后刷新：${_cleanError(error)}';
+      status = _rf('status.accountReadFailed', {'error': _cleanError(error)});
     }
     notifyListeners();
     _scheduleGenerationQuote();
@@ -269,9 +284,9 @@ class AppState extends ChangeNotifier {
     if (token == null) return;
     try {
       account = await api.fetchAccount(token, settings);
-      status = '积分已刷新';
+      status = _rt('status.anlasRefreshed');
     } catch (error) {
-      status = '积分刷新失败：${_cleanError(error)}';
+      status = _rf('status.anlasRefreshFailed', {'error': _cleanError(error)});
     }
     notifyListeners();
     _scheduleGenerationQuote();
@@ -279,7 +294,7 @@ class AppState extends ChangeNotifier {
 
   Future<String?> translateText(String text, {String target = 'en'}) async {
     busy = true;
-    status = '正在翻译...';
+    status = _rt('status.translating');
     notifyListeners();
     try {
       final result = await api.translateText(
@@ -331,7 +346,9 @@ class AppState extends ChangeNotifier {
     required String negativePrompt,
   }) async {
     final cleanName = name.trim();
-    if (cleanName.isEmpty) throw Exception('请输入模板名称');
+    if (cleanName.isEmpty) {
+      throw Exception(_rt('status.promptTemplateNameRequired'));
+    }
     settings.promptShortcuts.add(PromptShortcutTemplate(
       id: '${DateTime.now().microsecondsSinceEpoch}',
       name: cleanName,
@@ -365,7 +382,7 @@ class AppState extends ChangeNotifier {
         ].where((value) => value.trim().isNotEmpty).join(', ');
       }
     });
-    status = '已应用提示词模板：${template.name}';
+    status = _rf('status.promptShortcutApplied', {'name': template.name});
   }
 
   Future<void> setWorkbenchPath(String filePath) async {
@@ -375,7 +392,7 @@ class AppState extends ChangeNotifier {
     workbenchImportedParams = imported.isEmpty ? null : imported;
     workbenchImage =
         WorkingImage(filePath: filePath, width: dims.$1, height: dims.$2);
-    status = '已加载工作台图片';
+    status = _rt('status.workbenchLoaded');
     notifyListeners();
     _scheduleGenerationQuote();
   }
@@ -388,7 +405,7 @@ class AppState extends ChangeNotifier {
   void clearWorkbench() {
     workbenchImage = null;
     workbenchImportedParams = null;
-    status = '已清空工作台图片，当前为文生图';
+    status = _rt('status.workbenchCleared');
     notifyListeners();
     _scheduleGenerationQuote();
   }
@@ -396,7 +413,7 @@ class AppState extends ChangeNotifier {
   void applyWorkbenchMetadata() {
     final imported = workbenchImportedParams;
     if (imported == null || imported.isEmpty) {
-      status = '该图片不含可识别的 NovelAI 参数';
+      status = _rt('status.noMetadata');
       notifyListeners();
       return;
     }
@@ -406,7 +423,7 @@ class AppState extends ChangeNotifier {
     if (settings.lockStylePrompt) params.stylePrompt = lockedStyle;
     if (settings.lockNegativePrompt) params.negativePrompt = lockedNegative;
     unawaited(storage.setParams(params));
-    status = '已从图片元数据还原生成参数';
+    status = _rt('status.metadataRestored');
     notifyListeners();
     _scheduleGenerationQuote();
   }
@@ -432,7 +449,7 @@ class AppState extends ChangeNotifier {
   }
 
   Future<String?> addVibeImage(String filePath) async {
-    if (extras.vibeImages.length >= 16) return '最多添加 16 张氛围迁移图';
+    if (extras.vibeImages.length >= 16) return _rt('status.vibeLimit');
     try {
       final bytes = await File(filePath).readAsBytes();
       readImageDimensions(bytes);
@@ -440,12 +457,12 @@ class AppState extends ChangeNotifier {
         base64: base64Encode(bytes),
         sourcePath: filePath,
       ));
-      status = '已添加氛围迁移图；首次生成会进行一次付费编码';
+      status = _rt('status.vibeAdded');
       notifyListeners();
       _scheduleGenerationQuote();
       return null;
     } catch (_) {
-      return '无法读取参考图，请换用有效的 PNG、JPG 或 WebP 图片';
+      return _rt('error.readReference');
     }
   }
 
@@ -459,12 +476,12 @@ class AppState extends ChangeNotifier {
         width: dims.$1,
         height: dims.$2,
       ));
-      status = '已添加精准参考图（发送前自动转为官方尺寸 RGB，避免网点纹理）';
+      status = _rt('status.preciseAdded');
       notifyListeners();
       _scheduleGenerationQuote();
       return null;
     } catch (_) {
-      return '无法读取精准参考图，请换用有效的 PNG、JPG 或 WebP 图片';
+      return _rt('error.readPreciseReference');
     }
   }
 
@@ -528,16 +545,19 @@ class AppState extends ChangeNotifier {
         image: workbenchImage,
         inpaintModel: inpaintModel,
         strength: inpaintStrength,
+        language: settings.language,
       );
 
   AnlasQuote get upscaleAnlasQuote => calculateUpscaleAnlas(
         image: workbenchImage,
         account: account,
+        language: settings.language,
       );
 
   AnlasQuote get directorAnlasQuote => calculateDirectorAnlas(
         tool: directorTool,
         account: account,
+        language: settings.language,
       );
 
   void _scheduleGenerationQuote() {
@@ -591,6 +611,7 @@ class AppState extends ChangeNotifier {
       strength: i2i.strength,
       alreadyEncodedVibes: api.countCachedVibes(quoteParams.model, quoteExtras),
       preciseReferenceCount: quoteExtras.preciseReferences.length,
+      language: settings.language,
     );
     if (imageToImage ||
         quoteExtras.vibeImages.isNotEmpty ||
@@ -604,7 +625,8 @@ class AppState extends ChangeNotifier {
     );
     return official == null
         ? local
-        : local.asOfficial(official, samples: count);
+        : local.asOfficial(official,
+            samples: count, language: settings.language);
   }
 
   Future<void> refreshGenerationQuote() async {
@@ -632,6 +654,7 @@ class AppState extends ChangeNotifier {
       strength: i2i.strength,
       alreadyEncodedVibes: api.countCachedVibes(quoteParams.model, quoteExtras),
       preciseReferenceCount: quoteExtras.preciseReferences.length,
+      language: settings.language,
     );
     quoteLoading = !imageToImage &&
         quoteExtras.vibeImages.isEmpty &&
@@ -656,12 +679,12 @@ class AppState extends ChangeNotifier {
     if (busy) return;
     final token = await storage.getToken();
     if (token == null || token.isEmpty) {
-      status = '请先在设置中配置 API Token';
+      status = _rt('error.tokenRequired');
       notifyListeners();
       return;
     }
     if (params.positivePrompt.trim().isEmpty) {
-      status = '请输入正面提示词';
+      status = _rt('error.positiveRequired');
       notifyListeners();
       return;
     }
@@ -677,7 +700,7 @@ class AppState extends ChangeNotifier {
     final initialExtras = extras.copy();
     final initialSeed = initialParams.seed;
     busy = true;
-    status = '正在读取生成前扣费...';
+    status = _rt('status.readingCharge');
     notifyListeners();
 
     var completed = 0;
@@ -699,7 +722,10 @@ class AppState extends ChangeNotifier {
       }
       if (quote.insufficient) {
         throw Exception(
-          '本次需要 ${quote.amount} Anlas，当前余额 ${quote.balance ?? '未知'}，已阻止执行。',
+          _rf('status.insufficientThisRun', {
+            'amount': quote.amount,
+            'balance': quote.balance ?? _unknown(),
+          }),
         );
       }
 
@@ -718,8 +744,8 @@ class AppState extends ChangeNotifier {
       try {
         await BackgroundQueueService.start(
           'main-generation',
-          title: 'Langbai 图片生成队列',
-          text: '准备生成 0/$initialTotal',
+          title: _rt('notification.imageQueueTitle'),
+          text: _rf('notification.prepare', {'total': initialTotal}),
         );
       } catch (_) {
         // Notification permission or OEM restrictions must not block generation.
@@ -736,7 +762,10 @@ class AppState extends ChangeNotifier {
           clearQueueRequested = false;
         }
         while (queuePaused && !_cancelGenerationRequested) {
-          status = '队列已暂停（${completed + failed}/${queueProgress?.total ?? 0}）';
+          status = _rf('status.queuePaused', {
+            'done': completed + failed,
+            'total': queueProgress?.total ?? 0,
+          });
           notifyListeners();
           await Future<void>.delayed(const Duration(milliseconds: 250));
         }
@@ -755,7 +784,7 @@ class AppState extends ChangeNotifier {
           initialIndex++;
         } else {
           if (generationQueue.isEmpty && queueAdding) {
-            status = '当前图片已完成，正在等待队列任务报价...';
+            status = _rt('status.waitingQueueQuote');
             notifyListeners();
             await Future<void>.delayed(const Duration(milliseconds: 100));
             continue;
@@ -772,17 +801,23 @@ class AppState extends ChangeNotifier {
           ..positivePrompt = expandPromptWildcards(taskParams.positivePrompt)
           ..negativePrompt = expandPromptWildcards(taskParams.negativePrompt);
         final currentNumber = completed + failed + 1;
-        status =
-            '正在生成 $currentNumber/${queueProgress?.total ?? initialTotal}，等待 ${generationQueue.length} 张...';
+        status = _rf('status.generatingImage', {
+          'current': currentNumber,
+          'total': queueProgress?.total ?? initialTotal,
+          'queued': generationQueue.length,
+        });
         notifyListeners();
         unawaited(BackgroundQueueService.update(
-          title: 'Langbai 图片生成队列',
-          text: '正在生成 $currentNumber/${queueProgress?.total ?? initialTotal}',
+          title: _rt('notification.imageQueueTitle'),
+          text: _rf('notification.generating', {
+            'current': currentNumber,
+            'total': queueProgress?.total ?? initialTotal,
+          }),
         ));
         try {
           final (images, seed) =
               await api.generate(token, settings, taskParams, taskExtras);
-          if (images.isEmpty) throw Exception('API 返回成功但没有图片');
+          if (images.isEmpty) throw Exception(_rt('error.apiNoImages'));
           final items = <HistoryItem>[];
           for (final bytes in images) {
             items.add(await storage.saveImage(
@@ -822,15 +857,21 @@ class AppState extends ChangeNotifier {
       lastAnlasSpent = anlasBefore != null && after != null
           ? max(0, anlasBefore - after)
           : null;
-      final spentText = lastAnlasSpent == null
-          ? '实扣读取失败，请刷新积分确认'
-          : '实扣 $lastAnlasSpent Anlas';
+      final spentText = _spentText(lastAnlasSpent);
       if (_cancelGenerationRequested) {
-        status = '已取消生成，队列已清空；$spentText。';
+        status = _rf('status.generationCancelled', {'spent': spentText});
       } else if (failed > 0) {
-        status = '完成：成功 $completed 张，失败 $failed 张；$spentText。$lastError';
+        status = _rf('status.generationFailedSome', {
+          'completed': completed,
+          'failed': failed,
+          'spent': spentText,
+          'error': lastError,
+        });
       } else {
-        status = '生成完成：$completed 张；$spentText。';
+        status = _rf('status.generationDone', {
+          'completed': completed,
+          'spent': spentText,
+        });
       }
     } catch (error) {
       status = error.toString().replaceFirst('Exception: ', '');
@@ -852,7 +893,7 @@ class AppState extends ChangeNotifier {
   Future<void> enqueueGeneration() async {
     if (!generationQueueRunning || !busy || queueAdding) return;
     if (params.positivePrompt.trim().isEmpty) {
-      status = '请输入正面提示词后再加入队列';
+      status = _rt('status.enqueuePositiveRequired');
       notifyListeners();
       return;
     }
@@ -877,7 +918,10 @@ class AppState extends ChangeNotifier {
       final balance = quote.balance ?? freshAccount.anlasBalance;
       if (balance != null && queueReservedAnlas + quote.amount! > balance) {
         throw Exception(
-          '运行和排队任务已预留 $queueReservedAnlas Anlas，加入本张后将超过余额 $balance Anlas。',
+          _rf('status.queueReserveExceeded', {
+            'reserved': queueReservedAnlas,
+            'balance': balance,
+          }),
         );
       }
       generationQueue.add(GenerationQueueJob(
@@ -890,10 +934,13 @@ class AppState extends ChangeNotifier {
       queueReservedAnlas += quote.amount!;
       queueProgress = (queueProgress ?? const GenerationQueueProgress())
           .copyWith(total: (queueProgress?.total ?? 0) + 1);
-      status =
-          '已加入队列，等待 ${generationQueue.length} 张；本张报价 ${quote.amount} Anlas。';
+      status = _rf('status.queueAdded', {
+        'count': generationQueue.length,
+        'amount': quote.amount,
+      });
     } catch (error) {
-      status = '加入队列失败：${error.toString().replaceFirst('Exception: ', '')}';
+      status = _rf('status.queueAddFailed',
+          {'error': error.toString().replaceFirst('Exception: ', '')});
     } finally {
       queueAdding = false;
       notifyListeners();
@@ -911,7 +958,7 @@ class AppState extends ChangeNotifier {
         total: max(progress.done + progress.failed, progress.total - 1),
       );
     }
-    status = '已移出队列';
+    status = _rt('status.queueRemoved');
     notifyListeners();
   }
 
@@ -925,14 +972,18 @@ class AppState extends ChangeNotifier {
         total: progress.done + progress.failed + (_activeTaskQuote > 0 ? 1 : 0),
       );
     }
-    status = generationQueueRunning ? '已清空等待项，当前图片完成后停止' : '已清空队列';
+    status = generationQueueRunning
+        ? _rt('status.pendingClearedStop')
+        : _rt('status.queueCleared');
     notifyListeners();
   }
 
   void toggleQueuePause() {
     if (!generationQueueRunning) return;
     queuePaused = !queuePaused;
-    status = queuePaused ? '队列将在当前图片完成后暂停' : '队列继续生成';
+    status = queuePaused
+        ? _rt('status.pauseAfterCurrent')
+        : _rt('status.queueResumed');
     notifyListeners();
   }
 
@@ -947,13 +998,15 @@ class AppState extends ChangeNotifier {
     generationQueue.clear();
     queueReservedAnlas = 0;
     api.cancelActiveGeneration();
-    status = '正在取消生成并清空队列...';
+    status = _rt('status.cancellingQueue');
     notifyListeners();
   }
 
   Future<void> generateI2I() async {
     await _withTokenRun((token) async {
-      if (params.positivePrompt.trim().isEmpty) throw Exception('请输入正面提示词');
+      if (params.positivePrompt.trim().isEmpty) {
+        throw Exception(_rt('error.positiveRequired'));
+      }
       final referenceError = _referenceValidationError();
       if (referenceError != null) throw Exception(referenceError);
       final image = await _workbenchBytes();
@@ -970,6 +1023,7 @@ class AppState extends ChangeNotifier {
           strength: i2i.strength,
           alreadyEncodedVibes: api.countCachedVibes(taskParams.model, extras),
           preciseReferenceCount: extras.preciseReferences.length,
+          language: settings.language,
         ),
       );
       final quote = calculateImageGenerationAnlas(
@@ -980,19 +1034,21 @@ class AppState extends ChangeNotifier {
         strength: i2i.strength,
         alreadyEncodedVibes: api.countCachedVibes(taskParams.model, extras),
         preciseReferenceCount: extras.preciseReferences.length,
+        language: settings.language,
       );
-      status = '正在图生图，生成前报价 ${quote.amount} Anlas...';
+      status = _rf('status.i2iRunning', {'amount': quote.amount});
       notifyListeners();
       final (images, seed) = await api.img2img(
           token, settings, taskParams, extras.copy(), image, i2i);
-      if (images.isEmpty) throw Exception('图生图成功但没有图片');
+      if (images.isEmpty) throw Exception(_rt('error.i2iNoImages'));
       final items = <HistoryItem>[];
       for (final bytes in images) {
         items.add(await storage.saveImage(bytes, taskParams, seed,
             feature: 'i2i', groupId: selectedGroupId.ifEmptyNull));
       }
       _prependHistory(items, useAsWorkbench: true);
-      status = '图生图完成；${await _finishQuotedRun(token, before)}。';
+      status = _rf(
+          'status.i2iDone', {'spent': await _finishQuotedRun(token, before)});
     });
   }
 
@@ -1000,7 +1056,7 @@ class AppState extends ChangeNotifier {
     await _withTokenRun((token) async {
       final image = await _workbenchBytes();
       final dims = workbenchImage;
-      if (dims == null) throw Exception('请先加载原图');
+      if (dims == null) throw Exception(_rt('error.originalImageRequired'));
       final before = await _authorizeQuotedRun(
         token,
         (fresh) => calculateInpaintAnlas(
@@ -1009,9 +1065,11 @@ class AppState extends ChangeNotifier {
           image: dims,
           inpaintModel: inpaintModel,
           strength: inpaintStrength,
+          language: settings.language,
         ),
       );
-      status = '正在局部重绘，生成前报价 ${inpaintAnlasQuote.amount} Anlas...';
+      status =
+          _rf('status.inpaintRunning', {'amount': inpaintAnlasQuote.amount});
       notifyListeners();
       final taskParams = params.copy()
         ..positivePrompt = expandPromptWildcards(params.positivePrompt)
@@ -1027,7 +1085,7 @@ class AppState extends ChangeNotifier {
           dims.height,
           inpaintStrength,
           inpaintNoise);
-      if (images.isEmpty) throw Exception('重绘成功但没有图片');
+      if (images.isEmpty) throw Exception(_rt('error.inpaintNoImages'));
       final items = <HistoryItem>[];
       for (final bytes in images) {
         items.add(await storage.saveImage(bytes, taskParams, seed,
@@ -1044,9 +1102,13 @@ class AppState extends ChangeNotifier {
         height: dims.height,
       );
       _prependHistory(items, useAsWorkbench: true);
-      final fallbackNote =
-          usedModel == inpaintModel ? '' : '；所选模型不支持 infill，已改用 $usedModel';
-      status = '局部重绘完成$fallbackNote；${await _finishQuotedRun(token, before)}。';
+      final fallbackNote = usedModel == inpaintModel
+          ? ''
+          : _rf('status.inpaintFallback', {'model': usedModel});
+      status = _rf('status.inpaintDone', {
+        'note': fallbackNote,
+        'spent': await _finishQuotedRun(token, before),
+      });
     });
   }
 
@@ -1054,15 +1116,23 @@ class AppState extends ChangeNotifier {
     await _withTokenRun((token) async {
       final image = await _workbenchBytes();
       final dims = workbenchImage;
-      if (dims == null) throw Exception('请先加载图片');
+      if (dims == null) throw Exception(_rt('error.imageRequired'));
       final before = await _authorizeQuotedRun(
         token,
-        (fresh) => calculateUpscaleAnlas(image: dims, account: fresh),
+        (fresh) => calculateUpscaleAnlas(
+          image: dims,
+          account: fresh,
+          language: settings.language,
+        ),
       );
       final prepared = prepareImageWithinPixels(image);
       status = prepared.resized
-          ? '原图已安全缩小到 ${prepared.width}x${prepared.height}，正在超分 ${upscaleScale}x...'
-          : '正在超分 ${upscaleScale}x...';
+          ? _rf('status.upscalePreparedRunning', {
+              'width': prepared.width,
+              'height': prepared.height,
+              'scale': upscaleScale,
+            })
+          : _rf('status.upscaleRunning', {'scale': upscaleScale});
       notifyListeners();
       final bytes = await api.upscale(token, settings, prepared.bytes,
           prepared.width, prepared.height, upscaleScale);
@@ -1073,7 +1143,8 @@ class AppState extends ChangeNotifier {
           height: prepared.height * upscaleScale,
           groupId: selectedGroupId.ifEmptyNull);
       _prependHistory([item], useAsWorkbench: true);
-      status = '超分完成；${await _finishQuotedRun(token, before)}。';
+      status = _rf('status.upscaleDone',
+          {'spent': await _finishQuotedRun(token, before)});
     });
   }
 
@@ -1081,15 +1152,23 @@ class AppState extends ChangeNotifier {
     await _withTokenRun((token) async {
       final image = await _workbenchBytes();
       final dims = workbenchImage;
-      if (dims == null) throw Exception('请先加载图片');
+      if (dims == null) throw Exception(_rt('error.imageRequired'));
       final prepared = prepareDirectorImage(image);
       final before = await _authorizeQuotedRun(
         token,
-        (fresh) => calculateDirectorAnlas(tool: directorTool, account: fresh),
+        (fresh) => calculateDirectorAnlas(
+          tool: directorTool,
+          account: fresh,
+          language: settings.language,
+        ),
       );
       status = prepared.resized
-          ? '原图已安全缩至 ${prepared.width}x${prepared.height}，正在后期处理...'
-          : '正在后期处理，生成前报价 ${directorAnlasQuote.amount} Anlas...';
+          ? _rf('status.directorPreparedRunning', {
+              'width': prepared.width,
+              'height': prepared.height,
+            })
+          : _rf(
+              'status.directorRunning', {'amount': directorAnlasQuote.amount});
       notifyListeners();
       final images = await api.augment(
         token,
@@ -1100,7 +1179,7 @@ class AppState extends ChangeNotifier {
         directorTool,
         augmentOptions,
       );
-      if (images.isEmpty) throw Exception('后期处理成功但没有图片');
+      if (images.isEmpty) throw Exception(_rt('error.directorNoImages'));
       final items = <HistoryItem>[];
       for (final bytes in images) {
         final restored = prepared.resized
@@ -1119,9 +1198,15 @@ class AppState extends ChangeNotifier {
       }
       _prependHistory(items, useAsWorkbench: true);
       final resizeNote = prepared.resized
-          ? '；已恢复为 ${prepared.originalWidth}x${prepared.originalHeight}'
+          ? _rf('status.directorRestoreNote', {
+              'width': prepared.originalWidth,
+              'height': prepared.originalHeight,
+            })
           : '';
-      status = '后期处理完成$resizeNote；${await _finishQuotedRun(token, before)}。';
+      status = _rf('status.directorDone', {
+        'note': resizeNote,
+        'spent': await _finishQuotedRun(token, before),
+      });
     });
   }
 
@@ -1129,7 +1214,7 @@ class AppState extends ChangeNotifier {
     final image = await _workbenchBytes();
     final key = await storage.getVisionKey() ?? '';
     busy = true;
-    status = '正在 AI 反推...';
+    status = _rt('status.reverseRunning');
     notifyListeners();
     final res = await api.reversePrompt(
       settings: settings,
@@ -1145,14 +1230,14 @@ class AppState extends ChangeNotifier {
     busy = false;
     reverseResult = res.ok ? res.text : '';
     reversePromptVariants = res.ok ? res.variants : null;
-    status = res.ok ? '反推完成' : res.message;
+    status = res.ok ? _rt('status.reverseDone') : res.message;
     notifyListeners();
   }
 
   Future<void> convertPrompt() async {
     final key = await storage.getConvertKey() ?? '';
     busy = true;
-    status = '正在转换提示词...';
+    status = _rt('status.convertRunning');
     notifyListeners();
     final res = await api.convertPrompt(
       settings: settings,
@@ -1165,19 +1250,19 @@ class AppState extends ChangeNotifier {
     busy = false;
     convertResult = res.ok ? res.text : '';
     convertResultVariants = res.ok ? res.variants : null;
-    status = res.ok ? '转换完成' : res.message;
+    status = res.ok ? _rt('status.convertDone') : res.message;
     notifyListeners();
   }
 
   void applyPrompt(String prompt) {
     setParam((p) => p.positivePrompt = prompt);
-    status = '已复用到生成提示词';
+    status = _rt('status.promptApplied');
     notifyListeners();
   }
 
   String? _referenceValidationError() {
     if (extras.preciseReferences.isNotEmpty && !params.isV45) {
-      return '精准参考仅支持 NovelAI V4.5，请切换模型或移除精准参考图。';
+      return _rt('error.preciseV45OnlyPeriod');
     }
     return null;
   }
@@ -1255,11 +1340,12 @@ class AppState extends ChangeNotifier {
           apiKey: key, fallbackLocal: false));
     }
     // 1) Downloaded Danbooru library (richest: post counts + Chinese aliases).
-    merge((await offlineTags.search(raw, limit: 12)).map((item) => TagSuggestion(
-          tag: item.tag,
-          count: item.postCount,
-          description: item.chinese.join(' '),
-        )));
+    merge(
+        (await offlineTags.search(raw, limit: 12)).map((item) => TagSuggestion(
+              tag: item.tag,
+              count: item.postCount,
+              description: item.chinese.join(' '),
+            )));
     // 2) Bundled capsule taxonomy — always available, so autocomplete works even
     //    before any download, for both Chinese and English input.
     if (results.length < 12) {
@@ -1275,7 +1361,9 @@ class AppState extends ChangeNotifier {
   }
 
   Future<String> testTagService() async {
-    if (settings.tagServerUrl.trim().isEmpty) return '请先填写 Tag/MCP 地址';
+    if (settings.tagServerUrl.trim().isEmpty) {
+      return _rt('status.tagAddressRequired');
+    }
     final key = await storage.getTagKey() ?? '';
     try {
       final tags = await api.searchTags(
@@ -1288,13 +1376,13 @@ class AppState extends ChangeNotifier {
       );
       final remoteLike = tags.isNotEmpty && tags.first.tag.isNotEmpty;
       final message = remoteLike
-          ? 'Tag/MCP 服务可用，返回 ${tags.length} 个标签'
-          : '服务没有返回可解析标签，请检查地址、工具名和协议类型';
+          ? _rf('status.tagAvailable', {'count': tags.length})
+          : _rt('status.tagUnavailable');
       status = message;
       notifyListeners();
       return message;
     } catch (error) {
-      final message = 'Tag/MCP 检测失败：$error';
+      final message = _rf('status.tagTestFailed', {'error': error});
       status = message;
       notifyListeners();
       return message;
@@ -1304,13 +1392,14 @@ class AppState extends ChangeNotifier {
   Future<void> downloadOfflineTags() async {
     if (offlineTagBusy) return;
     offlineTagBusy = true;
-    status = '正在下载中文标签库...';
+    status = _rt('status.downloadingTags');
     notifyListeners();
     try {
       status = await offlineTags.download(settings);
       offlineTagStatus = await offlineTags.status();
     } catch (error) {
-      status = '中文标签库下载失败：${error.toString().replaceFirst('Exception: ', '')}';
+      status = _rf('status.tagDownloadFailed',
+          {'error': error.toString().replaceFirst('Exception: ', '')});
     } finally {
       offlineTagBusy = false;
       notifyListeners();
@@ -1321,17 +1410,18 @@ class AppState extends ChangeNotifier {
     if (updateChecking) return;
     updateChecking = true;
     if (manual) {
-      status = '正在检查更新...';
+      status = _rt('status.updateChecking');
       notifyListeners();
     }
     updateInfo = await checkAppUpdate(settings);
     updateChecking = false;
     if (manual) {
       status = updateInfo?.error != null
-          ? '更新检查失败：${updateInfo!.error}'
+          ? _rf('status.updateFailed', {'error': updateInfo!.error})
           : updateInfo?.hasUpdate == true
-              ? '发现新版本 v${updateInfo!.latestVersion}'
-              : '当前已是最新版本';
+              ? _rf(
+                  'status.updateFound', {'version': updateInfo!.latestVersion})
+              : _rt('status.updateLatest');
     }
     notifyListeners();
   }
@@ -1349,7 +1439,7 @@ class AppState extends ChangeNotifier {
 
   void clearAiCallLog() {
     api.clearAiCallLog();
-    status = 'AI 调用记录已清空';
+    status = _rt('status.aiLogCleared');
     notifyListeners();
   }
 
@@ -1406,7 +1496,8 @@ class AppState extends ChangeNotifier {
     if (preferredId != null && groups.any((group) => group.id == preferredId)) {
       return preferredId;
     }
-    final normalized = title.trim().isEmpty ? '未命名漫画项目' : title.trim();
+    final normalized =
+        title.trim().isEmpty ? _rt('comic.defaultTitle') : title.trim();
     for (final group in groups) {
       if (group.name == normalized) return group.id;
     }
@@ -1428,7 +1519,9 @@ class AppState extends ChangeNotifier {
     String? historyGroupId,
   }) async {
     final token = await storage.getToken();
-    if (token == null || token.isEmpty) throw Exception('请先配置 NovelAI Token');
+    if (token == null || token.isEmpty) {
+      throw Exception(_rt('error.naiTokenRequired'));
+    }
     account = await api.fetchAccount(token, settings);
     final quote = calculateImageGenerationAnlas(
       params: panelParams,
@@ -1436,10 +1529,14 @@ class AppState extends ChangeNotifier {
       extras: panelExtras,
       alreadyEncodedVibes: api.countCachedVibes(panelParams.model, panelExtras),
       preciseReferenceCount: panelExtras.preciseReferences.length,
+      language: settings.language,
     );
     if (quote.insufficient) {
       throw Exception(
-        '本分镜需要 ${quote.amount} Anlas，当前余额 ${quote.balance ?? '未知'}。',
+        _rf('status.insufficientPanel', {
+          'amount': quote.amount,
+          'balance': quote.balance ?? _unknown(),
+        }),
       );
     }
     final groupId = await ensureHistoryGroup(projectTitle, historyGroupId);
@@ -1470,9 +1567,9 @@ class AppState extends ChangeNotifier {
         panelParams,
         extrasToUse,
       );
-      status = '参考图生成失败，已自动无参考图重试成功';
+      status = _rt('status.referenceRetrySucceeded');
     }
-    if (images.isEmpty) throw Exception('图片接口未返回图片');
+    if (images.isEmpty) throw Exception(_rt('error.noImagesReturned'));
     final item = await storage.saveImage(
       images.first,
       panelParams,
@@ -1498,9 +1595,11 @@ class AppState extends ChangeNotifier {
     String? historyGroupId,
   }) async {
     final token = await storage.getToken();
-    if (token == null || token.isEmpty) throw Exception('请先配置 NovelAI Token');
+    if (token == null || token.isEmpty) {
+      throw Exception(_rt('error.naiTokenRequired'));
+    }
     if (itemExtras.preciseReferences.isNotEmpty && !itemParams.isV45) {
-      throw Exception('精准参考仅支持 NovelAI V4.5，请切换模型或移除精准参考图');
+      throw Exception(_rt('error.preciseV45Only'));
     }
     final taskParams = itemParams.copy()
       ..positivePrompt = expandPromptWildcards(itemParams.positivePrompt)
@@ -1514,10 +1613,14 @@ class AppState extends ChangeNotifier {
       strength: strength,
       alreadyEncodedVibes: api.countCachedVibes(taskParams.model, itemExtras),
       preciseReferenceCount: itemExtras.preciseReferences.length,
+      language: settings.language,
     );
     if (quote.insufficient) {
       throw Exception(
-        '本张需要 ${quote.amount} Anlas，当前余额 ${quote.balance ?? '未知'}。',
+        _rf('status.insufficientItem', {
+          'amount': quote.amount,
+          'balance': quote.balance ?? _unknown(),
+        }),
       );
     }
     final groupId = await ensureHistoryGroup(groupName, historyGroupId);
@@ -1529,7 +1632,7 @@ class AppState extends ChangeNotifier {
       sourceBytes,
       I2IParams(strength: strength),
     );
-    if (images.isEmpty) throw Exception('图片接口未返回图片');
+    if (images.isEmpty) throw Exception(_rt('error.noImagesReturned'));
     final item = await storage.saveImage(
       images.first,
       taskParams,
@@ -1582,6 +1685,7 @@ class AppState extends ChangeNotifier {
         items,
         groups,
         archiveName: archiveName,
+        language: settings.language,
       );
 
   void selectImage(HistoryItem item) {
@@ -1620,7 +1724,10 @@ class AppState extends ChangeNotifier {
     if (!quote.ok || quote.amount == null) throw Exception(quote.message);
     if (quote.insufficient) {
       throw Exception(
-        '本次需要 ${quote.amount} Anlas，当前余额 ${quote.balance ?? '未知'}，已阻止执行。',
+        _rf('status.insufficientThisRun', {
+          'amount': quote.amount,
+          'balance': quote.balance ?? _unknown(),
+        }),
       );
     }
     lastAnlasSpent = null;
@@ -1635,15 +1742,13 @@ class AppState extends ChangeNotifier {
     lastAnlasSpent =
         before != null && after != null ? max(0, before - after) : null;
     _pendingAuthorizedBalance = null;
-    return lastAnlasSpent == null
-        ? '实扣读取失败，请刷新积分确认'
-        : '实扣 $lastAnlasSpent Anlas';
+    return _spentText(lastAnlasSpent);
   }
 
   Future<void> _withTokenRun(Future<void> Function(String token) fn) async {
     final token = await storage.getToken();
     if (token == null || token.isEmpty) {
-      status = '请先在设置中配置 API Token';
+      status = _rt('error.tokenRequired');
       notifyListeners();
       return;
     }
@@ -1659,8 +1764,11 @@ class AppState extends ChangeNotifier {
         final after = account.anlasBalance;
         lastAnlasSpent = after == null ? null : max(0, before - after);
         status = lastAnlasSpent == null
-            ? '$message；失败后无法读取实扣，请刷新积分确认'
-            : '$message；失败后余额复核：实扣 $lastAnlasSpent Anlas';
+            ? _rf('status.failureActualUnknown', {'message': message})
+            : _rf('status.failureActualSpent', {
+                'message': message,
+                'amount': lastAnlasSpent,
+              });
       } else {
         status = message;
       }
@@ -1673,7 +1781,7 @@ class AppState extends ChangeNotifier {
 
   Future<Uint8List> _workbenchBytes() async {
     final img = workbenchImage;
-    if (img == null) throw Exception('请先加载工作台图片');
+    if (img == null) throw Exception(_rt('error.workbenchRequired'));
     return File(img.filePath).readAsBytes();
   }
 

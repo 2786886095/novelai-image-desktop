@@ -10,6 +10,8 @@ import {
   type TuiwenShot,
 } from "../types";
 
+export const DEFAULT_TUIWEN_TITLE = "未命名小说推文";
+
 export const TUIWEN_STEPS = [
   { key: "import", label: "导入", hint: "小说 / 字幕 / 画幅" },
   { key: "storyboard", label: "分镜旁白", hint: "旁白 · 画面 · 提示词" },
@@ -82,7 +84,7 @@ export function createDefaultTuiwenProject(params: GenerateParams = DEFAULT_PARA
   const exportSettings = createDefaultTuiwenExportSettings();
   return {
     id: crypto.randomUUID(),
-    title: "未命名小说推文",
+    title: DEFAULT_TUIWEN_TITLE,
     rawScript: "",
     mode: "natural",
     desiredPanelCount: "auto",

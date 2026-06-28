@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { droppedImagePath, hasDraggedFiles } from "./drag-drop";
 import { buildLatentMaskCells } from "./inpaint-mask";
+import { desktopUiText } from "./i18n";
 import { useAppStore } from "./store";
 
 function clampZoom(value: number) {
@@ -8,6 +9,7 @@ function clampZoom(value: number) {
 }
 
 export function InpaintCanvas() {
+  const language = useAppStore((state) => state.settings?.language);
   const workbenchImage = useAppStore((state) => state.workbenchImage);
   const comparisonBeforeImage = useAppStore((state) => state.comparisonBeforeImage);
   const brushSize = useAppStore((state) => state.brushSize);
@@ -34,6 +36,7 @@ export function InpaintCanvas() {
   const [compareDragging, setCompareDragging] = useState(false);
   const [dropOver, setDropOver] = useState(false);
   const canCompare = Boolean(comparisonBeforeImage?.fileUrl && workbenchImage?.fileUrl);
+  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
 
   useEffect(() => {
     if (!canvasRef.current || !workbenchImage) return;
@@ -268,10 +271,10 @@ export function InpaintCanvas() {
       >
         {dropOver && (
           <div className="superdrop-overlay">
-            <span>松开以加载图片</span>
+            <span>{t("inpaint.dropToLoad")}</span>
           </div>
         )}
-        <div className="inpaint-empty">在左侧点击“加载图片”后，即可在这里绘制局部重绘蒙版。</div>
+        <div className="inpaint-empty">{t("inpaint.empty")}</div>
       </main>
     );
   }
@@ -285,7 +288,7 @@ export function InpaintCanvas() {
     >
       {dropOver && (
         <div className="superdrop-overlay">
-          <span>松开以加载图片</span>
+          <span>{t("inpaint.dropToLoad")}</span>
         </div>
       )}
       <div className="inpaint-mask-toolbar">
@@ -294,36 +297,36 @@ export function InpaintCanvas() {
           className="btn btn-ghost"
           disabled={historyCount === 0}
           onClick={undoLastStroke}
-          title="撤回上一步"
+          title={t("inpaint.undoTitle")}
         >
-          <span className="inpaint-tool-arrow">↶</span> 撤回
+          <span className="inpaint-tool-arrow">↶</span> {t("inpaint.undo")}
         </button>
         <button
           type="button"
           className="btn btn-ghost"
           disabled={redoCount === 0}
           onClick={redoNextStroke}
-          title="返回下一步"
+          title={t("inpaint.redoTitle")}
         >
-          <span className="inpaint-tool-arrow">↷</span> 重做
+          <span className="inpaint-tool-arrow">↷</span> {t("inpaint.redo")}
         </button>
         <button
           type="button"
           className="btn btn-ghost"
           disabled={!previewMaskUrl}
           onClick={() => setShowExportPreview((value) => !value)}
-          title="预览实际发送给 NovelAI 的二值遮罩"
+          title={t("inpaint.previewMaskTitle")}
         >
-          {showExportPreview ? "返回涂抹视图" : "预览发送遮罩"}
+          {showExportPreview ? t("inpaint.backToPaint") : t("inpaint.previewMask")}
         </button>
         {canCompare ? (
           <button
             type="button"
             className="btn btn-ghost"
             onClick={() => setCompareEnabled((value) => !value)}
-            title="拖动中线查看处理前后差异"
+            title={t("inpaint.compareTitle")}
           >
-            {compareEnabled ? "关闭对比" : "前后对比"}
+            {compareEnabled ? t("inpaint.closeCompare") : t("inpaint.beforeAfter")}
           </button>
         ) : null}
         <span className="inpaint-zoom-readout">{Math.round(stageZoom * 100)}%</span>
@@ -335,16 +338,16 @@ export function InpaintCanvas() {
             setStageZoom(1);
             setStagePan({ x: 0, y: 0 });
           }}
-          title="复位缩放"
+          title={t("inpaint.resetZoom")}
         >
-          复位缩放
+          {t("inpaint.resetZoom")}
         </button>
       </div>
       <div className="inpaint-stage" ref={stageRef} onWheel={handleStageWheel}>
         <img
           className="inpaint-base-img"
           src={workbenchImage.fileUrl}
-          alt="局部重绘原图"
+          alt={t("inpaint.baseAlt")}
           draggable={false}
           style={{ ...imageZoomStyle, opacity: compareEnabled && canCompare ? 0 : 1 }}
         />
@@ -353,7 +356,7 @@ export function InpaintCanvas() {
             <img
               className="inpaint-compare-img inpaint-compare-before"
               src={comparisonBeforeImage!.fileUrl}
-              alt="重绘前图片"
+              alt={t("inpaint.beforeAlt")}
               draggable={false}
               style={imageZoomStyle}
             />
@@ -361,7 +364,7 @@ export function InpaintCanvas() {
               <img
                 className="inpaint-compare-img"
                 src={workbenchImage.fileUrl}
-                alt="重绘后图片"
+                alt={t("inpaint.afterAlt")}
                 draggable={false}
                 style={imageZoomStyle}
               />
@@ -376,8 +379,8 @@ export function InpaintCanvas() {
                 setCompareDragging(true);
                 updateComparePosition(event.clientX);
               }}
-              aria-label="拖动查看重绘前后差异"
-              title="拖动查看重绘前后差异"
+              aria-label={t("inpaint.dividerLabel")}
+              title={t("inpaint.dividerLabel")}
             >
               <span />
             </button>
@@ -416,7 +419,7 @@ export function InpaintCanvas() {
           }}
         />
         {showExportPreview && previewMaskUrl ? (
-          <img className="inpaint-export-preview" src={previewMaskUrl} alt="发送给 NovelAI 的二值遮罩预览" draggable={false} style={canvasZoomStyle} />
+          <img className="inpaint-export-preview" src={previewMaskUrl} alt={t("inpaint.maskPreviewAlt")} draggable={false} style={canvasZoomStyle} />
         ) : null}
         <div
           className="inpaint-cursor soft"

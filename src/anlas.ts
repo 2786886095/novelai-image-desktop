@@ -131,7 +131,7 @@ export function calculateImageGenerationAnlas({
     total += encodeCost;
     details.push(
       `V4+ Vibe encoding (one-time): ${toEncode} of ${vibeCount} image(s) x 2 Anlas = ${encodeCost}` +
-        `${alreadyEncodedVibes > 0 ? `（${Math.min(vibeCount, alreadyEncodedVibes)} 张已缓存，不再计费）` : ""}.`,
+        `${alreadyEncodedVibes > 0 ? ` (${Math.min(vibeCount, alreadyEncodedVibes)} cached, not billed again)` : ""}.`,
     );
     if (vibeCount > 4) {
       // The >4-vibe surcharge is added "to the generation", i.e. per request.
@@ -167,7 +167,7 @@ export function calculateUpscaleAnlas({
   scale?: UpscaleScale;
 }): AnlasQuoteResult {
   if (!image?.width || !image?.height) {
-    return { ok: false, source: "unavailable", message: "请先加载要超分的图片，才能读取生成前扣费。" };
+    return { ok: false, source: "unavailable", message: "Load the image to upscale before reading the pre-generation cost." };
   }
   const prepared = fitSizeWithinPixels(image.width, image.height, MAX_NAI_UPSCALE_INPUT_PIXELS);
   const pixels = prepared.width * prepared.height;
@@ -192,7 +192,7 @@ export function calculateUpscaleAnlas({
       ok: false,
       source: "unavailable",
       balance: account?.anlasBalance,
-      message: "图片分辨率超过 NovelAI 云端超分的报价范围。",
+      message: "Image resolution exceeds the quote range for NovelAI cloud upscale.",
       details,
     };
   }

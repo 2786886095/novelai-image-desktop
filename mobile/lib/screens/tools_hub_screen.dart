@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../i18n/app_locales.dart';
+import '../state/app_state.dart';
 import 'batch_redraw_screen.dart';
 import 'comic_screen.dart';
 
@@ -25,22 +28,25 @@ class _ToolsHubScreenState extends State<ToolsHubScreen> {
       return BatchRedrawScreen(
           onBack: () => setState(() => active = _ActiveTool.hub));
     }
+    final language =
+        context.select<AppState, String>((s) => s.settings.language);
+    final text = mobileToolsHubTextFor(language);
     return Scaffold(
-      appBar: AppBar(title: const Text('工具')),
+      appBar: AppBar(title: Text(text.title)),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           _ToolTile(
             icon: Icons.auto_stories_outlined,
-            title: '漫画生成器',
-            subtitle: '故事拆分、连续分镜、一致性检测、串行出图与 ZIP',
+            title: text.comicTitle,
+            subtitle: text.comicSubtitle,
             onTap: () => setState(() => active = _ActiveTool.comic),
           ),
           const SizedBox(height: 10),
           _ToolTile(
             icon: Icons.collections_outlined,
-            title: '批量图生图',
-            subtitle: '多图导入、逐图提示词和参数、AI 反推、串行重绘',
+            title: text.batchTitle,
+            subtitle: text.batchSubtitle,
             onTap: () => setState(() => active = _ActiveTool.batchRedraw),
           ),
         ],

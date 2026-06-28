@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../billing/anlas.dart';
+import '../i18n/runtime_text.dart';
 import '../models/nai_models.dart';
 import '../prompts/prompt_mode.dart';
 import '../state/app_state.dart';
@@ -25,7 +26,7 @@ class ComicController extends ChangeNotifier {
 
   late ComicProject project;
   ComicStep step = ComicStep.story;
-  String status = '就绪';
+  String status = runtimeTextFor('zh-CN', 'common.ready');
   String activePanelId = '';
   Set<String> selectedPanelIds = {};
   bool loaded = false;
@@ -36,6 +37,21 @@ class ComicController extends ChangeNotifier {
   int queueDone = 0;
   int queueTotal = 0;
   Timer? _saveTimer;
+
+  String _rt(String key) => runtimeTextFor(app.settings.language, key);
+  String _rf(String key, Map<String, Object?> values) =>
+      runtimeFormatFor(app.settings.language, key, values);
+  String _projectTitle() => project.title.trim().isEmpty ||
+          project.title == legacyComicProjectTitle ||
+          project.title == defaultComicProjectTitle
+      ? _rt('comic.defaultTitle')
+      : project.title;
+  String get displayTitle => _projectTitle();
+  String get displayStatus =>
+      status == runtimeTextFor('zh-CN', 'common.ready') ||
+              status == runtimeTextFor('en-US', 'common.ready')
+          ? _rt('common.ready')
+          : status;
 
   Future<void> load() async {
     try {
@@ -79,14 +95,14 @@ class ComicController extends ChangeNotifier {
     activePanelId = '';
     selectedPanelIds.clear();
     step = ComicStep.story;
-    changed('已新建空白漫画项目');
+    changed(_rt('comic.statusNew'));
   }
 
   void clearPanels() {
     project.panels.clear();
     activePanelId = '';
     selectedPanelIds.clear();
-    changed('已清空分镜，故事、全局设定和参考图仍保留');
+    changed(_rt('comic.panelsCleared'));
   }
 
   void syncCurrentParams() {
@@ -94,18 +110,18 @@ class ComicController extends ChangeNotifier {
       ..globalParams = (app.params.copy()..positivePrompt = '')
       ..globalStylePrompt = app.params.stylePrompt
       ..globalNegativePrompt = app.params.negativePrompt;
-    changed('已同步当前生图参数');
+    changed(_rt('comic.syncedParams'));
   }
 
   Future<void> exportProjectJson() async {
     final temp = await getTemporaryDirectory();
-    final file = File('${temp.path}/${_safeName(project.title)}.json');
+    final file = File('${temp.path}/${_safeName(_projectTitle())}.json');
     await file.writeAsString(
       const JsonEncoder.withIndent('  ').convert(project.toJson()),
       flush: true,
     );
-    await Share.shareXFiles([XFile(file.path)], text: project.title);
-    status = '项目 JSON 已交给系统分享/保存';
+    await Share.shareXFiles([XFile(file.path)], text: _projectTitle());
+    status = _rt('comic.jsonShared');
     notifyListeners();
   }
 
@@ -120,18 +136,18 @@ class ComicController extends ChangeNotifier {
       final picked = result.files.single;
       final bytes = picked.bytes ??
           (picked.path == null ? null : await File(picked.path!).readAsBytes());
-      if (bytes == null) throw const FormatException('无法读取文件');
+      if (bytes == null) throw FormatException(_rt('error.readFile'));
       final decoded = jsonDecode(utf8.decode(bytes));
-      if (decoded is! Map) throw const FormatException('项目 JSON 根节点必须是对象');
+      if (decoded is! Map) throw FormatException(_rt('error.projectJsonRoot'));
       project = ComicProject.fromJson(
         Map<String, dynamic>.from(decoded),
         app.params,
       );
       activePanelId = project.panels.isEmpty ? '' : project.panels.first.id;
       selectedPanelIds.clear();
-      changed('项目已导入；外部输出路径已清除，需要重新生成图片');
+      changed(_rt('comic.projectImported'));
     } catch (error) {
-      status = '导入失败：$error';
+      status = _rf('comic.importFailed', {'error': error});
       notifyListeners();
     }
   }
@@ -149,22 +165,22 @@ class ComicController extends ChangeNotifier {
         width: dims.$1,
         height: dims.$2,
       ));
-      changed('已添加参考图');
+      changed(_rt('comic.referenceAdded'));
       return null;
     } catch (_) {
-      return '无法读取参考图，请换用有效的 PNG、JPG 或 WebP 图片';
+      return _rt('error.readReference');
     }
   }
 
   void removeReference(String id) {
     project.references.removeWhere((item) => item.id == id);
-    changed('已移除参考图');
+    changed(_rt('comic.referenceRemoved'));
   }
 
   Future<void> reverseReference(ComicReference reference) async {
     if (busy) return;
     busy = true;
-    status = '正在反推 ${reference.name}...';
+    status = _rf('comic.reversingReference', {'name': reference.name});
     notifyListeners();
     try {
       final key = await app.storage.getVisionKey() ?? '';
@@ -188,7 +204,7 @@ class ComicController extends ChangeNotifier {
       );
       if (!result.ok) throw Exception(result.message);
       reference.reversePrompt = result.text;
-      changed('参考图反推完成');
+      changed(_rt('comic.reverseReferenceDone'));
     } catch (error) {
       status = error.toString().replaceFirst('Exception: ', '');
       notifyListeners();
@@ -202,14 +218,14 @@ class ComicController extends ChangeNotifier {
     final script = project.rawScript.trim();
     if (script.isEmpty || busy) return;
     busy = true;
-    status = '正在拆分故事...';
+    status = _rt('comic.splittingStory');
     notifyListeners();
     final fallback = _fallbackPanels(script, project.desiredPanelCount);
     try {
       final key = await app.storage.getConvertKey() ?? '';
       if (key.isEmpty) {
-        _applyAnalyzedPanels(fallback, title: project.title);
-        status = '未配置转换 API，已使用本地规则拆分 ${fallback.length} 格';
+        _applyAnalyzedPanels(fallback, title: _projectTitle());
+        status = _rf('comic.localSplitUsed', {'count': fallback.length});
       } else {
         final references = _referenceContext();
         final system = [
@@ -227,7 +243,7 @@ class ComicController extends ChangeNotifier {
           model: app.settings.convertApiModel,
           system: system,
           user:
-              '用户故事：\n$script\n\n参考图反推 / 用户说明：\n${references.isEmpty ? '(none)' : references.join('\n')}',
+              'User story:\n$script\n\nReference inspect / user notes:\n${references.isEmpty ? '(none)' : references.join('\n')}',
           maxTokens: 4000,
         );
         final parsed = result.ok ? _jsonObject(result.text) : null;
@@ -239,7 +255,7 @@ class ComicController extends ChangeNotifier {
         project
           ..title = parsed?['title']?.toString().trim().isNotEmpty == true
               ? parsed!['title'].toString().trim()
-              : project.title
+              : _projectTitle()
           ..globalPrompt =
               parsed?['globalPrompt']?.toString().trim().isNotEmpty == true
                   ? parsed!['globalPrompt'].toString().trim()
@@ -249,10 +265,10 @@ class ComicController extends ChangeNotifier {
                       true
                   ? parsed!['globalCharacterSetting'].toString().trim()
                   : references.join('\n');
-        _applyAnalyzedPanels(panels, title: project.title);
+        _applyAnalyzedPanels(panels, title: _projectTitle());
         status = result.ok
-            ? '已拆分 ${panels.length} 个分镜'
-            : 'AI 拆分失败，已回退本地规则：${result.message}';
+            ? _rf('comic.splitDone', {'count': panels.length})
+            : _rf('comic.splitFallback', {'message': result.message});
       }
       step = ComicStep.global;
       changed();
@@ -266,7 +282,7 @@ class ComicController extends ChangeNotifier {
     if (targets.isEmpty || busy) return;
     final key = await app.storage.getConvertKey() ?? '';
     if (key.isEmpty) {
-      status = '请先在设置中配置转换 API Key';
+      status = _rt('comic.convertKeyRequired');
       notifyListeners();
       return;
     }
@@ -277,7 +293,7 @@ class ComicController extends ChangeNotifier {
     try {
       for (final panel in targets) {
         final position = ordered.indexWhere((item) => item.id == panel.id);
-        status = '正在转换分镜 #${panel.index}...';
+        status = _rf('comic.convertingPanel', {'index': panel.index});
         notifyListeners();
         final system = [
           app.resolvedPromptTemplate('convert', project.mode),
@@ -332,7 +348,10 @@ class ComicController extends ChangeNotifier {
         }
         changed();
       }
-      status = '转换完成：成功 $success，失败 ${targets.length - success}';
+      status = _rf('comic.convertDone', {
+        'success': success,
+        'failed': targets.length - success,
+      });
     } finally {
       busy = false;
       changed();
@@ -345,7 +364,7 @@ class ComicController extends ChangeNotifier {
     final source = (toEnglish ? panel.cnPrompt : panel.enPrompt).trim();
     if (source.isEmpty) return;
     busy = true;
-    status = '正在翻译分镜 #${panel.index}...';
+    status = _rf('comic.translatingPanel', {'index': panel.index});
     notifyListeners();
     try {
       final result = await app.api.translateText(
@@ -361,7 +380,8 @@ class ComicController extends ChangeNotifier {
       } else {
         panel.cnPrompt = result.text;
       }
-      changed(toEnglish ? '已直译为英文' : '已回译为中文');
+      changed(
+          toEnglish ? _rt('comic.translatedEn') : _rt('comic.translatedCn'));
     } catch (error) {
       status = error.toString().replaceFirst('Exception: ', '');
     } finally {
@@ -377,12 +397,12 @@ class ComicController extends ChangeNotifier {
     if (reviewable.isEmpty || busy) return;
     final key = await app.storage.getConvertKey() ?? '';
     if (key.isEmpty) {
-      status = '请先配置转换 API Key';
+      status = _rt('comic.convertKeyRequiredShort');
       notifyListeners();
       return;
     }
     busy = true;
-    status = '正在分块检测一致性...';
+    status = _rt('comic.consistencyRunning');
     notifyListeners();
     final replacements = <String, String>{};
     try {
@@ -391,7 +411,7 @@ class ComicController extends ChangeNotifier {
             reviewable.sublist(start, min(start + 6, reviewable.length));
         final checked = await _checkConsistencyChunk(chunk, reviewable, key);
         if (checked == null) {
-          status = '一致性检测失败，已保留所有原英文提示词，未覆盖任何分镜';
+          status = _rt('comic.consistencyFailed');
           return;
         }
         replacements.addAll(checked);
@@ -406,7 +426,10 @@ class ComicController extends ChangeNotifier {
             ..status = ComicPanelStatus.converted;
         }
       }
-      changed('一致性检测完成：复核 ${reviewable.length} 格，调整 $changedCount 格');
+      changed(_rf('comic.consistencyDone', {
+        'reviewed': reviewable.length,
+        'changed': changedCount,
+      }));
     } finally {
       busy = false;
       notifyListeners();
@@ -492,6 +515,7 @@ class ComicController extends ChangeNotifier {
             extras: extras,
             alreadyEncodedVibes: app.api.countCachedVibes(params.model, extras),
             preciseReferenceCount: extras.preciseReferences.length,
+            language: app.settings.language,
           ).amount ??
           0;
     }
@@ -503,7 +527,7 @@ class ComicController extends ChangeNotifier {
     panel
       ..status = ComicPanelStatus.generating
       ..error = '';
-    changed('正在生成分镜 #${panel.index}...');
+    changed(_rf('comic.generatingPanel', {'index': panel.index}));
     try {
       final params =
           (panel.overrideParams ? panel.params : project.globalParams).copy();
@@ -518,7 +542,7 @@ class ComicController extends ChangeNotifier {
       final item = await app.generateComicPanel(
         panelParams: params,
         panelExtras: extras,
-        projectTitle: project.title,
+        projectTitle: _projectTitle(),
         historyGroupId: project.historyGroupId,
       );
       project.historyGroupId = item.groupId;
@@ -528,12 +552,15 @@ class ComicController extends ChangeNotifier {
         ..actualAnlas = before != null && app.account.anlasBalance != null
             ? max(0, before - app.account.anlasBalance!)
             : null;
-      changed('分镜 #${panel.index} 已生成');
+      changed(_rf('comic.panelDone', {'index': panel.index}));
     } catch (error) {
       panel
         ..status = ComicPanelStatus.failed
         ..error = error.toString().replaceFirst('Exception: ', '');
-      changed('分镜 #${panel.index} 失败：${panel.error}');
+      changed(_rf('comic.panelFailed', {
+        'index': panel.index,
+        'error': panel.error,
+      }));
       rethrow;
     }
   }
@@ -543,7 +570,10 @@ class ComicController extends ChangeNotifier {
     final quote = quotePanels(targets);
     final balance = app.account.anlasBalance;
     if (balance != null && quote > balance) {
-      status = '选中分镜预计需要 $quote Anlas，当前余额 $balance，已阻止执行';
+      status = _rf('comic.insufficient', {
+        'amount': quote,
+        'balance': balance,
+      });
       notifyListeners();
       return;
     }
@@ -556,8 +586,8 @@ class ComicController extends ChangeNotifier {
     try {
       await BackgroundQueueService.start(
         'comic-generation',
-        title: 'Langbai 漫画生成队列',
-        text: '准备生成 0/${targets.length}',
+        title: _rt('notification.comicTitle'),
+        text: _rf('notification.prepare', {'total': targets.length}),
       );
     } catch (_) {
       // Foreground-service restrictions must not block a foreground run.
@@ -569,8 +599,12 @@ class ComicController extends ChangeNotifier {
       }
       if (queueCancelled) break;
       unawaited(BackgroundQueueService.update(
-        title: 'Langbai 漫画生成队列',
-        text: '正在生成 ${queueDone + 1}/$queueTotal · 分镜 #${panel.index}',
+        title: _rt('notification.comicTitle'),
+        text: _rf('notification.generatingPanel', {
+          'current': queueDone + 1,
+          'total': queueTotal,
+          'index': panel.index,
+        }),
       ));
       try {
         await generateOne(panel);
@@ -578,7 +612,7 @@ class ComicController extends ChangeNotifier {
         final lower = error.toString().toLowerCase();
         if (lower.contains('401') || lower.contains('unauthorized')) {
           queueCancelled = true;
-          status = '队列已停止：NovelAI Token 或 Image Endpoint 鉴权失败';
+          status = _rt('comic.authStopped');
         }
       }
       queueDone++;
@@ -588,7 +622,12 @@ class ComicController extends ChangeNotifier {
     queueRunning = false;
     queuePaused = false;
     await BackgroundQueueService.stop('comic-generation');
-    if (!cancelled) status = '漫画队列完成：$queueDone/$queueTotal';
+    if (!cancelled) {
+      status = _rf('comic.queueDone', {
+        'done': queueDone,
+        'total': queueTotal,
+      });
+    }
     changed();
     if (!cancelled && project.autoExportZip) await exportComicZip();
   }
@@ -602,7 +641,7 @@ class ComicController extends ChangeNotifier {
     queueCancelled = true;
     queuePaused = false;
     app.api.cancelActiveGeneration();
-    status = '正在取消漫画队列...';
+    status = _rt('comic.cancelling');
     notifyListeners();
   }
 
@@ -613,7 +652,7 @@ class ComicController extends ChangeNotifier {
     );
     archive
         .addFile(ArchiveFile('project.json', projectJson.length, projectJson));
-    final prompts = StringBuffer('# ${project.title}\n\n');
+    final prompts = StringBuffer('# ${_projectTitle()}\n\n');
     for (final panel in project.panels) {
       prompts
         ..writeln('## ${panel.index}')
@@ -633,12 +672,12 @@ class ComicController extends ChangeNotifier {
     final promptBytes = utf8.encode(prompts.toString());
     archive.addFile(ArchiveFile('prompts.md', promptBytes.length, promptBytes));
     final zip = ZipEncoder().encode(archive);
-    if (zip == null) throw StateError('ZIP 编码失败');
+    if (zip == null) throw StateError(_rt('error.zipEncode'));
     final temp = await getTemporaryDirectory();
-    final file = File('${temp.path}/${_safeName(project.title)}.zip');
+    final file = File('${temp.path}/${_safeName(_projectTitle())}.zip');
     await file.writeAsBytes(zip, flush: true);
-    await Share.shareXFiles([XFile(file.path)], text: project.title);
-    status = '漫画 ZIP 已交给系统分享/保存';
+    await Share.shareXFiles([XFile(file.path)], text: _projectTitle());
+    status = _rt('comic.zipShared');
     notifyListeners();
   }
 
@@ -714,7 +753,7 @@ class ComicController extends ChangeNotifier {
         .where((line) => line.isNotEmpty)
         .toList();
     if (lines.isEmpty) {
-      changed('请粘贴 / 输入 Tag 提示词，每行一个分镜。');
+      changed(_rt('comic.tagPanelEmpty'));
       return;
     }
     project.panels = lines
@@ -731,7 +770,7 @@ class ComicController extends ChangeNotifier {
     activePanelId = project.panels.first.id;
     selectedPanelIds.clear();
     step = ComicStep.panels;
-    changed('已按 Tag 直接创建 ${lines.length} 个分镜，可前往「生成」。');
+    changed(_rf('comic.tagPanelsImported', {'count': lines.length}));
   }
 
   List<(String, String)> _fallbackPanels(String script, int desiredCount) {
@@ -749,7 +788,10 @@ class ComicController extends ChangeNotifier {
       }
       for (var index = start; index <= end; index++) {
         ranges.add((
-          '第 $index 格：$description。补足镜头、人物动作、场景、构图、情绪和连续性。',
+          _rf('comic.fallbackRangePanel', {
+            'index': index,
+            'description': description,
+          }),
           description.substring(0, min(180, description.length)),
         ));
       }
@@ -766,7 +808,10 @@ class ComicController extends ChangeNotifier {
       final chunk = source[
           min(source.length - 1, (index * source.length / count).floor())];
       return (
-        '第 ${index + 1} 格：$chunk。设计成独立漫画分镜，包含镜头景别、人物动作、场景细节、构图和情绪递进。',
+        _rf('comic.fallbackAutoPanel', {
+          'index': index + 1,
+          'chunk': chunk,
+        }),
         chunk.substring(0, min(180, chunk.length)),
       );
     });

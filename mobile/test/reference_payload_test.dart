@@ -83,6 +83,7 @@ void main() {
       ),
       batchCount: 2,
       preciseReferenceCount: 3,
+      language: 'zh-CN',
     );
     expect(quote.details.join('\n'), contains('精准参考：2 张 x 5 = 10'));
   });

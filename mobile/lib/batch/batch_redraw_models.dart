@@ -1,5 +1,8 @@
 import '../models/nai_models.dart';
 
+const legacyBatchRedrawGroupName = '批量图生图';
+const defaultBatchRedrawGroupName = 'Batch Img2Img';
+
 enum BatchRedrawStep { import, params, prompts, generate }
 
 enum BatchItemStatus { pending, generating, done, failed }
@@ -91,7 +94,7 @@ class BatchRedrawProject {
   String? historyGroupId;
 
   BatchRedrawProject({
-    this.groupName = '批量图生图',
+    this.groupName = defaultBatchRedrawGroupName,
     List<BatchRedrawItem>? items,
     this.globalStrength = 0.4,
     this.globalStyle = '',
@@ -141,7 +144,7 @@ class BatchRedrawProject {
             Map<String, dynamic>.from(json['globalParams']))
         : fallback.copy();
     return BatchRedrawProject(
-      groupName: json['groupName']?.toString() ?? '批量图生图',
+      groupName: json['groupName']?.toString() ?? defaultBatchRedrawGroupName,
       globalStrength: (json['globalStrength'] as num?)?.toDouble() ?? 0.4,
       globalStyle: json['globalStyle']?.toString() ?? '',
       globalNegative: json['globalNegative']?.toString() ?? '',

@@ -1,5 +1,6 @@
 import 'dart:math';
 
+import '../i18n/runtime_text.dart';
 import '../models/nai_models.dart';
 
 const _basePixelCoefficient = 2951823174884865e-21;
@@ -27,7 +28,11 @@ class AnlasQuote {
     this.details = const [],
   });
 
-  AnlasQuote asOfficial(int officialAmount, {int samples = 1}) {
+  AnlasQuote asOfficial(
+    int officialAmount, {
+    int samples = 1,
+    Object? language,
+  }) {
     final total = (max(0, officialAmount) * max(1, samples)).toInt();
     return AnlasQuote(
       ok: true,
@@ -35,14 +40,25 @@ class AnlasQuote {
       source: AnlasQuoteSource.officialApi,
       balance: balance,
       insufficient: balance != null && total > balance!,
-      message: '生成前官方报价：$total Anlas。',
+      message: _af(language, 'anlas.officialQuote', {'total': total}),
       details: [
-        'NovelAI request-price 返回每张 $officialAmount Anlas。',
-        if (samples > 1) '$officialAmount x $samples 张 = $total Anlas。',
+        _af(language, 'anlas.officialPerSample', {'amount': officialAmount}),
+        if (samples > 1)
+          _af(language, 'anlas.officialSamples', {
+            'amount': officialAmount,
+            'samples': samples,
+            'total': total,
+          }),
       ],
     );
   }
 }
+
+Object _lang(Object? language) => language ?? 'en-US';
+String _at(Object? language, String key) =>
+    runtimeTextFor(_lang(language), key);
+String _af(Object? language, String key, Map<String, Object?> values) =>
+    runtimeFormatFor(_lang(language), key, values);
 
 AnlasQuote calculateImageGenerationAnlas({
   required GenerateParams params,
@@ -54,6 +70,7 @@ AnlasQuote calculateImageGenerationAnlas({
   bool forcePaid = false,
   int alreadyEncodedVibes = 0,
   int preciseReferenceCount = 0,
+  Object? language,
 }) {
   final samples = max(1, batchCount.floor());
   final width = max(1, params.width);
@@ -75,7 +92,7 @@ AnlasQuote calculateImageGenerationAnlas({
 
   var basePerSample = 0;
   if (opusFree) {
-    details.add('Opus：当前尺寸和步数的文生图基础费用为 0。');
+    details.add(_at(language, 'anlas.opusFree'));
   } else {
     final smeaMultiplier = !v4Plus && params.smeaDyn
         ? 1.4
@@ -89,7 +106,9 @@ AnlasQuote calculateImageGenerationAnlas({
       140,
       max(2, (officialBase * smeaMultiplier * normalizedStrength).ceil()),
     );
-    details.add('基础费用：每张 $basePerSample Anlas。');
+    details.add(
+      _af(language, 'anlas.baseCost', {'amount': basePerSample}),
+    );
   }
 
   var total = basePerSample * samples;
@@ -98,18 +117,24 @@ AnlasQuote calculateImageGenerationAnlas({
     final toEncode = max(0, vibeCount - cached);
     final encodeCost = toEncode * 2;
     total += encodeCost;
-    details.add('Vibe 一次性编码：$toEncode 张 x 2 = $encodeCost Anlas。');
+    details.add(_af(language, 'anlas.vibeEncode', {
+      'count': toEncode,
+      'amount': encodeCost,
+    }));
     if (vibeCount > 4) {
       final extra = 2 * (vibeCount - 4) * samples;
       total += extra;
-      details.add('超过 4 张 Vibe 的附加费：$extra Anlas。');
+      details.add(_af(language, 'anlas.vibeExtra', {'amount': extra}));
     }
   }
 
   if (v4Plus && params.model.contains('4-5') && preciseReferenceCount > 0) {
     final preciseCost = 5 * samples;
     total += preciseCost;
-    details.add('精准参考：$samples 张 x 5 = $preciseCost Anlas。');
+    details.add(_af(language, 'anlas.preciseCost', {
+      'samples': samples,
+      'amount': preciseCost,
+    }));
   }
 
   final amount = max(0, total.ceil());
@@ -122,8 +147,11 @@ AnlasQuote calculateImageGenerationAnlas({
     balance: balance,
     insufficient: insufficient,
     message: insufficient
-        ? '需要 $amount Anlas，当前余额 $balance Anlas。'
-        : '预计需要 $amount Anlas。',
+        ? _af(language, 'anlas.requiredBalance', {
+            'amount': amount,
+            'balance': balance,
+          })
+        : _af(language, 'anlas.estimated', {'amount': amount}),
     details: details,
   );
 }
@@ -161,12 +189,13 @@ AnlasQuote calculateInpaintAnlas({
   required WorkingImage? image,
   required String inpaintModel,
   double strength = 1,
+  Object? language,
 }) {
   if (image == null || image.width <= 0 || image.height <= 0) {
-    return const AnlasQuote(
+    return AnlasQuote(
       ok: false,
       source: AnlasQuoteSource.unavailable,
-      message: '请先加载要重绘的图片',
+      message: _at(language, 'anlas.loadInpaintImage'),
     );
   }
   final quoteParams = params.copy()
@@ -179,18 +208,20 @@ AnlasQuote calculateInpaintAnlas({
     extras: GenerateExtras(),
     imageToImage: true,
     strength: strength,
+    language: language,
   );
 }
 
 AnlasQuote calculateUpscaleAnlas({
   required WorkingImage? image,
   required AccountSummary account,
+  Object? language,
 }) {
   if (image == null || image.width <= 0 || image.height <= 0) {
-    return const AnlasQuote(
+    return AnlasQuote(
       ok: false,
       source: AnlasQuoteSource.unavailable,
-      message: '请先加载要超分的图片',
+      message: _at(language, 'anlas.loadUpscaleImage'),
     );
   }
   const maxPixels = 1024 * 1024;
@@ -202,9 +233,14 @@ AnlasQuote calculateUpscaleAnlas({
   final pixels = width * height;
   final details = <String>[
     if (ratio < 1)
-      '超分前需缩小：${image.width}x${image.height} -> ${width}x$height。'
+      _af(language, 'anlas.upscaleResize', {
+        'from': '${image.width}x${image.height}',
+        'to': '${width}x$height',
+      })
     else
-      '报价输入尺寸：${image.width}x${image.height}。',
+      _af(language, 'anlas.upscaleInput', {
+        'size': '${image.width}x${image.height}',
+      }),
   ];
   final activeOpus =
       account.hasActiveSubscription == true && (account.tierLevel ?? 0) >= 3;
@@ -227,7 +263,7 @@ AnlasQuote calculateUpscaleAnlas({
       ok: false,
       source: AnlasQuoteSource.unavailable,
       balance: account.anlasBalance,
-      message: '图片分辨率超过 NovelAI 云端超分报价范围',
+      message: _at(language, 'anlas.upscaleTooLarge'),
       details: details,
     );
   }
@@ -238,7 +274,7 @@ AnlasQuote calculateUpscaleAnlas({
     source: AnlasQuoteSource.estimateFormula,
     balance: balance,
     insufficient: balance != null && amount > balance,
-    message: '超分预计需要 $amount Anlas。',
+    message: _af(language, 'anlas.upscaleEstimated', {'amount': amount}),
     details: details,
   );
 }
@@ -246,6 +282,7 @@ AnlasQuote calculateUpscaleAnlas({
 AnlasQuote calculateDirectorAnlas({
   required String tool,
   required AccountSummary account,
+  Object? language,
 }) {
   final amount = tool == 'bg-removal' ? 65 : 0;
   final balance = account.anlasBalance;
@@ -255,9 +292,13 @@ AnlasQuote calculateDirectorAnlas({
     source: AnlasQuoteSource.estimateFormula,
     balance: balance,
     insufficient: balance != null && amount > balance,
-    message: amount == 0 ? '当前后期工具免费。' : '移除背景固定需要 65 Anlas。',
+    message: amount == 0
+        ? _at(language, 'anlas.directorFree')
+        : _at(language, 'anlas.directorBgRemoval'),
     details: [
-      amount == 0 ? '当前 Director 工具费用为 0。' : '背景移除固定费用 65 Anlas。',
+      amount == 0
+          ? _at(language, 'anlas.directorFreeDetail')
+          : _at(language, 'anlas.directorBgRemovalDetail'),
     ],
   );
 }

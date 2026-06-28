@@ -273,6 +273,8 @@ class PromptEditorState extends State<PromptEditor> {
   }
 
   Future<void> _editWeights() async {
+    final language = context.read<AppState>().settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
     var working = controller.text;
     final result = await showModalBottomSheet<String>(
       context: context,
@@ -291,19 +293,19 @@ class PromptEditorState extends State<PromptEditor> {
                     child: Row(
                       children: [
                         Expanded(
-                          child: Text('提示词权重',
+                          child: Text(generateScreenTextFor(language).weight,
                               style: Theme.of(context).textTheme.titleMedium),
                         ),
                         FilledButton(
                           onPressed: () => Navigator.pop(context, working),
-                          child: const Text('应用'),
+                          child: Text(t('common.apply')),
                         ),
                       ],
                     ),
                   ),
                   Expanded(
                     child: tags.isEmpty
-                        ? const Center(child: Text('没有可调整的 Tag'))
+                        ? Center(child: Text(t('generate.noAdjustableTags')))
                         : ListView.separated(
                             padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
                             itemCount: tags.length,
@@ -320,7 +322,7 @@ class PromptEditorState extends State<PromptEditor> {
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     IconButton(
-                                      tooltip: '降低权重',
+                                      tooltip: t('generate.decreaseWeight'),
                                       onPressed: parsed.level <= -5
                                           ? null
                                           : () => setSheetState(() {
@@ -331,7 +333,7 @@ class PromptEditorState extends State<PromptEditor> {
                                     ),
                                     Text('${parsed.level}'),
                                     IconButton(
-                                      tooltip: '提高权重',
+                                      tooltip: t('generate.increaseWeight'),
                                       onPressed: parsed.level >= 5
                                           ? null
                                           : () => setSheetState(() {
@@ -357,6 +359,8 @@ class PromptEditorState extends State<PromptEditor> {
   }
 
   Future<void> _openNormalize() async {
+    final language = context.read<AppState>().settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
     var options = const PromptNormalizeOptions();
     final result = await showModalBottomSheet<String>(
       context: context,
@@ -370,54 +374,54 @@ class PromptEditorState extends State<PromptEditor> {
           );
           final toggles = <({String label, bool value, VoidCallback toggle})>[
             (
-              label: '转为小写',
+              label: t('generate.normalizeLowercase'),
               value: options.lowercase,
               toggle: () =>
                   options = options.copyWith(lowercase: !options.lowercase),
             ),
             (
-              label: '使用半角标点',
+              label: t('generate.normalizeHalfWidth'),
               value: options.halfWidthPunct,
               toggle: () => options =
                   options.copyWith(halfWidthPunct: !options.halfWidthPunct),
             ),
             (
-              label: '移除装饰符号',
+              label: t('generate.normalizeStripDecorative'),
               value: options.stripDecorative,
               toggle: () => options =
                   options.copyWith(stripDecorative: !options.stripDecorative),
             ),
             (
-              label: '下划线转为空格',
+              label: t('generate.normalizeUnderscoreToSpace'),
               value: options.underscoreToSpace,
               toggle: () => options = options.copyWith(
                   underscoreToSpace: !options.underscoreToSpace),
             ),
             (
-              label: '换行转逗号',
+              label: t('generate.normalizeNewlineToComma'),
               value: options.newlineToComma,
               toggle: () => options =
                   options.copyWith(newlineToComma: !options.newlineToComma),
             ),
             (
-              label: '去除重复标签',
+              label: t('generate.normalizeDedupe'),
               value: options.dedupe,
               toggle: () => options = options.copyWith(dedupe: !options.dedupe),
             ),
             (
-              label: '移除质量 / artist 前缀',
+              label: t('generate.normalizeStripQuality'),
               value: options.stripQualityPrefix,
               toggle: () => options = options.copyWith(
                   stripQualityPrefix: !options.stripQualityPrefix),
             ),
             (
-              label: '移除非 ASCII 字符',
+              label: t('generate.normalizeStripNonAscii'),
               value: options.stripNonAscii,
               toggle: () => options =
                   options.copyWith(stripNonAscii: !options.stripNonAscii),
             ),
             (
-              label: '保护 Wildcards 语法',
+              label: t('generate.normalizeKeepWildcards'),
               value: options.keepWildcards,
               toggle: () => options =
                   options.copyWith(keepWildcards: !options.keepWildcards),
@@ -434,7 +438,7 @@ class PromptEditorState extends State<PromptEditor> {
                       children: [
                         Expanded(
                           child: Text(
-                            '提示词标准化',
+                            t('generate.normalizeTitle'),
                             style: Theme.of(context).textTheme.titleMedium,
                           ),
                         ),
@@ -442,7 +446,7 @@ class PromptEditorState extends State<PromptEditor> {
                           onPressed: preview.trim().isEmpty
                               ? null
                               : () => Navigator.pop(sheetContext, preview),
-                          child: const Text('应用'),
+                          child: Text(t('common.apply')),
                         ),
                       ],
                     ),
@@ -459,12 +463,14 @@ class PromptEditorState extends State<PromptEditor> {
                             onChanged: (_) => setSheetState(item.toggle),
                           ),
                         const SizedBox(height: 8),
-                        const Text(
-                          '预览',
-                          style: TextStyle(fontWeight: FontWeight.bold),
+                        Text(
+                          t('generate.preview'),
+                          style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 6),
-                        SelectableText(preview.isEmpty ? '（结果为空）' : preview),
+                        SelectableText(preview.isEmpty
+                            ? t('generate.emptyResult')
+                            : preview),
                       ],
                     ),
                   ),
@@ -479,10 +485,12 @@ class PromptEditorState extends State<PromptEditor> {
   }
 
   Future<void> _pickRelatedTag() async {
+    final language = context.read<AppState>().settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
     final tags = relatedPromptTags(controller.text);
     if (tags.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('当前提示词没有可用的本地关联 Tag')),
+        SnackBar(content: Text(t('generate.relatedTagUnavailable'))),
       );
       return;
     }
@@ -496,7 +504,8 @@ class PromptEditorState extends State<PromptEditor> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('相关 Tag', style: Theme.of(context).textTheme.titleMedium),
+              Text(generateScreenTextFor(language).relatedTag,
+                  style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 12),
               Wrap(
                 spacing: 8,
@@ -519,23 +528,25 @@ class PromptEditorState extends State<PromptEditor> {
   }
 
   Future<void> _previewWildcard() async {
+    final language = context.read<AppState>().settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
     final preview = expandPromptWildcards(controller.text);
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('本次随机预览'),
+        title: Text(t('generate.randomPreviewTitle')),
         content: SelectableText(preview),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('关闭'),
+            child: Text(t('common.close')),
           ),
           FilledButton(
             onPressed: () {
               Navigator.pop(dialogContext);
               _apply(preview);
             },
-            child: const Text('应用结果'),
+            child: Text(t('generate.applyResult')),
           ),
         ],
       ),
@@ -551,6 +562,7 @@ class PromptEditorState extends State<PromptEditor> {
             ? state.settings.lockNegativePrompt
             : false;
     final text = generateScreenTextFor(state.settings.language);
+    final language = state.settings.language;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -576,9 +588,11 @@ class PromptEditorState extends State<PromptEditor> {
                 .map(
                   (suggestion) => ActionChip(
                     label: Text(
-                      suggestion.description?.trim().isNotEmpty == true
-                          ? '${suggestion.tag} · ${suggestion.description}'
-                          : suggestion.tag,
+                      '${suggestion.tag} · ${localizedTagLabel(
+                        language,
+                        suggestion.tag,
+                        sourceLabel: suggestion.description,
+                      )}',
                     ),
                     onPressed: () => _applySuggestion(suggestion),
                   ),
@@ -798,6 +812,7 @@ class _TagSearchBoxState extends State<_TagSearchBox> {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final text = generateScreenTextFor(state.settings.language);
+    final language = state.settings.language;
     final hasOfflineTags = state.offlineTagStatus.downloaded;
     return Card(
       child: Padding(
@@ -861,9 +876,13 @@ class _TagSearchBoxState extends State<_TagSearchBox> {
                 runSpacing: 8,
                 children: tags
                     .map((t) => ActionChip(
-                        label: Text(t.description == null
-                            ? t.tag
-                            : '${t.tag} · ${t.description}'),
+                        label: Text(
+                          '${t.tag} · ${localizedTagLabel(
+                            language,
+                            t.tag,
+                            sourceLabel: t.description,
+                          )}',
+                        ),
                         onPressed: () => widget.onInsert(t.tag, false)))
                     .toList(),
               ),
@@ -899,8 +918,9 @@ class _CapsulePickerSheetState extends State<_CapsulePickerSheet> {
   Widget build(BuildContext context) {
     final category = widget.categories[categoryIndex];
     final subgroup = category.subgroups[subgroupIndex];
-    final text =
-        generateScreenTextFor(context.watch<AppState>().settings.language);
+    final settings = context.watch<AppState>().settings;
+    final text = generateScreenTextFor(settings.language);
+    final language = settings.language;
     return SafeArea(
       child: SizedBox(
         height: MediaQuery.sizeOf(context).height * 0.84,
@@ -923,7 +943,8 @@ class _CapsulePickerSheetState extends State<_CapsulePickerSheet> {
                     Padding(
                       padding: const EdgeInsets.only(right: 8),
                       child: ChoiceChip(
-                        label: Text(widget.categories[index].name),
+                        label: Text(localizedCapsuleCategoryName(
+                            language, widget.categories[index].name)),
                         selected: categoryIndex == index,
                         onSelected: (_) => setState(() {
                           categoryIndex = index;
@@ -946,7 +967,8 @@ class _CapsulePickerSheetState extends State<_CapsulePickerSheet> {
                     Padding(
                       padding: const EdgeInsets.only(right: 8),
                       child: FilterChip(
-                        label: Text(category.subgroups[index].name),
+                        label: Text(localizedCapsuleSubgroupName(
+                            language, category.subgroups[index].name)),
                         selected: subgroupIndex == index,
                         onSelected: (_) =>
                             setState(() => subgroupIndex = index),
@@ -978,7 +1000,11 @@ class _CapsulePickerSheetState extends State<_CapsulePickerSheet> {
                                   ),
                                   if (tag.label.isNotEmpty)
                                     Text(
-                                      tag.label,
+                                      localizedTagLabel(
+                                        language,
+                                        tag.tag,
+                                        sourceLabel: tag.label,
+                                      ),
                                       style: TextStyle(
                                         fontSize: 11,
                                         color: Theme.of(context)
@@ -1011,7 +1037,9 @@ class _ParamControls extends StatelessWidget {
     final state = context.read<AppState>();
     final watched = context.watch<AppState>();
     final p = watched.params;
-    final text = generateScreenTextFor(watched.settings.language);
+    final language = watched.settings.language;
+    final text = generateScreenTextFor(language);
+    String t(String key) => mobileUiTextFor(language, key);
     final mode = p.model == 'nai-diffusion-furry-3'
         ? 'furry'
         : watched.settings.modelMode;
@@ -1055,7 +1083,9 @@ class _ParamControls extends StatelessWidget {
           items: visibleModels
               .map((m) => DropdownMenuItem(
                   value: m.value,
-                  child: Text(m.label, overflow: TextOverflow.ellipsis)))
+                  child: Text(
+                      localizedNaiOptionLabel(language, m.value, m.label),
+                      overflow: TextOverflow.ellipsis)))
               .toList(),
           onChanged: (v) =>
               v == null ? null : state.setParam((x) => x.model = v),
@@ -1067,7 +1097,8 @@ class _ParamControls extends StatelessWidget {
           children: sizePresets.map((s) {
             final selected = p.width == s.width && p.height == s.height;
             return ChoiceChip(
-                label: Text(s.label),
+                label: Text(localizedSizePresetLabel(
+                    language, s.width, s.height, s.label)),
                 selected: selected,
                 onSelected: (_) => state.setParam((x) => (x
                   ..width = s.width
@@ -1105,8 +1136,10 @@ class _ParamControls extends StatelessWidget {
               labelText: text.sampler, border: const OutlineInputBorder()),
           isExpanded: true,
           items: naiSamplers
-              .map(
-                  (s) => DropdownMenuItem(value: s.value, child: Text(s.label)))
+              .map((s) => DropdownMenuItem(
+                  value: s.value,
+                  child: Text(
+                      localizedNaiOptionLabel(language, s.value, s.label))))
               .toList(),
           onChanged: (v) =>
               v == null ? null : state.setParam((x) => x.sampler = v),
@@ -1146,7 +1179,8 @@ class _ParamControls extends StatelessWidget {
           items: naiNoiseSchedules
               .map((option) => DropdownMenuItem(
                     value: option.value,
-                    child: Text(option.label),
+                    child: Text(localizedNaiOptionLabel(
+                        language, option.value, option.label)),
                   ))
               .toList(),
           onChanged: (value) => value == null
@@ -1161,7 +1195,8 @@ class _ParamControls extends StatelessWidget {
           items: ucPresets
               .map((option) => DropdownMenuItem(
                     value: int.parse(option.value),
-                    child: Text(option.label),
+                    child: Text(localizedNaiOptionLabel(
+                        language, option.value, option.label)),
                   ))
               .toList(),
           onChanged: (value) =>
@@ -1230,7 +1265,7 @@ class _ParamControls extends StatelessWidget {
         if (!p.isV4Plus) ...[
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('SMEA（V3 高分辨率优化）'),
+            title: Text(t('generate.smea')),
             value: p.smea,
             onChanged: (value) => state.setParam((x) {
               x.smea = value;
@@ -1239,7 +1274,7 @@ class _ParamControls extends StatelessWidget {
           ),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('SMEA Dyn（动态 SMEA）'),
+            title: Text(t('generate.smeaDyn')),
             value: p.smeaDyn,
             onChanged: p.smea
                 ? (value) => state.setParam((x) => x.smeaDyn = value)
@@ -1432,6 +1467,8 @@ class _CharacterPrompts extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = context.watch<AppState>();
+    final language = s.settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -1440,13 +1477,13 @@ class _CharacterPrompts extends StatelessWidget {
           children: [
             Row(
               children: [
-                const Expanded(
-                    child: Text('角色提示词（最多 6 个）',
-                        style: TextStyle(fontWeight: FontWeight.bold))),
+                Expanded(
+                    child: Text(t('generate.characterPrompts'),
+                        style: const TextStyle(fontWeight: FontWeight.bold))),
                 TextButton.icon(
                     onPressed: s.addCharacter,
                     icon: const Icon(Icons.add),
-                    label: const Text('添加')),
+                    label: Text(t('common.add'))),
               ],
             ),
             for (var i = 0; i < s.extras.charCaptions.length; i++)
@@ -1476,24 +1513,29 @@ class _ReferenceControls extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
+    final language = state.settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
     final extras = state.extras;
     return Card(
       child: ExpansionTile(
         leading: const Icon(Icons.auto_awesome_motion_outlined),
-        title: const Text('参考图'),
+        title: Text(t('generate.referenceImages')),
         subtitle: Text(
-          'Vibe ${extras.vibeImages.length} · 精准参考 ${extras.preciseReferences.length}',
+          mobileUiFormatFor(language, 'generate.referenceSubtitle', {
+            'vibe': extras.vibeImages.length,
+            'precise': extras.preciseReferences.length
+          }),
         ),
         childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
         children: [
-          const Align(
+          Align(
             alignment: Alignment.centerLeft,
-            child: Text('氛围迁移（Vibe Transfer）',
-                style: TextStyle(fontWeight: FontWeight.bold)),
+            child: Text(t('generate.vibeTransfer'),
+                style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
-          const Align(
+          Align(
             alignment: Alignment.centerLeft,
-            child: Text('V4/V4.5 首次使用每张图会付费编码，随后在本次运行中复用缓存。'),
+            child: Text(t('generate.vibeHint')),
           ),
           for (var index = 0; index < extras.vibeImages.length; index++)
             _VibeReferenceRow(index: index),
@@ -1502,27 +1544,27 @@ class _ReferenceControls extends StatelessWidget {
             child: OutlinedButton.icon(
               onPressed: () => _pick(context, precise: false),
               icon: const Icon(Icons.add_photo_alternate_outlined),
-              label: const Text('添加氛围迁移图'),
+              label: Text(t('generate.addVibe')),
             ),
           ),
           const Divider(height: 28),
-          const Align(
+          Align(
             alignment: Alignment.centerLeft,
-            child: Text('精准参考（仅 NovelAI V4.5）',
-                style: TextStyle(fontWeight: FontWeight.bold)),
+            child: Text(t('generate.preciseReference'),
+                style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
-          const Align(
+          Align(
             alignment: Alignment.centerLeft,
             child: Text(
-              '只原图直传。图片必须是 1024x1536、1472x1472 或 1536x1024，其他尺寸会在加入前拦截。',
+              t('generate.preciseHint'),
             ),
           ),
           if (!state.params.isV45 && extras.preciseReferences.isNotEmpty)
-            const ListTile(
+            ListTile(
               contentPadding: EdgeInsets.zero,
-              leading: Icon(Icons.warning_amber_rounded),
-              title: Text('当前模型不支持精准参考'),
-              subtitle: Text('请切换到 NovelAI V4.5 模型，或移除精准参考图。'),
+              leading: const Icon(Icons.warning_amber_rounded),
+              title: Text(t('generate.preciseUnsupportedTitle')),
+              subtitle: Text(t('generate.preciseUnsupportedSubtitle')),
             ),
           for (var index = 0; index < extras.preciseReferences.length; index++)
             _PreciseReferenceRow(index: index),
@@ -1531,7 +1573,7 @@ class _ReferenceControls extends StatelessWidget {
             child: OutlinedButton.icon(
               onPressed: () => _pick(context, precise: true),
               icon: const Icon(Icons.person_search_outlined),
-              label: const Text('添加精准参考图'),
+              label: Text(t('generate.addPrecise')),
             ),
           ),
         ],
@@ -1571,6 +1613,8 @@ class _VibeReferenceRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
+    final language = state.settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
     final item = state.extras.vibeImages[index];
     return Padding(
       padding: const EdgeInsets.only(top: 10),
@@ -1583,7 +1627,7 @@ class _VibeReferenceRow extends StatelessWidget {
             child: Column(
               children: [
                 _Slider(
-                  label: '信息提取量',
+                  label: t('generate.infoExtracted'),
                   value: item.infoExtracted,
                   min: 0,
                   max: 1,
@@ -1593,7 +1637,7 @@ class _VibeReferenceRow extends StatelessWidget {
                       state.updateVibeImage(index, infoExtracted: value),
                 ),
                 _Slider(
-                  label: '参考强度',
+                  label: t('generate.referenceStrength'),
                   value: item.strength,
                   min: 0,
                   max: 1,
@@ -1606,7 +1650,7 @@ class _VibeReferenceRow extends StatelessWidget {
             ),
           ),
           IconButton(
-            tooltip: '移除',
+            tooltip: t('common.remove'),
             onPressed: () => state.removeVibeImage(index),
             icon: const Icon(Icons.close),
           ),
@@ -1623,6 +1667,8 @@ class _PreciseReferenceRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
+    final language = state.settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
     final item = state.extras.preciseReferences[index];
     return Padding(
       padding: const EdgeInsets.only(top: 10),
@@ -1638,22 +1684,27 @@ class _PreciseReferenceRow extends StatelessWidget {
                 DropdownButtonFormField<String>(
                   value: item.type,
                   isExpanded: true,
-                  decoration: const InputDecoration(
-                    labelText: '参考类型',
-                    border: OutlineInputBorder(),
+                  decoration: InputDecoration(
+                    labelText: t('generate.referenceType'),
+                    border: const OutlineInputBorder(),
                   ),
-                  items: const [
-                    DropdownMenuItem(value: 'character', child: Text('角色')),
-                    DropdownMenuItem(value: 'style', child: Text('风格')),
+                  items: [
                     DropdownMenuItem(
-                        value: 'character&style', child: Text('角色和风格')),
+                        value: 'character',
+                        child: Text(t('generate.refType.character'))),
+                    DropdownMenuItem(
+                        value: 'style',
+                        child: Text(t('generate.refType.style'))),
+                    DropdownMenuItem(
+                        value: 'character&style',
+                        child: Text(t('generate.refType.both'))),
                   ],
                   onChanged: (value) => value == null
                       ? null
                       : state.updatePreciseReference(index, type: value),
                 ),
                 _Slider(
-                  label: '参考强度 Strength',
+                  label: t('generate.strengthLabel'),
                   value: item.strength,
                   min: 0,
                   max: 1,
@@ -1663,7 +1714,7 @@ class _PreciseReferenceRow extends StatelessWidget {
                       state.updatePreciseReference(index, strength: value),
                 ),
                 _Slider(
-                  label: '保真度 Fidelity',
+                  label: t('generate.fidelityLabel'),
                   value: item.fidelity,
                   min: 0,
                   max: 1,
@@ -1672,12 +1723,13 @@ class _PreciseReferenceRow extends StatelessWidget {
                   onChanged: (value) =>
                       state.updatePreciseReference(index, fidelity: value),
                 ),
-                Text('${item.width}x${item.height} · 发送前自动转官方尺寸'),
+                Text(mobileUiFormatFor(language, 'generate.autoOfficialSize',
+                    {'width': item.width, 'height': item.height})),
               ],
             ),
           ),
           IconButton(
-            tooltip: '移除',
+            tooltip: t('common.remove'),
             onPressed: () => state.removePreciseReference(index),
             icon: const Icon(Icons.close),
           ),
@@ -1694,6 +1746,8 @@ class _CharCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = context.watch<AppState>();
+    final language = s.settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
     final c = s.extras.charCaptions[index];
     return Padding(
       padding: const EdgeInsets.only(top: 8),
@@ -1702,7 +1756,8 @@ class _CharCard extends StatelessWidget {
           TextFormField(
             initialValue: c.prompt,
             decoration: InputDecoration(
-                labelText: '角色 ${index + 1}',
+                labelText: mobileUiFormatFor(
+                    language, 'generate.characterLabel', {'index': index + 1}),
                 border: const OutlineInputBorder(),
                 suffixIcon: IconButton(
                     icon: const Icon(Icons.delete),
@@ -1714,7 +1769,7 @@ class _CharCard extends StatelessWidget {
           ),
           CheckboxListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('指定位置'),
+            title: Text(t('generate.useCoords')),
             value: c.useCoords,
             onChanged: (v) {
               c.useCoords = v ?? false;
@@ -1861,7 +1916,7 @@ class _RunBar extends StatelessWidget {
             Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                state.status == '就绪' ? text.ready : state.status,
+                state.displayStatus,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.bodySmall,

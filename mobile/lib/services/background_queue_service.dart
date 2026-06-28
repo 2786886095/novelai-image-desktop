@@ -36,8 +36,9 @@ abstract final class BackgroundQueueService {
     FlutterForegroundTask.init(
       androidNotificationOptions: AndroidNotificationOptions(
         channelId: 'langbai_generation_queue',
-        channelName: 'Langbai 生成队列',
-        channelDescription: '图片或漫画队列在后台运行时显示进度。',
+        channelName: 'Langbai generation queue',
+        channelDescription:
+            'Shows progress while image or comic queues run in the background.',
         onlyAlertOnce: true,
       ),
       iosNotificationOptions: const IOSNotificationOptions(
@@ -87,7 +88,7 @@ abstract final class BackgroundQueueService {
         notificationTitle: title,
         notificationText: text,
         notificationButtons: const [
-          NotificationButton(id: 'cancel', text: '取消'),
+          NotificationButton(id: 'cancel', text: 'Cancel'),
         ],
       );
     } else {
@@ -97,7 +98,7 @@ abstract final class BackgroundQueueService {
         notificationTitle: title,
         notificationText: text,
         notificationButtons: const [
-          NotificationButton(id: 'cancel', text: '取消'),
+          NotificationButton(id: 'cancel', text: 'Cancel'),
         ],
         callback: queueServiceCallback,
       );
@@ -113,7 +114,7 @@ abstract final class BackgroundQueueService {
       notificationTitle: title,
       notificationText: text,
       notificationButtons: const [
-        NotificationButton(id: 'cancel', text: '取消'),
+        NotificationButton(id: 'cancel', text: 'Cancel'),
       ],
     );
   }
