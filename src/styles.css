@@ -4366,6 +4366,12 @@ html, body, #root {
     radial-gradient(circle at 100% 0, rgba(124, 58, 237, 0.08), transparent 34%),
     rgba(255, 255, 255, 0.58);
 }
+.redraw-results-only {
+  gap: 0;
+}
+.redraw-results-only .redraw-results-stage {
+  height: clamp(560px, calc(100vh - 190px), 820px);
+}
 .redraw-results-toolbar {
   flex: 0 0 auto;
   display: grid;
@@ -6730,4 +6736,600 @@ button.prompt-chip-head {
     grid-template-columns: 1fr;
   }
   .comic-panel-param-toggles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* ──────────────────────────────────────────────────────────────────────────────
+   Product Design pass · dark theme stabilization
+   The light theme already carries the intended soft glass look. Dark mode needs
+   its own contrast system instead of reusing translucent light surfaces.
+   ────────────────────────────────────────────────────────────────────────────── */
+
+.theme-dark {
+  color-scheme: dark;
+  --bg-window: #080a16;
+  --bg-panel: rgba(23, 20, 42, 0.92);
+  --bg-canvas: rgba(11, 13, 28, 0.92);
+  --bg-dialog: rgba(28, 24, 48, 0.98);
+  --bg-hover: rgba(167, 139, 250, 0.16);
+  --bg-selected: rgba(124, 58, 237, 0.28);
+  --bg-input: rgba(12, 11, 26, 0.90);
+  --border: rgba(196, 181, 253, 0.20);
+  --border-strong: rgba(216, 204, 255, 0.40);
+  --accent: #a78bfa;
+  --accent-hover: #8b5cf6;
+  --accent-soft: rgba(124, 58, 237, 0.24);
+  --accent-text: #ffffff;
+  --text-primary: #fbf9ff;
+  --text-secondary: #d9d2f4;
+  --text-muted: #aaa0c8;
+  --muted: var(--text-muted);
+  --shadow-sm: 0 10px 26px rgba(0, 0, 0, 0.22), 0 1px 0 rgba(255, 255, 255, 0.03) inset;
+  --shadow-md: 0 18px 42px rgba(0, 0, 0, 0.28), 0 0 0 1px rgba(255, 255, 255, 0.02) inset;
+  --shadow-lg: 0 26px 68px rgba(0, 0, 0, 0.34), 0 0 40px rgba(124, 58, 237, 0.08);
+  --shadow-xl: 0 36px 110px rgba(0, 0, 0, 0.48), 0 0 70px rgba(124, 58, 237, 0.12);
+}
+
+html.theme-dark,
+html.theme-dark body,
+html.theme-dark #root {
+  background:
+    radial-gradient(circle at 6% 12%, rgba(6, 182, 212, 0.14), transparent 30%),
+    radial-gradient(circle at 46% -8%, rgba(124, 58, 237, 0.18), transparent 38%),
+    radial-gradient(circle at 94% 10%, rgba(245, 158, 11, 0.08), transparent 30%),
+    linear-gradient(180deg, #0b0d19 0%, #070914 100%);
+  color: var(--text-primary);
+}
+
+.theme-dark .app-shell {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0)),
+    transparent;
+}
+
+.theme-dark .app-shell::before {
+  opacity: 0.20;
+  background: radial-gradient(circle, rgba(6, 182, 212, 0.38), transparent 64%);
+}
+
+.theme-dark .app-shell::after {
+  opacity: 0.22;
+  background: radial-gradient(circle, rgba(124, 58, 237, 0.42), transparent 66%);
+}
+
+.theme-dark ::-webkit-scrollbar-thumb {
+  background: rgba(196, 181, 253, 0.34);
+}
+
+.theme-dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(216, 204, 255, 0.56);
+}
+
+/* Chrome: stable contrast and centered text/icon rhythm */
+.theme-dark .title-bar {
+  color: var(--text-primary);
+  background: rgba(8, 10, 22, 0.76);
+  border-bottom: 1px solid rgba(196, 181, 253, 0.18);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.035) inset, 0 12px 34px rgba(0, 0, 0, 0.16);
+  backdrop-filter: blur(22px) saturate(1.12);
+}
+
+.theme-dark .window-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.theme-dark .title-icon {
+  box-shadow: 0 0 0 1px rgba(196, 181, 253, 0.25), 0 8px 18px rgba(0, 0, 0, 0.26);
+}
+
+.theme-dark .title-ver {
+  color: var(--text-muted);
+}
+
+.theme-dark .title-account {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 26px;
+  color: var(--text-secondary);
+  background: rgba(18, 16, 34, 0.78);
+  border-color: rgba(196, 181, 253, 0.24);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.24), 0 1px 0 rgba(255, 255, 255, 0.05) inset;
+}
+
+.theme-dark .title-account.online {
+  color: #bbf7d0;
+  background: rgba(22, 101, 52, 0.20);
+  border-color: rgba(74, 222, 128, 0.34);
+}
+
+.theme-dark .window-controls button {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  color: var(--text-secondary);
+  line-height: 1;
+}
+
+.theme-dark .window-controls button:hover {
+  color: var(--text-primary);
+  background: rgba(167, 139, 250, 0.14);
+}
+
+.theme-dark .compact-toolbar {
+  background: rgba(8, 10, 22, 0.50);
+  border-bottom: 1px solid rgba(196, 181, 253, 0.12);
+  backdrop-filter: blur(20px) saturate(1.08);
+}
+
+.theme-dark .menu-action,
+.theme-dark .tab-bar button,
+.theme-dark .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  background: rgba(24, 21, 43, 0.78);
+  border-color: rgba(196, 181, 253, 0.18);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.045) inset, 0 10px 24px rgba(0, 0, 0, 0.14);
+}
+
+.theme-dark .menu-action {
+  min-height: 32px;
+  line-height: 1;
+}
+
+.theme-dark .menu-action:hover,
+.theme-dark .tab-bar button:hover,
+.theme-dark .btn:hover:not(:disabled) {
+  color: var(--text-primary);
+  background: rgba(39, 33, 66, 0.92);
+  border-color: rgba(216, 204, 255, 0.34);
+}
+
+.theme-dark .icon-text,
+.theme-dark .menu-action .icon-text,
+.theme-dark .btn .icon-text,
+.theme-dark .tab-bar button > span {
+  align-items: center;
+  line-height: 1;
+}
+
+.theme-dark .btn-icon,
+.theme-dark .tab-icon {
+  display: inline-grid;
+  place-items: center;
+  color: var(--accent);
+  background: rgba(167, 139, 250, 0.16);
+  border: 1px solid rgba(196, 181, 253, 0.14);
+}
+
+.theme-dark .tab-bar {
+  background: rgba(8, 10, 22, 0.34);
+  border-bottom: 1px solid rgba(196, 181, 253, 0.10);
+}
+
+.theme-dark .tab-bar button {
+  height: 36px;
+  color: var(--text-secondary);
+  background: rgba(22, 19, 40, 0.66);
+}
+
+.theme-dark .tab-bar button.active,
+.theme-dark .btn-primary {
+  color: #fff;
+  border-color: rgba(167, 139, 250, 0.30);
+  background: linear-gradient(135deg, #7c3aed 0%, #0891b2 100%);
+  box-shadow: 0 18px 38px rgba(79, 70, 229, 0.32), 0 1px 0 rgba(255, 255, 255, 0.14) inset;
+}
+
+.theme-dark .tab-bar button.active .tab-icon {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.20);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+/* Shell surfaces: separate panels from the dark page instead of one grey wash */
+.theme-dark .workspace {
+  background: transparent;
+}
+
+.theme-dark .left-panel,
+.theme-dark .history-panel,
+.theme-dark .canvas-area,
+.theme-dark .modal,
+.theme-dark .settings-content,
+.theme-dark .settings-nav,
+.theme-dark .onboarding,
+.theme-dark .onboarding-card {
+  color: var(--text-primary);
+  background:
+    linear-gradient(145deg, rgba(31, 27, 52, 0.94), rgba(14, 16, 33, 0.88)),
+    radial-gradient(circle at 18% 0%, rgba(124, 58, 237, 0.13), transparent 42%);
+  border-color: rgba(196, 181, 253, 0.20);
+  box-shadow: var(--shadow-lg);
+}
+
+.theme-dark .canvas-area {
+  background:
+    radial-gradient(circle at 50% 18%, rgba(124, 58, 237, 0.16), transparent 36%),
+    radial-gradient(circle at 82% 78%, rgba(6, 182, 212, 0.12), transparent 34%),
+    linear-gradient(145deg, rgba(24, 22, 42, 0.94), rgba(10, 12, 26, 0.92));
+}
+
+.theme-dark .panel-head,
+.theme-dark .left-footer,
+.theme-dark .status-bar {
+  color: var(--text-primary);
+  background: rgba(16, 15, 32, 0.78);
+  border-color: rgba(196, 181, 253, 0.16);
+}
+
+.theme-dark .panel-head > span {
+  color: #fff;
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.55), rgba(6, 182, 212, 0.38));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+.theme-dark .field span,
+.theme-dark .slider-field span,
+.theme-dark .batch-row span,
+.theme-dark .history-title strong,
+.theme-dark .prompt-chip-head span,
+.theme-dark .comic-step-btn span {
+  color: var(--text-primary);
+}
+
+.theme-dark .history-title small,
+.theme-dark .prompt-chip-head small,
+.theme-dark .comic-step-btn small,
+.theme-dark .comic-queue-status,
+.theme-dark .history-meta {
+  color: var(--text-muted);
+}
+
+/* Form controls: readable text, visible borders, consistent focus ring */
+.theme-dark .field input,
+.theme-dark .field select,
+.theme-dark .field textarea,
+.theme-dark .prompt-box,
+.theme-dark .prompt-chip-search,
+.theme-dark .history-panel select,
+.theme-dark .history-group-create input,
+.theme-dark .history-item-group,
+.theme-dark .settings-body input,
+.theme-dark .settings-body select,
+.theme-dark .settings-body textarea,
+.theme-dark .comic-field input,
+.theme-dark .comic-field select,
+.theme-dark .comic-field textarea,
+.theme-dark .comic-mode-row select,
+.theme-dark .comic-reference select,
+.theme-dark .comic-reference textarea,
+.theme-dark .comic-reference-controls input,
+.theme-dark .comic-reference-controls select,
+.theme-dark .redraw-ai-mode select,
+.theme-dark .batch-ref-row input[type="number"],
+.theme-dark .redraw-strength input,
+.theme-dark .tuiwen-reference-card textarea,
+.theme-dark .prompt-variant-card textarea {
+  color: var(--text-primary);
+  background: var(--bg-input);
+  border-color: rgba(196, 181, 253, 0.22);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.035) inset;
+}
+
+.theme-dark .field input::placeholder,
+.theme-dark .field textarea::placeholder,
+.theme-dark .prompt-box::placeholder,
+.theme-dark .prompt-chip-search::placeholder,
+.theme-dark .history-group-create input::placeholder,
+.theme-dark .settings-body input::placeholder,
+.theme-dark .settings-body textarea::placeholder,
+.theme-dark .comic-field textarea::placeholder,
+.theme-dark .comic-reference textarea::placeholder,
+.theme-dark .tuiwen-reference-card textarea::placeholder,
+.theme-dark .prompt-variant-card textarea::placeholder {
+  color: rgba(217, 210, 244, 0.50);
+}
+
+.theme-dark .field input:focus,
+.theme-dark .field select:focus,
+.theme-dark .field textarea:focus,
+.theme-dark .prompt-box:focus,
+.theme-dark .prompt-chip-search:focus,
+.theme-dark .history-panel select:focus,
+.theme-dark .history-group-create input:focus,
+.theme-dark .history-item-group:focus,
+.theme-dark .settings-body input:focus,
+.theme-dark .settings-body select:focus,
+.theme-dark .settings-body textarea:focus,
+.theme-dark .comic-field input:focus,
+.theme-dark .comic-field select:focus,
+.theme-dark .comic-field textarea:focus,
+.theme-dark .comic-reference textarea:focus,
+.theme-dark .prompt-variant-card textarea:focus {
+  outline: none;
+  border-color: rgba(196, 181, 253, 0.58);
+  box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.22), 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+}
+
+/* History / material rail: stronger hierarchy and readable controls */
+.theme-dark .history-panel {
+  background:
+    linear-gradient(145deg, rgba(35, 31, 54, 0.96), rgba(17, 17, 34, 0.92)),
+    radial-gradient(circle at 0% 0%, rgba(124, 58, 237, 0.12), transparent 48%);
+}
+
+.theme-dark .history-filters {
+  gap: 9px;
+}
+
+.theme-dark .history-group-create button,
+.theme-dark .history-group-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 32px;
+  color: var(--text-secondary);
+  background: rgba(167, 139, 250, 0.13);
+  border-color: rgba(196, 181, 253, 0.20);
+  line-height: 1;
+}
+
+.theme-dark .history-group-create button:hover,
+.theme-dark .history-group-actions button:hover:not(:disabled) {
+  color: #fff;
+  background: linear-gradient(135deg, #7c3aed, #0891b2);
+  border-color: rgba(196, 181, 253, 0.30);
+}
+
+.theme-dark .history-group-actions button:disabled {
+  color: rgba(217, 210, 244, 0.42);
+  background: rgba(255, 255, 255, 0.045);
+  border-color: rgba(196, 181, 253, 0.10);
+  opacity: 1;
+}
+
+.theme-dark .history-grid::-webkit-scrollbar-thumb {
+  background: rgba(196, 181, 253, 0.32);
+}
+
+.theme-dark .history-item {
+  background: rgba(13, 14, 30, 0.76);
+  border-color: rgba(196, 181, 253, 0.16);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.22);
+}
+
+.theme-dark .history-item:hover {
+  border-color: rgba(216, 204, 255, 0.42);
+  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.30), 0 0 0 1px rgba(167, 139, 250, 0.10);
+}
+
+.theme-dark .history-item > button:first-child {
+  background: transparent;
+}
+
+.theme-dark .history-thumb-frame {
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.025)),
+    radial-gradient(circle at 50% 50%, rgba(124, 58, 237, 0.16), transparent 62%);
+}
+
+.theme-dark .history-item span,
+.theme-dark .history-item-group {
+  color: var(--text-secondary);
+}
+
+.theme-dark .history-rename,
+.theme-dark .history-delete {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.28);
+}
+
+.theme-dark .history-empty {
+  color: var(--text-muted);
+  background:
+    radial-gradient(circle at 50% 0%, rgba(124, 58, 237, 0.18), transparent 56%),
+    rgba(255, 255, 255, 0.045);
+  border-color: rgba(196, 181, 253, 0.28);
+}
+
+.theme-dark .history-empty strong {
+  color: var(--text-secondary);
+}
+
+/* Cross-tool cards: keep product-wide dark contrast consistent */
+.theme-dark .redraw-page-title,
+.theme-dark .redraw-wizard .redraw-card,
+.theme-dark .redraw-import-side,
+.theme-dark .redraw-step-footer,
+.theme-dark .redraw-results-stage,
+.theme-dark .redraw-results-toolbar,
+.theme-dark .redraw-result-filters,
+.theme-dark .redraw-result-card,
+.theme-dark .tuiwen-page-title,
+.theme-dark .tuiwen-studio .redraw-card,
+.theme-dark .tuiwen-aspect-plan,
+.theme-dark .tuiwen-shot-card,
+.theme-dark .tuiwen-tts-notice,
+.theme-dark .tuiwen-pacing-card,
+.theme-dark .comic-hero,
+.theme-dark .comic-card,
+.theme-dark .comic-log,
+.theme-dark .comic-cost-card,
+.theme-dark .comic-reference,
+.theme-dark .tools-hero,
+.theme-dark .tool-card,
+.theme-dark .comic-api-info div,
+.theme-dark .comic-inline-help,
+.theme-dark .comic-template-preview,
+.theme-dark .prompt-variant-card {
+  color: var(--text-primary);
+  background:
+    linear-gradient(145deg, rgba(31, 27, 52, 0.92), rgba(14, 16, 33, 0.88)),
+    radial-gradient(circle at 8% 0%, rgba(124, 58, 237, 0.11), transparent 42%);
+  border-color: rgba(196, 181, 253, 0.18);
+  box-shadow: var(--shadow-md);
+}
+
+.theme-dark .redraw-page-metrics span,
+.theme-dark .redraw-empty-state,
+.theme-dark .redraw-dropzone,
+.theme-dark .comic-step-btn,
+.theme-dark .comic-panel-editor-tabs,
+.theme-dark .comic-panel-no-result,
+.theme-dark .image-viewer-toolbar,
+.theme-dark .inpaint-mask-toolbar,
+.theme-dark .compare-divider span {
+  color: var(--text-secondary);
+  background: rgba(18, 16, 34, 0.82);
+  border-color: rgba(196, 181, 253, 0.18);
+}
+
+.theme-dark .comic-step-btn.active,
+.theme-dark .prompt-tabs button.active,
+.theme-dark .mode-btn.active,
+.theme-dark .director-tools button.active {
+  color: #fff;
+  background: linear-gradient(135deg, #7c3aed, #0891b2);
+  border-color: rgba(196, 181, 253, 0.30);
+}
+
+.theme-dark .prompt-tabs,
+.theme-dark .generate-mode-switcher,
+.theme-dark .mode-buttons .btn,
+.theme-dark .scale-buttons .btn,
+.theme-dark .mode-btn,
+.theme-dark .preset-row button,
+.theme-dark .prompt-chip-zone,
+.theme-dark .prompt-chip-list button,
+.theme-dark .template-chip,
+.theme-dark .tpl-item,
+.theme-dark .tpl-new,
+.theme-dark .inspect-hint,
+.theme-dark .meta-table,
+.theme-dark .wb-thumb,
+.theme-dark .inpaint-empty {
+  color: var(--text-secondary);
+  background: rgba(18, 16, 34, 0.74);
+  border-color: rgba(196, 181, 253, 0.16);
+}
+
+.theme-dark .prompt-chip-list button span,
+.theme-dark .meta-table > .mt-val,
+.theme-dark .comic-cost-card strong,
+.theme-dark .comic-thumb-select {
+  color: var(--text-primary);
+}
+
+.theme-dark .prompt-chip-list button small,
+.theme-dark .meta-table > .mt-key,
+.theme-dark .comic-cost-card span {
+  color: var(--text-muted);
+}
+
+.theme-dark .ws-resizer-grip {
+  background: rgba(196, 181, 253, 0.26);
+}
+
+.theme-dark .ws-resizer-reset {
+  background: rgba(18, 16, 34, 0.92);
+  border-color: rgba(196, 181, 253, 0.28);
+  color: var(--accent);
+}
+
+/* Product Design pass · tuiwen/header overflow + settings tag server polish */
+.tuiwen-page-title {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px 18px;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.tuiwen-page-title > div:first-child {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.tuiwen-page-title small {
+  display: block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.tuiwen-page-title .redraw-page-metrics {
+  min-width: 0;
+  flex-shrink: 0;
+}
+
+.tuiwen-actions {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.tuiwen-actions .redraw-flow-hint {
+  flex: 1 1 360px;
+  min-width: 0;
+  max-width: 100%;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+@media (max-width: 920px) {
+  .tuiwen-page-title {
+    grid-template-columns: 1fr;
+    align-items: flex-start;
+  }
+
+  .tuiwen-page-title .redraw-page-metrics {
+    justify-content: flex-start;
+  }
+
+  .tuiwen-actions .redraw-flow-hint {
+    flex-basis: 100%;
+  }
+}
+
+.theme-dark .tag-server-card {
+  color: var(--text-primary);
+  background:
+    linear-gradient(145deg, rgba(31, 27, 52, 0.94), rgba(14, 16, 33, 0.90)),
+    radial-gradient(circle at 0% 0%, rgba(124, 58, 237, 0.12), transparent 44%);
+  border-color: rgba(196, 181, 253, 0.20);
+  box-shadow: var(--shadow-md);
+}
+
+.theme-dark .tag-server-card .settings-hint,
+.theme-dark .tag-server-card .toggle-copy small {
+  color: var(--text-muted);
+}
+
+.theme-dark .tag-server-card .status-box {
+  color: var(--text-secondary);
+  background: rgba(12, 11, 26, 0.74);
+  border-color: rgba(196, 181, 253, 0.16);
+}
+
+.theme-dark .tag-server-card .status-box.ok {
+  color: #86efac;
+  background: rgba(22, 101, 52, 0.16);
+  border-color: rgba(74, 222, 128, 0.28);
+}
+
+.theme-dark .tag-server-card .status-box.bad {
+  color: #fca5a5;
+  background: rgba(127, 29, 29, 0.18);
+  border-color: rgba(248, 113, 113, 0.28);
 }

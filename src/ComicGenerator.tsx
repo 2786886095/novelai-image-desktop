@@ -2597,53 +2597,59 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
     setToast(t("batch.toast.cleared"));
   }
 
+  const compactResultsView = step === "generate";
+
   return (
-    <main className="comic-generator redraw-wizard">
-      <div className="comic-page-title redraw-page-title">
-        <div>
-          <span className="eyebrow">{t("batch.titleEyebrow")}</span>
-          <strong>{displayGroupName || t("batch.unnamedTask")}</strong>
-          <small>{t("batch.subtitle")}</small>
-        </div>
-        <div className="redraw-page-metrics" aria-label={t("batch.subtitle")}>
-          <span>
-            <b>{items.length}</b> {t("batch.metric.images")}
-          </span>
-          <span>
-            <b>{readyCount}</b> {t("batch.metric.prompted")}
-          </span>
-          <span>
-            <b>{doneCount}</b> {t("batch.metric.generated")}
-          </span>
-          <span>
-            <b>{globalStrength.toFixed(2)}</b> {t("batch.metric.strength")}
-          </span>
-        </div>
-      </div>
+    <main className={clsx("comic-generator redraw-wizard", compactResultsView && "redraw-results-only")}>
+      {!compactResultsView && (
+        <>
+          <div className="comic-page-title redraw-page-title">
+            <div>
+              <span className="eyebrow">{t("batch.titleEyebrow")}</span>
+              <strong>{displayGroupName || t("batch.unnamedTask")}</strong>
+              <small>{t("batch.subtitle")}</small>
+            </div>
+            <div className="redraw-page-metrics" aria-label={t("batch.subtitle")}>
+              <span>
+                <b>{items.length}</b> {t("batch.metric.images")}
+              </span>
+              <span>
+                <b>{readyCount}</b> {t("batch.metric.prompted")}
+              </span>
+              <span>
+                <b>{doneCount}</b> {t("batch.metric.generated")}
+              </span>
+              <span>
+                <b>{globalStrength.toFixed(2)}</b> {t("batch.metric.strength")}
+              </span>
+            </div>
+          </div>
 
-      <nav className="comic-steps">
-        {REDRAW_STEPS.map((s, i) => (
-          <button
-            key={s.key}
-            type="button"
-            className={clsx("comic-step-btn", step === s.key && "active")}
-            onClick={() => setStep(s.key)}
-          >
-            <b>{i + 1}</b>
-            <span>{t(s.labelKey)}</span>
-            <small>{t(s.hintKey)}</small>
-          </button>
-        ))}
-      </nav>
+          <nav className="comic-steps">
+            {REDRAW_STEPS.map((s, i) => (
+              <button
+                key={s.key}
+                type="button"
+                className={clsx("comic-step-btn", step === s.key && "active")}
+                onClick={() => setStep(s.key)}
+              >
+                <b>{i + 1}</b>
+                <span>{t(s.labelKey)}</span>
+                <small>{t(s.hintKey)}</small>
+              </button>
+            ))}
+          </nav>
 
-      <div className="comic-step-actions">
-        {onBack ? (
-          <Button onClick={onBack} variant="ghost">
-            {t("batch.back")}
-          </Button>
-        ) : null}
-        <span className="redraw-flow-hint">{t("batch.flowHint")}</span>
-      </div>
+          <div className="comic-step-actions">
+            {onBack ? (
+              <Button onClick={onBack} variant="ghost">
+                {t("batch.back")}
+              </Button>
+            ) : null}
+            <span className="redraw-flow-hint">{t("batch.flowHint")}</span>
+          </div>
+        </>
+      )}
 
       {step === "import" && (
         <section className="redraw-card redraw-import-stage">

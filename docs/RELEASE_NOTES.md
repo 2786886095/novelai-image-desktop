@@ -4,14 +4,22 @@
 
 | 系统 | 安装包 | 安装说明 |
 | --- | --- | --- |
-| 🪟 **Windows** (x64) | `Langbai-NovelAI-Studio-1.1.0.exe` | 便携版，双击即用，无需安装 |
-| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-1.1.0-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
-| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-1.1.0.zip` | 解压后即为 `.app`，同样需右键「打开」 |
-| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-1.1.0.AppImage` | `chmod +x` 后直接运行 |
+| 🪟 **Windows** (x64) | `Langbai-NovelAI-Studio-1.1.1.exe` | 便携版，双击即用，无需安装 |
+| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-1.1.1-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
+| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-1.1.1.zip` | 解压后即为 `.app`，同样需右键「打开」 |
+| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-1.1.1.AppImage` | `chmod +x` 后直接运行 |
 | 🤖 **Android** | `app-release.apk` | 直接安装；未签名，需允许「未知来源」 |
 | 📱 **iOS** | `novelai-mobile-unsigned.ipa` | **未签名**，需用 AltStore / Sideloadly 等工具自行侧载 |
 
 > 桌面端与移动端均为 **API-only** 客户端，需自备 NovelAI Persistent API Token。
+
+### v1.1.1 更新内容
+
+- **深色主题稳定性修复（桌面端）**：统一深色模式下的背景、面板、输入框、文字/图标对比、历史侧栏与各工具卡片，修掉之前「灰蒙、低对比、控件看不清」的问题。
+- **设置页 Tag/MCP 服务卡片深色修复**：「提示词/补全」里的 Tag/MCP 配置块不再在深色模式下显示成一大块浅灰，提示文字与状态色也跟随深色。
+- **小说推文顶部说明不再溢出**：窄窗口/深色下标题副文案与流程提示会自动换行，不再超出卡片边框。
+- **批量图生图结果页精简**：进入最终生成/结果页时隐藏上方标题板块、四步步骤卡与流程提示，把空间留给结果列表（导入/参数/提示词三步仍保留完整导航）。
+- 本次仅桌面端 UI 结构与样式调整，未改动批量生成 / ZIP 打包 / 失败重试等业务逻辑；移动端与 v1.1.0 一致（仅版本号同步）。
 
 ### v1.1.0 更新内容
 
