@@ -58,18 +58,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final languageText = settingsLanguageTextFor(s.language);
     final appearanceText = settingsAppearanceTextFor(s.language);
     final account = state.account;
-    final retentionOptions = <int>{
-      30,
-      90,
-      365,
-      3650,
-      s.historyRetentionDays,
-    }.toList()
-      ..sort();
     return Scaffold(
       appBar: AppBar(title: Text(settingsText.title)),
       body: StudioContent(
           child: ListView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         // Add the keyboard inset to the bottom so the lower fields/buttons can
         // always scroll clear of the on-screen keyboard (nested Scaffold + bottom
         // nav can otherwise leave them covered).
@@ -475,31 +468,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ]),
           _Section(title: settingsText.storageSection, children: [
-            DropdownButtonFormField<int>(
-              value: s.historyRetentionDays,
-              isExpanded: true,
-              decoration: InputDecoration(
-                labelText: settingsDetailText.historyRetention,
-                border: const OutlineInputBorder(),
-              ),
-              items: retentionOptions
-                  .map(
-                    (days) => DropdownMenuItem(
-                      value: days,
-                      child: Text(switch (days) {
-                        30 => settingsDetailText.days30,
-                        90 => settingsDetailText.days90,
-                        365 => settingsDetailText.oneYear,
-                        3650 => settingsDetailText.longRetention,
-                        _ => '$days${settingsDetailText.daysSuffix}',
-                      }),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (value) => value == null
-                  ? null
-                  : state.setSettings((x) => x.historyRetentionDays = value),
-            ),
             _TextSetting(
               label: settingsDetailText.imageNameTemplate,
               value: s.imageNameTemplate,
@@ -819,7 +787,7 @@ class _Section extends StatelessWidget {
           title: Text(title, style: Theme.of(context).textTheme.titleMedium),
           shape: const Border(),
           collapsedShape: const Border(),
-          childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+          childrenPadding: const EdgeInsets.fromLTRB(12, 16, 12, 12),
           expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
           children:
               children.expand((w) => [w, const SizedBox(height: 8)]).toList()

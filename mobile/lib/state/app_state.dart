@@ -145,22 +145,6 @@ class AppState extends ChangeNotifier {
         emotionLevel: settings.augmentEmotionLevel,
       );
       history = await storage.getHistory();
-      final cutoff = DateTime.now().subtract(
-        Duration(days: settings.historyRetentionDays.clamp(1, 3650)),
-      );
-      final retained = history.where((item) {
-        // Drop entries older than the retention window only. Missing-file
-        // cleanup is deliberately NOT done here: statting every file
-        // synchronously would stall startup on a large library. The gallery
-        // removes broken thumbnails on demand (dropMissingImage) instead.
-        final created = DateTime.tryParse(item.createdAt);
-        final tooOld = created != null && created.isBefore(cutoff);
-        return !tooOld;
-      }).toList();
-      if (retained.length != history.length) {
-        history = retained;
-        await storage.writeHistory(history);
-      }
       groups = await storage.getGroups();
       selectedGroupId = groups.any(
         (group) => group.id == settings.activeHistoryGroupId,

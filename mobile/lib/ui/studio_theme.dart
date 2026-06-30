@@ -60,6 +60,8 @@ abstract final class StudioTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: scheme.surface,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(StudioRadii.control),
           borderSide: BorderSide(color: scheme.outlineVariant),

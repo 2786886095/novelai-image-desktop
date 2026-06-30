@@ -34,6 +34,7 @@ class _ToolsHubScreenState extends State<ToolsHubScreen> {
     return Scaffold(
       appBar: AppBar(title: Text(text.title)),
       body: ListView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.all(16),
         children: [
           _ToolTile(

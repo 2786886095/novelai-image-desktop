@@ -178,6 +178,7 @@ class _StoryStep extends StatelessWidget {
     return StudioContent(
       maxWidth: 980,
       child: ListView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 100),
         children: [
           Wrap(
@@ -560,6 +561,7 @@ class _GlobalStep extends StatelessWidget {
     return StudioContent(
       maxWidth: 980,
       child: ListView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 100),
         children: [
           Align(
@@ -830,6 +832,7 @@ class _PanelEditor extends StatelessWidget {
     String t(String key) => mobileUiTextFor(language, key);
     return ListView(
       key: ValueKey('panel-editor-${panel.id}'),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 120),
       children: [
         Row(
@@ -1404,6 +1407,7 @@ class _GenerateStep extends StatelessWidget {
                 ? 3
                 : 2;
     return ListView(
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 120),
       children: [
         Card(

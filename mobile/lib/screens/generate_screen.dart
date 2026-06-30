@@ -32,7 +32,7 @@ class GenerateScreen extends StatelessWidget {
     final state = context.watch<AppState>();
     final p = state.params;
     final text = generateScreenTextFor(state.settings.language);
-    final wide = StudioBreakpoints.classify(MediaQuery.sizeOf(context).width) !=
+    final wide = StudioBreakpoints.classify(MediaQuery.sizeOf(context)) !=
         StudioWindowClass.phone;
 
     final preview = _PreviewCard(onPick: () => _pickImage(context));
@@ -116,6 +116,8 @@ class GenerateScreen extends StatelessWidget {
                 Expanded(
                   flex: 5,
                   child: SingleChildScrollView(
+                    keyboardDismissBehavior:
+                        ScrollViewKeyboardDismissBehavior.onDrag,
                     padding: const EdgeInsets.fromLTRB(16, 12, 8, 120),
                     child: preview,
                   ),
@@ -124,6 +126,8 @@ class GenerateScreen extends StatelessWidget {
                 Expanded(
                   flex: 6,
                   child: ListView(
+                    keyboardDismissBehavior:
+                        ScrollViewKeyboardDismissBehavior.onDrag,
                     padding: const EdgeInsets.fromLTRB(8, 12, 16, 120),
                     children: controls,
                   ),
@@ -131,6 +135,7 @@ class GenerateScreen extends StatelessWidget {
               ],
             )
           : ListView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
               children: [preview, const SizedBox(height: 12), ...controls],
             ),
@@ -255,11 +260,10 @@ class PromptEditorState extends State<PromptEditor> {
     final input = controller.text.trim();
     if (input.isEmpty) return;
     setState(() => translating = true);
-    final containsChinese = RegExp(r'[\u3400-\u9fff]').hasMatch(input);
     final translated = await context.read<AppState>().translateText(
-          input,
-          target: containsChinese ? 'en' : 'zh-CN',
-        );
+      input,
+      target: 'en',
+    );
     if (!mounted) return;
     setState(() => translating = false);
     if (translated == null || translated.trim().isEmpty) {
@@ -273,6 +277,7 @@ class PromptEditorState extends State<PromptEditor> {
   }
 
   Future<void> _editWeights() async {
+    FocusManager.instance.primaryFocus?.unfocus();
     final language = context.read<AppState>().settings.language;
     String t(String key) => mobileUiTextFor(language, key);
     var working = controller.text;
@@ -359,6 +364,7 @@ class PromptEditorState extends State<PromptEditor> {
   }
 
   Future<void> _openNormalize() async {
+    FocusManager.instance.primaryFocus?.unfocus();
     final language = context.read<AppState>().settings.language;
     String t(String key) => mobileUiTextFor(language, key);
     var options = const PromptNormalizeOptions();
@@ -485,6 +491,7 @@ class PromptEditorState extends State<PromptEditor> {
   }
 
   Future<void> _pickRelatedTag() async {
+    FocusManager.instance.primaryFocus?.unfocus();
     final language = context.read<AppState>().settings.language;
     String t(String key) => mobileUiTextFor(language, key);
     final tags = relatedPromptTags(controller.text);
@@ -787,6 +794,7 @@ class _TagSearchBoxState extends State<_TagSearchBox> {
   }
 
   Future<void> _openCapsules() async {
+    FocusManager.instance.primaryFocus?.unfocus();
     final categories = await taxonomy;
     if (!mounted) return;
     final text =

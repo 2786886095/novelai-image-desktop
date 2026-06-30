@@ -70,6 +70,13 @@ const STEPS = [
 ] as const;
 type StepKey = (typeof STEPS)[number]["key"];
 
+const REDRAW_STEPS = [
+  { key: "import", labelKey: "batch.step.import", hintKey: "batch.step.importHint" },
+  { key: "params", labelKey: "batch.step.params", hintKey: "batch.step.paramsHint" },
+  { key: "prompts", labelKey: "batch.step.prompts", hintKey: "batch.step.promptsHint" },
+  { key: "generate", labelKey: "batch.step.generate", hintKey: "batch.step.generateHint" },
+] as const;
+
 const COMIC_UI_TEXT: Record<string, Record<string, string>> = {
   "zh-CN": {
     "comic.step.story": "故事",
@@ -1700,29 +1707,6 @@ export function ToolsHub() {
 // tabs never loses imported images / prompts / params / references. 导出/导入项目
 // give durable file-based save-restore (localStorage would overflow on many imgs).
 
-const REDRAW_STEPS = [
-  {
-    key: "import",
-    labelKey: "batch.step.import",
-    hintKey: "batch.step.importHint",
-  },
-  {
-    key: "params",
-    labelKey: "batch.step.params",
-    hintKey: "batch.step.paramsHint",
-  },
-  {
-    key: "prompts",
-    labelKey: "batch.step.prompts",
-    hintKey: "batch.step.promptsHint",
-  },
-  {
-    key: "generate",
-    labelKey: "batch.step.generate",
-    hintKey: "batch.step.generateHint",
-  },
-] as const;
-
 const LEGACY_BATCH_GROUP_NAME = "批量图生图";
 
 function useBatchLocale() {
@@ -2597,59 +2581,83 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
     setToast(t("batch.toast.cleared"));
   }
 
-  const compactResultsView = step === "generate";
-
   return (
-    <main className={clsx("comic-generator redraw-wizard", compactResultsView && "redraw-results-only")}>
-      {!compactResultsView && (
-        <>
-          <div className="comic-page-title redraw-page-title">
-            <div>
-              <span className="eyebrow">{t("batch.titleEyebrow")}</span>
-              <strong>{displayGroupName || t("batch.unnamedTask")}</strong>
-              <small>{t("batch.subtitle")}</small>
-            </div>
-            <div className="redraw-page-metrics" aria-label={t("batch.subtitle")}>
-              <span>
-                <b>{items.length}</b> {t("batch.metric.images")}
-              </span>
-              <span>
-                <b>{readyCount}</b> {t("batch.metric.prompted")}
-              </span>
-              <span>
-                <b>{doneCount}</b> {t("batch.metric.generated")}
-              </span>
-              <span>
-                <b>{globalStrength.toFixed(2)}</b> {t("batch.metric.strength")}
-              </span>
-            </div>
-          </div>
+    <main className="comic-generator redraw-wizard">
+      <div className="comic-page-title redraw-page-title">
+        <div>
+          <span className="eyebrow">{t("batch.titleEyebrow")}</span>
+          <strong>{displayGroupName || t("batch.unnamedTask")}</strong>
+        </div>
+        <div className="redraw-page-metrics" aria-label={t("batch.titleEyebrow")}>
+          <span>
+            <b>{items.length}</b>
+            {t("batch.metric.images")}
+          </span>
+          <span>
+            <b>{readyCount}</b>
+            {t("batch.metric.prompted")}
+          </span>
+          <span>
+            <b>{doneCount}</b>
+            {t("batch.metric.generated")}
+          </span>
+          <span>
+            <b>{globalStrength.toFixed(2)}</b>
+            {t("batch.metric.strength")}
+          </span>
+        </div>
+      </div>
 
-          <nav className="comic-steps">
-            {REDRAW_STEPS.map((s, i) => (
-              <button
-                key={s.key}
-                type="button"
-                className={clsx("comic-step-btn", step === s.key && "active")}
-                onClick={() => setStep(s.key)}
-              >
-                <b>{i + 1}</b>
-                <span>{t(s.labelKey)}</span>
-                <small>{t(s.hintKey)}</small>
-              </button>
-            ))}
-          </nav>
+      <nav className="comic-steps" aria-label={t("batch.titleEyebrow")}>
+        {REDRAW_STEPS.map((meta, index) => (
+          <button
+            type="button"
+            key={meta.key}
+            className={clsx("comic-step-btn", step === meta.key && "active")}
+            onClick={() => setStep(meta.key)}
+            disabled={running && meta.key !== "generate"}
+            aria-current={step === meta.key ? "step" : undefined}
+          >
+            <b>{index + 1}</b>
+            <span>{t(meta.labelKey)}</span>
+            <small>{t(meta.hintKey)}</small>
+          </button>
+        ))}
+      </nav>
 
-          <div className="comic-step-actions">
-            {onBack ? (
-              <Button onClick={onBack} variant="ghost">
-                {t("batch.back")}
-              </Button>
-            ) : null}
-            <span className="redraw-flow-hint">{t("batch.flowHint")}</span>
-          </div>
-        </>
-      )}
+      <div className="comic-step-actions redraw-header-actions">
+        {onBack ? (
+          <Button onClick={onBack} variant="ghost">
+            {t("batch.back")}
+          </Button>
+        ) : null}
+        <Button
+          variant="secondary"
+          onClick={exportProject}
+          disabled={items.length === 0}
+        >
+          {t("batch.import.exportProject")}
+        </Button>
+        <label className="btn btn-secondary redraw-file-btn">
+          {t("batch.import.importProject")}
+          <input
+            type="file"
+            hidden
+            accept=".json,application/json"
+            onChange={(e) => {
+              void importProject(e.target.files?.[0] ?? null);
+              e.target.value = "";
+            }}
+          />
+        </label>
+        <Button
+          variant="ghost"
+          onClick={clearProject}
+          disabled={running || items.length === 0}
+        >
+          {t("batch.import.clear")}
+        </Button>
+      </div>
 
       {step === "import" && (
         <section className="redraw-card redraw-import-stage">
@@ -2756,13 +2764,15 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
                 ? f("batch.import.footerReady", { count: items.length })
                 : t("batch.import.footerEmpty")}
             </span>
-            <Button
-              variant="primary"
-              onClick={() => setStep("params")}
-              disabled={items.length === 0}
-            >
-              {t("batch.next.params")}
-            </Button>
+            <div className="redraw-step-footer-actions">
+              <Button
+                variant="primary"
+                onClick={() => setStep("params")}
+                disabled={items.length === 0}
+              >
+                {t("batch.next.params")}
+              </Button>
+            </div>
           </div>
         </section>
       )}
@@ -2824,13 +2834,18 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
           />
           <div className="redraw-step-footer">
             <span>{t("batch.params.footer")}</span>
-            <Button
-              variant="primary"
-              onClick={() => setStep("prompts")}
-              disabled={items.length === 0}
-            >
-              {t("batch.next.prompts")}
-            </Button>
+            <div className="redraw-step-footer-actions">
+              <Button variant="ghost" onClick={() => setStep("import")}>
+                {t("batch.prev.import")}
+              </Button>
+              <Button
+                variant="primary"
+                onClick={() => setStep("prompts")}
+                disabled={items.length === 0}
+              >
+                {t("batch.next.prompts")}
+              </Button>
+            </div>
           </div>
         </section>
       )}
@@ -3066,13 +3081,18 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
                   })
                 : t("batch.prompts.footerEmpty")}
             </span>
-            <Button
-              variant="primary"
-              onClick={() => setStep("generate")}
-              disabled={readyCount === 0}
-            >
-              {t("batch.next.generate")}
-            </Button>
+            <div className="redraw-step-footer-actions">
+              <Button variant="ghost" onClick={() => setStep("params")}>
+                {t("batch.prev.params")}
+              </Button>
+              <Button
+                variant="primary"
+                onClick={() => setStep("generate")}
+                disabled={readyCount === 0}
+              >
+                {t("batch.next.generate")}
+              </Button>
+            </div>
           </div>
         </section>
       )}
@@ -3168,6 +3188,20 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
                   </Button>
                 </>
               )}
+              <Button
+                variant="ghost"
+                onClick={() => setStep("params")}
+                disabled={running}
+              >
+                {t("batch.results.editParams")}
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => setStep("prompts")}
+                disabled={running}
+              >
+                {t("batch.results.editPrompts")}
+              </Button>
               <Button
                 variant="secondary"
                 onClick={() => void exportZip()}

@@ -55,6 +55,11 @@ class NovelAIApp extends StatelessWidget {
         'dark' => ThemeMode.dark,
         _ => ThemeMode.system,
       },
+      builder: (context, child) => GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+        child: child ?? const SizedBox.shrink(),
+      ),
       home: const HomeShell(),
     );
   }
@@ -124,7 +129,10 @@ class _HomeShellState extends State<HomeShell> {
     }
     return StudioAdaptiveShell(
       selectedIndex: _index,
-      onDestinationSelected: (index) => setState(() => _index = index),
+      onDestinationSelected: (index) {
+        FocusManager.instance.primaryFocus?.unfocus();
+        setState(() => _index = index);
+      },
       destinations: destinations,
       pages: _pages,
       moreLabel: shellText.moreLabel,

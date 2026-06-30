@@ -81,6 +81,7 @@ class _ReversePanelState extends State<_ReversePanel> {
         IconButton(onPressed: widget.onPick, icon: const Icon(Icons.image))
       ]),
       body: ListView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.all(16),
         children: [
           AspectRatio(
@@ -231,6 +232,7 @@ class _ConvertPanelState extends State<_ConvertPanel> {
     return Scaffold(
       appBar: AppBar(title: Text(t('inspect.convertTitle'))),
       body: ListView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.all(16),
         children: [
           TextField(

@@ -1922,6 +1922,25 @@ button { user-select: none; }
   font-weight: 900;
   box-shadow: inset 0 -16px 0 rgba(109, 40, 217, 0.10);
 }
+.onboarding-hero-asset {
+  align-self: stretch;
+  justify-self: stretch;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid rgba(124, 58, 237, 0.14);
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 50% 20%, rgba(255, 255, 255, 0.45), transparent 42%),
+    rgba(255, 255, 255, 0.36);
+  box-shadow: 0 18px 42px rgba(60, 40, 120, 0.13);
+}
+.onboarding-hero-asset img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 45%;
+}
 .onboarding-content { align-self: center; }
 .onboarding-content h2 { font-size: 28px; margin: 0 0 12px; font-weight: 700; }
 .onboarding-content p { max-width: 520px; color: var(--text-secondary); line-height: 1.65; }
@@ -2494,6 +2513,11 @@ button { user-select: none; }
 .theme-dark .onboarding-top button { color: var(--text-muted); }
 .theme-dark .intro-grid div { background: var(--bg-panel); border-color: var(--border); }
 .theme-dark .chibi { background: linear-gradient(145deg, #4c1d95, #5b21b6); color: #c4b5fd; }
+.theme-dark .onboarding-hero-asset {
+  border-color: rgba(196, 181, 253, 0.18);
+  background: rgba(18, 16, 34, 0.74);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.28);
+}
 
 /* Dark: splash */
 .theme-dark .splash-page { background: #100d20; }
@@ -3714,6 +3738,17 @@ html, body, #root {
   gap: 12px;
 }
 
+.redraw-tool-back {
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+}
+
+.redraw-tool-back .btn {
+  min-height: 34px;
+  padding-inline: 12px;
+}
+
 .redraw-page-title {
   align-items: center;
   justify-content: space-between;
@@ -3802,6 +3837,15 @@ html, body, #root {
 .redraw-wizard .comic-step-actions {
   align-items: center;
   padding: 0 2px;
+}
+
+/* File-input labels styled as buttons (e.g. 导入项目) must center their text
+   like the real <button> siblings; without this the label's text sits at the
+   top of the 30px box and the control drifts above the adjacent buttons. */
+.redraw-file-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .redraw-wizard .redraw-card {
@@ -3917,6 +3961,14 @@ html, body, #root {
 .redraw-step-footer .btn {
   min-height: 36px;
   white-space: nowrap;
+}
+
+.redraw-step-footer-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 /* Thumbnail grid for the import step. */
@@ -4472,7 +4524,7 @@ html, body, #root {
   justify-content: flex-end;
   flex-wrap: wrap;
   gap: 8px;
-  max-width: 520px;
+  max-width: 680px;
 }
 .redraw-results-actions .btn { min-height: 36px; }
 
@@ -4788,6 +4840,17 @@ html, body, #root {
 
 .tuiwen-actions {
   align-items: center;
+}
+
+.tuiwen-actions > .btn,
+.tuiwen-actions > label.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  margin: 0;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .comic-inline-actions {

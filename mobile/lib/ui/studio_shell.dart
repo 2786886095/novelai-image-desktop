@@ -6,7 +6,12 @@ abstract final class StudioBreakpoints {
   static const double tablet = 600;
   static const double wideTablet = 1180;
 
-  static StudioWindowClass classify(double width) {
+  static StudioWindowClass classify(Size size) {
+    // A phone in landscape can easily be wider than 600dp, but its short side
+    // is still phone-sized. Treating it as a tablet produced a cramped rail
+    // layout with unreliable hit areas.
+    if (size.shortestSide < tablet) return StudioWindowClass.phone;
+    final width = size.width;
     if (width >= wideTablet) return StudioWindowClass.wideTablet;
     if (width >= tablet) return StudioWindowClass.tablet;
     return StudioWindowClass.phone;
@@ -22,8 +27,7 @@ class StudioContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final phone =
-        StudioBreakpoints.classify(MediaQuery.sizeOf(context).width) ==
+    final phone = StudioBreakpoints.classify(MediaQuery.sizeOf(context)) ==
             StudioWindowClass.phone;
     if (phone) return child;
     return Align(
@@ -69,7 +73,7 @@ class StudioAdaptiveShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final windowClass =
-        StudioBreakpoints.classify(MediaQuery.sizeOf(context).width);
+        StudioBreakpoints.classify(MediaQuery.sizeOf(context));
     if (windowClass == StudioWindowClass.phone) {
       return _PhoneShell(
         selectedIndex: selectedIndex,
@@ -113,11 +117,13 @@ class _PhoneShell extends StatelessWidget {
     final phoneIndex = primary.indexOf(selectedIndex);
     return Scaffold(
       key: const ValueKey('studio-phone-shell'),
+      resizeToAvoidBottomInset: false,
       body: IndexedStack(index: selectedIndex, children: pages),
       bottomNavigationBar: NavigationBar(
         key: const ValueKey('studio-phone-navigation'),
         selectedIndex: phoneIndex < 0 ? primary.length : phoneIndex,
         onDestinationSelected: (index) {
+          FocusManager.instance.primaryFocus?.unfocus();
           if (index < primary.length) {
             onDestinationSelected(primary[index]);
           } else {
@@ -142,44 +148,64 @@ class _PhoneShell extends StatelessWidget {
   }
 
   Future<void> _showMoreSheet(BuildContext context) async {
+    FocusManager.instance.primaryFocus?.unfocus();
     final primary = StudioAdaptiveShell._phonePrimaryIndexes.toSet();
     final target = await showModalBottomSheet<int>(
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
-      builder: (context) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(allFeaturesLabel,
-                  style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 12),
-              GridView.count(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                crossAxisCount: 3,
-                mainAxisSpacing: 8,
-                crossAxisSpacing: 8,
-                childAspectRatio: 1.25,
+      useSafeArea: true,
+      builder: (context) {
+        final size = MediaQuery.sizeOf(context);
+        final landscape = size.width > size.height;
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: size.height * 0.82),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  for (var index = 0; index < destinations.length; index++)
-                    if (!primary.contains(index))
-                      _MoreDestinationButton(
-                        destination: destinations[index],
-                        selected: selectedIndex == index,
-                        onPressed: () => Navigator.pop(context, index),
-                      ),
+                  Text(allFeaturesLabel,
+                      style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 12),
+                  Flexible(
+                    child: GridView.count(
+                      shrinkWrap: true,
+                      keyboardDismissBehavior:
+                          ScrollViewKeyboardDismissBehavior.onDrag,
+                      crossAxisCount: landscape ? 4 : 3,
+                      mainAxisSpacing: 8,
+                      crossAxisSpacing: 8,
+                      childAspectRatio: landscape ? 1.55 : 1.25,
+                      children: [
+                        for (var index = 0;
+                            index < destinations.length;
+                            index++)
+                          if (!primary.contains(index))
+                            _MoreDestinationButton(
+                              destination: destinations[index],
+                              selected: selectedIndex == index,
+                              onPressed: () {
+                                FocusManager.instance.primaryFocus?.unfocus();
+                                Navigator.pop(context, index);
+                              },
+                            ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
-    if (target != null) onDestinationSelected(target);
+    if (target != null) {
+      FocusManager.instance.primaryFocus?.unfocus();
+      onDestinationSelected(target);
+    }
   }
 }
 
@@ -236,6 +262,7 @@ class _TabletShell extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       key: const ValueKey('studio-tablet-shell'),
+      resizeToAvoidBottomInset: false,
       body: SafeArea(
         child: Row(
           children: [
@@ -244,7 +271,10 @@ class _TabletShell extends StatelessWidget {
               extended: extended,
               minExtendedWidth: 208,
               selectedIndex: selectedIndex,
-              onDestinationSelected: onDestinationSelected,
+              onDestinationSelected: (index) {
+                FocusManager.instance.primaryFocus?.unfocus();
+                onDestinationSelected(index);
+              },
               labelType: extended
                   ? NavigationRailLabelType.none
                   : NavigationRailLabelType.selected,

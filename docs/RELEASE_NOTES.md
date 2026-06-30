@@ -4,14 +4,23 @@
 
 | 系统 | 安装包 | 安装说明 |
 | --- | --- | --- |
-| 🪟 **Windows** (x64) | `Langbai-NovelAI-Studio-1.1.1.exe` | 便携版，双击即用，无需安装 |
-| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-1.1.1-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
-| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-1.1.1.zip` | 解压后即为 `.app`，同样需右键「打开」 |
-| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-1.1.1.AppImage` | `chmod +x` 后直接运行 |
+| 🪟 **Windows** (x64) | `Langbai-NovelAI-Studio-1.1.2.exe` | 便携版，双击即用，无需安装 |
+| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-1.1.2-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
+| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-1.1.2.zip` | 解压后即为 `.app`，同样需右键「打开」 |
+| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-1.1.2.AppImage` | `chmod +x` 后直接运行 |
 | 🤖 **Android** | `app-release.apk` | 直接安装；未签名，需允许「未知来源」 |
 | 📱 **iOS** | `novelai-mobile-unsigned.ipa` | **未签名**，需用 AltStore / Sideloadly 等工具自行侧载 |
 
 > 桌面端与移动端均为 **API-only** 客户端，需自备 NovelAI Persistent API Token。
+
+### v1.1.2 更新内容
+
+- **批量图生图顶部恢复步骤卡导航**：导入 / 参数 / 提示词 / 生成 四个步骤卡可自由点击切换（生成进行中只锁定为生成页）；顶部保留 返回 / 导出项目 / 导入项目 / 清空。
+- **历史记录改为永久保存**：删除「历史记录保留天数」设置，历史不再被自动按天清理（桌面端 + 移动端）。
+- **历史跟随真实文件状态（桌面端）**：图片被移动到输出目录下其他日期/分组时，记录自动挂到新分组并保留原时间；文件找不到时自动移除该条记录，但**绝不删除任何图片文件**。
+- **翻译按钮改为「自动检测→英文」**：不再按「是否中文」判断目标语言，中/日/韩等都会转英文，英文 Danbooru tag 原样保留；按钮与设置说明文案五种语言同步更新。
+- **引导界面重新打开时回填已有配置**：再次打开引导会显示已保存的代理 / 反推·转换密钥 / 输出目录；Token 出于安全无法读回明文，改为显示「已配置」状态并允许留空保持不变。
+- **批量图生图顶部对齐修复**：步骤卡标题/说明恢复为与漫画生成器一致的两行布局；「导入项目」按钮文字垂直居中，不再相对相邻按钮上漂。
 
 ### v1.1.1 更新内容
 

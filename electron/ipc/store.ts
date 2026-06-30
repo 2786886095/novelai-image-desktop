@@ -2,6 +2,7 @@ import { app, safeStorage } from "electron";
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
+import { pathToFileURL } from "url";
 import type { AccountSummary, AppSettings, HistoryGroup, HistoryItem, SettingKey } from "../../src/types";
 import { COMIC_ANALYZE_SYSTEM_PROMPT, SCOPED_REVERSE_SYSTEM_PROMPTS } from "../../src/data/prompt-templates";
 
@@ -225,20 +226,6 @@ export function defaultSettings(): AppSettings {
   };
 }
 
-// Drop history-list entries older than the configured retention window. This
-// only trims the in-app history index — the saved image FILES on disk are never
-// deleted, so nothing irreversible happens. Entries with an unparseable date are
-// always kept as a safety net.
-function pruneHistoryByRetention(history: HistoryItem[], retentionDays: number): HistoryItem[] {
-  if (!Array.isArray(history) || history.length === 0) return history;
-  if (!Number.isFinite(retentionDays) || retentionDays <= 0) return history;
-  const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
-  return history.filter((item) => {
-    const stamp = Date.parse(item?.createdAt || item?.date || "");
-    return Number.isNaN(stamp) || stamp >= cutoff;
-  });
-}
-
 function normalize(raw: Partial<PersistedData> | null): PersistedData {
   const defaults = defaultSettings();
   const rawSettings = (raw?.settings ?? {}) as Partial<AppSettings>;
@@ -271,7 +258,7 @@ function normalize(raw: Partial<PersistedData> | null): PersistedData {
     token: typeof raw?.token === "string" ? raw.token : undefined,
     account: raw?.account && typeof raw.account === "object" ? raw.account : undefined,
     settings,
-    history: pruneHistoryByRetention(Array.isArray(raw?.history) ? raw.history : [], settings.historyRetentionDays),
+    history: Array.isArray(raw?.history) ? raw.history : [],
     historyGroups: Array.isArray(raw?.historyGroups) ? raw.historyGroups : [],
   };
 }
@@ -371,35 +358,160 @@ export function addHistory(items: HistoryItem[]) {
   writeStore(data);
 }
 
-// Drop history entries whose image file no longer exists on disk (e.g. the user
-// deleted it in Explorer), so the in-app library stays in sync. Scheduled once
-// per session, OFF the boot path: statting a large library synchronously inside
-// the first getHistory call would stall startup. The renderer also removes
-// broken thumbnails at render time (dropMissingImage), so a slightly delayed
-// sweep is invisible.
-let historyPruneScheduled = false;
-function scheduleHistoryPrune(): void {
-  if (historyPruneScheduled) return;
-  historyPruneScheduled = true;
-  setTimeout(() => {
+function sanitizeGroupFolderName(name: string): string {
+  const cleaned = name
+    .replace(/[\\/:*?"<>|]+/g, "-")
+    .replace(/\s+/g, "_")
+    .replace(/^\.+/, "")
+    .trim()
+    .slice(0, 80);
+  return cleaned || "group";
+}
+
+function fileExists(filePath: string): boolean {
+  try {
+    return fs.existsSync(filePath);
+  } catch {
+    return false;
+  }
+}
+
+function isInside(parent: string, child: string): boolean {
+  try {
+    const rel = path.relative(path.resolve(parent), path.resolve(child));
+    return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
+  } catch {
+    return false;
+  }
+}
+
+function inferGroupIdFromPath(filePath: string, data: PersistedData): string | undefined {
+  const outputDir = data.settings.outputDir?.trim();
+  if (!outputDir || !isInside(outputDir, filePath)) return undefined;
+  const relParts = path.relative(outputDir, filePath).split(path.sep).filter(Boolean);
+  if (relParts.length < 3 || !/^\d{4}-\d{2}-\d{2}$/.test(relParts[0])) return undefined;
+
+  const folderName = relParts[1];
+  const folderKey = folderName.toLowerCase();
+  const existing = data.historyGroups.find((group) => {
+    const nameKey = group.name.trim().toLowerCase();
+    const safeKey = sanitizeGroupFolderName(group.name).toLowerCase();
+    return nameKey === folderKey || safeKey === folderKey;
+  });
+  if (existing) return existing.id;
+
+  const created: HistoryGroup = {
+    id: crypto.randomUUID(),
+    name: folderName.replace(/_/g, " ").trim() || folderName,
+    createdAt: new Date().toISOString(),
+  };
+  data.historyGroups = [...data.historyGroups, created];
+  return created.id;
+}
+
+function buildFileNameIndex(root: string): Map<string, string[]> {
+  const index = new Map<string, string[]>();
+  if (!root || !fileExists(root)) return index;
+  const stack = [root];
+  let scanned = 0;
+  const maxScan = 60_000;
+  while (stack.length > 0 && scanned < maxScan) {
+    const dir = stack.pop()!;
+    let entries: fs.Dirent[];
     try {
-      const data = readStore();
-      const kept = data.history.filter((item) => {
-        if (!item.filePath) return true;
-        try {
-          return fs.existsSync(item.filePath);
-        } catch {
-          return true; // a stat error shouldn't silently delete a record
-        }
-      });
-      if (kept.length !== data.history.length) {
-        data.history = kept;
-        writeStore(data);
-      }
+      entries = fs.readdirSync(dir, { withFileTypes: true });
     } catch {
-      // A failed sweep is non-fatal; it retries next session.
+      continue;
     }
-  }, 2000);
+    scanned += entries.length;
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(full);
+      } else if (entry.isFile()) {
+        const key = entry.name.toLowerCase();
+        const list = index.get(key);
+        if (list) list.push(full);
+        else index.set(key, [full]);
+      }
+    }
+  }
+  return index;
+}
+
+function findMovedHistoryFile(
+  item: HistoryItem,
+  data: PersistedData,
+  indexCache: Map<string, Map<string, string[]>>,
+): string | null {
+  if (!item.filePath) return null;
+  const fileName = path.basename(item.filePath).toLowerCase();
+  const roots = [
+    data.settings.outputDir && item.date ? path.join(data.settings.outputDir, item.date) : "",
+    data.settings.outputDir,
+  ].filter(Boolean);
+  const uniqueRoots = Array.from(new Set(roots.map((root) => path.resolve(root))));
+  for (const root of uniqueRoots) {
+    if (!fileExists(root)) continue;
+    let index = indexCache.get(root);
+    if (!index) {
+      index = buildFileNameIndex(root);
+      indexCache.set(root, index);
+    }
+    const candidate = index.get(fileName)?.find((p) => fileExists(p));
+    if (candidate) return candidate;
+  }
+  return null;
+}
+
+// History is permanent now: records are never deleted because they are old.
+// Instead the index mirrors real files. If an image was moved inside the output
+// directory (for example from one group folder to another), the record follows
+// that file and keeps its original createdAt/date. If it cannot be found, only
+// the stale record is removed.
+function reconcileHistoryFiles(): void {
+  const data = readStore();
+  if (data.history.length === 0) return;
+  const indexCache = new Map<string, Map<string, string[]>>();
+  let changed = false;
+  const next: HistoryItem[] = [];
+
+  for (const item of data.history) {
+    if (!item.filePath) {
+      next.push(item);
+      continue;
+    }
+
+    if (fileExists(item.filePath)) {
+      const inferredGroupId = inferGroupIdFromPath(item.filePath, data);
+      if (inferredGroupId !== item.groupId) {
+        next.push({ ...item, groupId: inferredGroupId });
+        changed = true;
+      } else {
+        next.push(item);
+      }
+      continue;
+    }
+
+    const movedPath = findMovedHistoryFile(item, data, indexCache);
+    if (!movedPath) {
+      changed = true;
+      continue;
+    }
+
+    next.push({
+      ...item,
+      filePath: movedPath,
+      fileUrl: pathToFileURL(movedPath).toString(),
+      groupId: inferGroupIdFromPath(movedPath, data),
+    });
+    changed = true;
+  }
+
+  if (changed) {
+    data.history = next;
+    writeStore(data);
+  }
 }
 
 // Remove a single history record when its image file is gone from disk (called
@@ -411,9 +523,17 @@ export function pruneMissingHistoryItem(id: string): boolean {
   const data = readStore();
   const item = data.history.find((h) => h.id === id);
   if (!item || !item.filePath) return false;
-  try {
-    if (fs.existsSync(item.filePath)) return false;
-  } catch {
+  if (fileExists(item.filePath)) return false;
+  const movedPath = findMovedHistoryFile(item, data, new Map());
+  if (movedPath) {
+    const updated = {
+      ...item,
+      filePath: movedPath,
+      fileUrl: pathToFileURL(movedPath).toString(),
+      groupId: inferGroupIdFromPath(movedPath, data),
+    };
+    data.history = data.history.map((h) => (h.id === id ? updated : h));
+    writeStore(data);
     return false;
   }
   data.history = data.history.filter((h) => h.id !== id);
@@ -422,7 +542,7 @@ export function pruneMissingHistoryItem(id: string): boolean {
 }
 
 export function getHistory(date?: string, groupId?: string): HistoryItem[] {
-  scheduleHistoryPrune();
+  reconcileHistoryFiles();
   const history = readStore().history;
   return history.filter((item) => {
     if (date && item.date !== date) return false;
@@ -433,6 +553,7 @@ export function getHistory(date?: string, groupId?: string): HistoryItem[] {
 }
 
 export function getHistoryDates(): string[] {
+  reconcileHistoryFiles();
   return Array.from(new Set(readStore().history.map((item) => item.date))).sort().reverse();
 }
 
@@ -457,6 +578,7 @@ export function updateHistoryItem(id: string, patch: Partial<HistoryItem>): Hist
 }
 
 export function getHistoryGroups(): HistoryGroup[] {
+  reconcileHistoryFiles();
   return readStore().historyGroups;
 }
 

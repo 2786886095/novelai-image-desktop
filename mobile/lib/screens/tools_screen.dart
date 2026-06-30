@@ -47,6 +47,7 @@ class ToolsScreen extends StatelessWidget {
       ]),
       body: StudioContent(
         child: ListView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
           children: [
             if (kind != ToolPageKind.inpaint) ...[

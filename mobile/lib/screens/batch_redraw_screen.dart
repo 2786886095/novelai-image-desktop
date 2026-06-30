@@ -253,6 +253,7 @@ class _ImportStep extends StatelessWidget {
     return StudioContent(
       maxWidth: 980,
       child: ListView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 100),
         children: [
           Wrap(
@@ -341,6 +342,7 @@ class _ParamsStep extends StatelessWidget {
     return StudioContent(
       maxWidth: 880,
       child: ListView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 100),
         children: [
           Align(
@@ -659,6 +661,7 @@ class _PromptsStep extends StatelessWidget {
     String t(String key) => mobileUiTextFor(language, key);
     final project = controller.project;
     return ListView(
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 100),
       children: [
         DropdownButtonFormField<ReversePromptMode>(
@@ -834,6 +837,7 @@ class _BatchGenerateStep extends StatelessWidget {
         ? null
         : controller.queueDone / controller.queueTotal;
     return ListView(
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 100),
       children: [
         _BatchGenerateConsole(

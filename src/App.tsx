@@ -77,6 +77,11 @@ const novelAiImageUrl = "https://novelai.net/image";
 const DEFAULT_HTTP_PROXY = "http://127.0.0.1:7890";
 const DEFAULT_SOCKS_PROXY = "socks5://127.0.0.1:10808";
 const appIconUrl = "./icon.png";
+const onboardingHeroUrl = "./onboarding-hero.png";
+
+function hasTranslatableText(segment: string) {
+  return /[\p{Letter}\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u.test(segment);
+}
 
 function fitSizeWithinPixels(width: number, height: number, maxPixels: number) {
   const pixels = width * height;
@@ -1077,28 +1082,32 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
       setToast(t("prompt.emptyTranslate"));
       return;
     }
-    if (!/[一-鿿]/.test(text)) {
-      setToast(t("prompt.alreadyEnglish"));
-      return;
-    }
     setTranslating(true);
     const original = promptValue;
     try {
-      // Translate only the comma-separated segments that contain Chinese, leaving
-      // existing English tags untouched — a mixed CN/EN prompt would otherwise be
-      // mistranslated or fail as a whole.
+      // Translate comma-separated natural-language segments with provider-side
+      // auto language detection. English Danbooru tags normally round-trip to the
+      // same text, while Chinese/Japanese/Korean/other languages become English.
       const segments = text.split(",");
+      let translatedAny = false;
       let failed = false;
       const translated = await Promise.all(
         segments.map(async (seg) => {
           const trimmed = seg.trim();
-          if (!trimmed || !/[一-鿿]/.test(trimmed)) return trimmed;
+          if (!trimmed || !hasTranslatableText(trimmed)) return trimmed;
           const res = await window.naiDesktop.translate(trimmed, "en");
-          if (res.ok && res.text) return res.text.trim();
+          if (res.ok && res.text) {
+            translatedAny = true;
+            return res.text.trim();
+          }
           failed = true;
           return trimmed;
         }),
       );
+      if (!translatedAny && failed) {
+        setToast(t("prompt.translateFailed"));
+        return;
+      }
       const joined = translated.filter(Boolean).join(", ");
       setParam(promptKey, joined + (joined.endsWith(",") ? " " : ", "));
       setTranslateBackup((b) => ({ ...b, [promptKey]: original }));
@@ -3803,12 +3812,6 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                     {f("settings.imageNameHint", { placeholders: "{date} {time} {seq} {seed} {model} {type} {ts}" })}
                   </small>
                 </label>
-                <label className="field">
-                  <NumberInput label={t("settings.historyRetentionDays")} value={settings.historyRetentionDays} min={1} max={3650} onChange={(v) => void update("historyRetentionDays", v)} />
-                  <small className="settings-hint">
-                    {t("settings.historyRetentionHint")}
-                  </small>
-                </label>
               </div>
             )}
             {section === "performance" && (
@@ -4179,7 +4182,9 @@ function OnboardingWizard() {
   const settings = useAppStore((state) => state.settings);
   const load = useAppStore((state) => state.load);
   const setShowOnboarding = useAppStore((state) => state.setShowOnboarding);
+  const refreshSettings = useAppStore((state) => state.refreshSettings);
   const refreshAccount = useAppStore((state) => state.refreshAccount);
+  const account = useAppStore((state) => state.account);
   const language = settings?.language;
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
@@ -4227,7 +4232,9 @@ function OnboardingWizard() {
               <strong>{APP_NAME}</strong>
               <span>{f("onboarding.step", { current: step + 1, total: cards.length })}</span>
             </div>
-            <div className="chibi">N</div>
+            <div className="onboarding-hero-asset">
+              <img src={onboardingHeroUrl} alt="" />
+            </div>
             <div className="card-foot">ⓘ {cards[step].badge}</div>
           </aside>
           <section className="onboarding-content">
@@ -4277,9 +4284,12 @@ function OnboardingWizard() {
             )}
             {step === 2 && (
               <div className="settings-form">
+                {account.hasToken && !tokenStatus && (
+                  <div className="status-box ok">{t("onboarding.tokenConfigured")}</div>
+                )}
                 <label className="field wide">
                   <span>{t("settings.apiTokenLabel")}</span>
-                  <input type="password" value={token} placeholder={t("settings.apiTokenPlaceholder")} onChange={(e) => setToken(e.target.value)} />
+                  <input type="password" value={token} placeholder={account.hasToken ? t("onboarding.tokenKeep") : t("settings.apiTokenPlaceholder")} onChange={(e) => setToken(e.target.value)} />
                 </label>
                 <div className="row-actions">
                   <Button variant="primary" onClick={verify} disabled={checking}>
@@ -4333,8 +4343,11 @@ function OnboardingWizard() {
                 </label>
                 <Button
                   onClick={async () => {
-                    await window.naiDesktop.selectOutputDir();
-                    await load();
+                    const selected = await window.naiDesktop.selectOutputDir();
+                    if (selected) {
+                      await refreshSettings();
+                      setShowOnboarding(true);
+                    }
                   }}
                 >
                   <IconText icon={<Icon name="folder" />}>{t("settings.browse")}</IconText>
