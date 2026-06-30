@@ -1,4 +1,4 @@
-export const APP_VERSION = "1.1.3";
+export const APP_VERSION = "1.1.4";
 export const APP_NAME = "Langbai NovelAI Studio";
 export const PROJECT_REPOSITORY = "https://github.com/2786886095/novelai-image-desktop";
 
@@ -91,7 +91,7 @@ export const DEFAULT_PARAMS: GenerateParams = {
   cfgScale: 6,
   cfgRescale: 0,
   sampler: "k_euler_ancestral",
-  noiseSchedule: "native",
+  noiseSchedule: "karras",
   seed: 0,
   seedMode: "random",
   ucPreset: 0,

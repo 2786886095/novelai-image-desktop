@@ -9,7 +9,7 @@ class NaiOption {
 }
 
 const appName = 'Langbai NovelAI Studio';
-const appVersion = '1.1.3';
+const appVersion = '1.1.4';
 
 const naiModels = <NaiOption>[
   NaiOption('NAI Diffusion 4.5 Full (Full model)', 'nai-diffusion-4-5-full'),
@@ -124,7 +124,7 @@ class GenerateParams {
     this.cfgScale = 6,
     this.cfgRescale = 0,
     this.sampler = 'k_euler_ancestral',
-    this.noiseSchedule = 'native',
+    this.noiseSchedule = 'karras',
     this.seed = 0,
     this.seedMode = 'random',
     this.ucPreset = 0,
@@ -171,7 +171,7 @@ class GenerateParams {
         cfgScale: (j['cfgScale'] ?? 6).toDouble(),
         cfgRescale: (j['cfgRescale'] ?? 0).toDouble(),
         sampler: j['sampler'] ?? 'k_euler_ancestral',
-        noiseSchedule: j['noiseSchedule'] ?? 'native',
+        noiseSchedule: j['noiseSchedule'] ?? 'karras',
         seed: j['seed'] ?? 0,
         seedMode: j['seedMode'] ?? 'random',
         ucPreset: j['ucPreset'] ?? 0,
