@@ -4,14 +4,18 @@
 
 | 系统 | 安装包 | 安装说明 |
 | --- | --- | --- |
-| 🪟 **Windows** (x64) | `Langbai-NovelAI-Studio-1.1.2.exe` | 便携版，双击即用，无需安装 |
-| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-1.1.2-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
-| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-1.1.2.zip` | 解压后即为 `.app`，同样需右键「打开」 |
-| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-1.1.2.AppImage` | `chmod +x` 后直接运行 |
+| 🪟 **Windows** (x64) | `Langbai-NovelAI-Studio-1.1.3.exe` | 便携版，双击即用，无需安装 |
+| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-1.1.3-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
+| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-1.1.3.zip` | 解压后即为 `.app`，同样需右键「打开」 |
+| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-1.1.3.AppImage` | `chmod +x` 后直接运行 |
 | 🤖 **Android** | `app-release.apk` | 直接安装；未签名，需允许「未知来源」 |
 | 📱 **iOS** | `novelai-mobile-unsigned.ipa` | **未签名**，需用 AltStore / Sideloadly 等工具自行侧载 |
 
 > 桌面端与移动端均为 **API-only** 客户端，需自备 NovelAI Persistent API Token。
+
+### v1.1.3 更新内容
+
+- **修复引导界面在「选择图片保存位置」步骤被意外关闭**：在该步切换「保留图片元数据」开关（或浏览目录）时，内部的一次刷新会把引导显示状态按「是否首次启动」重新计算，导致重新打开的引导被直接关掉。现在刷新不会再关闭已经打开的引导。
 
 ### v1.1.2 更新内容
 

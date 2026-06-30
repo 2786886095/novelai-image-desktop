@@ -641,7 +641,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       bootDone: true,
       settings,
       account,
-      showOnboarding: firstRun,
+      // Never let a refresh-triggered load() (e.g. the onboarding output-dir
+      // step toggling a setting) close an onboarding wizard that's open: keep
+      // it visible if it already is, otherwise drive it from firstRun.
+      showOnboarding: firstRun || get().showOnboarding,
       historyDates: dates,
       historyGroups: groups,
       selectedDate,
