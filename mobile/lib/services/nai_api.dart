@@ -779,10 +779,6 @@ class NaiApi {
     final tagHints = hints.isEmpty
         ? ''
         : '\nCandidate Danbooru tags: ${hints.map((e) => e.tag).join(', ')}';
-    final userScopeText = [
-      'Reverse scope: $scopeText.',
-      if (hint.trim().isNotEmpty) 'Subject hint: ${hint.trim()}',
-    ].join('\n');
     final user = [
       {
         'type': 'image_url',
@@ -794,7 +790,8 @@ class NaiApi {
       {
         'type': 'text',
         'text': [
-          userScopeText,
+          'Reverse scope: $scopeText.',
+          if (hint.trim().isNotEmpty) 'Subject hint: ${hint.trim()}',
           modeUserInstruction(mode, 'reverse'),
           if (tagHints.isNotEmpty) tagHints,
         ].join('\n')
@@ -810,8 +807,6 @@ class NaiApi {
       mode: mode,
       source: 'reverse',
       knownCharacter: knownCharacter,
-      originalInputText:
-          userScopeText.trim().isEmpty ? 'Image reverse-prompt request' : userScopeText,
     );
   }
 
@@ -855,20 +850,7 @@ class NaiApi {
       mode: mode,
       source: 'convert',
       knownCharacter: knownCharacter,
-      originalInputText: text,
     );
-  }
-
-  // If `user` carries an image_url part (the vision "reverse" request), keep
-  // it and swap in fresh repair instructions as the text part; otherwise the
-  // repair request is just the instructions (the "convert" text-only path).
-  Object _repairUser(Object user, String repairText) {
-    if (user is List) {
-      final imageParts =
-          user.where((part) => part is Map && part['type'] == 'image_url');
-      return [...imageParts, {'type': 'text', 'text': repairText}];
-    }
-    return repairText;
   }
 
   Future<AiTextResult> _promptChat({
@@ -881,7 +863,6 @@ class NaiApi {
     required ReversePromptMode mode,
     required String source,
     required bool knownCharacter,
-    required String originalInputText,
   }) async {
     var raw = await _chat(
       settings,
@@ -890,7 +871,6 @@ class NaiApi {
       model,
       system,
       user,
-      maxTokens: source == 'convert' && knownCharacter ? 2400 : 2000,
       label: source == 'reverse' ? 'AI inspect' : 'Prompt conversion',
       apiKind: source == 'reverse' ? 'vision' : 'convert',
     );
@@ -908,7 +888,6 @@ class NaiApi {
           'Return strict JSON only. Preserve the useful content from the previous response.',
         ].join('\n'),
         'Previous incomplete response:\n${raw.text}',
-        maxTokens: source == 'reverse' ? 1400 : 1600,
         label: source == 'reverse'
             ? 'AI inspect variant repair'
             : 'Prompt conversion variant repair',
@@ -926,33 +905,10 @@ class NaiApi {
         );
       }
     }
-    var content = parsed.primary;
-    if (modeNeedsRepair(mode, content)) {
-      final repaired = await _chat(
-        settings,
-        apiUrl,
-        apiKey,
-        model,
-        modeRepairSystemPrompt(mode),
-        _repairUser(
-            user, buildModeRepairUserText(mode, originalInputText, content)),
-        maxTokens: 900,
-        label: source == 'reverse'
-            ? 'AI inspect format repair'
-            : 'Prompt conversion format repair',
-        apiKind: source == 'reverse' ? 'vision' : 'convert',
-      );
-      // Best-effort: adopt the repaired output when available, but never
-      // hard-fail on a heuristic mismatch since modeNeedsRepair can
-      // false-positive on an otherwise-usable result.
-      if (repaired.ok && repaired.text.trim().isNotEmpty) {
-        content = cleanPromptOutput(repaired.text);
-      }
-    }
     return AiTextResult(
       ok: true,
       message: 'Success',
-      text: content,
+      text: parsed.primary,
       variants: parsed.variants,
     );
   }
