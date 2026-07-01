@@ -48,7 +48,7 @@ const _runtimeText = <String, Map<String, String>>{
     'status.generationDone': '生成完成：{completed} 张；{spent}。',
     'status.enqueuePositiveRequired': '请输入正面提示词后再加入队列',
     'status.queueReserveExceeded':
-        '运行和排队任务已预留 {reserved} Anlas，加入本张后将超过余额 {balance} Anlas。',
+        '运行和排队任务已预留 {reserved} Anlas，加入本张后可能超过余额 {balance} Anlas；仍会尝试。',
     'status.queueAdded': '已加入队列，等待 {count} 张；本张报价 {amount} Anlas。',
     'status.queueAddFailed': '加入队列失败：{error}',
     'status.queueRemoved': '已移出队列',
@@ -89,9 +89,9 @@ const _runtimeText = <String, Map<String, String>>{
     'status.referenceRetrySucceeded': '参考图生成失败，已自动无参考图重试成功',
     'status.failureActualUnknown': '{message}；失败后无法读取实扣，请刷新积分确认',
     'status.failureActualSpent': '{message}；失败后余额复核：实扣 {amount} Anlas',
-    'status.insufficientThisRun': '本次需要 {amount} Anlas，当前余额 {balance}，已阻止执行。',
-    'status.insufficientPanel': '本分镜需要 {amount} Anlas，当前余额 {balance}。',
-    'status.insufficientItem': '本张需要 {amount} Anlas，当前余额 {balance}。',
+    'status.insufficientThisRun': '本次预计需要 {amount} Anlas，当前余额 {balance}；仍会尝试，若官方拒绝会返回积分不足。',
+    'status.insufficientPanel': '本分镜预计需要 {amount} Anlas，当前余额 {balance}；仍会尝试。',
+    'status.insufficientItem': '本张预计需要 {amount} Anlas，当前余额 {balance}；仍会尝试。',
     'notification.imageQueueTitle': 'Langbai 图片生成队列',
     'notification.batchTitle': 'Langbai 批量图生图',
     'notification.comicTitle': 'Langbai 漫画生成队列',
@@ -110,7 +110,7 @@ const _runtimeText = <String, Map<String, String>>{
     'batch.visionKeyRequired': '请先在设置中配置 AI 反推 Key',
     'batch.reversing': '正在反推 {name}...',
     'batch.reverseDone': '反推完成：{done}/{total}',
-    'batch.insufficient': '预计需要 {amount} Anlas，当前余额 {balance}，已阻止执行',
+    'batch.insufficient': '预计需要 {amount} Anlas，当前余额 {balance}；仍会尝试，若官方拒绝会返回积分不足',
     'batch.authStopped': '队列已停止：NovelAI 鉴权失败',
     'batch.generatingItem': '正在生成 {name}...',
     'batch.queueDone': '批量图生图完成：{done}/{total}',
@@ -145,7 +145,7 @@ const _runtimeText = <String, Map<String, String>>{
     'comic.generatingPanel': '正在生成分镜 #{index}...',
     'comic.panelDone': '分镜 #{index} 已生成',
     'comic.panelFailed': '分镜 #{index} 失败：{error}',
-    'comic.insufficient': '选中分镜预计需要 {amount} Anlas，当前余额 {balance}，已阻止执行',
+    'comic.insufficient': '选中分镜预计需要 {amount} Anlas，当前余额 {balance}；仍会尝试',
     'comic.authStopped': '队列已停止：NovelAI Token 或 Image Endpoint 鉴权失败',
     'comic.queueDone': '漫画队列完成：{done}/{total}',
     'comic.cancelling': '正在取消漫画队列...',
@@ -237,7 +237,7 @@ const _runtimeText = <String, Map<String, String>>{
     'status.generationDone': '生成完成：{completed} 張；{spent}。',
     'status.enqueuePositiveRequired': '請輸入正面提示詞後再加入佇列',
     'status.queueReserveExceeded':
-        '執行中和排隊任務已預留 {reserved} Anlas，加入本張後將超過餘額 {balance} Anlas。',
+        '執行中和排隊任務已預留 {reserved} Anlas，加入本張後可能超過餘額 {balance} Anlas；仍會嘗試。',
     'status.queueAdded': '已加入佇列，等待 {count} 張；本張報價 {amount} Anlas。',
     'status.queueAddFailed': '加入佇列失敗：{error}',
     'status.queueRemoved': '已移出佇列',
@@ -278,9 +278,9 @@ const _runtimeText = <String, Map<String, String>>{
     'status.referenceRetrySucceeded': '參考圖生成失敗，已自動無參考圖重試成功',
     'status.failureActualUnknown': '{message}；失敗後無法讀取實扣，請重新整理積分確認',
     'status.failureActualSpent': '{message}；失敗後餘額複核：實扣 {amount} Anlas',
-    'status.insufficientThisRun': '本次需要 {amount} Anlas，目前餘額 {balance}，已阻止執行。',
-    'status.insufficientPanel': '本分鏡需要 {amount} Anlas，目前餘額 {balance}。',
-    'status.insufficientItem': '本張需要 {amount} Anlas，目前餘額 {balance}。',
+    'status.insufficientThisRun': '本次預計需要 {amount} Anlas，目前餘額 {balance}；仍會嘗試，若官方拒絕會返回積分不足。',
+    'status.insufficientPanel': '本分鏡預計需要 {amount} Anlas，目前餘額 {balance}；仍會嘗試。',
+    'status.insufficientItem': '本張預計需要 {amount} Anlas，目前餘額 {balance}；仍會嘗試。',
     'notification.imageQueueTitle': 'Langbai 圖片生成佇列',
     'notification.batchTitle': 'Langbai 批量圖生圖',
     'notification.comicTitle': 'Langbai 漫畫生成佇列',
@@ -299,7 +299,7 @@ const _runtimeText = <String, Map<String, String>>{
     'batch.visionKeyRequired': '請先在設定中配置 AI 反推 Key',
     'batch.reversing': '正在反推 {name}...',
     'batch.reverseDone': '反推完成：{done}/{total}',
-    'batch.insufficient': '預計需要 {amount} Anlas，目前餘額 {balance}，已阻止執行',
+    'batch.insufficient': '預計需要 {amount} Anlas，目前餘額 {balance}；仍會嘗試，若官方拒絕會返回積分不足',
     'batch.authStopped': '佇列已停止：NovelAI 鑑權失敗',
     'batch.generatingItem': '正在生成 {name}...',
     'batch.queueDone': '批量圖生圖完成：{done}/{total}',
@@ -334,7 +334,7 @@ const _runtimeText = <String, Map<String, String>>{
     'comic.generatingPanel': '正在生成分鏡 #{index}...',
     'comic.panelDone': '分鏡 #{index} 已生成',
     'comic.panelFailed': '分鏡 #{index} 失敗：{error}',
-    'comic.insufficient': '選中分鏡預計需要 {amount} Anlas，目前餘額 {balance}，已阻止執行',
+    'comic.insufficient': '選中分鏡預計需要 {amount} Anlas，目前餘額 {balance}；仍會嘗試',
     'comic.authStopped': '佇列已停止：NovelAI Token 或 Image Endpoint 鑑權失敗',
     'comic.queueDone': '漫畫佇列完成：{done}/{total}',
     'comic.cancelling': '正在取消漫畫佇列...',
@@ -442,7 +442,7 @@ const _runtimeText = <String, Map<String, String>>{
     'status.enqueuePositiveRequired':
         'Enter a positive prompt before adding to queue',
     'status.queueReserveExceeded':
-        '{reserved} Anlas are already reserved by running/queued jobs; adding this image would exceed the {balance} Anlas balance.',
+        '{reserved} Anlas are already reserved by running/queued jobs; adding this image may exceed the {balance} Anlas balance. It will still be tried.',
     'status.queueAdded':
         'Added to queue, {count} waiting; this image is quoted at {amount} Anlas.',
     'status.queueAddFailed': 'Failed to add to queue: {error}',
@@ -497,11 +497,11 @@ const _runtimeText = <String, Map<String, String>>{
     'status.failureActualSpent':
         '{message}; balance recheck after failure: actual cost {amount} Anlas',
     'status.insufficientThisRun':
-        'This run needs {amount} Anlas. Current balance: {balance}. Execution blocked.',
+        'This run is estimated at {amount} Anlas. Current balance: {balance}. It will still be tried; if the official service rejects it, insufficient balance will be shown.',
     'status.insufficientPanel':
-        'This panel needs {amount} Anlas. Current balance: {balance}.',
+        'This panel is estimated at {amount} Anlas. Current balance: {balance}. It will still be tried.',
     'status.insufficientItem':
-        'This image needs {amount} Anlas. Current balance: {balance}.',
+        'This image is estimated at {amount} Anlas. Current balance: {balance}. It will still be tried.',
     'notification.imageQueueTitle': 'Langbai image generation queue',
     'notification.batchTitle': 'Langbai Batch Img2Img',
     'notification.comicTitle': 'Langbai comic generation queue',
@@ -523,7 +523,7 @@ const _runtimeText = <String, Map<String, String>>{
     'batch.reversing': 'Inspecting {name}...',
     'batch.reverseDone': 'Inspect complete: {done}/{total}',
     'batch.insufficient':
-        'Estimated {amount} Anlas required, current balance {balance}. Execution blocked',
+        'Estimated {amount} Anlas required, current balance {balance}. It will still be tried; insufficient balance will be shown if the official service rejects it',
     'batch.authStopped': 'Queue stopped: NovelAI authentication failed',
     'batch.generatingItem': 'Generating {name}...',
     'batch.queueDone': 'Batch Img2Img complete: {done}/{total}',
@@ -566,7 +566,7 @@ const _runtimeText = <String, Map<String, String>>{
     'comic.panelDone': 'Panel #{index} generated',
     'comic.panelFailed': 'Panel #{index} failed: {error}',
     'comic.insufficient':
-        'Selected panels need {amount} Anlas, current balance {balance}. Execution blocked',
+        'Selected panels are estimated at {amount} Anlas, current balance {balance}. They will still be tried',
     'comic.authStopped':
         'Queue stopped: NovelAI Token or Image Endpoint authentication failed',
     'comic.queueDone': 'Comic queue complete: {done}/{total}',
@@ -672,7 +672,7 @@ const _runtimeText = <String, Map<String, String>>{
     'status.generationDone': '生成完了: {completed} 枚; {spent}。',
     'status.enqueuePositiveRequired': 'キューに追加する前にポジティブプロンプトを入力してください',
     'status.queueReserveExceeded':
-        '実行中/待機中のタスクで {reserved} Anlas が予約済みです。この画像を追加すると残高 {balance} Anlas を超えます。',
+        '実行中/待機中のタスクで {reserved} Anlas が予約済みです。この画像を追加すると残高 {balance} Anlas を超える可能性がありますが、実行を試みます。',
     'status.queueAdded':
         'キューに追加しました。待機 {count} 件。この画像の見積もりは {amount} Anlas です。',
     'status.queueAddFailed': 'キューへの追加に失敗しました: {error}',
@@ -718,10 +718,10 @@ const _runtimeText = <String, Map<String, String>>{
         '{message}; 失敗後に実コストを読み取れませんでした。Anlas を更新して確認してください',
     'status.failureActualSpent': '{message}; 失敗後の残高再確認: 実コスト {amount} Anlas',
     'status.insufficientThisRun':
-        'この実行には {amount} Anlas が必要です。現在の残高: {balance}。実行を停止しました。',
+        'この実行の見積もりは {amount} Anlas です。現在の残高: {balance}。実行を試み、公式側で拒否された場合は残高不足として表示します。',
     'status.insufficientPanel':
-        'このパネルには {amount} Anlas が必要です。現在の残高: {balance}。',
-    'status.insufficientItem': 'この画像には {amount} Anlas が必要です。現在の残高: {balance}。',
+        'このパネルの見積もりは {amount} Anlas です。現在の残高: {balance}。実行を試みます。',
+    'status.insufficientItem': 'この画像の見積もりは {amount} Anlas です。現在の残高: {balance}。実行を試みます。',
     'notification.imageQueueTitle': 'Langbai 画像生成キュー',
     'notification.batchTitle': 'Langbai 一括 Img2Img',
     'notification.comicTitle': 'Langbai 漫画生成キュー',
@@ -740,7 +740,7 @@ const _runtimeText = <String, Map<String, String>>{
     'batch.visionKeyRequired': '設定で AI 解析 Key を先に設定してください',
     'batch.reversing': '{name} を解析中...',
     'batch.reverseDone': '解析完了: {done}/{total}',
-    'batch.insufficient': '推定 {amount} Anlas が必要です。現在の残高 {balance}。実行を停止しました',
+    'batch.insufficient': '推定 {amount} Anlas が必要です。現在の残高 {balance}。実行を試み、公式側で拒否された場合は残高不足として表示します',
     'batch.authStopped': 'キュー停止: NovelAI 認証に失敗しました',
     'batch.generatingItem': '{name} を生成中...',
     'batch.queueDone': '一括 Img2Img 完了: {done}/{total}',
@@ -776,7 +776,7 @@ const _runtimeText = <String, Map<String, String>>{
     'comic.panelDone': 'パネル #{index} を生成しました',
     'comic.panelFailed': 'パネル #{index} 失敗: {error}',
     'comic.insufficient':
-        '選択したパネルには {amount} Anlas が必要です。現在の残高 {balance}。実行を停止しました',
+        '選択したパネルの見積もりは {amount} Anlas です。現在の残高 {balance}。実行を試みます',
     'comic.authStopped': 'キュー停止: NovelAI Token または Image Endpoint の認証に失敗しました',
     'comic.queueDone': '漫画キュー完了: {done}/{total}',
     'comic.cancelling': '漫画キューをキャンセル中...',
@@ -874,7 +874,7 @@ const _runtimeText = <String, Map<String, String>>{
     'status.generationDone': '생성 완료: {completed}장; {spent}.',
     'status.enqueuePositiveRequired': '대기열에 추가하기 전에 포지티브 프롬프트를 입력하세요',
     'status.queueReserveExceeded':
-        '실행/대기 중인 작업이 이미 {reserved} Anlas를 예약했습니다. 이 이미지를 추가하면 잔액 {balance} Anlas를 초과합니다.',
+        '실행/대기 중인 작업이 이미 {reserved} Anlas를 예약했습니다. 이 이미지를 추가하면 잔액 {balance} Anlas를 초과할 수 있지만 계속 시도합니다.',
     'status.queueAdded':
         '대기열에 추가했습니다. {count}개 대기; 이 이미지 견적은 {amount} Anlas입니다.',
     'status.queueAddFailed': '대기열 추가 실패: {error}',
@@ -920,11 +920,11 @@ const _runtimeText = <String, Map<String, String>>{
         '{message}; 실패 후 실제 비용을 읽을 수 없습니다. Anlas를 새로고침해 확인하세요',
     'status.failureActualSpent': '{message}; 실패 후 잔액 재확인: 실제 비용 {amount} Anlas',
     'status.insufficientThisRun':
-        '이번 실행에는 {amount} Anlas가 필요합니다. 현재 잔액: {balance}. 실행을 차단했습니다.',
+        '이번 실행 예상 비용은 {amount} Anlas입니다. 현재 잔액: {balance}. 계속 시도하며, 공식 서비스가 거부하면 잔액 부족으로 표시됩니다.',
     'status.insufficientPanel':
-        '이 패널에는 {amount} Anlas가 필요합니다. 현재 잔액: {balance}.',
+        '이 패널 예상 비용은 {amount} Anlas입니다. 현재 잔액: {balance}. 계속 시도합니다.',
     'status.insufficientItem':
-        '이 이미지에는 {amount} Anlas가 필요합니다. 현재 잔액: {balance}.',
+        '이 이미지 예상 비용은 {amount} Anlas입니다. 현재 잔액: {balance}. 계속 시도합니다.',
     'notification.imageQueueTitle': 'Langbai 이미지 생성 대기열',
     'notification.batchTitle': 'Langbai 일괄 Img2Img',
     'notification.comicTitle': 'Langbai 만화 생성 대기열',
@@ -944,7 +944,7 @@ const _runtimeText = <String, Map<String, String>>{
     'batch.reversing': '{name} 분석 중...',
     'batch.reverseDone': '분석 완료: {done}/{total}',
     'batch.insufficient':
-        '예상 {amount} Anlas가 필요합니다. 현재 잔액 {balance}. 실행을 차단했습니다',
+        '예상 {amount} Anlas가 필요합니다. 현재 잔액 {balance}. 계속 시도하며 공식 서비스가 거부하면 잔액 부족으로 표시됩니다',
     'batch.authStopped': '대기열 중지: NovelAI 인증 실패',
     'batch.generatingItem': '{name} 생성 중...',
     'batch.queueDone': '일괄 Img2Img 완료: {done}/{total}',
@@ -980,7 +980,7 @@ const _runtimeText = <String, Map<String, String>>{
     'comic.panelDone': '패널 #{index} 생성됨',
     'comic.panelFailed': '패널 #{index} 실패: {error}',
     'comic.insufficient':
-        '선택한 패널에는 {amount} Anlas가 필요합니다. 현재 잔액 {balance}. 실행을 차단했습니다',
+        '선택한 패널 예상 비용은 {amount} Anlas입니다. 현재 잔액 {balance}. 계속 시도합니다',
     'comic.authStopped': '대기열 중지: NovelAI Token 또는 Image Endpoint 인증 실패',
     'comic.queueDone': '만화 대기열 완료: {done}/{total}',
     'comic.cancelling': '만화 대기열 취소 중...',

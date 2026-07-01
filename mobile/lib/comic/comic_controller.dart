@@ -575,7 +575,6 @@ class ComicController extends ChangeNotifier {
         'balance': balance,
       });
       notifyListeners();
-      return;
     }
     queueRunning = true;
     queuePaused = false;

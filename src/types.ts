@@ -1,4 +1,4 @@
-export const APP_VERSION = "1.1.4";
+export const APP_VERSION = "1.1.5";
 export const APP_NAME = "Langbai NovelAI Studio";
 export const PROJECT_REPOSITORY = "https://github.com/2786886095/novelai-image-desktop";
 
@@ -781,6 +781,13 @@ export interface PromptTemplate {
   negativePrompt: string;
 }
 
+export interface StylePromptPreset {
+  id: string;
+  name: string;
+  prompt: string;
+  createdAt: string;
+}
+
 /** A single tag suggestion from the NAI suggest-tags endpoint */
 export interface TagSuggestion {
   tag: string;
@@ -884,6 +891,8 @@ export interface AppSettings {
   imageNameTemplate: string;
   // Prompt templates
   promptTemplates: PromptTemplate[];
+  // Named style-prompt presets available from the generation panel.
+  stylePromptPresets: StylePromptPreset[];
   lastGenerationState: LastGenerationState | null;
 }
 

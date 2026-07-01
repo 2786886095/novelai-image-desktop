@@ -297,7 +297,6 @@ class BatchRedrawController extends ChangeNotifier {
         'balance': balance,
       });
       notifyListeners();
-      return;
     }
     final incompatible = targets.any((item) {
       final params = item.overrideParams ? item.params : project.globalParams;

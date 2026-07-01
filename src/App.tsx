@@ -57,6 +57,7 @@ import {
   type GenerateParams,
   type ModePromptTemplates,
   type PromptTemplate,
+  type StylePromptPreset,
   type PreciseReferenceType,
   type PromptVariants,
   type ReversePromptMode,
@@ -81,6 +82,11 @@ const onboardingHeroUrl = "./onboarding-hero.png";
 
 function hasTranslatableText(segment: string) {
   return /[\p{Letter}\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u.test(segment);
+}
+
+function makeStylePresetId() {
+  const cryptoId = globalThis.crypto?.randomUUID?.();
+  return cryptoId ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 function fitSizeWithinPixels(width: number, height: number, maxPixels: number) {
@@ -996,11 +1002,13 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
   const [showWeights, setShowWeights] = useState(false);
   const [showNormalize, setShowNormalize] = useState(false);
   const [translating, setTranslating] = useState(false);
+  const [selectedStylePresetId, setSelectedStylePresetId] = useState("");
   // Original prompt text kept per tab so a translation can be reverted (还原).
   const [translateBackup, setTranslateBackup] = useState<Record<string, string>>({});
   const promptValue = promptTab === "positive" ? params.positivePrompt : params.negativePrompt;
   const promptKey = promptTab === "positive" ? "positivePrompt" : "negativePrompt";
   const templates: PromptTemplate[] = settings?.promptTemplates ?? [];
+  const stylePromptPresets: StylePromptPreset[] = settings?.stylePromptPresets ?? [];
   const generateText = useMemo(() => getGeneratePanelText(settings?.language), [settings?.language]);
   const t = useCallback((key: string) => desktopUiText(settings?.language, key), [settings?.language]);
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(settings?.language, key, values), [settings?.language]);
@@ -1016,6 +1024,53 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
       setParam("negativePrompt", tpl.negativePrompt.trim());
     }
     setToast(f("prompt.templateApplied", { name: tpl.name }));
+  }
+
+  useEffect(() => {
+    const stylePrompt = params.stylePrompt.trim();
+    const matched = stylePromptPresets.find((preset) => preset.prompt.trim() === stylePrompt);
+    setSelectedStylePresetId(matched?.id ?? "");
+  }, [params.stylePrompt, stylePromptPresets]);
+
+  async function applyStylePromptPreset(id: string) {
+    setSelectedStylePresetId(id);
+    const preset = stylePromptPresets.find((item) => item.id === id);
+    if (!preset) return;
+    setLockedAwareParam("stylePrompt", preset.prompt);
+    setToast(f("prompt.stylePresetApplied", { name: preset.name }));
+  }
+
+  async function saveStylePromptPreset() {
+    const stylePrompt = params.stylePrompt.trim();
+    if (!stylePrompt) {
+      setToast(t("prompt.stylePresetNeedPrompt"));
+      return;
+    }
+    const fallbackName = stylePrompt.slice(0, 28) || `Style ${stylePromptPresets.length + 1}`;
+    const name = window.prompt(generateText.prompt.stylePresetNamePrompt, fallbackName)?.trim();
+    if (!name) return;
+    const preset: StylePromptPreset = {
+      id: makeStylePresetId(),
+      name,
+      prompt: stylePrompt,
+      createdAt: new Date().toISOString(),
+    };
+    await window.naiDesktop.setSetting("stylePromptPresets", [...stylePromptPresets, preset]);
+    await refreshSettings();
+    setSelectedStylePresetId(preset.id);
+    setToast(f("prompt.stylePresetSaved", { name }));
+  }
+
+  async function deleteStylePromptPreset() {
+    const preset = stylePromptPresets.find((item) => item.id === selectedStylePresetId);
+    if (!preset) return;
+    await window.naiDesktop.setSetting(
+      "stylePromptPresets",
+      stylePromptPresets.filter((item) => item.id !== preset.id),
+    );
+    await refreshSettings();
+    setSelectedStylePresetId("");
+    setToast(f("prompt.stylePresetDeleted", { name: preset.name }));
   }
 
   function appendChip(tag: string) {
@@ -1177,6 +1232,31 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
           onChange={(e) => setLockedAwareParam("stylePrompt", e.target.value)}
         />
       </label>
+      <div className="style-preset-row">
+        <select
+          value={selectedStylePresetId}
+          onChange={(event) => void applyStylePromptPreset(event.target.value)}
+          aria-label={generateText.prompt.stylePresetPlaceholder}
+        >
+          <option value="">{generateText.prompt.stylePresetPlaceholder}</option>
+          {stylePromptPresets.map((preset) => (
+            <option value={preset.id} key={preset.id}>
+              {preset.name}
+            </option>
+          ))}
+        </select>
+        <Button type="button" variant="secondary" onClick={() => void saveStylePromptPreset()}>
+          <Icon name="pin" /> {generateText.prompt.stylePresetSave}
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          disabled={!selectedStylePresetId}
+          onClick={() => void deleteStylePromptPreset()}
+        >
+          <Icon name="trash" /> {generateText.prompt.stylePresetDelete}
+        </Button>
+      </div>
       <div className={clsx("prompt-chip-zone", !chipOpen && "collapsed")}>
         <button type="button" className="prompt-chip-head" onClick={() => setChipOpen((v) => !v)}>
           <span className="chip-head-title">

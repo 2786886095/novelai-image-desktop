@@ -369,6 +369,37 @@ class AppState extends ChangeNotifier {
     status = _rf('status.promptShortcutApplied', {'name': template.name});
   }
 
+  Future<StylePromptPreset> addStylePromptPreset({
+    required String name,
+    required String prompt,
+  }) async {
+    final cleanName = name.trim();
+    final cleanPrompt = prompt.trim();
+    if (cleanName.isEmpty) {
+      throw Exception(_rt('status.promptTemplateNameRequired'));
+    }
+    final preset = StylePromptPreset(
+      id: '${DateTime.now().microsecondsSinceEpoch}',
+      name: cleanName,
+      prompt: cleanPrompt,
+      createdAt: DateTime.now().toIso8601String(),
+    );
+    settings.stylePromptPresets.add(preset);
+    await storage.setSettings(settings);
+    notifyListeners();
+    return preset;
+  }
+
+  Future<void> removeStylePromptPreset(String id) async {
+    settings.stylePromptPresets.removeWhere((item) => item.id == id);
+    await storage.setSettings(settings);
+    notifyListeners();
+  }
+
+  void applyStylePromptPreset(StylePromptPreset preset) {
+    setParam((params) => params.stylePrompt = preset.prompt);
+  }
+
   Future<void> setWorkbenchPath(String filePath) async {
     final bytes = await File(filePath).readAsBytes();
     final dims = readImageDimensions(bytes);
@@ -705,12 +736,11 @@ class AppState extends ChangeNotifier {
         throw Exception(quote.message);
       }
       if (quote.insufficient) {
-        throw Exception(
-          _rf('status.insufficientThisRun', {
-            'amount': quote.amount,
-            'balance': quote.balance ?? _unknown(),
-          }),
-        );
+        status = _rf('status.insufficientThisRun', {
+          'amount': quote.amount,
+          'balance': quote.balance ?? _unknown(),
+        });
+        notifyListeners();
       }
 
       anlasBefore = account.anlasBalance;
@@ -898,30 +928,36 @@ class AppState extends ChangeNotifier {
         freshAccount,
       );
       if (!generationQueueRunning || _cancelGenerationRequested) return;
-      if (!quote.ok || quote.amount == null) throw Exception(quote.message);
+      var quotedAnlas = 0;
+      var quoteWarning = '';
+      if (!quote.ok || quote.amount == null) {
+        quoteWarning = quote.message;
+      } else {
+        quotedAnlas = quote.amount!;
+      }
       final balance = quote.balance ?? freshAccount.anlasBalance;
-      if (balance != null && queueReservedAnlas + quote.amount! > balance) {
-        throw Exception(
-          _rf('status.queueReserveExceeded', {
-            'reserved': queueReservedAnlas,
-            'balance': balance,
-          }),
-        );
+      if (balance != null && queueReservedAnlas + quotedAnlas > balance) {
+        quoteWarning = _rf('status.queueReserveExceeded', {
+          'reserved': queueReservedAnlas,
+          'balance': balance,
+        });
       }
       generationQueue.add(GenerationQueueJob(
         id: DateTime.now().microsecondsSinceEpoch.toString(),
         params: snapshot,
         extras: snapshotExtras,
-        quotedAnlas: quote.amount!,
+        quotedAnlas: quotedAnlas,
         addedAt: DateTime.now(),
       ));
-      queueReservedAnlas += quote.amount!;
+      queueReservedAnlas += quotedAnlas;
       queueProgress = (queueProgress ?? const GenerationQueueProgress())
           .copyWith(total: (queueProgress?.total ?? 0) + 1);
-      status = _rf('status.queueAdded', {
-        'count': generationQueue.length,
-        'amount': quote.amount,
-      });
+      status = quoteWarning.isNotEmpty
+          ? quoteWarning
+          : _rf('status.queueAdded', {
+              'count': generationQueue.length,
+              'amount': quotedAnlas,
+            });
     } catch (error) {
       status = _rf('status.queueAddFailed',
           {'error': error.toString().replaceFirst('Exception: ', '')});
@@ -1516,12 +1552,11 @@ class AppState extends ChangeNotifier {
       language: settings.language,
     );
     if (quote.insufficient) {
-      throw Exception(
-        _rf('status.insufficientPanel', {
-          'amount': quote.amount,
-          'balance': quote.balance ?? _unknown(),
-        }),
-      );
+      status = _rf('status.insufficientPanel', {
+        'amount': quote.amount,
+        'balance': quote.balance ?? _unknown(),
+      });
+      notifyListeners();
     }
     final groupId = await ensureHistoryGroup(projectTitle, historyGroupId);
     final before = account.anlasBalance;
@@ -1600,12 +1635,11 @@ class AppState extends ChangeNotifier {
       language: settings.language,
     );
     if (quote.insufficient) {
-      throw Exception(
-        _rf('status.insufficientItem', {
-          'amount': quote.amount,
-          'balance': quote.balance ?? _unknown(),
-        }),
-      );
+      status = _rf('status.insufficientItem', {
+        'amount': quote.amount,
+        'balance': quote.balance ?? _unknown(),
+      });
+      notifyListeners();
     }
     final groupId = await ensureHistoryGroup(groupName, historyGroupId);
     final (images, seed) = await api.img2img(
@@ -1707,12 +1741,10 @@ class AppState extends ChangeNotifier {
     final quote = buildQuote(account);
     if (!quote.ok || quote.amount == null) throw Exception(quote.message);
     if (quote.insufficient) {
-      throw Exception(
-        _rf('status.insufficientThisRun', {
-          'amount': quote.amount,
-          'balance': quote.balance ?? _unknown(),
-        }),
-      );
+      status = _rf('status.insufficientThisRun', {
+        'amount': quote.amount,
+        'balance': quote.balance ?? _unknown(),
+      });
     }
     lastAnlasSpent = null;
     _pendingAuthorizedBalance = account.anlasBalance;

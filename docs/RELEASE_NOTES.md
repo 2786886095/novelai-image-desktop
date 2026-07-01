@@ -4,14 +4,20 @@
 
 | 系统 | 安装包 | 安装说明 |
 | --- | --- | --- |
-| 🪟 **Windows** (x64) | `Langbai-NovelAI-Studio-1.1.4.exe` | 便携版，双击即用，无需安装 |
-| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-1.1.4-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
-| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-1.1.4.zip` | 解压后即为 `.app`，同样需右键「打开」 |
-| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-1.1.4.AppImage` | `chmod +x` 后直接运行 |
+| 🪟 **Windows** (x64) | `Langbai-NovelAI-Studio-1.1.5.exe` | 便携版，双击即用，无需安装 |
+| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-1.1.5-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
+| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-1.1.5.zip` | 解压后即为 `.app`，同样需右键「打开」 |
+| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-1.1.5.AppImage` | `chmod +x` 后直接运行 |
 | 🤖 **Android** | `app-release.apk` | 直接安装；未签名，需允许「未知来源」 |
 | 📱 **iOS** | `novelai-mobile-unsigned.ipa` | **未签名**，需用 AltStore / Sideloadly 等工具自行侧载 |
 
 > 桌面端与移动端均为 **API-only** 客户端，需自备 NovelAI Persistent API Token。
+
+### v1.1.5 更新内容
+
+- **新增「保存风格提示词并命名」**：生成面板 Style Prompt 下方可将当前风格另存为一个带名字的预设，随时从下拉列表切换、删除；桌面端与移动端均支持。
+- **积分不足不再本地硬拦截**：本地余额估算不再阻止生成/入队/漫画队列——余额不足或报价读取失败时仅提示「仍会尝试」，真正是否能生成交给 NovelAI 官方接口判定，失败会返回官方的积分不足错误。精准参考仅限 V4.5 等参数硬限制不受影响，仍然保留。
+- **移动端横屏 / 平板体验修复**：手机横屏下生成页改为左预览、右参数的双栏布局，底部生成栏收成一行紧凑布局，不再出现按钮/文字重叠；横屏仍使用手机底部导航，不会误判成平板。新增横屏截图审计覆盖。
 
 ### v1.1.4 更新内容
 

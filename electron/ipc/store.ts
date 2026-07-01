@@ -222,6 +222,7 @@ export function defaultSettings(): AppSettings {
     savedNegativePrompt: "",
     imageNameTemplate: "{date}_{seq}_{model}",
     promptTemplates: [],
+    stylePromptPresets: [],
     lastGenerationState: null,
   };
 }

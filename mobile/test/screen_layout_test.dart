@@ -104,6 +104,26 @@ void main() {
     expect(field.controller?.text, '1girl, smile, blue eyes');
   });
 
+  testWidgets('generate screen uses split content on roomy phone landscape',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(800, 360);
+    addTearDown(tester.view.reset);
+    final state = AppState();
+    addTearDown(state.dispose);
+
+    await _pumpScreen(
+      tester,
+      state,
+      const GenerateScreen(),
+      'generate landscape phone split layout',
+    );
+
+    expect(find.byKey(const ValueKey('generate-split-layout')), findsOneWidget);
+    expect(find.byKey(const ValueKey('generate-single-layout')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('expanded generation queue fits a compact phone viewport',
       (tester) async {
     tester.view.devicePixelRatio = 1;

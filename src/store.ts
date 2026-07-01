@@ -110,11 +110,12 @@ const STORE_TEXT: Record<AppLanguage, Record<string, string>> = {
     "anlas.spent": "{message} 实扣 {spent} Anlas。",
     "anlas.spentFailed": "{message} 实扣读取失败，请刷新积分确认。",
     "quote.readFailed": "{action}扣费读取失败，请稍后重试。",
-    "quote.insufficient": "{action}需要 {amount} Anlas，当前余额 {balance} Anlas，已阻止执行。",
+    "quote.readFailedTry": "{action}扣费读取失败，将继续尝试；若官方拒绝会返回错误。",
+    "quote.insufficient": "{action}预计需要 {amount} Anlas，当前余额 {balance} Anlas，将继续尝试；若余额确实不足会返回积分不足。",
     "quote.deduct": "{action}将在执行前扣除 {amount} Anlas。",
-    "queue.itemQuoteFailed": "无法读取这张队列图片的生成前扣费。",
-    "queue.itemInsufficient": "这张图片需要 {amount} Anlas，当前余额 {balance} Anlas，未加入队列。",
-    "queue.totalInsufficient": "队列中待生成图片预计还需 {pending} Anlas；加入本张后将超过当前余额 {balance} Anlas，未加入队列。",
+    "queue.itemQuoteFailed": "无法读取这张队列图片的生成前扣费，仍会加入队列并尝试。",
+    "queue.itemInsufficient": "这张图片预计需要 {amount} Anlas，当前余额 {balance} Anlas，仍会加入队列并尝试。",
+    "queue.totalInsufficient": "队列中待生成图片预计还需 {pending} Anlas；加入本张后可能超过当前余额 {balance} Anlas，仍会加入队列并尝试。",
     "queue.noPromptLabel": "(无提示词)",
     "queue.addedStatus": "已加入队列，等待 {count} 张。",
     "action.batchGenerate": "批量生成 {count} 张",
@@ -196,11 +197,12 @@ const STORE_TEXT: Record<AppLanguage, Record<string, string>> = {
     "anlas.spent": "{message} Spent {spent} Anlas.",
     "anlas.spentFailed": "{message} Could not read actual cost; refresh balance to confirm.",
     "quote.readFailed": "{action} cost quote failed; try again later.",
-    "quote.insufficient": "{action} requires {amount} Anlas; current balance is {balance} Anlas. Blocked.",
+    "quote.readFailedTry": "{action} cost quote failed; the app will try anyway. If the official service rejects it, the error will be shown.",
+    "quote.insufficient": "{action} is estimated at {amount} Anlas; current balance is {balance} Anlas. The app will try anyway and return insufficient balance if the service rejects it.",
     "quote.deduct": "{action} will deduct {amount} Anlas before execution.",
-    "queue.itemQuoteFailed": "Unable to quote this queued image before generation.",
-    "queue.itemInsufficient": "This image requires {amount} Anlas; current balance is {balance} Anlas. Not queued.",
-    "queue.totalInsufficient": "Queued pending images need about {pending} Anlas; adding this one would exceed current balance {balance} Anlas. Not queued.",
+    "queue.itemQuoteFailed": "Unable to quote this queued image before generation; it will still be queued and tried.",
+    "queue.itemInsufficient": "This image is estimated at {amount} Anlas; current balance is {balance} Anlas. It will still be queued and tried.",
+    "queue.totalInsufficient": "Queued pending images need about {pending} Anlas; adding this one may exceed current balance {balance} Anlas. It will still be queued and tried.",
     "queue.noPromptLabel": "(no prompt)",
     "queue.addedStatus": "Added to queue; {count} waiting.",
     "action.batchGenerate": "Batch generate {count} images",
@@ -495,15 +497,24 @@ async function ensureAnlasBeforeRun(
 ): Promise<AnlasQuoteResult | null> {
   const quote = await window.naiDesktop.quoteAnlas(request);
   if (!quote.ok || typeof quote.amount !== "number") {
-    const message = quote.message || storeFormat(settings, "quote.readFailed", { action: actionLabel });
-    set({ statusText: storeText(settings, "status.quoteFailed"), toast: message, lastError: message });
-    return null;
+    const message = quote.message || storeFormat(settings, "quote.readFailedTry", { action: actionLabel });
+    const fallbackMessage = storeFormat(settings, "quote.readFailedTry", { action: actionLabel });
+    set({ statusText: fallbackMessage, toast: message || fallbackMessage, lastError: "" });
+    return {
+      ok: true,
+      amount: 0,
+      source: "unavailable",
+      balance: request.account?.anlasBalance,
+      insufficient: false,
+      message: message || fallbackMessage,
+      details: quote.details,
+    };
   }
   if (quote.insufficient) {
     const balance = quote.balance ?? storeText(settings, "error.unknown");
     const message = storeFormat(settings, "quote.insufficient", { action: actionLabel, amount: quote.amount, balance });
-    set({ statusText: storeText(settings, "status.insufficient"), toast: message, lastError: message });
-    return null;
+    set({ statusText: message, toast: message, lastError: "" });
+    return quote;
   }
   set({ statusText: storeFormat(settings, "quote.deduct", { action: actionLabel, amount: quote.amount }), lastError: "" });
   return quote;
@@ -1118,22 +1129,20 @@ export const useAppStore = create<AppState>((set, get) => ({
         account: freshAccount,
         alreadyQueuedVibes,
       });
+      let quotedAnlas = 0;
+      let quoteWarning = "";
       if (!quote.ok || typeof quote.amount !== "number") {
-        const message = quote.message || storeText(get().settings, "queue.itemQuoteFailed");
-        set({ toast: message, lastError: message });
-        return;
-      }
-      if (quote.insufficient) {
-        const message = storeFormat(get().settings, "queue.itemInsufficient", { amount: quote.amount, balance: quote.balance ?? storeText(get().settings, "error.unknown") });
-        set({ toast: message, lastError: message });
-        return;
-      }
-      const pendingQuotedAnlas = get().generationQueue.reduce((sum, job) => sum + job.quotedAnlas, 0);
-      const knownBalance = quote.balance ?? freshAccount.anlasBalance;
-      if (typeof knownBalance === "number" && pendingQuotedAnlas + quote.amount > knownBalance) {
-        const message = storeFormat(get().settings, "queue.totalInsufficient", { pending: pendingQuotedAnlas, balance: knownBalance });
-        set({ toast: message, lastError: message });
-        return;
+        quoteWarning = quote.message || storeText(get().settings, "queue.itemQuoteFailed");
+      } else {
+        quotedAnlas = quote.amount;
+        if (quote.insufficient) {
+          quoteWarning = storeFormat(get().settings, "queue.itemInsufficient", { amount: quote.amount, balance: quote.balance ?? storeText(get().settings, "error.unknown") });
+        }
+        const pendingQuotedAnlas = get().generationQueue.reduce((sum, job) => sum + job.quotedAnlas, 0);
+        const knownBalance = quote.balance ?? freshAccount.anlasBalance;
+        if (typeof knownBalance === "number" && pendingQuotedAnlas + quote.amount > knownBalance) {
+          quoteWarning = storeFormat(get().settings, "queue.totalInsufficient", { pending: pendingQuotedAnlas, balance: knownBalance });
+        }
       }
       if (
         !get().isGenerating ||
@@ -1151,7 +1160,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         params,
         extras,
-        quotedAnlas: quote.amount,
+        quotedAnlas,
         addedAt: Date.now(),
         label: params.positivePrompt.trim().slice(0, 60) || storeText(get().settings, "queue.noPromptLabel"),
       };
@@ -1161,7 +1170,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           ? { ...current.queueProgress, total: current.queueProgress.total + 1 }
           : { done: 0, failed: 0, total: 1 },
         statusText: storeFormat(current.settings, "queue.addedStatus", { count: current.generationQueue.length + 1 }),
-        toast: storeFormat(current.settings, "toast.queueAdded", { amount: quote.amount }),
+        toast: quoteWarning || storeFormat(current.settings, "toast.queueAdded", { amount: quotedAnlas }),
         lastError: "",
       }));
     } catch (error) {

@@ -9,7 +9,7 @@ class NaiOption {
 }
 
 const appName = 'Langbai NovelAI Studio';
-const appVersion = '1.1.4';
+const appVersion = '1.1.5';
 
 const naiModels = <NaiOption>[
   NaiOption('NAI Diffusion 4.5 Full (Full model)', 'nai-diffusion-4-5-full'),
@@ -555,6 +555,7 @@ class AppSettings {
   String savedNegativePrompt;
   String imageNameTemplate;
   List<PromptShortcutTemplate> promptShortcuts;
+  List<StylePromptPreset> stylePromptPresets;
   Map<String, String> reversePromptTemplates;
   Map<String, String> convertPromptTemplates;
   String comicPromptTemplate;
@@ -611,6 +612,7 @@ class AppSettings {
     this.savedNegativePrompt = '',
     this.imageNameTemplate = '{date}_{seq}_{model}',
     List<PromptShortcutTemplate>? promptShortcuts,
+    List<StylePromptPreset>? stylePromptPresets,
     Map<String, String>? reversePromptTemplates,
     Map<String, String>? convertPromptTemplates,
     this.comicPromptTemplate = '',
@@ -627,7 +629,8 @@ class AppSettings {
     this.augmentEmotionLevel = 0,
   })  : reversePromptTemplates = reversePromptTemplates ?? {},
         convertPromptTemplates = convertPromptTemplates ?? {},
-        promptShortcuts = promptShortcuts ?? [];
+        promptShortcuts = promptShortcuts ?? [],
+        stylePromptPresets = stylePromptPresets ?? [];
 
   bool get darkMode => theme == 'dark';
 
@@ -671,6 +674,8 @@ class AppSettings {
         'imageNameTemplate': imageNameTemplate,
         'promptShortcuts':
             promptShortcuts.map((item) => item.toJson()).toList(),
+        'stylePromptPresets':
+            stylePromptPresets.map((item) => item.toJson()).toList(),
         'reversePromptTemplates': reversePromptTemplates,
         'convertPromptTemplates': convertPromptTemplates,
         'comicPromptTemplate': comicPromptTemplate,
@@ -732,6 +737,12 @@ class AppSettings {
                     Map<String, dynamic>.from(item)))
                 .toList() ??
             [],
+        stylePromptPresets: (j['stylePromptPresets'] as List?)
+                ?.whereType<Map>()
+                .map((item) =>
+                    StylePromptPreset.fromJson(Map<String, dynamic>.from(item)))
+                .toList() ??
+            [],
         reversePromptTemplates: _stringMap(j['reversePromptTemplates']),
         convertPromptTemplates: _stringMap(j['convertPromptTemplates']),
         comicPromptTemplate: j['comicPromptTemplate'] ?? '',
@@ -780,6 +791,35 @@ class PromptShortcutTemplate {
         prefix: json['prefix']?.toString() ?? '',
         suffix: json['suffix']?.toString() ?? '',
         negativePrompt: json['negativePrompt']?.toString() ?? '',
+      );
+}
+
+class StylePromptPreset {
+  final String id;
+  String name;
+  String prompt;
+  String createdAt;
+
+  StylePromptPreset({
+    required this.id,
+    required this.name,
+    required this.prompt,
+    required this.createdAt,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'prompt': prompt,
+        'createdAt': createdAt,
+      };
+
+  factory StylePromptPreset.fromJson(Map<String, dynamic> json) =>
+      StylePromptPreset(
+        id: json['id']?.toString() ?? '',
+        name: json['name']?.toString() ?? '',
+        prompt: json['prompt']?.toString() ?? '',
+        createdAt: json['createdAt']?.toString() ?? '',
       );
 }
 

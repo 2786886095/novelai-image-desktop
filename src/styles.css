@@ -5910,6 +5910,41 @@ button.prompt-chip-head {
 .theme-dark .lock-btn { background: rgba(23, 20, 42, 0.55); }
 .theme-dark .lock-btn.locked { color: #fbbf24; }
 
+.style-preset-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  margin-top: -2px;
+}
+
+.style-preset-row select {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 7px 8px;
+  background: var(--bg-canvas);
+  color: var(--text-primary);
+  outline: none;
+}
+
+.style-preset-row .btn {
+  min-height: 34px;
+  white-space: nowrap;
+}
+
+.theme-dark .style-preset-row select {
+  color: var(--text-primary);
+  background: var(--bg-input);
+  border-color: rgba(196, 181, 253, 0.22);
+}
+
+@media (max-width: 720px) {
+  .style-preset-row {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ── Prompt standardization modal ────────────────────────────────────────────── */
 .normalize-modal { width: 520px; max-width: 94vw; }
 .normalize-body { display: grid; gap: 14px; padding: 16px 18px 6px; }

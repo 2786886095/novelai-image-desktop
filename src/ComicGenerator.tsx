@@ -309,7 +309,7 @@ const COMIC_UI_TEXT: Record<string, Record<string, string>> = {
     "comic.msg.emptyPrompt": "分镜 #{index} 缺少可用于生图的提示词。",
     "comic.msg.quoteFailedBefore": "无法读取生成前扣费：{message}",
     "comic.msg.insufficient":
-      "漫画队列需要 {need} Anlas，当前余额 {balance} Anlas，已阻止执行。",
+      "漫画队列预计需要 {need} Anlas，当前余额 {balance} Anlas；仍可尝试，若官方拒绝会返回积分不足。",
     "comic.msg.confirmQueue":
       "将按顺序生成 {count} 个分镜。\n生成前扣费（本地估算，非 NovelAI 官方报价）：约 {quote} Anlas\n当前余额：{balance} Anlas\n生成后会按 NovelAI 账户余额差显示实际扣费，以实际为准。\n\n是否继续？",
     "comic.msg.newPanelDesc": "新分镜描述",
@@ -520,7 +520,7 @@ const COMIC_UI_TEXT: Record<string, Record<string, string>> = {
       "已匯入漫畫專案 JSON；外部檔案路徑已清除，圖片需要重新生成。",
     "comic.msg.importedTags": "已從 tags 建立 {count} 個分鏡，可前往「生成」。",
     "comic.msg.insufficient":
-      "漫畫佇列需要 {need} Anlas，目前餘額 {balance}，已阻止執行。",
+      "漫畫佇列預計需要 {need} Anlas，目前餘額 {balance}；仍可嘗試，若官方拒絕會返回積分不足。",
     "comic.msg.needConverted": "請先轉換至少一個分鏡的英文提示詞。",
     "comic.msg.needEndpoint": "請先在設定中填寫 NovelAI Image Endpoint。",
     "comic.msg.needTags": "請貼上或輸入 tag 提示詞，每行一個分鏡。",
@@ -807,7 +807,7 @@ const COMIC_UI_TEXT: Record<string, Record<string, string>> = {
     "comic.msg.quoteFailedBefore":
       "Could not read pre-generation quote: {message}",
     "comic.msg.insufficient":
-      "The comic queue needs {need} Anlas, but the current balance is {balance}. Execution was blocked.",
+      "The comic queue is estimated at {need} Anlas; current balance is {balance}. It will still be tried, and insufficient balance will be shown if the official service rejects it.",
     "comic.msg.confirmQueue":
       "Generate {count} panels in order?\nPre-generation charge (local estimate, not NovelAI official quote): about {quote} Anlas\nCurrent balance: {balance} Anlas\nAfter generation, actual spending is shown from the NovelAI balance difference.\n\nContinue?",
     "comic.msg.newPanelDesc": "New panel description",
@@ -1035,7 +1035,7 @@ const COMIC_UI_TEXT: Record<string, Record<string, string>> = {
     "comic.msg.importedTags":
       "tags から {count} パネルを作成しました。「生成」へ進めます。",
     "comic.msg.insufficient":
-      "漫画キューには {need} Anlas が必要ですが、現在の残高は {balance} です。実行を停止しました。",
+      "漫画キューの見積もりは {need} Anlas です。現在の残高は {balance} です。実行を試み、公式側で拒否された場合は残高不足として表示します。",
     "comic.msg.needConverted":
       "先に少なくとも 1 つのパネルの英語プロンプトを変換してください。",
     "comic.msg.needEndpoint":
@@ -1288,7 +1288,7 @@ const COMIC_UI_TEXT: Record<string, Record<string, string>> = {
     "comic.msg.importedTags":
       "tags에서 {count}개 패널을 만들었습니다. 생성 단계로 이동할 수 있습니다.",
     "comic.msg.insufficient":
-      "만화 대기열에는 {need} Anlas가 필요하지만 현재 잔액은 {balance}입니다. 실행을 차단했습니다.",
+      "만화 대기열 예상 비용은 {need} Anlas입니다. 현재 잔액은 {balance}입니다. 계속 시도하며 공식 서비스가 거부하면 잔액 부족으로 표시됩니다.",
     "comic.msg.needConverted":
       "먼저 하나 이상의 패널 영어 프롬프트를 변환하세요.",
     "comic.msg.needEndpoint":
@@ -4395,7 +4395,6 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
           balance: freshAccount.anlasBalance,
         }),
       );
-      return;
     }
     const ok = window.confirm(
       comicFormat(language, "comic.msg.confirmQueue", {

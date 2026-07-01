@@ -33,6 +33,11 @@ const _captures = <({
     size: Size(390, 844),
   ),
   (
+    name: 'generate-phone-landscape',
+    screen: GenerateScreen.new,
+    size: Size(800, 360),
+  ),
+  (
     name: 'settings-phone',
     screen: SettingsScreen.new,
     size: Size(390, 844),

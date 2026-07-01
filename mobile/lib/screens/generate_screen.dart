@@ -16,6 +16,13 @@ import '../state/app_state.dart';
 import '../ui/studio_shell.dart';
 import '../ui/zoomable_image.dart';
 
+bool _isRoomyPhoneLandscape(BuildContext context) {
+  final size = MediaQuery.sizeOf(context);
+  return StudioBreakpoints.classify(size) == StudioWindowClass.phone &&
+      size.width > size.height &&
+      size.width >= 700;
+}
+
 class GenerateScreen extends StatelessWidget {
   const GenerateScreen({super.key});
 
@@ -32,8 +39,10 @@ class GenerateScreen extends StatelessWidget {
     final state = context.watch<AppState>();
     final p = state.params;
     final text = generateScreenTextFor(state.settings.language);
-    final wide = StudioBreakpoints.classify(MediaQuery.sizeOf(context)) !=
-        StudioWindowClass.phone;
+    final size = MediaQuery.sizeOf(context);
+    final windowClass = StudioBreakpoints.classify(size);
+    final landscapePhone = _isRoomyPhoneLandscape(context);
+    final wide = windowClass != StudioWindowClass.phone || landscapePhone;
 
     final preview = _PreviewCard(onPick: () => _pickImage(context));
     final controls = <Widget>[
@@ -58,6 +67,8 @@ class GenerateScreen extends StatelessWidget {
         onChanged: (value) =>
             state.setParam((params) => params.stylePrompt = value),
       ),
+      const SizedBox(height: 8),
+      const _StylePresetControls(),
       const SizedBox(height: 12),
       PromptEditor(
         label: text.positivePrompt,
@@ -107,10 +118,13 @@ class GenerateScreen extends StatelessWidget {
           ),
         ],
       ),
-      // Tablet/desktop-ish width: preview pinned on the left, controls scroll on
-      // the right (no wasted horizontal space). Phone: single scroll column.
+      // Tablet/desktop-ish width and roomy phone landscape: preview pinned on
+      // the left, controls scroll on the right. Keep the outer shell classified
+      // as phone so landscape phones still use compact bottom navigation rather
+      // than the tablet rail.
       body: wide
           ? Row(
+              key: const ValueKey('generate-split-layout'),
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Expanded(
@@ -135,6 +149,7 @@ class GenerateScreen extends StatelessWidget {
               ],
             )
           : ListView(
+              key: const ValueKey('generate-single-layout'),
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
               children: [preview, const SizedBox(height: 12), ...controls],
@@ -666,6 +681,140 @@ class PromptEditorState extends State<PromptEditor> {
           ],
         ),
       ],
+    );
+  }
+}
+
+class _StylePresetControls extends StatelessWidget {
+  const _StylePresetControls();
+
+  String _fillName(String template, String name) =>
+      template.replaceAll('{name}', name);
+
+  Future<String?> _askName(
+    BuildContext context,
+    GenerateScreenText text,
+    String initialName,
+  ) {
+    final controller = TextEditingController(text: initialName);
+    return showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(text.saveStylePreset),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: InputDecoration(labelText: text.stylePresetName),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(MaterialLocalizations.of(context).cancelButtonLabel),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.pop(dialogContext, controller.text.trim()),
+            child: Text(MaterialLocalizations.of(context).okButtonLabel),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<AppState>();
+    final text = generateScreenTextFor(state.settings.language);
+    final presets = state.settings.stylePromptPresets;
+    final selected = presets
+        .where((preset) => preset.prompt.trim() == state.params.stylePrompt.trim())
+        .firstOrNull;
+    final messenger = ScaffoldMessenger.of(context);
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              text.stylePresets,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            DropdownButtonFormField<String>(
+              value: selected?.id,
+              decoration: InputDecoration(
+                labelText: text.chooseStylePreset,
+                border: const OutlineInputBorder(),
+              ),
+              items: presets
+                  .map(
+                    (preset) => DropdownMenuItem(
+                      value: preset.id,
+                      child: Text(preset.name),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                final preset =
+                    presets.where((item) => item.id == value).firstOrNull;
+                if (preset == null) return;
+                state.applyStylePromptPreset(preset);
+                messenger.showSnackBar(SnackBar(
+                  content: Text(_fillName(text.stylePresetApplied, preset.name)),
+                ));
+              },
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FilledButton.icon(
+                  onPressed: () async {
+                    final prompt = state.params.stylePrompt.trim();
+                    if (prompt.isEmpty) {
+                      messenger.showSnackBar(
+                        SnackBar(content: Text(text.stylePresetNeedPrompt)),
+                      );
+                      return;
+                    }
+                    final fallback =
+                        prompt.length > 28 ? prompt.substring(0, 28) : prompt;
+                    final name = await _askName(context, text, fallback);
+                    if (name == null || name.trim().isEmpty) return;
+                    final preset = await state.addStylePromptPreset(
+                      name: name,
+                      prompt: prompt,
+                    );
+                    messenger.showSnackBar(SnackBar(
+                      content:
+                          Text(_fillName(text.stylePresetSaved, preset.name)),
+                    ));
+                  },
+                  icon: const Icon(Icons.push_pin_outlined),
+                  label: Text(text.saveStylePreset),
+                ),
+                OutlinedButton.icon(
+                  onPressed: selected == null
+                      ? null
+                      : () async {
+                          final name = selected.name;
+                          await state.removeStylePromptPreset(selected.id);
+                          messenger.showSnackBar(SnackBar(
+                            content:
+                                Text(_fillName(text.stylePresetDeleted, name)),
+                          ));
+                        },
+                  icon: const Icon(Icons.delete_outline),
+                  label: Text(text.deleteStylePreset),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -1857,6 +2006,37 @@ class _RunBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final text = generateScreenTextFor(state.settings.language);
+    final runButton = FilledButton.icon(
+      onPressed: state.busy || !state.account.hasToken
+          ? null
+          : state.runTextOrImage,
+      icon: Icon(state.workbenchImage == null
+          ? Icons.play_arrow
+          : Icons.image_search),
+      label: Text(
+        state.workbenchImage == null
+            ? (state.batchCount > 1
+                ? '${text.generateCountPrefix}${state.batchCount}${text.generateCountSuffix}'
+                : text.generateImage)
+            : text.useCurrentImage,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
+    if (_isRoomyPhoneLandscape(context) && !state.generationQueueRunning) {
+      return SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
+          child: Row(
+            children: [
+              Expanded(flex: 5, child: _AnlasQuoteBar(state: state)),
+              const SizedBox(width: 8),
+              Expanded(flex: 4, child: runButton),
+            ],
+          ),
+        ),
+      );
+    }
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
@@ -1906,19 +2086,7 @@ class _RunBar extends StatelessWidget {
             ] else
               SizedBox(
                 width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: state.busy || !state.account.hasToken
-                      ? null
-                      : state.runTextOrImage,
-                  icon: Icon(state.workbenchImage == null
-                      ? Icons.play_arrow
-                      : Icons.image_search),
-                  label: Text(state.workbenchImage == null
-                      ? (state.batchCount > 1
-                          ? '${text.generateCountPrefix}${state.batchCount}${text.generateCountSuffix}'
-                          : text.generateImage)
-                      : text.useCurrentImage),
-                ),
+                child: runButton,
               ),
             const SizedBox(height: 4),
             Align(
@@ -2112,4 +2280,8 @@ class _QueueLine extends StatelessWidget {
           ],
         ),
       );
+}
+
+extension _FirstOrNull<T> on Iterable<T> {
+  T? get firstOrNull => isEmpty ? null : first;
 }
