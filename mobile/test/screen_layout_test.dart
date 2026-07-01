@@ -124,6 +124,42 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('home shell phone landscape keeps compact nav and split content',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(800, 360);
+    addTearDown(tester.view.reset);
+    final state = AppState()
+      ..booted = true
+      ..needsNetworkOnboarding = false
+      ..account = const AccountSummary(
+        hasToken: true,
+        tierName: 'Opus',
+        anlasBalance: 9049,
+      );
+    addTearDown(state.dispose);
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider.value(
+        value: state,
+        child: MaterialApp(theme: StudioTheme.light(), home: const HomeShell()),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+        find.byKey(const ValueKey('studio-phone-navigation')), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('studio-tablet-navigation')), findsNothing);
+    expect(find.byKey(const ValueKey('generate-split-layout')), findsOneWidget);
+    expect(find.byType(NavigationBar), findsOneWidget);
+    final nav = tester.widget<NavigationBar>(find.byType(NavigationBar));
+    expect(nav.height, 66);
+    expect(
+        nav.labelBehavior, NavigationDestinationLabelBehavior.onlyShowSelected);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('expanded generation queue fits a compact phone viewport',
       (tester) async {
     tester.view.devicePixelRatio = 1;

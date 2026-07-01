@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:novelai_mobile/billing/anlas.dart';
 import 'package:novelai_mobile/i18n/app_locales.dart';
+import 'package:novelai_mobile/main.dart';
 import 'package:novelai_mobile/models/nai_models.dart';
 import 'package:novelai_mobile/screens/generate_screen.dart';
 import 'package:novelai_mobile/screens/settings_screen.dart';
@@ -35,6 +36,11 @@ const _captures = <({
   (
     name: 'generate-phone-landscape',
     screen: GenerateScreen.new,
+    size: Size(800, 360),
+  ),
+  (
+    name: 'home-generate-phone-landscape',
+    screen: HomeShell.new,
     size: Size(800, 360),
   ),
   (
@@ -74,6 +80,8 @@ Future<void> _pumpCapture(
   Widget screen,
 ) async {
   state.settings.language = localeCode;
+  state.booted = true;
+  state.needsNetworkOnboarding = false;
   state.account = const AccountSummary(
       hasToken: true, tierName: 'Opus', anlasBalance: 9049);
   state.generationQuote = const AnlasQuote(

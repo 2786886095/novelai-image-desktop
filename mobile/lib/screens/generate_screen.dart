@@ -102,20 +102,54 @@ class GenerateScreen extends StatelessWidget {
       const SizedBox(height: 16),
       _OutputControls(),
     ];
+    final runButton = _PrimaryRunButton(state: state);
+    final previewPadding = landscapePhone
+        ? const EdgeInsets.fromLTRB(10, 8, 6, 8)
+        : const EdgeInsets.fromLTRB(16, 12, 8, 120);
+    final controlsPadding = landscapePhone
+        ? const EdgeInsets.fromLTRB(6, 8, 10, 8)
+        : const EdgeInsets.fromLTRB(8, 12, 16, 120);
+    final runButtonWidth = size.width < 760 ? 136.0 : 150.0;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(state.workbenchImage == null
-            ? text.titleTextToImage
-            : text.titleImageLoaded),
+        toolbarHeight: landscapePhone ? 48 : null,
+        title: Text(
+          state.workbenchImage == null
+              ? text.titleTextToImage
+              : text.titleImageLoaded,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
         actions: [
-          TextButton.icon(
-            onPressed: state.refreshAnlas,
-            icon: const Icon(Icons.refresh),
-            label: Text(state.account.hasToken
-                ? '${state.account.tierName ?? "API"} · ${state.account.anlasBalance ?? "—"}'
-                : text.notConfigured),
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: landscapePhone ? 166 : double.infinity,
+            ),
+            child: TextButton.icon(
+              onPressed: state.refreshAnlas,
+              style: landscapePhone
+                  ? TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                    )
+                  : null,
+              icon: const Icon(Icons.refresh),
+              label: Text(
+                state.account.hasToken
+                    ? '${state.account.tierName ?? "API"} · ${state.account.anlasBalance ?? "—"}'
+                    : text.notConfigured,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ),
+          if (landscapePhone && !state.generationQueueRunning)
+            Padding(
+              padding: const EdgeInsetsDirectional.only(end: 10),
+              child:
+                  SizedBox(width: runButtonWidth, height: 38, child: runButton),
+            ),
         ],
       ),
       // Tablet/desktop-ish width and roomy phone landscape: preview pinned on
@@ -132,7 +166,7 @@ class GenerateScreen extends StatelessWidget {
                   child: SingleChildScrollView(
                     keyboardDismissBehavior:
                         ScrollViewKeyboardDismissBehavior.onDrag,
-                    padding: const EdgeInsets.fromLTRB(16, 12, 8, 120),
+                    padding: previewPadding,
                     child: preview,
                   ),
                 ),
@@ -142,7 +176,7 @@ class GenerateScreen extends StatelessWidget {
                   child: ListView(
                     keyboardDismissBehavior:
                         ScrollViewKeyboardDismissBehavior.onDrag,
-                    padding: const EdgeInsets.fromLTRB(8, 12, 16, 120),
+                    padding: controlsPadding,
                     children: controls,
                   ),
                 ),
@@ -154,7 +188,9 @@ class GenerateScreen extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
               children: [preview, const SizedBox(height: 12), ...controls],
             ),
-      bottomNavigationBar: const _RunBar(),
+      bottomNavigationBar: landscapePhone && !state.generationQueueRunning
+          ? null
+          : const _RunBar(),
     );
   }
 
@@ -276,9 +312,9 @@ class PromptEditorState extends State<PromptEditor> {
     if (input.isEmpty) return;
     setState(() => translating = true);
     final translated = await context.read<AppState>().translateText(
-      input,
-      target: 'en',
-    );
+          input,
+          target: 'en',
+        );
     if (!mounted) return;
     setState(() => translating = false);
     if (translated == null || translated.trim().isEmpty) {
@@ -727,7 +763,8 @@ class _StylePresetControls extends StatelessWidget {
     final text = generateScreenTextFor(state.settings.language);
     final presets = state.settings.stylePromptPresets;
     final selected = presets
-        .where((preset) => preset.prompt.trim() == state.params.stylePrompt.trim())
+        .where(
+            (preset) => preset.prompt.trim() == state.params.stylePrompt.trim())
         .firstOrNull;
     final messenger = ScaffoldMessenger.of(context);
 
@@ -762,7 +799,8 @@ class _StylePresetControls extends StatelessWidget {
                 if (preset == null) return;
                 state.applyStylePromptPreset(preset);
                 messenger.showSnackBar(SnackBar(
-                  content: Text(_fillName(text.stylePresetApplied, preset.name)),
+                  content:
+                      Text(_fillName(text.stylePresetApplied, preset.name)),
                 ));
               },
             ),
@@ -2006,23 +2044,7 @@ class _RunBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final text = generateScreenTextFor(state.settings.language);
-    final runButton = FilledButton.icon(
-      onPressed: state.busy || !state.account.hasToken
-          ? null
-          : state.runTextOrImage,
-      icon: Icon(state.workbenchImage == null
-          ? Icons.play_arrow
-          : Icons.image_search),
-      label: Text(
-        state.workbenchImage == null
-            ? (state.batchCount > 1
-                ? '${text.generateCountPrefix}${state.batchCount}${text.generateCountSuffix}'
-                : text.generateImage)
-            : text.useCurrentImage,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-    );
+    final runButton = _PrimaryRunButton(state: state);
     if (_isRoomyPhoneLandscape(context) && !state.generationQueueRunning) {
       return SafeArea(
         child: Padding(
@@ -2100,6 +2122,32 @@ class _RunBar extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _PrimaryRunButton extends StatelessWidget {
+  final AppState state;
+
+  const _PrimaryRunButton({required this.state});
+
+  @override
+  Widget build(BuildContext context) {
+    final text = generateScreenTextFor(state.settings.language);
+    return FilledButton.icon(
+      onPressed:
+          state.busy || !state.account.hasToken ? null : state.runTextOrImage,
+      icon: Icon(
+          state.workbenchImage == null ? Icons.play_arrow : Icons.image_search),
+      label: Text(
+        state.workbenchImage == null
+            ? (state.batchCount > 1
+                ? '${text.generateCountPrefix}${state.batchCount}${text.generateCountSuffix}'
+                : text.generateImage)
+            : text.useCurrentImage,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
       ),
     );
   }

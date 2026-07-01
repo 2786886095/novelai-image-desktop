@@ -28,7 +28,7 @@ class StudioContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final phone = StudioBreakpoints.classify(MediaQuery.sizeOf(context)) ==
-            StudioWindowClass.phone;
+        StudioWindowClass.phone;
     if (phone) return child;
     return Align(
       alignment: Alignment.topCenter,
@@ -72,8 +72,7 @@ class StudioAdaptiveShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final windowClass =
-        StudioBreakpoints.classify(MediaQuery.sizeOf(context));
+    final windowClass = StudioBreakpoints.classify(MediaQuery.sizeOf(context));
     if (windowClass == StudioWindowClass.phone) {
       return _PhoneShell(
         selectedIndex: selectedIndex,
@@ -114,6 +113,8 @@ class _PhoneShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const primary = StudioAdaptiveShell._phonePrimaryIndexes;
+    final size = MediaQuery.sizeOf(context);
+    final landscape = size.width > size.height;
     final phoneIndex = primary.indexOf(selectedIndex);
     return Scaffold(
       key: const ValueKey('studio-phone-shell'),
@@ -121,6 +122,10 @@ class _PhoneShell extends StatelessWidget {
       body: IndexedStack(index: selectedIndex, children: pages),
       bottomNavigationBar: NavigationBar(
         key: const ValueKey('studio-phone-navigation'),
+        height: landscape ? 66 : null,
+        labelBehavior: landscape
+            ? NavigationDestinationLabelBehavior.onlyShowSelected
+            : NavigationDestinationLabelBehavior.alwaysShow,
         selectedIndex: phoneIndex < 0 ? primary.length : phoneIndex,
         onDestinationSelected: (index) {
           FocusManager.instance.primaryFocus?.unfocus();
