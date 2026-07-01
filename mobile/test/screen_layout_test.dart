@@ -124,6 +124,33 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets(
+      'generate screen keeps a compact bar when the queue runs in landscape',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(800, 360);
+    addTearDown(tester.view.reset);
+    final state = AppState()
+      ..generationQueueRunning = true
+      ..queueProgress = const GenerationQueueProgress(done: 0, total: 1);
+    addTearDown(state.dispose);
+
+    await _pumpScreen(
+      tester,
+      state,
+      const GenerateScreen(),
+      'generate landscape phone queue running',
+    );
+
+    expect(find.byKey(const ValueKey('generate-split-layout')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    // The tall stacked queue panel must not be docked as a bottomNavigationBar
+    // in landscape — it doesn't fit a short viewport and gets clipped behind
+    // the AppBar. Landscape uses compact pause/stop controls instead.
+    expect(find.byIcon(Icons.pause), findsOneWidget);
+    expect(find.byIcon(Icons.stop), findsOneWidget);
+  });
+
   testWidgets('home shell phone landscape keeps compact nav and split content',
       (tester) async {
     tester.view.devicePixelRatio = 1;

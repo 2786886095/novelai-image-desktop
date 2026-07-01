@@ -1,7 +1,8 @@
 // Shared presentational primitives used across the app's panels.
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import clsx from "clsx";
+import { Icon } from "./icons";
 
 export function Button({
   children,
@@ -52,6 +53,37 @@ export function Toggle({
       <span className={clsx("toggle", checked && "toggle-on")}>
         <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
         <span />
+      </span>
+    </label>
+  );
+}
+
+export function SecretInput({
+  label,
+  showLabel = "Show",
+  hideLabel = "Hide",
+  className,
+  ...props
+}: React.InputHTMLAttributes<HTMLInputElement> & {
+  label: ReactNode;
+  showLabel?: string;
+  hideLabel?: string;
+}) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <label className={clsx("field", className)}>
+      <span>{label}</span>
+      <span className="secret-field">
+        <input type={visible ? "text" : "password"} {...props} />
+        <button
+          type="button"
+          className="secret-field-toggle"
+          tabIndex={-1}
+          aria-label={visible ? hideLabel : showLabel}
+          onClick={() => setVisible((value) => !value)}
+        >
+          <Icon name={visible ? "eye" : "eyeOff"} />
+        </button>
       </span>
     </label>
   );

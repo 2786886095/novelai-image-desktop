@@ -349,16 +349,28 @@ class _GalleryScreenState extends State<GalleryScreen> {
                     icon: const Icon(Icons.workspaces_outline),
                     label: Text(t('gallery.setWorkbench')),
                     onPressed: () {
-                      context.read<AppState>().setWorkbenchFromHistory(item);
+                      final messenger = ScaffoldMessenger.of(context);
                       Navigator.pop(sheetContext);
+                      context
+                          .read<AppState>()
+                          .setWorkbenchFromHistory(item)
+                          .then((_) {
+                        messenger.showSnackBar(
+                          SnackBar(content: Text(t('gallery.setWorkbenchDone'))),
+                        );
+                      });
                     },
                   ),
                   FilledButton.tonalIcon(
                     icon: const Icon(Icons.replay),
                     label: Text(t('gallery.reuseParams')),
                     onPressed: () {
+                      final messenger = ScaffoldMessenger.of(context);
                       _reuseParams(context, item);
                       Navigator.pop(sheetContext);
+                      messenger.showSnackBar(
+                        SnackBar(content: Text(t('gallery.reuseParamsDone'))),
+                      );
                     },
                   ),
                   FilledButton.tonalIcon(

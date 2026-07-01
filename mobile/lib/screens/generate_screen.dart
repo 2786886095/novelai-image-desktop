@@ -74,7 +74,6 @@ class GenerateScreen extends StatelessWidget {
         label: text.positivePrompt,
         value: p.positivePrompt,
         maxLines: 5,
-        hintText: '1girl, masterpiece, ...',
         showRelatedTags: true,
         showTextTools: true,
         onChanged: (value) =>
@@ -150,6 +149,28 @@ class GenerateScreen extends StatelessWidget {
               child:
                   SizedBox(width: runButtonWidth, height: 38, child: runButton),
             ),
+          if (landscapePhone && state.generationQueueRunning)
+            Padding(
+              padding: const EdgeInsetsDirectional.only(end: 4),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    tooltip: state.queuePaused ? text.resume : text.pause,
+                    onPressed: state.toggleQueuePause,
+                    icon: Icon(
+                        state.queuePaused ? Icons.play_arrow : Icons.pause),
+                  ),
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    tooltip: text.cancelAndClear,
+                    onPressed: state.cancelGeneration,
+                    icon: const Icon(Icons.stop),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
       // Tablet/desktop-ish width and roomy phone landscape: preview pinned on
@@ -188,9 +209,7 @@ class GenerateScreen extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
               children: [preview, const SizedBox(height: 12), ...controls],
             ),
-      bottomNavigationBar: landscapePhone && !state.generationQueueRunning
-          ? null
-          : const _RunBar(),
+      bottomNavigationBar: landscapePhone ? null : const _RunBar(),
     );
   }
 
@@ -2042,23 +2061,12 @@ class _RunBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Only ever built in portrait — landscape phones use compact AppBar
+    // controls instead (see GenerateScreen.build) since this bar's full
+    // stacked layout is too tall to dock as a bottomNavigationBar there.
     final state = context.watch<AppState>();
     final text = generateScreenTextFor(state.settings.language);
     final runButton = _PrimaryRunButton(state: state);
-    if (_isRoomyPhoneLandscape(context) && !state.generationQueueRunning) {
-      return SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
-          child: Row(
-            children: [
-              Expanded(flex: 5, child: _AnlasQuoteBar(state: state)),
-              const SizedBox(width: 8),
-              Expanded(flex: 4, child: runButton),
-            ],
-          ),
-        ),
-      );
-    }
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),

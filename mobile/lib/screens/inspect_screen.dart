@@ -138,10 +138,12 @@ class _ReversePanelState extends State<_ReversePanel> {
             controller: _hintCtrl,
             decoration: InputDecoration(
               labelText: t('inspect.subjectHint'),
-              hintText: t('inspect.subjectHintExample'),
               border: const OutlineInputBorder(),
             ),
-            onChanged: (value) => s.reverseHint = value,
+            onChanged: (value) {
+              s.reverseHint = value;
+              s.markChanged();
+            },
           ),
           CheckboxListTile(
             contentPadding: EdgeInsets.zero,
@@ -166,7 +168,10 @@ class _ReversePanelState extends State<_ReversePanel> {
             decoration: InputDecoration(
                 labelText: t('inspect.reverseResult'),
                 border: const OutlineInputBorder()),
-            onChanged: (v) => s.reverseResult = v,
+            onChanged: (v) {
+              s.reverseResult = v;
+              s.markChanged();
+            },
           ),
           _ResultTemplateChips(
             value: s.reverseResult,
@@ -240,9 +245,11 @@ class _ConvertPanelState extends State<_ConvertPanel> {
             maxLines: 5,
             decoration: InputDecoration(
                 labelText: t('inspect.inputDescription'),
-                hintText: t('inspect.inputDescriptionHint'),
                 border: const OutlineInputBorder()),
-            onChanged: (v) => s.convertInput = v,
+            onChanged: (v) {
+              s.convertInput = v;
+              s.markChanged();
+            },
           ),
           const SizedBox(height: 12),
           _ModeSelector(
@@ -276,7 +283,10 @@ class _ConvertPanelState extends State<_ConvertPanel> {
             decoration: InputDecoration(
                 labelText: t('inspect.convertResult'),
                 border: const OutlineInputBorder()),
-            onChanged: (v) => s.convertResult = v,
+            onChanged: (v) {
+              s.convertResult = v;
+              s.markChanged();
+            },
           ),
           _ResultTemplateChips(
             value: s.convertResult,

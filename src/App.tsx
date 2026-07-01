@@ -23,7 +23,7 @@ import {
   CONVERT_SYSTEM_PROMPTS,
   SCOPED_REVERSE_SYSTEM_PROMPTS,
 } from "./data/prompt-templates";
-import { Button, IconText, AppPortal, Toggle, NumberInput, SliderInput } from "./components/ui";
+import { Button, IconText, AppPortal, Toggle, NumberInput, SliderInput, SecretInput } from "./components/ui";
 import { Icon } from "./components/icons";
 import { desktopUiFormat, desktopUiText, getChromeText, getGeneratePanelText, getLocalizedTabItems, getSettingsSectionText, getSettingsShellText, getTokenGuideText, localizedDesktopOptionLabel, SUPPORTED_APP_LANGUAGES } from "./i18n";
 import {
@@ -3800,10 +3800,14 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                   <strong>{t("settings.accountTitle")}</strong>
                   <span>{account.hasToken ? `${account.tierName ?? t("settings.verified")} · Anlas ${account.anlasBalance ?? t("title.unknown")}` : t("settings.noToken")}</span>
                 </div>
-                <label className="field">
-                  <span>{t("settings.apiTokenLabel")}</span>
-                  <input type="password" value={token} placeholder={t("settings.apiTokenPlaceholder")} onChange={(e) => setToken(e.target.value)} />
-                </label>
+                <SecretInput
+                  label={t("settings.apiTokenLabel")}
+                  value={token}
+                  placeholder={t("settings.apiTokenPlaceholder")}
+                  onChange={(e) => setToken(e.target.value)}
+                  showLabel={t("settings.showKey")}
+                  hideLabel={t("settings.hideKey")}
+                />
                 <div className="row-actions">
                   <Button variant="primary" disabled={checking} onClick={verify}>
                     {checking ? <IconText icon="…">{t("settings.verifying")}</IconText> : <IconText icon="✓">{t("settings.verifySave")}</IconText>}
@@ -4031,15 +4035,14 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                     onChange={(e) => void update("visionApiUrl", e.target.value)}
                   />
                 </label>
-                <label className="field">
-                  <span>API Key</span>
-                  <input
-                    type="password"
-                    value={settings.visionApiKey}
-                    placeholder="sk-..."
-                    onChange={(e) => void update("visionApiKey", e.target.value)}
-                  />
-                </label>
+                <SecretInput
+                  label="API Key"
+                  value={settings.visionApiKey}
+                  placeholder="sk-..."
+                  onChange={(e) => void update("visionApiKey", e.target.value)}
+                  showLabel={t("settings.showKey")}
+                  hideLabel={t("settings.hideKey")}
+                />
                 <label className="field">
                   <span>{t("settings.modelName")}</span>
                   <input
@@ -4082,15 +4085,14 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                     onChange={(e) => void update("convertApiUrl", e.target.value)}
                   />
                 </label>
-                <label className="field">
-                  <span>API Key</span>
-                  <input
-                    type="password"
-                    value={settings.convertApiKey}
-                    placeholder="sk-..."
-                    onChange={(e) => void update("convertApiKey", e.target.value)}
-                  />
-                </label>
+                <SecretInput
+                  label="API Key"
+                  value={settings.convertApiKey}
+                  placeholder="sk-..."
+                  onChange={(e) => void update("convertApiKey", e.target.value)}
+                  showLabel={t("settings.showKey")}
+                  hideLabel={t("settings.hideKey")}
+                />
                 <label className="field">
                   <span>{t("settings.modelName")}</span>
                   <input
@@ -4200,15 +4202,14 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                           onChange={(e) => void update("tagServerUrl", e.target.value)}
                         />
                       </label>
-                      <label className="field">
-                        <span>{t("settings.serviceKey")}</span>
-                        <input
-                          type="password"
-                          value={settings.tagServerApiKey}
-                          placeholder={t("settings.serviceKeyPlaceholder")}
-                          onChange={(e) => void update("tagServerApiKey", e.target.value)}
-                        />
-                      </label>
+                      <SecretInput
+                        label={t("settings.serviceKey")}
+                        value={settings.tagServerApiKey}
+                        placeholder={t("settings.serviceKeyPlaceholder")}
+                        onChange={(e) => void update("tagServerApiKey", e.target.value)}
+                        showLabel={t("settings.showKey")}
+                        hideLabel={t("settings.hideKey")}
+                      />
                     </>
                   )}
                   {settings.tagServerType !== "rest" && (
@@ -4258,15 +4259,14 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                           onChange={(e) => void update("baiduAppId", e.target.value)}
                         />
                       </label>
-                      <label className="field">
-                        <span>{t("settings.baiduSecret")}</span>
-                        <input
-                          type="password"
-                          value={settings.baiduSecret}
-                          placeholder={t("settings.baiduSecretPlaceholder")}
-                          onChange={(e) => void update("baiduSecret", e.target.value)}
-                        />
-                      </label>
+                      <SecretInput
+                        label={t("settings.baiduSecret")}
+                        value={settings.baiduSecret}
+                        placeholder={t("settings.baiduSecretPlaceholder")}
+                        onChange={(e) => void update("baiduSecret", e.target.value)}
+                        showLabel={t("settings.showKey")}
+                        hideLabel={t("settings.hideKey")}
+                      />
                     </>
                   )}
                 </div>
@@ -4441,10 +4441,15 @@ function OnboardingWizard() {
                 {account.hasToken && !tokenStatus && (
                   <div className="status-box ok">{t("onboarding.tokenConfigured")}</div>
                 )}
-                <label className="field wide">
-                  <span>{t("settings.apiTokenLabel")}</span>
-                  <input type="password" value={token} placeholder={account.hasToken ? t("onboarding.tokenKeep") : t("settings.apiTokenPlaceholder")} onChange={(e) => setToken(e.target.value)} />
-                </label>
+                <SecretInput
+                  className="wide"
+                  label={t("settings.apiTokenLabel")}
+                  value={token}
+                  placeholder={account.hasToken ? t("onboarding.tokenKeep") : t("settings.apiTokenPlaceholder")}
+                  onChange={(e) => setToken(e.target.value)}
+                  showLabel={t("settings.showKey")}
+                  hideLabel={t("settings.hideKey")}
+                />
                 <div className="row-actions">
                   <Button variant="primary" onClick={verify} disabled={checking}>
                     {checking ? <IconText icon="…">{t("settings.verifying")}</IconText> : <IconText icon="✓">{t("onboarding.verifySave")}</IconText>}
@@ -4459,24 +4464,24 @@ function OnboardingWizard() {
             {step === 3 && (
               <div className="settings-form">
                 <p className="settings-hint" style={{ margin: 0 }}>{t("onboarding.optionalHint")}</p>
-                <label className="field wide">
-                  <span>{t("onboarding.visionKeyLabel")}</span>
-                  <input
-                    type="password"
-                    defaultValue={settings?.visionApiKey ?? ""}
-                    placeholder={t("onboarding.visionKeyPlaceholder")}
-                    onChange={(e) => void window.naiDesktop.setSetting("visionApiKey", e.target.value)}
-                  />
-                </label>
-                <label className="field wide">
-                  <span>{t("onboarding.convertKeyLabel")}</span>
-                  <input
-                    type="password"
-                    defaultValue={settings?.convertApiKey ?? ""}
-                    placeholder={t("onboarding.convertKeyPlaceholder")}
-                    onChange={(e) => void window.naiDesktop.setSetting("convertApiKey", e.target.value)}
-                  />
-                </label>
+                <SecretInput
+                  className="wide"
+                  label={t("onboarding.visionKeyLabel")}
+                  defaultValue={settings?.visionApiKey ?? ""}
+                  placeholder={t("onboarding.visionKeyPlaceholder")}
+                  onChange={(e) => void window.naiDesktop.setSetting("visionApiKey", e.target.value)}
+                  showLabel={t("settings.showKey")}
+                  hideLabel={t("settings.hideKey")}
+                />
+                <SecretInput
+                  className="wide"
+                  label={t("onboarding.convertKeyLabel")}
+                  defaultValue={settings?.convertApiKey ?? ""}
+                  placeholder={t("onboarding.convertKeyPlaceholder")}
+                  onChange={(e) => void window.naiDesktop.setSetting("convertApiKey", e.target.value)}
+                  showLabel={t("settings.showKey")}
+                  hideLabel={t("settings.hideKey")}
+                />
                 <label className="field wide">
                   <span>{t("settings.translateEngine")}</span>
                   <select

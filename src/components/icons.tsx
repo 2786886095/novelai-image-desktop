@@ -23,7 +23,9 @@ export type IconName =
   | "trash"
   | "upgrade"
   | "download"
-  | "warning";
+  | "warning"
+  | "eye"
+  | "eyeOff";
 
 const PATHS: Record<IconName, ReactNode> = {
   lock: (
@@ -153,6 +155,19 @@ const PATHS: Record<IconName, ReactNode> = {
       <path d="M12 3.5 21 19.5H3Z" />
       <path d="M12 10v4.2" />
       <path d="M12 17.4h.01" />
+    </>
+  ),
+  eye: (
+    <>
+      <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" />
+      <circle cx="12" cy="12" r="3" />
+    </>
+  ),
+  eyeOff: (
+    <>
+      <path d="M3 3l18 18" />
+      <path d="M10.6 5.6c.45-.07.9-.1 1.4-.1 6 0 9.5 6.5 9.5 6.5a17.9 17.9 0 0 1-3.1 4.1M6.6 6.7C3.7 8.6 2 12 2 12s3.5 6.5 9.5 6.5c1.4 0 2.6-.3 3.7-.8" />
+      <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" />
     </>
   ),
 };
