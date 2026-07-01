@@ -1003,6 +1003,7 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
   const [showNormalize, setShowNormalize] = useState(false);
   const [translating, setTranslating] = useState(false);
   const [selectedStylePresetId, setSelectedStylePresetId] = useState("");
+  const [styleNamePrompt, setStyleNamePrompt] = useState<{ stylePrompt: string; fallbackName: string } | null>(null);
   // Original prompt text kept per tab so a translation can be reverted (还原).
   const [translateBackup, setTranslateBackup] = useState<Record<string, string>>({});
   const promptValue = promptTab === "positive" ? params.positivePrompt : params.negativePrompt;
@@ -1040,21 +1041,26 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
     setToast(f("prompt.stylePresetApplied", { name: preset.name }));
   }
 
-  async function saveStylePromptPreset() {
+  function saveStylePromptPreset() {
     const stylePrompt = params.stylePrompt.trim();
     if (!stylePrompt) {
       setToast(t("prompt.stylePresetNeedPrompt"));
       return;
     }
     const fallbackName = stylePrompt.slice(0, 28) || `Style ${stylePromptPresets.length + 1}`;
-    const name = window.prompt(generateText.prompt.stylePresetNamePrompt, fallbackName)?.trim();
-    if (!name) return;
+    setStyleNamePrompt({ stylePrompt, fallbackName });
+  }
+
+  async function confirmSaveStylePromptPreset(rawName: string) {
+    const name = rawName.trim();
+    if (!name || !styleNamePrompt) return;
     const preset: StylePromptPreset = {
       id: makeStylePresetId(),
       name,
-      prompt: stylePrompt,
+      prompt: styleNamePrompt.stylePrompt,
       createdAt: new Date().toISOString(),
     };
+    setStyleNamePrompt(null);
     await window.naiDesktop.setSetting("stylePromptPresets", [...stylePromptPresets, preset]);
     await refreshSettings();
     setSelectedStylePresetId(preset.id);
@@ -1245,7 +1251,7 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
             </option>
           ))}
         </select>
-        <Button type="button" variant="secondary" onClick={() => void saveStylePromptPreset()}>
+        <Button type="button" variant="secondary" onClick={saveStylePromptPreset}>
           <Icon name="pin" /> {generateText.prompt.stylePresetSave}
         </Button>
         <Button
@@ -1257,6 +1263,15 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
           <Icon name="trash" /> {generateText.prompt.stylePresetDelete}
         </Button>
       </div>
+      {styleNamePrompt && (
+        <InputModal
+          title={generateText.prompt.stylePresetSave}
+          label={generateText.prompt.stylePresetNamePrompt}
+          initial={styleNamePrompt.fallbackName}
+          onConfirm={(value) => void confirmSaveStylePromptPreset(value)}
+          onClose={() => setStyleNamePrompt(null)}
+        />
+      )}
       <div className={clsx("prompt-chip-zone", !chipOpen && "collapsed")}>
         <button type="button" className="prompt-chip-head" onClick={() => setChipOpen((v) => !v)}>
           <span className="chip-head-title">
