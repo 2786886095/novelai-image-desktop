@@ -9,6 +9,97 @@ class PromptVariants {
   const PromptVariants({this.namePrompt = '', this.featurePrompt = ''});
 
   bool get isComplete => namePrompt.isNotEmpty && featurePrompt.isNotEmpty;
+
+  Map<String, dynamic> toJson() => {
+        'namePrompt': namePrompt,
+        'featurePrompt': featurePrompt,
+      };
+
+  factory PromptVariants.fromJson(Map<String, dynamic> j) => PromptVariants(
+        namePrompt: j['namePrompt'] ?? '',
+        featurePrompt: j['featurePrompt'] ?? '',
+      );
+}
+
+enum TextToolJobStatus { processing, done, failed }
+
+/// In-flight/just-finished convert or reverse requests. Concurrent, not a
+/// serial queue: each job fires its API call immediately on creation and is
+/// updated in place when that call resolves. Not persisted across restarts.
+class TextToolJob {
+  final String id;
+  final String label;
+  final ReversePromptMode mode;
+  final bool knownCharacter;
+  TextToolJobStatus status;
+  String? result;
+  PromptVariants? variants;
+  String? message;
+  final DateTime addedAt;
+
+  TextToolJob({
+    required this.id,
+    required this.label,
+    required this.mode,
+    required this.knownCharacter,
+    required this.status,
+    this.result,
+    this.variants,
+    this.message,
+    required this.addedAt,
+  });
+}
+
+/// Persisted record of a completed convert/reverse result.
+class TextToolHistoryItem {
+  final String id;
+  final ReversePromptMode mode;
+  final bool knownCharacter;
+  final String input;
+  /// Reverse only — used to drop the record once the source image is gone,
+  /// same lazy-cleanup precedent as HistoryItem/dropMissingImage.
+  final String? sourceImagePath;
+  final String result;
+  final PromptVariants? variants;
+  final String createdAt;
+
+  TextToolHistoryItem({
+    required this.id,
+    required this.mode,
+    required this.knownCharacter,
+    required this.input,
+    this.sourceImagePath,
+    required this.result,
+    this.variants,
+    required this.createdAt,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'mode': mode.value,
+        'knownCharacter': knownCharacter,
+        'input': input,
+        'sourceImagePath': sourceImagePath,
+        'result': result,
+        'variants': variants?.toJson(),
+        'createdAt': createdAt,
+      };
+
+  factory TextToolHistoryItem.fromJson(Map<String, dynamic> j) => TextToolHistoryItem(
+        id: j['id'],
+        mode: ReversePromptMode.values.firstWhere(
+          (m) => m.value == j['mode'],
+          orElse: () => ReversePromptMode.tags,
+        ),
+        knownCharacter: j['knownCharacter'] ?? false,
+        input: j['input'] ?? '',
+        sourceImagePath: j['sourceImagePath'],
+        result: j['result'] ?? '',
+        variants: (j['variants'] is Map)
+            ? PromptVariants.fromJson(Map<String, dynamic>.from(j['variants']))
+            : null,
+        createdAt: j['createdAt'] ?? '',
+      );
 }
 
 class ParsedPromptResult {
@@ -143,34 +234,36 @@ String knownCharacterRuntimeInstruction(
   String source,
   bool knownCharacter,
 ) {
+  // Kept in Chinese to match the main system template (synced from desktop's
+  // CONVERT_SYSTEM_PROMPTS/REVERSE_SYSTEM_PROMPTS, both Chinese) — mixing
+  // languages within one system prompt measurably hurt output quality (the
+  // model treated an appended English block as a lower-priority afterthought
+  // instead of an integral part of the template). See desktop's
+  // src/prompt-mode.ts knownCharacterRuntimeInstruction for the same fix.
   final modeText = switch (mode) {
-    ReversePromptMode.natural =>
-      'Use concise English natural-language NovelAI prompts.',
-    ReversePromptMode.mixed =>
-      'Use concise mixed NovelAI prompts: mostly Danbooru tags with only short natural-language clauses when needed.',
-    ReversePromptMode.tags =>
-      'Use concise comma-separated Danbooru / NovelAI tags.',
+    ReversePromptMode.natural => '使用简洁的英文自然语言 NovelAI 提示词。',
+    ReversePromptMode.mixed => '使用简洁的混合 NovelAI 提示词：以 Danbooru tag 为主，只在需要时加入简短的自然语言。',
+    ReversePromptMode.tags => '使用简洁的英文逗号分隔 Danbooru / NovelAI tag。',
   };
   if (knownCharacter) {
     return [
-      'Known network/game/anime character mode is ON.',
-      'Return strict JSON only, with exactly these string keys: namePrompt and featurePrompt.',
-      'namePrompt: use the accurate character tag/name as the character identity. Do not repeat default hair, eyes, outfit, or accessories when the default character tag already covers them.',
-      'featurePrompt: do not use the character name. Use only short visible identity features and outfit tags, for cases where the model library does not know the character.',
-      'Only add outfit, feature, pose, action, or atmosphere details when the image/user request explicitly needs them.',
-      'Keep both prompts short. Avoid long feature lists because they reduce image quality.',
-      'For Furina, the minimal tag-style identity form should look like: 1girl, solo, furina (genshin impact).',
+      '已知网络/游戏/动漫角色模式已开启。',
+      '只输出严格 JSON，必须且只能包含这两个字符串字段：namePrompt 和 featurePrompt。',
+      'namePrompt 和 featurePrompt 都必须是完整的提示词，都要遵守上面系统模板里的全部格式、结构和权重规则（场景、构图、姿势、动作、互动、V4.5 多角色管道写法、source#/target#/mutual# 标签、权重语法）。两者必须用同样的详细程度描述同一个场景，区别只在于角色身份的表达方式，不能因为角色身份而减少场景内容。',
+      'namePrompt：使用准确的角色 tag/名字作为角色身份。如果角色 tag 本身已经包含默认发色、瞳色、服装或配饰，不要重复写出，除非用户明确要求不同或特殊的外观/服装。',
+      'featurePrompt：不要使用角色名字，改用简短的可见身份特征和服装 tag 作为身份，用于模型库不认识该角色的情况。除了身份表达方式之外，其余场景内容必须和 namePrompt 完全一致。',
+      '以芙宁娜为例，如果没有特殊服装或状态要求，身份部分本身可以简短到：1girl, solo, furina (genshin impact)——但两个版本都必须把用户描述的其余场景内容完整写出来。',
       modeText,
       source == 'reverse'
-          ? 'If the reverse scope is character, do not describe the full scene unless it is needed to identify a visible special outfit or state.'
-          : 'If the user only says a known character is doing something, do not invent extra default clothing or appearance tags.',
+          ? '如果反推范围是角色，除非需要识别可见的特殊服装或状态，否则不要描述整个场景。'
+          : '不要凭空编造角色 tag 或用户描述之外的额外默认服装、外观细节。',
     ].join('\n');
   }
   return [
-    'Known network/game/anime character mode is OFF.',
-    'Do not rely on character name tags or copyrighted character names as the identity.',
-    'Describe the subject with short visible appearance, outfit, pose, action, and atmosphere cues instead.',
-    'Keep the prompt concise and avoid long feature or clothing lists.',
+    '已知网络/游戏/动漫角色模式已关闭。',
+    '不要依赖角色名字 tag 或受版权保护的角色名作为身份。',
+    '改用简短的可见外观、服装、姿势、动作和氛围描述来代替。',
+    '保持提示词简洁，避免堆砌大段外观或服装描述。',
     modeText,
   ].join('\n');
 }

@@ -13,6 +13,7 @@ import '../history/history_archive.dart';
 import '../i18n/runtime_text.dart';
 import '../images/png_metadata.dart';
 import '../models/nai_models.dart';
+import '../prompts/prompt_mode.dart';
 
 // Run history JSON (de)serialisation on a background isolate once the payload is
 // large, so a big library never janks the UI thread at boot or on a save. Small
@@ -33,6 +34,8 @@ class Storage {
   static const _kVisionKey = 'vision_api_key';
   static const _kConvertKey = 'convert_api_key';
   static const _kTagKey = 'tag_server_key';
+  static const _kConvertHistory = 'texttool_convert_history_v1';
+  static const _kReverseHistory = 'texttool_reverse_history_v1';
 
   final _secure = const FlutterSecureStorage();
   int _saveSequence = 0;
@@ -42,6 +45,8 @@ class Storage {
   // only writeHistory touches disk. All persists go through writeHistory, so the
   // cache never drifts.
   List<HistoryItem>? _historyCache;
+  List<TextToolHistoryItem>? _convertHistoryCache;
+  List<TextToolHistoryItem>? _reverseHistoryCache;
   Future<SharedPreferences> get _prefs => SharedPreferences.getInstance();
 
   Future<String?> getToken() => _secure.read(key: _kToken);
@@ -161,6 +166,55 @@ class Storage {
         ? await compute(_encodeJsonList, data)
         : _encodeJsonList(data);
     await (await _prefs).setString(_kHistory, raw);
+  }
+
+  Future<List<TextToolHistoryItem>> getConvertHistory() =>
+      _getTextToolHistory(_kConvertHistory, () => _convertHistoryCache,
+          (v) => _convertHistoryCache = v);
+
+  Future<void> setConvertHistory(List<TextToolHistoryItem> items) =>
+      _setTextToolHistory(_kConvertHistory, items, (v) => _convertHistoryCache = v);
+
+  Future<List<TextToolHistoryItem>> getReverseHistory() =>
+      _getTextToolHistory(_kReverseHistory, () => _reverseHistoryCache,
+          (v) => _reverseHistoryCache = v);
+
+  Future<void> setReverseHistory(List<TextToolHistoryItem> items) =>
+      _setTextToolHistory(_kReverseHistory, items, (v) => _reverseHistoryCache = v);
+
+  Future<List<TextToolHistoryItem>> _getTextToolHistory(
+    String key,
+    List<TextToolHistoryItem>? Function() readCache,
+    void Function(List<TextToolHistoryItem>) writeCache,
+  ) async {
+    final cached = readCache();
+    if (cached != null) return List.of(cached);
+    final raw = (await _prefs).getString(key);
+    if (raw == null) {
+      writeCache([]);
+      return [];
+    }
+    try {
+      final list = jsonDecode(raw) as List<dynamic>;
+      final items = list
+          .map((e) => TextToolHistoryItem.fromJson(e as Map<String, dynamic>))
+          .toList();
+      writeCache(items);
+      return List.of(items);
+    } catch (_) {
+      writeCache([]);
+      return [];
+    }
+  }
+
+  Future<void> _setTextToolHistory(
+    String key,
+    List<TextToolHistoryItem> items,
+    void Function(List<TextToolHistoryItem>) writeCache,
+  ) async {
+    writeCache(List.of(items));
+    final data = items.map((e) => e.toJson()).toList();
+    await (await _prefs).setString(key, jsonEncode(data));
   }
 
   Future<List<HistoryGroup>> getGroups() async {

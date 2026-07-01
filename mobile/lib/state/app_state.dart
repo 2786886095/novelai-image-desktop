@@ -57,6 +57,9 @@ class AppState extends ChangeNotifier {
   String inpaintModel = 'nai-diffusion-4-5-full-inpainting';
   double inpaintStrength = 0.55;
   double inpaintNoise = 0;
+  // Independent from params.positivePrompt — inpaint must not inherit the
+  // main generate/i2i prompt automatically.
+  String inpaintPositivePrompt = '';
   int upscaleScale = 2;
   String directorTool = 'bg-removal';
   ReversePromptMode reverseMode = ReversePromptMode.tags;
@@ -67,9 +70,17 @@ class AppState extends ChangeNotifier {
   bool convertKnownCharacter = false;
   String reverseResult = '';
   PromptVariants? reversePromptVariants;
+  // Concurrent job tracker for reverse requests — every submission fires
+  // immediately and updates its own entry in place; not a serial queue.
+  List<TextToolJob> reverseJobs = [];
+  bool reverseQueueCollapsed = true;
+  List<TextToolHistoryItem> reverseHistory = [];
   String convertInput = '';
   String convertResult = '';
   PromptVariants? convertResultVariants;
+  List<TextToolJob> convertJobs = [];
+  bool convertQueueCollapsed = true;
+  List<TextToolHistoryItem> convertHistory = [];
   AnlasQuote? generationQuote;
   bool quoteLoading = false;
   bool generationQueueRunning = false;
@@ -136,6 +147,7 @@ class AppState extends ChangeNotifier {
       inpaintModel = settings.inpaintModel;
       inpaintStrength = settings.inpaintStrength;
       inpaintNoise = settings.inpaintNoise;
+      inpaintPositivePrompt = settings.inpaintPositivePrompt;
       upscaleScale = settings.upscaleScale;
       directorTool = settings.directorTool;
       augmentOptions = AugmentOptions(
@@ -145,6 +157,9 @@ class AppState extends ChangeNotifier {
         emotionLevel: settings.augmentEmotionLevel,
       );
       history = await storage.getHistory();
+      convertHistory = await storage.getConvertHistory();
+      reverseHistory = await storage.getReverseHistory();
+      unawaited(pruneMissingReverseHistory());
       groups = await storage.getGroups();
       selectedGroupId = groups.any(
         (group) => group.id == settings.activeHistoryGroupId,
@@ -600,6 +615,7 @@ class AppState extends ChangeNotifier {
       ..inpaintModel = inpaintModel
       ..inpaintStrength = inpaintStrength
       ..inpaintNoise = inpaintNoise
+      ..inpaintPositivePrompt = inpaintPositivePrompt
       ..upscaleScale = upscaleScale
       ..directorTool = directorTool
       ..augmentDefry = augmentOptions.defry
@@ -1077,10 +1093,17 @@ class AppState extends ChangeNotifier {
       final image = await _workbenchBytes();
       final dims = workbenchImage;
       if (dims == null) throw Exception(_rt('error.originalImageRequired'));
+      // Inpaint keeps its own independent positive prompt
+      // (inpaintPositivePrompt) instead of reusing params.positivePrompt —
+      // the rest of params (size, sampler, negative prompt, etc.) is still
+      // shared with the main generate/i2i params.
+      final taskParams = params.copy()
+        ..positivePrompt = expandPromptWildcards(inpaintPositivePrompt)
+        ..negativePrompt = expandPromptWildcards(params.negativePrompt);
       final before = await _authorizeQuotedRun(
         token,
         (fresh) => calculateInpaintAnlas(
-          params: params,
+          params: taskParams,
           account: fresh,
           image: dims,
           inpaintModel: inpaintModel,
@@ -1091,9 +1114,6 @@ class AppState extends ChangeNotifier {
       status =
           _rf('status.inpaintRunning', {'amount': inpaintAnlasQuote.amount});
       notifyListeners();
-      final taskParams = params.copy()
-        ..positivePrompt = expandPromptWildcards(params.positivePrompt)
-        ..negativePrompt = expandPromptWildcards(params.negativePrompt);
       final (images, seed, usedModel) = await api.inpaint(
           token,
           settings,
@@ -1230,12 +1250,37 @@ class AppState extends ChangeNotifier {
     });
   }
 
+  // Concurrent — every call fires its API request immediately and updates
+  // only its own job entry when it resolves, so multiple reverse requests
+  // can be in flight (the button never disables while one runs), and a
+  // foreground service keeps this specific request alive if the app is
+  // backgrounded mid-request.
   Future<void> reversePrompt() async {
     final image = await _workbenchBytes();
+    final sourcePath = workbenchImage?.filePath;
     final key = await storage.getVisionKey() ?? '';
-    busy = true;
-    status = _rt('status.reverseRunning');
+    final job = TextToolJob(
+      id: '${DateTime.now().microsecondsSinceEpoch}',
+      label: reverseHint.trim().isNotEmpty
+          ? reverseHint.trim()
+          : _rt('job.reverseLabel'),
+      mode: reverseMode,
+      knownCharacter: reverseKnownCharacter,
+      status: TextToolJobStatus.processing,
+      addedAt: DateTime.now(),
+    );
+    final owner = 'reverse-${job.id}';
+    reverseJobs = [job, ...reverseJobs];
     notifyListeners();
+    try {
+      await BackgroundQueueService.start(
+        owner,
+        title: _rt('notification.reverseTitle'),
+        text: _rt('notification.textToolRunning'),
+      );
+    } catch (_) {
+      // Notification permission or OEM restrictions must not block the request.
+    }
     final res = await api.reversePrompt(
       settings: settings,
       apiKey: key,
@@ -1247,18 +1292,63 @@ class AppState extends ChangeNotifier {
       systemTemplate: resolvedPromptTemplate('reverse', reverseMode,
           scoped: reverseScope != ReversePromptScope.full),
     );
-    busy = false;
-    reverseResult = res.ok ? res.text : '';
-    reversePromptVariants = res.ok ? res.variants : null;
-    status = res.ok ? _rt('status.reverseDone') : res.message;
+    await BackgroundQueueService.stop(owner);
+    // "Cancel" just removes the job from the tracker (the in-flight HTTP
+    // request itself isn't aborted) — but once it resolves, treat a removed
+    // job as truly cancelled: no result overwrite, no toast, no history entry.
+    if (!reverseJobs.any((j) => j.id == job.id)) return;
+    if (res.ok) {
+      job.status = TextToolJobStatus.done;
+      job.result = res.text;
+      job.variants = res.variants;
+      reverseResult = res.text;
+      reversePromptVariants = res.variants;
+      status = _rt('status.reverseDone');
+      final historyItem = TextToolHistoryItem(
+        id: job.id,
+        mode: reverseMode,
+        knownCharacter: reverseKnownCharacter,
+        input: reverseHint,
+        sourceImagePath: sourcePath,
+        result: res.text,
+        variants: res.variants,
+        createdAt: DateTime.now().toIso8601String(),
+      );
+      reverseHistory = [historyItem, ...reverseHistory];
+      unawaited(storage.setReverseHistory(reverseHistory));
+    } else {
+      job.status = TextToolJobStatus.failed;
+      job.message = res.message;
+      status = res.message;
+    }
     notifyListeners();
   }
 
+  // Concurrent, same reasoning as reversePrompt.
   Future<void> convertPrompt() async {
     final key = await storage.getConvertKey() ?? '';
-    busy = true;
-    status = _rt('status.convertRunning');
+    final job = TextToolJob(
+      id: '${DateTime.now().microsecondsSinceEpoch}',
+      label: convertInput.trim().length > 60
+          ? convertInput.trim().substring(0, 60)
+          : convertInput.trim(),
+      mode: convertMode,
+      knownCharacter: convertKnownCharacter,
+      status: TextToolJobStatus.processing,
+      addedAt: DateTime.now(),
+    );
+    final owner = 'convert-${job.id}';
+    convertJobs = [job, ...convertJobs];
     notifyListeners();
+    try {
+      await BackgroundQueueService.start(
+        owner,
+        title: _rt('notification.convertTitle'),
+        text: _rt('notification.textToolRunning'),
+      );
+    } catch (_) {
+      // Notification permission or OEM restrictions must not block the request.
+    }
     final res = await api.convertPrompt(
       settings: settings,
       apiKey: key,
@@ -1267,11 +1357,97 @@ class AppState extends ChangeNotifier {
       knownCharacter: convertKnownCharacter,
       systemTemplate: resolvedPromptTemplate('convert', convertMode),
     );
-    busy = false;
-    convertResult = res.ok ? res.text : '';
-    convertResultVariants = res.ok ? res.variants : null;
-    status = res.ok ? _rt('status.convertDone') : res.message;
+    await BackgroundQueueService.stop(owner);
+    // See reversePrompt: a removed job is treated as cancelled.
+    if (!convertJobs.any((j) => j.id == job.id)) return;
+    if (res.ok) {
+      job.status = TextToolJobStatus.done;
+      job.result = res.text;
+      job.variants = res.variants;
+      convertResult = res.text;
+      convertResultVariants = res.variants;
+      status = _rt('status.convertDone');
+      final historyItem = TextToolHistoryItem(
+        id: job.id,
+        mode: convertMode,
+        knownCharacter: convertKnownCharacter,
+        input: convertInput,
+        result: res.text,
+        variants: res.variants,
+        createdAt: DateTime.now().toIso8601String(),
+      );
+      convertHistory = [historyItem, ...convertHistory];
+      unawaited(storage.setConvertHistory(convertHistory));
+    } else {
+      job.status = TextToolJobStatus.failed;
+      job.message = res.message;
+      status = res.message;
+    }
     notifyListeners();
+  }
+
+  void toggleReverseQueueCollapsed() {
+    reverseQueueCollapsed = !reverseQueueCollapsed;
+    notifyListeners();
+  }
+
+  void removeReverseJob(String id) {
+    reverseJobs = reverseJobs.where((j) => j.id != id).toList();
+    notifyListeners();
+  }
+
+  Future<void> deleteReverseHistoryItem(String id) async {
+    reverseHistory = reverseHistory.where((item) => item.id != id).toList();
+    notifyListeners();
+    await storage.setReverseHistory(reverseHistory);
+  }
+
+  Future<void> clearReverseHistory() async {
+    reverseHistory = [];
+    notifyListeners();
+    await storage.setReverseHistory(reverseHistory);
+  }
+
+  /// Same lazy-cleanup precedent as dropMissingImage: called when the
+  /// reverse history list renders, drops any record whose source image file
+  /// is gone. No-op for records with no tracked source path.
+  Future<void> pruneMissingReverseHistory() async {
+    final survivors = <TextToolHistoryItem>[];
+    var changed = false;
+    for (final item in reverseHistory) {
+      final path = item.sourceImagePath;
+      if (path != null && path.isNotEmpty && !File(path).existsSync()) {
+        changed = true;
+        continue;
+      }
+      survivors.add(item);
+    }
+    if (!changed) return;
+    reverseHistory = survivors;
+    notifyListeners();
+    await storage.setReverseHistory(reverseHistory);
+  }
+
+  void toggleConvertQueueCollapsed() {
+    convertQueueCollapsed = !convertQueueCollapsed;
+    notifyListeners();
+  }
+
+  void removeConvertJob(String id) {
+    convertJobs = convertJobs.where((j) => j.id != id).toList();
+    notifyListeners();
+  }
+
+  Future<void> deleteConvertHistoryItem(String id) async {
+    convertHistory = convertHistory.where((item) => item.id != id).toList();
+    notifyListeners();
+    await storage.setConvertHistory(convertHistory);
+  }
+
+  Future<void> clearConvertHistory() async {
+    convertHistory = [];
+    notifyListeners();
+    await storage.setConvertHistory(convertHistory);
   }
 
   void applyPrompt(String prompt) {

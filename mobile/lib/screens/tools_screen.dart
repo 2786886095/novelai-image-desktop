@@ -204,7 +204,13 @@ class _InpaintPanelState extends State<_InpaintPanel> {
       width: image.width,
       height: image.height,
     );
-    if (mounted) await context.read<AppState>().inpaint(mask);
+    if (!mounted) return;
+    await context.read<AppState>().inpaint(mask);
+    // A successful run replaces workbenchImage with the new result — the old
+    // mask strokes no longer apply to it and must not linger on the canvas.
+    if (mounted && state.workbenchImage?.filePath != image.filePath) {
+      setState(strokes.clear);
+    }
   }
 
   // Renders the exact binary mask that will be sent (white = repaint area) and
@@ -376,12 +382,15 @@ class _InpaintPanelState extends State<_InpaintPanel> {
             const SizedBox(height: 12),
             PromptEditor(
               label: t('tools.positivePrompt'),
-              value: state.params.positivePrompt,
+              value: state.inpaintPositivePrompt,
               maxLines: 4,
               hintText: t('tools.positiveHint'),
               showRelatedTags: true,
               showTextTools: true,
-              onChanged: (v) => state.setParam((p) => p.positivePrompt = v),
+              onChanged: (v) {
+                state.inpaintPositivePrompt = v;
+                state.markChanged();
+              },
             ),
             const SizedBox(height: 12),
             PromptEditor(

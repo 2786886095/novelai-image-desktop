@@ -1787,21 +1787,6 @@ export async function testTagServer(query: string): Promise<{ ok: boolean; messa
     : { ok: false, message: "Tag 服务没有返回结果，请检查地址、鉴权或接口路径。", tags: [] };
 }
 
-function hasCompletePromptVariants(parsed: ReturnType<typeof parsePromptVariantResponse>) {
-  return Boolean(parsed.variants?.namePrompt.trim() && parsed.variants?.featurePrompt.trim());
-}
-
-function variantRepairSystemPrompt(mode: "tags" | "natural" | "mixed", source: "reverse" | "convert") {
-  return [
-    "Rewrite the previous output into strict JSON only.",
-    "Return exactly this shape: {\"namePrompt\":\"...\",\"featurePrompt\":\"...\"}.",
-    "namePrompt must use the known character name/tag concisely.",
-    "featurePrompt must not use the character name; replace it with short visible features and outfit cues.",
-    "Do not add explanations, Markdown, or extra keys.",
-    knownCharacterRuntimeInstruction(mode, source, true),
-  ].join("\n\n");
-}
-
 export async function reversePromptImage(
   imageBase64: string,
   mode: "tags" | "natural" | "mixed" = "tags",
@@ -1854,30 +1839,12 @@ export async function reversePromptImage(
   );
 
   if (result.ok) {
-    let parsed = parsePromptVariantResponse(result.content ?? "", knownCharacter);
-    if (knownCharacter && !hasCompletePromptVariants(parsed)) {
-      const repaired = await callVisionApi(
-        variantRepairSystemPrompt(mode, "reverse"),
-        [
-          { type: "image_url", image_url: { url: `data:image/png;base64,${imageBase64}`, detail: "high" } },
-          {
-            type: "text",
-            text: [
-              userScopeText,
-              "",
-              "Previous output that must be rewritten into two variants:",
-              result.content ?? "",
-            ].join("\n"),
-          },
-        ],
-        1400,
-        `AI 反推双版本修复 · ${mode}`,
-      );
-      if (repaired.ok && repaired.content) {
-        const fixed = parsePromptVariantResponse(repaired.content, true);
-        if (hasCompletePromptVariants(fixed)) parsed = fixed;
-      }
-    }
+    // Known-character mode already requires both variants in the single
+    // upfront call (knownCharacterRuntimeInstruction), so we accept whatever
+    // parsePromptVariantResponse extracts rather than spending a second
+    // request repairing an incomplete JSON response — same single-request
+    // strategy as convertPromptText.
+    const parsed = parsePromptVariantResponse(result.content ?? "", knownCharacter);
     let content = parsed.primary;
     // Same reasoning as convertPromptText: known-character mode already
     // requires both variants to follow every template rule in the single
@@ -2575,25 +2542,11 @@ export async function convertPromptText(
   const result = await callConvertApi(systemPrompt, userText, knownCharacter ? 2400 : 2000, `提示词转换 · ${mode}`);
 
   if (result.ok) {
-    let parsed = parsePromptVariantResponse(result.content ?? "", knownCharacter);
-    if (knownCharacter && !hasCompletePromptVariants(parsed)) {
-      const repaired = await callConvertApi(
-        variantRepairSystemPrompt(mode, "convert"),
-        [
-          "Original user description:",
-          chineseText,
-          "",
-          "Previous output that must be rewritten into two variants:",
-          result.content ?? "",
-        ].join("\n"),
-        1600,
-        `提示词转换双版本修复 · ${mode}`,
-      );
-      if (repaired.ok && repaired.content) {
-        const fixed = parsePromptVariantResponse(repaired.content, true);
-        if (hasCompletePromptVariants(fixed)) parsed = fixed;
-      }
-    }
+    // Known-character mode already requires both variants in the single
+    // upfront call (knownCharacterRuntimeInstruction), so we accept whatever
+    // parsePromptVariantResponse extracts rather than spending a second
+    // request repairing an incomplete JSON response.
+    const parsed = parsePromptVariantResponse(result.content ?? "", knownCharacter);
     let content = parsed.primary;
     // Known-character mode already asks for both variants to follow every
     // template rule in the single upfront call (knownCharacterRuntimeInstruction),

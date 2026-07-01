@@ -22,6 +22,45 @@ Offset? normalizeCanvasPoint(Offset point, Size canvasSize) {
   return Offset(point.dx / canvasSize.width, point.dy / canvasSize.height);
 }
 
+// Editing stays pixel-precise, but NovelAI inpainting works on a 64px latent
+// grid. Expand touched cells only in the exported mask; this preserves the
+// free round brush feel while giving the API a clean, aligned mask — mirrors
+// desktop's InpaintCanvas.tsx exportMask/buildLatentMaskCells.
+const _maskCellSize = 64;
+
+class _LatentMaskCells {
+  final Uint8List cellOn;
+  final int cols;
+  final int rows;
+  final bool any;
+  _LatentMaskCells(this.cellOn, this.cols, this.rows, this.any);
+}
+
+Future<_LatentMaskCells> _buildLatentMaskCells(
+  ByteData rgba,
+  int width,
+  int height,
+  int cellSize,
+) async {
+  final bytes = rgba.buffer.asUint8List();
+  final cols = (width / cellSize).ceil();
+  final rows = (height / cellSize).ceil();
+  final cellOn = Uint8List(cols * rows);
+  var any = false;
+  for (var y = 0; y < height; y++) {
+    final rowBase = y * width;
+    final cellRow = (y ~/ cellSize) * cols;
+    for (var x = 0; x < width; x++) {
+      final index = (rowBase + x) * 4;
+      if (bytes[index] + bytes[index + 1] + bytes[index + 2] > 32) {
+        cellOn[cellRow + (x ~/ cellSize)] = 1;
+        any = true;
+      }
+    }
+  }
+  return _LatentMaskCells(cellOn, cols, rows, any);
+}
+
 Future<Uint8List> renderInpaintMask({
   required List<InpaintStroke> strokes,
   required int width,
@@ -67,8 +106,34 @@ Future<Uint8List> renderInpaintMask({
     canvas.drawPath(path, paint);
   }
 
-  final picture = recorder.endRecording();
-  final image = await picture.toImage(width, height);
+  final rawImage = await recorder.endRecording().toImage(width, height);
+  final rawData = await rawImage.toByteData(format: ui.ImageByteFormat.rawRgba);
+  rawImage.dispose();
+  if (rawData == null) throw StateError('Unable to read the inpaint mask raster.');
+  final cells =
+      await _buildLatentMaskCells(rawData, width, height, _maskCellSize);
+
+  final cellRecorder = ui.PictureRecorder();
+  final cellCanvas = Canvas(cellRecorder);
+  cellCanvas.drawRect(Offset.zero & size, Paint()..color = Colors.black);
+  if (cells.any) {
+    final cellPaint = Paint()..color = Colors.white;
+    for (var row = 0; row < cells.rows; row++) {
+      for (var col = 0; col < cells.cols; col++) {
+        if (cells.cellOn[row * cells.cols + col] == 0) continue;
+        cellCanvas.drawRect(
+          Rect.fromLTWH(
+            (col * _maskCellSize).toDouble(),
+            (row * _maskCellSize).toDouble(),
+            _maskCellSize.toDouble(),
+            _maskCellSize.toDouble(),
+          ),
+          cellPaint,
+        );
+      }
+    }
+  }
+  final image = await cellRecorder.endRecording().toImage(width, height);
   final data = await image.toByteData(format: ui.ImageByteFormat.png);
   image.dispose();
   if (data == null) throw StateError('Unable to encode the inpaint mask.');

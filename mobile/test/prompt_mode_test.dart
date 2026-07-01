@@ -47,9 +47,10 @@ void main() {
       'convert',
       false,
     );
-    expect(known, contains('namePrompt and featurePrompt'));
+    expect(known, contains('namePrompt 和 featurePrompt'));
     expect(known, contains('furina (genshin impact)'));
-    expect(unknown, contains('Do not rely on character name tags'));
+    expect(known, isNot(contains('Keep both prompts short')));
+    expect(unknown, contains('不要依赖角色名字 tag'));
   });
 
   test('desktop templates are bundled for all modes', () async {

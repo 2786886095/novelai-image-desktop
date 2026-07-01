@@ -3746,7 +3746,11 @@ html, body, #root {
 .queue-panel-title {
   font-size: 12px;
   font-weight: 600;
-  color: var(--text, #d8dce6);
+  /* var(--text)/var(--text-dim) below are never defined anywhere in this
+     stylesheet, so every rule using them was silently rendering its fallback
+     color (tuned for a dark background) — unreadable against the light
+     theme. Use the actually-defined text variables instead. */
+  color: var(--text-primary);
 }
 .queue-panel-actions {
   display: flex;
@@ -3760,12 +3764,12 @@ html, body, #root {
   border-radius: 6px;
   border: 1px solid var(--border, #2a2f3a);
   background: transparent;
-  color: var(--text-dim, #9aa3b2);
+  color: var(--text-secondary);
   cursor: pointer;
 }
 .queue-mini-btn:hover {
   background: rgba(255, 255, 255, 0.06);
-  color: var(--text, #d8dce6);
+  color: var(--text-primary);
 }
 .queue-collapse-btn {
   min-width: 24px;
@@ -3808,17 +3812,17 @@ html, body, #root {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--text, #d8dce6);
+  color: var(--text-primary);
 }
 .queue-item-time {
   font-variant-numeric: tabular-nums;
-  color: var(--text-dim, #9aa3b2);
+  color: var(--text-secondary);
   font-size: 11px;
 }
 .queue-item-remove {
   border: none;
   background: transparent;
-  color: var(--text-dim, #9aa3b2);
+  color: var(--text-secondary);
   cursor: pointer;
   padding: 0 2px;
   line-height: 1;
@@ -3837,6 +3841,44 @@ html, body, #root {
 }
 @keyframes queue-spin {
   to { transform: rotate(360deg); }
+}
+
+/* ── 转换/反推：并发任务列表 + 历史记录 (reuses .queue-panel chrome above) ──── */
+/* .queue-panel's own background (rgba(255,255,255,0.03), a near-invisible
+   lightening tint) assumes a dark surrounding context; against this app's
+   light "workspace" panels it gives almost no card definition. Layered on
+   top of .queue-panel as an additional class so the untouched generation
+   queue (elsewhere, possibly against a dark backdrop) isn't affected. */
+.texttool-panel {
+  background: var(--bg-canvas);
+  border-color: var(--border);
+}
+.texttool-history-item {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  font-size: 11.5px;
+}
+.texttool-history-item-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+}
+.texttool-history-item-text {
+  color: var(--text-primary);
+  white-space: normal;
+  word-break: break-word;
+}
+.texttool-history-item-input {
+  color: var(--text-primary);
+  font-weight: 600;
+  white-space: normal;
+  word-break: break-word;
 }
 
 /* ── 图片批量重绘 (batch redraw tool, comic-generator style wizard) ─────────── */

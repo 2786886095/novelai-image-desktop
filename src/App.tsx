@@ -63,6 +63,8 @@ import {
   type ReversePromptMode,
   type ReversePromptScope,
   type TagSuggestion,
+  type TextToolHistoryItem,
+  type TextToolJob,
   type TokenStatus,
 } from "./types";
 
@@ -985,7 +987,17 @@ function CharCaptionsModal({ onClose }: { onClose: () => void }) {
 }
 
 // ── Prompt + Params ───────────────────────────────────────────────────────────
-function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
+function PromptAndParams({
+  includeModel = true,
+  promptOverride,
+}: {
+  includeModel?: boolean;
+  // When set, the positive-prompt textarea (and every action that edits it —
+  // templates, capsule insert, weight adjust, translate, normalize) reads and
+  // writes here instead of the shared params.positivePrompt. Used by the
+  // inpaint panel so it doesn't inherit the main generate/i2i prompt.
+  promptOverride?: { value: string; onChange: (value: string) => void };
+}) {
   const params = useAppStore((state) => state.params);
   const setParam = useAppStore((state) => state.setParam);
   const promptTab = useAppStore((state) => state.promptTab);
@@ -1009,21 +1021,35 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
   const [styleNamePrompt, setStyleNamePrompt] = useState<{ stylePrompt: string; fallbackName: string } | null>(null);
   // Original prompt text kept per tab so a translation can be reverted (还原).
   const [translateBackup, setTranslateBackup] = useState<Record<string, string>>({});
-  const promptValue = promptTab === "positive" ? params.positivePrompt : params.negativePrompt;
+  // The override (inpaint) fully replaces params.positivePrompt as the source
+  // of truth for every positive-prompt read/write in this component.
+  const effectivePositivePrompt = promptOverride ? promptOverride.value : params.positivePrompt;
+  function setPositivePromptValue(value: string) {
+    if (promptOverride) promptOverride.onChange(value);
+    else setParam("positivePrompt", value);
+  }
+  const promptValue = promptTab === "positive" ? effectivePositivePrompt : params.negativePrompt;
   const promptKey = promptTab === "positive" ? "positivePrompt" : "negativePrompt";
+  // Unified setter for every "edit whichever tab is active" action (capsule
+  // insert, weight adjust, translate, normalize) — negative prompt is always
+  // shared, positive prompt goes through the override when present.
+  function setPromptValue(value: string) {
+    if (promptKey === "positivePrompt") setPositivePromptValue(value);
+    else setParam("negativePrompt", value);
+  }
   const templates: PromptTemplate[] = settings?.promptTemplates ?? [];
   const stylePromptPresets: StylePromptPreset[] = settings?.stylePromptPresets ?? [];
   const generateText = useMemo(() => getGeneratePanelText(settings?.language), [settings?.language]);
   const t = useCallback((key: string) => desktopUiText(settings?.language, key), [settings?.language]);
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(settings?.language, key, values), [settings?.language]);
   // Co-occurrence: tags commonly used alongside what's already in the prompt.
-  const related = useMemo(() => relatedTags(params.positivePrompt, 8), [params.positivePrompt]);
+  const related = useMemo(() => relatedTags(effectivePositivePrompt, 8), [effectivePositivePrompt]);
 
   function applyTemplate(tpl: PromptTemplate) {
     setShowTemplateMenu(false);
-    const current = params.positivePrompt.trim();
+    const current = effectivePositivePrompt.trim();
     const parts = [tpl.prefix.trim(), current, tpl.suffix.trim()].filter(Boolean);
-    setParam("positivePrompt", parts.join(", "));
+    setPositivePromptValue(parts.join(", "));
     if (tpl.negativePrompt.trim() && !(settings?.lockNegativePrompt ?? false)) {
       setParam("negativePrompt", tpl.negativePrompt.trim());
     }
@@ -1085,7 +1111,7 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
   function appendChip(tag: string) {
     const current = promptValue.trim();
     const next = current ? `${current.replace(/\s*,?\s*$/, "")}, ${tag}, ` : `${tag}, `;
-    setParam(promptKey, next);
+    setPromptValue(next);
   }
 
   // Per-tag weight editor: parse the active prompt into { core, level } chips.
@@ -1096,7 +1122,7 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
   function bumpWeight(index: number, delta: number) {
     const tag = weightTags[index];
     if (!tag) return;
-    setParam(promptKey, setTagLevelInPrompt(promptValue, index, tag.level + delta));
+    setPromptValue(setTagLevelInPrompt(promptValue, index, tag.level + delta));
   }
 
   async function toggleAutoComplete() {
@@ -1130,6 +1156,10 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
   }
   // Keep the saved copy in sync while a field is locked.
   function setLockedAwareParam(key: "stylePrompt" | "positivePrompt" | "negativePrompt", value: string) {
+    if (key === "positivePrompt") {
+      setPositivePromptValue(value);
+      return;
+    }
     setParam(key, value);
     if (key === "stylePrompt" && settings?.lockStylePrompt) {
       void window.naiDesktop.setSetting("savedStylePrompt", value);
@@ -1173,7 +1203,7 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
         return;
       }
       const joined = translated.filter(Boolean).join(", ");
-      setParam(promptKey, joined + (joined.endsWith(",") ? " " : ", "));
+      setPromptValue(joined + (joined.endsWith(",") ? " " : ", "));
       setTranslateBackup((b) => ({ ...b, [promptKey]: original }));
       setToast(failed ? t("prompt.translatePartialFailed") : t("prompt.translateDone"));
     } catch {
@@ -1186,7 +1216,7 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
   function restoreTranslate() {
     const backup = translateBackup[promptKey];
     if (backup == null) return;
-    setParam(promptKey, backup);
+    setPromptValue(backup);
     setTranslateBackup((b) => {
       const next = { ...b };
       delete next[promptKey];
@@ -1477,7 +1507,7 @@ function PromptAndParams({ includeModel = true }: { includeModel?: boolean }) {
         <PromptNormalizeModal
           value={promptValue}
           onApply={(next) => {
-            setParam(promptKey, next);
+            setPromptValue(next);
             setShowNormalize(false);
             setToast(t("prompt.normalizedToast"));
           }}
@@ -1841,6 +1871,147 @@ function QueuePanel() {
   );
 }
 
+// Concurrent job tracker for convert/反推 — unlike QueuePanel above, there's no
+// serial drain loop: every submission fires immediately, so more than one
+// entry can be "processing" at once. Shared by both tools; each caller passes
+// its own job list + collapse state from the store.
+function TextToolQueuePanel({
+  jobs,
+  collapsed,
+  onToggleCollapsed,
+  onRemoveJob,
+}: {
+  jobs: TextToolJob[];
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
+  onRemoveJob: (id: string) => void;
+}) {
+  const language = useAppStore((state) => state.settings?.language);
+  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
+  if (jobs.length === 0) return null;
+  const processingCount = jobs.filter((job) => job.status === "processing").length;
+  return (
+    <div className="queue-panel texttool-panel">
+      <div className="queue-panel-head">
+        <span className="queue-panel-title">
+          {t("textTool.queueTitle")}
+          {processingCount > 0 ? ` · ${processingCount}` : ""}
+        </span>
+        <div className="queue-panel-actions">
+          <button
+            type="button"
+            className="queue-mini-btn queue-collapse-btn"
+            onClick={onToggleCollapsed}
+            aria-label={collapsed ? t("queue.expand") : t("queue.collapse")}
+          >
+            {collapsed ? "▸" : "▾"}
+          </button>
+        </div>
+      </div>
+      {!collapsed && (
+        <ul className="queue-list">
+          {jobs.map((job) => (
+            <li className={clsx("queue-item", job.status === "processing" && "queue-item-running")} key={job.id}>
+              {job.status === "processing" && <span className="queue-spinner" />}
+              <span className="queue-item-label" title={job.message || job.result || job.label}>
+                {job.status === "failed" ? `⚠ ${job.label}` : job.status === "done" ? `✓ ${job.label}` : job.label}
+              </span>
+              <span className="queue-item-time">
+                {new Date(job.addedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
+              </span>
+              <button
+                type="button"
+                className="queue-item-remove"
+                onClick={() => onRemoveJob(job.id)}
+                aria-label={t("queue.remove")}
+                title={t("queue.remove")}
+              >
+                ✕
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// Persisted convert/反推 history — reuses the same .queue-panel chrome, with
+// its own (locally-collapsed-by-default) section rather than the shared
+// queue-collapsed store flag, since browsing old results is secondary to
+// watching active jobs.
+function TextToolHistoryPanel({
+  items,
+  onDelete,
+  onClear,
+  onUse,
+}: {
+  items: TextToolHistoryItem[];
+  onDelete: (id: string) => void;
+  onClear: () => void;
+  onUse: (result: string) => void;
+}) {
+  const language = useAppStore((state) => state.settings?.language);
+  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
+  const [collapsed, setCollapsed] = useState(true);
+  if (items.length === 0) return null;
+  return (
+    <div className="queue-panel texttool-panel">
+      <div className="queue-panel-head">
+        <span className="queue-panel-title">
+          {t("textTool.historyTitle")} · {items.length}
+        </span>
+        <div className="queue-panel-actions">
+          <button type="button" className="queue-mini-btn" onClick={onClear}>
+            {t("textTool.historyClear")}
+          </button>
+          <button
+            type="button"
+            className="queue-mini-btn queue-collapse-btn"
+            onClick={() => setCollapsed((value) => !value)}
+            aria-label={collapsed ? t("queue.expand") : t("queue.collapse")}
+          >
+            {collapsed ? "▸" : "▾"}
+          </button>
+        </div>
+      </div>
+      {!collapsed && (
+        <ul className="queue-list">
+          {items.map((item) => (
+            <li className="texttool-history-item" key={item.id}>
+              <div className="texttool-history-item-head">
+                <span className="queue-item-time">
+                  {new Date(item.createdAt).toLocaleString("zh-CN", {
+                    month: "2-digit",
+                    day: "2-digit",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </span>
+                <button
+                  type="button"
+                  className="queue-item-remove"
+                  onClick={() => onDelete(item.id)}
+                  aria-label={t("queue.remove")}
+                  title={t("queue.remove")}
+                >
+                  ✕
+                </button>
+              </div>
+              <span className="texttool-history-item-input">
+                {item.input.trim() || item.result}
+              </span>
+              <button type="button" className="queue-mini-btn" onClick={() => onUse(item.result)}>
+                {t("variant.use")}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 // Settings section: configurable error-log path + open/view actions.
 function LogSettingsSection({
   logDir,
@@ -2114,6 +2285,8 @@ function I2IPanel({ openSettings }: { openSettings: () => void }) {
 // ── Inpaint panel ─────────────────────────────────────────────────────────────
 function InpaintPanel({ openSettings }: { openSettings: () => void }) {
   const language = useAppStore((state) => state.settings?.language);
+  const inpaintPositivePrompt = useAppStore((state) => state.inpaintPositivePrompt);
+  const setInpaintPositivePrompt = useAppStore((state) => state.setInpaintPositivePrompt);
   const inpaintModel = useAppStore((state) => state.inpaintModel);
   const setInpaintModel = useAppStore((state) => state.setInpaintModel);
   const inpaintStrength = useAppStore((state) => state.inpaintStrength);
@@ -2164,7 +2337,10 @@ function InpaintPanel({ openSettings }: { openSettings: () => void }) {
           <IconText icon="⌧">{t("inpaint.clearMask")}</IconText>
         </Button>
         <div className="panel-divider" />
-        <PromptAndParams includeModel={false} />
+        <PromptAndParams
+          includeModel={false}
+          promptOverride={{ value: inpaintPositivePrompt, onChange: setInpaintPositivePrompt }}
+        />
         <FeatureCostCard label={t("cost.beforeRun")} feature="inpaint" />
       </div>
       <AccountAndRunButton label={t("inpaint.run")} onRun={() => void inpaint()} openSettings={openSettings} />
@@ -2429,7 +2605,6 @@ function ReversePanel() {
   const clearInspect = useAppStore((state) => state.clearInspect);
   const inspectImageUrl = useAppStore((state) => state.inspectImageUrl);
   const reversePromptText = useAppStore((state) => state.reversePromptText);
-  const reversePrompting = useAppStore((state) => state.reversePrompting);
   const reversePromptMode = useAppStore((state) => state.reversePromptMode);
   const reversePromptScope = useAppStore((state) => state.reversePromptScope);
   const reversePromptHint = useAppStore((state) => state.reversePromptHint);
@@ -2441,6 +2616,14 @@ function ReversePanel() {
   const setReverseKnownCharacter = useAppStore((state) => state.setReverseKnownCharacter);
   const runReversePrompt = useAppStore((state) => state.runReversePrompt);
   const setReversePromptText = useAppStore((state) => state.setReversePromptText);
+  const reverseJobs = useAppStore((state) => state.reverseJobs);
+  const reverseQueueCollapsed = useAppStore((state) => state.reverseQueueCollapsed);
+  const toggleReverseQueueCollapsed = useAppStore((state) => state.toggleReverseQueueCollapsed);
+  const removeReverseJob = useAppStore((state) => state.removeReverseJob);
+  const reverseHistory = useAppStore((state) => state.reverseHistory);
+  const loadReverseHistory = useAppStore((state) => state.loadReverseHistory);
+  const deleteReverseHistoryItem = useAppStore((state) => state.deleteReverseHistoryItem);
+  const clearReverseHistory = useAppStore((state) => state.clearReverseHistory);
   const setParam = useAppStore((state) => state.setParam);
   const setToast = useAppStore((state) => state.setToast);
   const settings = useAppStore((state) => state.settings);
@@ -2450,6 +2633,10 @@ function ReversePanel() {
   const setActiveTab = useAppStore((state) => state.setActiveTab);
   const [dragging, setDragging] = useState(false);
   const hasImage = Boolean(inspectImageUrl);
+  const reverseBusy = reverseJobs.some((job) => job.status === "processing");
+  useEffect(() => {
+    void loadReverseHistory();
+  }, [loadReverseHistory]);
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
 
@@ -2485,6 +2672,9 @@ function ReversePanel() {
 
   function handleFile(file: File) {
     const url = URL.createObjectURL(file);
+    // Real filesystem path, when resolvable — used only so a reverse history
+    // record can later be dropped once this source image is gone.
+    const path = (file as File & { path?: string }).path || window.naiDesktop.getPathForFile(file);
     const reader = new FileReader();
     reader.onload = (ev) => {
       const buf = ev.target?.result as ArrayBuffer;
@@ -2493,7 +2683,7 @@ function ReversePanel() {
         new Uint8Array(buf).reduce((acc, byte) => acc + String.fromCharCode(byte), ""),
       );
       const meta = parsePngMeta(buf);
-      setInspectImage(url, meta, b64);
+      setInspectImage(url, meta, b64, path);
     };
     reader.readAsArrayBuffer(file);
   }
@@ -2615,12 +2805,18 @@ function ReversePanel() {
           <Button
             variant="primary"
             className="full"
-            disabled={reversePrompting}
             onClick={() => void runReversePrompt()}
           >
-            {reversePrompting ? <IconText icon="…">{t("inspect.running")}</IconText> : <IconText icon="◎">{t("inspect.run")}</IconText>}
+            <IconText icon={reverseBusy ? "…" : "◎"}>{t("inspect.run")}</IconText>
           </Button>
         )}
+
+        <TextToolQueuePanel
+          jobs={reverseJobs}
+          collapsed={reverseQueueCollapsed}
+          onToggleCollapsed={toggleReverseQueueCollapsed}
+          onRemoveJob={removeReverseJob}
+        />
 
         {reversePromptText && (
           <>
@@ -2650,6 +2846,13 @@ function ReversePanel() {
             )}
           </>
         )}
+
+        <TextToolHistoryPanel
+          items={reverseHistory}
+          onDelete={(id) => void deleteReverseHistoryItem(id)}
+          onClear={() => void clearReverseHistory()}
+          onUse={setReversePromptText}
+        />
 
         {!hasImage && (
           <div className="inspect-hint">
@@ -2730,7 +2933,6 @@ function LeftPanel({ openSettings }: { openSettings: () => void }) {
 function PromptConverterPanel() {
   const convertInput = useAppStore((state) => state.convertInput);
   const convertResult = useAppStore((state) => state.convertResult);
-  const converting = useAppStore((state) => state.converting);
   const setConvertInput = useAppStore((state) => state.setConvertInput);
   const setConvertResult = useAppStore((state) => state.setConvertResult);
   const convertMode = useAppStore((state) => state.convertMode);
@@ -2739,6 +2941,14 @@ function PromptConverterPanel() {
   const setConvertMode = useAppStore((state) => state.setConvertMode);
   const setConvertKnownCharacter = useAppStore((state) => state.setConvertKnownCharacter);
   const runConvertPrompt = useAppStore((state) => state.runConvertPrompt);
+  const convertJobs = useAppStore((state) => state.convertJobs);
+  const convertQueueCollapsed = useAppStore((state) => state.convertQueueCollapsed);
+  const toggleConvertQueueCollapsed = useAppStore((state) => state.toggleConvertQueueCollapsed);
+  const removeConvertJob = useAppStore((state) => state.removeConvertJob);
+  const convertHistory = useAppStore((state) => state.convertHistory);
+  const loadConvertHistory = useAppStore((state) => state.loadConvertHistory);
+  const deleteConvertHistoryItem = useAppStore((state) => state.deleteConvertHistoryItem);
+  const clearConvertHistory = useAppStore((state) => state.clearConvertHistory);
   const setParam = useAppStore((state) => state.setParam);
   const setToast = useAppStore((state) => state.setToast);
   const settings = useAppStore((state) => state.settings);
@@ -2746,6 +2956,10 @@ function PromptConverterPanel() {
   const language = settings?.language;
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
+  const convertBusy = convertJobs.some((job) => job.status === "processing");
+  useEffect(() => {
+    void loadConvertHistory();
+  }, [loadConvertHistory]);
 
   function applyToPanel() {
     if (!convertResult.trim()) return;
@@ -2811,17 +3025,20 @@ function PromptConverterPanel() {
         <Button
           variant="primary"
           className="full"
-          disabled={converting || !convertInput.trim()}
+          disabled={!convertInput.trim()}
           onClick={() => void runConvertPrompt()}
         >
-          {converting ? (
-            <IconText icon="…">{t("convert.running")}</IconText>
-          ) : (
-            <IconText icon="⇄">
-              {t(`convert.run.${convertMode}`)}
-            </IconText>
-          )}
+          <IconText icon={convertBusy ? "…" : "⇄"}>
+            {t(`convert.run.${convertMode}`)}
+          </IconText>
         </Button>
+
+        <TextToolQueuePanel
+          jobs={convertJobs}
+          collapsed={convertQueueCollapsed}
+          onToggleCollapsed={toggleConvertQueueCollapsed}
+          onRemoveJob={removeConvertJob}
+        />
 
         {convertResult && (
           <>
@@ -2847,6 +3064,13 @@ function PromptConverterPanel() {
             )}
           </>
         )}
+
+        <TextToolHistoryPanel
+          items={convertHistory}
+          onDelete={(id) => void deleteConvertHistoryItem(id)}
+          onClear={() => void clearConvertHistory()}
+          onUse={setConvertResult}
+        />
 
         {!convertResult && (
           <div className="inspect-hint">

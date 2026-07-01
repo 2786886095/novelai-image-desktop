@@ -53,6 +53,7 @@ import type {
   I2IParams,
   NAIInpaintModel,
   UpscaleScale,
+  TextToolHistoryItem,
   TuiwenExportJianYingRequest,
   TuiwenImportFileRequest,
   TuiwenProject,
@@ -60,14 +61,19 @@ import type {
   TuiwenTtsRequest,
 } from "../src/types";
 import {
+  addTextToolHistoryItem,
   clearToken,
+  clearTextToolHistory,
   completeSetup,
   getAccountSummary,
   getReversePromptTemplateDefaults,
   getSetting,
   getSettings,
+  getTextToolHistory,
   pruneMissingHistoryItem,
+  pruneMissingReverseHistoryItem,
   readStore,
+  removeTextToolHistoryItem,
   setSetting,
 } from "./ipc/store";
 import {
@@ -300,6 +306,34 @@ function registerIpc() {
   ipcMain.handle("storage:pruneMissing", (_event, id: string) => pruneMissingHistoryItem(id));
   ipcMain.handle("storage:renameItem", (_event, id: string, name: string) => renameHistoryItem(id, name));
   ipcMain.handle("storage:open", (_event, targetPath: string) => openTarget(targetPath));
+
+  ipcMain.handle("texttool:getConvertHistory", () => getTextToolHistory("convert"));
+  ipcMain.handle("texttool:addConvertHistoryItem", (_event, item: TextToolHistoryItem) => {
+    addTextToolHistoryItem("convert", item);
+    return { ok: true };
+  });
+  ipcMain.handle("texttool:deleteConvertHistoryItem", (_event, id: string) => {
+    removeTextToolHistoryItem("convert", id);
+    return { ok: true };
+  });
+  ipcMain.handle("texttool:clearConvertHistory", () => {
+    clearTextToolHistory("convert");
+    return { ok: true };
+  });
+  ipcMain.handle("texttool:getReverseHistory", () => getTextToolHistory("reverse"));
+  ipcMain.handle("texttool:addReverseHistoryItem", (_event, item: TextToolHistoryItem) => {
+    addTextToolHistoryItem("reverse", item);
+    return { ok: true };
+  });
+  ipcMain.handle("texttool:deleteReverseHistoryItem", (_event, id: string) => {
+    removeTextToolHistoryItem("reverse", id);
+    return { ok: true };
+  });
+  ipcMain.handle("texttool:clearReverseHistory", () => {
+    clearTextToolHistory("reverse");
+    return { ok: true };
+  });
+  ipcMain.handle("texttool:pruneMissingReverseHistoryItem", (_event, id: string) => pruneMissingReverseHistoryItem(id));
   ipcMain.handle("storage:selectDir", () => selectOutputDir());
 
   // Native drag-out: drag a generated/history image straight to the desktop,

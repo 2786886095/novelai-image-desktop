@@ -157,10 +157,15 @@ class _ReversePanelState extends State<_ReversePanel> {
             },
           ),
           FilledButton.icon(
-              onPressed:
-                  s.busy || s.workbenchImage == null ? null : s.reversePrompt,
+              onPressed: s.workbenchImage == null ? null : s.reversePrompt,
               icon: const Icon(Icons.visibility),
               label: Text(t('inspect.startReverse'))),
+          _TextToolJobList(
+            jobs: s.reverseJobs,
+            collapsed: s.reverseQueueCollapsed,
+            onToggleCollapsed: s.toggleReverseQueueCollapsed,
+            onRemove: s.removeReverseJob,
+          ),
           const SizedBox(height: 12),
           TextField(
             controller: _resultCtrl,
@@ -193,6 +198,15 @@ class _ReversePanelState extends State<_ReversePanel> {
             const SizedBox(height: 12),
             _VariantResults(variants: variants, language: language),
           ],
+          _TextToolHistoryList(
+            items: s.reverseHistory,
+            onDelete: s.deleteReverseHistoryItem,
+            onClear: s.clearReverseHistory,
+            onUse: (text) {
+              s.reverseResult = text;
+              s.markChanged();
+            },
+          ),
           const SizedBox(height: 8),
           Text(s.status),
         ],
@@ -271,11 +285,16 @@ class _ConvertPanelState extends State<_ConvertPanel> {
             },
           ),
           FilledButton.icon(
-              onPressed: s.busy || s.convertInput.trim().isEmpty
-                  ? null
-                  : s.convertPrompt,
+              onPressed:
+                  s.convertInput.trim().isEmpty ? null : s.convertPrompt,
               icon: const Icon(Icons.translate),
               label: Text(t('inspect.startConvert'))),
+          _TextToolJobList(
+            jobs: s.convertJobs,
+            collapsed: s.convertQueueCollapsed,
+            onToggleCollapsed: s.toggleConvertQueueCollapsed,
+            onRemove: s.removeConvertJob,
+          ),
           const SizedBox(height: 12),
           TextField(
             controller: _resultCtrl,
@@ -308,8 +327,163 @@ class _ConvertPanelState extends State<_ConvertPanel> {
             const SizedBox(height: 12),
             _VariantResults(variants: variants, language: language),
           ],
+          _TextToolHistoryList(
+            items: s.convertHistory,
+            onDelete: s.deleteConvertHistoryItem,
+            onClear: s.clearConvertHistory,
+            onUse: (text) {
+              s.convertResult = text;
+              s.markChanged();
+            },
+          ),
           const SizedBox(height: 8),
           Text(s.status),
+        ],
+      ),
+    );
+  }
+}
+
+// Concurrent job tracker for reverse/convert — unlike the image-generation
+// queue, there's no serial drain loop: every submission fires immediately,
+// so more than one entry can be "processing" at once. Shared by both panels.
+class _TextToolJobList extends StatelessWidget {
+  final List<TextToolJob> jobs;
+  final bool collapsed;
+  final VoidCallback onToggleCollapsed;
+  final ValueChanged<String> onRemove;
+  const _TextToolJobList({
+    required this.jobs,
+    required this.collapsed,
+    required this.onToggleCollapsed,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (jobs.isEmpty) return const SizedBox.shrink();
+    final language = context.watch<AppState>().settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
+    final processing =
+        jobs.where((j) => j.status == TextToolJobStatus.processing).length;
+    return Card(
+      margin: const EdgeInsets.only(top: 4, bottom: 4),
+      child: Column(
+        children: [
+          ListTile(
+            dense: true,
+            title: Text(processing > 0
+                ? '${t('textTool.queueTitle')} · $processing'
+                : t('textTool.queueTitle')),
+            trailing: IconButton(
+              icon: Icon(collapsed ? Icons.expand_more : Icons.expand_less),
+              onPressed: onToggleCollapsed,
+            ),
+          ),
+          if (!collapsed)
+            for (final job in jobs)
+              ListTile(
+                dense: true,
+                leading: switch (job.status) {
+                  TextToolJobStatus.processing => const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2)),
+                  TextToolJobStatus.done =>
+                    const Icon(Icons.check_circle, color: Colors.green, size: 18),
+                  TextToolJobStatus.failed =>
+                    const Icon(Icons.error, color: Colors.red, size: 18),
+                },
+                title: Text(job.label, maxLines: 1, overflow: TextOverflow.ellipsis),
+                subtitle: job.status == TextToolJobStatus.failed && job.message != null
+                    ? Text(job.message!, maxLines: 1, overflow: TextOverflow.ellipsis)
+                    : null,
+                trailing: IconButton(
+                  icon: const Icon(Icons.close, size: 18),
+                  tooltip: job.status == TextToolJobStatus.processing
+                      ? t('textTool.cancel')
+                      : null,
+                  onPressed: () => onRemove(job.id),
+                ),
+              ),
+        ],
+      ),
+    );
+  }
+}
+
+// Persisted reverse/convert history. Kept collapsed by default via local
+// state (separate from the job list's store-backed collapse flag) since
+// browsing old results is secondary to watching active jobs.
+class _TextToolHistoryList extends StatefulWidget {
+  final List<TextToolHistoryItem> items;
+  final ValueChanged<String> onDelete;
+  final VoidCallback onClear;
+  final ValueChanged<String> onUse;
+  const _TextToolHistoryList({
+    required this.items,
+    required this.onDelete,
+    required this.onClear,
+    required this.onUse,
+  });
+
+  @override
+  State<_TextToolHistoryList> createState() => _TextToolHistoryListState();
+}
+
+class _TextToolHistoryListState extends State<_TextToolHistoryList> {
+  bool _collapsed = true;
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.items.isEmpty) return const SizedBox.shrink();
+    final language = context.watch<AppState>().settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
+    return Card(
+      margin: const EdgeInsets.only(top: 4, bottom: 4),
+      child: Column(
+        children: [
+          ListTile(
+            dense: true,
+            title: Text('${t('textTool.historyTitle')} · ${widget.items.length}'),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextButton(
+                  onPressed: widget.onClear,
+                  child: Text(t('textTool.historyClear')),
+                ),
+                IconButton(
+                  icon: Icon(_collapsed ? Icons.expand_more : Icons.expand_less),
+                  onPressed: () => setState(() => _collapsed = !_collapsed),
+                ),
+              ],
+            ),
+          ),
+          if (!_collapsed)
+            for (final item in widget.items)
+              ListTile(
+                dense: true,
+                title: Text(
+                  item.input.trim().isNotEmpty ? item.input : item.result,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                subtitle: Text(item.createdAt.replaceFirst('T', ' ').split('.').first),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.send, size: 18),
+                      onPressed: () => widget.onUse(item.result),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 18),
+                      onPressed: () => widget.onDelete(item.id),
+                    ),
+                  ],
+                ),
+              ),
         ],
       ),
     );

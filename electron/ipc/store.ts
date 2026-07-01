@@ -3,7 +3,7 @@ import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { pathToFileURL } from "url";
-import type { AccountSummary, AppSettings, HistoryGroup, HistoryItem, SettingKey } from "../../src/types";
+import type { AccountSummary, AppSettings, HistoryGroup, HistoryItem, SettingKey, TextToolHistoryItem } from "../../src/types";
 import { COMIC_ANALYZE_SYSTEM_PROMPT, SCOPED_REVERSE_SYSTEM_PROMPTS } from "../../src/data/prompt-templates";
 
 interface PersistedData {
@@ -12,6 +12,8 @@ interface PersistedData {
   settings: AppSettings;
   history: HistoryItem[];
   historyGroups: HistoryGroup[];
+  convertHistory: TextToolHistoryItem[];
+  reverseHistory: TextToolHistoryItem[];
 }
 
 let cache: PersistedData | null = null;
@@ -261,6 +263,8 @@ function normalize(raw: Partial<PersistedData> | null): PersistedData {
     settings,
     history: Array.isArray(raw?.history) ? raw.history : [],
     historyGroups: Array.isArray(raw?.historyGroups) ? raw.historyGroups : [],
+    convertHistory: Array.isArray(raw?.convertHistory) ? raw.convertHistory : [],
+    reverseHistory: Array.isArray(raw?.reverseHistory) ? raw.reverseHistory : [],
   };
 }
 
@@ -357,6 +361,47 @@ export function addHistory(items: HistoryItem[]) {
   // explicitly on their history items.
   data.history = [...items, ...data.history];
   writeStore(data);
+}
+
+function textToolHistoryKey(kind: "convert" | "reverse"): "convertHistory" | "reverseHistory" {
+  return kind === "convert" ? "convertHistory" : "reverseHistory";
+}
+
+export function getTextToolHistory(kind: "convert" | "reverse"): TextToolHistoryItem[] {
+  return readStore()[textToolHistoryKey(kind)];
+}
+
+export function addTextToolHistoryItem(kind: "convert" | "reverse", item: TextToolHistoryItem) {
+  const data = readStore();
+  const key = textToolHistoryKey(kind);
+  data[key] = [item, ...data[key]];
+  writeStore(data);
+}
+
+export function removeTextToolHistoryItem(kind: "convert" | "reverse", id: string) {
+  const data = readStore();
+  const key = textToolHistoryKey(kind);
+  data[key] = data[key].filter((item) => item.id !== id);
+  writeStore(data);
+}
+
+export function clearTextToolHistory(kind: "convert" | "reverse") {
+  const data = readStore();
+  data[textToolHistoryKey(kind)] = [];
+  writeStore(data);
+}
+
+/** Reverse-only: drop a history record once its source image is gone. Unlike
+ * pruneMissingHistoryItem, there's no "moved file" search — the source image
+ * is an arbitrary user-picked path outside our managed output folders. */
+export function pruneMissingReverseHistoryItem(id: string): boolean {
+  const data = readStore();
+  const item = data.reverseHistory.find((h) => h.id === id);
+  if (!item || !item.sourceImagePath) return false;
+  if (fileExists(item.sourceImagePath)) return false;
+  data.reverseHistory = data.reverseHistory.filter((h) => h.id !== id);
+  writeStore(data);
+  return true;
 }
 
 function sanitizeGroupFolderName(name: string): string {

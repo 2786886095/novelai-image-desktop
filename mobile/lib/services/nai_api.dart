@@ -804,7 +804,6 @@ class NaiApi {
       model: settings.visionApiModel,
       system: system,
       user: user,
-      mode: mode,
       source: 'reverse',
       knownCharacter: knownCharacter,
     );
@@ -847,7 +846,6 @@ class NaiApi {
       model: settings.convertApiModel,
       system: system,
       user: user,
-      mode: mode,
       source: 'convert',
       knownCharacter: knownCharacter,
     );
@@ -860,11 +858,10 @@ class NaiApi {
     required String model,
     required String system,
     required Object user,
-    required ReversePromptMode mode,
     required String source,
     required bool knownCharacter,
   }) async {
-    var raw = await _chat(
+    final raw = await _chat(
       settings,
       apiUrl,
       apiKey,
@@ -875,36 +872,12 @@ class NaiApi {
       apiKind: source == 'reverse' ? 'vision' : 'convert',
     );
     if (!raw.ok) return raw;
-    var parsed = parsePromptVariantResponse(raw.text, knownCharacter);
-    if (knownCharacter && !(parsed.variants?.isComplete ?? false)) {
-      raw = await _chat(
-        settings,
-        apiUrl,
-        apiKey,
-        model,
-        [
-          'Repair a NovelAI prompt response.',
-          knownCharacterRuntimeInstruction(mode, source, true),
-          'Return strict JSON only. Preserve the useful content from the previous response.',
-        ].join('\n'),
-        'Previous incomplete response:\n${raw.text}',
-        label: source == 'reverse'
-            ? 'AI inspect variant repair'
-            : 'Prompt conversion variant repair',
-        apiKind: source == 'reverse' ? 'vision' : 'convert',
-      );
-      if (!raw.ok) return raw;
-      parsed = parsePromptVariantResponse(raw.text, true);
-      if (!(parsed.variants?.isComplete ?? false)) {
-        return AiTextResult(
-          ok: false,
-          message:
-              'The AI did not return complete name and feature variants. Retry or switch models.',
-          text: parsed.primary,
-          variants: parsed.variants,
-        );
-      }
-    }
+    // Known-character mode already requires both variants in the single
+    // upfront call (knownCharacterRuntimeInstruction), so we accept whatever
+    // parsePromptVariantResponse extracts rather than spending a second
+    // request repairing an incomplete JSON response — same single-request
+    // strategy for both convert and reverse.
+    final parsed = parsePromptVariantResponse(raw.text, knownCharacter);
     return AiTextResult(
       ok: true,
       message: 'Success',

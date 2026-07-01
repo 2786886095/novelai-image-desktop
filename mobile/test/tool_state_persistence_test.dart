@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novelai_mobile/models/nai_models.dart';
+import 'package:novelai_mobile/prompts/prompt_mode.dart';
 import 'package:novelai_mobile/services/nai_api.dart';
 import 'package:novelai_mobile/services/storage.dart';
 import 'package:novelai_mobile/state/app_state.dart';
@@ -122,6 +123,12 @@ class _MemoryStorage extends Storage {
 
   @override
   Future<void> writeHistory(List<HistoryItem> items) async {}
+
+  @override
+  Future<List<TextToolHistoryItem>> getConvertHistory() async => [];
+
+  @override
+  Future<List<TextToolHistoryItem>> getReverseHistory() async => [];
 
   @override
   Future<List<HistoryGroup>> getGroups() async => [];

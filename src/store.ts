@@ -19,6 +19,8 @@ import type {
   PromptVariants,
   ReversePromptMode,
   ReversePromptScope,
+  TextToolHistoryItem,
+  TextToolJob,
   UpdateInfo,
   UpscaleScale,
   VibeTransferImage,
@@ -275,6 +277,9 @@ interface AppState {
   inpaintModel: NAIInpaintModel;
   inpaintStrength: number;
   inpaintNoise: number;
+  /** Independent from params.positivePrompt — inpaint must not inherit the
+   * main generate/i2i prompt automatically. */
+  inpaintPositivePrompt: string;
   brushSize: number;
   brushOpacity: number;
   brushMode: BrushMode;
@@ -295,19 +300,32 @@ interface AppState {
   inspectImageUrl: string;
   inspectMeta: Record<string, string> | null;
   inspectImageBase64: string;
+  /** Real filesystem path of the loaded reverse-source image, when known
+   * (drag/drop and the file picker both resolve one). Used only to drop a
+   * reverse history record once its source image is gone. */
+  inspectImagePath: string;
   reversePromptText: string;
   reversePromptMode: ReversePromptMode;
   reversePromptScope: ReversePromptScope;
   reversePromptHint: string;
   reverseKnownCharacter: boolean;
   reversePromptVariants: PromptVariants | null;
-  reversePrompting: boolean;
+  /** Concurrent job tracker for reverse requests — every submission fires
+   * immediately and updates its own entry in place; not a serial queue.
+   * Whether ANY reverse job is still processing is derived from this list
+   * (`reverseJobs.some(j => j.status === "processing")`) rather than kept
+   * as a separate flag. */
+  reverseJobs: TextToolJob[];
+  reverseQueueCollapsed: boolean;
+  reverseHistory: TextToolHistoryItem[];
   convertInput: string;
   convertResult: string;
   convertMode: ReversePromptMode;
   convertKnownCharacter: boolean;
+  convertJobs: TextToolJob[];
+  convertQueueCollapsed: boolean;
+  convertHistory: TextToolHistoryItem[];
   convertResultVariants: PromptVariants | null;
-  converting: boolean;
   isGenerating: boolean;
   isGenerateQueueRunning: boolean;
   activeGenerationRunId: string | null;
@@ -358,6 +376,7 @@ interface AppState {
   setInpaintModel: (model: NAIInpaintModel) => void;
   setInpaintStrength: (value: number) => void;
   setInpaintNoise: (value: number) => void;
+  setInpaintPositivePrompt: (value: string) => void;
   setBrushSize: (size: number) => void;
   setBrushOpacity: (opacity: number) => void;
   setBrushMode: (mode: BrushMode) => void;
@@ -386,7 +405,7 @@ interface AppState {
   setBatchRunning: (running: boolean, progress?: { done: number; total: number } | null) => void;
   // Batch + Inspect + Convert
   setBatchCount: (count: number) => void;
-  setInspectImage: (url: string, meta: Record<string, string>, base64?: string) => void;
+  setInspectImage: (url: string, meta: Record<string, string>, base64?: string, path?: string) => void;
   clearInspect: () => void;
   setReversePromptText: (text: string) => void;
   setReversePromptMode: (mode: ReversePromptMode) => void;
@@ -394,11 +413,21 @@ interface AppState {
   setReversePromptHint: (hint: string) => void;
   setReverseKnownCharacter: (known: boolean) => void;
   runReversePrompt: () => Promise<void>;
+  toggleReverseQueueCollapsed: () => void;
+  removeReverseJob: (id: string) => void;
+  loadReverseHistory: () => Promise<void>;
+  deleteReverseHistoryItem: (id: string) => Promise<void>;
+  clearReverseHistory: () => Promise<void>;
   setConvertInput: (text: string) => void;
   setConvertResult: (text: string) => void;
   setConvertMode: (mode: ReversePromptMode) => void;
   setConvertKnownCharacter: (known: boolean) => void;
   runConvertPrompt: () => Promise<void>;
+  toggleConvertQueueCollapsed: () => void;
+  removeConvertJob: (id: string) => void;
+  loadConvertHistory: () => Promise<void>;
+  deleteConvertHistoryItem: (id: string) => Promise<void>;
+  clearConvertHistory: () => Promise<void>;
   setToast: (message: string) => void;
   clearImageComparison: () => void;
   // Core actions
@@ -530,6 +559,7 @@ function buildLastGenerationState(state: AppState): LastGenerationState {
     inpaintModel: state.inpaintModel,
     inpaintStrength: state.inpaintStrength,
     inpaintNoise: state.inpaintNoise,
+    inpaintPositivePrompt: state.inpaintPositivePrompt,
     brushSize: state.brushSize,
     brushOpacity: state.brushOpacity,
     upscaleScale: state.upscaleScale,
@@ -567,6 +597,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   inpaintModel: "nai-diffusion-4-5-full-inpainting",
   inpaintStrength: 1,
   inpaintNoise: 0,
+  inpaintPositivePrompt: "",
   brushSize: 64,
   brushOpacity: 0.55,
   brushMode: "paint",
@@ -585,19 +616,24 @@ export const useAppStore = create<AppState>((set, get) => ({
   inspectImageUrl: "",
   inspectMeta: null,
   inspectImageBase64: "",
+  inspectImagePath: "",
   reversePromptText: "",
   reversePromptMode: "tags" as ReversePromptMode,
   reversePromptScope: "full" as ReversePromptScope,
   reversePromptHint: "",
   reverseKnownCharacter: false,
   reversePromptVariants: null,
-  reversePrompting: false,
+  reverseJobs: [],
+  reverseQueueCollapsed: true,
+  reverseHistory: [],
   convertInput: "",
   convertResult: "",
   convertMode: "tags" as ReversePromptMode,
   convertKnownCharacter: false,
   convertResultVariants: null,
-  converting: false,
+  convertJobs: [],
+  convertQueueCollapsed: true,
+  convertHistory: [],
   isGenerating: false,
   isGenerateQueueRunning: false,
   activeGenerationRunId: null,
@@ -638,6 +674,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         inpaintModel: last.inpaintModel ?? state.inpaintModel,
         inpaintStrength: last.inpaintStrength ?? state.inpaintStrength,
         inpaintNoise: last.inpaintNoise ?? state.inpaintNoise,
+        inpaintPositivePrompt: last.inpaintPositivePrompt ?? state.inpaintPositivePrompt,
         brushSize: last.brushSize ?? state.brushSize,
         brushOpacity: last.brushOpacity ?? state.brushOpacity,
         upscaleScale: last.upscaleScale ?? state.upscaleScale,
@@ -885,6 +922,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     persistGenerationState(get);
   },
 
+  setInpaintPositivePrompt(value) {
+    set({ inpaintPositivePrompt: value });
+    persistGenerationState(get);
+  },
+
   setBrushSize(size) {
     set({ brushSize: Math.max(1, Math.min(128, size)) });
     persistGenerationState(get);
@@ -1001,12 +1043,26 @@ export const useAppStore = create<AppState>((set, get) => ({
     persistGenerationState(get);
   },
 
-  setInspectImage(url, meta, base64 = "") {
-    set({ inspectImageUrl: url, inspectMeta: meta, inspectImageBase64: base64, reversePromptText: "", reversePromptVariants: null });
+  setInspectImage(url, meta, base64 = "", path = "") {
+    set({
+      inspectImageUrl: url,
+      inspectMeta: meta,
+      inspectImageBase64: base64,
+      inspectImagePath: path,
+      reversePromptText: "",
+      reversePromptVariants: null,
+    });
   },
 
   clearInspect() {
-    set({ inspectImageUrl: "", inspectMeta: null, inspectImageBase64: "", reversePromptText: "", reversePromptVariants: null });
+    set({
+      inspectImageUrl: "",
+      inspectMeta: null,
+      inspectImageBase64: "",
+      inspectImagePath: "",
+      reversePromptText: "",
+      reversePromptVariants: null,
+    });
   },
 
   setReversePromptText(text) {
@@ -1029,13 +1085,24 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ reverseKnownCharacter: known, reversePromptVariants: known ? get().reversePromptVariants : null });
   },
 
+  // Concurrent — every call fires its API request immediately and updates
+  // only its own job entry when it resolves, so multiple reverse requests
+  // can be in flight (and the button never disables while one runs).
   async runReversePrompt() {
-    const { inspectImageBase64, reversePromptMode, reversePromptScope, reversePromptHint, reverseKnownCharacter } = get();
+    const { inspectImageBase64, inspectImagePath, reversePromptMode, reversePromptScope, reversePromptHint, reverseKnownCharacter } = get();
     if (!inspectImageBase64) {
       set({ toast: storeText(get().settings, "toast.needImage") });
       return;
     }
-    set({ reversePrompting: true, reversePromptVariants: null });
+    const job: TextToolJob = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      label: reversePromptHint.trim() || storeText(get().settings, "inspect.run"),
+      mode: reversePromptMode,
+      knownCharacter: reverseKnownCharacter,
+      status: "processing",
+      addedAt: Date.now(),
+    };
+    set({ reverseJobs: [job, ...get().reverseJobs], reversePromptVariants: null });
     const result = await window.naiDesktop.reversePrompt(
       inspectImageBase64,
       reversePromptMode,
@@ -1043,12 +1110,60 @@ export const useAppStore = create<AppState>((set, get) => ({
       reversePromptHint,
       reverseKnownCharacter,
     );
-    set({ reversePrompting: false });
+    // "Cancel" just removes the job from the tracker (the in-flight HTTP
+    // request itself isn't aborted) — but once it resolves, treat a removed
+    // job as truly cancelled: no result overwrite, no toast, no history entry.
+    if (!get().reverseJobs.some((j) => j.id === job.id)) return;
     if (result.ok && result.prompt) {
-      set({ reversePromptText: result.prompt, reversePromptVariants: result.variants ?? null, toast: storeText(get().settings, "toast.inspectDone") });
+      set({
+        reverseJobs: get().reverseJobs.map((j) =>
+          j.id === job.id ? { ...j, status: "done", result: result.prompt, variants: result.variants } : j,
+        ),
+        reversePromptText: result.prompt,
+        reversePromptVariants: result.variants ?? null,
+        toast: storeText(get().settings, "toast.inspectDone"),
+      });
+      const historyItem: TextToolHistoryItem = {
+        id: job.id,
+        mode: reversePromptMode,
+        knownCharacter: reverseKnownCharacter,
+        input: reversePromptHint,
+        sourceImagePath: inspectImagePath || undefined,
+        result: result.prompt,
+        variants: result.variants,
+        createdAt: new Date().toISOString(),
+      };
+      set({ reverseHistory: [historyItem, ...get().reverseHistory] });
+      void window.naiDesktop.addReverseHistoryItem(historyItem);
     } else {
-      set({ toast: result.message });
+      set({
+        reverseJobs: get().reverseJobs.map((j) => (j.id === job.id ? { ...j, status: "failed", message: result.message } : j)),
+        toast: result.message,
+      });
     }
+  },
+
+  toggleReverseQueueCollapsed() {
+    set({ reverseQueueCollapsed: !get().reverseQueueCollapsed });
+  },
+
+  removeReverseJob(id) {
+    set({ reverseJobs: get().reverseJobs.filter((j) => j.id !== id) });
+  },
+
+  async loadReverseHistory() {
+    const history = await window.naiDesktop.getReverseHistory();
+    set({ reverseHistory: history });
+  },
+
+  async deleteReverseHistoryItem(id) {
+    set({ reverseHistory: get().reverseHistory.filter((item) => item.id !== id) });
+    await window.naiDesktop.deleteReverseHistoryItem(id);
+  },
+
+  async clearReverseHistory() {
+    set({ reverseHistory: [] });
+    await window.naiDesktop.clearReverseHistory();
   },
 
   setConvertInput(text) {
@@ -1067,20 +1182,74 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ convertKnownCharacter: known, convertResultVariants: known ? get().convertResultVariants : null });
   },
 
+  // Concurrent, same reasoning as runReversePrompt.
   async runConvertPrompt() {
     const { convertInput, convertMode, convertKnownCharacter } = get();
     if (!convertInput.trim()) {
       set({ toast: storeText(get().settings, "toast.needConvertInput") });
       return;
     }
-    set({ converting: true, convertResultVariants: null });
+    const job: TextToolJob = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      label: convertInput.trim().slice(0, 60),
+      mode: convertMode,
+      knownCharacter: convertKnownCharacter,
+      status: "processing",
+      addedAt: Date.now(),
+    };
+    set({ convertJobs: [job, ...get().convertJobs], convertResultVariants: null });
     const result = await window.naiDesktop.convertPrompt(convertInput, convertMode, convertKnownCharacter);
-    set({ converting: false });
+    // See runReversePrompt: a removed job is treated as cancelled.
+    if (!get().convertJobs.some((j) => j.id === job.id)) return;
     if (result.ok && result.result) {
-      set({ convertResult: result.result, convertResultVariants: result.variants ?? null, toast: storeText(get().settings, "toast.convertDone") });
+      set({
+        convertJobs: get().convertJobs.map((j) =>
+          j.id === job.id ? { ...j, status: "done", result: result.result, variants: result.variants } : j,
+        ),
+        convertResult: result.result,
+        convertResultVariants: result.variants ?? null,
+        toast: storeText(get().settings, "toast.convertDone"),
+      });
+      const historyItem: TextToolHistoryItem = {
+        id: job.id,
+        mode: convertMode,
+        knownCharacter: convertKnownCharacter,
+        input: convertInput,
+        result: result.result,
+        variants: result.variants,
+        createdAt: new Date().toISOString(),
+      };
+      set({ convertHistory: [historyItem, ...get().convertHistory] });
+      void window.naiDesktop.addConvertHistoryItem(historyItem);
     } else {
-      set({ toast: result.message });
+      set({
+        convertJobs: get().convertJobs.map((j) => (j.id === job.id ? { ...j, status: "failed", message: result.message } : j)),
+        toast: result.message,
+      });
     }
+  },
+
+  toggleConvertQueueCollapsed() {
+    set({ convertQueueCollapsed: !get().convertQueueCollapsed });
+  },
+
+  removeConvertJob(id) {
+    set({ convertJobs: get().convertJobs.filter((j) => j.id !== id) });
+  },
+
+  async loadConvertHistory() {
+    const history = await window.naiDesktop.getConvertHistory();
+    set({ convertHistory: history });
+  },
+
+  async deleteConvertHistoryItem(id) {
+    set({ convertHistory: get().convertHistory.filter((item) => item.id !== id) });
+    await window.naiDesktop.deleteConvertHistoryItem(id);
+  },
+
+  async clearConvertHistory() {
+    set({ convertHistory: [] });
+    await window.naiDesktop.clearConvertHistory();
   },
 
   setToast(message) {
@@ -1469,12 +1638,16 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ toast: storeText(state.settings, "toast.needMask"), statusText: storeText(state.settings, "status.needMask") });
       return;
     }
+    // Inpaint keeps its own independent positive prompt (state.inpaintPositivePrompt)
+    // instead of reusing params.positivePrompt — the rest of params (size, sampler,
+    // negative prompt, etc.) is still shared with the main generate/i2i params.
+    const inpaintParams: GenerateParams = { ...state.params, positivePrompt: state.inpaintPositivePrompt };
     const freshAccount = await get().refreshAccount();
     const quote = await ensureAnlasBeforeRun(
       set,
       {
         feature: "inpaint",
-        params: state.params,
+        params: inpaintParams,
         inpaintModel: state.inpaintModel,
         inpaintStrength: state.inpaintStrength,
         inpaintNoise: state.inpaintNoise,
@@ -1495,7 +1668,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       statusText: storeFormat(state.settings, "inpaint.status", { amount: quote.amount }),
     });
     const result = await window.naiDesktop.inpaint(
-      state.params,
+      inpaintParams,
       state.inpaintModel,
       state.inpaintMask,
       state.inpaintStrength,

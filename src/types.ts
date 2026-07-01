@@ -1,4 +1,4 @@
-export const APP_VERSION = "1.2.2";
+export const APP_VERSION = "1.2.3";
 export const APP_NAME = "Langbai NovelAI Studio";
 export const PROJECT_REPOSITORY = "https://github.com/2786886095/novelai-image-desktop";
 
@@ -109,6 +109,7 @@ export interface LastGenerationState {
   inpaintModel: NAIInpaintModel;
   inpaintStrength: number;
   inpaintNoise: number;
+  inpaintPositivePrompt: string;
   brushSize: number;
   brushOpacity: number;
   upscaleScale: UpscaleScale;
@@ -268,6 +269,37 @@ export function createDefaultBatchRedraw(params: GenerateParams = DEFAULT_PARAMS
 export interface PromptVariants {
   namePrompt: string;
   featurePrompt: string;
+}
+
+/** In-flight/just-finished convert or reverse requests. Concurrent, not a
+ * serial queue: each job fires its API call immediately on creation and is
+ * updated in place when that call resolves. Not persisted across restarts. */
+export type TextToolJobStatus = "processing" | "done" | "failed";
+
+export interface TextToolJob {
+  id: string;
+  label: string;
+  mode: ReversePromptMode;
+  knownCharacter: boolean;
+  status: TextToolJobStatus;
+  result?: string;
+  variants?: PromptVariants;
+  message?: string;
+  addedAt: number;
+}
+
+/** Persisted record of a completed convert/reverse result. */
+export interface TextToolHistoryItem {
+  id: string;
+  mode: ReversePromptMode;
+  knownCharacter: boolean;
+  input: string;
+  /** Reverse only — used to drop the record once the source image is gone,
+   * same lazy-cleanup precedent as HistoryItem/pruneMissingHistoryItem. */
+  sourceImagePath?: string;
+  result: string;
+  variants?: PromptVariants;
+  createdAt: string;
 }
 
 export type ComicReferenceKind = "vibe" | "precise" | "character" | "scene" | "object";
@@ -987,6 +1019,15 @@ export interface NaiDesktopApi {
     mode: ReversePromptMode,
     knownCharacter?: boolean,
   ) => Promise<{ ok: boolean; result?: string; variants?: PromptVariants; message: string }>;
+  getConvertHistory: () => Promise<TextToolHistoryItem[]>;
+  addConvertHistoryItem: (item: TextToolHistoryItem) => Promise<{ ok: boolean }>;
+  deleteConvertHistoryItem: (id: string) => Promise<{ ok: boolean }>;
+  clearConvertHistory: () => Promise<{ ok: boolean }>;
+  getReverseHistory: () => Promise<TextToolHistoryItem[]>;
+  addReverseHistoryItem: (item: TextToolHistoryItem) => Promise<{ ok: boolean }>;
+  deleteReverseHistoryItem: (id: string) => Promise<{ ok: boolean }>;
+  clearReverseHistory: () => Promise<{ ok: boolean }>;
+  pruneMissingReverseHistoryItem: (id: string) => Promise<boolean>;
   comicAnalyzeScript: (request: ComicAnalyzeRequest) => Promise<ComicAnalyzeResult>;
   comicConvertPanels: (request: ComicConvertRequest) => Promise<ComicConvertResult>;
   comicCheckConsistency: (request: ComicConsistencyRequest) => Promise<ComicConsistencyResult>;

@@ -9,7 +9,7 @@ class NaiOption {
 }
 
 const appName = 'Langbai NovelAI Studio';
-const appVersion = '1.2.2';
+const appVersion = '1.2.3';
 
 const naiModels = <NaiOption>[
   NaiOption('NAI Diffusion 4.5 Full (Full model)', 'nai-diffusion-4-5-full'),
@@ -566,6 +566,9 @@ class AppSettings {
   String inpaintModel;
   double inpaintStrength;
   double inpaintNoise;
+  // Independent from the main generate/i2i positivePrompt — inpaint must not
+  // inherit it automatically.
+  String inpaintPositivePrompt;
   int upscaleScale;
   String directorTool;
   double augmentDefry;
@@ -621,6 +624,7 @@ class AppSettings {
     this.inpaintModel = 'nai-diffusion-4-5-full-inpainting',
     this.inpaintStrength = 0.55,
     this.inpaintNoise = 0,
+    this.inpaintPositivePrompt = '',
     this.upscaleScale = 2,
     this.directorTool = 'bg-removal',
     this.augmentDefry = 0,
@@ -684,6 +688,7 @@ class AppSettings {
         'inpaintModel': inpaintModel,
         'inpaintStrength': inpaintStrength,
         'inpaintNoise': inpaintNoise,
+        'inpaintPositivePrompt': inpaintPositivePrompt,
         'upscaleScale': upscaleScale,
         'directorTool': directorTool,
         'augmentDefry': augmentDefry,
@@ -751,6 +756,7 @@ class AppSettings {
         inpaintModel: j['inpaintModel'] ?? 'nai-diffusion-4-5-full-inpainting',
         inpaintStrength: (j['inpaintStrength'] as num?)?.toDouble() ?? 0.55,
         inpaintNoise: (j['inpaintNoise'] as num?)?.toDouble() ?? 0,
+        inpaintPositivePrompt: j['inpaintPositivePrompt'] ?? '',
         upscaleScale: (j['upscaleScale'] as num?)?.toInt() ?? 2,
         directorTool: j['directorTool'] ?? 'bg-removal',
         augmentDefry: (j['augmentDefry'] as num?)?.toDouble() ?? 0,
