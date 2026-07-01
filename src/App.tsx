@@ -79,6 +79,9 @@ const DEFAULT_HTTP_PROXY = "http://127.0.0.1:7890";
 const DEFAULT_SOCKS_PROXY = "socks5://127.0.0.1:10808";
 const appIconUrl = "./icon.png";
 const onboardingHeroUrl = "./onboarding-hero.png";
+const projectGithubUrl = "https://github.com/2786886095/novelai-image-desktop";
+const rewardWechatUrl = "./about/wechat-reward.jpg";
+const rewardAlipayUrl = "./about/alipay-reward.jpg";
 
 function hasTranslatableText(segment: string) {
   return /[\p{Letter}\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u.test(segment);
@@ -3766,6 +3769,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
     ["language", settingsShellText.nav.language],
     ["appearance", settingsShellText.nav.appearance],
     ["performance", settingsShellText.nav.performance],
+    ["about", settingsShellText.nav.about],
   ];
 
   return (
@@ -3922,6 +3926,56 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                     label={settingsSectionText.performance.superDropLabel}
                     description={settingsSectionText.performance.superDropDesc}
                   />
+                </div>
+              </div>
+            )}
+            {section === "about" && (
+              <div className="settings-form about-settings">
+                <div className="about-hero-card">
+                  <img src={appIconUrl} alt="" />
+                  <div>
+                    <strong>{APP_NAME}</strong>
+                    <span>{f("settings.aboutVersion", { version: APP_VERSION })}</span>
+                  </div>
+                </div>
+                <div className="about-block">
+                  <div>
+                    <strong>{t("settings.aboutProjectTitle")}</strong>
+                    <span>{t("settings.aboutProjectDesc")}</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="about-link"
+                    onClick={() => window.naiDesktop.openExternal(projectGithubUrl)}
+                  >
+                    {projectGithubUrl}
+                  </button>
+                </div>
+                <div className="about-block">
+                  <div>
+                    <strong>{t("settings.aboutAuthorTitle")}</strong>
+                    <span>{t("settings.aboutAuthorDesc")}</span>
+                  </div>
+                  <div className="about-copyline">
+                    <span>{t("settings.aboutAuthorQq")}</span>
+                    <strong>2786886095</strong>
+                  </div>
+                </div>
+                <div className="about-block">
+                  <div>
+                    <strong>{t("settings.aboutSupportTitle")}</strong>
+                    <span>{t("settings.aboutSupportMessage")}</span>
+                  </div>
+                  <div className="reward-grid">
+                    <figure>
+                      <img src={rewardWechatUrl} alt={t("settings.aboutWechatReward")} />
+                      <figcaption>{t("settings.aboutWechatReward")}</figcaption>
+                    </figure>
+                    <figure>
+                      <img src={rewardAlipayUrl} alt={t("settings.aboutAlipayReward")} />
+                      <figcaption>{t("settings.aboutAlipayReward")}</figcaption>
+                    </figure>
+                  </div>
                 </div>
               </div>
             )}

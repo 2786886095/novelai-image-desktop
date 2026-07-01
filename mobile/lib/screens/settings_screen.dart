@@ -11,6 +11,10 @@ import '../services/storage_permission.dart';
 import '../state/app_state.dart';
 import '../ui/studio_shell.dart';
 
+const _projectGithubUrl = 'https://github.com/2786886095/novelai-image-desktop';
+const _wechatRewardAsset = 'assets/about/wechat-reward.jpg';
+const _alipayRewardAsset = 'assets/about/alipay-reward.jpg';
+
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
 
@@ -57,6 +61,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final settingsDetailText = settingsDetailTextFor(s.language);
     final languageText = settingsLanguageTextFor(s.language);
     final appearanceText = settingsAppearanceTextFor(s.language);
+    final aboutText = settingsAboutTextFor(s.language);
     final account = state.account;
     return Scaffold(
       appBar: AppBar(title: Text(settingsText.title)),
@@ -541,10 +546,44 @@ class _SettingsScreenState extends State<SettingsScreen> {
               subtitle: Text(appearanceText.secureSubtitle),
             ),
           ]),
-          ListTile(
+          _Section(title: aboutText.sectionTitle, children: [
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Image.asset(
+                'assets/icon/app_icon.png',
+                width: 42,
+                height: 42,
+              ),
               title: const Text(appName),
-              subtitle:
-                  Text('${appearanceText.appInfoSubtitle} · v$appVersion')),
+              subtitle: Text('${aboutText.versionLabel} v$appVersion'),
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.code_outlined),
+              title: Text(aboutText.projectTitle),
+              subtitle: const Text(_projectGithubUrl),
+              trailing: const Icon(Icons.open_in_new),
+              onTap: () => launchUrl(
+                Uri.parse(_projectGithubUrl),
+                mode: LaunchMode.externalApplication,
+              ),
+            ),
+            Text(aboutText.projectDesc),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.person_outline),
+              title: Text(aboutText.authorTitle),
+              subtitle: Text('${aboutText.authorQq}: 2786886095'),
+            ),
+            Text(aboutText.authorDesc),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.local_cafe_outlined),
+              title: Text(aboutText.supportTitle),
+              subtitle: Text(aboutText.supportMessage),
+            ),
+            _RewardGrid(text: aboutText),
+          ]),
         ],
       )),
     );
@@ -771,6 +810,78 @@ class _TemplateTile extends StatelessWidget {
         trailing: const Icon(Icons.edit_outlined),
         onTap: onTap,
       );
+}
+
+class _RewardGrid extends StatelessWidget {
+  const _RewardGrid({required this.text});
+
+  final SettingsAboutText text;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+        builder: (context, constraints) {
+          final twoColumns = constraints.maxWidth >= 560;
+          return GridView.count(
+            crossAxisCount: twoColumns ? 2 : 1,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            childAspectRatio: twoColumns ? 0.78 : 0.92,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            children: [
+              _RewardCard(
+                label: text.wechatReward,
+                assetPath: _wechatRewardAsset,
+              ),
+              _RewardCard(
+                label: text.alipayReward,
+                assetPath: _alipayRewardAsset,
+              ),
+            ],
+          );
+        },
+      );
+}
+
+class _RewardCard extends StatelessWidget {
+  const _RewardCard({required this.label, required this.assetPath});
+
+  final String label;
+  final String assetPath;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Column(
+          children: [
+            Expanded(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(6),
+                  child: Image.asset(assetPath, fit: BoxFit.contain),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelLarge,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 /// A collapsible settings group: shows only its title until tapped, so the long

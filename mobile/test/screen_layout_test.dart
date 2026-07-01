@@ -160,6 +160,64 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  for (final target in <(String, Size)>[
+    ('compact phone', const Size(360, 800)),
+    ('landscape tablet', const Size(1280, 800)),
+  ]) {
+    testWidgets(
+        'settings about section expands without layout issues on ${target.$1}',
+        (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = target.$2;
+      addTearDown(tester.view.reset);
+      final state = AppState()..settings.language = 'en-US';
+      addTearDown(state.dispose);
+
+      await _pumpScreen(
+        tester,
+        state,
+        const SettingsScreen(),
+        'settings about initial ${target.$1}',
+      );
+
+      final aboutTile = find.text('About');
+      final scrollable = find.byType(Scrollable).first;
+      await tester.scrollUntilVisible(
+        aboutTile,
+        360,
+        scrollable: scrollable,
+      );
+      // Put the tile safely inside the viewport before tapping. On compact
+      // phones it can otherwise land exactly on the bottom edge.
+      await tester.drag(scrollable, const Offset(0, -96));
+      await tester.pumpAndSettle();
+      await tester.tap(aboutTile);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull,
+          reason: 'settings about expanded ${target.$1}');
+
+      const githubUrl = 'https://github.com/2786886095/novelai-image-desktop';
+      await tester.scrollUntilVisible(
+        find.text(githubUrl),
+        180,
+        scrollable: scrollable,
+      );
+      final githubTile =
+          tester.widget<ListTile>(find.widgetWithText(ListTile, githubUrl));
+      expect(githubTile.onTap, isNotNull);
+
+      await tester.scrollUntilVisible(
+        find.text('Alipay reward code'),
+        120,
+        scrollable: scrollable,
+      );
+      expect(find.text('WeChat reward code'), findsOneWidget);
+      expect(find.text('Alipay reward code'), findsOneWidget);
+      expect(tester.takeException(), isNull,
+          reason: 'settings about rewards ${target.$1}');
+    });
+  }
+
   testWidgets('expanded generation queue fits a compact phone viewport',
       (tester) async {
     tester.view.devicePixelRatio = 1;

@@ -61,7 +61,18 @@ describe("desktop i18n resources", () => {
       }
       const settings = getSettingsShellText(language.code);
       expect(settings.title.trim()).not.toBe("");
-      expect(Object.keys(settings.nav)).toEqual(["api", "storage", "ai-reverse", "convert-api", "templates", "prompt", "language", "appearance", "performance"]);
+      expect(Object.keys(settings.nav)).toEqual([
+        "api",
+        "storage",
+        "ai-reverse",
+        "convert-api",
+        "templates",
+        "prompt",
+        "language",
+        "appearance",
+        "performance",
+        "about",
+      ]);
       for (const value of Object.values(settings.nav)) {
         expect(value.trim()).not.toBe("");
       }

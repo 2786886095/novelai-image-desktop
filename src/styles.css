@@ -1710,6 +1710,99 @@ button { user-select: none; }
   gap: 12px;
   max-width: 740px;
 }
+.about-settings {
+  max-width: 820px;
+}
+.about-hero-card,
+.about-block {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 14px;
+  background: var(--bg-canvas);
+}
+.about-hero-card {
+  grid-template-columns: 64px minmax(0, 1fr);
+  align-items: center;
+}
+.about-hero-card img {
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  object-fit: cover;
+  box-shadow: var(--shadow-soft);
+}
+.about-hero-card div,
+.about-block div:first-child {
+  display: grid;
+  gap: 4px;
+}
+.about-hero-card strong,
+.about-block strong {
+  color: var(--text-primary);
+}
+.about-hero-card span,
+.about-block span {
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+.about-link {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  text-align: left;
+  cursor: pointer;
+  font-weight: 700;
+  word-break: break-all;
+}
+.about-link:hover {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+.about-copyline {
+  display: flex !important;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  border-radius: var(--radius-md);
+  padding: 9px 12px;
+  background: var(--accent-soft);
+}
+.reward-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.reward-grid figure {
+  margin: 0;
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 10px;
+  background: var(--bg-panel);
+}
+.reward-grid img {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: contain;
+  border-radius: var(--radius-md);
+  background: #fff;
+}
+.reward-grid figcaption {
+  color: var(--text-secondary);
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+}
+@media (max-width: 900px) {
+  .reward-grid { grid-template-columns: 1fr; }
+}
 .settings-hint {
   font-size: 12px;
   color: var(--text-muted);

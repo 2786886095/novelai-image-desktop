@@ -2421,6 +2421,100 @@ SettingsScreenText settingsScreenTextFor(Object? value) {
   }
 }
 
+typedef SettingsAboutText = ({
+  String sectionTitle,
+  String versionLabel,
+  String projectTitle,
+  String projectDesc,
+  String authorTitle,
+  String authorDesc,
+  String authorQq,
+  String supportTitle,
+  String supportMessage,
+  String wechatReward,
+  String alipayReward,
+});
+
+SettingsAboutText settingsAboutTextFor(Object? value) {
+  switch (normalizeAppLocaleCode(value)) {
+    case 'zh-TW':
+      return (
+        sectionTitle: '關於我們',
+        versionLabel: '目前版本',
+        projectTitle: '專案地址',
+        projectDesc: 'GitHub 開源專案地址，點擊即可在瀏覽器中開啟。',
+        authorTitle: '作者',
+        authorDesc: '軟體作者與維護者，歡迎回饋問題與建議。',
+        authorQq: '作者 QQ',
+        supportTitle: '贊賞支持',
+        supportMessage: '如果軟體幫到了你，可以請我喝杯奶茶（doge），或者隨手贊賞支持一下，十分感謝。',
+        wechatReward: '微信贊賞碼',
+        alipayReward: '支付寶贊賞碼',
+      );
+    case 'en-US':
+      return (
+        sectionTitle: 'About',
+        versionLabel: 'Current version',
+        projectTitle: 'Project',
+        projectDesc:
+            'GitHub open-source project. Tap to open it in your browser.',
+        authorTitle: 'Author',
+        authorDesc:
+            'Author and maintainer of the app. Feedback and suggestions are welcome.',
+        authorQq: 'Author QQ',
+        supportTitle: 'Support',
+        supportMessage:
+            'If this app helped you, you can buy me a milk tea (doge), or send a small tip. Thank you so much.',
+        wechatReward: 'WeChat reward code',
+        alipayReward: 'Alipay reward code',
+      );
+    case 'ja-JP':
+      return (
+        sectionTitle: 'このアプリについて',
+        versionLabel: '現在のバージョン',
+        projectTitle: 'プロジェクト',
+        projectDesc: 'GitHub のオープンソースプロジェクトです。タップするとブラウザで開きます。',
+        authorTitle: '作者',
+        authorDesc: 'アプリの作者・メンテナーです。問題報告や提案を歓迎します。',
+        authorQq: '作者 QQ',
+        supportTitle: '支援',
+        supportMessage:
+            'このアプリが役に立ったら、ミルクティー代（doge）やちょっとした支援をいただけると嬉しいです。ありがとうございます。',
+        wechatReward: 'WeChat 贈賞コード',
+        alipayReward: 'Alipay 贈賞コード',
+      );
+    case 'ko-KR':
+      return (
+        sectionTitle: '정보',
+        versionLabel: '현재 버전',
+        projectTitle: '프로젝트',
+        projectDesc: 'GitHub 오픈소스 프로젝트입니다. 탭하면 브라우저에서 열립니다.',
+        authorTitle: '작성자',
+        authorDesc: '앱 작성자이자 유지보수자입니다. 문제 제보와 제안을 환영합니다.',
+        authorQq: '작성자 QQ',
+        supportTitle: '후원',
+        supportMessage:
+            '이 앱이 도움이 되었다면 밀크티 한 잔(doge)을 사주시거나 가볍게 후원해 주세요. 정말 감사합니다.',
+        wechatReward: 'WeChat 후원 코드',
+        alipayReward: 'Alipay 후원 코드',
+      );
+    default:
+      return (
+        sectionTitle: '关于我们',
+        versionLabel: '当前版本',
+        projectTitle: '项目地址',
+        projectDesc: 'GitHub 开源项目地址，点击即可在浏览器中打开。',
+        authorTitle: '作者',
+        authorDesc: '软件作者与维护者，欢迎反馈问题与建议。',
+        authorQq: '作者 QQ',
+        supportTitle: '赞赏支持',
+        supportMessage: '如果软件帮到了你，可以请我喝杯奶茶（doge），或者随手赞赏支持一下，十分感谢。',
+        wechatReward: '微信赞赏码',
+        alipayReward: '支付宝赞赏码',
+      );
+  }
+}
+
 typedef SettingsDetailText = ({
   String tokenVerifiedSuccess,
   String connectionFailed,
