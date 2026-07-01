@@ -4,14 +4,19 @@
 
 | 系统 | 安装包 | 安装说明 |
 | --- | --- | --- |
-| 🪟 **Windows** (x64) | `Langbai-NovelAI-Studio-1.1.8.exe` | 便携版，双击即用，无需安装 |
-| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-1.1.8-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
-| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-1.1.8.zip` | 解压后即为 `.app`，同样需右键「打开」 |
-| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-1.1.8.AppImage` | `chmod +x` 后直接运行 |
+| 🪟 **Windows** (x64) | `Langbai-NovelAI-Studio-1.1.9.exe` | 便携版，双击即用，无需安装 |
+| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-1.1.9-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
+| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-1.1.9.zip` | 解压后即为 `.app`，同样需右键「打开」 |
+| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-1.1.9.AppImage` | `chmod +x` 后直接运行 |
 | 🤖 **Android** | `app-release.apk` | 直接安装；未签名，需允许「未知来源」 |
 | 📱 **iOS** | `novelai-mobile-unsigned.ipa` | **未签名**，需用 AltStore / Sideloadly 等工具自行侧载 |
 
 > 桌面端与移动端均为 **API-only** 客户端，需自备 NovelAI Persistent API Token。
+
+### v1.1.9 更新内容
+
+- **修复移动端「检测模型」总是提示未返回列表**：AI 反推 / 转换的 API Key 之前要先点「保存 Key」才会真正写入，直接点「检测模型」读到的还是旧值。现在点「检测模型」会自动带上当前填写的 Key 一并检测，不需要额外点保存。
+- **检测到的模型改为可选列表**：检测成功后不再弹只读提示框，而是在下方直接出现一个可选择的模型下拉框，选中即生效。
 
 ### v1.1.8 更新内容
 

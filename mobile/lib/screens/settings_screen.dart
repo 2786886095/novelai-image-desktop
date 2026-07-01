@@ -30,6 +30,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final baiduSecretCtrl = TextEditingController();
   bool verifying = false;
   bool testingProxy = false;
+  List<String> _detectedModels = [];
+  String _detectedModelKind = '';
 
   @override
   void dispose() {
@@ -234,6 +236,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       onPressed: () => _detect(context, 'reverse'),
                       child: Text(settingsDetailText.detectModel))),
             ]),
+            if (_detectedModelKind == 'reverse' && _detectedModels.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: DropdownButtonFormField<String>(
+                  value: _detectedModels.contains(s.visionApiModel)
+                      ? s.visionApiModel
+                      : null,
+                  isExpanded: true,
+                  decoration: InputDecoration(
+                    labelText: settingsDetailText.chooseDetectedModel,
+                    border: const OutlineInputBorder(),
+                  ),
+                  items: _detectedModels
+                      .map((m) => DropdownMenuItem(
+                            value: m,
+                            child: Text(m,
+                                maxLines: 1, overflow: TextOverflow.ellipsis),
+                          ))
+                      .toList(),
+                  onChanged: (value) {
+                    if (value == null) return;
+                    state.setSettings((x) => x.visionApiModel = value);
+                  },
+                ),
+              ),
           ]),
           _Section(title: settingsText.convertSection, children: [
             _TextSetting(
@@ -265,6 +292,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       onPressed: () => _detect(context, 'convert'),
                       child: Text(settingsDetailText.detectModel))),
             ]),
+            if (_detectedModelKind == 'convert' && _detectedModels.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: DropdownButtonFormField<String>(
+                  value: _detectedModels.contains(s.convertApiModel)
+                      ? s.convertApiModel
+                      : null,
+                  isExpanded: true,
+                  decoration: InputDecoration(
+                    labelText: settingsDetailText.chooseDetectedModel,
+                    border: const OutlineInputBorder(),
+                  ),
+                  items: _detectedModels
+                      .map((m) => DropdownMenuItem(
+                            value: m,
+                            child: Text(m,
+                                maxLines: 1, overflow: TextOverflow.ellipsis),
+                          ))
+                      .toList(),
+                  onChanged: (value) {
+                    if (value == null) return;
+                    state.setSettings((x) => x.convertApiModel = value);
+                  },
+                ),
+              ),
           ]),
           _Section(title: settingsText.tagSection, children: [
             SwitchListTile(
@@ -590,18 +642,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _detect(BuildContext context, String kind) async {
-    final detailText =
-        settingsDetailTextFor(context.read<AppState>().settings.language);
+    final state = context.read<AppState>();
+    final detailText = settingsDetailTextFor(state.settings.language);
+    // Drop any previous detection results up front so a re-detect against a
+    // changed URL/key never leaves stale options selectable.
+    setState(() {
+      _detectedModels = [];
+      _detectedModelKind = '';
+    });
+    // Typing a key doesn't persist to secure storage until it's saved, and
+    // detection reads straight from storage — save whatever is currently in
+    // the field first so a freshly-typed key can be detected without a
+    // separate manual "save" tap. The field is never pre-filled from storage
+    // (the key isn't re-displayed once saved), so only overwrite storage when
+    // the user actually typed something this time — otherwise re-detecting
+    // against an already-saved key (field left blank) would wipe it out.
+    final keyCtrl = kind == 'reverse' ? visionKeyCtrl : convertKeyCtrl;
+    if (keyCtrl.text.trim().isNotEmpty) {
+      await state.setSecret(kind == 'reverse' ? 'vision' : 'convert', keyCtrl.text);
+    }
     try {
-      final models = await context.read<AppState>().detectModels(kind);
+      final models = await state.detectModels(kind);
       if (!context.mounted) return;
-      showDialog(
-          context: context,
-          builder: (_) => AlertDialog(
-              title: Text(detailText.modelDetection),
-              content: Text(models.isEmpty
-                  ? detailText.noModelList
-                  : models.take(20).join('\n'))));
+      setState(() {
+        _detectedModels = models;
+        _detectedModelKind = kind;
+      });
+      if (models.isEmpty) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(detailText.noModelList)));
+      }
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context)
