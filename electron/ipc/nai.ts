@@ -1879,7 +1879,11 @@ export async function reversePromptImage(
       }
     }
     let content = parsed.primary;
-    if (modeNeedsRepair(mode, content)) {
+    // Same reasoning as convertPromptText: known-character mode already
+    // requires both variants to follow every template rule in the single
+    // upfront call, and this repair pass never touched parsed.variants (what
+    // the UI actually renders), so it was a wasted extra request there.
+    if (!knownCharacter && modeNeedsRepair(mode, content)) {
       const repaired = await callVisionApi(
         modeRepairSystemPrompt(mode),
         [
@@ -2591,7 +2595,13 @@ export async function convertPromptText(
       }
     }
     let content = parsed.primary;
-    if (modeNeedsRepair(mode, content)) {
+    // Known-character mode already asks for both variants to follow every
+    // template rule in the single upfront call (knownCharacterRuntimeInstruction),
+    // and this repair pass only ever rewrote `content` — never parsed.variants,
+    // which is what the UI actually shows for namePrompt/featurePrompt — so it
+    // was a wasted extra request for that path. Keep it for the plain
+    // (non-known-character) single-prompt path, where it does affect the result.
+    if (!knownCharacter && modeNeedsRepair(mode, content)) {
       const repaired = await callConvertApi(
         modeRepairSystemPrompt(mode),
         buildModeRepairUserText(mode, chineseText, content),

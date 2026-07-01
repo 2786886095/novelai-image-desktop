@@ -123,8 +123,16 @@ describe("prompt mode output handling", () => {
 
   it("adds concise no-name guidance when known character mode is off", () => {
     const instruction = knownCharacterRuntimeInstruction("tags", "convert", false);
-    expect(instruction).toContain("Known network/game/anime character mode is OFF.");
-    expect(instruction).toContain("Do not rely on character name tags");
-    expect(instruction).toContain("Keep the prompt concise");
+    expect(instruction).toContain("已知网络/游戏/动漫角色模式已关闭");
+    expect(instruction).toContain("不要依赖角色名字 tag");
+    expect(instruction).toContain("保持提示词简洁");
+  });
+
+  it("requires both known-character variants to keep full template detail", () => {
+    const instruction = knownCharacterRuntimeInstruction("tags", "convert", true);
+    expect(instruction).toContain("namePrompt 和 featurePrompt");
+    expect(instruction).toContain("furina (genshin impact)");
+    expect(instruction).not.toContain("Keep both prompts short");
+    expect(instruction).not.toContain("Only add outfit, feature, pose, action");
   });
 });
