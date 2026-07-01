@@ -254,6 +254,7 @@ void main() {
       ..account = const AccountSummary(hasToken: true, anlasBalance: 100)
       ..busy = true
       ..generationQueueRunning = true
+      ..queueCollapsed = false
       ..queueProgress = const GenerationQueueProgress(total: 4)
       ..generationQueue = [
         GenerationQueueJob(

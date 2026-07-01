@@ -74,7 +74,7 @@ class AppState extends ChangeNotifier {
   bool quoteLoading = false;
   bool generationQueueRunning = false;
   bool queuePaused = false;
-  bool queueCollapsed = false;
+  bool queueCollapsed = true;
   bool queueAdding = false;
   bool clearQueueRequested = false;
   List<GenerationQueueJob> generationQueue = [];
