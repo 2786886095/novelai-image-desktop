@@ -4,14 +4,22 @@
 
 | 系统 | 安装包 | 安装说明 |
 | --- | --- | --- |
-| 🪟 **Windows** (x64) | `Langbai-NovelAI-Studio-1.2.0.exe` | 便携版，双击即用，无需安装 |
-| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-1.2.0-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
-| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-1.2.0.zip` | 解压后即为 `.app`，同样需右键「打开」 |
-| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-1.2.0.AppImage` | `chmod +x` 后直接运行 |
+| 🪟 **Windows** (x64) | `Langbai-NovelAI-Studio-1.2.1.exe` | 便携版，双击即用，无需安装 |
+| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-1.2.1-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
+| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-1.2.1.zip` | 解压后即为 `.app`，同样需右键「打开」 |
+| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-1.2.1.AppImage` | `chmod +x` 后直接运行 |
 | 🤖 **Android** | `app-release.apk` | 直接安装；未签名，需允许「未知来源」 |
 | 📱 **iOS** | `novelai-mobile-unsigned.ipa` | **未签名**，需用 AltStore / Sideloadly 等工具自行侧载 |
 
 > 桌面端与移动端均为 **API-only** 客户端，需自备 NovelAI Persistent API Token。
+
+### v1.2.1 更新内容
+
+- **修复横屏生成页在生成中被裁切的问题**：手机横屏时如果正在生成，底部的扣费/队列面板会被顶部栏挡住一截；现在改为在顶部栏显示紧凑的暂停/停止按钮，不再出现裁切。
+- **桌面端所有密钥输入框补上小眼睛显隐**：与移动端 v1.2.0 的效果一致，NovelAI Token、反推/转换 Key、Tag·MCP Key、百度密钥默认隐藏，点击小眼睛可临时查看。
+- **移除容易被误认成真实内容的示例提示词**：正面提示词、AI 反推、转换页面里原本会在空白时显示一段示例文字（如"1girl, masterpiece..."），容易让人以为是自动填入的内容；现已去除。
+- **修复移动端"转换"页面输入描述后按钮一直灰色的问题**：输入框的内容之前没有正确触发界面刷新，现在输入后「开始转换」按钮会正常变为可点击。
+- **图库「设为工作台」「复用参数」补上操作成功提示**：之前点击后直接关闭弹窗、没有任何反馈；现在会显示明确的成功提示。
 
 ### v1.2.0 更新内容
 
