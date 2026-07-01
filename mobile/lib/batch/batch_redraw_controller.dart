@@ -453,6 +453,8 @@ class BatchRedrawController extends ChangeNotifier {
     final file = File('${temp.path}/${_safe(_projectName())}.zip');
     await file.writeAsBytes(zip, flush: true);
     await Share.shareXFiles([XFile(file.path)]);
+    status = _rt('batch.zipShared');
+    notifyListeners();
   }
 
   String _merge(String left, String right) =>

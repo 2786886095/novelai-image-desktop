@@ -2539,7 +2539,7 @@ export async function exportComicProjectZip(project: ComicProject): Promise<{ ok
   await fs.mkdir(dir, { recursive: true });
   const filePath = await uniqueFilePath(dir, `${safeZipName(project.title)}_${dateStamp(new Date())}`, "zip");
   await fs.writeFile(filePath, await zip.generateAsync({ type: "nodebuffer" }));
-  return { ok: true, message: `已导出 ${imageCount} 张分镜图片。`, path: filePath };
+  return { ok: true, message: `导出成功：已打包 ${imageCount} 张分镜图片。`, path: filePath };
 }
 
 export async function convertPromptText(

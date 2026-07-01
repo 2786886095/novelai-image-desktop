@@ -28,10 +28,51 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final convertKeyCtrl = TextEditingController();
   final tagKeyCtrl = TextEditingController();
   final baiduSecretCtrl = TextEditingController();
+  // Controlled (not _TextSetting's uncontrolled initialValue) so a model pick
+  // from the detected-models popup can push text into the field directly —
+  // an uncontrolled field wouldn't visually update just because `settings`
+  // changed on a rebuild it didn't trigger itself.
+  final visionModelCtrl = TextEditingController();
+  final convertModelCtrl = TextEditingController();
   bool verifying = false;
   bool testingProxy = false;
   List<String> _detectedModels = [];
   String _detectedModelKind = '';
+
+  @override
+  void initState() {
+    super.initState();
+    final settings = context.read<AppState>().settings;
+    visionModelCtrl.text = settings.visionApiModel;
+    convertModelCtrl.text = settings.convertApiModel;
+    _prefillSecrets();
+  }
+
+  // Secrets live in secure storage, not the reactive `settings` object, so the
+  // fields start blank on every screen build unless explicitly loaded once
+  // here — otherwise an already-saved key looks like it "disappeared". Best
+  // effort: secure storage is unavailable in widget tests (no platform
+  // channel) and, in principle, could fail on a real device too — either way
+  // the fields simply stay blank rather than crashing the settings screen.
+  Future<void> _prefillSecrets() async {
+    final storage = context.read<AppState>().storage;
+    List<String?> results;
+    try {
+      results = await Future.wait([
+        storage.getVisionKey(),
+        storage.getConvertKey(),
+        storage.getTagKey(),
+        storage.getBaiduSecret(),
+      ]);
+    } catch (_) {
+      return;
+    }
+    if (!mounted) return;
+    visionKeyCtrl.text = results[0] ?? '';
+    convertKeyCtrl.text = results[1] ?? '';
+    tagKeyCtrl.text = results[2] ?? '';
+    baiduSecretCtrl.text = results[3] ?? '';
+  }
 
   @override
   void dispose() {
@@ -40,6 +81,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     convertKeyCtrl.dispose();
     tagKeyCtrl.dispose();
     baiduSecretCtrl.dispose();
+    visionModelCtrl.dispose();
+    convertModelCtrl.dispose();
     super.dispose();
   }
 
@@ -185,12 +228,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onChanged: (value) =>
                   state.setSettings((x) => x.allowCustomEndpoint = value),
             ),
-            TextField(
-                controller: tokenCtrl,
-                obscureText: true,
-                decoration: const InputDecoration(
-                    labelText: 'Persistent API Token',
-                    border: OutlineInputBorder())),
+            _SecretField(
+                controller: tokenCtrl, labelText: 'Persistent API Token'),
             const SizedBox(height: 8),
             FilledButton(
                 onPressed: verifying ? null : _saveToken,
@@ -212,55 +251,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 label: settingsDetailText.visionApiUrl,
                 value: s.visionApiUrl,
                 onChanged: (v) => state.setSettings((x) => x.visionApiUrl = v)),
-            _TextSetting(
-                label: settingsDetailText.visionModel,
-                value: s.visionApiModel,
-                onChanged: (v) =>
-                    state.setSettings((x) => x.visionApiModel = v)),
-            TextField(
+            _ModelNameField(
+              label: settingsDetailText.visionModel,
+              controller: visionModelCtrl,
+              detectedModels:
+                  _detectedModelKind == 'reverse' ? _detectedModels : const [],
+              pickerTooltip: settingsDetailText.chooseDetectedModel,
+              onChanged: (v) => state.setSettings((x) => x.visionApiModel = v),
+            ),
+            _SecretField(
                 controller: visionKeyCtrl,
-                obscureText: true,
-                decoration: InputDecoration(
-                    labelText: settingsDetailText.visionApiKey,
-                    border: const OutlineInputBorder())),
+                labelText: settingsDetailText.visionApiKey,
+                onChanged: (v) => state.setSecret('vision', v)),
             const SizedBox(height: 8),
-            Row(children: [
-              Expanded(
-                  child: FilledButton.tonal(
-                      onPressed: () =>
-                          state.setSecret('vision', visionKeyCtrl.text),
-                      child: Text(settingsDetailText.saveKey))),
-              const SizedBox(width: 8),
-              Expanded(
-                  child: OutlinedButton(
-                      onPressed: () => _detect(context, 'reverse'),
-                      child: Text(settingsDetailText.detectModel))),
-            ]),
-            if (_detectedModelKind == 'reverse' && _detectedModels.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: DropdownButtonFormField<String>(
-                  value: _detectedModels.contains(s.visionApiModel)
-                      ? s.visionApiModel
-                      : null,
-                  isExpanded: true,
-                  decoration: InputDecoration(
-                    labelText: settingsDetailText.chooseDetectedModel,
-                    border: const OutlineInputBorder(),
-                  ),
-                  items: _detectedModels
-                      .map((m) => DropdownMenuItem(
-                            value: m,
-                            child: Text(m,
-                                maxLines: 1, overflow: TextOverflow.ellipsis),
-                          ))
-                      .toList(),
-                  onChanged: (value) {
-                    if (value == null) return;
-                    state.setSettings((x) => x.visionApiModel = value);
-                  },
-                ),
-              ),
+            SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                    onPressed: () => _detect(context, 'reverse'),
+                    child: Text(settingsDetailText.detectModel))),
           ]),
           _Section(title: settingsText.convertSection, children: [
             _TextSetting(
@@ -268,55 +276,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 value: s.convertApiUrl,
                 onChanged: (v) =>
                     state.setSettings((x) => x.convertApiUrl = v)),
-            _TextSetting(
-                label: settingsDetailText.textModel,
-                value: s.convertApiModel,
-                onChanged: (v) =>
-                    state.setSettings((x) => x.convertApiModel = v)),
-            TextField(
+            _ModelNameField(
+              label: settingsDetailText.textModel,
+              controller: convertModelCtrl,
+              detectedModels:
+                  _detectedModelKind == 'convert' ? _detectedModels : const [],
+              pickerTooltip: settingsDetailText.chooseDetectedModel,
+              onChanged: (v) =>
+                  state.setSettings((x) => x.convertApiModel = v),
+            ),
+            _SecretField(
                 controller: convertKeyCtrl,
-                obscureText: true,
-                decoration: InputDecoration(
-                    labelText: settingsDetailText.textApiKey,
-                    border: const OutlineInputBorder())),
+                labelText: settingsDetailText.textApiKey,
+                onChanged: (v) => state.setSecret('convert', v)),
             const SizedBox(height: 8),
-            Row(children: [
-              Expanded(
-                  child: FilledButton.tonal(
-                      onPressed: () =>
-                          state.setSecret('convert', convertKeyCtrl.text),
-                      child: Text(settingsDetailText.saveKey))),
-              const SizedBox(width: 8),
-              Expanded(
-                  child: OutlinedButton(
-                      onPressed: () => _detect(context, 'convert'),
-                      child: Text(settingsDetailText.detectModel))),
-            ]),
-            if (_detectedModelKind == 'convert' && _detectedModels.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: DropdownButtonFormField<String>(
-                  value: _detectedModels.contains(s.convertApiModel)
-                      ? s.convertApiModel
-                      : null,
-                  isExpanded: true,
-                  decoration: InputDecoration(
-                    labelText: settingsDetailText.chooseDetectedModel,
-                    border: const OutlineInputBorder(),
-                  ),
-                  items: _detectedModels
-                      .map((m) => DropdownMenuItem(
-                            value: m,
-                            child: Text(m,
-                                maxLines: 1, overflow: TextOverflow.ellipsis),
-                          ))
-                      .toList(),
-                  onChanged: (value) {
-                    if (value == null) return;
-                    state.setSettings((x) => x.convertApiModel = value);
-                  },
-                ),
-              ),
+            SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                    onPressed: () => _detect(context, 'convert'),
+                    child: Text(settingsDetailText.detectModel))),
           ]),
           _Section(title: settingsText.tagSection, children: [
             SwitchListTile(
@@ -372,16 +350,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               const SizedBox(height: 8),
             ],
-            TextField(
+            _SecretField(
                 controller: tagKeyCtrl,
-                obscureText: true,
-                decoration: InputDecoration(
-                    labelText: settingsDetailText.tagServiceKey,
-                    border: const OutlineInputBorder())),
-            const SizedBox(height: 8),
-            FilledButton.tonal(
-                onPressed: () => state.setSecret('tag', tagKeyCtrl.text),
-                child: Text(settingsDetailText.saveTagKey)),
+                labelText: settingsDetailText.tagServiceKey,
+                onChanged: (v) => state.setSecret('tag', v)),
             const SizedBox(height: 8),
             OutlinedButton.icon(
               onPressed: () async {
@@ -438,28 +410,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onChanged: (value) =>
                     state.setSettings((x) => x.baiduAppId = value.trim()),
               ),
-              TextField(
+              _SecretField(
                 controller: baiduSecretCtrl,
-                obscureText: true,
-                autocorrect: false,
-                decoration: InputDecoration(
-                  labelText: settingsDetailText.baiduSecret,
-                  border: const OutlineInputBorder(),
-                ),
-              ),
-              FilledButton.tonalIcon(
-                onPressed: () async {
-                  await state.setSecret('baidu', baiduSecretCtrl.text);
-                  baiduSecretCtrl.clear();
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                          content: Text(settingsDetailText.baiduSecretSaved)),
-                    );
-                  }
-                },
-                icon: const Icon(Icons.key_outlined),
-                label: Text(settingsDetailText.saveBaiduSecret),
+                labelText: settingsDetailText.baiduSecret,
+                onChanged: (v) => state.setSecret('baidu', v),
               ),
             ],
           ]),
@@ -645,22 +599,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final state = context.read<AppState>();
     final detailText = settingsDetailTextFor(state.settings.language);
     // Drop any previous detection results up front so a re-detect against a
-    // changed URL/key never leaves stale options selectable.
+    // changed URL/key never leaves stale options selectable. The key field
+    // auto-saves on every change, so storage is already current here.
     setState(() {
       _detectedModels = [];
       _detectedModelKind = '';
     });
-    // Typing a key doesn't persist to secure storage until it's saved, and
-    // detection reads straight from storage — save whatever is currently in
-    // the field first so a freshly-typed key can be detected without a
-    // separate manual "save" tap. The field is never pre-filled from storage
-    // (the key isn't re-displayed once saved), so only overwrite storage when
-    // the user actually typed something this time — otherwise re-detecting
-    // against an already-saved key (field left blank) would wipe it out.
-    final keyCtrl = kind == 'reverse' ? visionKeyCtrl : convertKeyCtrl;
-    if (keyCtrl.text.trim().isNotEmpty) {
-      await state.setSecret(kind == 'reverse' ? 'vision' : 'convert', keyCtrl.text);
-    }
     try {
       final models = await state.detectModels(kind);
       if (!context.mounted) return;
@@ -989,6 +933,80 @@ class _TextSetting extends StatelessWidget {
       decoration:
           InputDecoration(labelText: label, border: const OutlineInputBorder()),
       onChanged: onChanged);
+}
+
+// A secret/API-key field: hidden by default (never re-displayed in plain
+// text unintentionally), with a small eye toggle to reveal it on demand.
+class _SecretField extends StatefulWidget {
+  final TextEditingController controller;
+  final String labelText;
+  final ValueChanged<String>? onChanged;
+  const _SecretField(
+      {required this.controller, required this.labelText, this.onChanged});
+  @override
+  State<_SecretField> createState() => _SecretFieldState();
+}
+
+class _SecretFieldState extends State<_SecretField> {
+  bool _visible = false;
+  @override
+  Widget build(BuildContext context) => TextField(
+        controller: widget.controller,
+        obscureText: !_visible,
+        autocorrect: false,
+        onChanged: widget.onChanged,
+        decoration: InputDecoration(
+          labelText: widget.labelText,
+          border: const OutlineInputBorder(),
+          suffixIcon: IconButton(
+            icon: Icon(_visible ? Icons.visibility : Icons.visibility_off),
+            onPressed: () => setState(() => _visible = !_visible),
+          ),
+        ),
+      );
+}
+
+// A model-name field that stays freely editable but, once models have been
+// detected, also lets the same field pull down a picker of them.
+class _ModelNameField extends StatelessWidget {
+  final String label;
+  final TextEditingController controller;
+  final List<String> detectedModels;
+  final String pickerTooltip;
+  final ValueChanged<String> onChanged;
+  const _ModelNameField({
+    required this.label,
+    required this.controller,
+    required this.detectedModels,
+    required this.pickerTooltip,
+    required this.onChanged,
+  });
+  @override
+  Widget build(BuildContext context) => TextField(
+        controller: controller,
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+          suffixIcon: detectedModels.isEmpty
+              ? null
+              : PopupMenuButton<String>(
+                  tooltip: pickerTooltip,
+                  icon: const Icon(Icons.arrow_drop_down),
+                  onSelected: (value) {
+                    controller.text = value;
+                    onChanged(value);
+                  },
+                  itemBuilder: (context) => detectedModels
+                      .map((m) => PopupMenuItem(
+                            value: m,
+                            child: Text(m,
+                                maxLines: 1, overflow: TextOverflow.ellipsis),
+                          ))
+                      .toList(),
+                ),
+        ),
+        onChanged: onChanged,
+      );
 }
 
 // Lets the user choose a custom base folder for saved originals (Android). Images

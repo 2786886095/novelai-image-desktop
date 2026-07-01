@@ -2461,7 +2461,12 @@ function ReversePanel() {
       setToast(t("inspect.noMeta"));
       return;
     }
-    applyParams(imported);
+    // The locked negative prompt must survive this restore too, same as
+    // reset/template. (parseImportedParams never extracts stylePrompt from
+    // metadata, so only negativePrompt is relevant here.)
+    const patch = { ...imported };
+    if (settings?.lockNegativePrompt) delete patch.negativePrompt;
+    applyParams(patch);
     setActiveTab("generate");
     setToast(t("inspect.metaRestored"));
   }

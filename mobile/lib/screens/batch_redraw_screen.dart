@@ -862,7 +862,17 @@ class _BatchGenerateStep extends StatelessWidget {
               ? null
               : () => controller.startQueue(selected),
           onExportZip: project.items.any((item) => item.outputPath.isNotEmpty)
-              ? controller.exportZip
+              ? () async {
+                  final messenger = ScaffoldMessenger.of(context);
+                  try {
+                    await controller.exportZip();
+                    messenger.showSnackBar(
+                        SnackBar(content: Text(controller.status)));
+                  } catch (error) {
+                    messenger
+                        .showSnackBar(SnackBar(content: Text('$error')));
+                  }
+                }
               : null,
           onTogglePause: controller.togglePause,
           onCancel: controller.cancelQueue,

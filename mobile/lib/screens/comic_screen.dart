@@ -1464,7 +1464,17 @@ class _GenerateStep extends StatelessWidget {
                           'comic.retrySelected', {'count': selected.length})),
                     ),
                     OutlinedButton.icon(
-                      onPressed: controller.exportComicZip,
+                      onPressed: () async {
+                        final messenger = ScaffoldMessenger.of(context);
+                        try {
+                          await controller.exportComicZip();
+                          messenger.showSnackBar(
+                              SnackBar(content: Text(controller.status)));
+                        } catch (error) {
+                          messenger.showSnackBar(
+                              SnackBar(content: Text('$error')));
+                        }
+                      },
                       icon: const Icon(Icons.archive_outlined),
                       label: Text(t('comic.exportZip')),
                     ),

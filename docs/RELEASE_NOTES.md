@@ -4,14 +4,23 @@
 
 | 系统 | 安装包 | 安装说明 |
 | --- | --- | --- |
-| 🪟 **Windows** (x64) | `Langbai-NovelAI-Studio-1.1.9.exe` | 便携版，双击即用，无需安装 |
-| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-1.1.9-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
-| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-1.1.9.zip` | 解压后即为 `.app`，同样需右键「打开」 |
-| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-1.1.9.AppImage` | `chmod +x` 后直接运行 |
+| 🪟 **Windows** (x64) | `Langbai-NovelAI-Studio-1.2.0.exe` | 便携版，双击即用，无需安装 |
+| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-1.2.0-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
+| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-1.2.0.zip` | 解压后即为 `.app`，同样需右键「打开」 |
+| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-1.2.0.AppImage` | `chmod +x` 后直接运行 |
 | 🤖 **Android** | `app-release.apk` | 直接安装；未签名，需允许「未知来源」 |
 | 📱 **iOS** | `novelai-mobile-unsigned.ipa` | **未签名**，需用 AltStore / Sideloadly 等工具自行侧载 |
 
 > 桌面端与移动端均为 **API-only** 客户端，需自备 NovelAI Persistent API Token。
+
+### v1.2.0 更新内容
+
+- **正面提示词自动持久化（桌面端）**：正面提示词现在会跟其他参数一样自动记住，退出软件或异常关闭后重新打开可以接着上次继续编辑，不需要手动开启任何开关。（移动端本来就会自动保存，无需改动。）
+- **移动端 AI 反推/转换设置全面优化**：
+  - 检测到模型后，直接在原有的「模型」输入框里就能下拉选择，不再额外弹出一个新列表。
+  - 所有密钥（NovelAI Token、反推/转换/Tag·MCP/百度翻译）改为输入后自动保存，去掉了单独的「保存 Key」按钮；「检测模型」现在一键直接检测，不用先保存。
+  - 密钥默认隐藏显示，输入框旁新增小眼睛图标，点击可临时显示明文，再点一下恢复隐藏；重新打开设置页时已保存的密钥会正确显示为掩码，不会看起来像「消失」了。
+- **漫画生成器 / 批量图生图的 ZIP 导出增加明确的成功提示**：导出完成后会显示"导出成功"提示；同时修复了移动端批量图生图导出完成后完全没有任何提示的问题。
 
 ### v1.1.9 更新内容
 

@@ -149,7 +149,8 @@ const _runtimeText = <String, Map<String, String>>{
     'comic.authStopped': '队列已停止：NovelAI Token 或 Image Endpoint 鉴权失败',
     'comic.queueDone': '漫画队列完成：{done}/{total}',
     'comic.cancelling': '正在取消漫画队列...',
-    'comic.zipShared': '漫画 ZIP 已交给系统分享/保存',
+    'comic.zipShared': '导出成功：漫画 ZIP 已交给系统分享/保存',
+    'batch.zipShared': '导出成功：批量图生图 ZIP 已交给系统分享/保存',
     'comic.tagPanelEmpty': '请粘贴 / 输入 Tag 提示词，每行一个分镜。',
     'comic.tagPanelsImported': '已按 Tag 直接创建 {count} 个分镜，可前往「生成」。',
     'comic.fallbackRangePanel':
@@ -338,7 +339,8 @@ const _runtimeText = <String, Map<String, String>>{
     'comic.authStopped': '佇列已停止：NovelAI Token 或 Image Endpoint 鑑權失敗',
     'comic.queueDone': '漫畫佇列完成：{done}/{total}',
     'comic.cancelling': '正在取消漫畫佇列...',
-    'comic.zipShared': '漫畫 ZIP 已交給系統分享/儲存',
+    'comic.zipShared': '匯出成功：漫畫 ZIP 已交給系統分享/儲存',
+    'batch.zipShared': '匯出成功：批次圖生圖 ZIP 已交給系統分享/儲存',
     'comic.tagPanelEmpty': '請貼上 / 輸入 Tag 提示詞，每行一個分鏡。',
     'comic.tagPanelsImported': '已按 Tag 直接建立 {count} 個分鏡，可前往「生成」。',
     'comic.fallbackRangePanel':
@@ -571,7 +573,9 @@ const _runtimeText = <String, Map<String, String>>{
         'Queue stopped: NovelAI Token or Image Endpoint authentication failed',
     'comic.queueDone': 'Comic queue complete: {done}/{total}',
     'comic.cancelling': 'Cancelling comic queue...',
-    'comic.zipShared': 'Comic ZIP sent to system share/save',
+    'comic.zipShared': 'Export successful: comic ZIP sent to system share/save',
+    'batch.zipShared':
+        'Export successful: batch img2img ZIP sent to system share/save',
     'comic.tagPanelEmpty': 'Paste or enter Tag prompts, one panel per line.',
     'comic.tagPanelsImported':
         'Created {count} panels directly from Tags. You can go to Generate.',
@@ -780,7 +784,8 @@ const _runtimeText = <String, Map<String, String>>{
     'comic.authStopped': 'キュー停止: NovelAI Token または Image Endpoint の認証に失敗しました',
     'comic.queueDone': '漫画キュー完了: {done}/{total}',
     'comic.cancelling': '漫画キューをキャンセル中...',
-    'comic.zipShared': '漫画 ZIP をシステム共有/保存へ送りました',
+    'comic.zipShared': 'エクスポート成功：漫画 ZIP をシステム共有/保存へ送りました',
+    'batch.zipShared': 'エクスポート成功：一括 Img2Img ZIP をシステム共有/保存へ送りました',
     'comic.tagPanelEmpty': 'Tag プロンプトを貼り付け/入力してください。1 行につき 1 パネル。',
     'comic.tagPanelsImported': 'Tag から直接 {count} パネルを作成しました。生成へ進めます。',
     'comic.fallbackRangePanel':
@@ -984,7 +989,8 @@ const _runtimeText = <String, Map<String, String>>{
     'comic.authStopped': '대기열 중지: NovelAI Token 또는 Image Endpoint 인증 실패',
     'comic.queueDone': '만화 대기열 완료: {done}/{total}',
     'comic.cancelling': '만화 대기열 취소 중...',
-    'comic.zipShared': '만화 ZIP을 시스템 공유/저장으로 보냈습니다',
+    'comic.zipShared': '내보내기 성공: 만화 ZIP을 시스템 공유/저장으로 보냈습니다',
+    'batch.zipShared': '내보내기 성공: 배치 img2img ZIP을 시스템 공유/저장으로 보냈습니다',
     'comic.tagPanelEmpty': 'Tag 프롬프트를 붙여넣거나 입력하세요. 한 줄에 패널 하나입니다.',
     'comic.tagPanelsImported':
         'Tag에서 직접 {count}개 패널을 만들었습니다. 생성 단계로 이동할 수 있습니다.',

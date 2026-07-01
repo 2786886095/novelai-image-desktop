@@ -522,7 +522,9 @@ async function ensureAnlasBeforeRun(
 
 function buildLastGenerationState(state: AppState): LastGenerationState {
   return {
-    params: { ...state.params, positivePrompt: "" },
+    // positivePrompt is included so it survives a restart/crash, matching the
+    // mobile client (which already persists the full params unconditionally).
+    params: { ...state.params },
     batchCount: state.batchCount,
     i2iParams: state.i2iParams,
     inpaintModel: state.inpaintModel,
@@ -630,7 +632,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const last = settings.lastGenerationState;
     if (last) {
       set((state) => ({
-        params: { ...state.params, ...last.params, positivePrompt: "" },
+        params: { ...state.params, ...last.params },
         batchCount: Math.max(1, Math.min(16, last.batchCount ?? state.batchCount)),
         i2iParams: { ...state.i2iParams, ...(last.i2iParams ?? {}) },
         inpaintModel: last.inpaintModel ?? state.inpaintModel,
@@ -721,7 +723,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setParam(key, value) {
     set((state) => ({ params: { ...state.params, [key]: value } }));
-    if (key !== "positivePrompt") persistGenerationState(get);
+    persistGenerationState(get);
   },
 
   applyParams(patch) {
