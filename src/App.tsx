@@ -1978,41 +1978,64 @@ function TextToolHistoryPanel({
       {!collapsed && (
         <ul className="queue-list">
           {items.map((item) => (
-            <li className="texttool-history-item" key={item.id}>
-              <div className="texttool-history-item-head">
-                <span className="queue-item-time">
-                  {new Date(item.createdAt).toLocaleString("zh-CN", {
-                    month: "2-digit",
-                    day: "2-digit",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </span>
-                <button
-                  type="button"
-                  className="queue-item-remove"
-                  onClick={() => onDelete(item.id)}
-                  aria-label={t("queue.remove")}
-                  title={t("queue.remove")}
-                >
-                  ✕
-                </button>
-              </div>
-              <span className="texttool-history-item-input">
-                {item.input.trim() || item.result}
-              </span>
-              {item.variants && (item.variants.namePrompt.trim() || item.variants.featurePrompt.trim()) ? (
-                <PromptVariantCards variants={item.variants} onUse={onUse} />
-              ) : (
-                <button type="button" className="queue-mini-btn" onClick={() => onUse(item.result)}>
-                  {t("variant.use")}
-                </button>
-              )}
-            </li>
+            <TextToolHistoryItemRow key={item.id} item={item} onDelete={onDelete} onUse={onUse} />
           ))}
         </ul>
       )}
     </div>
+  );
+}
+
+// Collapsed by default so a long history list stays scannable — the
+// namePrompt/featurePrompt pair (or single result) only renders once this
+// specific record is expanded, not inline for every item at once.
+function TextToolHistoryItemRow({
+  item,
+  onDelete,
+  onUse,
+}: {
+  item: TextToolHistoryItem;
+  onDelete: (id: string) => void;
+  onUse: (result: string) => void;
+}) {
+  const language = useAppStore((state) => state.settings?.language);
+  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
+  const [expanded, setExpanded] = useState(false);
+  const hasVariants = Boolean(item.variants && (item.variants.namePrompt.trim() || item.variants.featurePrompt.trim()));
+  return (
+    <li className="texttool-history-item">
+      <div className="texttool-history-item-head">
+        <span className="queue-item-time">
+          {new Date(item.createdAt).toLocaleString("zh-CN", {
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+          })}
+        </span>
+        <button
+          type="button"
+          className="queue-item-remove"
+          onClick={() => onDelete(item.id)}
+          aria-label={t("queue.remove")}
+          title={t("queue.remove")}
+        >
+          ✕
+        </button>
+      </div>
+      <button type="button" className="texttool-history-item-toggle" onClick={() => setExpanded((value) => !value)}>
+        <span className="texttool-history-item-input">{item.input.trim() || item.result}</span>
+        <span aria-hidden="true">{expanded ? "▾" : "▸"}</span>
+      </button>
+      {expanded &&
+        (hasVariants ? (
+          <PromptVariantCards variants={item.variants ?? null} onUse={onUse} />
+        ) : (
+          <button type="button" className="queue-mini-btn" onClick={() => onUse(item.result)}>
+            {t("variant.use")}
+          </button>
+        ))}
+    </li>
   );
 }
 

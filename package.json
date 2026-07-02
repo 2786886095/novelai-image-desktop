@@ -1,6 +1,6 @@
 {
   "name": "langbai-novelai-studio",
-  "version": "1.2.5",
+  "version": "1.2.6",
   "private": true,
   "description": "Langbai NovelAI Studio: API-only NovelAI image generation desktop client with Chinese UI.",
   "author": "Langbai",

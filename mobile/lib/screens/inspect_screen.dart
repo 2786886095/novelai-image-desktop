@@ -433,6 +433,10 @@ class _TextToolHistoryList extends StatefulWidget {
 
 class _TextToolHistoryListState extends State<_TextToolHistoryList> {
   bool _collapsed = true;
+  // Per-record expand state: the stored prompt(s) — one or two versions,
+  // depending on whether that record used known-character mode — only
+  // render once that specific row is tapped, not inline for every item.
+  final Set<String> _expandedIds = {};
 
   @override
   Widget build(BuildContext context) {
@@ -469,6 +473,11 @@ class _TextToolHistoryListState extends State<_TextToolHistoryList> {
                   children: [
                     ListTile(
                       dense: true,
+                      onTap: () => setState(() {
+                        if (!_expandedIds.remove(item.id)) {
+                          _expandedIds.add(item.id);
+                        }
+                      }),
                       title: Text(
                         item.input.trim().isNotEmpty
                             ? item.input
@@ -481,11 +490,9 @@ class _TextToolHistoryListState extends State<_TextToolHistoryList> {
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          if (item.variants == null)
-                            IconButton(
-                              icon: const Icon(Icons.send, size: 18),
-                              onPressed: () => widget.onUse(item.result),
-                            ),
+                          Icon(_expandedIds.contains(item.id)
+                              ? Icons.expand_less
+                              : Icons.expand_more),
                           IconButton(
                             icon: const Icon(Icons.close, size: 18),
                             onPressed: () => widget.onDelete(item.id),
@@ -493,16 +500,27 @@ class _TextToolHistoryListState extends State<_TextToolHistoryList> {
                         ],
                       ),
                     ),
-                    if (item.variants case final variants?
-                        when variants.namePrompt.isNotEmpty ||
-                            variants.featurePrompt.isNotEmpty)
+                    if (_expandedIds.contains(item.id))
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                        child: _VariantResults(
-                          variants: variants,
-                          language: language,
-                          onUse: widget.onUse,
-                        ),
+                        child: switch (item.variants) {
+                          final variants?
+                              when variants.namePrompt.isNotEmpty ||
+                                  variants.featurePrompt.isNotEmpty =>
+                            _VariantResults(
+                              variants: variants,
+                              language: language,
+                              onUse: widget.onUse,
+                            ),
+                          _ => Align(
+                              alignment: Alignment.centerLeft,
+                              child: IconButton(
+                                icon: const Icon(Icons.send_outlined, size: 18),
+                                tooltip: t('inspect.reuseToGenerate'),
+                                onPressed: () => widget.onUse(item.result),
+                              ),
+                            ),
+                        },
                       ),
                   ],
                 ),
