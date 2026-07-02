@@ -1,4 +1,4 @@
-export const APP_VERSION = "1.2.3";
+export const APP_VERSION = "1.2.4";
 export const APP_NAME = "Langbai NovelAI Studio";
 export const PROJECT_REPOSITORY = "https://github.com/2786886095/novelai-image-desktop";
 
@@ -926,6 +926,15 @@ export interface AppSettings {
   // Named style-prompt presets available from the generation panel.
   stylePromptPresets: StylePromptPreset[];
   lastGenerationState: LastGenerationState | null;
+  // Per-tool opt-out for restoring lastGenerationState across restarts.
+  // All default true (today's behavior); turning one off means that tool
+  // falls back to hardcoded defaults on next launch instead of restoring
+  // what was last used there.
+  persistGenerateParams: boolean;
+  persistI2IParams: boolean;
+  persistInpaintParams: boolean;
+  persistUpscaleParams: boolean;
+  persistDirectorParams: boolean;
 }
 
 export type SettingKey = keyof AppSettings;

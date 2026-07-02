@@ -4160,6 +4160,42 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                     description={settingsSectionText.performance.superDropDesc}
                   />
                 </div>
+                <div className="info-card">
+                  <strong>{settingsSectionText.performance.persistSectionTitle}</strong>
+                  <span>{settingsSectionText.performance.persistSectionDesc}</span>
+                </div>
+                <div className="toggle-list">
+                  <Toggle
+                    checked={settings.persistGenerateParams ?? true}
+                    onChange={(v) => void update("persistGenerateParams", v)}
+                    label={settingsSectionText.performance.persistGenerateLabel}
+                    description={settingsSectionText.performance.persistGenerateDesc}
+                  />
+                  <Toggle
+                    checked={settings.persistI2IParams ?? true}
+                    onChange={(v) => void update("persistI2IParams", v)}
+                    label={settingsSectionText.performance.persistI2ILabel}
+                    description={settingsSectionText.performance.persistI2IDesc}
+                  />
+                  <Toggle
+                    checked={settings.persistInpaintParams ?? true}
+                    onChange={(v) => void update("persistInpaintParams", v)}
+                    label={settingsSectionText.performance.persistInpaintLabel}
+                    description={settingsSectionText.performance.persistInpaintDesc}
+                  />
+                  <Toggle
+                    checked={settings.persistUpscaleParams ?? true}
+                    onChange={(v) => void update("persistUpscaleParams", v)}
+                    label={settingsSectionText.performance.persistUpscaleLabel}
+                    description={settingsSectionText.performance.persistUpscaleDesc}
+                  />
+                  <Toggle
+                    checked={settings.persistDirectorParams ?? true}
+                    onChange={(v) => void update("persistDirectorParams", v)}
+                    label={settingsSectionText.performance.persistDirectorLabel}
+                    description={settingsSectionText.performance.persistDirectorDesc}
+                  />
+                </div>
               </div>
             )}
             {section === "about" && (

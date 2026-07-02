@@ -106,6 +106,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final settingsDetailText = settingsDetailTextFor(s.language);
     final languageText = settingsLanguageTextFor(s.language);
     final appearanceText = settingsAppearanceTextFor(s.language);
+    final persistText = settingsPersistTextFor(s.language);
     final aboutText = settingsAboutTextFor(s.language);
     final account = state.account;
     return Scaffold(
@@ -509,6 +510,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onChanged: (value) =>
                     state.setSettings((x) => x.imageOutputDir = value),
               ),
+          ]),
+          _Section(title: persistText.sectionTitle, children: [
+            Text(persistText.sectionDesc),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(persistText.generateTitle),
+              subtitle: Text(persistText.generateSubtitle),
+              value: s.persistGenerateParams,
+              onChanged: (value) =>
+                  state.setSettings((x) => x.persistGenerateParams = value),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(persistText.inpaintTitle),
+              subtitle: Text(persistText.inpaintSubtitle),
+              value: s.persistInpaintParams,
+              onChanged: (value) =>
+                  state.setSettings((x) => x.persistInpaintParams = value),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(persistText.upscaleTitle),
+              subtitle: Text(persistText.upscaleSubtitle),
+              value: s.persistUpscaleParams,
+              onChanged: (value) =>
+                  state.setSettings((x) => x.persistUpscaleParams = value),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(persistText.directorTitle),
+              subtitle: Text(persistText.directorSubtitle),
+              value: s.persistDirectorParams,
+              onChanged: (value) =>
+                  state.setSettings((x) => x.persistDirectorParams = value),
+            ),
           ]),
           _Section(title: appearanceText.sectionTitle, children: [
             DropdownButtonFormField<String>(

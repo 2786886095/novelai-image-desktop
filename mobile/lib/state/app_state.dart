@@ -21,6 +21,10 @@ import '../services/update_service.dart';
 import '../services/background_queue_service.dart';
 import '../tags/offline_tag_store.dart';
 
+// A finished convert/reverse job is already reflected in the result box and
+// history — leaving it in the tracker list just forces a manual ✕ tap.
+const _textToolDoneAutoDismiss = Duration(milliseconds: 1500);
+
 class AppState extends ChangeNotifier {
   final NaiApi api;
   final Storage storage;
@@ -122,7 +126,11 @@ class AppState extends ChangeNotifier {
       promptTemplates = await PromptTemplateLibrary.load();
       settings = await storage.getSettings();
       status = _rt('common.ready');
-      params = await storage.getParams();
+      // Per-tool persistence opt-out: when a toggle is off, that tool keeps
+      // its hardcoded defaults instead of restoring the last-used values.
+      if (settings.persistGenerateParams) {
+        params = await storage.getParams();
+      }
       final expectedModelMode = params.model == 'nai-diffusion-furry-3'
           ? 'furry'
           : settings.modelMode == 'furry'
@@ -140,22 +148,30 @@ class AppState extends ChangeNotifier {
         await storage.setSettings(settings);
       }
       // Restore the last-used tool selections (desktop "last generation state").
+      // reverseMode/convertMode aren't part of the per-tool persistence
+      // toggles below — those only cover generate/inpaint/upscale/director.
       reverseMode =
           _modeFromSetting(settings.reversePromptMode, ReversePromptMode.tags);
       convertMode = _modeFromSetting(
           settings.convertPromptMode, ReversePromptMode.natural);
-      inpaintModel = settings.inpaintModel;
-      inpaintStrength = settings.inpaintStrength;
-      inpaintNoise = settings.inpaintNoise;
-      inpaintPositivePrompt = settings.inpaintPositivePrompt;
-      upscaleScale = settings.upscaleScale;
-      directorTool = settings.directorTool;
-      augmentOptions = AugmentOptions(
-        defry: settings.augmentDefry,
-        colorizePrompt: settings.augmentColorizePrompt,
-        emotion: settings.augmentEmotion,
-        emotionLevel: settings.augmentEmotionLevel,
-      );
+      if (settings.persistInpaintParams) {
+        inpaintModel = settings.inpaintModel;
+        inpaintStrength = settings.inpaintStrength;
+        inpaintNoise = settings.inpaintNoise;
+        inpaintPositivePrompt = settings.inpaintPositivePrompt;
+      }
+      if (settings.persistUpscaleParams) {
+        upscaleScale = settings.upscaleScale;
+      }
+      if (settings.persistDirectorParams) {
+        directorTool = settings.directorTool;
+        augmentOptions = AugmentOptions(
+          defry: settings.augmentDefry,
+          colorizePrompt: settings.augmentColorizePrompt,
+          emotion: settings.augmentEmotion,
+          emotionLevel: settings.augmentEmotionLevel,
+        );
+      }
       history = await storage.getHistory();
       convertHistory = await storage.getConvertHistory();
       reverseHistory = await storage.getReverseHistory();
@@ -1316,6 +1332,7 @@ class AppState extends ChangeNotifier {
       );
       reverseHistory = [historyItem, ...reverseHistory];
       unawaited(storage.setReverseHistory(reverseHistory));
+      Timer(_textToolDoneAutoDismiss, () => removeReverseJob(job.id));
     } else {
       job.status = TextToolJobStatus.failed;
       job.message = res.message;
@@ -1378,6 +1395,7 @@ class AppState extends ChangeNotifier {
       );
       convertHistory = [historyItem, ...convertHistory];
       unawaited(storage.setConvertHistory(convertHistory));
+      Timer(_textToolDoneAutoDismiss, () => removeConvertJob(job.id));
     } else {
       job.status = TextToolJobStatus.failed;
       job.message = res.message;

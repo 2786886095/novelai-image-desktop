@@ -501,12 +501,14 @@ class NaiApi {
       'width': width,
       'height': height,
       'req_type': tool,
-      'defry': options.defry.clamp(0, 5),
+      // Integers, not doubles: a stray "2.0"/"happy;;3.0" (vs desktop's clean
+      // "2"/"happy;;3") is a malformed request on every director-tool call.
+      'defry': options.defry.clamp(0, 5).round(),
     };
     if (tool == 'colorize') payload['prompt'] = options.colorizePrompt;
     if (tool == 'emotion') {
       payload['prompt'] =
-          '${options.emotion};;${options.emotionLevel.clamp(0, 5)}';
+          '${options.emotion};;${options.emotionLevel.clamp(0, 5).round()}';
     }
 
     final res = await _withClient(
@@ -655,8 +657,7 @@ class NaiApi {
       parameters['director_reference_descriptions'] = precise
           .map((item) => {
                 'caption': {
-                  'base_caption':
-                      item.type.isEmpty ? 'character&style' : item.type,
+                  'base_caption': item.type.isEmpty ? 'character' : item.type,
                   'char_captions': <Object>[],
                 },
                 'legacy_uc': false,
@@ -794,6 +795,10 @@ class NaiApi {
           if (hint.trim().isNotEmpty) 'Subject hint: ${hint.trim()}',
           modeUserInstruction(mode, 'reverse'),
           if (tagHints.isNotEmpty) tagHints,
+          // Reinforced in the user turn too, not just the system prompt —
+          // mirrors desktop's reversePromptImage, which sends this in both
+          // places so known-character mode reliably returns both variants.
+          knownCharacterRuntimeInstruction(mode, 'reverse', knownCharacter),
         ].join('\n')
       }
     ];
@@ -831,8 +836,12 @@ class NaiApi {
     final hintText = hints.isEmpty
         ? ''
         : '\nCandidate Danbooru tags:\n${hints.map((e) => e.tag).join(', ')}';
+    // Reinforced in the user turn too, not just the system prompt — mirrors
+    // desktop's convertPromptText, which sends this in both places so
+    // known-character mode reliably returns both variants.
     final user =
-        'User description:\n$text\n\n${modeUserInstruction(mode, 'convert')}$hintText';
+        'User description:\n$text\n\n${modeUserInstruction(mode, 'convert')}$hintText'
+        '\n\n${knownCharacterRuntimeInstruction(mode, 'convert', knownCharacter)}';
     final system = [
       systemTemplate.trim().isEmpty
           ? _modeSystemPrompt(mode, reverse: false)

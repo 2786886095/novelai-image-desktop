@@ -2047,6 +2047,90 @@ SettingsAppearanceText settingsAppearanceTextFor(Object? value) {
   }
 }
 
+typedef SettingsPersistText = ({
+  String sectionTitle,
+  String sectionDesc,
+  String generateTitle,
+  String generateSubtitle,
+  String inpaintTitle,
+  String inpaintSubtitle,
+  String upscaleTitle,
+  String upscaleSubtitle,
+  String directorTitle,
+  String directorSubtitle,
+});
+
+SettingsPersistText settingsPersistTextFor(Object? value) {
+  switch (normalizeAppLocaleCode(value)) {
+    case 'zh-TW':
+      return (
+        sectionTitle: '跨次啟動記住參數',
+        sectionDesc: '以下開關預設全部開啟，關閉後對應工具在下次開啟應用程式時不再恢復上次使用的參數，改用預設值。',
+        generateTitle: '文生圖',
+        generateSubtitle: '記住上次的提示詞、尺寸、取樣參數等。',
+        inpaintTitle: '局部重繪',
+        inpaintSubtitle: '記住上次的重繪提示詞、模型、強度、筆刷設定。',
+        upscaleTitle: '超解析度',
+        upscaleSubtitle: '記住上次選擇的放大倍數。',
+        directorTitle: '後製處理',
+        directorSubtitle: '記住上次選擇的工具與參數。',
+      );
+    case 'en-US':
+      return (
+        sectionTitle: 'Remember params across restarts',
+        sectionDesc:
+            'All toggles below default on. Turning one off means that tool uses its built-in defaults next time you open the app instead of restoring what you last used.',
+        generateTitle: 'Text-to-image',
+        generateSubtitle: 'Remember the last prompt, size, and sampling parameters.',
+        inpaintTitle: 'Inpaint',
+        inpaintSubtitle: 'Remember the last inpaint prompt, model, strength, and brush settings.',
+        upscaleTitle: 'Upscale',
+        upscaleSubtitle: 'Remember the last selected upscale factor.',
+        directorTitle: 'Post-processing',
+        directorSubtitle: 'Remember the last selected tool and parameters.',
+      );
+    case 'ja-JP':
+      return (
+        sectionTitle: '再起動後もパラメータを記憶',
+        sectionDesc: '以下のスイッチは既定ですべてオンです。オフにすると、そのツールは次回起動時に前回の設定を復元せず初期値を使用します。',
+        generateTitle: '文生図',
+        generateSubtitle: '前回のプロンプト、サイズ、サンプリング設定を記憶します。',
+        inpaintTitle: '部分修復（インペイント）',
+        inpaintSubtitle: '前回のインペイント用プロンプト、モデル、強度、ブラシ設定を記憶します。',
+        upscaleTitle: 'アップスケール',
+        upscaleSubtitle: '前回選択した拡大倍率を記憶します。',
+        directorTitle: '後処理',
+        directorSubtitle: '前回選択したツールと設定を記憶します。',
+      );
+    case 'ko-KR':
+      return (
+        sectionTitle: '재시작 후에도 파라미터 기억',
+        sectionDesc: '아래 스위치는 기본적으로 모두 켜져 있습니다. 끄면 해당 도구는 다음 실행 시 마지막 설정을 복원하지 않고 기본값을 사용합니다.',
+        generateTitle: '텍스트→이미지',
+        generateSubtitle: '마지막 프롬프트, 크기, 샘플링 설정을 기억합니다.',
+        inpaintTitle: '부분 리터치(인페인트)',
+        inpaintSubtitle: '마지막 인페인트 프롬프트, 모델, 강도, 브러시 설정을 기억합니다.',
+        upscaleTitle: '업스케일',
+        upscaleSubtitle: '마지막으로 선택한 업스케일 배율을 기억합니다.',
+        directorTitle: '후처리',
+        directorSubtitle: '마지막으로 선택한 도구와 설정을 기억합니다.',
+      );
+    default:
+      return (
+        sectionTitle: '跨次启动记住参数',
+        sectionDesc: '以下开关默认全部开启，关闭后对应工具在下次打开应用时不再恢复上次使用的参数，改用默认值。',
+        generateTitle: '文生图',
+        generateSubtitle: '记住上次的提示词、尺寸、采样参数等。',
+        inpaintTitle: '局部重绘',
+        inpaintSubtitle: '记住上次的重绘提示词、模型、强度、笔刷设置。',
+        upscaleTitle: '超分',
+        upscaleSubtitle: '记住上次选择的放大倍数。',
+        directorTitle: '后期处理',
+        directorSubtitle: '记住上次选择的工具与参数。',
+      );
+  }
+}
+
 typedef SettingsLanguageText = ({
   String sectionTitle,
   String languageLabel,

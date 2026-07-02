@@ -37,6 +37,9 @@ type BrushMode = "paint" | "erase";
 
 // Workspace column widths (left operations rail / right history rail) — persisted
 // in localStorage so the layout is identical on next launch. Center fills the rest.
+// A finished convert/reverse job is already reflected in the result box and
+// history — leaving it in the tracker list just forces a manual ✕ click.
+const TEXTTOOL_DONE_AUTO_DISMISS_MS = 1500;
 const WS_LEFT_DEFAULT = 380;
 const WS_RIGHT_DEFAULT = 340;
 const WS_LEFT_MIN = 260;
@@ -668,18 +671,26 @@ export const useAppStore = create<AppState>((set, get) => ({
     const last = settings.lastGenerationState;
     if (last) {
       set((state) => ({
-        params: { ...state.params, ...last.params },
-        batchCount: Math.max(1, Math.min(16, last.batchCount ?? state.batchCount)),
-        i2iParams: { ...state.i2iParams, ...(last.i2iParams ?? {}) },
-        inpaintModel: last.inpaintModel ?? state.inpaintModel,
-        inpaintStrength: last.inpaintStrength ?? state.inpaintStrength,
-        inpaintNoise: last.inpaintNoise ?? state.inpaintNoise,
-        inpaintPositivePrompt: last.inpaintPositivePrompt ?? state.inpaintPositivePrompt,
-        brushSize: last.brushSize ?? state.brushSize,
-        brushOpacity: last.brushOpacity ?? state.brushOpacity,
-        upscaleScale: last.upscaleScale ?? state.upscaleScale,
-        directorTool: last.directorTool ?? state.directorTool,
-        augmentOptions: { ...state.augmentOptions, ...(last.augmentOptions ?? {}) },
+        params: settings.persistGenerateParams ? { ...state.params, ...last.params } : state.params,
+        batchCount: settings.persistGenerateParams
+          ? Math.max(1, Math.min(16, last.batchCount ?? state.batchCount))
+          : state.batchCount,
+        i2iParams: settings.persistI2IParams ? { ...state.i2iParams, ...(last.i2iParams ?? {}) } : state.i2iParams,
+        inpaintModel: settings.persistInpaintParams ? last.inpaintModel ?? state.inpaintModel : state.inpaintModel,
+        inpaintStrength: settings.persistInpaintParams
+          ? last.inpaintStrength ?? state.inpaintStrength
+          : state.inpaintStrength,
+        inpaintNoise: settings.persistInpaintParams ? last.inpaintNoise ?? state.inpaintNoise : state.inpaintNoise,
+        inpaintPositivePrompt: settings.persistInpaintParams
+          ? last.inpaintPositivePrompt ?? state.inpaintPositivePrompt
+          : state.inpaintPositivePrompt,
+        brushSize: settings.persistInpaintParams ? last.brushSize ?? state.brushSize : state.brushSize,
+        brushOpacity: settings.persistInpaintParams ? last.brushOpacity ?? state.brushOpacity : state.brushOpacity,
+        upscaleScale: settings.persistUpscaleParams ? last.upscaleScale ?? state.upscaleScale : state.upscaleScale,
+        directorTool: settings.persistDirectorParams ? last.directorTool ?? state.directorTool : state.directorTool,
+        augmentOptions: settings.persistDirectorParams
+          ? { ...state.augmentOptions, ...(last.augmentOptions ?? {}) }
+          : state.augmentOptions,
       }));
     }
     // Locks only protect fields from template/reset overwrites; persistence uses lastGenerationState.
@@ -1135,6 +1146,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       };
       set({ reverseHistory: [historyItem, ...get().reverseHistory] });
       void window.naiDesktop.addReverseHistoryItem(historyItem);
+      setTimeout(() => get().removeReverseJob(job.id), TEXTTOOL_DONE_AUTO_DISMISS_MS);
     } else {
       set({
         reverseJobs: get().reverseJobs.map((j) => (j.id === job.id ? { ...j, status: "failed", message: result.message } : j)),
@@ -1221,6 +1233,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       };
       set({ convertHistory: [historyItem, ...get().convertHistory] });
       void window.naiDesktop.addConvertHistoryItem(historyItem);
+      setTimeout(() => get().removeConvertJob(job.id), TEXTTOOL_DONE_AUTO_DISMISS_MS);
     } else {
       set({
         convertJobs: get().convertJobs.map((j) => (j.id === job.id ? { ...j, status: "failed", message: result.message } : j)),

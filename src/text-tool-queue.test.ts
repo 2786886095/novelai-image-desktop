@@ -151,4 +151,23 @@ describe("convert/反推 job tracker (concurrent, not a serial queue)", () => {
     expect(useAppStore.getState().convertResult).toBe("");
     expect(useAppStore.getState().convertHistory).toHaveLength(0);
   });
+
+  it("auto-dismisses a done job from the tracker shortly after it finishes, without touching history", async () => {
+    vi.useFakeTimers();
+    try {
+      const convertPrompt = vi.fn().mockResolvedValue({ ok: true, result: "1girl, solo" });
+      stubNaiDesktop({ convertPrompt });
+      useAppStore.setState({ convertInput: "应该自动消失" });
+
+      await useAppStore.getState().runConvertPrompt();
+      expect(useAppStore.getState().convertJobs).toHaveLength(1);
+      expect(useAppStore.getState().convertJobs[0].status).toBe("done");
+
+      await vi.advanceTimersByTimeAsync(1500);
+      expect(useAppStore.getState().convertJobs).toHaveLength(0);
+      expect(useAppStore.getState().convertHistory).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

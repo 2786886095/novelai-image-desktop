@@ -9,7 +9,7 @@ class NaiOption {
 }
 
 const appName = 'Langbai NovelAI Studio';
-const appVersion = '1.2.3';
+const appVersion = '1.2.4';
 
 const naiModels = <NaiOption>[
   NaiOption('NAI Diffusion 4.5 Full (Full model)', 'nai-diffusion-4-5-full'),
@@ -249,7 +249,11 @@ class PreciseReferenceItem {
 
   const PreciseReferenceItem({
     required this.base64,
-    this.type = 'character&style',
+    // Default to character-only: "character&style" copies the reference's
+    // rendering style (a prime cause of unwanted texture/halftone bleed when
+    // the art style is meant to come from the prompt's artist tags instead).
+    // Matches desktop's src/App.tsx handlePreciseFile default.
+    this.type = 'character',
     this.strength = 1,
     this.fidelity = 1,
     this.informationExtracted = 1,
@@ -289,7 +293,7 @@ class PreciseReferenceItem {
   factory PreciseReferenceItem.fromJson(Map<String, dynamic> json) =>
       PreciseReferenceItem(
         base64: json['base64']?.toString() ?? '',
-        type: json['type']?.toString() ?? 'character&style',
+        type: json['type']?.toString() ?? 'character',
         strength: (json['strength'] as num?)?.toDouble() ?? 1,
         fidelity: (json['fidelity'] as num?)?.toDouble() ?? 1,
         informationExtracted:
@@ -575,6 +579,13 @@ class AppSettings {
   String augmentColorizePrompt;
   String augmentEmotion;
   double augmentEmotionLevel;
+  // Per-tool opt-out for restoring last-used params across restarts.
+  // All default true (today's behavior); turning one off means that tool
+  // falls back to hardcoded defaults on next launch.
+  bool persistGenerateParams;
+  bool persistInpaintParams;
+  bool persistUpscaleParams;
+  bool persistDirectorParams;
 
   AppSettings({
     this.apiBaseUrl = 'https://api.novelai.net',
@@ -631,6 +642,10 @@ class AppSettings {
     this.augmentColorizePrompt = '',
     this.augmentEmotion = 'happy',
     this.augmentEmotionLevel = 0,
+    this.persistGenerateParams = true,
+    this.persistInpaintParams = true,
+    this.persistUpscaleParams = true,
+    this.persistDirectorParams = true,
   })  : reversePromptTemplates = reversePromptTemplates ?? {},
         convertPromptTemplates = convertPromptTemplates ?? {},
         promptShortcuts = promptShortcuts ?? [],
@@ -695,6 +710,10 @@ class AppSettings {
         'augmentColorizePrompt': augmentColorizePrompt,
         'augmentEmotion': augmentEmotion,
         'augmentEmotionLevel': augmentEmotionLevel,
+        'persistGenerateParams': persistGenerateParams,
+        'persistInpaintParams': persistInpaintParams,
+        'persistUpscaleParams': persistUpscaleParams,
+        'persistDirectorParams': persistDirectorParams,
       };
 
   factory AppSettings.fromJson(Map<String, dynamic> j) => AppSettings(
@@ -764,6 +783,10 @@ class AppSettings {
         augmentEmotion: j['augmentEmotion'] ?? 'happy',
         augmentEmotionLevel:
             (j['augmentEmotionLevel'] as num?)?.toDouble() ?? 0,
+        persistGenerateParams: j['persistGenerateParams'] ?? true,
+        persistInpaintParams: j['persistInpaintParams'] ?? true,
+        persistUpscaleParams: j['persistUpscaleParams'] ?? true,
+        persistDirectorParams: j['persistDirectorParams'] ?? true,
       );
 }
 

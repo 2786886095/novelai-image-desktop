@@ -1431,7 +1431,11 @@ class _ParamControls extends StatelessWidget {
           selected: {p.seedMode},
           onSelectionChanged: (selection) => state.setParam((x) {
             x.seedMode = selection.first;
-            if (x.seedMode == 'fixed' && x.seed <= 0) x.seed = 1;
+            // Roll a fresh seed instead of always landing on 1 — matches
+            // desktop and this screen's own "randomize" button below.
+            if (x.seedMode == 'fixed' && x.seed <= 0) {
+              x.seed = Random.secure().nextInt(2147483646) + 1;
+            }
           }),
         ),
         const SizedBox(height: 10),

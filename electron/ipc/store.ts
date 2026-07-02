@@ -226,6 +226,11 @@ export function defaultSettings(): AppSettings {
     promptTemplates: [],
     stylePromptPresets: [],
     lastGenerationState: null,
+    persistGenerateParams: true,
+    persistI2IParams: true,
+    persistInpaintParams: true,
+    persistUpscaleParams: true,
+    persistDirectorParams: true,
   };
 }
 

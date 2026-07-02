@@ -269,6 +269,25 @@ void main() {
     expect(state.convertResult, isEmpty);
     expect(state.convertHistory, isEmpty);
   });
+
+  test(
+      'auto-dismisses a done job from the tracker shortly after it finishes, without touching history',
+      () async {
+    final api = _ScriptedApi(convertResponses: [
+      () async => const AiTextResult(ok: true, message: 'ok', text: '1girl, solo'),
+    ]);
+    final storage = _FakeStorage();
+    final state = buildState(api, storage);
+    state.convertInput = '应该自动消失';
+
+    await state.convertPrompt();
+    expect(state.convertJobs, hasLength(1));
+    expect(state.convertJobs.single.status, TextToolJobStatus.done);
+
+    await Future<void>.delayed(const Duration(milliseconds: 1600));
+    expect(state.convertJobs, isEmpty);
+    expect(state.convertHistory, hasLength(1));
+  });
 }
 
 class _StubOfflineTags extends OfflineTagStore {

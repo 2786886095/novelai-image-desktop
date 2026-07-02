@@ -1037,6 +1037,18 @@ const SETTINGS_SECTION_TEXT = {
       strategyDesc: "当前版本使用单任务顺序执行：批量生成会逐张调用 API，避免并发导致取消和历史写入异常。",
       superDropLabel: "中央画布拖拽加载",
       superDropDesc: "将图片拖入中央画布即可加载为工作台图片。",
+      persistSectionTitle: "跨次启动记住参数",
+      persistSectionDesc: "以下开关默认全部开启，关闭后对应工具在下次打开软件时不再恢复上次使用的参数，改用默认值。",
+      persistGenerateLabel: "文生图",
+      persistGenerateDesc: "记住上次的提示词、尺寸、采样参数等。",
+      persistI2ILabel: "图生图",
+      persistI2IDesc: "记住上次的 Strength、Noise 等参数。",
+      persistInpaintLabel: "局部重绘",
+      persistInpaintDesc: "记住上次的重绘提示词、模型、强度、笔刷设置。",
+      persistUpscaleLabel: "超分",
+      persistUpscaleDesc: "记住上次选择的放大倍数。",
+      persistDirectorLabel: "后期处理",
+      persistDirectorDesc: "记住上次选择的工具与参数。",
     },
   },
   "zh-TW": {
@@ -1058,6 +1070,18 @@ const SETTINGS_SECTION_TEXT = {
       strategyDesc: "目前版本使用單任務循序執行：批次生成會逐張呼叫 API，避免並行造成取消與歷史寫入異常。",
       superDropLabel: "中央畫布拖曳載入",
       superDropDesc: "將圖片拖入中央畫布即可載入為工作台圖片。",
+      persistSectionTitle: "跨次啟動記住參數",
+      persistSectionDesc: "以下開關預設全部開啟，關閉後對應工具在下次開啟軟體時不再恢復上次使用的參數，改用預設值。",
+      persistGenerateLabel: "文生圖",
+      persistGenerateDesc: "記住上次的提示詞、尺寸、取樣參數等。",
+      persistI2ILabel: "圖生圖",
+      persistI2IDesc: "記住上次的 Strength、Noise 等參數。",
+      persistInpaintLabel: "局部重繪",
+      persistInpaintDesc: "記住上次的重繪提示詞、模型、強度、筆刷設定。",
+      persistUpscaleLabel: "超解析度",
+      persistUpscaleDesc: "記住上次選擇的放大倍數。",
+      persistDirectorLabel: "後製處理",
+      persistDirectorDesc: "記住上次選擇的工具與參數。",
     },
   },
   "en-US": {
@@ -1079,6 +1103,18 @@ const SETTINGS_SECTION_TEXT = {
       strategyDesc: "This version runs one task at a time: batch generation calls the API image by image to avoid cancellation and history-write races.",
       superDropLabel: "Drop to center canvas",
       superDropDesc: "Drop an image onto the center canvas to load it as the workspace image.",
+      persistSectionTitle: "Remember params across restarts",
+      persistSectionDesc: "All toggles below default on. Turning one off means that tool uses its built-in defaults next time you open the app instead of restoring what you last used.",
+      persistGenerateLabel: "Text-to-image",
+      persistGenerateDesc: "Remember the last prompt, size, and sampling parameters.",
+      persistI2ILabel: "Image-to-image",
+      persistI2IDesc: "Remember the last Strength, Noise, and related parameters.",
+      persistInpaintLabel: "Inpaint",
+      persistInpaintDesc: "Remember the last inpaint prompt, model, strength, and brush settings.",
+      persistUpscaleLabel: "Upscale",
+      persistUpscaleDesc: "Remember the last selected upscale factor.",
+      persistDirectorLabel: "Post-processing",
+      persistDirectorDesc: "Remember the last selected tool and parameters.",
     },
   },
   "ja-JP": {
@@ -1100,6 +1136,18 @@ const SETTINGS_SECTION_TEXT = {
       strategyDesc: "現在のバージョンは単一タスクを順番に実行します。バッチ生成は 1 枚ずつ API を呼び出し、キャンセルや履歴書き込みの競合を避けます。",
       superDropLabel: "中央キャンバスへドロップ",
       superDropDesc: "画像を中央キャンバスへドロップすると、ワークスペース画像として読み込みます。",
+      persistSectionTitle: "再起動後もパラメータを記憶",
+      persistSectionDesc: "以下のスイッチは既定ですべてオンです。オフにすると、そのツールは次回起動時に前回の設定を復元せず初期値を使用します。",
+      persistGenerateLabel: "文生図",
+      persistGenerateDesc: "前回のプロンプト、サイズ、サンプリング設定を記憶します。",
+      persistI2ILabel: "画像から画像",
+      persistI2IDesc: "前回の Strength、Noise などの設定を記憶します。",
+      persistInpaintLabel: "部分修復（インペイント）",
+      persistInpaintDesc: "前回のインペイント用プロンプト、モデル、強度、ブラシ設定を記憶します。",
+      persistUpscaleLabel: "アップスケール",
+      persistUpscaleDesc: "前回選択した拡大倍率を記憶します。",
+      persistDirectorLabel: "後処理",
+      persistDirectorDesc: "前回選択したツールと設定を記憶します。",
     },
   },
   "ko-KR": {
@@ -1121,6 +1169,18 @@ const SETTINGS_SECTION_TEXT = {
       strategyDesc: "현재 버전은 단일 작업을 순차 실행합니다. 배치 생성은 이미지를 한 장씩 API로 호출해 취소와 기록 저장 충돌을 피합니다.",
       superDropLabel: "중앙 캔버스 드롭 로드",
       superDropDesc: "이미지를 중앙 캔버스에 드롭하면 작업공간 이미지로 불러옵니다.",
+      persistSectionTitle: "재시작 후에도 파라미터 기억",
+      persistSectionDesc: "아래 스위치는 기본적으로 모두 켜져 있습니다. 끄면 해당 도구는 다음 실행 시 마지막 설정을 복원하지 않고 기본값을 사용합니다.",
+      persistGenerateLabel: "텍스트→이미지",
+      persistGenerateDesc: "마지막 프롬프트, 크기, 샘플링 설정을 기억합니다.",
+      persistI2ILabel: "이미지→이미지",
+      persistI2IDesc: "마지막 Strength, Noise 등의 설정을 기억합니다.",
+      persistInpaintLabel: "부분 리터치(인페인트)",
+      persistInpaintDesc: "마지막 인페인트 프롬프트, 모델, 강도, 브러시 설정을 기억합니다.",
+      persistUpscaleLabel: "업스케일",
+      persistUpscaleDesc: "마지막으로 선택한 업스케일 배율을 기억합니다.",
+      persistDirectorLabel: "후처리",
+      persistDirectorDesc: "마지막으로 선택한 도구와 설정을 기억합니다.",
     },
   },
 } satisfies Record<AppLanguage, {
@@ -1135,7 +1195,25 @@ const SETTINGS_SECTION_TEXT = {
     string
   >;
   language: Record<"language" | "hint", string>;
-  performance: Record<"strategyTitle" | "strategyDesc" | "superDropLabel" | "superDropDesc", string>;
+  performance: Record<
+    | "strategyTitle"
+    | "strategyDesc"
+    | "superDropLabel"
+    | "superDropDesc"
+    | "persistSectionTitle"
+    | "persistSectionDesc"
+    | "persistGenerateLabel"
+    | "persistGenerateDesc"
+    | "persistI2ILabel"
+    | "persistI2IDesc"
+    | "persistInpaintLabel"
+    | "persistInpaintDesc"
+    | "persistUpscaleLabel"
+    | "persistUpscaleDesc"
+    | "persistDirectorLabel"
+    | "persistDirectorDesc",
+    string
+  >;
 }>;
 
 export function getSettingsSectionText(language: unknown) {

@@ -131,10 +131,13 @@ PreparedDirectorImage prepareDirectorImage(
 
 /// Prepares a V4.5 precise (director) reference image the way the reference
 /// implementations do: fit the source into the closest official director size
-/// (1024x1536 / 1472x1472 / 1536x1024), letterbox onto an opaque BLACK canvas,
+/// (1024x1536 / 1472x1472 / 1536x1024), letterbox onto an opaque WHITE canvas,
 /// and drop the alpha channel (RGB, 3 channels). Sending the raw image — wrong
 /// size or with an alpha channel — is what produces the screentone / halftone
-/// (halftone / hatching) texture on the output.
+/// (halftone / hatching) texture on the output; a BLACK letterbox reads as
+/// image content and is itself a source of that artifact (matches desktop's
+/// electron/ipc/nai.ts prepareDirectorReferenceImage, fixed there for the
+/// same reason).
 Uint8List prepareDirectorReferenceImage(Uint8List bytes) {
   final source = image_lib.decodeImage(bytes);
   if (source == null) {
@@ -161,12 +164,12 @@ Uint8List prepareDirectorReferenceImage(Uint8List bytes) {
     height: fitHeight,
     interpolation: image_lib.Interpolation.cubic,
   );
-  // Opaque RGB canvas (3 channels, no alpha) padded black, source centered.
+  // Opaque RGB canvas (3 channels, no alpha) padded white, source centered.
   final canvas = image_lib.Image(
     width: targetWidth,
     height: targetHeight,
     numChannels: 3,
-  )..clear(image_lib.ColorRgb8(0, 0, 0));
+  )..clear(image_lib.ColorRgb8(255, 255, 255));
   image_lib.compositeImage(
     canvas,
     fitted,
