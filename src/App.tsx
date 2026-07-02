@@ -2001,9 +2001,13 @@ function TextToolHistoryPanel({
               <span className="texttool-history-item-input">
                 {item.input.trim() || item.result}
               </span>
-              <button type="button" className="queue-mini-btn" onClick={() => onUse(item.result)}>
-                {t("variant.use")}
-              </button>
+              {item.variants && (item.variants.namePrompt.trim() || item.variants.featurePrompt.trim()) ? (
+                <PromptVariantCards variants={item.variants} onUse={onUse} />
+              ) : (
+                <button type="button" className="queue-mini-btn" onClick={() => onUse(item.result)}>
+                  {t("variant.use")}
+                </button>
+              )}
             </li>
           ))}
         </ul>

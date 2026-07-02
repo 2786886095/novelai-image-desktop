@@ -462,25 +462,48 @@ class _TextToolHistoryListState extends State<_TextToolHistoryList> {
           ),
           if (!_collapsed)
             for (final item in widget.items)
-              ListTile(
-                dense: true,
-                title: Text(
-                  item.input.trim().isNotEmpty ? item.input : item.result,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                subtitle: Text(item.createdAt.replaceFirst('T', ' ').split('.').first),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    IconButton(
-                      icon: const Icon(Icons.send, size: 18),
-                      onPressed: () => widget.onUse(item.result),
+                    ListTile(
+                      dense: true,
+                      title: Text(
+                        item.input.trim().isNotEmpty
+                            ? item.input
+                            : item.result,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: Text(
+                          item.createdAt.replaceFirst('T', ' ').split('.').first),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (item.variants == null)
+                            IconButton(
+                              icon: const Icon(Icons.send, size: 18),
+                              onPressed: () => widget.onUse(item.result),
+                            ),
+                          IconButton(
+                            icon: const Icon(Icons.close, size: 18),
+                            onPressed: () => widget.onDelete(item.id),
+                          ),
+                        ],
+                      ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.close, size: 18),
-                      onPressed: () => widget.onDelete(item.id),
-                    ),
+                    if (item.variants case final variants?
+                        when variants.namePrompt.isNotEmpty ||
+                            variants.featurePrompt.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                        child: _VariantResults(
+                          variants: variants,
+                          language: language,
+                          onUse: widget.onUse,
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -537,7 +560,16 @@ class _ResultTemplateChips extends StatelessWidget {
 class _VariantResults extends StatelessWidget {
   final PromptVariants variants;
   final Object? language;
-  const _VariantResults({required this.variants, required this.language});
+  // Defaults to pushing straight into the main generate screen's positive
+  // prompt (the live-result behavior); history callers pass their own
+  // "put into the result box" callback instead, matching how the single
+  // non-variant history item's "use" button already behaves.
+  final ValueChanged<String>? onUse;
+  const _VariantResults({
+    required this.variants,
+    required this.language,
+    this.onUse,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -549,6 +581,7 @@ class _VariantResults extends StatelessWidget {
           subtitle: mobileUiTextFor(language, 'inspect.nameVariantHint'),
           prompt: variants.namePrompt,
           language: language,
+          onUse: onUse,
         ),
         const SizedBox(height: 8),
         _VariantCard(
@@ -556,6 +589,7 @@ class _VariantResults extends StatelessWidget {
           subtitle: mobileUiTextFor(language, 'inspect.featureVariantHint'),
           prompt: variants.featurePrompt,
           language: language,
+          onUse: onUse,
         ),
       ],
     );
@@ -567,11 +601,13 @@ class _VariantCard extends StatelessWidget {
   final String subtitle;
   final String prompt;
   final Object? language;
+  final ValueChanged<String>? onUse;
   const _VariantCard({
     required this.title,
     required this.subtitle,
     required this.prompt,
     required this.language,
+    this.onUse,
   });
 
   @override
@@ -593,7 +629,7 @@ class _VariantCard extends StatelessWidget {
             OutlinedButton.icon(
               onPressed: prompt.isEmpty
                   ? null
-                  : () => context.read<AppState>().applyPrompt(prompt),
+                  : () => (onUse ?? context.read<AppState>().applyPrompt)(prompt),
               icon: const Icon(Icons.send_outlined),
               label: Text(mobileUiTextFor(language, 'inspect.reuseToGenerate')),
             ),
