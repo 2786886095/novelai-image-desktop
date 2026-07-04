@@ -110,7 +110,7 @@ class NaiApi {
         (client) => client
             .post(
               Uri.parse(
-                '${_naiBase(settings.apiBaseUrl, 'https://api.novelai.net', settings)}/ai/generate-image/request-price',
+                '${_naiBase(settings.imageBaseUrl, 'https://image.novelai.net', settings)}/ai/generate-image/request-price',
               ),
               headers: {
                 'Authorization': 'Bearer $token',
@@ -269,8 +269,11 @@ class NaiApi {
   }
 
   // /user/data is a documented superset of /user/information (nests the same
-  // payload under `.information`); NovelAI now intermittently 400s the latter,
-  // so both verification and routine refresh go through /user/data alone.
+  // payload under `.information`). NovelAI now rejects it on api.novelai.net
+  // for at least some accounts with a 400 telling third-party tools to
+  // "update to the image URL" — confirmed live that image.novelai.net serves
+  // the identical payload successfully, so both verification and routine
+  // refresh go through image.novelai.net/user/data.
   Future<AccountSummary> verifyToken(String token, AppSettings settings) async {
     final t = token.trim();
     if (t.isEmpty) return const AccountSummary(hasToken: false);
@@ -278,7 +281,7 @@ class NaiApi {
       settings,
       (client) => client.get(
         Uri.parse(
-            '${_naiBase(settings.apiBaseUrl, 'https://api.novelai.net', settings)}/user/data'),
+            '${_naiBase(settings.imageBaseUrl, 'https://image.novelai.net', settings)}/user/data'),
         headers: {'Authorization': 'Bearer $t'},
       ).timeout(const Duration(seconds: 15)),
     );
@@ -298,7 +301,7 @@ class NaiApi {
         settings,
         (client) => client.get(
           Uri.parse(
-              '${_naiBase(settings.apiBaseUrl, 'https://api.novelai.net', settings)}/user/data'),
+              '${_naiBase(settings.imageBaseUrl, 'https://image.novelai.net', settings)}/user/data'),
           headers: {'Authorization': 'Bearer $token'},
         ).timeout(const Duration(seconds: 15)),
       );

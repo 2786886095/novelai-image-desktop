@@ -166,8 +166,11 @@ function parseAccount(data: any): Omit<AccountSummary, "hasToken"> {
 
 async function fetchAccount(token: string): Promise<Omit<AccountSummary, "hasToken">> {
   const settings = getSettings();
-  const apiBaseUrl = tokenSafeBaseUrl(settings.apiBaseUrl, "https://api.novelai.net");
-  const res = await axios.get(`${apiBaseUrl}/user/data`, {
+  // NovelAI now rejects /user/data on api.novelai.net for at least some accounts
+  // with a 400 telling third-party tools to "update to the image URL" — confirmed
+  // live that image.novelai.net serves the identical payload successfully.
+  const imageBaseUrl = tokenSafeBaseUrl(settings.imageBaseUrl, "https://image.novelai.net");
+  const res = await axios.get(`${imageBaseUrl}/user/data`, {
     headers: { Authorization: `Bearer ${token}` },
     timeout: 15_000,
     ...proxyConfig("nai"),
@@ -875,7 +878,7 @@ async function requestOfficialGenerationPrice(params: GenerateParams) {
   const token = getToken();
   if (!token) return undefined;
   const settings = getSettings();
-  const apiBaseUrl = tokenSafeBaseUrl(settings.apiBaseUrl, "https://api.novelai.net");
+  const imageBaseUrl = tokenSafeBaseUrl(settings.imageBaseUrl, "https://image.novelai.net");
   const quoteParams: GenerateParams = {
     ...params,
     stylePrompt: params.stylePrompt || "",
@@ -884,7 +887,7 @@ async function requestOfficialGenerationPrice(params: GenerateParams) {
   };
   const payload = buildPayload(quoteParams, 1, { vibeImages: [], charCaptions: [] });
   try {
-    const response = await axios.post(`${apiBaseUrl}/ai/generate-image/request-price`, payload, {
+    const response = await axios.post(`${imageBaseUrl}/ai/generate-image/request-price`, payload, {
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
