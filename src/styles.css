@@ -7023,54 +7023,54 @@ button.prompt-chip-head {
 
 .theme-dark {
   color-scheme: dark;
-  --bg-window: #080a16;
-  --bg-panel: rgba(23, 20, 42, 0.92);
-  --bg-canvas: rgba(11, 13, 28, 0.92);
-  --bg-dialog: rgba(28, 24, 48, 0.98);
-  --bg-hover: rgba(167, 139, 250, 0.16);
-  --bg-selected: rgba(124, 58, 237, 0.28);
-  --bg-input: rgba(12, 11, 26, 0.90);
-  --border: rgba(196, 181, 253, 0.20);
-  --border-strong: rgba(216, 204, 255, 0.40);
-  --accent: #a78bfa;
-  --accent-hover: #8b5cf6;
-  --accent-soft: rgba(124, 58, 237, 0.24);
-  --accent-text: #ffffff;
-  --text-primary: #fbf9ff;
-  --text-secondary: #d9d2f4;
-  --text-muted: #aaa0c8;
+  --bg-window: #060815;
+  --bg-panel: rgba(15, 14, 28, 0.94);
+  --bg-canvas: rgba(8, 10, 22, 0.94);
+  --bg-dialog: rgba(18, 16, 32, 0.98);
+  --bg-hover: rgba(148, 126, 225, 0.12);
+  --bg-selected: rgba(124, 58, 237, 0.20);
+  --bg-input: rgba(7, 8, 20, 0.92);
+  --border: rgba(160, 144, 214, 0.16);
+  --border-strong: rgba(190, 176, 238, 0.30);
+  --accent: #9d82f0;
+  --accent-hover: #b09af8;
+  --accent-soft: rgba(124, 58, 237, 0.18);
+  --accent-text: #f7f3ff;
+  --text-primary: #e8e3f6;
+  --text-secondary: #b8b0cf;
+  --text-muted: #817797;
   --muted: var(--text-muted);
-  --shadow-sm: 0 10px 26px rgba(0, 0, 0, 0.22), 0 1px 0 rgba(255, 255, 255, 0.03) inset;
-  --shadow-md: 0 18px 42px rgba(0, 0, 0, 0.28), 0 0 0 1px rgba(255, 255, 255, 0.02) inset;
-  --shadow-lg: 0 26px 68px rgba(0, 0, 0, 0.34), 0 0 40px rgba(124, 58, 237, 0.08);
-  --shadow-xl: 0 36px 110px rgba(0, 0, 0, 0.48), 0 0 70px rgba(124, 58, 237, 0.12);
+  --shadow-sm: 0 10px 26px rgba(0, 0, 0, 0.28), 0 1px 0 rgba(255, 255, 255, 0.018) inset;
+  --shadow-md: 0 18px 42px rgba(0, 0, 0, 0.34), 0 0 0 1px rgba(255, 255, 255, 0.014) inset;
+  --shadow-lg: 0 26px 68px rgba(0, 0, 0, 0.40), 0 0 34px rgba(124, 58, 237, 0.045);
+  --shadow-xl: 0 36px 110px rgba(0, 0, 0, 0.54), 0 0 54px rgba(124, 58, 237, 0.07);
 }
 
 html.theme-dark,
 html.theme-dark body,
 html.theme-dark #root {
   background:
-    radial-gradient(circle at 6% 12%, rgba(6, 182, 212, 0.14), transparent 30%),
-    radial-gradient(circle at 46% -8%, rgba(124, 58, 237, 0.18), transparent 38%),
-    radial-gradient(circle at 94% 10%, rgba(245, 158, 11, 0.08), transparent 30%),
-    linear-gradient(180deg, #0b0d19 0%, #070914 100%);
+    radial-gradient(circle at 6% 12%, rgba(6, 182, 212, 0.07), transparent 30%),
+    radial-gradient(circle at 46% -8%, rgba(124, 58, 237, 0.10), transparent 38%),
+    radial-gradient(circle at 94% 10%, rgba(245, 158, 11, 0.035), transparent 30%),
+    linear-gradient(180deg, #070915 0%, #040611 100%);
   color: var(--text-primary);
 }
 
 .theme-dark .app-shell {
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0)),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.018), rgba(255, 255, 255, 0)),
     transparent;
 }
 
 .theme-dark .app-shell::before {
-  opacity: 0.20;
-  background: radial-gradient(circle, rgba(6, 182, 212, 0.38), transparent 64%);
+  opacity: 0.10;
+  background: radial-gradient(circle, rgba(6, 182, 212, 0.28), transparent 64%);
 }
 
 .theme-dark .app-shell::after {
-  opacity: 0.22;
-  background: radial-gradient(circle, rgba(124, 58, 237, 0.42), transparent 66%);
+  opacity: 0.12;
+  background: radial-gradient(circle, rgba(124, 58, 237, 0.30), transparent 66%);
 }
 
 .theme-dark ::-webkit-scrollbar-thumb {
@@ -7084,10 +7084,10 @@ html.theme-dark #root {
 /* Chrome: stable contrast and centered text/icon rhythm */
 .theme-dark .title-bar {
   color: var(--text-primary);
-  background: rgba(8, 10, 22, 0.76);
-  border-bottom: 1px solid rgba(196, 181, 253, 0.18);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.035) inset, 0 12px 34px rgba(0, 0, 0, 0.16);
-  backdrop-filter: blur(22px) saturate(1.12);
+  background: rgba(6, 8, 21, 0.82);
+  border-bottom: 1px solid rgba(160, 144, 214, 0.13);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.018) inset, 0 12px 34px rgba(0, 0, 0, 0.24);
+  backdrop-filter: blur(20px) saturate(1.04);
 }
 
 .theme-dark .window-title {
@@ -7113,15 +7113,15 @@ html.theme-dark #root {
   gap: 7px;
   min-height: 26px;
   color: var(--text-secondary);
-  background: rgba(18, 16, 34, 0.78);
-  border-color: rgba(196, 181, 253, 0.24);
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.24), 0 1px 0 rgba(255, 255, 255, 0.05) inset;
+  background: rgba(11, 11, 24, 0.82);
+  border-color: rgba(160, 144, 214, 0.18);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.30), 0 1px 0 rgba(255, 255, 255, 0.026) inset;
 }
 
 .theme-dark .title-account.online {
-  color: #bbf7d0;
-  background: rgba(22, 101, 52, 0.20);
-  border-color: rgba(74, 222, 128, 0.34);
+  color: #a7f3d0;
+  background: rgba(20, 83, 45, 0.18);
+  border-color: rgba(74, 222, 128, 0.26);
 }
 
 .theme-dark .window-controls button {
@@ -7138,9 +7138,9 @@ html.theme-dark #root {
 }
 
 .theme-dark .compact-toolbar {
-  background: rgba(8, 10, 22, 0.50);
-  border-bottom: 1px solid rgba(196, 181, 253, 0.12);
-  backdrop-filter: blur(20px) saturate(1.08);
+  background: rgba(6, 8, 21, 0.58);
+  border-bottom: 1px solid rgba(160, 144, 214, 0.10);
+  backdrop-filter: blur(18px) saturate(1.02);
 }
 
 .theme-dark .menu-action,
@@ -7150,9 +7150,9 @@ html.theme-dark #root {
   align-items: center;
   justify-content: center;
   color: var(--text-secondary);
-  background: rgba(24, 21, 43, 0.78);
-  border-color: rgba(196, 181, 253, 0.18);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.045) inset, 0 10px 24px rgba(0, 0, 0, 0.14);
+  background: rgba(13, 12, 27, 0.84);
+  border-color: rgba(160, 144, 214, 0.15);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.022) inset, 0 10px 24px rgba(0, 0, 0, 0.20);
 }
 
 .theme-dark .menu-action {
@@ -7164,8 +7164,8 @@ html.theme-dark #root {
 .theme-dark .tab-bar button:hover,
 .theme-dark .btn:hover:not(:disabled) {
   color: var(--text-primary);
-  background: rgba(39, 33, 66, 0.92);
-  border-color: rgba(216, 204, 255, 0.34);
+  background: rgba(24, 21, 43, 0.94);
+  border-color: rgba(190, 176, 238, 0.26);
 }
 
 .theme-dark .icon-text,
@@ -7186,22 +7186,22 @@ html.theme-dark #root {
 }
 
 .theme-dark .tab-bar {
-  background: rgba(8, 10, 22, 0.34);
-  border-bottom: 1px solid rgba(196, 181, 253, 0.10);
+  background: rgba(6, 8, 21, 0.42);
+  border-bottom: 1px solid rgba(160, 144, 214, 0.08);
 }
 
 .theme-dark .tab-bar button {
   height: 36px;
   color: var(--text-secondary);
-  background: rgba(22, 19, 40, 0.66);
+  background: rgba(12, 11, 26, 0.72);
 }
 
 .theme-dark .tab-bar button.active,
 .theme-dark .btn-primary {
-  color: #fff;
-  border-color: rgba(167, 139, 250, 0.30);
-  background: linear-gradient(135deg, #7c3aed 0%, #0891b2 100%);
-  box-shadow: 0 18px 38px rgba(79, 70, 229, 0.32), 0 1px 0 rgba(255, 255, 255, 0.14) inset;
+  color: var(--accent-text);
+  border-color: rgba(157, 130, 240, 0.28);
+  background: linear-gradient(135deg, #6f55dc 0%, #0f7f99 100%);
+  box-shadow: 0 16px 34px rgba(64, 54, 154, 0.26), 0 1px 0 rgba(255, 255, 255, 0.08) inset;
 }
 
 .theme-dark .tab-bar button.active .tab-icon {
@@ -7225,31 +7225,31 @@ html.theme-dark #root {
 .theme-dark .onboarding-card {
   color: var(--text-primary);
   background:
-    linear-gradient(145deg, rgba(31, 27, 52, 0.94), rgba(14, 16, 33, 0.88)),
-    radial-gradient(circle at 18% 0%, rgba(124, 58, 237, 0.13), transparent 42%);
-  border-color: rgba(196, 181, 253, 0.20);
+    linear-gradient(145deg, rgba(18, 16, 34, 0.95), rgba(8, 10, 22, 0.90)),
+    radial-gradient(circle at 18% 0%, rgba(124, 58, 237, 0.08), transparent 42%);
+  border-color: rgba(160, 144, 214, 0.14);
   box-shadow: var(--shadow-lg);
 }
 
 .theme-dark .canvas-area {
   background:
-    radial-gradient(circle at 50% 18%, rgba(124, 58, 237, 0.16), transparent 36%),
-    radial-gradient(circle at 82% 78%, rgba(6, 182, 212, 0.12), transparent 34%),
-    linear-gradient(145deg, rgba(24, 22, 42, 0.94), rgba(10, 12, 26, 0.92));
+    radial-gradient(circle at 50% 18%, rgba(124, 58, 237, 0.09), transparent 36%),
+    radial-gradient(circle at 82% 78%, rgba(6, 182, 212, 0.07), transparent 34%),
+    linear-gradient(145deg, rgba(15, 14, 29, 0.95), rgba(6, 8, 20, 0.93));
 }
 
 .theme-dark .panel-head,
 .theme-dark .left-footer,
 .theme-dark .status-bar {
   color: var(--text-primary);
-  background: rgba(16, 15, 32, 0.78);
-  border-color: rgba(196, 181, 253, 0.16);
+  background: rgba(9, 10, 23, 0.82);
+  border-color: rgba(160, 144, 214, 0.12);
 }
 
 .theme-dark .panel-head > span {
-  color: #fff;
-  background: linear-gradient(135deg, rgba(124, 58, 237, 0.55), rgba(6, 182, 212, 0.38));
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+  color: var(--accent-text);
+  background: linear-gradient(135deg, rgba(111, 85, 220, 0.38), rgba(15, 127, 153, 0.24));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
 
 .theme-dark .field span,
@@ -7296,8 +7296,8 @@ html.theme-dark #root {
 .theme-dark .prompt-variant-card textarea {
   color: var(--text-primary);
   background: var(--bg-input);
-  border-color: rgba(196, 181, 253, 0.22);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.035) inset;
+  border-color: rgba(160, 144, 214, 0.16);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.018) inset;
 }
 
 .theme-dark .field input::placeholder,
@@ -7311,7 +7311,7 @@ html.theme-dark #root {
 .theme-dark .comic-reference textarea::placeholder,
 .theme-dark .tuiwen-reference-card textarea::placeholder,
 .theme-dark .prompt-variant-card textarea::placeholder {
-  color: rgba(217, 210, 244, 0.50);
+  color: rgba(184, 176, 207, 0.48);
 }
 
 .theme-dark .field input:focus,
@@ -7331,15 +7331,15 @@ html.theme-dark #root {
 .theme-dark .comic-reference textarea:focus,
 .theme-dark .prompt-variant-card textarea:focus {
   outline: none;
-  border-color: rgba(196, 181, 253, 0.58);
-  box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.22), 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+  border-color: rgba(157, 130, 240, 0.46);
+  box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.14), 0 1px 0 rgba(255, 255, 255, 0.024) inset;
 }
 
 /* History / material rail: stronger hierarchy and readable controls */
 .theme-dark .history-panel {
   background:
-    linear-gradient(145deg, rgba(35, 31, 54, 0.96), rgba(17, 17, 34, 0.92)),
-    radial-gradient(circle at 0% 0%, rgba(124, 58, 237, 0.12), transparent 48%);
+    linear-gradient(145deg, rgba(19, 17, 34, 0.96), rgba(9, 10, 23, 0.92)),
+    radial-gradient(circle at 0% 0%, rgba(124, 58, 237, 0.07), transparent 48%);
 }
 
 .theme-dark .history-filters {
@@ -7451,9 +7451,9 @@ html.theme-dark #root {
 .theme-dark .prompt-variant-card {
   color: var(--text-primary);
   background:
-    linear-gradient(145deg, rgba(31, 27, 52, 0.92), rgba(14, 16, 33, 0.88)),
-    radial-gradient(circle at 8% 0%, rgba(124, 58, 237, 0.11), transparent 42%);
-  border-color: rgba(196, 181, 253, 0.18);
+    linear-gradient(145deg, rgba(18, 16, 34, 0.93), rgba(8, 10, 22, 0.90)),
+    radial-gradient(circle at 8% 0%, rgba(124, 58, 237, 0.07), transparent 42%);
+  border-color: rgba(160, 144, 214, 0.14);
   box-shadow: var(--shadow-md);
 }
 
@@ -7467,8 +7467,8 @@ html.theme-dark #root {
 .theme-dark .inpaint-mask-toolbar,
 .theme-dark .compare-divider span {
   color: var(--text-secondary);
-  background: rgba(18, 16, 34, 0.82);
-  border-color: rgba(196, 181, 253, 0.18);
+  background: rgba(10, 10, 23, 0.84);
+  border-color: rgba(160, 144, 214, 0.14);
 }
 
 .theme-dark .comic-step-btn.active,

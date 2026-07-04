@@ -28,14 +28,33 @@ abstract final class StudioTheme {
       brightness: brightness,
     );
     final scheme = base.copyWith(
-      primary: dark ? const Color(0xFFA88BFF) : _brand,
-      secondary: dark ? const Color(0xFF55D5E7) : _cyan,
-      surface: dark ? const Color(0xFF17151F) : const Color(0xFFFCFBFF),
+      primary: dark ? const Color(0xFF9D82F0) : _brand,
+      onPrimary: dark ? const Color(0xFF151128) : Colors.white,
+      primaryContainer: dark ? const Color(0xFF2A2350) : base.primaryContainer,
+      onPrimaryContainer:
+          dark ? const Color(0xFFE9E2FF) : base.onPrimaryContainer,
+      secondary: dark ? const Color(0xFF3EC2D2) : _cyan,
+      onSecondary: dark ? const Color(0xFF071E24) : Colors.white,
+      secondaryContainer:
+          dark ? const Color(0xFF123840) : base.secondaryContainer,
+      onSecondaryContainer:
+          dark ? const Color(0xFFC9F7FF) : base.onSecondaryContainer,
+      surface: dark ? const Color(0xFF111120) : const Color(0xFFFCFBFF),
+      onSurface: dark ? const Color(0xFFE8E3F6) : base.onSurface,
+      onSurfaceVariant: dark ? const Color(0xFFB8B0CF) : base.onSurfaceVariant,
+      surfaceContainerLow:
+          dark ? const Color(0xFF0C0D19) : base.surfaceContainerLow,
       surfaceContainer:
-          dark ? const Color(0xFF211E2B) : const Color(0xFFF4F0FB),
+          dark ? const Color(0xFF18172A) : const Color(0xFFF4F0FB),
       surfaceContainerHigh:
-          dark ? const Color(0xFF2A2636) : const Color(0xFFEDE7F7),
-      outline: dark ? const Color(0xFF5F586E) : const Color(0xFFD6CDE6),
+          dark ? const Color(0xFF201E34) : const Color(0xFFEDE7F7),
+      surfaceContainerHighest:
+          dark ? const Color(0xFF28253D) : base.surfaceContainerHighest,
+      outline: dark ? const Color(0xFF514A66) : const Color(0xFFD6CDE6),
+      outlineVariant: dark ? const Color(0xFF312C44) : base.outlineVariant,
+      shadow: dark ? Colors.black : base.shadow,
+      scrim: Colors.black,
+      surfaceTint: dark ? const Color(0xFF7B61D1) : base.surfaceTint,
     );
     const controlShape = RoundedRectangleBorder(
       borderRadius: BorderRadius.all(Radius.circular(StudioRadii.control)),
@@ -46,7 +65,7 @@ abstract final class StudioTheme {
       brightness: brightness,
       colorScheme: scheme,
       scaffoldBackgroundColor:
-          dark ? const Color(0xFF111018) : const Color(0xFFF8F6FC),
+          dark ? const Color(0xFF090B16) : const Color(0xFFF8F6FC),
       visualDensity: VisualDensity.standard,
       cardTheme: CardTheme(
         elevation: 0,
@@ -87,15 +106,17 @@ abstract final class StudioTheme {
       navigationBarTheme: NavigationBarThemeData(
         height: 68,
         elevation: 0,
-        backgroundColor: scheme.surface,
-        indicatorColor: scheme.primaryContainer,
+        backgroundColor: dark ? const Color(0xFF0D0E1B) : scheme.surface,
+        indicatorColor:
+            dark ? const Color(0xFF2B2450) : scheme.primaryContainer,
         labelTextStyle: WidgetStatePropertyAll(
           TextStyle(fontSize: 12, color: scheme.onSurface),
         ),
       ),
       navigationRailTheme: NavigationRailThemeData(
-        backgroundColor: scheme.surface,
-        indicatorColor: scheme.primaryContainer,
+        backgroundColor: dark ? const Color(0xFF0D0E1B) : scheme.surface,
+        indicatorColor:
+            dark ? const Color(0xFF2B2450) : scheme.primaryContainer,
         selectedIconTheme: IconThemeData(color: scheme.onPrimaryContainer),
         selectedLabelTextStyle: TextStyle(
           color: scheme.primary,
