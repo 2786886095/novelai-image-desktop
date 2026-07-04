@@ -22,6 +22,7 @@ import type {
   TextToolHistoryItem,
   TextToolJob,
   UpdateInfo,
+  UpdateProgressEvent,
   UpscaleScale,
   VibeTransferImage,
   PreciseReferenceImage,
@@ -349,6 +350,8 @@ interface AppState {
   lastError: string;
   toast: string;
   updateInfo: UpdateInfo | null;
+  isPortable: boolean;
+  updateProgress: UpdateProgressEvent | null;
 
   load: () => Promise<void>;
   setShowOnboarding: (value: boolean) => void;
@@ -362,6 +365,8 @@ interface AppState {
   applyParams: (patch: Partial<GenerateParams>) => void;
   checkUpdate: () => Promise<void>;
   dismissUpdate: () => void;
+  downloadUpdate: () => Promise<void>;
+  installUpdate: () => void;
   setSelectedDate: (date: string) => Promise<void>;
   setSelectedGroupId: (groupId: string) => Promise<void>;
   createHistoryGroup: (name: string) => Promise<void>;
@@ -654,9 +659,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   lastError: "",
   toast: "",
   updateInfo: null,
+  isPortable: false,
+  updateProgress: null,
 
   async load() {
-    const [settings, account, firstRun, dates, groups] = await Promise.all([
+    const [settings, account, firstRun, dates, groups, isPortable] = await Promise.all([
       window.naiDesktop.getSettings(),
       // Cached, local-only summary — never a network call, so boot stays fast
       // even with no proxy. Live balance is refreshed after bootDone below.
@@ -664,7 +671,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       window.naiDesktop.isFirstRun(),
       window.naiDesktop.getHistoryDates(),
       window.naiDesktop.getHistoryGroups(),
+      window.naiDesktop.isPortable(),
     ]);
+    set({ isPortable });
+    window.naiDesktop.onUpdateEvent((event) => set({ updateProgress: event }));
     const selectedDate = dates[0] ?? "";
     const selectedGroupId = settings.activeHistoryGroupId ?? "";
     const history = await window.naiDesktop.getHistory(selectedDate || undefined, selectedGroupId || undefined);
@@ -790,6 +800,16 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   dismissUpdate() {
     set({ updateInfo: null });
+  },
+
+  async downloadUpdate() {
+    set({ updateProgress: { kind: "checking" } });
+    const result = await window.naiDesktop.downloadUpdate();
+    if (!result.ok) set({ updateProgress: { kind: "error", message: result.message }, toast: result.message });
+  },
+
+  installUpdate() {
+    void window.naiDesktop.installUpdate();
   },
 
   async setSelectedDate(date) {

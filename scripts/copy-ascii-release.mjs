@@ -13,6 +13,10 @@ const candidates = await Promise.all(
       /^NovelAI-Image-Desktop-.+\.exe$/i.test(name) ||
       /^NovelAI.+\.exe$/i.test(name),
     )
+    // The NSIS installer (Langbai-NovelAI-Studio-Setup-x.y.z.exe) also matches
+    // the pattern above — exclude it so the stable alias always points at the
+    // PORTABLE build, not whichever target happened to build most recently.
+    .filter((name) => !/-Setup-/i.test(name))
     .filter((name) => name !== "NovelAI-Image-Desktop.exe" && name !== "Langbai-NovelAI-Studio.exe")
     .map(async (name) => ({
       name,

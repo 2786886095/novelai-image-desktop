@@ -5,6 +5,7 @@ import path from "path";
 import { pathToFileURL } from "url";
 import type { AccountSummary, AppSettings, HistoryGroup, HistoryItem, SettingKey, TextToolHistoryItem } from "../../src/types";
 import { COMIC_ANALYZE_SYSTEM_PROMPT, SCOPED_REVERSE_SYSTEM_PROMPTS } from "../../src/data/prompt-templates";
+import { installedAppDir, isPortableBuild } from "./app-mode";
 
 interface PersistedData {
   token?: string;
@@ -162,12 +163,21 @@ function isLegacyScopedReverseTemplates(value: unknown): boolean {
   );
 }
 
+// Portable exe: keep images in the OS-standard Pictures folder (the exe may be
+// run from a USB stick / Downloads / anywhere, so a fixed known location is
+// safer). Real (NSIS) install: default to an "outputs" folder next to the
+// installed app, since the user already chose that install location deliberately.
+function defaultOutputDir(): string {
+  if (isPortableBuild()) return path.join(app.getPath("pictures"), "Langbai NovelAI Studio");
+  return path.join(installedAppDir(), "outputs");
+}
+
 export function defaultSettings(): AppSettings {
   const reversePromptTemplates = loadOwnerScopedReverseTemplates();
   return {
     hasOnboarded: false,
     language: "zh-CN",
-    outputDir: path.join(app.getPath("pictures"), "Langbai NovelAI Studio"),
+    outputDir: defaultOutputDir(),
     logDir: "",
     apiBaseUrl: "https://api.novelai.net",
     imageBaseUrl: "https://image.novelai.net",

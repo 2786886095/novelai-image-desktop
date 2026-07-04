@@ -92,6 +92,8 @@ import {
   selectOutputDir,
 } from "./ipc/storage";
 import { checkUpdate } from "./ipc/update";
+import { downloadUpdate, installUpdate, wireAutoUpdater } from "./ipc/auto-update";
+import { isPortableBuild } from "./ipc/app-mode";
 import { proxyConfig } from "./ipc/proxy";
 import {
   installGlobalLogging,
@@ -388,6 +390,9 @@ function registerIpc() {
     return { ok: true };
   });
   ipcMain.handle("app:checkUpdate", () => checkUpdate());
+  ipcMain.handle("app:isPortable", () => isPortableBuild());
+  ipcMain.handle("app:downloadUpdate", () => downloadUpdate());
+  ipcMain.handle("app:installUpdate", () => installUpdate());
 }
 
 app.whenReady().then(() => {
@@ -395,6 +400,7 @@ app.whenReady().then(() => {
   readStore();
   installGlobalLogging();
   registerIpc();
+  wireAutoUpdater(() => mainWindow);
   createWindow();
 
   app.on("activate", () => {

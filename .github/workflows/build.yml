@@ -29,6 +29,7 @@ jobs:
             name: windows
             artifacts: |
               release/*.exe
+              release/latest.yml
           - os: ubuntu-latest
             name: linux
             artifacts: |

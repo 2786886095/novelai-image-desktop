@@ -23,13 +23,25 @@ Release 目标产物：
 
 | 平台 | 文件 |
 | --- | --- |
-| Windows | `Langbai-NovelAI-Studio-1.2.6.exe` |
+| Windows（便携版） | `Langbai-NovelAI-Studio-1.2.6.exe` |
+| Windows（安装版） | `Langbai-NovelAI-Studio-Setup-1.2.6.exe` |
 | macOS | universal `.dmg` + `.zip` |
 | Linux | `.AppImage` |
 | Android | `app-release.apk` |
 | iOS | `novelai-mobile-unsigned.ipa` |
 
 > macOS 包当前未签名，首次打开可能需要右键“打开”。iOS IPA 当前未签名，需要自行侧载或用自己的 Apple 证书签名。
+
+**Windows 两种包怎么选：**
+
+| | 便携版 `.exe` | 安装版 `Setup.exe` |
+| --- | --- | --- |
+| 使用方式 | 双击直接用，不用安装 | 走安装向导，可自选安装路径、创建桌面/开始菜单快捷方式 |
+| 启动速度 | 每次启动需要先解压到临时目录，略慢 | 直接从安装目录运行，启动更快 |
+| 更新方式 | 软件内提示新版本后跳转 GitHub Releases，手动下载替换 | 软件内直接下载并一键重启安装，无需手动去下载 |
+| 适合场景 | 想即开即用、放 U 盘带走、不想在系统里留痕迹 | 想长期使用、希望免去手动更新的麻烦 |
+
+两者的账号 Token、历史记录、设置是共享的（都存在 `%APPDATA%\novelai-image-desktop\`），换用哪个都不会丢数据。
 
 ## 截图
 
@@ -84,12 +96,16 @@ npm run build
 npm run pack
 ```
 
-本地 Windows 便携包输出：
+`npm run pack` 现在会同时产出便携版和安装版：
 
 ```text
-release\Langbai-NovelAI-Studio-1.2.6.exe
-release\Langbai-NovelAI-Studio.exe
+release\Langbai-NovelAI-Studio-1.2.6.exe          # 便携版
+release\Langbai-NovelAI-Studio-Setup-1.2.6.exe    # 安装版（NSIS 向导）
+release\Langbai-NovelAI-Studio.exe                # 便携版稳定别名
+release\latest.yml                                # 安装版应用内更新用的元数据
 ```
+
+只想要便携版可以用 `npm run pack:portable`。
 
 兼容旧启动脚本的别名仍会生成：
 

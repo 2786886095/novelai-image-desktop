@@ -949,6 +949,19 @@ export interface UpdateInfo {
   error?: string;
 }
 
+/**
+ * In-app update pipeline (electron-updater), only functional for a real
+ * (NSIS) install — the portable exe has no installed copy to replace, so it
+ * always falls back to UpdateInfo.releaseUrl for a manual download instead.
+ */
+export type UpdateProgressEvent =
+  | { kind: "checking" }
+  | { kind: "available"; version: string }
+  | { kind: "not-available" }
+  | { kind: "progress"; percent: number }
+  | { kind: "downloaded"; version: string }
+  | { kind: "error"; message: string };
+
 export interface AiModelListResult {
   ok: boolean;
   message: string;
@@ -1069,6 +1082,10 @@ export interface NaiDesktopApi {
   danbooruSearch: (query: string, limit: number) => Promise<TagSuggestion[]>;
   translate: (text: string, target?: string) => Promise<{ ok: boolean; text?: string; error?: string }>;
   checkUpdate: () => Promise<UpdateInfo>;
+  isPortable: () => Promise<boolean>;
+  downloadUpdate: () => Promise<{ ok: boolean; message: string }>;
+  installUpdate: () => Promise<void>;
+  onUpdateEvent: (callback: (event: UpdateProgressEvent) => void) => () => void;
   minimize: () => Promise<void>;
   maximize: () => Promise<void>;
   close: () => Promise<void>;

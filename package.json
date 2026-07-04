@@ -23,15 +23,17 @@
     "test:watch": "vitest",
     "validate:jianying-draft": "npm run build:electron && node scripts/create-tuiwen-jianying-validation.mjs",
     "start": "npm run build && electron .",
-    "pack": "node scripts/cleanup-portable-release.mjs && npm run build && electron-builder --win portable && node scripts/copy-ascii-release.mjs && node scripts/cleanup-portable-release.mjs",
+    "pack": "node scripts/cleanup-portable-release.mjs && npm run build && electron-builder --win portable nsis && node scripts/copy-ascii-release.mjs && node scripts/cleanup-portable-release.mjs",
+    "pack:portable": "node scripts/cleanup-portable-release.mjs && npm run build && electron-builder --win portable && node scripts/copy-ascii-release.mjs && node scripts/cleanup-portable-release.mjs",
     "pack:dir": "npm run build && electron-builder --dir",
-    "dist": "npm run build && electron-builder --win portable",
+    "dist": "npm run build && electron-builder --win portable nsis",
     "dist:mac": "npm run build && electron-builder --mac"
   },
   "dependencies": {
     "axios": "^1.13.2",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
+    "electron-updater": "^6.8.9",
     "http-proxy-agent": "^5.0.0",
     "https-proxy-agent": "^5.0.1",
     "jszip": "^3.10.1",
@@ -83,8 +85,19 @@
     "win": {
       "icon": "build/icon.ico",
       "target": [
-        "portable"
+        "portable",
+        "nsis"
       ]
+    },
+    "nsis": {
+      "artifactName": "Langbai-NovelAI-Studio-Setup-${version}.${ext}",
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Langbai NovelAI Studio",
+      "deleteAppDataOnUninstall": false,
+      "runAfterFinish": true
     },
     "mac": {
       "icon": "build/icon.png",

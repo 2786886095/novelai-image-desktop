@@ -4844,24 +4844,50 @@ function OnboardingWizard() {
 function UpdateBanner() {
   const updateInfo = useAppStore((state) => state.updateInfo);
   const dismissUpdate = useAppStore((state) => state.dismissUpdate);
+  const isPortable = useAppStore((state) => state.isPortable);
+  const updateProgress = useAppStore((state) => state.updateProgress);
+  const downloadUpdate = useAppStore((state) => state.downloadUpdate);
+  const installUpdate = useAppStore((state) => state.installUpdate);
   const language = useAppStore((state) => state.settings?.language);
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
   // Always render an element so .app-shell keeps a stable 6-row grid; the empty
   // slot collapses to 0 height when there's no update.
   if (!updateInfo?.hasUpdate) return <div className="update-banner-slot" />;
+
+  // The portable exe has no installed copy for electron-updater to replace —
+  // always fall back to the manual release-page link there.
+  const busy = updateProgress?.kind === "checking" || updateProgress?.kind === "progress";
+  const downloaded = updateProgress?.kind === "downloaded";
+  const failed = updateProgress?.kind === "error";
+
   return (
     <div className="update-banner">
       <span>
         <Icon name="upgrade" /> {f("update.newVersion", { latest: updateInfo.latestVersion, current: updateInfo.currentVersion })}
+        {failed && <> · {updateProgress.message}</>}
       </span>
       <div className="update-banner-actions">
-        <button
-          className="btn btn-primary"
-          onClick={() => updateInfo.releaseUrl && void window.naiDesktop.openExternal(updateInfo.releaseUrl)}
-        >
-          {t("update.download")}
-        </button>
+        {isPortable ? (
+          <button
+            className="btn btn-primary"
+            onClick={() => updateInfo.releaseUrl && void window.naiDesktop.openExternal(updateInfo.releaseUrl)}
+          >
+            {t("update.download")}
+          </button>
+        ) : downloaded ? (
+          <button className="btn btn-primary" onClick={installUpdate}>
+            {t("update.installRestart")}
+          </button>
+        ) : (
+          <button className="btn btn-primary" disabled={busy} onClick={() => void downloadUpdate()}>
+            {updateProgress?.kind === "progress"
+              ? f("update.downloading", { percent: updateProgress.percent })
+              : busy
+                ? t("update.checking")
+                : t("update.downloadInApp")}
+          </button>
+        )}
         <button className="btn btn-ghost" onClick={dismissUpdate}>
           {t("update.later")}
         </button>
