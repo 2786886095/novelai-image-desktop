@@ -4,14 +4,21 @@
 
 | 系统 | 安装包 | 安装说明 |
 | --- | --- | --- |
-| 🪟 **Windows** (x64) | `Langbai-NovelAI-Studio-1.2.6.exe` | 便携版，双击即用，无需安装 |
-| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-1.2.6-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
-| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-1.2.6.zip` | 解压后即为 `.app`，同样需右键「打开」 |
-| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-1.2.6.AppImage` | `chmod +x` 后直接运行 |
+| 🪟 **Windows**（便携版，x64） | `Langbai-NovelAI-Studio-1.2.7.exe` | 双击即用，无需安装 |
+| 🪟 **Windows**（安装版，x64） | `Langbai-NovelAI-Studio-Setup-1.2.7.exe` | 安装向导可自选路径、创建快捷方式；支持软件内一键更新 |
+| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-1.2.7-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
+| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-1.2.7.zip` | 解压后即为 `.app`，同样需右键「打开」 |
+| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-1.2.7.AppImage` | `chmod +x` 后直接运行 |
 | 🤖 **Android** | `app-release.apk` | 直接安装；未签名，需允许「未知来源」 |
 | 📱 **iOS** | `novelai-mobile-unsigned.ipa` | **未签名**，需用 AltStore / Sideloadly 等工具自行侧载 |
 
 > 桌面端与移动端均为 **API-only** 客户端，需自备 NovelAI Persistent API Token。
+
+### v1.2.7 更新内容
+
+- **新增 Windows 安装版（Setup.exe）**：除便携版 `.exe` 外，新增 NSIS 安装向导，可自选安装路径、创建桌面/开始菜单快捷方式；安装版支持在软件内直接检查、下载并一键重启安装最新版本，无需再手动去 GitHub 下载替换。便携版长期保留，行为不变，两者共用同一份 Token / 历史记录 / 设置（`%APPDATA%\novelai-image-desktop\`），切换使用不会丢数据。
+- **安装版默认输出目录调整**：安装版首次运行的默认生图目录改为安装目录旁的 `outputs` 文件夹；便携版默认目录保持“图片\Langbai NovelAI Studio”不变；两种情况用户都可在设置中自行修改。
+- **深色主题降低刺眼感**：桌面端与移动端的深色配色进一步调暗、降低高对比刺激，新增对比度回归测试防止后续改动再次跑出刺眼的配色。
 
 ### v1.2.6 更新内容
 
