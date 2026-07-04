@@ -268,24 +268,27 @@ class NaiApi {
     }
   }
 
+  // /user/data is a documented superset of /user/information (nests the same
+  // payload under `.information`); NovelAI now intermittently 400s the latter,
+  // so both verification and routine refresh go through /user/data alone.
   Future<AccountSummary> verifyToken(String token, AppSettings settings) async {
     final t = token.trim();
     if (t.isEmpty) return const AccountSummary(hasToken: false);
-    final info = await _withClient(
+    final res = await _withClient(
       settings,
       (client) => client.get(
         Uri.parse(
-            '${_naiBase(settings.apiBaseUrl, 'https://api.novelai.net', settings)}/user/information'),
+            '${_naiBase(settings.apiBaseUrl, 'https://api.novelai.net', settings)}/user/data'),
         headers: {'Authorization': 'Bearer $t'},
       ).timeout(const Duration(seconds: 15)),
     );
-    if (info.statusCode == 401) {
+    if (res.statusCode == 401) {
       throw Exception('Token is invalid or expired.');
     }
-    if (info.statusCode >= 400) {
-      throw Exception('Token verification failed (HTTP ${info.statusCode}).');
+    if (res.statusCode >= 400) {
+      throw Exception('Token verification failed (HTTP ${res.statusCode}).');
     }
-    return fetchAccount(t, settings);
+    return _parseAccountData(res.body);
   }
 
   Future<AccountSummary> fetchAccount(
@@ -299,28 +302,32 @@ class NaiApi {
           headers: {'Authorization': 'Bearer $token'},
         ).timeout(const Duration(seconds: 15)),
       );
-      final data = jsonDecode(res.body) as Map<String, dynamic>;
-      final sub = (data['subscription'] ?? {}) as Map<String, dynamic>;
-      final tier = sub['tier'] as int?;
-      int? anlas;
-      final steps = sub['trainingStepsLeft'];
-      if (steps is Map) {
-        anlas = ((steps['fixedTrainingStepsLeft'] ?? 0) as num).toInt() +
-            ((steps['purchasedTrainingSteps'] ?? 0) as num).toInt();
-      } else if (steps is num) {
-        anlas = steps.toInt();
-      }
-      return AccountSummary(
-        hasToken: true,
-        tierName: _tierName(tier),
-        tierLevel: tier,
-        anlasBalance: anlas,
-        hasActiveSubscription:
-            sub['active'] is bool ? sub['active'] as bool : null,
-      );
+      return _parseAccountData(res.body);
     } catch (_) {
       return const AccountSummary(hasToken: true, tierName: 'Verified');
     }
+  }
+
+  AccountSummary _parseAccountData(String body) {
+    final data = jsonDecode(body) as Map<String, dynamic>;
+    final sub = (data['subscription'] ?? {}) as Map<String, dynamic>;
+    final tier = sub['tier'] as int?;
+    int? anlas;
+    final steps = sub['trainingStepsLeft'];
+    if (steps is Map) {
+      anlas = ((steps['fixedTrainingStepsLeft'] ?? 0) as num).toInt() +
+          ((steps['purchasedTrainingSteps'] ?? 0) as num).toInt();
+    } else if (steps is num) {
+      anlas = steps.toInt();
+    }
+    return AccountSummary(
+      hasToken: true,
+      tierName: _tierName(tier),
+      tierLevel: tier,
+      anlasBalance: anlas,
+      hasActiveSubscription:
+          sub['active'] is bool ? sub['active'] as bool : null,
+    );
   }
 
   Future<(List<Uint8List>, int)> generate(

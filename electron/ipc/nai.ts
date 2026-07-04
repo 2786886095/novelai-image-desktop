@@ -182,20 +182,9 @@ export async function verifyToken(token: string): Promise<TokenStatus> {
   }
 
   try {
-    const settings = getSettings();
-    const apiBaseUrl = tokenSafeBaseUrl(settings.apiBaseUrl, "https://api.novelai.net");
-    await axios.get(`${apiBaseUrl}/user/information`, {
-      headers: { Authorization: `Bearer ${normalized}` },
-      timeout: 15_000,
-      ...proxyConfig("nai"),
-    });
-
-    let account: Omit<AccountSummary, "hasToken"> = {};
-    try {
-      account = await fetchAccount(normalized);
-    } catch {
-      account = { tierName: "已验证", hasActiveSubscription: true };
-    }
+    // /user/data is a documented superset of /user/information (nests the same
+    // payload under `.information`); NovelAI now intermittently 400s the latter.
+    const account = await fetchAccount(normalized);
 
     setToken(normalized);
     setAccountSummary(account);

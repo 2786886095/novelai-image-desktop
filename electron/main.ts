@@ -104,9 +104,23 @@ import {
   readRecentLog,
 } from "./ipc/logger";
 
+// Launching the app while it's already running should focus the existing
+// window, not spawn a second process fighting over the same userData store.
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+  process.exit(0);
+}
+
 let mainWindow: BrowserWindow | null = null;
 
 const isDev = Boolean(process.env.VITE_DEV_SERVER_URL);
+
+app.on("second-instance", () => {
+  if (!mainWindow) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+});
 
 /**
  * Right-click context menu for text fields: 剪切 / 复制 / 粘贴 / 全选. Electron
