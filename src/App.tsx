@@ -2259,7 +2259,7 @@ function GeneratePanel({ openSettings }: { openSettings: () => void }) {
             style={{ margin: 0 }}
             value={batchCount}
             min={1}
-            max={16}
+            max={999}
             onChange={(e) => setBatchCount(Number(e.target.value))}
           />
         </div>

@@ -269,7 +269,7 @@ class AppState extends ChangeNotifier {
   }
 
   void setBatchCount(int n) {
-    batchCount = n.clamp(1, 16);
+    batchCount = n.clamp(1, 999);
     notifyListeners();
     _scheduleGenerationQuote();
   }
@@ -691,7 +691,7 @@ class AppState extends ChangeNotifier {
     final quoteParams = params.copy();
     final quoteExtras = extras.copy();
     final imageToImage = workbenchImage != null;
-    final count = imageToImage ? 1 : batchCount.clamp(1, 16);
+    final count = imageToImage ? 1 : batchCount.clamp(1, 999);
     generationQuote = calculateImageGenerationAnlas(
       params: quoteParams,
       account: account,
@@ -742,7 +742,7 @@ class AppState extends ChangeNotifier {
       return;
     }
 
-    final initialTotal = batchCount.clamp(1, 16);
+    final initialTotal = batchCount.clamp(1, 999);
     final initialParams = params.copy();
     final initialExtras = extras.copy();
     final initialSeed = initialParams.seed;

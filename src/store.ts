@@ -683,7 +683,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       set((state) => ({
         params: settings.persistGenerateParams ? { ...state.params, ...last.params } : state.params,
         batchCount: settings.persistGenerateParams
-          ? Math.max(1, Math.min(16, last.batchCount ?? state.batchCount))
+          ? Math.max(1, Math.min(999, last.batchCount ?? state.batchCount))
           : state.batchCount,
         i2iParams: settings.persistI2IParams ? { ...state.i2iParams, ...(last.i2iParams ?? {}) } : state.i2iParams,
         inpaintModel: settings.persistInpaintParams ? last.inpaintModel ?? state.inpaintModel : state.inpaintModel,
@@ -1070,7 +1070,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // ── Batch + Inspect ────────────────────────────────────────────────────────
   setBatchCount(count) {
-    set({ batchCount: Math.max(1, Math.min(16, count)) });
+    set({ batchCount: Math.max(1, Math.min(999, count)) });
     persistGenerationState(get);
   },
 
