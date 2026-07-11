@@ -1,6 +1,6 @@
 import FormData from "form-data";
 import { describe, expect, it } from "vitest";
-import { buildGenerateImageHttpBody } from "./nai";
+import { buildGenerateImageHttpBody, isOfficialNaiHost } from "./nai";
 
 function b64(text: string) {
   return Buffer.from(text, "utf8").toString("base64");
@@ -50,5 +50,32 @@ describe("buildGenerateImageHttpBody", () => {
     expect(result.useMultipart).toBe(false);
     expect(result.body).toBe(payload);
     expect(result.bodyHeaders["Content-Type"]).toBe("application/json");
+  });
+});
+
+describe("isOfficialNaiHost (P1-14)", () => {
+  it("accepts the real API/image hosts over HTTPS", () => {
+    expect(isOfficialNaiHost("https://api.novelai.net")).toBe(true);
+    expect(isOfficialNaiHost("https://image.novelai.net")).toBe(true);
+    expect(isOfficialNaiHost("https://text.novelai.net")).toBe(true);
+  });
+
+  it("rejects a novelai.net host over plain HTTP (token would go in the clear)", () => {
+    expect(isOfficialNaiHost("http://api.novelai.net")).toBe(false);
+    expect(isOfficialNaiHost("http://image.novelai.net")).toBe(false);
+  });
+
+  it("rejects a lookalike host regardless of scheme", () => {
+    expect(isOfficialNaiHost("https://novelai.net.attacker.com")).toBe(false);
+    expect(isOfficialNaiHost("https://notnovelai.net")).toBe(false);
+  });
+
+  it("still allows loopback over plain HTTP (local dev/reverse-proxy)", () => {
+    expect(isOfficialNaiHost("http://localhost:8080")).toBe(true);
+    expect(isOfficialNaiHost("http://127.0.0.1:8080")).toBe(true);
+  });
+
+  it("returns false for an unparseable URL", () => {
+    expect(isOfficialNaiHost("not a url")).toBe(false);
   });
 });

@@ -4107,6 +4107,18 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                     {t("settings.allowCustomEndpoint")}
                   </span>
                 </label>
+                {settings.allowCustomEndpoint && (
+                  <label className="field-inline">
+                    <input
+                      type="checkbox"
+                      checked={settings.allowCustomEndpointFallback}
+                      onChange={(e) => void update("allowCustomEndpointFallback", e.target.checked)}
+                    />
+                    <span>
+                      {t("settings.allowCustomEndpointFallback")}
+                    </span>
+                  </label>
+                )}
 
                 <div className="proxy-card">
                   <ProxyPresetControl value={settings.proxyUrl} onChange={(value) => void updateProxy(value)} />

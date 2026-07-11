@@ -182,6 +182,7 @@ export function defaultSettings(): AppSettings {
     apiBaseUrl: "https://api.novelai.net",
     imageBaseUrl: "https://image.novelai.net",
     allowCustomEndpoint: false,
+    allowCustomEndpointFallback: false,
     proxyMode: "http",
     proxyUrl: "http://127.0.0.1:7890",
     proxyForNai: true,

@@ -184,6 +184,20 @@ async function callHttp(
   return resultToText(call?.result);
 }
 
+// SECURITY: the server picks the "endpoint" event's URL. Without an origin
+// check, a malicious or compromised server (or a MITM on the configured
+// proxy) could point it at an attacker-controlled host and still receive our
+// Authorization header on the POST that follows. Same-origin only.
+export function resolveSseEndpoint(
+  data: string,
+  streamUrl: string,
+): { ok: true; url: string } | { ok: false; origin: string } {
+  const resolved = data.startsWith("http") ? data : new URL(data, streamUrl).toString();
+  const resolvedOrigin = new URL(resolved).origin;
+  if (resolvedOrigin !== new URL(streamUrl).origin) return { ok: false, origin: resolvedOrigin };
+  return { ok: true, url: resolved };
+}
+
 // ── Legacy HTTP + SSE transport ────────────────────────────────────────────────
 async function callSse(
   endpoint: string,
@@ -223,8 +237,13 @@ async function callSse(
       }
       const data = dataLines.join("\n");
       if (eventName === "endpoint") {
-        postUrl = data.startsWith("http") ? data : new URL(data, url).toString();
-        emitter.emit("endpoint");
+        const resolution = resolveSseEndpoint(data, url);
+        if (!resolution.ok) {
+          emitter.emit("endpoint-error", new Error(`MCP endpoint 事件跳转到了不同源（${resolution.origin}），已拒绝以避免泄露密钥。`));
+        } else {
+          postUrl = resolution.url;
+          emitter.emit("endpoint");
+        }
       } else if (data) {
         try {
           const msg: JsonRpcMessage = JSON.parse(data);
@@ -245,6 +264,10 @@ async function callSse(
     emitter.once("endpoint", () => {
       clearTimeout(t);
       resolve();
+    });
+    emitter.once("endpoint-error", (err: Error) => {
+      clearTimeout(t);
+      reject(err);
     });
   });
 

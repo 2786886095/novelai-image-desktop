@@ -95,17 +95,18 @@ function normalizeBaseUrl(url: string, fallback: string) {
 // runs themselves) may receive the Bearer token unless the user explicitly opts
 // into a custom endpoint. Prevents a mistyped/hostile endpoint from exfiltrating
 // the token.
-function isOfficialNaiHost(baseUrl: string): boolean {
+export function isOfficialNaiHost(baseUrl: string): boolean {
   try {
-    const { hostname } = new URL(baseUrl);
+    const { hostname, protocol } = new URL(baseUrl);
     const host = hostname.toLowerCase();
-    return (
-      host === "novelai.net" ||
-      host.endsWith(".novelai.net") ||
-      host === "localhost" ||
-      host === "127.0.0.1" ||
-      host === "::1"
-    );
+    const isNovelAi = host === "novelai.net" || host.endsWith(".novelai.net");
+    // The real API only ever runs on HTTPS — matching the hostname alone would
+    // let a plain http:// URL (e.g. a misconfigured or malicious proxy) still
+    // count as "official" and carry the Bearer token in the clear.
+    if (isNovelAi) return protocol === "https:";
+    // Loopback stays allowed over plain HTTP: it's for local dev/reverse-proxy
+    // setups where the traffic never leaves the machine.
+    return host === "localhost" || host === "127.0.0.1" || host === "::1";
   } catch {
     return false;
   }
@@ -1352,7 +1353,12 @@ async function postGenerateImage(payload: ReturnType<typeof buildPayload>, signa
     res = await postTo(imageBaseUrl);
   } catch (error: any) {
     const defaultImageBaseUrl = "https://image.novelai.net";
-    if ((error?.response?.status === 401 || error?.response?.status === 403) && imageBaseUrl !== defaultImageBaseUrl) {
+    const status = error?.response?.status;
+    if (
+      (status === 401 || status === 403) &&
+      imageBaseUrl !== defaultImageBaseUrl &&
+      settings.allowCustomEndpointFallback
+    ) {
       res = await postTo(defaultImageBaseUrl);
     } else {
       if (error?.response?.status === 500 && payload.action === "infill") {

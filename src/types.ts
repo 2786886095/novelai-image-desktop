@@ -844,6 +844,11 @@ export interface AppSettings {
   // Default false: a custom (non *.novelai.net) endpoint is refused to avoid
   // leaking the token to an untrusted server.
   allowCustomEndpoint: boolean;
+  // Opt-in to retrying a failed (401/403) custom image endpoint against the
+  // official one. Default false: without this, a custom-endpoint failure just
+  // fails — it doesn't silently and invisibly also become a real, billed
+  // request against the user's official account.
+  allowCustomEndpointFallback: boolean;
   proxyMode: "http" | "direct" | "socks" | "custom";
   // Proxy for outbound requests. Empty = direct. Accepts http://host:port or
   // socks5://host:port (scheme defaults to http:// when omitted).

@@ -216,6 +216,18 @@ function createWindow() {
 
   attachEditContextMenu(mainWindow);
 
+  // Defense in depth: the app never needs to navigate this window away from
+  // its own bundled UI, or open a second BrowserWindow. External links
+  // already go through the dedicated window:openExternal IPC channel (which
+  // validates http/https itself) — closing these off means a future XSS or
+  // malicious-content bug can't escalate into loading an arbitrary remote
+  // page inside the app (with its Electron API surface) or spawning one.
+  mainWindow.webContents.on("will-navigate", (event, targetUrl) => {
+    const current = mainWindow?.webContents.getURL();
+    if (current && targetUrl !== current) event.preventDefault();
+  });
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+
   mainWindow.once("ready-to-show", () => {
     mainWindow?.show();
   });
