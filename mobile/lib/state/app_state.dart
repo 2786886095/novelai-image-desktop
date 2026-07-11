@@ -876,7 +876,13 @@ class AppState extends ChangeNotifier {
           }
           _prependHistory(items);
           completed += items.length;
-          account = await api.fetchAccount(token, settings);
+          // The images are already saved at this point — a balance-refresh
+          // hiccup here must not flip an already-successful item to failed.
+          try {
+            account = await api.fetchAccount(token, settings);
+          } catch (_) {
+            /* balance will catch up on the next natural refresh */
+          }
         } on GenerationCancelledException {
           _cancelGenerationRequested = true;
         } catch (error) {
@@ -1791,10 +1797,17 @@ class AppState extends ChangeNotifier {
       groupId: groupId,
     );
     _prependHistory([item]);
-    account = await api.fetchAccount(token, settings);
-    final after = account.anlasBalance;
-    lastAnlasSpent =
-        before != null && after != null ? max(0, before - after) : null;
+    // The panel image is already saved at this point — a balance-refresh hiccup
+    // here must not make the caller (comic_controller's generateOne) report an
+    // already-successful panel as failed.
+    try {
+      account = await api.fetchAccount(token, settings);
+      final after = account.anlasBalance;
+      lastAnlasSpent =
+          before != null && after != null ? max(0, before - after) : null;
+    } catch (_) {
+      /* balance will catch up on the next natural refresh */
+    }
     notifyListeners();
     return item;
   }
@@ -1853,7 +1866,14 @@ class AppState extends ChangeNotifier {
       groupId: groupId,
     );
     _prependHistory([item]);
-    account = await api.fetchAccount(token, settings);
+    // The redrawn image is already saved at this point — a balance-refresh
+    // hiccup here must not make the caller report an already-successful item
+    // as failed.
+    try {
+      account = await api.fetchAccount(token, settings);
+    } catch (_) {
+      /* balance will catch up on the next natural refresh */
+    }
     notifyListeners();
     return item;
   }

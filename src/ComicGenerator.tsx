@@ -2207,6 +2207,7 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
   const running = useAppStore((state) => state.batchRunning);
   const progress = useAppStore((state) => state.batchProgress);
   const setBatchRunning = useAppStore((state) => state.setBatchRunning);
+  const requestBatchCancel = useAppStore((state) => state.requestBatchCancel);
   const setToast = useAppStore((state) => state.setToast);
   const refreshHistory = useAppStore((state) => state.refreshHistory);
   const refreshAccount = useAppStore((state) => state.refreshAccount);
@@ -2218,7 +2219,23 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
   const [resultFilter, setResultFilter] = useState<
     "all" | "done" | "failed" | "pending"
   >("all");
-  const cancelRef = useRef(false);
+  // Cancel signal lives in the global store (batchCancelRequested), not a local
+  // ref: a component-local ref only reaches the loop from THIS mount. If the
+  // user leaves this tab mid-run and comes back, the still-running loop is a
+  // closure from the OLD mount — only global state can still reach it.
+  const cancelRefCurrent = () => useAppStore.getState().batchCancelRequested;
+
+  useEffect(() => {
+    return () => {
+      // Leaving the tab mid-run must abort the in-flight paid request and let a
+      // future remount's "stop" still be able to reach this run — otherwise it
+      // keeps generating/billing in the background with no way to stop it.
+      if (useAppStore.getState().batchRunning) {
+        requestBatchCancel();
+        void window.naiDesktop.cancel();
+      }
+    };
+  }, [requestBatchCancel]);
 
   const { items, globalStrength, step } = project;
   const globalParams = project.globalParams;
@@ -2379,11 +2396,11 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
       return;
     }
     setAiFilling(true);
-    cancelRef.current = false;
+    useAppStore.setState({ batchCancelRequested: false });
     const mode = useAppStore.getState().batchRedraw.aiMode;
     try {
       for (const it of targets) {
-        if (cancelRef.current) break;
+        if (cancelRefCurrent()) break;
         const res = await window.naiDesktop.reversePrompt(it.base64, mode);
         if (res.ok && res.prompt)
           patchItem(it.id, { prompt: res.prompt.trim() });
@@ -2421,7 +2438,6 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
       setToast(t("batch.toast.noReady"));
       return;
     }
-    cancelRef.current = false;
     setBatchRunning(true, { done: 0, total: ready.length });
 
     let done = 0;
@@ -2444,7 +2460,7 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
       };
 
       for (const it of ready) {
-        if (cancelRef.current) break;
+        if (cancelRefCurrent()) break;
         if (it.historyItemId) {
           try {
             await window.naiDesktop.deleteHistory(it.historyItemId);
@@ -2501,7 +2517,7 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
       setBatchRunning(false, null);
     }
     setToast(
-      cancelRef.current
+      cancelRefCurrent()
         ? f("batch.toast.stopped", { done })
         : failed > 0
           ? f("batch.toast.failed", { done, failed, message: lastError })
@@ -2510,7 +2526,7 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
   }
 
   function stop() {
-    cancelRef.current = true;
+    requestBatchCancel();
     void window.naiDesktop.cancel();
   }
 
@@ -3402,15 +3418,20 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
   const [queueQuoteError, setQueueQuoteError] = useState("");
   const [queueQuoteLoading, setQueueQuoteLoading] = useState(false);
   const [queueAnlasSpent, setQueueAnlasSpent] = useState<number | null>(null);
-  const queueRef = useRef({ paused: false, cancelled: false });
+  // `running` is the source of truth for "is the paid queue actually active
+  // right now" — `cancelled` defaults to false both before a queue has ever
+  // started AND after one finishes normally, so inferring "was running" from
+  // `!cancelled` wrongly fires a cancel on an idle or already-finished queue.
+  const queueRef = useRef({ paused: false, cancelled: false, running: false });
   const mountedRef = useRef(true);
   const comicRootRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     return () => {
       mountedRef.current = false;
-      const wasRunning = !queueRef.current.cancelled;
+      const wasRunning = queueRef.current.running;
       queueRef.current.cancelled = true;
+      queueRef.current.running = false;
       // Leaving the comic tab mid-queue must abort the in-flight paid request,
       // otherwise it keeps generating, billing, and saving in the background.
       if (wasRunning) void window.naiDesktop.cancel();
@@ -4187,7 +4208,7 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
 
   async function runQueue(targets: ComicPanel[], anlasBefore?: number) {
     if (!targets.length) return;
-    queueRef.current = { paused: false, cancelled: false };
+    queueRef.current = { paused: false, cancelled: false, running: true };
     setQueue({ total: targets.length, done: 0, current: 0, paused: false });
     setQueueAnlasSpent(null);
     // Collect each panel's freshly-generated output here. React state updates are
@@ -4226,6 +4247,7 @@ export function ComicGenerator({ onBack }: { onBack?: () => void }) {
       }
       setQueue((q) => (q ? { ...q, done: i + 1 } : q));
     }
+    queueRef.current.running = false;
     if (!mountedRef.current) return;
     const finalAccount = await refreshAccount();
     const spent = anlasSpent(anlasBefore, finalAccount.anlasBalance);

@@ -300,6 +300,11 @@ interface AppState {
   /** Transient run state (not exported with the project). */
   batchRunning: boolean;
   batchProgress: { done: number; total: number } | null;
+  // Global (not component-local) so a remounted BatchRedraw instance — e.g. the
+  // user left the tab mid-run and came back — can still signal the ORIGINAL
+  // still-running loop to stop. A component-local ref can't: a fresh mount gets
+  // a fresh ref the old closure never sees.
+  batchCancelRequested: boolean;
   batchCount: number;
   inspectImageUrl: string;
   inspectMeta: Record<string, string> | null;
@@ -411,6 +416,7 @@ interface AppState {
   setBatchRedraw: (updater: (prev: BatchRedrawProject) => BatchRedrawProject) => void;
   resetBatchRedraw: () => void;
   setBatchRunning: (running: boolean, progress?: { done: number; total: number } | null) => void;
+  requestBatchCancel: () => void;
   // Batch + Inspect + Convert
   setBatchCount: (count: number) => void;
   setInspectImage: (url: string, meta: Record<string, string>, base64?: string, path?: string) => void;
@@ -471,9 +477,26 @@ async function refreshAfterImage(
   options: { compareBefore?: WorkingImage | null; loadWorkbench?: boolean } = {},
 ) {
   set({ currentImage: item, comparisonBeforeImage: options.compareBefore ?? null });
-  await get().refreshHistory(item.date);
-  await get().refreshAccount();
-  if (options.loadWorkbench) await get().loadWorkbenchFromPath(item.filePath, { silent: true });
+  // The generation itself already succeeded (the caller only reaches here on a
+  // successful save) — a hiccup refreshing history/balance/workbench afterwards
+  // must not mask that success or leave isGenerating stuck true forever.
+  try {
+    await get().refreshHistory(item.date);
+  } catch {
+    /* history list will catch up on the next natural refresh */
+  }
+  try {
+    await get().refreshAccount();
+  } catch {
+    /* balance will catch up on the next natural refresh */
+  }
+  if (options.loadWorkbench) {
+    try {
+      await get().loadWorkbenchFromPath(item.filePath, { silent: true });
+    } catch {
+      /* workbench reload is best-effort */
+    }
+  }
 }
 
 function buildExtras(state: AppState): GenerateExtras {
@@ -620,6 +643,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   batchRedraw: createDefaultBatchRedraw(),
   batchRunning: false,
   batchProgress: null,
+  batchCancelRequested: false,
   batchCount: 1,
   inspectImageUrl: "",
   inspectMeta: null,
@@ -1062,10 +1086,22 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ batchRedraw: updater(get().batchRedraw) });
   },
   resetBatchRedraw() {
-    set({ batchRedraw: createDefaultBatchRedraw(get().params), batchRunning: false, batchProgress: null });
+    set({
+      batchRedraw: createDefaultBatchRedraw(get().params),
+      batchRunning: false,
+      batchProgress: null,
+      batchCancelRequested: false,
+    });
   },
   setBatchRunning(running, progress) {
-    set({ batchRunning: running, batchProgress: progress === undefined ? get().batchProgress : progress });
+    set({
+      batchRunning: running,
+      batchProgress: progress === undefined ? get().batchProgress : progress,
+      batchCancelRequested: running ? false : get().batchCancelRequested,
+    });
+  },
+  requestBatchCancel() {
+    set({ batchCancelRequested: true });
   },
 
   // ── Batch + Inspect ────────────────────────────────────────────────────────
@@ -1623,7 +1659,18 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ toast: storeText(state.settings, "toast.needReference"), statusText: storeText(state.settings, "status.needImage") });
       return;
     }
+    // Enter the generating state BEFORE the balance refresh and price quote so a
+    // fast double-click can't sneak a second paid request in before the button
+    // disappears (isGenerating is what hides it — see AccountAndRunButton).
+    set({
+      isGenerating: true,
+      currentAnlasSpent: null,
+      lastAnlasSpent: null,
+      lastError: "",
+      statusText: storeText(state.settings, "status.preparing"),
+    });
     const freshAccount = await get().refreshAccount();
+    if (!get().isGenerating) return; // cancelled during prep
     const quote = await ensureAnlasBeforeRun(
       set,
       {
@@ -1636,7 +1683,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       storeText(state.settings, "action.i2i"),
       state.settings,
     );
-    if (!quote) return;
+    if (!quote || !get().isGenerating) {
+      if (get().isGenerating) set({ isGenerating: false });
+      return;
+    }
     const anlasBefore = freshAccount.anlasBalance;
     set({
       isGenerating: true,
@@ -1675,7 +1725,18 @@ export const useAppStore = create<AppState>((set, get) => ({
     // instead of reusing params.positivePrompt — the rest of params (size, sampler,
     // negative prompt, etc.) is still shared with the main generate/i2i params.
     const inpaintParams: GenerateParams = { ...state.params, positivePrompt: state.inpaintPositivePrompt };
+    // Enter the generating state BEFORE the balance refresh and price quote so a
+    // fast double-click can't sneak a second paid request in before the button
+    // disappears (isGenerating is what hides it — see AccountAndRunButton).
+    set({
+      isGenerating: true,
+      currentAnlasSpent: null,
+      lastAnlasSpent: null,
+      lastError: "",
+      statusText: storeText(state.settings, "status.preparing"),
+    });
     const freshAccount = await get().refreshAccount();
+    if (!get().isGenerating) return; // cancelled during prep
     const quote = await ensureAnlasBeforeRun(
       set,
       {
@@ -1691,7 +1752,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       storeText(state.settings, "action.inpaint"),
       state.settings,
     );
-    if (!quote) return;
+    if (!quote || !get().isGenerating) {
+      if (get().isGenerating) set({ isGenerating: false });
+      return;
+    }
     const anlasBefore = freshAccount.anlasBalance;
     set({
       isGenerating: true,
@@ -1728,7 +1792,18 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ toast: storeText(state.settings, "toast.needLoadedImage"), statusText: storeText(state.settings, "status.needImage") });
       return;
     }
+    // Enter the generating state BEFORE the balance refresh and price quote so a
+    // fast double-click can't sneak a second paid request in before the button
+    // disappears (isGenerating is what hides it — see AccountAndRunButton).
+    set({
+      isGenerating: true,
+      currentAnlasSpent: null,
+      lastAnlasSpent: null,
+      lastError: "",
+      statusText: storeText(state.settings, "status.preparing"),
+    });
     const freshAccount = await get().refreshAccount();
+    if (!get().isGenerating) return; // cancelled during prep
     const quote = await ensureAnlasBeforeRun(
       set,
       {
@@ -1740,7 +1815,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       storeFormat(state.settings, "action.upscale", { scale: state.upscaleScale }),
       state.settings,
     );
-    if (!quote) return;
+    if (!quote || !get().isGenerating) {
+      if (get().isGenerating) set({ isGenerating: false });
+      return;
+    }
     const anlasBefore = freshAccount.anlasBalance;
     set({
       isGenerating: true,
@@ -1770,7 +1848,18 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ toast: storeText(state.settings, "toast.needLoadedImage"), statusText: storeText(state.settings, "status.needImage") });
       return;
     }
+    // Enter the generating state BEFORE the balance refresh and price quote so a
+    // fast double-click can't sneak a second paid request in before the button
+    // disappears (isGenerating is what hides it — see AccountAndRunButton).
+    set({
+      isGenerating: true,
+      currentAnlasSpent: null,
+      lastAnlasSpent: null,
+      lastError: "",
+      statusText: storeText(state.settings, "status.preparing"),
+    });
     const freshAccount = await get().refreshAccount();
+    if (!get().isGenerating) return; // cancelled during prep
     const quote = await ensureAnlasBeforeRun(
       set,
       {
@@ -1782,7 +1871,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       storeText(state.settings, "action.postprocess"),
       state.settings,
     );
-    if (!quote) return;
+    if (!quote || !get().isGenerating) {
+      if (get().isGenerating) set({ isGenerating: false });
+      return;
+    }
     const anlasBefore = freshAccount.anlasBalance;
     set({
       isGenerating: true,

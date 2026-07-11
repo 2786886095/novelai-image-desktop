@@ -82,8 +82,8 @@ import {
   parsePromptVariantResponse,
   resolveModePrompt,
 } from "../../src/prompt-mode";
+import { beginJob, cancelAllJobs } from "./job-registry";
 
-let currentAbort: AbortController | null = null;
 let workbenchImagePath: string | null = null;
 
 function normalizeBaseUrl(url: string, fallback: string) {
@@ -599,7 +599,7 @@ function countCachedVibes(extras: GenerateExtras | undefined, params: GeneratePa
  * NOTE: needs verification against a live V4.5 token — the encode-vibe payload
  * shape is based on the NovelAI web client and may need adjustment.
  */
-async function prepareExtras(params: GenerateParams, extras?: GenerateExtras): Promise<GenerateExtras | undefined> {
+async function prepareExtras(params: GenerateParams, extras?: GenerateExtras, signal?: AbortSignal): Promise<GenerateExtras | undefined> {
   if (!extras) return extras;
 
   // Precise/director references: any size accepted, preprocessed to the nearest
@@ -644,18 +644,18 @@ async function prepareExtras(params: GenerateParams, extras?: GenerateExtras): P
                 headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
                 responseType: "arraybuffer",
                 timeout: 60_000,
-                signal: currentAbort?.signal,
+                signal,
                 ...proxyConfig("nai"),
               },
             ),
           // encode-vibe is a paid endpoint; only retry pre-charge 429s.
-          { retries: 2, signal: currentAbort?.signal ?? undefined, retryStatuses: [429] },
+          { retries: 2, signal, retryStatuses: [429] },
         );
         const encodedBase64 = Buffer.from(res.data).toString("base64");
         vibeEncodeCache.set(cacheKey, encodedBase64);
         return { ...vibe, base64: encodedBase64 };
       } catch (error: any) {
-        if (currentAbort?.signal.aborted) throw error;
+        if (signal?.aborted) throw error;
         const detail = responseErrorText(error) || "未知错误";
         logError("[vibe] encode-vibe failed", detail);
         // Abort rather than send raw bytes — a failed encode cannot produce a
@@ -1315,7 +1315,7 @@ export function buildGenerateImageHttpBody(payload: ReturnType<typeof buildPaylo
   return { body, bodyHeaders, useMultipart };
 }
 
-async function postGenerateImage(payload: ReturnType<typeof buildPayload>) {
+async function postGenerateImage(payload: ReturnType<typeof buildPayload>, signal?: AbortSignal) {
   const token = getToken();
   if (!token) throw new Error("请先配置 API Token。");
   const settings = getSettings();
@@ -1339,13 +1339,13 @@ async function postGenerateImage(payload: ReturnType<typeof buildPayload>) {
           timeout: 180_000,
           maxBodyLength: Infinity,
           maxContentLength: Infinity,
-          signal: currentAbort?.signal,
+          signal,
           ...proxyConfig("nai"),
         }),
       // A paid generate POST may have already produced (and charged for) an image
       // even when the gateway reports a 5xx, so we never auto-retry server errors
       // here — only 429 rate-limits, which are rejected before any work is done.
-      { signal: currentAbort?.signal ?? undefined, retryStatuses: [429] },
+      { signal, retryStatuses: [429] },
     );
   let res;
   try {
@@ -2600,23 +2600,22 @@ export async function generateImage(
     `generate: model=${params.model} size=${params.width}x${params.height} steps=${params.steps} ` +
       `cfg=${params.cfgScale} vibe=${extras?.vibeImages?.length ?? 0} precise=${extras?.preciseReferences?.length ?? 0}`,
   );
-  currentAbort?.abort();
-  currentAbort = new AbortController();
+  const job = beginJob();
 
   // "fixed" mode honors the chosen seed; "random" (or seed<=0) rolls a new one.
   const useFixedSeed = params.seedMode !== "random" && params.seed > 0;
   const actualSeed = useFixedSeed ? params.seed : crypto.randomInt(1, 2_147_483_647);
 
   try {
-    const preparedExtras = await prepareExtras(params, extras);
+    const preparedExtras = await prepareExtras(params, extras, job.controller.signal);
     const payload = buildPayload(params, actualSeed, preparedExtras);
     let buffers: Buffer[];
     try {
-      buffers = await postGenerateImage(payload);
+      buffers = await postGenerateImage(payload, job.controller.signal);
     } catch (error: any) {
       if (!shouldRetryCharCaptionsAsPipe(error, params, preparedExtras)) throw error;
       const pipePayload = buildPayload(params, actualSeed, preparedExtras, "pipe");
-      buffers = await postGenerateImage(pipePayload);
+      buffers = await postGenerateImage(pipePayload, job.controller.signal);
     }
     if (buffers.length === 0) return { ok: false, message: "API 返回成功，但压缩包中没有图片。", items: [] };
     const items = await saveBuffers(buffers, params, actualSeed, "t2i", undefined, saveOptions);
@@ -2625,7 +2624,7 @@ export async function generateImage(
   } catch (error: any) {
     return handleGenerateError(error, "图片生成失败");
   } finally {
-    currentAbort = null;
+    job.end();
   }
 }
 
@@ -2636,13 +2635,12 @@ export async function generateI2I(params: GenerateParams, i2i: I2IParams, extras
   if (!workbenchImagePath) return { ok: false, message: "请先加载参考图片。", items: [] };
   logInfo(`img2img: model=${params.model} size=${params.width}x${params.height} strength=${i2i?.strength}`);
 
-  currentAbort?.abort();
-  currentAbort = new AbortController();
+  const job = beginJob();
 
   const actualSeed =
     params.seedMode !== "random" && params.seed > 0 ? params.seed : crypto.randomInt(1, 2_147_483_647);
   try {
-    const preparedExtras = await prepareExtras(params, extras);
+    const preparedExtras = await prepareExtras(params, extras, job.controller.signal);
     // Resize the source to the requested output dimensions — NovelAI's img2img
     // expects the input image to match width×height; sending an arbitrary size
     // risks a 400/500 or a misaligned composition.
@@ -2664,10 +2662,10 @@ export async function generateI2I(params: GenerateParams, i2i: I2IParams, extras
 
     let buffers: Buffer[];
     try {
-      buffers = await postGenerateImage(applyI2I(buildPayload(params, actualSeed, preparedExtras)));
+      buffers = await postGenerateImage(applyI2I(buildPayload(params, actualSeed, preparedExtras)), job.controller.signal);
     } catch (error: any) {
       if (!shouldRetryCharCaptionsAsPipe(error, params, preparedExtras)) throw error;
-      buffers = await postGenerateImage(applyI2I(buildPayload(params, actualSeed, preparedExtras, "pipe")));
+      buffers = await postGenerateImage(applyI2I(buildPayload(params, actualSeed, preparedExtras, "pipe")), job.controller.signal);
     }
     if (buffers.length === 0) return { ok: false, message: "图生图成功但无图片返回。", items: [] };
     const items = await saveBuffers(buffers, params, actualSeed, "i2i");
@@ -2676,7 +2674,7 @@ export async function generateI2I(params: GenerateParams, i2i: I2IParams, extras
   } catch (error: any) {
     return handleGenerateError(error, "图生图失败");
   } finally {
-    currentAbort = null;
+    job.end();
   }
 }
 
@@ -2689,13 +2687,12 @@ export async function redrawImage(request: BatchRedrawRequest): Promise<Generate
   if (!request.imageBase64) return { ok: false, message: "缺少待重绘的图片。", items: [] };
   if (!request.params.positivePrompt.trim()) return { ok: false, message: "该图片缺少提示词。", items: [] };
 
-  currentAbort?.abort();
-  currentAbort = new AbortController();
+  const job = beginJob();
   const params = { ...request.params, fileNamePrefix: request.fileNamePrefix || request.params.fileNamePrefix || "redraw" };
   const actualSeed =
     params.seedMode !== "random" && params.seed > 0 ? params.seed : crypto.randomInt(1, 2_147_483_647);
   try {
-    const preparedExtras = await prepareExtras(params, request.extras);
+    const preparedExtras = await prepareExtras(params, request.extras, job.controller.signal);
     const srcBuffer = Buffer.from(stripBase64Prefix(request.imageBase64), "base64");
     const base64Image = resizeImageBufferToPng(srcBuffer, params.width, params.height).toString("base64");
     const strength = clamp01(request.strength, 0.4);
@@ -2713,10 +2710,10 @@ export async function redrawImage(request: BatchRedrawRequest): Promise<Generate
 
     let buffers: Buffer[];
     try {
-      buffers = await postGenerateImage(applyI2I(buildPayload(params, actualSeed, preparedExtras)));
+      buffers = await postGenerateImage(applyI2I(buildPayload(params, actualSeed, preparedExtras)), job.controller.signal);
     } catch (error: any) {
       if (!shouldRetryCharCaptionsAsPipe(error, params, preparedExtras)) throw error;
-      buffers = await postGenerateImage(applyI2I(buildPayload(params, actualSeed, preparedExtras, "pipe")));
+      buffers = await postGenerateImage(applyI2I(buildPayload(params, actualSeed, preparedExtras, "pipe")), job.controller.signal);
     }
     if (buffers.length === 0) return { ok: false, message: "重绘成功但无图片返回。", items: [] };
     const items = await saveBuffers(buffers, params, actualSeed, "redraw", undefined, { groupOverride });
@@ -2726,7 +2723,7 @@ export async function redrawImage(request: BatchRedrawRequest): Promise<Generate
   } catch (error: any) {
     return handleGenerateError(error, "批量重绘失败");
   } finally {
-    currentAbort = null;
+    job.end();
   }
 }
 
@@ -2743,43 +2740,42 @@ export async function inpaintImage(
   if (!workbenchImagePath) return { ok: false, message: "请先加载原图。", items: [] };
   if (!maskBase64) return { ok: false, message: "请先绘制需要重绘的蒙版区域。", items: [] };
 
-  currentAbort?.abort();
-  currentAbort = new AbortController();
-
-  const { buffer } = await readWorkbenchImage();
-  const preparedAssets = prepareInpaintAssets(buffer, maskBase64);
-  const actualSeed =
-    params.seedMode !== "random" && params.seed > 0 ? params.seed : crypto.randomInt(1, 2_147_483_647);
-  const normalizedStrength = Math.max(0, Math.min(1, Number.isFinite(strength) ? strength : 0.55));
-  const normalizedNoise = Math.max(0, Math.min(0.99, Number.isFinite(noise) ? noise : 0));
-  const buildInpaintPayload = (model: NAIInpaintModel) => {
-    const inpaintParams: PayloadParams = {
-      ...params,
-      model,
-      width: preparedAssets.width,
-      height: preparedAssets.height,
-    };
-    const historyParams: GenerateParams = {
-      ...params,
-      width: preparedAssets.originalWidth,
-      height: preparedAssets.originalHeight,
-    };
-    const payload = buildPayload(inpaintParams, actualSeed);
-    payload.action = "infill";
-    payload.parameters.image = preparedAssets.imageBase64;
-    payload.parameters.mask = preparedAssets.maskBase64;
-    // Known-good v0.9.3 infill structure. The unofficial-SDK variant
-    // (add_original_image=false + nested img2img + inpaintImg2ImgStrength +
-    // noise=0) regressed real inpainting, so we keep the standard infill payload:
-    // composite the original back outside the mask, honor the user's strength/noise.
-    payload.parameters.add_original_image = true;
-    payload.parameters.strength = normalizedStrength;
-    payload.parameters.noise = normalizedNoise;
-    payload.parameters.extra_noise_seed = crypto.randomInt(1, 2_147_483_647);
-    return { payload, historyParams, model };
-  };
+  const job = beginJob();
 
   try {
+    const { buffer } = await readWorkbenchImage();
+    const preparedAssets = prepareInpaintAssets(buffer, maskBase64);
+    const actualSeed =
+      params.seedMode !== "random" && params.seed > 0 ? params.seed : crypto.randomInt(1, 2_147_483_647);
+    const normalizedStrength = Math.max(0, Math.min(1, Number.isFinite(strength) ? strength : 0.55));
+    const normalizedNoise = Math.max(0, Math.min(0.99, Number.isFinite(noise) ? noise : 0));
+    const buildInpaintPayload = (model: NAIInpaintModel) => {
+      const inpaintParams: PayloadParams = {
+        ...params,
+        model,
+        width: preparedAssets.width,
+        height: preparedAssets.height,
+      };
+      const historyParams: GenerateParams = {
+        ...params,
+        width: preparedAssets.originalWidth,
+        height: preparedAssets.originalHeight,
+      };
+      const payload = buildPayload(inpaintParams, actualSeed);
+      payload.action = "infill";
+      payload.parameters.image = preparedAssets.imageBase64;
+      payload.parameters.mask = preparedAssets.maskBase64;
+      // Known-good v0.9.3 infill structure. The unofficial-SDK variant
+      // (add_original_image=false + nested img2img + inpaintImg2ImgStrength +
+      // noise=0) regressed real inpainting, so we keep the standard infill payload:
+      // composite the original back outside the mask, honor the user's strength/noise.
+      payload.parameters.add_original_image = true;
+      payload.parameters.strength = normalizedStrength;
+      payload.parameters.noise = normalizedNoise;
+      payload.parameters.extra_noise_seed = crypto.randomInt(1, 2_147_483_647);
+      return { payload, historyParams, model };
+    };
+
     let chosen: ReturnType<typeof buildInpaintPayload> | null = null;
     let buffers: Buffer[] | null = null;
     let lastError: any = null;
@@ -2787,7 +2783,7 @@ export async function inpaintImage(
     for (let index = 0; index < candidates.length; index += 1) {
       chosen = buildInpaintPayload(candidates[index]);
       try {
-        buffers = await postGenerateImage(chosen.payload);
+        buffers = await postGenerateImage(chosen.payload, job.controller.signal);
         break;
       } catch (error: any) {
         lastError = error;
@@ -2811,7 +2807,7 @@ export async function inpaintImage(
   } catch (error: any) {
     return handleGenerateError(error, "重绘失败");
   } finally {
-    currentAbort = null;
+    job.end();
   }
 }
 
@@ -2821,9 +2817,8 @@ export async function upscaleImg(scale: UpscaleScale): Promise<SingleImageResult
   if (!workbenchImagePath) return { ok: false, message: "请先加载图片。" };
   logInfo(`upscale: scale=${scale}x`);
 
-  currentAbort?.abort();
-  const abort = new AbortController();
-  currentAbort = abort;
+  const job = beginJob();
+  const abort = job.controller;
 
   try {
     const { buffer, image } = await readWorkbenchImage();
@@ -2914,7 +2909,7 @@ export async function upscaleImg(scale: UpscaleScale): Promise<SingleImageResult
       : "";
     return { ok: false, message: `超分失败${status ? `（HTTP ${status}）` : ""}：${detail}${hint ? ` ${hint}` : ""}` };
   } finally {
-    currentAbort = null;
+    job.end();
   }
 }
 
@@ -2924,8 +2919,7 @@ export async function augmentImg(tool: DirectorTool, options: AugmentOptions): P
   if (!workbenchImagePath) return { ok: false, message: "请先加载图片。", items: [] };
   logInfo(`director: tool=${tool}`);
 
-  currentAbort?.abort();
-  currentAbort = new AbortController();
+  const job = beginJob();
 
   try {
     const { buffer, image } = await readWorkbenchImage();
@@ -2961,7 +2955,7 @@ export async function augmentImg(tool: DirectorTool, options: AugmentOptions): P
       },
       responseType: "arraybuffer",
       timeout: 180_000,
-      signal: currentAbort.signal,
+      signal: job.controller.signal,
       ...proxyConfig("nai"),
     });
 
@@ -2985,7 +2979,7 @@ export async function augmentImg(tool: DirectorTool, options: AugmentOptions): P
   } catch (error: any) {
     return handleGenerateError(error, "后期处理失败");
   } finally {
-    currentAbort = null;
+    job.end();
   }
 }
 
@@ -3029,8 +3023,7 @@ function handleGenerateError(error: any, prefix: string): GenerateResult {
 }
 
 export function cancelGeneration() {
-  currentAbort?.abort();
-  currentAbort = null;
+  cancelAllJobs();
   return { ok: true };
 }
 
