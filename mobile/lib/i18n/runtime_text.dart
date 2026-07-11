@@ -92,6 +92,7 @@ const _runtimeText = <String, Map<String, String>>{
     'status.insufficientThisRun': '本次预计需要 {amount} Anlas，当前余额 {balance}；仍会尝试，若官方拒绝会返回积分不足。',
     'status.insufficientPanel': '本分镜预计需要 {amount} Anlas，当前余额 {balance}；仍会尝试。',
     'status.insufficientItem': '本张预计需要 {amount} Anlas，当前余额 {balance}；仍会尝试。',
+    'status.backgroundNotSupported': 'iOS 上无法在后台保持长时间生成任务，切到其他 App 或锁屏可能会中断，请让本 App 保持在前台。',
     'notification.imageQueueTitle': 'Langbai 图片生成队列',
     'notification.batchTitle': 'Langbai 批量图生图',
     'notification.comicTitle': 'Langbai 漫画生成队列',
@@ -286,6 +287,7 @@ const _runtimeText = <String, Map<String, String>>{
     'status.insufficientThisRun': '本次預計需要 {amount} Anlas，目前餘額 {balance}；仍會嘗試，若官方拒絕會返回積分不足。',
     'status.insufficientPanel': '本分鏡預計需要 {amount} Anlas，目前餘額 {balance}；仍會嘗試。',
     'status.insufficientItem': '本張預計需要 {amount} Anlas，目前餘額 {balance}；仍會嘗試。',
+    'status.backgroundNotSupported': 'iOS 無法在背景保持長時間生成任務，切到其他 App 或鎖屏可能會中斷，請讓本 App 保持在前景。',
     'notification.imageQueueTitle': 'Langbai 圖片生成佇列',
     'notification.batchTitle': 'Langbai 批量圖生圖',
     'notification.comicTitle': 'Langbai 漫畫生成佇列',
@@ -512,6 +514,8 @@ const _runtimeText = <String, Map<String, String>>{
         'This panel is estimated at {amount} Anlas. Current balance: {balance}. It will still be tried.',
     'status.insufficientItem':
         'This image is estimated at {amount} Anlas. Current balance: {balance}. It will still be tried.',
+    'status.backgroundNotSupported':
+        'iOS cannot keep a long generation queue running in the background — switching apps or locking the screen may interrupt it. Please keep this app in the foreground.',
     'notification.imageQueueTitle': 'Langbai image generation queue',
     'notification.batchTitle': 'Langbai Batch Img2Img',
     'notification.comicTitle': 'Langbai comic generation queue',
@@ -738,6 +742,7 @@ const _runtimeText = <String, Map<String, String>>{
     'status.insufficientPanel':
         'このパネルの見積もりは {amount} Anlas です。現在の残高: {balance}。実行を試みます。',
     'status.insufficientItem': 'この画像の見積もりは {amount} Anlas です。現在の残高: {balance}。実行を試みます。',
+    'status.backgroundNotSupported': 'iOS では長時間の生成キューをバックグラウンドで維持できません。アプリの切り替えや画面ロックで中断される可能性があります。このアプリを前面に保ったままにしてください。',
     'notification.imageQueueTitle': 'Langbai 画像生成キュー',
     'notification.batchTitle': 'Langbai 一括 Img2Img',
     'notification.comicTitle': 'Langbai 漫画生成キュー',
@@ -946,6 +951,8 @@ const _runtimeText = <String, Map<String, String>>{
         '이 패널 예상 비용은 {amount} Anlas입니다. 현재 잔액: {balance}. 계속 시도합니다.',
     'status.insufficientItem':
         '이 이미지 예상 비용은 {amount} Anlas입니다. 현재 잔액: {balance}. 계속 시도합니다.',
+    'status.backgroundNotSupported':
+        'iOS에서는 긴 생성 대기열을 백그라운드에서 유지할 수 없습니다. 앱을 전환하거나 화면을 잠그면 중단될 수 있으니 앱을 전면에 유지해 주세요.',
     'notification.imageQueueTitle': 'Langbai 이미지 생성 대기열',
     'notification.batchTitle': 'Langbai 일괄 Img2Img',
     'notification.comicTitle': 'Langbai 만화 생성 대기열',

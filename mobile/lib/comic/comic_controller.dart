@@ -15,6 +15,7 @@ import '../models/nai_models.dart';
 import '../prompts/prompt_mode.dart';
 import '../state/app_state.dart';
 import '../services/background_queue_service.dart';
+import '../services/import_limits.dart';
 import 'comic_models.dart';
 
 class ComicController extends ChangeNotifier {
@@ -150,10 +151,15 @@ class ComicController extends ChangeNotifier {
       if (bytes == null) throw FormatException(_rt('error.readFile'));
       final decoded = jsonDecode(utf8.decode(bytes));
       if (decoded is! Map) throw FormatException(_rt('error.projectJsonRoot'));
-      project = ComicProject.fromJson(
+      final imported = ComicProject.fromJson(
         Map<String, dynamic>.from(decoded),
         app.params,
       );
+      enforceImportLimits(
+        imported.references.map((r) => r.base64).toList(),
+        itemNoun: '张参考图',
+      );
+      project = imported;
       activePanelId = project.panels.isEmpty ? '' : project.panels.first.id;
       selectedPanelIds.clear();
       changed(_rt('comic.projectImported'));
@@ -592,6 +598,9 @@ class ComicController extends ChangeNotifier {
     queueCancelled = false;
     queueDone = 0;
     queueTotal = targets.length;
+    if (BackgroundQueueService.shouldWarnNoBackgroundSupport()) {
+      status = _rt('status.backgroundNotSupported');
+    }
     notifyListeners();
     try {
       await BackgroundQueueService.start(

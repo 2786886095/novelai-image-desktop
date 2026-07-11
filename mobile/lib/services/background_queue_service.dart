@@ -29,6 +29,25 @@ abstract final class BackgroundQueueService {
   static final Set<String> _owners = {};
   static final Set<void Function()> _cancelHandlers = {};
   static bool _initialized = false;
+  static bool _warnedNoBackgroundSupport = false;
+
+  // flutter_foreground_task is Android-only (there is no iOS equivalent
+  // service API it wraps) — every method below no-ops on other platforms.
+  // A long paid queue backgrounded on iOS is not kept alive the way it is
+  // on Android; iOS may suspend the app after its normal grace period. This
+  // exists so callers can surface that honestly instead of the UI silently
+  // implying cross-platform parity it can't actually deliver (P1-17).
+  static bool get supportsBackgroundExecution => Platform.isAndroid;
+
+  /// Returns true exactly once per app run, the first time a caller checks
+  /// this on a platform without real background support — callers use that
+  /// to show a one-time "keep the app open" notice instead of repeating it
+  /// on every single queue start.
+  static bool shouldWarnNoBackgroundSupport() {
+    if (supportsBackgroundExecution || _warnedNoBackgroundSupport) return false;
+    _warnedNoBackgroundSupport = true;
+    return true;
+  }
 
   static void initialize() {
     if (_initialized || !Platform.isAndroid) return;

@@ -13,6 +13,7 @@ import '../billing/anlas.dart';
 import '../i18n/runtime_text.dart';
 import '../models/nai_models.dart';
 import '../services/background_queue_service.dart';
+import '../services/import_limits.dart';
 import '../state/app_state.dart';
 import 'batch_redraw_models.dart';
 
@@ -324,6 +325,9 @@ class BatchRedrawController extends ChangeNotifier {
     queueCancelled = false;
     queueDone = 0;
     queueTotal = targets.length;
+    if (BackgroundQueueService.shouldWarnNoBackgroundSupport()) {
+      status = _rt('status.backgroundNotSupported');
+    }
     try {
       await BackgroundQueueService.start(
         'batch-redraw',
@@ -426,10 +430,15 @@ class BatchRedrawController extends ChangeNotifier {
       final bytes = picked.bytes ??
           (picked.path == null ? null : await File(picked.path!).readAsBytes());
       if (bytes == null) throw FormatException(_rt('error.readFile'));
-      project = BatchRedrawProject.fromJson(
+      final imported = BatchRedrawProject.fromJson(
         Map<String, dynamic>.from(jsonDecode(utf8.decode(bytes))),
         app.params,
       );
+      enforceImportLimits(
+        imported.items.map((it) => it.base64).toList(),
+        itemNoun: '张图片',
+      );
+      project = imported;
       changed(_rt('batch.projectImported'));
     } catch (error) {
       status = _rf('batch.importFailed', {'error': error});

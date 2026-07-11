@@ -786,6 +786,9 @@ class AppState extends ChangeNotifier {
       generationQueue = [];
       queueProgress = GenerationQueueProgress(total: initialTotal);
       lastAnlasSpent = null;
+      if (BackgroundQueueService.shouldWarnNoBackgroundSupport()) {
+        status = _rt('status.backgroundNotSupported');
+      }
       notifyListeners();
       try {
         await BackgroundQueueService.start(
