@@ -23,6 +23,12 @@ function safeName(value: string) {
   return (value || "").replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, "_").slice(0, 80);
 }
 
+/** True only when `child` resolves to a path inside `parent` (blocks `..` traversal and absolute paths pointing elsewhere). */
+function isInsideDir(child: string, parent: string): boolean {
+  const rel = path.relative(path.resolve(parent), path.resolve(child));
+  return rel.length > 0 && !rel.startsWith("..") && !path.isAbsolute(rel);
+}
+
 /** Render a filename from the user template + a history item. */
 function formatImageName(template: string, item: HistoryItem, seq: number): string {
   const created = new Date(item.createdAt);
@@ -99,10 +105,25 @@ export async function exportGroup(groupId: string) {
 /** Bundle an explicit ordered list of files into a ZIP. Used by batch img2img so
  * the export contains exactly the current run's final outputs, independent of
  * history groups with the same name or stale history state. */
+// SECURITY: filePath comes from renderer state that can originate in an
+// imported project JSON (batch/comic), which is untrusted input — a crafted
+// resultPath could otherwise point anywhere on disk and get read into the
+// exported ZIP. Only ever read files inside the app's own output directory.
+export function filterExportableFiles(files: BatchExportFile[], outputDir: string | undefined): BatchExportFile[] {
+  if (!Array.isArray(files)) return [];
+  return files.filter(
+    (file) =>
+      file &&
+      typeof file.filePath === "string" &&
+      file.filePath.trim() &&
+      outputDir &&
+      isInsideDir(file.filePath, outputDir),
+  );
+}
+
 export async function exportFiles(files: BatchExportFile[], defaultName = "images") {
-  const requested = Array.isArray(files)
-    ? files.filter((file) => file && typeof file.filePath === "string" && file.filePath.trim())
-    : [];
+  const outputDir = getSetting("outputDir");
+  const requested = filterExportableFiles(files, outputDir);
   if (requested.length === 0) return { ok: false, message: "没有可打包的图片。" };
 
   const result = await dialog.showSaveDialog({
@@ -202,7 +223,12 @@ export async function renameHistoryItem(id: string, rawName: string): Promise<{ 
 
 export async function deleteHistoryItem(id: string) {
   const item = removeHistory(id);
-  if (item?.filePath) {
+  // Only unlink a path that's actually inside the configured output
+  // directory — a record that was ever mis-bound (e.g. two groups sharing a
+  // renamed file's basename) must never let a delete reach outside the app's
+  // own managed space.
+  const outputDir = getSetting("outputDir");
+  if (item?.filePath && outputDir && isInsideDir(item.filePath, outputDir)) {
     try {
       await fs.unlink(item.filePath);
     } catch {

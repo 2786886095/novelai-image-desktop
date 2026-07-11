@@ -1744,6 +1744,13 @@ function batchItemParams(
   };
 }
 
+// normalizeBatchItem's only caller is importProject (a raw file picker read),
+// so this is untrusted input by construction. SECURITY: never trust
+// resultPath/resultUrl/historyItemId/a "done" status from an imported file —
+// those describe THIS machine's own prior output, and accepting them from an
+// imported JSON would let a crafted project claim an arbitrary local path is
+// a finished result (later readable via ZIP export). Every imported item
+// starts fresh at "pending" with no result reference.
 function normalizeBatchItem(
   raw: Partial<BatchRedrawItem>,
   index: number,
@@ -1756,10 +1763,10 @@ function normalizeBatchItem(
     strength: raw.strength == null ? null : Number(raw.strength),
     overrideParams: Boolean(raw.overrideParams),
     params: raw.params ?? {},
-    status: raw.status === "done" ? "done" : "pending",
-    resultUrl: raw.resultUrl,
-    resultPath: raw.resultPath,
-    historyItemId: raw.historyItemId,
+    status: "pending",
+    resultUrl: undefined,
+    resultPath: undefined,
+    historyItemId: undefined,
   };
 }
 

@@ -7,7 +7,7 @@ import type { AccountSummary, AppSettings, HistoryGroup, HistoryItem, SettingKey
 import { COMIC_ANALYZE_SYSTEM_PROMPT, SCOPED_REVERSE_SYSTEM_PROMPTS } from "../../src/data/prompt-templates";
 import { installedAppDir, isPortableBuild } from "./app-mode";
 
-interface PersistedData {
+export interface PersistedData {
   token?: string;
   account?: Omit<AccountSummary, "hasToken">;
   settings: AppSettings;
@@ -283,40 +283,100 @@ function normalize(raw: Partial<PersistedData> | null): PersistedData {
   };
 }
 
+// Write to a temp file in the same directory, fsync it, then rename over the
+// target. Rename onto an existing path is atomic on both POSIX and Windows
+// (NTFS), so a crash/power-loss can never leave the live store half-written —
+// readers either see the old complete file or the new complete file.
+export function atomicWriteFileSync(file: string, data: string) {
+  const tmp = path.join(path.dirname(file), `.${path.basename(file)}.tmp-${process.pid}-${Date.now()}`);
+  fs.writeFileSync(tmp, data, "utf8");
+  const fd = fs.openSync(tmp, "r+");
+  try {
+    fs.fsyncSync(fd);
+  } finally {
+    fs.closeSync(fd);
+  }
+  fs.renameSync(tmp, file);
+}
+
+// Keep the last two known-good snapshots BEFORE overwriting `file`, so even a
+// logically-bad write still has a recovery path beyond "reset to defaults."
+// Best-effort: backup rotation must never block an actual save.
+export function rotateBackupsSync(file: string) {
+  try {
+    const bak1 = `${file}.bak`;
+    const bak2 = `${file}.bak2`;
+    if (fs.existsSync(bak1)) fs.copyFileSync(bak1, bak2);
+    if (fs.existsSync(file)) fs.copyFileSync(file, bak1);
+  } catch {
+    // best-effort
+  }
+}
+
+// Reads `file`, parsing with `parse`. If that fails (missing, corrupt, torn
+// write), tries `${file}.bak` then `${file}.bak2` in turn before giving up.
+// A successful backup recovery is written back to `file` (atomically) so
+// future reads/writes build on it instead of leaving it stranded as a backup.
+export function readWithBackupRecoverySync<T>(
+  file: string,
+  parse: (raw: string) => T,
+  serialize: (value: T) => string,
+): { value: T; recoveredFrom: string | null } | null {
+  for (const candidate of [file, `${file}.bak`, `${file}.bak2`]) {
+    try {
+      if (!fs.existsSync(candidate)) continue;
+      const value = parse(fs.readFileSync(candidate, "utf8"));
+      if (candidate !== file) {
+        try {
+          atomicWriteFileSync(file, serialize(value));
+        } catch {
+          // recovered in memory even if writing the repair back out fails
+        }
+      }
+      return { value, recoveredFrom: candidate === file ? null : candidate };
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
 export function readStore(): PersistedData {
   if (cache) return cache;
 
-  try {
-    const file = storePath();
-    if (!fs.existsSync(file)) {
-      cache = normalize(null);
-      writeStore(cache);
-      return cache;
+  const file = storePath();
+  const recovered = readWithBackupRecoverySync<PersistedData>(
+    file,
+    (raw) => normalize(decryptFromDisk(JSON.parse(raw) as Partial<PersistedData>)),
+    (value) => JSON.stringify(encryptForDisk(value), null, 2),
+  );
+  if (recovered) {
+    if (recovered.recoveredFrom) {
+      console.warn(`[store] primary store was unreadable; recovered from ${path.basename(recovered.recoveredFrom)}.`);
     }
-
-    const raw = decryptFromDisk(JSON.parse(fs.readFileSync(file, "utf8")) as Partial<PersistedData>);
-    cache = normalize(raw);
-    return cache;
-  } catch {
-    // Don't silently wipe a corrupt store (would lose the saved token/history).
-    // Back it up as .corrupt so it can be recovered.
-    try {
-      const file = storePath();
-      if (fs.existsSync(file)) fs.copyFileSync(file, `${file}.corrupt-${Date.now()}`);
-    } catch {
-      // ignore backup failure
-    }
-    cache = normalize(null);
-    writeStore(cache);
+    cache = recovered.value;
     return cache;
   }
+
+  // Neither the primary file nor either backup was readable. If the primary
+  // file exists it's corrupt (not just missing) — back it up before resetting
+  // to defaults so it isn't silently lost.
+  try {
+    if (fs.existsSync(file)) fs.copyFileSync(file, `${file}.corrupt-${Date.now()}`);
+  } catch {
+    // ignore backup failure
+  }
+  cache = normalize(null);
+  writeStore(cache);
+  return cache;
 }
 
 export function writeStore(next: PersistedData) {
   cache = next; // in-memory cache stays plaintext
   const file = storePath();
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, JSON.stringify(encryptForDisk(next), null, 2), "utf8");
+  rotateBackupsSync(file);
+  atomicWriteFileSync(file, JSON.stringify(encryptForDisk(next), null, 2));
 }
 
 export function getSettings(): AppSettings {
@@ -429,7 +489,7 @@ function sanitizeGroupFolderName(name: string): string {
   return cleaned || "group";
 }
 
-function fileExists(filePath: string): boolean {
+export function fileExists(filePath: string): boolean {
   try {
     return fs.existsSync(filePath);
   } catch {
@@ -470,13 +530,26 @@ function inferGroupIdFromPath(filePath: string, data: PersistedData): string | u
   return created.id;
 }
 
-function buildFileNameIndex(root: string): Map<string, string[]> {
+interface FileNameIndex {
+  index: Map<string, string[]>;
+  // True when the scan hit the 60k cap before finishing this root — a "not
+  // found" result against a truncated index is NOT proof the file is gone,
+  // just that we stopped looking before reaching it.
+  truncated: boolean;
+}
+
+function buildFileNameIndex(root: string): FileNameIndex {
   const index = new Map<string, string[]>();
-  if (!root || !fileExists(root)) return index;
+  if (!root || !fileExists(root)) return { index, truncated: false };
   const stack = [root];
   let scanned = 0;
   const maxScan = 60_000;
-  while (stack.length > 0 && scanned < maxScan) {
+  let truncated = false;
+  while (stack.length > 0) {
+    if (scanned >= maxScan) {
+      truncated = true;
+      break;
+    }
     const dir = stack.pop()!;
     let entries: fs.Dirent[];
     try {
@@ -497,43 +570,72 @@ function buildFileNameIndex(root: string): Map<string, string[]> {
       }
     }
   }
-  return index;
+  return { index, truncated };
 }
 
-function findMovedHistoryFile(
+// `inconclusive` covers every reason "not found" doesn't prove the file is
+// gone: an unreachable root (e.g. an unplugged drive) or a scan that hit the
+// file cap before finishing. Callers must not delete a record on an
+// inconclusive result — only on a search that genuinely completed empty.
+export function findMovedHistoryFile(
   item: HistoryItem,
   data: PersistedData,
-  indexCache: Map<string, Map<string, string[]>>,
-): string | null {
-  if (!item.filePath) return null;
+  indexCache: Map<string, FileNameIndex>,
+): { path: string | null; inconclusive: boolean } {
+  if (!item.filePath) return { path: null, inconclusive: false };
   const fileName = path.basename(item.filePath).toLowerCase();
   const roots = [
     data.settings.outputDir && item.date ? path.join(data.settings.outputDir, item.date) : "",
     data.settings.outputDir,
   ].filter(Boolean);
   const uniqueRoots = Array.from(new Set(roots.map((root) => path.resolve(root))));
+  let inconclusive = false;
   for (const root of uniqueRoots) {
-    if (!fileExists(root)) continue;
-    let index = indexCache.get(root);
-    if (!index) {
-      index = buildFileNameIndex(root);
-      indexCache.set(root, index);
+    if (!fileExists(root)) {
+      // Could mean "genuinely doesn't exist" or "drive/share is offline right
+      // now" — we can't tell the two apart, so don't let this root's absence
+      // count as evidence the file is gone.
+      inconclusive = true;
+      continue;
     }
-    const candidate = index.get(fileName)?.find((p) => fileExists(p));
-    if (candidate) return candidate;
+    let entry = indexCache.get(root);
+    if (!entry) {
+      entry = buildFileNameIndex(root);
+      indexCache.set(root, entry);
+    }
+    if (entry.truncated) inconclusive = true;
+    const candidates = entry.index.get(fileName)?.filter((p) => fileExists(p)) ?? [];
+    if (candidates.length > 0) {
+      // Same basename can exist in more than one group (a user can rename two
+      // different images to the same name). Prefer whichever candidate's own
+      // folder maps to the group this record already belongs to, instead of
+      // picking whatever the directory scan happened to visit first.
+      const sameGroup = item.groupId
+        ? candidates.find((p) => inferGroupIdFromPath(p, data) === item.groupId)
+        : undefined;
+      return { path: sameGroup ?? candidates[0], inconclusive: false };
+    }
   }
-  return null;
+  return { path: null, inconclusive };
 }
 
 // History is permanent now: records are never deleted because they are old.
 // Instead the index mirrors real files. If an image was moved inside the output
 // directory (for example from one group folder to another), the record follows
 // that file and keeps its original createdAt/date. If it cannot be found, only
-// the stale record is removed.
+// the stale record is removed — and only when the search that failed to find
+// it actually completed (see findMovedHistoryFile's `inconclusive`), so an
+// offline drive or a huge library can't wipe the whole index in one pass.
 function reconcileHistoryFiles(): void {
   const data = readStore();
   if (data.history.length === 0) return;
-  const indexCache = new Map<string, Map<string, string[]>>();
+  // If the output directory itself can't be reached at all, every item would
+  // look "missing" for the same reason — skip reconciliation entirely rather
+  // than risk mass-deleting a perfectly intact history because a removable/
+  // network drive happens to be disconnected right now.
+  const outputDir = data.settings.outputDir?.trim();
+  if (outputDir && !fileExists(outputDir)) return;
+  const indexCache = new Map<string, FileNameIndex>();
   let changed = false;
   const next: HistoryItem[] = [];
 
@@ -554,17 +656,21 @@ function reconcileHistoryFiles(): void {
       continue;
     }
 
-    const movedPath = findMovedHistoryFile(item, data, indexCache);
-    if (!movedPath) {
-      changed = true;
+    const moved = findMovedHistoryFile(item, data, indexCache);
+    if (!moved.path) {
+      if (moved.inconclusive) {
+        next.push(item); // keep it — the search wasn't conclusive
+      } else {
+        changed = true; // genuinely not found anywhere reachable
+      }
       continue;
     }
 
     next.push({
       ...item,
-      filePath: movedPath,
-      fileUrl: pathToFileURL(movedPath).toString(),
-      groupId: inferGroupIdFromPath(movedPath, data),
+      filePath: moved.path,
+      fileUrl: pathToFileURL(moved.path).toString(),
+      groupId: inferGroupIdFromPath(moved.path, data),
     });
     changed = true;
   }
@@ -585,18 +691,21 @@ export function pruneMissingHistoryItem(id: string): boolean {
   const item = data.history.find((h) => h.id === id);
   if (!item || !item.filePath) return false;
   if (fileExists(item.filePath)) return false;
-  const movedPath = findMovedHistoryFile(item, data, new Map());
-  if (movedPath) {
+  const moved = findMovedHistoryFile(item, data, new Map());
+  if (moved.path) {
     const updated = {
       ...item,
-      filePath: movedPath,
-      fileUrl: pathToFileURL(movedPath).toString(),
-      groupId: inferGroupIdFromPath(movedPath, data),
+      filePath: moved.path,
+      fileUrl: pathToFileURL(moved.path).toString(),
+      groupId: inferGroupIdFromPath(moved.path, data),
     };
     data.history = data.history.map((h) => (h.id === id ? updated : h));
     writeStore(data);
     return false;
   }
+  // An inconclusive search (unreachable root, or a scan too large to finish)
+  // is not proof the file is gone — never drop the record on that basis.
+  if (moved.inconclusive) return false;
   data.history = data.history.filter((h) => h.id !== id);
   writeStore(data);
   return true;
