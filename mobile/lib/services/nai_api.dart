@@ -70,8 +70,11 @@ class NaiApi {
   final _rng = Random.secure();
   final Map<String, String> _vibeEncodeCache = {};
   final List<AiCallLogEntry> _aiCallLog = [];
-  http.Client? _activeGenerationClient;
-  bool _generationCancelled = false;
+  // Every in-flight generate/i2i/inpaint/redraw/comic call registers its own
+  // client here instead of sharing one field — otherwise feature A starting
+  // while B is still running overwrites B's client, and A's own request never
+  // gets tracked, letting cancel silently miss whichever call isn't "current".
+  final Set<http.Client> _activeGenerationClients = {};
 
   int randomSeed() => 1 + _rng.nextInt(2147483646);
 
@@ -84,8 +87,12 @@ class NaiApi {
       .length;
 
   void cancelActiveGeneration() {
-    _generationCancelled = true;
-    _activeGenerationClient?.close();
+    // Cancels every generation currently in flight, not just the most recent —
+    // matches the single app-wide "stop" affordance in the UI.
+    for (final client in _activeGenerationClients) {
+      client.close();
+    }
+    _activeGenerationClients.clear();
   }
 
   Future<int?> requestOfficialGenerationPrice(
@@ -1086,9 +1093,9 @@ class NaiApi {
 
   Future<Uint8List> _postGenerate(
       String token, AppSettings settings, Map<String, dynamic> payload) async {
-    _generationCancelled = false;
     final client = createProxyHttpClient(settings, scope: ProxyScope.nai);
-    _activeGenerationClient = client;
+    _activeGenerationClients.add(client);
+    bool cancelled() => !_activeGenerationClients.contains(client);
     final uri = Uri.parse(
       '${_naiBase(settings.imageBaseUrl, 'https://image.novelai.net', settings)}/ai/generate-image',
     );
@@ -1097,7 +1104,7 @@ class NaiApi {
     final useMultipart = cached is List && cached.isNotEmpty;
     try {
       for (var attempt = 0; attempt <= 3; attempt++) {
-        if (_generationCancelled) throw const GenerationCancelledException();
+        if (cancelled()) throw const GenerationCancelledException();
         try {
           final response =
               await _sendGenerate(client, uri, token, payload, useMultipart)
@@ -1115,15 +1122,13 @@ class NaiApi {
               : 2000 * (1 << attempt);
           await Future.delayed(Duration(milliseconds: min(waitMs, 30000)));
         } catch (_) {
-          if (_generationCancelled) throw const GenerationCancelledException();
+          if (cancelled()) throw const GenerationCancelledException();
           rethrow;
         }
       }
       throw StateError('Generation request did not complete');
     } finally {
-      if (identical(_activeGenerationClient, client)) {
-        _activeGenerationClient = null;
-      }
+      _activeGenerationClients.remove(client);
       client.close();
     }
   }

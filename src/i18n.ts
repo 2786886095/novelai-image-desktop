@@ -3582,6 +3582,7 @@ const DESKTOP_BATCH_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
 const DESKTOP_MAIN_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
   "zh-CN": {
     "splash.subtitle": "NovelAI API 图像创作工作台",
+    "splash.retry": "重试",
     "title.connected": "已连接",
     "title.notConnected": "未连接 API",
     "title.cached": "（缓存）",
@@ -3627,6 +3628,7 @@ const DESKTOP_MAIN_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
   },
   "zh-TW": {
     "splash.subtitle": "NovelAI API 圖像創作工作台",
+    "splash.retry": "重試",
     "title.connected": "已連接",
     "title.notConnected": "未連接 API",
     "title.cached": "（快取）",
@@ -3672,6 +3674,7 @@ const DESKTOP_MAIN_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
   },
   "en-US": {
     "splash.subtitle": "NovelAI API image creation workspace",
+    "splash.retry": "Retry",
     "title.connected": "Connected",
     "title.notConnected": "API not connected",
     "title.cached": " (cached)",
@@ -3717,6 +3720,7 @@ const DESKTOP_MAIN_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
   },
   "ja-JP": {
     "splash.subtitle": "NovelAI API 画像制作ワークスペース",
+    "splash.retry": "再試行",
     "title.connected": "接続済み",
     "title.notConnected": "API 未接続",
     "title.cached": "（キャッシュ）",
@@ -3762,6 +3766,7 @@ const DESKTOP_MAIN_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
   },
   "ko-KR": {
     "splash.subtitle": "NovelAI API 이미지 창작 작업대",
+    "splash.retry": "다시 시도",
     "title.connected": "연결됨",
     "title.notConnected": "API 미연결",
     "title.cached": "(캐시)",

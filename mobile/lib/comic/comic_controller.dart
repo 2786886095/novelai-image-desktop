@@ -37,6 +37,17 @@ class ComicController extends ChangeNotifier {
   int queueDone = 0;
   int queueTotal = 0;
   Timer? _saveTimer;
+  bool _disposed = false;
+
+  // The queue loop is a plain async function, not tied to widget lifecycle —
+  // leaving the comic screen mid-queue must not let it keep calling
+  // notifyListeners() on a disposed ChangeNotifier (Flutter throws on that),
+  // nor keep the paid request running unattended in the background.
+  @override
+  void notifyListeners() {
+    if (_disposed) return;
+    super.notifyListeners();
+  }
 
   String _rt(String key) => runtimeTextFor(app.settings.language, key);
   String _rf(String key, Map<String, Object?> values) =>
@@ -867,6 +878,8 @@ class ComicController extends ChangeNotifier {
 
   @override
   void dispose() {
+    if (queueRunning) cancelQueue();
+    _disposed = true;
     _saveTimer?.cancel();
     BackgroundQueueService.removeCancelHandler(cancelQueue);
     super.dispose();

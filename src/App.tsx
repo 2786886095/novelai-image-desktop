@@ -491,6 +491,8 @@ function SplashPage() {
   // back to the built-in animated orbs. The <img> hides itself on load error.
   const [hasCustom, setHasCustom] = useState(true);
   const language = useAppStore((state) => state.settings?.language);
+  const bootError = useAppStore((state) => state.bootError);
+  const load = useAppStore((state) => state.load);
   return (
     <div className="splash-page splash-animate">
       {hasCustom && (
@@ -519,6 +521,16 @@ function SplashPage() {
         <div className="splash-divider" />
         <p className="splash-sub">{desktopUiText(language, "splash.subtitle")}</p>
         <p className="splash-ver">v{APP_VERSION}</p>
+        {bootError && (
+          <>
+            <p className="splash-sub" style={{ color: "var(--danger)" }}>
+              {bootError}
+            </p>
+            <Button variant="primary" onClick={() => void load()}>
+              {desktopUiText(language, "splash.retry")}
+            </Button>
+          </>
+        )}
       </div>
     </div>
   );

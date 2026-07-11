@@ -29,9 +29,20 @@ class BatchRedrawController extends ChangeNotifier {
   int queueTotal = 0;
   String status = runtimeTextFor('zh-CN', 'common.ready');
   Timer? _saveTimer;
+  bool _disposed = false;
 
   BatchRedrawController(this.app) {
     BackgroundQueueService.addCancelHandler(cancelQueue);
+  }
+
+  // The queue loop is a plain async function, not tied to widget lifecycle —
+  // leaving the batch screen mid-queue must not let it keep calling
+  // notifyListeners() on a disposed ChangeNotifier (Flutter throws on that),
+  // nor keep the paid request running unattended in the background.
+  @override
+  void notifyListeners() {
+    if (_disposed) return;
+    super.notifyListeners();
   }
 
   String _rt(String key) => runtimeTextFor(app.settings.language, key);
@@ -471,6 +482,8 @@ class BatchRedrawController extends ChangeNotifier {
 
   @override
   void dispose() {
+    if (queueRunning) cancelQueue();
+    _disposed = true;
     _saveTimer?.cancel();
     BackgroundQueueService.removeCancelHandler(cancelQueue);
     super.dispose();

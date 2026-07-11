@@ -259,6 +259,9 @@ export interface QueuedGenerationJob {
 
 interface AppState {
   bootDone: boolean;
+  // Set only when a critical boot read (settings) fails outright — lets the
+  // splash screen show a retry instead of spinning forever with no feedback.
+  bootError: string | null;
   showOnboarding: boolean;
   showSettings: boolean;
   activeTab: ActiveTab;
@@ -607,6 +610,7 @@ function persistGenerationState(get: () => AppState) {
 
 export const useAppStore = create<AppState>((set, get) => ({
   bootDone: false,
+  bootError: null,
   showOnboarding: false,
   showSettings: false,
   activeTab: "generate",
@@ -687,21 +691,46 @@ export const useAppStore = create<AppState>((set, get) => ({
   updateProgress: null,
 
   async load() {
-    const [settings, account, firstRun, dates, groups, isPortable] = await Promise.all([
-      window.naiDesktop.getSettings(),
-      // Cached, local-only summary — never a network call, so boot stays fast
-      // even with no proxy. Live balance is refreshed after bootDone below.
+    window.naiDesktop.onUpdateEvent((event) => set({ updateProgress: event }));
+
+    // Settings drive almost everything below (language, persisted params, lock
+    // state) — there's no safe fallback to fake, so a failure here surfaces a
+    // retriable error instead of the other reads' fire-and-forget defaults.
+    let settings: AppSettings;
+    try {
+      settings = await window.naiDesktop.getSettings();
+    } catch (error: any) {
+      set({ bootError: error?.message || "读取设置失败，请重试。" });
+      return;
+    }
+    set({ bootError: null });
+
+    // Each of these can independently fail (e.g. history/dates hit a removed
+    // network drive) without blocking boot — a single Promise.all would let
+    // any one rejection permanently strand the splash screen with bootDone
+    // never set. Each gets a safe default instead.
+    const [accountResult, firstRunResult, datesResult, groupsResult, portableResult] = await Promise.allSettled([
       window.naiDesktop.accountCached(),
       window.naiDesktop.isFirstRun(),
       window.naiDesktop.getHistoryDates(),
       window.naiDesktop.getHistoryGroups(),
       window.naiDesktop.isPortable(),
     ]);
+    const account: AccountSummary = accountResult.status === "fulfilled" ? accountResult.value : { hasToken: false };
+    const firstRun = firstRunResult.status === "fulfilled" ? firstRunResult.value : false;
+    const dates = datesResult.status === "fulfilled" ? datesResult.value : [];
+    const groups = groupsResult.status === "fulfilled" ? groupsResult.value : [];
+    const isPortable = portableResult.status === "fulfilled" ? portableResult.value : false;
     set({ isPortable });
-    window.naiDesktop.onUpdateEvent((event) => set({ updateProgress: event }));
+
     const selectedDate = dates[0] ?? "";
     const selectedGroupId = settings.activeHistoryGroupId ?? "";
-    const history = await window.naiDesktop.getHistory(selectedDate || undefined, selectedGroupId || undefined);
+    let history: HistoryItem[] = [];
+    try {
+      history = await window.naiDesktop.getHistory(selectedDate || undefined, selectedGroupId || undefined);
+    } catch {
+      /* history list will catch up on the next natural refresh */
+    }
     const last = settings.lastGenerationState;
     if (last) {
       set((state) => ({
