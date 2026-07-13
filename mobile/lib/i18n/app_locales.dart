@@ -1905,7 +1905,19 @@ LocalizedDestinationText shellTextFor(Object? value) {
 List<String> mainDestinationLabelsFor(Object? value) {
   switch (normalizeAppLocaleCode(value)) {
     case 'zh-TW':
-      return ['生成', '重繪', '超分', '後期', '反推', '轉換', '工具', '圖庫', '記錄', '設定'];
+      return [
+        '生成',
+        '重繪',
+        '超分',
+        '後期',
+        '反推',
+        '轉換',
+        '原始資料',
+        '工具',
+        '圖庫',
+        '記錄',
+        '設定'
+      ];
     case 'en-US':
       return [
         'Generate',
@@ -1914,6 +1926,7 @@ List<String> mainDestinationLabelsFor(Object? value) {
         'Director',
         'Inspect',
         'Convert',
+        'Metadata',
         'Tools',
         'Gallery',
         'Logs',
@@ -1927,15 +1940,40 @@ List<String> mainDestinationLabelsFor(Object? value) {
         '後処理',
         '解析',
         '変換',
+        '元データ',
         'ツール',
         'ギャラリー',
         '履歴',
         '設定'
       ];
     case 'ko-KR':
-      return ['생성', '리드로우', '업스케일', '후처리', '분석', '변환', '도구', '갤러리', '기록', '설정'];
+      return [
+        '생성',
+        '리드로우',
+        '업스케일',
+        '후처리',
+        '분석',
+        '변환',
+        '원본 데이터',
+        '도구',
+        '갤러리',
+        '기록',
+        '설정'
+      ];
     default:
-      return ['生成', '重绘', '超分', '后期', '反推', '转换', '工具', '图库', '记录', '设置'];
+      return [
+        '生成',
+        '重绘',
+        '超分',
+        '后期',
+        '反推',
+        '转换',
+        '原数据',
+        '工具',
+        '图库',
+        '记录',
+        '设置'
+      ];
   }
 }
 

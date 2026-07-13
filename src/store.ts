@@ -32,7 +32,7 @@ import { createDefaultBatchRedraw, DEFAULT_AUGMENT_OPTIONS, DEFAULT_I2I_PARAMS, 
 import { normalizeAppLanguage } from "./i18n";
 import { expandWildcards } from "./wildcards";
 
-type ActiveTab = "generate" | "inpaint" | "upscale" | "postprocess" | "inspect" | "convert" | "tools" | "records";
+type ActiveTab = "generate" | "inpaint" | "upscale" | "postprocess" | "inspect" | "convert" | "metadata" | "tools" | "records";
 type PromptTab = "positive" | "negative";
 type BrushMode = "paint" | "erase";
 

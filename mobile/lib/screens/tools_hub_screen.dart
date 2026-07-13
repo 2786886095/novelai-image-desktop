@@ -5,14 +5,11 @@ import '../i18n/app_locales.dart';
 import '../state/app_state.dart';
 import 'batch_redraw_screen.dart';
 import 'comic_screen.dart';
-import 'metadata_inspector_screen.dart';
 
-enum _ActiveTool { hub, comic, batchRedraw, metadata }
+enum _ActiveTool { hub, comic, batchRedraw }
 
 class ToolsHubScreen extends StatefulWidget {
-  final VoidCallback? onOpenGenerate;
-
-  const ToolsHubScreen({super.key, this.onOpenGenerate});
+  const ToolsHubScreen({super.key});
 
   @override
   State<ToolsHubScreen> createState() => _ToolsHubScreenState();
@@ -30,12 +27,6 @@ class _ToolsHubScreenState extends State<ToolsHubScreen> {
     if (active == _ActiveTool.batchRedraw) {
       return BatchRedrawScreen(
           onBack: () => setState(() => active = _ActiveTool.hub));
-    }
-    if (active == _ActiveTool.metadata) {
-      return MetadataInspectorScreen(
-        onBack: () => setState(() => active = _ActiveTool.hub),
-        onOpenGenerate: widget.onOpenGenerate ?? () {},
-      );
     }
     final language =
         context.select<AppState, String>((s) => s.settings.language);
@@ -58,13 +49,6 @@ class _ToolsHubScreenState extends State<ToolsHubScreen> {
             title: text.batchTitle,
             subtitle: text.batchSubtitle,
             onTap: () => setState(() => active = _ActiveTool.batchRedraw),
-          ),
-          const SizedBox(height: 10),
-          _ToolTile(
-            icon: Icons.data_object_outlined,
-            title: text.metadataTitle,
-            subtitle: text.metadataSubtitle,
-            onTap: () => setState(() => active = _ActiveTool.metadata),
           ),
         ],
       ),

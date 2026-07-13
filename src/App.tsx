@@ -6,6 +6,7 @@ import { format } from "date-fns";
 // ComicGenerator module (comic + batch redraw) becomes its own chunk.
 const ToolsHub = lazy(() => import("./ComicGenerator").then((m) => ({ default: m.ToolsHub })));
 const InpaintCanvas = lazy(() => import("./InpaintCanvas").then((m) => ({ default: m.InpaintCanvas })));
+const MetadataInspector = lazy(() => import("./MetadataInspector"));
 import { useAppStore } from "./store";
 import { relatedTags } from "./related-tags";
 import { fmtCount, wordAtCursor } from "./text-utils";
@@ -5017,10 +5018,14 @@ function MainPage() {
       <MenuBar openSettings={() => setShowSettings(true)} />
       <TabBar />
       <div
-        className={clsx("workspace", (activeTab === "tools" || activeTab === "records") && "workspace-tools")}
+        className={clsx("workspace", (activeTab === "metadata" || activeTab === "tools" || activeTab === "records") && "workspace-tools")}
         style={{ "--ws-left": `${wsLeftWidth}px`, "--ws-right": `${wsRightWidth}px` } as CSSProperties}
       >
-        {activeTab === "tools" ? (
+        {activeTab === "metadata" ? (
+          <Suspense fallback={<div className="lazy-tool-loading">{t("tool.loadingTools")}</div>}>
+            <MetadataInspector onBack={() => useAppStore.getState().setActiveTab("generate")} />
+          </Suspense>
+        ) : activeTab === "tools" ? (
           <Suspense fallback={<div className="lazy-tool-loading">{t("tool.loadingTools")}</div>}>
             <ToolsHub />
           </Suspense>

@@ -21,7 +21,6 @@ import {
 } from "./i18n";
 import { useAppStore } from "./store";
 import { NovelTuiwenStudio } from "./tuiwen/NovelTuiwenStudio";
-import MetadataInspector from "./MetadataInspector";
 import {
   createDefaultBatchRedraw,
   NAI_MODELS,
@@ -1652,7 +1651,7 @@ export function ToolsHub() {
   const language = useAppStore((state) => state.settings?.language);
   const text = useMemo(() => getToolsHubText(language), [language]);
   const [activeTool, setActiveTool] = useState<
-    "hub" | "comic" | "redraw" | "tuiwen" | "metadata"
+    "hub" | "comic" | "redraw" | "tuiwen"
   >("hub");
   if (activeTool === "comic")
     return <ComicGenerator onBack={() => setActiveTool("hub")} />;
@@ -1660,8 +1659,6 @@ export function ToolsHub() {
     return <BatchRedraw onBack={() => setActiveTool("hub")} />;
   if (activeTool === "tuiwen")
     return <NovelTuiwenStudio onBack={() => setActiveTool("hub")} />;
-  if (activeTool === "metadata")
-    return <MetadataInspector onBack={() => setActiveTool("hub")} />;
 
   return (
     <main className="tools-hub">
@@ -1699,15 +1696,6 @@ export function ToolsHub() {
           <b>{text.tuiwenTitle}</b>
           <span>{text.tuiwenDesc}</span>
           <small>{text.foundation}</small>
-        </button>
-        <button
-          type="button"
-          className="tool-card ready"
-          onClick={() => setActiveTool("metadata")}
-        >
-          <b>{text.metadataTitle}</b>
-          <span>{text.metadataDesc}</span>
-          <small>{text.ready}</small>
         </button>
       </section>
     </main>

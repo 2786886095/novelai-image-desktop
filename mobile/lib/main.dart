@@ -11,6 +11,7 @@ import 'screens/gallery_screen.dart';
 import 'screens/ai_log_screen.dart';
 import 'screens/generate_screen.dart';
 import 'screens/inspect_screen.dart';
+import 'screens/metadata_inspector_screen.dart';
 import 'screens/tools_hub_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/tools_screen.dart';
@@ -85,6 +86,7 @@ class _HomeShellState extends State<HomeShell> {
     (icon: Icons.tune_outlined, selectedIcon: Icons.tune),
     (icon: Icons.visibility_outlined, selectedIcon: Icons.visibility),
     (icon: Icons.translate_outlined, selectedIcon: Icons.translate),
+    (icon: Icons.data_object_outlined, selectedIcon: Icons.data_object),
     (icon: Icons.widgets_outlined, selectedIcon: Icons.widgets),
     (icon: Icons.photo_library_outlined, selectedIcon: Icons.photo_library),
     (icon: Icons.receipt_long_outlined, selectedIcon: Icons.receipt_long),
@@ -101,9 +103,15 @@ class _HomeShellState extends State<HomeShell> {
       const ToolsScreen(kind: ToolPageKind.postprocess),
       const InspectScreen(kind: InspectPageKind.reverse),
       const InspectScreen(kind: InspectPageKind.convert),
-      ToolsHubScreen(onOpenGenerate: () {
-        if (mounted) setState(() => _index = 0);
-      }),
+      MetadataInspectorScreen(
+        onBack: () {
+          if (mounted) setState(() => _index = 0);
+        },
+        onOpenGenerate: () {
+          if (mounted) setState(() => _index = 0);
+        },
+      ),
+      const ToolsHubScreen(),
       const GalleryScreen(),
       const AiLogScreen(),
       const SettingsScreen(),
@@ -158,6 +166,6 @@ class _HomeShellState extends State<HomeShell> {
     );
     if (!mounted) return;
     await context.read<AppState>().dismissNetworkOnboarding();
-    if (openSettings == true && mounted) setState(() => _index = 9);
+    if (openSettings == true && mounted) setState(() => _index = 10);
   }
 }
