@@ -64,6 +64,97 @@ void main() {
     final plain = Uint8List.fromList([1, 2, 3]);
     expect(identical(stripPngMetadata(plain), plain), isTrue);
   });
+
+  test('reads A1111 / Forge metadata and maps NovelAI-compatible values', () {
+    final parameters = [
+      '1girl, blue hair, city',
+      'Negative prompt: lowres, bad hands',
+      'Steps: 24, Sampler: Euler a, Schedule type: Karras, CFG scale: 7, Seed: 42, Size: 768x1152, Model hash: abc123, Model: animeXL_v1',
+    ].join('\n');
+    final report = inspectImageMetadata({'parameters': parameters});
+
+    expect(report.kind, ImageMetadataKind.stableDiffusion);
+    expect(report.imported.positivePrompt, contains('blue hair'));
+    expect(report.imported.negativePrompt, 'lowres, bad hands');
+    expect(report.imported.sampler, 'k_euler_ancestral');
+    expect(report.imported.noiseSchedule, 'karras');
+    expect(report.imported.steps, 24);
+    expect(report.imported.cfgScale, 7);
+    expect(report.imported.seed, 42);
+    expect((report.imported.width, report.imported.height), (768, 1152));
+    expect(
+        report.entries.any(
+            (entry) => entry.key == 'Model' && entry.value == 'animeXL_v1'),
+        isTrue);
+  });
+
+  test('reads A1111 generation parameters from JPEG EXIF UserComment', () {
+    final parameters = [
+      '1girl, blue hair',
+      'Negative prompt: lowres',
+      'Steps: 24, Sampler: Euler a, CFG scale: 7, Seed: 42, Size: 768x1152',
+    ].join('\n');
+    final metadata = parseImageTextMetadata(_makeExifJpeg(parameters));
+    expect(metadata['parameters'], contains('Sampler: Euler a'));
+    expect(inspectImageMetadata(metadata).imported.seed, 42);
+  });
+
+  test('reads ComfyUI prompt and workflow metadata', () {
+    final prompt = {
+      '1': {
+        'class_type': 'CheckpointLoaderSimple',
+        'inputs': {'ckpt_name': 'sdxl.safetensors'}
+      },
+      '2': {
+        'class_type': 'CLIPTextEncode',
+        'inputs': {
+          'text': '1girl, silver hair',
+          'clip': ['1', 1]
+        }
+      },
+      '3': {
+        'class_type': 'CLIPTextEncode',
+        'inputs': {
+          'text': 'lowres',
+          'clip': ['1', 1]
+        }
+      },
+      '4': {
+        'class_type': 'EmptyLatentImage',
+        'inputs': {'width': 832, 'height': 1216, 'batch_size': 1}
+      },
+      '5': {
+        'class_type': 'KSampler',
+        'inputs': {
+          'seed': 99,
+          'steps': 28,
+          'cfg': 6,
+          'sampler_name': 'dpmpp_2m',
+          'scheduler': 'karras',
+          'denoise': 1,
+          'model': ['1', 0],
+          'positive': ['2', 0],
+          'negative': ['3', 0],
+          'latent_image': ['4', 0],
+        }
+      },
+    };
+    final report = inspectImageMetadata({
+      'prompt': jsonEncode(prompt),
+      'workflow': jsonEncode({
+        'nodes': [
+          {'id': 5, 'type': 'KSampler'}
+        ]
+      }),
+    });
+
+    expect(report.kind, ImageMetadataKind.comfyUi);
+    expect(report.imported.positivePrompt, '1girl, silver hair');
+    expect(report.imported.negativePrompt, 'lowres');
+    expect(report.imported.sampler, 'k_dpmpp_2m');
+    expect((report.imported.width, report.imported.height), (832, 1216));
+    expect(report.rawText, contains('workflow'));
+  });
 }
 
 Uint8List _makePng(Map<String, String> values) {
@@ -90,4 +181,43 @@ Uint8List _makePng(Map<String, String> values) {
   }
   addChunk('IEND', const []);
   return Uint8List.fromList(bytes);
+}
+
+Uint8List _makeExifJpeg(String parameters) {
+  final comment = <int>[
+    ...ascii.encode('ASCII\u0000\u0000\u0000'),
+    ...utf8.encode(parameters),
+    0,
+  ];
+  final tiff = Uint8List(44 + comment.length);
+  final view = ByteData.sublistView(tiff);
+  tiff.setRange(0, 2, [0x4d, 0x4d]);
+  view.setUint16(2, 42, Endian.big);
+  view.setUint32(4, 8, Endian.big);
+  view.setUint16(8, 1, Endian.big);
+  view.setUint16(10, 0x8769, Endian.big);
+  view.setUint16(12, 4, Endian.big);
+  view.setUint32(14, 1, Endian.big);
+  view.setUint32(18, 26, Endian.big);
+  view.setUint32(22, 0, Endian.big);
+  view.setUint16(26, 1, Endian.big);
+  view.setUint16(28, 0x9286, Endian.big);
+  view.setUint16(30, 7, Endian.big);
+  view.setUint32(32, comment.length, Endian.big);
+  view.setUint32(36, 44, Endian.big);
+  view.setUint32(40, 0, Endian.big);
+  tiff.setRange(44, 44 + comment.length, comment);
+  final payload = <int>[...ascii.encode('Exif\u0000\u0000'), ...tiff];
+  final length = payload.length + 2;
+  return Uint8List.fromList([
+    0xff,
+    0xd8,
+    0xff,
+    0xe1,
+    (length >> 8) & 255,
+    length & 255,
+    ...payload,
+    0xff,
+    0xd9,
+  ]);
 }

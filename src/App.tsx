@@ -9,7 +9,7 @@ const InpaintCanvas = lazy(() => import("./InpaintCanvas").then((m) => ({ defaul
 import { useAppStore } from "./store";
 import { relatedTags } from "./related-tags";
 import { fmtCount, wordAtCursor } from "./text-utils";
-import { parsePngMeta, parseImportedParams } from "./png-meta";
+import { inspectImageMetadata, parseImageMeta } from "./png-meta";
 import { droppedImagePath, hasDraggedFiles } from "./drag-drop";
 import { splitPromptTags, parseWeightedTag, formatMultiplier, setTagLevelInPrompt } from "./prompt-weight";
 import {
@@ -2679,7 +2679,10 @@ function ReversePanel() {
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
 
-  const imported = useMemo(() => (inspectMeta ? parseImportedParams(inspectMeta) : {}), [inspectMeta]);
+  const imported = useMemo(
+    () => (inspectMeta ? inspectImageMetadata(inspectMeta).imported : {}),
+    [inspectMeta],
+  );
   const hasMeta = Object.keys(imported).length > 0;
 
   function restoreParams() {
@@ -2721,7 +2724,7 @@ function ReversePanel() {
       const b64 = btoa(
         new Uint8Array(buf).reduce((acc, byte) => acc + String.fromCharCode(byte), ""),
       );
-      const meta = parsePngMeta(buf);
+      const meta = parseImageMeta(buf);
       setInspectImage(url, meta, b64, path);
     };
     reader.readAsArrayBuffer(file);

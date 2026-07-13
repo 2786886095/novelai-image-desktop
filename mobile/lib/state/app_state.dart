@@ -434,7 +434,8 @@ class AppState extends ChangeNotifier {
   Future<void> setWorkbenchPath(String filePath) async {
     final bytes = await File(filePath).readAsBytes();
     final dims = readImageDimensions(bytes);
-    final imported = parseImportedGenerateParams(parsePngTextMetadata(bytes));
+    final imported =
+        inspectImageMetadata(parseImageTextMetadata(bytes)).imported;
     workbenchImportedParams = imported.isEmpty ? null : imported;
     workbenchImage =
         WorkingImage(filePath: filePath, width: dims.$1, height: dims.$2);
@@ -459,6 +460,15 @@ class AppState extends ChangeNotifier {
   void applyWorkbenchMetadata() {
     final imported = workbenchImportedParams;
     if (imported == null || imported.isEmpty) {
+      status = _rt('status.noMetadata');
+      notifyListeners();
+      return;
+    }
+    applyImportedMetadata(imported);
+  }
+
+  void applyImportedMetadata(ImportedGenerateParams imported) {
+    if (imported.isEmpty) {
       status = _rt('status.noMetadata');
       notifyListeners();
       return;

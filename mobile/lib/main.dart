@@ -36,7 +36,8 @@ class NovelAIApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = context.select<AppState, String>((s) => s.settings.theme);
-    final language = context.select<AppState, String>((s) => s.settings.language);
+    final language =
+        context.select<AppState, String>((s) => s.settings.language);
     final localeInfo = appLocaleInfoFor(language);
     return MaterialApp(
       title: appName,
@@ -75,6 +76,7 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   int _index = 0;
   bool _onboardingScheduled = false;
+  late final List<Widget> _pages;
 
   static const _destinationIcons = [
     (icon: Icons.auto_awesome_outlined, selectedIcon: Icons.auto_awesome),
@@ -89,18 +91,24 @@ class _HomeShellState extends State<HomeShell> {
     (icon: Icons.settings_outlined, selectedIcon: Icons.settings),
   ];
 
-  static const _pages = [
-    GenerateScreen(),
-    ToolsScreen(kind: ToolPageKind.inpaint),
-    ToolsScreen(kind: ToolPageKind.upscale),
-    ToolsScreen(kind: ToolPageKind.postprocess),
-    InspectScreen(kind: InspectPageKind.reverse),
-    InspectScreen(kind: InspectPageKind.convert),
-    ToolsHubScreen(),
-    GalleryScreen(),
-    AiLogScreen(),
-    SettingsScreen(),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _pages = [
+      const GenerateScreen(),
+      const ToolsScreen(kind: ToolPageKind.inpaint),
+      const ToolsScreen(kind: ToolPageKind.upscale),
+      const ToolsScreen(kind: ToolPageKind.postprocess),
+      const InspectScreen(kind: InspectPageKind.reverse),
+      const InspectScreen(kind: InspectPageKind.convert),
+      ToolsHubScreen(onOpenGenerate: () {
+        if (mounted) setState(() => _index = 0);
+      }),
+      const GalleryScreen(),
+      const AiLogScreen(),
+      const SettingsScreen(),
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -108,7 +116,8 @@ class _HomeShellState extends State<HomeShell> {
     if (!booted) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-    final language = context.select<AppState, String>((s) => s.settings.language);
+    final language =
+        context.select<AppState, String>((s) => s.settings.language);
     final labels = mainDestinationLabelsFor(language);
     final shellText = shellTextFor(language);
     final destinations = [

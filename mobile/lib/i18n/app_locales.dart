@@ -2081,9 +2081,11 @@ SettingsPersistText settingsPersistTextFor(Object? value) {
         sectionDesc:
             'All toggles below default on. Turning one off means that tool uses its built-in defaults next time you open the app instead of restoring what you last used.',
         generateTitle: 'Text-to-image',
-        generateSubtitle: 'Remember the last prompt, size, and sampling parameters.',
+        generateSubtitle:
+            'Remember the last prompt, size, and sampling parameters.',
         inpaintTitle: 'Inpaint',
-        inpaintSubtitle: 'Remember the last inpaint prompt, model, strength, and brush settings.',
+        inpaintSubtitle:
+            'Remember the last inpaint prompt, model, strength, and brush settings.',
         upscaleTitle: 'Upscale',
         upscaleSubtitle: 'Remember the last selected upscale factor.',
         directorTitle: 'Post-processing',
@@ -2092,7 +2094,8 @@ SettingsPersistText settingsPersistTextFor(Object? value) {
     case 'ja-JP':
       return (
         sectionTitle: '再起動後もパラメータを記憶',
-        sectionDesc: '以下のスイッチは既定ですべてオンです。オフにすると、そのツールは次回起動時に前回の設定を復元せず初期値を使用します。',
+        sectionDesc:
+            '以下のスイッチは既定ですべてオンです。オフにすると、そのツールは次回起動時に前回の設定を復元せず初期値を使用します。',
         generateTitle: '文生図',
         generateSubtitle: '前回のプロンプト、サイズ、サンプリング設定を記憶します。',
         inpaintTitle: '部分修復（インペイント）',
@@ -2105,7 +2108,8 @@ SettingsPersistText settingsPersistTextFor(Object? value) {
     case 'ko-KR':
       return (
         sectionTitle: '재시작 후에도 파라미터 기억',
-        sectionDesc: '아래 스위치는 기본적으로 모두 켜져 있습니다. 끄면 해당 도구는 다음 실행 시 마지막 설정을 복원하지 않고 기본값을 사용합니다.',
+        sectionDesc:
+            '아래 스위치는 기본적으로 모두 켜져 있습니다. 끄면 해당 도구는 다음 실행 시 마지막 설정을 복원하지 않고 기본값을 사용합니다.',
         generateTitle: '텍스트→이미지',
         generateSubtitle: '마지막 프롬프트, 크기, 샘플링 설정을 기억합니다.',
         inpaintTitle: '부분 리터치(인페인트)',
@@ -2325,6 +2329,8 @@ typedef MobileToolsHubText = ({
   String comicSubtitle,
   String batchTitle,
   String batchSubtitle,
+  String metadataTitle,
+  String metadataSubtitle,
 });
 
 MobileToolsHubText mobileToolsHubTextFor(Object? value) {
@@ -2336,6 +2342,9 @@ MobileToolsHubText mobileToolsHubTextFor(Object? value) {
         comicSubtitle: '故事拆分、連續分鏡、一致性檢測、串行出圖與 ZIP',
         batchTitle: '批量圖生圖',
         batchSubtitle: '多圖匯入、逐圖提示詞和參數、AI 反推、串行重繪',
+        metadataTitle: '恢復圖片原始資料',
+        metadataSubtitle:
+            '讀取 NovelAI、Stable Diffusion WebUI / Forge 與 ComfyUI 內嵌參數',
       );
     case 'en-US':
       return (
@@ -2346,6 +2355,9 @@ MobileToolsHubText mobileToolsHubTextFor(Object? value) {
         batchTitle: 'Batch Img2Img',
         batchSubtitle:
             'Multi-image import, per-image prompts and params, AI reverse prompt, and serial redraw',
+        metadataTitle: 'Restore Image Metadata',
+        metadataSubtitle:
+            'Read embedded NovelAI, Stable Diffusion WebUI / Forge, and ComfyUI parameters',
       );
     case 'ja-JP':
       return (
@@ -2354,6 +2366,9 @@ MobileToolsHubText mobileToolsHubTextFor(Object? value) {
         comicSubtitle: '物語分割、連続コマ、一貫性チェック、順次生成、ZIP 書き出し',
         batchTitle: '一括 Img2Img',
         batchSubtitle: '複数画像の読み込み、画像別プロンプトと設定、AI 解析、順次再描画',
+        metadataTitle: '画像の元データを復元',
+        metadataSubtitle:
+            'NovelAI、Stable Diffusion WebUI / Forge、ComfyUI の埋め込み設定を読み取ります',
       );
     case 'ko-KR':
       return (
@@ -2362,6 +2377,9 @@ MobileToolsHubText mobileToolsHubTextFor(Object? value) {
         comicSubtitle: '스토리 분할, 연속 컷, 일관성 검사, 순차 생성, ZIP 내보내기',
         batchTitle: '배치 Img2Img',
         batchSubtitle: '여러 이미지 가져오기, 이미지별 프롬프트와 설정, AI 역추론, 순차 리드로우',
+        metadataTitle: '이미지 원본 데이터 복원',
+        metadataSubtitle:
+            'NovelAI, Stable Diffusion WebUI / Forge, ComfyUI 내장 매개변수를 읽습니다',
       );
     default:
       return (
@@ -2370,6 +2388,9 @@ MobileToolsHubText mobileToolsHubTextFor(Object? value) {
         comicSubtitle: '故事拆分、连续分镜、一致性检测、串行出图与 ZIP',
         batchTitle: '批量图生图',
         batchSubtitle: '多图导入、逐图提示词和参数、AI 反推、串行重绘',
+        metadataTitle: '恢复图片原数据',
+        metadataSubtitle:
+            '读取 NovelAI、Stable Diffusion WebUI / Forge 与 ComfyUI 内嵌参数',
       );
   }
 }

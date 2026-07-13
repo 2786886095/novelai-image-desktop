@@ -973,7 +973,7 @@ export interface AiModelListResult {
   models: string[];
 }
 
-/** Parsed generation parameters extracted from a NovelAI PNG's metadata. */
+/** Compatible generation parameters extracted from embedded image metadata. */
 export interface ImportedParams {
   positivePrompt?: string;
   negativePrompt?: string;
@@ -984,6 +984,7 @@ export interface ImportedParams {
   sampler?: NAISampler;
   noiseSchedule?: string;
   seed?: number;
+  seedMode?: "fixed" | "random";
   width?: number;
   height?: number;
   smea?: boolean;
