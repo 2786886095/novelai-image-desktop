@@ -2369,6 +2369,8 @@ typedef MobileToolsHubText = ({
   String batchSubtitle,
   String metadataTitle,
   String metadataSubtitle,
+  String aitagTitle,
+  String aitagSubtitle,
 });
 
 MobileToolsHubText mobileToolsHubTextFor(Object? value) {
@@ -2383,6 +2385,8 @@ MobileToolsHubText mobileToolsHubTextFor(Object? value) {
         metadataTitle: '恢復圖片原始資料',
         metadataSubtitle:
             '讀取 NovelAI、Stable Diffusion WebUI / Forge 與 ComfyUI 內嵌參數',
+        aitagTitle: 'AI 繪畫咒語圖庫',
+        aitagSubtitle: '搜尋 AITag 公開作品並查看圖片生成原參數',
       );
     case 'en-US':
       return (
@@ -2396,6 +2400,9 @@ MobileToolsHubText mobileToolsHubTextFor(Object? value) {
         metadataTitle: 'Restore Image Metadata',
         metadataSubtitle:
             'Read embedded NovelAI, Stable Diffusion WebUI / Forge, and ComfyUI parameters',
+        aitagTitle: 'AI Art Prompt Gallery',
+        aitagSubtitle:
+            'Search AITag public works and inspect original generation metadata',
       );
     case 'ja-JP':
       return (
@@ -2407,6 +2414,8 @@ MobileToolsHubText mobileToolsHubTextFor(Object? value) {
         metadataTitle: '画像の元データを復元',
         metadataSubtitle:
             'NovelAI、Stable Diffusion WebUI / Forge、ComfyUI の埋め込み設定を読み取ります',
+        aitagTitle: 'AI イラスト呪文ギャラリー',
+        aitagSubtitle: 'AITag の公開作品を検索して画像の生成データを確認します',
       );
     case 'ko-KR':
       return (
@@ -2418,6 +2427,8 @@ MobileToolsHubText mobileToolsHubTextFor(Object? value) {
         metadataTitle: '이미지 원본 데이터 복원',
         metadataSubtitle:
             'NovelAI, Stable Diffusion WebUI / Forge, ComfyUI 내장 매개변수를 읽습니다',
+        aitagTitle: 'AI 그림 프롬프트 갤러리',
+        aitagSubtitle: 'AITag 공개 작품을 검색하고 이미지 생성 원본 데이터를 확인합니다',
       );
     default:
       return (
@@ -2429,6 +2440,8 @@ MobileToolsHubText mobileToolsHubTextFor(Object? value) {
         metadataTitle: '恢复图片原数据',
         metadataSubtitle:
             '读取 NovelAI、Stable Diffusion WebUI / Forge 与 ComfyUI 内嵌参数',
+        aitagTitle: 'AI绘画咒语图库',
+        aitagSubtitle: '搜索 AITag 公开作品并查看图片生成原参数',
       );
   }
 }

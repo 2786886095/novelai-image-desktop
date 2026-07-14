@@ -1,0 +1,74 @@
+import 'dart:convert';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:novelai_mobile/images/png_metadata.dart';
+import 'package:novelai_mobile/services/aitag_service.dart';
+
+void main() {
+  test(
+      'AITag native data client searches, loads detail, and reuses metadata parser',
+      () async {
+    http.Response jsonResponse(Object value) => http.Response.bytes(
+          utf8.encode(jsonEncode(value)),
+          200,
+          headers: const {'content-type': 'application/json'},
+        );
+    final client = MockClient((request) async {
+      if (request.url.path == '/api/config') {
+        return jsonResponse({'asset_base_url': 'https://cdn.example/'});
+      }
+      if (request.url.path == '/api/ai_works_search') {
+        expect(request.url.queryParameters['page_size'], '$aitagPageSize');
+        return jsonResponse({
+          'page': 1,
+          'total': 1,
+          'items': [
+            {
+              'id': 9,
+              'title': '测试作品',
+              'tags': '["solo","blue_hair"]',
+              'AI_type': 'SD',
+              'image_count': 1,
+            }
+          ],
+        });
+      }
+      if (request.url.path == '/api/work/9') {
+        return jsonResponse({
+          'work': {'id': 9, 'title': '测试作品', 'AI_type': 'SD'},
+          'images': [
+            {
+              'id': 3,
+              'author_id': '22',
+              'image_type': 'SD',
+              'file_name': 'work 0',
+              'ai_json': jsonEncode({
+                'parameters':
+                    '1girl\nNegative prompt: lowres\nSteps: 28, Sampler: Euler a, CFG scale: 6, Seed: 12, Size: 832x1216',
+              }),
+            }
+          ],
+        });
+      }
+      return http.Response('not found', 404);
+    });
+
+    final service = AitagService(client: client);
+    await service.loadConfig();
+    final search = await service.search(query: 'blue hair');
+    expect(search.items.single.title, '测试作品');
+    expect(search.items.single.tags, ['solo', 'blue_hair']);
+
+    final detail = await service.work(9);
+    expect(service.imageUrl(detail.images.single),
+        'https://cdn.example/SD/22/work%200.webp');
+    final report = inspectImageMetadata(
+        aitagMetadataRecord(detail.images.single, detail.work.aiType));
+    expect(report.kind, ImageMetadataKind.stableDiffusion);
+    expect(report.imported.steps, 28);
+    expect(report.imported.width, 832);
+    service.close();
+  });
+}

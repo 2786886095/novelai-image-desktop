@@ -118,6 +118,8 @@ const TOOLS_HUB_TEXT = {
     tuiwenDesc: "桌面专属：小说/字幕转分镜旁白，叠加全局精准参考，最终导出剪映草稿。",
     metadataTitle: "恢复图片原数据",
     metadataDesc: "读取 NovelAI、Stable Diffusion WebUI / Forge 与 ComfyUI 图片的完整内嵌参数，并可一键套用兼容项。",
+    aitagTitle: "AI绘画咒语图库",
+    aitagDesc: "原生搜索 AITag 公开作品，并查看每张图片的生成提示词与原参数。",
     ready: "已接入",
     foundation: "P0 底座",
   },
@@ -133,6 +135,8 @@ const TOOLS_HUB_TEXT = {
     tuiwenDesc: "桌面專屬：小說/字幕轉分鏡旁白，疊加全域精準參考，最後匯出剪映草稿。",
     metadataTitle: "恢復圖片原始資料",
     metadataDesc: "讀取 NovelAI、Stable Diffusion WebUI / Forge 與 ComfyUI 圖片的完整內嵌參數，並可一鍵套用相容項目。",
+    aitagTitle: "AI 繪畫咒語圖庫",
+    aitagDesc: "原生搜尋 AITag 公開作品，並查看每張圖片的生成提示詞與原參數。",
     ready: "已接入",
     foundation: "P0 底座",
   },
@@ -148,6 +152,8 @@ const TOOLS_HUB_TEXT = {
     tuiwenDesc: "Desktop-only: turn novels/subtitles into narrated shots, keep global precise references, and export Jianying drafts.",
     metadataTitle: "Restore Image Metadata",
     metadataDesc: "Read complete NovelAI, Stable Diffusion WebUI / Forge, and ComfyUI metadata and reuse compatible values.",
+    aitagTitle: "AI Art Prompt Gallery",
+    aitagDesc: "Search AITag public works natively and inspect prompts and original generation metadata.",
     ready: "Ready",
     foundation: "P0 Base",
   },
@@ -163,6 +169,8 @@ const TOOLS_HUB_TEXT = {
     tuiwenDesc: "デスクトップ専用：小説/字幕をナレーション付きカットに変換し、精密参照を重ねて剪映ドラフトへ書き出します。",
     metadataTitle: "画像の元データを復元",
     metadataDesc: "NovelAI、Stable Diffusion WebUI / Forge、ComfyUI の全埋め込み設定を読み取り、互換項目を再利用します。",
+    aitagTitle: "AI イラスト呪文ギャラリー",
+    aitagDesc: "AITag の公開作品をネイティブ検索し、画像ごとのプロンプトと生成パラメータを確認します。",
     ready: "接続済み",
     foundation: "P0 基盤",
   },
@@ -178,6 +186,8 @@ const TOOLS_HUB_TEXT = {
     tuiwenDesc: "데스크톱 전용: 소설/자막을 내레이션 컷으로 바꾸고 전역 정밀 참조를 더해 Jianying 초안으로 내보냅니다.",
     metadataTitle: "이미지 원본 데이터 복원",
     metadataDesc: "NovelAI, Stable Diffusion WebUI / Forge, ComfyUI의 전체 내장 설정을 읽고 호환 값을 재사용합니다.",
+    aitagTitle: "AI 그림 프롬프트 갤러리",
+    aitagDesc: "AITag 공개 작품을 기본 화면에서 검색하고 이미지별 프롬프트와 생성 매개변수를 확인합니다.",
     ready: "연결됨",
     foundation: "P0 기반",
   },
@@ -193,6 +203,8 @@ const TOOLS_HUB_TEXT = {
   | "tuiwenDesc"
   | "metadataTitle"
   | "metadataDesc"
+  | "aitagTitle"
+  | "aitagDesc"
   | "ready"
   | "foundation",
   string

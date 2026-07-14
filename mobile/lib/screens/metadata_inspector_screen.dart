@@ -31,6 +31,8 @@ typedef _MetadataText = ({
   String raw,
   String copyRaw,
   String copied,
+  String copyItem,
+  String itemCopied,
   String viewOnly,
   String readFailed,
 });
@@ -60,6 +62,8 @@ _MetadataText _metadataTextFor(Object? language) {
         raw: '完整原始資料',
         copyRaw: '複製原始資料',
         copied: '原始資料已複製',
+        copyItem: '複製此項',
+        itemCopied: '已複製',
         viewOnly: '部分 SD / ComfyUI 專用值只能查看，無法直接套用到 NovelAI。',
         readFailed: '無法讀取該圖片，請確認檔案未損壞並重新選擇原圖。',
       );
@@ -90,6 +94,8 @@ _MetadataText _metadataTextFor(Object? language) {
         raw: 'Complete raw metadata',
         copyRaw: 'Copy raw metadata',
         copied: 'Raw metadata copied',
+        copyItem: 'Copy value',
+        itemCopied: 'Copied',
         viewOnly:
             'Some SD / ComfyUI-only values are view-only and cannot be applied directly to NovelAI.',
         readFailed:
@@ -119,6 +125,8 @@ _MetadataText _metadataTextFor(Object? language) {
         raw: '完全な元データ',
         copyRaw: '元データをコピー',
         copied: '元データをコピーしました',
+        copyItem: 'この値をコピー',
+        itemCopied: 'コピーしました',
         viewOnly: '一部の SD / ComfyUI 専用値は閲覧のみで、NovelAI へ直接適用できません。',
         readFailed: '画像を読み取れません。ファイルが壊れていないか確認し、元画像を選び直してください。',
       );
@@ -146,6 +154,8 @@ _MetadataText _metadataTextFor(Object? language) {
         raw: '전체 원본 데이터',
         copyRaw: '원본 데이터 복사',
         copied: '원본 데이터를 복사했습니다',
+        copyItem: '이 값 복사',
+        itemCopied: '복사했습니다',
         viewOnly: '일부 SD / ComfyUI 전용 값은 보기 전용이며 NovelAI에 바로 적용할 수 없습니다.',
         readFailed: '이미지를 읽을 수 없습니다. 파일이 손상되지 않았는지 확인하고 원본을 다시 선택하세요.',
       );
@@ -172,10 +182,294 @@ _MetadataText _metadataTextFor(Object? language) {
         raw: '完整原始数据',
         copyRaw: '复制原始数据',
         copied: '原始数据已复制',
+        copyItem: '复制此项',
+        itemCopied: '已复制',
         viewOnly: '部分 SD / ComfyUI 专用值只能查看，无法直接套用到 NovelAI。',
         readFailed: '无法读取该图片，请确认文件未损坏并重新选择原图。',
       );
   }
+}
+
+const _importedEnglish = <String, String>{
+  'positivePrompt': 'Positive prompt',
+  'negativePrompt': 'Negative prompt',
+  'model': 'Model',
+  'steps': 'Steps',
+  'cfgScale': 'CFG scale',
+  'cfgRescale': 'CFG rescale',
+  'sampler': 'Sampler',
+  'noiseSchedule': 'Noise schedule',
+  'seed': 'Seed',
+  'seedMode': 'Seed mode',
+  'width': 'Width',
+  'height': 'Height',
+  'smea': 'SMEA',
+  'smeaDyn': 'SMEA Dyn',
+};
+
+const _parameterEnglish = <String, String>{
+  'positive prompt': 'Positive prompt',
+  'negative prompt': 'Negative prompt',
+  'description': 'Description',
+  'prompt': 'Prompt',
+  'uc': 'Undesired content',
+  'steps': 'Steps',
+  'cfg scale': 'CFG scale',
+  'scale': 'CFG scale',
+  'cfg rescale': 'CFG rescale',
+  'cfg_rescale': 'CFG rescale',
+  'sampler': 'Sampler',
+  'scheduler': 'Scheduler',
+  'schedule type': 'Schedule type',
+  'noise schedule': 'Noise schedule',
+  'noise_schedule': 'Noise schedule',
+  'seed': 'Seed',
+  'seed mode': 'Seed mode',
+  'width': 'Width',
+  'height': 'Height',
+  'size': 'Size',
+  'model': 'Model',
+  'source': 'Source',
+  'software': 'Software',
+  'model hash': 'Model hash',
+  'vae': 'VAE',
+  'vae hash': 'VAE hash',
+  'lora': 'LoRA',
+  'checkpoint': 'Checkpoint',
+  'denoise': 'Denoise',
+  'denoising strength': 'Denoising strength',
+  'clip skip': 'Clip skip',
+  'version': 'Version',
+  'smea': 'SMEA',
+  'sm': 'SMEA',
+  'smea dyn': 'SMEA Dyn',
+  'sm_dyn': 'SMEA Dyn',
+  'dynamic_thresholding': 'Dynamic thresholding',
+  'qualitytoggle': 'Quality toggle',
+  'params_version': 'Parameters version',
+  'hires steps': 'Hires steps',
+  'hires upscale': 'Hires upscale',
+  'hires upscaler': 'Hires upscaler',
+  'hires prompt': 'Hires prompt',
+  'hires negative prompt': 'Hires negative prompt',
+  'lora hashes': 'LoRA hashes',
+  'adetailer model': 'ADetailer model',
+  'adetailer prompt': 'ADetailer prompt',
+  'adetailer negative prompt': 'ADetailer negative prompt',
+  'adetailer confidence': 'ADetailer confidence',
+  'adetailer denoising strength': 'ADetailer denoising strength',
+  'adetailer version': 'ADetailer version',
+};
+
+const _zhCnParameters = <String, String>{
+  'Positive prompt': '正面提示词',
+  'Negative prompt': '负面提示词',
+  'Description': '提示词描述',
+  'Prompt': '提示词',
+  'Undesired content': '不希望出现的内容',
+  'Steps': '采样步数',
+  'CFG scale': '提示词引导强度',
+  'CFG rescale': 'CFG 重缩放',
+  'Sampler': '采样器',
+  'Scheduler': '调度器',
+  'Schedule type': '调度类型',
+  'Noise schedule': '噪声调度',
+  'Seed': '种子',
+  'Seed mode': '种子模式',
+  'Width': '宽度',
+  'Height': '高度',
+  'Size': '尺寸',
+  'Model': '模型',
+  'Source': '来源模型',
+  'Software': '生成软件',
+  'Model hash': '模型哈希',
+  'VAE': 'VAE 模型',
+  'VAE hash': 'VAE 哈希',
+  'LoRA': 'LoRA 模型',
+  'Checkpoint': '基础模型',
+  'Denoise': '降噪强度',
+  'Denoising strength': '重绘强度',
+  'Clip skip': 'CLIP 跳过层数',
+  'Version': '版本',
+  'SMEA': 'SMEA 平滑',
+  'SMEA Dyn': '动态 SMEA',
+  'Dynamic thresholding': '动态阈值',
+  'Quality toggle': '质量增强',
+  'Parameters version': '参数版本',
+  'Hires steps': '高清修复步数',
+  'Hires upscale': '高清放大倍数',
+  'Hires upscaler': '高清放大算法',
+  'Hires prompt': '高清修复提示词',
+  'Hires negative prompt': '高清修复负面提示词',
+  'LoRA hashes': 'LoRA 哈希',
+  'ADetailer model': '细节修复模型',
+  'ADetailer prompt': '细节修复提示词',
+  'ADetailer negative prompt': '细节修复负面提示词',
+  'ADetailer confidence': '细节检测置信度',
+  'ADetailer denoising strength': '细节修复重绘强度',
+  'ADetailer version': '细节修复版本',
+};
+
+Map<String, String> _parameterTranslations(String code) => switch (code) {
+      'zh-CN' => _zhCnParameters,
+      'zh-TW' => _zhCnParameters.map((key, value) => MapEntry(
+          key,
+          value
+              .replaceAll('提示词', '提示詞')
+              .replaceAll('采样', '取樣')
+              .replaceAll('调度', '排程')
+              .replaceAll('噪声', '雜訊')
+              .replaceAll('种子', '種子')
+              .replaceAll('宽度', '寬度')
+              .replaceAll('软件', '軟體')
+              .replaceAll('哈希', '雜湊')
+              .replaceAll('参数', '參數')
+              .replaceAll('动态', '動態')
+              .replaceAll('质量', '品質')
+              .replaceAll('重绘', '重繪'))),
+      'ja-JP' => const {
+          'Positive prompt': 'ポジティブプロンプト',
+          'Negative prompt': 'ネガティブプロンプト',
+          'Description': 'プロンプト記述',
+          'Prompt': 'プロンプト',
+          'Undesired content': '除外内容',
+          'Steps': 'ステップ数',
+          'CFG scale': 'CFG スケール',
+          'CFG rescale': 'CFG リスケール',
+          'Sampler': 'サンプラー',
+          'Scheduler': 'スケジューラー',
+          'Schedule type': 'スケジュール方式',
+          'Noise schedule': 'ノイズスケジュール',
+          'Seed': 'シード',
+          'Seed mode': 'シード方式',
+          'Width': '幅',
+          'Height': '高さ',
+          'Size': 'サイズ',
+          'Model': 'モデル',
+          'Source': '生成元',
+          'Software': '生成ソフト',
+          'Model hash': 'モデルハッシュ',
+          'Checkpoint': 'チェックポイント',
+          'Denoise': 'ノイズ除去',
+          'Denoising strength': 'ノイズ除去強度',
+          'Clip skip': 'CLIP スキップ',
+          'Version': 'バージョン',
+          'SMEA Dyn': '動的 SMEA',
+          'Dynamic thresholding': '動的しきい値',
+          'Quality toggle': '品質向上',
+          'Parameters version': 'パラメータ版',
+          'Hires steps': '高解像度ステップ',
+          'Hires upscale': '高解像度倍率',
+          'Hires upscaler': '高解像度アップスケーラー',
+          'Hires prompt': '高解像度プロンプト',
+          'Hires negative prompt': '高解像度ネガティブプロンプト',
+          'LoRA hashes': 'LoRA ハッシュ',
+          'ADetailer model': 'ディテール修正モデル',
+          'ADetailer prompt': 'ディテール修正プロンプト',
+          'ADetailer negative prompt': 'ディテール修正ネガティブプロンプト',
+          'ADetailer confidence': 'ディテール検出信頼度',
+          'ADetailer denoising strength': 'ディテール修正強度',
+          'ADetailer version': 'ADetailer バージョン',
+        },
+      'ko-KR' => const {
+          'Positive prompt': '긍정 프롬프트',
+          'Negative prompt': '부정 프롬프트',
+          'Description': '프롬프트 설명',
+          'Prompt': '프롬프트',
+          'Undesired content': '제외할 내용',
+          'Steps': '샘플링 단계',
+          'CFG scale': 'CFG 강도',
+          'CFG rescale': 'CFG 재조정',
+          'Sampler': '샘플러',
+          'Scheduler': '스케줄러',
+          'Schedule type': '스케줄 유형',
+          'Noise schedule': '노이즈 스케줄',
+          'Seed': '시드',
+          'Seed mode': '시드 모드',
+          'Width': '너비',
+          'Height': '높이',
+          'Size': '크기',
+          'Model': '모델',
+          'Source': '출처 모델',
+          'Software': '생성 소프트웨어',
+          'Model hash': '모델 해시',
+          'Checkpoint': '체크포인트',
+          'Denoise': '노이즈 제거',
+          'Denoising strength': '노이즈 제거 강도',
+          'Clip skip': 'CLIP 건너뛰기',
+          'Version': '버전',
+          'SMEA Dyn': '동적 SMEA',
+          'Dynamic thresholding': '동적 임계값',
+          'Quality toggle': '품질 향상',
+          'Parameters version': '매개변수 버전',
+          'Hires steps': '고해상도 단계',
+          'Hires upscale': '고해상도 배율',
+          'Hires upscaler': '고해상도 업스케일러',
+          'Hires prompt': '고해상도 프롬프트',
+          'Hires negative prompt': '고해상도 부정 프롬프트',
+          'LoRA hashes': 'LoRA 해시',
+          'ADetailer model': '세부 보정 모델',
+          'ADetailer prompt': '세부 보정 프롬프트',
+          'ADetailer negative prompt': '세부 보정 부정 프롬프트',
+          'ADetailer confidence': '세부 감지 신뢰도',
+          'ADetailer denoising strength': '세부 보정 강도',
+          'ADetailer version': 'ADetailer 버전',
+        },
+      _ => const {},
+    };
+
+String metadataParameterLabel(Object? language, String key) {
+  final code = normalizeAppLocaleCode(language);
+  final english = _parameterEnglish[key.trim().toLowerCase()] ?? key;
+  if (code == 'en-US') return english;
+  final generic = switch (code) {
+    'zh-TW' => '其他參數',
+    'ja-JP' => 'その他の設定',
+    'ko-KR' => '기타 매개변수',
+    _ => '其他参数',
+  };
+  final translated = _parameterTranslations(code)[english] ?? generic;
+  return '$translated ($english)';
+}
+
+String metadataGroupLabel(Object? language, String group) {
+  final code = normalizeAppLocaleCode(language);
+  final english = const {
+        'generation': 'Generation',
+        'model': 'Model',
+        'image': 'Image',
+        'raw': 'Raw'
+      }[group] ??
+      group;
+  if (code == 'en-US') return english;
+  final translated = switch (code) {
+        'zh-TW' => const {
+            'Generation': '生成參數',
+            'Model': '模型參數',
+            'Image': '圖片參數',
+            'Raw': '原始資料'
+          },
+        'ja-JP' => const {
+            'Generation': '生成設定',
+            'Model': 'モデル設定',
+            'Image': '画像設定',
+            'Raw': '元データ'
+          },
+        'ko-KR' => const {
+            'Generation': '생성 매개변수',
+            'Model': '모델 매개변수',
+            'Image': '이미지 매개변수',
+            'Raw': '원본 데이터'
+          },
+        _ => const {
+            'Generation': '生成参数',
+            'Model': '模型参数',
+            'Image': '图像参数',
+            'Raw': '原始数据'
+          },
+      }[english] ??
+      english;
+  return '$translated ($english)';
 }
 
 class MetadataInspectorScreen extends StatefulWidget {
@@ -230,6 +524,13 @@ class _MetadataInspectorScreenState extends State<MetadataInspectorScreen> {
         ImageMetadataKind.comfyUi => text.sourceComfy,
         ImageMetadataKind.unknown => text.sourceUnknown,
       };
+
+  Future<void> _copyItem(String value, String label, _MetadataText text) async {
+    await Clipboard.setData(ClipboardData(text: value));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text('${text.itemCopied}: $label')));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -359,11 +660,14 @@ class _MetadataInspectorScreenState extends State<MetadataInspectorScreen> {
                           Wrap(
                             spacing: 8,
                             runSpacing: 8,
-                            children: compatible.entries
-                                .map((entry) => Chip(
-                                    label:
-                                        Text('${entry.key}: ${entry.value}')))
-                                .toList(),
+                            children: compatible.entries.map((entry) {
+                              final english =
+                                  _importedEnglish[entry.key] ?? entry.key;
+                              return Chip(
+                                  label: Text(
+                                '${metadataParameterLabel(state.settings.language, english)}: ${entry.value}',
+                              ));
+                            }).toList(),
                           ),
                         const SizedBox(height: 14),
                         FilledButton.icon(
@@ -415,6 +719,17 @@ class _MetadataInspectorScreenState extends State<MetadataInspectorScreen> {
                         else
                           ...report.entries.map((entry) => _ParameterTile(
                                 entry: entry,
+                                label: metadataParameterLabel(
+                                    state.settings.language, entry.key),
+                                groupLabel: metadataGroupLabel(
+                                    state.settings.language, entry.group),
+                                copyTooltip: text.copyItem,
+                                onCopy: () => _copyItem(
+                                  entry.value,
+                                  metadataParameterLabel(
+                                      state.settings.language, entry.key),
+                                  text,
+                                ),
                               )),
                       ],
                     ),
@@ -498,8 +813,18 @@ class _SummaryCard extends StatelessWidget {
 
 class _ParameterTile extends StatelessWidget {
   final ImageMetadataEntry entry;
+  final String label;
+  final String groupLabel;
+  final String copyTooltip;
+  final VoidCallback onCopy;
 
-  const _ParameterTile({required this.entry});
+  const _ParameterTile({
+    required this.entry,
+    required this.label,
+    required this.groupLabel,
+    required this.copyTooltip,
+    required this.onCopy,
+  });
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -518,13 +843,18 @@ class _ParameterTile extends StatelessWidget {
                 Row(
                   children: [
                     Expanded(
-                      child: Text(entry.key,
+                      child: Text(label,
                           style: const TextStyle(fontWeight: FontWeight.w700)),
                     ),
-                    Text(entry.group,
-                        style: Theme.of(context).textTheme.labelSmall),
+                    IconButton(
+                      tooltip: '$copyTooltip: $label',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: onCopy,
+                      icon: const Icon(Icons.copy_outlined, size: 19),
+                    ),
                   ],
                 ),
+                Text(groupLabel, style: Theme.of(context).textTheme.labelSmall),
                 const SizedBox(height: 6),
                 SelectableText(entry.value),
               ],

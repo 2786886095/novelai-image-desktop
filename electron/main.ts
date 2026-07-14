@@ -32,6 +32,7 @@ import {
   verifyToken,
 } from "./ipc/nai";
 import { danbooruStatus, downloadDanbooruTags, browseDanbooru, searchDanbooru } from "./ipc/danbooru-tags";
+import { getAitagConfig, getAitagWork, searchAitag } from "./ipc/aitag";
 import { getTuiwenTtsCatalog, saveTuiwenImportedAudio, synthesizeTuiwenSpeech } from "./ipc/tuiwen-audio";
 import { importTuiwenFile } from "./ipc/tuiwen-import";
 import { detectJianYingDraftRoot, exportTuiwenJianYingDraft } from "./ipc/tuiwen-jianying";
@@ -244,6 +245,9 @@ function createWindow() {
 }
 
 function registerIpc() {
+  ipcMain.handle("aitag:config", () => getAitagConfig());
+  ipcMain.handle("aitag:search", (_event, request: unknown) => searchAitag(request));
+  ipcMain.handle("aitag:work", (_event, id: unknown) => getAitagWork(id));
   ipcMain.handle("nai:hasToken", async () => {
     const summary = getAccountSummary();
     if (!summary.hasToken) return summary;

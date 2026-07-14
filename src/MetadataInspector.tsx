@@ -31,6 +31,8 @@ type MetadataText = {
   raw: string;
   copyRaw: string;
   copied: string;
+  copyItem: string;
+  itemCopied: string;
   localOnly: string;
   replace: string;
   viewOnly: string;
@@ -62,6 +64,8 @@ const TEXT: Record<AppLanguage, MetadataText> = {
     raw: "完整原始数据",
     copyRaw: "复制原始数据",
     copied: "原始数据已复制",
+    copyItem: "复制此项",
+    itemCopied: "已复制",
     localOnly: "零积分 · 不调用 AI · 不发送网络请求",
     replace: "更换图片",
     viewOnly: "部分 Stable Diffusion / ComfyUI 专用参数只能查看，无法直接套用到 NovelAI。",
@@ -91,6 +95,8 @@ const TEXT: Record<AppLanguage, MetadataText> = {
     raw: "完整原始資料",
     copyRaw: "複製原始資料",
     copied: "原始資料已複製",
+    copyItem: "複製此項",
+    itemCopied: "已複製",
     localOnly: "零積分 · 不呼叫 AI · 不傳送網路請求",
     replace: "更換圖片",
     viewOnly: "部分 Stable Diffusion / ComfyUI 專用參數只能查看，無法直接套用到 NovelAI。",
@@ -120,6 +126,8 @@ const TEXT: Record<AppLanguage, MetadataText> = {
     raw: "Complete raw metadata",
     copyRaw: "Copy raw metadata",
     copied: "Raw metadata copied",
+    copyItem: "Copy value",
+    itemCopied: "Copied",
     localOnly: "0 Anlas · no AI call · no network request",
     replace: "Replace image",
     viewOnly: "Some Stable Diffusion / ComfyUI-only values are view-only and cannot be applied directly to NovelAI.",
@@ -149,6 +157,8 @@ const TEXT: Record<AppLanguage, MetadataText> = {
     raw: "完全な元データ",
     copyRaw: "元データをコピー",
     copied: "元データをコピーしました",
+    copyItem: "この値をコピー",
+    itemCopied: "コピーしました",
     localOnly: "Anlas 0 · AI 不使用 · ネットワーク送信なし",
     replace: "画像を変更",
     viewOnly: "一部の Stable Diffusion / ComfyUI 専用設定は閲覧のみで、NovelAI へ直接適用できません。",
@@ -178,6 +188,8 @@ const TEXT: Record<AppLanguage, MetadataText> = {
     raw: "전체 원본 데이터",
     copyRaw: "원본 데이터 복사",
     copied: "원본 데이터를 복사했습니다",
+    copyItem: "이 값 복사",
+    itemCopied: "복사했습니다",
     localOnly: "Anlas 0 · AI 호출 없음 · 네트워크 전송 없음",
     replace: "이미지 변경",
     viewOnly: "일부 Stable Diffusion / ComfyUI 전용 값은 보기 전용이며 NovelAI에 직접 적용할 수 없습니다.",
@@ -201,6 +213,177 @@ const IMPORT_LABELS: Record<keyof ImportedParams, string> = {
   smea: "SMEA",
   smeaDyn: "SMEA Dyn",
 };
+
+const PARAMETER_ENGLISH: Record<string, string> = {
+  "positive prompt": "Positive prompt",
+  "negative prompt": "Negative prompt",
+  description: "Description",
+  prompt: "Prompt",
+  uc: "Undesired content",
+  steps: "Steps",
+  "cfg scale": "CFG scale",
+  scale: "CFG scale",
+  "cfg rescale": "CFG rescale",
+  cfg_rescale: "CFG rescale",
+  sampler: "Sampler",
+  scheduler: "Scheduler",
+  "schedule type": "Schedule type",
+  "noise schedule": "Noise schedule",
+  noise_schedule: "Noise schedule",
+  seed: "Seed",
+  "seed mode": "Seed mode",
+  width: "Width",
+  height: "Height",
+  size: "Size",
+  model: "Model",
+  source: "Source",
+  software: "Software",
+  "model hash": "Model hash",
+  vae: "VAE",
+  "vae hash": "VAE hash",
+  lora: "LoRA",
+  checkpoint: "Checkpoint",
+  denoise: "Denoise",
+  "denoising strength": "Denoising strength",
+  "clip skip": "Clip skip",
+  version: "Version",
+  smea: "SMEA",
+  sm: "SMEA",
+  "smea dyn": "SMEA Dyn",
+  sm_dyn: "SMEA Dyn",
+  dynamic_thresholding: "Dynamic thresholding",
+  qualitytoggle: "Quality toggle",
+  params_version: "Parameters version",
+  "hires steps": "Hires steps",
+  "hires upscale": "Hires upscale",
+  "hires upscaler": "Hires upscaler",
+  "hires prompt": "Hires prompt",
+  "hires negative prompt": "Hires negative prompt",
+  "lora hashes": "LoRA hashes",
+  "adetailer model": "ADetailer model",
+  "adetailer prompt": "ADetailer prompt",
+  "adetailer negative prompt": "ADetailer negative prompt",
+  "adetailer confidence": "ADetailer confidence",
+  "adetailer dilate erode": "ADetailer dilate/erode",
+  "adetailer mask blur": "ADetailer mask blur",
+  "adetailer denoising strength": "ADetailer denoising strength",
+  "adetailer inpaint only masked": "ADetailer inpaint only masked",
+  "adetailer inpaint padding": "ADetailer inpaint padding",
+  "adetailer version": "ADetailer version",
+  "skip_cfg_above_sigma": "Skip CFG above sigma",
+  "controlnet_strength": "ControlNet strength",
+  "reference_strength_multiple": "Reference strengths",
+  "reference_information_extracted_multiple": "Reference information extracted",
+  "director_reference_strength_values": "Director reference strengths",
+  "director_reference_information_extracted": "Director reference information extracted",
+};
+
+const PARAMETER_TRANSLATIONS: Record<Exclude<AppLanguage, "en-US">, Record<string, string>> = {
+  "zh-CN": {
+    "Positive prompt": "正面提示词", "Negative prompt": "负面提示词", Description: "提示词描述",
+    Prompt: "提示词", "Undesired content": "不希望出现的内容", Steps: "采样步数", "CFG scale": "提示词引导强度",
+    "CFG rescale": "CFG 重缩放", Sampler: "采样器", Scheduler: "调度器", "Schedule type": "调度类型",
+    "Noise schedule": "噪声调度", Seed: "种子", "Seed mode": "种子模式", Width: "宽度", Height: "高度",
+    Size: "尺寸", Model: "模型", Source: "来源模型", Software: "生成软件", "Model hash": "模型哈希",
+    VAE: "VAE 模型", "VAE hash": "VAE 哈希", LoRA: "LoRA 模型", Checkpoint: "基础模型",
+    Denoise: "降噪强度", "Denoising strength": "重绘强度", "Clip skip": "CLIP 跳过层数", Version: "版本",
+    SMEA: "SMEA 平滑", "SMEA Dyn": "动态 SMEA", "Dynamic thresholding": "动态阈值",
+    "Quality toggle": "质量增强", "Parameters version": "参数版本", "Hires steps": "高清修复步数",
+    "Hires upscale": "高清放大倍数", "Hires upscaler": "高清放大算法",
+    "Hires prompt": "高清修复提示词", "Hires negative prompt": "高清修复负面提示词", "LoRA hashes": "LoRA 哈希",
+    "ADetailer model": "细节修复模型", "ADetailer prompt": "细节修复提示词", "ADetailer negative prompt": "细节修复负面提示词",
+    "ADetailer confidence": "细节检测置信度", "ADetailer dilate/erode": "细节遮罩扩张/侵蚀", "ADetailer mask blur": "细节遮罩模糊",
+    "ADetailer denoising strength": "细节修复重绘强度", "ADetailer inpaint only masked": "仅重绘细节遮罩", "ADetailer inpaint padding": "细节重绘边距", "ADetailer version": "细节修复版本",
+    "Skip CFG above sigma": "高噪声阶段跳过 CFG", "ControlNet strength": "ControlNet 强度", "Reference strengths": "参考图强度组",
+    "Reference information extracted": "参考图信息提取组", "Director reference strengths": "精准参考强度组", "Director reference information extracted": "精准参考信息提取组",
+  },
+  "zh-TW": {
+    "Positive prompt": "正面提示詞", "Negative prompt": "負面提示詞", Description: "提示詞描述",
+    Prompt: "提示詞", "Undesired content": "不希望出現的內容", Steps: "取樣步數", "CFG scale": "提示詞引導強度",
+    "CFG rescale": "CFG 重新縮放", Sampler: "取樣器", Scheduler: "排程器", "Schedule type": "排程類型",
+    "Noise schedule": "雜訊排程", Seed: "種子", "Seed mode": "種子模式", Width: "寬度", Height: "高度",
+    Size: "尺寸", Model: "模型", Source: "來源模型", Software: "生成軟體", "Model hash": "模型雜湊",
+    VAE: "VAE 模型", "VAE hash": "VAE 雜湊", LoRA: "LoRA 模型", Checkpoint: "基礎模型",
+    Denoise: "降噪強度", "Denoising strength": "重繪強度", "Clip skip": "CLIP 跳過層數", Version: "版本",
+    SMEA: "SMEA 平滑", "SMEA Dyn": "動態 SMEA", "Dynamic thresholding": "動態閾值",
+    "Quality toggle": "品質增強", "Parameters version": "參數版本", "Hires steps": "高解析修復步數",
+    "Hires upscale": "高解析放大倍數", "Hires upscaler": "高解析放大演算法",
+    "Hires prompt": "高解析修復提示詞", "Hires negative prompt": "高解析修復負面提示詞", "LoRA hashes": "LoRA 雜湊",
+    "ADetailer model": "細節修復模型", "ADetailer prompt": "細節修復提示詞", "ADetailer negative prompt": "細節修復負面提示詞",
+    "ADetailer confidence": "細節偵測信賴度", "ADetailer dilate/erode": "細節遮罩擴張/侵蝕", "ADetailer mask blur": "細節遮罩模糊",
+    "ADetailer denoising strength": "細節修復重繪強度", "ADetailer inpaint only masked": "僅重繪細節遮罩", "ADetailer inpaint padding": "細節重繪邊距", "ADetailer version": "細節修復版本",
+    "Skip CFG above sigma": "高雜訊階段略過 CFG", "ControlNet strength": "ControlNet 強度", "Reference strengths": "參考圖強度組",
+    "Reference information extracted": "參考圖資訊擷取組", "Director reference strengths": "精準參考強度組", "Director reference information extracted": "精準參考資訊擷取組",
+  },
+  "ja-JP": {
+    "Positive prompt": "ポジティブプロンプト", "Negative prompt": "ネガティブプロンプト", Description: "プロンプト記述",
+    Prompt: "プロンプト", "Undesired content": "除外内容", Steps: "ステップ数", "CFG scale": "CFG スケール",
+    "CFG rescale": "CFG リスケール", Sampler: "サンプラー", Scheduler: "スケジューラー", "Schedule type": "スケジュール方式",
+    "Noise schedule": "ノイズスケジュール", Seed: "シード", "Seed mode": "シード方式", Width: "幅", Height: "高さ",
+    Size: "サイズ", Model: "モデル", Source: "生成元", Software: "生成ソフト", "Model hash": "モデルハッシュ",
+    VAE: "VAE", "VAE hash": "VAE ハッシュ", LoRA: "LoRA", Checkpoint: "チェックポイント",
+    Denoise: "ノイズ除去", "Denoising strength": "ノイズ除去強度", "Clip skip": "CLIP スキップ", Version: "バージョン",
+    SMEA: "SMEA", "SMEA Dyn": "動的 SMEA", "Dynamic thresholding": "動的しきい値",
+    "Quality toggle": "品質向上", "Parameters version": "パラメータ版", "Hires steps": "高解像度ステップ",
+    "Hires upscale": "高解像度倍率", "Hires upscaler": "高解像度アップスケーラー",
+    "Hires prompt": "高解像度プロンプト", "Hires negative prompt": "高解像度ネガティブプロンプト", "LoRA hashes": "LoRA ハッシュ",
+    "ADetailer model": "ディテール修正モデル", "ADetailer prompt": "ディテール修正プロンプト", "ADetailer negative prompt": "ディテール修正ネガティブプロンプト",
+    "ADetailer confidence": "ディテール検出信頼度", "ADetailer dilate/erode": "マスク膨張/収縮", "ADetailer mask blur": "マスクぼかし",
+    "ADetailer denoising strength": "ディテール修正強度", "ADetailer inpaint only masked": "マスク部分のみ修正", "ADetailer inpaint padding": "修正余白", "ADetailer version": "ADetailer バージョン",
+    "Skip CFG above sigma": "高ノイズ時の CFG スキップ", "ControlNet strength": "ControlNet 強度", "Reference strengths": "参照強度一覧",
+    "Reference information extracted": "参照情報抽出一覧", "Director reference strengths": "精密参照強度一覧", "Director reference information extracted": "精密参照情報抽出一覧",
+  },
+  "ko-KR": {
+    "Positive prompt": "긍정 프롬프트", "Negative prompt": "부정 프롬프트", Description: "프롬프트 설명",
+    Prompt: "프롬프트", "Undesired content": "제외할 내용", Steps: "샘플링 단계", "CFG scale": "CFG 강도",
+    "CFG rescale": "CFG 재조정", Sampler: "샘플러", Scheduler: "스케줄러", "Schedule type": "스케줄 유형",
+    "Noise schedule": "노이즈 스케줄", Seed: "시드", "Seed mode": "시드 모드", Width: "너비", Height: "높이",
+    Size: "크기", Model: "모델", Source: "출처 모델", Software: "생성 소프트웨어", "Model hash": "모델 해시",
+    VAE: "VAE 모델", "VAE hash": "VAE 해시", LoRA: "LoRA 모델", Checkpoint: "체크포인트",
+    Denoise: "노이즈 제거", "Denoising strength": "노이즈 제거 강도", "Clip skip": "CLIP 건너뛰기", Version: "버전",
+    SMEA: "SMEA", "SMEA Dyn": "동적 SMEA", "Dynamic thresholding": "동적 임계값",
+    "Quality toggle": "품질 향상", "Parameters version": "매개변수 버전", "Hires steps": "고해상도 단계",
+    "Hires upscale": "고해상도 배율", "Hires upscaler": "고해상도 업스케일러",
+    "Hires prompt": "고해상도 프롬프트", "Hires negative prompt": "고해상도 부정 프롬프트", "LoRA hashes": "LoRA 해시",
+    "ADetailer model": "세부 보정 모델", "ADetailer prompt": "세부 보정 프롬프트", "ADetailer negative prompt": "세부 보정 부정 프롬프트",
+    "ADetailer confidence": "세부 감지 신뢰도", "ADetailer dilate/erode": "마스크 팽창/침식", "ADetailer mask blur": "마스크 흐림",
+    "ADetailer denoising strength": "세부 보정 강도", "ADetailer inpaint only masked": "마스크 부분만 보정", "ADetailer inpaint padding": "보정 여백", "ADetailer version": "ADetailer 버전",
+    "Skip CFG above sigma": "고노이즈 CFG 건너뛰기", "ControlNet strength": "ControlNet 강도", "Reference strengths": "참조 강도 목록",
+    "Reference information extracted": "참조 정보 추출 목록", "Director reference strengths": "정밀 참조 강도 목록", "Director reference information extracted": "정밀 참조 정보 추출 목록",
+  },
+};
+
+const GROUP_LABELS: Record<ImageMetadataReport["entries"][number]["group"], string> = {
+  generation: "Generation",
+  model: "Model",
+  image: "Image",
+  raw: "Raw",
+};
+
+export function parameterLabel(language: AppLanguage, key: string) {
+  const english = PARAMETER_ENGLISH[key.trim().toLowerCase()] ?? key;
+  if (language === "en-US") return english;
+  const fallback = {
+    "zh-CN": "其他参数",
+    "zh-TW": "其他參數",
+    "ja-JP": "その他の設定",
+    "ko-KR": "기타 매개변수",
+  }[language];
+  const translated = PARAMETER_TRANSLATIONS[language][english] ?? fallback;
+  return `${translated} (${english})`;
+}
+
+export function groupLabel(language: AppLanguage, group: keyof typeof GROUP_LABELS) {
+  const english = GROUP_LABELS[group];
+  if (language === "en-US") return english;
+  const translated = ({
+    "zh-CN": { Generation: "生成参数", Model: "模型参数", Image: "图像参数", Raw: "原始数据" },
+    "zh-TW": { Generation: "生成參數", Model: "模型參數", Image: "圖片參數", Raw: "原始資料" },
+    "ja-JP": { Generation: "生成設定", Model: "モデル設定", Image: "画像設定", Raw: "元データ" },
+    "ko-KR": { Generation: "생성 매개변수", Model: "모델 매개변수", Image: "이미지 매개변수", Raw: "원본 데이터" },
+  }[language] as Record<string, string>)[english] ?? english;
+  return `${translated} (${english})`;
+}
 
 function sourceLabel(report: ImageMetadataReport, text: MetadataText) {
   if (report.kind === "novelai") return text.sourceNovelAi;
@@ -266,6 +449,11 @@ export default function MetadataInspector({ onBack }: { onBack: () => void }) {
     if (!report?.rawText) return;
     await navigator.clipboard.writeText(report.rawText);
     setToast(text.copied);
+  }
+
+  async function copyItem(value: string, label: string) {
+    await navigator.clipboard.writeText(value);
+    setToast(`${text.itemCopied}: ${label}`);
   }
 
   return (
@@ -347,7 +535,7 @@ export default function MetadataInspector({ onBack }: { onBack: () => void }) {
               <div className="metadata-compatible-grid">
                 {compatibleEntries.map(([key, value]) => (
                   <div key={key}>
-                    <span>{IMPORT_LABELS[key]}</span>
+                    <span>{parameterLabel(language, IMPORT_LABELS[key])}</span>
                     <strong>{String(value)}</strong>
                   </div>
                 ))}
@@ -362,10 +550,19 @@ export default function MetadataInspector({ onBack }: { onBack: () => void }) {
                 {report.entries.map((entry, index) => (
                   <article key={entry.group + "-" + entry.key + "-" + index}>
                     <div>
-                      <span>{entry.group}</span>
-                      <strong>{entry.key}</strong>
+                      <span>{groupLabel(language, entry.group)}</span>
+                      <strong>{parameterLabel(language, entry.key)}</strong>
                     </div>
                     <pre>{entry.value}</pre>
+                    <button
+                      type="button"
+                      className="metadata-copy-item"
+                      title={`${text.copyItem}: ${parameterLabel(language, entry.key)}`}
+                      aria-label={`${text.copyItem}: ${parameterLabel(language, entry.key)}`}
+                      onClick={() => void copyItem(entry.value, parameterLabel(language, entry.key))}
+                    >
+                      <Icon name="copy" />
+                    </button>
                   </article>
                 ))}
               </div>

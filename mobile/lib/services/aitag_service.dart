@@ -1,0 +1,275 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:http/http.dart' as http;
+
+const aitagSiteUrl = 'https://aitag.win';
+const aitagPageSize = 60;
+
+String _string(Object? value) => value == null ? '' : value.toString();
+int _integer(Object? value) => int.tryParse(_string(value)) ?? 0;
+
+Object? parseAitagJson(Object? value) {
+  if (value is! String || value.trim().isEmpty) return value;
+  try {
+    return jsonDecode(value);
+  } catch (_) {
+    return value;
+  }
+}
+
+List<String> _stringList(Object? value) {
+  final parsed = parseAitagJson(value);
+  if (parsed is List) {
+    return parsed.map(_string).where((item) => item.isNotEmpty).toList();
+  }
+  return parsed is String
+      ? parsed
+          .split(',')
+          .map((item) => item.trim())
+          .where((item) => item.isNotEmpty)
+          .toList()
+      : const [];
+}
+
+class AitagWork {
+  final int id;
+  final String userId;
+  final String title;
+  final String caption;
+  final List<String> tags;
+  final String createDate;
+  final String aiType;
+  final int totalView;
+  final int totalBookmarks;
+  final int imageCount;
+
+  const AitagWork({
+    required this.id,
+    required this.userId,
+    required this.title,
+    required this.caption,
+    required this.tags,
+    required this.createDate,
+    required this.aiType,
+    required this.totalView,
+    required this.totalBookmarks,
+    required this.imageCount,
+  });
+
+  factory AitagWork.fromJson(Map<String, dynamic> json) => AitagWork(
+        id: _integer(json['id']),
+        userId: _string(json['userId'] ?? json['userid']),
+        title: _string(json['title']),
+        caption: _string(json['caption']),
+        tags: _stringList(json['tags']),
+        createDate: _string(json['create_date'] ?? json['createDate']),
+        aiType: _string(json['AI_type'] ?? json['ai_type'] ?? json['aiType']),
+        totalView: _integer(json['total_view'] ?? json['totalView']),
+        totalBookmarks:
+            _integer(json['total_bookmarks'] ?? json['totalBookmarks']),
+        imageCount: _integer(json['image_count'] ?? json['imageCount']),
+      );
+}
+
+class AitagImage {
+  final int id;
+  final String authorId;
+  final String imageType;
+  final String model;
+  final String fileName;
+  final Object? aiJson;
+  final String promptText;
+
+  const AitagImage({
+    required this.id,
+    required this.authorId,
+    required this.imageType,
+    required this.model,
+    required this.fileName,
+    required this.aiJson,
+    required this.promptText,
+  });
+
+  factory AitagImage.fromJson(Map<String, dynamic> json) => AitagImage(
+        id: _integer(json['id']),
+        authorId: _string(json['author_id'] ?? json['authorId']),
+        imageType: _string(json['image_type'] ?? json['imageType']),
+        model: _string(json['model']),
+        fileName: _string(json['file_name'] ?? json['fileName']),
+        aiJson: parseAitagJson(json['ai_json'] ?? json['aiJson']),
+        promptText: _string(json['prompt_text'] ?? json['promptText']),
+      );
+}
+
+class AitagWorkDetail {
+  final AitagWork work;
+  final List<AitagImage> images;
+  const AitagWorkDetail({required this.work, required this.images});
+}
+
+class AitagSearchResult {
+  final int page;
+  final int total;
+  final List<AitagWork> items;
+  const AitagSearchResult(
+      {required this.page, required this.total, required this.items});
+}
+
+class AitagService {
+  final http.Client _client;
+  String assetBaseUrl = 'https://ai-img.10118899.xyz/';
+  final Map<int, Future<AitagWorkDetail>> _detailCache = {};
+
+  AitagService({http.Client? client}) : _client = client ?? http.Client();
+
+  Future<Map<String, dynamic>> _get(Uri uri) async {
+    final response = await _client.get(uri, headers: const {
+      'Accept': 'application/json',
+      'User-Agent': 'Langbai-NovelAI-Studio-Mobile/AITag-Data-Client',
+    }).timeout(const Duration(seconds: 30));
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw http.ClientException('AITag HTTP ${response.statusCode}', uri);
+    }
+    final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+    if (decoded is! Map<String, dynamic>) {
+      throw const FormatException('Invalid AITag response');
+    }
+    return decoded;
+  }
+
+  Future<void> loadConfig() async {
+    final data = await _get(Uri.parse('$aitagSiteUrl/api/config'));
+    final base = _string(data['asset_base_url'] ?? data['assetBaseUrl']).trim();
+    if (base.isNotEmpty) assetBaseUrl = base;
+  }
+
+  Future<AitagSearchResult> search({
+    int page = 1,
+    String query = '',
+    String prompt = '',
+    String sort = 'new',
+  }) async {
+    final monthly = sort == 'monthly';
+    final params = <String, String>{
+      'page': '${page.clamp(1, 10000)}',
+      'page_size': '$aitagPageSize',
+      if (query.trim().isNotEmpty)
+        'q': query.trim().substring(0, query.trim().length.clamp(0, 2000)),
+      if (prompt.trim().isNotEmpty)
+        'prompt':
+            prompt.trim().substring(0, prompt.trim().length.clamp(0, 2000)),
+      if (!monthly) 'sort': 'new',
+      if (!monthly) 'time_range': 'all',
+    };
+    final path = monthly ? '/api/rank/monthly/real' : '/api/ai_works_search';
+    final data = await _get(
+        Uri.parse('$aitagSiteUrl$path').replace(queryParameters: params));
+    final rawItems = data['items'] is List ? data['items'] as List : const [];
+    return AitagSearchResult(
+      page: _integer(data['page']).clamp(1, 10000),
+      total: _integer(data['total']).clamp(0, 1 << 31),
+      items: rawItems
+          .whereType<Map>()
+          .map((item) => AitagWork.fromJson(Map<String, dynamic>.from(item)))
+          .where((item) => item.id > 0)
+          .toList(),
+    );
+  }
+
+  Future<AitagWorkDetail> work(int id) {
+    if (id <= 0) {
+      return Future.error(const FormatException('Invalid AITag work id'));
+    }
+    return _detailCache.putIfAbsent(id, () async {
+      try {
+        final data = await _get(Uri.parse('$aitagSiteUrl/api/work/$id'));
+        final workJson = data['work'] is Map
+            ? Map<String, dynamic>.from(data['work'] as Map)
+            : <String, dynamic>{};
+        final rawImages =
+            data['images'] is List ? data['images'] as List : const [];
+        return AitagWorkDetail(
+          work: AitagWork.fromJson(workJson),
+          images: rawImages
+              .whereType<Map>()
+              .map((image) =>
+                  AitagImage.fromJson(Map<String, dynamic>.from(image)))
+              .toList(),
+        );
+      } catch (_) {
+        _detailCache.remove(id);
+        rethrow;
+      }
+    });
+  }
+
+  String imageUrl(AitagImage image) {
+    if (image.authorId.isEmpty ||
+        image.imageType.isEmpty ||
+        image.fileName.isEmpty) return '';
+    final base = assetBaseUrl.replaceFirst(RegExp(r'/+$'), '');
+    final parts = [image.imageType, image.authorId, '${image.fileName}.webp']
+        .map(Uri.encodeComponent);
+    return '$base/${parts.join('/')}';
+  }
+
+  void close() => _client.close();
+}
+
+String formatAitagMetadata(Object? value) {
+  if (value is String) return value;
+  try {
+    return const JsonEncoder.withIndent('  ').convert(value);
+  } catch (_) {
+    return _string(value);
+  }
+}
+
+Map<String, String> aitagMetadataRecord(AitagImage image, String aiType) {
+  final parsed = image.aiJson;
+  final source =
+      parsed is Map ? Map<String, dynamic>.from(parsed) : <String, dynamic>{};
+  final result = <String, String>{};
+  for (final entry in source.entries) {
+    result[entry.key] = entry.value is String
+        ? entry.value as String
+        : formatAitagMetadata(entry.value);
+  }
+  if (parsed is String && parsed.trim().isNotEmpty) {
+    result['parameters'] = parsed;
+  }
+  if (source['parameters'] is String) {
+    result['parameters'] = source['parameters'] as String;
+  }
+  if (source['prompt'] is Map) {
+    result['prompt'] = formatAitagMetadata(source['prompt']);
+  }
+  if (source['workflow'] is Map) {
+    result['workflow'] = formatAitagMetadata(source['workflow']);
+  }
+  final novelAi = RegExp('novel|nai', caseSensitive: false)
+      .hasMatch('$aiType ${image.model}');
+  if (novelAi &&
+      !result.containsKey('parameters') &&
+      !result.containsKey('prompt') &&
+      !result.containsKey('workflow')) {
+    result['Description'] = result['Description'] ?? image.promptText;
+    result['Comment'] = result['Comment'] ?? formatAitagMetadata(source);
+    result['Source'] = result['Source'] ?? image.model;
+    result['Software'] = result['Software'] ?? 'NovelAI';
+  }
+  if (result.isEmpty && image.promptText.isNotEmpty) {
+    result['Description'] = image.promptText;
+  }
+  return result;
+}
+
+String stripAitagHtml(String value) => value
+    .replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n')
+    .replaceAll(RegExp(r'<[^>]+>'), '')
+    .replaceAll('&amp;', '&')
+    .replaceAll('&lt;', '<')
+    .replaceAll('&gt;', '>')
+    .replaceAll('&quot;', '"')
+    .trim();

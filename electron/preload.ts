@@ -26,8 +26,12 @@ import type {
   TuiwenTtsRequest,
   UpdateProgressEvent,
 } from "../src/types";
+import type { AitagSearchRequest } from "../src/aitag";
 
 contextBridge.exposeInMainWorld("naiDesktop", {
+  aitagConfig: () => ipcRenderer.invoke("aitag:config"),
+  aitagSearch: (request: AitagSearchRequest) => ipcRenderer.invoke("aitag:search", request),
+  aitagWork: (id: number) => ipcRenderer.invoke("aitag:work", id),
   hasToken: () => ipcRenderer.invoke("nai:hasToken"),
   accountCached: () => ipcRenderer.invoke("nai:accountCached"),
   verifyToken: (token: string) => ipcRenderer.invoke("nai:verify", token),

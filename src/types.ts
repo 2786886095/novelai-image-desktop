@@ -992,6 +992,10 @@ export interface ImportedParams {
 }
 
 export interface NaiDesktopApi {
+  /** Native read-only access to AITag's public gallery data (renderer-safe IPC proxy). */
+  aitagConfig: () => Promise<unknown>;
+  aitagSearch: (request: import("./aitag").AitagSearchRequest) => Promise<unknown>;
+  aitagWork: (id: number) => Promise<unknown>;
   hasToken: () => Promise<AccountSummary>;
   accountCached: () => Promise<AccountSummary>;
   verifyToken: (token: string) => Promise<TokenStatus>;

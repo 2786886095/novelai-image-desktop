@@ -5,8 +5,9 @@ import '../i18n/app_locales.dart';
 import '../state/app_state.dart';
 import 'batch_redraw_screen.dart';
 import 'comic_screen.dart';
+import 'aitag_gallery_screen.dart';
 
-enum _ActiveTool { hub, comic, batchRedraw }
+enum _ActiveTool { hub, comic, batchRedraw, aitag }
 
 class ToolsHubScreen extends StatefulWidget {
   const ToolsHubScreen({super.key});
@@ -26,6 +27,10 @@ class _ToolsHubScreenState extends State<ToolsHubScreen> {
     }
     if (active == _ActiveTool.batchRedraw) {
       return BatchRedrawScreen(
+          onBack: () => setState(() => active = _ActiveTool.hub));
+    }
+    if (active == _ActiveTool.aitag) {
+      return AitagGalleryScreen(
           onBack: () => setState(() => active = _ActiveTool.hub));
     }
     final language =
@@ -49,6 +54,13 @@ class _ToolsHubScreenState extends State<ToolsHubScreen> {
             title: text.batchTitle,
             subtitle: text.batchSubtitle,
             onTap: () => setState(() => active = _ActiveTool.batchRedraw),
+          ),
+          const SizedBox(height: 10),
+          _ToolTile(
+            icon: Icons.auto_awesome_mosaic_outlined,
+            title: text.aitagTitle,
+            subtitle: text.aitagSubtitle,
+            onTap: () => setState(() => active = _ActiveTool.aitag),
           ),
         ],
       ),
