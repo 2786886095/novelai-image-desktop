@@ -5066,11 +5066,7 @@ function MainPage() {
           <Suspense fallback={<div className="lazy-tool-loading">{t("tool.loadingTools")}</div>}>
             <MetadataInspector onBack={() => useAppStore.getState().setActiveTab("generate")} />
           </Suspense>
-        ) : activeTab === "tools" ? (
-          <Suspense fallback={<div className="lazy-tool-loading">{t("tool.loadingTools")}</div>}>
-            <ToolsHub />
-          </Suspense>
-        ) : activeTab === "records" ? (
+        ) : activeTab === "tools" ? null : activeTab === "records" ? (
           <AiLogPanel />
         ) : (
           <>
@@ -5087,6 +5083,11 @@ function MainPage() {
             <HistoryPanel />
           </>
         )}
+        <div className={clsx("persistent-tools-view", activeTab !== "tools" && "is-hidden")} aria-hidden={activeTab !== "tools"}>
+          <Suspense fallback={<div className="lazy-tool-loading">{t("tool.loadingTools")}</div>}>
+            <ToolsHub />
+          </Suspense>
+        </div>
       </div>
       <footer className="status-bar">
         <span>{statusText}</span>

@@ -288,6 +288,23 @@ const TEXT = {
 
 type GalleryText = (typeof TEXT)[keyof typeof TEXT];
 
+// Keep the gallery session outside React. ToolsHub is intentionally unmounted
+// when the user visits Generate/Redraw, but returning should feel like switching
+// tabs, not like reopening a remote website.
+const gallerySession = {
+  loaded: false,
+  config: normalizeAitagConfig({}),
+  query: "",
+  prompt: "",
+  sort: "new" as AitagSort,
+  timeRange: "all",
+  page: 1,
+  result: normalizeAitagSearch({}),
+  selected: null as AitagWorkDetail | null,
+  selectedImage: 0,
+};
+const galleryDetailCache = new Map<number, Promise<AitagWorkDetail>>();
+
 function interpolate(value: string, key: string, replacement: string | number) {
   return value.replace(`{${key}}`, String(replacement));
 }
@@ -378,31 +395,34 @@ export default function AitagGallery({ onBack }: { onBack: () => void }) {
   const applyParams = useAppStore((state) => state.applyParams);
   const setActiveTab = useAppStore((state) => state.setActiveTab);
   const text = TEXT[language];
-  const [config, setConfig] = useState<AitagConfig>(() => normalizeAitagConfig({}));
-  const [query, setQuery] = useState("");
-  const [prompt, setPrompt] = useState("");
-  const [sort, setSort] = useState<AitagSort>("new");
-  const [timeRange, setTimeRange] = useState("all");
-  const [page, setPage] = useState(1);
-  const [result, setResult] = useState(() => normalizeAitagSearch({}));
-  const [loading, setLoading] = useState(true);
+  const [config, setConfig] = useState<AitagConfig>(() => gallerySession.config);
+  const [query, setQuery] = useState(gallerySession.query);
+  const [prompt, setPrompt] = useState(gallerySession.prompt);
+  const [sort, setSort] = useState<AitagSort>(gallerySession.sort);
+  const [timeRange, setTimeRange] = useState(gallerySession.timeRange);
+  const [page, setPage] = useState(gallerySession.page);
+  const [result, setResult] = useState(() => gallerySession.result);
+  const [loading, setLoading] = useState(!gallerySession.loaded);
   const [error, setError] = useState(false);
-  const [selected, setSelected] = useState<AitagWorkDetail | null>(null);
-  const [selectedImage, setSelectedImage] = useState(0);
+  const [selected, setSelected] = useState<AitagWorkDetail | null>(gallerySession.selected);
+  const [selectedImage, setSelectedImage] = useState(gallerySession.selectedImage);
   const [detailLoading, setDetailLoading] = useState(false);
   const [compatibleSelection, setCompatibleSelection] = useState<Set<keyof ImportedParams>>(loadCompatibleSelection);
-  const cache = useRef(new Map<number, Promise<AitagWorkDetail>>());
 
   useEffect(() => {
     localStorage.setItem(COMPATIBLE_SELECTION_KEY, JSON.stringify([...compatibleSelection]));
   }, [compatibleSelection]);
 
+  useEffect(() => {
+    Object.assign(gallerySession, { config, query, prompt, sort, timeRange, page, result, selected, selectedImage });
+  }, [config, page, prompt, query, result, selected, selectedImage, sort, timeRange]);
+
   const loadDetail = useCallback((id: number) => {
-    const existing = cache.current.get(id);
+    const existing = galleryDetailCache.get(id);
     if (existing) return existing;
     const request = window.naiDesktop.aitagWork(id).then(normalizeAitagDetail);
-    cache.current.set(id, request);
-    request.catch(() => cache.current.delete(id));
+    galleryDetailCache.set(id, request);
+    request.catch(() => galleryDetailCache.delete(id));
     return request;
   }, []);
 
@@ -423,6 +443,9 @@ export default function AitagGallery({ onBack }: { onBack: () => void }) {
       const normalized = normalizeAitagSearch(raw);
       setResult(normalized);
       setPage(normalized.page);
+      gallerySession.result = normalized;
+      gallerySession.page = normalized.page;
+      gallerySession.loaded = true;
     } catch {
       setError(true);
     } finally {
@@ -431,12 +454,14 @@ export default function AitagGallery({ onBack }: { onBack: () => void }) {
   }, [prompt, query, sort, timeRange]);
 
   useEffect(() => {
+    if (gallerySession.loaded) return;
     void window.naiDesktop.aitagConfig().then((raw) => setConfig(normalizeAitagConfig(raw))).catch(() => undefined);
     void search(1);
   }, []); // initial load only; later searches are explicit
 
   const refresh = useCallback(async () => {
-    cache.current.clear();
+    galleryDetailCache.clear();
+    gallerySession.loaded = false;
     setSelected(null);
     setSelectedImage(0);
     try {
