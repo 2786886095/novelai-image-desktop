@@ -455,13 +455,50 @@ export default function AitagGallery({ onBack }: { onBack: () => void }) {
 
   useEffect(() => {
     if (gallerySession.loaded) return;
-    void window.naiDesktop.aitagConfig().then((raw) => setConfig(normalizeAitagConfig(raw))).catch(() => undefined);
-    void search(1);
+    let active = true;
+    void (async () => {
+      const snapshot = await window.naiDesktop.aitagSnapshot().catch(() => null);
+      if (active && snapshot) {
+        const nextConfig = normalizeAitagConfig(snapshot.config);
+        const nextResult = normalizeAitagSearch(snapshot.search);
+        setConfig(nextConfig);
+        setResult(nextResult);
+        setPage(nextResult.page);
+        setLoading(false);
+        gallerySession.config = nextConfig;
+        gallerySession.result = nextResult;
+        gallerySession.page = nextResult.page;
+        gallerySession.loaded = true;
+      }
+      try {
+        const [rawConfig, rawResult] = await Promise.all([
+          window.naiDesktop.aitagConfig(),
+          window.naiDesktop.aitagSearchFresh({ page: 1, query: "", prompt: "", sort: "new", timeRange: "all" }),
+        ]);
+        if (!active) return;
+        const nextConfig = normalizeAitagConfig(rawConfig);
+        const nextResult = normalizeAitagSearch(rawResult);
+        setConfig(nextConfig);
+        setResult(nextResult);
+        setPage(nextResult.page);
+        setError(false);
+        gallerySession.config = nextConfig;
+        gallerySession.result = nextResult;
+        gallerySession.page = nextResult.page;
+        gallerySession.loaded = true;
+      } catch {
+        if (active && !snapshot) setError(true);
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => { active = false; };
   }, []); // initial load only; later searches are explicit
 
   const refresh = useCallback(async () => {
     galleryDetailCache.clear();
     gallerySession.loaded = false;
+    await window.naiDesktop.aitagClearDataCache();
     setSelected(null);
     setSelectedImage(0);
     try {

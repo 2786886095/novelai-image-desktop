@@ -32,7 +32,7 @@ import {
   verifyToken,
 } from "./ipc/nai";
 import { danbooruStatus, downloadDanbooruTags, browseDanbooru, searchDanbooru } from "./ipc/danbooru-tags";
-import { getAitagConfig, getAitagWork, searchAitag } from "./ipc/aitag";
+import { clearAitagDataCache, getAitagConfig, getAitagSnapshot, getAitagWork, prewarmAitag, searchAitag, searchAitagFresh } from "./ipc/aitag";
 import { aitagCacheStats, cacheAitagImage, clearAitagCache } from "./ipc/aitag-cache";
 import { getTuiwenTtsCatalog, saveTuiwenImportedAudio, synthesizeTuiwenSpeech } from "./ipc/tuiwen-audio";
 import { importTuiwenFile } from "./ipc/tuiwen-import";
@@ -248,7 +248,11 @@ function createWindow() {
 function registerIpc() {
   ipcMain.handle("aitag:config", () => getAitagConfig());
   ipcMain.handle("aitag:search", (_event, request: unknown) => searchAitag(request));
+  ipcMain.handle("aitag:search-fresh", (_event, request: unknown) => searchAitagFresh(request));
+  ipcMain.handle("aitag:snapshot", () => getAitagSnapshot());
   ipcMain.handle("aitag:work", (_event, id: unknown) => getAitagWork(id));
+  ipcMain.handle("aitag:prewarm", (_event, days: unknown) => prewarmAitag(days));
+  ipcMain.handle("aitag:clear-data-cache", () => clearAitagDataCache());
   ipcMain.handle("aitag:cache-image", (_event, url: unknown, days: unknown) => cacheAitagImage(url, days));
   ipcMain.handle("aitag:cache-stats", () => aitagCacheStats());
   ipcMain.handle("aitag:clear-cache", () => clearAitagCache());

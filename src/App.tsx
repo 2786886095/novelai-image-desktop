@@ -5113,11 +5113,20 @@ export default function App() {
   useEffect(() => {
     void load();
     void checkUpdate();
+    // Warm public AITag data after the critical boot work. This is deliberately
+    // delayed and fire-and-forget so it cannot slow the window opening.
+    const prewarmTimer = window.setTimeout(() => {
+      const days = Number(localStorage.getItem("langbai.aitag.cache-retention-days.v1") ?? "30");
+      void window.naiDesktop.aitagPrewarm(Number.isFinite(days) ? days : 30).catch(() => undefined);
+    }, 400);
     // Keep the real boot path fast, but let the entrance breathe. 300ms felt
     // like a flash-cut from the splash artwork into the workbench; ~0.9s keeps
     // the app feeling responsive while making the transition intentional.
     const timer = window.setTimeout(() => setSplash(false), SPLASH_MIN_VISIBLE_MS);
-    return () => window.clearTimeout(timer);
+    return () => {
+      window.clearTimeout(timer);
+      window.clearTimeout(prewarmTimer);
+    };
   }, [load, checkUpdate]);
 
   const shouldShowSplash = useMemo(() => splash || !bootDone, [splash, bootDone]);

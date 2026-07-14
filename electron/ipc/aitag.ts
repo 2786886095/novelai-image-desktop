@@ -1,11 +1,27 @@
 import axios from "axios";
 import type { AitagSearchRequest } from "../../src/aitag";
-import { AITAG_PAGE_SIZE } from "../../src/aitag";
+import { AITAG_PAGE_SIZE, aitagImageUrl, normalizeAitagConfig, normalizeAitagDetail, normalizeAitagSearch } from "../../src/aitag";
 import { proxyConfig } from "./proxy";
+import { cacheAitagImage } from "./aitag-cache";
 
 const API_BASE = "https://aitag.win";
 const REQUEST_TIMEOUT = 30_000;
 const MAX_SEARCH_LENGTH = 2_000;
+const DATA_CACHE_TTL_MS = 10 * 60_000;
+type CachedRequest = { expires: number; promise: Promise<unknown> };
+let configCache: CachedRequest | null = null;
+const searchCache = new Map<string, CachedRequest>();
+const workCache = new Map<number, CachedRequest>();
+let defaultSnapshot: { config: unknown; search: unknown } | null = null;
+let defaultFreshInFlight: Promise<unknown> | null = null;
+
+function cached(cache: CachedRequest | undefined | null, load: () => Promise<unknown>, save: (value: CachedRequest) => void) {
+  if (cache && cache.expires > Date.now()) return cache.promise;
+  const value: CachedRequest = { expires: Date.now() + DATA_CACHE_TTL_MS, promise: load() };
+  save(value);
+  value.promise.catch(() => save({ expires: 0, promise: Promise.resolve(undefined) }));
+  return value.promise;
+}
 
 function safePage(value: unknown): number {
   const page = Number(value);
@@ -43,12 +59,21 @@ function requestConfig() {
 }
 
 export async function getAitagConfig(): Promise<unknown> {
-  const response = await axios.get(`${API_BASE}/api/config`, requestConfig());
-  return response.data as unknown;
+  return cached(configCache, async () => {
+    const response = await axios.get(`${API_BASE}/api/config`, requestConfig());
+    return response.data as unknown;
+  }, (value) => { configCache = value.expires ? value : null; });
 }
 
 export async function searchAitag(raw: unknown): Promise<unknown> {
   const request = normalizeAitagSearchRequest(raw);
+  const cacheKey = JSON.stringify(request);
+  return cached(searchCache.get(cacheKey), () => searchAitagNetwork(request), (value) => {
+    if (value.expires) searchCache.set(cacheKey, value); else searchCache.delete(cacheKey);
+  });
+}
+
+async function searchAitagNetwork(request: Required<AitagSearchRequest>): Promise<unknown> {
   const historicalRank = request.sort === "monthly" && request.timeRange !== "current";
   const endpoint = request.sort === "monthly"
     ? historicalRank ? "/api/rank/monthly/fixed" : "/api/rank/monthly/real"
@@ -74,9 +99,71 @@ export async function searchAitag(raw: unknown): Promise<unknown> {
   return response.data as unknown;
 }
 
+export async function searchAitagFresh(raw: unknown): Promise<unknown> {
+  const request = normalizeAitagSearchRequest(raw);
+  const isDefault = request.page === 1 && !request.query && !request.prompt && request.sort === "new" && request.timeRange === "all";
+  if (isDefault && defaultFreshInFlight) return defaultFreshInFlight;
+  const networkRequest = searchAitagNetwork(request);
+  if (isDefault) defaultFreshInFlight = networkRequest;
+  let value: unknown;
+  try {
+    value = await networkRequest;
+  } finally {
+    if (isDefault) defaultFreshInFlight = null;
+  }
+  const cacheKey = JSON.stringify(request);
+  searchCache.set(cacheKey, { expires: Date.now() + DATA_CACHE_TTL_MS, promise: Promise.resolve(value) });
+  if (isDefault) {
+    const config = await getAitagConfig();
+    defaultSnapshot = { config, search: value };
+  }
+  return value;
+}
+
+export function getAitagSnapshot() {
+  return defaultSnapshot;
+}
+
 export async function getAitagWork(rawId: unknown): Promise<unknown> {
   const id = Number(rawId);
   if (!Number.isSafeInteger(id) || id <= 0) throw new Error("Invalid AITag work id");
-  const response = await axios.get(`${API_BASE}/api/work/${id}`, requestConfig());
-  return response.data as unknown;
+  return cached(workCache.get(id), async () => {
+    const response = await axios.get(`${API_BASE}/api/work/${id}`, requestConfig());
+    return response.data as unknown;
+  }, (value) => {
+    if (value.expires) workCache.set(id, value); else workCache.delete(id);
+  });
+}
+
+export function clearAitagDataCache() {
+  configCache = null;
+  searchCache.clear();
+  workCache.clear();
+  defaultSnapshot = null;
+}
+
+export async function prewarmAitag(rawRetentionDays: unknown) {
+  const [rawConfig, rawSearch] = await Promise.all([
+    getAitagConfig(),
+    searchAitagFresh({ page: 1, query: "", prompt: "", sort: "new", timeRange: "all" }),
+  ]);
+  defaultSnapshot = { config: rawConfig, search: rawSearch };
+  const config = normalizeAitagConfig(rawConfig);
+  const result = normalizeAitagSearch(rawSearch);
+  const queue = result.items.slice(0, 12);
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < queue.length) {
+      const work = queue[cursor++];
+      try {
+        const detail = normalizeAitagDetail(await getAitagWork(work.id));
+        const first = detail.images[0];
+        if (first) await cacheAitagImage(aitagImageUrl(config, first), rawRetentionDays);
+      } catch {
+        // Prewarming is best effort and must never affect the workbench.
+      }
+    }
+  };
+  await Promise.all([worker(), worker(), worker()]);
+  return { works: result.items.length, images: Math.min(queue.length, 12) };
 }

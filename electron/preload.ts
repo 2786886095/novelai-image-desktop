@@ -31,7 +31,11 @@ import type { AitagSearchRequest } from "../src/aitag";
 contextBridge.exposeInMainWorld("naiDesktop", {
   aitagConfig: () => ipcRenderer.invoke("aitag:config"),
   aitagSearch: (request: AitagSearchRequest) => ipcRenderer.invoke("aitag:search", request),
+  aitagSearchFresh: (request: AitagSearchRequest) => ipcRenderer.invoke("aitag:search-fresh", request),
+  aitagSnapshot: () => ipcRenderer.invoke("aitag:snapshot"),
   aitagWork: (id: number) => ipcRenderer.invoke("aitag:work", id),
+  aitagPrewarm: (retentionDays?: number) => ipcRenderer.invoke("aitag:prewarm", retentionDays),
+  aitagClearDataCache: () => ipcRenderer.invoke("aitag:clear-data-cache"),
   aitagCacheImage: (url: string, retentionDays?: number) => ipcRenderer.invoke("aitag:cache-image", url, retentionDays),
   aitagCacheStats: () => ipcRenderer.invoke("aitag:cache-stats"),
   aitagClearCache: () => ipcRenderer.invoke("aitag:clear-cache"),
