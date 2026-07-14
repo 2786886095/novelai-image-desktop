@@ -8,10 +8,13 @@ export interface AitagSearchRequest {
   query?: string;
   prompt?: string;
   sort?: AitagSort;
+  timeRange?: string;
 }
 
 export interface AitagConfig {
   assetBaseUrl: string;
+  availableYears: number[];
+  availableMonths: string[];
 }
 
 export interface AitagWorkSummary {
@@ -105,7 +108,13 @@ function normalizeWork(value: unknown): AitagWorkSummary {
 export function normalizeAitagConfig(value: unknown): AitagConfig {
   const source = record(value);
   const base = text(source.asset_base_url ?? source.assetBaseUrl).trim();
-  return { assetBaseUrl: base || "https://ai-img.10118899.xyz/" };
+  const years = Array.isArray(source.available_years) ? source.available_years : [];
+  const months = Array.isArray(source.available_months) ? source.available_months : [];
+  return {
+    assetBaseUrl: base || "https://ai-img.10118899.xyz/",
+    availableYears: years.map(number).filter((year) => year >= 2000 && year <= 2200),
+    availableMonths: months.map(text).filter((month) => /^\d{4}-(?:0[1-9]|1[0-2])$/.test(month)),
+  };
 }
 
 export function normalizeAitagSearch(value: unknown): AitagSearchResult {

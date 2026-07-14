@@ -119,6 +119,8 @@ class AitagSearchResult {
 class AitagService {
   final http.Client _client;
   String assetBaseUrl = 'https://ai-img.10118899.xyz/';
+  List<int> availableYears = const [];
+  List<String> availableMonths = const [];
   final Map<int, Future<AitagWorkDetail>> _detailCache = {};
 
   AitagService({http.Client? client}) : _client = client ?? http.Client();
@@ -142,6 +144,18 @@ class AitagService {
     final data = await _get(Uri.parse('$aitagSiteUrl/api/config'));
     final base = _string(data['asset_base_url'] ?? data['assetBaseUrl']).trim();
     if (base.isNotEmpty) assetBaseUrl = base;
+    availableYears = (data['available_years'] is List
+            ? data['available_years'] as List
+            : const [])
+        .map(_integer)
+        .where((year) => year >= 2000 && year <= 2200)
+        .toList();
+    availableMonths = (data['available_months'] is List
+            ? data['available_months'] as List
+            : const [])
+        .map(_string)
+        .where((month) => RegExp(r'^\d{4}-(?:0[1-9]|1[0-2])$').hasMatch(month))
+        .toList();
   }
 
   Future<AitagSearchResult> search({
@@ -149,8 +163,15 @@ class AitagService {
     String query = '',
     String prompt = '',
     String sort = 'new',
+    String? timeRange,
   }) async {
     final monthly = sort == 'monthly';
+    final selectedTimeRange = _validTimeRange(timeRange)
+        ? timeRange!
+        : monthly
+            ? 'current'
+            : 'all';
+    final historicalRank = monthly && selectedTimeRange != 'current';
     final params = <String, String>{
       'page': '${page.clamp(1, 10000)}',
       'page_size': '$aitagPageSize',
@@ -160,9 +181,17 @@ class AitagService {
         'prompt':
             prompt.trim().substring(0, prompt.trim().length.clamp(0, 2000)),
       if (!monthly) 'sort': 'new',
-      if (!monthly) 'time_range': 'all',
+      if (!monthly) 'time_range': selectedTimeRange,
+      if (historicalRank)
+        'month': selectedTimeRange == 'older'
+            ? 'older'
+            : selectedTimeRange.substring(1),
     };
-    final path = monthly ? '/api/rank/monthly/real' : '/api/ai_works_search';
+    final path = monthly
+        ? historicalRank
+            ? '/api/rank/monthly/fixed'
+            : '/api/rank/monthly/real'
+        : '/api/ai_works_search';
     final data = await _get(
         Uri.parse('$aitagSiteUrl$path').replace(queryParameters: params));
     final rawItems = data['items'] is List ? data['items'] as List : const [];
@@ -216,6 +245,12 @@ class AitagService {
 
   void close() => _client.close();
 }
+
+bool _validTimeRange(String? value) =>
+    value != null &&
+    RegExp(
+      r'^(?:all|older|current|y\d{4}|q\d{4}Q[1-4]|m\d{4}-(?:0[1-9]|1[0-2]))$',
+    ).hasMatch(value);
 
 String formatAitagMetadata(Object? value) {
   if (value is String) return value;

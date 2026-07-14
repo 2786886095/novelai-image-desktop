@@ -9,6 +9,15 @@ import {
 import { inspectImageMetadata } from "./png-meta";
 
 describe("AITag public data normalization", () => {
+  it("normalizes the site's available year and month filters", () => {
+    const config = normalizeAitagConfig({
+      available_years: [2026, "2025", "bad"],
+      available_months: ["2026-07", "2026-06", "invalid"],
+    });
+    expect(config.availableYears).toEqual([2026, 2025]);
+    expect(config.availableMonths).toEqual(["2026-07", "2026-06"]);
+  });
+
   it("normalizes list fields returned as JSON strings", () => {
     const result = normalizeAitagSearch({
       page: 2,

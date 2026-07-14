@@ -17,10 +17,15 @@ void main() {
         );
     final client = MockClient((request) async {
       if (request.url.path == '/api/config') {
-        return jsonResponse({'asset_base_url': 'https://cdn.example/'});
+        return jsonResponse({
+          'asset_base_url': 'https://cdn.example/',
+          'available_years': [2026, 2025],
+          'available_months': ['2026-07', '2026-06'],
+        });
       }
       if (request.url.path == '/api/ai_works_search') {
         expect(request.url.queryParameters['page_size'], '$aitagPageSize');
+        expect(request.url.queryParameters['time_range'], 'q2026Q2');
         return jsonResponse({
           'page': 1,
           'total': 1,
@@ -34,6 +39,11 @@ void main() {
             }
           ],
         });
+      }
+      if (request.url.path == '/api/rank/monthly/fixed') {
+        expect(request.url.queryParameters['month'], '2026-06');
+        expect(request.url.queryParameters.containsKey('time_range'), isFalse);
+        return jsonResponse({'page': 1, 'total': 0, 'items': []});
       }
       if (request.url.path == '/api/work/9') {
         return jsonResponse({
@@ -57,9 +67,13 @@ void main() {
 
     final service = AitagService(client: client);
     await service.loadConfig();
-    final search = await service.search(query: 'blue hair');
+    expect(service.availableYears, [2026, 2025]);
+    expect(service.availableMonths, ['2026-07', '2026-06']);
+    final search =
+        await service.search(query: 'blue hair', timeRange: 'q2026Q2');
     expect(search.items.single.title, '测试作品');
     expect(search.items.single.tags, ['solo', 'blue_hair']);
+    await service.search(sort: 'monthly', timeRange: 'm2026-06');
 
     final detail = await service.work(9);
     expect(service.imageUrl(detail.images.single),

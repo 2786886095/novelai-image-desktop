@@ -32,6 +32,12 @@ const TEXT = {
     search: "搜索",
     newest: "最新作品",
     monthly: "本月排行",
+    timeRange: "时间范围",
+    allTime: "全部时间",
+    fullYear: "{year} 全年",
+    quarter: "{year} 年第 {quarter} 季度",
+    currentMonth: "当前月份",
+    older: "更早作品",
     loading: "正在读取 AITag 数据…",
     failed: "读取失败，请检查网络后重试。",
     retry: "重试",
@@ -69,6 +75,12 @@ const TEXT = {
     search: "搜尋",
     newest: "最新作品",
     monthly: "本月排行",
+    timeRange: "時間範圍",
+    allTime: "全部時間",
+    fullYear: "{year} 全年",
+    quarter: "{year} 年第 {quarter} 季度",
+    currentMonth: "目前月份",
+    older: "更早作品",
     loading: "正在讀取 AITag 資料…",
     failed: "讀取失敗，請檢查網路後重試。",
     retry: "重試",
@@ -106,6 +118,12 @@ const TEXT = {
     search: "Search",
     newest: "Newest",
     monthly: "Monthly Rank",
+    timeRange: "Time range",
+    allTime: "All time",
+    fullYear: "{year} (full year)",
+    quarter: "{year} Q{quarter}",
+    currentMonth: "Current month",
+    older: "Older works",
     loading: "Loading AITag data…",
     failed: "Could not load data. Check your network and try again.",
     retry: "Retry",
@@ -143,6 +161,12 @@ const TEXT = {
     search: "検索",
     newest: "新着作品",
     monthly: "月間ランキング",
+    timeRange: "期間",
+    allTime: "全期間",
+    fullYear: "{year} 年通年",
+    quarter: "{year} 年 Q{quarter}",
+    currentMonth: "今月",
+    older: "以前の作品",
     loading: "AITag データを読み込み中…",
     failed: "読み込めませんでした。ネットワークを確認して再試行してください。",
     retry: "再試行",
@@ -180,6 +204,12 @@ const TEXT = {
     search: "검색",
     newest: "최신 작품",
     monthly: "월간 순위",
+    timeRange: "기간",
+    allTime: "전체 기간",
+    fullYear: "{year}년 전체",
+    quarter: "{year}년 {quarter}분기",
+    currentMonth: "이번 달",
+    older: "이전 작품",
     loading: "AITag 데이터를 불러오는 중…",
     failed: "데이터를 불러오지 못했습니다. 네트워크를 확인하고 다시 시도하세요.",
     retry: "다시 시도",
@@ -291,6 +321,7 @@ export default function AitagGallery({ onBack }: { onBack: () => void }) {
   const [query, setQuery] = useState("");
   const [prompt, setPrompt] = useState("");
   const [sort, setSort] = useState<AitagSort>("new");
+  const [timeRange, setTimeRange] = useState("all");
   const [page, setPage] = useState(1);
   const [result, setResult] = useState(() => normalizeAitagSearch({}));
   const [loading, setLoading] = useState(true);
@@ -309,7 +340,10 @@ export default function AitagGallery({ onBack }: { onBack: () => void }) {
     return request;
   }, []);
 
-  const search = useCallback(async (targetPage = 1) => {
+  const search = useCallback(async (
+    targetPage = 1,
+    overrides?: { sort?: AitagSort; timeRange?: string },
+  ) => {
     setLoading(true);
     setError(false);
     try {
@@ -317,7 +351,8 @@ export default function AitagGallery({ onBack }: { onBack: () => void }) {
         page: targetPage,
         query,
         prompt,
-        sort,
+        sort: overrides?.sort ?? sort,
+        timeRange: overrides?.timeRange ?? timeRange,
       });
       const normalized = normalizeAitagSearch(raw);
       setResult(normalized);
@@ -327,7 +362,7 @@ export default function AitagGallery({ onBack }: { onBack: () => void }) {
     } finally {
       setLoading(false);
     }
-  }, [prompt, query, sort]);
+  }, [prompt, query, sort, timeRange]);
 
   useEffect(() => {
     void window.naiDesktop.aitagConfig().then((raw) => setConfig(normalizeAitagConfig(raw))).catch(() => undefined);
@@ -365,6 +400,30 @@ export default function AitagGallery({ onBack }: { onBack: () => void }) {
     setActiveTab("generate");
   };
   const maxPage = Math.max(1, Math.ceil(result.total / AITAG_PAGE_SIZE));
+  const timeOptions = useMemo(() => {
+    if (sort === "monthly") {
+      const months = [...new Set(config.availableMonths)]
+        .filter((month) => month >= "2023-11")
+        .sort((a, b) => b.localeCompare(a));
+      return [
+        { value: "current", label: text.currentMonth },
+        ...months.map((month) => ({ value: `m${month}`, label: month })),
+        { value: "older", label: text.older },
+      ];
+    }
+    const years = config.availableYears.length ? [...config.availableYears].sort((a, b) => b - a) : [new Date().getFullYear()];
+    return [
+      { value: "all", label: text.allTime },
+      ...years.flatMap((year) => [
+        { value: `y${year}`, label: interpolate(text.fullYear, "year", year) },
+        ...(year > 2023 ? [1, 2, 3, 4] as const : year === 2023 ? [4] as const : []).map((quarter) => ({
+          value: `q${year}Q${quarter}`,
+          label: interpolate(interpolate(text.quarter, "year", year), "quarter", quarter),
+        })),
+      ]),
+      { value: "older", label: text.older },
+    ];
+  }, [config.availableMonths, config.availableYears, sort, text]);
 
   if (selected) {
     return (
@@ -450,8 +509,14 @@ export default function AitagGallery({ onBack }: { onBack: () => void }) {
           <button type="button" className="btn primary" onClick={() => void search(1)}>{text.search}</button>
         </div>
         <div className="aitag-sort-tabs">
-          <button type="button" className={sort === "new" ? "active" : ""} onClick={() => setSort("new")}>{text.newest}</button>
-          <button type="button" className={sort === "monthly" ? "active" : ""} onClick={() => setSort("monthly")}>{text.monthly}</button>
+          <button type="button" className={sort === "new" ? "active" : ""} onClick={() => { setSort("new"); setTimeRange("all"); void search(1, { sort: "new", timeRange: "all" }); }}>{text.newest}</button>
+          <button type="button" className={sort === "monthly" ? "active" : ""} onClick={() => { setSort("monthly"); setTimeRange("current"); void search(1, { sort: "monthly", timeRange: "current" }); }}>{text.monthly}</button>
+          <label className="aitag-time-filter">
+            <span>{text.timeRange}</span>
+            <select value={timeRange} onChange={(event) => { const value = event.target.value; setTimeRange(value); void search(1, { timeRange: value }); }}>
+              {timeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </select>
+          </label>
           <span>{interpolate(text.total, "count", result.total)}</span>
         </div>
       </section>

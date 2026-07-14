@@ -21,6 +21,12 @@ class _Text {
       search,
       newest,
       monthly,
+      timeRange,
+      allTime,
+      fullYear,
+      quarter,
+      currentMonth,
+      older,
       loading,
       failed,
       retry,
@@ -57,6 +63,12 @@ class _Text {
     required this.search,
     required this.newest,
     required this.monthly,
+    required this.timeRange,
+    required this.allTime,
+    required this.fullYear,
+    required this.quarter,
+    required this.currentMonth,
+    required this.older,
     required this.loading,
     required this.failed,
     required this.retry,
@@ -99,6 +111,12 @@ _Text _textFor(Object? value) {
           search: '搜尋',
           newest: '最新作品',
           monthly: '本月排行',
+          timeRange: '時間範圍',
+          allTime: '全部時間',
+          fullYear: '{year} 全年',
+          quarter: '{year} 年第 {quarter} 季度',
+          currentMonth: '目前月份',
+          older: '更早作品',
           loading: '正在讀取 AITag 資料…',
           failed: '讀取失敗，請檢查網路後重試。',
           retry: '重試',
@@ -137,6 +155,12 @@ _Text _textFor(Object? value) {
           search: 'Search',
           newest: 'Newest',
           monthly: 'Monthly Rank',
+          timeRange: 'Time range',
+          allTime: 'All time',
+          fullYear: '{year} (full year)',
+          quarter: '{year} Q{quarter}',
+          currentMonth: 'Current month',
+          older: 'Older works',
           loading: 'Loading AITag data…',
           failed: 'Could not load data. Check your network and try again.',
           retry: 'Retry',
@@ -176,6 +200,12 @@ _Text _textFor(Object? value) {
           search: '検索',
           newest: '新着作品',
           monthly: '月間ランキング',
+          timeRange: '期間',
+          allTime: '全期間',
+          fullYear: '{year} 年通年',
+          quarter: '{year} 年 Q{quarter}',
+          currentMonth: '今月',
+          older: '以前の作品',
           loading: 'AITag データを読み込み中…',
           failed: '読み込めませんでした。ネットワークを確認して再試行してください。',
           retry: '再試行',
@@ -213,6 +243,12 @@ _Text _textFor(Object? value) {
           search: '검색',
           newest: '최신 작품',
           monthly: '월간 순위',
+          timeRange: '기간',
+          allTime: '전체 기간',
+          fullYear: '{year}년 전체',
+          quarter: '{year}년 {quarter}분기',
+          currentMonth: '이번 달',
+          older: '이전 작품',
           loading: 'AITag 데이터를 불러오는 중…',
           failed: '데이터를 불러오지 못했습니다. 네트워크를 확인하고 다시 시도하세요.',
           retry: '다시 시도',
@@ -250,6 +286,12 @@ _Text _textFor(Object? value) {
           search: '搜索',
           newest: '最新作品',
           monthly: '本月排行',
+          timeRange: '时间范围',
+          allTime: '全部时间',
+          fullYear: '{year} 全年',
+          quarter: '{year} 年第 {quarter} 季度',
+          currentMonth: '当前月份',
+          older: '更早作品',
           loading: '正在读取 AITag 数据…',
           failed: '读取失败，请检查网络后重试。',
           retry: '重试',
@@ -297,13 +339,16 @@ class _AitagGalleryScreenState extends State<AitagGalleryScreen> {
   AitagSearchResult result =
       const AitagSearchResult(page: 1, total: 0, items: []);
   String sort = 'new';
+  String timeRange = 'all';
   bool loading = true;
   bool failed = false;
 
   @override
   void initState() {
     super.initState();
-    service.loadConfig().catchError((_) {});
+    service.loadConfig().then((_) {
+      if (mounted) setState(() {});
+    }).catchError((_) {});
     _search(1);
   }
 
@@ -315,14 +360,19 @@ class _AitagGalleryScreenState extends State<AitagGalleryScreen> {
     super.dispose();
   }
 
-  Future<void> _search(int page) async {
+  Future<void> _search(int page,
+      {String? sortOverride, String? timeRangeOverride}) async {
     setState(() {
       loading = true;
       failed = false;
     });
     try {
       final next = await service.search(
-          page: page, query: query.text, prompt: prompt.text, sort: sort);
+          page: page,
+          query: query.text,
+          prompt: prompt.text,
+          sort: sortOverride ?? sort,
+          timeRange: timeRangeOverride ?? timeRange);
       if (mounted) setState(() => result = next);
     } catch (_) {
       if (mounted) setState(() => failed = true);
@@ -337,6 +387,42 @@ class _AitagGalleryScreenState extends State<AitagGalleryScreen> {
         context.select<AppState, String>((state) => state.settings.language);
     final text = _textFor(language);
     final maxPage = math.max(1, (result.total / aitagPageSize).ceil());
+    final timeOptions = <({String value, String label})>[];
+    if (sort == 'monthly') {
+      final months = service.availableMonths
+          .where((month) => month.compareTo('2023-11') >= 0)
+          .toSet()
+          .toList()
+        ..sort((a, b) => b.compareTo(a));
+      timeOptions
+        ..add((value: 'current', label: text.currentMonth))
+        ..addAll(months.map((month) => (value: 'm$month', label: month)))
+        ..add((value: 'older', label: text.older));
+    } else {
+      final years = service.availableYears.isEmpty
+          ? <int>[DateTime.now().year]
+          : service.availableYears.toSet().toList()
+        ..sort((a, b) => b.compareTo(a));
+      timeOptions.add((value: 'all', label: text.allTime));
+      for (final year in years) {
+        timeOptions.add((
+          value: 'y$year',
+          label: _f(text.fullYear, 'year', year),
+        ));
+        final quarters = year > 2023
+            ? const [1, 2, 3, 4]
+            : year == 2023
+                ? const [4]
+                : const <int>[];
+        for (final quarter in quarters) {
+          timeOptions.add((
+            value: 'q${year}Q$quarter',
+            label: _f(_f(text.quarter, 'year', year), 'quarter', quarter),
+          ));
+        }
+      }
+      timeOptions.add((value: 'older', label: text.older));
+    }
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -408,8 +494,48 @@ class _AitagGalleryScreenState extends State<AitagGalleryScreen> {
                                 selected: {
                                   sort
                                 },
-                                onSelectionChanged: (value) =>
-                                    setState(() => sort = value.first)),
+                                onSelectionChanged: loading
+                                    ? null
+                                    : (value) {
+                                        final nextSort = value.first;
+                                        final nextTimeRange =
+                                            nextSort == 'monthly'
+                                                ? 'current'
+                                                : 'all';
+                                        setState(() {
+                                          sort = nextSort;
+                                          timeRange = nextTimeRange;
+                                        });
+                                        _search(1,
+                                            sortOverride: nextSort,
+                                            timeRangeOverride: nextTimeRange);
+                                      }),
+                            SizedBox(
+                              width: 240,
+                              child: DropdownButtonFormField<String>(
+                                value: timeRange,
+                                isExpanded: true,
+                                decoration: InputDecoration(
+                                  labelText: text.timeRange,
+                                  prefixIcon:
+                                      const Icon(Icons.calendar_month_outlined),
+                                ),
+                                items: timeOptions
+                                    .map((option) => DropdownMenuItem(
+                                          value: option.value,
+                                          child: Text(option.label,
+                                              overflow: TextOverflow.ellipsis),
+                                        ))
+                                    .toList(),
+                                onChanged: loading
+                                    ? null
+                                    : (value) {
+                                        if (value == null) return;
+                                        setState(() => timeRange = value);
+                                        _search(1, timeRangeOverride: value);
+                                      },
+                              ),
+                            ),
                             FilledButton.icon(
                                 onPressed: loading ? null : () => _search(1),
                                 icon: const Icon(Icons.search),
