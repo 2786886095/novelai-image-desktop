@@ -190,4 +190,24 @@ describe("ComfyUI metadata", () => {
     expect(report.rawText).toContain("workflow");
     expect(report.entries.some((entry) => entry.key === "Model" && entry.value === "sdxl.safetensors")).toBe(true);
   });
+
+  it("extracts structured values from ComfyUI workflow node arrays", () => {
+    const workflow = [
+      { id: 59, type: "VAELoader", mode: 0, widgets_values: ["qwen_vae.safetensors"] },
+      { id: 60, type: "UNETLoader", mode: 0, widgets_values: ["anima-base.safetensors", "default"] },
+      { id: 61, type: "CLIPLoader", mode: 0, widgets_values: ["qwen_clip.safetensors", "qwen_image", "default"] },
+      { id: 52, type: "CLIPTextEncode", mode: 0, widgets_values: ["1girl, silver hair"] },
+      { id: 40, type: "EmptyLatentImage", mode: 0, widgets_values: [832, 1216, 1] },
+      { id: 90, type: "KSampler", mode: 0, widgets_values: [99, "randomize", 20, 5, "euler_ancestral", "simple", 0.55] },
+      { id: 48, type: "LatentUpscaleBy", mode: 0, widgets_values: ["nearest-exact", 1.5] },
+    ];
+    const report = inspectImageMetadata({ workflow: JSON.stringify(workflow) });
+    expect(report.kind).toBe("comfyui");
+    expect(report.imported.steps).toBe(20);
+    expect(report.imported.width).toBe(832);
+    expect(report.imported.height).toBe(1216);
+    expect(report.entries.some((entry) => entry.key === "VAE" && entry.value.includes("qwen_vae"))).toBe(true);
+    expect(report.entries.some((entry) => entry.key === "CLIP model" && entry.value.includes("qwen_clip"))).toBe(true);
+    expect(report.entries.some((entry) => entry.key === "Upscale scale" && entry.value.includes("1.5"))).toBe(true);
+  });
 });

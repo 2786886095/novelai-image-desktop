@@ -383,6 +383,14 @@ function importedFromStableDiffusion(info: StableDiffusionInfo): ImportedParams 
 
 type ComfyNode = { class_type?: string; inputs?: Record<string, unknown>; _meta?: Record<string, unknown> };
 type ComfyPrompt = Record<string, ComfyNode>;
+type ComfyWorkflowNode = {
+  id?: string | number;
+  type?: string;
+  mode?: number;
+  inputs?: { name?: string; label?: string; link?: number | null; widget?: unknown }[];
+  outputs?: { links?: number[] | null }[];
+  widgets_values?: unknown[];
+};
 
 function parseJsonObject(value: string | undefined): Record<string, unknown> | null {
   if (!value) return null;
@@ -394,6 +402,97 @@ function parseJsonObject(value: string | undefined): Record<string, unknown> | n
   } catch {
     return null;
   }
+}
+
+function parseJsonValue(value: string | undefined): unknown {
+  if (!value) return null;
+  try { return JSON.parse(value); } catch { return null; }
+}
+
+const COMFY_WIDGET_KEYS: Record<string, string[]> = {
+  KSampler: ["Seed", "Seed mode", "Steps", "CFG scale", "Sampler", "Scheduler", "Denoise"],
+  KSamplerAdvanced: ["Add noise", "Noise seed", "Seed mode", "Steps", "CFG scale", "Sampler", "Scheduler", "Start step", "End step", "Return with leftover noise"],
+  CheckpointLoaderSimple: ["Model"],
+  CheckpointLoader: ["Model", "Config"],
+  UNETLoader: ["Model", "Weight dtype"],
+  VAELoader: ["VAE"],
+  CLIPLoader: ["CLIP model", "CLIP type", "Device"],
+  DualCLIPLoader: ["CLIP model 1", "CLIP model 2", "CLIP type", "Device"],
+  CLIPTextEncode: ["Prompt"],
+  EmptyLatentImage: ["Width", "Height", "Batch size"],
+  EmptySD3LatentImage: ["Width", "Height", "Batch size"],
+  LatentUpscaleBy: ["Upscale method", "Upscale scale"],
+  LatentUpscale: ["Upscale method", "Width", "Height", "Crop"],
+  LoraLoader: ["LoRA", "LoRA model strength", "LoRA CLIP strength"],
+  LoraLoaderModelOnly: ["LoRA", "LoRA model strength"],
+  ControlNetLoader: ["ControlNet model"],
+  LoadImage: ["Input image", "Upload mode"],
+  SaveImage: ["Filename prefix"],
+  PreviewImage: [],
+  FluxGuidance: ["Guidance"],
+  CFGGuider: ["CFG scale"],
+  BasicScheduler: ["Scheduler", "Steps", "Denoise"],
+  RandomNoise: ["Seed", "Seed mode"],
+};
+
+function comfyWorkflowNodes(raw: unknown): ComfyWorkflowNode[] {
+  const source = Array.isArray(raw)
+    ? raw
+    : raw && typeof raw === "object" && Array.isArray((raw as Record<string, unknown>).nodes)
+      ? (raw as Record<string, unknown>).nodes as unknown[]
+      : [];
+  return source.filter((node): node is ComfyWorkflowNode => Boolean(node && typeof node === "object"));
+}
+
+function comfyWorkflowEntries(value: string | undefined): {
+  entries: ImageMetadataEntry[];
+  imported: ImportedParams;
+} {
+  const nodes = comfyWorkflowNodes(parseJsonValue(value));
+  const entries: ImageMetadataEntry[] = [];
+  let imported: ImportedParams = {};
+  const add = (key: string, raw: unknown, type: string, id: unknown) => {
+    if (raw === undefined || raw === null || raw === "") return;
+    const valueText = typeof raw === "string" ? raw : stringifyValue(raw);
+    const group = /model|vae|clip|lora|controlnet|dtype|config/i.test(key)
+      ? "model" as const
+      : /width|height|size|upscale|crop|image/i.test(key)
+        ? "image" as const
+        : "generation" as const;
+    entries.push({ key, value: nodes.length > 1 ? `[${type} #${String(id ?? "?")}] ${valueText}` : valueText, group });
+  };
+  for (const node of nodes) {
+    if (node.mode === 4) continue;
+    const type = node.type ?? "ComfyUI node";
+    const widgets = Array.isArray(node.widgets_values) ? node.widgets_values : [];
+    const knownKeys = COMFY_WIDGET_KEYS[type];
+    if (knownKeys) {
+      knownKeys.forEach((key, index) => add(key, widgets[index], type, node.id));
+    } else {
+      let widgetIndex = 0;
+      for (const input of node.inputs ?? []) {
+        if (!input.widget || input.link !== null && input.link !== undefined) continue;
+        add(`${type} · ${input.label || input.name || `Value ${widgetIndex + 1}`}`, widgets[widgetIndex], type, node.id);
+        widgetIndex += 1;
+      }
+    }
+    if (/^KSampler$/i.test(type)) {
+      imported = cleanImported({
+        ...imported,
+        seed: finiteInteger(widgets[0]),
+        steps: finiteInteger(widgets[2]),
+        cfgScale: finiteNumber(widgets[3]),
+        sampler: samplerToNai(nonEmpty(widgets[4])),
+        noiseSchedule: schedulerToNai(nonEmpty(widgets[5])),
+      });
+    } else if (/Empty(?:SD3)?LatentImage/i.test(type)) {
+      imported = cleanImported({ ...imported, width: finiteInteger(widgets[0]), height: finiteInteger(widgets[1]) });
+    } else if (/CLIPTextEncode/i.test(type) && !imported.positivePrompt) {
+      imported = cleanImported({ ...imported, positivePrompt: nonEmpty(widgets[0]) });
+    }
+  }
+  const unique = new Map(entries.map((entry) => [`${entry.key}\0${entry.value}`, entry]));
+  return { entries: [...unique.values()], imported };
 }
 
 function comfyReferenceId(value: unknown): string | undefined {
@@ -440,11 +539,12 @@ function inspectComfy(meta: Record<string, string>): {
   entries: ImageMetadataEntry[];
   warnings: string[];
 } {
+  const workflow = comfyWorkflowEntries(meta.workflow);
   const promptObject = parseJsonObject(meta.prompt);
   if (!promptObject) {
     return {
-      imported: {},
-      entries: [],
+      imported: workflow.imported,
+      entries: workflow.entries,
       warnings: ["ComfyUI prompt JSON is missing or malformed; the raw workflow is still available."],
     };
   }
@@ -464,8 +564,8 @@ function inspectComfy(meta: Record<string, string>): {
   sampler ??= Object.values(prompt).find((node) => /KSampler/i.test(node.class_type ?? ""));
   if (!sampler) {
     return {
-      imported: {},
-      entries: [],
+      imported: workflow.imported,
+      entries: workflow.entries,
       warnings: ["No compatible ComfyUI KSampler node was found; view the raw workflow for all node data."],
     };
   }
@@ -512,8 +612,7 @@ function inspectComfy(meta: Record<string, string>): {
     modelName ? { key: "Model", value: modelName, group: "model" } : null,
   ].filter(Boolean) as ImageMetadataEntry[];
 
-  return {
-    imported: cleanImported({
+  const promptImported = cleanImported({
       positivePrompt: positive,
       negativePrompt: negative,
       steps: finiteInteger(inputs.steps),
@@ -523,8 +622,11 @@ function inspectComfy(meta: Record<string, string>): {
       height: finiteInteger(latent?.inputs?.height),
       sampler: samplerToNai(samplerName),
       noiseSchedule: schedulerToNai(scheduler),
-    }),
-    entries,
+    });
+  const allEntries = [...entries, ...workflow.entries];
+  return {
+    imported: cleanImported({ ...workflow.imported, ...promptImported }),
+    entries: [...new Map(allEntries.map((entry) => [`${entry.key}\0${entry.value}`, entry])).values()],
     warnings: [],
   };
 }

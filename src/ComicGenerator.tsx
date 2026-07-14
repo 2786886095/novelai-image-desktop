@@ -1653,7 +1653,15 @@ export function ToolsHub() {
   const text = useMemo(() => getToolsHubText(language), [language]);
   const [activeTool, setActiveTool] = useState<
     "hub" | "comic" | "redraw" | "tuiwen" | "aitag"
-  >("hub");
+  >(() => {
+    const saved = localStorage.getItem("langbai.tools.active.v1");
+    return saved === "comic" || saved === "redraw" || saved === "tuiwen" || saved === "aitag"
+      ? saved
+      : "hub";
+  });
+  useEffect(() => {
+    localStorage.setItem("langbai.tools.active.v1", activeTool);
+  }, [activeTool]);
   if (activeTool === "comic")
     return <ComicGenerator onBack={() => setActiveTool("hub")} />;
   if (activeTool === "redraw")

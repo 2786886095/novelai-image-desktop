@@ -7990,6 +7990,12 @@ html.theme-dark #root {
   color: var(--muted);
 }
 
+.aitag-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .aitag-search-panel {
   padding: 16px;
   margin-bottom: 16px;
@@ -8252,6 +8258,63 @@ html.theme-dark #root {
   border-top: 1px solid var(--border);
 }
 
+.aitag-compatible-details {
+  margin-bottom: 10px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-input);
+}
+
+.aitag-compatible-details > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.aitag-compatible-details > summary small {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.aitag-compatible-toolbar {
+  display: flex;
+  gap: 8px;
+  padding: 0 14px 10px;
+}
+
+.aitag-compatible-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 0 14px 14px;
+}
+
+.aitag-compatible-options label {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--bg-panel);
+  cursor: pointer;
+}
+
+.aitag-compatible-options input { margin-top: 3px; accent-color: var(--accent); }
+.aitag-compatible-options span { min-width: 0; }
+.aitag-compatible-options strong,
+.aitag-compatible-options small { display: block; overflow-wrap: anywhere; }
+.aitag-compatible-options small {
+  margin-top: 3px;
+  color: var(--muted);
+  font: 11px/1.35 ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
 .aitag-data-block {
   margin-top: 10px;
   padding: 14px;
@@ -8288,6 +8351,26 @@ html.theme-dark #root {
   cursor: pointer;
 }
 
+.aitag-original-details > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.aitag-original-details > summary small {
+  min-width: 28px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+  text-align: center;
+}
+
+.aitag-original-details-body { padding-top: 12px; }
+
 .theme-dark .aitag-header,
 .theme-dark .aitag-search-panel,
 .theme-dark .aitag-card,
@@ -8305,11 +8388,13 @@ html.theme-dark #root {
 @media (max-width: 620px) {
   .aitag-page { padding: 12px; }
   .aitag-header { flex-direction: column; align-items: stretch; }
+  .aitag-header-actions { display: grid; grid-template-columns: 1fr 1fr; }
   .aitag-search-fields { grid-template-columns: 1fr; }
   .aitag-sort-tabs { flex-wrap: wrap; }
   .aitag-sort-tabs > span { flex-basis: 100%; margin-left: 0; }
   .aitag-time-filter { flex: 1 1 100%; margin-left: 0; }
   .aitag-time-filter select { flex: 1; max-width: none; }
+  .aitag-compatible-options { grid-template-columns: 1fr; }
   .aitag-work-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
   .aitag-card-copy p { display: none; }
   .aitag-card-copy div { flex-direction: column; gap: 3px; }

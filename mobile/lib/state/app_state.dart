@@ -49,6 +49,7 @@ class AppState extends ChangeNotifier {
   HistoryItem? current;
   WorkingImage? workbenchImage;
   ImportedGenerateParams? workbenchImportedParams;
+  Set<String> aitagCompatibleParams = {...importedGenerateParamKeys};
   WorkingImage? comparisonBefore;
   WorkingImage? comparisonAfter;
 
@@ -125,6 +126,16 @@ class AppState extends ChangeNotifier {
     try {
       promptTemplates = await PromptTemplateLibrary.load();
       settings = await storage.getSettings();
+      try {
+        final savedAitagParams = await storage.getAitagCompatibleParams();
+        if (savedAitagParams != null) {
+          aitagCompatibleParams = savedAitagParams
+              .where(importedGenerateParamKeys.contains)
+              .toSet();
+        }
+      } catch (_) {
+        // Older/test platform shells may not expose SharedPreferences yet.
+      }
       status = _rt('common.ready');
       // Per-tool persistence opt-out: when a toggle is off, that tool keeps
       // its hardcoded defaults instead of restoring the last-used values.
@@ -482,6 +493,13 @@ class AppState extends ChangeNotifier {
     status = _rt('status.metadataRestored');
     notifyListeners();
     _scheduleGenerationQuote();
+  }
+
+  void setAitagCompatibleParams(Set<String> values) {
+    aitagCompatibleParams =
+        values.where(importedGenerateParamKeys.contains).toSet();
+    unawaited(storage.setAitagCompatibleParams(aitagCompatibleParams));
+    notifyListeners();
   }
 
   void clearComparison() {

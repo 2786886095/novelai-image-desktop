@@ -36,6 +36,7 @@ class Storage {
   static const _kTagKey = 'tag_server_key';
   static const _kConvertHistory = 'texttool_convert_history_v1';
   static const _kReverseHistory = 'texttool_reverse_history_v1';
+  static const _kAitagCompatibleParams = 'aitag_compatible_params_v1';
 
   final _secure = const FlutterSecureStorage();
   int _saveSequence = 0;
@@ -79,6 +80,14 @@ class Storage {
 
   Future<void> setSettings(AppSettings settings) async =>
       (await _prefs).setString(_kSettings, jsonEncode(settings.toJson()));
+
+  Future<Set<String>?> getAitagCompatibleParams() async {
+    final values = (await _prefs).getStringList(_kAitagCompatibleParams);
+    return values?.toSet();
+  }
+
+  Future<void> setAitagCompatibleParams(Set<String> values) async =>
+      (await _prefs).setStringList(_kAitagCompatibleParams, values.toList());
 
   Future<bool> hasSeenNetworkOnboarding() async =>
       (await _prefs).getBool(_kNetworkOnboarding) ?? false;
@@ -168,19 +177,23 @@ class Storage {
     await (await _prefs).setString(_kHistory, raw);
   }
 
-  Future<List<TextToolHistoryItem>> getConvertHistory() =>
-      _getTextToolHistory(_kConvertHistory, () => _convertHistoryCache,
-          (v) => _convertHistoryCache = v);
+  Future<List<TextToolHistoryItem>> getConvertHistory() => _getTextToolHistory(
+      _kConvertHistory,
+      () => _convertHistoryCache,
+      (v) => _convertHistoryCache = v);
 
   Future<void> setConvertHistory(List<TextToolHistoryItem> items) =>
-      _setTextToolHistory(_kConvertHistory, items, (v) => _convertHistoryCache = v);
+      _setTextToolHistory(
+          _kConvertHistory, items, (v) => _convertHistoryCache = v);
 
-  Future<List<TextToolHistoryItem>> getReverseHistory() =>
-      _getTextToolHistory(_kReverseHistory, () => _reverseHistoryCache,
-          (v) => _reverseHistoryCache = v);
+  Future<List<TextToolHistoryItem>> getReverseHistory() => _getTextToolHistory(
+      _kReverseHistory,
+      () => _reverseHistoryCache,
+      (v) => _reverseHistoryCache = v);
 
   Future<void> setReverseHistory(List<TextToolHistoryItem> items) =>
-      _setTextToolHistory(_kReverseHistory, items, (v) => _reverseHistoryCache = v);
+      _setTextToolHistory(
+          _kReverseHistory, items, (v) => _reverseHistoryCache = v);
 
   Future<List<TextToolHistoryItem>> _getTextToolHistory(
     String key,

@@ -8,12 +8,53 @@ import 'package:url_launcher/url_launcher.dart';
 import '../i18n/app_locales.dart';
 import '../models/nai_models.dart';
 import '../services/storage_permission.dart';
+import '../services/aitag_service.dart';
 import '../state/app_state.dart';
 import '../ui/studio_shell.dart';
 
 const _projectGithubUrl = 'https://github.com/2786886095/novelai-image-desktop';
 const _wechatRewardAsset = 'assets/about/wechat-reward.jpg';
 const _alipayRewardAsset = 'assets/about/alipay-reward.jpg';
+
+String _formatBytes(int bytes) => bytes < 1024 * 1024
+    ? '${(bytes / 1024).toStringAsFixed(1)} KB'
+    : '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+
+(String, String, String, String, String, String) _cacheText(Object? language) {
+  switch (normalizeAppLocaleCode(language)) {
+    case 'zh-TW':
+      return ('AI 繪畫咒語圖庫圖片快取', '本機快取', '自動清理週期', '未使用天數', '永不自動清理', '清除快取');
+    case 'en-US':
+      return (
+        'AI Art Prompt Gallery cache',
+        'Local cache',
+        'Automatic cleanup interval',
+        'Unused days',
+        'Never clean automatically',
+        'Clear cache'
+      );
+    case 'ja-JP':
+      return (
+        'AI イラスト呪文ギャラリー画像キャッシュ',
+        'ローカルキャッシュ',
+        '自動削除の間隔',
+        '未使用日数',
+        '自動削除しない',
+        'キャッシュを消去'
+      );
+    case 'ko-KR':
+      return (
+        'AI 그림 프롬프트 갤러리 이미지 캐시',
+        '로컬 캐시',
+        '자동 정리 주기',
+        '미사용 일수',
+        '자동으로 정리하지 않음',
+        '캐시 지우기'
+      );
+    default:
+      return ('AI绘画咒语图库图片缓存', '本地缓存', '自动清理周期', '未使用天数', '永不自动清理', '清除缓存');
+  }
+}
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -38,6 +79,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool testingProxy = false;
   List<String> _detectedModels = [];
   String _detectedModelKind = '';
+  ({int bytes, int files}) _aitagCacheStats = (bytes: 0, files: 0);
+  bool _aitagCacheBusy = false;
 
   @override
   void initState() {
@@ -46,6 +89,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     visionModelCtrl.text = settings.visionApiModel;
     convertModelCtrl.text = settings.convertApiModel;
     _prefillSecrets();
+    _loadAitagCacheStats();
+  }
+
+  Future<void> _loadAitagCacheStats() async {
+    try {
+      final value = await AitagImageCache.stats();
+      if (mounted) setState(() => _aitagCacheStats = value);
+    } catch (_) {
+      // Path provider may be unavailable in widget tests; the cache remains optional.
+    }
   }
 
   // Secrets live in secure storage, not the reactive `settings` object, so the
@@ -108,6 +161,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final appearanceText = settingsAppearanceTextFor(s.language);
     final persistText = settingsPersistTextFor(s.language);
     final aboutText = settingsAboutTextFor(s.language);
+    final cacheText = _cacheText(s.language);
     final account = state.account;
     return Scaffold(
       appBar: AppBar(title: Text(settingsText.title)),
@@ -283,8 +337,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               detectedModels:
                   _detectedModelKind == 'convert' ? _detectedModels : const [],
               pickerTooltip: settingsDetailText.chooseDetectedModel,
-              onChanged: (v) =>
-                  state.setSettings((x) => x.convertApiModel = v),
+              onChanged: (v) => state.setSettings((x) => x.convertApiModel = v),
             ),
             _SecretField(
                 controller: convertKeyCtrl,
@@ -494,6 +547,57 @@ class _SettingsScreenState extends State<SettingsScreen> {
               value: s.keepImageMetadata,
               onChanged: (value) =>
                   state.setSettings((x) => x.keepImageMetadata = value),
+            ),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(cacheText.$1,
+                          style: Theme.of(context).textTheme.titleSmall),
+                      const SizedBox(height: 4),
+                      Text(
+                          '${cacheText.$2} · ${_aitagCacheStats.files} · ${_formatBytes(_aitagCacheStats.bytes)}'),
+                      const SizedBox(height: 10),
+                      DropdownButtonFormField<int>(
+                        value: s.aitagCacheRetentionDays,
+                        decoration: InputDecoration(
+                            labelText: cacheText.$3,
+                            border: const OutlineInputBorder()),
+                        items: [1, 7, 30, 90, 180]
+                            .map((days) => DropdownMenuItem(
+                                value: days,
+                                child: Text('${cacheText.$4} $days')))
+                            .followedBy([
+                          DropdownMenuItem(value: 0, child: Text(cacheText.$5))
+                        ]).toList(),
+                        onChanged: (value) {
+                          if (value != null) {
+                            state.setSettings(
+                                (x) => x.aitagCacheRetentionDays = value);
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                      OutlinedButton.icon(
+                        onPressed: _aitagCacheBusy
+                            ? null
+                            : () async {
+                                setState(() => _aitagCacheBusy = true);
+                                await AitagImageCache.clear();
+                                if (mounted) {
+                                  setState(() {
+                                    _aitagCacheBusy = false;
+                                    _aitagCacheStats = (bytes: 0, files: 0);
+                                  });
+                                }
+                              },
+                        icon: const Icon(Icons.delete_sweep_outlined),
+                        label: Text(cacheText.$6),
+                      ),
+                    ]),
+              ),
             ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,

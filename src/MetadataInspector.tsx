@@ -197,7 +197,7 @@ const TEXT: Record<AppLanguage, MetadataText> = {
   },
 };
 
-const IMPORT_LABELS: Record<keyof ImportedParams, string> = {
+export const IMPORT_LABELS: Record<keyof ImportedParams, string> = {
   positivePrompt: "Positive prompt",
   negativePrompt: "Negative prompt",
   model: "Model",

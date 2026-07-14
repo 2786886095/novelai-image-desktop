@@ -3947,6 +3947,10 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
   const [tagTestMessage, setTagTestMessage] = useState("");
   const [tagTestTags, setTagTestTags] = useState<TagSuggestion[]>([]);
   const [tagTesting, setTagTesting] = useState(false);
+  const [aitagCacheStats, setAitagCacheStats] = useState({ bytes: 0, files: 0 });
+  const [aitagCacheBusy, setAitagCacheBusy] = useState(false);
+  const [aitagCacheRetentionDays, setAitagCacheRetentionDays] = useState(() =>
+    Number(localStorage.getItem("langbai.aitag.cache-retention-days.v1") ?? "30"));
   const language = settings?.language;
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
@@ -3961,6 +3965,11 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
       }
     });
   }, []);
+
+  useEffect(() => {
+    if (section !== "storage") return;
+    void window.naiDesktop.aitagCacheStats().then(setAitagCacheStats).catch(() => undefined);
+  }, [section]);
 
   if (!settings) return null;
 
@@ -3984,6 +3993,17 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
     await window.naiDesktop.selectOutputDir();
     await refreshSettings();
   };
+  const clearAitagCache = async () => {
+    setAitagCacheBusy(true);
+    try {
+      setAitagCacheStats(await window.naiDesktop.aitagClearCache());
+    } finally {
+      setAitagCacheBusy(false);
+    }
+  };
+  const cacheSize = aitagCacheStats.bytes < 1024 * 1024
+    ? `${(aitagCacheStats.bytes / 1024).toFixed(1)} KB`
+    : `${(aitagCacheStats.bytes / (1024 * 1024)).toFixed(1)} MB`;
 
   function saveNewTemplate() {
     if (!newTplName.trim()) return;
@@ -4172,6 +4192,27 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                   label={t("settings.keepMetadata")}
                   description={t("settings.keepMetadataDesc")}
                 />
+                <div className="info-card">
+                  <strong>{t("settings.aitagCacheTitle")}</strong>
+                  <span>{t("settings.aitagCacheDesc")}</span>
+                  <span>{f("settings.aitagCacheSize", { files: aitagCacheStats.files, size: cacheSize })}</span>
+                  <label className="field">
+                    <span>{t("settings.aitagCacheRetention")}</span>
+                    <select value={aitagCacheRetentionDays} onChange={(event) => {
+                      const days = Number(event.target.value);
+                      setAitagCacheRetentionDays(days);
+                      localStorage.setItem("langbai.aitag.cache-retention-days.v1", String(days));
+                    }}>
+                      {[1, 7, 30, 90, 180].map((days) => <option key={days} value={days}>{f("settings.aitagCacheDays", { days })}</option>)}
+                      <option value={0}>{t("settings.aitagCacheNever")}</option>
+                    </select>
+                  </label>
+                  <div className="row-actions">
+                    <Button onClick={() => void clearAitagCache()} disabled={aitagCacheBusy}>
+                      {t("settings.clearAitagCache")}
+                    </Button>
+                  </div>
+                </div>
                 <LogSettingsSection
                   logDir={settings.logDir ?? ""}
                   loggingEnabled={settings.loggingEnabled ?? true}

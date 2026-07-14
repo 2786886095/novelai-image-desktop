@@ -52,6 +52,27 @@ void main() {
     expect(parsePngTextMetadata(Uint8List.fromList([1, 2, 3])), isEmpty);
   });
 
+  test('applies only the globally selected compatible metadata fields', () {
+    const imported = ImportedGenerateParams(
+      positivePrompt: 'selected prompt',
+      negativePrompt: 'should stay unchanged',
+      steps: 31,
+      seed: 99,
+    );
+    final selected = imported.selecting({'positivePrompt', 'steps'});
+    final target = GenerateParams()
+      ..negativePrompt = 'locked value'
+      ..seed = 7;
+    selected.applyTo(target);
+
+    expect(target.positivePrompt, 'selected prompt');
+    expect(target.steps, 31);
+    expect(target.negativePrompt, 'locked value');
+    expect(target.seed, 7);
+    expect(selected.compatibleValuesByKey.keys,
+        containsAll(<String>['positivePrompt', 'steps']));
+  });
+
   test('strips textual PNG metadata without changing non-PNG input', () {
     final bytes = _makePng({
       'Description': 'private prompt',
@@ -154,6 +175,77 @@ void main() {
     expect(report.imported.sampler, 'k_dpmpp_2m');
     expect((report.imported.width, report.imported.height), (832, 1216));
     expect(report.rawText, contains('workflow'));
+  });
+
+  test('extracts structured values from ComfyUI workflow node arrays', () {
+    final workflow = jsonEncode([
+      {
+        'id': 59,
+        'type': 'VAELoader',
+        'mode': 0,
+        'widgets_values': ['qwen_vae.safetensors']
+      },
+      {
+        'id': 60,
+        'type': 'UNETLoader',
+        'mode': 0,
+        'widgets_values': ['anima-base.safetensors', 'default']
+      },
+      {
+        'id': 61,
+        'type': 'CLIPLoader',
+        'mode': 0,
+        'widgets_values': ['qwen_clip.safetensors', 'qwen_image', 'default']
+      },
+      {
+        'id': 52,
+        'type': 'CLIPTextEncode',
+        'mode': 0,
+        'widgets_values': ['1girl, silver hair']
+      },
+      {
+        'id': 40,
+        'type': 'EmptyLatentImage',
+        'mode': 0,
+        'widgets_values': [832, 1216, 1]
+      },
+      {
+        'id': 90,
+        'type': 'KSampler',
+        'mode': 0,
+        'widgets_values': [
+          99,
+          'randomize',
+          20,
+          5,
+          'euler_ancestral',
+          'simple',
+          0.55
+        ]
+      },
+      {
+        'id': 48,
+        'type': 'LatentUpscaleBy',
+        'mode': 0,
+        'widgets_values': ['nearest-exact', 1.5]
+      },
+    ]);
+    final report = inspectImageMetadata({'workflow': workflow});
+    expect(report.kind, ImageMetadataKind.comfyUi);
+    expect(report.imported.steps, 20);
+    expect((report.imported.width, report.imported.height), (832, 1216));
+    expect(
+        report.entries.any(
+            (entry) => entry.key == 'VAE' && entry.value.contains('qwen_vae')),
+        isTrue);
+    expect(
+        report.entries.any((entry) =>
+            entry.key == 'CLIP model' && entry.value.contains('qwen_clip')),
+        isTrue);
+    expect(
+        report.entries.any((entry) =>
+            entry.key == 'Upscale scale' && entry.value.contains('1.5')),
+        isTrue);
   });
 }
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ImgHTMLAttributes } from "react";
 import {
   AITAG_PAGE_SIZE,
   AITAG_SITE_URL,
@@ -15,11 +15,28 @@ import {
   type AitagWorkSummary,
 } from "./aitag";
 import { normalizeAppLanguage } from "./i18n";
-import { groupLabel, parameterLabel } from "./MetadataInspector";
+import { groupLabel, IMPORT_LABELS, parameterLabel } from "./MetadataInspector";
 import { inspectImageMetadata } from "./png-meta";
 import { useAppStore } from "./store";
+import type { ImportedParams } from "./types";
 
 const COPY_RESET_MS = 1_500;
+const COMPATIBLE_SELECTION_KEY = "langbai.aitag.compatible-params.v1";
+export const AITAG_CACHE_RETENTION_KEY = "langbai.aitag.cache-retention-days.v1";
+const COMPATIBLE_PARAM_KEYS = Object.keys(IMPORT_LABELS) as (keyof ImportedParams)[];
+
+function loadCompatibleSelection(): Set<keyof ImportedParams> {
+  try {
+    const raw = localStorage.getItem(COMPATIBLE_SELECTION_KEY);
+    if (!raw) return new Set(COMPATIBLE_PARAM_KEYS);
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return new Set(COMPATIBLE_PARAM_KEYS);
+    return new Set(parsed.filter((key): key is keyof ImportedParams =>
+      typeof key === "string" && COMPATIBLE_PARAM_KEYS.includes(key as keyof ImportedParams)));
+  } catch {
+    return new Set(COMPATIBLE_PARAM_KEYS);
+  }
+}
 
 const TEXT = {
   "zh-CN": {
@@ -30,6 +47,7 @@ const TEXT = {
     query: "搜索作品、作者、标签、模型或 ID",
     prompt: "搜索正向提示词（可选）",
     search: "搜索",
+    refresh: "刷新",
     newest: "最新作品",
     monthly: "本月排行",
     timeRange: "时间范围",
@@ -63,6 +81,11 @@ const TEXT = {
     image: "图片 {index}",
     use: "一键使用到生成",
     compatible: "可用兼容参数 {count} 项",
+    compatibleSettings: "兼容参数复用设置",
+    selectedCompatible: "已选择 {selected}/{total} 项",
+    selectAll: "全选",
+    clearAll: "清空",
+    noSelected: "请至少勾选一个兼容参数",
     sourceNotice: "数据与图片来自 AITag；接口结构变更时可能暂时不可用。",
   },
   "zh-TW": {
@@ -73,6 +96,7 @@ const TEXT = {
     query: "搜尋作品、作者、標籤、模型或 ID",
     prompt: "搜尋正向提示詞（可選）",
     search: "搜尋",
+    refresh: "重新整理",
     newest: "最新作品",
     monthly: "本月排行",
     timeRange: "時間範圍",
@@ -106,6 +130,11 @@ const TEXT = {
     image: "圖片 {index}",
     use: "一鍵套用到生成",
     compatible: "可用相容參數 {count} 項",
+    compatibleSettings: "相容參數重用設定",
+    selectedCompatible: "已選擇 {selected}/{total} 項",
+    selectAll: "全選",
+    clearAll: "清除",
+    noSelected: "請至少勾選一個相容參數",
     sourceNotice: "資料與圖片來自 AITag；介面結構變更時可能暫時無法使用。",
   },
   "en-US": {
@@ -116,6 +145,7 @@ const TEXT = {
     query: "Search works, creators, tags, models, or IDs",
     prompt: "Search positive prompts (optional)",
     search: "Search",
+    refresh: "Refresh",
     newest: "Newest",
     monthly: "Monthly Rank",
     timeRange: "Time range",
@@ -149,6 +179,11 @@ const TEXT = {
     image: "Image {index}",
     use: "Use in Generate",
     compatible: "{count} compatible values",
+    compatibleSettings: "Compatible parameters to reuse",
+    selectedCompatible: "{selected}/{total} selected",
+    selectAll: "Select all",
+    clearAll: "Clear all",
+    noSelected: "Select at least one compatible parameter",
     sourceNotice: "Data and images are provided by AITag; availability may change with its API.",
   },
   "ja-JP": {
@@ -159,6 +194,7 @@ const TEXT = {
     query: "作品、作者、タグ、モデル、ID を検索",
     prompt: "ポジティブプロンプトを検索（任意）",
     search: "検索",
+    refresh: "更新",
     newest: "新着作品",
     monthly: "月間ランキング",
     timeRange: "期間",
@@ -192,6 +228,11 @@ const TEXT = {
     image: "画像 {index}",
     use: "生成画面で使用",
     compatible: "互換設定 {count} 件",
+    compatibleSettings: "再利用する互換設定",
+    selectedCompatible: "{selected}/{total} 件を選択",
+    selectAll: "すべて選択",
+    clearAll: "すべて解除",
+    noSelected: "互換設定を1つ以上選択してください",
     sourceNotice: "データと画像は AITag 提供です。API 変更時は一時的に利用できない場合があります。",
   },
   "ko-KR": {
@@ -202,6 +243,7 @@ const TEXT = {
     query: "작품, 작가, 태그, 모델 또는 ID 검색",
     prompt: "긍정 프롬프트 검색(선택 사항)",
     search: "검색",
+    refresh: "새로고침",
     newest: "최신 작품",
     monthly: "월간 순위",
     timeRange: "기간",
@@ -235,6 +277,11 @@ const TEXT = {
     image: "이미지 {index}",
     use: "생성 화면에서 사용",
     compatible: "호환 값 {count}개",
+    compatibleSettings: "재사용할 호환 매개변수",
+    selectedCompatible: "{selected}/{total}개 선택",
+    selectAll: "전체 선택",
+    clearAll: "전체 해제",
+    noSelected: "호환 매개변수를 하나 이상 선택하세요",
     sourceNotice: "데이터와 이미지는 AITag에서 제공되며 API 변경 시 일시적으로 사용할 수 없을 수 있습니다.",
   },
 } as const;
@@ -257,6 +304,20 @@ function CopyButton({ value, text }: { value: string; text: GalleryText }) {
       {copied ? text.copied : text.copy}
     </button>
   );
+}
+
+function AitagCachedImage({ src, ...props }: ImgHTMLAttributes<HTMLImageElement> & { src: string }) {
+  const [resolved, setResolved] = useState("");
+  useEffect(() => {
+    let active = true;
+    setResolved("");
+    const days = Number(localStorage.getItem(AITAG_CACHE_RETENTION_KEY) ?? "30");
+    void window.naiDesktop.aitagCacheImage(src, Number.isFinite(days) ? days : 30)
+      .then((localUrl) => { if (active) setResolved(localUrl); })
+      .catch(() => { if (active) setResolved(src); });
+    return () => { active = false; };
+  }, [src]);
+  return resolved ? <img {...props} src={resolved} /> : <span className="aitag-image-loading">AITag</span>;
 }
 
 function WorkCard({
@@ -294,7 +355,7 @@ function WorkCard({
     <article ref={rootRef} className="aitag-card" onClick={() => onOpen(work)}>
       <button type="button" className="aitag-card-hit" aria-label={work.title || `#${work.id}`}>
         <div className="aitag-card-image">
-          {imageUrl ? <img src={imageUrl} alt="" loading="lazy" /> : <span>AITag</span>}
+          {imageUrl ? <AitagCachedImage src={imageUrl} alt="" loading="lazy" /> : <span>AITag</span>}
           <small>{interpolate(text.images, "count", work.imageCount)}</small>
         </div>
         <div className="aitag-card-copy">
@@ -329,7 +390,12 @@ export default function AitagGallery({ onBack }: { onBack: () => void }) {
   const [selected, setSelected] = useState<AitagWorkDetail | null>(null);
   const [selectedImage, setSelectedImage] = useState(0);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [compatibleSelection, setCompatibleSelection] = useState<Set<keyof ImportedParams>>(loadCompatibleSelection);
   const cache = useRef(new Map<number, Promise<AitagWorkDetail>>());
+
+  useEffect(() => {
+    localStorage.setItem(COMPATIBLE_SELECTION_KEY, JSON.stringify([...compatibleSelection]));
+  }, [compatibleSelection]);
 
   const loadDetail = useCallback((id: number) => {
     const existing = cache.current.get(id);
@@ -369,6 +435,19 @@ export default function AitagGallery({ onBack }: { onBack: () => void }) {
     void search(1);
   }, []); // initial load only; later searches are explicit
 
+  const refresh = useCallback(async () => {
+    cache.current.clear();
+    setSelected(null);
+    setSelectedImage(0);
+    try {
+      const raw = await window.naiDesktop.aitagConfig();
+      setConfig(normalizeAitagConfig(raw));
+    } catch {
+      // Searching still works with the last known CDN/config values.
+    }
+    await search(page);
+  }, [page, search]);
+
   const openWork = async (work: AitagWorkSummary) => {
     setDetailLoading(true);
     setError(false);
@@ -390,14 +469,31 @@ export default function AitagGallery({ onBack }: { onBack: () => void }) {
     () => image ? inspectImageMetadata(aitagMetadataRecord(image, selected?.work.aiType ?? "")) : null,
     [image, selected?.work.aiType],
   );
-  const compatibleCount = report ? Object.values(report.imported).filter((value) => value !== undefined).length : 0;
+  const compatibleEntries = useMemo(
+    () => report
+      ? (Object.entries(report.imported) as [keyof ImportedParams, ImportedParams[keyof ImportedParams]][])
+          .filter(([, value]) => value !== undefined)
+      : [],
+    [report],
+  );
+  const selectedCompatibleEntries = compatibleEntries.filter(([key]) => compatibleSelection.has(key));
+  const compatibleCount = compatibleEntries.length;
 
   const applyCompatible = () => {
-    if (!report || !compatibleCount) return;
-    const patch = { ...report.imported };
+    if (!report || !selectedCompatibleEntries.length) return;
+    const patch = Object.fromEntries(selectedCompatibleEntries) as Partial<ImportedParams>;
     if (settings?.lockNegativePrompt) delete patch.negativePrompt;
     applyParams(patch);
     setActiveTab("generate");
+  };
+
+  const toggleCompatible = (key: keyof ImportedParams) => {
+    setCompatibleSelection((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   };
   const maxPage = Math.max(1, Math.ceil(result.total / AITAG_PAGE_SIZE));
   const timeOptions = useMemo(() => {
@@ -446,11 +542,11 @@ export default function AitagGallery({ onBack }: { onBack: () => void }) {
 
         <section className="aitag-detail-grid">
           <div className="aitag-detail-visual">
-            {imageUrl ? <img src={imageUrl} alt={interpolate(text.image, "index", selectedImage + 1)} /> : null}
+            {imageUrl ? <AitagCachedImage src={imageUrl} alt={interpolate(text.image, "index", selectedImage + 1)} /> : null}
             <div className="aitag-image-strip">
               {selected.images.map((candidate, index) => (
                 <button key={candidate.id || index} type="button" className={index === selectedImage ? "active" : ""} onClick={() => setSelectedImage(index)}>
-                  <img src={aitagImageUrl(config, candidate)} alt={interpolate(text.image, "index", index + 1)} loading="lazy" />
+                  <AitagCachedImage src={aitagImageUrl(config, candidate)} alt={interpolate(text.image, "index", index + 1)} loading="lazy" />
                   <span>{index + 1}</span>
                 </button>
               ))}
@@ -460,10 +556,30 @@ export default function AitagGallery({ onBack }: { onBack: () => void }) {
             <div className="aitag-metadata-title">
               <div><span>{text.model}</span><b>{image?.model || selected.work.aiType || "—"}</b></div>
               <div className="aitag-compatible-action">
-                <span>{interpolate(text.compatible, "count", compatibleCount)}</span>
-                <button type="button" className="btn primary compact" disabled={!compatibleCount} onClick={applyCompatible}>{text.use}</button>
+                <span>{interpolate(interpolate(text.selectedCompatible, "selected", selectedCompatibleEntries.length), "total", compatibleCount)}</span>
+                <button type="button" className="btn primary compact" title={!selectedCompatibleEntries.length ? text.noSelected : undefined} disabled={!selectedCompatibleEntries.length} onClick={applyCompatible}>{text.use}</button>
               </div>
             </div>
+            {compatibleEntries.length ? (
+              <details className="aitag-compatible-details">
+                <summary>
+                  <span>{text.compatibleSettings}</span>
+                  <small>{interpolate(interpolate(text.selectedCompatible, "selected", selectedCompatibleEntries.length), "total", compatibleCount)}</small>
+                </summary>
+                <div className="aitag-compatible-toolbar">
+                  <button type="button" className="btn secondary compact" onClick={() => setCompatibleSelection(new Set(COMPATIBLE_PARAM_KEYS))}>{text.selectAll}</button>
+                  <button type="button" className="btn secondary compact" onClick={() => setCompatibleSelection(new Set())}>{text.clearAll}</button>
+                </div>
+                <div className="aitag-compatible-options">
+                  {compatibleEntries.map(([key, value]) => (
+                    <label key={key}>
+                      <input type="checkbox" checked={compatibleSelection.has(key)} onChange={() => toggleCompatible(key)} />
+                      <span><strong>{parameterLabel(language, IMPORT_LABELS[key])}</strong><small>{String(value)}</small></span>
+                    </label>
+                  ))}
+                </div>
+              </details>
+            ) : null}
             {image?.promptText ? (
               <article className="aitag-data-block">
                 <header><h3>{text.promptText}</h3><CopyButton value={image.promptText} text={text} /></header>
@@ -471,19 +587,24 @@ export default function AitagGallery({ onBack }: { onBack: () => void }) {
               </article>
             ) : null}
             <article className="aitag-data-block">
-              <header><h3>{text.metadata}</h3><CopyButton value={metadata} text={text} /></header>
-              {report?.entries.length ? (
-                <div className="metadata-param-list aitag-param-list">
-                  {report.entries.map((entry, index) => (
-                    <article key={`${entry.group}-${entry.key}-${index}`}>
-                      <div><span>{groupLabel(language, entry.group)}</span><strong>{parameterLabel(language, entry.key)}</strong></div>
-                      <pre>{entry.value}</pre>
-                      <CopyButton value={entry.value} text={text} />
-                    </article>
-                  ))}
+              <details className="aitag-original-details">
+                <summary><span>{text.metadata}</span><small>{report?.entries.length ?? 0}</small></summary>
+                <div className="aitag-original-details-body">
+                  <header><h3>{text.metadata}</h3><CopyButton value={metadata} text={text} /></header>
+                  {report?.entries.length ? (
+                    <div className="metadata-param-list aitag-param-list">
+                      {report.entries.map((entry, index) => (
+                        <article key={`${entry.group}-${entry.key}-${index}`}>
+                          <div><span>{groupLabel(language, entry.group)}</span><strong>{parameterLabel(language, entry.key)}</strong></div>
+                          <pre>{entry.value}</pre>
+                          <CopyButton value={entry.value} text={text} />
+                        </article>
+                      ))}
+                    </div>
+                  ) : <p>{text.noMetadata}</p>}
+                  {metadata ? <details className="aitag-raw-details"><summary>{text.metadata}</summary><pre>{metadata}</pre></details> : null}
                 </div>
-              ) : <p>{text.noMetadata}</p>}
-              {metadata ? <details className="aitag-raw-details"><summary>{text.metadata}</summary><pre>{metadata}</pre></details> : null}
+              </details>
             </article>
           </div>
         </section>
@@ -499,7 +620,10 @@ export default function AitagGallery({ onBack }: { onBack: () => void }) {
           <h2>{text.title}</h2>
           <p>{text.subtitle}</p>
         </div>
-        <button type="button" className="btn secondary" onClick={() => void window.naiDesktop.openExternal(AITAG_SITE_URL)}>{text.source}</button>
+        <div className="aitag-header-actions">
+          <button type="button" className="btn secondary" disabled={loading} onClick={() => void refresh()}>{text.refresh}</button>
+          <button type="button" className="btn secondary" onClick={() => void window.naiDesktop.openExternal(AITAG_SITE_URL)}>{text.source}</button>
+        </div>
       </header>
 
       <section className="aitag-search-panel">

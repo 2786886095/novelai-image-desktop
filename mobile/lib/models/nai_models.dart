@@ -9,7 +9,7 @@ class NaiOption {
 }
 
 const appName = 'Langbai NovelAI Studio';
-const appVersion = '1.3.4';
+const appVersion = '1.3.5';
 
 const naiModels = <NaiOption>[
   NaiOption('NAI Diffusion 4.5 Full (Full model)', 'nai-diffusion-4-5-full'),
@@ -547,6 +547,7 @@ class AppSettings {
   String translateProvider;
   String baiduAppId;
   int historyRetentionDays;
+  int aitagCacheRetentionDays;
   bool keepImageMetadata;
   bool saveToGallery;
   // Custom base folder for saved originals. Empty = app documents/images.
@@ -616,6 +617,7 @@ class AppSettings {
     this.translateProvider = 'google',
     this.baiduAppId = '',
     this.historyRetentionDays = 365,
+    this.aitagCacheRetentionDays = 30,
     this.keepImageMetadata = true,
     this.saveToGallery = true,
     this.imageOutputDir = '',
@@ -682,6 +684,7 @@ class AppSettings {
         'translateProvider': translateProvider,
         'baiduAppId': baiduAppId,
         'historyRetentionDays': historyRetentionDays,
+        'aitagCacheRetentionDays': aitagCacheRetentionDays,
         'keepImageMetadata': keepImageMetadata,
         'saveToGallery': saveToGallery,
         'imageOutputDir': imageOutputDir,
@@ -746,6 +749,7 @@ class AppSettings {
         translateProvider: j['translateProvider'] ?? 'google',
         baiduAppId: j['baiduAppId'] ?? '',
         historyRetentionDays: j['historyRetentionDays'] ?? 365,
+        aitagCacheRetentionDays: j['aitagCacheRetentionDays'] ?? 30,
         keepImageMetadata: j['keepImageMetadata'] ?? true,
         saveToGallery: j['saveToGallery'] ?? true,
         imageOutputDir: j['imageOutputDir'] ?? '',

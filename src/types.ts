@@ -1,4 +1,4 @@
-export const APP_VERSION = "1.3.4";
+export const APP_VERSION = "1.3.5";
 export const APP_NAME = "Langbai NovelAI Studio";
 export const PROJECT_REPOSITORY = "https://github.com/2786886095/novelai-image-desktop";
 
@@ -996,6 +996,9 @@ export interface NaiDesktopApi {
   aitagConfig: () => Promise<unknown>;
   aitagSearch: (request: import("./aitag").AitagSearchRequest) => Promise<unknown>;
   aitagWork: (id: number) => Promise<unknown>;
+  aitagCacheImage: (url: string, retentionDays?: number) => Promise<string>;
+  aitagCacheStats: () => Promise<{ bytes: number; files: number }>;
+  aitagClearCache: () => Promise<{ bytes: number; files: number }>;
   hasToken: () => Promise<AccountSummary>;
   accountCached: () => Promise<AccountSummary>;
   verifyToken: (token: string) => Promise<TokenStatus>;

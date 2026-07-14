@@ -84,7 +84,55 @@ class ImportedGenerateParams {
         if (smea != null) 'SMEA': smea!,
         if (smeaDyn != null) 'SMEA Dyn': smeaDyn!,
       };
+
+  Map<String, Object> get compatibleValuesByKey => {
+        if (positivePrompt != null) 'positivePrompt': positivePrompt!,
+        if (negativePrompt != null) 'negativePrompt': negativePrompt!,
+        if (model != null) 'model': model!,
+        if (width != null) 'width': width!,
+        if (height != null) 'height': height!,
+        if (steps != null) 'steps': steps!,
+        if (cfgScale != null) 'cfgScale': cfgScale!,
+        if (cfgRescale != null) 'cfgRescale': cfgRescale!,
+        if (sampler != null) 'sampler': sampler!,
+        if (noiseSchedule != null) 'noiseSchedule': noiseSchedule!,
+        if (seed != null) 'seed': seed!,
+        if (smea != null) 'smea': smea!,
+        if (smeaDyn != null) 'smeaDyn': smeaDyn!,
+      };
+
+  ImportedGenerateParams selecting(Set<String> keys) => ImportedGenerateParams(
+        model: keys.contains('model') ? model : null,
+        positivePrompt: keys.contains('positivePrompt') ? positivePrompt : null,
+        negativePrompt: keys.contains('negativePrompt') ? negativePrompt : null,
+        width: keys.contains('width') ? width : null,
+        height: keys.contains('height') ? height : null,
+        steps: keys.contains('steps') ? steps : null,
+        cfgScale: keys.contains('cfgScale') ? cfgScale : null,
+        cfgRescale: keys.contains('cfgRescale') ? cfgRescale : null,
+        sampler: keys.contains('sampler') ? sampler : null,
+        noiseSchedule: keys.contains('noiseSchedule') ? noiseSchedule : null,
+        seed: keys.contains('seed') ? seed : null,
+        smea: keys.contains('smea') ? smea : null,
+        smeaDyn: keys.contains('smeaDyn') ? smeaDyn : null,
+      );
 }
+
+const importedGenerateParamKeys = <String>{
+  'model',
+  'positivePrompt',
+  'negativePrompt',
+  'width',
+  'height',
+  'steps',
+  'cfgScale',
+  'cfgRescale',
+  'sampler',
+  'noiseSchedule',
+  'seed',
+  'smea',
+  'smeaDyn',
+};
 
 enum ImageMetadataKind { novelAi, stableDiffusion, comfyUi, unknown }
 
@@ -555,6 +603,172 @@ Map<String, dynamic>? _jsonMap(String? value) {
   }
 }
 
+Object? _jsonValue(String? value) {
+  if (value == null || value.isEmpty) return null;
+  try {
+    return jsonDecode(value);
+  } catch (_) {
+    return null;
+  }
+}
+
+const _comfyWidgetKeys = <String, List<String>>{
+  'KSampler': [
+    'Seed',
+    'Seed mode',
+    'Steps',
+    'CFG scale',
+    'Sampler',
+    'Scheduler',
+    'Denoise'
+  ],
+  'KSamplerAdvanced': [
+    'Add noise',
+    'Noise seed',
+    'Seed mode',
+    'Steps',
+    'CFG scale',
+    'Sampler',
+    'Scheduler',
+    'Start step',
+    'End step',
+    'Return with leftover noise'
+  ],
+  'CheckpointLoaderSimple': ['Model'],
+  'CheckpointLoader': ['Model', 'Config'],
+  'UNETLoader': ['Model', 'Weight dtype'],
+  'VAELoader': ['VAE'],
+  'CLIPLoader': ['CLIP model', 'CLIP type', 'Device'],
+  'DualCLIPLoader': ['CLIP model 1', 'CLIP model 2', 'CLIP type', 'Device'],
+  'CLIPTextEncode': ['Prompt'],
+  'EmptyLatentImage': ['Width', 'Height', 'Batch size'],
+  'EmptySD3LatentImage': ['Width', 'Height', 'Batch size'],
+  'LatentUpscaleBy': ['Upscale method', 'Upscale scale'],
+  'LatentUpscale': ['Upscale method', 'Width', 'Height', 'Crop'],
+  'LoraLoader': ['LoRA', 'LoRA model strength', 'LoRA CLIP strength'],
+  'LoraLoaderModelOnly': ['LoRA', 'LoRA model strength'],
+  'ControlNetLoader': ['ControlNet model'],
+  'LoadImage': ['Input image', 'Upload mode'],
+  'SaveImage': ['Filename prefix'],
+  'PreviewImage': [],
+  'FluxGuidance': ['Guidance'],
+  'CFGGuider': ['CFG scale'],
+  'BasicScheduler': ['Scheduler', 'Steps', 'Denoise'],
+  'RandomNoise': ['Seed', 'Seed mode'],
+};
+
+ImportedGenerateParams _mergeImported(
+  ImportedGenerateParams primary,
+  ImportedGenerateParams fallback,
+) =>
+    ImportedGenerateParams(
+      model: primary.model ?? fallback.model,
+      positivePrompt: primary.positivePrompt ?? fallback.positivePrompt,
+      negativePrompt: primary.negativePrompt ?? fallback.negativePrompt,
+      width: primary.width ?? fallback.width,
+      height: primary.height ?? fallback.height,
+      steps: primary.steps ?? fallback.steps,
+      cfgScale: primary.cfgScale ?? fallback.cfgScale,
+      cfgRescale: primary.cfgRescale ?? fallback.cfgRescale,
+      sampler: primary.sampler ?? fallback.sampler,
+      noiseSchedule: primary.noiseSchedule ?? fallback.noiseSchedule,
+      seed: primary.seed ?? fallback.seed,
+      smea: primary.smea ?? fallback.smea,
+      smeaDyn: primary.smeaDyn ?? fallback.smeaDyn,
+    );
+
+({ImportedGenerateParams imported, List<ImageMetadataEntry> entries})
+    _inspectComfyWorkflow(String? value) {
+  final decoded = _jsonValue(value);
+  final rawNodes = decoded is List
+      ? decoded
+      : decoded is Map && decoded['nodes'] is List
+          ? decoded['nodes'] as List
+          : const [];
+  final entries = <ImageMetadataEntry>[];
+  var imported = const ImportedGenerateParams();
+  void add(String key, Object? raw, String type, Object? id) {
+    if (raw == null || raw == '') return;
+    final group = RegExp(r'model|vae|clip|lora|controlnet|dtype|config',
+                caseSensitive: false)
+            .hasMatch(key)
+        ? 'model'
+        : RegExp(r'width|height|size|upscale|crop|image', caseSensitive: false)
+                .hasMatch(key)
+            ? 'image'
+            : 'generation';
+    final text = raw is String ? raw : _metadataValue(raw);
+    entries.add(ImageMetadataEntry(
+      key: key,
+      value: rawNodes.length > 1 ? '[$type #${id ?? '?'}] $text' : text,
+      group: group,
+    ));
+  }
+
+  for (final rawNode in rawNodes) {
+    if (rawNode is! Map) continue;
+    final node = Map<String, dynamic>.from(rawNode);
+    if (_intValue(node['mode']) == 4) continue;
+    final type = _textValue(node['type']) ?? 'ComfyUI node';
+    final widgets = node['widgets_values'] is List
+        ? node['widgets_values'] as List
+        : const [];
+    final known = _comfyWidgetKeys[type];
+    if (known != null) {
+      for (var index = 0; index < known.length; index++) {
+        add(known[index], index < widgets.length ? widgets[index] : null, type,
+            node['id']);
+      }
+    } else if (node['inputs'] is List) {
+      var widgetIndex = 0;
+      for (final rawInput in node['inputs'] as List) {
+        if (rawInput is! Map || rawInput['widget'] == null) continue;
+        if (rawInput['link'] != null) continue;
+        add(
+            '$type · ${rawInput['label'] ?? rawInput['name'] ?? 'Value ${widgetIndex + 1}'}',
+            widgetIndex < widgets.length ? widgets[widgetIndex] : null,
+            type,
+            node['id']);
+        widgetIndex++;
+      }
+    }
+    if (type == 'KSampler') {
+      imported = _mergeImported(
+        ImportedGenerateParams(
+          seed: widgets.isNotEmpty ? _intValue(widgets[0]) : null,
+          steps: widgets.length > 2 ? _intValue(widgets[2]) : null,
+          cfgScale: widgets.length > 3 ? _doubleValue(widgets[3]) : null,
+          sampler:
+              widgets.length > 4 ? _naiSampler(_textValue(widgets[4])) : null,
+          noiseSchedule:
+              widgets.length > 5 ? _naiScheduler(_textValue(widgets[5])) : null,
+        ),
+        imported,
+      );
+    } else if (type == 'EmptyLatentImage' || type == 'EmptySD3LatentImage') {
+      imported = _mergeImported(
+          ImportedGenerateParams(
+            width: widgets.isNotEmpty ? _intValue(widgets[0]) : null,
+            height: widgets.length > 1 ? _intValue(widgets[1]) : null,
+          ),
+          imported);
+    } else if (type == 'CLIPTextEncode' && imported.positivePrompt == null) {
+      imported = _mergeImported(
+          ImportedGenerateParams(
+              positivePrompt:
+                  widgets.isNotEmpty ? _textValue(widgets[0]) : null),
+          imported);
+    }
+  }
+  final seen = <String>{};
+  return (
+    imported: imported,
+    entries: entries
+        .where((entry) => seen.add('${entry.key}\u0000${entry.value}'))
+        .toList(),
+  );
+}
+
 String? _referenceId(Object? value) {
   if (value is! List || value.isEmpty) return null;
   final id = value.first;
@@ -616,11 +830,12 @@ String? _comfyText(Map<String, dynamic> prompt, Object? reference) {
   List<ImageMetadataEntry> entries,
   List<String> warnings
 }) _inspectComfy(Map<String, String> metadata) {
+  final workflow = _inspectComfyWorkflow(metadata['workflow']);
   final prompt = _jsonMap(metadata['prompt']);
   if (prompt == null) {
     return (
-      imported: const ImportedGenerateParams(),
-      entries: const [],
+      imported: workflow.imported,
+      entries: workflow.entries,
       warnings: const [
         'ComfyUI prompt JSON is missing or malformed; the raw workflow is still available.'
       ],
@@ -638,8 +853,8 @@ String? _comfyText(Map<String, dynamic> prompt, Object? reference) {
   }
   if (sampler == null) {
     return (
-      imported: const ImportedGenerateParams(),
-      entries: const [],
+      imported: workflow.imported,
+      entries: workflow.entries,
       warnings: const [
         'No compatible ComfyUI KSampler node was found; view the raw workflow for all node data.'
       ],
@@ -698,19 +913,23 @@ String? _comfyText(Map<String, dynamic> prompt, Object? reference) {
       ImageMetadataEntry(key: 'Model', value: model, group: 'model'),
   ];
 
+  final promptImported = ImportedGenerateParams(
+    positivePrompt: positive,
+    negativePrompt: negative,
+    steps: _intValue(inputs['steps']),
+    cfgScale: _doubleValue(inputs['cfg']),
+    seed: _intValue(inputs['seed']),
+    width: _intValue(latentInputs['width']),
+    height: _intValue(latentInputs['height']),
+    sampler: _naiSampler(samplerName),
+    noiseSchedule: _naiScheduler(scheduler),
+  );
+  final seen = <String>{};
   return (
-    imported: ImportedGenerateParams(
-      positivePrompt: positive,
-      negativePrompt: negative,
-      steps: _intValue(inputs['steps']),
-      cfgScale: _doubleValue(inputs['cfg']),
-      seed: _intValue(inputs['seed']),
-      width: _intValue(latentInputs['width']),
-      height: _intValue(latentInputs['height']),
-      sampler: _naiSampler(samplerName),
-      noiseSchedule: _naiScheduler(scheduler),
-    ),
-    entries: entries,
+    imported: _mergeImported(promptImported, workflow.imported),
+    entries: [...entries, ...workflow.entries]
+        .where((entry) => seen.add('${entry.key}\u0000${entry.value}'))
+        .toList(),
     warnings: const [],
   );
 }

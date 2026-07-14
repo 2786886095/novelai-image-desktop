@@ -19,6 +19,7 @@ class _Text {
       query,
       prompt,
       search,
+      refresh,
       newest,
       monthly,
       timeRange,
@@ -52,6 +53,11 @@ class _Text {
       image,
       use,
       compatible,
+      compatibleSettings,
+      selectedCompatible,
+      selectAll,
+      clearAll,
+      noSelected,
       notice;
   const _Text({
     required this.title,
@@ -61,6 +67,7 @@ class _Text {
     required this.query,
     required this.prompt,
     required this.search,
+    required this.refresh,
     required this.newest,
     required this.monthly,
     required this.timeRange,
@@ -94,6 +101,11 @@ class _Text {
     required this.image,
     required this.use,
     required this.compatible,
+    required this.compatibleSettings,
+    required this.selectedCompatible,
+    required this.selectAll,
+    required this.clearAll,
+    required this.noSelected,
     required this.notice,
   });
 }
@@ -109,6 +121,7 @@ _Text _textFor(Object? value) {
           query: '搜尋作品、作者、標籤、模型或 ID',
           prompt: '搜尋正向提示詞（可選）',
           search: '搜尋',
+          refresh: '重新整理',
           newest: '最新作品',
           monthly: '本月排行',
           timeRange: '時間範圍',
@@ -142,6 +155,11 @@ _Text _textFor(Object? value) {
           image: '圖片 {index}',
           use: '一鍵套用到生成',
           compatible: '可用相容參數 {count} 項',
+          compatibleSettings: '相容參數重用設定',
+          selectedCompatible: '已選擇 {selected}/{total} 項',
+          selectAll: '全選',
+          clearAll: '清除',
+          noSelected: '請至少勾選一個相容參數',
           notice: '資料與圖片來自 AITag；介面結構變更時可能暫時無法使用。');
     case 'en-US':
       return const _Text(
@@ -153,6 +171,7 @@ _Text _textFor(Object? value) {
           query: 'Search works, creators, tags, models, or IDs',
           prompt: 'Search positive prompts (optional)',
           search: 'Search',
+          refresh: 'Refresh',
           newest: 'Newest',
           monthly: 'Monthly Rank',
           timeRange: 'Time range',
@@ -187,6 +206,11 @@ _Text _textFor(Object? value) {
           image: 'Image {index}',
           use: 'Use in Generate',
           compatible: '{count} compatible values',
+          compatibleSettings: 'Compatible parameters to reuse',
+          selectedCompatible: '{selected}/{total} selected',
+          selectAll: 'Select all',
+          clearAll: 'Clear all',
+          noSelected: 'Select at least one compatible parameter',
           notice:
               'Data and images are provided by AITag; availability may change with its API.');
     case 'ja-JP':
@@ -198,6 +222,7 @@ _Text _textFor(Object? value) {
           query: '作品、作者、タグ、モデル、ID を検索',
           prompt: 'ポジティブプロンプトを検索（任意）',
           search: '検索',
+          refresh: '更新',
           newest: '新着作品',
           monthly: '月間ランキング',
           timeRange: '期間',
@@ -231,6 +256,11 @@ _Text _textFor(Object? value) {
           image: '画像 {index}',
           use: '生成画面で使用',
           compatible: '互換設定 {count} 件',
+          compatibleSettings: '再利用する互換設定',
+          selectedCompatible: '{selected}/{total} 件を選択',
+          selectAll: 'すべて選択',
+          clearAll: 'すべて解除',
+          noSelected: '互換設定を1つ以上選択してください',
           notice: 'データと画像は AITag 提供です。API 変更時は一時的に利用できない場合があります。');
     case 'ko-KR':
       return const _Text(
@@ -241,6 +271,7 @@ _Text _textFor(Object? value) {
           query: '작품, 작가, 태그, 모델 또는 ID 검색',
           prompt: '긍정 프롬프트 검색(선택 사항)',
           search: '검색',
+          refresh: '새로고침',
           newest: '최신 작품',
           monthly: '월간 순위',
           timeRange: '기간',
@@ -274,6 +305,11 @@ _Text _textFor(Object? value) {
           image: '이미지 {index}',
           use: '생성 화면에서 사용',
           compatible: '호환 값 {count}개',
+          compatibleSettings: '재사용할 호환 매개변수',
+          selectedCompatible: '{selected}/{total}개 선택',
+          selectAll: '전체 선택',
+          clearAll: '전체 해제',
+          noSelected: '호환 매개변수를 하나 이상 선택하세요',
           notice: '데이터와 이미지는 AITag에서 제공되며 API 변경 시 일시적으로 사용할 수 없을 수 있습니다.');
     default:
       return const _Text(
@@ -284,6 +320,7 @@ _Text _textFor(Object? value) {
           query: '搜索作品、作者、标签、模型或 ID',
           prompt: '搜索正向提示词（可选）',
           search: '搜索',
+          refresh: '刷新',
           newest: '最新作品',
           monthly: '本月排行',
           timeRange: '时间范围',
@@ -317,6 +354,11 @@ _Text _textFor(Object? value) {
           image: '图片 {index}',
           use: '一键使用到生成',
           compatible: '可用兼容参数 {count} 项',
+          compatibleSettings: '兼容参数复用设置',
+          selectedCompatible: '已选择 {selected}/{total} 项',
+          selectAll: '全选',
+          clearAll: '清空',
+          noSelected: '请至少勾选一个兼容参数',
           notice: '数据与图片来自 AITag；接口结构变更时可能暂时不可用。');
   }
 }
@@ -381,6 +423,17 @@ class _AitagGalleryScreenState extends State<AitagGalleryScreen> {
     }
   }
 
+  Future<void> _refresh() async {
+    service.clearDetailCache();
+    try {
+      await service.loadConfig();
+    } catch (_) {
+      // Keep the last known config and still refresh the result list.
+    }
+    if (mounted) setState(() {});
+    await _search(result.page);
+  }
+
   @override
   Widget build(BuildContext context) {
     final language =
@@ -431,6 +484,10 @@ class _AitagGalleryScreenState extends State<AitagGalleryScreen> {
             icon: const Icon(Icons.arrow_back)),
         title: Text(text.title),
         actions: [
+          IconButton(
+              tooltip: text.refresh,
+              onPressed: loading ? null : _refresh,
+              icon: const Icon(Icons.refresh)),
           IconButton(
               tooltip: text.source,
               onPressed: () => launchUrl(Uri.parse(aitagSiteUrl),
@@ -622,6 +679,32 @@ class _AitagGalleryScreenState extends State<AitagGalleryScreen> {
   }
 }
 
+class _CachedAitagImage extends StatelessWidget {
+  final AitagService service;
+  final String url;
+  final BoxFit fit;
+  const _CachedAitagImage(
+      {required this.service, required this.url, required this.fit});
+
+  @override
+  Widget build(BuildContext context) {
+    final days = context.read<AppState>().settings.aitagCacheRetentionDays;
+    return FutureBuilder(
+      future: service.cachedImage(url, retentionDays: days),
+      builder: (context, snapshot) {
+        if (snapshot.hasData) return Image.file(snapshot.data!, fit: fit);
+        if (snapshot.hasError) {
+          return Image.network(url,
+              fit: fit,
+              errorBuilder: (_, __, ___) =>
+                  const Center(child: Icon(Icons.broken_image_outlined)));
+        }
+        return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+      },
+    );
+  }
+}
+
 class _WorkCard extends StatelessWidget {
   final AitagWork work;
   final AitagService service;
@@ -650,11 +733,10 @@ class _WorkCard extends StatelessWidget {
                                 image == null ? '' : service.imageUrl(image);
                             return Stack(fit: StackFit.expand, children: [
                               if (url.isNotEmpty)
-                                Image.network(url,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) => const Center(
-                                        child:
-                                            Icon(Icons.broken_image_outlined)))
+                                _CachedAitagImage(
+                                    service: service,
+                                    url: url,
+                                    fit: BoxFit.cover)
                               else
                                 const Center(
                                     child: Icon(Icons.image_search_outlined,
@@ -773,7 +855,10 @@ class _AitagDetailScreenState extends State<_AitagDetailScreen> {
                         ConstrainedBox(
                             constraints: BoxConstraints(
                                 maxHeight: constraints.maxHeight * .68),
-                            child: Image.network(url, fit: BoxFit.contain)),
+                            child: _CachedAitagImage(
+                                service: widget.service,
+                                url: url,
+                                fit: BoxFit.contain)),
                       if (data.images.length > 1)
                         SizedBox(
                             height: 94,
@@ -799,8 +884,9 @@ class _AitagDetailScreenState extends State<_AitagDetailScreen> {
                                             borderRadius:
                                                 BorderRadius.circular(10)),
                                         clipBehavior: Clip.antiAlias,
-                                        child: Image.network(
-                                            widget.service
+                                        child: _CachedAitagImage(
+                                            service: widget.service,
+                                            url: widget.service
                                                 .imageUrl(data.images[i]),
                                             fit: BoxFit.cover))))),
                     ]);
@@ -897,77 +983,154 @@ class _MetadataReportBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
-    final compatible = report.imported.compatibleValues;
+    final compatible = report.imported.compatibleValuesByKey;
+    final selected = state.aitagCompatibleParams;
+    final selectedCount = compatible.keys.where(selected.contains).length;
+    const labels = <String, String>{
+      'positivePrompt': 'Positive prompt',
+      'negativePrompt': 'Negative prompt',
+      'model': 'Model',
+      'width': 'Width',
+      'height': 'Height',
+      'steps': 'Steps',
+      'cfgScale': 'CFG scale',
+      'cfgRescale': 'CFG rescale',
+      'sampler': 'Sampler',
+      'noiseSchedule': 'Noise schedule',
+      'seed': 'Seed',
+      'smea': 'SMEA',
+      'smeaDyn': 'SMEA Dyn',
+    };
+    final selectedSummary = _f(
+        _f(text.selectedCompatible, 'selected', selectedCount),
+        'total',
+        compatible.length);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(text.metadata, style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 6),
-            Text(_f(text.compatible, 'count', compatible.length)),
-            const SizedBox(height: 8),
-            FilledButton.icon(
-              onPressed: compatible.isEmpty
-                  ? null
-                  : () {
-                      state.applyImportedMetadata(report.imported);
-                      ScaffoldMessenger.of(context)
-                          .showSnackBar(SnackBar(content: Text(text.copied)));
+            ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              initiallyExpanded: false,
+              title: Text(text.compatibleSettings),
+              subtitle: Text(selectedSummary),
+              children: [
+                Wrap(spacing: 8, runSpacing: 8, children: [
+                  OutlinedButton(
+                      onPressed: () => state.setAitagCompatibleParams(
+                          {...importedGenerateParamKeys}),
+                      child: Text(text.selectAll)),
+                  OutlinedButton(
+                      onPressed: () =>
+                          state.setAitagCompatibleParams(<String>{}),
+                      child: Text(text.clearAll)),
+                ]),
+                const SizedBox(height: 6),
+                ...compatible.entries.map((entry) {
+                  final label = metadataParameterLabel(
+                      state.settings.language, labels[entry.key] ?? entry.key);
+                  return CheckboxListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    value: selected.contains(entry.key),
+                    title: Text(label),
+                    subtitle: Text('${entry.value}',
+                        maxLines: 2, overflow: TextOverflow.ellipsis),
+                    onChanged: (checked) {
+                      final next = {...selected};
+                      if (checked == true) {
+                        next.add(entry.key);
+                      } else {
+                        next.remove(entry.key);
+                      }
+                      state.setAitagCompatibleParams(next);
                     },
-              icon: const Icon(Icons.play_arrow),
-              label: Text(text.use),
-            ),
-            const SizedBox(height: 10),
-            if (report.entries.isEmpty)
-              Text(text.noMetadata)
-            else
-              ...report.entries.map((entry) {
-                final label =
-                    metadataParameterLabel(state.settings.language, entry.key);
-                return Card.outlined(
-                  child: Padding(
-                    padding: const EdgeInsets.all(10),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Row(children: [
-                          Expanded(
-                              child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                Text(metadataGroupLabel(
-                                    state.settings.language, entry.group)),
-                                Text(label,
-                                    style:
-                                        Theme.of(context).textTheme.titleSmall),
-                              ])),
-                          IconButton(
-                              tooltip: text.copy,
-                              onPressed: () => onCopy(entry.value),
-                              icon: const Icon(Icons.copy_outlined)),
-                        ]),
-                        SelectableText(entry.value,
-                            style: const TextStyle(fontFamily: 'monospace')),
-                      ],
-                    ),
+                  );
+                }),
+                const SizedBox(height: 6),
+                FilledButton.icon(
+                  onPressed: selectedCount == 0
+                      ? null
+                      : () {
+                          state.applyImportedMetadata(
+                              report.imported.selecting(selected));
+                          ScaffoldMessenger.of(context)
+                              .showSnackBar(SnackBar(content: Text(text.use)));
+                        },
+                  icon: const Icon(Icons.play_arrow),
+                  label: Text(text.use),
+                ),
+                if (selectedCount == 0)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(text.noSelected,
+                        style: Theme.of(context).textTheme.bodySmall),
                   ),
-                );
-              }),
-            if (raw.isNotEmpty)
-              ExpansionTile(
-                tilePadding: EdgeInsets.zero,
-                title: Text(text.metadata),
-                trailing: IconButton(
-                    tooltip: text.copy,
-                    onPressed: () => onCopy(raw),
-                    icon: const Icon(Icons.copy_outlined)),
-                children: [
-                  SelectableText(raw,
-                      style: const TextStyle(fontFamily: 'monospace'))
-                ],
-              ),
+              ],
+            ),
+            const Divider(),
+            ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              initiallyExpanded: false,
+              title: Text(text.metadata),
+              subtitle: Text('${report.entries.length}'),
+              children: [
+                if (report.entries.isEmpty)
+                  Text(text.noMetadata)
+                else
+                  ...report.entries.map((entry) {
+                    final label = metadataParameterLabel(
+                        state.settings.language, entry.key);
+                    return Card.outlined(
+                      child: Padding(
+                        padding: const EdgeInsets.all(10),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(children: [
+                              Expanded(
+                                  child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                    Text(metadataGroupLabel(
+                                        state.settings.language, entry.group)),
+                                    Text(label,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleSmall),
+                                  ])),
+                              IconButton(
+                                  tooltip: text.copy,
+                                  onPressed: () => onCopy(entry.value),
+                                  icon: const Icon(Icons.copy_outlined)),
+                            ]),
+                            SelectableText(entry.value,
+                                style:
+                                    const TextStyle(fontFamily: 'monospace')),
+                          ],
+                        ),
+                      ),
+                    );
+                  }),
+                if (raw.isNotEmpty)
+                  ExpansionTile(
+                    tilePadding: EdgeInsets.zero,
+                    initiallyExpanded: false,
+                    title: Text(text.metadata),
+                    trailing: IconButton(
+                        tooltip: text.copy,
+                        onPressed: () => onCopy(raw),
+                        icon: const Icon(Icons.copy_outlined)),
+                    children: [
+                      SelectableText(raw,
+                          style: const TextStyle(fontFamily: 'monospace'))
+                    ],
+                  ),
+              ],
+            ),
           ],
         ),
       ),

@@ -1,10 +1,14 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 
 const aitagSiteUrl = 'https://aitag.win';
 const aitagPageSize = 60;
+const _maxCachedImageBytes = 64 * 1024 * 1024;
 
 String _string(Object? value) => value == null ? '' : value.toString();
 int _integer(Object? value) => int.tryParse(_string(value)) ?? 0;
@@ -233,6 +237,11 @@ class AitagService {
     });
   }
 
+  void clearDetailCache() => _detailCache.clear();
+
+  Future<File> cachedImage(String url, {int retentionDays = 30}) =>
+      AitagImageCache.get(url, _client, retentionDays: retentionDays);
+
   String imageUrl(AitagImage image) {
     if (image.authorId.isEmpty ||
         image.imageType.isEmpty ||
@@ -244,6 +253,75 @@ class AitagService {
   }
 
   void close() => _client.close();
+}
+
+class AitagImageCache {
+  static Future<Directory> _directory() async {
+    final root = await getTemporaryDirectory();
+    return Directory('${root.path}${Platform.pathSeparator}aitag-image-cache');
+  }
+
+  static Future<void> prune({int retentionDays = 30}) async {
+    if (retentionDays <= 0) return;
+    final dir = await _directory();
+    if (!await dir.exists()) return;
+    final threshold = DateTime.now().subtract(Duration(days: retentionDays));
+    await for (final entity in dir.list()) {
+      if (entity is! File) continue;
+      final stat = await entity.stat();
+      if (stat.modified.isBefore(threshold)) await entity.delete();
+    }
+  }
+
+  static Future<File> get(String url, http.Client client,
+      {int retentionDays = 30}) async {
+    final uri = Uri.parse(url);
+    if (uri.scheme != 'https') throw const FormatException('HTTPS required');
+    await prune(retentionDays: retentionDays);
+    final dir = await _directory();
+    await dir.create(recursive: true);
+    final ext = RegExp(r'\.(png|jpe?g|webp|gif)$', caseSensitive: false)
+            .firstMatch(uri.path)
+            ?.group(0) ??
+        '.webp';
+    final file = File(
+        '${dir.path}${Platform.pathSeparator}${sha256.convert(utf8.encode(url))}$ext');
+    if (await file.exists() && await file.length() > 0) {
+      await file.setLastModified(DateTime.now());
+      return file;
+    }
+    final response = await client.get(uri).timeout(const Duration(seconds: 30));
+    if (response.statusCode < 200 ||
+        response.statusCode >= 300 ||
+        response.bodyBytes.isEmpty) {
+      throw http.ClientException(
+          'AITag image HTTP ${response.statusCode}', uri);
+    }
+    if (response.bodyBytes.length > _maxCachedImageBytes) {
+      throw http.ClientException('AITag image too large', uri);
+    }
+    await file.writeAsBytes(response.bodyBytes, flush: true);
+    return file;
+  }
+
+  static Future<({int bytes, int files})> stats() async {
+    final dir = await _directory();
+    if (!await dir.exists()) return (bytes: 0, files: 0);
+    var bytes = 0;
+    var files = 0;
+    await for (final entity in dir.list()) {
+      if (entity is File) {
+        bytes += await entity.length();
+        files++;
+      }
+    }
+    return (bytes: bytes, files: files);
+  }
+
+  static Future<void> clear() async {
+    final dir = await _directory();
+    if (await dir.exists()) await dir.delete(recursive: true);
+  }
 }
 
 bool _validTimeRange(String? value) =>
