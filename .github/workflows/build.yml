@@ -44,11 +44,20 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: 20
+          # Electron 42 requires Node >=22.12. Keep CI on the same supported
+          # runtime family used by the packaged application tooling.
+          node-version: 24
           cache: npm
 
       - name: Install dependencies
         run: npm ci
+
+      # Electron 42 downloads its binary lazily. Without this serial warm-up,
+      # parallel Vitest workers can race while creating electron/dist on a fresh
+      # Windows runner (error 183: directory already exists).
+      - name: Warm Electron binary (Windows)
+        if: runner.os == 'Windows'
+        run: npx electron --version
 
       - name: Typecheck
         run: npm run typecheck
