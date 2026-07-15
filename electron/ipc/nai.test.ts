@@ -1,10 +1,59 @@
 import FormData from "form-data";
 import { describe, expect, it } from "vitest";
-import { buildGenerateImageHttpBody, isOfficialNaiHost } from "./nai";
+import {
+  buildGenerateImageHttpBody,
+  isOfficialNaiHost,
+  prepareImageBufferForSave,
+  stripPngMetadata,
+} from "./nai";
 
 function b64(text: string) {
   return Buffer.from(text, "utf8").toString("base64");
 }
+
+function pngChunk(type: string, data = Buffer.alloc(0)) {
+  const chunk = Buffer.alloc(12 + data.length);
+  chunk.writeUInt32BE(data.length, 0);
+  chunk.write(type, 4, 4, "ascii");
+  data.copy(chunk, 8);
+  // stripPngMetadata only needs chunk framing; CRC contents do not affect the
+  // lossless chunk filter and are deliberately left zeroed in this fixture.
+  return chunk;
+}
+
+function pngWithGenerationMetadata() {
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    pngChunk("IHDR", Buffer.alloc(13)),
+    pngChunk("tEXt", Buffer.from("Description\u00001girl, private prompt")),
+    pngChunk("iTXt", Buffer.from("Comment\u0000{\"seed\":123}")),
+    pngChunk("eXIf", Buffer.from("private exif")),
+    pngChunk("IDAT", Buffer.from([1, 2, 3, 4])),
+    pngChunk("IEND"),
+  ]);
+}
+
+describe("image metadata save preference", () => {
+  it("removes PNG generation metadata without re-encoding image chunks", () => {
+    const source = pngWithGenerationMetadata();
+    const stripped = stripPngMetadata(source);
+
+    expect(stripped.toString("latin1")).not.toContain("Description");
+    expect(stripped.toString("latin1")).not.toContain("Comment");
+    expect(stripped.toString("latin1")).not.toContain("private exif");
+    expect(stripped.toString("latin1")).toContain("IDAT");
+    expect(stripped.subarray(0, 8)).toEqual(source.subarray(0, 8));
+  });
+
+  it("uses the same preference for every save path and leaves non-PNG bytes untouched", () => {
+    const source = pngWithGenerationMetadata();
+    expect(prepareImageBufferForSave(source, true)).toBe(source);
+    expect(prepareImageBufferForSave(source, false).toString("latin1")).not.toContain("Description");
+
+    const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
+    expect(prepareImageBufferForSave(jpeg, false)).toBe(jpeg);
+  });
+});
 
 describe("buildGenerateImageHttpBody", () => {
   it("uploads img2img image and mask as form parts when precise references force multipart", () => {

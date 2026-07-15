@@ -1151,7 +1151,7 @@ const PNG_METADATA_CHUNKS = new Set(["tEXt", "iTXt", "zTXt", "eXIf"]);
  * prompt / seed / parameters JSON) from a PNG WITHOUT re-encoding the pixels, so
  * it stays lossless. Non-PNG buffers are returned untouched.
  */
-function stripPngMetadata(buffer: Buffer): Buffer {
+export function stripPngMetadata(buffer: Buffer): Buffer {
   if (buffer.length < 8 || !buffer.subarray(0, 8).equals(PNG_SIGNATURE)) return buffer;
   const out: Buffer[] = [buffer.subarray(0, 8)];
   let offset = 8;
@@ -1165,6 +1165,11 @@ function stripPngMetadata(buffer: Buffer): Buffer {
     if (type === "IEND") break;
   }
   return Buffer.concat(out);
+}
+
+/** Apply the user's metadata preference at every image save boundary. */
+export function prepareImageBufferForSave(buffer: Buffer, keepImageMetadata: boolean): Buffer {
+  return keepImageMetadata ? buffer : stripPngMetadata(buffer);
 }
 
 async function saveBuffers(
@@ -1203,7 +1208,7 @@ async function saveBuffers(
     });
     const filePath = await uniqueFilePath(dir, base, ext);
     // Optionally strip embedded generation metadata before writing to disk.
-    const outBuffer = settings.keepImageMetadata === false ? stripPngMetadata(buffers[index]) : buffers[index];
+    const outBuffer = prepareImageBufferForSave(buffers[index], settings.keepImageMetadata !== false);
     await fs.writeFile(filePath, outBuffer);
     items.push({
       id,
@@ -2883,7 +2888,9 @@ export async function upscaleImg(scale: UpscaleScale): Promise<SingleImageResult
     await fs.mkdir(dir, { recursive: true });
     const baseName = path.basename(workbenchImagePath, path.extname(workbenchImagePath)).replace(/[^\w.-]+/g, "-");
     const filePath = path.join(dir, `${now.getTime()}-upscale${scale}x-${baseName}.png`);
-    await fs.writeFile(filePath, outBuffer);
+    // Upscale has its own save path, so apply the same metadata preference used
+    // by generation, img2img, inpaint, batch redraw, and Director tools.
+    await fs.writeFile(filePath, prepareImageBufferForSave(outBuffer, settings.keepImageMetadata !== false));
     const outDims = readImageDimensions(outBuffer);
     const outWidth = outDims.width || preparedImage.width * scale;
     const outHeight = outDims.height || preparedImage.height * scale;
