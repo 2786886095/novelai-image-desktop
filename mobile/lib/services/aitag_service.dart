@@ -129,11 +129,15 @@ class AitagService {
 
   AitagService({http.Client? client}) : _client = client ?? http.Client();
 
-  Future<Map<String, dynamic>> _get(Uri uri) async {
+  Future<Map<String, dynamic>> _get(Uri uri,
+      {bool emptySearchOnNotFound = false}) async {
     final response = await _client.get(uri, headers: const {
       'Accept': 'application/json',
       'User-Agent': 'Langbai-NovelAI-Studio-Mobile/AITag-Data-Client',
     }).timeout(const Duration(seconds: 30));
+    if (emptySearchOnNotFound && response.statusCode == 404) {
+      return <String, dynamic>{};
+    }
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw http.ClientException('AITag HTTP ${response.statusCode}', uri);
     }
@@ -197,7 +201,8 @@ class AitagService {
             : '/api/rank/monthly/real'
         : '/api/ai_works_search';
     final data = await _get(
-        Uri.parse('$aitagSiteUrl$path').replace(queryParameters: params));
+        Uri.parse('$aitagSiteUrl$path').replace(queryParameters: params),
+        emptySearchOnNotFound: true);
     final rawItems = data['items'] is List ? data['items'] as List : const [];
     return AitagSearchResult(
       page: _integer(data['page']).clamp(1, 10000),

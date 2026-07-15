@@ -7,6 +7,17 @@ import 'package:novelai_mobile/images/png_metadata.dart';
 import 'package:novelai_mobile/services/aitag_service.dart';
 
 void main() {
+  test('AITag HTTP 404 search response is a valid empty result', () async {
+    final service = AitagService(
+      client: MockClient((_) async => http.Response('', 404)),
+    );
+    final result = await service.search(query: '__no_match__');
+    expect(result.page, 1);
+    expect(result.total, 0);
+    expect(result.items, isEmpty);
+    service.close();
+  });
+
   test(
       'AITag native data client searches, loads detail, and reuses metadata parser',
       () async {

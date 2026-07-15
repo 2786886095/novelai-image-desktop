@@ -95,7 +95,14 @@ async function searchAitagNetwork(request: Required<AitagSearchRequest>): Promis
   const response = await axios.get(`${API_BASE}${endpoint}`, {
     ...requestConfig(),
     params,
+    // AITag uses HTTP 404 to represent a valid search with zero matches.
+    // Treat only this endpoint-specific case as an empty result; config/work
+    // 404s must still surface as real failures.
+    validateStatus: (status) => (status >= 200 && status < 300) || status === 404,
   });
+  if (response.status === 404) {
+    return { page: request.page, page_size: AITAG_PAGE_SIZE, total: 0, items: [] };
+  }
   return response.data as unknown;
 }
 
