@@ -4,17 +4,17 @@
 
 | 系统 | 安装包 | 安装说明 |
 | --- | --- | --- |
-| 🪟 **Windows**（便携版，x64） | `Langbai-NovelAI-Studio-1.3.9.exe` | 双击即用，无需安装 |
-| 🪟 **Windows**（安装版，x64） | `Langbai-NovelAI-Studio-Setup-1.3.9.exe` | 安装向导可自选路径、创建快捷方式；支持软件内一键更新 |
-| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-1.3.9-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
-| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-1.3.9.zip` | 解压后即为 `.app`，同样需右键「打开」 |
-| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-1.3.9.AppImage` | `chmod +x` 后直接运行 |
+| 🪟 **Windows**（便携版，x64） | `Langbai-NovelAI-Studio-1.4.0.exe` | 双击即用，无需安装 |
+| 🪟 **Windows**（安装版，x64） | `Langbai-NovelAI-Studio-Setup-1.4.0.exe` | 安装向导可自选路径、创建快捷方式；支持软件内一键更新 |
+| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-1.4.0-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
+| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-1.4.0.zip` | 解压后即为 `.app`，同样需右键「打开」 |
+| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-1.4.0.AppImage` | `chmod +x` 后直接运行 |
 | 🤖 **Android** | `app-release.apk` | 直接安装；未签名，需允许「未知来源」 |
 | 📱 **iOS** | `novelai-mobile-unsigned.ipa` | **未签名**，需用 AltStore / Sideloadly 等工具自行侧载 |
 
 > 桌面端与移动端均为 **API-only** 客户端，需自备 NovelAI Persistent API Token。
 
-### v1.3.9 更新内容
+### v1.4.0 更新内容
 
-- **修复关闭“保留图片元数据”后，超分结果仍保留原数据**：桌面端超分此前使用独立保存路径，绕过了统一的元数据清理设置；现在生成、图生图、批量重绘、局部重绘、后期处理和超分均遵循同一开关。
-- 去除元数据时仅无损移除 PNG 的 `tEXt`、`iTXt`、`zTXt` 与 `eXIf` 数据块，不解码或重新压缩像素；新增回归测试验证提示词、种子和 EXIF 被移除，同时图像数据保持不变。
+- **修复批量图生图“停止任务”一次只停止一张并将其误报为失败**：桌面端与移动端现在点击一次即可取消当前请求并终止整个队列，后续图片不会继续启动。
+- 被中断和未开始的图片统一保持“待处理”，不会增加失败数量；同时覆盖账户查询、历史分组准备等生成前阶段，并新增桌面端与移动端回归测试。

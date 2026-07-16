@@ -94,6 +94,53 @@ void main() {
     ));
     await expectLater(queueDone, completes);
   });
+
+  test(
+      'BatchRedrawController stop cancels the whole queue without marking one item failed',
+      () async {
+    final pending = Completer<(List<Uint8List>, int)>();
+    final api = _CancellableImg2ImgApi(pending);
+    final storage = _MemoryStorage();
+    final app = AppState(api: api, storage: storage)
+      ..account = const AccountSummary(
+        hasToken: true,
+        tierLevel: 1,
+        anlasBalance: 1000,
+        hasActiveSubscription: true,
+      );
+    final controller = BatchRedrawController(app);
+    final first = BatchRedrawItem(
+      id: 'item-1',
+      name: 'first.png',
+      base64: 'YWJj',
+      prompt: 'first',
+    );
+    final second = BatchRedrawItem(
+      id: 'item-2',
+      name: 'second.png',
+      base64: 'ZGVm',
+      prompt: 'second',
+    );
+    controller.project = BatchRedrawProject.empty(app.params)
+      ..items.addAll([first, second]);
+
+    final queueDone = controller.startQueue([first, second]);
+    await _waitUntil(() => api.calls == 1);
+    controller.cancelQueue();
+    await queueDone;
+
+    expect(api.calls, 1, reason: 'stop must not start the second image');
+    expect(controller.queueRunning, isFalse);
+    expect(controller.queueCancelled, isTrue);
+    expect(first.status, BatchItemStatus.pending);
+    expect(first.error, isEmpty);
+    expect(second.status, BatchItemStatus.pending);
+    expect(
+      controller.project.items
+          .where((item) => item.status == BatchItemStatus.failed),
+      isEmpty,
+    );
+  });
 }
 
 Future<void> _waitUntil(bool Function() condition) async {
@@ -160,6 +207,17 @@ class _SlowImg2ImgApi extends NaiApi {
   ) async {
     calls += 1;
     return pending.future;
+  }
+}
+
+class _CancellableImg2ImgApi extends _SlowImg2ImgApi {
+  _CancellableImg2ImgApi(super.pending);
+
+  @override
+  void cancelActiveGeneration() {
+    if (!pending.isCompleted) {
+      pending.completeError(const GenerationCancelledException());
+    }
   }
 }
 

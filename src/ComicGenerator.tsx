@@ -20,6 +20,10 @@ import {
   localizedDesktopOptionLabel,
 } from "./i18n";
 import { useAppStore } from "./store";
+import {
+  resetInterruptedBatchItem,
+  shouldStopBatchRedraw,
+} from "./batch-redraw-queue";
 import { NovelTuiwenStudio } from "./tuiwen/NovelTuiwenStudio";
 import AitagGallery from "./AitagGallery";
 import {
@@ -2232,6 +2236,7 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
   const setBatchRedraw = useAppStore((state) => state.setBatchRedraw);
   const resetBatchRedraw = useAppStore((state) => state.resetBatchRedraw);
   const running = useAppStore((state) => state.batchRunning);
+  const cancelling = useAppStore((state) => state.batchCancelRequested);
   const progress = useAppStore((state) => state.batchProgress);
   const setBatchRunning = useAppStore((state) => state.setBatchRunning);
   const requestBatchCancel = useAppStore((state) => state.requestBatchCancel);
@@ -2510,6 +2515,17 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
           groupName: runGroupName,
           fileNamePrefix: it.name,
         });
+        // Cancellation controls the whole queue; it is not a failed image.
+        // Return the interrupted card to pending and never start another one.
+        if (shouldStopBatchRedraw(cancelRefCurrent(), res.failureKind)) {
+          setBatchRedraw((prev) => ({
+            ...prev,
+            items: prev.items.map((item) =>
+              item.id === it.id ? resetInterruptedBatchItem(item) : item,
+            ),
+          }));
+          break;
+        }
         const out = res.ok ? res.items[0] : undefined;
         if (res.ok && out) {
           patchItem(it.id, {
@@ -2528,9 +2544,17 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
         setBatchRunning(true, { done: done + failed, total: ready.length });
       }
     } catch (error) {
-      lastError = error instanceof Error ? error.message : String(error);
-      failed = Math.max(failed, ready.length - done);
+      if (!cancelRefCurrent()) {
+        lastError = error instanceof Error ? error.message : String(error);
+        failed = Math.max(failed, ready.length - done);
+      }
     } finally {
+      if (cancelRefCurrent()) {
+        setBatchRedraw((prev) => ({
+          ...prev,
+          items: prev.items.map(resetInterruptedBatchItem),
+        }));
+      }
       try {
         await refreshHistory();
       } catch {
@@ -2554,6 +2578,10 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
 
   function stop() {
     requestBatchCancel();
+    setBatchRedraw((prev) => ({
+      ...prev,
+      items: prev.items.map(resetInterruptedBatchItem),
+    }));
     void window.naiDesktop.cancel();
   }
 
@@ -3191,7 +3219,7 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
             </div>
             <div className="redraw-results-actions">
               {running ? (
-                <Button variant="danger" onClick={stop}>
+                <Button variant="danger" onClick={stop} disabled={cancelling}>
                   {t("batch.results.stop")}
                 </Button>
               ) : (

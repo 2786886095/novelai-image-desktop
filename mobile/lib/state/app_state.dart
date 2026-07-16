@@ -1850,8 +1850,17 @@ class AppState extends ChangeNotifier {
     required double strength,
     required String groupName,
     String? historyGroupId,
+    bool Function()? cancelled,
   }) async {
+    void throwIfCancelled() {
+      if (cancelled?.call() == true) {
+        throw const GenerationCancelledException();
+      }
+    }
+
+    throwIfCancelled();
     final token = await storage.getToken();
+    throwIfCancelled();
     if (token == null || token.isEmpty) {
       throw Exception(_rt('error.naiTokenRequired'));
     }
@@ -1862,6 +1871,7 @@ class AppState extends ChangeNotifier {
       ..positivePrompt = expandPromptWildcards(itemParams.positivePrompt)
       ..negativePrompt = expandPromptWildcards(itemParams.negativePrompt);
     account = await api.fetchAccount(token, settings);
+    throwIfCancelled();
     final quote = calculateImageGenerationAnlas(
       params: taskParams,
       account: account,
@@ -1880,6 +1890,7 @@ class AppState extends ChangeNotifier {
       notifyListeners();
     }
     final groupId = await ensureHistoryGroup(groupName, historyGroupId);
+    throwIfCancelled();
     final (images, seed) = await api.img2img(
       token,
       settings,
@@ -1888,6 +1899,7 @@ class AppState extends ChangeNotifier {
       sourceBytes,
       I2IParams(strength: strength),
     );
+    throwIfCancelled();
     if (images.isEmpty) throw Exception(_rt('error.noImagesReturned'));
     final item = await storage.saveImage(
       images.first,

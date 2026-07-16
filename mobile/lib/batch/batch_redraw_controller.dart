@@ -14,6 +14,7 @@ import '../i18n/runtime_text.dart';
 import '../models/nai_models.dart';
 import '../services/background_queue_service.dart';
 import '../services/import_limits.dart';
+import '../services/nai_api.dart';
 import '../state/app_state.dart';
 import 'batch_redraw_models.dart';
 
@@ -366,12 +367,28 @@ class BatchRedrawController extends ChangeNotifier {
           strength: item.strength ?? project.globalStrength,
           groupName: _projectName(),
           historyGroupId: project.historyGroupId,
+          cancelled: () => queueCancelled,
         );
+        if (queueCancelled) {
+          item
+            ..status = BatchItemStatus.pending
+            ..error = '';
+          changed();
+          break;
+        }
         project.historyGroupId = history.groupId;
         item
           ..status = BatchItemStatus.done
           ..outputPath = history.filePath;
       } catch (error) {
+        if (queueCancelled || error is GenerationCancelledException) {
+          queueCancelled = true;
+          item
+            ..status = BatchItemStatus.pending
+            ..error = '';
+          changed();
+          break;
+        }
         item
           ..status = BatchItemStatus.failed
           ..error = error.toString().replaceFirst('Exception: ', '');
@@ -386,8 +403,20 @@ class BatchRedrawController extends ChangeNotifier {
     }
     queueRunning = false;
     queuePaused = false;
+    for (final item in project.items) {
+      if (item.status == BatchItemStatus.generating) {
+        item
+          ..status = BatchItemStatus.pending
+          ..error = '';
+      }
+    }
     await BackgroundQueueService.stop('batch-redraw');
-    if (!queueCancelled) {
+    if (queueCancelled) {
+      status = _rf('batch.queueCancelled', {
+        'done': queueDone,
+        'total': queueTotal,
+      });
+    } else {
       status = _rf('batch.queueDone', {
         'done': queueDone,
         'total': queueTotal,
@@ -402,8 +431,20 @@ class BatchRedrawController extends ChangeNotifier {
   }
 
   void cancelQueue() {
+    if (!queueRunning || queueCancelled) return;
     queueCancelled = true;
     queuePaused = false;
+    for (final item in project.items) {
+      if (item.status == BatchItemStatus.generating) {
+        item
+          ..status = BatchItemStatus.pending
+          ..error = '';
+      }
+    }
+    status = _rf('batch.queueCancelled', {
+      'done': queueDone,
+      'total': queueTotal,
+    });
     app.api.cancelActiveGeneration();
     notifyListeners();
   }
