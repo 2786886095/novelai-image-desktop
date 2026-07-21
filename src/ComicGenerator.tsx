@@ -21,6 +21,7 @@ import {
 } from "./i18n";
 import { useAppStore } from "./store";
 import {
+  clearBatchRedrawItemResult,
   resetInterruptedBatchItem,
   shouldStopBatchRedraw,
 } from "./batch-redraw-queue";
@@ -2585,6 +2586,45 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
     void window.naiDesktop.cancel();
   }
 
+  async function clearGeneratedResults() {
+    if (running) return;
+    const snapshot = useAppStore.getState().batchRedraw.items;
+    const generated = snapshot.filter(
+      (item) => item.historyItemId || item.resultPath || item.status === "failed",
+    );
+    if (generated.length === 0) return;
+    if (!window.confirm(t("batch.results.clearConfirm"))) return;
+
+    const failedIds = new Set<string>();
+    for (const historyId of new Set(
+      generated.map((item) => item.historyItemId).filter(Boolean) as string[],
+    )) {
+      try {
+        await window.naiDesktop.deleteHistory(historyId);
+      } catch {
+        failedIds.add(historyId);
+      }
+    }
+
+    setBatchRedraw((prev) => ({
+      ...prev,
+      step: failedIds.size === 0 ? "params" : prev.step,
+      items: prev.items.map((item) =>
+        item.historyItemId && failedIds.has(item.historyItemId)
+          ? item
+          : clearBatchRedrawItemResult(item),
+      ),
+    }));
+    setResultFilter("all");
+    setLightbox(null);
+    await refreshHistory();
+    setToast(
+      failedIds.size === 0
+        ? t("batch.toast.resultsCleared")
+        : f("batch.toast.resultsClearFailed", { count: failedIds.size }),
+    );
+  }
+
   async function exportZip() {
     const name = localizedBatchGroupName(project.groupName, t);
     if (!name) {
@@ -3272,6 +3312,13 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
                 disabled={running}
               >
                 {t("batch.results.editPrompts")}
+              </Button>
+              <Button
+                variant="danger"
+                onClick={() => void clearGeneratedResults()}
+                disabled={running || doneCount + failedCount === 0}
+              >
+                {t("batch.results.clearGenerated")}
               </Button>
               <Button
                 variant="secondary"

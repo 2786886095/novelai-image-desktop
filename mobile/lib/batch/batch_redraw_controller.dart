@@ -449,6 +449,43 @@ class BatchRedrawController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<bool> clearGeneratedResults() async {
+    if (queueRunning || busy) return false;
+    final paths = project.items
+        .map((item) => item.outputPath)
+        .where((path) => path.isNotEmpty)
+        .toSet();
+    if (paths.isEmpty &&
+        !project.items.any((item) => item.status == BatchItemStatus.failed)) {
+      return false;
+    }
+    busy = true;
+    notifyListeners();
+    try {
+      await app.deleteHistoryFiles(paths);
+      for (final item in project.items) {
+        item
+          ..status = BatchItemStatus.pending
+          ..outputPath = ''
+          ..error = '';
+      }
+      queueDone = 0;
+      queueTotal = 0;
+      queuePaused = false;
+      queueCancelled = false;
+      step = BatchRedrawStep.params;
+      changed(_rt('batch.resultsCleared'));
+      return true;
+    } catch (error) {
+      status = _rf('batch.resultsClearFailed', {'error': error});
+      notifyListeners();
+      return false;
+    } finally {
+      busy = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> exportJson() async {
     final temp = await getTemporaryDirectory();
     final file = File('${temp.path}/${_safe(_projectName())}.batch.json');

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { resetInterruptedBatchItem, shouldStopBatchRedraw } from "./batch-redraw-queue";
+import {
+  clearBatchRedrawItemResult,
+  resetInterruptedBatchItem,
+  shouldStopBatchRedraw,
+} from "./batch-redraw-queue";
 import type { BatchRedrawItem } from "./types";
 
 function item(status: BatchRedrawItem["status"]): BatchRedrawItem {
@@ -29,5 +33,23 @@ describe("batch redraw cancellation", () => {
       error: undefined,
     });
     expect(resetInterruptedBatchItem(item("done")).status).toBe("done");
+  });
+
+  it("clears a previous result without changing the source inputs", () => {
+    const source = {
+      ...item("done"),
+      prompt: "keep this prompt",
+      resultUrl: "file:///result.png",
+      resultPath: "C:/output/result.png",
+      historyItemId: "history-1",
+    };
+    expect(clearBatchRedrawItemResult(source)).toMatchObject({
+      prompt: "keep this prompt",
+      status: "pending",
+      error: undefined,
+      resultUrl: undefined,
+      resultPath: undefined,
+      historyItemId: undefined,
+    });
   });
 });

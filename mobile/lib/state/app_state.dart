@@ -1975,6 +1975,17 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> deleteHistoryFiles(Iterable<String> filePaths) async {
+    final targets = filePaths.where((path) => path.isNotEmpty).toSet();
+    if (targets.isEmpty) return;
+    await storage.deleteHistoryFiles(targets);
+    history.removeWhere((item) => targets.contains(item.filePath));
+    if (current != null && targets.contains(current!.filePath)) {
+      current = history.isNotEmpty ? history.first : null;
+    }
+    notifyListeners();
+  }
+
   // Drop a history record whose image file is gone from disk (called when a
   // gallery tile can't find its file mid-session). Re-checks existence so a
   // present file is never removed; only the record is dropped (file already

@@ -90,6 +90,9 @@ void main() {
       final controller = BatchRedrawController(app)
         ..project = _project()
         ..loaded = true;
+      controller.project.items.first
+        ..status = BatchItemStatus.failed
+        ..error = 'network error';
       addTearDown(app.dispose);
       addTearDown(controller.dispose);
       for (final step in BatchRedrawStep.values) {

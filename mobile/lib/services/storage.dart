@@ -376,6 +376,23 @@ class Storage {
     await writeHistory(history);
   }
 
+  /// Deletes trusted generated outputs and their history entries in one write.
+  /// Batch project imports strip output paths, so callers only pass paths that
+  /// were persisted by this installation after a successful generation.
+  Future<void> deleteHistoryFiles(Iterable<String> filePaths) async {
+    final targets = filePaths.where((path) => path.isNotEmpty).toSet();
+    if (targets.isEmpty) return;
+    final history = await getHistory();
+    for (final path in targets) {
+      try {
+        final file = File(path);
+        if (file.existsSync()) await file.delete();
+      } catch (_) {}
+    }
+    history.removeWhere((item) => targets.contains(item.filePath));
+    await writeHistory(history);
+  }
+
   Future<HistoryItem> renameHistoryFile(
     HistoryItem item,
     String requestedName,

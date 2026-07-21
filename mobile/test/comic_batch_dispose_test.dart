@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -141,6 +142,69 @@ void main() {
       isEmpty,
     );
   });
+
+  test('BatchRedrawController clears outputs and returns to parameters',
+      () async {
+    final storage = _MemoryStorage();
+    final app = AppState(storage: storage);
+    final controller = BatchRedrawController(app);
+    final done = BatchRedrawItem(
+      id: 'done',
+      name: 'done.png',
+      base64: 'YWJj',
+      prompt: 'keep prompt',
+      status: BatchItemStatus.done,
+      outputPath: '/trusted/output.png',
+    );
+    final failed = BatchRedrawItem(
+      id: 'failed',
+      name: 'failed.png',
+      base64: 'ZGVm',
+      prompt: 'keep failed prompt',
+      status: BatchItemStatus.failed,
+      error: 'network error',
+    );
+    controller.project = BatchRedrawProject.empty(app.params)
+      ..items.addAll([done, failed]);
+    controller.step = BatchRedrawStep.generate;
+
+    expect(await controller.clearGeneratedResults(), isTrue);
+
+    expect(storage.deletedPaths, {'/trusted/output.png'});
+    expect(controller.step, BatchRedrawStep.params);
+    expect(controller.queueDone, 0);
+    expect(controller.queueTotal, 0);
+    expect(done.status, BatchItemStatus.pending);
+    expect(done.outputPath, isEmpty);
+    expect(done.prompt, 'keep prompt');
+    expect(failed.status, BatchItemStatus.pending);
+    expect(failed.error, isEmpty);
+  });
+
+  test('Storage.deleteHistoryFiles removes files and matching history records',
+      () async {
+    final directory = await Directory.systemTemp.createTemp('batch-clear-');
+    addTearDown(() => directory.delete(recursive: true));
+    final output = File('${directory.path}/generated.png');
+    await output.writeAsBytes([1, 2, 3]);
+    final historyItem = HistoryItem(
+      id: 'history-1',
+      filePath: output.path,
+      date: '2026-07-21',
+      createdAt: '2026-07-21T00:00:00',
+      seed: 1,
+      model: 'model',
+      width: 64,
+      height: 64,
+      prompt: 'prompt',
+    );
+    final storage = _HistoryStorage([historyItem]);
+
+    await storage.deleteHistoryFiles([output.path]);
+
+    expect(output.existsSync(), isFalse);
+    expect(storage.items, isEmpty);
+  });
 }
 
 Future<void> _waitUntil(bool Function() condition) async {
@@ -222,6 +286,8 @@ class _CancellableImg2ImgApi extends _SlowImg2ImgApi {
 }
 
 class _MemoryStorage extends Storage {
+  final Set<String> deletedPaths = {};
+
   @override
   Future<String?> getToken() async => 'test-token';
 
@@ -230,6 +296,11 @@ class _MemoryStorage extends Storage {
 
   @override
   Future<void> setBatchRedrawProject(BatchRedrawProject project) async {}
+
+  @override
+  Future<void> deleteHistoryFiles(Iterable<String> filePaths) async {
+    deletedPaths.addAll(filePaths);
+  }
 
   @override
   Future<void> writeGroups(List<HistoryGroup> groups) async {}
@@ -259,5 +330,18 @@ class _MemoryStorage extends Storage {
       groupId: groupId,
       params: params.toJson(),
     );
+  }
+}
+
+class _HistoryStorage extends Storage {
+  _HistoryStorage(this.items);
+  List<HistoryItem> items;
+
+  @override
+  Future<List<HistoryItem>> getHistory() async => [...items];
+
+  @override
+  Future<void> writeHistory(List<HistoryItem> value) async {
+    items = [...value];
   }
 }

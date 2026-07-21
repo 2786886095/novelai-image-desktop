@@ -869,11 +869,46 @@ class _BatchGenerateStep extends StatelessWidget {
                     messenger.showSnackBar(
                         SnackBar(content: Text(controller.status)));
                   } catch (error) {
-                    messenger
-                        .showSnackBar(SnackBar(content: Text('$error')));
+                    messenger.showSnackBar(SnackBar(content: Text('$error')));
                   }
                 }
               : null,
+          onClearGenerated: controller.queueRunning ||
+                  !project.items.any((item) =>
+                      item.outputPath.isNotEmpty ||
+                      item.status == BatchItemStatus.failed)
+              ? null
+              : () async {
+                  final language = controller.app.settings.language;
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (dialogContext) => AlertDialog(
+                      title: Text(mobileUiTextFor(
+                          language, 'batch.clearGeneratedTitle')),
+                      content: Text(mobileUiTextFor(
+                          language, 'batch.clearGeneratedConfirm')),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(dialogContext, false),
+                          child:
+                              Text(mobileUiTextFor(language, 'common.cancel')),
+                        ),
+                        FilledButton(
+                          onPressed: () => Navigator.pop(dialogContext, true),
+                          child: Text(mobileUiTextFor(
+                              language, 'batch.clearGenerated')),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirmed != true || !context.mounted) return;
+                  final messenger = ScaffoldMessenger.of(context);
+                  await controller.clearGeneratedResults();
+                  if (context.mounted) {
+                    messenger.showSnackBar(
+                        SnackBar(content: Text(controller.displayStatus)));
+                  }
+                },
           onTogglePause: controller.togglePause,
           onCancel: controller.cancelQueue,
         ),
@@ -927,6 +962,7 @@ class _BatchGenerateConsole extends StatelessWidget {
   final VoidCallback? onStartPending;
   final VoidCallback? onRetrySelected;
   final VoidCallback? onExportZip;
+  final VoidCallback? onClearGenerated;
   final VoidCallback onTogglePause;
   final VoidCallback onCancel;
 
@@ -948,6 +984,7 @@ class _BatchGenerateConsole extends StatelessWidget {
     required this.onStartPending,
     required this.onRetrySelected,
     required this.onExportZip,
+    required this.onClearGenerated,
     required this.onTogglePause,
     required this.onCancel,
   });
@@ -1030,6 +1067,11 @@ class _BatchGenerateConsole extends StatelessWidget {
                   onPressed: onExportZip,
                   icon: const Icon(Icons.archive_outlined),
                   label: Text(t('batch.exportZip')),
+                ),
+                OutlinedButton.icon(
+                  onPressed: onClearGenerated,
+                  icon: const Icon(Icons.delete_sweep_outlined),
+                  label: Text(t('batch.clearGenerated')),
                 ),
               ],
             ),

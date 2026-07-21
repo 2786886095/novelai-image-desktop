@@ -9,8 +9,24 @@ export function shouldStopBatchRedraw(
 }
 
 /** Put an interrupted item back into the retryable state without a false error. */
-export function resetInterruptedBatchItem(item: BatchRedrawItem): BatchRedrawItem {
+export function resetInterruptedBatchItem(
+  item: BatchRedrawItem,
+): BatchRedrawItem {
   if (item.status !== "generating") return item;
+  return {
+    ...item,
+    status: "pending",
+    error: undefined,
+    resultUrl: undefined,
+    resultPath: undefined,
+    historyItemId: undefined,
+  };
+}
+
+/** Remove every result/error from a completed run while preserving its inputs. */
+export function clearBatchRedrawItemResult(
+  item: BatchRedrawItem,
+): BatchRedrawItem {
   return {
     ...item,
     status: "pending",
