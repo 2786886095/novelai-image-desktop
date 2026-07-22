@@ -4,17 +4,17 @@
 
 | 系统 | 安装包 | 安装说明 |
 | --- | --- | --- |
-| 🪟 **Windows**（便携版，x64） | `Langbai-NovelAI-Studio-1.4.1.exe` | 双击即用，无需安装 |
-| 🪟 **Windows**（安装版，x64） | `Langbai-NovelAI-Studio-Setup-1.4.1.exe` | 安装向导可自选路径、创建快捷方式；支持软件内一键更新 |
-| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-1.4.1-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
-| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-1.4.1.zip` | 解压后即为 `.app`，同样需右键「打开」 |
-| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-1.4.1.AppImage` | `chmod +x` 后直接运行 |
+| 🪟 **Windows**（便携版，x64） | `Langbai-NovelAI-Studio-1.4.2.exe` | 双击即用，无需安装 |
+| 🪟 **Windows**（安装版，x64） | `Langbai-NovelAI-Studio-Setup-1.4.2.exe` | 安装向导可自选路径、创建快捷方式；支持软件内一键更新 |
+| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-1.4.2-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
+| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-1.4.2.zip` | 解压后即为 `.app`，同样需右键「打开」 |
+| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-1.4.2.AppImage` | `chmod +x` 后直接运行 |
 | 🤖 **Android** | `app-release.apk` | 直接安装；未签名，需允许「未知来源」 |
 | 📱 **iOS** | `novelai-mobile-unsigned.ipa` | **未签名**，需用 AltStore / Sideloadly 等工具自行侧载 |
 
 > 桌面端与移动端均为 **API-only** 客户端，需自备 NovelAI Persistent API Token。
 
-### v1.4.1 更新内容
+### v1.4.2 更新内容
 
-- **批量图生图新增“清空当前生成”**：生成后可一次删除本轮全部输出图片及对应历史记录，并自动返回参数步骤；原图、提示词、强度和独立参数保持不变，可修改后重新生成。
-- 桌面端与移动端均提供不可撤销确认，清空后完成/失败条目统一恢复为待处理；补全五种语言，并新增真实文件删除、历史清理及手机/平板布局回归测试。
+- **修复 V4/V4.5 角色提示词未指定位置时生成失败（HTTP 500）**：桌面端与移动端此前发送空的 `centers` 数组，NovelAI 服务无法处理；现在发送 AI 自选位置所需的默认中心占位，并保持 `use_coords=false`。
+- 勾选“指定位置”时仍使用用户选择的坐标并启用 `use_coords=true`；两种路径均增加请求级回归测试，不对所有 HTTP 500 盲目重试，避免潜在重复扣费。

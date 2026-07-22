@@ -567,15 +567,22 @@ class NaiApi {
         .take(6)
         .map((c) => {
               'char_caption': c.prompt.trim(),
-              'centers': c.useCoords
-                  ? [
-                      {'x': c.x.clamp(0, 1), 'y': c.y.clamp(0, 1)}
-                    ]
-                  : [],
+              // The V4/V4.5 API requires a center even when placement is left
+              // to the AI. An empty list produces HTTP 500; (0.5, 0.5) is the
+              // AI-choice sentinel while use_coords remains false.
+              'centers': [
+                {
+                  'x': c.useCoords ? c.x.clamp(0, 1) : 0.5,
+                  'y': c.useCoords ? c.y.clamp(0, 1) : 0.5,
+                }
+              ],
             })
         .toList();
     final hasCoords = structuredCharacters &&
-        charCaptions.any((c) => (c['centers'] as List).isNotEmpty);
+        extras.charCaptions
+            .where((caption) => caption.prompt.trim().isNotEmpty)
+            .take(6)
+            .any((caption) => caption.useCoords);
     final inputPrompt = structuredCharacters || charCaptions.isEmpty
         ? effectivePrompt
         : [

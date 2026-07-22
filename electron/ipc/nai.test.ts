@@ -1,11 +1,13 @@
 import FormData from "form-data";
 import { describe, expect, it } from "vitest";
 import {
+  buildPayload,
   buildGenerateImageHttpBody,
   isOfficialNaiHost,
   prepareImageBufferForSave,
   stripPngMetadata,
 } from "./nai";
+import { DEFAULT_PARAMS } from "../../src/types";
 
 function b64(text: string) {
   return Buffer.from(text, "utf8").toString("base64");
@@ -99,6 +101,52 @@ describe("buildGenerateImageHttpBody", () => {
     expect(result.useMultipart).toBe(false);
     expect(result.body).toBe(payload);
     expect(result.bodyHeaders["Content-Type"]).toBe("application/json");
+  });
+});
+
+describe("V4 character prompt payload", () => {
+  it("uses the AI-choice center when character position is unspecified", () => {
+    const payload = buildPayload(
+      { ...DEFAULT_PARAMS, positivePrompt: "2girls" },
+      123,
+      {
+        vibeImages: [],
+        preciseReferences: [],
+        charCaptions: [
+          { prompt: "girl, blue hair", useCoords: false, x: 0.1, y: 0.9 },
+        ],
+      },
+    );
+    const v4Prompt = payload.parameters.v4_prompt as {
+      caption: { char_captions: Array<{ centers: Array<{ x: number; y: number }> }> };
+      use_coords: boolean;
+    };
+
+    expect(payload.parameters.use_coords).toBe(false);
+    expect(v4Prompt.use_coords).toBe(false);
+    expect(v4Prompt.caption.char_captions[0].centers).toEqual([{ x: 0.5, y: 0.5 }]);
+  });
+
+  it("keeps the selected center when character position is specified", () => {
+    const payload = buildPayload(
+      { ...DEFAULT_PARAMS, positivePrompt: "2girls" },
+      123,
+      {
+        vibeImages: [],
+        preciseReferences: [],
+        charCaptions: [
+          { prompt: "girl, red hair", useCoords: true, x: 0.2, y: 0.8 },
+        ],
+      },
+    );
+    const v4Prompt = payload.parameters.v4_prompt as {
+      caption: { char_captions: Array<{ centers: Array<{ x: number; y: number }> }> };
+      use_coords: boolean;
+    };
+
+    expect(payload.parameters.use_coords).toBe(true);
+    expect(v4Prompt.use_coords).toBe(true);
+    expect(v4Prompt.caption.char_captions[0].centers).toEqual([{ x: 0.2, y: 0.8 }]);
   });
 });
 

@@ -86,6 +86,9 @@ void main() {
         (structuredParameters['v4_prompt'] as Map)['caption'] as Map;
     expect(structuredParameters['use_coords'], isTrue);
     expect(structuredCaption['char_captions'], hasLength(1));
+    expect((structuredCaption['char_captions'] as List).single['centers'], [
+      {'x': 0.2, 'y': 0.3}
+    ]);
 
     final pipe = await api.buildPayload(
       'unused',
@@ -101,5 +104,30 @@ void main() {
     expect(pipe['input'], contains('| blue-haired girl'));
     expect(pipeParameters['use_coords'], isFalse);
     expect(pipeCaption['char_captions'], isEmpty);
+  });
+
+  test('character prompt without position uses the AI-choice center', () async {
+    final payload = await api.buildPayload(
+      'unused',
+      settings,
+      GenerateParams(positivePrompt: '2girls'),
+      123,
+      GenerateExtras(charCaptions: [
+        CharCaptionItem(
+          prompt: 'girl, blue hair',
+          useCoords: false,
+          x: 0.1,
+          y: 0.9,
+        ),
+      ]),
+    );
+    final parameters = payload['parameters'] as Map<String, dynamic>;
+    final caption = (parameters['v4_prompt'] as Map)['caption'] as Map;
+    final character = (caption['char_captions'] as List).single as Map;
+
+    expect(parameters['use_coords'], isFalse);
+    expect(character['centers'], [
+      {'x': 0.5, 'y': 0.5}
+    ]);
   });
 }

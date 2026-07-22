@@ -346,7 +346,7 @@ function withPipeCharCaptions(basePrompt: string, captions: ReturnType<typeof no
 
 type PayloadParams = Omit<GenerateParams, "model"> & { model: string };
 
-function buildPayload(
+export function buildPayload(
   params: PayloadParams,
   actualSeed: number,
   extras?: GenerateExtras,
@@ -401,10 +401,13 @@ function buildPayload(
   if (v4Plus) {
     const charCaptionsPayload = cleanedCharCaptions.map((c) => ({
       char_caption: c.prompt,
-      centers: c.useCoords ? [{ x: c.x, y: c.y }] : [],
+      // NovelAI still requires one center for AI-choice placement. An empty
+      // centers array causes the V4/V4.5 endpoint to return HTTP 500 even when
+      // use_coords is false. (0.5, 0.5) is the protocol's AI-choice sentinel.
+      centers: [{ x: c.useCoords ? c.x : 0.5, y: c.useCoords ? c.y : 0.5 }],
     }));
     const useStructuredChars = charCaptionMode === "structured";
-    const useCoords = useStructuredChars && charCaptionsPayload.some((c) => c.centers.length > 0);
+    const useCoords = useStructuredChars && cleanedCharCaptions.some((c) => c.useCoords);
 
     parameters.use_coords = useCoords;
     parameters.v4_prompt = {
