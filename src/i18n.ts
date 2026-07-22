@@ -9,17 +9,46 @@ export interface AppLanguageInfo {
 }
 
 export const SUPPORTED_APP_LANGUAGES: readonly AppLanguageInfo[] = [
-  { code: "zh-CN", nativeName: "简体中文", englishName: "Simplified Chinese", menuLabel: "简体中文" },
-  { code: "zh-TW", nativeName: "繁體中文", englishName: "Traditional Chinese", menuLabel: "繁體中文" },
-  { code: "en-US", nativeName: "English", englishName: "English", menuLabel: "English" },
-  { code: "ja-JP", nativeName: "日本語", englishName: "Japanese", menuLabel: "日本語" },
-  { code: "ko-KR", nativeName: "한국어", englishName: "Korean", menuLabel: "한국어" },
+  {
+    code: "zh-CN",
+    nativeName: "简体中文",
+    englishName: "Simplified Chinese",
+    menuLabel: "简体中文",
+  },
+  {
+    code: "zh-TW",
+    nativeName: "繁體中文",
+    englishName: "Traditional Chinese",
+    menuLabel: "繁體中文",
+  },
+  {
+    code: "en-US",
+    nativeName: "English",
+    englishName: "English",
+    menuLabel: "English",
+  },
+  {
+    code: "ja-JP",
+    nativeName: "日本語",
+    englishName: "Japanese",
+    menuLabel: "日本語",
+  },
+  {
+    code: "ko-KR",
+    nativeName: "한국어",
+    englishName: "Korean",
+    menuLabel: "한국어",
+  },
 ] as const;
 
-const APP_LANGUAGE_CODES = new Set<AppLanguage>(SUPPORTED_APP_LANGUAGES.map((item) => item.code));
+const APP_LANGUAGE_CODES = new Set<AppLanguage>(
+  SUPPORTED_APP_LANGUAGES.map((item) => item.code),
+);
 
 export function isAppLanguage(value: unknown): value is AppLanguage {
-  return typeof value === "string" && APP_LANGUAGE_CODES.has(value as AppLanguage);
+  return (
+    typeof value === "string" && APP_LANGUAGE_CODES.has(value as AppLanguage)
+  );
 }
 
 export function normalizeAppLanguage(value: unknown): AppLanguage {
@@ -28,63 +57,230 @@ export function normalizeAppLanguage(value: unknown): AppLanguage {
 
 type MainTabValue = (typeof TAB_ITEMS)[number]["value"];
 
-type MainTabLocale = Record<MainTabValue, { label: string; title: string; desc: string }>;
+type MainTabLocale = Record<
+  MainTabValue,
+  { label: string; title: string; desc: string }
+>;
 
 const MAIN_TAB_LOCALES: Record<AppLanguage, MainTabLocale> = {
   "zh-CN": {
-    generate: { label: "生成", title: "文生图 / 图生图", desc: "提示词、参考图、批量生成" },
-    inpaint: { label: "重绘", title: "局部重绘", desc: "涂抹蒙版后重绘指定区域" },
+    generate: {
+      label: "生成",
+      title: "文生图 / 图生图",
+      desc: "提示词、参考图、批量生成",
+    },
+    inpaint: {
+      label: "重绘",
+      title: "局部重绘",
+      desc: "涂抹蒙版后重绘指定区域",
+    },
     upscale: { label: "超分", title: "云端放大", desc: "2× / 4× 云端超分" },
-    postprocess: { label: "后期", title: "导演工具", desc: "移除背景、线稿、上色、表情" },
-    inspect: { label: "反推", title: "AI 反推提示词", desc: "图片分析与提示词反推" },
-    convert: { label: "转换", title: "中文描述转标签", desc: "自然语言转 Danbooru 标签" },
-    metadata: { label: "原数据", title: "恢复图片原数据", desc: "查看并套用 NAI / SD / ComfyUI 图片参数" },
+    postprocess: {
+      label: "后期",
+      title: "导演工具",
+      desc: "移除背景、线稿、上色、表情",
+    },
+    inspect: {
+      label: "反推",
+      title: "AI 反推提示词",
+      desc: "图片分析与提示词反推",
+    },
+    convert: {
+      label: "转换",
+      title: "中文描述转标签",
+      desc: "自然语言转 Danbooru 标签",
+    },
+    metadata: {
+      label: "原数据",
+      title: "恢复图片原数据",
+      desc: "查看并套用 NAI / SD / ComfyUI 图片参数",
+    },
     tools: { label: "工具", title: "工具板块", desc: "漫画生成器、批量工作流" },
-    records: { label: "记录", title: "AI 调用记录", desc: "查看反推/转换/拆分镜每次发送与返回" },
+    records: {
+      label: "记录",
+      title: "AI 调用记录",
+      desc: "查看反推/转换/拆分镜每次发送与返回",
+    },
   },
   "zh-TW": {
-    generate: { label: "生成", title: "文生圖 / 圖生圖", desc: "提示詞、參考圖、批次生成" },
-    inpaint: { label: "重繪", title: "局部重繪", desc: "塗抹蒙版後重繪指定區域" },
+    generate: {
+      label: "生成",
+      title: "文生圖 / 圖生圖",
+      desc: "提示詞、參考圖、批次生成",
+    },
+    inpaint: {
+      label: "重繪",
+      title: "局部重繪",
+      desc: "塗抹蒙版後重繪指定區域",
+    },
     upscale: { label: "超分", title: "雲端放大", desc: "2× / 4× 雲端超分" },
-    postprocess: { label: "後期", title: "導演工具", desc: "移除背景、線稿、上色、表情" },
-    inspect: { label: "反推", title: "AI 反推提示詞", desc: "圖片分析與提示詞反推" },
-    convert: { label: "轉換", title: "中文描述轉標籤", desc: "自然語言轉 Danbooru 標籤" },
-    metadata: { label: "原始資料", title: "恢復圖片原始資料", desc: "查看並套用 NAI / SD / ComfyUI 圖片參數" },
+    postprocess: {
+      label: "後期",
+      title: "導演工具",
+      desc: "移除背景、線稿、上色、表情",
+    },
+    inspect: {
+      label: "反推",
+      title: "AI 反推提示詞",
+      desc: "圖片分析與提示詞反推",
+    },
+    convert: {
+      label: "轉換",
+      title: "中文描述轉標籤",
+      desc: "自然語言轉 Danbooru 標籤",
+    },
+    metadata: {
+      label: "原始資料",
+      title: "恢復圖片原始資料",
+      desc: "查看並套用 NAI / SD / ComfyUI 圖片參數",
+    },
     tools: { label: "工具", title: "工具板塊", desc: "漫畫生成器、批次工作流" },
-    records: { label: "記錄", title: "AI 呼叫記錄", desc: "查看反推/轉換/拆分鏡每次送出與返回" },
+    records: {
+      label: "記錄",
+      title: "AI 呼叫記錄",
+      desc: "查看反推/轉換/拆分鏡每次送出與返回",
+    },
   },
   "en-US": {
-    generate: { label: "Generate", title: "Text / Image to Image", desc: "Prompts, references, and batch generation" },
-    inpaint: { label: "Inpaint", title: "Local Inpainting", desc: "Paint a mask and redraw the selected area" },
-    upscale: { label: "Upscale", title: "Cloud Upscale", desc: "2× / 4× NovelAI cloud upscaling" },
-    postprocess: { label: "Director", title: "Director Tools", desc: "Background removal, lineart, colorize, emotions" },
-    inspect: { label: "Inspect", title: "AI Prompt Inspector", desc: "Analyze images and reverse prompts" },
-    convert: { label: "Convert", title: "Description to Tags", desc: "Natural language to Danbooru-style tags" },
-    metadata: { label: "Metadata", title: "Restore Image Metadata", desc: "Inspect and apply NAI / SD / ComfyUI image parameters" },
-    tools: { label: "Tools", title: "Tool Hub", desc: "Comic generator and batch workflows" },
-    records: { label: "Logs", title: "AI Call Logs", desc: "Inspect every reverse / convert / storyboard request" },
+    generate: {
+      label: "Generate",
+      title: "Text / Image to Image",
+      desc: "Prompts, references, and batch generation",
+    },
+    inpaint: {
+      label: "Inpaint",
+      title: "Local Inpainting",
+      desc: "Paint a mask and redraw the selected area",
+    },
+    upscale: {
+      label: "Upscale",
+      title: "Cloud Upscale",
+      desc: "2× / 4× NovelAI cloud upscaling",
+    },
+    postprocess: {
+      label: "Director",
+      title: "Director Tools",
+      desc: "Background removal, lineart, colorize, emotions",
+    },
+    inspect: {
+      label: "Inspect",
+      title: "AI Prompt Inspector",
+      desc: "Analyze images and reverse prompts",
+    },
+    convert: {
+      label: "Convert",
+      title: "Description to Tags",
+      desc: "Natural language to Danbooru-style tags",
+    },
+    metadata: {
+      label: "Metadata",
+      title: "Restore Image Metadata",
+      desc: "Inspect and apply NAI / SD / ComfyUI image parameters",
+    },
+    tools: {
+      label: "Tools",
+      title: "Tool Hub",
+      desc: "Comic generator and batch workflows",
+    },
+    records: {
+      label: "Logs",
+      title: "AI Call Logs",
+      desc: "Inspect every reverse / convert / storyboard request",
+    },
   },
   "ja-JP": {
-    generate: { label: "生成", title: "テキスト / 画像生成", desc: "プロンプト、参照画像、バッチ生成" },
-    inpaint: { label: "再描画", title: "部分再描画", desc: "マスクを塗って指定範囲を再生成" },
-    upscale: { label: "高解像", title: "クラウド拡大", desc: "2× / 4× クラウドアップスケール" },
-    postprocess: { label: "後処理", title: "Director ツール", desc: "背景除去、線画化、彩色、表情変更" },
-    inspect: { label: "解析", title: "AI プロンプト解析", desc: "画像を分析してプロンプトを逆生成" },
-    convert: { label: "変換", title: "説明文をタグへ", desc: "自然文を Danbooru 風タグへ変換" },
-    metadata: { label: "元データ", title: "画像の元データを復元", desc: "NAI / SD / ComfyUI の画像パラメータを確認・適用" },
-    tools: { label: "ツール", title: "ツールハブ", desc: "漫画生成器とバッチワークフロー" },
-    records: { label: "履歴", title: "AI 呼び出し履歴", desc: "解析/変換/絵コンテの送受信を確認" },
+    generate: {
+      label: "生成",
+      title: "テキスト / 画像生成",
+      desc: "プロンプト、参照画像、バッチ生成",
+    },
+    inpaint: {
+      label: "再描画",
+      title: "部分再描画",
+      desc: "マスクを塗って指定範囲を再生成",
+    },
+    upscale: {
+      label: "高解像",
+      title: "クラウド拡大",
+      desc: "2× / 4× クラウドアップスケール",
+    },
+    postprocess: {
+      label: "後処理",
+      title: "Director ツール",
+      desc: "背景除去、線画化、彩色、表情変更",
+    },
+    inspect: {
+      label: "解析",
+      title: "AI プロンプト解析",
+      desc: "画像を分析してプロンプトを逆生成",
+    },
+    convert: {
+      label: "変換",
+      title: "説明文をタグへ",
+      desc: "自然文を Danbooru 風タグへ変換",
+    },
+    metadata: {
+      label: "元データ",
+      title: "画像の元データを復元",
+      desc: "NAI / SD / ComfyUI の画像パラメータを確認・適用",
+    },
+    tools: {
+      label: "ツール",
+      title: "ツールハブ",
+      desc: "漫画生成器とバッチワークフロー",
+    },
+    records: {
+      label: "履歴",
+      title: "AI 呼び出し履歴",
+      desc: "解析/変換/絵コンテの送受信を確認",
+    },
   },
   "ko-KR": {
-    generate: { label: "생성", title: "텍스트 / 이미지 생성", desc: "프롬프트, 참고 이미지, 배치 생성" },
-    inpaint: { label: "리드로우", title: "부분 리드로우", desc: "마스크를 칠한 영역만 다시 생성" },
-    upscale: { label: "업스케일", title: "클라우드 업스케일", desc: "2× / 4× NovelAI 클라우드 확대" },
-    postprocess: { label: "후처리", title: "Director 도구", desc: "배경 제거, 선화, 채색, 표정 변경" },
-    inspect: { label: "분석", title: "AI 프롬프트 분석", desc: "이미지를 분석하고 프롬프트를 역추출" },
-    convert: { label: "변환", title: "설명을 태그로", desc: "자연어를 Danbooru 스타일 태그로 변환" },
-    metadata: { label: "원본 데이터", title: "이미지 원본 데이터 복원", desc: "NAI / SD / ComfyUI 이미지 매개변수 확인 및 적용" },
-    tools: { label: "도구", title: "도구 허브", desc: "만화 생성기와 배치 워크플로" },
-    records: { label: "기록", title: "AI 호출 기록", desc: "분석/변환/스토리보드 요청과 응답 확인" },
+    generate: {
+      label: "생성",
+      title: "텍스트 / 이미지 생성",
+      desc: "프롬프트, 참고 이미지, 배치 생성",
+    },
+    inpaint: {
+      label: "리드로우",
+      title: "부분 리드로우",
+      desc: "마스크를 칠한 영역만 다시 생성",
+    },
+    upscale: {
+      label: "업스케일",
+      title: "클라우드 업스케일",
+      desc: "2× / 4× NovelAI 클라우드 확대",
+    },
+    postprocess: {
+      label: "후처리",
+      title: "Director 도구",
+      desc: "배경 제거, 선화, 채색, 표정 변경",
+    },
+    inspect: {
+      label: "분석",
+      title: "AI 프롬프트 분석",
+      desc: "이미지를 분석하고 프롬프트를 역추출",
+    },
+    convert: {
+      label: "변환",
+      title: "설명을 태그로",
+      desc: "자연어를 Danbooru 스타일 태그로 변환",
+    },
+    metadata: {
+      label: "원본 데이터",
+      title: "이미지 원본 데이터 복원",
+      desc: "NAI / SD / ComfyUI 이미지 매개변수 확인 및 적용",
+    },
+    tools: {
+      label: "도구",
+      title: "도구 허브",
+      desc: "만화 생성기와 배치 워크플로",
+    },
+    records: {
+      label: "기록",
+      title: "AI 호출 기록",
+      desc: "분석/변환/스토리보드 요청과 응답 확인",
+    },
   },
 };
 
@@ -97,9 +293,16 @@ const CHROME_TEXT = {
   "zh-CN": { outputDir: "输出目录", settings: "设置", docs: "文档" },
   "zh-TW": { outputDir: "輸出目錄", settings: "設定", docs: "文件" },
   "en-US": { outputDir: "Output Folder", settings: "Settings", docs: "Docs" },
-  "ja-JP": { outputDir: "出力フォルダ", settings: "設定", docs: "ドキュメント" },
+  "ja-JP": {
+    outputDir: "出力フォルダ",
+    settings: "設定",
+    docs: "ドキュメント",
+  },
   "ko-KR": { outputDir: "출력 폴더", settings: "설정", docs: "문서" },
-} satisfies Record<AppLanguage, Record<"outputDir" | "settings" | "docs", string>>;
+} satisfies Record<
+  AppLanguage,
+  Record<"outputDir" | "settings" | "docs", string>
+>;
 
 export function getChromeText(language: unknown) {
   return CHROME_TEXT[normalizeAppLanguage(language)];
@@ -111,17 +314,21 @@ const TOOLS_HUB_TEXT = {
     title: "工具板块",
     subtitle: "把复杂流程收进专用工具里。",
     comicTitle: "漫画生成器",
-    comicDesc: "故事拆分、参考图反推、分镜转换、队列出图与 ZIP 打包。",
+    comicDesc: "直接导入 Tag，逐格生成多张候选图，选择主图并打包 ZIP。",
     batchTitle: "批量图生图",
-    batchDesc: "导入图片 + 对应提示词，按改图强度逐张图生图，存入分组并打包 ZIP。",
+    batchDesc:
+      "导入图片 + 对应提示词，按改图强度逐张图生图，存入分组并打包 ZIP。",
     tuiwenTitle: "小说推文",
-    tuiwenDesc: "桌面专属：小说/字幕转分镜旁白，叠加全局精准参考，最终导出剪映草稿。",
+    tuiwenDesc:
+      "桌面专属：小说/字幕转分镜旁白，叠加全局精准参考，最终导出剪映草稿。",
     metadataTitle: "恢复图片原数据",
-    metadataDesc: "读取 NovelAI、Stable Diffusion WebUI / Forge 与 ComfyUI 图片的完整内嵌参数，并可一键套用兼容项。",
+    metadataDesc:
+      "读取 NovelAI、Stable Diffusion WebUI / Forge 与 ComfyUI 图片的完整内嵌参数，并可一键套用兼容项。",
     aitagTitle: "AI绘画咒语图库",
     aitagDesc: "原生搜索 AITag 公开作品，并查看每张图片的生成提示词与原参数。",
     artistLabTitle: "画风实验室",
-    artistLabDesc: "固定内容与 Seed，自动测试带权画师串，并用本地模型按目标画风排序。仅 Windows。",
+    artistLabDesc:
+      "固定内容与 Seed，自动测试带权画师串，并用本地模型按目标画风排序。仅 Windows。",
     ready: "已接入",
     foundation: "P0 底座",
   },
@@ -130,17 +337,21 @@ const TOOLS_HUB_TEXT = {
     title: "工具板塊",
     subtitle: "把複雜流程收進專用工具裡。",
     comicTitle: "漫畫生成器",
-    comicDesc: "故事拆分、參考圖反推、分鏡轉換、佇列出圖與 ZIP 打包。",
+    comicDesc: "直接匯入 Tag，逐格生成多張候選圖，選擇主圖並打包 ZIP。",
     batchTitle: "批次圖生圖",
-    batchDesc: "匯入圖片與對應提示詞，依改圖強度逐張圖生圖，存入分組並打包 ZIP。",
+    batchDesc:
+      "匯入圖片與對應提示詞，依改圖強度逐張圖生圖，存入分組並打包 ZIP。",
     tuiwenTitle: "小說推文",
-    tuiwenDesc: "桌面專屬：小說/字幕轉分鏡旁白，疊加全域精準參考，最後匯出剪映草稿。",
+    tuiwenDesc:
+      "桌面專屬：小說/字幕轉分鏡旁白，疊加全域精準參考，最後匯出剪映草稿。",
     metadataTitle: "恢復圖片原始資料",
-    metadataDesc: "讀取 NovelAI、Stable Diffusion WebUI / Forge 與 ComfyUI 圖片的完整內嵌參數，並可一鍵套用相容項目。",
+    metadataDesc:
+      "讀取 NovelAI、Stable Diffusion WebUI / Forge 與 ComfyUI 圖片的完整內嵌參數，並可一鍵套用相容項目。",
     aitagTitle: "AI 繪畫咒語圖庫",
     aitagDesc: "原生搜尋 AITag 公開作品，並查看每張圖片的生成提示詞與原參數。",
     artistLabTitle: "畫風實驗室",
-    artistLabDesc: "固定內容與 Seed，自動測試帶權畫師串，並以本機模型按目標畫風排序。僅 Windows。",
+    artistLabDesc:
+      "固定內容與 Seed，自動測試帶權畫師串，並以本機模型按目標畫風排序。僅 Windows。",
     ready: "已接入",
     foundation: "P0 底座",
   },
@@ -149,17 +360,23 @@ const TOOLS_HUB_TEXT = {
     title: "Tool Hub",
     subtitle: "Dedicated workspaces for the complex flows.",
     comicTitle: "Comic Generator",
-    comicDesc: "Split stories, inspect references, convert panels, queue images, and export ZIPs.",
+    comicDesc:
+      "Import tags, generate multiple candidates per panel, choose main images, and export a ZIP.",
     batchTitle: "Batch Img2Img",
-    batchDesc: "Import images with matching prompts, redraw them one by one, group results, and export a ZIP.",
+    batchDesc:
+      "Import images with matching prompts, redraw them one by one, group results, and export a ZIP.",
     tuiwenTitle: "Novel Shorts",
-    tuiwenDesc: "Desktop-only: turn novels/subtitles into narrated shots, keep global precise references, and export Jianying drafts.",
+    tuiwenDesc:
+      "Desktop-only: turn novels/subtitles into narrated shots, keep global precise references, and export Jianying drafts.",
     metadataTitle: "Restore Image Metadata",
-    metadataDesc: "Read complete NovelAI, Stable Diffusion WebUI / Forge, and ComfyUI metadata and reuse compatible values.",
+    metadataDesc:
+      "Read complete NovelAI, Stable Diffusion WebUI / Forge, and ComfyUI metadata and reuse compatible values.",
     aitagTitle: "AI Art Prompt Gallery",
-    aitagDesc: "Search AITag public works natively and inspect prompts and original generation metadata.",
+    aitagDesc:
+      "Search AITag public works natively and inspect prompts and original generation metadata.",
     artistLabTitle: "Artist Style Lab",
-    artistLabDesc: "Keep content and seed fixed, test weighted artist strings, and rank target style locally. Windows only.",
+    artistLabDesc:
+      "Keep content and seed fixed, test weighted artist strings, and rank target style locally. Windows only.",
     ready: "Ready",
     foundation: "P0 Base",
   },
@@ -168,17 +385,23 @@ const TOOLS_HUB_TEXT = {
     title: "ツールハブ",
     subtitle: "複雑なワークフローを専用ツールにまとめます。",
     comicTitle: "漫画生成器",
-    comicDesc: "物語分割、参照画像解析、コマ変換、画像キュー生成、ZIP 書き出し。",
+    comicDesc:
+      "Tagを直接読み込み、各コマの候補画像を生成してメイン画像を選び、ZIPに書き出します。",
     batchTitle: "一括 Img2Img",
-    batchDesc: "画像と対応プロンプトを読み込み、強度に応じて一枚ずつ再生成し ZIP 化します。",
+    batchDesc:
+      "画像と対応プロンプトを読み込み、強度に応じて一枚ずつ再生成し ZIP 化します。",
     tuiwenTitle: "小説ショート",
-    tuiwenDesc: "デスクトップ専用：小説/字幕をナレーション付きカットに変換し、精密参照を重ねて剪映ドラフトへ書き出します。",
+    tuiwenDesc:
+      "デスクトップ専用：小説/字幕をナレーション付きカットに変換し、精密参照を重ねて剪映ドラフトへ書き出します。",
     metadataTitle: "画像の元データを復元",
-    metadataDesc: "NovelAI、Stable Diffusion WebUI / Forge、ComfyUI の全埋め込み設定を読み取り、互換項目を再利用します。",
+    metadataDesc:
+      "NovelAI、Stable Diffusion WebUI / Forge、ComfyUI の全埋め込み設定を読み取り、互換項目を再利用します。",
     aitagTitle: "AI イラスト呪文ギャラリー",
-    aitagDesc: "AITag の公開作品をネイティブ検索し、画像ごとのプロンプトと生成パラメータを確認します。",
+    aitagDesc:
+      "AITag の公開作品をネイティブ検索し、画像ごとのプロンプトと生成パラメータを確認します。",
     artistLabTitle: "画風ラボ",
-    artistLabDesc: "内容と Seed を固定して重み付き画家タグを自動テストし、端末内モデルで目標画風順に並べます。Windows 専用。",
+    artistLabDesc:
+      "内容と Seed を固定して重み付き画家タグを自動テストし、端末内モデルで目標画風順に並べます。Windows 専用。",
     ready: "接続済み",
     foundation: "P0 基盤",
   },
@@ -187,40 +410,49 @@ const TOOLS_HUB_TEXT = {
     title: "도구 허브",
     subtitle: "복잡한 흐름을 전용 도구로 정리합니다.",
     comicTitle: "만화 생성기",
-    comicDesc: "스토리 분할, 참고 이미지 분석, 컷 변환, 이미지 큐 생성, ZIP 내보내기.",
+    comicDesc:
+      "Tag를 직접 가져와 패널별 후보를 생성하고 대표 이미지를 선택해 ZIP으로 내보냅니다.",
     batchTitle: "배치 Img2Img",
-    batchDesc: "이미지와 프롬프트를 가져와 강도에 따라 한 장씩 다시 생성하고 ZIP으로 묶습니다.",
+    batchDesc:
+      "이미지와 프롬프트를 가져와 강도에 따라 한 장씩 다시 생성하고 ZIP으로 묶습니다.",
     tuiwenTitle: "소설 숏폼",
-    tuiwenDesc: "데스크톱 전용: 소설/자막을 내레이션 컷으로 바꾸고 전역 정밀 참조를 더해 Jianying 초안으로 내보냅니다.",
+    tuiwenDesc:
+      "데스크톱 전용: 소설/자막을 내레이션 컷으로 바꾸고 전역 정밀 참조를 더해 Jianying 초안으로 내보냅니다.",
     metadataTitle: "이미지 원본 데이터 복원",
-    metadataDesc: "NovelAI, Stable Diffusion WebUI / Forge, ComfyUI의 전체 내장 설정을 읽고 호환 값을 재사용합니다.",
+    metadataDesc:
+      "NovelAI, Stable Diffusion WebUI / Forge, ComfyUI의 전체 내장 설정을 읽고 호환 값을 재사용합니다.",
     aitagTitle: "AI 그림 프롬프트 갤러리",
-    aitagDesc: "AITag 공개 작품을 기본 화면에서 검색하고 이미지별 프롬프트와 생성 매개변수를 확인합니다.",
+    aitagDesc:
+      "AITag 공개 작품을 기본 화면에서 검색하고 이미지별 프롬프트와 생성 매개변수를 확인합니다.",
     artistLabTitle: "화풍 실험실",
-    artistLabDesc: "내용과 Seed를 고정해 가중치 작가 태그를 자동 테스트하고 로컬 모델로 목표 화풍 순위를 계산합니다. Windows 전용.",
+    artistLabDesc:
+      "내용과 Seed를 고정해 가중치 작가 태그를 자동 테스트하고 로컬 모델로 목표 화풍 순위를 계산합니다. Windows 전용.",
     ready: "연결됨",
     foundation: "P0 기반",
   },
-} satisfies Record<AppLanguage, Record<
-  | "eyebrow"
-  | "title"
-  | "subtitle"
-  | "comicTitle"
-  | "comicDesc"
-  | "batchTitle"
-  | "batchDesc"
-  | "tuiwenTitle"
-  | "tuiwenDesc"
-  | "metadataTitle"
-  | "metadataDesc"
-  | "aitagTitle"
-  | "aitagDesc"
-  | "artistLabTitle"
-  | "artistLabDesc"
-  | "ready"
-  | "foundation",
-  string
->>;
+} satisfies Record<
+  AppLanguage,
+  Record<
+    | "eyebrow"
+    | "title"
+    | "subtitle"
+    | "comicTitle"
+    | "comicDesc"
+    | "batchTitle"
+    | "batchDesc"
+    | "tuiwenTitle"
+    | "tuiwenDesc"
+    | "metadataTitle"
+    | "metadataDesc"
+    | "aitagTitle"
+    | "aitagDesc"
+    | "artistLabTitle"
+    | "artistLabDesc"
+    | "ready"
+    | "foundation",
+    string
+  >
+>;
 
 export function getToolsHubText(language: unknown) {
   return TOOLS_HUB_TEXT[normalizeAppLanguage(language)];
@@ -233,15 +465,28 @@ const TOKEN_GUIDE_TEXT = {
     close: "关闭 Token 教程",
     zoom: "点击查看大图",
     previewAlt: "Token 教程大图",
-    warning: "Token 等同账号凭证，只粘贴到本软件，不要截图、分享或写入项目文件。",
+    warning:
+      "Token 等同账号凭证，只粘贴到本软件，不要截图、分享或写入项目文件。",
     openNovelAi: "打开 NovelAI 生图页",
     confirm: "我知道了",
     stepAltPrefix: "Token 获取教程第",
     stepAltSuffix: "步",
     steps: [
-      { title: "打开左上角菜单", description: "登录 NovelAI 生图页面后，点击左上角蓝圈标出的三横线菜单。" },
-      { title: "进入 Account Settings", description: "菜单展开后，在 Account 区域点击蓝圈标出的 Account Settings。" },
-      { title: "获取 Persistent API Token", description: "在 User Settings 的 Account 页面点击蓝圈标出的 Get Persistent API Token，并复制完整 Token。" },
+      {
+        title: "打开左上角菜单",
+        description:
+          "登录 NovelAI 生图页面后，点击左上角蓝圈标出的三横线菜单。",
+      },
+      {
+        title: "进入 Account Settings",
+        description:
+          "菜单展开后，在 Account 区域点击蓝圈标出的 Account Settings。",
+      },
+      {
+        title: "获取 Persistent API Token",
+        description:
+          "在 User Settings 的 Account 页面点击蓝圈标出的 Get Persistent API Token，并复制完整 Token。",
+      },
     ],
   },
   "zh-TW": {
@@ -256,75 +501,132 @@ const TOKEN_GUIDE_TEXT = {
     stepAltPrefix: "Token 取得教學第",
     stepAltSuffix: "步",
     steps: [
-      { title: "打開左上角選單", description: "登入 NovelAI 生圖頁面後，點擊左上角藍圈標出的三橫線選單。" },
-      { title: "進入 Account Settings", description: "選單展開後，在 Account 區域點擊藍圈標出的 Account Settings。" },
-      { title: "取得 Persistent API Token", description: "在 User Settings 的 Account 頁面點擊藍圈標出的 Get Persistent API Token，並複製完整 Token。" },
+      {
+        title: "打開左上角選單",
+        description:
+          "登入 NovelAI 生圖頁面後，點擊左上角藍圈標出的三橫線選單。",
+      },
+      {
+        title: "進入 Account Settings",
+        description:
+          "選單展開後，在 Account 區域點擊藍圈標出的 Account Settings。",
+      },
+      {
+        title: "取得 Persistent API Token",
+        description:
+          "在 User Settings 的 Account 頁面點擊藍圈標出的 Get Persistent API Token，並複製完整 Token。",
+      },
     ],
   },
   "en-US": {
     title: "Get NovelAI Persistent API Token",
-    subtitle: "Follow the current NovelAI web UI. You do not need the old API docs.",
+    subtitle:
+      "Follow the current NovelAI web UI. You do not need the old API docs.",
     close: "Close token guide",
     zoom: "Click to view full size",
     previewAlt: "Token guide preview",
-    warning: "The token is an account credential. Paste it only into this app; do not screenshot, share, or save it in project files.",
+    warning:
+      "The token is an account credential. Paste it only into this app; do not screenshot, share, or save it in project files.",
     openNovelAi: "Open NovelAI image page",
     confirm: "Got it",
     stepAltPrefix: "Token guide",
     stepAltSuffix: "step",
     steps: [
-      { title: "Open the top-left menu", description: "After signing in to the NovelAI image page, click the three-line menu marked by the blue circle." },
-      { title: "Open Account Settings", description: "When the menu opens, click Account Settings in the Account area marked by the blue circle." },
-      { title: "Get Persistent API Token", description: "On User Settings › Account, click Get Persistent API Token marked by the blue circle and copy the full token." },
+      {
+        title: "Open the top-left menu",
+        description:
+          "After signing in to the NovelAI image page, click the three-line menu marked by the blue circle.",
+      },
+      {
+        title: "Open Account Settings",
+        description:
+          "When the menu opens, click Account Settings in the Account area marked by the blue circle.",
+      },
+      {
+        title: "Get Persistent API Token",
+        description:
+          "On User Settings › Account, click Get Persistent API Token marked by the blue circle and copy the full token.",
+      },
     ],
   },
   "ja-JP": {
     title: "NovelAI Persistent API Token を取得",
-    subtitle: "現在の NovelAI Web 画面に沿って操作します。古い API ドキュメントは不要です。",
+    subtitle:
+      "現在の NovelAI Web 画面に沿って操作します。古い API ドキュメントは不要です。",
     close: "Token ガイドを閉じる",
     zoom: "クリックして大きく表示",
     previewAlt: "Token ガイド拡大画像",
-    warning: "Token はアカウント認証情報です。このアプリだけに貼り付け、スクリーンショット・共有・プロジェクト保存はしないでください。",
+    warning:
+      "Token はアカウント認証情報です。このアプリだけに貼り付け、スクリーンショット・共有・プロジェクト保存はしないでください。",
     openNovelAi: "NovelAI 画像ページを開く",
     confirm: "了解",
     stepAltPrefix: "Token ガイド",
     stepAltSuffix: "手順",
     steps: [
-      { title: "左上のメニューを開く", description: "NovelAI の画像生成ページにログインし、青い丸で示した三本線メニューをクリックします。" },
-      { title: "Account Settings を開く", description: "メニューが開いたら、Account エリアにある青い丸で示した Account Settings をクリックします。" },
-      { title: "Persistent API Token を取得", description: "User Settings の Account ページで、青い丸で示した Get Persistent API Token をクリックし、完全な Token をコピーします。" },
+      {
+        title: "左上のメニューを開く",
+        description:
+          "NovelAI の画像生成ページにログインし、青い丸で示した三本線メニューをクリックします。",
+      },
+      {
+        title: "Account Settings を開く",
+        description:
+          "メニューが開いたら、Account エリアにある青い丸で示した Account Settings をクリックします。",
+      },
+      {
+        title: "Persistent API Token を取得",
+        description:
+          "User Settings の Account ページで、青い丸で示した Get Persistent API Token をクリックし、完全な Token をコピーします。",
+      },
     ],
   },
   "ko-KR": {
     title: "NovelAI Persistent API Token 가져오기",
-    subtitle: "현재 NovelAI 웹 화면을 기준으로 진행합니다. 예전 API 문서는 필요하지 않습니다.",
+    subtitle:
+      "현재 NovelAI 웹 화면을 기준으로 진행합니다. 예전 API 문서는 필요하지 않습니다.",
     close: "Token 가이드 닫기",
     zoom: "클릭해서 크게 보기",
     previewAlt: "Token 가이드 큰 이미지",
-    warning: "Token 은 계정 인증 정보입니다. 이 앱에만 붙여넣고, 스크린샷·공유·프로젝트 파일 저장은 하지 마세요.",
+    warning:
+      "Token 은 계정 인증 정보입니다. 이 앱에만 붙여넣고, 스크린샷·공유·프로젝트 파일 저장은 하지 마세요.",
     openNovelAi: "NovelAI 이미지 페이지 열기",
     confirm: "알겠습니다",
     stepAltPrefix: "Token 가이드",
     stepAltSuffix: "단계",
     steps: [
-      { title: "왼쪽 위 메뉴 열기", description: "NovelAI 이미지 페이지에 로그인한 뒤, 파란 원으로 표시된 세 줄 메뉴를 누릅니다." },
-      { title: "Account Settings 열기", description: "메뉴가 펼쳐지면 Account 영역에서 파란 원으로 표시된 Account Settings 를 누릅니다." },
-      { title: "Persistent API Token 가져오기", description: "User Settings 의 Account 페이지에서 파란 원으로 표시된 Get Persistent API Token 을 누르고 전체 Token 을 복사합니다." },
+      {
+        title: "왼쪽 위 메뉴 열기",
+        description:
+          "NovelAI 이미지 페이지에 로그인한 뒤, 파란 원으로 표시된 세 줄 메뉴를 누릅니다.",
+      },
+      {
+        title: "Account Settings 열기",
+        description:
+          "메뉴가 펼쳐지면 Account 영역에서 파란 원으로 표시된 Account Settings 를 누릅니다.",
+      },
+      {
+        title: "Persistent API Token 가져오기",
+        description:
+          "User Settings 의 Account 페이지에서 파란 원으로 표시된 Get Persistent API Token 을 누르고 전체 Token 을 복사합니다.",
+      },
     ],
   },
-} satisfies Record<AppLanguage, {
-  title: string;
-  subtitle: string;
-  close: string;
-  zoom: string;
-  previewAlt: string;
-  warning: string;
-  openNovelAi: string;
-  confirm: string;
-  stepAltPrefix: string;
-  stepAltSuffix: string;
-  steps: { title: string; description: string }[];
-}>;
+} satisfies Record<
+  AppLanguage,
+  {
+    title: string;
+    subtitle: string;
+    close: string;
+    zoom: string;
+    previewAlt: string;
+    warning: string;
+    openNovelAi: string;
+    confirm: string;
+    stepAltPrefix: string;
+    stepAltSuffix: string;
+    steps: { title: string; description: string }[];
+  }
+>;
 
 export function getTokenGuideText(language: unknown) {
   return TOKEN_GUIDE_TEXT[normalizeAppLanguage(language)];
@@ -417,7 +719,8 @@ const GENERATE_PANEL_TEXT = {
       capsuleTitle: "灵感胶囊",
       capsuleHintOpen: "本地标签库 · 中/英文搜索 → 点击插入",
       capsuleHintClosed: "点击展开 · 本地 Danbooru 标签库（按热度）",
-      capsuleSearchPlaceholder: "搜索标签：中文或英文，如 双马尾 / twintails / 夜景",
+      capsuleSearchPlaceholder:
+        "搜索标签：中文或英文，如 双马尾 / twintails / 夜景",
       relatedTitle: "相关推荐（常一起使用）",
       weightAdjust: "权重微调",
       translating: "翻译中…",
@@ -432,7 +735,8 @@ const GENERATE_PANEL_TEXT = {
       decreaseWeight: "降低权重",
       increaseWeight: "提高权重",
       emptyTag: "(空)",
-      helperOn: "英文输入 1 个字符即可推测 tag；↑↓ 选择，Tab/Enter 插入，Esc 关闭。",
+      helperOn:
+        "英文输入 1 个字符即可推测 tag；↑↓ 选择，Tab/Enter 插入，Esc 关闭。",
       helperOff: "Tag 自动补全已关闭，可在设置 › 提示词/补全 中开启。",
       tagUnit: "个标签",
       tokenLimitExceeded: "超出225限制",
@@ -476,7 +780,8 @@ const GENERATE_PANEL_TEXT = {
       capsuleTitle: "靈感膠囊",
       capsuleHintOpen: "本地標籤庫 · 中/英文搜尋 → 點擊插入",
       capsuleHintClosed: "點擊展開 · 本地 Danbooru 標籤庫（按熱度）",
-      capsuleSearchPlaceholder: "搜尋標籤：中文或英文，例如 雙馬尾 / twintails / 夜景",
+      capsuleSearchPlaceholder:
+        "搜尋標籤：中文或英文，例如 雙馬尾 / twintails / 夜景",
       relatedTitle: "相關推薦（常一起使用）",
       weightAdjust: "權重微調",
       translating: "翻譯中…",
@@ -491,7 +796,8 @@ const GENERATE_PANEL_TEXT = {
       decreaseWeight: "降低權重",
       increaseWeight: "提高權重",
       emptyTag: "(空)",
-      helperOn: "英文輸入 1 個字元即可推測 tag；↑↓ 選擇，Tab/Enter 插入，Esc 關閉。",
+      helperOn:
+        "英文輸入 1 個字元即可推測 tag；↑↓ 選擇，Tab/Enter 插入，Esc 關閉。",
       helperOff: "Tag 自動補全已關閉，可在設定 › 提示詞/補全 中開啟。",
       tagUnit: "個標籤",
       tokenLimitExceeded: "超出225限制",
@@ -526,7 +832,8 @@ const GENERATE_PANEL_TEXT = {
       stylePresetNamePrompt: "Name this style prompt:",
       locked: "Locked",
       lock: "Lock",
-      lockSavedTitle: "Locked: resets/templates will not change it, and it persists after restart. Click to unlock.",
+      lockSavedTitle:
+        "Locked: resets/templates will not change it, and it persists after restart. Click to unlock.",
       lockCurrentTitle: "Lock and save the current prompt so it stays fixed.",
       positivePrompt: "Positive Prompt",
       negativePrompt: "Negative Prompt",
@@ -534,8 +841,10 @@ const GENERATE_PANEL_TEXT = {
       negativePlaceholder: "Enter what you want to avoid...",
       capsuleTitle: "Inspiration Capsules",
       capsuleHintOpen: "Local tag library · Search CN/EN → click to insert",
-      capsuleHintClosed: "Click to expand · Local Danbooru tag library by popularity",
-      capsuleSearchPlaceholder: "Search tags: Chinese or English, e.g. twintails / night scenery",
+      capsuleHintClosed:
+        "Click to expand · Local Danbooru tag library by popularity",
+      capsuleSearchPlaceholder:
+        "Search tags: Chinese or English, e.g. twintails / night scenery",
       relatedTitle: "Related recommendations",
       weightAdjust: "Weight tuning",
       translating: "Translating…",
@@ -546,12 +855,15 @@ const GENERATE_PANEL_TEXT = {
       autocompleteTitle: "Suggest candidate tags while typing English",
       autocompleteOn: "Tags: On",
       autocompleteOff: "Tags: Off",
-      weightHint: "Click − / ＋ to adjust tag weight using NovelAI {} / [] syntax.",
+      weightHint:
+        "Click − / ＋ to adjust tag weight using NovelAI {} / [] syntax.",
       decreaseWeight: "Decrease weight",
       increaseWeight: "Increase weight",
       emptyTag: "(empty)",
-      helperOn: "Type 1 English character to suggest tags; ↑↓ select, Tab/Enter insert, Esc close.",
-      helperOff: "Tag autocomplete is off. Enable it in Settings › Prompt / Tags.",
+      helperOn:
+        "Type 1 English character to suggest tags; ↑↓ select, Tab/Enter insert, Esc close.",
+      helperOff:
+        "Tag autocomplete is off. Enable it in Settings › Prompt / Tags.",
       tagUnit: "tags",
       tokenLimitExceeded: "over 225 limit",
       characterPrompt: "Character Prompt",
@@ -585,7 +897,8 @@ const GENERATE_PANEL_TEXT = {
       stylePresetNamePrompt: "このスタイルプロンプトの名前：",
       locked: "ロック中",
       lock: "ロック",
-      lockSavedTitle: "ロック中：リセット/テンプレートで変更されず、再起動後も保持されます。クリックで解除。",
+      lockSavedTitle:
+        "ロック中：リセット/テンプレートで変更されず、再起動後も保持されます。クリックで解除。",
       lockCurrentTitle: "現在のプロンプトをロックして固定します。",
       positivePrompt: "ポジティブプロンプト",
       negativePrompt: "ネガティブプロンプト",
@@ -605,12 +918,15 @@ const GENERATE_PANEL_TEXT = {
       autocompleteTitle: "英字入力中に候補 tag を推測します",
       autocompleteOn: "補完：ON",
       autocompleteOff: "補完：OFF",
-      weightHint: "− / ＋ でタグの重みを調整します（NovelAI の {} / [] 構文）。",
+      weightHint:
+        "− / ＋ でタグの重みを調整します（NovelAI の {} / [] 構文）。",
       decreaseWeight: "重みを下げる",
       increaseWeight: "重みを上げる",
       emptyTag: "(空)",
-      helperOn: "英字を 1 文字入力すると tag を推測します。↑↓ 選択、Tab/Enter 挿入、Esc 閉じる。",
-      helperOff: "Tag 自動補完はオフです。設定 › プロンプト/補完 でオンにできます。",
+      helperOn:
+        "英字を 1 文字入力すると tag を推測します。↑↓ 選択、Tab/Enter 挿入、Esc 閉じる。",
+      helperOff:
+        "Tag 自動補完はオフです。設定 › プロンプト/補完 でオンにできます。",
       tagUnit: "タグ",
       tokenLimitExceeded: "225制限超過",
       characterPrompt: "キャラプロンプト",
@@ -637,14 +953,16 @@ const GENERATE_PANEL_TEXT = {
       animeMode: "애니메",
       furryMode: "Furry",
       stylePrompt: "스타일 프롬프트",
-      stylePlaceholder: "예: anime style, watercolor 같은 스타일 프롬프트 입력...",
+      stylePlaceholder:
+        "예: anime style, watercolor 같은 스타일 프롬프트 입력...",
       stylePresetPlaceholder: "저장된 스타일 선택",
       stylePresetSave: "스타일 저장",
       stylePresetDelete: "삭제",
       stylePresetNamePrompt: "이 스타일 프롬프트 이름:",
       locked: "잠김",
       lock: "잠금",
-      lockSavedTitle: "잠김: 초기화/템플릿으로 바뀌지 않고 재시작 후에도 유지됩니다. 클릭하면 해제됩니다.",
+      lockSavedTitle:
+        "잠김: 초기화/템플릿으로 바뀌지 않고 재시작 후에도 유지됩니다. 클릭하면 해제됩니다.",
       lockCurrentTitle: "현재 프롬프트를 잠그고 저장해 고정합니다.",
       positivePrompt: "긍정 프롬프트",
       negativePrompt: "부정 프롬프트",
@@ -664,12 +982,15 @@ const GENERATE_PANEL_TEXT = {
       autocompleteTitle: "영어 입력 중 후보 tag를 추정합니다",
       autocompleteOn: "태그: 켬",
       autocompleteOff: "태그: 끔",
-      weightHint: "− / ＋ 를 눌러 NovelAI {} / [] 문법 기반 태그 가중치를 조정합니다.",
+      weightHint:
+        "− / ＋ 를 눌러 NovelAI {} / [] 문법 기반 태그 가중치를 조정합니다.",
       decreaseWeight: "가중치 낮추기",
       increaseWeight: "가중치 높이기",
       emptyTag: "(비어 있음)",
-      helperOn: "영문 1자를 입력하면 tag를 추정합니다. ↑↓ 선택, Tab/Enter 삽입, Esc 닫기.",
-      helperOff: "Tag 자동완성이 꺼져 있습니다. 설정 › 프롬프트/자동완성에서 켤 수 있습니다.",
+      helperOn:
+        "영문 1자를 입력하면 tag를 추정합니다. ↑↓ 선택, Tab/Enter 삽입, Esc 닫기.",
+      helperOff:
+        "Tag 자동완성이 꺼져 있습니다. 설정 › 프롬프트/자동완성에서 켤 수 있습니다.",
       tagUnit: "개 태그",
       tokenLimitExceeded: "225 제한 초과",
       characterPrompt: "캐릭터 프롬프트",
@@ -692,7 +1013,14 @@ export function getGeneratePanelText(language: unknown) {
   return GENERATE_PANEL_TEXT[normalizeAppLanguage(language)];
 }
 
-export type TuiwenStudioStepKey = "import" | "storyboard" | "references" | "generate" | "audio" | "motion" | "export";
+export type TuiwenStudioStepKey =
+  | "import"
+  | "storyboard"
+  | "references"
+  | "generate"
+  | "audio"
+  | "motion"
+  | "export";
 
 type TuiwenStudioText = {
   page: {
@@ -740,7 +1068,8 @@ const TUIWEN_STUDIO_TEXT = {
       exportProjectJson: "导出项目 JSON",
       importProjectJson: "导入项目 JSON",
       importNovelSubtitle: "导入小说/字幕",
-      flowHint: "当前可导入文本/字幕、复用漫画 LLM 管线，并直接进入生图、配音与剪映导出流程。",
+      flowHint:
+        "当前可导入文本/字幕、复用漫画 LLM 管线，并直接进入生图、配音与剪映导出流程。",
     },
     steps: {
       import: { label: "导入", hint: "小说 / 字幕 / 画幅" },
@@ -770,9 +1099,11 @@ const TUIWEN_STUDIO_TEXT = {
       opusFreeOk: "当前默认尺寸/步数未越过 Opus 免费线。",
       opusFreeExceeded: "当前尺寸/步数会越过 Opus 免费线",
       stepsUnit: "步",
-      scriptLabel: "粘贴小说 / 字幕文本（可本地快速拆段，也可交给 LLM 智能分镜）",
+      scriptLabel:
+        "粘贴小说 / 字幕文本（可本地快速拆段，也可交给 LLM 智能分镜）",
       scriptPlaceholder: "把小说正文、推文文案或字幕文本粘贴到这里。",
-      footerHint: "本地草稿适合快速拆段；LLM 分镜会复用漫画分析接口，额外生成全局设定与连续性信息。",
+      footerHint:
+        "本地草稿适合快速拆段；LLM 分镜会复用漫画分析接口，额外生成全局设定与连续性信息。",
       createDraft: "创建旁白分镜草稿",
       llmAnalyze: "LLM 智能分镜",
       llmAnalyzing: "LLM 分镜中...",
@@ -788,7 +1119,8 @@ const TUIWEN_STUDIO_TEXT = {
       exportProjectJson: "匯出專案 JSON",
       importProjectJson: "匯入專案 JSON",
       importNovelSubtitle: "匯入小說/字幕",
-      flowHint: "目前可匯入文本/字幕、複用漫畫 LLM 管線，並直接進入生圖、配音與剪映匯出流程。",
+      flowHint:
+        "目前可匯入文本/字幕、複用漫畫 LLM 管線，並直接進入生圖、配音與剪映匯出流程。",
     },
     steps: {
       import: { label: "匯入", hint: "小說 / 字幕 / 畫幅" },
@@ -818,9 +1150,11 @@ const TUIWEN_STUDIO_TEXT = {
       opusFreeOk: "目前預設尺寸/步數未超過 Opus 免費線。",
       opusFreeExceeded: "目前尺寸/步數會超過 Opus 免費線",
       stepsUnit: "步",
-      scriptLabel: "貼上小說 / 字幕文本（可本地快速拆段，也可交給 LLM 智慧分鏡）",
+      scriptLabel:
+        "貼上小說 / 字幕文本（可本地快速拆段，也可交給 LLM 智慧分鏡）",
       scriptPlaceholder: "把小說正文、推文文案或字幕文本貼到這裡。",
-      footerHint: "本地草稿適合快速拆段；LLM 分鏡會複用漫畫分析介面，額外產生全域設定與連續性資訊。",
+      footerHint:
+        "本地草稿適合快速拆段；LLM 分鏡會複用漫畫分析介面，額外產生全域設定與連續性資訊。",
       createDraft: "建立旁白分鏡草稿",
       llmAnalyze: "LLM 智慧分鏡",
       llmAnalyzing: "LLM 分鏡中...",
@@ -830,13 +1164,15 @@ const TUIWEN_STUDIO_TEXT = {
     page: {
       eyebrow: "Tools / Novel Shorts",
       defaultTitle: "Untitled novel short",
-      subtitle: "Desktop only · Novel/subtitles → narrated shots → image/voice → Jianying draft",
+      subtitle:
+        "Desktop only · Novel/subtitles → narrated shots → image/voice → Jianying draft",
       shotsMetric: "shots",
       backToTools: "Back to Tools",
       exportProjectJson: "Export Project JSON",
       importProjectJson: "Import Project JSON",
       importNovelSubtitle: "Import Novel/Subtitles",
-      flowHint: "Import text or subtitles, reuse the comic LLM pipeline, then continue into image generation, voice, and Jianying export.",
+      flowHint:
+        "Import text or subtitles, reuse the comic LLM pipeline, then continue into image generation, voice, and Jianying export.",
     },
     steps: {
       import: { label: "Import", hint: "Novel / Subtitles / Canvas" },
@@ -863,12 +1199,16 @@ const TUIWEN_STUDIO_TEXT = {
       defaultShotDuration: "Default shot duration (ms)",
       canvas: "Canvas",
       kenBurnsSuggestion: "Ken Burns suggestion",
-      opusFreeOk: "The current default size/steps stay within the Opus free tier.",
+      opusFreeOk:
+        "The current default size/steps stay within the Opus free tier.",
       opusFreeExceeded: "The current size/steps exceed the Opus free tier",
       stepsUnit: "steps",
-      scriptLabel: "Paste novel / subtitle text (split locally, or let the LLM storyboard it)",
-      scriptPlaceholder: "Paste the novel, short-form copy, or subtitle text here.",
-      footerHint: "Local drafts are best for quick splitting; LLM storyboarding reuses the comic analysis API and adds global setup plus continuity notes.",
+      scriptLabel:
+        "Paste novel / subtitle text (split locally, or let the LLM storyboard it)",
+      scriptPlaceholder:
+        "Paste the novel, short-form copy, or subtitle text here.",
+      footerHint:
+        "Local drafts are best for quick splitting; LLM storyboarding reuses the comic analysis API and adds global setup plus continuity notes.",
       createDraft: "Create narration draft",
       llmAnalyze: "LLM storyboard",
       llmAnalyzing: "Storyboarding...",
@@ -878,17 +1218,22 @@ const TUIWEN_STUDIO_TEXT = {
     page: {
       eyebrow: "ツール / 小説ショート",
       defaultTitle: "無題の小説ショート",
-      subtitle: "デスクトップ専用 · 小説/字幕 → ナレーションカット → 画像/音声 → 剪映ドラフト",
+      subtitle:
+        "デスクトップ専用 · 小説/字幕 → ナレーションカット → 画像/音声 → 剪映ドラフト",
       shotsMetric: "カット",
       backToTools: "ツール一覧へ戻る",
       exportProjectJson: "プロジェクト JSON を書き出し",
       importProjectJson: "プロジェクト JSON を読み込み",
       importNovelSubtitle: "小説/字幕を読み込み",
-      flowHint: "テキスト/字幕を読み込み、漫画用 LLM パイプラインを再利用して、画像生成・音声・剪映書き出しへ進みます。",
+      flowHint:
+        "テキスト/字幕を読み込み、漫画用 LLM パイプラインを再利用して、画像生成・音声・剪映書き出しへ進みます。",
     },
     steps: {
       import: { label: "読込", hint: "小説 / 字幕 / 画角" },
-      storyboard: { label: "絵コンテ", hint: "ナレーション · 画面 · プロンプト" },
+      storyboard: {
+        label: "絵コンテ",
+        hint: "ナレーション · 画面 · プロンプト",
+      },
       references: { label: "キャラ参照", hint: "精密参照 · ライブラリ" },
       generate: { label: "生成", hint: "再開 · コスト · 再試行" },
       audio: { label: "音声", hint: "読み込み · TTS · 長さ" },
@@ -914,9 +1259,12 @@ const TUIWEN_STUDIO_TEXT = {
       opusFreeOk: "現在の既定サイズ/ステップ数は Opus 無料枠内です。",
       opusFreeExceeded: "現在のサイズ/ステップ数は Opus 無料枠を超えます",
       stepsUnit: "ステップ",
-      scriptLabel: "小説 / 字幕テキストを貼り付け（ローカル分割または LLM 絵コンテ）",
-      scriptPlaceholder: "小説本文、ショート文案、字幕テキストをここに貼り付けます。",
-      footerHint: "ローカル草稿は素早い分割向きです。LLM 絵コンテは漫画分析 API を再利用し、全体設定と連続性メモも生成します。",
+      scriptLabel:
+        "小説 / 字幕テキストを貼り付け（ローカル分割または LLM 絵コンテ）",
+      scriptPlaceholder:
+        "小説本文、ショート文案、字幕テキストをここに貼り付けます。",
+      footerHint:
+        "ローカル草稿は素早い分割向きです。LLM 絵コンテは漫画分析 API を再利用し、全体設定と連続性メモも生成します。",
       createDraft: "ナレーション草稿を作成",
       llmAnalyze: "LLM 絵コンテ",
       llmAnalyzing: "絵コンテ生成中...",
@@ -926,13 +1274,15 @@ const TUIWEN_STUDIO_TEXT = {
     page: {
       eyebrow: "도구 / 소설 숏폼",
       defaultTitle: "제목 없는 소설 숏폼",
-      subtitle: "데스크톱 전용 · 소설/자막 → 내레이션 컷 → 이미지/음성 → Jianying 초안",
+      subtitle:
+        "데스크톱 전용 · 소설/자막 → 내레이션 컷 → 이미지/음성 → Jianying 초안",
       shotsMetric: "컷",
       backToTools: "도구 홈으로",
       exportProjectJson: "프로젝트 JSON 내보내기",
       importProjectJson: "프로젝트 JSON 가져오기",
       importNovelSubtitle: "소설/자막 가져오기",
-      flowHint: "텍스트나 자막을 가져오고 만화 LLM 파이프라인을 재사용한 뒤 이미지 생성, 음성, Jianying 내보내기로 이어집니다.",
+      flowHint:
+        "텍스트나 자막을 가져오고 만화 LLM 파이프라인을 재사용한 뒤 이미지 생성, 음성, Jianying 내보내기로 이어집니다.",
     },
     steps: {
       import: { label: "가져오기", hint: "소설 / 자막 / 화면비" },
@@ -963,8 +1313,10 @@ const TUIWEN_STUDIO_TEXT = {
       opusFreeExceeded: "현재 크기/스텝은 Opus 무료 기준을 초과합니다",
       stepsUnit: "스텝",
       scriptLabel: "소설 / 자막 텍스트 붙여넣기(로컬 분할 또는 LLM 스토리보드)",
-      scriptPlaceholder: "소설 본문, 숏폼 문안, 자막 텍스트를 여기에 붙여넣으세요.",
-      footerHint: "로컬 초안은 빠른 분할에 좋습니다. LLM 스토리보드는 만화 분석 API를 재사용하고 전역 설정과 연속성 메모도 만듭니다.",
+      scriptPlaceholder:
+        "소설 본문, 숏폼 문안, 자막 텍스트를 여기에 붙여넣으세요.",
+      footerHint:
+        "로컬 초안은 빠른 분할에 좋습니다. LLM 스토리보드는 만화 분석 API를 재사용하고 전역 설정과 연속성 메모도 만듭니다.",
       createDraft: "내레이션 초안 만들기",
       llmAnalyze: "LLM 스토리보드",
       llmAnalyzing: "스토리보드 생성 중...",
@@ -1067,7 +1419,8 @@ const SETTINGS_SECTION_TEXT = {
       themeSystem: "跟随系统",
       workspaceLayout: "工作台布局",
       resetWorkspace: "恢复默认分栏宽度",
-      workspaceHint: "把左右两栏宽度恢复默认。也可直接在工作台拖动两栏之间的分隔条调整，双击分隔条或点其上的 ⟲ 也能恢复。",
+      workspaceHint:
+        "把左右两栏宽度恢复默认。也可直接在工作台拖动两栏之间的分隔条调整，双击分隔条或点其上的 ⟲ 也能恢复。",
     },
     language: {
       language: "界面语言",
@@ -1075,11 +1428,13 @@ const SETTINGS_SECTION_TEXT = {
     },
     performance: {
       strategyTitle: "执行策略",
-      strategyDesc: "当前版本使用单任务顺序执行：批量生成会逐张调用 API，避免并发导致取消和历史写入异常。",
+      strategyDesc:
+        "当前版本使用单任务顺序执行：批量生成会逐张调用 API，避免并发导致取消和历史写入异常。",
       superDropLabel: "中央画布拖拽加载",
       superDropDesc: "将图片拖入中央画布即可加载为工作台图片。",
       persistSectionTitle: "跨次启动记住参数",
-      persistSectionDesc: "以下开关默认全部开启，关闭后对应工具在下次打开软件时不再恢复上次使用的参数，改用默认值。",
+      persistSectionDesc:
+        "以下开关默认全部开启，关闭后对应工具在下次打开软件时不再恢复上次使用的参数，改用默认值。",
       persistGenerateLabel: "文生图",
       persistGenerateDesc: "记住上次的提示词、尺寸、采样参数等。",
       persistI2ILabel: "图生图",
@@ -1100,7 +1455,8 @@ const SETTINGS_SECTION_TEXT = {
       themeSystem: "跟隨系統",
       workspaceLayout: "工作台版面",
       resetWorkspace: "恢復預設分欄寬度",
-      workspaceHint: "把左右兩欄寬度恢復預設。也可直接在工作台拖動兩欄之間的分隔條調整，雙擊分隔條或點其上的 ⟲ 也能恢復。",
+      workspaceHint:
+        "把左右兩欄寬度恢復預設。也可直接在工作台拖動兩欄之間的分隔條調整，雙擊分隔條或點其上的 ⟲ 也能恢復。",
     },
     language: {
       language: "介面語言",
@@ -1108,11 +1464,13 @@ const SETTINGS_SECTION_TEXT = {
     },
     performance: {
       strategyTitle: "執行策略",
-      strategyDesc: "目前版本使用單任務循序執行：批次生成會逐張呼叫 API，避免並行造成取消與歷史寫入異常。",
+      strategyDesc:
+        "目前版本使用單任務循序執行：批次生成會逐張呼叫 API，避免並行造成取消與歷史寫入異常。",
       superDropLabel: "中央畫布拖曳載入",
       superDropDesc: "將圖片拖入中央畫布即可載入為工作台圖片。",
       persistSectionTitle: "跨次啟動記住參數",
-      persistSectionDesc: "以下開關預設全部開啟，關閉後對應工具在下次開啟軟體時不再恢復上次使用的參數，改用預設值。",
+      persistSectionDesc:
+        "以下開關預設全部開啟，關閉後對應工具在下次開啟軟體時不再恢復上次使用的參數，改用預設值。",
       persistGenerateLabel: "文生圖",
       persistGenerateDesc: "記住上次的提示詞、尺寸、取樣參數等。",
       persistI2ILabel: "圖生圖",
@@ -1133,7 +1491,8 @@ const SETTINGS_SECTION_TEXT = {
       themeSystem: "System",
       workspaceLayout: "Workspace Layout",
       resetWorkspace: "Reset column widths",
-      workspaceHint: "Restore the left and right workspace columns to their defaults. You can also drag the splitters directly, double-click a splitter, or click its ⟲ control.",
+      workspaceHint:
+        "Restore the left and right workspace columns to their defaults. You can also drag the splitters directly, double-click a splitter, or click its ⟲ control.",
     },
     language: {
       language: "Interface language",
@@ -1141,17 +1500,23 @@ const SETTINGS_SECTION_TEXT = {
     },
     performance: {
       strategyTitle: "Execution Strategy",
-      strategyDesc: "This version runs one task at a time: batch generation calls the API image by image to avoid cancellation and history-write races.",
+      strategyDesc:
+        "This version runs one task at a time: batch generation calls the API image by image to avoid cancellation and history-write races.",
       superDropLabel: "Drop to center canvas",
-      superDropDesc: "Drop an image onto the center canvas to load it as the workspace image.",
+      superDropDesc:
+        "Drop an image onto the center canvas to load it as the workspace image.",
       persistSectionTitle: "Remember params across restarts",
-      persistSectionDesc: "All toggles below default on. Turning one off means that tool uses its built-in defaults next time you open the app instead of restoring what you last used.",
+      persistSectionDesc:
+        "All toggles below default on. Turning one off means that tool uses its built-in defaults next time you open the app instead of restoring what you last used.",
       persistGenerateLabel: "Text-to-image",
-      persistGenerateDesc: "Remember the last prompt, size, and sampling parameters.",
+      persistGenerateDesc:
+        "Remember the last prompt, size, and sampling parameters.",
       persistI2ILabel: "Image-to-image",
-      persistI2IDesc: "Remember the last Strength, Noise, and related parameters.",
+      persistI2IDesc:
+        "Remember the last Strength, Noise, and related parameters.",
       persistInpaintLabel: "Inpaint",
-      persistInpaintDesc: "Remember the last inpaint prompt, model, strength, and brush settings.",
+      persistInpaintDesc:
+        "Remember the last inpaint prompt, model, strength, and brush settings.",
       persistUpscaleLabel: "Upscale",
       persistUpscaleDesc: "Remember the last selected upscale factor.",
       persistDirectorLabel: "Post-processing",
@@ -1166,7 +1531,8 @@ const SETTINGS_SECTION_TEXT = {
       themeSystem: "システムに合わせる",
       workspaceLayout: "ワークスペース配置",
       resetWorkspace: "列幅を初期値に戻す",
-      workspaceHint: "左右の列幅を初期値に戻します。ワークスペースの区切り線をドラッグ、ダブルクリック、または ⟲ ボタンでも復元できます。",
+      workspaceHint:
+        "左右の列幅を初期値に戻します。ワークスペースの区切り線をドラッグ、ダブルクリック、または ⟲ ボタンでも復元できます。",
     },
     language: {
       language: "表示言語",
@@ -1174,17 +1540,22 @@ const SETTINGS_SECTION_TEXT = {
     },
     performance: {
       strategyTitle: "実行方式",
-      strategyDesc: "現在のバージョンは単一タスクを順番に実行します。バッチ生成は 1 枚ずつ API を呼び出し、キャンセルや履歴書き込みの競合を避けます。",
+      strategyDesc:
+        "現在のバージョンは単一タスクを順番に実行します。バッチ生成は 1 枚ずつ API を呼び出し、キャンセルや履歴書き込みの競合を避けます。",
       superDropLabel: "中央キャンバスへドロップ",
-      superDropDesc: "画像を中央キャンバスへドロップすると、ワークスペース画像として読み込みます。",
+      superDropDesc:
+        "画像を中央キャンバスへドロップすると、ワークスペース画像として読み込みます。",
       persistSectionTitle: "再起動後もパラメータを記憶",
-      persistSectionDesc: "以下のスイッチは既定ですべてオンです。オフにすると、そのツールは次回起動時に前回の設定を復元せず初期値を使用します。",
+      persistSectionDesc:
+        "以下のスイッチは既定ですべてオンです。オフにすると、そのツールは次回起動時に前回の設定を復元せず初期値を使用します。",
       persistGenerateLabel: "文生図",
-      persistGenerateDesc: "前回のプロンプト、サイズ、サンプリング設定を記憶します。",
+      persistGenerateDesc:
+        "前回のプロンプト、サイズ、サンプリング設定を記憶します。",
       persistI2ILabel: "画像から画像",
       persistI2IDesc: "前回の Strength、Noise などの設定を記憶します。",
       persistInpaintLabel: "部分修復（インペイント）",
-      persistInpaintDesc: "前回のインペイント用プロンプト、モデル、強度、ブラシ設定を記憶します。",
+      persistInpaintDesc:
+        "前回のインペイント用プロンプト、モデル、強度、ブラシ設定を記憶します。",
       persistUpscaleLabel: "アップスケール",
       persistUpscaleDesc: "前回選択した拡大倍率を記憶します。",
       persistDirectorLabel: "後処理",
@@ -1199,7 +1570,8 @@ const SETTINGS_SECTION_TEXT = {
       themeSystem: "시스템 설정",
       workspaceLayout: "작업공간 레이아웃",
       resetWorkspace: "열 너비 초기화",
-      workspaceHint: "왼쪽/오른쪽 작업공간 열 너비를 기본값으로 되돌립니다. 구분선을 드래그하거나 더블 클릭하거나 ⟲ 버튼을 눌러도 복원할 수 있습니다.",
+      workspaceHint:
+        "왼쪽/오른쪽 작업공간 열 너비를 기본값으로 되돌립니다. 구분선을 드래그하거나 더블 클릭하거나 ⟲ 버튼을 눌러도 복원할 수 있습니다.",
     },
     language: {
       language: "인터페이스 언어",
@@ -1207,55 +1579,62 @@ const SETTINGS_SECTION_TEXT = {
     },
     performance: {
       strategyTitle: "실행 방식",
-      strategyDesc: "현재 버전은 단일 작업을 순차 실행합니다. 배치 생성은 이미지를 한 장씩 API로 호출해 취소와 기록 저장 충돌을 피합니다.",
+      strategyDesc:
+        "현재 버전은 단일 작업을 순차 실행합니다. 배치 생성은 이미지를 한 장씩 API로 호출해 취소와 기록 저장 충돌을 피합니다.",
       superDropLabel: "중앙 캔버스 드롭 로드",
-      superDropDesc: "이미지를 중앙 캔버스에 드롭하면 작업공간 이미지로 불러옵니다.",
+      superDropDesc:
+        "이미지를 중앙 캔버스에 드롭하면 작업공간 이미지로 불러옵니다.",
       persistSectionTitle: "재시작 후에도 파라미터 기억",
-      persistSectionDesc: "아래 스위치는 기본적으로 모두 켜져 있습니다. 끄면 해당 도구는 다음 실행 시 마지막 설정을 복원하지 않고 기본값을 사용합니다.",
+      persistSectionDesc:
+        "아래 스위치는 기본적으로 모두 켜져 있습니다. 끄면 해당 도구는 다음 실행 시 마지막 설정을 복원하지 않고 기본값을 사용합니다.",
       persistGenerateLabel: "텍스트→이미지",
       persistGenerateDesc: "마지막 프롬프트, 크기, 샘플링 설정을 기억합니다.",
       persistI2ILabel: "이미지→이미지",
       persistI2IDesc: "마지막 Strength, Noise 등의 설정을 기억합니다.",
       persistInpaintLabel: "부분 리터치(인페인트)",
-      persistInpaintDesc: "마지막 인페인트 프롬프트, 모델, 강도, 브러시 설정을 기억합니다.",
+      persistInpaintDesc:
+        "마지막 인페인트 프롬프트, 모델, 강도, 브러시 설정을 기억합니다.",
       persistUpscaleLabel: "업스케일",
       persistUpscaleDesc: "마지막으로 선택한 업스케일 배율을 기억합니다.",
       persistDirectorLabel: "후처리",
       persistDirectorDesc: "마지막으로 선택한 도구와 설정을 기억합니다.",
     },
   },
-} satisfies Record<AppLanguage, {
-  appearance: Record<
-    | "theme"
-    | "themeLight"
-    | "themeDark"
-    | "themeSystem"
-    | "workspaceLayout"
-    | "resetWorkspace"
-    | "workspaceHint",
-    string
-  >;
-  language: Record<"language" | "hint", string>;
-  performance: Record<
-    | "strategyTitle"
-    | "strategyDesc"
-    | "superDropLabel"
-    | "superDropDesc"
-    | "persistSectionTitle"
-    | "persistSectionDesc"
-    | "persistGenerateLabel"
-    | "persistGenerateDesc"
-    | "persistI2ILabel"
-    | "persistI2IDesc"
-    | "persistInpaintLabel"
-    | "persistInpaintDesc"
-    | "persistUpscaleLabel"
-    | "persistUpscaleDesc"
-    | "persistDirectorLabel"
-    | "persistDirectorDesc",
-    string
-  >;
-}>;
+} satisfies Record<
+  AppLanguage,
+  {
+    appearance: Record<
+      | "theme"
+      | "themeLight"
+      | "themeDark"
+      | "themeSystem"
+      | "workspaceLayout"
+      | "resetWorkspace"
+      | "workspaceHint",
+      string
+    >;
+    language: Record<"language" | "hint", string>;
+    performance: Record<
+      | "strategyTitle"
+      | "strategyDesc"
+      | "superDropLabel"
+      | "superDropDesc"
+      | "persistSectionTitle"
+      | "persistSectionDesc"
+      | "persistGenerateLabel"
+      | "persistGenerateDesc"
+      | "persistI2ILabel"
+      | "persistI2IDesc"
+      | "persistInpaintLabel"
+      | "persistInpaintDesc"
+      | "persistUpscaleLabel"
+      | "persistUpscaleDesc"
+      | "persistDirectorLabel"
+      | "persistDirectorDesc",
+      string
+    >;
+  }
+>;
 
 export function getSettingsSectionText(language: unknown) {
   return SETTINGS_SECTION_TEXT[normalizeAppLanguage(language)];
@@ -1297,7 +1676,8 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "cost.beforeRun": "生成前扣费",
     "upscale.sizeEstimate": "输出尺寸预估",
     "upscale.preResize": "预缩至",
-    "upscale.resizeHint": "NovelAI 云端超分只接受约 1024×1024 等效面积以内的输入，程序会自动预缩后再超分。",
+    "upscale.resizeHint":
+      "NovelAI 云端超分只接受约 1024×1024 等效面积以内的输入，程序会自动预缩后再超分。",
     "upscale.run": "云端超分 {scale}×",
     "director.colorizePrompt": "Colorize Prompt（上色提示）",
     "director.colorizePlaceholder": "例如：blue dress, warm sunset light",
@@ -1305,8 +1685,10 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "director.emotionLevel": "Emotion Level（表情强度）",
     "director.defry": "Defry（去噪强度）",
     "director.sizeProtection": "后期尺寸保护",
-    "director.sizeProtectionPath": "{source} → 预缩至 {prepared} 处理 → 恢复到原尺寸保存",
-    "director.sizeProtectionHint": "大图或透明 PNG 直接送入后期接口容易返回 500，程序会自动转换为白底 PNG 并限制输入尺寸。",
+    "director.sizeProtectionPath":
+      "{source} → 预缩至 {prepared} 处理 → 恢复到原尺寸保存",
+    "director.sizeProtectionHint":
+      "大图或透明 PNG 直接送入后期接口容易返回 500，程序会自动转换为白底 PNG 并限制输入尺寸。",
     "director.run": "执行后期处理",
     "advanced.title": "高级参数",
     "advanced.steps": "Steps（采样步数）",
@@ -1344,18 +1726,22 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "reference.fidelity": "保真度 Fidelity",
     "reference.recommendedSize": "{source} → 推荐尺寸 {target}",
     "reference.sizeExact": "（已匹配，无留白）",
-    "reference.sizePadded": "（将缩放并填充约 {pad}% 白边；裁/缩到推荐尺寸可消除白边）",
+    "reference.sizePadded":
+      "（将缩放并填充约 {pad}% 白边；裁/缩到推荐尺寸可消除白边）",
     "reference.addVibe": "氛围迁移图",
     "reference.addPrecise": "精准参考图（V4.5）",
     "reference.clearAll": "清空所有",
     "reference.done": "完成",
-    "reference.preciseReadFailed": "无法读取精准参考图，请换用有效的 PNG、JPG 或 WebP 图片。",
+    "reference.preciseReadFailed":
+      "无法读取精准参考图，请换用有效的 PNG、JPG 或 WebP 图片。",
     "reference.preciseLoadFailed": "读取精准参考图失败，请重新选择图片。",
     "character.title": "角色提示词（Character Prompt）",
-    "character.unsupported": "角色提示词仅支持 V4 / V4.5 模型，当前模型不兼容，生成时将忽略角色设置。",
+    "character.unsupported":
+      "角色提示词仅支持 V4 / V4.5 模型，当前模型不兼容，生成时将忽略角色设置。",
     "character.label": "角色 {index}",
     "character.delete": "删除",
-    "character.placeholder": "输入该角色的提示词，例如：girl, blue dress, long hair",
+    "character.placeholder":
+      "输入该角色的提示词，例如：girl, blue dress, long hair",
     "character.useCoords": "指定角色位置（中心点，0 = 左/上，1 = 右/下）",
     "character.x": "X 位置（左→右）",
     "character.y": "Y 位置（上→下）",
@@ -1402,7 +1788,8 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "generate.batchCount": "批量生成数量",
     "generate.fileNamePrefix": "图片命名（文件名前缀，可留空）",
     "generate.fileNamePlaceholder": "例如：我的角色 → 我的角色_20260617_01.png",
-    "generate.wildcardHint": "支持动态提示词通配符 {example}，批量时每张随机取一项；NovelAI 的 {tag} 权重语法不受影响。",
+    "generate.wildcardHint":
+      "支持动态提示词通配符 {example}，批量时每张随机取一项；NovelAI 的 {tag} 权重语法不受影响。",
     "generate.run": "生成",
     "generate.batchRun": "批量生成 {count} 张",
     "i2i.strength": "Strength（改图强度）",
@@ -1422,7 +1809,8 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "prompt.unlockedToast": "已解锁",
     "prompt.emptyTranslate": "提示词为空，无需翻译",
     "prompt.alreadyEnglish": "当前提示词已是英文",
-    "prompt.translatePartialFailed": "部分内容翻译失败，已尽力转为英文；可点还原",
+    "prompt.translatePartialFailed":
+      "部分内容翻译失败，已尽力转为英文；可点还原",
     "prompt.translateDone": "已自动检测并转为英文，可点还原",
     "prompt.translateFailed": "翻译失败，请检查网络",
     "prompt.translateRestored": "已还原翻译前的提示词",
@@ -1441,7 +1829,8 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "normalize.option.keepWildcards": "保留 Wildcards 语法",
     "common.apply": "应用",
     "tagLibrary.title": "中文标签库（自动补全 / 灵感胶囊）",
-    "tagLibrary.downloadingToast": "正在下载中文标签库（约 7MB，每个标签均含中文）…",
+    "tagLibrary.downloadingToast":
+      "正在下载中文标签库（约 7MB，每个标签均含中文）…",
     "tagLibrary.downloaded": "已下载",
     "tagLibrary.itemCount": "{count} 条，均含中文",
     "tagLibrary.notDownloaded": "未下载（补全与灵感胶囊将使用内置精简词库）",
@@ -1487,7 +1876,8 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "cost.beforeRun": "生成前扣費",
     "upscale.sizeEstimate": "輸出尺寸預估",
     "upscale.preResize": "預縮至",
-    "upscale.resizeHint": "NovelAI 雲端超分只接受約 1024×1024 等效面積以內的輸入，程式會自動預縮後再超分。",
+    "upscale.resizeHint":
+      "NovelAI 雲端超分只接受約 1024×1024 等效面積以內的輸入，程式會自動預縮後再超分。",
     "upscale.run": "雲端超分 {scale}×",
     "director.colorizePrompt": "Colorize Prompt（上色提示）",
     "director.colorizePlaceholder": "例如：blue dress, warm sunset light",
@@ -1495,8 +1885,10 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "director.emotionLevel": "Emotion Level（表情強度）",
     "director.defry": "Defry（去噪強度）",
     "director.sizeProtection": "後期尺寸保護",
-    "director.sizeProtectionPath": "{source} → 預縮至 {prepared} 處理 → 恢復到原尺寸保存",
-    "director.sizeProtectionHint": "大圖或透明 PNG 直接送入後期介面容易返回 500，程式會自動轉換為白底 PNG 並限制輸入尺寸。",
+    "director.sizeProtectionPath":
+      "{source} → 預縮至 {prepared} 處理 → 恢復到原尺寸保存",
+    "director.sizeProtectionHint":
+      "大圖或透明 PNG 直接送入後期介面容易返回 500，程式會自動轉換為白底 PNG 並限制輸入尺寸。",
     "director.run": "執行後期處理",
     "advanced.title": "進階參數",
     "advanced.steps": "Steps（採樣步數）",
@@ -1534,18 +1926,22 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "reference.fidelity": "保真度 Fidelity",
     "reference.recommendedSize": "{source} → 推薦尺寸 {target}",
     "reference.sizeExact": "（已匹配，無留白）",
-    "reference.sizePadded": "（將縮放並填充約 {pad}% 白邊；裁/縮到推薦尺寸可消除白邊）",
+    "reference.sizePadded":
+      "（將縮放並填充約 {pad}% 白邊；裁/縮到推薦尺寸可消除白邊）",
     "reference.addVibe": "氛圍遷移圖",
     "reference.addPrecise": "精準參考圖（V4.5）",
     "reference.clearAll": "清空所有",
     "reference.done": "完成",
-    "reference.preciseReadFailed": "無法讀取精準參考圖，請換用有效的 PNG、JPG 或 WebP 圖片。",
+    "reference.preciseReadFailed":
+      "無法讀取精準參考圖，請換用有效的 PNG、JPG 或 WebP 圖片。",
     "reference.preciseLoadFailed": "讀取精準參考圖失敗，請重新選擇圖片。",
     "character.title": "角色提示詞（Character Prompt）",
-    "character.unsupported": "角色提示詞僅支援 V4 / V4.5 模型，目前模型不相容，生成時將忽略角色設定。",
+    "character.unsupported":
+      "角色提示詞僅支援 V4 / V4.5 模型，目前模型不相容，生成時將忽略角色設定。",
     "character.label": "角色 {index}",
     "character.delete": "刪除",
-    "character.placeholder": "輸入該角色的提示詞，例如：girl, blue dress, long hair",
+    "character.placeholder":
+      "輸入該角色的提示詞，例如：girl, blue dress, long hair",
     "character.useCoords": "指定角色位置（中心點，0 = 左/上，1 = 右/下）",
     "character.x": "X 位置（左→右）",
     "character.y": "Y 位置（上→下）",
@@ -1592,7 +1988,8 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "generate.batchCount": "批次生成數量",
     "generate.fileNamePrefix": "圖片命名（檔名前綴，可留空）",
     "generate.fileNamePlaceholder": "例如：我的角色 → 我的角色_20260617_01.png",
-    "generate.wildcardHint": "支援動態提示詞通配符 {example}，批次時每張隨機取一項；NovelAI 的 {tag} 權重語法不受影響。",
+    "generate.wildcardHint":
+      "支援動態提示詞通配符 {example}，批次時每張隨機取一項；NovelAI 的 {tag} 權重語法不受影響。",
     "generate.run": "生成",
     "generate.batchRun": "批次生成 {count} 張",
     "i2i.strength": "Strength（改圖強度）",
@@ -1612,7 +2009,8 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "prompt.unlockedToast": "已解鎖",
     "prompt.emptyTranslate": "提示詞為空，無需翻譯",
     "prompt.alreadyEnglish": "目前提示詞已是英文",
-    "prompt.translatePartialFailed": "部分內容翻譯失敗，已盡力轉為英文；可點還原",
+    "prompt.translatePartialFailed":
+      "部分內容翻譯失敗，已盡力轉為英文；可點還原",
     "prompt.translateDone": "已自動偵測並轉為英文，可點還原",
     "prompt.translateFailed": "翻譯失敗，請檢查網路",
     "prompt.translateRestored": "已還原翻譯前的提示詞",
@@ -1631,7 +2029,8 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "normalize.option.keepWildcards": "保留 Wildcards 語法",
     "common.apply": "套用",
     "tagLibrary.title": "中文標籤庫（自動補全 / 靈感膠囊）",
-    "tagLibrary.downloadingToast": "正在下載中文標籤庫（約 7MB，每個標籤均含中文）…",
+    "tagLibrary.downloadingToast":
+      "正在下載中文標籤庫（約 7MB，每個標籤均含中文）…",
     "tagLibrary.downloaded": "已下載",
     "tagLibrary.itemCount": "{count} 條，均含中文",
     "tagLibrary.notDownloaded": "未下載（補全與靈感膠囊將使用內建精簡詞庫）",
@@ -1648,12 +2047,14 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "common.unknown": "Unknown",
     "common.loading": "Loading…",
     "inpaint.dropToLoad": "Release to load image",
-    "inpaint.empty": "Click “Load image” on the left, then paint the inpaint mask here.",
+    "inpaint.empty":
+      "Click “Load image” on the left, then paint the inpaint mask here.",
     "inpaint.undo": "Undo",
     "inpaint.undoTitle": "Undo last stroke",
     "inpaint.redo": "Redo",
     "inpaint.redoTitle": "Redo next stroke",
-    "inpaint.previewMaskTitle": "Preview the binary mask that will be sent to NovelAI",
+    "inpaint.previewMaskTitle":
+      "Preview the binary mask that will be sent to NovelAI",
     "inpaint.backToPaint": "Back to paint view",
     "inpaint.previewMask": "Preview sent mask",
     "inpaint.compareTitle": "Drag the divider to compare before and after",
@@ -1666,7 +2067,8 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "inpaint.dividerLabel": "Drag to compare before and after",
     "inpaint.maskPreviewAlt": "Binary mask preview for NovelAI",
     "inpaint.model": "Inpaint model",
-    "inpaint.strength": "Inpaint strength (1 = fully follow prompt; lower keeps closer to source)",
+    "inpaint.strength":
+      "Inpaint strength (1 = fully follow prompt; lower keeps closer to source)",
     "inpaint.noise": "Inpaint noise (usually keep 0)",
     "inpaint.brushSize": "Round brush size",
     "inpaint.brushOpacity": "Brush opacity (visual preview only)",
@@ -1677,7 +2079,8 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "cost.beforeRun": "Pre-run cost",
     "upscale.sizeEstimate": "Estimated output size",
     "upscale.preResize": "pre-resize to",
-    "upscale.resizeHint": "NovelAI cloud upscale only accepts inputs around 1024×1024 effective area. The app will downscale first, then upscale.",
+    "upscale.resizeHint":
+      "NovelAI cloud upscale only accepts inputs around 1024×1024 effective area. The app will downscale first, then upscale.",
     "upscale.run": "Cloud upscale {scale}×",
     "director.colorizePrompt": "Colorize Prompt",
     "director.colorizePlaceholder": "e.g. blue dress, warm sunset light",
@@ -1685,8 +2088,10 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "director.emotionLevel": "Emotion Level",
     "director.defry": "Defry",
     "director.sizeProtection": "Post-process size protection",
-    "director.sizeProtectionPath": "{source} → downscale to {prepared} → restore original size after processing",
-    "director.sizeProtectionHint": "Large images or transparent PNGs may return 500 from the post-process API. The app flattens to white PNG and limits input size automatically.",
+    "director.sizeProtectionPath":
+      "{source} → downscale to {prepared} → restore original size after processing",
+    "director.sizeProtectionHint":
+      "Large images or transparent PNGs may return 500 from the post-process API. The app flattens to white PNG and limits input size automatically.",
     "director.run": "Run post-process",
     "advanced.title": "Advanced Parameters",
     "advanced.steps": "Steps",
@@ -1696,7 +2101,8 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "advanced.noiseSchedule": "Noise Schedule",
     "advanced.ucPreset": "UC Preset",
     "advanced.qualityToggle": "Quality Toggle",
-    "advanced.qualityToggleDesc": "Automatically append NovelAI’s common quality tags.",
+    "advanced.qualityToggleDesc":
+      "Automatically append NovelAI’s common quality tags.",
     "advanced.smea": "SMEA",
     "advanced.smeaDesc": "Only available for V3-era and older models.",
     "advanced.smeaDyn": "SMEA Dyn",
@@ -1711,7 +2117,8 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "reference.strength": "Reference strength",
     "reference.remove": "Remove",
     "reference.preciseTitle": "Precise Reference",
-    "reference.preciseUnsupported": " · V4.5 models only; the current model does not support this",
+    "reference.preciseUnsupported":
+      " · V4.5 models only; the current model does not support this",
     "reference.preciseHint":
       "Any size is accepted: the app follows the official strategy, scaling proportionally and adding white padding to the nearest official size (1024×1536 / 1472×1472 / 1536×1024). Transparent RGBA images are flattened on white first. Use a similar aspect ratio to reduce padding; choose “Character” when you want character identity rather than art style.",
     "reference.emptyPrecise": "No precise reference images yet.",
@@ -1724,19 +2131,25 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "reference.fidelity": "Fidelity",
     "reference.recommendedSize": "{source} → recommended {target}",
     "reference.sizeExact": "(already matches; no padding)",
-    "reference.sizePadded": "(will scale and add about {pad}% white padding; crop/resize to the recommended size to avoid padding)",
+    "reference.sizePadded":
+      "(will scale and add about {pad}% white padding; crop/resize to the recommended size to avoid padding)",
     "reference.addVibe": "Vibe image",
     "reference.addPrecise": "Precise reference (V4.5)",
     "reference.clearAll": "Clear all",
     "reference.done": "Done",
-    "reference.preciseReadFailed": "Could not read the precise reference image. Please use a valid PNG, JPG, or WebP image.",
-    "reference.preciseLoadFailed": "Failed to read the precise reference image. Please choose it again.",
+    "reference.preciseReadFailed":
+      "Could not read the precise reference image. Please use a valid PNG, JPG, or WebP image.",
+    "reference.preciseLoadFailed":
+      "Failed to read the precise reference image. Please choose it again.",
     "character.title": "Character Prompt",
-    "character.unsupported": "Character prompts only support V4 / V4.5 models. The current model is incompatible, so character settings will be ignored during generation.",
+    "character.unsupported":
+      "Character prompts only support V4 / V4.5 models. The current model is incompatible, so character settings will be ignored during generation.",
     "character.label": "Character {index}",
     "character.delete": "Delete",
-    "character.placeholder": "Enter this character’s prompt, e.g. girl, blue dress, long hair",
-    "character.useCoords": "Specify character position (center point, 0 = left/top, 1 = right/bottom)",
+    "character.placeholder":
+      "Enter this character’s prompt, e.g. girl, blue dress, long hair",
+    "character.useCoords":
+      "Specify character position (center point, 0 = left/top, 1 = right/bottom)",
     "character.x": "X position (left → right)",
     "character.y": "Y position (top → bottom)",
     "character.add": "Add character",
@@ -1748,7 +2161,8 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "workbench.load": "Load image...",
     "workbench.dropHint": "Drop an image here to load it",
     "cost.official": "NovelAI official quote API (actual charge)",
-    "cost.estimateFormula": "Local estimate (official web formula, not actual charge)",
+    "cost.estimateFormula":
+      "Local estimate (official web formula, not actual charge)",
     "cost.estimateFixed": "Local estimate (fixed rule, not actual charge)",
     "cost.readingHint": "Read the cost estimate for the current settings",
     "cost.zero": "This run: 0 Anlas",
@@ -1762,7 +2176,8 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "cost.actualHint": "After running, the balance delta will be checked again",
     "cost.balance": "Balance: {balance} Anlas",
     "cost.cached": " (cached)",
-    "cost.insufficient": " · balance may be insufficient, but you can still try",
+    "cost.insufficient":
+      " · balance may be insufficient, but you can still try",
     "account.configured": "API configured",
     "account.notSet": "API not set",
     "account.anlas": "Anlas: {balance}",
@@ -1781,8 +2196,10 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "account.lastSpent": "Last actual spend: {amount} Anlas",
     "generate.batchCount": "Batch count",
     "generate.fileNamePrefix": "Image naming (file prefix, optional)",
-    "generate.fileNamePlaceholder": "e.g. My Character → My Character_20260617_01.png",
-    "generate.wildcardHint": "Supports dynamic prompt wildcards {example}; each batch image picks one option randomly. NovelAI {tag} weight syntax is unaffected.",
+    "generate.fileNamePlaceholder":
+      "e.g. My Character → My Character_20260617_01.png",
+    "generate.wildcardHint":
+      "Supports dynamic prompt wildcards {example}; each batch image picks one option randomly. NovelAI {tag} weight syntax is unaffected.",
     "generate.run": "Generate",
     "generate.batchRun": "Generate {count} images",
     "i2i.strength": "Strength",
@@ -1798,12 +2215,15 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "prompt.autocompleteOffToast": "Input autocomplete disabled",
     "prompt.modeFurryToast": "Switched to Furry mode",
     "prompt.modeAnimeToast": "Switched to Anime mode",
-    "prompt.lockedToast": "Locked and saved as default; resets/templates will not change it",
+    "prompt.lockedToast":
+      "Locked and saved as default; resets/templates will not change it",
     "prompt.unlockedToast": "Unlocked",
     "prompt.emptyTranslate": "Prompt is empty; no translation needed",
     "prompt.alreadyEnglish": "The current prompt is already English",
-    "prompt.translatePartialFailed": "Some segments failed; translated what could be detected to English. You can revert.",
-    "prompt.translateDone": "Auto-detected the source language and translated to English. You can revert.",
+    "prompt.translatePartialFailed":
+      "Some segments failed; translated what could be detected to English. You can revert.",
+    "prompt.translateDone":
+      "Auto-detected the source language and translated to English. You can revert.",
     "prompt.translateFailed": "Translation failed. Check your network.",
     "prompt.translateRestored": "Restored the prompt before translation",
     "prompt.normalizedToast": "Prompt normalized",
@@ -1815,16 +2235,20 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "normalize.option.stripDecorative": "Remove decorative symbols (【】「」)",
     "normalize.option.underscoreToSpace": "Convert underscores to spaces",
     "normalize.option.newlineToComma": "Convert newlines to commas",
-    "normalize.option.stripQualityPrefix": "Remove common quality / artist prefixes",
+    "normalize.option.stripQualityPrefix":
+      "Remove common quality / artist prefixes",
     "normalize.option.stripNonAscii": "Remove non-ASCII characters",
     "normalize.option.dedupe": "Remove duplicate tags",
     "normalize.option.keepWildcards": "Keep Wildcards syntax",
     "common.apply": "Apply",
-    "tagLibrary.title": "Chinese tag library (autocomplete / inspiration capsule)",
-    "tagLibrary.downloadingToast": "Downloading Chinese tag library (~7 MB; every tag includes Chinese)…",
+    "tagLibrary.title":
+      "Chinese tag library (autocomplete / inspiration capsule)",
+    "tagLibrary.downloadingToast":
+      "Downloading Chinese tag library (~7 MB; every tag includes Chinese)…",
     "tagLibrary.downloaded": "Downloaded",
     "tagLibrary.itemCount": "{count} items, all with Chinese labels",
-    "tagLibrary.notDownloaded": "Not downloaded (autocomplete and capsules will use the built-in compact library)",
+    "tagLibrary.notDownloaded":
+      "Not downloaded (autocomplete and capsules will use the built-in compact library)",
     "tagLibrary.hint":
       "Source: DanbooruSearchOnline (GPL-3.0, pinned version). It is downloaded separately and not bundled. After download, Chinese or English autocomplete and popularity display are available.",
     "tagLibrary.downloading": "Downloading…",
@@ -1838,7 +2262,8 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "common.unknown": "不明",
     "common.loading": "読み込み中…",
     "inpaint.dropToLoad": "離すと画像を読み込みます",
-    "inpaint.empty": "左側の「画像を読み込み」をクリックすると、ここで部分再描画マスクを描けます。",
+    "inpaint.empty":
+      "左側の「画像を読み込み」をクリックすると、ここで部分再描画マスクを描けます。",
     "inpaint.undo": "元に戻す",
     "inpaint.undoTitle": "一つ前に戻す",
     "inpaint.redo": "やり直し",
@@ -1856,7 +2281,8 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "inpaint.dividerLabel": "ドラッグして再描画前後を比較",
     "inpaint.maskPreviewAlt": "NovelAI に送る二値マスクのプレビュー",
     "inpaint.model": "再描画モデル",
-    "inpaint.strength": "再描画強度（1=プロンプト通りに再描画、低いほど元画像寄り）",
+    "inpaint.strength":
+      "再描画強度（1=プロンプト通りに再描画、低いほど元画像寄り）",
     "inpaint.noise": "再描画ノイズ（通常は 0）",
     "inpaint.brushSize": "丸ブラシサイズ",
     "inpaint.brushOpacity": "ブラシ不透明度（表示のみ）",
@@ -1867,7 +2293,8 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "cost.beforeRun": "生成前コスト",
     "upscale.sizeEstimate": "出力サイズ見積もり",
     "upscale.preResize": "事前縮小",
-    "upscale.resizeHint": "NovelAI クラウド拡大は約 1024×1024 相当までの入力を受け付けます。アプリが先に縮小してから拡大します。",
+    "upscale.resizeHint":
+      "NovelAI クラウド拡大は約 1024×1024 相当までの入力を受け付けます。アプリが先に縮小してから拡大します。",
     "upscale.run": "クラウド拡大 {scale}×",
     "director.colorizePrompt": "Colorize Prompt（彩色プロンプト）",
     "director.colorizePlaceholder": "例：blue dress, warm sunset light",
@@ -1875,8 +2302,10 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "director.emotionLevel": "Emotion Level（表情強度）",
     "director.defry": "Defry（ノイズ除去強度）",
     "director.sizeProtection": "後処理サイズ保護",
-    "director.sizeProtectionPath": "{source} → {prepared} へ事前縮小 → 処理後に元サイズへ復元",
-    "director.sizeProtectionHint": "大きい画像や透明 PNG は後処理 API で 500 になりやすいため、白背景 PNG に変換し入力サイズを自動制限します。",
+    "director.sizeProtectionPath":
+      "{source} → {prepared} へ事前縮小 → 処理後に元サイズへ復元",
+    "director.sizeProtectionHint":
+      "大きい画像や透明 PNG は後処理 API で 500 になりやすいため、白背景 PNG に変換し入力サイズを自動制限します。",
     "director.run": "後処理を実行",
     "advanced.title": "詳細パラメータ",
     "advanced.steps": "Steps（サンプリング数）",
@@ -1886,7 +2315,8 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "advanced.noiseSchedule": "Noise Schedule",
     "advanced.ucPreset": "UC Preset",
     "advanced.qualityToggle": "Quality Toggle（品質タグ）",
-    "advanced.qualityToggleDesc": "公式でよく使われる品質プロンプトを自動追加します。",
+    "advanced.qualityToggleDesc":
+      "公式でよく使われる品質プロンプトを自動追加します。",
     "advanced.smea": "SMEA（高度サンプリング）",
     "advanced.smeaDesc": "V3 以前のモデルでのみ利用できます。",
     "advanced.smeaDyn": "SMEA Dyn（動的 SMEA）",
@@ -1901,7 +2331,8 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "reference.strength": "参照強度",
     "reference.remove": "削除",
     "reference.preciseTitle": "精密参照（Precise Reference）",
-    "reference.preciseUnsupported": " · V4.5 モデルのみ有効です。現在のモデルは未対応",
+    "reference.preciseUnsupported":
+      " · V4.5 モデルのみ有効です。現在のモデルは未対応",
     "reference.preciseHint":
       "任意のサイズを利用できます。アプリは公式方式に合わせて等比縮小し、最も近い公式サイズ（1024×1536 / 1472×1472 / 1536×1024）へ白余白で埋めます。RGBA 透明画像は先に白背景へ合成します。余白を減らすには近い比率の画像を使い、画風ではなくキャラクターを参照したい場合は種類を「キャラクター」にしてください。",
     "reference.emptyPrecise": "精密参照画像はまだありません。",
@@ -1914,19 +2345,25 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "reference.fidelity": "忠実度 Fidelity",
     "reference.recommendedSize": "{source} → 推奨サイズ {target}",
     "reference.sizeExact": "（一致済み、余白なし）",
-    "reference.sizePadded": "（約 {pad}% の白余白を追加。推奨サイズへ切り抜き/縮小すると余白をなくせます）",
+    "reference.sizePadded":
+      "（約 {pad}% の白余白を追加。推奨サイズへ切り抜き/縮小すると余白をなくせます）",
     "reference.addVibe": "Vibe 画像",
     "reference.addPrecise": "精密参照画像（V4.5）",
     "reference.clearAll": "すべてクリア",
     "reference.done": "完了",
-    "reference.preciseReadFailed": "精密参照画像を読み込めません。PNG、JPG、WebP の有効な画像を使用してください。",
-    "reference.preciseLoadFailed": "精密参照画像の読み込みに失敗しました。もう一度選択してください。",
+    "reference.preciseReadFailed":
+      "精密参照画像を読み込めません。PNG、JPG、WebP の有効な画像を使用してください。",
+    "reference.preciseLoadFailed":
+      "精密参照画像の読み込みに失敗しました。もう一度選択してください。",
     "character.title": "キャラクタープロンプト",
-    "character.unsupported": "キャラクタープロンプトは V4 / V4.5 モデルのみ対応です。現在のモデルでは生成時にキャラクター設定が無視されます。",
+    "character.unsupported":
+      "キャラクタープロンプトは V4 / V4.5 モデルのみ対応です。現在のモデルでは生成時にキャラクター設定が無視されます。",
     "character.label": "キャラクター {index}",
     "character.delete": "削除",
-    "character.placeholder": "このキャラクターのプロンプトを入力。例：girl, blue dress, long hair",
-    "character.useCoords": "キャラクター位置を指定（中心点、0 = 左/上、1 = 右/下）",
+    "character.placeholder":
+      "このキャラクターのプロンプトを入力。例：girl, blue dress, long hair",
+    "character.useCoords":
+      "キャラクター位置を指定（中心点、0 = 左/上、1 = 右/下）",
     "character.x": "X 位置（左→右）",
     "character.y": "Y 位置（上→下）",
     "character.add": "キャラクターを追加",
@@ -1971,8 +2408,10 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "account.lastSpent": "前回の実課金 {amount} Anlas",
     "generate.batchCount": "一括生成枚数",
     "generate.fileNamePrefix": "画像名（ファイル名プレフィックス、省略可）",
-    "generate.fileNamePlaceholder": "例：My Character → My Character_20260617_01.png",
-    "generate.wildcardHint": "動的プロンプトワイルドカード {example} に対応。一括時は各画像でランダムに選択されます。NovelAI の {tag} 重み構文には影響しません。",
+    "generate.fileNamePlaceholder":
+      "例：My Character → My Character_20260617_01.png",
+    "generate.wildcardHint":
+      "動的プロンプトワイルドカード {example} に対応。一括時は各画像でランダムに選択されます。NovelAI の {tag} 重み構文には影響しません。",
     "generate.run": "生成",
     "generate.batchRun": "{count} 枚を一括生成",
     "i2i.strength": "Strength（変化強度）",
@@ -1980,7 +2419,8 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "i2i.extraNoiseSeed": "Extra Noise Seed（0 = ランダム）",
     "i2i.run": "画像から画像",
     "prompt.templateApplied": "テンプレート「{name}」を適用しました",
-    "prompt.stylePresetNeedPrompt": "保存する前にスタイルプロンプトを入力してください。",
+    "prompt.stylePresetNeedPrompt":
+      "保存する前にスタイルプロンプトを入力してください。",
     "prompt.stylePresetSaved": "スタイル「{name}」を保存しました。",
     "prompt.stylePresetDeleted": "スタイル「{name}」を削除しました。",
     "prompt.stylePresetApplied": "スタイル「{name}」に切り替えました。",
@@ -1988,13 +2428,17 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "prompt.autocompleteOffToast": "入力補完を無効にしました",
     "prompt.modeFurryToast": "Furry モードに切り替えました",
     "prompt.modeAnimeToast": "アニメモードに切り替えました",
-    "prompt.lockedToast": "ロックして既定値として保存しました（リセット/テンプレートでは変更されません）",
+    "prompt.lockedToast":
+      "ロックして既定値として保存しました（リセット/テンプレートでは変更されません）",
     "prompt.unlockedToast": "ロック解除しました",
     "prompt.emptyTranslate": "プロンプトが空です。翻訳不要です",
     "prompt.alreadyEnglish": "現在のプロンプトはすでに英語です",
-    "prompt.translatePartialFailed": "一部の内容の翻訳に失敗しました。可能な範囲で英語へ変換済みです。元に戻せます",
-    "prompt.translateDone": "言語を自動判別して英語へ変換しました。元に戻せます",
-    "prompt.translateFailed": "翻訳に失敗しました。ネットワークを確認してください",
+    "prompt.translatePartialFailed":
+      "一部の内容の翻訳に失敗しました。可能な範囲で英語へ変換済みです。元に戻せます",
+    "prompt.translateDone":
+      "言語を自動判別して英語へ変換しました。元に戻せます",
+    "prompt.translateFailed":
+      "翻訳に失敗しました。ネットワークを確認してください",
     "prompt.translateRestored": "翻訳前のプロンプトに戻しました",
     "prompt.normalizedToast": "プロンプトを標準化しました",
     "normalize.title": "プロンプト標準化",
@@ -2010,11 +2454,14 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "normalize.option.dedupe": "重複タグを削除",
     "normalize.option.keepWildcards": "Wildcards 構文を保持",
     "common.apply": "適用",
-    "tagLibrary.title": "中国語タグライブラリ（自動補完 / インスピレーションカプセル）",
-    "tagLibrary.downloadingToast": "中国語タグライブラリをダウンロード中（約 7MB、全タグに中国語付き）…",
+    "tagLibrary.title":
+      "中国語タグライブラリ（自動補完 / インスピレーションカプセル）",
+    "tagLibrary.downloadingToast":
+      "中国語タグライブラリをダウンロード中（約 7MB、全タグに中国語付き）…",
     "tagLibrary.downloaded": "ダウンロード済み",
     "tagLibrary.itemCount": "{count} 件、すべて中国語ラベル付き",
-    "tagLibrary.notDownloaded": "未ダウンロード（補完とカプセルは内蔵の簡易ライブラリを使用）",
+    "tagLibrary.notDownloaded":
+      "未ダウンロード（補完とカプセルは内蔵の簡易ライブラリを使用）",
     "tagLibrary.hint":
       "出典は DanbooruSearchOnline（GPL-3.0、固定バージョン）です。別途ダウンロードし、アプリには同梱しません。ダウンロード後は中国語/英語の補完と人気度表示が使えます。",
     "tagLibrary.downloading": "ダウンロード中…",
@@ -2028,7 +2475,8 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "common.unknown": "알 수 없음",
     "common.loading": "불러오는 중…",
     "inpaint.dropToLoad": "놓으면 이미지를 불러옵니다",
-    "inpaint.empty": "왼쪽에서 “이미지 불러오기”를 누른 뒤 여기에서 부분 리드로우 마스크를 그릴 수 있습니다.",
+    "inpaint.empty":
+      "왼쪽에서 “이미지 불러오기”를 누른 뒤 여기에서 부분 리드로우 마스크를 그릴 수 있습니다.",
     "inpaint.undo": "되돌리기",
     "inpaint.undoTitle": "이전 단계로 되돌리기",
     "inpaint.redo": "다시 실행",
@@ -2046,7 +2494,8 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "inpaint.dividerLabel": "드래그해 리드로우 전후 비교",
     "inpaint.maskPreviewAlt": "NovelAI 로 보낼 이진 마스크 미리보기",
     "inpaint.model": "리드로우 모델",
-    "inpaint.strength": "리드로우 강도(1=프롬프트대로 다시 그림, 낮을수록 원본 유지)",
+    "inpaint.strength":
+      "리드로우 강도(1=프롬프트대로 다시 그림, 낮을수록 원본 유지)",
     "inpaint.noise": "리드로우 노이즈(보통 0 유지)",
     "inpaint.brushSize": "원형 브러시 크기",
     "inpaint.brushOpacity": "브러시 불투명도(화면 표시만 영향)",
@@ -2057,7 +2506,8 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "cost.beforeRun": "생성 전 비용",
     "upscale.sizeEstimate": "출력 크기 예상",
     "upscale.preResize": "사전 축소",
-    "upscale.resizeHint": "NovelAI 클라우드 업스케일은 약 1024×1024 유효 면적 이하의 입력만 받습니다. 앱이 먼저 축소한 뒤 업스케일합니다.",
+    "upscale.resizeHint":
+      "NovelAI 클라우드 업스케일은 약 1024×1024 유효 면적 이하의 입력만 받습니다. 앱이 먼저 축소한 뒤 업스케일합니다.",
     "upscale.run": "클라우드 업스케일 {scale}×",
     "director.colorizePrompt": "Colorize Prompt(채색 프롬프트)",
     "director.colorizePlaceholder": "예: blue dress, warm sunset light",
@@ -2065,8 +2515,10 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "director.emotionLevel": "Emotion Level(표정 강도)",
     "director.defry": "Defry(노이즈 제거 강도)",
     "director.sizeProtection": "후처리 크기 보호",
-    "director.sizeProtectionPath": "{source} → {prepared}로 사전 축소 → 처리 후 원본 크기로 복원",
-    "director.sizeProtectionHint": "큰 이미지나 투명 PNG는 후처리 API에서 500을 반환하기 쉬워 앱이 흰 배경 PNG로 변환하고 입력 크기를 자동 제한합니다.",
+    "director.sizeProtectionPath":
+      "{source} → {prepared}로 사전 축소 → 처리 후 원본 크기로 복원",
+    "director.sizeProtectionHint":
+      "큰 이미지나 투명 PNG는 후처리 API에서 500을 반환하기 쉬워 앱이 흰 배경 PNG로 변환하고 입력 크기를 자동 제한합니다.",
     "director.run": "후처리 실행",
     "advanced.title": "고급 매개변수",
     "advanced.steps": "Steps(샘플링 스텝)",
@@ -2076,7 +2528,8 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "advanced.noiseSchedule": "Noise Schedule",
     "advanced.ucPreset": "UC Preset",
     "advanced.qualityToggle": "Quality Toggle(품질 태그)",
-    "advanced.qualityToggleDesc": "공식에서 자주 쓰는 품질 프롬프트를 자동 추가합니다.",
+    "advanced.qualityToggleDesc":
+      "공식에서 자주 쓰는 품질 프롬프트를 자동 추가합니다.",
     "advanced.smea": "SMEA(고급 샘플링)",
     "advanced.smeaDesc": "V3 및 이전 모델에서만 사용할 수 있습니다.",
     "advanced.smeaDyn": "SMEA Dyn(동적 SMEA)",
@@ -2091,7 +2544,8 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "reference.strength": "참조 강도",
     "reference.remove": "제거",
     "reference.preciseTitle": "정밀 참조(Precise Reference)",
-    "reference.preciseUnsupported": " · V4.5 모델에서만 작동하며 현재 모델은 지원하지 않습니다",
+    "reference.preciseUnsupported":
+      " · V4.5 모델에서만 작동하며 현재 모델은 지원하지 않습니다",
     "reference.preciseHint":
       "모든 크기를 사용할 수 있습니다. 앱이 공식 전략에 맞춰 비율을 유지해 축소하고 가장 가까운 공식 크기(1024×1536 / 1472×1472 / 1536×1024)에 흰 여백을 채웁니다. RGBA 투명 이미지는 먼저 흰 배경으로 합성합니다. 여백을 줄이려면 세 비율 중 하나에 가까운 참고 이미지를 쓰고, 화풍보다 캐릭터를 원하면 유형을 “캐릭터”로 선택하세요.",
     "reference.emptyPrecise": "아직 정밀 참조 이미지가 없습니다.",
@@ -2104,19 +2558,25 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "reference.fidelity": "충실도 Fidelity",
     "reference.recommendedSize": "{source} → 권장 크기 {target}",
     "reference.sizeExact": "(이미 일치, 여백 없음)",
-    "reference.sizePadded": "(약 {pad}% 흰 여백을 채움; 권장 크기로 자르거나 축소하면 여백을 없앨 수 있음)",
+    "reference.sizePadded":
+      "(약 {pad}% 흰 여백을 채움; 권장 크기로 자르거나 축소하면 여백을 없앨 수 있음)",
     "reference.addVibe": "Vibe 이미지",
     "reference.addPrecise": "정밀 참조 이미지(V4.5)",
     "reference.clearAll": "모두 비우기",
     "reference.done": "완료",
-    "reference.preciseReadFailed": "정밀 참조 이미지를 읽을 수 없습니다. 올바른 PNG, JPG, WebP 이미지를 사용하세요.",
-    "reference.preciseLoadFailed": "정밀 참조 이미지 읽기에 실패했습니다. 이미지를 다시 선택하세요.",
+    "reference.preciseReadFailed":
+      "정밀 참조 이미지를 읽을 수 없습니다. 올바른 PNG, JPG, WebP 이미지를 사용하세요.",
+    "reference.preciseLoadFailed":
+      "정밀 참조 이미지 읽기에 실패했습니다. 이미지를 다시 선택하세요.",
     "character.title": "캐릭터 프롬프트",
-    "character.unsupported": "캐릭터 프롬프트는 V4 / V4.5 모델에서만 지원됩니다. 현재 모델은 호환되지 않아 생성 시 캐릭터 설정이 무시됩니다.",
+    "character.unsupported":
+      "캐릭터 프롬프트는 V4 / V4.5 모델에서만 지원됩니다. 현재 모델은 호환되지 않아 생성 시 캐릭터 설정이 무시됩니다.",
     "character.label": "캐릭터 {index}",
     "character.delete": "삭제",
-    "character.placeholder": "이 캐릭터의 프롬프트를 입력하세요. 예: girl, blue dress, long hair",
-    "character.useCoords": "캐릭터 위치 지정(중심점, 0 = 왼쪽/위, 1 = 오른쪽/아래)",
+    "character.placeholder":
+      "이 캐릭터의 프롬프트를 입력하세요. 예: girl, blue dress, long hair",
+    "character.useCoords":
+      "캐릭터 위치 지정(중심점, 0 = 왼쪽/위, 1 = 오른쪽/아래)",
     "character.x": "X 위치(왼쪽→오른쪽)",
     "character.y": "Y 위치(위→아래)",
     "character.add": "캐릭터 추가",
@@ -2161,8 +2621,10 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "account.lastSpent": "지난 실제 차감 {amount} Anlas",
     "generate.batchCount": "배치 생성 수",
     "generate.fileNamePrefix": "이미지 이름(파일 접두사, 선택)",
-    "generate.fileNamePlaceholder": "예: My Character → My Character_20260617_01.png",
-    "generate.wildcardHint": "동적 프롬프트 와일드카드 {example} 지원. 배치에서는 이미지마다 하나를 무작위 선택합니다. NovelAI {tag} 가중치 문법은 영향받지 않습니다.",
+    "generate.fileNamePlaceholder":
+      "예: My Character → My Character_20260617_01.png",
+    "generate.wildcardHint":
+      "동적 프롬프트 와일드카드 {example} 지원. 배치에서는 이미지마다 하나를 무작위 선택합니다. NovelAI {tag} 가중치 문법은 영향받지 않습니다.",
     "generate.run": "생성",
     "generate.batchRun": "{count}장 배치 생성",
     "i2i.strength": "Strength(변화 강도)",
@@ -2170,7 +2632,8 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "i2i.extraNoiseSeed": "Extra Noise Seed(0 = 무작위)",
     "i2i.run": "이미지 투 이미지",
     "prompt.templateApplied": "템플릿 “{name}” 적용됨",
-    "prompt.stylePresetNeedPrompt": "저장하기 전에 스타일 프롬프트를 입력하세요.",
+    "prompt.stylePresetNeedPrompt":
+      "저장하기 전에 스타일 프롬프트를 입력하세요.",
     "prompt.stylePresetSaved": "스타일 “{name}” 저장됨.",
     "prompt.stylePresetDeleted": "스타일 “{name}” 삭제됨.",
     "prompt.stylePresetApplied": "스타일 “{name}”로 전환됨.",
@@ -2178,12 +2641,15 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "prompt.autocompleteOffToast": "입력 자동완성 꺼짐",
     "prompt.modeFurryToast": "Furry 모드로 전환됨",
     "prompt.modeAnimeToast": "애니메이션 모드로 전환됨",
-    "prompt.lockedToast": "잠그고 기본값으로 저장됨(초기화/템플릿이 변경하지 않음)",
+    "prompt.lockedToast":
+      "잠그고 기본값으로 저장됨(초기화/템플릿이 변경하지 않음)",
     "prompt.unlockedToast": "잠금 해제됨",
     "prompt.emptyTranslate": "프롬프트가 비어 있어 번역할 필요가 없습니다",
     "prompt.alreadyEnglish": "현재 프롬프트는 이미 영어입니다",
-    "prompt.translatePartialFailed": "일부 내용 번역에 실패했습니다. 가능한 범위에서 영어로 변환했습니다. 되돌릴 수 있습니다",
-    "prompt.translateDone": "언어를 자동 감지해 영어로 변환했습니다. 되돌릴 수 있습니다",
+    "prompt.translatePartialFailed":
+      "일부 내용 번역에 실패했습니다. 가능한 범위에서 영어로 변환했습니다. 되돌릴 수 있습니다",
+    "prompt.translateDone":
+      "언어를 자동 감지해 영어로 변환했습니다. 되돌릴 수 있습니다",
     "prompt.translateFailed": "번역 실패. 네트워크를 확인하세요",
     "prompt.translateRestored": "번역 전 프롬프트로 복원됨",
     "prompt.normalizedToast": "프롬프트 표준화 완료",
@@ -2201,10 +2667,12 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "normalize.option.keepWildcards": "Wildcards 문법 유지",
     "common.apply": "적용",
     "tagLibrary.title": "중국어 태그 라이브러리(자동완성 / 영감 캡슐)",
-    "tagLibrary.downloadingToast": "중국어 태그 라이브러리 다운로드 중(약 7MB, 모든 태그에 중국어 포함)…",
+    "tagLibrary.downloadingToast":
+      "중국어 태그 라이브러리 다운로드 중(약 7MB, 모든 태그에 중국어 포함)…",
     "tagLibrary.downloaded": "다운로드됨",
     "tagLibrary.itemCount": "{count}개, 모두 중국어 라벨 포함",
-    "tagLibrary.notDownloaded": "미다운로드(자동완성과 캡슐은 내장 간단 라이브러리 사용)",
+    "tagLibrary.notDownloaded":
+      "미다운로드(자동완성과 캡슐은 내장 간단 라이브러리 사용)",
     "tagLibrary.hint":
       "출처는 DanbooruSearchOnline(GPL-3.0, 고정 버전)입니다. 별도로 다운로드하며 앱에 번들하지 않습니다. 다운로드 후 중국어/영어 자동완성과 인기도 표시를 사용할 수 있습니다.",
     "tagLibrary.downloading": "다운로드 중…",
@@ -2225,8 +2693,10 @@ const DESKTOP_EXTRA_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "template.restoreMode": "↺ 恢复默认（{mode}）",
     "template.restoreTitle": "恢复为内置默认模板",
     "template.restore": "↺ 恢复默认",
-    "template.modeHint": "标签 / 自然语言 / 混合三种输出各用独立系统提示词，互不混用。直接编辑即生效；点“恢复默认”可随时还原为内置模板。",
-    "template.comicHint": "漫画拆分分镜只使用这一套模板；反推和转换仍按三种模式分别读取上方模板。",
+    "template.modeHint":
+      "标签 / 自然语言 / 混合三种输出各用独立系统提示词，互不混用。直接编辑即生效；点“恢复默认”可随时还原为内置模板。",
+    "template.comicHint":
+      "漫画拆分分镜只使用这一套模板；反推和转换仍按三种模式分别读取上方模板。",
     "mode.tags": "Danbooru 标签",
     "mode.natural": "自然语言",
     "mode.mixed": "混合模式",
@@ -2241,10 +2711,13 @@ const DESKTOP_EXTRA_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "inspect.openFile": "打开文件",
     "inspect.imageAlt": "检视图",
     "inspect.costTitle": "积分说明",
-    "inspect.costDesc": "AI 反推不消耗 NovelAI Anlas；只会调用“AI 反推”中配置的视觉模型 API。",
+    "inspect.costDesc":
+      "AI 反推不消耗 NovelAI Anlas；只会调用“AI 反推”中配置的视觉模型 API。",
     "inspect.restoreParams": "↩ 从图片还原参数",
-    "inspect.restoreMetaOk": "读取 NovelAI PNG 内嵌的提示词、种子、采样器等参数并填入生成面板。",
-    "inspect.restoreMetaMissing": "未检测到 NovelAI 参数（图片可能被压缩或来自其它来源）。",
+    "inspect.restoreMetaOk":
+      "读取 NovelAI PNG 内嵌的提示词、种子、采样器等参数并填入生成面板。",
+    "inspect.restoreMetaMissing":
+      "未检测到 NovelAI 参数（图片可能被压缩或来自其它来源）。",
     "inspect.mode.tagsTip": "输出标准 Danbooru tag 格式",
     "inspect.mode.naturalTip": "输出流畅的描述性文字",
     "inspect.mode.mixedTip": "Tag + 自然语言结合",
@@ -2258,7 +2731,8 @@ const DESKTOP_EXTRA_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "inspect.scope.scene": "场景",
     "inspect.scope.sceneTip": "只反推背景、光照、空间和氛围",
     "inspect.subjectHint": "目标/角色提示（可选）",
-    "inspect.subjectPlaceholder": "例如：这是芙宁娜 / 只反推右侧角色 / 只反推桌上的盒子",
+    "inspect.subjectPlaceholder":
+      "例如：这是芙宁娜 / 只反推右侧角色 / 只反推桌上的盒子",
     "inspect.knownCharacter": "这是网络/游戏/动漫角色，生成角色名版和特征版",
     "inspect.run": "AI 反推提示词",
     "textTool.queueTitle": "任务列表",
@@ -2266,37 +2740,45 @@ const DESKTOP_EXTRA_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "textTool.historyClear": "清空记录",
     "inspect.result": "反推结果",
     "inspect.applyTemplate": "应用模板",
-    "inspect.emptyHint1": "上传图片后，点击“AI 反推提示词”按钮，将使用视觉模型分析图片内容，自动生成适合 NovelAI 的提示词。",
-    "inspect.emptyHint2": "需要在 设置 › AI 反推 中填写视觉模型 API 地址和 Key（支持 OpenAI / 兼容接口）。",
+    "inspect.emptyHint1":
+      "上传图片后，点击“AI 反推提示词”按钮，将使用视觉模型分析图片内容，自动生成适合 NovelAI 的提示词。",
+    "inspect.emptyHint2":
+      "需要在 设置 › AI 反推 中填写视觉模型 API 地址和 Key（支持 OpenAI / 兼容接口）。",
     "inspect.reuse": "复用至生成面板",
     "inspect.clearImage": "清除图片",
     "inspect.canvasTitle": "AI 反推提示词",
-    "inspect.canvasHint": "在左侧上传图片，选择输出模式（Danbooru 标签 / 自然语言 / 混合），然后点击反推按钮。",
+    "inspect.canvasHint":
+      "在左侧上传图片，选择输出模式（Danbooru 标签 / 自然语言 / 混合），然后点击反推按钮。",
     "inspect.canvasAlt": "反推图片",
     "convert.title": "提示词转换",
     "convert.subtitle": "输入中文或自然语言描述，AI 将转换为 Danbooru 风格标签",
     "convert.costTitle": "积分说明",
-    "convert.costDesc": "转换不消耗 NovelAI Anlas；只会调用“转换 API”中配置的文本模型。",
+    "convert.costDesc":
+      "转换不消耗 NovelAI Anlas；只会调用“转换 API”中配置的文本模型。",
     "convert.input": "描述输入",
-    "convert.placeholder": "例如：\n一个短发蓝眼睛的女孩，穿白色连衣裙，站在樱花树下，阳光照射，动漫风格",
+    "convert.placeholder":
+      "例如：\n一个短发蓝眼睛的女孩，穿白色连衣裙，站在樱花树下，阳光照射，动漫风格",
     "convert.knownCharacter": "这是网络/游戏/动漫角色，生成角色名版和特征版",
     "convert.run.tags": "转换为 Danbooru 标签",
     "convert.run.natural": "转换为自然语言",
     "convert.run.mixed": "转换为混合提示词",
     "convert.result": "转换结果（可编辑）",
     "convert.applyTemplate": "叠加模板",
-    "convert.emptyHint1": "输入任意语言的图像描述，AI 将分析语义并输出符合 NovelAI 风格的 Danbooru 标签组合。",
+    "convert.emptyHint1":
+      "输入任意语言的图像描述，AI 将分析语义并输出符合 NovelAI 风格的 Danbooru 标签组合。",
     "convert.emptyHint2": "需要在 设置 › 转换 API 中配置文本模型 API。",
     "convert.reuse": "复用至生成面板",
     "convert.copied": "已复制到剪贴板",
     "convert.copy": "复制结果",
     "shared.reusedToGenerate": "提示词已复用至生成面板。",
     "aiLog.title": "AI 调用记录",
-    "aiLog.subtitle": "反推 / 转换 / 拆分镜 / 一致性检测每次发送给 AI 的内容与原始返回（最多保留最近 200 条，重启后清空）。",
+    "aiLog.subtitle":
+      "反推 / 转换 / 拆分镜 / 一致性检测每次发送给 AI 的内容与原始返回（最多保留最近 200 条，重启后清空）。",
     "aiLog.refreshing": "刷新中...",
     "aiLog.refresh": "刷新",
     "aiLog.clear": "清空",
-    "aiLog.empty": "暂无记录。进行一次 AI 反推 / 转换 / 漫画拆分镜后，这里会显示发送与返回内容。",
+    "aiLog.empty":
+      "暂无记录。进行一次 AI 反推 / 转换 / 漫画拆分镜后，这里会显示发送与返回内容。",
     "aiLog.ok": "成功",
     "aiLog.fail": "失败",
     "aiLog.visionApi": "反推API",
@@ -2318,7 +2800,8 @@ const DESKTOP_EXTRA_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "canvas.generatingTitle": "正在处理图片...",
     "canvas.generatingHint": "请求 NovelAI API，完成后会自动保存并写入历史。",
     "canvas.emptyTitle": "准备开始创作",
-    "canvas.emptyHint": "在左侧输入英文 tag 或自然提示词，点击下方生成按钮；结果会自动保存并进入右侧历史。",
+    "canvas.emptyHint":
+      "在左侧输入英文 tag 或自然提示词，点击下方生成按钮；结果会自动保存并进入右侧历史。",
     "canvas.shortcutAutocomplete": "Tag 自动补全",
     "canvas.shortcutDrop": "支持拖入图片到工作台",
     "canvas.shortcutApiOnly": "API-only 生成",
@@ -2345,8 +2828,10 @@ const DESKTOP_EXTRA_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "template.restoreMode": "↺ 恢復預設（{mode}）",
     "template.restoreTitle": "恢復為內建預設範本",
     "template.restore": "↺ 恢復預設",
-    "template.modeHint": "標籤 / 自然語言 / 混合三種輸出各用獨立系統提示詞，互不混用。直接編輯即生效；點「恢復預設」可隨時還原為內建範本。",
-    "template.comicHint": "漫畫拆分分鏡只使用這一套範本；反推和轉換仍按三種模式分別讀取上方範本。",
+    "template.modeHint":
+      "標籤 / 自然語言 / 混合三種輸出各用獨立系統提示詞，互不混用。直接編輯即生效；點「恢復預設」可隨時還原為內建範本。",
+    "template.comicHint":
+      "漫畫拆分分鏡只使用這一套範本；反推和轉換仍按三種模式分別讀取上方範本。",
     "mode.tags": "Danbooru 標籤",
     "mode.natural": "自然語言",
     "mode.mixed": "混合模式",
@@ -2361,10 +2846,13 @@ const DESKTOP_EXTRA_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "inspect.openFile": "開啟檔案",
     "inspect.imageAlt": "檢視圖",
     "inspect.costTitle": "積分說明",
-    "inspect.costDesc": "AI 反推不消耗 NovelAI Anlas；只會呼叫「AI 反推」中配置的視覺模型 API。",
+    "inspect.costDesc":
+      "AI 反推不消耗 NovelAI Anlas；只會呼叫「AI 反推」中配置的視覺模型 API。",
     "inspect.restoreParams": "↩ 從圖片還原參數",
-    "inspect.restoreMetaOk": "讀取 NovelAI PNG 內嵌的提示詞、種子、採樣器等參數並填入生成面板。",
-    "inspect.restoreMetaMissing": "未偵測到 NovelAI 參數（圖片可能被壓縮或來自其他來源）。",
+    "inspect.restoreMetaOk":
+      "讀取 NovelAI PNG 內嵌的提示詞、種子、採樣器等參數並填入生成面板。",
+    "inspect.restoreMetaMissing":
+      "未偵測到 NovelAI 參數（圖片可能被壓縮或來自其他來源）。",
     "inspect.mode.tagsTip": "輸出標準 Danbooru tag 格式",
     "inspect.mode.naturalTip": "輸出流暢的描述性文字",
     "inspect.mode.mixedTip": "Tag + 自然語言結合",
@@ -2378,7 +2866,8 @@ const DESKTOP_EXTRA_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "inspect.scope.scene": "場景",
     "inspect.scope.sceneTip": "只反推背景、光照、空間和氛圍",
     "inspect.subjectHint": "目標/角色提示（可選）",
-    "inspect.subjectPlaceholder": "例如：這是芙寧娜 / 只反推右側角色 / 只反推桌上的盒子",
+    "inspect.subjectPlaceholder":
+      "例如：這是芙寧娜 / 只反推右側角色 / 只反推桌上的盒子",
     "inspect.knownCharacter": "這是網路/遊戲/動漫角色，生成角色名版和特徵版",
     "inspect.run": "AI 反推提示詞",
     "textTool.queueTitle": "任務列表",
@@ -2386,37 +2875,45 @@ const DESKTOP_EXTRA_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "textTool.historyClear": "清空記錄",
     "inspect.result": "反推結果",
     "inspect.applyTemplate": "套用範本",
-    "inspect.emptyHint1": "上傳圖片後，點擊「AI 反推提示詞」按鈕，將使用視覺模型分析圖片內容，自動生成適合 NovelAI 的提示詞。",
-    "inspect.emptyHint2": "需要在 設定 › AI 反推 中填寫視覺模型 API 地址和 Key（支援 OpenAI / 相容介面）。",
+    "inspect.emptyHint1":
+      "上傳圖片後，點擊「AI 反推提示詞」按鈕，將使用視覺模型分析圖片內容，自動生成適合 NovelAI 的提示詞。",
+    "inspect.emptyHint2":
+      "需要在 設定 › AI 反推 中填寫視覺模型 API 地址和 Key（支援 OpenAI / 相容介面）。",
     "inspect.reuse": "複用至生成面板",
     "inspect.clearImage": "清除圖片",
     "inspect.canvasTitle": "AI 反推提示詞",
-    "inspect.canvasHint": "在左側上傳圖片，選擇輸出模式（Danbooru 標籤 / 自然語言 / 混合），然後點擊反推按鈕。",
+    "inspect.canvasHint":
+      "在左側上傳圖片，選擇輸出模式（Danbooru 標籤 / 自然語言 / 混合），然後點擊反推按鈕。",
     "inspect.canvasAlt": "反推圖片",
     "convert.title": "提示詞轉換",
     "convert.subtitle": "輸入中文或自然語言描述，AI 將轉換為 Danbooru 風格標籤",
     "convert.costTitle": "積分說明",
-    "convert.costDesc": "轉換不消耗 NovelAI Anlas；只會呼叫「轉換 API」中配置的文字模型。",
+    "convert.costDesc":
+      "轉換不消耗 NovelAI Anlas；只會呼叫「轉換 API」中配置的文字模型。",
     "convert.input": "描述輸入",
-    "convert.placeholder": "例如：\n一個短髮藍眼睛的女孩，穿白色連衣裙，站在櫻花樹下，陽光照射，動漫風格",
+    "convert.placeholder":
+      "例如：\n一個短髮藍眼睛的女孩，穿白色連衣裙，站在櫻花樹下，陽光照射，動漫風格",
     "convert.knownCharacter": "這是網路/遊戲/動漫角色，生成角色名版和特徵版",
     "convert.run.tags": "轉換為 Danbooru 標籤",
     "convert.run.natural": "轉換為自然語言",
     "convert.run.mixed": "轉換為混合提示詞",
     "convert.result": "轉換結果（可編輯）",
     "convert.applyTemplate": "疊加範本",
-    "convert.emptyHint1": "輸入任意語言的圖片描述，AI 將分析語義並輸出符合 NovelAI 風格的 Danbooru 標籤組合。",
+    "convert.emptyHint1":
+      "輸入任意語言的圖片描述，AI 將分析語義並輸出符合 NovelAI 風格的 Danbooru 標籤組合。",
     "convert.emptyHint2": "需要在 設定 › 轉換 API 中配置文字模型 API。",
     "convert.reuse": "複用至生成面板",
     "convert.copied": "已複製到剪貼簿",
     "convert.copy": "複製結果",
     "shared.reusedToGenerate": "提示詞已複用至生成面板。",
     "aiLog.title": "AI 呼叫記錄",
-    "aiLog.subtitle": "反推 / 轉換 / 拆分鏡 / 一致性檢測每次送給 AI 的內容與原始返回（最多保留最近 200 條，重啟後清空）。",
+    "aiLog.subtitle":
+      "反推 / 轉換 / 拆分鏡 / 一致性檢測每次送給 AI 的內容與原始返回（最多保留最近 200 條，重啟後清空）。",
     "aiLog.refreshing": "刷新中...",
     "aiLog.refresh": "刷新",
     "aiLog.clear": "清空",
-    "aiLog.empty": "暫無記錄。進行一次 AI 反推 / 轉換 / 漫畫拆分鏡後，這裡會顯示送出與返回內容。",
+    "aiLog.empty":
+      "暫無記錄。進行一次 AI 反推 / 轉換 / 漫畫拆分鏡後，這裡會顯示送出與返回內容。",
     "aiLog.ok": "成功",
     "aiLog.fail": "失敗",
     "aiLog.visionApi": "反推API",
@@ -2438,7 +2935,8 @@ const DESKTOP_EXTRA_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "canvas.generatingTitle": "正在處理圖片...",
     "canvas.generatingHint": "請求 NovelAI API，完成後會自動保存並寫入歷史。",
     "canvas.emptyTitle": "準備開始創作",
-    "canvas.emptyHint": "在左側輸入英文 tag 或自然提示詞，點擊下方生成按鈕；結果會自動保存並進入右側歷史。",
+    "canvas.emptyHint":
+      "在左側輸入英文 tag 或自然提示詞，點擊下方生成按鈕；結果會自動保存並進入右側歷史。",
     "canvas.shortcutAutocomplete": "Tag 自動補全",
     "canvas.shortcutDrop": "支援拖入圖片到工作台",
     "canvas.shortcutApiOnly": "API-only 生成",
@@ -2458,15 +2956,19 @@ const DESKTOP_EXTRA_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
   "en-US": {
     "common.confirm": "OK",
     "template.editorTitle": "Prompt template",
-    "template.modeSeparated": "Prompt templates (each mode is separate and never mixed)",
+    "template.modeSeparated":
+      "Prompt templates (each mode is separate and never mixed)",
     "template.custom": "Customized",
     "template.default": "Default",
-    "template.restoreModeTitle": "Restore the current mode to the built-in default template",
+    "template.restoreModeTitle":
+      "Restore the current mode to the built-in default template",
     "template.restoreMode": "↺ Restore default ({mode})",
     "template.restoreTitle": "Restore the built-in default template",
     "template.restore": "↺ Restore default",
-    "template.modeHint": "Tags, natural language, and mixed output each use their own system prompt. Edits apply immediately; Restore default brings back the built-in template.",
-    "template.comicHint": "Comic storyboard splitting uses this single template; reverse and conversion still use the three mode-specific templates above.",
+    "template.modeHint":
+      "Tags, natural language, and mixed output each use their own system prompt. Edits apply immediately; Restore default brings back the built-in template.",
+    "template.comicHint":
+      "Comic storyboard splitting uses this single template; reverse and conversion still use the three mode-specific templates above.",
     "mode.tags": "Danbooru tags",
     "mode.natural": "Natural language",
     "mode.mixed": "Mixed mode",
@@ -2475,68 +2977,88 @@ const DESKTOP_EXTRA_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "variant.featureTitle": "Feature version",
     "variant.featureHint": "Use when the model may not know the character.",
     "variant.use": "Use this version",
-    "inspect.noMeta": "This image does not contain recognizable NovelAI parameters.",
+    "inspect.noMeta":
+      "This image does not contain recognizable NovelAI parameters.",
     "inspect.metaRestored": "Parameters restored from image metadata.",
     "inspect.dropHint": "Drop an image here, or click the button below",
     "inspect.openFile": "Open file",
     "inspect.imageAlt": "Inspection image",
     "inspect.costTitle": "Cost note",
-    "inspect.costDesc": "AI inspection does not spend NovelAI Anlas; it only calls the vision model API configured under “AI Reverse”.",
+    "inspect.costDesc":
+      "AI inspection does not spend NovelAI Anlas; it only calls the vision model API configured under “AI Reverse”.",
     "inspect.restoreParams": "↩ Restore parameters from image",
-    "inspect.restoreMetaOk": "Reads NovelAI PNG embedded prompt, seed, sampler, and other parameters into the generation panel.",
-    "inspect.restoreMetaMissing": "No NovelAI parameters detected. The image may have been compressed or created elsewhere.",
+    "inspect.restoreMetaOk":
+      "Reads NovelAI PNG embedded prompt, seed, sampler, and other parameters into the generation panel.",
+    "inspect.restoreMetaMissing":
+      "No NovelAI parameters detected. The image may have been compressed or created elsewhere.",
     "inspect.mode.tagsTip": "Output standard Danbooru tag format",
     "inspect.mode.naturalTip": "Output fluent descriptive text",
     "inspect.mode.mixedTip": "Combine tags with natural language",
     "inspect.scopeTitle": "Reverse scope",
     "inspect.scope.full": "Full image",
-    "inspect.scope.fullTip": "Reverse the full image, characters, scene, and composition",
+    "inspect.scope.fullTip":
+      "Reverse the full image, characters, scene, and composition",
     "inspect.scope.character": "Character",
-    "inspect.scope.characterTip": "Reverse only the target character’s appearance, outfit, and pose",
+    "inspect.scope.characterTip":
+      "Reverse only the target character’s appearance, outfit, and pose",
     "inspect.scope.object": "Object",
     "inspect.scope.objectTip": "Reverse only the target object or prop",
     "inspect.scope.scene": "Scene",
-    "inspect.scope.sceneTip": "Reverse only the background, lighting, space, and atmosphere",
+    "inspect.scope.sceneTip":
+      "Reverse only the background, lighting, space, and atmosphere",
     "inspect.subjectHint": "Target / character hint (optional)",
-    "inspect.subjectPlaceholder": "Example: this is Furina / only inspect the right-side character / only inspect the box on the desk",
-    "inspect.knownCharacter": "This is a web/game/anime character; generate name and feature versions",
+    "inspect.subjectPlaceholder":
+      "Example: this is Furina / only inspect the right-side character / only inspect the box on the desk",
+    "inspect.knownCharacter":
+      "This is a web/game/anime character; generate name and feature versions",
     "inspect.run": "AI reverse prompt",
     "textTool.queueTitle": "Job list",
     "textTool.historyTitle": "History",
     "textTool.historyClear": "Clear history",
     "inspect.result": "Reverse result",
     "inspect.applyTemplate": "Apply template",
-    "inspect.emptyHint1": "Upload an image, then click AI reverse prompt. The vision model will analyze the image and generate a NovelAI-friendly prompt.",
-    "inspect.emptyHint2": "Configure the vision model API URL and key in Settings › AI Reverse. OpenAI and compatible APIs are supported.",
+    "inspect.emptyHint1":
+      "Upload an image, then click AI reverse prompt. The vision model will analyze the image and generate a NovelAI-friendly prompt.",
+    "inspect.emptyHint2":
+      "Configure the vision model API URL and key in Settings › AI Reverse. OpenAI and compatible APIs are supported.",
     "inspect.reuse": "Reuse in generation panel",
     "inspect.clearImage": "Clear image",
     "inspect.canvasTitle": "AI reverse prompt",
-    "inspect.canvasHint": "Upload an image on the left, choose an output mode (Danbooru tags / natural language / mixed), then click the reverse button.",
+    "inspect.canvasHint":
+      "Upload an image on the left, choose an output mode (Danbooru tags / natural language / mixed), then click the reverse button.",
     "inspect.canvasAlt": "Reverse image",
     "convert.title": "Prompt conversion",
-    "convert.subtitle": "Enter Chinese or natural-language descriptions; AI converts them into Danbooru-style tags",
+    "convert.subtitle":
+      "Enter Chinese or natural-language descriptions; AI converts them into Danbooru-style tags",
     "convert.costTitle": "Cost note",
-    "convert.costDesc": "Conversion does not spend NovelAI Anlas; it only calls the text model configured under “Conversion API”.",
+    "convert.costDesc":
+      "Conversion does not spend NovelAI Anlas; it only calls the text model configured under “Conversion API”.",
     "convert.input": "Description input",
-    "convert.placeholder": "Example:\nA short-haired blue-eyed girl in a white dress, standing under cherry blossoms, sunlight, anime style",
-    "convert.knownCharacter": "This is a web/game/anime character; generate name and feature versions",
+    "convert.placeholder":
+      "Example:\nA short-haired blue-eyed girl in a white dress, standing under cherry blossoms, sunlight, anime style",
+    "convert.knownCharacter":
+      "This is a web/game/anime character; generate name and feature versions",
     "convert.run.tags": "Convert to Danbooru tags",
     "convert.run.natural": "Convert to natural language",
     "convert.run.mixed": "Convert to mixed prompt",
     "convert.result": "Conversion result (editable)",
     "convert.applyTemplate": "Overlay template",
-    "convert.emptyHint1": "Enter an image description in any language. AI will parse the meaning and output NovelAI-style Danbooru tag combinations.",
-    "convert.emptyHint2": "Configure the text model API in Settings › Conversion API.",
+    "convert.emptyHint1":
+      "Enter an image description in any language. AI will parse the meaning and output NovelAI-style Danbooru tag combinations.",
+    "convert.emptyHint2":
+      "Configure the text model API in Settings › Conversion API.",
     "convert.reuse": "Reuse in generation panel",
     "convert.copied": "Copied to clipboard",
     "convert.copy": "Copy result",
     "shared.reusedToGenerate": "Prompt reused in the generation panel.",
     "aiLog.title": "AI call logs",
-    "aiLog.subtitle": "View every request and raw response for reverse, conversion, storyboard splitting, and consistency checks. Keeps the latest 200 entries until restart.",
+    "aiLog.subtitle":
+      "View every request and raw response for reverse, conversion, storyboard splitting, and consistency checks. Keeps the latest 200 entries until restart.",
     "aiLog.refreshing": "Refreshing...",
     "aiLog.refresh": "Refresh",
     "aiLog.clear": "Clear",
-    "aiLog.empty": "No records yet. Run AI reverse, conversion, or comic storyboard splitting to see requests and responses here.",
+    "aiLog.empty":
+      "No records yet. Run AI reverse, conversion, or comic storyboard splitting to see requests and responses here.",
     "aiLog.ok": "Success",
     "aiLog.fail": "Failed",
     "aiLog.visionApi": "Vision API",
@@ -2556,9 +3078,11 @@ const DESKTOP_EXTRA_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "canvas.resultAlt": "Generated result",
     "canvas.dropToLoad": "Release to load image",
     "canvas.generatingTitle": "Processing image...",
-    "canvas.generatingHint": "Calling the NovelAI API. The result will be saved and added to history automatically.",
+    "canvas.generatingHint":
+      "Calling the NovelAI API. The result will be saved and added to history automatically.",
     "canvas.emptyTitle": "Ready to create",
-    "canvas.emptyHint": "Enter English tags or a natural prompt on the left, then click Generate. Results are saved and added to history automatically.",
+    "canvas.emptyHint":
+      "Enter English tags or a natural prompt on the left, then click Generate. Results are saved and added to history automatically.",
     "canvas.shortcutAutocomplete": "Tag autocomplete",
     "canvas.shortcutDrop": "Drop images into the workbench",
     "canvas.shortcutApiOnly": "API-only generation",
@@ -2578,22 +3102,27 @@ const DESKTOP_EXTRA_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
   "ja-JP": {
     "common.confirm": "OK",
     "template.editorTitle": "プロンプトテンプレート",
-    "template.modeSeparated": "プロンプトテンプレート（三つのモードは個別で混用しません）",
+    "template.modeSeparated":
+      "プロンプトテンプレート（三つのモードは個別で混用しません）",
     "template.custom": "カスタム済み",
     "template.default": "既定",
     "template.restoreModeTitle": "現在のモードを内蔵既定テンプレートへ戻す",
     "template.restoreMode": "↺ 既定に戻す（{mode}）",
     "template.restoreTitle": "内蔵既定テンプレートへ戻す",
     "template.restore": "↺ 既定に戻す",
-    "template.modeHint": "タグ / 自然言語 / 混合はそれぞれ独立したシステムプロンプトを使います。編集は即時反映され、「既定に戻す」で内蔵テンプレートへ戻せます。",
-    "template.comicHint": "漫画のコマ分割はこの単一テンプレートのみ使用します。解析と変換は上の三つのモード別テンプレートを使います。",
+    "template.modeHint":
+      "タグ / 自然言語 / 混合はそれぞれ独立したシステムプロンプトを使います。編集は即時反映され、「既定に戻す」で内蔵テンプレートへ戻せます。",
+    "template.comicHint":
+      "漫画のコマ分割はこの単一テンプレートのみ使用します。解析と変換は上の三つのモード別テンプレートを使います。",
     "mode.tags": "Danbooru タグ",
     "mode.natural": "自然言語",
     "mode.mixed": "混合モード",
     "variant.nameTitle": "キャラ名版",
-    "variant.nameHint": "モデルがそのキャラクターを知っている場合に向いています。",
+    "variant.nameHint":
+      "モデルがそのキャラクターを知っている場合に向いています。",
     "variant.featureTitle": "特徴版",
-    "variant.featureHint": "モデルがそのキャラクターを知らない場合に向いています。",
+    "variant.featureHint":
+      "モデルがそのキャラクターを知らない場合に向いています。",
     "variant.use": "この版を使う",
     "inspect.noMeta": "この画像には認識できる NovelAI パラメータがありません。",
     "inspect.metaRestored": "画像メタデータからパラメータを復元しました。",
@@ -2601,10 +3130,13 @@ const DESKTOP_EXTRA_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "inspect.openFile": "ファイルを開く",
     "inspect.imageAlt": "解析画像",
     "inspect.costTitle": "コスト説明",
-    "inspect.costDesc": "AI 解析は NovelAI Anlas を消費しません。「AI 反推」で設定した視覚モデル API のみ呼び出します。",
+    "inspect.costDesc":
+      "AI 解析は NovelAI Anlas を消費しません。「AI 反推」で設定した視覚モデル API のみ呼び出します。",
     "inspect.restoreParams": "↩ 画像からパラメータ復元",
-    "inspect.restoreMetaOk": "NovelAI PNG に埋め込まれたプロンプト、シード、サンプラーなどを生成パネルへ読み込みます。",
-    "inspect.restoreMetaMissing": "NovelAI パラメータが検出されません。画像が圧縮されたか、別の出所かもしれません。",
+    "inspect.restoreMetaOk":
+      "NovelAI PNG に埋め込まれたプロンプト、シード、サンプラーなどを生成パネルへ読み込みます。",
+    "inspect.restoreMetaMissing":
+      "NovelAI パラメータが検出されません。画像が圧縮されたか、別の出所かもしれません。",
     "inspect.mode.tagsTip": "標準 Danbooru tag 形式で出力",
     "inspect.mode.naturalTip": "自然な説明文で出力",
     "inspect.mode.mixedTip": "Tag と自然言語を組み合わせます",
@@ -2612,51 +3144,65 @@ const DESKTOP_EXTRA_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "inspect.scope.full": "画像全体",
     "inspect.scope.fullTip": "画面全体、人物、背景、構図を解析",
     "inspect.scope.character": "キャラクター",
-    "inspect.scope.characterTip": "指定キャラクターの外見、衣装、ポーズのみ解析",
+    "inspect.scope.characterTip":
+      "指定キャラクターの外見、衣装、ポーズのみ解析",
     "inspect.scope.object": "物体",
     "inspect.scope.objectTip": "指定した物体や小道具のみ解析",
     "inspect.scope.scene": "シーン",
     "inspect.scope.sceneTip": "背景、光、空間、雰囲気のみ解析",
     "inspect.subjectHint": "対象 / キャラクターのヒント（任意）",
-    "inspect.subjectPlaceholder": "例：これは Furina / 右側のキャラだけ / 机上の箱だけ",
-    "inspect.knownCharacter": "Web/ゲーム/アニメのキャラクターとして、名前版と特徴版を生成",
+    "inspect.subjectPlaceholder":
+      "例：これは Furina / 右側のキャラだけ / 机上の箱だけ",
+    "inspect.knownCharacter":
+      "Web/ゲーム/アニメのキャラクターとして、名前版と特徴版を生成",
     "inspect.run": "AI プロンプト解析",
     "textTool.queueTitle": "タスク一覧",
     "textTool.historyTitle": "履歴",
     "textTool.historyClear": "履歴を消去",
     "inspect.result": "解析結果",
     "inspect.applyTemplate": "テンプレート適用",
-    "inspect.emptyHint1": "画像をアップロードして「AI プロンプト解析」を押すと、視覚モデルが内容を分析し NovelAI 向けプロンプトを生成します。",
-    "inspect.emptyHint2": "設定 › AI 反推 で視覚モデル API URL と Key を設定してください（OpenAI / 互換 API 対応）。",
+    "inspect.emptyHint1":
+      "画像をアップロードして「AI プロンプト解析」を押すと、視覚モデルが内容を分析し NovelAI 向けプロンプトを生成します。",
+    "inspect.emptyHint2":
+      "設定 › AI 反推 で視覚モデル API URL と Key を設定してください（OpenAI / 互換 API 対応）。",
     "inspect.reuse": "生成パネルへ再利用",
     "inspect.clearImage": "画像をクリア",
     "inspect.canvasTitle": "AI プロンプト解析",
-    "inspect.canvasHint": "左側で画像をアップロードし、出力モード（Danbooru タグ / 自然言語 / 混合）を選んで解析ボタンを押します。",
+    "inspect.canvasHint":
+      "左側で画像をアップロードし、出力モード（Danbooru タグ / 自然言語 / 混合）を選んで解析ボタンを押します。",
     "inspect.canvasAlt": "解析画像",
     "convert.title": "プロンプト変換",
-    "convert.subtitle": "中国語または自然文を入力すると、AI が Danbooru 風タグへ変換します",
+    "convert.subtitle":
+      "中国語または自然文を入力すると、AI が Danbooru 風タグへ変換します",
     "convert.costTitle": "コスト説明",
-    "convert.costDesc": "変換は NovelAI Anlas を消費しません。「変換 API」で設定したテキストモデルのみ呼び出します。",
+    "convert.costDesc":
+      "変換は NovelAI Anlas を消費しません。「変換 API」で設定したテキストモデルのみ呼び出します。",
     "convert.input": "説明入力",
-    "convert.placeholder": "例：\n短髪で青い目の少女、白いワンピース、桜の木の下、日差し、アニメ風",
-    "convert.knownCharacter": "Web/ゲーム/アニメのキャラクターとして、名前版と特徴版を生成",
+    "convert.placeholder":
+      "例：\n短髪で青い目の少女、白いワンピース、桜の木の下、日差し、アニメ風",
+    "convert.knownCharacter":
+      "Web/ゲーム/アニメのキャラクターとして、名前版と特徴版を生成",
     "convert.run.tags": "Danbooru タグへ変換",
     "convert.run.natural": "自然言語へ変換",
     "convert.run.mixed": "混合プロンプトへ変換",
     "convert.result": "変換結果（編集可）",
     "convert.applyTemplate": "テンプレートを重ねる",
-    "convert.emptyHint1": "任意の言語で画像説明を入力すると、AI が意味を解析し NovelAI 風 Danbooru タグへ整えます。",
-    "convert.emptyHint2": "設定 › 変換 API でテキストモデル API を設定してください。",
+    "convert.emptyHint1":
+      "任意の言語で画像説明を入力すると、AI が意味を解析し NovelAI 風 Danbooru タグへ整えます。",
+    "convert.emptyHint2":
+      "設定 › 変換 API でテキストモデル API を設定してください。",
     "convert.reuse": "生成パネルへ再利用",
     "convert.copied": "クリップボードへコピーしました",
     "convert.copy": "結果をコピー",
     "shared.reusedToGenerate": "プロンプトを生成パネルへ再利用しました。",
     "aiLog.title": "AI 呼び出し履歴",
-    "aiLog.subtitle": "解析 / 変換 / コマ分割 / 整合性チェックで AI へ送った内容と原始応答を確認できます（最新 200 件、再起動で消去）。",
+    "aiLog.subtitle":
+      "解析 / 変換 / コマ分割 / 整合性チェックで AI へ送った内容と原始応答を確認できます（最新 200 件、再起動で消去）。",
     "aiLog.refreshing": "更新中...",
     "aiLog.refresh": "更新",
     "aiLog.clear": "クリア",
-    "aiLog.empty": "履歴はまだありません。AI 解析 / 変換 / 漫画コマ分割を行うと送受信内容が表示されます。",
+    "aiLog.empty":
+      "履歴はまだありません。AI 解析 / 変換 / 漫画コマ分割を行うと送受信内容が表示されます。",
     "aiLog.ok": "成功",
     "aiLog.fail": "失敗",
     "aiLog.visionApi": "解析API",
@@ -2669,16 +3215,19 @@ const DESKTOP_EXTRA_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "aiLog.emptyValue": "（空）",
     "viewer.reset": "リセット",
     "viewer.compare": "比較",
-    "viewer.dragTitle": "デスクトップ / エクスプローラー / 他アプリへドラッグ可能",
+    "viewer.dragTitle":
+      "デスクトップ / エクスプローラー / 他アプリへドラッグ可能",
     "viewer.beforeAlt": "処理前画像",
     "viewer.afterAlt": "処理後画像",
     "viewer.compareDividerLabel": "ドラッグして処理前後を比較",
     "canvas.resultAlt": "生成結果",
     "canvas.dropToLoad": "放すと画像を読み込み",
     "canvas.generatingTitle": "画像を処理中...",
-    "canvas.generatingHint": "NovelAI API を呼び出しています。完了後は自動保存され履歴へ追加されます。",
+    "canvas.generatingHint":
+      "NovelAI API を呼び出しています。完了後は自動保存され履歴へ追加されます。",
     "canvas.emptyTitle": "創作を始めましょう",
-    "canvas.emptyHint": "左側で英語タグまたは自然文プロンプトを入力し、生成ボタンを押してください。結果は自動保存され履歴へ入ります。",
+    "canvas.emptyHint":
+      "左側で英語タグまたは自然文プロンプトを入力し、生成ボタンを押してください。結果は自動保存され履歴へ入ります。",
     "canvas.shortcutAutocomplete": "Tag 自動補完",
     "canvas.shortcutDrop": "画像をワークベンチへドロップ可能",
     "canvas.shortcutApiOnly": "API-only 生成",
@@ -2698,15 +3247,18 @@ const DESKTOP_EXTRA_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
   "ko-KR": {
     "common.confirm": "확인",
     "template.editorTitle": "프롬프트 템플릿",
-    "template.modeSeparated": "프롬프트 템플릿(세 모드는 각각 독립, 혼용하지 않음)",
+    "template.modeSeparated":
+      "프롬프트 템플릿(세 모드는 각각 독립, 혼용하지 않음)",
     "template.custom": "사용자 지정",
     "template.default": "기본값",
     "template.restoreModeTitle": "현재 모드를 내장 기본 템플릿으로 복원",
     "template.restoreMode": "↺ 기본값 복원({mode})",
     "template.restoreTitle": "내장 기본 템플릿으로 복원",
     "template.restore": "↺ 기본값 복원",
-    "template.modeHint": "태그 / 자연어 / 혼합 출력은 각각 독립된 시스템 프롬프트를 사용합니다. 편집은 즉시 적용되며, 기본값 복원으로 내장 템플릿을 되돌릴 수 있습니다.",
-    "template.comicHint": "만화 컷 분할은 이 단일 템플릿만 사용합니다. 분석과 변환은 위의 세 모드별 템플릿을 사용합니다.",
+    "template.modeHint":
+      "태그 / 자연어 / 혼합 출력은 각각 독립된 시스템 프롬프트를 사용합니다. 편집은 즉시 적용되며, 기본값 복원으로 내장 템플릿을 되돌릴 수 있습니다.",
+    "template.comicHint":
+      "만화 컷 분할은 이 단일 템플릿만 사용합니다. 분석과 변환은 위의 세 모드별 템플릿을 사용합니다.",
     "mode.tags": "Danbooru 태그",
     "mode.natural": "자연어",
     "mode.mixed": "혼합 모드",
@@ -2721,10 +3273,13 @@ const DESKTOP_EXTRA_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "inspect.openFile": "파일 열기",
     "inspect.imageAlt": "검사 이미지",
     "inspect.costTitle": "비용 안내",
-    "inspect.costDesc": "AI 분석은 NovelAI Anlas를 쓰지 않습니다. “AI Reverse”에 설정된 비전 모델 API만 호출합니다.",
+    "inspect.costDesc":
+      "AI 분석은 NovelAI Anlas를 쓰지 않습니다. “AI Reverse”에 설정된 비전 모델 API만 호출합니다.",
     "inspect.restoreParams": "↩ 이미지에서 매개변수 복원",
-    "inspect.restoreMetaOk": "NovelAI PNG에 포함된 프롬프트, 시드, 샘플러 등의 매개변수를 생성 패널에 채웁니다.",
-    "inspect.restoreMetaMissing": "NovelAI 매개변수를 감지하지 못했습니다. 이미지가 압축되었거나 다른 출처일 수 있습니다.",
+    "inspect.restoreMetaOk":
+      "NovelAI PNG에 포함된 프롬프트, 시드, 샘플러 등의 매개변수를 생성 패널에 채웁니다.",
+    "inspect.restoreMetaMissing":
+      "NovelAI 매개변수를 감지하지 못했습니다. 이미지가 압축되었거나 다른 출처일 수 있습니다.",
     "inspect.mode.tagsTip": "표준 Danbooru tag 형식으로 출력",
     "inspect.mode.naturalTip": "자연스러운 설명문으로 출력",
     "inspect.mode.mixedTip": "Tag와 자연어를 함께 사용",
@@ -2738,45 +3293,58 @@ const DESKTOP_EXTRA_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "inspect.scope.scene": "장면",
     "inspect.scope.sceneTip": "배경, 조명, 공간, 분위기만 분석",
     "inspect.subjectHint": "대상 / 캐릭터 힌트(선택)",
-    "inspect.subjectPlaceholder": "예: Furina입니다 / 오른쪽 캐릭터만 / 책상 위 상자만",
-    "inspect.knownCharacter": "웹/게임/애니 캐릭터로 이름 버전과 특징 버전 생성",
+    "inspect.subjectPlaceholder":
+      "예: Furina입니다 / 오른쪽 캐릭터만 / 책상 위 상자만",
+    "inspect.knownCharacter":
+      "웹/게임/애니 캐릭터로 이름 버전과 특징 버전 생성",
     "inspect.run": "AI 프롬프트 분석",
     "textTool.queueTitle": "작업 목록",
     "textTool.historyTitle": "기록",
     "textTool.historyClear": "기록 지우기",
     "inspect.result": "분석 결과",
     "inspect.applyTemplate": "템플릿 적용",
-    "inspect.emptyHint1": "이미지를 업로드한 뒤 AI 프롬프트 분석을 누르면 비전 모델이 이미지를 분석해 NovelAI용 프롬프트를 만듭니다.",
-    "inspect.emptyHint2": "설정 › AI Reverse 에서 비전 모델 API URL과 Key를 설정하세요(OpenAI / 호환 API 지원).",
+    "inspect.emptyHint1":
+      "이미지를 업로드한 뒤 AI 프롬프트 분석을 누르면 비전 모델이 이미지를 분석해 NovelAI용 프롬프트를 만듭니다.",
+    "inspect.emptyHint2":
+      "설정 › AI Reverse 에서 비전 모델 API URL과 Key를 설정하세요(OpenAI / 호환 API 지원).",
     "inspect.reuse": "생성 패널에 재사용",
     "inspect.clearImage": "이미지 지우기",
     "inspect.canvasTitle": "AI 프롬프트 분석",
-    "inspect.canvasHint": "왼쪽에서 이미지를 업로드하고 출력 모드(Danbooru 태그 / 자연어 / 혼합)를 선택한 뒤 분석 버튼을 누르세요.",
+    "inspect.canvasHint":
+      "왼쪽에서 이미지를 업로드하고 출력 모드(Danbooru 태그 / 자연어 / 혼합)를 선택한 뒤 분석 버튼을 누르세요.",
     "inspect.canvasAlt": "분석 이미지",
     "convert.title": "프롬프트 변환",
-    "convert.subtitle": "중국어나 자연어 설명을 입력하면 AI가 Danbooru 스타일 태그로 변환합니다",
+    "convert.subtitle":
+      "중국어나 자연어 설명을 입력하면 AI가 Danbooru 스타일 태그로 변환합니다",
     "convert.costTitle": "비용 안내",
-    "convert.costDesc": "변환은 NovelAI Anlas를 쓰지 않습니다. “Conversion API”에 설정된 텍스트 모델만 호출합니다.",
+    "convert.costDesc":
+      "변환은 NovelAI Anlas를 쓰지 않습니다. “Conversion API”에 설정된 텍스트 모델만 호출합니다.",
     "convert.input": "설명 입력",
-    "convert.placeholder": "예:\n짧은 머리와 파란 눈의 소녀, 흰 원피스, 벚꽃나무 아래, 햇살, 애니메이션 스타일",
-    "convert.knownCharacter": "웹/게임/애니 캐릭터로 이름 버전과 특징 버전 생성",
+    "convert.placeholder":
+      "예:\n짧은 머리와 파란 눈의 소녀, 흰 원피스, 벚꽃나무 아래, 햇살, 애니메이션 스타일",
+    "convert.knownCharacter":
+      "웹/게임/애니 캐릭터로 이름 버전과 특징 버전 생성",
     "convert.run.tags": "Danbooru 태그로 변환",
     "convert.run.natural": "자연어로 변환",
     "convert.run.mixed": "혼합 프롬프트로 변환",
     "convert.result": "변환 결과(편집 가능)",
     "convert.applyTemplate": "템플릿 덧붙이기",
-    "convert.emptyHint1": "어떤 언어든 이미지 설명을 입력하면 AI가 의미를 분석해 NovelAI 스타일 Danbooru 태그 조합으로 출력합니다.",
-    "convert.emptyHint2": "설정 › Conversion API 에서 텍스트 모델 API를 설정하세요.",
+    "convert.emptyHint1":
+      "어떤 언어든 이미지 설명을 입력하면 AI가 의미를 분석해 NovelAI 스타일 Danbooru 태그 조합으로 출력합니다.",
+    "convert.emptyHint2":
+      "설정 › Conversion API 에서 텍스트 모델 API를 설정하세요.",
     "convert.reuse": "생성 패널에 재사용",
     "convert.copied": "클립보드에 복사됨",
     "convert.copy": "결과 복사",
     "shared.reusedToGenerate": "프롬프트를 생성 패널에 재사용했습니다.",
     "aiLog.title": "AI 호출 기록",
-    "aiLog.subtitle": "분석 / 변환 / 컷 분할 / 일관성 검사에서 AI로 보낸 내용과 원본 응답을 확인합니다(최근 200개, 재시작 시 초기화).",
+    "aiLog.subtitle":
+      "분석 / 변환 / 컷 분할 / 일관성 검사에서 AI로 보낸 내용과 원본 응답을 확인합니다(최근 200개, 재시작 시 초기화).",
     "aiLog.refreshing": "새로고침 중...",
     "aiLog.refresh": "새로고침",
     "aiLog.clear": "비우기",
-    "aiLog.empty": "아직 기록이 없습니다. AI 분석 / 변환 / 만화 컷 분할을 실행하면 요청과 응답이 표시됩니다.",
+    "aiLog.empty":
+      "아직 기록이 없습니다. AI 분석 / 변환 / 만화 컷 분할을 실행하면 요청과 응답이 표시됩니다.",
     "aiLog.ok": "성공",
     "aiLog.fail": "실패",
     "aiLog.visionApi": "분석API",
@@ -2796,9 +3364,11 @@ const DESKTOP_EXTRA_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "canvas.resultAlt": "생성 결과",
     "canvas.dropToLoad": "놓으면 이미지 불러오기",
     "canvas.generatingTitle": "이미지 처리 중...",
-    "canvas.generatingHint": "NovelAI API 요청 중입니다. 완료되면 자동 저장되고 기록에 추가됩니다.",
+    "canvas.generatingHint":
+      "NovelAI API 요청 중입니다. 완료되면 자동 저장되고 기록에 추가됩니다.",
     "canvas.emptyTitle": "창작 준비 완료",
-    "canvas.emptyHint": "왼쪽에 영어 tag 또는 자연어 프롬프트를 입력하고 생성 버튼을 누르세요. 결과는 자동 저장되고 오른쪽 기록에 추가됩니다.",
+    "canvas.emptyHint":
+      "왼쪽에 영어 tag 또는 자연어 프롬프트를 입력하고 생성 버튼을 누르세요. 결과는 자동 저장되고 오른쪽 기록에 추가됩니다.",
     "canvas.shortcutAutocomplete": "Tag 자동완성",
     "canvas.shortcutDrop": "작업대에 이미지 드롭 지원",
     "canvas.shortcutApiOnly": "API-only 생성",
@@ -2869,18 +3439,22 @@ const DESKTOP_BATCH_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "batch.metric.generated": "已生成",
     "batch.metric.strength": "强度",
     "batch.back": "返回工具首页",
-    "batch.flowHint": "流程：导入 → 参数 → 提示词 → 生成（项目自动保存，切换不丢失）",
-    "batch.import.groupName": "分组名称（最终图片全部存入此分组，并作为打包来源）",
+    "batch.flowHint":
+      "流程：导入 → 参数 → 提示词 → 生成（项目自动保存，切换不丢失）",
+    "batch.import.groupName":
+      "分组名称（最终图片全部存入此分组，并作为打包来源）",
     "batch.import.groupPlaceholder": "例如：重绘_0622",
     "batch.import.imagesTitle": "导入需要批量重绘的图片",
-    "batch.import.imagesDesc": "支持 PNG / JPG / WEBP，会按文件名自然升序排列，项目会自动保存。",
+    "batch.import.imagesDesc":
+      "支持 PNG / JPG / WEBP，会按文件名自然升序排列，项目会自动保存。",
     "batch.import.pickImages": "选择图片",
     "batch.import.projectTitle": "项目管理",
     "batch.import.projectDesc": "适合长队列：导出 JSON 后可跨重启继续。",
     "batch.import.exportProject": "导出项目",
     "batch.import.importProject": "导入项目",
     "batch.import.clear": "清除",
-    "batch.import.hint": "默认按文件名升序（1 / 2 / 10 正确顺序）。项目（图片+提示词+参数+参考）会自动保存，切换工具/标签不会丢失；“导出项目”可跨重启备份/迁移。",
+    "batch.import.hint":
+      "默认按文件名升序（1 / 2 / 10 正确顺序）。项目（图片+提示词+参数+参考）会自动保存，切换工具/标签不会丢失；“导出项目”可跨重启备份/迁移。",
     "batch.import.emptyTitle": "还没有导入图片",
     "batch.import.emptyHint": "先放进一批原图，再进入参数和提示词步骤。",
     "batch.import.thumbTitle": "双击放大",
@@ -2899,14 +3473,17 @@ const DESKTOP_BATCH_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "batch.params.footer": "参数会作为每张图的默认值；单张覆盖可在下一步细调。",
     "batch.prev.params": "返回参数",
     "batch.next.prompts": "下一步：提示词",
-    "batch.prompts.bulkLabel": "批量输入提示词（每行一条，按顺序对应图片）→ 点“导入文本”",
-    "batch.prompts.bulkPlaceholder": "第 1 张的提示词\n第 2 张的提示词\n第 3 张的提示词\n...",
+    "batch.prompts.bulkLabel":
+      "批量输入提示词（每行一条，按顺序对应图片）→ 点“导入文本”",
+    "batch.prompts.bulkPlaceholder":
+      "第 1 张的提示词\n第 2 张的提示词\n第 3 张的提示词\n...",
     "batch.prompts.importText": "导入文本",
     "batch.prompts.importTxt": "导入 .txt 文件",
     "batch.prompts.reverseMode": "反推模式",
     "batch.prompts.aiRunning": "AI 反推中…",
     "batch.prompts.aiFill": "AI 反推填充空缺",
-    "batch.prompts.hint": "导入优先（每行对应一张）；空缺可用所选模式 AI 反推补全。左侧选择图片，右侧编辑该图的提示词 / 改图强度 / 单独高级参数，可单张“生成 / 重试”。双击大图放大。",
+    "batch.prompts.hint":
+      "导入优先（每行对应一张）；空缺可用所选模式 AI 反推补全。左侧选择图片，右侧编辑该图的提示词 / 改图强度 / 单独高级参数，可单张“生成 / 重试”。双击大图放大。",
     "batch.prompts.importFirst": "请先在“导入”步骤导入图片。",
     "batch.prompts.generateOne": "生成此张",
     "batch.prompts.regenerate": "重新生成",
@@ -2941,7 +3518,8 @@ const DESKTOP_BATCH_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "batch.results.editParams": "修改参数",
     "batch.results.editPrompts": "修改提示词",
     "batch.results.clearGenerated": "清空当前生成",
-    "batch.results.clearConfirm": "将删除本轮全部生成图片及对应历史记录，并返回参数步骤。此操作无法撤销，是否继续？",
+    "batch.results.clearConfirm":
+      "将删除本轮全部生成图片及对应历史记录，并返回参数步骤。此操作无法撤销，是否继续？",
     "batch.results.filterAria": "筛选生成结果",
     "batch.results.all": "全部",
     "batch.results.completed": "已完成",
@@ -2977,8 +3555,10 @@ const DESKTOP_BATCH_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "batch.toast.projectImported": "已导入项目（{count} 张图片）",
     "batch.toast.importFailed": "导入失败：{message}",
     "batch.toast.cleared": "已清除当前项目",
-    "batch.toast.resultsCleared": "已删除本轮生成图片和历史记录，可以修改参数后重新生成",
-    "batch.toast.resultsClearFailed": "有 {count} 张图片删除失败，未清除对应结果",
+    "batch.toast.resultsCleared":
+      "已删除本轮生成图片和历史记录，可以修改参数后重新生成",
+    "batch.toast.resultsClearFailed":
+      "有 {count} 张图片删除失败，未清除对应结果",
     "batch.exportDefault": "{name}_本次图生图结果",
     "batch.projectDefaultName": "批量图生图",
   },
@@ -3033,18 +3613,22 @@ const DESKTOP_BATCH_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "batch.metric.generated": "已生成",
     "batch.metric.strength": "強度",
     "batch.back": "返回工具首頁",
-    "batch.flowHint": "流程：匯入 → 參數 → 提示詞 → 生成（專案自動保存，切換不丟失）",
-    "batch.import.groupName": "分組名稱（最終圖片全部存入此分組，並作為打包來源）",
+    "batch.flowHint":
+      "流程：匯入 → 參數 → 提示詞 → 生成（專案自動保存，切換不丟失）",
+    "batch.import.groupName":
+      "分組名稱（最終圖片全部存入此分組，並作為打包來源）",
     "batch.import.groupPlaceholder": "例如：重繪_0622",
     "batch.import.imagesTitle": "匯入需要批次重繪的圖片",
-    "batch.import.imagesDesc": "支援 PNG / JPG / WEBP，會按檔名自然升序排列，專案會自動保存。",
+    "batch.import.imagesDesc":
+      "支援 PNG / JPG / WEBP，會按檔名自然升序排列，專案會自動保存。",
     "batch.import.pickImages": "選擇圖片",
     "batch.import.projectTitle": "專案管理",
     "batch.import.projectDesc": "適合長佇列：匯出 JSON 後可跨重啟繼續。",
     "batch.import.exportProject": "匯出專案",
     "batch.import.importProject": "匯入專案",
     "batch.import.clear": "清除",
-    "batch.import.hint": "預設按檔名升序（1 / 2 / 10 正確順序）。專案（圖片+提示詞+參數+參考）會自動保存，切換工具/標籤不會丟失；「匯出專案」可跨重啟備份/遷移。",
+    "batch.import.hint":
+      "預設按檔名升序（1 / 2 / 10 正確順序）。專案（圖片+提示詞+參數+參考）會自動保存，切換工具/標籤不會丟失；「匯出專案」可跨重啟備份/遷移。",
     "batch.import.emptyTitle": "還沒有匯入圖片",
     "batch.import.emptyHint": "先放入一批原圖，再進入參數和提示詞步驟。",
     "batch.import.thumbTitle": "雙擊放大",
@@ -3063,14 +3647,17 @@ const DESKTOP_BATCH_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "batch.params.footer": "參數會作為每張圖的預設值；單張覆蓋可在下一步細調。",
     "batch.prev.params": "返回參數",
     "batch.next.prompts": "下一步：提示詞",
-    "batch.prompts.bulkLabel": "批次輸入提示詞（每行一條，按順序對應圖片）→ 點「匯入文字」",
-    "batch.prompts.bulkPlaceholder": "第 1 張的提示詞\n第 2 張的提示詞\n第 3 張的提示詞\n...",
+    "batch.prompts.bulkLabel":
+      "批次輸入提示詞（每行一條，按順序對應圖片）→ 點「匯入文字」",
+    "batch.prompts.bulkPlaceholder":
+      "第 1 張的提示詞\n第 2 張的提示詞\n第 3 張的提示詞\n...",
     "batch.prompts.importText": "匯入文字",
     "batch.prompts.importTxt": "匯入 .txt 檔",
     "batch.prompts.reverseMode": "反推模式",
     "batch.prompts.aiRunning": "AI 反推中…",
     "batch.prompts.aiFill": "AI 反推填補空缺",
-    "batch.prompts.hint": "優先匯入（每行對應一張）；空缺可用所選模式 AI 反推補全。左側選擇圖片，右側編輯該圖提示詞 / 改圖強度 / 單獨進階參數，可單張「生成 / 重試」。雙擊大圖放大。",
+    "batch.prompts.hint":
+      "優先匯入（每行對應一張）；空缺可用所選模式 AI 反推補全。左側選擇圖片，右側編輯該圖提示詞 / 改圖強度 / 單獨進階參數，可單張「生成 / 重試」。雙擊大圖放大。",
     "batch.prompts.importFirst": "請先在「匯入」步驟匯入圖片。",
     "batch.prompts.generateOne": "生成此張",
     "batch.prompts.regenerate": "重新生成",
@@ -3105,7 +3692,8 @@ const DESKTOP_BATCH_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "batch.results.editParams": "修改參數",
     "batch.results.editPrompts": "修改提示詞",
     "batch.results.clearGenerated": "清空目前生成",
-    "batch.results.clearConfirm": "將刪除本輪全部生成圖片及對應歷史記錄，並返回參數步驟。此操作無法復原，是否繼續？",
+    "batch.results.clearConfirm":
+      "將刪除本輪全部生成圖片及對應歷史記錄，並返回參數步驟。此操作無法復原，是否繼續？",
     "batch.results.filterAria": "篩選生成結果",
     "batch.results.all": "全部",
     "batch.results.completed": "已完成",
@@ -3141,8 +3729,10 @@ const DESKTOP_BATCH_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "batch.toast.projectImported": "已匯入專案（{count} 張圖片）",
     "batch.toast.importFailed": "匯入失敗：{message}",
     "batch.toast.cleared": "已清除目前專案",
-    "batch.toast.resultsCleared": "已刪除本輪生成圖片和歷史記錄，可以修改參數後重新生成",
-    "batch.toast.resultsClearFailed": "有 {count} 張圖片刪除失敗，未清除對應結果",
+    "batch.toast.resultsCleared":
+      "已刪除本輪生成圖片和歷史記錄，可以修改參數後重新生成",
+    "batch.toast.resultsClearFailed":
+      "有 {count} 張圖片刪除失敗，未清除對應結果",
     "batch.exportDefault": "{name}_本次圖生圖結果",
     "batch.projectDefaultName": "批次圖生圖",
   },
@@ -3179,11 +3769,14 @@ const DESKTOP_BATCH_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "batch.param.varietyDesc": "Increase sampling variety",
     "batch.param.smeaDesc": "V3 high-resolution optimization",
     "batch.param.smeaDynDesc": "V3 dynamic optimization",
-    "batch.ref.preciseTitle": "Global precise references · V4 / V4.5 only (+5 Anlas per image)",
+    "batch.ref.preciseTitle":
+      "Global precise references · V4 / V4.5 only (+5 Anlas per image)",
     "batch.ref.vibeTitle": "Global Vibe Transfer (first encoding spends Anlas)",
     "batch.ref.add": "＋ Add",
-    "batch.ref.preciseEmpty": "None added. Keeps character / style consistent across every redraw.",
-    "batch.ref.vibeEmpty": "None added. Transfers the reference image’s overall vibe to every redraw.",
+    "batch.ref.preciseEmpty":
+      "None added. Keeps character / style consistent across every redraw.",
+    "batch.ref.vibeEmpty":
+      "None added. Transfers the reference image’s overall vibe to every redraw.",
     "batch.ref.style": "Style",
     "batch.ref.characterStyle": "Character + style",
     "batch.ref.strength": "Strength",
@@ -3191,50 +3784,67 @@ const DESKTOP_BATCH_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "batch.ref.info": "Info",
     "batch.titleEyebrow": "Tools / Batch Img2Img",
     "batch.unnamedTask": "Untitled batch task",
-    "batch.subtitle": "Import images → Shared params → Per-image prompts → Queue / ZIP",
+    "batch.subtitle":
+      "Import images → Shared params → Per-image prompts → Queue / ZIP",
     "batch.metric.images": "Images",
     "batch.metric.prompted": "Prompted",
     "batch.metric.generated": "Generated",
     "batch.metric.strength": "Strength",
     "batch.back": "Back to Tool Hub",
-    "batch.flowHint": "Flow: Import → Params → Prompts → Generate (project auto-saves; switching tabs is safe)",
-    "batch.import.groupName": "Group name (final images are saved here and used as the ZIP source)",
+    "batch.flowHint":
+      "Flow: Import → Params → Prompts → Generate (project auto-saves; switching tabs is safe)",
+    "batch.import.groupName":
+      "Group name (final images are saved here and used as the ZIP source)",
     "batch.import.groupPlaceholder": "Example: redraw_0622",
     "batch.import.imagesTitle": "Import images to redraw",
-    "batch.import.imagesDesc": "Supports PNG / JPG / WEBP. Files are sorted by natural filename order and the project auto-saves.",
+    "batch.import.imagesDesc":
+      "Supports PNG / JPG / WEBP. Files are sorted by natural filename order and the project auto-saves.",
     "batch.import.pickImages": "Choose images",
     "batch.import.projectTitle": "Project management",
-    "batch.import.projectDesc": "For long queues: export JSON and continue after restart.",
+    "batch.import.projectDesc":
+      "For long queues: export JSON and continue after restart.",
     "batch.import.exportProject": "Export project",
     "batch.import.importProject": "Import project",
     "batch.import.clear": "Clear",
-    "batch.import.hint": "Default order is natural filename sort (1 / 2 / 10). Project data (images + prompts + params + refs) auto-saves; Export project backs it up across restarts.",
+    "batch.import.hint":
+      "Default order is natural filename sort (1 / 2 / 10). Project data (images + prompts + params + refs) auto-saves; Export project backs it up across restarts.",
     "batch.import.emptyTitle": "No images imported yet",
-    "batch.import.emptyHint": "Add a batch of source images, then continue to Params and Prompts.",
+    "batch.import.emptyHint":
+      "Add a batch of source images, then continue to Params and Prompts.",
     "batch.import.thumbTitle": "Double-click to zoom",
     "batch.import.remove": "Remove",
-    "batch.import.footerReady": "{count} images imported. Continue to shared parameters.",
-    "batch.import.footerEmpty": "Thumbnails appear here after import. You can remove individual images any time.",
+    "batch.import.footerReady":
+      "{count} images imported. Continue to shared parameters.",
+    "batch.import.footerEmpty":
+      "Thumbnails appear here after import. You can remove individual images any time.",
     "batch.prev.import": "Back to import",
     "batch.next.params": "Next: Params",
-    "batch.params.title": "Global params · seeded from the main Generate screen, editable here",
+    "batch.params.title":
+      "Global params · seeded from the main Generate screen, editable here",
     "batch.params.sync": "Sync main params",
-    "batch.params.strength": "Global img2img strength: {value} (lower keeps more of the source)",
-    "batch.params.style": "Global style prompt (prepended to every image prompt)",
+    "batch.params.strength":
+      "Global img2img strength: {value} (lower keeps more of the source)",
+    "batch.params.style":
+      "Global style prompt (prepended to every image prompt)",
     "batch.params.stylePlaceholder": "e.g. masterpiece, best quality, anime",
-    "batch.params.negative": "Global negative prompt (empty = model default negative)",
+    "batch.params.negative":
+      "Global negative prompt (empty = model default negative)",
     "batch.params.negativePlaceholder": "e.g. lowres, bad anatomy",
-    "batch.params.footer": "These params are defaults for every image; per-image overrides can be edited next.",
+    "batch.params.footer":
+      "These params are defaults for every image; per-image overrides can be edited next.",
     "batch.prev.params": "Back to params",
     "batch.next.prompts": "Next: Prompts",
-    "batch.prompts.bulkLabel": "Bulk prompts (one line per image, same order) → click Import text",
-    "batch.prompts.bulkPlaceholder": "Prompt for image 1\nPrompt for image 2\nPrompt for image 3\n...",
+    "batch.prompts.bulkLabel":
+      "Bulk prompts (one line per image, same order) → click Import text",
+    "batch.prompts.bulkPlaceholder":
+      "Prompt for image 1\nPrompt for image 2\nPrompt for image 3\n...",
     "batch.prompts.importText": "Import text",
     "batch.prompts.importTxt": "Import .txt",
     "batch.prompts.reverseMode": "Reverse mode",
     "batch.prompts.aiRunning": "AI reversing…",
     "batch.prompts.aiFill": "AI-fill missing prompts",
-    "batch.prompts.hint": "Imported lines take priority; missing prompts can be filled by AI reverse. Pick an image on the left, edit its prompt / strength / advanced overrides on the right, and generate or retry one image at a time.",
+    "batch.prompts.hint":
+      "Imported lines take priority; missing prompts can be filled by AI reverse. Pick an image on the left, edit its prompt / strength / advanced overrides on the right, and generate or retry one image at a time.",
     "batch.prompts.importFirst": "Import images in the Import step first.",
     "batch.prompts.generateOne": "Generate this",
     "batch.prompts.regenerate": "Regenerate",
@@ -3242,15 +3852,19 @@ const DESKTOP_BATCH_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "batch.prompts.dragOutput": "Drag to Desktop / other apps",
     "batch.prompts.currentOutput": "Current output",
     "batch.prompts.sourceImage": "Source image",
-    "batch.prompts.outputHint": "Regenerating replaces this image’s current output.",
-    "batch.prompts.sourceHint": "Double-click to zoom; output appears here after generation.",
-    "batch.prompts.itemPrompt": "Prompt for this image (imported / AI reverse / manual)",
+    "batch.prompts.outputHint":
+      "Regenerating replaces this image’s current output.",
+    "batch.prompts.sourceHint":
+      "Double-click to zoom; output appears here after generation.",
+    "batch.prompts.itemPrompt":
+      "Prompt for this image (imported / AI reverse / manual)",
     "batch.prompts.itemPromptPlaceholder": "Prompt for this image",
     "batch.prompts.itemStrength": "Img2Img strength (empty = global {value})",
     "batch.prompts.advanced": "Per-image advanced params",
     "batch.prompts.override": "Override global params (editable per field)",
     "batch.prompts.footerReady": "{ready}/{total} images have prompts.",
-    "batch.prompts.footerEmpty": "Each image needs at least one prompt before entering the queue.",
+    "batch.prompts.footerEmpty":
+      "Each image needs at least one prompt before entering the queue.",
     "batch.next.generate": "Next: Generate",
     "batch.results.eyebrow": "Batch output",
     "batch.results.title": "Batch generation results",
@@ -3269,11 +3883,13 @@ const DESKTOP_BATCH_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "batch.results.editParams": "Edit params",
     "batch.results.editPrompts": "Edit prompts",
     "batch.results.clearGenerated": "Clear current results",
-    "batch.results.clearConfirm": "This deletes every image generated in this run and its history record, then returns to Parameters. This cannot be undone. Continue?",
+    "batch.results.clearConfirm":
+      "This deletes every image generated in this run and its history record, then returns to Parameters. This cannot be undone. Continue?",
     "batch.results.filterAria": "Filter generation results",
     "batch.results.all": "All",
     "batch.results.completed": "Completed",
-    "batch.results.tip": "Click thumbnails to view full size; generated images can be dragged to Desktop or other apps.",
+    "batch.results.tip":
+      "Click thumbnails to view full size; generated images can be dragged to Desktop or other apps.",
     "batch.results.emptyTitle": "No images ready to generate",
     "batch.results.emptyHint": "Go back to Import and Prompts to finish setup.",
     "batch.results.filteredEmpty": "No images match this filter",
@@ -3285,7 +3901,8 @@ const DESKTOP_BATCH_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "batch.results.noPrompt": "(No prompt; this image will be skipped)",
     "batch.results.zoom": "Zoom",
     "batch.results.previewAlt": "Preview",
-    "batch.toast.synced": "Synced model / params / style / negative prompt from the main screen",
+    "batch.toast.synced":
+      "Synced model / params / style / negative prompt from the main screen",
     "batch.toast.importedImages": "Imported {count} images (sorted by name)",
     "batch.toast.importedPrompts": "Imported {count} prompts in order",
     "batch.toast.needPromptBulk": "Paste or enter prompts first (one per line)",
@@ -3294,19 +3911,23 @@ const DESKTOP_BATCH_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "batch.toast.aiDone": "AI prompt fill complete",
     "batch.toast.aiFailed": "AI fill failed: {message}",
     "batch.toast.needGroup": "Enter a group name first",
-    "batch.toast.noReady": "No images can be generated; each image needs a prompt",
+    "batch.toast.noReady":
+      "No images can be generated; each image needs a prompt",
     "batch.toast.stopped": "Stopped ({done} completed)",
     "batch.toast.failed": "{done} completed, {failed} failed: {message}",
     "batch.toast.allDone": "All done: {done} images saved to “{name}”",
     "batch.toast.needGenerated": "Generate this batch before packaging",
     "batch.toast.zipDone": "Export successful, ZIP packaged: {path}",
     "batch.toast.zipDoneFallback": "Done",
-    "batch.toast.projectExported": "Project exported (images and params included)",
+    "batch.toast.projectExported":
+      "Project exported (images and params included)",
     "batch.toast.projectImported": "Project imported ({count} images)",
     "batch.toast.importFailed": "Import failed: {message}",
     "batch.toast.cleared": "Current project cleared",
-    "batch.toast.resultsCleared": "Generated images and history records cleared. You can edit parameters and generate again.",
-    "batch.toast.resultsClearFailed": "Failed to delete {count} image(s); their results were kept",
+    "batch.toast.resultsCleared":
+      "Generated images and history records cleared. You can edit parameters and generate again.",
+    "batch.toast.resultsClearFailed":
+      "Failed to delete {count} image(s); their results were kept",
     "batch.exportDefault": "{name}_current-img2img-results",
     "batch.projectDefaultName": "batch-img2img",
   },
@@ -3343,11 +3964,14 @@ const DESKTOP_BATCH_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "batch.param.varietyDesc": "サンプリングの多様性を増加",
     "batch.param.smeaDesc": "V3 高解像最適化",
     "batch.param.smeaDynDesc": "V3 動的最適化",
-    "batch.ref.preciseTitle": "全体精密参照 · V4 / V4.5 のみ（画像ごと +5 Anlas）",
+    "batch.ref.preciseTitle":
+      "全体精密参照 · V4 / V4.5 のみ（画像ごと +5 Anlas）",
     "batch.ref.vibeTitle": "全体 Vibe Transfer（初回エンコードで Anlas 消費）",
     "batch.ref.add": "＋ 追加",
-    "batch.ref.preciseEmpty": "未追加。各再生成でキャラクター / 画風を一貫させます。",
-    "batch.ref.vibeEmpty": "未追加。参照画像の全体的な雰囲気を各再生成へ移します。",
+    "batch.ref.preciseEmpty":
+      "未追加。各再生成でキャラクター / 画風を一貫させます。",
+    "batch.ref.vibeEmpty":
+      "未追加。参照画像の全体的な雰囲気を各再生成へ移します。",
     "batch.ref.style": "画風",
     "batch.ref.characterStyle": "キャラ+画風",
     "batch.ref.strength": "強度",
@@ -3355,51 +3979,67 @@ const DESKTOP_BATCH_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "batch.ref.info": "情報量",
     "batch.titleEyebrow": "ツール / 一括 Img2Img",
     "batch.unnamedTask": "無題の一括タスク",
-    "batch.subtitle": "画像読み込み → 共通パラメータ → 個別プロンプト → キュー生成 / ZIP",
+    "batch.subtitle":
+      "画像読み込み → 共通パラメータ → 個別プロンプト → キュー生成 / ZIP",
     "batch.metric.images": "画像",
     "batch.metric.prompted": "入力済み",
     "batch.metric.generated": "生成済み",
     "batch.metric.strength": "強度",
     "batch.back": "ツールハブへ戻る",
-    "batch.flowHint": "流れ：読み込み → パラメータ → プロンプト → 生成（プロジェクトは自動保存、切替でも保持）",
-    "batch.import.groupName": "グループ名（最終画像はここへ保存され、ZIP 元になります）",
+    "batch.flowHint":
+      "流れ：読み込み → パラメータ → プロンプト → 生成（プロジェクトは自動保存、切替でも保持）",
+    "batch.import.groupName":
+      "グループ名（最終画像はここへ保存され、ZIP 元になります）",
     "batch.import.groupPlaceholder": "例：redraw_0622",
     "batch.import.imagesTitle": "一括再生成する画像を読み込み",
-    "batch.import.imagesDesc": "PNG / JPG / WEBP 対応。ファイル名の自然順で並べ、自動保存します。",
+    "batch.import.imagesDesc":
+      "PNG / JPG / WEBP 対応。ファイル名の自然順で並べ、自動保存します。",
     "batch.import.pickImages": "画像を選択",
     "batch.import.projectTitle": "プロジェクト管理",
-    "batch.import.projectDesc": "長いキュー向け：JSON を書き出して再起動後に続行できます。",
+    "batch.import.projectDesc":
+      "長いキュー向け：JSON を書き出して再起動後に続行できます。",
     "batch.import.exportProject": "プロジェクトを書き出し",
     "batch.import.importProject": "プロジェクトを読み込み",
     "batch.import.clear": "クリア",
-    "batch.import.hint": "既定はファイル名の自然順（1 / 2 / 10）。プロジェクト（画像+プロンプト+パラメータ+参照）は自動保存され、ツール/タブ切替でも失われません。",
+    "batch.import.hint":
+      "既定はファイル名の自然順（1 / 2 / 10）。プロジェクト（画像+プロンプト+パラメータ+参照）は自動保存され、ツール/タブ切替でも失われません。",
     "batch.import.emptyTitle": "画像がまだありません",
-    "batch.import.emptyHint": "まず元画像を追加し、パラメータとプロンプトへ進みます。",
+    "batch.import.emptyHint":
+      "まず元画像を追加し、パラメータとプロンプトへ進みます。",
     "batch.import.thumbTitle": "ダブルクリックで拡大",
     "batch.import.remove": "削除",
-    "batch.import.footerReady": "{count} 枚を読み込みました。共通パラメータへ進めます。",
-    "batch.import.footerEmpty": "読み込むとここにサムネイルが表示されます。個別に削除できます。",
+    "batch.import.footerReady":
+      "{count} 枚を読み込みました。共通パラメータへ進めます。",
+    "batch.import.footerEmpty":
+      "読み込むとここにサムネイルが表示されます。個別に削除できます。",
     "batch.prev.import": "読み込みへ戻る",
     "batch.next.params": "次へ：パラメータ",
-    "batch.params.title": "共通パラメータ · メイン生成画面から初期化、ここで編集可能",
+    "batch.params.title":
+      "共通パラメータ · メイン生成画面から初期化、ここで編集可能",
     "batch.params.sync": "メイン設定を同期",
-    "batch.params.strength": "全体 Img2Img 強度：{value}（低いほど元画像を保持）",
+    "batch.params.strength":
+      "全体 Img2Img 強度：{value}（低いほど元画像を保持）",
     "batch.params.style": "全体スタイルプロンプト（各画像の前に付加）",
     "batch.params.stylePlaceholder": "例 masterpiece, best quality, anime",
     "batch.params.negative": "全体ネガティブプロンプト（空ならモデル既定）",
     "batch.params.negativePlaceholder": "例 lowres, bad anatomy",
-    "batch.params.footer": "これらは各画像の既定値です。次の手順で個別上書きできます。",
+    "batch.params.footer":
+      "これらは各画像の既定値です。次の手順で個別上書きできます。",
     "batch.prev.params": "パラメータへ戻る",
     "batch.next.prompts": "次へ：プロンプト",
-    "batch.prompts.bulkLabel": "一括プロンプト（画像順に 1 行 1 件）→「テキストを読み込み」",
-    "batch.prompts.bulkPlaceholder": "1 枚目のプロンプト\n2 枚目のプロンプト\n3 枚目のプロンプト\n...",
+    "batch.prompts.bulkLabel":
+      "一括プロンプト（画像順に 1 行 1 件）→「テキストを読み込み」",
+    "batch.prompts.bulkPlaceholder":
+      "1 枚目のプロンプト\n2 枚目のプロンプト\n3 枚目のプロンプト\n...",
     "batch.prompts.importText": "テキストを読み込み",
     "batch.prompts.importTxt": ".txt を読み込み",
     "batch.prompts.reverseMode": "解析モード",
     "batch.prompts.aiRunning": "AI 解析中…",
     "batch.prompts.aiFill": "空欄を AI で補完",
-    "batch.prompts.hint": "読み込み行を優先し、空欄は選択モードの AI 解析で補完できます。左で画像を選び、右でプロンプト / 強度 / 詳細上書きを編集します。",
-    "batch.prompts.importFirst": "先に「読み込み」手順で画像を追加してください。",
+    "batch.prompts.hint":
+      "読み込み行を優先し、空欄は選択モードの AI 解析で補完できます。左で画像を選び、右でプロンプト / 強度 / 詳細上書きを編集します。",
+    "batch.prompts.importFirst":
+      "先に「読み込み」手順で画像を追加してください。",
     "batch.prompts.generateOne": "この画像を生成",
     "batch.prompts.regenerate": "再生成",
     "batch.prompts.retry": "再試行",
@@ -3407,14 +4047,17 @@ const DESKTOP_BATCH_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "batch.prompts.currentOutput": "現在の出力",
     "batch.prompts.sourceImage": "元画像",
     "batch.prompts.outputHint": "再生成すると現在の出力を置き換えます。",
-    "batch.prompts.sourceHint": "ダブルクリックで拡大。生成後ここに出力が表示されます。",
-    "batch.prompts.itemPrompt": "この画像のプロンプト（読み込み / AI 解析 / 手動）",
+    "batch.prompts.sourceHint":
+      "ダブルクリックで拡大。生成後ここに出力が表示されます。",
+    "batch.prompts.itemPrompt":
+      "この画像のプロンプト（読み込み / AI 解析 / 手動）",
     "batch.prompts.itemPromptPlaceholder": "この画像のプロンプト",
     "batch.prompts.itemStrength": "Img2Img 強度（空 = 全体 {value}）",
     "batch.prompts.advanced": "個別詳細パラメータ",
     "batch.prompts.override": "全体パラメータを上書き（項目ごとに編集）",
     "batch.prompts.footerReady": "{ready}/{total} 枚にプロンプトがあります。",
-    "batch.prompts.footerEmpty": "キューに入るには各画像にプロンプトが必要です。",
+    "batch.prompts.footerEmpty":
+      "キューに入るには各画像にプロンプトが必要です。",
     "batch.next.generate": "次へ：生成",
     "batch.results.eyebrow": "Batch output",
     "batch.results.title": "一括生成結果",
@@ -3433,13 +4076,16 @@ const DESKTOP_BATCH_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "batch.results.editParams": "パラメータを編集",
     "batch.results.editPrompts": "プロンプトを編集",
     "batch.results.clearGenerated": "今回の生成結果を消去",
-    "batch.results.clearConfirm": "今回生成したすべての画像と履歴を削除し、パラメータ画面に戻ります。この操作は取り消せません。続行しますか？",
+    "batch.results.clearConfirm":
+      "今回生成したすべての画像と履歴を削除し、パラメータ画面に戻ります。この操作は取り消せません。続行しますか？",
     "batch.results.filterAria": "生成結果をフィルタ",
     "batch.results.all": "すべて",
     "batch.results.completed": "完了",
-    "batch.results.tip": "サムネイルをクリックして拡大。生成画像はデスクトップや他アプリへドラッグできます。",
+    "batch.results.tip":
+      "サムネイルをクリックして拡大。生成画像はデスクトップや他アプリへドラッグできます。",
     "batch.results.emptyTitle": "生成待ち画像がありません",
-    "batch.results.emptyHint": "「読み込み」と「プロンプト」に戻って設定してください。",
+    "batch.results.emptyHint":
+      "「読み込み」と「プロンプト」に戻って設定してください。",
     "batch.results.filteredEmpty": "このフィルタに画像はありません",
     "batch.results.viewAll": "すべて表示",
     "batch.results.previewTitle": "クリックして拡大",
@@ -3449,28 +4095,35 @@ const DESKTOP_BATCH_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "batch.results.noPrompt": "（プロンプトなし。スキップされます）",
     "batch.results.zoom": "拡大",
     "batch.results.previewAlt": "プレビュー",
-    "batch.toast.synced": "メイン画面のモデル / パラメータ / スタイル / ネガティブを同期しました",
+    "batch.toast.synced":
+      "メイン画面のモデル / パラメータ / スタイル / ネガティブを同期しました",
     "batch.toast.importedImages": "{count} 枚の画像を読み込みました（名前順）",
-    "batch.toast.importedPrompts": "{count} 件のプロンプトを順番に読み込みました",
-    "batch.toast.needPromptBulk": "先にプロンプトを貼り付け/入力してください（1 行 1 件）",
+    "batch.toast.importedPrompts":
+      "{count} 件のプロンプトを順番に読み込みました",
+    "batch.toast.needPromptBulk":
+      "先にプロンプトを貼り付け/入力してください（1 行 1 件）",
     "batch.toast.needImages": "先に「読み込み」手順で画像を追加してください",
     "batch.toast.allPrompted": "すべての画像にプロンプトがあります",
     "batch.toast.aiDone": "AI 補完が完了しました",
     "batch.toast.aiFailed": "AI 補完失敗：{message}",
     "batch.toast.needGroup": "先にグループ名を入力してください",
-    "batch.toast.noReady": "生成できる画像がありません（各画像にプロンプトが必要です）",
+    "batch.toast.noReady":
+      "生成できる画像がありません（各画像にプロンプトが必要です）",
     "batch.toast.stopped": "停止しました（完了 {done} 枚）",
     "batch.toast.failed": "完了 {done} 枚、失敗 {failed} 枚：{message}",
     "batch.toast.allDone": "すべて完了：{done} 枚を「{name}」へ保存しました",
     "batch.toast.needGenerated": "ZIP 化する前にこのバッチを生成してください",
     "batch.toast.zipDone": "エクスポート成功、ZIP を作成しました：{path}",
     "batch.toast.zipDoneFallback": "完了",
-    "batch.toast.projectExported": "プロジェクトを書き出しました（画像とパラメータ込み）",
+    "batch.toast.projectExported":
+      "プロジェクトを書き出しました（画像とパラメータ込み）",
     "batch.toast.projectImported": "プロジェクトを読み込みました（{count} 枚）",
     "batch.toast.importFailed": "読み込み失敗：{message}",
     "batch.toast.cleared": "現在のプロジェクトをクリアしました",
-    "batch.toast.resultsCleared": "今回の生成画像と履歴を削除しました。パラメータを変更して再生成できます",
-    "batch.toast.resultsClearFailed": "{count} 枚の削除に失敗したため、該当結果を保持しました",
+    "batch.toast.resultsCleared":
+      "今回の生成画像と履歴を削除しました。パラメータを変更して再生成できます",
+    "batch.toast.resultsClearFailed":
+      "{count} 枚の削除に失敗したため、該当結果を保持しました",
     "batch.exportDefault": "{name}_current-img2img-results",
     "batch.projectDefaultName": "batch-img2img",
   },
@@ -3507,11 +4160,14 @@ const DESKTOP_BATCH_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "batch.param.varietyDesc": "샘플링 다양성 증가",
     "batch.param.smeaDesc": "V3 고해상도 최적화",
     "batch.param.smeaDynDesc": "V3 동적 최적화",
-    "batch.ref.preciseTitle": "전역 정밀 참조 · V4 / V4.5 전용(이미지당 +5 Anlas)",
+    "batch.ref.preciseTitle":
+      "전역 정밀 참조 · V4 / V4.5 전용(이미지당 +5 Anlas)",
     "batch.ref.vibeTitle": "전역 Vibe Transfer(첫 인코딩 시 Anlas 사용)",
     "batch.ref.add": "＋ 추가",
-    "batch.ref.preciseEmpty": "아직 없음. 모든 리드로우에서 캐릭터 / 화풍 일관성을 유지합니다.",
-    "batch.ref.vibeEmpty": "아직 없음. 참고 이미지의 전체 분위기를 모든 리드로우에 전달합니다.",
+    "batch.ref.preciseEmpty":
+      "아직 없음. 모든 리드로우에서 캐릭터 / 화풍 일관성을 유지합니다.",
+    "batch.ref.vibeEmpty":
+      "아직 없음. 참고 이미지의 전체 분위기를 모든 리드로우에 전달합니다.",
     "batch.ref.style": "화풍",
     "batch.ref.characterStyle": "캐릭터+화풍",
     "batch.ref.strength": "강도",
@@ -3519,66 +4175,85 @@ const DESKTOP_BATCH_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "batch.ref.info": "정보량",
     "batch.titleEyebrow": "도구 / 배치 Img2Img",
     "batch.unnamedTask": "이름 없는 배치 작업",
-    "batch.subtitle": "이미지 가져오기 → 공통 매개변수 → 이미지별 프롬프트 → 큐 생성 / ZIP",
+    "batch.subtitle":
+      "이미지 가져오기 → 공통 매개변수 → 이미지별 프롬프트 → 큐 생성 / ZIP",
     "batch.metric.images": "이미지",
     "batch.metric.prompted": "프롬프트 있음",
     "batch.metric.generated": "생성됨",
     "batch.metric.strength": "강도",
     "batch.back": "도구 허브로 돌아가기",
-    "batch.flowHint": "흐름: 가져오기 → 매개변수 → 프롬프트 → 생성(프로젝트 자동 저장, 탭 전환에도 유지)",
-    "batch.import.groupName": "그룹 이름(최종 이미지를 여기에 저장하고 ZIP 원본으로 사용)",
+    "batch.flowHint":
+      "흐름: 가져오기 → 매개변수 → 프롬프트 → 생성(프로젝트 자동 저장, 탭 전환에도 유지)",
+    "batch.import.groupName":
+      "그룹 이름(최종 이미지를 여기에 저장하고 ZIP 원본으로 사용)",
     "batch.import.groupPlaceholder": "예: redraw_0622",
     "batch.import.imagesTitle": "배치 리드로우할 이미지 가져오기",
-    "batch.import.imagesDesc": "PNG / JPG / WEBP 지원. 파일명을 자연순으로 정렬하고 프로젝트를 자동 저장합니다.",
+    "batch.import.imagesDesc":
+      "PNG / JPG / WEBP 지원. 파일명을 자연순으로 정렬하고 프로젝트를 자동 저장합니다.",
     "batch.import.pickImages": "이미지 선택",
     "batch.import.projectTitle": "프로젝트 관리",
-    "batch.import.projectDesc": "긴 큐에 적합: JSON으로 내보내 재시작 후 이어갈 수 있습니다.",
+    "batch.import.projectDesc":
+      "긴 큐에 적합: JSON으로 내보내 재시작 후 이어갈 수 있습니다.",
     "batch.import.exportProject": "프로젝트 내보내기",
     "batch.import.importProject": "프로젝트 가져오기",
     "batch.import.clear": "지우기",
-    "batch.import.hint": "기본 정렬은 파일명 자연순(1 / 2 / 10)입니다. 프로젝트(이미지+프롬프트+매개변수+참조)는 자동 저장되며 도구/탭 전환에도 사라지지 않습니다.",
+    "batch.import.hint":
+      "기본 정렬은 파일명 자연순(1 / 2 / 10)입니다. 프로젝트(이미지+프롬프트+매개변수+참조)는 자동 저장되며 도구/탭 전환에도 사라지지 않습니다.",
     "batch.import.emptyTitle": "아직 가져온 이미지가 없습니다",
-    "batch.import.emptyHint": "먼저 원본 이미지를 넣고 매개변수와 프롬프트 단계로 이동하세요.",
+    "batch.import.emptyHint":
+      "먼저 원본 이미지를 넣고 매개변수와 프롬프트 단계로 이동하세요.",
     "batch.import.thumbTitle": "더블클릭해 확대",
     "batch.import.remove": "제거",
-    "batch.import.footerReady": "{count}장을 가져왔습니다. 공통 매개변수를 설정하세요.",
-    "batch.import.footerEmpty": "가져오면 여기에 썸네일이 표시되며, 개별 이미지를 제거할 수 있습니다.",
+    "batch.import.footerReady":
+      "{count}장을 가져왔습니다. 공통 매개변수를 설정하세요.",
+    "batch.import.footerEmpty":
+      "가져오면 여기에 썸네일이 표시되며, 개별 이미지를 제거할 수 있습니다.",
     "batch.prev.import": "가져오기로 돌아가기",
     "batch.next.params": "다음: 매개변수",
-    "batch.params.title": "전역 매개변수 · 기본은 메인 생성 화면에서 가져오며 수정 가능",
+    "batch.params.title":
+      "전역 매개변수 · 기본은 메인 생성 화면에서 가져오며 수정 가능",
     "batch.params.sync": "메인 매개변수 동기화",
     "batch.params.strength": "전역 Img2Img 강도: {value}(낮을수록 원본 유지)",
     "batch.params.style": "전역 스타일 프롬프트(각 이미지 프롬프트 앞에 추가)",
     "batch.params.stylePlaceholder": "예: masterpiece, best quality, anime",
     "batch.params.negative": "전역 네거티브 프롬프트(비우면 모델 기본값)",
     "batch.params.negativePlaceholder": "예: lowres, bad anatomy",
-    "batch.params.footer": "이 매개변수는 모든 이미지의 기본값입니다. 다음 단계에서 이미지별로 덮어쓸 수 있습니다.",
+    "batch.params.footer":
+      "이 매개변수는 모든 이미지의 기본값입니다. 다음 단계에서 이미지별로 덮어쓸 수 있습니다.",
     "batch.prev.params": "매개변수로 돌아가기",
     "batch.next.prompts": "다음: 프롬프트",
-    "batch.prompts.bulkLabel": "배치 프롬프트(이미지 순서대로 한 줄씩) → 텍스트 가져오기 클릭",
-    "batch.prompts.bulkPlaceholder": "1번 이미지 프롬프트\n2번 이미지 프롬프트\n3번 이미지 프롬프트\n...",
+    "batch.prompts.bulkLabel":
+      "배치 프롬프트(이미지 순서대로 한 줄씩) → 텍스트 가져오기 클릭",
+    "batch.prompts.bulkPlaceholder":
+      "1번 이미지 프롬프트\n2번 이미지 프롬프트\n3번 이미지 프롬프트\n...",
     "batch.prompts.importText": "텍스트 가져오기",
     "batch.prompts.importTxt": ".txt 가져오기",
     "batch.prompts.reverseMode": "분석 모드",
     "batch.prompts.aiRunning": "AI 분석 중…",
     "batch.prompts.aiFill": "빈 프롬프트 AI 채우기",
-    "batch.prompts.hint": "가져온 줄을 우선 사용하고, 빈 칸은 선택한 AI 분석 모드로 채울 수 있습니다. 왼쪽에서 이미지를 선택하고 오른쪽에서 프롬프트 / 강도 / 고급 덮어쓰기를 편집하세요.",
-    "batch.prompts.importFirst": "먼저 ‘가져오기’ 단계에서 이미지를 추가하세요.",
+    "batch.prompts.hint":
+      "가져온 줄을 우선 사용하고, 빈 칸은 선택한 AI 분석 모드로 채울 수 있습니다. 왼쪽에서 이미지를 선택하고 오른쪽에서 프롬프트 / 강도 / 고급 덮어쓰기를 편집하세요.",
+    "batch.prompts.importFirst":
+      "먼저 ‘가져오기’ 단계에서 이미지를 추가하세요.",
     "batch.prompts.generateOne": "이 이미지 생성",
     "batch.prompts.regenerate": "다시 생성",
     "batch.prompts.retry": "재시도",
     "batch.prompts.dragOutput": "데스크톱 / 다른 앱으로 드래그 가능",
     "batch.prompts.currentOutput": "현재 결과",
     "batch.prompts.sourceImage": "원본 이미지",
-    "batch.prompts.outputHint": "다시 생성하면 이 이미지의 현재 결과를 대체합니다.",
-    "batch.prompts.sourceHint": "더블클릭해 확대; 생성 후 결과가 여기에 표시됩니다.",
-    "batch.prompts.itemPrompt": "이 이미지의 프롬프트(가져오기 / AI 분석 / 수동)",
+    "batch.prompts.outputHint":
+      "다시 생성하면 이 이미지의 현재 결과를 대체합니다.",
+    "batch.prompts.sourceHint":
+      "더블클릭해 확대; 생성 후 결과가 여기에 표시됩니다.",
+    "batch.prompts.itemPrompt":
+      "이 이미지의 프롬프트(가져오기 / AI 분석 / 수동)",
     "batch.prompts.itemPromptPlaceholder": "이 이미지의 프롬프트",
     "batch.prompts.itemStrength": "Img2Img 강도(비우면 전역 {value})",
     "batch.prompts.advanced": "이미지별 고급 매개변수",
     "batch.prompts.override": "전역 매개변수 덮어쓰기(항목별 수정 가능)",
     "batch.prompts.footerReady": "{ready}/{total}장에 프롬프트가 있습니다.",
-    "batch.prompts.footerEmpty": "큐에 넣으려면 각 이미지에 최소 하나의 프롬프트가 필요합니다.",
+    "batch.prompts.footerEmpty":
+      "큐에 넣으려면 각 이미지에 최소 하나의 프롬프트가 필요합니다.",
     "batch.next.generate": "다음: 생성",
     "batch.results.eyebrow": "Batch output",
     "batch.results.title": "배치 생성 결과",
@@ -3597,13 +4272,16 @@ const DESKTOP_BATCH_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "batch.results.editParams": "파라미터 수정",
     "batch.results.editPrompts": "프롬프트 수정",
     "batch.results.clearGenerated": "현재 생성 결과 지우기",
-    "batch.results.clearConfirm": "이번에 생성한 모든 이미지와 기록을 삭제하고 파라미터 단계로 돌아갑니다. 취소할 수 없습니다. 계속할까요?",
+    "batch.results.clearConfirm":
+      "이번에 생성한 모든 이미지와 기록을 삭제하고 파라미터 단계로 돌아갑니다. 취소할 수 없습니다. 계속할까요?",
     "batch.results.filterAria": "생성 결과 필터",
     "batch.results.all": "전체",
     "batch.results.completed": "완료됨",
-    "batch.results.tip": "썸네일을 클릭해 크게 보고, 생성 이미지는 데스크톱이나 다른 앱으로 드래그할 수 있습니다.",
+    "batch.results.tip":
+      "썸네일을 클릭해 크게 보고, 생성 이미지는 데스크톱이나 다른 앱으로 드래그할 수 있습니다.",
     "batch.results.emptyTitle": "생성할 이미지가 없습니다",
-    "batch.results.emptyHint": "가져오기와 프롬프트 단계로 돌아가 설정을 완료하세요.",
+    "batch.results.emptyHint":
+      "가져오기와 프롬프트 단계로 돌아가 설정을 완료하세요.",
     "batch.results.filteredEmpty": "현재 필터에 이미지가 없습니다",
     "batch.results.viewAll": "전체 보기",
     "batch.results.previewTitle": "클릭해 크게 보기",
@@ -3613,28 +4291,34 @@ const DESKTOP_BATCH_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "batch.results.noPrompt": "(프롬프트 없음, 건너뜁니다)",
     "batch.results.zoom": "확대",
     "batch.results.previewAlt": "미리보기",
-    "batch.toast.synced": "메인 화면의 모델 / 매개변수 / 스타일 / 네거티브를 동기화했습니다",
+    "batch.toast.synced":
+      "메인 화면의 모델 / 매개변수 / 스타일 / 네거티브를 동기화했습니다",
     "batch.toast.importedImages": "{count}장 이미지를 가져왔습니다(이름순)",
     "batch.toast.importedPrompts": "{count}개 프롬프트를 순서대로 가져왔습니다",
-    "batch.toast.needPromptBulk": "먼저 프롬프트를 붙여넣거나 입력하세요(한 줄에 하나)",
+    "batch.toast.needPromptBulk":
+      "먼저 프롬프트를 붙여넣거나 입력하세요(한 줄에 하나)",
     "batch.toast.needImages": "먼저 ‘가져오기’ 단계에서 이미지를 추가하세요",
     "batch.toast.allPrompted": "모든 이미지에 프롬프트가 있습니다",
     "batch.toast.aiDone": "AI 프롬프트 채우기 완료",
     "batch.toast.aiFailed": "AI 채우기 실패: {message}",
     "batch.toast.needGroup": "먼저 그룹 이름을 입력하세요",
-    "batch.toast.noReady": "생성 가능한 이미지가 없습니다(각 이미지에 프롬프트 필요)",
+    "batch.toast.noReady":
+      "생성 가능한 이미지가 없습니다(각 이미지에 프롬프트 필요)",
     "batch.toast.stopped": "중지됨({done}장 완료)",
     "batch.toast.failed": "{done}장 완료, {failed}장 실패: {message}",
     "batch.toast.allDone": "모두 완료: {done}장을 “{name}”에 저장했습니다",
     "batch.toast.needGenerated": "ZIP을 만들기 전에 이 배치를 먼저 생성하세요",
     "batch.toast.zipDone": "내보내기 성공, ZIP 생성 완료: {path}",
     "batch.toast.zipDoneFallback": "완료",
-    "batch.toast.projectExported": "프로젝트를 내보냈습니다(이미지와 매개변수 포함)",
+    "batch.toast.projectExported":
+      "프로젝트를 내보냈습니다(이미지와 매개변수 포함)",
     "batch.toast.projectImported": "프로젝트를 가져왔습니다({count}장)",
     "batch.toast.importFailed": "가져오기 실패: {message}",
     "batch.toast.cleared": "현재 프로젝트를 지웠습니다",
-    "batch.toast.resultsCleared": "이번 생성 이미지와 기록을 삭제했습니다. 파라미터를 수정한 뒤 다시 생성할 수 있습니다",
-    "batch.toast.resultsClearFailed": "이미지 {count}개를 삭제하지 못해 해당 결과를 유지했습니다",
+    "batch.toast.resultsCleared":
+      "이번 생성 이미지와 기록을 삭제했습니다. 파라미터를 수정한 뒤 다시 생성할 수 있습니다",
+    "batch.toast.resultsClearFailed":
+      "이미지 {count}개를 삭제하지 못해 해당 결과를 유지했습니다",
     "batch.exportDefault": "{name}_current-img2img-results",
     "batch.projectDefaultName": "batch-img2img",
   },
@@ -3685,7 +4369,8 @@ const DESKTOP_MAIN_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "history.renameGroupModal": "重命名分组",
     "history.renameGroupLabel": "分组名称",
     "history.renameConfirm": "重命名",
-    "history.deleteGroupConfirm": "删除分组“{name}”？组内图片会转为未分组（文件保留）。",
+    "history.deleteGroupConfirm":
+      "删除分组“{name}”？组内图片会转为未分组（文件保留）。",
   },
   "zh-TW": {
     "splash.subtitle": "NovelAI API 圖像創作工作台",
@@ -3731,7 +4416,8 @@ const DESKTOP_MAIN_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "history.renameGroupModal": "重新命名分組",
     "history.renameGroupLabel": "分組名稱",
     "history.renameConfirm": "重新命名",
-    "history.deleteGroupConfirm": "刪除分組「{name}」？組內圖片會轉為未分組（檔案保留）。",
+    "history.deleteGroupConfirm":
+      "刪除分組「{name}」？組內圖片會轉為未分組（檔案保留）。",
   },
   "en-US": {
     "splash.subtitle": "NovelAI API image creation workspace",
@@ -3766,18 +4452,21 @@ const DESKTOP_MAIN_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "history.deleteGroupTitle": "Delete current group",
     "history.delete": "Delete",
     "history.emptyTitle": "No history yet",
-    "history.emptyHint": "Generation, inpaint, upscale, and post-processing results are saved here automatically.",
+    "history.emptyHint":
+      "Generation, inpaint, upscale, and post-processing results are saved here automatically.",
     "history.thumbAlt": "History thumbnail",
     "history.dragTitle": "Drag to Desktop / File Explorer / other apps",
     "history.itemGroupTitle": "Set asset group",
     "history.renameImageTitle": "Rename image (also renames the local file)",
     "history.deleteImageTitle": "Delete record and local file",
     "history.renameImageModal": "Rename image",
-    "history.renameImageLabel": "New filename (without extension; local file is renamed too)",
+    "history.renameImageLabel":
+      "New filename (without extension; local file is renamed too)",
     "history.renameGroupModal": "Rename group",
     "history.renameGroupLabel": "Group name",
     "history.renameConfirm": "Rename",
-    "history.deleteGroupConfirm": "Delete group “{name}”? Images in it will become ungrouped; files are kept.",
+    "history.deleteGroupConfirm":
+      "Delete group “{name}”? Images in it will become ungrouped; files are kept.",
   },
   "ja-JP": {
     "splash.subtitle": "NovelAI API 画像制作ワークスペース",
@@ -3812,18 +4501,22 @@ const DESKTOP_MAIN_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "history.deleteGroupTitle": "現在のグループを削除",
     "history.delete": "削除",
     "history.emptyTitle": "履歴はまだありません",
-    "history.emptyHint": "生成、再描画、拡大、後処理の結果はここに自動保存されます。",
+    "history.emptyHint":
+      "生成、再描画、拡大、後処理の結果はここに自動保存されます。",
     "history.thumbAlt": "履歴サムネイル",
-    "history.dragTitle": "デスクトップ / エクスプローラー / 他アプリへドラッグ可能",
+    "history.dragTitle":
+      "デスクトップ / エクスプローラー / 他アプリへドラッグ可能",
     "history.itemGroupTitle": "素材グループを設定",
     "history.renameImageTitle": "画像名を変更（ローカルファイルも同期）",
     "history.deleteImageTitle": "記録とローカルファイルを削除",
     "history.renameImageModal": "画像名を変更",
-    "history.renameImageLabel": "新しいファイル名（拡張子なし。ローカルファイルも変更）",
+    "history.renameImageLabel":
+      "新しいファイル名（拡張子なし。ローカルファイルも変更）",
     "history.renameGroupModal": "グループ名を変更",
     "history.renameGroupLabel": "グループ名",
     "history.renameConfirm": "名前変更",
-    "history.deleteGroupConfirm": "グループ「{name}」を削除しますか？中の画像は未分類になります（ファイルは保持）。",
+    "history.deleteGroupConfirm":
+      "グループ「{name}」を削除しますか？中の画像は未分類になります（ファイルは保持）。",
   },
   "ko-KR": {
     "splash.subtitle": "NovelAI API 이미지 창작 작업대",
@@ -3858,7 +4551,8 @@ const DESKTOP_MAIN_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "history.deleteGroupTitle": "현재 그룹 삭제",
     "history.delete": "삭제",
     "history.emptyTitle": "아직 기록이 없습니다",
-    "history.emptyHint": "생성, 리드로우, 업스케일, 후처리 결과가 자동으로 여기에 저장됩니다.",
+    "history.emptyHint":
+      "생성, 리드로우, 업스케일, 후처리 결과가 자동으로 여기에 저장됩니다.",
     "history.thumbAlt": "기록 썸네일",
     "history.dragTitle": "데스크톱 / 파일 탐색기 / 다른 앱으로 드래그 가능",
     "history.itemGroupTitle": "소재 그룹 설정",
@@ -3869,11 +4563,15 @@ const DESKTOP_MAIN_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "history.renameGroupModal": "그룹 이름 변경",
     "history.renameGroupLabel": "그룹 이름",
     "history.renameConfirm": "이름 변경",
-    "history.deleteGroupConfirm": "그룹 “{name}”을 삭제할까요? 그룹 안 이미지는 미분류로 이동하며 파일은 유지됩니다.",
+    "history.deleteGroupConfirm":
+      "그룹 “{name}”을 삭제할까요? 그룹 안 이미지는 미분류로 이동하며 파일은 유지됩니다.",
   },
 };
 
-const DESKTOP_ONBOARDING_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
+const DESKTOP_ONBOARDING_UI_TEXT: Record<
+  AppLanguage,
+  Record<string, string>
+> = {
   "zh-CN": {
     "onboarding.skip": "跳过向导",
     "onboarding.step": "第 {current}/{total} 步",
@@ -3882,28 +4580,36 @@ const DESKTOP_ONBOARDING_UI_TEXT: Record<AppLanguage, Record<string, string>> = 
     "onboarding.start": "开始使用",
     "onboarding.card0.badge": "介绍",
     "onboarding.card0.title": "欢迎使用 Langbai NovelAI Studio",
-    "onboarding.card0.desc": "中文 API-only 的 NovelAI 图像创作工作台：文生图 / 图生图 / 局部重绘 / 云端超分 / 导演工具 / 漫画生成，本地中文标签补全与灵感胶囊。",
+    "onboarding.card0.desc":
+      "中文 API-only 的 NovelAI 图像创作工作台：文生图 / 图生图 / 局部重绘 / 云端超分 / 导演工具 / 漫画生成，本地中文标签补全与灵感胶囊。",
     "onboarding.card1.badge": "网络",
     "onboarding.card1.title": "先确认代理连接",
-    "onboarding.card1.desc": "NovelAI、AI 反推、谷歌翻译及更新检查等大部分联网功能通常需要可用代理。默认使用本机 HTTP 代理 127.0.0.1:7890。",
+    "onboarding.card1.desc":
+      "NovelAI、AI 反推、谷歌翻译及更新检查等大部分联网功能通常需要可用代理。默认使用本机 HTTP 代理 127.0.0.1:7890。",
     "onboarding.card2.badge": "API",
     "onboarding.card2.title": "配置 NovelAI API Token",
-    "onboarding.card2.desc": "Token 只保存在本机主进程存储中，渲染层不会直接持有。",
+    "onboarding.card2.desc":
+      "Token 只保存在本机主进程存储中，渲染层不会直接持有。",
     "onboarding.card3.badge": "选填",
     "onboarding.card3.title": "可选的第三方 AI 服务",
-    "onboarding.card3.desc": "反推（图→提示词）、转换（中文→标签）、翻译都依赖你自备的第三方接口，不填也能正常生成图片，之后可在设置中再配置。",
+    "onboarding.card3.desc":
+      "反推（图→提示词）、转换（中文→标签）、翻译都依赖你自备的第三方接口，不填也能正常生成图片，之后可在设置中再配置。",
     "onboarding.card4.badge": "保存",
     "onboarding.card4.title": "选择图片保存位置",
-    "onboarding.card4.desc": "生成图片会自动保存到此目录并写入右侧历史。可选择是否在图片中保留生成元数据：保留便于日后反查，关闭则导出“干净”图片便于分享。",
+    "onboarding.card4.desc":
+      "生成图片会自动保存到此目录并写入右侧历史。可选择是否在图片中保留生成元数据：保留便于日后反查，关闭则导出“干净”图片便于分享。",
     "onboarding.card5.badge": "标签库",
     "onboarding.card5.title": "下载中文标签库（可选）",
-    "onboarding.card5.desc": "下载后，提示词补全与灵感胶囊将使用上万条带中文的 Danbooru 标签（按热度）。不下载则使用内置精简词库。",
+    "onboarding.card5.desc":
+      "下载后，提示词补全与灵感胶囊将使用上万条带中文的 Danbooru 标签（按热度）。不下载则使用内置精简词库。",
     "onboarding.card6.badge": "界面",
     "onboarding.card6.title": "了解主界面",
-    "onboarding.card6.desc": "左侧参数、中间画布、右侧历史；英文输入会自动推测 tag。",
+    "onboarding.card6.desc":
+      "左侧参数、中间画布、右侧历史；英文输入会自动推测 tag。",
     "onboarding.card7.badge": "完成",
     "onboarding.card7.title": "一切就绪",
-    "onboarding.card7.desc": "之后可随时在设置中修改 API、输出目录和偏好，也能重新查看本向导。",
+    "onboarding.card7.desc":
+      "之后可随时在设置中修改 API、输出目录和偏好，也能重新查看本向导。",
     "onboarding.text2imgTitle": "文生图 / 图生图",
     "onboarding.text2imgDesc": "提示词、参考图、批量与队列",
     "onboarding.redrawTitle": "重绘 / 超分",
@@ -3914,13 +4620,17 @@ const DESKTOP_ONBOARDING_UI_TEXT: Record<AppLanguage, Record<string, string>> = 
     "onboarding.tagsDesc": "本地中文补全与灵感胶囊",
     "onboarding.github": "GitHub 项目主页",
     "onboarding.language": "语言",
-    "onboarding.networkWarning": "请先启动本机代理软件，并确认端口与下方选择一致；如果你的网络可以直接访问 NovelAI，可选择“直连”。",
+    "onboarding.networkWarning":
+      "请先启动本机代理软件，并确认端口与下方选择一致；如果你的网络可以直接访问 NovelAI，可选择“直连”。",
     "onboarding.verifySave": "验证并保存",
-    "onboarding.tokenConfigured": "已配置 Token（留空保持不变，或输入新 Token 替换）。",
+    "onboarding.tokenConfigured":
+      "已配置 Token（留空保持不变，或输入新 Token 替换）。",
     "onboarding.tokenKeep": "已配置，留空保持不变",
-    "onboarding.optionalHint": "以下全部可选，可直接“下一步”跳过，稍后在设置中配置。",
+    "onboarding.optionalHint":
+      "以下全部可选，可直接“下一步”跳过，稍后在设置中配置。",
     "onboarding.visionKeyLabel": "反推（图→提示词）Vision API Key",
-    "onboarding.visionKeyPlaceholder": "选填：用于“AI 反推”，默认 OpenAI 兼容接口",
+    "onboarding.visionKeyPlaceholder":
+      "选填：用于“AI 反推”，默认 OpenAI 兼容接口",
     "onboarding.convertKeyLabel": "转换（中文→标签）API Key",
     "onboarding.convertKeyPlaceholder": "选填：用于“中文描述转标签”",
     "onboarding.currentOutputDir": "当前输出目录",
@@ -3952,28 +4662,36 @@ const DESKTOP_ONBOARDING_UI_TEXT: Record<AppLanguage, Record<string, string>> = 
     "onboarding.start": "開始使用",
     "onboarding.card0.badge": "介紹",
     "onboarding.card0.title": "歡迎使用 Langbai NovelAI Studio",
-    "onboarding.card0.desc": "中文 API-only 的 NovelAI 圖像創作工作台：文生圖 / 圖生圖 / 局部重繪 / 雲端超分 / 導演工具 / 漫畫生成，本地中文標籤補全與靈感膠囊。",
+    "onboarding.card0.desc":
+      "中文 API-only 的 NovelAI 圖像創作工作台：文生圖 / 圖生圖 / 局部重繪 / 雲端超分 / 導演工具 / 漫畫生成，本地中文標籤補全與靈感膠囊。",
     "onboarding.card1.badge": "網路",
     "onboarding.card1.title": "先確認代理連線",
-    "onboarding.card1.desc": "NovelAI、AI 反推、Google 翻譯及更新檢查等大部分聯網功能通常需要可用代理。預設使用本機 HTTP 代理 127.0.0.1:7890。",
+    "onboarding.card1.desc":
+      "NovelAI、AI 反推、Google 翻譯及更新檢查等大部分聯網功能通常需要可用代理。預設使用本機 HTTP 代理 127.0.0.1:7890。",
     "onboarding.card2.badge": "API",
     "onboarding.card2.title": "配置 NovelAI API Token",
-    "onboarding.card2.desc": "Token 只保存在本機主程序儲存中，渲染層不會直接持有。",
+    "onboarding.card2.desc":
+      "Token 只保存在本機主程序儲存中，渲染層不會直接持有。",
     "onboarding.card3.badge": "選填",
     "onboarding.card3.title": "可選的第三方 AI 服務",
-    "onboarding.card3.desc": "反推（圖→提示詞）、轉換（中文→標籤）、翻譯都依賴你自備的第三方介面，不填也能正常生成圖片，之後可在設定中再配置。",
+    "onboarding.card3.desc":
+      "反推（圖→提示詞）、轉換（中文→標籤）、翻譯都依賴你自備的第三方介面，不填也能正常生成圖片，之後可在設定中再配置。",
     "onboarding.card4.badge": "保存",
     "onboarding.card4.title": "選擇圖片保存位置",
-    "onboarding.card4.desc": "生成圖片會自動保存到此目錄並寫入右側歷史。可選擇是否保留生成中繼資料：保留便於日後反查，關閉則導出「乾淨」圖片便於分享。",
+    "onboarding.card4.desc":
+      "生成圖片會自動保存到此目錄並寫入右側歷史。可選擇是否保留生成中繼資料：保留便於日後反查，關閉則導出「乾淨」圖片便於分享。",
     "onboarding.card5.badge": "標籤庫",
     "onboarding.card5.title": "下載中文標籤庫（可選）",
-    "onboarding.card5.desc": "下載後，提示詞補全與靈感膠囊將使用上萬條帶中文的 Danbooru 標籤（按熱度）。不下載則使用內置精簡詞庫。",
+    "onboarding.card5.desc":
+      "下載後，提示詞補全與靈感膠囊將使用上萬條帶中文的 Danbooru 標籤（按熱度）。不下載則使用內置精簡詞庫。",
     "onboarding.card6.badge": "介面",
     "onboarding.card6.title": "了解主介面",
-    "onboarding.card6.desc": "左側參數、中間畫布、右側歷史；英文輸入會自動推測 tag。",
+    "onboarding.card6.desc":
+      "左側參數、中間畫布、右側歷史；英文輸入會自動推測 tag。",
     "onboarding.card7.badge": "完成",
     "onboarding.card7.title": "一切就緒",
-    "onboarding.card7.desc": "之後可隨時在設定中修改 API、輸出目錄和偏好，也能重新查看本向導。",
+    "onboarding.card7.desc":
+      "之後可隨時在設定中修改 API、輸出目錄和偏好，也能重新查看本向導。",
     "onboarding.text2imgTitle": "文生圖 / 圖生圖",
     "onboarding.text2imgDesc": "提示詞、參考圖、批量與佇列",
     "onboarding.redrawTitle": "重繪 / 超分",
@@ -3984,13 +4702,17 @@ const DESKTOP_ONBOARDING_UI_TEXT: Record<AppLanguage, Record<string, string>> = 
     "onboarding.tagsDesc": "本地中文補全與靈感膠囊",
     "onboarding.github": "GitHub 專案首頁",
     "onboarding.language": "語言",
-    "onboarding.networkWarning": "請先啟動本機代理軟體，並確認連接埠與下方選擇一致；如果你的網路可以直接存取 NovelAI，可選擇「直連」。",
+    "onboarding.networkWarning":
+      "請先啟動本機代理軟體，並確認連接埠與下方選擇一致；如果你的網路可以直接存取 NovelAI，可選擇「直連」。",
     "onboarding.verifySave": "驗證並保存",
-    "onboarding.tokenConfigured": "已設定 Token（留空保持不變，或輸入新 Token 替換）。",
+    "onboarding.tokenConfigured":
+      "已設定 Token（留空保持不變，或輸入新 Token 替換）。",
     "onboarding.tokenKeep": "已設定，留空保持不變",
-    "onboarding.optionalHint": "以下全部可選，可直接「下一步」略過，稍後在設定中配置。",
+    "onboarding.optionalHint":
+      "以下全部可選，可直接「下一步」略過，稍後在設定中配置。",
     "onboarding.visionKeyLabel": "反推（圖→提示詞）Vision API Key",
-    "onboarding.visionKeyPlaceholder": "選填：用於「AI 反推」，預設 OpenAI 相容介面",
+    "onboarding.visionKeyPlaceholder":
+      "選填：用於「AI 反推」，預設 OpenAI 相容介面",
     "onboarding.convertKeyLabel": "轉換（中文→標籤）API Key",
     "onboarding.convertKeyPlaceholder": "選填：用於「中文描述轉標籤」",
     "onboarding.currentOutputDir": "目前輸出目錄",
@@ -4022,56 +4744,72 @@ const DESKTOP_ONBOARDING_UI_TEXT: Record<AppLanguage, Record<string, string>> = 
     "onboarding.start": "Start",
     "onboarding.card0.badge": "Intro",
     "onboarding.card0.title": "Welcome to Langbai NovelAI Studio",
-    "onboarding.card0.desc": "An API-only NovelAI image workspace: text-to-image, image-to-image, inpainting, cloud upscale, director tools, comic generation, local tag completion, and inspiration capsules.",
+    "onboarding.card0.desc":
+      "An API-only NovelAI image workspace: text-to-image, image-to-image, inpainting, cloud upscale, director tools, comic generation, local tag completion, and inspiration capsules.",
     "onboarding.card1.badge": "Network",
     "onboarding.card1.title": "Check your proxy first",
-    "onboarding.card1.desc": "NovelAI, AI reverse prompting, Google Translate, and update checks often need a working proxy. The default is local HTTP proxy 127.0.0.1:7890.",
+    "onboarding.card1.desc":
+      "NovelAI, AI reverse prompting, Google Translate, and update checks often need a working proxy. The default is local HTTP proxy 127.0.0.1:7890.",
     "onboarding.card2.badge": "API",
     "onboarding.card2.title": "Configure NovelAI API Token",
-    "onboarding.card2.desc": "The token is stored only in the local main-process storage; the renderer never keeps it directly.",
+    "onboarding.card2.desc":
+      "The token is stored only in the local main-process storage; the renderer never keeps it directly.",
     "onboarding.card3.badge": "Optional",
     "onboarding.card3.title": "Optional third-party AI services",
-    "onboarding.card3.desc": "Reverse prompting, prompt conversion, and translation rely on your own third-party endpoints. You can skip them and configure later in Settings.",
+    "onboarding.card3.desc":
+      "Reverse prompting, prompt conversion, and translation rely on your own third-party endpoints. You can skip them and configure later in Settings.",
     "onboarding.card4.badge": "Save",
     "onboarding.card4.title": "Choose where images are saved",
-    "onboarding.card4.desc": "Generated images are saved to this folder and listed in history. You can keep metadata for later import, or export clean images for sharing.",
+    "onboarding.card4.desc":
+      "Generated images are saved to this folder and listed in history. You can keep metadata for later import, or export clean images for sharing.",
     "onboarding.card5.badge": "Tags",
     "onboarding.card5.title": "Download the Chinese tag library (optional)",
-    "onboarding.card5.desc": "After download, completion and capsules use a large Danbooru tag library with Chinese labels. Without it, the built-in compact library is used.",
+    "onboarding.card5.desc":
+      "After download, completion and capsules use a large Danbooru tag library with Chinese labels. Without it, the built-in compact library is used.",
     "onboarding.card6.badge": "UI",
     "onboarding.card6.title": "Learn the workspace",
-    "onboarding.card6.desc": "Parameters on the left, canvas in the middle, history on the right; English fragments can trigger tag suggestions.",
+    "onboarding.card6.desc":
+      "Parameters on the left, canvas in the middle, history on the right; English fragments can trigger tag suggestions.",
     "onboarding.card7.badge": "Done",
     "onboarding.card7.title": "You are ready",
-    "onboarding.card7.desc": "You can change API, output, and preferences in Settings anytime, and reopen this guide later.",
+    "onboarding.card7.desc":
+      "You can change API, output, and preferences in Settings anytime, and reopen this guide later.",
     "onboarding.text2imgTitle": "Text / Image generation",
     "onboarding.text2imgDesc": "Prompts, references, batches, and queue",
     "onboarding.redrawTitle": "Inpaint / Upscale",
     "onboarding.redrawDesc": "Mask inpainting and 2×/4× cloud upscale",
     "onboarding.directorTitle": "Director / Comics",
-    "onboarding.directorDesc": "Background removal, line art, colorize, emotion, comics",
+    "onboarding.directorDesc":
+      "Background removal, line art, colorize, emotion, comics",
     "onboarding.tagsTitle": "Tags",
     "onboarding.tagsDesc": "Local completion and inspiration capsules",
     "onboarding.github": "GitHub project",
     "onboarding.language": "Language",
-    "onboarding.networkWarning": "Start your local proxy first and make sure the port matches the choice below. If your network can access NovelAI directly, choose Direct.",
+    "onboarding.networkWarning":
+      "Start your local proxy first and make sure the port matches the choice below. If your network can access NovelAI directly, choose Direct.",
     "onboarding.verifySave": "Verify and save",
-    "onboarding.tokenConfigured": "Token already configured (leave blank to keep it, or enter a new one to replace).",
+    "onboarding.tokenConfigured":
+      "Token already configured (leave blank to keep it, or enter a new one to replace).",
     "onboarding.tokenKeep": "Already set; leave blank to keep",
-    "onboarding.optionalHint": "Everything below is optional. You can click Next now and configure it later in Settings.",
+    "onboarding.optionalHint":
+      "Everything below is optional. You can click Next now and configure it later in Settings.",
     "onboarding.visionKeyLabel": "Reverse prompt Vision API Key",
-    "onboarding.visionKeyPlaceholder": "Optional: for AI reverse prompting, OpenAI-compatible by default",
+    "onboarding.visionKeyPlaceholder":
+      "Optional: for AI reverse prompting, OpenAI-compatible by default",
     "onboarding.convertKeyLabel": "Prompt conversion API Key",
-    "onboarding.convertKeyPlaceholder": "Optional: for natural language to tag conversion",
+    "onboarding.convertKeyPlaceholder":
+      "Optional: for natural language to tag conversion",
     "onboarding.currentOutputDir": "Current output folder",
     "onboarding.leftTitle": "Left",
     "onboarding.leftDesc": "Prompts, models, image inputs, feature parameters",
     "onboarding.centerTitle": "Center",
-    "onboarding.centerDesc": "Generation preview, inpaint canvas, file location",
+    "onboarding.centerDesc":
+      "Generation preview, inpaint canvas, file location",
     "onboarding.rightTitle": "Right",
     "onboarding.rightDesc": "History by date and record deletion",
     "onboarding.completeTitle": "Completion",
-    "onboarding.completeDesc": "Type fragments like g / glo, then Tab or Enter to insert a tag",
+    "onboarding.completeDesc":
+      "Type fragments like g / glo, then Tab or Enter to insert a tag",
     "update.newVersion": "New version v{latest} available (current v{current})",
     "update.download": "Download",
     "update.downloadInApp": "Download and install in-app",
@@ -4092,28 +4830,36 @@ const DESKTOP_ONBOARDING_UI_TEXT: Record<AppLanguage, Record<string, string>> = 
     "onboarding.start": "開始",
     "onboarding.card0.badge": "紹介",
     "onboarding.card0.title": "Langbai NovelAI Studio へようこそ",
-    "onboarding.card0.desc": "API 専用の NovelAI 画像制作ワークスペースです。txt2img、img2img、インペイント、クラウド超解像、Director ツール、漫画生成、ローカルタグ補完、インスピレーションカプセルに対応します。",
+    "onboarding.card0.desc":
+      "API 専用の NovelAI 画像制作ワークスペースです。txt2img、img2img、インペイント、クラウド超解像、Director ツール、漫画生成、ローカルタグ補完、インスピレーションカプセルに対応します。",
     "onboarding.card1.badge": "ネットワーク",
     "onboarding.card1.title": "まずプロキシを確認",
-    "onboarding.card1.desc": "NovelAI、AI 逆推定、Google 翻訳、更新確認などはプロキシが必要な場合があります。既定はローカル HTTP プロキシ 127.0.0.1:7890 です。",
+    "onboarding.card1.desc":
+      "NovelAI、AI 逆推定、Google 翻訳、更新確認などはプロキシが必要な場合があります。既定はローカル HTTP プロキシ 127.0.0.1:7890 です。",
     "onboarding.card2.badge": "API",
     "onboarding.card2.title": "NovelAI API Token を設定",
-    "onboarding.card2.desc": "Token はローカルのメインプロセス側ストレージにのみ保存され、レンダラーは直接保持しません。",
+    "onboarding.card2.desc":
+      "Token はローカルのメインプロセス側ストレージにのみ保存され、レンダラーは直接保持しません。",
     "onboarding.card3.badge": "任意",
     "onboarding.card3.title": "任意の外部 AI サービス",
-    "onboarding.card3.desc": "逆推定、プロンプト変換、翻訳は自分の外部 API を使います。未設定でも画像生成はでき、後から設定できます。",
+    "onboarding.card3.desc":
+      "逆推定、プロンプト変換、翻訳は自分の外部 API を使います。未設定でも画像生成はでき、後から設定できます。",
     "onboarding.card4.badge": "保存",
     "onboarding.card4.title": "画像の保存先を選択",
-    "onboarding.card4.desc": "生成画像はこのフォルダーに保存され、履歴にも追加されます。メタデータを残すか、共有向けにクリーンな画像を出力できます。",
+    "onboarding.card4.desc":
+      "生成画像はこのフォルダーに保存され、履歴にも追加されます。メタデータを残すか、共有向けにクリーンな画像を出力できます。",
     "onboarding.card5.badge": "タグ",
     "onboarding.card5.title": "中国語タグライブラリをダウンロード（任意）",
-    "onboarding.card5.desc": "ダウンロード後、補完とカプセルは中国語ラベル付きの大規模 Danbooru タグを使います。未取得時は内蔵の軽量辞書を使います。",
+    "onboarding.card5.desc":
+      "ダウンロード後、補完とカプセルは中国語ラベル付きの大規模 Danbooru タグを使います。未取得時は内蔵の軽量辞書を使います。",
     "onboarding.card6.badge": "画面",
     "onboarding.card6.title": "ワークスペースを確認",
-    "onboarding.card6.desc": "左にパラメータ、中央にキャンバス、右に履歴。英語の断片入力でタグ候補が出ます。",
+    "onboarding.card6.desc":
+      "左にパラメータ、中央にキャンバス、右に履歴。英語の断片入力でタグ候補が出ます。",
     "onboarding.card7.badge": "完了",
     "onboarding.card7.title": "準備完了",
-    "onboarding.card7.desc": "API、出力先、各種設定はいつでも設定画面から変更でき、このガイドも再表示できます。",
+    "onboarding.card7.desc":
+      "API、出力先、各種設定はいつでも設定画面から変更でき、このガイドも再表示できます。",
     "onboarding.text2imgTitle": "文生画像 / 画像生成",
     "onboarding.text2imgDesc": "プロンプト、参照画像、バッチ、キュー",
     "onboarding.redrawTitle": "インペイント / 超解像",
@@ -4124,25 +4870,32 @@ const DESKTOP_ONBOARDING_UI_TEXT: Record<AppLanguage, Record<string, string>> = 
     "onboarding.tagsDesc": "ローカル補完とインスピレーションカプセル",
     "onboarding.github": "GitHub プロジェクト",
     "onboarding.language": "言語",
-    "onboarding.networkWarning": "先にローカルプロキシを起動し、下の選択とポートが一致しているか確認してください。NovelAI に直接接続できる場合は Direct を選べます。",
+    "onboarding.networkWarning":
+      "先にローカルプロキシを起動し、下の選択とポートが一致しているか確認してください。NovelAI に直接接続できる場合は Direct を選べます。",
     "onboarding.verifySave": "検証して保存",
-    "onboarding.tokenConfigured": "Token 設定済み（空欄で維持、新しい Token を入力すると置き換え）。",
+    "onboarding.tokenConfigured":
+      "Token 設定済み（空欄で維持、新しい Token を入力すると置き換え）。",
     "onboarding.tokenKeep": "設定済み・空欄で維持",
-    "onboarding.optionalHint": "以下はすべて任意です。今は「次へ」で進み、後から設定できます。",
+    "onboarding.optionalHint":
+      "以下はすべて任意です。今は「次へ」で進み、後から設定できます。",
     "onboarding.visionKeyLabel": "逆推定用 Vision API Key",
-    "onboarding.visionKeyPlaceholder": "任意：AI 逆推定用。既定は OpenAI 互換 API",
+    "onboarding.visionKeyPlaceholder":
+      "任意：AI 逆推定用。既定は OpenAI 互換 API",
     "onboarding.convertKeyLabel": "プロンプト変換 API Key",
     "onboarding.convertKeyPlaceholder": "任意：自然文からタグへの変換用",
     "onboarding.currentOutputDir": "現在の出力フォルダー",
     "onboarding.leftTitle": "左",
     "onboarding.leftDesc": "プロンプト、モデル、画像入力、機能パラメータ",
     "onboarding.centerTitle": "中央",
-    "onboarding.centerDesc": "生成プレビュー、インペイントキャンバス、ファイル場所",
+    "onboarding.centerDesc":
+      "生成プレビュー、インペイントキャンバス、ファイル場所",
     "onboarding.rightTitle": "右",
     "onboarding.rightDesc": "日付別履歴とレコード削除",
     "onboarding.completeTitle": "補完",
-    "onboarding.completeDesc": "g / glo などを入力し、Tab または Enter でタグを挿入",
-    "update.newVersion": "新しいバージョン v{latest} があります（現在 v{current}）",
+    "onboarding.completeDesc":
+      "g / glo などを入力し、Tab または Enter でタグを挿入",
+    "update.newVersion":
+      "新しいバージョン v{latest} があります（現在 v{current}）",
     "update.download": "ダウンロード",
     "update.downloadInApp": "アプリ内でダウンロード・インストール",
     "update.checking": "確認中…",
@@ -4162,28 +4915,36 @@ const DESKTOP_ONBOARDING_UI_TEXT: Record<AppLanguage, Record<string, string>> = 
     "onboarding.start": "시작",
     "onboarding.card0.badge": "소개",
     "onboarding.card0.title": "Langbai NovelAI Studio에 오신 것을 환영합니다",
-    "onboarding.card0.desc": "API 전용 NovelAI 이미지 작업 공간입니다. 텍스트/이미지 생성, 인페인트, 클라우드 업스케일, Director 도구, 만화 생성, 로컬 태그 완성과 영감 캡슐을 지원합니다.",
+    "onboarding.card0.desc":
+      "API 전용 NovelAI 이미지 작업 공간입니다. 텍스트/이미지 생성, 인페인트, 클라우드 업스케일, Director 도구, 만화 생성, 로컬 태그 완성과 영감 캡슐을 지원합니다.",
     "onboarding.card1.badge": "네트워크",
     "onboarding.card1.title": "먼저 프록시 확인",
-    "onboarding.card1.desc": "NovelAI, AI 역추론, Google 번역, 업데이트 확인 등은 프록시가 필요할 수 있습니다. 기본값은 로컬 HTTP 프록시 127.0.0.1:7890입니다.",
+    "onboarding.card1.desc":
+      "NovelAI, AI 역추론, Google 번역, 업데이트 확인 등은 프록시가 필요할 수 있습니다. 기본값은 로컬 HTTP 프록시 127.0.0.1:7890입니다.",
     "onboarding.card2.badge": "API",
     "onboarding.card2.title": "NovelAI API Token 설정",
-    "onboarding.card2.desc": "Token은 로컬 메인 프로세스 저장소에만 저장되며 렌더러가 직접 보관하지 않습니다.",
+    "onboarding.card2.desc":
+      "Token은 로컬 메인 프로세스 저장소에만 저장되며 렌더러가 직접 보관하지 않습니다.",
     "onboarding.card3.badge": "선택",
     "onboarding.card3.title": "선택형 외부 AI 서비스",
-    "onboarding.card3.desc": "역추론, 프롬프트 변환, 번역은 사용자가 준비한 외부 API를 사용합니다. 비워도 이미지 생성은 가능하며 나중에 설정할 수 있습니다.",
+    "onboarding.card3.desc":
+      "역추론, 프롬프트 변환, 번역은 사용자가 준비한 외부 API를 사용합니다. 비워도 이미지 생성은 가능하며 나중에 설정할 수 있습니다.",
     "onboarding.card4.badge": "저장",
     "onboarding.card4.title": "이미지 저장 위치 선택",
-    "onboarding.card4.desc": "생성 이미지는 이 폴더에 저장되고 기록에도 추가됩니다. 메타데이터를 보존하거나 공유용 클린 이미지를 내보낼 수 있습니다.",
+    "onboarding.card4.desc":
+      "생성 이미지는 이 폴더에 저장되고 기록에도 추가됩니다. 메타데이터를 보존하거나 공유용 클린 이미지를 내보낼 수 있습니다.",
     "onboarding.card5.badge": "태그",
     "onboarding.card5.title": "중국어 태그 라이브러리 다운로드(선택)",
-    "onboarding.card5.desc": "다운로드 후 완성과 캡슐은 중국어 라벨이 있는 대규모 Danbooru 태그를 사용합니다. 다운로드하지 않으면 내장 간단 라이브러리를 사용합니다.",
+    "onboarding.card5.desc":
+      "다운로드 후 완성과 캡슐은 중국어 라벨이 있는 대규모 Danbooru 태그를 사용합니다. 다운로드하지 않으면 내장 간단 라이브러리를 사용합니다.",
     "onboarding.card6.badge": "화면",
     "onboarding.card6.title": "작업 공간 알아보기",
-    "onboarding.card6.desc": "왼쪽은 파라미터, 가운데는 캔버스, 오른쪽은 기록입니다. 영어 조각 입력으로 태그 후보를 볼 수 있습니다.",
+    "onboarding.card6.desc":
+      "왼쪽은 파라미터, 가운데는 캔버스, 오른쪽은 기록입니다. 영어 조각 입력으로 태그 후보를 볼 수 있습니다.",
     "onboarding.card7.badge": "완료",
     "onboarding.card7.title": "준비 완료",
-    "onboarding.card7.desc": "API, 출력 폴더, 환경 설정은 언제든 설정에서 바꿀 수 있고 이 가이드도 다시 열 수 있습니다.",
+    "onboarding.card7.desc":
+      "API, 출력 폴더, 환경 설정은 언제든 설정에서 바꿀 수 있고 이 가이드도 다시 열 수 있습니다.",
     "onboarding.text2imgTitle": "텍스트 / 이미지 생성",
     "onboarding.text2imgDesc": "프롬프트, 참조 이미지, 배치, 큐",
     "onboarding.redrawTitle": "인페인트 / 업스케일",
@@ -4194,13 +4955,17 @@ const DESKTOP_ONBOARDING_UI_TEXT: Record<AppLanguage, Record<string, string>> = 
     "onboarding.tagsDesc": "로컬 완성과 영감 캡슐",
     "onboarding.github": "GitHub 프로젝트",
     "onboarding.language": "언어",
-    "onboarding.networkWarning": "먼저 로컬 프록시를 실행하고 아래 선택과 포트가 일치하는지 확인하세요. NovelAI에 직접 접속할 수 있다면 Direct를 선택할 수 있습니다.",
+    "onboarding.networkWarning":
+      "먼저 로컬 프록시를 실행하고 아래 선택과 포트가 일치하는지 확인하세요. NovelAI에 직접 접속할 수 있다면 Direct를 선택할 수 있습니다.",
     "onboarding.verifySave": "검증 후 저장",
-    "onboarding.tokenConfigured": "Token 설정됨(비워 두면 유지, 새 Token 입력 시 교체).",
+    "onboarding.tokenConfigured":
+      "Token 설정됨(비워 두면 유지, 새 Token 입력 시 교체).",
     "onboarding.tokenKeep": "설정됨, 비우면 유지",
-    "onboarding.optionalHint": "아래 항목은 모두 선택 사항입니다. 지금은 다음을 눌러 건너뛰고 나중에 설정할 수 있습니다.",
+    "onboarding.optionalHint":
+      "아래 항목은 모두 선택 사항입니다. 지금은 다음을 눌러 건너뛰고 나중에 설정할 수 있습니다.",
     "onboarding.visionKeyLabel": "역추론 Vision API Key",
-    "onboarding.visionKeyPlaceholder": "선택: AI 역추론용, 기본은 OpenAI 호환 API",
+    "onboarding.visionKeyPlaceholder":
+      "선택: AI 역추론용, 기본은 OpenAI 호환 API",
     "onboarding.convertKeyLabel": "프롬프트 변환 API Key",
     "onboarding.convertKeyPlaceholder": "선택: 자연어를 태그로 변환할 때 사용",
     "onboarding.currentOutputDir": "현재 출력 폴더",
@@ -4211,7 +4976,8 @@ const DESKTOP_ONBOARDING_UI_TEXT: Record<AppLanguage, Record<string, string>> = 
     "onboarding.rightTitle": "오른쪽",
     "onboarding.rightDesc": "날짜별 기록과 기록 삭제",
     "onboarding.completeTitle": "완성",
-    "onboarding.completeDesc": "g / glo 같은 조각을 입력한 뒤 Tab 또는 Enter로 태그 삽입",
+    "onboarding.completeDesc":
+      "g / glo 같은 조각을 입력한 뒤 Tab 또는 Enter로 태그 삽입",
     "update.newVersion": "새 버전 v{latest} 사용 가능(현재 v{current})",
     "update.download": "다운로드",
     "update.downloadInApp": "앱 내에서 다운로드 및 설치",
@@ -4234,7 +5000,8 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "log.enabled": "已开启运行日志",
     "log.disabled": "已关闭运行日志",
     "log.label": "运行日志",
-    "log.desc": "记录软件的各类调用信息与错误（生成 / 图生图 / 超分 / 导演工具 / 异常等），写入 app.log，便于排查问题。",
+    "log.desc":
+      "记录软件的各类调用信息与错误（生成 / 图生图 / 超分 / 导演工具 / 异常等），写入 app.log，便于排查问题。",
     "log.path": "日志存放路径",
     "log.placeholder": "默认：用户数据目录 / logs",
     "log.currentWithSize": "当前：{path}（{size} KB）",
@@ -4256,9 +5023,12 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.logout": "退出 API 登录",
     "settings.accountEndpoint": "API Endpoint（账户接口）",
     "settings.imageEndpoint": "Image Endpoint（图片接口）",
-    "settings.allowCustomEndpoint": "允许向非官方 Endpoint 发送 Token（默认关闭）。关闭时，若 Endpoint 不是 *.novelai.net，会自动改用官方地址以防 Token 泄露。",
-    "settings.allowCustomEndpointFallback": "自定义生图 Endpoint 鉴权失败（401/403）时，自动改用官方地址重试（默认关闭）。开启后重试会用你的官方账号计费，请确认这是你想要的。",
-    "settings.proxyHint": "NovelAI、AI 反推、谷歌翻译及更新检查等联网功能可能需要代理。请确保所选端口与本机代理软件一致。",
+    "settings.allowCustomEndpoint":
+      "允许向非官方 Endpoint 发送 Token（默认关闭）。关闭时，若 Endpoint 不是 *.novelai.net，会自动改用官方地址以防 Token 泄露。",
+    "settings.allowCustomEndpointFallback":
+      "自定义生图 Endpoint 鉴权失败（401/403）时，自动改用官方地址重试（默认关闭）。开启后重试会用你的官方账号计费，请确认这是你想要的。",
+    "settings.proxyHint":
+      "NovelAI、AI 反推、谷歌翻译及更新检查等联网功能可能需要代理。请确保所选端口与本机代理软件一致。",
     "settings.proxyScopeTitle": "走代理的请求（关掉则该项直连）",
     "settings.proxyForNai": "NovelAI API（验证 / 生图 / 超分等）",
     "settings.proxyForAi": "AI 反推 / 转换（OpenAI 兼容）",
@@ -4269,21 +5039,27 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.browse": "浏览...",
     "settings.openOutputDir": "打开输出目录",
     "settings.keepMetadata": "保留图片元数据（提示词 / 种子 / 参数）",
-    "settings.keepMetadataDesc": "开启：保存的 PNG 内嵌生成信息，便于日后反查或重新导入参数。关闭：保存“干净”图片、抹除内嵌的提示词/种子/参数，适合对外分享（不影响画面，无损）。",
+    "settings.keepMetadataDesc":
+      "开启：保存的 PNG 内嵌生成信息，便于日后反查或重新导入参数。关闭：保存“干净”图片、抹除内嵌的提示词/种子/参数，适合对外分享（不影响画面，无损）。",
     "settings.onboarding": "重新查看新手引导",
     "settings.imageNameTemplate": "图片命名模板",
-    "settings.imageNameHint": "可用占位符：{placeholders}。同样应用于分组 ZIP 导出。",
+    "settings.imageNameHint":
+      "可用占位符：{placeholders}。同样应用于分组 ZIP 导出。",
     "settings.historyRetentionDays": "历史记录保留天数",
     "settings.aitagCacheTitle": "AI绘画咒语图库图片缓存",
-    "settings.aitagCacheDesc": "图库预览图首次加载后保存到本地，之后打开无需重复下载。",
+    "settings.aitagCacheDesc":
+      "图库预览图首次加载后保存到本地，之后打开无需重复下载。",
     "settings.aitagCacheSize": "{files} 个文件 · {size}",
     "settings.clearAitagCache": "清除缓存",
     "settings.aitagCacheRetention": "自动清理周期",
     "settings.aitagCacheDays": "{days} 天未使用后清理",
     "settings.aitagCacheNever": "永不自动清理",
-    "settings.historyRetentionHint": "启动时自动清理超过该天数的应用内历史记录；仅清理列表，不会删除已保存到本地的图片文件。",
-    "settings.aiReverseHint": "配置视觉 AI 模型接口，用于反推面板的“反推提示词”功能。支持 OpenAI 及兼容接口（Gemini、本地 Ollama 等）。",
-    "settings.convertHint": "转换 API 只处理文本：把中文或自然语言描述转换为 NovelAI 可用的 Danbooru 英文 tag。它与“AI 反推”的视觉模型 API 分离，可使用更便宜的文本模型。",
+    "settings.historyRetentionHint":
+      "启动时自动清理超过该天数的应用内历史记录；仅清理列表，不会删除已保存到本地的图片文件。",
+    "settings.aiReverseHint":
+      "配置视觉 AI 模型接口，用于反推面板的“反推提示词”功能。支持 OpenAI 及兼容接口（Gemini、本地 Ollama 等）。",
+    "settings.convertHint":
+      "转换 API 只处理文本：把中文或自然语言描述转换为 NovelAI 可用的 Danbooru 英文 tag。它与“AI 反推”的视觉模型 API 分离，可使用更便宜的文本模型。",
     "settings.apiUrl": "API 地址",
     "settings.modelName": "模型名称",
     "settings.detecting": "检测中...",
@@ -4293,30 +5069,37 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.chooseDetected": "— 从检测结果选择 —",
     "settings.reverseTemplate": "反推模板",
     "settings.convertTemplate": "转换模板",
-    "settings.templateMoved": "已集中到“提示词模板”版块，避免同一模板在多个页面重复维护。",
+    "settings.templateMoved":
+      "已集中到“提示词模板”版块，避免同一模板在多个页面重复维护。",
     "settings.unifiedTemplate": "统一提示词模板",
-    "settings.unifiedTemplateDesc": "AI 反推和提示词转换各自读取三套模式模板；漫画 AI 拆分分镜读取下方单模板，漫画生成器不再维护隐藏模板。",
+    "settings.unifiedTemplateDesc":
+      "AI 反推和提示词转换各自读取三套模式模板；漫画 AI 拆分分镜读取下方单模板，漫画生成器不再维护隐藏模板。",
     "settings.reverseTemplateTitle": "AI 反推模板",
     "settings.convertTemplateTitle": "提示词转换模板",
     "settings.comicAnalyzeTemplateTitle": "AI 拆分分镜模板",
     "settings.singleTemplateShared": "单模板，全模式共用",
     "settings.autoComplete": "标签自动补全",
-    "settings.autoCompleteDesc": "输入英文单词时推测可能需要的 NovelAI / Danbooru tag。",
+    "settings.autoCompleteDesc":
+      "输入英文单词时推测可能需要的 NovelAI / Danbooru tag。",
     "settings.tagServerEnabled": "启用 Tag/MCP 服务",
-    "settings.tagServerEnabledDesc": "用于中文灵感、Tag 补全、反推和转换提示词的 Danbooru 标签增强。",
+    "settings.tagServerEnabledDesc":
+      "用于中文灵感、Tag 补全、反推和转换提示词的 Danbooru 标签增强。",
     "settings.tagServerType": "服务类型 / MCP 传输",
     "settings.transportRest": "普通 HTTP 接口（REST /search /tags）",
-    "settings.transportHttp": "MCP · Streamable HTTP（推荐，如 DanbooruSearchOnline）",
+    "settings.transportHttp":
+      "MCP · Streamable HTTP（推荐，如 DanbooruSearchOnline）",
     "settings.transportSse": "MCP · SSE（旧版 HTTP+SSE）",
     "settings.transportStdio": "MCP · stdio（本地启动子进程）",
     "settings.command": "启动命令",
     "settings.commandPlaceholder": "例如：npx 或 mcp-remote 的绝对路径",
     "settings.args": "命令参数（空格分隔）",
-    "settings.argsPlaceholder": "例如：-y mcp-remote https://sakizuki-danboorusearch.hf.space/mcp/mcp",
+    "settings.argsPlaceholder":
+      "例如：-y mcp-remote https://sakizuki-danboorusearch.hf.space/mcp/mcp",
     "settings.serviceUrl": "服务地址",
     "settings.mcpUrl": "MCP 服务地址",
     "settings.serviceUrlPlaceholder": "例如：http://127.0.0.1:8765",
-    "settings.mcpUrlPlaceholder": "例如：https://sakizuki-danboorusearch.hf.space/mcp/mcp",
+    "settings.mcpUrlPlaceholder":
+      "例如：https://sakizuki-danboorusearch.hf.space/mcp/mcp",
     "settings.serviceKey": "服务 Key（可选）",
     "settings.serviceKeyPlaceholder": "Bearer Token，可留空",
     "settings.mcpTool": "MCP 工具名",
@@ -4324,11 +5107,14 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.testing": "检测中",
     "settings.test": "检测",
     "settings.mcpForCapsule": "用于灵感胶囊",
-    "settings.mcpForCapsuleDesc": "配置并启用服务后默认开启：在灵感胶囊中按中文搜索返回 MCP 标签。",
+    "settings.mcpForCapsuleDesc":
+      "配置并启用服务后默认开启：在灵感胶囊中按中文搜索返回 MCP 标签。",
     "settings.mcpForReverse": "用于 AI 反推",
-    "settings.mcpForReverseDesc": "反推图片后，用 MCP 标签补强结果（默认关闭）。",
+    "settings.mcpForReverseDesc":
+      "反推图片后，用 MCP 标签补强结果（默认关闭）。",
     "settings.mcpForConvert": "用于提示词转换",
-    "settings.mcpForConvertDesc": "转换中文描述时，用 MCP 标签补强结果（默认关闭）。",
+    "settings.mcpForConvertDesc":
+      "转换中文描述时，用 MCP 标签补强结果（默认关闭）。",
     "settings.translateHint": "提示词“自动检测→英文”按钮使用的翻译引擎。",
     "settings.translateEngine": "翻译引擎",
     "settings.googleTranslate": "谷歌翻译（免费，可能需要代理）",
@@ -4337,7 +5123,8 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.baiduAppIdPlaceholder": "在 fanyi-api.baidu.com 申请",
     "settings.baiduSecret": "百度翻译密钥",
     "settings.baiduSecretPlaceholder": "开发者密钥",
-    "settings.promptTemplateHint": "提示词模板可以为提示词快速添加前缀/后缀/负面词。在生成面板的提示词区或检视面板可一键应用。",
+    "settings.promptTemplateHint":
+      "提示词模板可以为提示词快速添加前缀/后缀/负面词。在生成面板的提示词区或检视面板可一键应用。",
     "settings.noTemplates": "还没有模板，使用下方表单添加。",
     "settings.delete": "删除",
     "settings.prefix": "前缀：{value}",
@@ -4355,12 +5142,14 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.detectTagToast": "正在检测 Tag/MCP 服务...",
     "settings.aboutVersion": "当前版本 v{version}",
     "settings.aboutProjectTitle": "项目地址",
-    "settings.aboutProjectDesc": "GitHub 开源项目地址，点击即可在浏览器中打开。",
+    "settings.aboutProjectDesc":
+      "GitHub 开源项目地址，点击即可在浏览器中打开。",
     "settings.aboutAuthorTitle": "作者",
     "settings.aboutAuthorDesc": "软件作者与维护者，欢迎反馈问题与建议。",
     "settings.aboutAuthorQq": "作者 QQ",
     "settings.aboutSupportTitle": "赞赏支持",
-    "settings.aboutSupportMessage": "如果软件帮到了你，可以请我喝杯奶茶（doge），或者随手赞赏支持一下，十分感谢。",
+    "settings.aboutSupportMessage":
+      "如果软件帮到了你，可以请我喝杯奶茶（doge），或者随手赞赏支持一下，十分感谢。",
     "settings.aboutWechatReward": "微信赞赏码",
     "settings.aboutAlipayReward": "支付宝赞赏码",
   },
@@ -4371,7 +5160,8 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "log.enabled": "已開啟執行日誌",
     "log.disabled": "已關閉執行日誌",
     "log.label": "執行日誌",
-    "log.desc": "記錄軟體的各類呼叫資訊與錯誤（生成 / 圖生圖 / 超分 / 導演工具 / 異常等），寫入 app.log，便於排查問題。",
+    "log.desc":
+      "記錄軟體的各類呼叫資訊與錯誤（生成 / 圖生圖 / 超分 / 導演工具 / 異常等），寫入 app.log，便於排查問題。",
     "log.path": "日誌存放路徑",
     "log.placeholder": "預設：使用者資料目錄 / logs",
     "log.currentWithSize": "目前：{path}（{size} KB）",
@@ -4393,9 +5183,12 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.logout": "登出 API",
     "settings.accountEndpoint": "API Endpoint（帳號介面）",
     "settings.imageEndpoint": "Image Endpoint（圖片介面）",
-    "settings.allowCustomEndpoint": "允許向非官方 Endpoint 傳送 Token（預設關閉）。關閉時，若 Endpoint 不是 *.novelai.net，會自動改用官方地址以防 Token 外洩。",
-    "settings.allowCustomEndpointFallback": "自訂生圖 Endpoint 驗證失敗（401/403）時，自動改用官方地址重試（預設關閉）。開啟後重試會用你的官方帳號計費，請確認這是你要的行為。",
-    "settings.proxyHint": "NovelAI、AI 反推、Google 翻譯及更新檢查等聯網功能可能需要代理。請確認所選連接埠與本機代理軟體一致。",
+    "settings.allowCustomEndpoint":
+      "允許向非官方 Endpoint 傳送 Token（預設關閉）。關閉時，若 Endpoint 不是 *.novelai.net，會自動改用官方地址以防 Token 外洩。",
+    "settings.allowCustomEndpointFallback":
+      "自訂生圖 Endpoint 驗證失敗（401/403）時，自動改用官方地址重試（預設關閉）。開啟後重試會用你的官方帳號計費，請確認這是你要的行為。",
+    "settings.proxyHint":
+      "NovelAI、AI 反推、Google 翻譯及更新檢查等聯網功能可能需要代理。請確認所選連接埠與本機代理軟體一致。",
     "settings.proxyScopeTitle": "走代理的請求（關掉則該項直連）",
     "settings.proxyForNai": "NovelAI API（驗證 / 生圖 / 超分等）",
     "settings.proxyForAi": "AI 反推 / 轉換（OpenAI 相容）",
@@ -4406,21 +5199,27 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.browse": "瀏覽...",
     "settings.openOutputDir": "開啟輸出目錄",
     "settings.keepMetadata": "保留圖片中繼資料（提示詞 / 種子 / 參數）",
-    "settings.keepMetadataDesc": "開啟：保存的 PNG 內嵌生成資訊，便於日後反查或重新匯入參數。關閉：保存「乾淨」圖片、抹除內嵌資訊，適合對外分享（不影響畫面，無損）。",
+    "settings.keepMetadataDesc":
+      "開啟：保存的 PNG 內嵌生成資訊，便於日後反查或重新匯入參數。關閉：保存「乾淨」圖片、抹除內嵌資訊，適合對外分享（不影響畫面，無損）。",
     "settings.onboarding": "重新查看新手引導",
     "settings.imageNameTemplate": "圖片命名範本",
-    "settings.imageNameHint": "可用佔位符：{placeholders}。同樣套用於分組 ZIP 匯出。",
+    "settings.imageNameHint":
+      "可用佔位符：{placeholders}。同樣套用於分組 ZIP 匯出。",
     "settings.historyRetentionDays": "歷史記錄保留天數",
     "settings.aitagCacheTitle": "AI 繪畫咒語圖庫圖片快取",
-    "settings.aitagCacheDesc": "圖庫預覽圖首次載入後儲存在本機，之後開啟無需重複下載。",
+    "settings.aitagCacheDesc":
+      "圖庫預覽圖首次載入後儲存在本機，之後開啟無需重複下載。",
     "settings.aitagCacheSize": "{files} 個檔案 · {size}",
     "settings.clearAitagCache": "清除快取",
     "settings.aitagCacheRetention": "自動清理週期",
     "settings.aitagCacheDays": "{days} 天未使用後清理",
     "settings.aitagCacheNever": "永不自動清理",
-    "settings.historyRetentionHint": "啟動時自動清理超過該天數的應用內歷史記錄；僅清理列表，不會刪除已保存到本地的圖片檔案。",
-    "settings.aiReverseHint": "配置視覺 AI 模型介面，用於反推面板的「反推提示詞」功能。支援 OpenAI 及相容介面（Gemini、本地 Ollama 等）。",
-    "settings.convertHint": "轉換 API 只處理文字：把中文或自然語言描述轉換為 NovelAI 可用的 Danbooru 英文 tag。它與「AI 反推」的視覺模型 API 分離，可使用更便宜的文字模型。",
+    "settings.historyRetentionHint":
+      "啟動時自動清理超過該天數的應用內歷史記錄；僅清理列表，不會刪除已保存到本地的圖片檔案。",
+    "settings.aiReverseHint":
+      "配置視覺 AI 模型介面，用於反推面板的「反推提示詞」功能。支援 OpenAI 及相容介面（Gemini、本地 Ollama 等）。",
+    "settings.convertHint":
+      "轉換 API 只處理文字：把中文或自然語言描述轉換為 NovelAI 可用的 Danbooru 英文 tag。它與「AI 反推」的視覺模型 API 分離，可使用更便宜的文字模型。",
     "settings.apiUrl": "API 地址",
     "settings.modelName": "模型名稱",
     "settings.detecting": "檢測中...",
@@ -4430,30 +5229,37 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.chooseDetected": "— 從檢測結果選擇 —",
     "settings.reverseTemplate": "反推範本",
     "settings.convertTemplate": "轉換範本",
-    "settings.templateMoved": "已集中到「提示詞範本」版塊，避免同一範本在多個頁面重複維護。",
+    "settings.templateMoved":
+      "已集中到「提示詞範本」版塊，避免同一範本在多個頁面重複維護。",
     "settings.unifiedTemplate": "統一提示詞範本",
-    "settings.unifiedTemplateDesc": "AI 反推和提示詞轉換各自讀取三套模式範本；漫畫 AI 拆分分鏡讀取下方單範本，漫畫生成器不再維護隱藏範本。",
+    "settings.unifiedTemplateDesc":
+      "AI 反推和提示詞轉換各自讀取三套模式範本；漫畫 AI 拆分分鏡讀取下方單範本，漫畫生成器不再維護隱藏範本。",
     "settings.reverseTemplateTitle": "AI 反推範本",
     "settings.convertTemplateTitle": "提示詞轉換範本",
     "settings.comicAnalyzeTemplateTitle": "AI 拆分分鏡範本",
     "settings.singleTemplateShared": "單範本，全模式共用",
     "settings.autoComplete": "標籤自動補全",
-    "settings.autoCompleteDesc": "輸入英文單字時推測可能需要的 NovelAI / Danbooru tag。",
+    "settings.autoCompleteDesc":
+      "輸入英文單字時推測可能需要的 NovelAI / Danbooru tag。",
     "settings.tagServerEnabled": "啟用 Tag/MCP 服務",
-    "settings.tagServerEnabledDesc": "用於中文靈感、Tag 補全、反推和轉換提示詞的 Danbooru 標籤增強。",
+    "settings.tagServerEnabledDesc":
+      "用於中文靈感、Tag 補全、反推和轉換提示詞的 Danbooru 標籤增強。",
     "settings.tagServerType": "服務類型 / MCP 傳輸",
     "settings.transportRest": "普通 HTTP 介面（REST /search /tags）",
-    "settings.transportHttp": "MCP · Streamable HTTP（推薦，如 DanbooruSearchOnline）",
+    "settings.transportHttp":
+      "MCP · Streamable HTTP（推薦，如 DanbooruSearchOnline）",
     "settings.transportSse": "MCP · SSE（舊版 HTTP+SSE）",
     "settings.transportStdio": "MCP · stdio（本地啟動子行程）",
     "settings.command": "啟動命令",
     "settings.commandPlaceholder": "例如：npx 或 mcp-remote 的絕對路徑",
     "settings.args": "命令參數（空格分隔）",
-    "settings.argsPlaceholder": "例如：-y mcp-remote https://sakizuki-danboorusearch.hf.space/mcp/mcp",
+    "settings.argsPlaceholder":
+      "例如：-y mcp-remote https://sakizuki-danboorusearch.hf.space/mcp/mcp",
     "settings.serviceUrl": "服務地址",
     "settings.mcpUrl": "MCP 服務地址",
     "settings.serviceUrlPlaceholder": "例如：http://127.0.0.1:8765",
-    "settings.mcpUrlPlaceholder": "例如：https://sakizuki-danboorusearch.hf.space/mcp/mcp",
+    "settings.mcpUrlPlaceholder":
+      "例如：https://sakizuki-danboorusearch.hf.space/mcp/mcp",
     "settings.serviceKey": "服務 Key（可選）",
     "settings.serviceKeyPlaceholder": "Bearer Token，可留空",
     "settings.mcpTool": "MCP 工具名",
@@ -4461,11 +5267,14 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.testing": "檢測中",
     "settings.test": "檢測",
     "settings.mcpForCapsule": "用於靈感膠囊",
-    "settings.mcpForCapsuleDesc": "配置並啟用服務後預設開啟：在靈感膠囊中按中文搜尋返回 MCP 標籤。",
+    "settings.mcpForCapsuleDesc":
+      "配置並啟用服務後預設開啟：在靈感膠囊中按中文搜尋返回 MCP 標籤。",
     "settings.mcpForReverse": "用於 AI 反推",
-    "settings.mcpForReverseDesc": "反推圖片後，用 MCP 標籤補強結果（預設關閉）。",
+    "settings.mcpForReverseDesc":
+      "反推圖片後，用 MCP 標籤補強結果（預設關閉）。",
     "settings.mcpForConvert": "用於提示詞轉換",
-    "settings.mcpForConvertDesc": "轉換中文描述時，用 MCP 標籤補強結果（預設關閉）。",
+    "settings.mcpForConvertDesc":
+      "轉換中文描述時，用 MCP 標籤補強結果（預設關閉）。",
     "settings.translateHint": "提示詞「自動偵測→英文」按鈕使用的翻譯引擎。",
     "settings.translateEngine": "翻譯引擎",
     "settings.googleTranslate": "Google 翻譯（免費，可能需要代理）",
@@ -4474,7 +5283,8 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.baiduAppIdPlaceholder": "在 fanyi-api.baidu.com 申請",
     "settings.baiduSecret": "百度翻譯密鑰",
     "settings.baiduSecretPlaceholder": "開發者密鑰",
-    "settings.promptTemplateHint": "提示詞範本可以為提示詞快速添加前綴/後綴/負面詞。在生成面板的提示詞區或檢視面板可一鍵套用。",
+    "settings.promptTemplateHint":
+      "提示詞範本可以為提示詞快速添加前綴/後綴/負面詞。在生成面板的提示詞區或檢視面板可一鍵套用。",
     "settings.noTemplates": "還沒有範本，使用下方表單新增。",
     "settings.delete": "刪除",
     "settings.prefix": "前綴：{value}",
@@ -4492,12 +5302,14 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.detectTagToast": "正在檢測 Tag/MCP 服務...",
     "settings.aboutVersion": "目前版本 v{version}",
     "settings.aboutProjectTitle": "專案地址",
-    "settings.aboutProjectDesc": "GitHub 開源專案地址，點擊即可在瀏覽器中開啟。",
+    "settings.aboutProjectDesc":
+      "GitHub 開源專案地址，點擊即可在瀏覽器中開啟。",
     "settings.aboutAuthorTitle": "作者",
     "settings.aboutAuthorDesc": "軟體作者與維護者，歡迎回饋問題與建議。",
     "settings.aboutAuthorQq": "作者 QQ",
     "settings.aboutSupportTitle": "贊賞支持",
-    "settings.aboutSupportMessage": "如果軟體幫到了你，可以請我喝杯奶茶（doge），或者隨手贊賞支持一下，十分感謝。",
+    "settings.aboutSupportMessage":
+      "如果軟體幫到了你，可以請我喝杯奶茶（doge），或者隨手贊賞支持一下，十分感謝。",
     "settings.aboutWechatReward": "微信贊賞碼",
     "settings.aboutAlipayReward": "支付寶贊賞碼",
   },
@@ -4508,7 +5320,8 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "log.enabled": "Runtime logging enabled",
     "log.disabled": "Runtime logging disabled",
     "log.label": "Runtime logs",
-    "log.desc": "Record calls and errors from generation, img2img, upscale, Director tools, exceptions, and more into app.log for troubleshooting.",
+    "log.desc":
+      "Record calls and errors from generation, img2img, upscale, Director tools, exceptions, and more into app.log for troubleshooting.",
     "log.path": "Log folder",
     "log.placeholder": "Default: user data directory / logs",
     "log.currentWithSize": "Current: {path} ({size} KB)",
@@ -4530,10 +5343,14 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.logout": "Sign out of API",
     "settings.accountEndpoint": "API Endpoint (account)",
     "settings.imageEndpoint": "Image Endpoint",
-    "settings.allowCustomEndpoint": "Allow sending Token to non-official endpoints (off by default). When off, endpoints outside *.novelai.net are replaced with official URLs to avoid Token leaks.",
-    "settings.allowCustomEndpointFallback": "When the custom image endpoint fails auth (401/403), automatically retry against the official one (off by default). Enabling this bills the retry to your official account — make sure that's what you want.",
-    "settings.proxyHint": "NovelAI, AI reverse, Google Translate, and update checks may need a proxy. Make sure the selected port matches your local proxy app.",
-    "settings.proxyScopeTitle": "Requests using proxy (off = direct for that item)",
+    "settings.allowCustomEndpoint":
+      "Allow sending Token to non-official endpoints (off by default). When off, endpoints outside *.novelai.net are replaced with official URLs to avoid Token leaks.",
+    "settings.allowCustomEndpointFallback":
+      "When the custom image endpoint fails auth (401/403), automatically retry against the official one (off by default). Enabling this bills the retry to your official account — make sure that's what you want.",
+    "settings.proxyHint":
+      "NovelAI, AI reverse, Google Translate, and update checks may need a proxy. Make sure the selected port matches your local proxy app.",
+    "settings.proxyScopeTitle":
+      "Requests using proxy (off = direct for that item)",
     "settings.proxyForNai": "NovelAI API (verify / image / upscale, etc.)",
     "settings.proxyForAi": "AI reverse / conversion (OpenAI-compatible)",
     "settings.proxyForMcp": "MCP / Tag service",
@@ -4543,21 +5360,27 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.browse": "Browse...",
     "settings.openOutputDir": "Open output folder",
     "settings.keepMetadata": "Keep image metadata (prompt / seed / parameters)",
-    "settings.keepMetadataDesc": "On: saved PNGs embed generation info for later inspection or parameter import. Off: save clean images and remove embedded prompt/seed/parameters for sharing. Image pixels are unchanged.",
+    "settings.keepMetadataDesc":
+      "On: saved PNGs embed generation info for later inspection or parameter import. Off: save clean images and remove embedded prompt/seed/parameters for sharing. Image pixels are unchanged.",
     "settings.onboarding": "Show onboarding again",
     "settings.imageNameTemplate": "Image naming template",
-    "settings.imageNameHint": "Available placeholders: {placeholders}. Also used for group ZIP export.",
+    "settings.imageNameHint":
+      "Available placeholders: {placeholders}. Also used for group ZIP export.",
     "settings.historyRetentionDays": "History retention days",
     "settings.aitagCacheTitle": "AI Art Prompt Gallery image cache",
-    "settings.aitagCacheDesc": "Gallery previews are stored locally after the first load so they do not need to be downloaded again.",
+    "settings.aitagCacheDesc":
+      "Gallery previews are stored locally after the first load so they do not need to be downloaded again.",
     "settings.aitagCacheSize": "{files} files · {size}",
     "settings.clearAitagCache": "Clear cache",
     "settings.aitagCacheRetention": "Automatic cleanup interval",
     "settings.aitagCacheDays": "Remove after {days} unused days",
     "settings.aitagCacheNever": "Never clean automatically",
-    "settings.historyRetentionHint": "On startup, app history older than this is pruned from the list only. Saved image files are not deleted.",
-    "settings.aiReverseHint": "Configure the vision AI API used by the reverse prompt panel. OpenAI and compatible APIs are supported, including Gemini and local Ollama.",
-    "settings.convertHint": "Conversion API handles text only: it converts Chinese or natural-language descriptions into NovelAI-ready Danbooru tags. It is separate from the vision API and can use a cheaper text model.",
+    "settings.historyRetentionHint":
+      "On startup, app history older than this is pruned from the list only. Saved image files are not deleted.",
+    "settings.aiReverseHint":
+      "Configure the vision AI API used by the reverse prompt panel. OpenAI and compatible APIs are supported, including Gemini and local Ollama.",
+    "settings.convertHint":
+      "Conversion API handles text only: it converts Chinese or natural-language descriptions into NovelAI-ready Danbooru tags. It is separate from the vision API and can use a cheaper text model.",
     "settings.apiUrl": "API URL",
     "settings.modelName": "Model name",
     "settings.detecting": "Checking...",
@@ -4567,43 +5390,56 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.chooseDetected": "— Choose from detected models —",
     "settings.reverseTemplate": "Reverse template",
     "settings.convertTemplate": "Conversion template",
-    "settings.templateMoved": "Moved to the Prompt Templates section so the same template is not maintained in multiple places.",
+    "settings.templateMoved":
+      "Moved to the Prompt Templates section so the same template is not maintained in multiple places.",
     "settings.unifiedTemplate": "Unified prompt templates",
-    "settings.unifiedTemplateDesc": "AI reverse and prompt conversion each use three mode templates; comic storyboard splitting uses the single template below. The comic generator no longer keeps hidden templates.",
+    "settings.unifiedTemplateDesc":
+      "AI reverse and prompt conversion each use three mode templates; comic storyboard splitting uses the single template below. The comic generator no longer keeps hidden templates.",
     "settings.reverseTemplateTitle": "AI reverse template",
     "settings.convertTemplateTitle": "Prompt conversion template",
     "settings.comicAnalyzeTemplateTitle": "AI storyboard splitting template",
     "settings.singleTemplateShared": "Single template, shared by all modes",
     "settings.autoComplete": "Tag autocomplete",
-    "settings.autoCompleteDesc": "Suggest likely NovelAI / Danbooru tags when typing English words.",
+    "settings.autoCompleteDesc":
+      "Suggest likely NovelAI / Danbooru tags when typing English words.",
     "settings.tagServerEnabled": "Enable Tag/MCP service",
-    "settings.tagServerEnabledDesc": "Enhances inspiration capsules, tag autocomplete, reverse prompts, and conversion with Danbooru tags.",
+    "settings.tagServerEnabledDesc":
+      "Enhances inspiration capsules, tag autocomplete, reverse prompts, and conversion with Danbooru tags.",
     "settings.tagServerType": "Service type / MCP transport",
     "settings.transportRest": "Plain HTTP API (REST /search /tags)",
-    "settings.transportHttp": "MCP · Streamable HTTP (recommended, e.g. DanbooruSearchOnline)",
+    "settings.transportHttp":
+      "MCP · Streamable HTTP (recommended, e.g. DanbooruSearchOnline)",
     "settings.transportSse": "MCP · SSE (legacy HTTP+SSE)",
     "settings.transportStdio": "MCP · stdio (local subprocess)",
     "settings.command": "Command",
-    "settings.commandPlaceholder": "Example: absolute path to npx or mcp-remote",
+    "settings.commandPlaceholder":
+      "Example: absolute path to npx or mcp-remote",
     "settings.args": "Command args (space-separated)",
-    "settings.argsPlaceholder": "Example: -y mcp-remote https://sakizuki-danboorusearch.hf.space/mcp/mcp",
+    "settings.argsPlaceholder":
+      "Example: -y mcp-remote https://sakizuki-danboorusearch.hf.space/mcp/mcp",
     "settings.serviceUrl": "Service URL",
     "settings.mcpUrl": "MCP service URL",
     "settings.serviceUrlPlaceholder": "Example: http://127.0.0.1:8765",
-    "settings.mcpUrlPlaceholder": "Example: https://sakizuki-danboorusearch.hf.space/mcp/mcp",
+    "settings.mcpUrlPlaceholder":
+      "Example: https://sakizuki-danboorusearch.hf.space/mcp/mcp",
     "settings.serviceKey": "Service key (optional)",
     "settings.serviceKeyPlaceholder": "Bearer Token; optional",
     "settings.mcpTool": "MCP tool name",
-    "settings.testSearchPlaceholder": "Test search, e.g. blue eyes white hair girl",
+    "settings.testSearchPlaceholder":
+      "Test search, e.g. blue eyes white hair girl",
     "settings.testing": "Checking",
     "settings.test": "Check",
     "settings.mcpForCapsule": "Use for inspiration capsules",
-    "settings.mcpForCapsuleDesc": "Enabled by default when the service is configured: Chinese capsule searches can return MCP tags.",
+    "settings.mcpForCapsuleDesc":
+      "Enabled by default when the service is configured: Chinese capsule searches can return MCP tags.",
     "settings.mcpForReverse": "Use for AI reverse",
-    "settings.mcpForReverseDesc": "After reversing an image, enrich the result with MCP tags (off by default).",
+    "settings.mcpForReverseDesc":
+      "After reversing an image, enrich the result with MCP tags (off by default).",
     "settings.mcpForConvert": "Use for prompt conversion",
-    "settings.mcpForConvertDesc": "When converting Chinese descriptions, enrich the result with MCP tags (off by default).",
-    "settings.translateHint": "Translation engine used by the prompt auto-detect → English button.",
+    "settings.mcpForConvertDesc":
+      "When converting Chinese descriptions, enrich the result with MCP tags (off by default).",
+    "settings.translateHint":
+      "Translation engine used by the prompt auto-detect → English button.",
     "settings.translateEngine": "Translation engine",
     "settings.googleTranslate": "Google Translate (free, may need proxy)",
     "settings.baiduTranslate": "Baidu Translate (requires APP ID and secret)",
@@ -4611,7 +5447,8 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.baiduAppIdPlaceholder": "Apply at fanyi-api.baidu.com",
     "settings.baiduSecret": "Baidu Translate secret",
     "settings.baiduSecretPlaceholder": "Developer secret",
-    "settings.promptTemplateHint": "Prompt templates quickly add prefixes, suffixes, and negative prompts. They can be applied from the generation prompt area or inspect panel.",
+    "settings.promptTemplateHint":
+      "Prompt templates quickly add prefixes, suffixes, and negative prompts. They can be applied from the generation prompt area or inspect panel.",
     "settings.noTemplates": "No templates yet. Add one with the form below.",
     "settings.delete": "Delete",
     "settings.prefix": "Prefix: {value}",
@@ -4629,12 +5466,15 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.detectTagToast": "Checking Tag/MCP service...",
     "settings.aboutVersion": "Current version v{version}",
     "settings.aboutProjectTitle": "Project",
-    "settings.aboutProjectDesc": "GitHub open-source project. Click to open it in your browser.",
+    "settings.aboutProjectDesc":
+      "GitHub open-source project. Click to open it in your browser.",
     "settings.aboutAuthorTitle": "Author",
-    "settings.aboutAuthorDesc": "Author and maintainer of the app. Feedback and suggestions are welcome.",
+    "settings.aboutAuthorDesc":
+      "Author and maintainer of the app. Feedback and suggestions are welcome.",
     "settings.aboutAuthorQq": "Author QQ",
     "settings.aboutSupportTitle": "Support",
-    "settings.aboutSupportMessage": "If this app helped you, you can buy me a milk tea (doge), or send a small tip. Thank you so much.",
+    "settings.aboutSupportMessage":
+      "If this app helped you, you can buy me a milk tea (doge), or send a small tip. Thank you so much.",
     "settings.aboutWechatReward": "WeChat reward code",
     "settings.aboutAlipayReward": "Alipay reward code",
   },
@@ -4645,7 +5485,8 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "log.enabled": "実行ログを有効にしました",
     "log.disabled": "実行ログを無効にしました",
     "log.label": "実行ログ",
-    "log.desc": "生成、画像生成、拡大、Director ツール、例外などの呼び出しとエラーを app.log に記録し、問題調査に使います。",
+    "log.desc":
+      "生成、画像生成、拡大、Director ツール、例外などの呼び出しとエラーを app.log に記録し、問題調査に使います。",
     "log.path": "ログ保存先",
     "log.placeholder": "既定：ユーザーデータディレクトリ / logs",
     "log.currentWithSize": "現在：{path}（{size} KB）",
@@ -4667,9 +5508,12 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.logout": "API からサインアウト",
     "settings.accountEndpoint": "API Endpoint（アカウント）",
     "settings.imageEndpoint": "Image Endpoint",
-    "settings.allowCustomEndpoint": "非公式 Endpoint へ Token 送信を許可（既定はオフ）。オフの場合、*.novelai.net 以外は Token 漏洩防止のため公式 URL に置換されます。",
-    "settings.allowCustomEndpointFallback": "カスタム画像 Endpoint の認証が失敗（401/403）した場合、自動的に公式 URL で再試行します（既定はオフ）。有効にすると再試行はあなたの公式アカウントに課金されます。",
-    "settings.proxyHint": "NovelAI、AI 解析、Google 翻訳、更新確認などはプロキシが必要な場合があります。選択したポートがローカルプロキシと一致するか確認してください。",
+    "settings.allowCustomEndpoint":
+      "非公式 Endpoint へ Token 送信を許可（既定はオフ）。オフの場合、*.novelai.net 以外は Token 漏洩防止のため公式 URL に置換されます。",
+    "settings.allowCustomEndpointFallback":
+      "カスタム画像 Endpoint の認証が失敗（401/403）した場合、自動的に公式 URL で再試行します（既定はオフ）。有効にすると再試行はあなたの公式アカウントに課金されます。",
+    "settings.proxyHint":
+      "NovelAI、AI 解析、Google 翻訳、更新確認などはプロキシが必要な場合があります。選択したポートがローカルプロキシと一致するか確認してください。",
     "settings.proxyScopeTitle": "プロキシを使うリクエスト（オフなら直接接続）",
     "settings.proxyForNai": "NovelAI API（検証 / 生成 / 拡大など）",
     "settings.proxyForAi": "AI 解析 / 変換（OpenAI 互換）",
@@ -4679,22 +5523,29 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.outputDir": "出力フォルダ",
     "settings.browse": "参照...",
     "settings.openOutputDir": "出力フォルダを開く",
-    "settings.keepMetadata": "画像メタデータを保持（プロンプト / シード / パラメータ）",
-    "settings.keepMetadataDesc": "オン：保存 PNG に生成情報を埋め込み、後で確認や再読み込みができます。オフ：共有向けに埋め込み情報を削除したクリーン画像を保存します（画質は無損失）。",
+    "settings.keepMetadata":
+      "画像メタデータを保持（プロンプト / シード / パラメータ）",
+    "settings.keepMetadataDesc":
+      "オン：保存 PNG に生成情報を埋め込み、後で確認や再読み込みができます。オフ：共有向けに埋め込み情報を削除したクリーン画像を保存します（画質は無損失）。",
     "settings.onboarding": "オンボーディングを再表示",
     "settings.imageNameTemplate": "画像名テンプレート",
-    "settings.imageNameHint": "使用可能なプレースホルダ：{placeholders}。グループ ZIP 書き出しにも使用されます。",
+    "settings.imageNameHint":
+      "使用可能なプレースホルダ：{placeholders}。グループ ZIP 書き出しにも使用されます。",
     "settings.historyRetentionDays": "履歴保持日数",
     "settings.aitagCacheTitle": "AI イラスト呪文ギャラリー画像キャッシュ",
-    "settings.aitagCacheDesc": "初回表示後にプレビュー画像を端末へ保存し、次回以降の再ダウンロードを省きます。",
+    "settings.aitagCacheDesc":
+      "初回表示後にプレビュー画像を端末へ保存し、次回以降の再ダウンロードを省きます。",
     "settings.aitagCacheSize": "{files} ファイル · {size}",
     "settings.clearAitagCache": "キャッシュを消去",
     "settings.aitagCacheRetention": "自動削除の間隔",
     "settings.aitagCacheDays": "{days} 日間未使用で削除",
     "settings.aitagCacheNever": "自動削除しない",
-    "settings.historyRetentionHint": "起動時にこの日数を超えたアプリ内履歴を一覧から削除します。保存済み画像ファイルは削除されません。",
-    "settings.aiReverseHint": "解析パネルのプロンプト逆生成に使う視覚 AI API を設定します。OpenAI 互換 API、Gemini、ローカル Ollama などに対応します。",
-    "settings.convertHint": "変換 API はテキストのみを処理し、中国語や自然文を NovelAI 用 Danbooru 英語 tag へ変換します。視覚 API とは別で、より安価なテキストモデルを使えます。",
+    "settings.historyRetentionHint":
+      "起動時にこの日数を超えたアプリ内履歴を一覧から削除します。保存済み画像ファイルは削除されません。",
+    "settings.aiReverseHint":
+      "解析パネルのプロンプト逆生成に使う視覚 AI API を設定します。OpenAI 互換 API、Gemini、ローカル Ollama などに対応します。",
+    "settings.convertHint":
+      "変換 API はテキストのみを処理し、中国語や自然文を NovelAI 用 Danbooru 英語 tag へ変換します。視覚 API とは別で、より安価なテキストモデルを使えます。",
     "settings.apiUrl": "API URL",
     "settings.modelName": "モデル名",
     "settings.detecting": "検出中...",
@@ -4704,30 +5555,37 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.chooseDetected": "— 検出結果から選択 —",
     "settings.reverseTemplate": "解析テンプレート",
     "settings.convertTemplate": "変換テンプレート",
-    "settings.templateMoved": "同じテンプレートを複数箇所で管理しないよう、「プロンプトテンプレート」セクションに統合しました。",
+    "settings.templateMoved":
+      "同じテンプレートを複数箇所で管理しないよう、「プロンプトテンプレート」セクションに統合しました。",
     "settings.unifiedTemplate": "統一プロンプトテンプレート",
-    "settings.unifiedTemplateDesc": "AI 解析とプロンプト変換はそれぞれ三つのモードテンプレートを使用します。漫画コマ分割は下の単一テンプレートを使います。",
+    "settings.unifiedTemplateDesc":
+      "AI 解析とプロンプト変換はそれぞれ三つのモードテンプレートを使用します。漫画コマ分割は下の単一テンプレートを使います。",
     "settings.reverseTemplateTitle": "AI 解析テンプレート",
     "settings.convertTemplateTitle": "プロンプト変換テンプレート",
     "settings.comicAnalyzeTemplateTitle": "AI コマ分割テンプレート",
     "settings.singleTemplateShared": "単一テンプレート、全モード共通",
     "settings.autoComplete": "タグ自動補完",
-    "settings.autoCompleteDesc": "英単語入力時に NovelAI / Danbooru tag を推測します。",
+    "settings.autoCompleteDesc":
+      "英単語入力時に NovelAI / Danbooru tag を推測します。",
     "settings.tagServerEnabled": "Tag/MCP サービスを有効化",
-    "settings.tagServerEnabledDesc": "インスピレーションカプセル、Tag 補完、解析、変換を Danbooru タグで強化します。",
+    "settings.tagServerEnabledDesc":
+      "インスピレーションカプセル、Tag 補完、解析、変換を Danbooru タグで強化します。",
     "settings.tagServerType": "サービス種類 / MCP 転送",
     "settings.transportRest": "通常 HTTP API（REST /search /tags）",
-    "settings.transportHttp": "MCP · Streamable HTTP（推奨、例 DanbooruSearchOnline）",
+    "settings.transportHttp":
+      "MCP · Streamable HTTP（推奨、例 DanbooruSearchOnline）",
     "settings.transportSse": "MCP · SSE（旧 HTTP+SSE）",
     "settings.transportStdio": "MCP · stdio（ローカル子プロセス）",
     "settings.command": "起動コマンド",
     "settings.commandPlaceholder": "例：npx または mcp-remote の絶対パス",
     "settings.args": "コマンド引数（空白区切り）",
-    "settings.argsPlaceholder": "例：-y mcp-remote https://sakizuki-danboorusearch.hf.space/mcp/mcp",
+    "settings.argsPlaceholder":
+      "例：-y mcp-remote https://sakizuki-danboorusearch.hf.space/mcp/mcp",
     "settings.serviceUrl": "サービス URL",
     "settings.mcpUrl": "MCP サービス URL",
     "settings.serviceUrlPlaceholder": "例：http://127.0.0.1:8765",
-    "settings.mcpUrlPlaceholder": "例：https://sakizuki-danboorusearch.hf.space/mcp/mcp",
+    "settings.mcpUrlPlaceholder":
+      "例：https://sakizuki-danboorusearch.hf.space/mcp/mcp",
     "settings.serviceKey": "サービス Key（任意）",
     "settings.serviceKeyPlaceholder": "Bearer Token、省略可",
     "settings.mcpTool": "MCP ツール名",
@@ -4735,12 +5593,16 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.testing": "検出中",
     "settings.test": "検出",
     "settings.mcpForCapsule": "カプセルで使用",
-    "settings.mcpForCapsuleDesc": "サービス設定後は既定で有効：中国語検索で MCP タグを返します。",
+    "settings.mcpForCapsuleDesc":
+      "サービス設定後は既定で有効：中国語検索で MCP タグを返します。",
     "settings.mcpForReverse": "AI 解析で使用",
-    "settings.mcpForReverseDesc": "画像解析後、MCP タグで結果を強化します（既定オフ）。",
+    "settings.mcpForReverseDesc":
+      "画像解析後、MCP タグで結果を強化します（既定オフ）。",
     "settings.mcpForConvert": "プロンプト変換で使用",
-    "settings.mcpForConvertDesc": "中国語説明の変換時、MCP タグで結果を強化します（既定オフ）。",
-    "settings.translateHint": "プロンプトの自動判別→英語ボタンで使う翻訳エンジンです。",
+    "settings.mcpForConvertDesc":
+      "中国語説明の変換時、MCP タグで結果を強化します（既定オフ）。",
+    "settings.translateHint":
+      "プロンプトの自動判別→英語ボタンで使う翻訳エンジンです。",
     "settings.translateEngine": "翻訳エンジン",
     "settings.googleTranslate": "Google 翻訳（無料、プロキシが必要な場合あり）",
     "settings.baiduTranslate": "Baidu 翻訳（APP ID と Secret が必要）",
@@ -4748,8 +5610,10 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.baiduAppIdPlaceholder": "fanyi-api.baidu.com で申請",
     "settings.baiduSecret": "Baidu 翻訳 Secret",
     "settings.baiduSecretPlaceholder": "開発者 Secret",
-    "settings.promptTemplateHint": "プロンプトテンプレートは接頭辞・接尾辞・ネガティブを素早く追加できます。生成パネルや解析パネルから適用できます。",
-    "settings.noTemplates": "テンプレートはまだありません。下のフォームで追加してください。",
+    "settings.promptTemplateHint":
+      "プロンプトテンプレートは接頭辞・接尾辞・ネガティブを素早く追加できます。生成パネルや解析パネルから適用できます。",
+    "settings.noTemplates":
+      "テンプレートはまだありません。下のフォームで追加してください。",
     "settings.delete": "削除",
     "settings.prefix": "接頭辞：{value}",
     "settings.suffix": "接尾辞：{value}",
@@ -4766,12 +5630,15 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.detectTagToast": "Tag/MCP サービスを検出中...",
     "settings.aboutVersion": "現在のバージョン v{version}",
     "settings.aboutProjectTitle": "プロジェクト",
-    "settings.aboutProjectDesc": "GitHub のオープンソースプロジェクトです。クリックするとブラウザで開きます。",
+    "settings.aboutProjectDesc":
+      "GitHub のオープンソースプロジェクトです。クリックするとブラウザで開きます。",
     "settings.aboutAuthorTitle": "作者",
-    "settings.aboutAuthorDesc": "アプリの作者・メンテナーです。問題報告や提案を歓迎します。",
+    "settings.aboutAuthorDesc":
+      "アプリの作者・メンテナーです。問題報告や提案を歓迎します。",
     "settings.aboutAuthorQq": "作者 QQ",
     "settings.aboutSupportTitle": "支援",
-    "settings.aboutSupportMessage": "このアプリが役に立ったら、ミルクティー代（doge）やちょっとした支援をいただけると嬉しいです。ありがとうございます。",
+    "settings.aboutSupportMessage":
+      "このアプリが役に立ったら、ミルクティー代（doge）やちょっとした支援をいただけると嬉しいです。ありがとうございます。",
     "settings.aboutWechatReward": "WeChat 贈賞コード",
     "settings.aboutAlipayReward": "Alipay 贈賞コード",
   },
@@ -4782,7 +5649,8 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "log.enabled": "실행 로그 켜짐",
     "log.disabled": "실행 로그 꺼짐",
     "log.label": "실행 로그",
-    "log.desc": "생성, 이미지 투 이미지, 업스케일, Director 도구, 예외 등의 호출 정보와 오류를 app.log에 기록해 문제 확인에 사용합니다.",
+    "log.desc":
+      "생성, 이미지 투 이미지, 업스케일, Director 도구, 예외 등의 호출 정보와 오류를 app.log에 기록해 문제 확인에 사용합니다.",
     "log.path": "로그 저장 경로",
     "log.placeholder": "기본값: 사용자 데이터 디렉터리 / logs",
     "log.currentWithSize": "현재: {path}({size} KB)",
@@ -4804,10 +5672,14 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.logout": "API 로그아웃",
     "settings.accountEndpoint": "API Endpoint(계정)",
     "settings.imageEndpoint": "Image Endpoint",
-    "settings.allowCustomEndpoint": "비공식 Endpoint로 Token 전송 허용(기본 꺼짐). 꺼져 있으면 *.novelai.net 외 Endpoint는 Token 유출 방지를 위해 공식 주소로 대체됩니다.",
-    "settings.allowCustomEndpointFallback": "커스텀 이미지 Endpoint 인증이 실패(401/403)하면 자동으로 공식 주소로 재시도합니다(기본 꺼짐). 활성화하면 재시도 비용이 공식 계정에 청구되니 원하는 동작인지 확인하세요.",
-    "settings.proxyHint": "NovelAI, AI 분석, Google 번역, 업데이트 확인 등 네트워크 기능에는 프록시가 필요할 수 있습니다. 선택한 포트가 로컬 프록시 앱과 일치하는지 확인하세요.",
-    "settings.proxyScopeTitle": "프록시를 사용할 요청(끄면 해당 항목은 직접 연결)",
+    "settings.allowCustomEndpoint":
+      "비공식 Endpoint로 Token 전송 허용(기본 꺼짐). 꺼져 있으면 *.novelai.net 외 Endpoint는 Token 유출 방지를 위해 공식 주소로 대체됩니다.",
+    "settings.allowCustomEndpointFallback":
+      "커스텀 이미지 Endpoint 인증이 실패(401/403)하면 자동으로 공식 주소로 재시도합니다(기본 꺼짐). 활성화하면 재시도 비용이 공식 계정에 청구되니 원하는 동작인지 확인하세요.",
+    "settings.proxyHint":
+      "NovelAI, AI 분석, Google 번역, 업데이트 확인 등 네트워크 기능에는 프록시가 필요할 수 있습니다. 선택한 포트가 로컬 프록시 앱과 일치하는지 확인하세요.",
+    "settings.proxyScopeTitle":
+      "프록시를 사용할 요청(끄면 해당 항목은 직접 연결)",
     "settings.proxyForNai": "NovelAI API(검증 / 생성 / 업스케일 등)",
     "settings.proxyForAi": "AI 분석 / 변환(OpenAI 호환)",
     "settings.proxyForMcp": "MCP / Tag 서비스",
@@ -4816,22 +5688,29 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.outputDir": "출력 폴더",
     "settings.browse": "찾아보기...",
     "settings.openOutputDir": "출력 폴더 열기",
-    "settings.keepMetadata": "이미지 메타데이터 보존(프롬프트 / 시드 / 매개변수)",
-    "settings.keepMetadataDesc": "켬: 저장 PNG에 생성 정보를 포함해 나중에 확인하거나 매개변수를 다시 가져올 수 있습니다. 끔: 공유용으로 포함 정보를 제거한 깨끗한 이미지를 저장합니다(화질 손실 없음).",
+    "settings.keepMetadata":
+      "이미지 메타데이터 보존(프롬프트 / 시드 / 매개변수)",
+    "settings.keepMetadataDesc":
+      "켬: 저장 PNG에 생성 정보를 포함해 나중에 확인하거나 매개변수를 다시 가져올 수 있습니다. 끔: 공유용으로 포함 정보를 제거한 깨끗한 이미지를 저장합니다(화질 손실 없음).",
     "settings.onboarding": "온보딩 다시 보기",
     "settings.imageNameTemplate": "이미지 이름 템플릿",
-    "settings.imageNameHint": "사용 가능한 자리표시자: {placeholders}. 그룹 ZIP 내보내기에도 적용됩니다.",
+    "settings.imageNameHint":
+      "사용 가능한 자리표시자: {placeholders}. 그룹 ZIP 내보내기에도 적용됩니다.",
     "settings.historyRetentionDays": "기록 보존 일수",
     "settings.aitagCacheTitle": "AI 그림 프롬프트 갤러리 이미지 캐시",
-    "settings.aitagCacheDesc": "갤러리 미리보기는 처음 불러온 뒤 기기에 저장되어 다시 다운로드하지 않습니다.",
+    "settings.aitagCacheDesc":
+      "갤러리 미리보기는 처음 불러온 뒤 기기에 저장되어 다시 다운로드하지 않습니다.",
     "settings.aitagCacheSize": "파일 {files}개 · {size}",
     "settings.clearAitagCache": "캐시 지우기",
     "settings.aitagCacheRetention": "자동 정리 주기",
     "settings.aitagCacheDays": "{days}일 동안 미사용 시 삭제",
     "settings.aitagCacheNever": "자동으로 정리하지 않음",
-    "settings.historyRetentionHint": "시작 시 이 일수를 넘은 앱 내 기록을 목록에서만 정리합니다. 저장된 이미지 파일은 삭제하지 않습니다.",
-    "settings.aiReverseHint": "분석 패널의 프롬프트 역추출에 사용할 비전 AI API를 설정합니다. OpenAI 호환 API, Gemini, 로컬 Ollama 등을 지원합니다.",
-    "settings.convertHint": "변환 API는 텍스트만 처리합니다. 중국어나 자연어 설명을 NovelAI용 Danbooru 영어 tag로 변환하며 비전 API와 분리되어 더 저렴한 텍스트 모델을 사용할 수 있습니다.",
+    "settings.historyRetentionHint":
+      "시작 시 이 일수를 넘은 앱 내 기록을 목록에서만 정리합니다. 저장된 이미지 파일은 삭제하지 않습니다.",
+    "settings.aiReverseHint":
+      "분석 패널의 프롬프트 역추출에 사용할 비전 AI API를 설정합니다. OpenAI 호환 API, Gemini, 로컬 Ollama 등을 지원합니다.",
+    "settings.convertHint":
+      "변환 API는 텍스트만 처리합니다. 중국어나 자연어 설명을 NovelAI용 Danbooru 영어 tag로 변환하며 비전 API와 분리되어 더 저렴한 텍스트 모델을 사용할 수 있습니다.",
     "settings.apiUrl": "API URL",
     "settings.modelName": "모델 이름",
     "settings.detecting": "확인 중...",
@@ -4841,43 +5720,55 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.chooseDetected": "— 감지 결과에서 선택 —",
     "settings.reverseTemplate": "분석 템플릿",
     "settings.convertTemplate": "변환 템플릿",
-    "settings.templateMoved": "동일 템플릿을 여러 곳에서 관리하지 않도록 프롬프트 템플릿 섹션으로 통합했습니다.",
+    "settings.templateMoved":
+      "동일 템플릿을 여러 곳에서 관리하지 않도록 프롬프트 템플릿 섹션으로 통합했습니다.",
     "settings.unifiedTemplate": "통합 프롬프트 템플릿",
-    "settings.unifiedTemplateDesc": "AI 분석과 프롬프트 변환은 각각 세 가지 모드 템플릿을 사용합니다. 만화 컷 분할은 아래 단일 템플릿을 사용합니다.",
+    "settings.unifiedTemplateDesc":
+      "AI 분석과 프롬프트 변환은 각각 세 가지 모드 템플릿을 사용합니다. 만화 컷 분할은 아래 단일 템플릿을 사용합니다.",
     "settings.reverseTemplateTitle": "AI 분석 템플릿",
     "settings.convertTemplateTitle": "프롬프트 변환 템플릿",
     "settings.comicAnalyzeTemplateTitle": "AI 컷 분할 템플릿",
     "settings.singleTemplateShared": "단일 템플릿, 모든 모드 공용",
     "settings.autoComplete": "태그 자동완성",
-    "settings.autoCompleteDesc": "영어 단어 입력 시 필요한 NovelAI / Danbooru tag를 추정합니다.",
+    "settings.autoCompleteDesc":
+      "영어 단어 입력 시 필요한 NovelAI / Danbooru tag를 추정합니다.",
     "settings.tagServerEnabled": "Tag/MCP 서비스 사용",
-    "settings.tagServerEnabledDesc": "영감 캡슐, Tag 자동완성, 분석과 변환 프롬프트를 Danbooru 태그로 강화합니다.",
+    "settings.tagServerEnabledDesc":
+      "영감 캡슐, Tag 자동완성, 분석과 변환 프롬프트를 Danbooru 태그로 강화합니다.",
     "settings.tagServerType": "서비스 유형 / MCP 전송",
     "settings.transportRest": "일반 HTTP API(REST /search /tags)",
-    "settings.transportHttp": "MCP · Streamable HTTP(권장, 예: DanbooruSearchOnline)",
+    "settings.transportHttp":
+      "MCP · Streamable HTTP(권장, 예: DanbooruSearchOnline)",
     "settings.transportSse": "MCP · SSE(이전 HTTP+SSE)",
     "settings.transportStdio": "MCP · stdio(로컬 하위 프로세스)",
     "settings.command": "실행 명령",
     "settings.commandPlaceholder": "예: npx 또는 mcp-remote 절대 경로",
     "settings.args": "명령 인수(공백 구분)",
-    "settings.argsPlaceholder": "예: -y mcp-remote https://sakizuki-danboorusearch.hf.space/mcp/mcp",
+    "settings.argsPlaceholder":
+      "예: -y mcp-remote https://sakizuki-danboorusearch.hf.space/mcp/mcp",
     "settings.serviceUrl": "서비스 주소",
     "settings.mcpUrl": "MCP 서비스 주소",
     "settings.serviceUrlPlaceholder": "예: http://127.0.0.1:8765",
-    "settings.mcpUrlPlaceholder": "예: https://sakizuki-danboorusearch.hf.space/mcp/mcp",
+    "settings.mcpUrlPlaceholder":
+      "예: https://sakizuki-danboorusearch.hf.space/mcp/mcp",
     "settings.serviceKey": "서비스 Key(선택)",
     "settings.serviceKeyPlaceholder": "Bearer Token, 비워둘 수 있음",
     "settings.mcpTool": "MCP 도구 이름",
-    "settings.testSearchPlaceholder": "검색 테스트 예: blue eyes white hair girl",
+    "settings.testSearchPlaceholder":
+      "검색 테스트 예: blue eyes white hair girl",
     "settings.testing": "확인 중",
     "settings.test": "확인",
     "settings.mcpForCapsule": "영감 캡슐에 사용",
-    "settings.mcpForCapsuleDesc": "서비스를 구성하고 켜면 기본 활성화됩니다. 중국어 캡슐 검색으로 MCP 태그를 받을 수 있습니다.",
+    "settings.mcpForCapsuleDesc":
+      "서비스를 구성하고 켜면 기본 활성화됩니다. 중국어 캡슐 검색으로 MCP 태그를 받을 수 있습니다.",
     "settings.mcpForReverse": "AI 분석에 사용",
-    "settings.mcpForReverseDesc": "이미지 분석 후 MCP 태그로 결과를 보강합니다(기본 꺼짐).",
+    "settings.mcpForReverseDesc":
+      "이미지 분석 후 MCP 태그로 결과를 보강합니다(기본 꺼짐).",
     "settings.mcpForConvert": "프롬프트 변환에 사용",
-    "settings.mcpForConvertDesc": "중국어 설명 변환 시 MCP 태그로 결과를 보강합니다(기본 꺼짐).",
-    "settings.translateHint": "프롬프트 자동 감지→영어 버튼이 사용할 번역 엔진입니다.",
+    "settings.mcpForConvertDesc":
+      "중국어 설명 변환 시 MCP 태그로 결과를 보강합니다(기본 꺼짐).",
+    "settings.translateHint":
+      "프롬프트 자동 감지→영어 버튼이 사용할 번역 엔진입니다.",
     "settings.translateEngine": "번역 엔진",
     "settings.googleTranslate": "Google 번역(무료, 프록시 필요 가능)",
     "settings.baiduTranslate": "Baidu 번역(APP ID와 비밀키 필요)",
@@ -4885,7 +5776,8 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.baiduAppIdPlaceholder": "fanyi-api.baidu.com에서 신청",
     "settings.baiduSecret": "Baidu 번역 비밀키",
     "settings.baiduSecretPlaceholder": "개발자 비밀키",
-    "settings.promptTemplateHint": "프롬프트 템플릿은 접두사/접미사/네거티브를 빠르게 추가합니다. 생성 패널이나 분석 패널에서 적용할 수 있습니다.",
+    "settings.promptTemplateHint":
+      "프롬프트 템플릿은 접두사/접미사/네거티브를 빠르게 추가합니다. 생성 패널이나 분석 패널에서 적용할 수 있습니다.",
     "settings.noTemplates": "아직 템플릿이 없습니다. 아래 양식으로 추가하세요.",
     "settings.delete": "삭제",
     "settings.prefix": "접두사: {value}",
@@ -4903,12 +5795,15 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.detectTagToast": "Tag/MCP 서비스 확인 중...",
     "settings.aboutVersion": "현재 버전 v{version}",
     "settings.aboutProjectTitle": "프로젝트",
-    "settings.aboutProjectDesc": "GitHub 오픈소스 프로젝트입니다. 클릭하면 브라우저에서 열립니다.",
+    "settings.aboutProjectDesc":
+      "GitHub 오픈소스 프로젝트입니다. 클릭하면 브라우저에서 열립니다.",
     "settings.aboutAuthorTitle": "작성자",
-    "settings.aboutAuthorDesc": "앱 작성자이자 유지보수자입니다. 문제 제보와 제안을 환영합니다.",
+    "settings.aboutAuthorDesc":
+      "앱 작성자이자 유지보수자입니다. 문제 제보와 제안을 환영합니다.",
     "settings.aboutAuthorQq": "작성자 QQ",
     "settings.aboutSupportTitle": "후원",
-    "settings.aboutSupportMessage": "이 앱이 도움이 되었다면 밀크티 한 잔(doge)을 사주시거나 가볍게 후원해 주세요. 정말 감사합니다.",
+    "settings.aboutSupportMessage":
+      "이 앱이 도움이 되었다면 밀크티 한 잔(doge)을 사주시거나 가볍게 후원해 주세요. 정말 감사합니다.",
     "settings.aboutWechatReward": "WeChat 후원 코드",
     "settings.aboutAlipayReward": "Alipay 후원 코드",
   },
@@ -4916,32 +5811,43 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
 
 export function desktopUiText(language: unknown, key: string) {
   const code = normalizeAppLanguage(language);
-  return DESKTOP_SETTINGS_UI_TEXT[code][key]
-    ?? DESKTOP_ONBOARDING_UI_TEXT[code][key]
-    ?? DESKTOP_MAIN_UI_TEXT[code][key]
-    ?? DESKTOP_BATCH_UI_TEXT[code][key]
-    ?? DESKTOP_EXTRA_UI_TEXT[code][key]
-    ?? DESKTOP_UI_TEXT[code][key]
-    ?? DESKTOP_SETTINGS_UI_TEXT["en-US"][key]
-    ?? DESKTOP_ONBOARDING_UI_TEXT["en-US"][key]
-    ?? DESKTOP_MAIN_UI_TEXT["en-US"][key]
-    ?? DESKTOP_BATCH_UI_TEXT["en-US"][key]
-    ?? DESKTOP_EXTRA_UI_TEXT["en-US"][key]
-    ?? DESKTOP_UI_TEXT["en-US"][key]
-    ?? DESKTOP_SETTINGS_UI_TEXT["zh-CN"][key]
-    ?? DESKTOP_ONBOARDING_UI_TEXT["zh-CN"][key]
-    ?? DESKTOP_MAIN_UI_TEXT["zh-CN"][key]
-    ?? DESKTOP_BATCH_UI_TEXT["zh-CN"][key]
-    ?? DESKTOP_EXTRA_UI_TEXT["zh-CN"][key]
-    ?? DESKTOP_UI_TEXT["zh-CN"][key]
-    ?? key;
+  return (
+    DESKTOP_SETTINGS_UI_TEXT[code][key] ??
+    DESKTOP_ONBOARDING_UI_TEXT[code][key] ??
+    DESKTOP_MAIN_UI_TEXT[code][key] ??
+    DESKTOP_BATCH_UI_TEXT[code][key] ??
+    DESKTOP_EXTRA_UI_TEXT[code][key] ??
+    DESKTOP_UI_TEXT[code][key] ??
+    DESKTOP_SETTINGS_UI_TEXT["en-US"][key] ??
+    DESKTOP_ONBOARDING_UI_TEXT["en-US"][key] ??
+    DESKTOP_MAIN_UI_TEXT["en-US"][key] ??
+    DESKTOP_BATCH_UI_TEXT["en-US"][key] ??
+    DESKTOP_EXTRA_UI_TEXT["en-US"][key] ??
+    DESKTOP_UI_TEXT["en-US"][key] ??
+    DESKTOP_SETTINGS_UI_TEXT["zh-CN"][key] ??
+    DESKTOP_ONBOARDING_UI_TEXT["zh-CN"][key] ??
+    DESKTOP_MAIN_UI_TEXT["zh-CN"][key] ??
+    DESKTOP_BATCH_UI_TEXT["zh-CN"][key] ??
+    DESKTOP_EXTRA_UI_TEXT["zh-CN"][key] ??
+    DESKTOP_UI_TEXT["zh-CN"][key] ??
+    key
+  );
 }
 
-export function desktopUiFormat(language: unknown, key: string, values: Record<string, unknown>) {
-  return desktopUiText(language, key).replace(/\{(\w+)\}/g, (_, name: string) => String(values[name] ?? ""));
+export function desktopUiFormat(
+  language: unknown,
+  key: string,
+  values: Record<string, unknown>,
+) {
+  return desktopUiText(language, key).replace(/\{(\w+)\}/g, (_, name: string) =>
+    String(values[name] ?? ""),
+  );
 }
 
-const DESKTOP_OPTION_LABELS: Record<string, Partial<Record<AppLanguage, string>>> = {
+const DESKTOP_OPTION_LABELS: Record<
+  string,
+  Partial<Record<AppLanguage, string>>
+> = {
   "nai-diffusion-4-5-full": {
     "zh-CN": "NAI Diffusion 4.5 Full（完整模型）",
     "zh-TW": "NAI Diffusion 4.5 Full（完整模型）",
@@ -4998,36 +5904,202 @@ const DESKTOP_OPTION_LABELS: Record<string, Partial<Record<AppLanguage, string>>
     "ja-JP": "Euler Ancestral（推奨）",
     "ko-KR": "Euler Ancestral（권장）",
   },
-  k_euler: { "zh-CN": "Euler（欧拉）", "zh-TW": "Euler（歐拉）", "en-US": "Euler", "ja-JP": "Euler", "ko-KR": "Euler" },
-  k_dpmpp_2m: { "zh-CN": "DPM++ 2M（稳定采样）", "zh-TW": "DPM++ 2M（穩定採樣）", "en-US": "DPM++ 2M", "ja-JP": "DPM++ 2M（安定）", "ko-KR": "DPM++ 2M（안정）" },
-  k_dpmpp_2m_sde: { "zh-CN": "DPM++ 2M SDE（随机微分）", "zh-TW": "DPM++ 2M SDE（隨機微分）", "en-US": "DPM++ 2M SDE", "ja-JP": "DPM++ 2M SDE", "ko-KR": "DPM++ 2M SDE" },
-  k_dpmpp_sde: { "zh-CN": "DPM++ SDE（高质量随机微分）", "zh-TW": "DPM++ SDE（高品質隨機微分）", "en-US": "DPM++ SDE", "ja-JP": "DPM++ SDE（高品質）", "ko-KR": "DPM++ SDE（고품질）" },
-  k_dpmpp_2s_ancestral: { "zh-CN": "DPM++ 2S Ancestral（祖先采样）", "zh-TW": "DPM++ 2S Ancestral（祖先採樣）", "en-US": "DPM++ 2S Ancestral", "ja-JP": "DPM++ 2S Ancestral", "ko-KR": "DPM++ 2S Ancestral" },
-  ddim_v3: { "zh-CN": "DDIM（快速采样）", "zh-TW": "DDIM（快速採樣）", "en-US": "DDIM (fast)", "ja-JP": "DDIM（高速）", "ko-KR": "DDIM（빠름）" },
-  native: { "zh-CN": "Native（原生）", "zh-TW": "Native（原生）", "en-US": "Native", "ja-JP": "Native", "ko-KR": "Native" },
-  karras: { "zh-CN": "Karras（常用）", "zh-TW": "Karras（常用）", "en-US": "Karras", "ja-JP": "Karras", "ko-KR": "Karras" },
-  exponential: { "zh-CN": "Exponential（指数）", "zh-TW": "Exponential（指數）", "en-US": "Exponential", "ja-JP": "Exponential（指数）", "ko-KR": "Exponential（지수）" },
-  "0": { "zh-CN": "Heavy（强负面）", "zh-TW": "Heavy（強負面）", "en-US": "Heavy", "ja-JP": "Heavy（強め）", "ko-KR": "Heavy（강함）" },
-  "1": { "zh-CN": "Light（轻负面）", "zh-TW": "Light（輕負面）", "en-US": "Light", "ja-JP": "Light（軽め）", "ko-KR": "Light（약함）" },
-  "2": { "zh-CN": "Human Focus（人物优先）", "zh-TW": "Human Focus（人物優先）", "en-US": "Human Focus", "ja-JP": "Human Focus（人物優先）", "ko-KR": "Human Focus（인물 우선）" },
-  "3": { "zh-CN": "None（不使用预设）", "zh-TW": "None（不使用預設）", "en-US": "None", "ja-JP": "None（未使用）", "ko-KR": "None（사용 안 함）" },
-  "bg-removal": { "zh-CN": "移除背景", "zh-TW": "移除背景", "en-US": "Remove background", "ja-JP": "背景除去", "ko-KR": "배경 제거" },
-  lineart: { "zh-CN": "线稿提取", "zh-TW": "線稿提取", "en-US": "Lineart", "ja-JP": "線画抽出", "ko-KR": "선화 추출" },
-  sketch: { "zh-CN": "草图化", "zh-TW": "草圖化", "en-US": "Sketch", "ja-JP": "スケッチ化", "ko-KR": "스케치화" },
-  colorize: { "zh-CN": "上色", "zh-TW": "上色", "en-US": "Colorize", "ja-JP": "彩色化", "ko-KR": "채색" },
-  emotion: { "zh-CN": "表情迁移", "zh-TW": "表情遷移", "en-US": "Emotion transfer", "ja-JP": "表情転送", "ko-KR": "표정 전이" },
-  declutter: { "zh-CN": "去除杂乱", "zh-TW": "去除雜亂", "en-US": "Declutter", "ja-JP": "不要物除去", "ko-KR": "잡동사니 제거" },
-  neutral: { "zh-CN": "中性（Neutral）", "zh-TW": "中性（Neutral）", "en-US": "Neutral", "ja-JP": "ニュートラル", "ko-KR": "중립" },
-  happy: { "zh-CN": "开心（Happy）", "zh-TW": "開心（Happy）", "en-US": "Happy", "ja-JP": "喜び", "ko-KR": "기쁨" },
-  sad: { "zh-CN": "悲伤（Sad）", "zh-TW": "悲傷（Sad）", "en-US": "Sad", "ja-JP": "悲しみ", "ko-KR": "슬픔" },
-  angry: { "zh-CN": "愤怒（Angry）", "zh-TW": "憤怒（Angry）", "en-US": "Angry", "ja-JP": "怒り", "ko-KR": "분노" },
-  surprised: { "zh-CN": "惊讶（Surprised）", "zh-TW": "驚訝（Surprised）", "en-US": "Surprised", "ja-JP": "驚き", "ko-KR": "놀람" },
-  scared: { "zh-CN": "害怕（Scared）", "zh-TW": "害怕（Scared）", "en-US": "Scared", "ja-JP": "恐怖", "ko-KR": "무서움" },
-  disgusted: { "zh-CN": "厌恶（Disgusted）", "zh-TW": "厭惡（Disgusted）", "en-US": "Disgusted", "ja-JP": "嫌悪", "ko-KR": "혐오" },
-  amazed: { "zh-CN": "惊叹（Amazed）", "zh-TW": "驚嘆（Amazed）", "en-US": "Amazed", "ja-JP": "感嘆", "ko-KR": "감탄" },
+  k_euler: {
+    "zh-CN": "Euler（欧拉）",
+    "zh-TW": "Euler（歐拉）",
+    "en-US": "Euler",
+    "ja-JP": "Euler",
+    "ko-KR": "Euler",
+  },
+  k_dpmpp_2m: {
+    "zh-CN": "DPM++ 2M（稳定采样）",
+    "zh-TW": "DPM++ 2M（穩定採樣）",
+    "en-US": "DPM++ 2M",
+    "ja-JP": "DPM++ 2M（安定）",
+    "ko-KR": "DPM++ 2M（안정）",
+  },
+  k_dpmpp_2m_sde: {
+    "zh-CN": "DPM++ 2M SDE（随机微分）",
+    "zh-TW": "DPM++ 2M SDE（隨機微分）",
+    "en-US": "DPM++ 2M SDE",
+    "ja-JP": "DPM++ 2M SDE",
+    "ko-KR": "DPM++ 2M SDE",
+  },
+  k_dpmpp_sde: {
+    "zh-CN": "DPM++ SDE（高质量随机微分）",
+    "zh-TW": "DPM++ SDE（高品質隨機微分）",
+    "en-US": "DPM++ SDE",
+    "ja-JP": "DPM++ SDE（高品質）",
+    "ko-KR": "DPM++ SDE（고품질）",
+  },
+  k_dpmpp_2s_ancestral: {
+    "zh-CN": "DPM++ 2S Ancestral（祖先采样）",
+    "zh-TW": "DPM++ 2S Ancestral（祖先採樣）",
+    "en-US": "DPM++ 2S Ancestral",
+    "ja-JP": "DPM++ 2S Ancestral",
+    "ko-KR": "DPM++ 2S Ancestral",
+  },
+  ddim_v3: {
+    "zh-CN": "DDIM（快速采样）",
+    "zh-TW": "DDIM（快速採樣）",
+    "en-US": "DDIM (fast)",
+    "ja-JP": "DDIM（高速）",
+    "ko-KR": "DDIM（빠름）",
+  },
+  native: {
+    "zh-CN": "Native（原生）",
+    "zh-TW": "Native（原生）",
+    "en-US": "Native",
+    "ja-JP": "Native",
+    "ko-KR": "Native",
+  },
+  karras: {
+    "zh-CN": "Karras（常用）",
+    "zh-TW": "Karras（常用）",
+    "en-US": "Karras",
+    "ja-JP": "Karras",
+    "ko-KR": "Karras",
+  },
+  exponential: {
+    "zh-CN": "Exponential（指数）",
+    "zh-TW": "Exponential（指數）",
+    "en-US": "Exponential",
+    "ja-JP": "Exponential（指数）",
+    "ko-KR": "Exponential（지수）",
+  },
+  "0": {
+    "zh-CN": "Heavy（强负面）",
+    "zh-TW": "Heavy（強負面）",
+    "en-US": "Heavy",
+    "ja-JP": "Heavy（強め）",
+    "ko-KR": "Heavy（강함）",
+  },
+  "1": {
+    "zh-CN": "Light（轻负面）",
+    "zh-TW": "Light（輕負面）",
+    "en-US": "Light",
+    "ja-JP": "Light（軽め）",
+    "ko-KR": "Light（약함）",
+  },
+  "2": {
+    "zh-CN": "Human Focus（人物优先）",
+    "zh-TW": "Human Focus（人物優先）",
+    "en-US": "Human Focus",
+    "ja-JP": "Human Focus（人物優先）",
+    "ko-KR": "Human Focus（인물 우선）",
+  },
+  "3": {
+    "zh-CN": "None（不使用预设）",
+    "zh-TW": "None（不使用預設）",
+    "en-US": "None",
+    "ja-JP": "None（未使用）",
+    "ko-KR": "None（사용 안 함）",
+  },
+  "bg-removal": {
+    "zh-CN": "移除背景",
+    "zh-TW": "移除背景",
+    "en-US": "Remove background",
+    "ja-JP": "背景除去",
+    "ko-KR": "배경 제거",
+  },
+  lineart: {
+    "zh-CN": "线稿提取",
+    "zh-TW": "線稿提取",
+    "en-US": "Lineart",
+    "ja-JP": "線画抽出",
+    "ko-KR": "선화 추출",
+  },
+  sketch: {
+    "zh-CN": "草图化",
+    "zh-TW": "草圖化",
+    "en-US": "Sketch",
+    "ja-JP": "スケッチ化",
+    "ko-KR": "스케치화",
+  },
+  colorize: {
+    "zh-CN": "上色",
+    "zh-TW": "上色",
+    "en-US": "Colorize",
+    "ja-JP": "彩色化",
+    "ko-KR": "채색",
+  },
+  emotion: {
+    "zh-CN": "表情迁移",
+    "zh-TW": "表情遷移",
+    "en-US": "Emotion transfer",
+    "ja-JP": "表情転送",
+    "ko-KR": "표정 전이",
+  },
+  declutter: {
+    "zh-CN": "去除杂乱",
+    "zh-TW": "去除雜亂",
+    "en-US": "Declutter",
+    "ja-JP": "不要物除去",
+    "ko-KR": "잡동사니 제거",
+  },
+  neutral: {
+    "zh-CN": "中性（Neutral）",
+    "zh-TW": "中性（Neutral）",
+    "en-US": "Neutral",
+    "ja-JP": "ニュートラル",
+    "ko-KR": "중립",
+  },
+  happy: {
+    "zh-CN": "开心（Happy）",
+    "zh-TW": "開心（Happy）",
+    "en-US": "Happy",
+    "ja-JP": "喜び",
+    "ko-KR": "기쁨",
+  },
+  sad: {
+    "zh-CN": "悲伤（Sad）",
+    "zh-TW": "悲傷（Sad）",
+    "en-US": "Sad",
+    "ja-JP": "悲しみ",
+    "ko-KR": "슬픔",
+  },
+  angry: {
+    "zh-CN": "愤怒（Angry）",
+    "zh-TW": "憤怒（Angry）",
+    "en-US": "Angry",
+    "ja-JP": "怒り",
+    "ko-KR": "분노",
+  },
+  surprised: {
+    "zh-CN": "惊讶（Surprised）",
+    "zh-TW": "驚訝（Surprised）",
+    "en-US": "Surprised",
+    "ja-JP": "驚き",
+    "ko-KR": "놀람",
+  },
+  scared: {
+    "zh-CN": "害怕（Scared）",
+    "zh-TW": "害怕（Scared）",
+    "en-US": "Scared",
+    "ja-JP": "恐怖",
+    "ko-KR": "무서움",
+  },
+  disgusted: {
+    "zh-CN": "厌恶（Disgusted）",
+    "zh-TW": "厭惡（Disgusted）",
+    "en-US": "Disgusted",
+    "ja-JP": "嫌悪",
+    "ko-KR": "혐오",
+  },
+  amazed: {
+    "zh-CN": "惊叹（Amazed）",
+    "zh-TW": "驚嘆（Amazed）",
+    "en-US": "Amazed",
+    "ja-JP": "感嘆",
+    "ko-KR": "감탄",
+  },
 };
 
-export function localizedDesktopOptionLabel(language: unknown, value: string | number, fallback: string) {
+export function localizedDesktopOptionLabel(
+  language: unknown,
+  value: string | number,
+  fallback: string,
+) {
   const code = normalizeAppLanguage(language);
   return DESKTOP_OPTION_LABELS[String(value)]?.[code] ?? fallback;
 }

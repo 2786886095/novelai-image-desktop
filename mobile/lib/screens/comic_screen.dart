@@ -1,8 +1,6 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../comic/comic_controller.dart';
@@ -19,10 +17,9 @@ class ComicScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final value = controller;
-    if (value != null) {
+    if (controller != null) {
       return ChangeNotifierProvider.value(
-        value: value,
+        value: controller!,
         child: _ComicBody(onBack: onBack),
       );
     }
@@ -40,8 +37,7 @@ class _ComicBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<ComicController>();
-    final language = context.watch<AppState>().settings.language;
-    String t(String key) => mobileUiTextFor(language, key);
+    final t = _text(context);
     if (!controller.loaded) {
       return Scaffold(body: Center(child: Text(t('comic.loading'))));
     }
@@ -54,49 +50,51 @@ class _ComicBody extends StatelessWidget {
                 onPressed: onBack,
                 icon: const Icon(Icons.arrow_back),
               ),
-        title: Text(controller.displayTitle),
-      ),
-      body: Column(
-        children: [
-          _StepBar(controller: controller),
-          Expanded(
-            child: switch (controller.step) {
-              ComicStep.story => const _StoryStep(),
-              ComicStep.global => const _GlobalStep(),
-              ComicStep.panels => const _PanelsStep(),
-              ComicStep.generate => const _GenerateStep(),
-            },
-          ),
-          Material(
-            color: Theme.of(context).colorScheme.surfaceContainerLow,
-            child: SafeArea(
-              top: false,
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                child: Row(
-                  children: [
-                    if (controller.busy || controller.queueRunning)
-                      const Padding(
-                        padding: EdgeInsets.only(right: 8),
-                        child: SizedBox.square(
-                          dimension: 15,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      ),
-                    Expanded(
-                      child: Text(
-                        controller.displayStatus,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(controller.displayTitle, overflow: TextOverflow.ellipsis),
+            Text(
+              t('comic.subtitle'),
+              style: Theme.of(context).textTheme.labelSmall,
+              overflow: TextOverflow.ellipsis,
             ),
+          ],
+        ),
+        actions: [
+          IconButton(
+            tooltip: t('comic.newProject'),
+            onPressed: controller.createNewProject,
+            icon: const Icon(Icons.note_add_outlined),
+          ),
+          IconButton(
+            tooltip: t('comic.saveProjectJson'),
+            onPressed: () => _run(context, controller.exportProjectJson),
+            icon: const Icon(Icons.save_alt),
+          ),
+          IconButton(
+            tooltip: t('comic.importProjectJson'),
+            onPressed: () => _run(context, controller.importProjectJson),
+            icon: const Icon(Icons.file_open_outlined),
           ),
         ],
+      ),
+      body: SafeArea(
+        top: false,
+        child: Column(
+          children: [
+            _StepBar(controller: controller),
+            Expanded(
+              child: switch (controller.step) {
+                ComicStep.importTags => const _ImportStep(),
+                ComicStep.global => const _GlobalStep(),
+                ComicStep.panels => const _PanelsStep(),
+                ComicStep.generate => const _GenerateStep(),
+              },
+            ),
+            _StatusBar(controller: controller),
+          ],
+        ),
       ),
     );
   }
@@ -108,442 +106,205 @@ class _StepBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final language = context.watch<AppState>().settings.language;
+    final t = _text(context);
     final labels = [
-      mobileUiTextFor(language, 'comic.step.story'),
-      mobileUiTextFor(language, 'comic.step.global'),
-      mobileUiTextFor(language, 'comic.step.panels'),
-      mobileUiTextFor(language, 'batch.step.generate'),
+      t('comic.step.import'),
+      t('comic.step.global'),
+      t('comic.step.panels'),
+      t('comic.step.generate'),
     ];
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
-      child: Row(
-        children: [
-          for (var index = 0; index < ComicStep.values.length; index++) ...[
-            if (index > 0) const SizedBox(width: 6),
-            Expanded(
-              child: Material(
-                color: controller.step.index == index
-                    ? Theme.of(context).colorScheme.primaryContainer
-                    : Theme.of(context).colorScheme.surfaceContainer,
-                borderRadius: BorderRadius.circular(8),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(8),
-                  onTap: () => controller.setStep(ComicStep.values[index]),
-                  child: Padding(
-                    padding:
-                        const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text('${index + 1}',
-                            style:
-                                const TextStyle(fontWeight: FontWeight.bold)),
-                        Text(labels[index],
-                            maxLines: 1, overflow: TextOverflow.ellipsis),
-                      ],
+    return LayoutBuilder(builder: (context, constraints) {
+      final compact = constraints.maxWidth < 620;
+      return SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
+        child: Row(
+          children: List.generate(ComicStep.values.length, (index) {
+            final selected = controller.step.index == index;
+            return Padding(
+              padding: EdgeInsets.only(right: index == 3 ? 0 : 8),
+              child: SizedBox(
+                width: compact ? 132 : (constraints.maxWidth - 48) / 4,
+                height: 56,
+                child: Material(
+                  color: selected
+                      ? Theme.of(context).colorScheme.primaryContainer
+                      : Theme.of(context).colorScheme.surfaceContainer,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    side: BorderSide(
+                      color: selected
+                          ? Theme.of(context).colorScheme.primary
+                          : Theme.of(context).dividerColor,
+                    ),
+                  ),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(14),
+                    onTap: () => controller.setStep(ComicStep.values[index]),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 14,
+                            backgroundColor: selected
+                                ? Theme.of(context).colorScheme.primary
+                                : Theme.of(context)
+                                    .colorScheme
+                                    .surfaceContainerHighest,
+                            foregroundColor: selected
+                                ? Theme.of(context).colorScheme.onPrimary
+                                : null,
+                            child: Text('${index + 1}'),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              labels[index],
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ],
-        ],
-      ),
-    );
+            );
+          }),
+        ),
+      );
+    });
   }
 }
 
-class _StoryStep extends StatelessWidget {
-  const _StoryStep();
-
-  Future<void> _pickReference(BuildContext context) async {
-    final picked = await ImagePicker()
-        .pickImage(source: ImageSource.gallery, imageQuality: 100);
-    if (picked == null || !context.mounted) return;
-    final error =
-        await context.read<ComicController>().addReference(picked.path);
-    if (error != null && context.mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(error)));
-    }
-  }
+class _StatusBar extends StatelessWidget {
+  final ComicController controller;
+  const _StatusBar({required this.controller});
 
   @override
   Widget build(BuildContext context) {
-    final controller = context.watch<ComicController>();
-    final language = context.watch<AppState>().settings.language;
-    String t(String key) => mobileUiTextFor(language, key);
-    final project = controller.project;
-    return StudioContent(
-      maxWidth: 980,
-      child: ListView(
-        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 100),
-        children: [
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              OutlinedButton.icon(
-                onPressed: controller.createNewProject,
-                icon: const Icon(Icons.note_add_outlined),
-                label: Text(t('batch.newProject')),
-              ),
-              OutlinedButton.icon(
-                onPressed:
-                    project.panels.isEmpty ? null : controller.clearPanels,
-                icon: const Icon(Icons.playlist_remove),
-                label: Text(t('comic.clearPanels')),
-              ),
-              OutlinedButton.icon(
-                onPressed: controller.exportProjectJson,
-                icon: const Icon(Icons.save_alt),
-                label: Text(t('comic.saveProjectJson')),
-              ),
-              OutlinedButton.icon(
-                onPressed: controller.importProjectJson,
-                icon: const Icon(Icons.file_open_outlined),
-                label: Text(t('comic.importProjectJson')),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
-            key: ValueKey('comic-title-${project.id}-$language'),
-            initialValue: controller.displayTitle,
-            decoration: InputDecoration(
-              labelText: t('comic.projectName'),
-              border: const OutlineInputBorder(),
-            ),
-            onChanged: (value) {
-              project.title = value;
-              controller.changed();
-            },
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: DropdownButtonFormField<ReversePromptMode>(
-                  value: project.mode,
-                  decoration: InputDecoration(
-                    labelText: t('comic.promptMode'),
-                    border: const OutlineInputBorder(),
-                  ),
-                  items: ReversePromptMode.values
-                      .map((mode) => DropdownMenuItem(
-                            value: mode,
-                            child: Text(t('promptMode.${mode.value}')),
-                          ))
-                      .toList(),
-                  onChanged: (value) {
-                    if (value == null) return;
-                    project.mode = value;
-                    controller.changed();
-                  },
-                ),
+    return Material(
+      color: Theme.of(context).colorScheme.surfaceContainerLow,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        child: Row(
+          children: [
+            if (controller.queueRunning) ...[
+              const SizedBox.square(
+                dimension: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
               ),
               const SizedBox(width: 10),
-              Expanded(
-                child: TextFormField(
-                  key: ValueKey('panel-count-${project.id}'),
-                  initialValue: project.desiredPanelCount == 0
-                      ? ''
-                      : '${project.desiredPanelCount}',
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: t('comic.panelCount'),
-                    border: const OutlineInputBorder(),
-                  ),
-                  onChanged: (value) {
-                    project.desiredPanelCount =
-                        (int.tryParse(value) ?? 0).clamp(0, 500);
-                    controller.changed();
-                  },
-                ),
-              ),
             ],
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
-            key: ValueKey('comic-script-${project.id}'),
-            initialValue: project.rawScript,
-            minLines: 10,
-            maxLines: 20,
-            decoration: InputDecoration(
-              labelText: t('comic.storyLabel'),
-              alignLabelWithHint: true,
-              border: const OutlineInputBorder(),
+            Expanded(
+              child: Text(
+                controller.displayStatus,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
-            onChanged: (value) {
-              project.rawScript = value;
-              controller.changed();
-            },
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: Text(t('comic.references'),
-                    style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.bold)),
-              ),
-              OutlinedButton.icon(
-                onPressed: () => _pickReference(context),
-                icon: const Icon(Icons.add_photo_alternate_outlined),
-                label: Text(t('comic.import')),
-              ),
-            ],
-          ),
-          for (final reference in project.references)
-            _ComicReferenceCard(reference: reference),
-          const SizedBox(height: 12),
-          FilledButton.icon(
-            onPressed: controller.busy || project.rawScript.trim().isEmpty
-                ? null
-                : controller.analyzeStory,
-            icon: const Icon(Icons.auto_fix_high),
-            label: Text(t('comic.analyzeStory')),
-          ),
-          const SizedBox(height: 20),
-          const Divider(),
-          const _TagImportBlock(),
-        ],
+            if (controller.queueRunning)
+              Text('${controller.queueDone}/${controller.queueTotal}'),
+          ],
+        ),
       ),
     );
   }
 }
 
-// Direct tag-prompt import (mirrors batch img2img): each line becomes one panel's
-// English prompt (status converted), skipping AI script-splitting + reverse.
-class _TagImportBlock extends StatefulWidget {
-  const _TagImportBlock();
+class _ImportStep extends StatefulWidget {
+  const _ImportStep();
 
   @override
-  State<_TagImportBlock> createState() => _TagImportBlockState();
+  State<_ImportStep> createState() => _ImportStepState();
 }
 
-class _TagImportBlockState extends State<_TagImportBlock> {
-  final _ctrl = TextEditingController();
+class _ImportStepState extends State<_ImportStep> {
+  final input = TextEditingController();
 
   @override
   void dispose() {
-    _ctrl.dispose();
+    input.dispose();
     super.dispose();
   }
-
-  Future<void> _import() async {
-    final text = _ctrl.text;
-    if (text.trim().isEmpty) return;
-    final controller = context.read<ComicController>();
-    final existing = controller.project.panels.length;
-    if (existing > 0) {
-      final language = context.read<AppState>().settings.language;
-      String t(String key) => mobileUiTextFor(language, key);
-      final ok = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text(t('comic.replaceTitle')),
-          content: Text(mobileUiFormatFor(
-              language, 'comic.replaceContent', {'count': existing})),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: Text(t('common.cancel'))),
-            FilledButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                child: Text(t('comic.replace'))),
-          ],
-        ),
-      );
-      if (ok != true) return;
-    }
-    controller.importTagPanels(text);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final language = context.watch<AppState>().settings.language;
-    String t(String key) => mobileUiTextFor(language, key);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        const SizedBox(height: 8),
-        Text(t('comic.directTagImport'),
-            style: const TextStyle(fontWeight: FontWeight.w600)),
-        const SizedBox(height: 8),
-        TextField(
-          controller: _ctrl,
-          minLines: 3,
-          maxLines: 10,
-          decoration: InputDecoration(
-            hintText: t('comic.tagHint'),
-            border: const OutlineInputBorder(),
-          ),
-        ),
-        const SizedBox(height: 8),
-        FilledButton.tonalIcon(
-          onPressed: _import,
-          icon: const Icon(Icons.playlist_add),
-          label: Text(t('comic.importPanels')),
-        ),
-      ],
-    );
-  }
-}
-
-class _ComicReferenceCard extends StatelessWidget {
-  final ComicReference reference;
-  const _ComicReferenceCard({required this.reference});
 
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<ComicController>();
-    final language = context.watch<AppState>().settings.language;
-    String t(String key) => mobileUiTextFor(language, key);
-    return Card(
-      margin: const EdgeInsets.only(top: 10),
-      child: Padding(
-        padding: const EdgeInsets.all(10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    final t = _text(context);
+    return StudioContent(
+      maxWidth: 1180,
+      child: ListView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 100),
+        children: [
+          _SectionCard(
+            title: t('comic.importHeading'),
+            subtitle: t('comic.importDescription'),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
-                  child: SizedBox.square(
-                    dimension: 76,
-                    child: reference.sourcePath.isNotEmpty &&
-                            File(reference.sourcePath).existsSync()
-                        ? Image.file(
-                            File(reference.sourcePath),
-                            fit: BoxFit.cover,
-                            cacheWidth: 180,
-                            filterQuality: FilterQuality.low,
-                          )
-                        : Image.memory(
-                            base64Decode(reference.base64),
-                            fit: BoxFit.cover,
-                            cacheWidth: 180,
-                            filterQuality: FilterQuality.low,
-                          ),
+                TextField(
+                  controller: input,
+                  minLines: 8,
+                  maxLines: 16,
+                  decoration: InputDecoration(
+                    hintText: t('comic.importHint'),
+                    border: const OutlineInputBorder(),
+                    alignLabelWithHint: true,
                   ),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Text(reference.name,
-                          maxLines: 1, overflow: TextOverflow.ellipsis),
-                      const SizedBox(height: 6),
-                      DropdownButtonFormField<String>(
-                        value: reference.kind,
-                        isExpanded: true,
-                        decoration: InputDecoration(
-                          labelText: t('comic.referenceKind'),
-                          border: const OutlineInputBorder(),
-                        ),
-                        items: [
-                          DropdownMenuItem(
-                              value: 'character',
-                              child: Text(t('comic.kind.character'))),
-                          DropdownMenuItem(
-                              value: 'scene',
-                              child: Text(t('comic.kind.scene'))),
-                          DropdownMenuItem(
-                              value: 'object',
-                              child: Text(t('comic.kind.object'))),
-                          DropdownMenuItem(
-                              value: 'precise',
-                              child: Text(t('comic.kind.precise'))),
-                          DropdownMenuItem(
-                              value: 'vibe', child: Text(t('comic.kind.vibe'))),
-                        ],
-                        onChanged: (value) {
-                          if (value == null) return;
-                          reference.kind = value;
-                          controller.changed();
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  tooltip: t('common.remove'),
-                  onPressed: () => controller.removeReference(reference.id),
-                  icon: const Icon(Icons.close),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    FilledButton.icon(
+                      onPressed: input.text.trim().isEmpty
+                          ? null
+                          : () => _run(context, () async {
+                                await controller.importText(input.text);
+                                if (mounted) setState(() {});
+                              }),
+                      icon: const Icon(Icons.playlist_add),
+                      label: Text(t('comic.importText')),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () => _run(context, controller.pickImportFile),
+                      icon: const Icon(Icons.upload_file),
+                      label: Text(t('comic.chooseFile')),
+                    ),
+                  ],
                 ),
               ],
             ),
-            const SizedBox(height: 8),
-            DropdownButtonFormField<String>(
-              value: reference.scope,
-              decoration: InputDecoration(
-                labelText: t('inspect.reverseScope'),
-                border: const OutlineInputBorder(),
-              ),
-              items: ReversePromptScope.values
-                  .map((scope) => DropdownMenuItem(
-                        value: scope.value,
-                        child: Text(t('reverseScope.${scope.value}')),
-                      ))
-                  .toList(),
-              onChanged: (value) {
-                if (value == null) return;
-                reference.scope = value;
-                controller.changed();
-              },
-            ),
-            const SizedBox(height: 8),
-            TextFormField(
-              initialValue: reference.subjectHint,
-              decoration: InputDecoration(
-                labelText: t('comic.subjectHint'),
-                hintText: t('comic.subjectHintExample'),
-                border: const OutlineInputBorder(),
-              ),
-              onChanged: (value) {
-                reference.subjectHint = value;
-                controller.changed();
-              },
-            ),
-            const SizedBox(height: 8),
-            TextFormField(
-              initialValue: reference.reversePrompt,
-              minLines: 2,
-              maxLines: 5,
-              decoration: InputDecoration(
-                labelText: t('comic.reverseResult'),
-                border: const OutlineInputBorder(),
-              ),
-              onChanged: (value) {
-                reference.reversePrompt = value;
-                controller.changed();
-              },
-            ),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(t('comic.useForGeneration')),
-              subtitle: Text('${reference.width}x${reference.height}'),
-              value: reference.useForGeneration,
-              onChanged: (value) {
-                reference.useForGeneration = value;
-                controller.changed();
-              },
-            ),
-            FilledButton.tonalIcon(
-              onPressed: controller.busy
-                  ? null
-                  : () => controller.reverseReference(reference),
-              icon: const Icon(Icons.visibility_outlined),
-              label: Text(t('comic.reverseReference')),
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 12),
+          _SectionCard(
+            title: t('comic.importedPanels'),
+            subtitle: '${controller.project.panels.length}',
+            child: controller.project.panels.isEmpty
+                ? _EmptyState(
+                    icon: Icons.view_carousel_outlined,
+                    text: t('comic.panelsEmpty'),
+                  )
+                : Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: controller.project.panels
+                        .map((panel) => Chip(
+                              avatar:
+                                  CircleAvatar(child: Text('${panel.index}')),
+                              label: Text(panel.title),
+                            ))
+                        .toList(),
+                  ),
+          ),
+        ],
       ),
     );
   }
@@ -555,97 +316,77 @@ class _GlobalStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<ComicController>();
-    final language = context.watch<AppState>().settings.language;
-    String t(String key) => mobileUiTextFor(language, key);
     final project = controller.project;
+    final t = _text(context);
     return StudioContent(
-      maxWidth: 980,
+      maxWidth: 1180,
       child: ListView(
-        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 100),
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 110),
         children: [
-          Align(
-            alignment: Alignment.centerRight,
-            child: OutlinedButton.icon(
+          _SectionCard(
+            title: t('comic.globalHeading'),
+            action: OutlinedButton.icon(
               onPressed: controller.syncCurrentParams,
               icon: const Icon(Icons.sync),
-              label: Text(t('batch.syncParams')),
+              label: Text(t('comic.syncParams')),
+            ),
+            child: Column(
+              children: [
+                _Field(
+                  value: project.title,
+                  label: t('comic.projectName'),
+                  onChanged: (value) {
+                    project.title = value;
+                    controller.changed();
+                  },
+                ),
+                const SizedBox(height: 12),
+                _Field(
+                  value: project.globalStylePrompt,
+                  label: t('comic.globalStyle'),
+                  minLines: 3,
+                  onChanged: (value) {
+                    project.globalStylePrompt = value;
+                    controller.changed();
+                  },
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<int>(
+                  value: project.initialGenerationCount,
+                  decoration: InputDecoration(
+                    labelText: t('comic.initialCount'),
+                    helperText: t('comic.initialCountHint'),
+                    border: const OutlineInputBorder(),
+                  ),
+                  items: List.generate(
+                    10,
+                    (index) => DropdownMenuItem(
+                      value: index + 1,
+                      child: Text('${index + 1}'),
+                    ),
+                  ),
+                  onChanged: (value) {
+                    project.initialGenerationCount = value ?? 1;
+                    controller.changed();
+                  },
+                ),
+              ],
             ),
           ),
-          _ProjectTextField(
-            label: t('comic.globalStory'),
-            value: project.globalPrompt,
-            minLines: 6,
-            onChanged: (value) => project.globalPrompt = value,
-          ),
-          _ProjectTextField(
-            label: t('comic.globalCharacter'),
-            value: project.globalCharacterSetting,
-            minLines: 8,
-            onChanged: (value) => project.globalCharacterSetting = value,
-          ),
-          _ProjectTextField(
-            label: t('comic.globalStyle'),
-            value: project.globalStylePrompt,
-            minLines: 3,
-            onChanged: (value) => project.globalStylePrompt = value,
-          ),
-          _ProjectTextField(
-            label: t('comic.globalNegative'),
-            value: project.globalNegativePrompt,
-            minLines: 3,
-            onChanged: (value) => project.globalNegativePrompt = value,
-          ),
-          _ComicParamsEditor(
-            title: t('batch.globalParams'),
+          const SizedBox(height: 12),
+          _ParamsEditor(
             params: project.globalParams,
             onChanged: controller.changed,
-          ),
-          const SizedBox(height: 12),
-          FilledButton.icon(
-            onPressed: project.panels.isEmpty
-                ? null
-                : () => controller.setStep(ComicStep.panels),
-            icon: const Icon(Icons.view_sidebar_outlined),
-            label: Text(mobileUiFormatFor(language, 'comic.enterPanels',
-                {'count': project.panels.length})),
+            negativePrompt: project.globalNegativePrompt,
+            onNegativeChanged: (value) {
+              project.globalNegativePrompt = value;
+              controller.changed();
+            },
           ),
         ],
       ),
     );
   }
-}
-
-class _ProjectTextField extends StatelessWidget {
-  final String label;
-  final String value;
-  final int minLines;
-  final ValueChanged<String> onChanged;
-  const _ProjectTextField({
-    required this.label,
-    required this.value,
-    required this.minLines,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 12),
-        child: TextFormField(
-          initialValue: value,
-          minLines: minLines,
-          maxLines: minLines + 6,
-          decoration: InputDecoration(
-            labelText: label,
-            alignLabelWithHint: true,
-            border: const OutlineInputBorder(),
-          ),
-          onChanged: (value) {
-            onChanged(value);
-            context.read<ComicController>().changed();
-          },
-        ),
-      );
 }
 
 class _PanelsStep extends StatelessWidget {
@@ -654,729 +395,164 @@ class _PanelsStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<ComicController>();
-    final language = context.watch<AppState>().settings.language;
-    final panels = controller.project.panels;
-    if (panels.isEmpty) {
-      return Center(
-          child: Text(mobileUiTextFor(language, 'comic.emptyPanels')));
-    }
-    final phone = MediaQuery.sizeOf(context).width < StudioBreakpoints.tablet;
-    return Column(
-      children: [
-        _PanelActions(controller: controller),
-        if (phone) _HorizontalPanelPicker(controller: controller),
-        Expanded(
-          child: phone
-              ? _PanelEditor(panel: controller.activePanel ?? panels.first)
-              : Row(
-                  children: [
-                    SizedBox(
-                      width: 220,
-                      child: _VerticalPanelPicker(controller: controller),
-                    ),
-                    const VerticalDivider(width: 1),
-                    Expanded(
-                      child: _PanelEditor(
-                          panel: controller.activePanel ?? panels.first),
-                    ),
-                  ],
-                ),
+    final t = _text(context);
+    if (controller.project.panels.isEmpty) {
+      return _EmptyState(
+        icon: Icons.view_carousel_outlined,
+        text: t('comic.panelsEmpty'),
+        action: FilledButton.icon(
+          onPressed: controller.addPanel,
+          icon: const Icon(Icons.add),
+          label: Text(t('comic.addPanel')),
         ),
-      ],
-    );
-  }
-}
-
-class _PanelActions extends StatelessWidget {
-  final ComicController controller;
-  const _PanelActions({required this.controller});
-
-  @override
-  Widget build(BuildContext context) {
-    final language = context.watch<AppState>().settings.language;
-    String t(String key) => mobileUiTextFor(language, key);
-    final targets = controller.selectedPanels.isEmpty
-        ? controller.project.panels
-        : controller.selectedPanels;
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      child: Row(
-        children: [
-          FilledButton.tonal(
-            onPressed: controller.busy
-                ? null
-                : () => controller.convertPanels(targets),
-            child: Text(controller.selectedPanels.isEmpty
-                ? t('comic.convertAll')
-                : t('comic.convertSelected')),
-          ),
-          const SizedBox(width: 6),
-          OutlinedButton(
-            onPressed: controller.busy ? null : controller.checkConsistency,
-            child: Text(t('comic.consistency')),
-          ),
-          const SizedBox(width: 6),
-          OutlinedButton(
-            onPressed: () {
-              final index = controller.project.panels.length + 1;
-              final panel = ComicPanel(
-                id: DateTime.now().microsecondsSinceEpoch.toString(),
-                index: index,
-                params: controller.project.globalParams.copy(),
-              );
-              controller.project.panels.add(panel);
-              controller.activePanelId = panel.id;
-              controller.changed(mobileUiFormatFor(
-                  language, 'comic.addedPanel', {'index': index}));
-            },
-            child: Text(t('comic.addPanel')),
-          ),
-          const SizedBox(width: 6),
-          OutlinedButton(
-            onPressed: () {
-              controller.selectedPanelIds =
-                  controller.project.panels.map((panel) => panel.id).toSet();
-              controller.changed();
-            },
-            child: Text(t('comic.selectAll')),
-          ),
-          const SizedBox(width: 6),
-          TextButton(
-            onPressed: () {
-              controller.selectedPanelIds.clear();
-              controller.changed();
-            },
-            child: Text(t('comic.clearSelection')),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _HorizontalPanelPicker extends StatelessWidget {
-  final ComicController controller;
-  const _HorizontalPanelPicker({required this.controller});
-
-  @override
-  Widget build(BuildContext context) {
-    final language = context.watch<AppState>().settings.language;
-    return SizedBox(
-      height: 52,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        itemCount: controller.project.panels.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 6),
-        itemBuilder: (context, index) {
-          final panel = controller.project.panels[index];
-          return ChoiceChip(
-            selected: controller.activePanelId == panel.id,
-            label: Text(
-                '#${panel.index} · ${_comicStatusText(language, panel.status)}'),
-            onSelected: (_) {
-              controller.activePanelId = panel.id;
-              controller.changed();
-            },
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _VerticalPanelPicker extends StatelessWidget {
-  final ComicController controller;
-  const _VerticalPanelPicker({required this.controller});
-
-  @override
-  Widget build(BuildContext context) {
-    final language = context.watch<AppState>().settings.language;
-    return ListView.builder(
-      padding: const EdgeInsets.all(8),
-      itemCount: controller.project.panels.length,
-      itemBuilder: (context, index) {
-        final panel = controller.project.panels[index];
-        return ListTile(
-          selected: controller.activePanelId == panel.id,
-          leading: Checkbox(
-            value: controller.selectedPanelIds.contains(panel.id),
-            onChanged: (checked) {
-              checked == true
-                  ? controller.selectedPanelIds.add(panel.id)
-                  : controller.selectedPanelIds.remove(panel.id);
-              controller.changed();
-            },
-          ),
-          title: Text('#${panel.index}'),
-          subtitle: Text(_comicStatusText(language, panel.status)),
-          onTap: () {
-            controller.activePanelId = panel.id;
-            controller.changed();
-          },
+      );
+    }
+    return LayoutBuilder(builder: (context, constraints) {
+      final wide = constraints.maxWidth >= 760;
+      final list = _PanelList(controller: controller);
+      final editor = _PanelEditor(
+        key: ValueKey(controller.activePanel?.id),
+        panel: controller.activePanel!,
+      );
+      if (!wide) {
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 110),
+          children: [list, const SizedBox(height: 12), editor],
         );
-      },
+      }
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(width: 300, child: SingleChildScrollView(child: list)),
+            const SizedBox(width: 12),
+            Expanded(child: SingleChildScrollView(child: editor)),
+          ],
+        ),
+      );
+    });
+  }
+}
+
+class _PanelList extends StatelessWidget {
+  final ComicController controller;
+  const _PanelList({required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    final t = _text(context);
+    return _SectionCard(
+      title: t('comic.panelsHeading'),
+      action: IconButton.filledTonal(
+        tooltip: t('comic.addPanel'),
+        onPressed: controller.addPanel,
+        icon: const Icon(Icons.add),
+      ),
+      child: Column(
+        children: controller.project.panels.map((panel) {
+          final selected = controller.activePanelId == panel.id;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: ListTile(
+              selected: selected,
+              selectedTileColor: Theme.of(context).colorScheme.primaryContainer,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+              leading: CircleAvatar(child: Text('${panel.index}')),
+              title: Text(panel.title,
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
+              subtitle: Text(
+                panel.prompt,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              trailing: panel.candidates.isEmpty
+                  ? null
+                  : Badge(label: Text('${panel.candidates.length}')),
+              onTap: () => controller.selectPanel(panel.id),
+            ),
+          );
+        }).toList(),
+      ),
     );
   }
 }
 
 class _PanelEditor extends StatelessWidget {
   final ComicPanel panel;
-  const _PanelEditor({required this.panel});
+  const _PanelEditor({super.key, required this.panel});
 
   @override
   Widget build(BuildContext context) {
-    final controller = context.watch<ComicController>();
-    final language = context.watch<AppState>().settings.language;
-    String t(String key) => mobileUiTextFor(language, key);
-    return ListView(
-      key: ValueKey('panel-editor-${panel.id}'),
-      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 120),
-      children: [
-        Row(
-          children: [
-            Checkbox(
-              value: controller.selectedPanelIds.contains(panel.id),
-              onChanged: (checked) {
-                checked == true
-                    ? controller.selectedPanelIds.add(panel.id)
-                    : controller.selectedPanelIds.remove(panel.id);
-                controller.changed();
-              },
-            ),
-            Expanded(
-              child: Text(
-                  mobileUiFormatFor(
-                      language, 'comic.panelTitle', {'index': panel.index}),
-                  style: Theme.of(context).textTheme.titleMedium),
-            ),
-            Chip(label: Text(_comicStatusText(language, panel.status))),
-            IconButton(
-              tooltip: t('comic.deletePanel'),
-              onPressed: () {
-                controller.project.panels
-                    .removeWhere((item) => item.id == panel.id);
-                for (var index = 0;
-                    index < controller.project.panels.length;
-                    index++) {
-                  controller.project.panels[index].index = index + 1;
-                }
-                controller.activePanelId = controller.project.panels.isEmpty
-                    ? ''
-                    : controller.project.panels.first.id;
-                controller.changed(t('comic.deletedPanel'));
-              },
-              icon: const Icon(Icons.delete_outline),
-            ),
-          ],
-        ),
-        if (panel.outputPath.isNotEmpty &&
-            File(panel.outputPath).existsSync()) ...[
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 360),
-            child: Image.file(File(panel.outputPath), fit: BoxFit.contain),
+    final controller = context.read<ComicController>();
+    final t = _text(context);
+    return _SectionCard(
+      title: '${panel.index}. ${panel.title}',
+      action: Wrap(
+        spacing: 4,
+        children: [
+          IconButton(
+            tooltip: t('comic.moveUp'),
+            onPressed: panel.index <= 1
+                ? null
+                : () => controller.movePanel(panel.id, -1),
+            icon: const Icon(Icons.arrow_upward),
           ),
-          const SizedBox(height: 10),
+          IconButton(
+            tooltip: t('comic.moveDown'),
+            onPressed: panel.index >= controller.project.panels.length
+                ? null
+                : () => controller.movePanel(panel.id, 1),
+            icon: const Icon(Icons.arrow_downward),
+          ),
+          IconButton(
+            tooltip: t('comic.delete'),
+            onPressed: () => controller.removePanel(panel.id),
+            icon: const Icon(Icons.delete_outline),
+          ),
         ],
-        TextFormField(
-          initialValue: panel.cnPrompt,
-          minLines: 5,
-          maxLines: 10,
-          decoration: InputDecoration(
-            labelText: t('comic.cnPanel'),
-            alignLabelWithHint: true,
-            border: const OutlineInputBorder(),
+      ),
+      child: Column(
+        children: [
+          _Field(
+            value: panel.title,
+            label: t('comic.panelTitle'),
+            onChanged: (value) {
+              panel.title = value;
+              controller.changed();
+            },
           ),
-          onChanged: (value) {
-            panel.cnPrompt = value;
-            controller.changed();
-          },
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: controller.busy
-                    ? null
-                    : () => controller.translatePanel(panel, toEnglish: true),
-                icon: const Icon(Icons.translate),
-                label: Text(t('comic.translateToEn')),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: controller.busy || panel.enPrompt.trim().isEmpty
-                    ? null
-                    : () => controller.translatePanel(panel, toEnglish: false),
-                icon: const Icon(Icons.translate),
-                label: Text(t('comic.translateToCn')),
-              ),
-            ),
+          const SizedBox(height: 12),
+          _Field(
+            value: panel.prompt,
+            label: t('comic.panelPrompt'),
+            minLines: 8,
+            onChanged: (value) {
+              panel.prompt = value;
+              controller.changed();
+            },
+          ),
+          const SizedBox(height: 8),
+          SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            title: Text(t('comic.override')),
+            subtitle: Text(t('comic.overrideHint')),
+            value: panel.overrideParams,
+            onChanged: (value) {
+              panel.overrideParams = value;
+              if (value) panel.params = controller.project.globalParams.copy();
+              controller.changed();
+            },
+          ),
+          if (panel.overrideParams) ...[
+            const SizedBox(height: 8),
+            _ParamsEditor(params: panel.params, onChanged: controller.changed),
           ],
-        ),
-        const SizedBox(height: 8),
-        TextFormField(
-          initialValue: panel.enPrompt,
-          minLines: 5,
-          maxLines: 10,
-          decoration: InputDecoration(
-            labelText: t('comic.enPrompt'),
-            alignLabelWithHint: true,
-            border: const OutlineInputBorder(),
-          ),
-          onChanged: (value) {
-            panel
-              ..enPrompt = value
-              ..status = value.trim().isEmpty
-                  ? ComicPanelStatus.draft
-                  : ComicPanelStatus.converted;
-            controller.changed();
-          },
-        ),
-        const SizedBox(height: 10),
-        TextFormField(
-          initialValue: panel.localNegativePrompt,
-          minLines: 2,
-          maxLines: 5,
-          decoration: InputDecoration(
-            labelText: t('comic.panelNegative'),
-            border: const OutlineInputBorder(),
-          ),
-          onChanged: (value) {
-            panel.localNegativePrompt = value;
-            controller.changed();
-          },
-        ),
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          title: Text(t('comic.overrideNegative')),
-          subtitle: Text(t('comic.appendNegative')),
-          value: panel.overrideNegative,
-          onChanged: (value) {
-            panel.overrideNegative = value;
-            controller.changed();
-          },
-        ),
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          title: Text(t('comic.panelParams')),
-          value: panel.overrideParams,
-          onChanged: (value) {
-            panel.overrideParams = value;
-            if (value) panel.params = controller.project.globalParams.copy();
-            controller.changed();
-          },
-        ),
-        if (panel.overrideParams)
-          _ComicParamsEditor(
-            title: t('comic.panelParamsTitle'),
-            params: panel.params,
-            onChanged: controller.changed,
-          ),
-        if (panel.error.isNotEmpty)
-          Text(panel.error,
-              style: TextStyle(color: Theme.of(context).colorScheme.error)),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton(
-                onPressed: controller.busy
-                    ? null
-                    : () => controller.convertPanels([panel]),
-                child: Text(t('comic.convertPanel')),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: FilledButton(
-                onPressed: controller.busy || controller.queueRunning
-                    ? null
-                    : () => controller.startQueue([panel]),
-                child: Text(panel.outputPath.isEmpty
-                    ? t('comic.generatePanel')
-                    : t('comic.retryPanel')),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _ComicParamsEditor extends StatelessWidget {
-  final String title;
-  final GenerateParams params;
-  final VoidCallback onChanged;
-
-  const _ComicParamsEditor({
-    required this.title,
-    required this.params,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final language = context.watch<AppState>().settings.language;
-    String t(String key) => mobileUiTextFor(language, key);
-    return Card(
-      margin: const EdgeInsets.only(bottom: 10),
-      child: Padding(
-        padding: const EdgeInsets.all(10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 10),
-            DropdownButtonFormField<String>(
-              value: params.model,
-              isExpanded: true,
-              decoration: InputDecoration(
-                labelText: t('batch.model'),
-                border: const OutlineInputBorder(),
-              ),
-              items: naiModels
-                  .map((model) => DropdownMenuItem(
-                        value: model.value,
-                        child: Text(
-                            localizedNaiOptionLabel(
-                                language, model.value, model.label),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis),
-                      ))
-                  .toList(),
-              onChanged: (value) {
-                if (value == null) return;
-                params.model = value;
-                onChanged();
-              },
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: sizePresets
-                  .map((size) => ChoiceChip(
-                        label: Text(localizedSizePresetLabel(
-                            language, size.width, size.height, size.label)),
-                        selected: params.width == size.width &&
-                            params.height == size.height,
-                        onSelected: (_) {
-                          params
-                            ..width = size.width
-                            ..height = size.height;
-                          onChanged();
-                        },
-                      ))
-                  .toList(),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _ComicNumberField(
-                  label: t('batch.width'),
-                  value: params.width,
-                  onChanged: (value) {
-                    params.width = _snapComicDimension(value);
-                    onChanged();
-                  },
-                ),
-                _ComicNumberField(
-                  label: t('batch.height'),
-                  value: params.height,
-                  onChanged: (value) {
-                    params.height = _snapComicDimension(value);
-                    onChanged();
-                  },
-                ),
-                _ComicNumberField(
-                  label: t('batch.seed'),
-                  value: params.seedMode == 'random' ? 0 : params.seed,
-                  onChanged: (value) {
-                    params
-                      ..seed = value.clamp(0, 2147483647)
-                      ..seedMode = value > 0 ? 'fixed' : 'random';
-                    onChanged();
-                  },
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            DropdownButtonFormField<String>(
-              value: params.sampler,
-              isExpanded: true,
-              decoration: InputDecoration(
-                labelText: t('batch.sampler'),
-                border: const OutlineInputBorder(),
-              ),
-              items: naiSamplers
-                  .map((sampler) => DropdownMenuItem(
-                        value: sampler.value,
-                        child: Text(localizedNaiOptionLabel(
-                            language, sampler.value, sampler.label)),
-                      ))
-                  .toList(),
-              onChanged: (value) {
-                if (value == null) return;
-                params.sampler = value;
-                onChanged();
-              },
-            ),
-            _ComicSlider(
-              label: 'Steps',
-              value: params.steps.toDouble(),
-              min: 1,
-              max: 50,
-              divisions: 49,
-              onChanged: (value) {
-                params.steps = value.round();
-                onChanged();
-              },
-            ),
-            _ComicSlider(
-              label: 'CFG',
-              value: params.cfgScale,
-              min: 1,
-              max: 10,
-              divisions: 45,
-              onChanged: (value) {
-                params.cfgScale = value;
-                onChanged();
-              },
-            ),
-            _ComicSlider(
-              label: 'CFG Rescale',
-              value: params.cfgRescale,
-              min: 0,
-              max: 1,
-              divisions: 100,
-              onChanged: (value) {
-                params.cfgRescale = value;
-                onChanged();
-              },
-            ),
-            DropdownButtonFormField<String>(
-              value: params.noiseSchedule,
-              isExpanded: true,
-              decoration: const InputDecoration(
-                labelText: 'Noise Schedule',
-                border: OutlineInputBorder(),
-              ),
-              items: naiNoiseSchedules
-                  .map((option) => DropdownMenuItem(
-                        value: option.value,
-                        child: Text(localizedNaiOptionLabel(
-                            language, option.value, option.label)),
-                      ))
-                  .toList(),
-              onChanged: (value) {
-                if (value == null) return;
-                params.noiseSchedule = value;
-                onChanged();
-              },
-            ),
-            const SizedBox(height: 8),
-            DropdownButtonFormField<int>(
-              value: params.ucPreset,
-              isExpanded: true,
-              decoration: const InputDecoration(
-                labelText: 'UC Preset',
-                border: OutlineInputBorder(),
-              ),
-              items: ucPresets
-                  .map((option) => DropdownMenuItem(
-                        value: int.parse(option.value),
-                        child: Text(localizedNaiOptionLabel(
-                            language, option.value, option.label)),
-                      ))
-                  .toList(),
-              onChanged: (value) {
-                if (value == null) return;
-                params.ucPreset = value;
-                onChanged();
-              },
-            ),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Quality Toggle'),
-              value: params.qualityToggle,
-              onChanged: (value) {
-                params.qualityToggle = value;
-                onChanged();
-              },
-            ),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Variety+'),
-              value: params.variety,
-              onChanged: (value) {
-                params.variety = value;
-                onChanged();
-              },
-            ),
-            if (!params.isV4Plus) ...[
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('SMEA'),
-                value: params.smea,
-                onChanged: (value) {
-                  params.smea = value;
-                  if (!value) params.smeaDyn = false;
-                  onChanged();
-                },
-              ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('SMEA Dyn'),
-                value: params.smeaDyn,
-                onChanged: params.smea
-                    ? (value) {
-                        params.smeaDyn = value;
-                        onChanged();
-                      }
-                    : null,
-              ),
-            ],
-          ],
-        ),
+        ],
       ),
     );
   }
-}
-
-int _snapComicDimension(int value) {
-  final bounded = value.clamp(64, 1600);
-  return ((bounded / 64).round() * 64).clamp(64, 1600);
-}
-
-String _comicStatusText(String language, ComicPanelStatus status) {
-  final key = switch (status) {
-    ComicPanelStatus.draft => 'comic.status.draft',
-    ComicPanelStatus.converted => 'comic.status.converted',
-    ComicPanelStatus.generating => 'comic.status.generating',
-    ComicPanelStatus.done => 'comic.status.done',
-    ComicPanelStatus.failed => 'comic.status.failed',
-  };
-  return mobileUiTextFor(language, key);
-}
-
-class _ComicNumberField extends StatefulWidget {
-  final String label;
-  final int value;
-  final ValueChanged<int> onChanged;
-
-  const _ComicNumberField({
-    required this.label,
-    required this.value,
-    required this.onChanged,
-  });
-
-  @override
-  State<_ComicNumberField> createState() => _ComicNumberFieldState();
-}
-
-class _ComicNumberFieldState extends State<_ComicNumberField> {
-  late final TextEditingController controller;
-  late final FocusNode focusNode;
-
-  @override
-  void initState() {
-    super.initState();
-    controller = TextEditingController(text: '${widget.value}');
-    focusNode = FocusNode()..addListener(_syncAfterEditing);
-  }
-
-  @override
-  void didUpdateWidget(covariant _ComicNumberField oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (!focusNode.hasFocus && controller.text != '${widget.value}') {
-      controller.text = '${widget.value}';
-    }
-  }
-
-  void _syncAfterEditing() {
-    if (!focusNode.hasFocus && controller.text != '${widget.value}') {
-      controller.text = '${widget.value}';
-    }
-  }
-
-  @override
-  void dispose() {
-    focusNode
-      ..removeListener(_syncAfterEditing)
-      ..dispose();
-    controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => SizedBox(
-        width: 180,
-        child: TextField(
-          controller: controller,
-          focusNode: focusNode,
-          keyboardType: TextInputType.number,
-          decoration: InputDecoration(
-            labelText: widget.label,
-            border: const OutlineInputBorder(),
-          ),
-          onChanged: (raw) {
-            final parsed = int.tryParse(raw);
-            if (parsed != null) widget.onChanged(parsed);
-          },
-        ),
-      );
-}
-
-class _ComicSlider extends StatelessWidget {
-  final String label;
-  final double value;
-  final double min;
-  final double max;
-  final int divisions;
-  final ValueChanged<double> onChanged;
-  const _ComicSlider({
-    required this.label,
-    required this.value,
-    required this.min,
-    required this.max,
-    required this.divisions,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) => Row(
-        children: [
-          SizedBox(width: 50, child: Text(label)),
-          Expanded(
-            child: Slider(
-              value: value.clamp(min, max),
-              min: min,
-              max: max,
-              divisions: divisions,
-              label: value.toStringAsFixed(_digits),
-              onChanged: onChanged,
-            ),
-          ),
-          SizedBox(
-            width: 38,
-            child: Text(value.toStringAsFixed(_digits)),
-          ),
-        ],
-      );
-
-  int get _digits => label == 'Steps'
-      ? 0
-      : label.contains('Rescale')
-          ? 2
-          : 1;
 }
 
 class _GenerateStep extends StatelessWidget {
@@ -1385,220 +561,574 @@ class _GenerateStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<ComicController>();
-    final language = context.watch<AppState>().settings.language;
-    String t(String key) => mobileUiTextFor(language, key);
-    final project = controller.project;
-    final selected = controller.selectedPanels;
-    final ungenerated =
-        project.panels.where((panel) => panel.outputPath.isEmpty).toList();
-    // Panels that were never converted to an English prompt and aren't generated
-    // yet. Generating them falls back to the Chinese prompt (see generateOne).
-    final unconverted = project.panels
-        .where((panel) =>
-            panel.outputPath.isEmpty && panel.enPrompt.trim().isEmpty)
-        .toList();
-    final quoteTargets = selected.isNotEmpty ? selected : ungenerated;
-    final width = MediaQuery.sizeOf(context).width;
-    final columns = width >= 1180
-        ? 6
-        : width >= 800
-            ? 4
-            : width >= 520
-                ? 3
-                : 2;
-    return ListView(
-      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 120),
-      children: [
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(mobileUiFormatFor(language, 'comic.quote',
-                    {'amount': controller.quotePanels(quoteTargets)})),
-                Text(mobileUiFormatFor(language, 'comic.balance', {
-                  'balance':
-                      controller.app.account.anlasBalance ?? t('common.unknown')
-                })),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(t('comic.autoExportZip')),
-                  value: project.autoExportZip,
-                  onChanged: (value) {
-                    project.autoExportZip = value;
-                    controller.changed();
-                  },
-                ),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    FilledButton.icon(
-                      onPressed: controller.queueRunning || ungenerated.isEmpty
-                          ? null
-                          : () => controller.startQueue(ungenerated),
-                      icon: const Icon(Icons.playlist_play),
-                      label: Text(mobileUiFormatFor(
-                          language,
-                          'comic.generateUngenerated',
-                          {'count': ungenerated.length})),
-                    ),
-                    FilledButton.tonalIcon(
-                      onPressed: controller.queueRunning || unconverted.isEmpty
-                          ? null
-                          : () => controller.startQueue(unconverted),
-                      icon: const Icon(Icons.auto_fix_high),
-                      label: Text(mobileUiFormatFor(
-                          language,
-                          'comic.generateUnconverted',
-                          {'count': unconverted.length})),
-                    ),
-                    FilledButton.tonalIcon(
-                      onPressed: controller.queueRunning || selected.isEmpty
-                          ? null
-                          : () => controller.startQueue(selected),
-                      icon: const Icon(Icons.refresh),
-                      label: Text(mobileUiFormatFor(language,
-                          'comic.retrySelected', {'count': selected.length})),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: () async {
-                        final messenger = ScaffoldMessenger.of(context);
-                        try {
-                          await controller.exportComicZip();
-                          messenger.showSnackBar(
-                              SnackBar(content: Text(controller.status)));
-                        } catch (error) {
-                          messenger.showSnackBar(
-                              SnackBar(content: Text('$error')));
-                        }
-                      },
-                      icon: const Icon(Icons.archive_outlined),
-                      label: Text(t('comic.exportZip')),
-                    ),
-                  ],
-                ),
-                if (controller.queueRunning) ...[
-                  const SizedBox(height: 10),
-                  LinearProgressIndicator(
-                    value: controller.queueTotal == 0
-                        ? null
-                        : controller.queueDone / controller.queueTotal,
-                  ),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(mobileUiFormatFor(language, 'comic.queue', {
-                          'done': controller.queueDone,
-                          'total': controller.queueTotal,
-                        })),
-                      ),
-                      IconButton.filledTonal(
-                        tooltip: controller.queuePaused
-                            ? t('batch.resumeQueue')
-                            : t('batch.pauseQueue'),
-                        onPressed: controller.toggleQueuePause,
-                        icon: Icon(controller.queuePaused
-                            ? Icons.play_arrow
-                            : Icons.pause),
-                      ),
-                      const SizedBox(width: 6),
-                      IconButton.filled(
-                        tooltip: t('common.cancel'),
-                        onPressed: controller.cancelQueue,
-                        icon: const Icon(Icons.stop),
-                      ),
-                    ],
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ),
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: columns,
-            mainAxisSpacing: 10,
-            crossAxisSpacing: 10,
-            childAspectRatio: 0.62,
-          ),
-          itemCount: project.panels.length,
-          itemBuilder: (context, index) {
-            final panel = project.panels[index];
-            final checked = controller.selectedPanelIds.contains(panel.id);
-            return Card(
-              clipBehavior: Clip.antiAlias,
-              margin: EdgeInsets.zero,
-              child: InkWell(
-                onTap: () {
-                  checked
-                      ? controller.selectedPanelIds.remove(panel.id)
-                      : controller.selectedPanelIds.add(panel.id);
-                  controller.changed();
-                },
+    final t = _text(context);
+    final panels = controller.project.panels;
+    return LayoutBuilder(builder: (context, constraints) {
+      final columns = constraints.maxWidth >= 1100
+          ? 4
+          : constraints.maxWidth >= 760
+              ? 3
+              : constraints.maxWidth >= 500
+                  ? 2
+                  : 1;
+      return CustomScrollView(
+        slivers: [
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+              child: _SectionCard(
+                title: t('comic.generateHeading'),
+                subtitle: t('comic.exportHint'),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Expanded(
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          if (panel.outputPath.isNotEmpty &&
-                              File(panel.outputPath).existsSync())
-                            Image.file(
-                              File(panel.outputPath),
-                              fit: BoxFit.cover,
-                              cacheWidth: 420,
-                              filterQuality: FilterQuality.low,
-                            )
-                          else
-                            const ColoredBox(
-                              color: Colors.black12,
-                              child: Icon(Icons.image_outlined),
-                            ),
-                          Positioned(
-                            top: 4,
-                            left: 4,
-                            child: Checkbox(
-                              value: checked,
-                              onChanged: (_) {
-                                checked
-                                    ? controller.selectedPanelIds
-                                        .remove(panel.id)
-                                    : controller.selectedPanelIds.add(panel.id);
-                                controller.changed();
-                              },
-                            ),
+                    if (controller.queueRunning) ...[
+                      LinearProgressIndicator(
+                        value: controller.queueTotal == 0
+                            ? null
+                            : controller.queueDone / controller.queueTotal,
+                      ),
+                      const SizedBox(height: 10),
+                    ],
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: [
+                        FilledButton.icon(
+                          onPressed: controller.queueRunning || panels.isEmpty
+                              ? null
+                              : () => _confirmAndRun(
+                                    context,
+                                    controller,
+                                    controller.generateInitial,
+                                    () => controller.quoteTasks(
+                                      panels,
+                                      each: controller
+                                          .project.initialGenerationCount,
+                                    ),
+                                  ),
+                          icon: const Icon(Icons.play_arrow),
+                          label: Text(t('comic.generateInitial')),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: controller.queueRunning || panels.isEmpty
+                              ? null
+                              : () => _confirmAndRun(
+                                    context,
+                                    controller,
+                                    controller.addOneToAll,
+                                    () => controller.quoteTasks(panels),
+                                  ),
+                          icon: const Icon(Icons.add_photo_alternate_outlined),
+                          label: Text(t('comic.addAll')),
+                        ),
+                        if (controller.queueRunning)
+                          FilledButton.tonalIcon(
+                            onPressed: controller.cancelQueue,
+                            icon: const Icon(Icons.stop),
+                            label: Text(t('comic.stop')),
                           ),
-                        ],
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.all(6),
-                      child: Column(
-                        children: [
-                          Text(
-                              '#${panel.index} · ${_comicStatusText(language, panel.status)}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis),
-                          if (panel.actualAnlas != null)
-                            Text(
-                                mobileUiFormatFor(language, 'comic.actualCost',
-                                    {'amount': panel.actualAnlas}),
-                                style: Theme.of(context).textTheme.bodySmall),
-                        ],
-                      ),
+                        OutlinedButton.icon(
+                          onPressed: panels
+                                  .any((item) => item.selectedCandidate != null)
+                              ? () =>
+                                  _run(context, controller.exportSelectedZip)
+                              : null,
+                          icon: const Icon(Icons.archive_outlined),
+                          label: Text(t('comic.exportZip')),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
-            );
-          },
-        ),
-      ],
+            ),
+          ),
+          if (panels.isEmpty)
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: _EmptyState(
+                icon: Icons.image_outlined,
+                text: t('comic.panelsEmpty'),
+              ),
+            )
+          else
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(12, 6, 12, 110),
+              sliver: SliverGrid.builder(
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: columns,
+                  crossAxisSpacing: 10,
+                  mainAxisSpacing: 10,
+                  mainAxisExtent: columns == 1 ? 520 : 480,
+                ),
+                itemCount: panels.length,
+                itemBuilder: (context, index) =>
+                    _ResultCard(panel: panels[index]),
+              ),
+            ),
+        ],
+      );
+    });
+  }
+}
+
+class _ResultCard extends StatelessWidget {
+  final ComicPanel panel;
+  const _ResultCard({required this.panel});
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = context.read<ComicController>();
+    final t = _text(context);
+    final selected = panel.selectedCandidate;
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ListTile(
+            dense: true,
+            leading: CircleAvatar(child: Text('${panel.index}')),
+            title:
+                Text(panel.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+            subtitle: Text(
+              '${t('comic.currentMain')} · ${panel.candidates.length}',
+              maxLines: 1,
+            ),
+            trailing: IconButton(
+              tooltip: panel.status == ComicPanelStatus.failed
+                  ? t('comic.retry')
+                  : t('comic.addOne'),
+              onPressed: controller.queueRunning
+                  ? null
+                  : () => _confirmAndRun(
+                        context,
+                        controller,
+                        () => controller.addOne(panel),
+                        () => controller.quoteTasks([panel]),
+                      ),
+              icon: Icon(panel.status == ComicPanelStatus.failed
+                  ? Icons.refresh
+                  : Icons.add),
+            ),
+          ),
+          Expanded(
+            child: InkWell(
+              onTap: selected == null
+                  ? null
+                  : () => _preview(context, selected.outputPath),
+              child: selected == null
+                  ? _EmptyState(
+                      icon: panel.status == ComicPanelStatus.generating
+                          ? Icons.hourglass_top
+                          : Icons.image_outlined,
+                      text: panel.error.isNotEmpty
+                          ? panel.error
+                          : t('comic.noCandidate'),
+                    )
+                  : Hero(
+                      tag: 'comic-${selected.id}',
+                      child: Image.file(
+                        File(selected.outputPath),
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, __, ___) =>
+                            Center(child: Text(t('comic.imageMissing'))),
+                      ),
+                    ),
+            ),
+          ),
+          if (panel.candidates.length > 1)
+            ExpansionTile(
+              title: Text(t('comic.showCandidates')),
+              childrenPadding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+              children: [
+                SizedBox(
+                  height: 82,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: panel.candidates.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 8),
+                    itemBuilder: (context, index) {
+                      final candidate = panel.candidates[index];
+                      final active = candidate.id == panel.selectedCandidateId;
+                      return InkWell(
+                        onTap: () =>
+                            controller.selectCandidate(panel, candidate.id),
+                        onLongPress: () =>
+                            _preview(context, candidate.outputPath),
+                        child: Container(
+                          width: 68,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: active
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(context).dividerColor,
+                              width: active ? 3 : 1,
+                            ),
+                          ),
+                          clipBehavior: Clip.antiAlias,
+                          child: Image.file(
+                            File(candidate.outputPath),
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+        ],
+      ),
     );
   }
+}
+
+class _ParamsEditor extends StatelessWidget {
+  final GenerateParams params;
+  final VoidCallback onChanged;
+  final String? negativePrompt;
+  final ValueChanged<String>? onNegativeChanged;
+  const _ParamsEditor({
+    required this.params,
+    required this.onChanged,
+    this.negativePrompt,
+    this.onNegativeChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final t = _text(context);
+    return _SectionCard(
+      title: t('comic.paramsHeading'),
+      child: LayoutBuilder(builder: (context, constraints) {
+        final width = constraints.maxWidth >= 760
+            ? (constraints.maxWidth - 24) / 3
+            : constraints.maxWidth >= 480
+                ? (constraints.maxWidth - 12) / 2
+                : constraints.maxWidth;
+        return Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            if (negativePrompt != null && onNegativeChanged != null)
+              SizedBox(
+                width: constraints.maxWidth,
+                child: _Field(
+                  value: negativePrompt!,
+                  label: t('comic.globalNegative'),
+                  minLines: 3,
+                  onChanged: onNegativeChanged!,
+                ),
+              ),
+            SizedBox(
+              width: width,
+              child: DropdownButtonFormField<String>(
+                isExpanded: true,
+                value: naiModels.any((item) => item.value == params.model)
+                    ? params.model
+                    : naiModels.first.value,
+                decoration: InputDecoration(
+                    labelText: t('comic.model'),
+                    border: const OutlineInputBorder()),
+                items: naiModels
+                    .map((item) => DropdownMenuItem(
+                          value: item.value,
+                          child:
+                              Text(item.label, overflow: TextOverflow.ellipsis),
+                        ))
+                    .toList(),
+                onChanged: (value) {
+                  params.model = value ?? params.model;
+                  onChanged();
+                },
+              ),
+            ),
+            _NumberField(
+              width: width,
+              label: t('comic.width'),
+              value: params.width,
+              onChanged: (value) => params.width = value.clamp(64, 4096),
+              notify: onChanged,
+            ),
+            _NumberField(
+              width: width,
+              label: t('comic.height'),
+              value: params.height,
+              onChanged: (value) => params.height = value.clamp(64, 4096),
+              notify: onChanged,
+            ),
+            _NumberField(
+              width: width,
+              label: t('comic.steps'),
+              value: params.steps,
+              onChanged: (value) => params.steps = value.clamp(1, 50),
+              notify: onChanged,
+            ),
+            _DecimalField(
+              width: width,
+              label: t('comic.cfg'),
+              value: params.cfgScale,
+              onChanged: (value) => params.cfgScale = value.clamp(0, 20),
+              notify: onChanged,
+            ),
+            _NumberField(
+              width: width,
+              label: t('comic.seed'),
+              value: params.seed,
+              onChanged: (value) => params.seed = value,
+              notify: onChanged,
+            ),
+          ],
+        );
+      }),
+    );
+  }
+}
+
+class _SectionCard extends StatelessWidget {
+  final String title;
+  final String? subtitle;
+  final Widget? action;
+  final Widget child;
+  const _SectionCard({
+    required this.title,
+    this.subtitle,
+    this.action,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title,
+                          style: Theme.of(context).textTheme.titleMedium),
+                      if (subtitle != null) ...[
+                        const SizedBox(height: 2),
+                        Text(subtitle!,
+                            style: Theme.of(context).textTheme.bodySmall),
+                      ],
+                    ],
+                  ),
+                ),
+                if (action != null) action!,
+              ],
+            ),
+            const SizedBox(height: 14),
+            child,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Field extends StatelessWidget {
+  final String value;
+  final String label;
+  final int minLines;
+  final ValueChanged<String> onChanged;
+  const _Field({
+    required this.value,
+    required this.label,
+    this.minLines = 1,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) => TextFormField(
+        key: ValueKey('$label-$value'),
+        initialValue: value,
+        minLines: minLines,
+        maxLines: minLines == 1 ? 1 : minLines + 4,
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+          alignLabelWithHint: minLines > 1,
+        ),
+        onChanged: onChanged,
+      );
+}
+
+class _NumberField extends StatelessWidget {
+  final double width;
+  final String label;
+  final int value;
+  final ValueChanged<int> onChanged;
+  final VoidCallback notify;
+  const _NumberField({
+    required this.width,
+    required this.label,
+    required this.value,
+    required this.onChanged,
+    required this.notify,
+  });
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        width: width,
+        child: TextFormField(
+          key: ValueKey('$label-$value'),
+          initialValue: '$value',
+          keyboardType: TextInputType.number,
+          decoration: InputDecoration(
+              labelText: label, border: const OutlineInputBorder()),
+          onChanged: (input) {
+            final parsed = int.tryParse(input);
+            if (parsed != null) {
+              onChanged(parsed);
+              notify();
+            }
+          },
+        ),
+      );
+}
+
+class _DecimalField extends StatelessWidget {
+  final double width;
+  final String label;
+  final double value;
+  final ValueChanged<double> onChanged;
+  final VoidCallback notify;
+  const _DecimalField({
+    required this.width,
+    required this.label,
+    required this.value,
+    required this.onChanged,
+    required this.notify,
+  });
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        width: width,
+        child: TextFormField(
+          key: ValueKey('$label-$value'),
+          initialValue: '$value',
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: InputDecoration(
+              labelText: label, border: const OutlineInputBorder()),
+          onChanged: (input) {
+            final parsed = double.tryParse(input);
+            if (parsed != null) {
+              onChanged(parsed);
+              notify();
+            }
+          },
+        ),
+      );
+}
+
+class _EmptyState extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  final Widget? action;
+  const _EmptyState({required this.icon, required this.text, this.action});
+
+  @override
+  Widget build(BuildContext context) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon,
+                  size: 44, color: Theme.of(context).colorScheme.outline),
+              const SizedBox(height: 12),
+              Text(text, textAlign: TextAlign.center),
+              if (action != null) ...[const SizedBox(height: 12), action!],
+            ],
+          ),
+        ),
+      );
+}
+
+String Function(String) _text(BuildContext context) {
+  final language = context.watch<AppState>().settings.language;
+  return (key) => mobileUiTextFor(language, key);
+}
+
+Future<void> _run(BuildContext context, Future<void> Function() action) async {
+  try {
+    await action();
+  } catch (error) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))),
+    );
+  }
+}
+
+Future<void> _confirmAndRun(
+  BuildContext context,
+  ComicController controller,
+  Future<void> Function() action,
+  Future<int> Function() loadQuote,
+) async {
+  final t = _text(context);
+  final quote = await loadQuote();
+  if (!context.mounted) return;
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text(t('comic.confirmGenerate')),
+      content: Text('${t('comic.quote')}: $quote Anlas'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: Text(t('common.cancel')),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: Text(t('comic.confirm')),
+        ),
+      ],
+    ),
+  );
+  if (confirmed == true && context.mounted) await _run(context, action);
+}
+
+Future<void> _preview(BuildContext context, String path) async {
+  await showDialog<void>(
+    context: context,
+    barrierColor: Colors.black87,
+    builder: (context) => Dialog.fullscreen(
+      backgroundColor: Colors.black,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: InteractiveViewer(
+              minScale: 0.5,
+              maxScale: 6,
+              child: Center(child: Image.file(File(path), fit: BoxFit.contain)),
+            ),
+          ),
+          Positioned(
+            top: 12,
+            right: 12,
+            child: SafeArea(
+              child: IconButton.filled(
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.close),
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 }

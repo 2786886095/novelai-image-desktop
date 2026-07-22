@@ -8791,3 +8791,283 @@ html.theme-dark #root {
   .random-artist-settings { grid-template-columns: 1fr; }
   .random-artist-settings .wide { grid-column: auto; }
 }
+
+/* Tag-only comic workspace v2 ------------------------------------------------ */
+.tag-comic {
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 18px 20px 36px;
+  color: var(--text-primary);
+}
+.tag-comic-header,
+.tag-comic-card {
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 95%, transparent);
+  box-shadow: 0 16px 40px rgba(58, 42, 94, 0.07);
+}
+.tag-comic-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px 20px;
+  border-radius: 24px;
+}
+.tag-comic-header small { color: var(--accent); font-size: 11px; font-weight: 800; letter-spacing: 0.14em; }
+.tag-comic-header h2 { margin: 5px 0 4px; font-size: 25px; }
+.tag-comic-header p,
+.tag-comic-section-heading p { margin: 0; color: var(--text-muted); line-height: 1.55; }
+.tag-comic-header-actions,
+.tag-comic-actions,
+.tag-comic-generate-toolbar,
+.tag-comic-result-actions { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.tag-comic-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 14px 0;
+}
+.tag-comic-steps button {
+  min-width: 0;
+  min-height: 66px;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 180ms ease, background 180ms ease, transform 180ms ease;
+}
+.tag-comic-steps button:hover { border-color: color-mix(in srgb, var(--accent) 48%, var(--border)); }
+.tag-comic-steps button:active { transform: translateY(1px); }
+.tag-comic-steps button:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 30%, transparent); outline-offset: 2px; }
+.tag-comic-steps button.active {
+  border-color: color-mix(in srgb, var(--accent) 65%, var(--border));
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 14%, var(--surface)), color-mix(in srgb, #0ea5e9 10%, var(--surface)));
+}
+.tag-comic-steps b {
+  grid-row: 1 / 3;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  color: var(--accent);
+}
+.tag-comic-steps button.active b { background: var(--accent); color: #fff; }
+.tag-comic-steps span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
+.tag-comic-steps small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-muted); }
+.tag-comic-card { border-radius: 24px; padding: 20px; min-width: 0; }
+.tag-comic-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.tag-comic-section-heading h3 { margin: 0 0 4px; font-size: 18px; }
+.tag-comic-section-heading > span { color: var(--text-muted); font-size: 12px; }
+.tag-comic textarea,
+.tag-comic input,
+.tag-comic select {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--input-bg);
+  color: var(--text-primary);
+  padding: 10px 12px;
+  font: inherit;
+}
+.tag-comic textarea { resize: vertical; line-height: 1.55; }
+.tag-comic textarea:focus,
+.tag-comic input:focus,
+.tag-comic select:focus { outline: 3px solid color-mix(in srgb, var(--accent) 22%, transparent); border-color: var(--accent); }
+.tag-comic label { display: grid; gap: 7px; min-width: 0; }
+.tag-comic label > span { color: var(--text-secondary); font-size: 12px; font-weight: 650; }
+.tag-comic-import > textarea { min-height: 280px; }
+.tag-comic-file-button {
+  position: relative;
+  min-height: 42px;
+  display: inline-flex !important;
+  grid-auto-flow: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px !important;
+  padding: 9px 14px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--surface);
+  cursor: pointer;
+  overflow: hidden;
+}
+.tag-comic-file-button input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.tag-comic-global-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(190px, 1fr);
+  gap: 13px;
+}
+.tag-comic-global-grid .wide { grid-column: 1 / -1; }
+.tag-comic-global-grid textarea { min-height: 92px; }
+.tag-comic-params { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
+.tag-comic-param-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.tag-comic-param-grid .wide { grid-column: 1 / -1; }
+.tag-comic-param-grid textarea { min-height: 92px; }
+.tag-comic-param-grid.compact { margin-top: 12px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.tag-comic-disclosure {
+  margin-top: 12px;
+  min-height: 40px;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-weight: 700;
+  cursor: pointer;
+}
+.tag-comic-panel-workspace {
+  display: grid;
+  grid-template-columns: minmax(210px, 260px) minmax(0, 1fr);
+  gap: 14px;
+  min-height: 470px;
+}
+.tag-comic-panel-workspace > aside {
+  max-height: 620px;
+  overflow-y: auto;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding-right: 4px;
+}
+.tag-comic-panel-workspace > aside button {
+  min-height: 58px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 9px;
+  align-items: center;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+.tag-comic-panel-workspace > aside button.active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 9%, var(--surface)); }
+.tag-comic-panel-workspace > aside button b { grid-row: 1 / 3; color: var(--accent); }
+.tag-comic-panel-workspace > aside button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
+.tag-comic-panel-workspace > aside button small { color: var(--text-muted); }
+.tag-comic-panel-editor {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
+}
+.tag-comic-panel-editor > header { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+.tag-comic-panel-editor textarea { min-height: 180px; }
+.tag-comic-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-muted) 12%, transparent);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 800;
+}
+.tag-comic-status.generating { color: #7c3aed; background: rgba(124, 58, 237, 0.13); }
+.tag-comic-status.done { color: #15803d; background: rgba(22, 163, 74, 0.13); }
+.tag-comic-status.failed { color: #dc2626; background: rgba(239, 68, 68, 0.13); }
+.tag-comic-empty,
+.tag-comic-no-image {
+  min-height: 260px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--border);
+  border-radius: 18px;
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+}
+.tag-comic-balance { padding: 8px 12px; border-radius: 999px; background: color-mix(in srgb, #16a34a 12%, var(--surface)); color: #15803d; font-weight: 750; }
+.tag-comic-progress-block { display: flex; align-items: center; gap: 12px; margin: 14px 0; }
+.tag-comic-progress { flex: 1; height: 8px; overflow: hidden; border-radius: 999px; background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+.tag-comic-progress span { display: block; height: 100%; background: linear-gradient(90deg, #7c3aed, #0ea5e9); transition: width 180ms ease; }
+.tag-comic-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; margin-top: 16px; }
+.tag-comic-result-card { min-width: 0; overflow: hidden; border: 1px solid var(--border); border-radius: 18px; background: var(--surface); }
+.tag-comic-result-card > header { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 11px 12px; }
+.tag-comic-result-card > header > div { min-width: 0; display: flex; gap: 8px; align-items: center; }
+.tag-comic-result-card > header strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tag-comic-result-card > header b { color: var(--accent); }
+.tag-comic-main-image { position: relative; width: 100%; aspect-ratio: 3 / 4; display: block; padding: 0; border: 0; background: color-mix(in srgb, var(--text-primary) 5%, var(--surface)); cursor: zoom-in; }
+.tag-comic-main-image img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.tag-comic-main-image span { position: absolute; left: 10px; bottom: 10px; padding: 5px 9px; border-radius: 999px; background: rgba(15, 23, 42, 0.78); color: #fff; font-size: 11px; }
+.tag-comic-result-actions { padding: 11px 12px; }
+.tag-comic-error { margin: 0; padding: 9px 12px; color: #dc2626; background: rgba(239, 68, 68, 0.08); font-size: 12px; }
+.tag-comic-candidates { padding: 0 12px 12px; border-top: 1px solid var(--border); }
+.tag-comic-candidates h4 { margin: 11px 0 9px; }
+.tag-comic-candidates > div { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; }
+.tag-comic-candidates button { position: relative; aspect-ratio: 1; padding: 0; overflow: hidden; border: 2px solid transparent; border-radius: 10px; background: transparent; cursor: pointer; }
+.tag-comic-candidates button.selected { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent); }
+.tag-comic-candidates img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tag-comic-candidates span { position: absolute; right: 4px; bottom: 4px; min-width: 20px; padding: 2px 5px; border-radius: 999px; background: rgba(15, 23, 42, 0.78); color: #fff; font-size: 10px; }
+.theme-dark .tag-comic-header,
+.theme-dark .tag-comic-card,
+.theme-dark .tag-comic-result-card,
+.theme-dark .tag-comic-panel-editor,
+.theme-dark .tag-comic-panel-workspace > aside button { background: #171426; border-color: #37304f; box-shadow: none; }
+.theme-dark .tag-comic-steps button { background: #151222; border-color: #37304f; }
+.theme-dark .tag-comic-steps button.active { background: linear-gradient(135deg, #2d2350, #172b42); border-color: #8065c9; }
+.theme-dark .tag-comic textarea,
+.theme-dark .tag-comic input,
+.theme-dark .tag-comic select { background: #100e1b; border-color: #40375b; color: #f4f0ff; }
+.theme-dark .tag-comic-balance { color: #86efac; background: rgba(22, 163, 74, 0.14); }
+@media (max-width: 980px) {
+  .tag-comic { padding: 12px 12px 28px; }
+  .tag-comic-header { align-items: flex-start; }
+  .tag-comic-header,
+  .tag-comic-section-heading { flex-direction: column; }
+  .tag-comic-header-actions { width: 100%; }
+  .tag-comic-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tag-comic-param-grid,
+  .tag-comic-param-grid.compact { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tag-comic-panel-workspace { grid-template-columns: 1fr; }
+  .tag-comic-panel-workspace > aside { max-height: none; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+}
+@media (max-width: 560px) {
+  .tag-comic { padding: 8px 8px 24px; }
+  .tag-comic-card,
+  .tag-comic-header { padding: 14px; border-radius: 18px; }
+  .tag-comic-header-actions .btn,
+  .tag-comic-actions .btn,
+  .tag-comic-generate-toolbar .btn { min-height: 44px; flex: 1 1 auto; }
+  .tag-comic-steps { gap: 7px; }
+  .tag-comic-steps button { min-height: 60px; padding: 8px; grid-template-columns: 29px minmax(0, 1fr); column-gap: 7px; }
+  .tag-comic-steps b { width: 29px; height: 29px; }
+  .tag-comic-steps small { display: none; }
+  .tag-comic-global-grid,
+  .tag-comic-param-grid,
+  .tag-comic-param-grid.compact { grid-template-columns: 1fr; }
+  .tag-comic-global-grid .wide,
+  .tag-comic-param-grid .wide { grid-column: auto; }
+  .tag-comic-panel-editor { padding: 12px; }
+  .tag-comic-panel-editor > header { align-items: flex-start; flex-direction: column; }
+  .tag-comic-gallery { grid-template-columns: 1fr; }
+  .tag-comic-candidates > div { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tag-comic *,
+  .tag-comic *::before,
+  .tag-comic *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+}

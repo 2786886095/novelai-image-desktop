@@ -12,32 +12,36 @@ ComicProject _project() {
   final params = GenerateParams();
   return ComicProject(
     id: 'project-1',
-    title: '测试漫画',
-    rawScript: '第一幕。第二幕。',
-    globalPrompt: '连续故事',
-    globalCharacterSetting: '主角保持黑色短发和白衬衫',
+    title: 'Test comic',
+    globalStylePrompt: 'masterpiece, best quality',
+    globalNegativePrompt: 'lowres',
+    initialGenerationCount: 3,
     globalParams: params,
     panels: List.generate(
       3,
       (index) => ComicPanel(
         id: 'panel-$index',
         index: index + 1,
-        cnPrompt: '第 ${index + 1} 格中文描述',
-        enPrompt: 'panel ${index + 1} prompt',
+        title: 'Panel ${index + 1}',
+        prompt: 'panel ${index + 1} prompt',
         params: params.copy(),
-        status: ComicPanelStatus.converted,
       ),
     ),
   );
 }
 
 void main() {
-  test('trusted restore keeps output paths while imported JSON clears them',
-      () {
+  test('trusted restore keeps candidates while imported JSON clears them', () {
     final source = _project();
-    source
-      ..historyGroupId = 'group-1'
-      ..panels.first.outputPath = r'C:\trusted\panel.png';
+    source.historyGroupId = 'group-1';
+    source.panels.first
+      ..candidates.add(ComicCandidate(
+        id: 'candidate-1',
+        historyItemId: 'history-1',
+        outputPath: r'C:\trusted\panel.png',
+        createdAt: '2026-07-22T00:00:00Z',
+      ))
+      ..selectedCandidateId = 'candidate-1';
     final json = source.toJson();
     final trusted = ComicProject.fromJson(
       json,
@@ -46,13 +50,13 @@ void main() {
     );
     final imported = ComicProject.fromJson(json, GenerateParams());
     expect(trusted.historyGroupId, 'group-1');
-    expect(trusted.panels.first.outputPath, r'C:\trusted\panel.png');
+    expect(trusted.panels.first.selectedCandidate?.outputPath,
+        r'C:\trusted\panel.png');
     expect(imported.historyGroupId, isNull);
-    expect(imported.panels.first.outputPath, isEmpty);
+    expect(imported.panels.first.candidates, isEmpty);
   });
 
-  test('comic project JSON preserves panel parameters and reference switches',
-      () {
+  test('v2 project preserves global and per-panel generation settings', () {
     final source = _project();
     source.panels.first
       ..overrideParams = true
@@ -60,22 +64,45 @@ void main() {
         ..width = 1472
         ..height = 1472
         ..steps = 36);
-    source.references.add(ComicReference(
-      id: 'ref-1',
-      name: 'hero.png',
-      base64: 'YWJj',
-      kind: 'character',
-      useForGeneration: false,
-    ));
     final restored = ComicProject.fromJson(source.toJson(), GenerateParams());
+    expect(restored.initialGenerationCount, 3);
+    expect(restored.globalNegativePrompt, 'lowres');
     expect(restored.panels.first.params.width, 1472);
     expect(restored.panels.first.params.steps, 36);
-    expect(restored.references.single.useForGeneration, isFalse);
+  });
+
+  test('old comic project schema is rejected', () {
+    expect(
+      () => ComicProject.fromJson(
+        {'schemaVersion': 1, 'panels': []},
+        GenerateParams(),
+      ),
+      throwsFormatException,
+    );
+  });
+
+  test('tag imports support text, titled JSON, and quoted CSV', () {
+    expect(parseComicImport('one\ntwo').map((item) => item.$2), ['one', 'two']);
+    expect(
+      parseComicImport(
+        '[{"title":"Opening","prompt":"1girl"}]',
+        fileName: 'panels.json',
+      ).single,
+      ('Opening', '1girl'),
+    );
+    expect(
+      parseComicImport(
+        'title,prompt\n"Panel, One","1girl, smile"',
+        fileName: 'panels.csv',
+      ).single,
+      ('Panel, One', '1girl, smile'),
+    );
   });
 
   for (final viewport in <(String, Size)>[
-    ('phone', const Size(360, 800)),
-    ('tablet', const Size(1280, 800)),
+    ('phone portrait', const Size(360, 800)),
+    ('phone landscape', const Size(800, 360)),
+    ('tablet landscape', const Size(1280, 800)),
   ]) {
     testWidgets('four comic steps fit the ${viewport.$1} viewport',
         (tester) async {
@@ -102,11 +129,8 @@ void main() {
           ),
         );
         await tester.pump();
-        expect(
-          tester.takeException(),
-          isNull,
-          reason: '${viewport.$1} ${step.name}',
-        );
+        expect(tester.takeException(), isNull,
+            reason: '${viewport.$1} ${step.name}');
       }
     });
   }

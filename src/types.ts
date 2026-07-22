@@ -1,6 +1,7 @@
-export const APP_VERSION = "1.4.3";
+export const APP_VERSION = "1.4.4";
 export const APP_NAME = "Langbai NovelAI Studio";
-export const PROJECT_REPOSITORY = "https://github.com/2786886095/novelai-image-desktop";
+export const PROJECT_REPOSITORY =
+  "https://github.com/2786886095/novelai-image-desktop";
 
 export type ReversePromptMode = "tags" | "natural" | "mixed";
 export type ReversePromptScope = "full" | "character" | "object" | "scene";
@@ -14,17 +15,45 @@ export interface ModePromptTemplates {
   mixed: string;
 }
 
-export const EMPTY_MODE_TEMPLATES: ModePromptTemplates = { tags: "", natural: "", mixed: "" };
+export const EMPTY_MODE_TEMPLATES: ModePromptTemplates = {
+  tags: "",
+  natural: "",
+  mixed: "",
+};
 
 export type ModelMode = "anime" | "furry";
 
 export const NAI_MODELS = [
-  { label: "NAI Diffusion 4.5 Full（完整模型）", value: "nai-diffusion-4-5-full", mode: "anime" },
-  { label: "NAI Diffusion 4.5 Curated（精选模型）", value: "nai-diffusion-4-5-curated", mode: "anime" },
-  { label: "NAI Diffusion 4 Full（完整模型）", value: "nai-diffusion-4-full", mode: "anime" },
-  { label: "NAI Diffusion 4 Curated（精选模型）", value: "nai-diffusion-4-curated", mode: "anime" },
-  { label: "NAI Diffusion 3（旧版通用）", value: "nai-diffusion-3", mode: "anime" },
-  { label: "NAI Diffusion Furry 3（兽人模型）", value: "nai-diffusion-furry-3", mode: "furry" },
+  {
+    label: "NAI Diffusion 4.5 Full（完整模型）",
+    value: "nai-diffusion-4-5-full",
+    mode: "anime",
+  },
+  {
+    label: "NAI Diffusion 4.5 Curated（精选模型）",
+    value: "nai-diffusion-4-5-curated",
+    mode: "anime",
+  },
+  {
+    label: "NAI Diffusion 4 Full（完整模型）",
+    value: "nai-diffusion-4-full",
+    mode: "anime",
+  },
+  {
+    label: "NAI Diffusion 4 Curated（精选模型）",
+    value: "nai-diffusion-4-curated",
+    mode: "anime",
+  },
+  {
+    label: "NAI Diffusion 3（旧版通用）",
+    value: "nai-diffusion-3",
+    mode: "anime",
+  },
+  {
+    label: "NAI Diffusion Furry 3（兽人模型）",
+    value: "nai-diffusion-furry-3",
+    mode: "furry",
+  },
 ] as const;
 
 export type NAIModel = (typeof NAI_MODELS)[number]["value"];
@@ -149,9 +178,9 @@ export const DEFAULT_I2I_PARAMS: I2IParams = {
 
 /** Vibe Transfer / Precise Reference — slim type sent over IPC */
 export interface VibeTransferItem {
-  base64: string;        // pure base64 without data-URL prefix
+  base64: string; // pure base64 without data-URL prefix
   infoExtracted: number; // 0.0 – 1.0  (0.7 vibe / 1.0 precise)
-  strength: number;      // 0.0 – 1.0
+  strength: number; // 0.0 – 1.0
 }
 
 /** Renderer store representation (adds id + preview for display) */
@@ -164,10 +193,10 @@ export interface VibeTransferImage extends VibeTransferItem {
  * Sent over IPC; the main process emits director_reference_* fields. */
 export type PreciseReferenceType = "character" | "style" | "character&style";
 export interface PreciseReferenceItem {
-  base64: string;               // pure base64 (resized to an official reference resolution in main)
-  type: PreciseReferenceType;   // -> director_reference_descriptions[].caption.base_caption
-  strength: number;             // 0.0 – 1.0 -> director_reference_strength_values
-  fidelity: number;             // 0.0 – 1.0 -> secondary = round(1 - fidelity, 2)
+  base64: string; // pure base64 (resized to an official reference resolution in main)
+  type: PreciseReferenceType; // -> director_reference_descriptions[].caption.base_caption
+  strength: number; // 0.0 – 1.0 -> director_reference_strength_values
+  fidelity: number; // 0.0 – 1.0 -> secondary = round(1 - fidelity, 2)
   /** 0.0 – 1.0 -> director_reference_information_extracted. High = pull more
    * detail (incl. high-frequency texture like screentone/hatching). Optional for
    * backward compat; defaults to 1.0 in the main process. */
@@ -205,7 +234,8 @@ export interface GenerateExtras {
 // ── Batch img2img (批量图生图) project — persisted in the store so switching
 // tools/tabs never loses work; serialised verbatim by 导出/导入项目. ───────────
 export type BatchRedrawStep = "import" | "params" | "prompts" | "generate";
-export type BatchRedrawItemStatus = "pending" | "generating" | "done" | "failed";
+export type BatchRedrawItemStatus =
+  "pending" | "generating" | "done" | "failed";
 
 export interface BatchRedrawItem {
   id: string;
@@ -249,7 +279,9 @@ export interface BatchExportFile {
   name?: string;
 }
 
-export function createDefaultBatchRedraw(params: GenerateParams = DEFAULT_PARAMS): BatchRedrawProject {
+export function createDefaultBatchRedraw(
+  params: GenerateParams = DEFAULT_PARAMS,
+): BatchRedrawProject {
   return {
     groupName: "批量图生图",
     items: [],
@@ -302,10 +334,13 @@ export interface TextToolHistoryItem {
   createdAt: string;
 }
 
-export type ComicReferenceKind = "vibe" | "precise" | "character" | "scene" | "object";
-export type ComicPanelStatus = "draft" | "converted" | "generating" | "done" | "failed";
+export type ComicReferenceKind =
+  "vibe" | "precise" | "character" | "scene" | "object";
+export type ComicPanelStatus =
+  "draft" | "converted" | "generating" | "done" | "failed";
 export type ComicDesiredPanelCount = "auto" | number;
-export type GenerateFailureKind = "auth" | "reference" | "validation" | "api" | "cancelled";
+export type GenerateFailureKind =
+  "auth" | "reference" | "validation" | "api" | "cancelled";
 
 export interface ComicReferenceAsset {
   id: string;
@@ -458,7 +493,14 @@ export interface TuiwenSubtitle {
 
 export interface TuiwenKeyframeConfig {
   preset: TuiwenKeyframePreset;
-  keys: Array<{ timeRatio: number; scale: number; x: number; y: number; alpha: number; rotation: number }>;
+  keys: Array<{
+    timeRatio: number;
+    scale: number;
+    x: number;
+    y: number;
+    alpha: number;
+    rotation: number;
+  }>;
 }
 
 export interface TuiwenTransition {
@@ -497,7 +539,11 @@ export interface TuiwenPreflightState {
 }
 
 export interface TuiwenProject extends Omit<ComicProject, "panels"> {
-  source: { type: TuiwenSourceType; fileName: string; subtitleFormat?: TuiwenSubtitleFormat };
+  source: {
+    type: TuiwenSourceType;
+    fileName: string;
+    subtitleFormat?: TuiwenSubtitleFormat;
+  };
   panels: TuiwenShot[];
   exportSettings: TuiwenExportSettings;
   preflight: TuiwenPreflightState;
@@ -574,7 +620,9 @@ export interface ComicAnalyzeResult {
   globalPrompt?: string;
   globalCharacterSetting?: string;
   continuityBible?: string;
-  panels?: Array<Pick<ComicPanel, "cnPrompt" | "contextSummary"> & { narration?: string }>;
+  panels?: Array<
+    Pick<ComicPanel, "cnPrompt" | "contextSummary"> & { narration?: string }
+  >;
 }
 
 export interface ComicConvertPanelInput {
@@ -602,7 +650,12 @@ export interface ComicConvertRequest {
 export interface ComicConvertResult {
   ok: boolean;
   message: string;
-  panels: Array<{ panelId: string; enPrompt: string; contextSummary?: string; error?: string }>;
+  panels: Array<{
+    panelId: string;
+    enPrompt: string;
+    contextSummary?: string;
+    error?: string;
+  }>;
 }
 
 export interface ComicConsistencyRequest {
@@ -642,6 +695,60 @@ export interface ComicExportZipResult {
   path?: string;
 }
 
+/** Tag-only comic workflow (schema v2). It intentionally does not accept the
+ * former story splitting, reference reverse, prompt conversion, or per-panel
+ * negative-prompt fields. */
+export type TagComicPanelStatus = "ready" | "generating" | "done" | "failed";
+
+export interface TagComicCandidate {
+  id: string;
+  historyItemId: string;
+  outputPath: string;
+  outputUrl: string;
+  createdAt: string;
+  actualAnlas?: number;
+}
+
+export interface TagComicPanel {
+  id: string;
+  index: number;
+  title: string;
+  prompt: string;
+  paramsOverride: ComicPanelParamsOverride;
+  status: TagComicPanelStatus;
+  candidates: TagComicCandidate[];
+  selectedCandidateId?: string;
+  error?: string;
+}
+
+export interface TagComicProject {
+  schemaVersion: 2;
+  id: string;
+  title: string;
+  historyGroupId?: string;
+  globalStylePrompt: string;
+  globalNegativePrompt: string;
+  initialGenerationCount: number;
+  globalParams: GenerateParams;
+  panels: TagComicPanel[];
+}
+
+export interface TagComicGenerateRequest {
+  projectId: string;
+  projectTitle: string;
+  historyGroupId?: string;
+  panelId: string;
+  panelIndex: number;
+  params: GenerateParams;
+  globalStylePrompt: string;
+  panelPrompt: string;
+  globalNegativePrompt: string;
+}
+
+export interface TagComicExportZipRequest {
+  project: TagComicProject;
+}
+
 export interface AiCallLogEntry {
   id: string;
   time: number;
@@ -655,10 +762,19 @@ export interface AiCallLogEntry {
 }
 
 export const NAI_INPAINT_MODELS = [
-  { label: "NAI Diffusion 4.5 Full（推荐）", value: "nai-diffusion-4-5-full-inpainting" },
-  { label: "NAI Diffusion 4.5 Curated", value: "nai-diffusion-4-5-curated-inpainting" },
+  {
+    label: "NAI Diffusion 4.5 Full（推荐）",
+    value: "nai-diffusion-4-5-full-inpainting",
+  },
+  {
+    label: "NAI Diffusion 4.5 Curated",
+    value: "nai-diffusion-4-5-curated-inpainting",
+  },
   { label: "NAI Diffusion 4 Full", value: "nai-diffusion-4-full-inpainting" },
-  { label: "NAI Diffusion 4 Curated", value: "nai-diffusion-4-curated-inpainting" },
+  {
+    label: "NAI Diffusion 4 Curated",
+    value: "nai-diffusion-4-curated-inpainting",
+  },
   { label: "NAI Diffusion 3", value: "nai-diffusion-3-inpainting" },
 ] as const;
 
@@ -727,11 +843,13 @@ export interface AccountSummary {
   stale?: boolean;
 }
 
-export type AnlasQuoteFeature = "generate" | "i2i" | "inpaint" | "upscale" | "director";
+export type AnlasQuoteFeature =
+  "generate" | "i2i" | "inpaint" | "upscale" | "director";
 // "official-api" = price returned by NovelAI's /request-price endpoint (authoritative).
 // "estimate-formula"/"estimate-fixed" = our local web-frontend formula / fixed rules,
 // which are close but NOT guaranteed to match the final charge — must be shown as estimates.
-export type AnlasQuoteSource = "official-api" | "estimate-formula" | "estimate-fixed" | "unavailable";
+export type AnlasQuoteSource =
+  "official-api" | "estimate-formula" | "estimate-fixed" | "unavailable";
 
 export interface AnlasQuoteRequest {
   feature: AnlasQuoteFeature;
@@ -993,23 +1111,43 @@ export interface ImportedParams {
 
 export interface NaiDesktopApi {
   platform: NodeJS.Platform;
-  artistLabPickTarget: () => Promise<{ filePath: string; fileUrl: string; name: string } | null>;
-  artistLabSearchArtists: (query?: string, limit?: number) => Promise<import("./artist-lab").ArtistTagRecord[]>;
-  artistLabPopularArtists: (limit?: number, force?: boolean) => Promise<import("./artist-lab").ArtistTagRecord[]>;
+  artistLabPickTarget: () => Promise<{
+    filePath: string;
+    fileUrl: string;
+    name: string;
+  } | null>;
+  artistLabSearchArtists: (
+    query?: string,
+    limit?: number,
+  ) => Promise<import("./artist-lab").ArtistTagRecord[]>;
+  artistLabPopularArtists: (
+    limit?: number,
+    force?: boolean,
+  ) => Promise<import("./artist-lab").ArtistTagRecord[]>;
   artistLabScoreImages: (
     mode: import("./artist-lab").ArtistLabModelMode,
     targetPath: string,
     candidatePath: string,
   ) => Promise<import("./artist-lab").ArtistLabImageScore>;
-  artistLabModelStatus: (mode: import("./artist-lab").ArtistLabModelMode) => Promise<import("./artist-lab").ArtistLabModelStatus>;
-  artistLabClearModels: () => Promise<import("./artist-lab").ArtistLabModelStatus>;
+  artistLabModelStatus: (
+    mode: import("./artist-lab").ArtistLabModelMode,
+  ) => Promise<import("./artist-lab").ArtistLabModelStatus>;
+  artistLabClearModels: () => Promise<
+    import("./artist-lab").ArtistLabModelStatus
+  >;
   /** Native read-only access to AITag's public gallery data (renderer-safe IPC proxy). */
   aitagConfig: () => Promise<unknown>;
-  aitagSearch: (request: import("./aitag").AitagSearchRequest) => Promise<unknown>;
-  aitagSearchFresh: (request: import("./aitag").AitagSearchRequest) => Promise<unknown>;
+  aitagSearch: (
+    request: import("./aitag").AitagSearchRequest,
+  ) => Promise<unknown>;
+  aitagSearchFresh: (
+    request: import("./aitag").AitagSearchRequest,
+  ) => Promise<unknown>;
   aitagSnapshot: () => Promise<{ config: unknown; search: unknown } | null>;
   aitagWork: (id: number) => Promise<unknown>;
-  aitagPrewarm: (retentionDays?: number) => Promise<{ works: number; images: number }>;
+  aitagPrewarm: (
+    retentionDays?: number,
+  ) => Promise<{ works: number; images: number }>;
   aitagClearDataCache: () => Promise<void>;
   aitagCacheImage: (url: string, retentionDays?: number) => Promise<string>;
   aitagCacheStats: () => Promise<{ bytes: number; files: number }>;
@@ -1019,8 +1157,15 @@ export interface NaiDesktopApi {
   verifyToken: (token: string) => Promise<TokenStatus>;
   clearToken: () => Promise<{ ok: boolean }>;
   quoteAnlas: (request: AnlasQuoteRequest) => Promise<AnlasQuoteResult>;
-  generate: (params: GenerateParams, extras: GenerateExtras) => Promise<GenerateResult>;
-  generateI2I: (params: GenerateParams, i2i: I2IParams, extras: GenerateExtras) => Promise<GenerateResult>;
+  generate: (
+    params: GenerateParams,
+    extras: GenerateExtras,
+  ) => Promise<GenerateResult>;
+  generateI2I: (
+    params: GenerateParams,
+    i2i: I2IParams,
+    extras: GenerateExtras,
+  ) => Promise<GenerateResult>;
   redrawImage: (request: BatchRedrawRequest) => Promise<GenerateResult>;
   inpaint: (
     params: GenerateParams,
@@ -1030,7 +1175,10 @@ export interface NaiDesktopApi {
     noise: number,
   ) => Promise<GenerateResult>;
   upscaleImage: (scale: UpscaleScale) => Promise<SingleImageResult>;
-  augmentImage: (tool: DirectorTool, options: AugmentOptions) => Promise<GenerateResult>;
+  augmentImage: (
+    tool: DirectorTool,
+    options: AugmentOptions,
+  ) => Promise<GenerateResult>;
   cancel: () => Promise<{ ok: boolean }>;
   loadImage: () => Promise<LoadImageResult>;
   loadImageFromPath: (filePath: string) => Promise<LoadImageResult>;
@@ -1042,18 +1190,29 @@ export interface NaiDesktopApi {
   createHistoryGroup: (name: string) => Promise<HistoryGroup[]>;
   renameHistoryGroup: (id: string, name: string) => Promise<HistoryGroup[]>;
   deleteHistoryGroup: (id: string) => Promise<HistoryGroup[]>;
-  exportHistoryGroup: (groupId: string) => Promise<{ ok: boolean; message: string; path?: string }>;
-  exportFiles: (files: BatchExportFile[], defaultName?: string) => Promise<{ ok: boolean; message: string; path?: string }>;
+  exportHistoryGroup: (
+    groupId: string,
+  ) => Promise<{ ok: boolean; message: string; path?: string }>;
+  exportFiles: (
+    files: BatchExportFile[],
+    defaultName?: string,
+  ) => Promise<{ ok: boolean; message: string; path?: string }>;
   setHistoryGroup: (id: string, groupId?: string) => Promise<{ ok: boolean }>;
   deleteHistory: (id: string) => Promise<{ ok: boolean }>;
   pruneMissingHistoryItem: (id: string) => Promise<boolean>;
-  renameHistoryItem: (id: string, name: string) => Promise<{ ok: boolean; message?: string; item?: HistoryItem }>;
+  renameHistoryItem: (
+    id: string,
+    name: string,
+  ) => Promise<{ ok: boolean; message?: string; item?: HistoryItem }>;
   openInExplorer: (targetPath: string) => Promise<{ ok: boolean }>;
   /** Native OS drag-out of a saved image file (drag to desktop / Explorer / other apps). */
   startImageDrag: (filePath: string) => void;
   selectOutputDir: () => Promise<string | null>;
   getSetting: <K extends SettingKey>(key: K) => Promise<AppSettings[K]>;
-  setSetting: <K extends SettingKey>(key: K, value: AppSettings[K]) => Promise<AppSettings[K]>;
+  setSetting: <K extends SettingKey>(
+    key: K,
+    value: AppSettings[K],
+  ) => Promise<AppSettings[K]>;
   getSettings: () => Promise<AppSettings>;
   isFirstRun: () => Promise<boolean>;
   completeSetup: () => Promise<{ ok: boolean }>;
@@ -1063,52 +1222,112 @@ export interface NaiDesktopApi {
     scope?: ReversePromptScope,
     hint?: string,
     knownCharacter?: boolean,
-  ) => Promise<{ ok: boolean; prompt?: string; variants?: PromptVariants; message: string }>;
+  ) => Promise<{
+    ok: boolean;
+    prompt?: string;
+    variants?: PromptVariants;
+    message: string;
+  }>;
   convertPrompt: (
     text: string,
     mode: ReversePromptMode,
     knownCharacter?: boolean,
-  ) => Promise<{ ok: boolean; result?: string; variants?: PromptVariants; message: string }>;
+  ) => Promise<{
+    ok: boolean;
+    result?: string;
+    variants?: PromptVariants;
+    message: string;
+  }>;
   getConvertHistory: () => Promise<TextToolHistoryItem[]>;
-  addConvertHistoryItem: (item: TextToolHistoryItem) => Promise<{ ok: boolean }>;
+  addConvertHistoryItem: (
+    item: TextToolHistoryItem,
+  ) => Promise<{ ok: boolean }>;
   deleteConvertHistoryItem: (id: string) => Promise<{ ok: boolean }>;
   clearConvertHistory: () => Promise<{ ok: boolean }>;
   getReverseHistory: () => Promise<TextToolHistoryItem[]>;
-  addReverseHistoryItem: (item: TextToolHistoryItem) => Promise<{ ok: boolean }>;
+  addReverseHistoryItem: (
+    item: TextToolHistoryItem,
+  ) => Promise<{ ok: boolean }>;
   deleteReverseHistoryItem: (id: string) => Promise<{ ok: boolean }>;
   clearReverseHistory: () => Promise<{ ok: boolean }>;
   pruneMissingReverseHistoryItem: (id: string) => Promise<boolean>;
-  comicAnalyzeScript: (request: ComicAnalyzeRequest) => Promise<ComicAnalyzeResult>;
-  comicConvertPanels: (request: ComicConvertRequest) => Promise<ComicConvertResult>;
-  comicCheckConsistency: (request: ComicConsistencyRequest) => Promise<ComicConsistencyResult>;
+  comicAnalyzeScript: (
+    request: ComicAnalyzeRequest,
+  ) => Promise<ComicAnalyzeResult>;
+  comicConvertPanels: (
+    request: ComicConvertRequest,
+  ) => Promise<ComicConvertResult>;
+  comicCheckConsistency: (
+    request: ComicConsistencyRequest,
+  ) => Promise<ComicConsistencyResult>;
   comicReverseAsset: (
     imageBase64: string,
     mode: ReversePromptMode,
     scope?: ReversePromptScope,
     hint?: string,
     knownCharacter?: boolean,
-  ) => Promise<{ ok: boolean; prompt?: string; variants?: PromptVariants; message: string }>;
-  comicGeneratePanel: (request: ComicGeneratePanelRequest) => Promise<GenerateResult>;
-  comicExportProjectZip: (project: ComicProject) => Promise<ComicExportZipResult>;
-  tuiwenImportFile: (request: TuiwenImportFileRequest) => Promise<TuiwenImportFileResult>;
-  tuiwenTtsProviders: () => Promise<{ providers: TuiwenTtsProviderInfo[]; voices: TuiwenTtsVoice[] }>;
+  ) => Promise<{
+    ok: boolean;
+    prompt?: string;
+    variants?: PromptVariants;
+    message: string;
+  }>;
+  comicGeneratePanel: (
+    request: ComicGeneratePanelRequest,
+  ) => Promise<GenerateResult>;
+  tagComicGenerateCandidate: (
+    request: TagComicGenerateRequest,
+  ) => Promise<GenerateResult>;
+  tagComicExportSelectedZip: (
+    request: TagComicExportZipRequest,
+  ) => Promise<ComicExportZipResult>;
+  tuiwenImportFile: (
+    request: TuiwenImportFileRequest,
+  ) => Promise<TuiwenImportFileResult>;
+  tuiwenTtsProviders: () => Promise<{
+    providers: TuiwenTtsProviderInfo[];
+    voices: TuiwenTtsVoice[];
+  }>;
   tuiwenTts: (request: TuiwenTtsRequest) => Promise<TuiwenTtsResult>;
-  tuiwenSaveImportedAudio: (request: TuiwenSaveImportedAudioRequest) => Promise<TuiwenSaveImportedAudioResult>;
-  tuiwenExportJianYing: (request: TuiwenExportJianYingRequest) => Promise<TuiwenExportJianYingResult>;
-  tuiwenSaveProjectSnapshot: (project: TuiwenProject) => Promise<TuiwenProjectSnapshotResult>;
+  tuiwenSaveImportedAudio: (
+    request: TuiwenSaveImportedAudioRequest,
+  ) => Promise<TuiwenSaveImportedAudioResult>;
+  tuiwenExportJianYing: (
+    request: TuiwenExportJianYingRequest,
+  ) => Promise<TuiwenExportJianYingResult>;
+  tuiwenSaveProjectSnapshot: (
+    project: TuiwenProject,
+  ) => Promise<TuiwenProjectSnapshotResult>;
   tuiwenLoadProjectSnapshot: () => Promise<TuiwenProjectSnapshotResult>;
   getAiCallLog: () => Promise<AiCallLogEntry[]>;
   clearAiCallLog: () => Promise<{ ok: boolean }>;
   getReverseTemplateDefaults: () => Promise<ModePromptTemplates>;
   listAiModels: (kind: "reverse" | "convert") => Promise<AiModelListResult>;
-  testTagServer: (query: string) => Promise<{ ok: boolean; message: string; tags: TagSuggestion[] }>;
+  testTagServer: (
+    query: string,
+  ) => Promise<{ ok: boolean; message: string; tags: TagSuggestion[] }>;
   suggestTags: (model: string, prompt: string) => Promise<TagSuggestion[]>;
   searchTagServer: (query: string, limit?: number) => Promise<TagSuggestion[]>;
-  danbooruStatus: () => Promise<{ downloaded: boolean; sizeBytes: number; count: number }>;
-  downloadDanbooru: () => Promise<{ ok: boolean; message: string; count?: number }>;
-  danbooruBrowse: (category: number, offset: number, limit: number) => Promise<TagSuggestion[]>;
+  danbooruStatus: () => Promise<{
+    downloaded: boolean;
+    sizeBytes: number;
+    count: number;
+  }>;
+  downloadDanbooru: () => Promise<{
+    ok: boolean;
+    message: string;
+    count?: number;
+  }>;
+  danbooruBrowse: (
+    category: number,
+    offset: number,
+    limit: number,
+  ) => Promise<TagSuggestion[]>;
   danbooruSearch: (query: string, limit: number) => Promise<TagSuggestion[]>;
-  translate: (text: string, target?: string) => Promise<{ ok: boolean; text?: string; error?: string }>;
+  translate: (
+    text: string,
+    target?: string,
+  ) => Promise<{ ok: boolean; text?: string; error?: string }>;
   checkUpdate: () => Promise<UpdateInfo>;
   isPortable: () => Promise<boolean>;
   downloadUpdate: () => Promise<{ ok: boolean; message: string }>;
@@ -1118,7 +1337,12 @@ export interface NaiDesktopApi {
   maximize: () => Promise<void>;
   close: () => Promise<void>;
   openExternal: (url: string) => Promise<void>;
-  getLogInfo: () => Promise<{ path: string; dir: string; exists: boolean; sizeBytes: number }>;
+  getLogInfo: () => Promise<{
+    path: string;
+    dir: string;
+    exists: boolean;
+    sizeBytes: number;
+  }>;
   selectLogDir: () => Promise<string | null>;
   openLogFile: () => Promise<{ ok: boolean; message?: string }>;
   openLogDir: () => Promise<{ ok: boolean; message?: string }>;

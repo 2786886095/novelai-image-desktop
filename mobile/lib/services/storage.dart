@@ -27,7 +27,7 @@ class Storage {
   static const _kHistory = 'history_index_v2';
   static const _kGroups = 'history_groups';
   static const _kSettings = 'app_settings';
-  static const _kComicProject = 'comic_project_v1';
+  static const _kComicProject = 'comic_project_v2';
   static const _kBatchRedrawProject = 'batch_redraw_project_v1';
   static const _kNetworkOnboarding = 'network_onboarding_seen';
   static const _kToken = 'nai_token';

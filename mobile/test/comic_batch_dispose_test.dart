@@ -36,13 +36,12 @@ void main() {
     final panel = ComicPanel(
       id: 'panel-1',
       index: 1,
-      cnPrompt: '测试',
-      enPrompt: 'test panel',
+      title: 'Panel 1',
+      prompt: 'test panel',
       params: app.params.copy(),
-      status: ComicPanelStatus.converted,
     );
 
-    final queueDone = controller.startQueue([panel]);
+    final queueDone = controller.addOne(panel);
     await _waitUntil(() => api.calls == 1);
     expect(controller.queueRunning, isTrue);
 
@@ -53,7 +52,9 @@ void main() {
     // The in-flight request resolves AFTER dispose — notifyListeners() must be
     // a safe no-op here, not throw "used after being disposed".
     pending.complete((
-      [Uint8List.fromList([1, 2, 3])],
+      [
+        Uint8List.fromList([1, 2, 3])
+      ],
       7,
     ));
     await expectLater(queueDone, completes);
@@ -90,7 +91,9 @@ void main() {
     expect(controller.queueCancelled, isTrue);
 
     pending.complete((
-      [Uint8List.fromList([4, 5, 6])],
+      [
+        Uint8List.fromList([4, 5, 6])
+      ],
       9,
     ));
     await expectLater(queueDone, completes);

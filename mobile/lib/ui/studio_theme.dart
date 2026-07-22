@@ -59,6 +59,22 @@ abstract final class StudioTheme {
     const controlShape = RoundedRectangleBorder(
       borderRadius: BorderRadius.all(Radius.circular(StudioRadii.control)),
     );
+    // ThemeData.cardTheme changed from CardTheme to CardThemeData in newer
+    // Flutter releases. Deriving it from ThemeData keeps this source compatible
+    // with both the CI-pinned Flutter 3.24 SDK and newer local SDKs.
+    final cardTheme = ThemeData(
+      useMaterial3: true,
+      brightness: brightness,
+      colorScheme: scheme,
+    ).cardTheme.copyWith(
+          elevation: 0,
+          margin: EdgeInsets.zero,
+          color: scheme.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(StudioRadii.panel),
+            side: BorderSide(color: scheme.outlineVariant),
+          ),
+        );
 
     return ThemeData(
       useMaterial3: true,
@@ -67,15 +83,7 @@ abstract final class StudioTheme {
       scaffoldBackgroundColor:
           dark ? const Color(0xFF090B16) : const Color(0xFFF8F6FC),
       visualDensity: VisualDensity.standard,
-      cardTheme: CardTheme(
-        elevation: 0,
-        margin: EdgeInsets.zero,
-        color: scheme.surface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(StudioRadii.panel),
-          side: BorderSide(color: scheme.outlineVariant),
-        ),
-      ),
+      cardTheme: cardTheme,
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: scheme.surface,

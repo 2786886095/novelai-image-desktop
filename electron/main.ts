@@ -1,4 +1,11 @@
-import { app, BrowserWindow, ipcMain, Menu, nativeImage, shell } from "electron";
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+  Menu,
+  nativeImage,
+  shell,
+} from "electron";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
@@ -12,8 +19,9 @@ import {
   getAiCallLog,
   convertComicPanels,
   convertPromptText,
-  exportComicProjectZip,
+  exportTagComicSelectedZip,
   generateComicPanel,
+  generateTagComicCandidate,
   generateI2I,
   generateImage,
   redrawImage,
@@ -31,9 +39,26 @@ import {
   upscaleImg,
   verifyToken,
 } from "./ipc/nai";
-import { danbooruStatus, downloadDanbooruTags, browseDanbooru, searchDanbooru } from "./ipc/danbooru-tags";
-import { clearAitagDataCache, getAitagConfig, getAitagSnapshot, getAitagWork, prewarmAitag, searchAitag, searchAitagFresh } from "./ipc/aitag";
-import { aitagCacheStats, cacheAitagImage, clearAitagCache } from "./ipc/aitag-cache";
+import {
+  danbooruStatus,
+  downloadDanbooruTags,
+  browseDanbooru,
+  searchDanbooru,
+} from "./ipc/danbooru-tags";
+import {
+  clearAitagDataCache,
+  getAitagConfig,
+  getAitagSnapshot,
+  getAitagWork,
+  prewarmAitag,
+  searchAitag,
+  searchAitagFresh,
+} from "./ipc/aitag";
+import {
+  aitagCacheStats,
+  cacheAitagImage,
+  clearAitagCache,
+} from "./ipc/aitag-cache";
 import {
   artistLabModelStatus,
   clearArtistLabModels,
@@ -42,9 +67,16 @@ import {
   scoreArtistLabImages,
   searchArtistTags,
 } from "./ipc/artist-lab";
-import { getTuiwenTtsCatalog, saveTuiwenImportedAudio, synthesizeTuiwenSpeech } from "./ipc/tuiwen-audio";
+import {
+  getTuiwenTtsCatalog,
+  saveTuiwenImportedAudio,
+  synthesizeTuiwenSpeech,
+} from "./ipc/tuiwen-audio";
 import { importTuiwenFile } from "./ipc/tuiwen-import";
-import { detectJianYingDraftRoot, exportTuiwenJianYingDraft } from "./ipc/tuiwen-jianying";
+import {
+  detectJianYingDraftRoot,
+  exportTuiwenJianYingDraft,
+} from "./ipc/tuiwen-jianying";
 import {
   loadTuiwenProjectSnapshot as loadTuiwenProjectSnapshotFile,
   saveTuiwenProjectSnapshot as saveTuiwenProjectSnapshotFile,
@@ -58,7 +90,8 @@ import type {
   ComicConsistencyRequest,
   ComicConvertRequest,
   ComicGeneratePanelRequest,
-  ComicProject,
+  TagComicExportZipRequest,
+  TagComicGenerateRequest,
   DirectorTool,
   I2IParams,
   NAIInpaintModel,
@@ -102,7 +135,11 @@ import {
   selectOutputDir,
 } from "./ipc/storage";
 import { checkUpdate } from "./ipc/update";
-import { downloadUpdate, installUpdate, wireAutoUpdater } from "./ipc/auto-update";
+import {
+  downloadUpdate,
+  installUpdate,
+  wireAutoUpdater,
+} from "./ipc/auto-update";
 import { isPortableBuild } from "./ipc/app-mode";
 import { proxyConfig } from "./ipc/proxy";
 import {
@@ -148,7 +185,11 @@ function attachEditContextMenu(win: BrowserWindow) {
     }
     template.push({ label: "复制", role: "copy", enabled: editFlags.canCopy });
     if (isEditable) {
-      template.push({ label: "粘贴", role: "paste", enabled: editFlags.canPaste });
+      template.push({
+        label: "粘贴",
+        role: "paste",
+        enabled: editFlags.canPaste,
+      });
     }
     template.push({ type: "separator" }, { label: "全选", role: "selectAll" });
     Menu.buildFromTemplate(template).popup({ window: win });
@@ -160,7 +201,11 @@ const STORE_FILE = "novelai-image-desktop.json";
 // app.getName()/productName which moves userData, orphaning the saved token and
 // history. We pin userData to a stable folder and migrate the newest legacy
 // store into it so settings survive any future rename.
-const LEGACY_DIRS = ["Langbai NovelAI Studio", "langbai-novelai-studio", "NovelAI Studio"];
+const LEGACY_DIRS = [
+  "Langbai NovelAI Studio",
+  "langbai-novelai-studio",
+  "NovelAI Studio",
+];
 
 function pinUserDataAndMigrate() {
   const appData = app.getPath("appData");
@@ -255,20 +300,40 @@ function createWindow() {
 
 function registerIpc() {
   ipcMain.handle("artistLab:pickTarget", () => pickArtistLabTarget());
-  ipcMain.handle("artistLab:searchArtists", (_event, query: unknown, limit: unknown) => searchArtistTags(query, limit));
-  ipcMain.handle("artistLab:popularArtists", (_event, limit: unknown, force: unknown) => loadPopularArtistTags(limit, force));
-  ipcMain.handle("artistLab:scoreImages", (_event, mode: unknown, targetPath: unknown, candidatePath: unknown) =>
-    scoreArtistLabImages(mode, targetPath, candidatePath));
-  ipcMain.handle("artistLab:modelStatus", (_event, mode: unknown) => artistLabModelStatus(mode));
+  ipcMain.handle(
+    "artistLab:searchArtists",
+    (_event, query: unknown, limit: unknown) => searchArtistTags(query, limit),
+  );
+  ipcMain.handle(
+    "artistLab:popularArtists",
+    (_event, limit: unknown, force: unknown) =>
+      loadPopularArtistTags(limit, force),
+  );
+  ipcMain.handle(
+    "artistLab:scoreImages",
+    (_event, mode: unknown, targetPath: unknown, candidatePath: unknown) =>
+      scoreArtistLabImages(mode, targetPath, candidatePath),
+  );
+  ipcMain.handle("artistLab:modelStatus", (_event, mode: unknown) =>
+    artistLabModelStatus(mode),
+  );
   ipcMain.handle("artistLab:clearModels", () => clearArtistLabModels());
   ipcMain.handle("aitag:config", () => getAitagConfig());
-  ipcMain.handle("aitag:search", (_event, request: unknown) => searchAitag(request));
-  ipcMain.handle("aitag:search-fresh", (_event, request: unknown) => searchAitagFresh(request));
+  ipcMain.handle("aitag:search", (_event, request: unknown) =>
+    searchAitag(request),
+  );
+  ipcMain.handle("aitag:search-fresh", (_event, request: unknown) =>
+    searchAitagFresh(request),
+  );
   ipcMain.handle("aitag:snapshot", () => getAitagSnapshot());
   ipcMain.handle("aitag:work", (_event, id: unknown) => getAitagWork(id));
-  ipcMain.handle("aitag:prewarm", (_event, days: unknown) => prewarmAitag(days));
+  ipcMain.handle("aitag:prewarm", (_event, days: unknown) =>
+    prewarmAitag(days),
+  );
   ipcMain.handle("aitag:clear-data-cache", () => clearAitagDataCache());
-  ipcMain.handle("aitag:cache-image", (_event, url: unknown, days: unknown) => cacheAitagImage(url, days));
+  ipcMain.handle("aitag:cache-image", (_event, url: unknown, days: unknown) =>
+    cacheAitagImage(url, days),
+  );
   ipcMain.handle("aitag:cache-stats", () => aitagCacheStats());
   ipcMain.handle("aitag:clear-cache", () => clearAitagCache());
   ipcMain.handle("nai:hasToken", async () => {
@@ -285,88 +350,232 @@ function registerIpc() {
     clearToken();
     return { ok: true };
   });
-  ipcMain.handle("nai:quoteAnlas", (_event, request: AnlasQuoteRequest) => quoteAnlasCost(request));
-  ipcMain.handle("nai:generate", (_event, params, extras) => generateImage(params, extras));
-  ipcMain.handle("nai:generateI2I", (_event, params, i2i: I2IParams, extras) => generateI2I(params, i2i, extras));
-  ipcMain.handle("nai:redrawImage", (_event, request: BatchRedrawRequest) => redrawImage(request));
-  ipcMain.handle("nai:inpaint", (_event, params, inpaintModel: NAIInpaintModel, maskBase64: string, strength: number, noise: number) =>
-    inpaintImage(params, inpaintModel, maskBase64, strength, noise),
+  ipcMain.handle("nai:quoteAnlas", (_event, request: AnlasQuoteRequest) =>
+    quoteAnlasCost(request),
   );
-  ipcMain.handle("nai:upscale", (_event, scale: UpscaleScale) => upscaleImg(scale));
-  ipcMain.handle("nai:augment", (_event, tool: DirectorTool, options: AugmentOptions) => augmentImg(tool, options));
+  ipcMain.handle("nai:generate", (_event, params, extras) =>
+    generateImage(params, extras),
+  );
+  ipcMain.handle("nai:generateI2I", (_event, params, i2i: I2IParams, extras) =>
+    generateI2I(params, i2i, extras),
+  );
+  ipcMain.handle("nai:redrawImage", (_event, request: BatchRedrawRequest) =>
+    redrawImage(request),
+  );
+  ipcMain.handle(
+    "nai:inpaint",
+    (
+      _event,
+      params,
+      inpaintModel: NAIInpaintModel,
+      maskBase64: string,
+      strength: number,
+      noise: number,
+    ) => inpaintImage(params, inpaintModel, maskBase64, strength, noise),
+  );
+  ipcMain.handle("nai:upscale", (_event, scale: UpscaleScale) =>
+    upscaleImg(scale),
+  );
+  ipcMain.handle(
+    "nai:augment",
+    (_event, tool: DirectorTool, options: AugmentOptions) =>
+      augmentImg(tool, options),
+  );
   ipcMain.handle("nai:loadImage", () => loadImageFile());
-  ipcMain.handle("nai:loadImageFromPath", (_event, filePath: string) => loadImageFromPath(filePath));
+  ipcMain.handle("nai:loadImageFromPath", (_event, filePath: string) =>
+    loadImageFromPath(filePath),
+  );
   ipcMain.handle("nai:clearWorkbenchImage", () => clearWorkbenchImage());
-  ipcMain.handle("nai:reversePrompt", (_event, imageBase64: string, mode: string, scope?: string, hint?: string, knownCharacter?: boolean) =>
-    reversePromptImage(imageBase64, (mode as "tags" | "natural" | "mixed") ?? "tags", scope, hint, knownCharacter),
+  ipcMain.handle(
+    "nai:reversePrompt",
+    (
+      _event,
+      imageBase64: string,
+      mode: string,
+      scope?: string,
+      hint?: string,
+      knownCharacter?: boolean,
+    ) =>
+      reversePromptImage(
+        imageBase64,
+        (mode as "tags" | "natural" | "mixed") ?? "tags",
+        scope,
+        hint,
+        knownCharacter,
+      ),
   );
-  ipcMain.handle("nai:convertPrompt", (_event, text: string, mode: string, knownCharacter?: boolean) =>
-    convertPromptText(text, (mode as "tags" | "natural" | "mixed") ?? "tags", knownCharacter),
+  ipcMain.handle(
+    "nai:convertPrompt",
+    (_event, text: string, mode: string, knownCharacter?: boolean) =>
+      convertPromptText(
+        text,
+        (mode as "tags" | "natural" | "mixed") ?? "tags",
+        knownCharacter,
+      ),
   );
-  ipcMain.handle("comic:analyzeScript", (_event, request: ComicAnalyzeRequest) => analyzeComicScript(request));
-  ipcMain.handle("comic:convertPanels", (_event, request: ComicConvertRequest) => convertComicPanels(request));
-  ipcMain.handle("comic:checkConsistency", (_event, request: ComicConsistencyRequest) => checkComicConsistency(request));
-  ipcMain.handle("comic:reverseAsset", (_event, imageBase64: string, mode: string, scope?: string, hint?: string, knownCharacter?: boolean) =>
-    reversePromptImage(imageBase64, (mode as "tags" | "natural" | "mixed") ?? "tags", scope, hint, knownCharacter),
+  ipcMain.handle(
+    "comic:analyzeScript",
+    (_event, request: ComicAnalyzeRequest) => analyzeComicScript(request),
   );
-  ipcMain.handle("comic:generatePanel", (_event, request: ComicGeneratePanelRequest) => generateComicPanel(request));
-  ipcMain.handle("comic:exportProjectZip", (_event, project: ComicProject) => exportComicProjectZip(project));
-  ipcMain.handle("tuiwen:importFile", (_event, request: TuiwenImportFileRequest) => importTuiwenFile(request));
+  ipcMain.handle(
+    "comic:convertPanels",
+    (_event, request: ComicConvertRequest) => convertComicPanels(request),
+  );
+  ipcMain.handle(
+    "comic:checkConsistency",
+    (_event, request: ComicConsistencyRequest) =>
+      checkComicConsistency(request),
+  );
+  ipcMain.handle(
+    "comic:reverseAsset",
+    (
+      _event,
+      imageBase64: string,
+      mode: string,
+      scope?: string,
+      hint?: string,
+      knownCharacter?: boolean,
+    ) =>
+      reversePromptImage(
+        imageBase64,
+        (mode as "tags" | "natural" | "mixed") ?? "tags",
+        scope,
+        hint,
+        knownCharacter,
+      ),
+  );
+  ipcMain.handle(
+    "comic:generatePanel",
+    (_event, request: ComicGeneratePanelRequest) => generateComicPanel(request),
+  );
+  ipcMain.handle(
+    "tagComic:generateCandidate",
+    (_event, request: TagComicGenerateRequest) =>
+      generateTagComicCandidate(request),
+  );
+  ipcMain.handle(
+    "tagComic:exportSelectedZip",
+    (_event, request: TagComicExportZipRequest) =>
+      exportTagComicSelectedZip(request),
+  );
+  ipcMain.handle(
+    "tuiwen:importFile",
+    (_event, request: TuiwenImportFileRequest) => importTuiwenFile(request),
+  );
   ipcMain.handle("tuiwen:ttsProviders", () => getTuiwenTtsCatalog());
   ipcMain.handle("tuiwen:tts", (_event, request: TuiwenTtsRequest) => {
     const proxy = proxyConfig("ai");
     return synthesizeTuiwenSpeech(request, {
       outputRoot: getSetting("outputDir"),
-      agent: (proxy.httpsAgent ?? proxy.httpAgent) as import("http").Agent | undefined,
+      agent: (proxy.httpsAgent ?? proxy.httpAgent) as
+        import("http").Agent | undefined,
     });
   });
-  ipcMain.handle("tuiwen:saveImportedAudio", (_event, request: TuiwenSaveImportedAudioRequest) =>
-    saveTuiwenImportedAudio(request, getSetting("outputDir")));
-  ipcMain.handle("tuiwen:exportJianYing", (_event, request: TuiwenExportJianYingRequest) => {
-    const outDir = request.outDir?.trim()
-      || request.project.exportSettings.jianyingDraftDir?.trim()
-      || detectJianYingDraftRoot()
-      || path.join(getSetting("outputDir"), "Jianying Drafts");
-    fs.mkdirSync(outDir, { recursive: true });
-    return exportTuiwenJianYingDraft(request.project, outDir);
-  });
-  ipcMain.handle("tuiwen:saveProjectSnapshot", (_event, project: TuiwenProject) =>
-    saveTuiwenProjectSnapshotFile(project, app.getPath("userData")));
-  ipcMain.handle("tuiwen:loadProjectSnapshot", () => loadTuiwenProjectSnapshotFile(app.getPath("userData")));
+  ipcMain.handle(
+    "tuiwen:saveImportedAudio",
+    (_event, request: TuiwenSaveImportedAudioRequest) =>
+      saveTuiwenImportedAudio(request, getSetting("outputDir")),
+  );
+  ipcMain.handle(
+    "tuiwen:exportJianYing",
+    (_event, request: TuiwenExportJianYingRequest) => {
+      const outDir =
+        request.outDir?.trim() ||
+        request.project.exportSettings.jianyingDraftDir?.trim() ||
+        detectJianYingDraftRoot() ||
+        path.join(getSetting("outputDir"), "Jianying Drafts");
+      fs.mkdirSync(outDir, { recursive: true });
+      return exportTuiwenJianYingDraft(request.project, outDir);
+    },
+  );
+  ipcMain.handle(
+    "tuiwen:saveProjectSnapshot",
+    (_event, project: TuiwenProject) =>
+      saveTuiwenProjectSnapshotFile(project, app.getPath("userData")),
+  );
+  ipcMain.handle("tuiwen:loadProjectSnapshot", () =>
+    loadTuiwenProjectSnapshotFile(app.getPath("userData")),
+  );
   ipcMain.handle("ai:getLog", () => getAiCallLog());
   ipcMain.handle("ai:clearLog", () => clearAiCallLog());
-  ipcMain.handle("nai:listModels", (_event, kind: "reverse" | "convert") => listAiModels(kind));
-  ipcMain.handle("nai:testTagServer", (_event, query: string) => testTagServer(query));
-  ipcMain.handle("nai:suggestTags", (_event, model: string, prompt: string) => suggestTags(model, prompt));
-  ipcMain.handle("nai:searchTagServer", (_event, query: string, limit?: number) => searchTagServer(query, limit));
+  ipcMain.handle("nai:listModels", (_event, kind: "reverse" | "convert") =>
+    listAiModels(kind),
+  );
+  ipcMain.handle("nai:testTagServer", (_event, query: string) =>
+    testTagServer(query),
+  );
+  ipcMain.handle("nai:suggestTags", (_event, model: string, prompt: string) =>
+    suggestTags(model, prompt),
+  );
+  ipcMain.handle(
+    "nai:searchTagServer",
+    (_event, query: string, limit?: number) => searchTagServer(query, limit),
+  );
   ipcMain.handle("nai:danbooruStatus", () => danbooruStatus());
   ipcMain.handle("nai:downloadDanbooru", () => downloadDanbooruTags());
-  ipcMain.handle("nai:danbooruBrowse", (_event, category: number, offset: number, limit: number) =>
-    browseDanbooru(category, offset, limit),
+  ipcMain.handle(
+    "nai:danbooruBrowse",
+    (_event, category: number, offset: number, limit: number) =>
+      browseDanbooru(category, offset, limit),
   );
-  ipcMain.handle("nai:danbooruSearch", (_event, query: string, limit: number) => searchDanbooru(query, limit));
-  ipcMain.handle("nai:translate", (_event, text: string, target?: string) => translateText(text, target));
+  ipcMain.handle("nai:danbooruSearch", (_event, query: string, limit: number) =>
+    searchDanbooru(query, limit),
+  );
+  ipcMain.handle("nai:translate", (_event, text: string, target?: string) =>
+    translateText(text, target),
+  );
   ipcMain.handle("nai:cancel", () => cancelGeneration());
 
-  ipcMain.handle("storage:getHistory", (_event, date?: string, groupId?: string) => listHistory(date, groupId));
+  ipcMain.handle(
+    "storage:getHistory",
+    (_event, date?: string, groupId?: string) => listHistory(date, groupId),
+  );
   ipcMain.handle("storage:getHistoryDates", () => listHistoryDates());
   ipcMain.handle("storage:getHistoryGroups", () => listHistoryGroups());
-  ipcMain.handle("storage:createGroup", (_event, name: string) => createGroup(name));
-  ipcMain.handle("storage:renameGroup", (_event, id: string, name: string) => renameGroup(id, name));
-  ipcMain.handle("storage:deleteGroup", (_event, id: string) => removeGroup(id));
-  ipcMain.handle("storage:exportGroup", (_event, groupId: string) => exportGroup(groupId));
-  ipcMain.handle("storage:exportFiles", (_event, files: BatchExportFile[], defaultName?: string) => exportFiles(files, defaultName));
-  ipcMain.handle("storage:setHistoryGroup", (_event, id: string, groupId?: string) => assignHistoryGroup(id, groupId));
-  ipcMain.handle("storage:delete", (_event, id: string) => deleteHistoryItem(id));
-  ipcMain.handle("storage:pruneMissing", (_event, id: string) => pruneMissingHistoryItem(id));
-  ipcMain.handle("storage:renameItem", (_event, id: string, name: string) => renameHistoryItem(id, name));
-  ipcMain.handle("storage:open", (_event, targetPath: string) => openTarget(targetPath));
+  ipcMain.handle("storage:createGroup", (_event, name: string) =>
+    createGroup(name),
+  );
+  ipcMain.handle("storage:renameGroup", (_event, id: string, name: string) =>
+    renameGroup(id, name),
+  );
+  ipcMain.handle("storage:deleteGroup", (_event, id: string) =>
+    removeGroup(id),
+  );
+  ipcMain.handle("storage:exportGroup", (_event, groupId: string) =>
+    exportGroup(groupId),
+  );
+  ipcMain.handle(
+    "storage:exportFiles",
+    (_event, files: BatchExportFile[], defaultName?: string) =>
+      exportFiles(files, defaultName),
+  );
+  ipcMain.handle(
+    "storage:setHistoryGroup",
+    (_event, id: string, groupId?: string) => assignHistoryGroup(id, groupId),
+  );
+  ipcMain.handle("storage:delete", (_event, id: string) =>
+    deleteHistoryItem(id),
+  );
+  ipcMain.handle("storage:pruneMissing", (_event, id: string) =>
+    pruneMissingHistoryItem(id),
+  );
+  ipcMain.handle("storage:renameItem", (_event, id: string, name: string) =>
+    renameHistoryItem(id, name),
+  );
+  ipcMain.handle("storage:open", (_event, targetPath: string) =>
+    openTarget(targetPath),
+  );
 
-  ipcMain.handle("texttool:getConvertHistory", () => getTextToolHistory("convert"));
-  ipcMain.handle("texttool:addConvertHistoryItem", (_event, item: TextToolHistoryItem) => {
-    addTextToolHistoryItem("convert", item);
-    return { ok: true };
-  });
+  ipcMain.handle("texttool:getConvertHistory", () =>
+    getTextToolHistory("convert"),
+  );
+  ipcMain.handle(
+    "texttool:addConvertHistoryItem",
+    (_event, item: TextToolHistoryItem) => {
+      addTextToolHistoryItem("convert", item);
+      return { ok: true };
+    },
+  );
   ipcMain.handle("texttool:deleteConvertHistoryItem", (_event, id: string) => {
     removeTextToolHistoryItem("convert", id);
     return { ok: true };
@@ -375,11 +584,16 @@ function registerIpc() {
     clearTextToolHistory("convert");
     return { ok: true };
   });
-  ipcMain.handle("texttool:getReverseHistory", () => getTextToolHistory("reverse"));
-  ipcMain.handle("texttool:addReverseHistoryItem", (_event, item: TextToolHistoryItem) => {
-    addTextToolHistoryItem("reverse", item);
-    return { ok: true };
-  });
+  ipcMain.handle("texttool:getReverseHistory", () =>
+    getTextToolHistory("reverse"),
+  );
+  ipcMain.handle(
+    "texttool:addReverseHistoryItem",
+    (_event, item: TextToolHistoryItem) => {
+      addTextToolHistoryItem("reverse", item);
+      return { ok: true };
+    },
+  );
   ipcMain.handle("texttool:deleteReverseHistoryItem", (_event, id: string) => {
     removeTextToolHistoryItem("reverse", id);
     return { ok: true };
@@ -388,7 +602,10 @@ function registerIpc() {
     clearTextToolHistory("reverse");
     return { ok: true };
   });
-  ipcMain.handle("texttool:pruneMissingReverseHistoryItem", (_event, id: string) => pruneMissingReverseHistoryItem(id));
+  ipcMain.handle(
+    "texttool:pruneMissingReverseHistoryItem",
+    (_event, id: string) => pruneMissingReverseHistoryItem(id),
+  );
   ipcMain.handle("storage:selectDir", () => selectOutputDir());
 
   // Native drag-out: drag a generated/history image straight to the desktop,
@@ -397,10 +614,15 @@ function registerIpc() {
   ipcMain.on("image:startDrag", (event, filePathOrUrl: string) => {
     try {
       if (!filePathOrUrl) return;
-      const filePath = filePathOrUrl.startsWith("file://") ? fileURLToPath(filePathOrUrl) : filePathOrUrl;
+      const filePath = filePathOrUrl.startsWith("file://")
+        ? fileURLToPath(filePathOrUrl)
+        : filePathOrUrl;
       const icon = nativeImage.createFromPath(filePath);
       if (icon.isEmpty()) return; // startDrag throws on an empty icon
-      event.sender.startDrag({ file: filePath, icon: icon.resize({ height: 96 }) });
+      event.sender.startDrag({
+        file: filePath,
+        icon: icon.resize({ height: 96 }),
+      });
     } catch {
       /* ignore — a failed drag must never crash the main process */
     }
@@ -413,9 +635,13 @@ function registerIpc() {
   ipcMain.handle("log:read", () => readRecentLog());
 
   ipcMain.handle("settings:get", (_event, key) => getSetting(key));
-  ipcMain.handle("settings:set", (_event, key, value) => setSetting(key, value));
+  ipcMain.handle("settings:set", (_event, key, value) =>
+    setSetting(key, value),
+  );
   ipcMain.handle("settings:getAll", () => getSettings());
-  ipcMain.handle("settings:getReverseDefaults", () => getReversePromptTemplateDefaults());
+  ipcMain.handle("settings:getReverseDefaults", () =>
+    getReversePromptTemplateDefaults(),
+  );
   ipcMain.handle("settings:isFirstRun", () => !getSettings().hasOnboarded);
   ipcMain.handle("settings:completeSetup", () => {
     completeSetup();
@@ -438,7 +664,8 @@ function registerIpc() {
     } catch {
       return { ok: false };
     }
-    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return { ok: false };
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:")
+      return { ok: false };
     void shell.openExternal(parsed.toString());
     return { ok: true };
   });

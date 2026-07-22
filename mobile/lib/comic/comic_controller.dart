@@ -10,12 +10,10 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../billing/anlas.dart';
-import '../i18n/runtime_text.dart';
+import '../i18n/app_locales.dart';
 import '../models/nai_models.dart';
-import '../prompts/prompt_mode.dart';
-import '../state/app_state.dart';
 import '../services/background_queue_service.dart';
-import '../services/import_limits.dart';
+import '../state/app_state.dart';
 import 'comic_models.dart';
 
 class ComicController extends ChangeNotifier {
@@ -26,44 +24,30 @@ class ComicController extends ChangeNotifier {
   }
 
   late ComicProject project;
-  ComicStep step = ComicStep.story;
-  String status = runtimeTextFor('zh-CN', 'common.ready');
+  ComicStep step = ComicStep.importTags;
+  String statusKey = 'comic.ready';
+  String statusDetail = '';
   String activePanelId = '';
-  Set<String> selectedPanelIds = {};
   bool loaded = false;
-  bool busy = false;
   bool queueRunning = false;
-  bool queuePaused = false;
   bool queueCancelled = false;
   int queueDone = 0;
   int queueTotal = 0;
   Timer? _saveTimer;
   bool _disposed = false;
 
-  // The queue loop is a plain async function, not tied to widget lifecycle —
-  // leaving the comic screen mid-queue must not let it keep calling
-  // notifyListeners() on a disposed ChangeNotifier (Flutter throws on that),
-  // nor keep the paid request running unattended in the background.
+  String _t(String key) => mobileUiTextFor(app.settings.language, key);
+  String get displayTitle =>
+      project.title.trim().isEmpty || project.title == defaultComicProjectTitle
+          ? _t('comic.defaultTitle')
+          : project.title.trim();
+  String get displayStatus =>
+      statusDetail.isEmpty ? _t(statusKey) : statusDetail;
+
   @override
   void notifyListeners() {
-    if (_disposed) return;
-    super.notifyListeners();
+    if (!_disposed) super.notifyListeners();
   }
-
-  String _rt(String key) => runtimeTextFor(app.settings.language, key);
-  String _rf(String key, Map<String, Object?> values) =>
-      runtimeFormatFor(app.settings.language, key, values);
-  String _projectTitle() => project.title.trim().isEmpty ||
-          project.title == legacyComicProjectTitle ||
-          project.title == defaultComicProjectTitle
-      ? _rt('comic.defaultTitle')
-      : project.title;
-  String get displayTitle => _projectTitle();
-  String get displayStatus =>
-      status == runtimeTextFor('zh-CN', 'common.ready') ||
-              status == runtimeTextFor('en-US', 'common.ready')
-          ? _rt('common.ready')
-          : status;
 
   Future<void> load() async {
     try {
@@ -83,17 +67,15 @@ class ComicController extends ChangeNotifier {
     return project.panels.isEmpty ? null : project.panels.first;
   }
 
-  List<ComicPanel> get selectedPanels => project.panels
-      .where((panel) => selectedPanelIds.contains(panel.id))
-      .toList();
-
   void setStep(ComicStep value) {
     step = value;
     notifyListeners();
   }
 
-  void changed([String? message]) {
-    if (message != null) status = message;
+  void changed([String? key, String detail = '']) {
+    if (_disposed) return;
+    if (key != null) statusKey = key;
+    statusDetail = detail;
     notifyListeners();
     _saveTimer?.cancel();
     _saveTimer = Timer(
@@ -105,16 +87,8 @@ class ComicController extends ChangeNotifier {
   void createNewProject() {
     project = ComicProject.empty(app.params);
     activePanelId = '';
-    selectedPanelIds.clear();
-    step = ComicStep.story;
-    changed(_rt('comic.statusNew'));
-  }
-
-  void clearPanels() {
-    project.panels.clear();
-    activePanelId = '';
-    selectedPanelIds.clear();
-    changed(_rt('comic.panelsCleared'));
+    step = ComicStep.importTags;
+    changed('comic.statusNew');
   }
 
   void syncCurrentParams() {
@@ -122,19 +96,91 @@ class ComicController extends ChangeNotifier {
       ..globalParams = (app.params.copy()..positivePrompt = '')
       ..globalStylePrompt = app.params.stylePrompt
       ..globalNegativePrompt = app.params.negativePrompt;
-    changed(_rt('comic.syncedParams'));
+    changed('comic.syncedParams');
+  }
+
+  void selectPanel(String id) {
+    activePanelId = id;
+    notifyListeners();
+  }
+
+  void addPanel() {
+    final index = project.panels.length + 1;
+    final panel = ComicPanel(
+      id: comicId(),
+      index: index,
+      title: '${_t('comic.panelFallback')} $index',
+      params: project.globalParams.copy(),
+    );
+    project.panels.add(panel);
+    activePanelId = panel.id;
+    changed('comic.panelAdded');
+  }
+
+  void removePanel(String id) {
+    project.panels.removeWhere((item) => item.id == id);
+    _reindexPanels();
+    activePanelId = project.panels.isEmpty ? '' : project.panels.first.id;
+    changed('comic.panelRemoved');
+  }
+
+  void movePanel(String id, int delta) {
+    final from = project.panels.indexWhere((item) => item.id == id);
+    final to = from + delta;
+    if (from < 0 || to < 0 || to >= project.panels.length) return;
+    final item = project.panels.removeAt(from);
+    project.panels.insert(to, item);
+    _reindexPanels();
+    changed();
+  }
+
+  void _reindexPanels() {
+    for (var index = 0; index < project.panels.length; index++) {
+      project.panels[index].index = index + 1;
+    }
+  }
+
+  Future<void> importText(String source, {String fileName = ''}) async {
+    final parsed = parseComicImport(source, fileName: fileName);
+    if (parsed.isEmpty) throw FormatException(_t('comic.noTags'));
+    project.panels = parsed.asMap().entries.map((entry) {
+      return ComicPanel(
+        id: comicId(),
+        index: entry.key + 1,
+        title: entry.value.$1.isEmpty
+            ? '${_t('comic.panelFallback')} ${entry.key + 1}'
+            : entry.value.$1,
+        prompt: entry.value.$2,
+        params: project.globalParams.copy(),
+      );
+    }).toList();
+    activePanelId = project.panels.first.id;
+    changed('comic.imported');
+  }
+
+  Future<void> pickImportFile() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['txt', 'json', 'csv'],
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) return;
+    final picked = result.files.single;
+    final bytes = picked.bytes ??
+        (picked.path == null ? null : await File(picked.path!).readAsBytes());
+    if (bytes == null) throw FormatException(_t('error.readFile'));
+    await importText(utf8.decode(bytes), fileName: picked.name);
   }
 
   Future<void> exportProjectJson() async {
     final temp = await getTemporaryDirectory();
-    final file = File('${temp.path}/${_safeName(_projectTitle())}.json');
+    final file = File('${temp.path}/${_safeName(displayTitle)}.json');
     await file.writeAsString(
       const JsonEncoder.withIndent('  ').convert(project.toJson()),
       flush: true,
     );
-    await Share.shareXFiles([XFile(file.path)], text: _projectTitle());
-    status = _rt('comic.jsonShared');
-    notifyListeners();
+    await Share.shareXFiles([XFile(file.path)], text: displayTitle);
+    changed('comic.jsonShared');
   }
 
   Future<void> importProjectJson() async {
@@ -144,753 +190,334 @@ class ComicController extends ChangeNotifier {
       withData: true,
     );
     if (result == null || result.files.isEmpty) return;
-    try {
-      final picked = result.files.single;
-      final bytes = picked.bytes ??
-          (picked.path == null ? null : await File(picked.path!).readAsBytes());
-      if (bytes == null) throw FormatException(_rt('error.readFile'));
-      final decoded = jsonDecode(utf8.decode(bytes));
-      if (decoded is! Map) throw FormatException(_rt('error.projectJsonRoot'));
-      final imported = ComicProject.fromJson(
-        Map<String, dynamic>.from(decoded),
-        app.params,
-      );
-      enforceImportLimits(
-        imported.references.map((r) => r.base64).toList(),
-        itemNoun: '张参考图',
-      );
-      project = imported;
-      activePanelId = project.panels.isEmpty ? '' : project.panels.first.id;
-      selectedPanelIds.clear();
-      changed(_rt('comic.projectImported'));
-    } catch (error) {
-      status = _rf('comic.importFailed', {'error': error});
-      notifyListeners();
-    }
-  }
-
-  Future<String?> addReference(String filePath) async {
-    try {
-      final file = File(filePath);
-      final bytes = await file.readAsBytes();
-      final dims = AppState.readImageDimensions(bytes);
-      project.references.add(ComicReference(
-        id: _id(),
-        name: file.uri.pathSegments.last,
-        base64: base64Encode(bytes),
-        sourcePath: filePath,
-        width: dims.$1,
-        height: dims.$2,
-      ));
-      changed(_rt('comic.referenceAdded'));
-      return null;
-    } catch (_) {
-      return _rt('error.readReference');
-    }
-  }
-
-  void removeReference(String id) {
-    project.references.removeWhere((item) => item.id == id);
-    changed(_rt('comic.referenceRemoved'));
-  }
-
-  Future<void> reverseReference(ComicReference reference) async {
-    if (busy) return;
-    busy = true;
-    status = _rf('comic.reversingReference', {'name': reference.name});
-    notifyListeners();
-    try {
-      final key = await app.storage.getVisionKey() ?? '';
-      final scope = ReversePromptScope.values.firstWhere(
-        (value) => value.value == reference.scope,
-        orElse: () => ReversePromptScope.full,
-      );
-      final result = await app.api.reversePrompt(
-        settings: app.settings,
-        apiKey: key,
-        image: base64Decode(reference.base64),
-        mode: project.mode,
-        scope: scope,
-        hint: reference.subjectHint,
-        knownCharacter: false,
-        systemTemplate: app.resolvedPromptTemplate(
-          'reverse',
-          project.mode,
-          scoped: scope != ReversePromptScope.full,
-        ),
-      );
-      if (!result.ok) throw Exception(result.message);
-      reference.reversePrompt = result.text;
-      changed(_rt('comic.reverseReferenceDone'));
-    } catch (error) {
-      status = error.toString().replaceFirst('Exception: ', '');
-      notifyListeners();
-    } finally {
-      busy = false;
-      notifyListeners();
-    }
-  }
-
-  Future<void> analyzeStory() async {
-    final script = project.rawScript.trim();
-    if (script.isEmpty || busy) return;
-    busy = true;
-    status = _rt('comic.splittingStory');
-    notifyListeners();
-    final fallback = _fallbackPanels(script, project.desiredPanelCount);
-    try {
-      final key = await app.storage.getConvertKey() ?? '';
-      if (key.isEmpty) {
-        _applyAnalyzedPanels(fallback, title: _projectTitle());
-        status = _rf('comic.localSplitUsed', {'count': fallback.length});
-      } else {
-        final references = _referenceContext();
-        final system = [
-          app.resolvedPromptTemplate('comic', project.mode),
-          project.desiredPanelCount > 0
-              ? 'Target panel count: ${project.desiredPanelCount}.'
-              : 'Panel count: auto.',
-          'Use the reference notes to build global character, scene and object settings.',
-          'Return JSON only: title, globalPrompt, globalCharacterSetting, panels. Each panel has cnPrompt and contextSummary.',
-        ].join('\n\n');
-        final result = await app.api.runTextAi(
-          settings: app.settings,
-          apiKey: key,
-          apiUrl: app.settings.convertApiUrl,
-          model: app.settings.convertApiModel,
-          system: system,
-          user:
-              'User story:\n$script\n\nReference inspect / user notes:\n${references.isEmpty ? '(none)' : references.join('\n')}',
-          maxTokens: 4000,
-        );
-        final parsed = result.ok ? _jsonObject(result.text) : null;
-        final parsedPanels = _panelsFromJson(parsed?['panels']);
-        final minimum = project.desiredPanelCount > 0
-            ? max(1, (project.desiredPanelCount * 0.6).floor())
-            : 1;
-        final panels = parsedPanels.length >= minimum ? parsedPanels : fallback;
-        project
-          ..title = parsed?['title']?.toString().trim().isNotEmpty == true
-              ? parsed!['title'].toString().trim()
-              : _projectTitle()
-          ..globalPrompt =
-              parsed?['globalPrompt']?.toString().trim().isNotEmpty == true
-                  ? parsed!['globalPrompt'].toString().trim()
-                  : script
-          ..globalCharacterSetting =
-              parsed?['globalCharacterSetting']?.toString().trim().isNotEmpty ==
-                      true
-                  ? parsed!['globalCharacterSetting'].toString().trim()
-                  : references.join('\n');
-        _applyAnalyzedPanels(panels, title: _projectTitle());
-        status = result.ok
-            ? _rf('comic.splitDone', {'count': panels.length})
-            : _rf('comic.splitFallback', {'message': result.message});
-      }
-      step = ComicStep.global;
-      changed();
-    } finally {
-      busy = false;
-      notifyListeners();
-    }
-  }
-
-  Future<void> convertPanels(List<ComicPanel> targets) async {
-    if (targets.isEmpty || busy) return;
-    final key = await app.storage.getConvertKey() ?? '';
-    if (key.isEmpty) {
-      status = _rt('comic.convertKeyRequired');
-      notifyListeners();
-      return;
-    }
-    busy = true;
-    var success = 0;
-    final ordered = [...project.panels]
-      ..sort((a, b) => a.index.compareTo(b.index));
-    try {
-      for (final panel in targets) {
-        final position = ordered.indexWhere((item) => item.id == panel.id);
-        status = _rf('comic.convertingPanel', {'index': panel.index});
-        notifyListeners();
-        final system = [
-          app.resolvedPromptTemplate('convert', project.mode),
-          'You convert continuous comic panels into NovelAI prompts.',
-          'Keep characters, outfits, locations, timeline and key objects consistent.',
-          'Do not change this panel camera, action or plot focus.',
-          modeUserInstruction(project.mode, 'convert'),
-        ].join('\n\n');
-        final user = [
-          'Global story:',
-          project.globalPrompt,
-          'Global setting:',
-          project.globalCharacterSetting,
-          'Global style:',
-          project.globalStylePrompt,
-          'Reference notes:',
-          _referenceContext().join('\n'),
-          'Previous Chinese panel:',
-          position > 0 ? ordered[position - 1].cnPrompt : '(none)',
-          'Current Chinese panel:',
-          panel.cnPrompt,
-          'Next Chinese panel:',
-          position + 1 < ordered.length
-              ? ordered[position + 1].cnPrompt
-              : '(none)',
-          'Previous final prompts:',
-          ordered
-              .sublist(max(0, position - 2), max(0, position))
-              .map((item) => item.enPrompt)
-              .where((text) => text.trim().isNotEmpty)
-              .join('\n'),
-        ].join('\n\n');
-        final result = await app.api.runTextAi(
-          settings: app.settings,
-          apiKey: key,
-          apiUrl: app.settings.convertApiUrl,
-          model: app.settings.convertApiModel,
-          system: system,
-          user: user,
-          maxTokens: 1800,
-        );
-        if (result.ok && result.text.trim().isNotEmpty) {
-          panel
-            ..enPrompt = cleanPromptOutput(result.text)
-            ..status = ComicPanelStatus.converted
-            ..error = '';
-          success++;
-        } else {
-          panel
-            ..status = ComicPanelStatus.failed
-            ..error = result.message;
-        }
-        changed();
-      }
-      status = _rf('comic.convertDone', {
-        'success': success,
-        'failed': targets.length - success,
-      });
-    } finally {
-      busy = false;
-      changed();
-    }
-  }
-
-  Future<void> translatePanel(ComicPanel panel,
-      {required bool toEnglish}) async {
-    if (busy) return;
-    final source = (toEnglish ? panel.cnPrompt : panel.enPrompt).trim();
-    if (source.isEmpty) return;
-    busy = true;
-    status = _rf('comic.translatingPanel', {'index': panel.index});
-    notifyListeners();
-    try {
-      final result = await app.api.translateText(
-        source,
-        app.settings,
-        target: toEnglish ? 'en' : 'zh-CN',
-      );
-      if (!result.ok) throw Exception(result.message);
-      if (toEnglish) {
-        panel
-          ..enPrompt = result.text
-          ..status = ComicPanelStatus.converted;
-      } else {
-        panel.cnPrompt = result.text;
-      }
-      changed(
-          toEnglish ? _rt('comic.translatedEn') : _rt('comic.translatedCn'));
-    } catch (error) {
-      status = error.toString().replaceFirst('Exception: ', '');
-    } finally {
-      busy = false;
-      notifyListeners();
-    }
-  }
-
-  Future<void> checkConsistency() async {
-    final reviewable = project.panels
-        .where((panel) => panel.enPrompt.trim().isNotEmpty)
-        .toList();
-    if (reviewable.isEmpty || busy) return;
-    final key = await app.storage.getConvertKey() ?? '';
-    if (key.isEmpty) {
-      status = _rt('comic.convertKeyRequiredShort');
-      notifyListeners();
-      return;
-    }
-    busy = true;
-    status = _rt('comic.consistencyRunning');
-    notifyListeners();
-    final replacements = <String, String>{};
-    try {
-      for (var start = 0; start < reviewable.length; start += 6) {
-        final chunk =
-            reviewable.sublist(start, min(start + 6, reviewable.length));
-        final checked = await _checkConsistencyChunk(chunk, reviewable, key);
-        if (checked == null) {
-          status = _rt('comic.consistencyFailed');
-          return;
-        }
-        replacements.addAll(checked);
-      }
-      var changedCount = 0;
-      for (final panel in reviewable) {
-        final replacement = replacements[panel.id];
-        if (replacement != null && replacement.trim().isNotEmpty) {
-          if (replacement != panel.enPrompt) changedCount++;
-          panel
-            ..enPrompt = replacement
-            ..status = ComicPanelStatus.converted;
-        }
-      }
-      changed(_rf('comic.consistencyDone', {
-        'reviewed': reviewable.length,
-        'changed': changedCount,
-      }));
-    } finally {
-      busy = false;
-      notifyListeners();
-    }
-  }
-
-  Future<Map<String, String>?> _checkConsistencyChunk(
-    List<ComicPanel> chunk,
-    List<ComicPanel> all,
-    String key,
-  ) async {
-    final result = await app.api.runTextAi(
-      settings: app.settings,
-      apiKey: key,
-      apiUrl: app.settings.convertApiUrl,
-      model: app.settings.convertApiModel,
-      system: [
-        'You are a continuous comic prompt consistency reviewer.',
-        'Return strict JSON only: {"panels":[{"panelId":"...","enPrompt":"...","note":"..."}]}.',
-        'Only fix inconsistent character, outfit, scene or object naming.',
-        'Never change camera, action, pose or plot focus in an individual panel.',
-      ].join('\n'),
-      user: [
-        'Global setting:',
-        project.globalCharacterSetting,
-        'Reference notes:',
-        _referenceContext().join('\n'),
-        'All panel identity context:',
-        jsonEncode(all
-            .map((panel) => {
-                  'panelId': panel.id,
-                  'index': panel.index,
-                  'cnPrompt': panel.cnPrompt,
-                  'enPrompt': panel.enPrompt,
-                })
-            .toList()),
-        'Panels to review:',
-        jsonEncode(chunk
-            .map((panel) => {
-                  'panelId': panel.id,
-                  'index': panel.index,
-                  'cnPrompt': panel.cnPrompt,
-                  'enPrompt': panel.enPrompt,
-                })
-            .toList()),
-      ].join('\n\n'),
-      maxTokens: min(3200, max(1400, 700 + chunk.length * 420)),
+    final picked = result.files.single;
+    final bytes = picked.bytes ??
+        (picked.path == null ? null : await File(picked.path!).readAsBytes());
+    if (bytes == null) throw FormatException(_t('error.readFile'));
+    final decoded = jsonDecode(utf8.decode(bytes));
+    if (decoded is! Map) throw FormatException(_t('error.projectJsonRoot'));
+    project = ComicProject.fromJson(
+      Map<String, dynamic>.from(decoded),
+      app.params,
     );
-    final parsed = result.ok ? _jsonObject(result.text) : null;
-    final items = parsed?['panels'];
-    final replacements = <String, String>{};
-    if (items is List) {
-      for (final item in items.whereType<Map>()) {
-        final id = item['panelId']?.toString().trim() ?? '';
-        final prompt = cleanPromptOutput(item['enPrompt']?.toString() ?? '');
-        if (id.isNotEmpty && prompt.isNotEmpty) replacements[id] = prompt;
-      }
-    }
-    if (replacements.isNotEmpty) {
-      return {
-        for (final panel in chunk)
-          panel.id: replacements[panel.id] ?? panel.enPrompt
-      };
-    }
-    if (chunk.length == 1) return null;
-    final middle = (chunk.length / 2).ceil();
-    final left =
-        await _checkConsistencyChunk(chunk.sublist(0, middle), all, key);
-    if (left == null) return null;
-    final right = await _checkConsistencyChunk(chunk.sublist(middle), all, key);
-    if (right == null) return null;
-    return {...left, ...right};
+    activePanelId = project.panels.isEmpty ? '' : project.panels.first.id;
+    changed('comic.projectImported');
   }
 
-  int quotePanels(List<ComicPanel> panels) {
+  GenerateParams paramsFor(ComicPanel panel) {
+    final params =
+        (panel.overrideParams ? panel.params : project.globalParams).copy();
+    params
+      ..positivePrompt = _merge(project.globalStylePrompt, panel.prompt)
+      ..negativePrompt = project.globalNegativePrompt;
+    return params;
+  }
+
+  Future<int> quoteTasks(Iterable<ComicPanel> panels, {int each = 1}) async {
+    final token = await app.storage.getToken();
+    final officialCache = <String, int?>{};
     var total = 0;
     for (final panel in panels) {
-      final params = panel.overrideParams ? panel.params : project.globalParams;
-      final extras = _referencesToExtras(params);
-      total += calculateImageGenerationAnlas(
+      final params = paramsFor(panel);
+      final key = jsonEncode({
+        'model': params.model,
+        'width': params.width,
+        'height': params.height,
+        'steps': params.steps,
+        'sampler': params.sampler,
+        'noiseSchedule': params.noiseSchedule,
+        'smea': params.smea,
+        'smeaDyn': params.smeaDyn,
+      });
+      int? official = officialCache[key];
+      if (!officialCache.containsKey(key) && token?.isNotEmpty == true) {
+        official = await app.api.requestOfficialGenerationPrice(
+          token!,
+          app.settings,
+          params,
+        );
+        officialCache[key] = official;
+      }
+      final local = calculateImageGenerationAnlas(
             params: params,
             account: app.account,
-            extras: extras,
-            alreadyEncodedVibes: app.api.countCachedVibes(params.model, extras),
-            preciseReferenceCount: extras.preciseReferences.length,
             language: app.settings.language,
           ).amount ??
           0;
+      total += (official ?? local) * each;
     }
     return total;
   }
 
-  Future<void> generateOne(ComicPanel panel) async {
-    if (panel.status == ComicPanelStatus.generating) return;
+  Future<void> generateCandidate(ComicPanel panel) async {
+    if (panel.prompt.trim().isEmpty) {
+      throw FormatException(_t('comic.emptyPrompt'));
+    }
     panel
       ..status = ComicPanelStatus.generating
       ..error = '';
-    changed(_rf('comic.generatingPanel', {'index': panel.index}));
+    changed('comic.generatingPanel');
     try {
-      final params =
-          (panel.overrideParams ? panel.params : project.globalParams).copy();
-      params
-        ..positivePrompt = _merge(project.globalStylePrompt,
-            panel.enPrompt.trim().isEmpty ? panel.cnPrompt : panel.enPrompt)
-        ..negativePrompt = panel.overrideNegative
-            ? panel.localNegativePrompt
-            : _merge(project.globalNegativePrompt, panel.localNegativePrompt);
-      final extras = _referencesToExtras(params);
       final before = app.account.anlasBalance;
       final item = await app.generateComicPanel(
-        panelParams: params,
-        panelExtras: extras,
-        projectTitle: _projectTitle(),
+        panelParams: paramsFor(panel),
+        panelExtras: GenerateExtras(),
+        projectTitle: displayTitle,
         historyGroupId: project.historyGroupId,
       );
       project.historyGroupId = item.groupId;
-      panel
-        ..status = ComicPanelStatus.done
-        ..outputPath = item.filePath
-        ..actualAnlas = before != null && app.account.anlasBalance != null
+      final candidate = ComicCandidate(
+        id: comicId(),
+        historyItemId: item.id,
+        outputPath: item.filePath,
+        createdAt: item.createdAt,
+        actualAnlas: before != null && app.account.anlasBalance != null
             ? max(0, before - app.account.anlasBalance!)
-            : null;
-      changed(_rf('comic.panelDone', {'index': panel.index}));
+            : null,
+      );
+      panel.candidates.add(candidate);
+      panel
+        ..selectedCandidateId ??= candidate.id
+        ..status = ComicPanelStatus.done;
+      changed('comic.generated');
     } catch (error) {
+      if (queueCancelled) {
+        panel
+          ..status = panel.candidates.isEmpty
+              ? ComicPanelStatus.ready
+              : ComicPanelStatus.done
+          ..error = '';
+        changed('comic.queueStopped');
+        return;
+      }
       panel
         ..status = ComicPanelStatus.failed
         ..error = error.toString().replaceFirst('Exception: ', '');
-      changed(_rf('comic.panelFailed', {
-        'index': panel.index,
-        'error': panel.error,
-      }));
+      changed('comic.panelFailed', panel.error);
       rethrow;
     }
   }
 
-  Future<void> startQueue(List<ComicPanel> targets) async {
-    if (targets.isEmpty || queueRunning) return;
-    final quote = quotePanels(targets);
-    final balance = app.account.anlasBalance;
-    if (balance != null && quote > balance) {
-      status = _rf('comic.insufficient', {
-        'amount': quote,
-        'balance': balance,
-      });
-      notifyListeners();
+  Future<void> generateInitial() async {
+    final tasks = <ComicPanel>[];
+    for (final panel in project.panels) {
+      final missing =
+          max(0, project.initialGenerationCount - panel.candidates.length);
+      for (var index = 0; index < missing; index++) {
+        tasks.add(panel);
+      }
     }
+    await _runQueue(tasks);
+  }
+
+  Future<void> addOneToAll() =>
+      _runQueue(List<ComicPanel>.from(project.panels));
+  Future<void> addOne(ComicPanel panel) => _runQueue([panel]);
+
+  Future<void> _runQueue(List<ComicPanel> tasks) async {
+    if (queueRunning || tasks.isEmpty) return;
     queueRunning = true;
-    queuePaused = false;
     queueCancelled = false;
     queueDone = 0;
-    queueTotal = targets.length;
-    if (BackgroundQueueService.shouldWarnNoBackgroundSupport()) {
-      status = _rt('status.backgroundNotSupported');
-    }
+    queueTotal = tasks.length;
     notifyListeners();
     try {
       await BackgroundQueueService.start(
         'comic-generation',
-        title: _rt('notification.comicTitle'),
-        text: _rf('notification.prepare', {'total': targets.length}),
+        title: _t('notification.comicTitle'),
+        text: '${_t('comic.generateHeading')} 0/${tasks.length}',
       );
-    } catch (_) {
-      // Foreground-service restrictions must not block a foreground run.
-    }
-    for (final panel in targets) {
+    } catch (_) {}
+    for (final panel in tasks) {
       if (queueCancelled) break;
-      while (queuePaused && !queueCancelled) {
-        await Future<void>.delayed(const Duration(milliseconds: 220));
-      }
-      if (queueCancelled) break;
-      unawaited(BackgroundQueueService.update(
-        title: _rt('notification.comicTitle'),
-        text: _rf('notification.generatingPanel', {
-          'current': queueDone + 1,
-          'total': queueTotal,
-          'index': panel.index,
-        }),
-      ));
       try {
-        await generateOne(panel);
-      } catch (error) {
-        final lower = error.toString().toLowerCase();
-        if (lower.contains('401') || lower.contains('unauthorized')) {
-          queueCancelled = true;
-          status = _rt('comic.authStopped');
-        }
-      }
+        await generateCandidate(panel);
+      } catch (_) {}
       queueDone++;
       notifyListeners();
     }
-    final cancelled = queueCancelled;
     queueRunning = false;
-    queuePaused = false;
     await BackgroundQueueService.stop('comic-generation');
-    if (!cancelled) {
-      status = _rf('comic.queueDone', {
-        'done': queueDone,
-        'total': queueTotal,
-      });
-    }
-    changed();
-    if (!cancelled && project.autoExportZip) await exportComicZip();
-  }
-
-  void toggleQueuePause() {
-    queuePaused = !queuePaused;
-    notifyListeners();
+    changed(queueCancelled ? 'comic.queueStopped' : 'comic.queueDone');
   }
 
   void cancelQueue() {
+    if (!queueRunning) return;
     queueCancelled = true;
-    queuePaused = false;
     app.api.cancelActiveGeneration();
-    status = _rt('comic.cancelling');
-    notifyListeners();
+    changed('comic.queueStopped');
   }
 
-  Future<void> exportComicZip() async {
+  void selectCandidate(ComicPanel panel, String candidateId) {
+    if (!panel.candidates.any((item) => item.id == candidateId)) return;
+    panel.selectedCandidateId = candidateId;
+    changed('comic.currentMain');
+  }
+
+  Future<void> exportSelectedZip() async {
+    final selected = project.panels
+        .map((panel) => (panel, panel.selectedCandidate))
+        .where((entry) =>
+            entry.$2 != null && File(entry.$2!.outputPath).existsSync())
+        .toList();
+    if (selected.isEmpty) throw StateError(_t('comic.noCandidate'));
     final archive = Archive();
-    final projectJson = utf8.encode(
+    final manifest = utf8.encode(
       const JsonEncoder.withIndent('  ').convert(project.toJson()),
     );
-    archive
-        .addFile(ArchiveFile('project.json', projectJson.length, projectJson));
-    final prompts = StringBuffer('# ${_projectTitle()}\n\n');
-    for (final panel in project.panels) {
+    archive.addFile(ArchiveFile('project.json', manifest.length, manifest));
+    final prompts = StringBuffer('# $displayTitle\n\n');
+    for (final entry in selected) {
+      final panel = entry.$1;
+      final candidate = entry.$2!;
+      final bytes = await File(candidate.outputPath).readAsBytes();
+      final extension = _extension(candidate.outputPath);
+      archive.addFile(ArchiveFile(
+        'images/${panel.index.toString().padLeft(3, '0')}.$extension',
+        bytes.length,
+        bytes,
+      ));
       prompts
-        ..writeln('## ${panel.index}')
-        ..writeln(panel.cnPrompt)
-        ..writeln(panel.enPrompt)
+        ..writeln('## ${panel.index}. ${panel.title}')
+        ..writeln(panel.prompt)
         ..writeln();
-      final path = panel.outputPath;
-      if (path.isNotEmpty && File(path).existsSync()) {
-        final bytes = await File(path).readAsBytes();
-        archive.addFile(ArchiveFile(
-          'images/${panel.index.toString().padLeft(3, '0')}.png',
-          bytes.length,
-          bytes,
-        ));
-      }
     }
     final promptBytes = utf8.encode(prompts.toString());
     archive.addFile(ArchiveFile('prompts.md', promptBytes.length, promptBytes));
     final zip = ZipEncoder().encode(archive);
-    if (zip == null) throw StateError(_rt('error.zipEncode'));
+    if (zip == null) throw StateError(_t('error.zipEncode'));
     final temp = await getTemporaryDirectory();
-    final file = File('${temp.path}/${_safeName(_projectTitle())}.zip');
+    final file = File('${temp.path}/${_safeName(displayTitle)}.zip');
     await file.writeAsBytes(zip, flush: true);
-    await Share.shareXFiles([XFile(file.path)], text: _projectTitle());
-    status = _rt('comic.zipShared');
-    notifyListeners();
+    await Share.shareXFiles([XFile(file.path)], text: displayTitle);
+    changed('comic.zipShared');
   }
-
-  GenerateExtras _referencesToExtras(GenerateParams params) {
-    final vibes = <VibeTransferItem>[];
-    final precise = <PreciseReferenceItem>[];
-    for (final reference in project.references.where(
-      (item) => item.useForGeneration && item.base64.isNotEmpty,
-    )) {
-      final preciseType = switch (reference.kind) {
-        'character' => 'character',
-        'scene' || 'object' => 'style',
-        'precise' => 'character&style',
-        _ => null,
-      };
-      if (params.isV45 && preciseType != null) {
-        precise.add(PreciseReferenceItem(
-          base64: reference.base64,
-          type: preciseType,
-          strength: reference.strength,
-          fidelity: reference.infoExtracted,
-          informationExtracted: reference.infoExtracted,
-          sourcePath: reference.sourcePath,
-          width: reference.width,
-          height: reference.height,
-        ));
-      } else {
-        vibes.add(VibeTransferItem(
-          base64: reference.base64,
-          infoExtracted: reference.infoExtracted,
-          strength: reference.strength,
-          sourcePath: reference.sourcePath,
-        ));
-      }
-    }
-    return GenerateExtras(vibeImages: vibes, preciseReferences: precise);
-  }
-
-  List<String> _referenceContext() => project.references
-      .where((item) =>
-          item.reversePrompt.trim().isNotEmpty ||
-          item.subjectHint.trim().isNotEmpty)
-      .map((item) => '【${item.kind} · ${item.name}】${[
-            item.subjectHint,
-            item.reversePrompt
-          ].where((text) => text.trim().isNotEmpty).join('；')}')
-      .toList();
-
-  void _applyAnalyzedPanels(List<(String, String)> panels,
-      {required String title}) {
-    project.panels = panels
-        .asMap()
-        .entries
-        .map((entry) => ComicPanel(
-              id: _id(),
-              index: entry.key + 1,
-              cnPrompt: entry.value.$1,
-              contextSummary: entry.value.$2,
-              params: project.globalParams.copy(),
-            ))
-        .toList();
-    activePanelId = project.panels.isEmpty ? '' : project.panels.first.id;
-    selectedPanelIds.clear();
-  }
-
-  // Create panels straight from imported tag prompts (one per line). Each line
-  // is the panel's English prompt (status converted), so the user can generate
-  // without the story → split → reverse flow — same idea as batch img2img import.
-  void importTagPanels(String text) {
-    final lines = text
-        .split(RegExp(r'\r?\n'))
-        .map((line) => line.trim())
-        .where((line) => line.isNotEmpty)
-        .toList();
-    if (lines.isEmpty) {
-      changed(_rt('comic.tagPanelEmpty'));
-      return;
-    }
-    project.panels = lines
-        .asMap()
-        .entries
-        .map((entry) => ComicPanel(
-              id: _id(),
-              index: entry.key + 1,
-              enPrompt: entry.value,
-              status: ComicPanelStatus.converted,
-              params: project.globalParams.copy(),
-            ))
-        .toList();
-    activePanelId = project.panels.first.id;
-    selectedPanelIds.clear();
-    step = ComicStep.panels;
-    changed(_rf('comic.tagPanelsImported', {'count': lines.length}));
-  }
-
-  List<(String, String)> _fallbackPanels(String script, int desiredCount) {
-    final ranges = <(String, String)>[];
-    for (final raw in script.split(RegExp(r'\r?\n'))) {
-      final line = raw.trim();
-      final match =
-          RegExp(r'^(\d+)\s*[-~]\s*(\d+)\s*[.。:：、]?\s*(.+)$').firstMatch(line);
-      if (match == null) continue;
-      final start = int.tryParse(match.group(1) ?? '');
-      final end = int.tryParse(match.group(2) ?? '');
-      final description = match.group(3)?.trim() ?? '';
-      if (start == null || end == null || end < start || end - start > 500) {
-        continue;
-      }
-      for (var index = start; index <= end; index++) {
-        ranges.add((
-          _rf('comic.fallbackRangePanel', {
-            'index': index,
-            'description': description,
-          }),
-          description.substring(0, min(180, description.length)),
-        ));
-      }
-    }
-    if (ranges.isNotEmpty) return ranges;
-    final chunks = script
-        .split(RegExp(r'(?<=[。！？!?])\s*'))
-        .map((text) => text.trim())
-        .where((text) => text.isNotEmpty)
-        .toList();
-    final source = chunks.isEmpty ? [script] : chunks;
-    final count = desiredCount > 0 ? desiredCount.clamp(1, 500) : source.length;
-    return List.generate(count, (index) {
-      final chunk = source[
-          min(source.length - 1, (index * source.length / count).floor())];
-      return (
-        _rf('comic.fallbackAutoPanel', {
-          'index': index + 1,
-          'chunk': chunk,
-        }),
-        chunk.substring(0, min(180, chunk.length)),
-      );
-    });
-  }
-
-  List<(String, String)> _panelsFromJson(dynamic value) {
-    if (value is! List) return [];
-    return value
-        .whereType<Map>()
-        .map((item) {
-          final prompt =
-              (item['cnPrompt'] ?? item['prompt'] ?? '').toString().trim();
-          final summary = (item['contextSummary'] ?? item['summary'] ?? prompt)
-              .toString()
-              .trim();
-          return (prompt, summary);
-        })
-        .where((item) => item.$1.isNotEmpty)
-        .toList();
-  }
-
-  Map<String, dynamic>? _jsonObject(String text) {
-    final cleaned = text
-        .trim()
-        .replaceFirst(RegExp(r'^```(?:json)?\s*', caseSensitive: false), '')
-        .replaceFirst(RegExp(r'\s*```$'), '');
-    try {
-      final value = jsonDecode(cleaned);
-      if (value is Map) return Map<String, dynamic>.from(value);
-    } catch (_) {}
-    final start = cleaned.indexOf('{');
-    final end = cleaned.lastIndexOf('}');
-    if (start < 0 || end <= start) return null;
-    try {
-      final value = jsonDecode(cleaned.substring(start, end + 1));
-      return value is Map ? Map<String, dynamic>.from(value) : null;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  String _merge(String left, String right) =>
-      [left.trim(), right.trim()].where((value) => value.isNotEmpty).join(', ');
-
-  String _safeName(String value) {
-    final safe = value.replaceAll(RegExp(r'[\\/:*?"<>|]+'), '-').trim();
-    return safe.isEmpty
-        ? 'comic-project'
-        : safe.substring(0, min(80, safe.length));
-  }
-
-  String _id() =>
-      '${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(1 << 20)}';
 
   @override
   void dispose() {
-    if (queueRunning) cancelQueue();
+    if (queueRunning) {
+      queueCancelled = true;
+      app.api.cancelActiveGeneration();
+    }
     _disposed = true;
     _saveTimer?.cancel();
     BackgroundQueueService.removeCancelHandler(cancelQueue);
     super.dispose();
   }
+}
+
+List<(String, String)> parseComicImport(String input, {String fileName = ''}) {
+  final source = input.replaceFirst('\uFEFF', '').trim();
+  if (source.isEmpty) return [];
+  final lower = fileName.toLowerCase();
+  if (lower.endsWith('.json') ||
+      source.startsWith('[') ||
+      source.startsWith('{')) {
+    final decoded = jsonDecode(source);
+    if (decoded is Map && decoded['schemaVersion'] != null) {
+      throw const FormatException('Project JSON must be imported as a project');
+    }
+    final list = decoded is List
+        ? decoded
+        : decoded is Map && decoded['panels'] is List
+            ? decoded['panels'] as List
+            : const [];
+    return list
+        .asMap()
+        .entries
+        .map((entry) {
+          final value = entry.value;
+          if (value is String) return ('Panel ${entry.key + 1}', value.trim());
+          if (value is! Map) return ('', '');
+          final prompt =
+              (value['prompt'] ?? value['tags'] ?? value['tagPrompt'] ?? '')
+                  .toString()
+                  .trim();
+          final title =
+              (value['title'] ?? value['name'] ?? 'Panel ${entry.key + 1}')
+                  .toString()
+                  .trim();
+          return (title, prompt);
+        })
+        .where((item) => item.$2.isNotEmpty)
+        .toList();
+  }
+  if (lower.endsWith('.csv')) {
+    final rows = _parseCsv(source);
+    if (rows.isEmpty) return [];
+    final header = rows.first.map((item) => item.trim().toLowerCase()).toList();
+    final titleIndex = header
+        .indexWhere((item) => ['title', 'name', '标题', '分镜标题'].contains(item));
+    final promptIndex = header.indexWhere(
+        (item) => ['prompt', 'tags', 'tag', '提示词', '正面提示词'].contains(item));
+    final hasHeader = titleIndex >= 0 || promptIndex >= 0;
+    final data = hasHeader ? rows.skip(1).toList() : rows;
+    return data
+        .asMap()
+        .entries
+        .map((entry) {
+          final row = entry.value;
+          String at(int index) =>
+              index >= 0 && index < row.length ? row[index].trim() : '';
+          final prompt =
+              at(promptIndex >= 0 ? promptIndex : (row.length > 1 ? 1 : 0));
+          final title =
+              at(titleIndex >= 0 ? titleIndex : (row.length > 1 ? 0 : -1));
+          return (title.isEmpty ? 'Panel ${entry.key + 1}' : title, prompt);
+        })
+        .where((item) => item.$2.isNotEmpty)
+        .toList();
+  }
+  return source
+      .split(RegExp(r'\r?\n'))
+      .map((item) => item.trim())
+      .where((item) => item.isNotEmpty)
+      .toList()
+      .asMap()
+      .entries
+      .map((entry) => ('Panel ${entry.key + 1}', entry.value))
+      .toList();
+}
+
+List<List<String>> _parseCsv(String text) {
+  final rows = <List<String>>[];
+  var row = <String>[];
+  var cell = StringBuffer();
+  var quoted = false;
+  for (var index = 0; index < text.length; index++) {
+    final char = text[index];
+    if (char == '"') {
+      if (quoted && index + 1 < text.length && text[index + 1] == '"') {
+        cell.write('"');
+        index++;
+      } else {
+        quoted = !quoted;
+      }
+    } else if (char == ',' && !quoted) {
+      row.add(cell.toString());
+      cell = StringBuffer();
+    } else if ((char == '\n' || char == '\r') && !quoted) {
+      if (char == '\r' && index + 1 < text.length && text[index + 1] == '\n') {
+        index++;
+      }
+      row.add(cell.toString());
+      if (row.any((item) => item.trim().isNotEmpty)) rows.add(row);
+      row = <String>[];
+      cell = StringBuffer();
+    } else {
+      cell.write(char);
+    }
+  }
+  row.add(cell.toString());
+  if (row.any((item) => item.trim().isNotEmpty)) rows.add(row);
+  return rows;
+}
+
+String _merge(String first, String second) =>
+    [first.trim(), second.trim()].where((item) => item.isNotEmpty).join(', ');
+String _safeName(String value) =>
+    value.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_');
+String _extension(String path) {
+  final dot = path.lastIndexOf('.');
+  return dot < 0 ? 'png' : path.substring(dot + 1).toLowerCase();
 }
