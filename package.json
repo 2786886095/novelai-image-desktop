@@ -112,6 +112,12 @@
     "mac": {
       "icon": "build/icon.png",
       "category": "public.app-category.graphics-design",
+      "files": [
+        "!node_modules/@huggingface/transformers/**",
+        "!node_modules/@img/**",
+        "!node_modules/sharp/**",
+        "!node_modules/onnxruntime-node/**"
+      ],
       "target": [
         {
           "target": "dmg",
@@ -126,6 +132,12 @@
     "linux": {
       "icon": "build/icon.png",
       "category": "Graphics",
+      "files": [
+        "!node_modules/@huggingface/transformers/**",
+        "!node_modules/@img/**",
+        "!node_modules/sharp/**",
+        "!node_modules/onnxruntime-node/**"
+      ],
       "target": [
         "AppImage"
       ]
