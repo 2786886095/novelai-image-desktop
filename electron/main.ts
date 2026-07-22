@@ -34,6 +34,14 @@ import {
 import { danbooruStatus, downloadDanbooruTags, browseDanbooru, searchDanbooru } from "./ipc/danbooru-tags";
 import { clearAitagDataCache, getAitagConfig, getAitagSnapshot, getAitagWork, prewarmAitag, searchAitag, searchAitagFresh } from "./ipc/aitag";
 import { aitagCacheStats, cacheAitagImage, clearAitagCache } from "./ipc/aitag-cache";
+import {
+  artistLabModelStatus,
+  clearArtistLabModels,
+  loadPopularArtistTags,
+  pickArtistLabTarget,
+  scoreArtistLabImages,
+  searchArtistTags,
+} from "./ipc/artist-lab";
 import { getTuiwenTtsCatalog, saveTuiwenImportedAudio, synthesizeTuiwenSpeech } from "./ipc/tuiwen-audio";
 import { importTuiwenFile } from "./ipc/tuiwen-import";
 import { detectJianYingDraftRoot, exportTuiwenJianYingDraft } from "./ipc/tuiwen-jianying";
@@ -246,6 +254,13 @@ function createWindow() {
 }
 
 function registerIpc() {
+  ipcMain.handle("artistLab:pickTarget", () => pickArtistLabTarget());
+  ipcMain.handle("artistLab:searchArtists", (_event, query: unknown, limit: unknown) => searchArtistTags(query, limit));
+  ipcMain.handle("artistLab:popularArtists", (_event, limit: unknown, force: unknown) => loadPopularArtistTags(limit, force));
+  ipcMain.handle("artistLab:scoreImages", (_event, mode: unknown, targetPath: unknown, candidatePath: unknown) =>
+    scoreArtistLabImages(mode, targetPath, candidatePath));
+  ipcMain.handle("artistLab:modelStatus", (_event, mode: unknown) => artistLabModelStatus(mode));
+  ipcMain.handle("artistLab:clearModels", () => clearArtistLabModels());
   ipcMain.handle("aitag:config", () => getAitagConfig());
   ipcMain.handle("aitag:search", (_event, request: unknown) => searchAitag(request));
   ipcMain.handle("aitag:search-fresh", (_event, request: unknown) => searchAitagFresh(request));

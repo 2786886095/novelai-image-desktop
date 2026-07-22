@@ -5,7 +5,7 @@ import path from "path";
 import { pathToFileURL } from "url";
 import type { AccountSummary, AppSettings, HistoryGroup, HistoryItem, SettingKey, TextToolHistoryItem } from "../../src/types";
 import { COMIC_ANALYZE_SYSTEM_PROMPT, SCOPED_REVERSE_SYSTEM_PROMPTS } from "../../src/data/prompt-templates";
-import { installedAppDir, isPortableBuild } from "./app-mode";
+import { installedAppDir } from "./app-mode";
 
 export interface PersistedData {
   token?: string;
@@ -163,13 +163,96 @@ function isLegacyScopedReverseTemplates(value: unknown): boolean {
   );
 }
 
-// Portable exe: keep images in the OS-standard Pictures folder (the exe may be
-// run from a USB stick / Downloads / anywhere, so a fixed known location is
-// safer). Real (NSIS) install: default to an "outputs" folder next to the
-// installed app, since the user already chose that install location deliberately.
+// Generated images are user data, not application files. Keeping them beside an
+// installed EXE lets NSIS/electron-updater remove them while replacing the old
+// application directory. Always use the OS Pictures folder for every build.
 function defaultOutputDir(): string {
-  if (isPortableBuild()) return path.join(app.getPath("pictures"), "Langbai NovelAI Studio");
-  return path.join(installedAppDir(), "outputs");
+  return path.join(app.getPath("pictures"), "Langbai NovelAI Studio");
+}
+
+function samePath(left: string, right: string): boolean {
+  return path.resolve(left).toLowerCase() === path.resolve(right).toLowerCase();
+}
+
+function remapManagedPath(filePath: string | undefined, oldRoot: string, newRoot: string): string | undefined {
+  if (!filePath || !isInside(oldRoot, filePath)) return filePath;
+  return path.join(newRoot, path.relative(oldRoot, filePath));
+}
+
+function copyTreeWithoutOverwriting(source: string, destination: string): void {
+  fs.mkdirSync(destination, { recursive: true });
+  for (const entry of fs.readdirSync(source, { withFileTypes: true })) {
+    const from = path.join(source, entry.name);
+    const to = path.join(destination, entry.name);
+    if (entry.isDirectory()) {
+      copyTreeWithoutOverwriting(from, to);
+    } else if (entry.isFile() && !fs.existsSync(to)) {
+      fs.copyFileSync(from, to, fs.constants.COPYFILE_EXCL);
+      try {
+        const stat = fs.statSync(from);
+        fs.utimesSync(to, stat.atime, stat.mtime);
+      } catch {
+        // Timestamp preservation is best effort; the image itself is safe.
+      }
+    }
+  }
+}
+
+/**
+ * Migrate the unsafe legacy NSIS default (<install>/outputs) into Pictures.
+ * Files are copied, never deleted here. The installer first moves the legacy
+ * directory outside its replaceable app folder; the new app then merges that
+ * recovery copy into Pictures. Path parameters keep this regression-testable.
+ */
+export function migrateLegacyInstalledOutput(
+  data: PersistedData,
+  oldRoot: string,
+  newRoot: string,
+  installerBackupRoot?: string,
+): { data: PersistedData; changed: boolean; copied: boolean } {
+  if (!data.settings.outputDir?.trim() || !samePath(data.settings.outputDir, oldRoot)) {
+    return { data, changed: false, copied: false };
+  }
+
+  let copied = false;
+  try {
+    const sources = [oldRoot, installerBackupRoot]
+      .filter((value): value is string => typeof value === "string" && fs.existsSync(value));
+    fs.mkdirSync(newRoot, { recursive: true });
+    for (const source of sources) {
+      copyTreeWithoutOverwriting(source, newRoot);
+      copied = true;
+    }
+  } catch (error) {
+    console.error("[store] failed to protect legacy output folder:", error);
+    // Do not redirect future saves when the existing files could not be copied.
+    return { data, changed: false, copied: false };
+  }
+
+  const history = data.history.map((item) => {
+    const nextPath = remapManagedPath(item.filePath, oldRoot, newRoot);
+    if (!nextPath || nextPath === item.filePath || !fs.existsSync(nextPath)) return item;
+    return { ...item, filePath: nextPath, fileUrl: pathToFileURL(nextPath).toString() };
+  });
+  return {
+    data: {
+      ...data,
+      settings: { ...data.settings, outputDir: newRoot },
+      history,
+    },
+    changed: true,
+    copied,
+  };
+}
+
+function migrateLegacyInstalledOutputForCurrentApp(data: PersistedData) {
+  const picturesRoot = app.getPath("pictures");
+  return migrateLegacyInstalledOutput(
+    data,
+    path.join(installedAppDir(), "outputs"),
+    defaultOutputDir(),
+    path.join(picturesRoot, "Langbai NovelAI Studio Update Backup"),
+  );
 }
 
 export function defaultSettings(): AppSettings {
@@ -355,7 +438,9 @@ export function readStore(): PersistedData {
     if (recovered.recoveredFrom) {
       console.warn(`[store] primary store was unreadable; recovered from ${path.basename(recovered.recoveredFrom)}.`);
     }
-    cache = recovered.value;
+    const migration = migrateLegacyInstalledOutputForCurrentApp(recovered.value);
+    cache = migration.data;
+    if (migration.changed) writeStore(cache);
     return cache;
   }
 

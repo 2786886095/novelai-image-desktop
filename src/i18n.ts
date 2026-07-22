@@ -120,6 +120,8 @@ const TOOLS_HUB_TEXT = {
     metadataDesc: "读取 NovelAI、Stable Diffusion WebUI / Forge 与 ComfyUI 图片的完整内嵌参数，并可一键套用兼容项。",
     aitagTitle: "AI绘画咒语图库",
     aitagDesc: "原生搜索 AITag 公开作品，并查看每张图片的生成提示词与原参数。",
+    artistLabTitle: "画风实验室",
+    artistLabDesc: "固定内容与 Seed，自动测试带权画师串，并用本地模型按目标画风排序。仅 Windows。",
     ready: "已接入",
     foundation: "P0 底座",
   },
@@ -137,6 +139,8 @@ const TOOLS_HUB_TEXT = {
     metadataDesc: "讀取 NovelAI、Stable Diffusion WebUI / Forge 與 ComfyUI 圖片的完整內嵌參數，並可一鍵套用相容項目。",
     aitagTitle: "AI 繪畫咒語圖庫",
     aitagDesc: "原生搜尋 AITag 公開作品，並查看每張圖片的生成提示詞與原參數。",
+    artistLabTitle: "畫風實驗室",
+    artistLabDesc: "固定內容與 Seed，自動測試帶權畫師串，並以本機模型按目標畫風排序。僅 Windows。",
     ready: "已接入",
     foundation: "P0 底座",
   },
@@ -154,6 +158,8 @@ const TOOLS_HUB_TEXT = {
     metadataDesc: "Read complete NovelAI, Stable Diffusion WebUI / Forge, and ComfyUI metadata and reuse compatible values.",
     aitagTitle: "AI Art Prompt Gallery",
     aitagDesc: "Search AITag public works natively and inspect prompts and original generation metadata.",
+    artistLabTitle: "Artist Style Lab",
+    artistLabDesc: "Keep content and seed fixed, test weighted artist strings, and rank target style locally. Windows only.",
     ready: "Ready",
     foundation: "P0 Base",
   },
@@ -171,6 +177,8 @@ const TOOLS_HUB_TEXT = {
     metadataDesc: "NovelAI、Stable Diffusion WebUI / Forge、ComfyUI の全埋め込み設定を読み取り、互換項目を再利用します。",
     aitagTitle: "AI イラスト呪文ギャラリー",
     aitagDesc: "AITag の公開作品をネイティブ検索し、画像ごとのプロンプトと生成パラメータを確認します。",
+    artistLabTitle: "画風ラボ",
+    artistLabDesc: "内容と Seed を固定して重み付き画家タグを自動テストし、端末内モデルで目標画風順に並べます。Windows 専用。",
     ready: "接続済み",
     foundation: "P0 基盤",
   },
@@ -188,6 +196,8 @@ const TOOLS_HUB_TEXT = {
     metadataDesc: "NovelAI, Stable Diffusion WebUI / Forge, ComfyUI의 전체 내장 설정을 읽고 호환 값을 재사용합니다.",
     aitagTitle: "AI 그림 프롬프트 갤러리",
     aitagDesc: "AITag 공개 작품을 기본 화면에서 검색하고 이미지별 프롬프트와 생성 매개변수를 확인합니다.",
+    artistLabTitle: "화풍 실험실",
+    artistLabDesc: "내용과 Seed를 고정해 가중치 작가 태그를 자동 테스트하고 로컬 모델로 목표 화풍 순위를 계산합니다. Windows 전용.",
     ready: "연결됨",
     foundation: "P0 기반",
   },
@@ -205,6 +215,8 @@ const TOOLS_HUB_TEXT = {
   | "metadataDesc"
   | "aitagTitle"
   | "aitagDesc"
+  | "artistLabTitle"
+  | "artistLabDesc"
   | "ready"
   | "foundation",
   string

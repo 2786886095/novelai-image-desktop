@@ -1,4 +1,4 @@
-export const APP_VERSION = "1.4.2";
+export const APP_VERSION = "1.4.3";
 export const APP_NAME = "Langbai NovelAI Studio";
 export const PROJECT_REPOSITORY = "https://github.com/2786886095/novelai-image-desktop";
 
@@ -992,6 +992,17 @@ export interface ImportedParams {
 }
 
 export interface NaiDesktopApi {
+  platform: NodeJS.Platform;
+  artistLabPickTarget: () => Promise<{ filePath: string; fileUrl: string; name: string } | null>;
+  artistLabSearchArtists: (query?: string, limit?: number) => Promise<import("./artist-lab").ArtistTagRecord[]>;
+  artistLabPopularArtists: (limit?: number, force?: boolean) => Promise<import("./artist-lab").ArtistTagRecord[]>;
+  artistLabScoreImages: (
+    mode: import("./artist-lab").ArtistLabModelMode,
+    targetPath: string,
+    candidatePath: string,
+  ) => Promise<import("./artist-lab").ArtistLabImageScore>;
+  artistLabModelStatus: (mode: import("./artist-lab").ArtistLabModelMode) => Promise<import("./artist-lab").ArtistLabModelStatus>;
+  artistLabClearModels: () => Promise<import("./artist-lab").ArtistLabModelStatus>;
   /** Native read-only access to AITag's public gallery data (renderer-safe IPC proxy). */
   aitagConfig: () => Promise<unknown>;
   aitagSearch: (request: import("./aitag").AitagSearchRequest) => Promise<unknown>;

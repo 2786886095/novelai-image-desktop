@@ -27,6 +27,7 @@ import {
 } from "./batch-redraw-queue";
 import { NovelTuiwenStudio } from "./tuiwen/NovelTuiwenStudio";
 import AitagGallery from "./AitagGallery";
+import ArtistLab from "./ArtistLab";
 import {
   createDefaultBatchRedraw,
   NAI_MODELS,
@@ -1656,11 +1657,12 @@ type PanelOutput = {
 export function ToolsHub() {
   const language = useAppStore((state) => state.settings?.language);
   const text = useMemo(() => getToolsHubText(language), [language]);
+  const isWindows = window.naiDesktop.platform === "win32";
   const [activeTool, setActiveTool] = useState<
-    "hub" | "comic" | "redraw" | "tuiwen" | "aitag"
+    "hub" | "comic" | "redraw" | "tuiwen" | "aitag" | "artistLab"
   >(() => {
     const saved = localStorage.getItem("langbai.tools.active.v1");
-    return saved === "comic" || saved === "redraw" || saved === "tuiwen" || saved === "aitag"
+    return saved === "comic" || saved === "redraw" || saved === "tuiwen" || saved === "aitag" || (saved === "artistLab" && isWindows)
       ? saved
       : "hub";
   });
@@ -1675,6 +1677,8 @@ export function ToolsHub() {
     return <NovelTuiwenStudio onBack={() => setActiveTool("hub")} />;
   if (activeTool === "aitag")
     return <AitagGallery onBack={() => setActiveTool("hub")} />;
+  if (activeTool === "artistLab" && isWindows)
+    return <ArtistLab onBack={() => setActiveTool("hub")} />;
 
   return (
     <main className="tools-hub">
@@ -1722,6 +1726,15 @@ export function ToolsHub() {
           <span>{text.aitagDesc}</span>
           <small>{text.ready}</small>
         </button>
+        {isWindows && <button
+          type="button"
+          className="tool-card ready"
+          onClick={() => setActiveTool("artistLab")}
+        >
+          <b>{text.artistLabTitle}</b>
+          <span>{text.artistLabDesc}</span>
+          <small>{text.ready}</small>
+        </button>}
       </section>
     </main>
   );

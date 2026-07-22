@@ -29,6 +29,16 @@ import type {
 import type { AitagSearchRequest } from "../src/aitag";
 
 contextBridge.exposeInMainWorld("naiDesktop", {
+  platform: process.platform,
+  artistLabPickTarget: () => ipcRenderer.invoke("artistLab:pickTarget"),
+  artistLabSearchArtists: (query?: string, limit?: number) =>
+    ipcRenderer.invoke("artistLab:searchArtists", query, limit),
+  artistLabPopularArtists: (limit?: number, force?: boolean) =>
+    ipcRenderer.invoke("artistLab:popularArtists", limit, force),
+  artistLabScoreImages: (mode: "high" | "light", targetPath: string, candidatePath: string) =>
+    ipcRenderer.invoke("artistLab:scoreImages", mode, targetPath, candidatePath),
+  artistLabModelStatus: (mode: "high" | "light") => ipcRenderer.invoke("artistLab:modelStatus", mode),
+  artistLabClearModels: () => ipcRenderer.invoke("artistLab:clearModels"),
   aitagConfig: () => ipcRenderer.invoke("aitag:config"),
   aitagSearch: (request: AitagSearchRequest) => ipcRenderer.invoke("aitag:search", request),
   aitagSearchFresh: (request: AitagSearchRequest) => ipcRenderer.invoke("aitag:search-fresh", request),
