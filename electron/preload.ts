@@ -49,6 +49,14 @@ contextBridge.exposeInMainWorld("naiDesktop", {
     ),
   artistLabModelStatus: (mode: "high" | "light") =>
     ipcRenderer.invoke("artistLab:modelStatus", mode),
+  artistLabDiscoverSimilar: (
+    mode: "high" | "light",
+    targetPath: string,
+    offset?: number,
+    scanCount?: number,
+    shortlist?: number,
+    force?: boolean,
+  ) => ipcRenderer.invoke("artistLab:discoverSimilar", mode, targetPath, offset, scanCount, shortlist, force),
   artistLabClearModels: () => ipcRenderer.invoke("artistLab:clearModels"),
   aitagConfig: () => ipcRenderer.invoke("aitag:config"),
   aitagSearch: (request: AitagSearchRequest) =>
@@ -72,6 +80,11 @@ contextBridge.exposeInMainWorld("naiDesktop", {
     ipcRenderer.invoke("nai:quoteAnlas", request),
   generate: (params: GenerateParams, extras: GenerateExtras) =>
     ipcRenderer.invoke("nai:generate", params, extras),
+  generateArtistLab: (
+    params: GenerateParams,
+    extras: GenerateExtras,
+    mode: "target" | "random",
+  ) => ipcRenderer.invoke("nai:generateArtistLab", params, extras, mode),
   generateI2I: (
     params: GenerateParams,
     i2i: I2IParams,

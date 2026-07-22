@@ -2386,6 +2386,8 @@ typedef MobileToolsHubText = ({
   String metadataSubtitle,
   String aitagTitle,
   String aitagSubtitle,
+  String artistLabTitle,
+  String artistLabSubtitle,
 });
 
 MobileToolsHubText mobileToolsHubTextFor(Object? value) {
@@ -2402,6 +2404,8 @@ MobileToolsHubText mobileToolsHubTextFor(Object? value) {
             '讀取 NovelAI、Stable Diffusion WebUI / Forge 與 ComfyUI 內嵌參數',
         aitagTitle: 'AI 繪畫咒語圖庫',
         aitagSubtitle: '搜尋 AITag 公開作品並查看圖片生成原參數',
+        artistLabTitle: '隨機畫師串抽卡',
+        artistLabSubtitle: '動態熱門畫師池、隨機權重組合與 NovelAI 批量對照',
       );
     case 'en-US':
       return (
@@ -2418,6 +2422,9 @@ MobileToolsHubText mobileToolsHubTextFor(Object? value) {
         aitagTitle: 'AI Art Prompt Gallery',
         aitagSubtitle:
             'Search AITag public works and inspect original generation metadata',
+        artistLabTitle: 'Random Artist-string Gacha',
+        artistLabSubtitle:
+            'Dynamic popular artists, randomized weights, and NovelAI comparison batches',
       );
     case 'ja-JP':
       return (
@@ -2431,6 +2438,8 @@ MobileToolsHubText mobileToolsHubTextFor(Object? value) {
             'NovelAI、Stable Diffusion WebUI / Forge、ComfyUI の埋め込み設定を読み取ります',
         aitagTitle: 'AI イラスト呪文ギャラリー',
         aitagSubtitle: 'AITag の公開作品を検索して画像の生成データを確認します',
+        artistLabTitle: 'ランダム画家タグ抽選',
+        artistLabSubtitle: '動的人気画家、ランダム重み、NovelAI 比較バッチ',
       );
     case 'ko-KR':
       return (
@@ -2444,6 +2453,8 @@ MobileToolsHubText mobileToolsHubTextFor(Object? value) {
             'NovelAI, Stable Diffusion WebUI / Forge, ComfyUI 내장 매개변수를 읽습니다',
         aitagTitle: 'AI 그림 프롬프트 갤러리',
         aitagSubtitle: 'AITag 공개 작품을 검색하고 이미지 생성 원본 데이터를 확인합니다',
+        artistLabTitle: '무작위 작가 조합 뽑기',
+        artistLabSubtitle: '동적 인기 작가, 무작위 가중치, NovelAI 비교 배치',
       );
     default:
       return (
@@ -2457,6 +2468,8 @@ MobileToolsHubText mobileToolsHubTextFor(Object? value) {
             '读取 NovelAI、Stable Diffusion WebUI / Forge 与 ComfyUI 内嵌参数',
         aitagTitle: 'AI绘画咒语图库',
         aitagSubtitle: '搜索 AITag 公开作品并查看图片生成原参数',
+        artistLabTitle: '随机画师串抽卡',
+        artistLabSubtitle: '动态热门画师池、随机权重组合与 NovelAI 批量对照',
       );
   }
 }

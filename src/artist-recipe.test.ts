@@ -60,4 +60,16 @@ describe("artist recipe grammar", () => {
     })[0];
     expect(locked.auxiliary.map((token) => token.value)).toEqual(["year 2025", "impasto", "no halo"]);
   });
+
+  it("does not impose the former one-hundred recipe ceiling", () => {
+    const recipes = generatePopularArtistRecipes(pool, {
+      count: 137,
+      minArtists: 4,
+      maxArtists: 10,
+      mutateAuxiliary: false,
+      random: seeded(),
+    });
+    expect(recipes).toHaveLength(137);
+    expect(new Set(recipes.map((recipe) => recipe.prompt)).size).toBe(137);
+  });
 });

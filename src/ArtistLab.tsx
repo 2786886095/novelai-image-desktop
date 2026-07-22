@@ -1,179 +1,91 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAppStore } from "./store";
 import { Button } from "./components/ui";
 import {
-  buildArtistCombinations,
   createArtistLabRandom,
-  type ArtistCombination,
-  type ArtistLabDiscoveryMode,
+  normalizeArtistProgress,
+  shouldResetArtistSearch,
   type ArtistLabModelMode,
   type ArtistLabModelStatus,
-  type ArtistTagRecord,
+  type ArtistReferenceMatch,
 } from "./artist-lab";
+import { generatePopularArtistRecipes, type GeneratedArtistRecipe } from "./artist-recipe";
 import type { AppLanguage, HistoryItem } from "./types";
 import RandomArtistLab from "./RandomArtistLab";
 
 type TargetImage = { filePath: string; fileUrl: string; name: string };
-type LabResult = ArtistCombination & {
+type LabResult = GeneratedArtistRecipe & {
   sequence: number;
   round: number;
   status: "pending" | "generating" | "scoring" | "done" | "failed";
   image?: HistoryItem;
-  score?: number;
-  delta?: number;
+  similarity?: number;
+  progress?: number;
   error?: string;
-  liked?: boolean;
 };
 type Session = {
-  mode: ArtistLabDiscoveryMode;
   modelMode: ArtistLabModelMode;
   target: TargetImage | null;
   basePrompt: string;
   sharedStylePrompt: string;
-  search: string;
-  selectedArtists: string[];
-  count: number;
+  batchSize: number;
   seed: number;
-  autoRounds: number;
-  sortMode: "sequence" | "score";
-  baseline?: { image?: HistoryItem; score?: number; error?: string };
+  targetProgress: number;
+  stagnantLimit: number;
+  minImprovement: number;
+  scanCount: number;
+  shortlist: number;
+  discoveryOffset: number;
+  matches: ArtistReferenceMatch[];
+  baseline?: { image?: HistoryItem; similarity?: number; error?: string };
+  bestProgress: number;
+  round: number;
+  resetCount: number;
   results: LabResult[];
 };
 
-const STORAGE_KEY = "langbai.artist-lab.session.v2";
+const STORAGE_KEY = "langbai.artist-lab.target.v3";
 let sessionCache: Session | null = null;
 
 const TEXT = {
-  "zh-CN": {
-    eyebrow: "WINDOWS · NOVELAI ARTIST TAGS",
-    title: "画风实验室",
-    subtitle: "固定提示词与 Seed，自动测试带权画师串，并按目标图片的整体画风排序。",
-    back: "返回工具",
-    target: "目标画风",
-    choose: "选择目标图片",
-    change: "更换图片",
-    targetHint: "匹配模式需要目标图片；图片只在本机评分，不会上传到第三方评分服务。",
-    mode: "探索模式",
-    match: "接近目标图",
-    random: "随机发现画风",
-    model: "评分模型",
-    high: "高精度（默认）",
-    light: "轻量",
-    modelHint: "首次评分会下载模型并缓存在本机。高精度使用 DINOv2 Base，轻量使用量化 DINOv2 Small。",
-    cache: "模型缓存",
-    clearCache: "清除模型缓存",
-    prompt: "固定内容提示词",
-    promptHint: "所有候选使用完全相同的内容提示词。画师串单独写入风格提示词。",
-    search: "搜索 Danbooru 画师标签",
-    searchPlaceholder: "输入画师名；留空载入热门画师",
-    searchButton: "搜索",
-    selected: "已选画师",
-    selectedHint: "至少选择一名；建议先选 12～40 名候选，程序再逐轮淘汰。",
-    noArtists: "还没有选择画师",
-    count: "本轮生成数量",
-    seed: "固定 Seed",
-    rounds: "自动迭代轮数",
-    roundsHint: "仅目标匹配模式可用；1 表示只生成初始轮，最多 5 轮。",
-    start: "生成并评分",
-    iterate: "用本轮优胜项继续迭代",
-    stop: "停止任务",
-    apply: "应用到生成",
-    like: "喜欢",
-    unlike: "取消喜欢",
-    pending: "等待",
-    generating: "生成中",
-    scoring: "AI评分中",
-    failed: "失败",
-    done: "已完成",
-    score: "相似度",
-    quote: "本轮官方报价：{amount} Anlas",
-    quoteFail: "报价暂不可用：{message}。仍可尝试生成，以 NovelAI 返回结果为准。",
-    needTarget: "请先选择目标图片。",
-    needArtist: "请至少选择一名画师。",
-    needPrompt: "请填写用于公平对比的固定内容提示词。",
-    searching: "正在读取画师标签…",
-    empty: "没有找到可用画师标签。",
-    running: "本轮进行中：{done}/{total}",
-    complete: "本轮已完成。可直接应用，也可让优胜画师继续组合迭代。",
-    applied: "画师串已写入生成页的风格提示词。",
-    queue: "本轮画师串队列",
-    queueHint: "一条画师串对应一张 NovelAI 图片；预览顺序就是实际生成顺序。",
-    emptyQueue: "选择画师后，这里会预览本轮所有带权组合。",
-    gallery: "画师串对照画廊",
-    galleryHint: "图片和画师串始终一一对应。生成过程中默认保持原顺序，便于逐项对照。",
-    sequenceOrder: "按生成顺序",
-    scoreOrder: "按评分排序",
-    artistString: "画师串",
-    copy: "复制",
-    copied: "已复制画师串。",
-    round: "轮次",
-  },
-  "zh-TW": {
-    eyebrow: "WINDOWS · NOVELAI ARTIST TAGS", title: "畫風實驗室", subtitle: "固定提示詞與 Seed，自動測試帶權畫師串，並按目標圖片的整體畫風排序。", back: "返回工具", target: "目標畫風", choose: "選擇目標圖片", change: "更換圖片", targetHint: "匹配模式需要目標圖片；圖片只在本機評分，不會上傳到第三方評分服務。", mode: "探索模式", match: "接近目標圖", random: "隨機發現畫風", model: "評分模型", high: "高精度（預設）", light: "輕量", modelHint: "首次評分會下載模型並快取於本機。高精度使用 DINOv2 Base，輕量使用量化 DINOv2 Small。", cache: "模型快取", clearCache: "清除模型快取", prompt: "固定內容提示詞", promptHint: "所有候選使用完全相同的內容提示詞。畫師串另外寫入風格提示詞。", search: "搜尋 Danbooru 畫師標籤", searchPlaceholder: "輸入畫師名；留空載入熱門畫師", searchButton: "搜尋", selected: "已選畫師", selectedHint: "至少選擇一名；建議先選 12～40 名候選，再逐輪淘汰。", noArtists: "尚未選擇畫師", count: "本輪生成數量", seed: "固定 Seed", rounds: "自動迭代輪數", roundsHint: "僅目標匹配模式可用；1 代表只生成初始輪，最多 5 輪。", start: "生成並評分", iterate: "以本輪優勝項繼續迭代", stop: "停止任務", apply: "套用到生成", like: "喜歡", unlike: "取消喜歡", pending: "等待", generating: "生成中", scoring: "AI 評分中", failed: "失敗", done: "已完成", score: "相似度", quote: "本輪官方報價：{amount} Anlas", quoteFail: "報價暫不可用：{message}。仍可嘗試生成，以 NovelAI 回傳結果為準。", needTarget: "請先選擇目標圖片。", needArtist: "請至少選擇一名畫師。", needPrompt: "請填寫固定內容提示詞。", searching: "正在讀取畫師標籤…", empty: "找不到可用畫師標籤。", running: "本輪進行中：{done}/{total}", complete: "本輪已完成。可直接套用，或讓優勝畫師繼續組合迭代。", applied: "畫師串已寫入生成頁的風格提示詞。", queue: "本輪畫師串佇列", queueHint: "一條畫師串對應一張 NovelAI 圖片；預覽順序就是實際生成順序。", emptyQueue: "選擇畫師後，這裡會預覽本輪所有帶權組合。", gallery: "畫師串對照畫廊", galleryHint: "圖片與畫師串始終一一對應；生成時預設保持原順序。", sequenceOrder: "依生成順序", scoreOrder: "依評分排序", artistString: "畫師串", copy: "複製", copied: "已複製畫師串。", round: "輪次",
-  },
-  "en-US": {
-    eyebrow: "WINDOWS · NOVELAI ARTIST TAGS", title: "Artist Style Lab", subtitle: "Keep prompt and seed fixed, test weighted artist strings, and rank overall style against a target image.", back: "Back to Tools", target: "Target style", choose: "Choose target image", change: "Change image", targetHint: "Target matching requires an image. Scoring stays on this device and is not sent to a third-party scoring service.", mode: "Discovery mode", match: "Match target", random: "Discover random styles", model: "Scoring model", high: "High accuracy (default)", light: "Lightweight", modelHint: "The model is downloaded and cached on first scoring. High uses DINOv2 Base; Light uses quantized DINOv2 Small.", cache: "Model cache", clearCache: "Clear model cache", prompt: "Fixed content prompt", promptHint: "Every candidate uses the same content prompt. Artist strings are added separately as style prompt.", search: "Search Danbooru artist tags", searchPlaceholder: "Artist name; leave empty for popular artists", searchButton: "Search", selected: "Selected artists", selectedHint: "Select at least one. Start with 12–40 artists, then eliminate candidates by rounds.", noArtists: "No artists selected", count: "Images this round", seed: "Fixed seed", rounds: "Automatic rounds", roundsHint: "Target-match mode only. 1 runs the initial round; maximum 5.", start: "Generate and score", iterate: "Iterate with round winners", stop: "Stop task", apply: "Apply to Generate", like: "Like", unlike: "Unlike", pending: "Pending", generating: "Generating", scoring: "AI scoring", failed: "Failed", done: "Complete", score: "Similarity", quote: "Official quote for this round: {amount} Anlas", quoteFail: "Quote unavailable: {message}. Generation can still be attempted; NovelAI's response is authoritative.", needTarget: "Choose a target image first.", needArtist: "Select at least one artist.", needPrompt: "Enter a fixed content prompt for fair comparison.", searching: "Loading artist tags…", empty: "No usable artist tags found.", running: "Round in progress: {done}/{total}", complete: "Round complete. Apply a result or continue combining the winners.", applied: "Artist string was written to the Generate style prompt.", queue: "Artist-string queue", queueHint: "One artist string creates one NovelAI image. Preview order is generation order.", emptyQueue: "Select artists to preview every weighted combination in this round.", gallery: "Artist-string comparison gallery", galleryHint: "Every image stays paired with its artist string. Generation order is stable by default.", sequenceOrder: "Generation order", scoreOrder: "Score order", artistString: "Artist string", copy: "Copy", copied: "Artist string copied.", round: "Round",
-  },
-  "ja-JP": {
-    eyebrow: "WINDOWS · NOVELAI ARTIST TAGS", title: "画風ラボ", subtitle: "プロンプトと Seed を固定し、重み付き画家タグを自動テストして目標画像との画風類似度で並べます。", back: "ツールへ戻る", target: "目標画風", choose: "目標画像を選択", change: "画像を変更", targetHint: "目標一致モードには画像が必要です。採点は端末内だけで行い、第三者サービスへ送りません。", mode: "探索モード", match: "目標に近づける", random: "ランダム画風探索", model: "採点モデル", high: "高精度（既定）", light: "軽量", modelHint: "初回採点時にモデルをダウンロードして端末へキャッシュします。高精度は DINOv2 Base、軽量は量子化 DINOv2 Small です。", cache: "モデルキャッシュ", clearCache: "モデルキャッシュを削除", prompt: "固定内容プロンプト", promptHint: "全候補で同じ内容プロンプトを使い、画家タグだけをスタイル欄へ追加します。", search: "Danbooru 画家タグを検索", searchPlaceholder: "画家名。空欄なら人気順", searchButton: "検索", selected: "選択した画家", selectedHint: "最低1名。最初は12～40名から始め、ラウンドごとに絞り込みます。", noArtists: "画家が未選択です", count: "このラウンドの枚数", seed: "固定 Seed", rounds: "自動反復回数", roundsHint: "目標一致モードのみ。1 は初回のみ、最大 5 回です。", start: "生成して採点", iterate: "上位候補で次を反復", stop: "タスクを停止", apply: "生成へ適用", like: "お気に入り", unlike: "解除", pending: "待機", generating: "生成中", scoring: "AI 採点中", failed: "失敗", done: "完了", score: "類似度", quote: "このラウンドの公式見積り：{amount} Anlas", quoteFail: "見積りを取得できません：{message}。生成は試行でき、NovelAI の応答を優先します。", needTarget: "先に目標画像を選択してください。", needArtist: "画家を1名以上選択してください。", needPrompt: "比較用の固定内容プロンプトを入力してください。", searching: "画家タグを読み込み中…", empty: "利用可能な画家タグが見つかりません。", running: "ラウンド進行中：{done}/{total}", complete: "ラウンド完了。適用するか、上位画家を組み合わせて続行できます。", applied: "画家タグを生成画面のスタイルプロンプトへ反映しました。", queue: "画家タグ列", queueHint: "1つの画家タグ列につき1枚をNovelAIで生成します。表示順が生成順です。", emptyQueue: "画家を選ぶと重み付き組み合わせを一覧できます。", gallery: "画家タグ比較ギャラリー", galleryHint: "画像と画家タグ列は常に1対1で対応し、既定では生成順を保ちます。", sequenceOrder: "生成順", scoreOrder: "採点順", artistString: "画家タグ列", copy: "コピー", copied: "画家タグ列をコピーしました。", round: "ラウンド",
-  },
-  "ko-KR": {
-    eyebrow: "WINDOWS · NOVELAI ARTIST TAGS", title: "화풍 실험실", subtitle: "프롬프트와 Seed를 고정하고 가중치 작가 태그를 자동 테스트해 목표 이미지와의 화풍 유사도로 정렬합니다.", back: "도구로 돌아가기", target: "목표 화풍", choose: "목표 이미지 선택", change: "이미지 변경", targetHint: "목표 매칭에는 이미지가 필요합니다. 평가는 이 기기에서만 실행되며 제3자 평가 서비스로 전송되지 않습니다.", mode: "탐색 모드", match: "목표와 가깝게", random: "무작위 화풍 발견", model: "평가 모델", high: "고정밀(기본)", light: "경량", modelHint: "첫 평가 때 모델을 내려받아 로컬에 캐시합니다. 고정밀은 DINOv2 Base, 경량은 양자화 DINOv2 Small을 사용합니다.", cache: "모델 캐시", clearCache: "모델 캐시 지우기", prompt: "고정 내용 프롬프트", promptHint: "모든 후보가 같은 내용 프롬프트를 사용하고 작가 문자열만 스타일 프롬프트에 추가됩니다.", search: "Danbooru 작가 태그 검색", searchPlaceholder: "작가 이름, 비우면 인기 작가", searchButton: "검색", selected: "선택한 작가", selectedHint: "최소 한 명을 선택하세요. 12~40명으로 시작해 라운드별로 줄이는 것을 권장합니다.", noArtists: "선택한 작가가 없습니다", count: "이번 라운드 생성 수", seed: "고정 Seed", rounds: "자동 반복 횟수", roundsHint: "목표 매칭 모드에서만 사용합니다. 1은 첫 라운드만, 최대 5입니다.", start: "생성 및 평가", iterate: "상위 결과로 계속 반복", stop: "작업 중지", apply: "생성에 적용", like: "좋아요", unlike: "좋아요 취소", pending: "대기", generating: "생성 중", scoring: "AI 평가 중", failed: "실패", done: "완료", score: "유사도", quote: "이번 라운드 공식 견적: {amount} Anlas", quoteFail: "견적을 사용할 수 없음: {message}. 생성은 시도할 수 있으며 NovelAI 응답이 우선입니다.", needTarget: "먼저 목표 이미지를 선택하세요.", needArtist: "작가를 한 명 이상 선택하세요.", needPrompt: "공정한 비교를 위한 고정 프롬프트를 입력하세요.", searching: "작가 태그를 불러오는 중…", empty: "사용 가능한 작가 태그가 없습니다.", running: "라운드 진행: {done}/{total}", complete: "라운드가 완료되었습니다. 적용하거나 상위 작가 조합으로 계속할 수 있습니다.", applied: "작가 문자열을 생성 화면 스타일 프롬프트에 적용했습니다.", queue: "이번 작가 문자열 대기열", queueHint: "작가 문자열 하나가 NovelAI 이미지 한 장과 대응하며 표시 순서대로 생성합니다.", emptyQueue: "작가를 선택하면 가중 조합을 미리 볼 수 있습니다.", gallery: "작가 문자열 비교 갤러리", galleryHint: "이미지와 작가 문자열은 항상 1:1로 유지되며 기본값은 생성 순서입니다.", sequenceOrder: "생성 순서", scoreOrder: "평가 순서", artistString: "작가 문자열", copy: "복사", copied: "작가 문자열을 복사했습니다.", round: "라운드",
-  },
+  "zh-CN": { title: "目标画风自动迭代", subtitle: "以无画师基线为 0%、目标图为 100%，只变异画师标签与权重，达到目标或手动停止。", back: "返回画风实验室", target: "目标图片", choose: "选择图片", change: "更换图片", local: "目标图与评分都留在本机；只会从 Danbooru 缓存公开代表缩略图。", model: "评分模型", high: "高精度 DINOv2 Base（默认）", light: "轻量 DINOv2 Small", cache: "模型缓存", clear: "清除模型缓存", prompt: "固定内容提示词", reverse: "AI 反推内容", reversing: "正在反推…", fixedStyle: "固定辅助风格词（可选）", batch: "每轮候选数", seed: "固定 Seed", goal: "停止目标", advanced: "高级迭代设置", stagnant: "连续无明显提升轮数", improvement: "最低明显提升（百分点）", scan: "每次预筛画师数", shortlist: "保留相似画师数", start: "开始自动迭代", stop: "停止", needTarget: "请先选择目标图片。", needPrompt: "请填写或反推固定内容提示词。", baseline: "无画师基线", discovering: "正在下载/读取代表缩略图并预筛画师…", running: "第 {round} 轮 · {done}/{total} · 当前最佳 {best}%", reached: "已达到目标：{best}%", stopped: "任务已停止。", failedRound: "本轮没有成功图片，已停止以避免无限重试。", reset: "连续 {count} 轮无明显提升，已重洗画师池并扩展候选。", matches: "当前相似画师候选", progress: "相对进度", raw: "原始相似度", apply: "应用到生成", copy: "复制", copied: "已复制画师串。", applied: "已应用到生成页。", pending: "等待", generating: "生成中", scoring: "评分中", done: "已完成", failed: "失败", round: "轮次", best: "最佳", reverseFail: "反推失败：{message}" },
+  "zh-TW": { title: "目標畫風自動迭代", subtitle: "以無畫師基線為 0%、目標圖為 100%，只變動畫師標籤與權重。", back: "返回畫風實驗室", target: "目標圖片", choose: "選擇圖片", change: "更換圖片", local: "目標圖與評分留在本機；只快取 Danbooru 公開縮圖。", model: "評分模型", high: "高精度 DINOv2 Base（預設）", light: "輕量 DINOv2 Small", cache: "模型快取", clear: "清除模型快取", prompt: "固定內容提示詞", reverse: "AI 反推內容", reversing: "正在反推…", fixedStyle: "固定輔助畫風詞（選填）", batch: "每輪候選數", seed: "固定 Seed", goal: "停止目標", advanced: "進階迭代設定", stagnant: "連續無明顯提升輪數", improvement: "最低明顯提升（百分點）", scan: "每次預篩畫師數", shortlist: "保留相似畫師數", start: "開始自動迭代", stop: "停止", needTarget: "請先選擇目標圖片。", needPrompt: "請填寫或反推固定內容提示詞。", baseline: "無畫師基線", discovering: "正在預篩相似畫師…", running: "第 {round} 輪 · {done}/{total} · 最佳 {best}%", reached: "已達目標：{best}%", stopped: "任務已停止。", failedRound: "本輪沒有成功圖片，已停止。", reset: "連續 {count} 輪無提升，已重洗並擴展候選。", matches: "目前相似畫師", progress: "相對進度", raw: "原始相似度", apply: "套用到生成", copy: "複製", copied: "已複製。", applied: "已套用到生成頁。", pending: "等待", generating: "生成中", scoring: "評分中", done: "完成", failed: "失敗", round: "輪次", best: "最佳", reverseFail: "反推失敗：{message}" },
+  "en-US": { title: "Automatic Target-style Search", subtitle: "No-artist baseline is 0%, the target image is 100%; only artist tags and weights mutate.", back: "Back to Artist Lab", target: "Target image", choose: "Choose image", change: "Change image", local: "Target and scoring stay local. Only public Danbooru thumbnails are cached.", model: "Scoring model", high: "High accuracy DINOv2 Base (default)", light: "Light DINOv2 Small", cache: "Model cache", clear: "Clear model cache", prompt: "Fixed content prompt", reverse: "Reverse content with AI", reversing: "Reversing…", fixedStyle: "Fixed auxiliary style terms (optional)", batch: "Candidates per round", seed: "Fixed seed", goal: "Stop target", advanced: "Advanced iteration", stagnant: "Stagnant rounds before reset", improvement: "Minimum improvement (points)", scan: "Artists scanned per expansion", shortlist: "Similar artists retained", start: "Start automatic search", stop: "Stop", needTarget: "Choose a target image first.", needPrompt: "Enter or reverse a fixed content prompt.", baseline: "No-artist baseline", discovering: "Caching thumbnails and prefiltering artists…", running: "Round {round} · {done}/{total} · best {best}%", reached: "Target reached: {best}%", stopped: "Task stopped.", failedRound: "No image succeeded this round; stopped to avoid endless retries.", reset: "No meaningful gain for {count} rounds; pool reshuffled and expanded.", matches: "Current similar artists", progress: "Relative progress", raw: "Raw similarity", apply: "Apply to Generate", copy: "Copy", copied: "Artist string copied.", applied: "Applied to Generate.", pending: "Pending", generating: "Generating", scoring: "Scoring", done: "Complete", failed: "Failed", round: "Round", best: "Best", reverseFail: "Reverse failed: {message}" },
+  "ja-JP": { title: "目標画風の自動探索", subtitle: "画家なしを0%、目標画像を100%として画家タグと重みだけを変異します。", back: "画風ラボへ戻る", target: "目標画像", choose: "画像を選択", change: "画像を変更", local: "目標と採点は端末内。公開 Danbooru 縮小画像だけをキャッシュします。", model: "採点モデル", high: "高精度 DINOv2 Base（既定）", light: "軽量 DINOv2 Small", cache: "モデルキャッシュ", clear: "キャッシュ削除", prompt: "固定内容プロンプト", reverse: "AIで内容を逆引き", reversing: "逆引き中…", fixedStyle: "固定補助画風語（任意）", batch: "1ラウンドの候補数", seed: "固定 Seed", goal: "停止目標", advanced: "高度な反復設定", stagnant: "リセットまでの停滞回数", improvement: "最低改善ポイント", scan: "拡張ごとの調査数", shortlist: "保持する類似画家", start: "自動探索開始", stop: "停止", needTarget: "目標画像を選択してください。", needPrompt: "固定内容を入力または逆引きしてください。", baseline: "画家なし基準", discovering: "類似画家を事前選別中…", running: "第 {round} 回 · {done}/{total} · 最高 {best}%", reached: "目標到達：{best}%", stopped: "停止しました。", failedRound: "成功画像がないため停止しました。", reset: "{count}回改善せず、候補を拡張・再構成しました。", matches: "現在の類似画家", progress: "相対進捗", raw: "元の類似度", apply: "生成へ適用", copy: "コピー", copied: "コピーしました。", applied: "生成へ適用しました。", pending: "待機", generating: "生成中", scoring: "採点中", done: "完了", failed: "失敗", round: "回", best: "最高", reverseFail: "逆引き失敗：{message}" },
+  "ko-KR": { title: "목표 화풍 자동 탐색", subtitle: "작가 없는 기준을 0%, 목표를 100%로 두고 작가 태그와 가중치만 변이합니다.", back: "화풍 실험실로", target: "목표 이미지", choose: "이미지 선택", change: "이미지 변경", local: "목표와 평가는 기기 안에 남고 공개 Danbooru 썸네일만 캐시합니다.", model: "평가 모델", high: "고정밀 DINOv2 Base (기본)", light: "경량 DINOv2 Small", cache: "모델 캐시", clear: "캐시 삭제", prompt: "고정 내용 프롬프트", reverse: "AI 내용 역추론", reversing: "역추론 중…", fixedStyle: "고정 보조 화풍 용어 (선택)", batch: "라운드당 후보", seed: "고정 Seed", goal: "중지 목표", advanced: "고급 반복 설정", stagnant: "리셋 전 정체 라운드", improvement: "최소 개선 포인트", scan: "확장당 탐색 작가", shortlist: "유사 작가 유지 수", start: "자동 탐색 시작", stop: "중지", needTarget: "목표 이미지를 선택하세요.", needPrompt: "고정 내용을 입력하거나 역추론하세요.", baseline: "작가 없는 기준", discovering: "유사 작가를 사전 선별 중…", running: "{round}라운드 · {done}/{total} · 최고 {best}%", reached: "목표 도달: {best}%", stopped: "작업을 중지했습니다.", failedRound: "성공 이미지가 없어 중지했습니다.", reset: "{count}라운드 개선이 없어 풀을 확장했습니다.", matches: "현재 유사 작가", progress: "상대 진행", raw: "원시 유사도", apply: "생성에 적용", copy: "복사", copied: "복사했습니다.", applied: "생성 화면에 적용했습니다.", pending: "대기", generating: "생성 중", scoring: "평가 중", done: "완료", failed: "실패", round: "라운드", best: "최고", reverseFail: "역추론 실패: {message}" },
 } satisfies Record<AppLanguage, Record<string, string>>;
 
-const HOME_TEXT = {
-  "zh-CN": { eyebrow: "WINDOWS · ARTIST STYLE LAB", title: "画风实验室", subtitle: "选择一种工作流；两个项目分别保存，不会互相覆盖。", back: "返回工具", reverse: "目标画风反推", reverseDesc: "上传目标图，固定内容与 Seed，通过单画师测试、权重扫描和组合评分逐轮接近目标画风。", random: "随机画师组合", randomDesc: "从高人气画师池生成多层级权重配方，NovelAI 逐串出图，再根据你喜欢的结果继续变异。", enter: "进入" },
-  "zh-TW": { eyebrow: "WINDOWS · ARTIST STYLE LAB", title: "畫風實驗室", subtitle: "選擇工作流程；兩個專案分開保存。", back: "返回工具", reverse: "目標畫風反推", reverseDesc: "上傳目標圖，以單畫師、權重掃描和組合評分逐輪接近目標畫風。", random: "隨機畫師組合", randomDesc: "從高人氣畫師池建立多層級權重配方，再依喜歡結果繼續變異。", enter: "進入" },
-  "en-US": { eyebrow: "WINDOWS · ARTIST STYLE LAB", title: "Artist Style Lab", subtitle: "Choose a workflow. Both projects persist independently.", back: "Back to Tools", reverse: "Target Style Reverse Search", reverseDesc: "Use a target image, controlled single-artist tests, weight sweeps, and scored combinations to approach its style.", random: "Random Artist Combinations", randomDesc: "Build layered recipes from a popularity-weighted artist pool, generate one image per recipe, and evolve from your likes.", enter: "Open" },
-  "ja-JP": { eyebrow: "WINDOWS · ARTIST STYLE LAB", title: "画風ラボ", subtitle: "ワークフローを選択してください。各プロジェクトは別々に保存されます。", back: "ツールへ戻る", reverse: "目標画風の逆探索", reverseDesc: "目標画像、単独画家テスト、重み走査、組合せ採点で画風へ近づけます。", random: "ランダム画家組合せ", randomDesc: "人気画家プールから重み付き配方を作り、お気に入りから変体を続けます。", enter: "開く" },
-  "ko-KR": { eyebrow: "WINDOWS · ARTIST STYLE LAB", title: "화풍 실험실", subtitle: "워크플로를 선택하세요. 두 프로젝트는 별도로 저장됩니다.", back: "도구로 돌아가기", reverse: "목표 화풍 역탐색", reverseDesc: "목표 이미지, 단일 작가 테스트, 가중치 탐색과 조합 평가로 화풍에 접근합니다.", random: "무작위 작가 조합", randomDesc: "인기 작가 풀에서 다단계 가중 조합을 만들고 좋아요 결과로 계속 변이합니다.", enter: "열기" },
+const HOME = {
+  "zh-CN": { title: "画风实验室", subtitle: "目标图自动迭代与随机画师串抽卡是两条独立流程。", back: "返回工具", target: "目标图自动迭代", targetDesc: "本机模型筛选和评分，自动扩展相似画师并迭代到目标。", random: "随机画师串抽卡", randomDesc: "每批重新随机画师与权重，由你选择喜欢的组合。", enter: "进入" },
+  "zh-TW": { title: "畫風實驗室", subtitle: "目標圖自動迭代與隨機畫師串抽卡是兩條獨立流程。", back: "返回工具", target: "目標圖自動迭代", targetDesc: "本機模型篩選與評分，迭代至目標。", random: "隨機畫師串抽卡", randomDesc: "每批重新組合畫師與權重。", enter: "進入" },
+  "en-US": { title: "Artist Style Lab", subtitle: "Automatic target matching and random artist-string gacha are separate workflows.", back: "Back to Tools", target: "Automatic target matching", targetDesc: "Local scoring prefilters artists and iterates until the target is reached.", random: "Random artist-string gacha", randomDesc: "Reroll artists and weights every batch, then choose what you like.", enter: "Open" },
+  "ja-JP": { title: "画風ラボ", subtitle: "目標自動探索とランダム抽選は独立した機能です。", back: "ツールへ戻る", target: "目標画風の自動探索", targetDesc: "端末内で候補選別・採点し、目標まで反復します。", random: "ランダム画家タグ抽選", randomDesc: "バッチごとに画家と重みを再抽選します。", enter: "開く" },
+  "ko-KR": { title: "화풍 실험실", subtitle: "목표 자동 탐색과 무작위 작가 뽑기는 별도 흐름입니다.", back: "도구로", target: "목표 화풍 자동 탐색", targetDesc: "로컬 평가로 후보를 선별하고 목표까지 반복합니다.", random: "무작위 작가 조합 뽑기", randomDesc: "배치마다 작가와 가중치를 다시 뽑습니다.", enter: "열기" },
 } satisfies Record<AppLanguage, Record<string, string>>;
 
-const CONTRIBUTION_TEXT = {
-  "zh-CN": { baseline: "无候选画师基准", baselineHint: "使用相同内容、Seed 和参数，只保留生成页公共风格词。", contribution: "单画师贡献", contributionHint: "变化值＝加入该画师后的目标相似度－基准相似度，只对当前模型、提示词和 Seed 有效。", improved: "提升", reduced: "降低", baselineFailed: "基准图生成失败，仍会继续生成候选，但无法计算相对贡献。" },
-  "zh-TW": { baseline: "無候選畫師基準", baselineHint: "使用相同內容、Seed 與參數，只保留生成頁共用風格詞。", contribution: "單畫師貢獻", contributionHint: "變化值＝加入畫師後的目標相似度－基準相似度，只對目前模型、提示詞與 Seed 有效。", improved: "提升", reduced: "降低", baselineFailed: "基準圖生成失敗，仍會繼續候選，但無法計算相對貢獻。" },
-  "en-US": { baseline: "No-candidate baseline", baselineHint: "Same content, seed, and settings; only the shared Generate style prompt remains.", contribution: "Single-artist contribution", contributionHint: "Delta = target similarity with the artist minus baseline similarity. It is contextual to this model, prompt, and seed.", improved: "improved", reduced: "reduced", baselineFailed: "Baseline generation failed. Candidates continue, but relative contribution is unavailable." },
-  "ja-JP": { baseline: "候補画家なし基準", baselineHint: "内容、Seed、設定を固定し、生成画面の共通スタイル語だけを残します。", contribution: "単独画家の寄与", contributionHint: "変化値＝画家追加後の類似度－基準類似度。現在のモデル、プロンプト、Seed にのみ有効です。", improved: "向上", reduced: "低下", baselineFailed: "基準画像の生成に失敗しました。候補生成は続行しますが相対寄与は計算できません。" },
-  "ko-KR": { baseline: "후보 작가 없는 기준", baselineHint: "같은 내용, Seed와 설정에서 생성 화면의 공통 화풍어만 유지합니다.", contribution: "단일 작가 기여도", contributionHint: "변화값 = 작가 추가 후 목표 유사도 - 기준 유사도이며 현재 모델, 프롬프트와 Seed에만 유효합니다.", improved: "향상", reduced: "감소", baselineFailed: "기준 이미지 생성에 실패했습니다. 후보 생성은 계속하지만 상대 기여도를 계산할 수 없습니다." },
-} satisfies Record<AppLanguage, Record<string, string>>;
-
-const SHARED_STYLE_TEXT = {
-  "zh-CN": { label: "公共非候选风格词", hint: "可放质量、媒介、光照等固定词。为保证基准有效，请不要在这里混入本轮候选画师。" },
-  "zh-TW": { label: "共用非候選風格詞", hint: "可放品質、媒材、光線等固定詞；請勿混入本輪候選畫師。" },
-  "en-US": { label: "Shared non-candidate style terms", hint: "Keep fixed quality, medium, or lighting terms here. Do not mix in artists being tested this round." },
-  "ja-JP": { label: "共通の非候補スタイル語", hint: "品質、媒体、照明などの固定語を置き、今回試す画家は混ぜないでください。" },
-  "ko-KR": { label: "공통 비후보 화풍 용어", hint: "품질, 매체, 조명 같은 고정 용어만 두고 이번 후보 작가는 섞지 마세요." },
-} satisfies Record<AppLanguage, { label: string; hint: string }>;
-
-function restoreSession(basePrompt: string, sharedStylePrompt: string): Session {
+function restore(basePrompt: string): Session {
   if (sessionCache) return sessionCache;
+  const fallback: Session = { modelMode: "high", target: null, basePrompt, sharedStylePrompt: "", batchSize: 8, seed: 246813579, targetProgress: 85, stagnantLimit: 2, minImprovement: 2, scanCount: 40, shortlist: 20, discoveryOffset: 0, matches: [], bestProgress: 0, round: 0, resetCount: 0, results: [] };
   try {
     const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null") as Partial<Session> | null;
-    sessionCache = {
-      mode: raw?.mode === "random" ? "random" : "match",
-      modelMode: raw?.modelMode === "light" ? "light" : "high",
-      target: raw?.target?.filePath ? raw.target as TargetImage : null,
-      basePrompt: typeof raw?.basePrompt === "string" ? raw.basePrompt : basePrompt,
-      sharedStylePrompt: typeof raw?.sharedStylePrompt === "string" ? raw.sharedStylePrompt : sharedStylePrompt,
-      search: "",
-      selectedArtists: Array.isArray(raw?.selectedArtists) ? raw.selectedArtists.filter((v): v is string => typeof v === "string") : [],
-      count: Math.max(1, Math.min(40, Number(raw?.count) || 8)),
-      seed: Number.isSafeInteger(raw?.seed) ? Number(raw?.seed) : 123456789,
-      autoRounds: Math.max(1, Math.min(5, Number(raw?.autoRounds) || 1)),
-      sortMode: raw?.sortMode === "score" ? "score" : "sequence",
-      baseline: raw?.baseline,
-      results: Array.isArray(raw?.results) ? raw.results.map((item, index) => ({ ...item, sequence: item.sequence || index + 1, round: item.round || 1 })) as LabResult[] : [],
-    };
-  } catch {
-    sessionCache = { mode: "match", modelMode: "high", target: null, basePrompt, sharedStylePrompt, search: "", selectedArtists: [], count: 8, seed: 123456789, autoRounds: 1, sortMode: "sequence", baseline: undefined, results: [] };
-  }
+    sessionCache = { ...fallback, ...raw, modelMode: raw?.modelMode === "light" ? "light" : "high", target: raw?.target ?? null, results: Array.isArray(raw?.results) ? raw.results : [], matches: Array.isArray(raw?.matches) ? raw.matches : [] };
+  } catch { sessionCache = fallback; }
   return sessionCache;
 }
 
-function formatBytes(bytes: number) {
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+function interpolate(value: string, values: Record<string, unknown>) {
+  return Object.entries(values).reduce((out, [key, replacement]) => out.replaceAll(`{${key}}`, String(replacement)), value);
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+  return btoa(binary);
+}
+
+function formatBytes(value: number) {
+  if (value < 1024 * 1024) return `${Math.round(value / 1024)} KB`;
+  return `${(value / 1024 / 1024).toFixed(1)} MB`;
 }
 
 function TargetArtistLab({ onBack }: { onBack: () => void }) {
@@ -183,314 +95,162 @@ function TargetArtistLab({ onBack }: { onBack: () => void }) {
   const refreshAccount = useAppStore((state) => state.refreshAccount);
   const refreshHistory = useAppStore((state) => state.refreshHistory);
   const text = TEXT[language];
-  const contributionText = CONTRIBUTION_TEXT[language];
-  const sharedStyleText = SHARED_STYLE_TEXT[language];
-  const initial = useMemo(() => ({ ...restoreSession(params.positivePrompt, ""), mode: "match" as const }), []);
-  const [session, setSession] = useState<Session>(initial);
-  const [artists, setArtists] = useState<ArtistTagRecord[]>([]);
-  const [searching, setSearching] = useState(false);
+  const [session, setSession] = useState(() => restore(params.positivePrompt));
   const [running, setRunning] = useState(false);
+  const [reversing, setReversing] = useState(false);
   const [message, setMessage] = useState("");
   const [modelStatus, setModelStatus] = useState<ArtistLabModelStatus | null>(null);
   const cancelRef = useRef(false);
-  const artistKey = session.selectedArtists.join("\u0000");
-  const plannedCombinations = useMemo(
-    () => buildArtistCombinations(session.selectedArtists, session.count, session.mode, createArtistLabRandom(session.seed)),
-    [artistKey, session.count, session.mode, session.seed],
-  );
-
   const patch = (next: Partial<Session>) => setSession((current) => ({ ...current, ...next }));
-  const patchExperiment = (next: Partial<Session>) => setSession((current) => ({
-    ...current,
-    ...next,
-    baseline: undefined,
-    results: [],
-  }));
-  useEffect(() => {
-    sessionCache = session;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
-  }, [session]);
-  useEffect(() => {
-    void window.naiDesktop.artistLabModelStatus(session.modelMode).then(setModelStatus).catch(() => undefined);
-  }, [session.modelMode]);
 
-  const interpolate = (value: string, values: Record<string, unknown>) =>
-    Object.entries(values).reduce((out, [key, replacement]) => out.replaceAll(`{${key}}`, String(replacement)), value);
-
-  const searchArtists = async () => {
-    setSearching(true);
-    setMessage("");
-    try {
-      const items = await window.naiDesktop.artistLabSearchArtists(session.search, 60);
-      setArtists(items);
-      if (items.length === 0) setMessage(text.empty);
-    } catch (error: any) {
-      setMessage(error?.message ?? String(error));
-    } finally {
-      setSearching(false);
-    }
-  };
+  useEffect(() => { sessionCache = session; localStorage.setItem(STORAGE_KEY, JSON.stringify(session)); }, [session]);
+  useEffect(() => { void window.naiDesktop.artistLabModelStatus(session.modelMode).then(setModelStatus); }, [session.modelMode]);
 
   const chooseTarget = async () => {
     const target = await window.naiDesktop.artistLabPickTarget();
-    if (target) patchExperiment({ target });
+    if (target) patch({ target, baseline: undefined, results: [], matches: [], discoveryOffset: 0, bestProgress: 0, round: 0, resetCount: 0 });
   };
 
-  const toggleArtist = (name: string) => {
-    setSession((current) => ({
-      ...current,
-      selectedArtists: current.selectedArtists.includes(name)
-        ? current.selectedArtists.filter((item) => item !== name)
-        : [...current.selectedArtists, name],
-      baseline: undefined,
-      results: [],
-    }));
+  const reverseContent = async () => {
+    if (!session.target) return setMessage(text.needTarget);
+    setReversing(true);
+    try {
+      const response = await fetch(session.target.fileUrl);
+      const result = await window.naiDesktop.reversePrompt(bytesToBase64(new Uint8Array(await response.arrayBuffer())), "tags", "full", "只提取主体、构图、环境与动作；不要输出 artist 标签、画师名或纯画风词。", false);
+      if (!result.ok || !result.prompt) throw new Error(result.message);
+      patch({ basePrompt: result.prompt });
+      setMessage("");
+    } catch (error: any) { setMessage(interpolate(text.reverseFail, { message: error?.message ?? String(error) })); }
+    finally { setReversing(false); }
   };
 
-  const runRound = async (iterate = false) => {
-    if (session.mode === "match" && !session.target) return setMessage(text.needTarget);
-    if (session.selectedArtists.length === 0) return setMessage(text.needArtist);
+  const updateResult = (id: string, update: Partial<LabResult>) => setSession((current) => ({ ...current, results: current.results.map((item) => item.id === id ? { ...item, ...update } : item) }));
+
+  const start = async () => {
+    if (!session.target) return setMessage(text.needTarget);
     if (!session.basePrompt.trim()) return setMessage(text.needPrompt);
-    const winnerNames = (items: LabResult[]) => Array.from(new Set(
-      [...items]
-        .filter((item) => item.status === "done")
-        .sort((left, right) => Number(right.liked) - Number(left.liked) || (right.score ?? 0) - (left.score ?? 0))
-        .slice(0, 6)
-        .flatMap((item) => item.tags.map((tag) => tag.name)),
-    ));
-    const previousRound = session.results.reduce((max, item) => Math.max(max, item.round || 1), 0);
-    const startRound = iterate ? previousRound + 1 : 1;
-    const automaticRounds = !iterate && session.mode === "match" ? session.autoRounds : 1;
-    let accumulated: LabResult[] = iterate ? [...session.results] : [];
-    let baseline = iterate ? session.baseline : undefined;
-    let sourceNames = iterate ? winnerNames(session.results) : session.selectedArtists;
-    if (sourceNames.length === 0) sourceNames = session.selectedArtists;
-    let combinations = iterate
-      ? buildArtistCombinations(sourceNames, session.count, "random", createArtistLabRandom(session.seed + startRound))
-      : plannedCombinations;
-    const seenPrompts = new Set(accumulated.map((item) => item.prompt));
     setRunning(true);
-    setMessage("");
     cancelRef.current = false;
-    if (!iterate) setSession((state) => ({ ...state, baseline: undefined, results: [] }));
-
-    const fixedParams = {
-      ...params,
-      positivePrompt: session.basePrompt.trim(),
-      stylePrompt: session.sharedStylePrompt.trim(),
-      width: 512,
-      height: 512,
-      seedMode: "fixed" as const,
-      seed: session.seed,
-      qualityToggle: false,
-    };
+    let accumulated: LabResult[] = [];
+    let matches: ArtistReferenceMatch[] = [];
+    let offset = 0;
+    let bestProgress = 0;
+    let stagnant = 0;
+    let round = 0;
+    let resetCount = 0;
+    const fixedParams = { ...params, positivePrompt: session.basePrompt.trim(), stylePrompt: session.sharedStylePrompt.trim(), width: 512, height: 512, seedMode: "fixed" as const, seed: session.seed, qualityToggle: false };
     const extras = { vibeImages: [], charCaptions: [], preciseReferences: [] };
-    for (let roundOffset = 0; roundOffset < automaticRounds; roundOffset += 1) {
-      if (cancelRef.current) break;
-      const round = startRound + roundOffset;
-      if (roundOffset > 0) {
-        sourceNames = winnerNames(accumulated.filter((item) => item.round === round - 1));
-        if (sourceNames.length === 0) break;
-        combinations = buildArtistCombinations(
-          sourceNames,
-          session.count,
-          "random",
-          createArtistLabRandom(session.seed + round),
-        );
-      }
-      combinations = combinations.filter((item) => !seenPrompts.has(item.prompt));
-      if (combinations.length === 0) break;
-      combinations.forEach((item) => seenPrompts.add(item.prompt));
-      try {
-        const quote = await window.naiDesktop.quoteAnlas({
-          feature: "generate",
-          params: fixedParams,
-          extras,
-          batchCount: combinations.length + (!iterate && roundOffset === 0 ? 1 : 0),
-        });
-        setMessage(quote.ok && quote.amount !== undefined
-          ? interpolate(text.quote, { amount: quote.amount })
-          : interpolate(text.quoteFail, { message: quote.message }));
-      } catch (error: any) {
-        setMessage(interpolate(text.quoteFail, { message: error?.message ?? String(error) }));
-      }
-      if (!iterate && roundOffset === 0 && !cancelRef.current) {
+    patch({ results: [], baseline: undefined, matches: [], discoveryOffset: 0, bestProgress: 0, round: 0, resetCount: 0 });
+    let baselineSimilarity = 0;
+    try {
+      setMessage(text.baseline);
+      const generated = await window.naiDesktop.generateArtistLab(fixedParams, extras, "target");
+      const image = generated.items[0];
+      if (!generated.ok || !image) throw new Error(generated.message);
+      baselineSimilarity = (await window.naiDesktop.artistLabScoreImages(session.modelMode, session.target.filePath, image.filePath)).similarity;
+      patch({ baseline: { image, similarity: baselineSimilarity } });
+    } catch (error: any) {
+      patch({ baseline: { error: error?.message ?? String(error) } });
+      setRunning(false);
+      return;
+    }
+
+    while (!cancelRef.current && bestProgress < session.targetProgress) {
+      if (matches.length === 0 || shouldResetArtistSearch(stagnant, session.stagnantLimit)) {
+        if (matches.length > 0) {
+          resetCount += 1;
+          setMessage(interpolate(text.reset, { count: stagnant }));
+        } else setMessage(text.discovering);
+        let discovered;
         try {
-          const generated = await window.naiDesktop.generate(
-            fixedParams,
-            extras,
-          );
-          const image = generated.items[0];
-          if (!generated.ok || !image) throw new Error(generated.message);
-          const scored = await window.naiDesktop.artistLabScoreImages(
-            session.modelMode,
-            session.target!.filePath,
-            image.filePath,
-          );
-          baseline = { image, score: scored.similarity };
+          discovered = await window.naiDesktop.artistLabDiscoverSimilar(session.modelMode, session.target.filePath, offset, session.scanCount, session.shortlist, false);
         } catch (error: any) {
-          baseline = { error: error?.message ?? String(error) };
+          setMessage(error?.message ?? String(error));
+          break;
         }
-        setSession((state) => ({ ...state, baseline }));
+        offset = discovered.nextOffset;
+        matches = discovered.matches;
+        stagnant = 0;
+        patch({ matches, discoveryOffset: offset, resetCount });
+        if (matches.length === 0) break;
       }
-      let roundResults: LabResult[] = combinations.map((item, index) => ({
-        ...item,
-        id: `round-${round}:${item.id}`,
-        sequence: accumulated.length + index + 1,
-        round,
-        status: "pending",
-      }));
-      accumulated = [...accumulated, ...roundResults];
-      setSession((state) => ({ ...state, results: accumulated }));
-
-      const updateResult = (id: string, update: Partial<LabResult>) => {
-        roundResults = roundResults.map((item) => item.id === id ? { ...item, ...update } : item);
-        accumulated = accumulated.map((item) => item.id === id ? { ...item, ...update } : item);
-        setSession((state) => ({ ...state, results: accumulated }));
-      };
-
-      for (const current of roundResults) {
+      round += 1;
+      const previousBest = bestProgress;
+      const favorites = accumulated.filter((item) => item.status === "done").sort((a, b) => (b.progress ?? 0) - (a.progress ?? 0)).slice(0, Math.max(2, Math.ceil(session.batchSize / 4))).flatMap((item) => item.artists.map((artist) => artist.name));
+      const pool = matches.map((match, index) => ({ ...match.artist, postCount: Math.max(match.artist.postCount, Math.round((matches.length - index) ** 3)) }));
+      const recipes = generatePopularArtistRecipes(pool, { count: session.batchSize, minArtists: Math.min(2, pool.length), maxArtists: Math.min(10, pool.length), auxiliaryPrompt: "", mutateAuxiliary: false, favoriteArtists: favorites, random: createArtistLabRandom((session.seed + round * 2654435761 + resetCount * 97) >>> 0) });
+      let currentRound = recipes.map((recipe, index): LabResult => ({ ...recipe, id: `round-${round}-${recipe.id}`, sequence: accumulated.length + index + 1, round, status: "pending" }));
+      accumulated = [...accumulated, ...currentRound];
+      setSession((current) => ({ ...current, results: accumulated, round }));
+      let successes = 0;
+      for (const current of currentRound) {
         if (cancelRef.current) break;
         updateResult(current.id, { status: "generating" });
         try {
-          const generated = await window.naiDesktop.generate(
-            { ...fixedParams, stylePrompt: [session.sharedStylePrompt.trim(), current.prompt].filter(Boolean).join(", ") },
-            extras,
-          );
+          const generated = await window.naiDesktop.generateArtistLab({ ...fixedParams, stylePrompt: [session.sharedStylePrompt.trim(), current.prompt].filter(Boolean).join(", ") }, extras, "target");
           const image = generated.items[0];
           if (!generated.ok || !image) throw new Error(generated.message);
-          let score: number | undefined;
-          if (session.target) {
-            updateResult(current.id, { image, status: "scoring" });
-            const scored = await window.naiDesktop.artistLabScoreImages(session.modelMode, session.target.filePath, image.filePath);
-            score = scored.similarity;
-          }
-          updateResult(current.id, {
-            image,
-            score,
-            delta: score !== undefined && baseline?.score !== undefined ? score - baseline.score : undefined,
-            status: "done",
-          });
+          updateResult(current.id, { image, status: "scoring" });
+          const similarity = (await window.naiDesktop.artistLabScoreImages(session.modelMode, session.target.filePath, image.filePath)).similarity;
+          const progress = normalizeArtistProgress(baselineSimilarity, similarity);
+          bestProgress = Math.max(bestProgress, progress);
+          successes += 1;
+          currentRound = currentRound.map((item) => item.id === current.id ? { ...item, image, similarity, progress, status: "done" } : item);
+          accumulated = accumulated.map((item) => item.id === current.id ? { ...item, image, similarity, progress, status: "done" } : item);
+          setSession((state) => ({ ...state, results: accumulated, bestProgress }));
+          setMessage(interpolate(text.running, { round, done: successes, total: currentRound.length, best: bestProgress.toFixed(1) }));
+          if (bestProgress >= session.targetProgress) break;
         } catch (error: any) {
-          updateResult(current.id, { status: "failed", error: error?.message ?? String(error) });
+          const update = { status: "failed" as const, error: error?.message ?? String(error) };
+          currentRound = currentRound.map((item) => item.id === current.id ? { ...item, ...update } : item);
+          accumulated = accumulated.map((item) => item.id === current.id ? { ...item, ...update } : item);
+          setSession((state) => ({ ...state, results: accumulated }));
         }
       }
+      if (successes === 0 && !cancelRef.current) { setMessage(text.failedRound); break; }
+      const improvement = bestProgress - previousBest;
+      stagnant = improvement < session.minImprovement ? stagnant + 1 : 0;
     }
     setRunning(false);
     await Promise.allSettled([refreshAccount(), refreshHistory()]);
     setModelStatus(await window.naiDesktop.artistLabModelStatus(session.modelMode));
-    if (!cancelRef.current) setMessage(text.complete);
+    if (cancelRef.current) setMessage(text.stopped);
+    else if (bestProgress >= session.targetProgress) setMessage(interpolate(text.reached, { best: bestProgress.toFixed(1) }));
   };
 
-  const stop = () => {
-    cancelRef.current = true;
-    void window.naiDesktop.cancel();
-    setRunning(false);
-  };
-
-  const ranked = [...session.results].sort((left, right) => {
-    if (session.sortMode === "sequence") return left.sequence - right.sequence;
-    if (left.status !== "done" && right.status === "done") return 1;
-    if (left.status === "done" && right.status !== "done") return -1;
-    return Number(right.liked) - Number(left.liked) || (right.score ?? 0) - (left.score ?? 0);
-  });
-  const done = session.results.filter((item) => item.status === "done" || item.status === "failed").length;
-  const contributions = session.results
-    .filter((item) => item.status === "done" && item.tags.length === 1 && item.delta !== undefined)
-    .sort((left, right) => (right.delta ?? 0) - (left.delta ?? 0));
-
-  return (
-    <main className="artist-lab">
-      <header className="artist-lab-hero">
-        <div><span className="eyebrow">{text.eyebrow}</span><h2>{text.title}</h2><p>{text.subtitle}</p></div>
-        <Button onClick={onBack}>{text.back}</Button>
-      </header>
-
-      <section className="artist-lab-config-grid">
-        <article className="artist-lab-panel target-panel">
-          <h3>{text.target}</h3>
-          {session.target ? <img src={session.target.fileUrl} alt={session.target.name} /> : <div className="artist-target-empty">◎</div>}
-          <Button onClick={() => void chooseTarget()}>{session.target ? text.change : text.choose}</Button>
-          <small>{text.targetHint}</small>
-        </article>
-        <article className="artist-lab-panel artist-lab-controls">
-          <label><span>{text.model}</span><select value={session.modelMode} onChange={(event) => patchExperiment({ modelMode: event.target.value as ArtistLabModelMode })}><option value="high">{text.high}</option><option value="light">{text.light}</option></select></label>
-          <small>{text.modelHint}</small>
-          <div className="artist-model-cache"><span>{text.cache}: {modelStatus ? `${formatBytes(modelStatus.cachedBytes)} · ${modelStatus.cachedFiles}` : "—"}</span><Button variant="ghost" onClick={async () => setModelStatus(await window.naiDesktop.artistLabClearModels())}>{text.clearCache}</Button></div>
-          <label><span>{text.prompt}</span><textarea value={session.basePrompt} onChange={(event) => patchExperiment({ basePrompt: event.target.value })} /></label>
-          <small>{text.promptHint}</small>
-          <label><span>{sharedStyleText.label}</span><textarea value={session.sharedStylePrompt} onChange={(event) => patchExperiment({ sharedStylePrompt: event.target.value })} /></label>
-          <small>{sharedStyleText.hint}</small>
-          <div className="artist-run-options"><label><span>{text.count}</span><input type="number" min={1} max={40} value={session.count} onChange={(event) => patch({ count: Math.max(1, Math.min(40, Number(event.target.value) || 1)) })} /></label><label><span>{text.seed}</span><input type="number" min={0} value={session.seed} onChange={(event) => patchExperiment({ seed: Math.max(0, Math.floor(Number(event.target.value) || 0)) })} /></label><label><span>{text.rounds}</span><input type="number" min={1} max={5} disabled={session.mode !== "match"} value={session.mode === "match" ? session.autoRounds : 1} onChange={(event) => patch({ autoRounds: Math.max(1, Math.min(5, Number(event.target.value) || 1)) })} /></label></div>
-          <small>{text.roundsHint}</small>
-        </article>
-      </section>
-
-      <section className="artist-lab-panel artist-browser">
-        <div className="artist-browser-heading"><div><h3>{text.search}</h3><small>{text.selectedHint}</small></div><div className="artist-search-row"><input value={session.search} placeholder={text.searchPlaceholder} onChange={(event) => patch({ search: event.target.value })} onKeyDown={(event) => { if (event.key === "Enter") void searchArtists(); }} /><Button onClick={() => void searchArtists()} disabled={searching}>{searching ? text.searching : text.searchButton}</Button></div></div>
-        <div className="artist-selected"><strong>{text.selected}</strong>{session.selectedArtists.length === 0 ? <span>{text.noArtists}</span> : session.selectedArtists.map((name) => <button key={name} type="button" onClick={() => toggleArtist(name)}>{name} ×</button>)}</div>
-        {artists.length > 0 && <div className="artist-tag-results">{artists.map((artist) => <button type="button" key={artist.id} className={session.selectedArtists.includes(artist.name) ? "selected" : ""} onClick={() => toggleArtist(artist.name)}><b>{artist.name}</b><span>{artist.postCount.toLocaleString()}</span></button>)}</div>}
-      </section>
-
-      <section className="artist-lab-panel artist-queue-panel">
-        <div className="artist-section-heading"><div><h3>{text.queue}</h3><small>{text.queueHint}</small></div><b>{plannedCombinations.length}</b></div>
-        {plannedCombinations.length === 0 ? <div className="artist-queue-empty">{text.emptyQueue}</div> : <ol className="artist-combination-queue">{plannedCombinations.map((item, index) => <li key={item.id}><span>#{String(index + 1).padStart(2, "0")}</span><code>{item.prompt}</code></li>)}</ol>}
-      </section>
-
-      <section className="artist-lab-actions">
-        {running ? <Button variant="danger" onClick={stop}>{text.stop}</Button> : <Button variant="primary" onClick={() => void runRound(false)}>{text.start}</Button>}
-        <Button disabled={running || !session.results.some((item) => item.status === "done")} onClick={() => void runRound(true)}>{text.iterate}</Button>
-        <span>{running ? interpolate(text.running, { done, total: session.results.length }) : message}</span>
-      </section>
-
-      {session.baseline && <section className="artist-lab-panel artist-baseline-panel">
-        <div className="artist-section-heading"><div><h3>{contributionText.baseline}</h3><small>{contributionText.baselineHint}</small></div>{session.baseline.score !== undefined && <b>{text.score} {(session.baseline.score * 100).toFixed(1)}%</b>}</div>
-        {session.baseline.error
-          ? <p className="artist-error">{contributionText.baselineFailed}<br />{session.baseline.error}</p>
-          : session.baseline.image && <div className="artist-baseline-content"><img src={session.baseline.image.fileUrl} alt={contributionText.baseline} /><div><strong>{contributionText.baseline}</strong><p>{contributionText.baselineHint}</p></div></div>}
-      </section>}
-
-      {contributions.length > 0 && <section className="artist-lab-panel artist-contribution-panel">
-        <div className="artist-section-heading"><div><h3>{contributionText.contribution}</h3><small>{contributionText.contributionHint}</small></div><b>{contributions.length}</b></div>
-        <div className="artist-contribution-list">{contributions.map((result) => <article key={`contribution-${result.id}`}>
-          {result.image && <img src={result.image.fileUrl} alt={result.tags[0].name} />}
-          <div><strong>{result.tags[0].name}</strong><span>{text.score} {((result.score ?? 0) * 100).toFixed(1)}%</span></div>
-          <b className={(result.delta ?? 0) >= 0 ? "positive" : "negative"}>{(result.delta ?? 0) >= 0 ? "+" : ""}{((result.delta ?? 0) * 100).toFixed(1)}% · {(result.delta ?? 0) >= 0 ? contributionText.improved : contributionText.reduced}</b>
-        </article>)}</div>
-      </section>}
-
-      {ranked.length > 0 && <section className="artist-gallery-section"><div className="artist-gallery-heading"><div><h3>{text.gallery}</h3><small>{text.galleryHint}</small></div><div className="artist-sort-toggle"><button type="button" className={session.sortMode === "sequence" ? "active" : ""} onClick={() => patch({ sortMode: "sequence" })}>{text.sequenceOrder}</button><button type="button" className={session.sortMode === "score" ? "active" : ""} onClick={() => patch({ sortMode: "score" })}>{text.scoreOrder}</button></div></div><div className="artist-candidate-grid">{ranked.map((result) => <article key={result.id} className={`artist-candidate ${result.status}`}>
-        <header className="artist-candidate-header"><b>#{String(result.sequence).padStart(2, "0")} · {text.round} {result.round}</b><span>{text[result.status]}</span></header>
-        <div className="artist-candidate-media">{result.image ? <img src={result.image.fileUrl} alt={result.prompt} /> : <div className="artist-candidate-placeholder">{text[result.status]}</div>}{result.score !== undefined && <b className="artist-score">{text.score} {(result.score * 100).toFixed(1)}%{result.delta !== undefined ? ` · ${result.delta >= 0 ? "+" : ""}${(result.delta * 100).toFixed(1)}%` : ""}</b>}</div>
-        <div className="artist-string-block"><span>{text.artistString}</span><button type="button" onClick={() => { void navigator.clipboard.writeText(result.prompt); setMessage(text.copied); }}>{text.copy}</button><code>{result.prompt}</code></div>
-        {result.error && <small className="artist-error">{result.error}</small>}
-        <div className="artist-candidate-actions"><Button variant="ghost" onClick={() => setSession((state) => ({ ...state, results: state.results.map((item) => item.id === result.id ? { ...item, liked: !item.liked } : item) }))}>{result.liked ? text.unlike : text.like}</Button><Button variant="primary" disabled={result.status !== "done"} onClick={() => { applyParams({ stylePrompt: [session.sharedStylePrompt.trim(), result.prompt].filter(Boolean).join(", ") }); setMessage(text.applied); }}>{text.apply}</Button></div>
-      </article>)}</div></section>}
-    </main>
-  );
+  const ranked = [...session.results].sort((a, b) => (b.progress ?? -1) - (a.progress ?? -1));
+  return <main className="artist-lab target-artist-lab">
+    <header className="artist-lab-hero"><div><h2>{text.title}</h2><p>{text.subtitle}</p></div><Button onClick={onBack}>{text.back}</Button></header>
+    <section className="artist-lab-config-grid">
+      <article className="artist-lab-panel target-panel"><h3>{text.target}</h3>{session.target ? <img src={session.target.fileUrl} alt={session.target.name} /> : <div className="artist-target-empty">◎</div>}<Button onClick={() => void chooseTarget()}>{session.target ? text.change : text.choose}</Button><small>{text.local}</small></article>
+      <article className="artist-lab-panel artist-lab-controls">
+        <label><span>{text.model}</span><select value={session.modelMode} onChange={(event) => patch({ modelMode: event.target.value as ArtistLabModelMode })}><option value="high">{text.high}</option><option value="light">{text.light}</option></select></label>
+        <div className="artist-model-cache"><span>{text.cache}: {modelStatus ? `${formatBytes(modelStatus.cachedBytes)} · ${modelStatus.cachedFiles}` : "—"}</span><Button variant="ghost" onClick={async () => setModelStatus(await window.naiDesktop.artistLabClearModels())}>{text.clear}</Button></div>
+        <label><span>{text.prompt}</span><textarea value={session.basePrompt} onChange={(event) => patch({ basePrompt: event.target.value })} /></label><Button onClick={() => void reverseContent()} disabled={!session.target || reversing}>{reversing ? text.reversing : text.reverse}</Button>
+        <label><span>{text.fixedStyle}</span><textarea value={session.sharedStylePrompt} onChange={(event) => patch({ sharedStylePrompt: event.target.value })} /></label>
+        <div className="artist-run-options"><label><span>{text.batch}</span><input type="number" min={1} max={40} value={session.batchSize} onChange={(event) => patch({ batchSize: Math.max(1, Math.min(40, Number(event.target.value) || 1)) })} /></label><label><span>{text.seed}</span><input type="number" min={0} value={session.seed} onChange={(event) => patch({ seed: Math.max(0, Math.floor(Number(event.target.value) || 0)) })} /></label><label><span>{text.goal}</span><input type="number" min={1} max={100} value={session.targetProgress} onChange={(event) => patch({ targetProgress: Math.max(1, Math.min(100, Number(event.target.value) || 85)) })} /></label></div>
+        <details className="artist-lab-advanced"><summary>{text.advanced}</summary><div className="artist-run-options"><label><span>{text.stagnant}</span><input type="number" min={1} value={session.stagnantLimit} onChange={(event) => patch({ stagnantLimit: Math.max(1, Math.floor(Number(event.target.value) || 2)) })} /></label><label><span>{text.improvement}</span><input type="number" min={0.1} step={0.1} value={session.minImprovement} onChange={(event) => patch({ minImprovement: Math.max(0.1, Number(event.target.value) || 2) })} /></label><label><span>{text.scan}</span><input type="number" min={10} max={120} value={session.scanCount} onChange={(event) => patch({ scanCount: Math.max(10, Math.min(120, Number(event.target.value) || 40)) })} /></label><label><span>{text.shortlist}</span><input type="number" min={4} max={120} value={session.shortlist} onChange={(event) => patch({ shortlist: Math.max(4, Math.min(120, Number(event.target.value) || 20)) })} /></label></div></details>
+      </article>
+    </section>
+    <section className="artist-lab-actions">{running ? <Button variant="danger" onClick={() => { cancelRef.current = true; void window.naiDesktop.cancel(); }}>{text.stop}</Button> : <Button variant="primary" onClick={() => void start()}>{text.start}</Button>}<span>{message}</span></section>
+    {session.baseline && <section className="artist-lab-panel artist-baseline-panel"><div className="artist-section-heading"><h3>{text.baseline}</h3>{session.baseline.similarity !== undefined && <b>{text.raw} {(session.baseline.similarity * 100).toFixed(1)}%</b>}</div>{session.baseline.image && <div className="artist-baseline-content"><img src={session.baseline.image.fileUrl} alt={text.baseline} /></div>}{session.baseline.error && <p className="artist-error">{session.baseline.error}</p>}</section>}
+    {session.matches.length > 0 && <section className="artist-lab-panel"><div className="artist-section-heading"><h3>{text.matches}</h3><b>{session.matches.length}</b></div><div className="artist-reference-grid">{session.matches.map((match) => <article key={match.artist.id}><img src={match.referenceUrl} alt={match.artist.name} /><b>{match.artist.name}</b><span>{(match.similarity * 100).toFixed(1)}%</span></article>)}</div></section>}
+    {ranked.length > 0 && <section className="artist-gallery-section"><div className="artist-gallery-heading"><h3>{text.best}: {session.bestProgress.toFixed(1)}% / {session.targetProgress}%</h3></div><div className="artist-candidate-grid">{ranked.map((result) => <article key={result.id} className={`artist-candidate ${result.status}`}><header className="artist-candidate-header"><b>#{result.sequence} · {text.round} {result.round}</b><span>{text[result.status]}</span></header><div className="artist-candidate-media">{result.image ? <img src={result.image.fileUrl} alt={result.prompt} /> : <div className="artist-candidate-placeholder">{text[result.status]}</div>}{result.progress !== undefined && <b className="artist-score">{text.progress} {result.progress.toFixed(1)}%</b>}</div><div className="artist-string-block"><button type="button" onClick={() => { void navigator.clipboard.writeText(result.prompt); setMessage(text.copied); }}>{text.copy}</button><code>{result.prompt}</code></div>{result.error && <small className="artist-error">{result.error}</small>}<div className="artist-candidate-actions"><Button variant="primary" disabled={result.status !== "done"} onClick={() => { applyParams({ stylePrompt: [session.sharedStylePrompt.trim(), result.prompt].filter(Boolean).join(", ") }); setMessage(text.applied); }}>{text.apply}</Button></div></article>)}</div></section>}
+  </main>;
 }
 
-type ArtistLabScreen = "home" | "reverse" | "random";
-const SCREEN_KEY = "langbai.artist-lab.screen.v2";
+type ArtistLabScreen = "home" | "target" | "random";
+const SCREEN_KEY = "langbai.artist-lab.screen.v3";
 
 export default function ArtistLab({ onBack }: { onBack: () => void }) {
   const language = useAppStore((state) => state.settings?.language ?? "zh-CN");
   const [screen, setScreen] = useState<ArtistLabScreen>(() => {
     const saved = localStorage.getItem(SCREEN_KEY);
-    return saved === "reverse" || saved === "random" ? saved : "home";
+    return saved === "target" || saved === "random" ? saved : "home";
   });
-  const open = (next: ArtistLabScreen) => {
-    localStorage.setItem(SCREEN_KEY, next);
-    setScreen(next);
-  };
-  if (screen === "reverse") return <TargetArtistLab onBack={() => open("home")} />;
+  const open = (next: ArtistLabScreen) => { localStorage.setItem(SCREEN_KEY, next); setScreen(next); };
+  if (screen === "target") return <TargetArtistLab onBack={() => open("home")} />;
   if (screen === "random") return <RandomArtistLab onBack={() => open("home")} />;
-  const text = HOME_TEXT[language];
-  return <main className="artist-lab artist-lab-home">
-    <header className="artist-lab-hero"><div><span className="eyebrow">{text.eyebrow}</span><h2>{text.title}</h2><p>{text.subtitle}</p></div><Button onClick={onBack}>{text.back}</Button></header>
-    <section className="artist-lab-mode-grid">
-      <button type="button" className="artist-lab-mode-card reverse" onClick={() => open("reverse")}><span className="artist-mode-icon">◎</span><div><h3>{text.reverse}</h3><p>{text.reverseDesc}</p><b>{text.enter} →</b></div></button>
-      <button type="button" className="artist-lab-mode-card random" onClick={() => open("random")}><span className="artist-mode-icon">⌘</span><div><h3>{text.random}</h3><p>{text.randomDesc}</p><b>{text.enter} →</b></div></button>
-    </section>
-  </main>;
+  const text = HOME[language];
+  return <main className="artist-lab artist-lab-home"><header className="artist-lab-hero"><div><h2>{text.title}</h2><p>{text.subtitle}</p></div><Button onClick={onBack}>{text.back}</Button></header><section className="artist-lab-mode-grid"><button type="button" className="artist-lab-mode-card reverse" onClick={() => open("target")}><span className="artist-mode-icon">◎</span><div><h3>{text.target}</h3><p>{text.targetDesc}</p><b>{text.enter} →</b></div></button><button type="button" className="artist-lab-mode-card random" onClick={() => open("random")}><span className="artist-mode-icon">⌘</span><div><h3>{text.random}</h3><p>{text.randomDesc}</p><b>{text.enter} →</b></div></button></section></main>;
 }

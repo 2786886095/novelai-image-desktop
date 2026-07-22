@@ -22,6 +22,7 @@ import {
   exportTagComicSelectedZip,
   generateComicPanel,
   generateTagComicCandidate,
+  generateArtistLabImage,
   generateI2I,
   generateImage,
   redrawImage,
@@ -61,6 +62,7 @@ import {
 } from "./ipc/aitag-cache";
 import {
   artistLabModelStatus,
+  discoverSimilarArtists,
   clearArtistLabModels,
   loadPopularArtistTags,
   pickArtistLabTarget,
@@ -317,6 +319,11 @@ function registerIpc() {
   ipcMain.handle("artistLab:modelStatus", (_event, mode: unknown) =>
     artistLabModelStatus(mode),
   );
+  ipcMain.handle(
+    "artistLab:discoverSimilar",
+    (_event, mode: unknown, targetPath: unknown, offset: unknown, scanCount: unknown, shortlist: unknown, force: unknown) =>
+      discoverSimilarArtists(mode, targetPath, offset, scanCount, shortlist, force),
+  );
   ipcMain.handle("artistLab:clearModels", () => clearArtistLabModels());
   ipcMain.handle("aitag:config", () => getAitagConfig());
   ipcMain.handle("aitag:search", (_event, request: unknown) =>
@@ -355,6 +362,9 @@ function registerIpc() {
   );
   ipcMain.handle("nai:generate", (_event, params, extras) =>
     generateImage(params, extras),
+  );
+  ipcMain.handle("nai:generateArtistLab", (_event, params, extras, mode) =>
+    generateArtistLabImage(params, extras, mode),
   );
   ipcMain.handle("nai:generateI2I", (_event, params, i2i: I2IParams, extras) =>
     generateI2I(params, i2i, extras),

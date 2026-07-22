@@ -169,7 +169,7 @@ export function generatePopularArtistRecipes(
   options: RandomArtistRecipeOptions,
 ): GeneratedArtistRecipe[] {
   const random = options.random ?? Math.random;
-  const count = Math.max(1, Math.min(100, Math.floor(options.count)));
+  const count = Math.max(1, Math.floor(Number.isFinite(options.count) ? options.count : 1));
   const minArtists = Math.max(1, Math.min(24, Math.floor(options.minArtists)));
   const maxArtists = Math.max(minArtists, Math.min(24, Math.floor(options.maxArtists)));
   const favorites = new Set((options.favoriteArtists ?? []).map((name) => name.trim()).filter(Boolean));
@@ -179,7 +179,8 @@ export function generatePopularArtistRecipes(
   const seen = new Set<string>();
   let attempts = 0;
 
-  while (output.length < count && attempts++ < count * 100) {
+  const maxAttempts = Math.min(Number.MAX_SAFE_INTEGER, count * 100);
+  while (output.length < count && attempts++ < maxAttempts) {
     // A triangular distribution keeps most recipes near the mature reference
     // median while still allowing sparse and very dense combinations.
     const span = maxArtists - minArtists + 1;

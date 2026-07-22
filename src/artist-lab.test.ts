@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildArtistCombinations, createArtistLabRandom, formatArtistCombination } from "./artist-lab";
+import { buildArtistCombinations, createArtistLabRandom, formatArtistCombination, normalizeArtistProgress, shouldResetArtistSearch } from "./artist-lab";
 
 describe("artist lab combination search", () => {
   it("formats NovelAI V4 numeric emphasis around each artist tag", () => {
@@ -33,5 +33,13 @@ describe("artist lab combination search", () => {
     const first = buildArtistCombinations(["a", "b", "c", "d"], 10, "random", createArtistLabRandom(42));
     const second = buildArtistCombinations(["a", "b", "c", "d"], 10, "random", createArtistLabRandom(42));
     expect(first).toEqual(second);
+  });
+
+  it("normalizes baseline and target progress and resets after configured stagnation", () => {
+    expect(normalizeArtistProgress(0.6, 0.6)).toBe(0);
+    expect(normalizeArtistProgress(0.6, 0.8)).toBeCloseTo(50);
+    expect(normalizeArtistProgress(0.6, 1)).toBe(100);
+    expect(shouldResetArtistSearch(1, 2)).toBe(false);
+    expect(shouldResetArtistSearch(2, 2)).toBe(true);
   });
 });

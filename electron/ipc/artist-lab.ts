@@ -2,8 +2,10 @@ import { app, dialog } from "electron";
 import axios from "axios";
 import fs from "fs";
 import path from "path";
+import crypto from "crypto";
 import { pathToFileURL } from "url";
 import type {
+  ArtistDiscoveryResult,
   ArtistLabImageScore,
   ArtistLabModelMode,
   ArtistLabModelStatus,
@@ -12,6 +14,7 @@ import type {
 import { proxyConfig } from "./proxy";
 
 const DANBOORU_TAGS_URL = "https://danbooru.donmai.us/tags.json";
+const DANBOORU_POSTS_URL = "https://danbooru.donmai.us/posts.json";
 const POPULAR_ARTIST_CACHE_MAX_AGE = 7 * 24 * 60 * 60 * 1000;
 const MODEL_IDS: Record<ArtistLabModelMode, string> = {
   // Base/full precision is the default Windows scorer. It is materially more
@@ -22,6 +25,7 @@ const MODEL_IDS: Record<ArtistLabModelMode, string> = {
 };
 const pipelines = new Map<ArtistLabModelMode, any>();
 const loading = new Map<ArtistLabModelMode, Promise<any>>();
+const embeddingCache = new Map<string, Float32Array>();
 
 function modelCacheDir() {
   return path.join(app.getPath("userData"), "artist-lab-model-cache");
@@ -29,6 +33,10 @@ function modelCacheDir() {
 
 function popularArtistCacheFile() {
   return path.join(app.getPath("userData"), "artist-lab-popular-artists.json");
+}
+
+function referenceCacheDir() {
+  return path.join(app.getPath("userData"), "artist-lab-reference-cache");
 }
 
 function directoryStats(root: string): { bytes: number; files: number } {
@@ -112,7 +120,7 @@ async function fetchArtistTagsPage(query: string, limit: number, page: number): 
 }
 
 export async function loadPopularArtistTags(rawLimit: unknown, rawForce: unknown): Promise<ArtistTagRecord[]> {
-  const limit = Math.max(20, Math.min(500, Number(rawLimit) || 300));
+  const limit = Math.max(20, Math.min(5000, Math.floor(Number(rawLimit) || 300)));
   const force = rawForce === true;
   let cachedItems: ArtistTagRecord[] = [];
   try {
@@ -134,10 +142,11 @@ export async function loadPopularArtistTags(rawLimit: unknown, rawForce: unknown
     // Missing or unreadable cache falls through to the live ranking.
   }
 
-  const output: ArtistTagRecord[] = [];
-  const seen = new Set<number>();
+  const output: ArtistTagRecord[] = force ? [] : [...cachedItems];
+  const seen = new Set<number>(output.map((item) => item.id));
   try {
-    for (let page = 1; output.length < limit && page <= 5; page += 1) {
+    const startPage = Math.floor(output.length / 100) + 1;
+    for (let page = startPage; output.length < limit; page += 1) {
       const pageSize = Math.min(100, limit - output.length);
       const batch = await fetchArtistTagsPage("", pageSize, page);
       if (batch.length === 0) break;
@@ -203,6 +212,10 @@ function cosine(left: Float32Array | number[], right: Float32Array | number[]): 
 
 async function embedding(pipe: any, filePath: string): Promise<Float32Array> {
   if (!path.isAbsolute(filePath) || !fs.existsSync(filePath)) throw new Error("Image file is unavailable");
+  const stat = fs.statSync(filePath);
+  const key = `${filePath}:${stat.size}:${stat.mtimeMs}`;
+  const cached = embeddingCache.get(key);
+  if (cached) return cached;
   const output = await pipe(filePath);
   const data = output?.data;
   if (!data || typeof data.length !== "number") throw new Error("The scoring model returned no image features");
@@ -213,9 +226,114 @@ async function embedding(pipe: any, filePath: string): Promise<Float32Array> {
   // would over-weight identical composition and punish the same style in a
   // different pose, which is the opposite of this tool's purpose.
   if (dims.length === 3 && dims[0] === 1 && dims[2] > 0 && values.length >= dims[2]) {
-    return values.slice(0, dims[2]);
+    const vector = values.slice(0, dims[2]);
+    embeddingCache.set(key, vector);
+    return vector;
   }
+  embeddingCache.set(key, values);
   return values;
+}
+
+function referenceFile(artist: ArtistTagRecord, sourceUrl: string): string {
+  const extension = (() => {
+    try {
+      const ext = path.extname(new URL(sourceUrl).pathname).toLowerCase();
+      return [".png", ".jpg", ".jpeg", ".webp"].includes(ext) ? ext : ".jpg";
+    } catch { return ".jpg"; }
+  })();
+  const safe = artist.name.replace(/[^a-z0-9_()-]+/gi, "_").slice(0, 90);
+  const hash = crypto.createHash("sha1").update(sourceUrl).digest("hex").slice(0, 12);
+  return path.join(referenceCacheDir(), `${artist.id}-${safe}-${hash}${extension}`);
+}
+
+async function representativeImage(artist: ArtistTagRecord): Promise<string | null> {
+  const manifestFile = path.join(referenceCacheDir(), `${artist.id}.json`);
+  try {
+    const manifest = JSON.parse(fs.readFileSync(manifestFile, "utf8")) as { file?: string };
+    if (manifest.file && fs.existsSync(manifest.file)) return manifest.file;
+  } catch { /* live lookup */ }
+  const response = await axios.get(DANBOORU_POSTS_URL, {
+    timeout: 30_000,
+    headers: { Accept: "application/json", "User-Agent": "Langbai-NovelAI-Studio/Artist-Lab" },
+    params: { limit: 1, tags: `${artist.name} rating:g order:rank` },
+    ...proxyConfig("update"),
+  });
+  const post = Array.isArray(response.data) ? response.data[0] : null;
+  const sourceUrl = [post?.preview_file_url, post?.large_file_url, post?.file_url]
+    .find((value) => typeof value === "string" && /^https:\/\//i.test(value));
+  if (!sourceUrl) return null;
+  const file = referenceFile(artist, sourceUrl);
+  fs.mkdirSync(referenceCacheDir(), { recursive: true });
+  if (!fs.existsSync(file)) {
+    const image = await axios.get<ArrayBuffer>(sourceUrl, {
+      responseType: "arraybuffer",
+      timeout: 45_000,
+      maxContentLength: 12 * 1024 * 1024,
+      headers: { Accept: "image/*", "User-Agent": "Langbai-NovelAI-Studio/Artist-Lab" },
+      ...proxyConfig("update"),
+    });
+    const bytes = Buffer.from(image.data);
+    if (bytes.length < 128 || bytes.length > 12 * 1024 * 1024) return null;
+    fs.writeFileSync(file, bytes);
+  }
+  fs.writeFileSync(manifestFile, JSON.stringify({ file, sourceUrl, savedAt: Date.now() }), "utf8");
+  return file;
+}
+
+async function mapLimit<T, R>(items: T[], limit: number, task: (item: T) => Promise<R>): Promise<R[]> {
+  const output = new Array<R>(items.length);
+  let cursor = 0;
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor++;
+      output[index] = await task(items[index]);
+    }
+  }));
+  return output;
+}
+
+export async function discoverSimilarArtists(
+  rawMode: unknown,
+  rawTargetPath: unknown,
+  rawOffset: unknown,
+  rawScanCount: unknown,
+  rawShortlist: unknown,
+  rawForce: unknown,
+): Promise<ArtistDiscoveryResult> {
+  const mode: ArtistLabModelMode = rawMode === "light" ? "light" : "high";
+  if (typeof rawTargetPath !== "string" || !path.isAbsolute(rawTargetPath) || !fs.existsSync(rawTargetPath)) {
+    throw new Error("Target image is unavailable");
+  }
+  const offset = Math.max(0, Math.floor(Number(rawOffset) || 0));
+  const scanCount = Math.max(10, Math.min(120, Math.floor(Number(rawScanCount) || 40)));
+  const shortlist = Math.max(4, Math.min(scanCount, Math.floor(Number(rawShortlist) || 20)));
+  const pool = await loadPopularArtistTags(offset + scanCount, rawForce);
+  const candidates = pool.slice(offset, offset + scanCount);
+  const pipe = await scorer(mode);
+  const target = await embedding(pipe, rawTargetPath);
+  const matches = (await mapLimit(candidates, 5, async (artist) => {
+    try {
+      const filePath = await representativeImage(artist);
+      if (!filePath) return null;
+      const vector = await embedding(pipe, filePath);
+      return {
+        artist,
+        similarity: Math.max(0, Math.min(1, cosine(target, vector))),
+        referencePath: filePath,
+        referenceUrl: pathToFileURL(filePath).toString(),
+      };
+    } catch { return null; }
+  }))
+    .filter((item): item is NonNullable<typeof item> => Boolean(item))
+    .sort((left, right) => right.similarity - left.similarity)
+    .slice(0, shortlist);
+  return {
+    matches,
+    scanned: candidates.length,
+    nextOffset: offset + candidates.length,
+    poolSize: pool.length,
+    cachedBytes: directoryStats(referenceCacheDir()).bytes,
+  };
 }
 
 export async function scoreArtistLabImages(
@@ -247,6 +365,7 @@ export async function clearArtistLabModels(): Promise<ArtistLabModelStatus> {
     try { await pipe.dispose?.(); } catch { /* best effort */ }
   }
   pipelines.clear();
+  embeddingCache.clear();
   if (loading.size > 0) throw new Error("Model is still loading; try again after it finishes");
   fs.rmSync(modelCacheDir(), { recursive: true, force: true });
   return artistLabModelStatus("high");

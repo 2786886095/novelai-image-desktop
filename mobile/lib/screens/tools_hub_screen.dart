@@ -6,8 +6,9 @@ import '../state/app_state.dart';
 import 'batch_redraw_screen.dart';
 import 'comic_screen.dart';
 import 'aitag_gallery_screen.dart';
+import 'random_artist_lab_screen.dart';
 
-enum _ActiveTool { hub, comic, batchRedraw, aitag }
+enum _ActiveTool { hub, comic, batchRedraw, aitag, randomArtist }
 
 class ToolsHubScreen extends StatefulWidget {
   const ToolsHubScreen({super.key});
@@ -31,6 +32,10 @@ class _ToolsHubScreenState extends State<ToolsHubScreen> {
     }
     if (active == _ActiveTool.aitag) {
       return AitagGalleryScreen(
+          onBack: () => setState(() => active = _ActiveTool.hub));
+    }
+    if (active == _ActiveTool.randomArtist) {
+      return RandomArtistLabScreen(
           onBack: () => setState(() => active = _ActiveTool.hub));
     }
     final language =
@@ -61,6 +66,13 @@ class _ToolsHubScreenState extends State<ToolsHubScreen> {
             title: text.aitagTitle,
             subtitle: text.aitagSubtitle,
             onTap: () => setState(() => active = _ActiveTool.aitag),
+          ),
+          const SizedBox(height: 10),
+          _ToolTile(
+            icon: Icons.casino_outlined,
+            title: text.artistLabTitle,
+            subtitle: text.artistLabSubtitle,
+            onTap: () => setState(() => active = _ActiveTool.randomArtist),
           ),
         ],
       ),

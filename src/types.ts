@@ -1,4 +1,4 @@
-export const APP_VERSION = "1.4.4";
+export const APP_VERSION = "1.4.5";
 export const APP_NAME = "Langbai NovelAI Studio";
 export const PROJECT_REPOSITORY =
   "https://github.com/2786886095/novelai-image-desktop";
@@ -1132,6 +1132,14 @@ export interface NaiDesktopApi {
   artistLabModelStatus: (
     mode: import("./artist-lab").ArtistLabModelMode,
   ) => Promise<import("./artist-lab").ArtistLabModelStatus>;
+  artistLabDiscoverSimilar: (
+    mode: import("./artist-lab").ArtistLabModelMode,
+    targetPath: string,
+    offset?: number,
+    scanCount?: number,
+    shortlist?: number,
+    force?: boolean,
+  ) => Promise<import("./artist-lab").ArtistDiscoveryResult>;
   artistLabClearModels: () => Promise<
     import("./artist-lab").ArtistLabModelStatus
   >;
@@ -1160,6 +1168,11 @@ export interface NaiDesktopApi {
   generate: (
     params: GenerateParams,
     extras: GenerateExtras,
+  ) => Promise<GenerateResult>;
+  generateArtistLab: (
+    params: GenerateParams,
+    extras: GenerateExtras,
+    mode: "target" | "random",
   ) => Promise<GenerateResult>;
   generateI2I: (
     params: GenerateParams,

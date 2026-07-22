@@ -3086,6 +3086,39 @@ export async function generateTagComicCandidate(
   return result;
 }
 
+export async function generateArtistLabImage(
+  params: GenerateParams,
+  extras: GenerateExtras,
+  rawMode: unknown,
+): Promise<GenerateResult> {
+  const mode = rawMode === "target" ? "target" : "random";
+  const group = ensureHistoryGroup(
+    mode === "target" ? "画风实验室-目标迭代" : "画风实验室-随机抽卡",
+  );
+  const result = await generateImage(
+    {
+      ...params,
+      fileNamePrefix: params.fileNamePrefix || `artist-lab-${mode}`,
+    },
+    extras,
+    {
+      groupOverride: {
+        groupId: group.id,
+        folderName: sanitizeGroupFolderName(group.name),
+      },
+    },
+  );
+  if (result.ok) {
+    result.items = result.items.map((item) =>
+      updateHistoryItem(item.id, {
+        feature: "artist-lab",
+        groupId: group.id,
+      }) ?? { ...item, feature: "artist-lab", groupId: group.id },
+    );
+  }
+  return result;
+}
+
 export async function exportTagComicSelectedZip(
   request: TagComicExportZipRequest,
 ): Promise<{ ok: boolean; message: string; path?: string }> {
