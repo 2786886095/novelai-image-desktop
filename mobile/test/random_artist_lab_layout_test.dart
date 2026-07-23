@@ -204,7 +204,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('switching result folders returns to the top controls',
+  testWidgets('switching result folders preserves the page scroll position',
       (tester) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(420, 800);
@@ -254,10 +254,11 @@ void main() {
     );
     final scrollable = tester.state<ScrollableState>(bodyScrollable);
     expect(scrollable.position.pixels, greaterThan(0));
+    final before = scrollable.position.pixels;
 
     await tester.tap(favoritesTab);
     await tester.pumpAndSettle();
-    expect(scrollable.position.pixels, 0);
+    expect(scrollable.position.pixels, closeTo(before, 0.5));
     expect(tester.takeException(), isNull);
   });
 }

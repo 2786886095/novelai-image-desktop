@@ -9092,9 +9092,6 @@ html.theme-dark #root {
 .artist-favorites-panel { display: grid; gap: 14px; }
 .artist-favorites-panel > .artist-candidate-grid { margin: 0; }
 .artist-result-tabs {
-  position: sticky;
-  top: 0;
-  z-index: 4;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
@@ -9102,7 +9099,6 @@ html.theme-dark #root {
   border: 1px solid var(--border);
   border-radius: 18px;
   background: color-mix(in srgb, var(--bg-panel) 94%, transparent);
-  backdrop-filter: blur(16px);
 }
 .artist-result-tabs button {
   min-height: 42px;

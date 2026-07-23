@@ -1499,11 +1499,6 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
             onSelectionChanged: (value) {
               setState(() => _showFavorites = value.first);
               _save();
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (!mounted || !_scrollController.hasClients) return;
-                _scrollController
-                    .jumpTo(_scrollController.position.minScrollExtent);
-              });
             },
           ),
           const SizedBox(height: 12),

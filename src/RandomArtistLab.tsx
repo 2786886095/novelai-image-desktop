@@ -262,7 +262,6 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
     }));
   const switchGallery = (favorites: boolean) => {
     setShowFavorites(favorites);
-    requestAnimationFrame(() => scrollRef.current?.scrollTo({ top: 0 }));
   };
   const rememberScrollTop = () => {
     scrollTopToRestoreRef.current = scrollRef.current?.scrollTop ?? null;
