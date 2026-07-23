@@ -83,6 +83,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
   bool _loading = true;
   bool _running = false;
   bool _cancelled = false;
+  bool _showFavorites = false;
   String _message = '';
   int _drawSeed = Random.secure().nextInt(0x7fffffff);
 
@@ -355,6 +356,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     _poolSize.text = '${prefs.getInt('${_prefsPrefix}poolSize') ?? 1000}';
     _seed.text = '${prefs.getInt('${_prefsPrefix}seed') ?? 246813579}';
     _mutateAuxiliary = prefs.getBool('${_prefsPrefix}mutate') ?? false;
+    _showFavorites = prefs.getBool('${_prefsPrefix}showFavorites') ?? false;
     for (final entry in <(String, List<_Result>)>[
       ('results', _results),
       ('favorites', _favorites),
@@ -383,6 +385,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     await prefs.setInt('${_prefsPrefix}poolSize', _poolLimit());
     await prefs.setInt('${_prefsPrefix}seed', int.tryParse(_seed.text) ?? 0);
     await prefs.setBool('${_prefsPrefix}mutate', _mutateAuxiliary);
+    await prefs.setBool('${_prefsPrefix}showFavorites', _showFavorites);
     await prefs.setString('${_prefsPrefix}results',
         jsonEncode(_results.map((item) => item.toJson()).toList()));
     await prefs.setString('${_prefsPrefix}favorites',
@@ -767,6 +770,13 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
     final text = _text(app.settings.language);
+    final favoriteFolderLabel = switch (app.settings.language) {
+      'zh-TW' => '收藏夾',
+      'en-US' => 'Favorites',
+      'ja-JP' => 'お気に入り',
+      'ko-KR' => '즐겨찾기',
+      _ => '收藏夹',
+    };
     final completed = _results
         .where((item) => item.status == 'done' || item.status == 'failed')
         .length;
@@ -1001,22 +1011,48 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
             ],
           ),
           const SizedBox(height: 12),
-          if (_results.isNotEmpty) _resultGrid(_results, text, app),
-          if (_favorites.isNotEmpty) ...[
-            const SizedBox(height: 16),
+          SegmentedButton<bool>(
+            segments: [
+              ButtonSegment(
+                value: false,
+                icon: const Icon(Icons.grid_view_outlined),
+                label: Text('${text['preview']} (${_results.length})'),
+              ),
+              ButtonSegment(
+                value: true,
+                icon: const Icon(Icons.favorite_outline),
+                label: Text('$favoriteFolderLabel (${_favorites.length})'),
+              ),
+            ],
+            selected: {_showFavorites},
+            onSelectionChanged: (value) {
+              setState(() => _showFavorites = value.first);
+              _save();
+            },
+          ),
+          const SizedBox(height: 12),
+          if (!_showFavorites && _results.isNotEmpty)
+            _resultGrid(_results, text, app),
+          if (_showFavorites) ...[
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(14),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text(text['favorites']!,
+                    Text(favoriteFolderLabel,
                         style: Theme.of(context).textTheme.titleMedium),
                     const SizedBox(height: 4),
                     Text(text['favoritesHint']!,
                         style: Theme.of(context).textTheme.bodySmall),
                     const SizedBox(height: 12),
-                    _resultGrid(_favorites, text, app, favorites: true),
+                    if (_favorites.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 32),
+                        child: Center(child: Text(text['needLikes']!)),
+                      )
+                    else
+                      _resultGrid(_favorites, text, app, favorites: true),
                   ],
                 ),
               ),

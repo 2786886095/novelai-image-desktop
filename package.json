@@ -1,6 +1,6 @@
 {
   "name": "langbai-novelai-studio",
-  "version": "1.4.8",
+  "version": "1.4.9",
   "private": true,
   "description": "Langbai NovelAI Studio: API-only NovelAI image generation desktop client with Chinese UI.",
   "author": "Langbai",
@@ -16,6 +16,7 @@
     "dev:renderer": "vite --host 127.0.0.1",
     "dev:electron": "wait-on http://127.0.0.1:5173 && npm run build:electron && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .",
     "build": "npm run build:renderer && npm run build:electron",
+    "build:prompt-codex": "node scripts/build-prompt-codex.mjs",
     "build:renderer": "vite build",
     "build:electron": "tsc -p tsconfig.electron.json",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.electron.json --noEmit",

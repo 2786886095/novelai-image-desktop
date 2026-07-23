@@ -91,11 +91,21 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
   const refreshAccount = useAppStore((state) => state.refreshAccount);
   const refreshHistory = useAppStore((state) => state.refreshHistory);
   const text = TEXT[language];
+  const favoriteFolderLabel = {
+    "zh-CN": "收藏夹",
+    "zh-TW": "收藏夾",
+    "en-US": "Favorites",
+    "ja-JP": "お気に入り",
+    "ko-KR": "즐겨찾기",
+  }[language];
   const [session, setSession] = useState(() => restore(params.positivePrompt));
   const [pool, setPool] = useState<ArtistTagRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [running, setRunning] = useState(false);
   const [message, setMessage] = useState("");
+  const [showFavorites, setShowFavorites] = useState(
+    () => localStorage.getItem("langbai.artist-lab.random.view.v1") === "favorites",
+  );
   const cancelRef = useRef(false);
   const scrollRef = useRef<HTMLElement>(null);
   const scrollTopToRestoreRef = useRef<number | null>(null);
@@ -120,6 +130,12 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
     sessionCache = session;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
   }, [session]);
+  useEffect(() => {
+    localStorage.setItem(
+      "langbai.artist-lab.random.view.v1",
+      showFavorites ? "favorites" : "results",
+    );
+  }, [showFavorites]);
 
   const interpolate = (value: string, values: Record<string, unknown>) => Object.entries(values).reduce((out, [key, replacement]) => out.replaceAll(`{${key}}`, String(replacement)), value);
   const categoryLabels = useMemo(() => {
@@ -289,7 +305,11 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
     </section>
     <section className="artist-lab-panel artist-queue-panel"><div className="artist-section-heading"><div><h3>{text.preview}</h3><small>{text.previewHint}</small></div><div className="artist-preview-actions"><b>{interpolate(text.pairSummary, { pairs: planned.length, images: plannedComparisons.length })}</b><Button onClick={() => void draw(false)} disabled={running || pool.length === 0}>{text.draw}</Button></div></div>{planned.length === 0 ? <div className="artist-queue-empty">{text.empty}</div> : <ol className="artist-combination-queue">{planned.map((recipe, index) => <li key={recipe.id}><span>#{String(index + 1).padStart(2, "0")}</span><div><b className="artist-ab-label">{text.variantPlain}</b><code>{recipe.basePrompt}</code>{session.mutateAuxiliary && <><b className="artist-ab-label">{text.variantMutated}</b><code>{recipe.prompt}</code>{renderMutationTerms(recipe)}</>}</div></li>)}</ol>}</section>
     <section className="artist-lab-actions">{running ? <Button variant="danger" onClick={() => { cancelRef.current = true; void window.naiDesktop.cancel(); }}>{text.stop}</Button> : <Button variant="primary" onClick={() => void run(false)}>{text.generate}</Button>}<Button disabled={running || likedArtists.length === 0} onClick={() => void draw(true)}>{text.refine}</Button><span>{running ? interpolate(text.running, { done: batchDone, total: session.results.length }) : message}</span></section>
-    {session.results.length > 0 && <section className="artist-candidate-grid">{session.results.map((result) => renderCard(result))}</section>}
-    {session.favorites.length > 0 && <section className="artist-lab-panel artist-favorites-panel"><div className="artist-section-heading"><div><h3>{text.favorites}</h3><small>{text.favoritesHint}</small></div><b>{session.favorites.length}</b></div><div className="artist-candidate-grid">{session.favorites.map((result) => renderCard(result, true))}</div></section>}
+    <nav className="artist-result-tabs" aria-label={`${text.preview} / ${favoriteFolderLabel}`}>
+      <button type="button" className={!showFavorites ? "active" : ""} onClick={() => setShowFavorites(false)}><span>{text.preview}</span><b>{session.results.length}</b></button>
+      <button type="button" className={showFavorites ? "active" : ""} onClick={() => setShowFavorites(true)}><span>{favoriteFolderLabel}</span><b>{session.favorites.length}</b></button>
+    </nav>
+    {!showFavorites && session.results.length > 0 && <section className="artist-candidate-grid">{session.results.map((result) => renderCard(result))}</section>}
+    {showFavorites && <section className="artist-lab-panel artist-favorites-panel"><div className="artist-section-heading"><div><h3>{favoriteFolderLabel}</h3><small>{text.favoritesHint}</small></div><b>{session.favorites.length}</b></div>{session.favorites.length > 0 ? <div className="artist-candidate-grid">{session.favorites.map((result) => renderCard(result, true))}</div> : <div className="artist-queue-empty">{text.needLikes}</div>}</section>}
   </main>;
 }

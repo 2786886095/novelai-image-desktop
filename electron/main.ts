@@ -73,6 +73,10 @@ import {
   searchArtistTags,
 } from "./ipc/artist-lab";
 import {
+  loadPromptCodexCache,
+  updatePromptCodex,
+} from "./ipc/prompt-codex";
+import {
   getTuiwenTtsCatalog,
   saveTuiwenImportedAudio,
   synthesizeTuiwenSpeech,
@@ -304,6 +308,8 @@ function createWindow() {
 }
 
 function registerIpc() {
+  ipcMain.handle("promptCodex:cache", () => loadPromptCodexCache());
+  ipcMain.handle("promptCodex:update", () => updatePromptCodex());
   ipcMain.handle("artistLab:pickTarget", () => pickArtistLabTarget());
   ipcMain.handle(
     "artistLab:searchArtists",

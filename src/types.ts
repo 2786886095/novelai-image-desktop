@@ -1,4 +1,4 @@
-export const APP_VERSION = "1.4.8";
+export const APP_VERSION = "1.4.9";
 export const APP_NAME = "Langbai NovelAI Studio";
 export const PROJECT_REPOSITORY =
   "https://github.com/2786886095/novelai-image-desktop";
@@ -1111,6 +1111,12 @@ export interface ImportedParams {
 
 export interface NaiDesktopApi {
   platform: NodeJS.Platform;
+  promptCodexCache: () => Promise<
+    import("./prompt-codex").PromptCodexSnapshot | null
+  >;
+  promptCodexUpdate: () => Promise<
+    import("./prompt-codex").PromptCodexSnapshot
+  >;
   artistLabPickTarget: () => Promise<{
     filePath: string;
     fileUrl: string;

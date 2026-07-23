@@ -29,9 +29,14 @@ import type {
   UpdateProgressEvent,
 } from "../src/types";
 import type { AitagSearchRequest } from "../src/aitag";
+import type { PromptCodexSnapshot } from "../src/prompt-codex";
 
 contextBridge.exposeInMainWorld("naiDesktop", {
   platform: process.platform,
+  promptCodexCache: (): Promise<PromptCodexSnapshot | null> =>
+    ipcRenderer.invoke("promptCodex:cache"),
+  promptCodexUpdate: (): Promise<PromptCodexSnapshot> =>
+    ipcRenderer.invoke("promptCodex:update"),
   artistLabPickTarget: () => ipcRenderer.invoke("artistLab:pickTarget"),
   artistLabSearchArtists: (query?: string, limit?: number) =>
     ipcRenderer.invoke("artistLab:searchArtists", query, limit),

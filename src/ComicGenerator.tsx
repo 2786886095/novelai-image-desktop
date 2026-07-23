@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 import { Button, NumberInput, Toggle } from "./components/ui";
 import {
@@ -57,18 +57,42 @@ const REDRAW_STEPS = [
   },
 ] as const;
 
+const PromptCodex = lazy(() => import("./PromptCodex"));
+
+function promptCodexCardText(language: unknown) {
+  const text = {
+    "zh-CN": ["所长 NovelAI 个人法典", "三套法典离线收录、原章节与统一分类检索、提示词一键复制，并可手动更新。"],
+    "zh-TW": ["所長 NovelAI 個人法典", "三套法典離線收錄、原章節與統一分類搜尋、提示詞一鍵複製，並可手動更新。"],
+    "en-US": ["NovelAI Personal Codex", "Three offline codices with section/category search, one-click copy, and manual updates."],
+    "ja-JP": ["NovelAI 個人プロンプト法典", "3冊をオフライン収録。章・分類検索、ワンクリックコピー、手動更新に対応。"],
+    "ko-KR": ["NovelAI 개인 프롬프트 법전", "세 법전을 오프라인 제공하며 장·분류 검색, 원클릭 복사, 수동 업데이트를 지원합니다."],
+  } as const;
+  const [title, desc] =
+    text[
+      typeof language === "string" && language in text
+        ? (language as keyof typeof text)
+        : "zh-CN"
+    ];
+  return { title, desc };
+}
+
 export function ToolsHub() {
   const language = useAppStore((state) => state.settings?.language);
   const text = useMemo(() => getToolsHubText(language), [language]);
+  const codexText = useMemo(
+    () => promptCodexCardText(language),
+    [language],
+  );
   const isWindows = window.naiDesktop.platform === "win32";
   const [activeTool, setActiveTool] = useState<
-    "hub" | "comic" | "redraw" | "tuiwen" | "aitag" | "artistLab"
+    "hub" | "comic" | "redraw" | "tuiwen" | "aitag" | "artistLab" | "promptCodex"
   >(() => {
     const saved = localStorage.getItem("langbai.tools.active.v1");
     return saved === "comic" ||
       saved === "redraw" ||
       saved === "tuiwen" ||
       saved === "aitag" ||
+      saved === "promptCodex" ||
       (saved === "artistLab" && isWindows)
       ? saved
       : "hub";
@@ -84,6 +108,20 @@ export function ToolsHub() {
     return <NovelTuiwenStudio onBack={() => setActiveTool("hub")} />;
   if (activeTool === "aitag")
     return <AitagGallery onBack={() => setActiveTool("hub")} />;
+  if (activeTool === "promptCodex")
+    return (
+      <Suspense
+        fallback={
+          <main className="tools-hub">
+            <section className="tools-hero">
+              <h2>{codexText.title}</h2>
+            </section>
+          </main>
+        }
+      >
+        <PromptCodex onBack={() => setActiveTool("hub")} />
+      </Suspense>
+    );
   if (activeTool === "artistLab" && isWindows)
     return <ArtistLab onBack={() => setActiveTool("hub")} />;
 
@@ -104,6 +142,15 @@ export function ToolsHub() {
         >
           <b>{text.comicTitle}</b>
           <span>{text.comicDesc}</span>
+          <small>{text.ready}</small>
+        </button>
+        <button
+          type="button"
+          className="tool-card ready"
+          onClick={() => setActiveTool("promptCodex")}
+        >
+          <b>{codexText.title}</b>
+          <span>{codexText.desc}</span>
           <small>{text.ready}</small>
         </button>
         <button
