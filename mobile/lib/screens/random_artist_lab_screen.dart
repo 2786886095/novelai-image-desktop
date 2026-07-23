@@ -15,20 +15,22 @@ import '../state/app_state.dart';
 
 class _Result {
   final ArtistRecipe recipe;
+  final int sequence;
   String status;
   HistoryItem? image;
   String? error;
   bool liked;
-  bool saving;
+  bool saving = false;
   _Result(this.recipe,
-      {this.status = 'pending',
+      {this.sequence = 1,
+      this.status = 'pending',
       this.image,
       this.error,
-      this.liked = false,
-      this.saving = false});
+      this.liked = false});
 
   Map<String, dynamic> toJson() => {
         'recipe': recipe.toJson(),
+        'sequence': sequence,
         'status': status,
         'image': image?.toJson(),
         'error': error,
@@ -38,6 +40,7 @@ class _Result {
   factory _Result.fromJson(Map<String, dynamic> json) => _Result(
         ArtistRecipe.fromJson(
             Map<String, dynamic>.from(json['recipe'] as Map? ?? const {})),
+        sequence: (json['sequence'] as num?)?.toInt() ?? 1,
         status: json['status']?.toString() ?? 'pending',
         image: json['image'] is Map
             ? HistoryItem.fromJson(
@@ -94,8 +97,9 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           'base': '固定內容提示詞',
           'aux': '固定附加詞（每次保留）',
           'mutate': '抽卡時額外加入隨機風格詞',
-          'mutateHint': '從藝術風格、媒介/筆觸、色彩、光照、氛圍抽取 2～6 個詞，並配置 0.3～1.5 權重。',
-          'count': '本批生成數量（任意正整數）',
+          'mutateHint':
+              '開啟後以相同畫師串、提示詞、Seed 與參數生成 A/B：A 不加風格詞，B 加入 2～6 個帶 0.3～1.5 權重的風格詞。',
+          'count': '本批畫師串組數',
           'min': '最少畫師',
           'max': '每串畫師數量（1～20）',
           'seed': '固定 Seed',
@@ -115,12 +119,17 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           'saving': '儲存中',
           'saved': '已收藏',
           'favorites': '喜歡的畫風',
-          'favoritesHint': '收藏圖片永久保存；未收藏結果只留在暫存，下一次抽卡會清除。',
+          'favoritesHint': 'A、B 可分別收藏；收藏 B 後，偏好抽卡也會參考其風格詞與權重。',
           'remove': '移除收藏',
           'mutation': '本次風格/光影變異詞',
           'categories': '藝術風格|媒介/筆觸|色彩|光照|氛圍',
           'running': '生成中',
-          'hint': '每次抽卡都會重新組合畫師與權重；不下載代表圖。'
+          'hint': '開啟隨機風格詞時，每組生成 A/B 兩張；不下載代表圖。',
+          'variantPlain': 'A｜僅畫師串',
+          'variantMutated': 'B｜畫師串＋隨機風格詞',
+          'copyArtists': '複製畫師串',
+          'copyFull': '複製完整提示詞',
+          'pairSummary': '{pairs} 組 · {images} 張'
         };
       case 'en-US':
         return {
@@ -133,8 +142,8 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           'aux': 'Fixed extra terms (always kept)',
           'mutate': 'Add random style terms during the draw',
           'mutateHint':
-              'Draw 2–6 weighted terms (0.3–1.5) from art style, medium/brushwork, color, lighting, and atmosphere.',
-          'count': 'Batch size (any positive integer)',
+              'Create a fair A/B pair with the same artist string, prompt, seed, and settings: A has no random styles; B adds 2–6 terms weighted 0.3–1.5.',
+          'count': 'Artist-string groups in this batch',
           'min': 'Minimum artists',
           'max': 'Artists per string (1–20)',
           'seed': 'Fixed seed',
@@ -155,14 +164,19 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           'saved': 'Saved',
           'favorites': 'Favorite styles',
           'favoritesHint':
-              'Favorites are permanent. Unliked results are temporary and cleared by the next draw.',
+              'A and B can be saved independently. Favorite B terms and weights can guide later style-enabled draws.',
           'remove': 'Remove favorite',
           'mutation': 'Style / lighting terms in this draw',
           'categories':
               'Art style|Medium / brushwork|Color|Lighting|Atmosphere',
           'running': 'Generating',
           'hint':
-              'Every draw rerolls artists and weights. No representative images are downloaded.'
+              'Style mode creates two A/B images per group. No representative images are downloaded.',
+          'variantPlain': 'A | Artist string only',
+          'variantMutated': 'B | Artist string + random styles',
+          'copyArtists': 'Copy artist string',
+          'copyFull': 'Copy full prompt',
+          'pairSummary': '{pairs} groups · {images} images'
         };
       case 'ja-JP':
         return {
@@ -174,8 +188,9 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           'base': '固定内容プロンプト',
           'aux': '固定追加語（常に保持）',
           'mutate': '抽選時に画風語を追加',
-          'mutateHint': '画風、画材/筆致、色彩、光、雰囲気から 2～6 語を選び、0.3～1.5 の重みを付けます。',
-          'count': 'バッチ枚数（任意の正整数）',
+          'mutateHint':
+              '同じ画家列・プロンプト・Seed・設定で A/B を生成します。A は画風語なし、B は 0.3～1.5 重みの画風語を 2～6 個追加します。',
+          'count': 'このバッチの画家列グループ数',
           'min': '最小画家数',
           'max': '1組の画家数（1～20）',
           'seed': '固定 Seed',
@@ -195,12 +210,17 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           'saving': '保存中',
           'saved': '保存済み',
           'favorites': 'お気に入り画風',
-          'favoritesHint': 'お気に入りは永久保存し、それ以外は次回抽選時に消去します。',
+          'favoritesHint': 'A/B は個別保存できます。B の画風語と重みは次の画風語抽選にも反映できます。',
           'remove': 'お気に入り削除',
           'mutation': '今回の画風・光変異語',
           'categories': '画風|画材・筆致|色彩|光|雰囲気',
           'running': '生成中',
-          'hint': '抽選ごとに画家と重みを更新し、代表画像は取得しません。'
+          'hint': '画風語を有効にすると1組につき A/B の2枚を生成します。代表画像は取得しません。',
+          'variantPlain': 'A｜画家列のみ',
+          'variantMutated': 'B｜画家列＋ランダム画風語',
+          'copyArtists': '画家列をコピー',
+          'copyFull': '完全プロンプトをコピー',
+          'pairSummary': '{pairs} 組 · {images} 枚'
         };
       case 'ko-KR':
         return {
@@ -212,8 +232,9 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           'base': '고정 내용 프롬프트',
           'aux': '고정 추가 용어 (항상 유지)',
           'mutate': '뽑을 때 무작위 화풍 용어 추가',
-          'mutateHint': '화풍, 매체/붓질, 색상, 조명, 분위기에서 2～6개를 뽑고 0.3～1.5 가중치를 부여합니다.',
-          'count': '배치 수 (임의의 양의 정수)',
+          'mutateHint':
+              '같은 작가 문자열·프롬프트·Seed·설정으로 A/B를 생성합니다. A는 화풍 용어가 없고 B는 0.3～1.5 가중치의 용어 2～6개를 추가합니다.',
+          'count': '이번 배치 작가 문자열 그룹 수',
           'min': '최소 작가 수',
           'max': '조합당 작가 수 (1～20)',
           'seed': '고정 Seed',
@@ -233,12 +254,18 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           'saving': '저장 중',
           'saved': '저장됨',
           'favorites': '좋아하는 화풍',
-          'favoritesHint': '즐겨찾기는 영구 저장되고 나머지는 다음 뽑기 때 삭제됩니다.',
+          'favoritesHint':
+              'A/B를 각각 저장할 수 있습니다. B의 화풍 용어와 가중치는 이후 화풍 추첨에도 반영됩니다.',
           'remove': '즐겨찾기 제거',
           'mutation': '이번 화풍/조명 변이 용어',
           'categories': '화풍|매체/붓질|색상|조명|분위기',
           'running': '생성 중',
-          'hint': '뽑을 때마다 작가와 가중치를 갱신하며 대표 이미지는 받지 않습니다.'
+          'hint': '화풍 용어를 켜면 그룹마다 A/B 두 장을 생성합니다. 대표 이미지는 받지 않습니다.',
+          'variantPlain': 'A｜작가 문자열만',
+          'variantMutated': 'B｜작가 문자열＋무작위 화풍',
+          'copyArtists': '작가 문자열 복사',
+          'copyFull': '전체 프롬프트 복사',
+          'pairSummary': '{pairs} 그룹 · {images}장'
         };
       default:
         return {
@@ -250,8 +277,9 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           'base': '固定内容提示词',
           'aux': '固定附加词（每次保留）',
           'mutate': '抽卡时额外加入随机风格词',
-          'mutateHint': '从艺术风格、媒介/笔触、色彩、光照、氛围抽取 2～6 个词，并配置 0.3～1.5 权重。',
-          'count': '本批生成数量（任意正整数）',
+          'mutateHint':
+              '开启后以相同画师串、提示词、Seed 和参数生成 A/B：A 不加风格词，B 加入 2～6 个带 0.3～1.5 权重的风格词。',
+          'count': '本批画师串组数',
           'min': '最少画师',
           'max': '每串画师数量（1～20）',
           'seed': '固定 Seed',
@@ -271,12 +299,17 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           'saving': '保存中',
           'saved': '已收藏',
           'favorites': '喜欢的画风',
-          'favoritesHint': '收藏图片永久保存；未收藏结果只留在临时缓存，下一次抽卡会清除。',
+          'favoritesHint': 'A、B 可分别收藏；收藏 B 后，偏好抽卡也会参考其风格词与权重。',
           'remove': '移除收藏',
           'mutation': '本次风格/光影变异词',
           'categories': '艺术风格|媒介/笔触|色彩|光照|氛围',
           'running': '生成中',
-          'hint': '每次抽卡都会重新组合画师与权重；不下载代表图。'
+          'hint': '开启随机风格词时，每组生成 A/B 两张；不下载代表图。',
+          'variantPlain': 'A｜仅画师串',
+          'variantMutated': 'B｜画师串＋随机风格词',
+          'copyArtists': '复制画师串',
+          'copyFull': '复制完整提示词',
+          'pairSummary': '{pairs} 组 · {images} 张'
         };
     }
   }
@@ -339,7 +372,10 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
 
   int _poolLimit() => _positive(_poolSize, 1000).clamp(100, 5000).toInt();
 
-  List<ArtistRecipe> _buildPlan([Set<String> favorites = const {}]) =>
+  List<ArtistRecipe> _buildPlan([
+    Set<String> favorites = const {},
+    List<StyleMutationTerm> favoriteMutations = const [],
+  ]) =>
       drawArtistRecipes(
         pool: _pool,
         count: _positive(_count, 8),
@@ -349,6 +385,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
         auxiliary: _auxiliary.text,
         mutateAuxiliary: _mutateAuxiliary,
         favorites: favorites,
+        favoriteMutations: _mutateAuxiliary ? favoriteMutations : const [],
       );
 
   Future<void> _loadPool(bool force) async {
@@ -384,11 +421,17 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     final favorites = likedOnly
         ? _favorites.expand((item) => item.recipe.artists).toSet()
         : <String>{};
+    final favoriteMutations = likedOnly && _mutateAuxiliary
+        ? _favorites
+            .where((item) => item.recipe.variant == 'mutated')
+            .expand((item) => item.recipe.mutations)
+            .toList()
+        : <StyleMutationTerm>[];
     if (likedOnly && favorites.isEmpty) return;
     await _clearCurrent();
     if (!mounted) return;
     _drawSeed = Random.secure().nextInt(0x7fffffff);
-    setState(() => _planned = _buildPlan(favorites));
+    setState(() => _planned = _buildPlan(favorites, favoriteMutations));
     await _save();
   }
 
@@ -424,7 +467,17 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     if (_base.text.trim().isEmpty || _planned.isEmpty || _running) return;
     final app = context.read<AppState>();
     await _clearCurrent();
-    final batch = _planned.map(_Result.new).toList();
+    final comparisons = expandArtistRecipeComparisons(
+      _planned,
+      _mutateAuxiliary,
+    );
+    final batch = List<_Result>.generate(
+      comparisons.length,
+      (index) => _Result(
+        comparisons[index],
+        sequence: _mutateAuxiliary ? index ~/ 2 + 1 : index + 1,
+      ),
+    );
     setState(() {
       _results
         ..clear()
@@ -566,6 +619,25 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
               clipBehavior: Clip.antiAlias,
               child: Column(
                 children: [
+                  Container(
+                    width: double.infinity,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    color: result.recipe.variant == 'mutated'
+                        ? Theme.of(context)
+                            .colorScheme
+                            .primaryContainer
+                            .withAlpha(166)
+                        : Theme.of(context)
+                            .colorScheme
+                            .surfaceContainerHighest
+                            .withAlpha(184),
+                    child: Text(
+                      '#${result.sequence.toString().padLeft(2, '0')} · '
+                      '${result.recipe.variant == 'mutated' ? text['variantMutated']! : text['variantPlain']!}',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
                   Expanded(
                     child: result.image == null
                         ? Center(
@@ -594,16 +666,32 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                               fontSize: 11)),
                     ),
                   Padding(
+                    padding: const EdgeInsets.fromLTRB(6, 6, 6, 0),
+                    child: Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: () => Clipboard.setData(
+                              ClipboardData(text: result.recipe.artistPrompt)),
+                          icon: const Icon(Icons.people_alt_outlined, size: 16),
+                          label: Text(text['copyArtists']!),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: () => Clipboard.setData(
+                              ClipboardData(text: result.recipe.prompt)),
+                          icon:
+                              const Icon(Icons.content_copy_outlined, size: 16),
+                          label: Text(text['copyFull']!),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Padding(
                     padding: const EdgeInsets.all(6),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        IconButton(
-                          tooltip: text['copy'],
-                          onPressed: () => Clipboard.setData(
-                              ClipboardData(text: result.recipe.prompt)),
-                          icon: const Icon(Icons.copy_outlined),
-                        ),
                         if (favorites)
                           IconButton(
                             tooltip: text['remove'],
@@ -657,6 +745,10 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     final completed = _results
         .where((item) => item.status == 'done' || item.status == 'failed')
         .length;
+    final plannedImages = _planned.length * (_mutateAuxiliary ? 2 : 1);
+    final pairSummary = text['pairSummary']!
+        .replaceAll('{pairs}', '${_planned.length}')
+        .replaceAll('{images}', '$plannedImages');
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -763,8 +855,14 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                         title: Text(text['mutate']!),
                         subtitle: Text(text['mutateHint']!),
                         value: _mutateAuxiliary,
-                        onChanged: (value) =>
-                            setState(() => _mutateAuxiliary = value),
+                        onChanged: (value) {
+                          setState(() {
+                            _mutateAuxiliary = value;
+                            _drawSeed = Random.secure().nextInt(0x7fffffff);
+                            _planned = _buildPlan();
+                          });
+                          _save();
+                        },
                       ),
                     ),
                     numberField(_count, text['count']!),
@@ -786,7 +884,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                     children: [
                       Expanded(
                         child: Text(
-                          '${text['preview']} · ${_planned.length}',
+                          '${text['preview']} · $pairSummary',
                           style: Theme.of(context).textTheme.titleMedium,
                         ),
                       ),
@@ -811,9 +909,22 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                           title: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(_planned[index].prompt,
+                              Text(text['variantPlain']!,
+                                  style:
+                                      Theme.of(context).textTheme.labelMedium),
+                              Text(_planned[index].basePrompt,
                                   maxLines: 2, overflow: TextOverflow.ellipsis),
-                              _mutationTerms(_planned[index], text),
+                              if (_mutateAuxiliary) ...[
+                                const SizedBox(height: 5),
+                                Text(text['variantMutated']!,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelMedium),
+                                Text(_planned[index].prompt,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis),
+                                _mutationTerms(_planned[index], text),
+                              ],
                             ],
                           ),
                         ),

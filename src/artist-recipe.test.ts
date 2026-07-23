@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { generatePopularArtistRecipes, parseArtistRecipe } from "./artist-recipe";
+import {
+  expandArtistRecipeComparisons,
+  generatePopularArtistRecipes,
+  parseArtistRecipe,
+} from "./artist-recipe";
 import type { ArtistTagRecord } from "./artist-lab";
 
 const pool: ArtistTagRecord[] = Array.from({ length: 30 }, (_, index) => ({
@@ -60,6 +64,7 @@ describe("artist recipe grammar", () => {
     })[0];
     expect(locked.auxiliary.map((token) => token.value)).toEqual(["year 2025", "impasto", "no halo"]);
     expect(locked.mutations).toEqual([]);
+    expect(locked.basePrompt).toBe(locked.prompt);
 
     const mutated = generatePopularArtistRecipes(pool, {
       count: 8,
@@ -73,6 +78,60 @@ describe("artist recipe grammar", () => {
     expect(mutated.every((recipe) => recipe.mutations.length >= 2 && recipe.mutations.length <= 6)).toBe(true);
     expect(mutated.flatMap((recipe) => recipe.mutations).every((token) => token.weight >= 0.3 && token.weight <= 1.5)).toBe(true);
     expect(mutated.flatMap((recipe) => recipe.mutations).every((token) => Boolean(token.category))).toBe(true);
+    expect(mutated.every((recipe) => !recipe.basePrompt.includes(recipe.mutations[0].value))).toBe(true);
+  });
+
+  it("expands mutation draws into fair plain/mutated A-B comparisons", () => {
+    const recipe = generatePopularArtistRecipes(pool, {
+      count: 1,
+      minArtists: 5,
+      maxArtists: 5,
+      mutateAuxiliary: true,
+      auxiliaryPrompt: "year 2025",
+      random: seeded(),
+    })[0];
+    const pair = expandArtistRecipeComparisons([recipe], true);
+    expect(pair).toHaveLength(2);
+    expect(pair.map((item) => item.variant)).toEqual(["plain", "mutated"]);
+    expect(pair[0].pairId).toBe(pair[1].pairId);
+    expect(pair[0].artists).toEqual(pair[1].artists);
+    expect(pair[0].prompt).toBe(recipe.basePrompt);
+    expect(pair[0].mutations).toEqual([]);
+    expect(pair[1].prompt).toBe(recipe.prompt);
+    expect(pair[1].mutations).toEqual(recipe.mutations);
+  });
+
+  it("reuses favorite style categories and weights only when mutation is enabled", () => {
+    const favorite = {
+      raw: "cinematic lighting",
+      value: "cinematic lighting",
+      weight: 1.4,
+      kind: "style" as const,
+      category: "lighting" as const,
+    };
+    const biased = generatePopularArtistRecipes(pool, {
+      count: 40,
+      minArtists: 5,
+      maxArtists: 5,
+      mutateAuxiliary: true,
+      favoriteMutations: [favorite],
+      random: seeded(),
+    });
+    expect(biased.flatMap((recipe) => recipe.mutations).some((token) => (
+      token.category === favorite.category
+      && token.value === favorite.value
+      && token.weight === favorite.weight
+    ))).toBe(true);
+
+    const disabled = generatePopularArtistRecipes(pool, {
+      count: 1,
+      minArtists: 5,
+      maxArtists: 5,
+      mutateAuxiliary: false,
+      favoriteMutations: [favorite],
+      random: seeded(),
+    })[0];
+    expect(disabled.mutations).toEqual([]);
   });
 
   it("caps each string at twenty artists", () => {

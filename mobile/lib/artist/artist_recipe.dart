@@ -20,14 +20,32 @@ class ArtistTagRecord {
 class ArtistRecipe {
   final String id;
   final String prompt;
+  final String basePrompt;
+  final String artistPrompt;
+  final String pairId;
+  final String variant;
   final List<String> artists;
   final List<StyleMutationTerm> mutations;
-  const ArtistRecipe(this.id, this.prompt, this.artists,
-      [this.mutations = const []]);
+  const ArtistRecipe(
+    this.id,
+    this.prompt,
+    this.artists, {
+    this.mutations = const [],
+    String? basePrompt,
+    String? artistPrompt,
+    String? pairId,
+    this.variant = 'mutated',
+  })  : basePrompt = basePrompt ?? prompt,
+        artistPrompt = artistPrompt ?? basePrompt ?? prompt,
+        pairId = pairId ?? id;
 
   Map<String, dynamic> toJson() => {
         'id': id,
         'prompt': prompt,
+        'basePrompt': basePrompt,
+        'artistPrompt': artistPrompt,
+        'pairId': pairId,
+        'variant': variant,
         'artists': artists,
         'mutations': mutations.map((item) => item.toJson()).toList(),
       };
@@ -38,11 +56,18 @@ class ArtistRecipe {
         (json['artists'] as List? ?? const [])
             .map((item) => item.toString())
             .toList(),
-        (json['mutations'] as List? ?? const [])
+        mutations: (json['mutations'] as List? ?? const [])
             .whereType<Map>()
             .map((item) =>
                 StyleMutationTerm.fromJson(Map<String, dynamic>.from(item)))
             .toList(),
+        basePrompt: json['basePrompt']?.toString(),
+        artistPrompt: json['artistPrompt']?.toString(),
+        pairId: json['pairId']?.toString(),
+        variant: json['variant']?.toString() ??
+            ((json['mutations'] as List? ?? const []).isEmpty
+                ? 'plain'
+                : 'mutated'),
       );
 }
 
@@ -250,17 +275,33 @@ String _number(double value) => value == value.roundToDouble()
     ? value.toInt().toString()
     : value.toStringAsFixed(2).replaceFirst(RegExp(r'0+$'), '');
 
-List<StyleMutationTerm> _drawMutations(Random random) {
+List<StyleMutationTerm> _drawMutations(
+  Random random, [
+  List<StyleMutationTerm> favoriteMutations = const [],
+]) {
   final categories = styleMutationLibrary.keys.toList();
+  final preferred = favoriteMutations
+      .where((item) =>
+          styleMutationLibrary.containsKey(item.category) &&
+          item.value.trim().isNotEmpty &&
+          item.weight.isFinite)
+      .toList();
   final count = 2 + random.nextInt(5);
   final values = <String>{};
   final output = <StyleMutationTerm>[];
   while (output.length < count) {
-    final category = categories[random.nextInt(categories.length)];
+    final availablePreferred =
+        preferred.where((item) => !values.contains(item.value)).toList();
+    final favorite = availablePreferred.isNotEmpty && random.nextDouble() < .6
+        ? availablePreferred[random.nextInt(availablePreferred.length)]
+        : null;
+    final category =
+        favorite?.category ?? categories[random.nextInt(categories.length)];
     final terms = styleMutationLibrary[category]!;
-    final value = terms[random.nextInt(terms.length)];
+    final value = favorite?.value ?? terms[random.nextInt(terms.length)];
     if (!values.add(value)) continue;
-    final weight = .3 + random.nextInt(13) / 10;
+    final weight = favorite?.weight.clamp(.3, 1.5).toDouble() ??
+        (.3 + random.nextInt(13) / 10);
     output.add(StyleMutationTerm(category, value, weight));
   }
   return output;
@@ -275,6 +316,7 @@ List<ArtistRecipe> drawArtistRecipes({
   String auxiliary = '',
   bool mutateAuxiliary = false,
   Set<String> favorites = const {},
+  List<StyleMutationTerm> favoriteMutations = const [],
 }) {
   if (pool.isEmpty || count < 1) return const [];
   final random = Random(drawSeed);
@@ -291,28 +333,70 @@ List<ArtistRecipe> drawArtistRecipes({
       final index = _weightedIndex(available, random, favorites);
       selected.add(available.removeAt(index));
     }
-    final tokens = <String>[];
+    final artistTokens = <String>[];
     for (var index = 0; index < selected.length; index++) {
-      tokens.add(
+      artistTokens.add(
           '${_number(_weight(index, selected.length, random))}::artist:${selected[index].name} ::');
     }
+    final tokens = <String>[...artistTokens];
     final auxiliaryTokens = auxiliary
         .split(RegExp(r'[,，]'))
         .map((item) => item.trim())
         .where((item) => item.isNotEmpty);
     tokens.addAll(auxiliaryTokens);
-    final mutations =
-        mutateAuxiliary ? _drawMutations(random) : const <StyleMutationTerm>[];
+    final basePrompt = tokens.join(', ');
+    final mutations = mutateAuxiliary
+        ? _drawMutations(random, favoriteMutations)
+        : const <StyleMutationTerm>[];
     tokens.addAll(
         mutations.map((item) => '${_number(item.weight)}::${item.value} ::'));
     final prompt = tokens.join(', ');
     if (!seen.add(prompt)) continue;
+    final id =
+        '$drawSeed-${output.length}-${selected.map((item) => item.name).join('+')}';
     output.add(ArtistRecipe(
-      '$drawSeed-${output.length}-${selected.map((item) => item.name).join('+')}',
+      id,
       prompt,
       selected.map((item) => item.name).toList(),
-      mutations,
+      mutations: mutations,
+      basePrompt: basePrompt,
+      artistPrompt: artistTokens.join(', '),
+      pairId: id,
+      variant: mutations.isEmpty ? 'plain' : 'mutated',
     ));
   }
   return output;
 }
+
+List<ArtistRecipe> expandArtistRecipeComparisons(
+  List<ArtistRecipe> recipes,
+  bool compareMutations,
+) =>
+    recipes.expand((recipe) {
+      final plain = ArtistRecipe(
+        '${recipe.id}-plain',
+        recipe.basePrompt,
+        recipe.artists,
+        mutations: const [],
+        basePrompt: recipe.basePrompt,
+        artistPrompt: recipe.artistPrompt,
+        pairId: recipe.id,
+        variant: 'plain',
+      );
+      if (!compareMutations || recipe.mutations.isEmpty) {
+        return <ArtistRecipe>[plain];
+      }
+      return <ArtistRecipe>[
+        plain,
+        ArtistRecipe(
+          '${recipe.id}-mutated',
+          recipe.prompt,
+          recipe.artists,
+          mutations: recipe.mutations,
+          basePrompt: recipe.basePrompt,
+          artistPrompt: recipe.artistPrompt,
+          pairId: recipe.id,
+          variant: 'mutated',
+        ),
+      ];
+    }).toList();

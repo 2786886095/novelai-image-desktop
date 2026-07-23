@@ -8803,10 +8803,37 @@ html.theme-dark #root {
 }
 .artist-mutation-block span small { color: var(--accent); font-size: 9px; font-weight: 800; }
 .artist-combination-queue li > div { min-width: 0; }
+.artist-combination-queue li > div > code { display: block; }
+.artist-ab-label {
+  display: block;
+  width: fit-content;
+  margin: 2px 0 5px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent-soft) 72%, var(--bg-panel));
+  color: var(--accent);
+  font-size: 10px;
+}
+.artist-ab-label:not(:first-child) { margin-top: 10px; }
 .artist-combination-queue .artist-mutation-block { margin: 7px 0 0; }
 .artist-favorites-panel { display: grid; gap: 14px; }
 .artist-favorites-panel > .artist-candidate-grid { margin: 0; }
 .artist-string-block em { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-style: normal; }
+.artist-copy-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.artist-copy-actions button {
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-panel);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.artist-copy-actions button:hover { border-color: var(--accent); }
+.artist-variant-plain .artist-candidate-header { background: color-mix(in srgb, var(--bg-panel) 88%, #38bdf8 12%); }
+.artist-variant-mutated .artist-candidate-header { background: color-mix(in srgb, var(--bg-panel) 82%, var(--accent-soft) 18%); }
 @media (max-width: 900px) {
   .artist-lab { padding: 12px; }
   .artist-lab-config-grid { grid-template-columns: 1fr; }

@@ -16,6 +16,7 @@ export interface RandomArtistRecipeOptions {
   auxiliaryPrompt?: string;
   mutateAuxiliary: boolean;
   favoriteArtists?: string[];
+  favoriteMutations?: StyleMutationToken[];
   random?: () => number;
 }
 
@@ -24,6 +25,7 @@ export interface GeneratedArtistRecipe {
   artists: ArtistWeightedTag[];
   auxiliary: ParsedRecipeToken[];
   mutations: StyleMutationToken[];
+  basePrompt: string;
   prompt: string;
 }
 
@@ -31,6 +33,13 @@ export type StyleMutationCategory = "artStyle" | "medium" | "color" | "lighting"
 
 export interface StyleMutationToken extends ParsedRecipeToken {
   category: StyleMutationCategory;
+}
+
+export type ArtistRecipeVariant = "plain" | "mutated";
+
+export interface ArtistRecipeComparison extends GeneratedArtistRecipe {
+  pairId: string;
+  variant: ArtistRecipeVariant;
 }
 
 /**
@@ -197,18 +206,32 @@ function formatToken(token: ParsedRecipeToken): string {
   return `${roundWeight(token.weight)}::${token.value} ::`;
 }
 
-function drawStyleMutations(random: () => number): StyleMutationToken[] {
+function drawStyleMutations(
+  random: () => number,
+  favoriteMutations: StyleMutationToken[] = [],
+): StyleMutationToken[] {
   const categories = Object.keys(STYLE_MUTATION_LIBRARY) as StyleMutationCategory[];
+  const preferred = favoriteMutations.filter((token) => (
+    categories.includes(token.category)
+    && Boolean(token.value.trim())
+    && Number.isFinite(token.weight)
+  ));
   const count = 2 + Math.floor(random() * 5);
   const selected = new Set<string>();
   const output: StyleMutationToken[] = [];
   while (output.length < count) {
-    const category = categories[Math.floor(random() * categories.length)];
+    const availablePreferred = preferred.filter((token) => !selected.has(token.value));
+    const favorite = availablePreferred.length > 0 && random() < 0.6
+      ? availablePreferred[Math.floor(random() * availablePreferred.length)]
+      : undefined;
+    const category = favorite?.category ?? categories[Math.floor(random() * categories.length)];
     const terms = STYLE_MUTATION_LIBRARY[category];
-    const value = terms[Math.floor(random() * terms.length)];
+    const value = favorite?.value ?? terms[Math.floor(random() * terms.length)];
     if (selected.has(value)) continue;
     selected.add(value);
-    const weight = roundWeight(0.3 + Math.floor(random() * 13) / 10);
+    const weight = favorite
+      ? roundWeight(Math.max(0.3, Math.min(1.5, favorite.weight)))
+      : roundWeight(0.3 + Math.floor(random() * 13) / 10);
     output.push({ raw: value, value, weight, kind: "style", category });
   }
   return output;
@@ -244,11 +267,14 @@ export function generatePopularArtistRecipes(
       return { name: artist.name, weight: chooseWeight(role, random) };
     });
     const auxiliary = baseAuxiliary;
-    const mutations = options.mutateAuxiliary ? drawStyleMutations(random) : [];
+    const mutations = options.mutateAuxiliary
+      ? drawStyleMutations(random, options.favoriteMutations)
+      : [];
     const artistText = artists.map((artist) => `${artist.weight}::artist:${artist.name} ::`).join(", ");
     const auxiliaryText = auxiliary.map(formatToken).join(", ");
     const mutationText = mutations.map(formatToken).join(", ");
-    const prompt = [artistText, auxiliaryText, mutationText].filter(Boolean).join(", ");
+    const basePrompt = [artistText, auxiliaryText].filter(Boolean).join(", ");
+    const prompt = [basePrompt, mutationText].filter(Boolean).join(", ");
     if (!prompt || seen.has(prompt)) continue;
     seen.add(prompt);
     output.push({
@@ -256,8 +282,35 @@ export function generatePopularArtistRecipes(
       artists,
       auxiliary,
       mutations,
+      basePrompt,
       prompt,
     });
   }
   return output;
+}
+
+export function expandArtistRecipeComparisons(
+  recipes: GeneratedArtistRecipe[],
+  compareMutations: boolean,
+): ArtistRecipeComparison[] {
+  return recipes.flatMap((recipe) => {
+    const plain: ArtistRecipeComparison = {
+      ...recipe,
+      id: `${recipe.id}-plain`,
+      pairId: recipe.id,
+      variant: "plain",
+      mutations: [],
+      prompt: recipe.basePrompt,
+    };
+    if (!compareMutations || recipe.mutations.length === 0) return [plain];
+    return [
+      plain,
+      {
+        ...recipe,
+        id: `${recipe.id}-mutated`,
+        pairId: recipe.id,
+        variant: "mutated",
+      },
+    ];
+  });
 }

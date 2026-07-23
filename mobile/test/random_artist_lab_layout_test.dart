@@ -94,4 +94,32 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byTooltip('重试'), findsOneWidget);
   });
+
+  testWidgets('style toggle previews clearly labelled A-B pairs',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(800, 900);
+    addTearDown(tester.view.reset);
+    final state = AppState();
+    addTearDown(state.dispose);
+    await tester.pumpWidget(
+      ChangeNotifierProvider.value(
+        value: state,
+        child: MaterialApp(
+          theme: StudioTheme.light(),
+          home: RandomArtistLabScreen(
+            onBack: () {},
+            artistService: _FakeArtistService(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(Switch));
+    await tester.pumpAndSettle();
+    expect(find.text('A｜仅画师串'), findsWidgets);
+    expect(find.text('B｜画师串＋随机风格词'), findsWidgets);
+    expect(find.textContaining('8 组 · 16 张'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
