@@ -74,6 +74,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
   final _artistCount = TextEditingController(text: '8');
   final _seed = TextEditingController(text: '246813579');
   final _poolSize = TextEditingController(text: '1000');
+  final _scrollController = ScrollController();
   List<ArtistTagRecord> _pool = const [];
   List<ArtistRecipe> _planned = const [];
   final List<_Result> _results = [];
@@ -84,6 +85,24 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
   bool _cancelled = false;
   String _message = '';
   int _drawSeed = Random.secure().nextInt(0x7fffffff);
+
+  void _setStateKeepingScroll(VoidCallback update) {
+    if (!mounted) return;
+    final scrollOffset =
+        _scrollController.hasClients ? _scrollController.offset : null;
+    setState(update);
+    if (scrollOffset == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) return;
+      final position = _scrollController.position;
+      final target = scrollOffset
+          .clamp(position.minScrollExtent, position.maxScrollExtent)
+          .toDouble();
+      if ((position.pixels - target).abs() > 0.5) {
+        _scrollController.jumpTo(target);
+      }
+    });
+  }
 
   Map<String, String> _text(String language) {
     switch (normalizeAppLocaleCode(language)) {
@@ -437,7 +456,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
 
   Future<void> _generateOne(_Result result) async {
     final app = context.read<AppState>();
-    setState(() {
+    _setStateKeepingScroll(() {
       result.status = 'running';
       result.error = null;
     });
@@ -450,16 +469,20 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
         ..seedMode = 'fixed'
         ..seed = int.tryParse(_seed.text) ?? 0
         ..qualityToggle = false;
-      result.image = await app.generateArtistLabTemporary(
+      final image = await app.generateArtistLabTemporary(
         panelParams: fixed,
         panelExtras: GenerateExtras(),
       );
-      result.status = 'done';
+      _setStateKeepingScroll(() {
+        result.image = image;
+        result.status = 'done';
+      });
     } catch (error) {
-      result.status = 'failed';
-      result.error = error.toString();
+      _setStateKeepingScroll(() {
+        result.status = 'failed';
+        result.error = error.toString();
+      });
     }
-    if (mounted) setState(() {});
     await _save();
   }
 
@@ -478,7 +501,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
         sequence: _mutateAuxiliary ? index ~/ 2 + 1 : index + 1,
       ),
     );
-    setState(() {
+    _setStateKeepingScroll(() {
       _results
         ..clear()
         ..addAll(batch);
@@ -492,7 +515,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
       await _generateOne(result);
     }
     if (mounted) {
-      setState(() {
+      _setStateKeepingScroll(() {
         _running = false;
         _message = _cancelled
             ? _text(app.settings.language)['stop']!
@@ -504,9 +527,9 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
 
   Future<void> _retry(_Result result) async {
     if (_running || result.status != 'failed') return;
-    setState(() => _running = true);
+    _setStateKeepingScroll(() => _running = true);
     await _generateOne(result);
-    if (mounted) setState(() => _running = false);
+    _setStateKeepingScroll(() => _running = false);
   }
 
   Future<void> _saveFavorite(_Result result) async {
@@ -547,6 +570,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     _artistCount.dispose();
     _poolSize.dispose();
     _seed.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -616,6 +640,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           itemBuilder: (context, index) {
             final result = items[index];
             return Card(
+              key: ValueKey(result.recipe.id),
               clipBehavior: Clip.antiAlias,
               child: Column(
                 children: [
@@ -758,6 +783,8 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
         title: Text(text['title']!),
       ),
       body: ListView(
+        controller: _scrollController,
+        key: const PageStorageKey<String>('random-artist-lab-scroll'),
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 32),
         children: [

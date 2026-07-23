@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -22,6 +23,17 @@ class _FakeArtistService extends ArtistTagService {
         60,
         (index) => ArtistTagRecord(index + 1, 'artist_$index', 1000 - index),
       );
+}
+
+class _FakeGenerationAppState extends AppState {
+  final Completer<HistoryItem> generation = Completer<HistoryItem>();
+
+  @override
+  Future<HistoryItem> generateArtistLabTemporary({
+    required GenerateParams panelParams,
+    required GenerateExtras panelExtras,
+  }) =>
+      generation.future;
 }
 
 void main() {
@@ -120,6 +132,75 @@ void main() {
     expect(find.text('A｜仅画师串'), findsWidgets);
     expect(find.text('B｜画师串＋随机风格词'), findsWidgets);
     expect(find.textContaining('8 组 · 16 张'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('result completion keeps the current page scroll position',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(420, 800);
+    addTearDown(tester.view.reset);
+    SharedPreferences.setMockInitialValues({
+      'artist_lab_random_v1_results': jsonEncode(List.generate(
+        12,
+        (index) => {
+          'recipe': {
+            'id': 'failed-$index',
+            'prompt': '1.2::artist:test_artist_$index ::',
+            'artists': ['test_artist_$index'],
+            'mutations': [],
+          },
+          'sequence': index + 1,
+          'status': 'failed',
+          'error': 'network error',
+          'liked': false,
+        },
+      )),
+    });
+    final state = _FakeGenerationAppState();
+    addTearDown(state.dispose);
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppState>.value(
+        value: state,
+        child: MaterialApp(
+          theme: StudioTheme.light(),
+          home: RandomArtistLabScreen(
+            onBack: () {},
+            artistService: _FakeArtistService(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final bodyList =
+        find.byKey(const PageStorageKey<String>('random-artist-lab-scroll'));
+    await tester.drag(bodyList, const Offset(0, -2600));
+    await tester.pumpAndSettle();
+    final scrollable = tester.state<ScrollableState>(
+      find.descendant(of: bodyList, matching: find.byType(Scrollable)).first,
+    );
+    final before = scrollable.position.pixels;
+    expect(before, greaterThan(0));
+
+    await tester.tap(find.byTooltip('重试').hitTestable().first);
+    await tester.pump();
+    expect(scrollable.position.pixels, closeTo(before, 0.5));
+
+    state.generation.complete(HistoryItem(
+      id: 'generated-1',
+      filePath: 'missing-test-image.png',
+      date: '2026-07-23',
+      createdAt: '2026-07-23T00:00:00',
+      seed: 246813579,
+      model: 'nai-diffusion-4-5-full',
+      width: 512,
+      height: 512,
+      prompt: 'test',
+      feature: 'artist-lab',
+    ));
+    await tester.pumpAndSettle();
+    expect(scrollable.position.pixels, closeTo(before, 0.5));
     expect(tester.takeException(), isNull);
   });
 }

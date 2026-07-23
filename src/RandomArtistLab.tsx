@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Button } from "./components/ui";
 import {
   expandArtistRecipeComparisons,
@@ -97,7 +97,24 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
   const [running, setRunning] = useState(false);
   const [message, setMessage] = useState("");
   const cancelRef = useRef(false);
+  const scrollRef = useRef<HTMLElement>(null);
+  const scrollTopToRestoreRef = useRef<number | null>(null);
   const patch = (next: Partial<RandomSession>) => setSession((current) => ({ ...current, ...next }));
+  const rememberScrollTop = () => {
+    scrollTopToRestoreRef.current = scrollRef.current?.scrollTop ?? null;
+  };
+  const updateResultsKeepingScroll = (update: (current: RandomSession) => RandomSession) => {
+    rememberScrollTop();
+    setSession(update);
+  };
+
+  useLayoutEffect(() => {
+    const scrollTop = scrollTopToRestoreRef.current;
+    const scroller = scrollRef.current;
+    if (scrollTop === null || !scroller) return;
+    scrollTopToRestoreRef.current = null;
+    scroller.scrollTop = Math.min(scrollTop, Math.max(0, scroller.scrollHeight - scroller.clientHeight));
+  });
 
   useEffect(() => {
     sessionCache = session;
@@ -158,14 +175,14 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
 
   const generateOne = async (recipe: RandomResult) => {
     const id = recipe.id;
-    setSession((current) => ({ ...current, results: current.results.map((item) => item.id === id ? { ...item, status: "generating", error: undefined } : item) }));
+    updateResultsKeepingScroll((current) => ({ ...current, results: current.results.map((item) => item.id === id ? { ...item, status: "generating", error: undefined } : item) }));
     try {
       const generated = await window.naiDesktop.generateArtistLab({ ...fixedParams(), stylePrompt: recipe.prompt }, extras, "random");
       const image = generated.items[0];
       if (!generated.ok || !image) throw new Error(generated.message);
-      setSession((current) => ({ ...current, results: current.results.map((item) => item.id === id ? { ...item, image, status: "done", error: undefined } : item) }));
+      updateResultsKeepingScroll((current) => ({ ...current, results: current.results.map((item) => item.id === id ? { ...item, image, status: "done", error: undefined } : item) }));
     } catch (error: any) {
-      setSession((current) => ({ ...current, results: current.results.map((item) => item.id === id ? { ...item, status: "failed", error: error?.message ?? String(error) } : item) }));
+      updateResultsKeepingScroll((current) => ({ ...current, results: current.results.map((item) => item.id === id ? { ...item, status: "failed", error: error?.message ?? String(error) } : item) }));
     }
   };
 
@@ -193,6 +210,7 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
       sequence: session.mutateAuxiliary ? Math.floor(index / 2) + 1 : index + 1,
       status: "pending",
     }));
+    rememberScrollTop();
     patch({ results: pending });
     setRunning(true);
     cancelRef.current = false;
@@ -200,6 +218,7 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
       if (cancelRef.current) break;
       await generateOne(result);
     }
+    rememberScrollTop();
     setRunning(false);
     await Promise.allSettled([refreshAccount()]);
     if (!cancelRef.current) setMessage(text.complete);
@@ -207,9 +226,11 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
 
   const retry = async (result: RandomResult) => {
     if (running || result.status !== "failed") return;
+    rememberScrollTop();
     setRunning(true);
     cancelRef.current = false;
     await generateOne(result);
+    rememberScrollTop();
     setRunning(false);
     await Promise.allSettled([refreshAccount()]);
   };
@@ -252,10 +273,10 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
   const renderMutationTerms = (result: GeneratedArtistRecipe) => result.mutations.length > 0 && <div className="artist-mutation-block"><b>{text.mutation}</b><div>{result.mutations.map((token, index) => <span key={`${token.value}-${index}`}><small>{categoryLabels[token.category]}</small>{token.weight}::{token.value}</span>)}</div></div>;
   const renderCard = (result: RandomResult, favorite = false) => {
     const variant = variantOf(result);
-    return <article key={result.id} className={`artist-candidate ${result.status} artist-variant-${variant}`}><header className="artist-candidate-header"><b>#{String(result.sequence).padStart(2, "0")} · {variant === "mutated" ? text.variantMutated : text.variantPlain}</b><span>{favorite || result.liked ? text.saved : text[result.status]}</span></header><div className="artist-candidate-media">{result.image ? <img src={result.image.fileUrl} alt={`${variant === "mutated" ? text.variantMutated : text.variantPlain}: ${result.prompt}`} /> : <div className="artist-candidate-placeholder">{text[result.status]}</div>}</div>{renderMutationTerms(result)}<div className="artist-string-block"><div className="artist-copy-actions"><button type="button" onClick={() => { void navigator.clipboard.writeText(artistString(result)); setMessage(text.copiedArtists); }}>{text.copyArtists}</button><button type="button" onClick={() => { void navigator.clipboard.writeText(result.prompt); setMessage(text.copiedFull); }}>{text.copyFull}</button></div><code>{result.prompt}</code></div>{result.error && <small className="artist-error">{result.error}</small>}<div className="artist-candidate-actions">{favorite ? <Button variant="ghost" onClick={() => void removeFavorite(result)}>{text.remove}</Button> : result.status === "failed" ? <Button variant="ghost" disabled={running} onClick={() => void retry(result)}>{text.retry}</Button> : <Button variant="ghost" disabled={result.status !== "done" || result.liked || result.saving} onClick={() => void saveFavorite(result)}>{result.saving ? text.saving : result.liked ? text.saved : text.like}</Button>}<Button variant="primary" disabled={result.status !== "done"} onClick={() => { applyParams({ stylePrompt: result.prompt }); setMessage(text.applied); }}>{text.apply}</Button></div></article>;
+    return <article key={result.id} className={`artist-candidate ${result.status} artist-variant-${variant}`}><header className="artist-candidate-header"><b>#{String(result.sequence).padStart(2, "0")} · {variant === "mutated" ? text.variantMutated : text.variantPlain}</b><span>{favorite || result.liked ? text.saved : text[result.status]}</span></header><div className="artist-candidate-media">{result.image ? <img src={result.image.fileUrl} alt={`${variant === "mutated" ? text.variantMutated : text.variantPlain}: ${result.prompt}`} /> : <div className="artist-candidate-placeholder">{text[result.status]}</div>}</div>{renderMutationTerms(result)}<div className="artist-string-block"><div className="artist-copy-actions"><button type="button" onClick={() => { void navigator.clipboard.writeText(artistString(result)); setMessage(text.copiedArtists); }}>{text.copyArtists}</button><button type="button" onClick={() => { void navigator.clipboard.writeText(result.prompt); setMessage(text.copiedFull); }}>{text.copyFull}</button></div><code>{result.prompt}</code></div><small className={`artist-error ${result.error ? "" : "empty"}`} title={result.error}>{result.error ?? "\u00a0"}</small><div className="artist-candidate-actions">{favorite ? <Button variant="ghost" onClick={() => void removeFavorite(result)}>{text.remove}</Button> : result.status === "failed" ? <Button variant="ghost" disabled={running} onClick={() => void retry(result)}>{text.retry}</Button> : <Button variant="ghost" disabled={result.status !== "done" || result.liked || result.saving} onClick={() => void saveFavorite(result)}>{result.saving ? text.saving : result.liked ? text.saved : text.like}</Button>}<Button variant="primary" disabled={result.status !== "done"} onClick={() => { applyParams({ stylePrompt: result.prompt }); setMessage(text.applied); }}>{text.apply}</Button></div></article>;
   };
 
-  return <main className="artist-lab random-artist-lab">
+  return <main ref={scrollRef} className="artist-lab random-artist-lab">
     <header className="artist-lab-hero"><div><h2>{text.title}</h2><p>{text.subtitle}</p></div><Button onClick={onBack}>{text.back}</Button></header>
     <section className="artist-lab-panel random-pool-summary"><div><h3>{text.pool}</h3><strong>{loading ? text.loading : interpolate(text.ready, { count: pool.length })}</strong><small>{text.hint}</small></div><div className="artist-pool-actions"><label><span>{text.poolSize}</span><input type="number" min={100} max={5000} step={100} value={session.poolSize} onChange={(event) => patch({ poolSize: clampPoolSize(event.target.value) })} /></label><Button onClick={() => void loadPool(false)} disabled={loading}>{text.load}</Button><Button onClick={() => void loadPool(true)} disabled={loading}>{text.refresh}</Button></div></section>
     <section className="artist-lab-panel random-artist-settings">
