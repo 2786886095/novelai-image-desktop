@@ -80,12 +80,58 @@ class PromptCodexEntry {
       };
 }
 
+class PromptCodexIntroduction {
+  final String title;
+  final String content;
+
+  const PromptCodexIntroduction({required this.title, required this.content});
+
+  factory PromptCodexIntroduction.fromJson(Map<String, dynamic> json) =>
+      PromptCodexIntroduction(
+        title: json['title']?.toString() ?? '',
+        content: json['content']?.toString() ?? '',
+      );
+
+  Map<String, dynamic> toJson() => {'title': title, 'content': content};
+}
+
+bool isPromptCodexIntroductionEntry(PromptCodexEntry entry) {
+  if (entry.section == '前言') return true;
+  if (entry.section != '编纂者常用画师组') return false;
+  final value = entry.title.trim();
+  return RegExp(r'^ps[:：]', caseSensitive: false).hasMatch(value) ||
+      RegExp(r'^NAI(?:3|4(?:\.5)?)时期[:：]?$', caseSensitive: false)
+          .hasMatch(value);
+}
+
+List<PromptCodexIntroduction> extractPromptCodexIntroduction(
+    List<PromptCodexEntry> entries) {
+  final seen = <String>{};
+  return entries
+      .where((entry) =>
+          entry.bookId == 'regular' && isPromptCodexIntroductionEntry(entry))
+      .where((entry) => seen.add('${entry.title}\n${entry.prompt}'))
+      .map((entry) =>
+          PromptCodexIntroduction(title: entry.title, content: entry.prompt))
+      .toList(growable: false);
+}
+
+List<PromptCodexEntry> dedupePromptCodexEntries(
+    Iterable<PromptCodexEntry> entries) {
+  final seen = <String>{};
+  return entries
+      .where((entry) =>
+          seen.add('${entry.section}\n${entry.title}\n${entry.prompt}'))
+      .toList(growable: false);
+}
+
 class PromptCodexSnapshot {
   final String generatedAt;
   final String sourceSite;
   final String permissionNote;
   final List<PromptCodexBook> books;
   final List<PromptCodexEntry> entries;
+  final List<PromptCodexIntroduction> introduction;
 
   const PromptCodexSnapshot({
     required this.generatedAt,
@@ -93,6 +139,7 @@ class PromptCodexSnapshot {
     required this.permissionNote,
     required this.books,
     required this.entries,
+    this.introduction = const [],
   });
 
   factory PromptCodexSnapshot.fromJson(Map<String, dynamic> json) =>
@@ -110,6 +157,11 @@ class PromptCodexSnapshot {
             .map((item) =>
                 PromptCodexEntry.fromJson(Map<String, dynamic>.from(item)))
             .toList(growable: false),
+        introduction: (json['introduction'] as List? ?? const [])
+            .whereType<Map>()
+            .map((item) => PromptCodexIntroduction.fromJson(
+                Map<String, dynamic>.from(item)))
+            .toList(growable: false),
       );
 
   Map<String, dynamic> toJson() => {
@@ -119,6 +171,7 @@ class PromptCodexSnapshot {
         'permissionNote': permissionNote,
         'books': books.map((item) => item.toJson()).toList(),
         'entries': entries.map((item) => item.toJson()).toList(),
+        'introduction': introduction.map((item) => item.toJson()).toList(),
       };
 }
 
@@ -256,7 +309,9 @@ PromptCodexSnapshot _parsePages(Map<String, Object?> payload) {
     sourceSite: 'https://nai4.top',
     permissionNote: '原页面声明为无偿免费分享；应用保留原始来源链接。',
     books: books,
-    entries: entries,
+    introduction: extractPromptCodexIntroduction(entries),
+    entries: dedupePromptCodexEntries(
+        entries.where((entry) => !isPromptCodexIntroductionEntry(entry))),
   );
 }
 

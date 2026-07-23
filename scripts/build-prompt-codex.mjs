@@ -127,6 +127,15 @@ export function parsePromptCodexHtml(html, book) {
   return entries;
 }
 
+function isIntroductionEntry(entry) {
+  if (entry.section === "前言") return true;
+  if (entry.section !== "编纂者常用画师组") return false;
+  return (
+    /^ps[:：]/i.test(entry.title.trim()) ||
+    /^NAI(?:3|4(?:\.5)?)时期[:：]?$/i.test(entry.title.trim())
+  );
+}
+
 async function main() {
   const entries = [];
   for (const book of BOOKS) {
@@ -144,13 +153,32 @@ async function main() {
     entries.push(...parsed);
     process.stdout.write(`${book.title}: ${parsed.length}\n`);
   }
+  const introduction = [];
+  const seenIntroduction = new Set();
+  for (const entry of entries) {
+    if (entry.bookId !== "regular" || !isIntroductionEntry(entry)) continue;
+    const key = `${entry.title}\n${entry.prompt}`;
+    if (seenIntroduction.has(key)) continue;
+    seenIntroduction.add(key);
+    introduction.push({ title: entry.title, content: entry.prompt });
+  }
+  const seenPrompts = new Set();
+  const promptEntries = entries
+    .filter((entry) => !isIntroductionEntry(entry))
+    .filter((entry) => {
+      const key = `${entry.section}\n${entry.title}\n${entry.prompt}`;
+      if (seenPrompts.has(key)) return false;
+      seenPrompts.add(key);
+      return true;
+    });
   const snapshot = {
     schemaVersion: 1,
     generatedAt: new Date().toISOString(),
     sourceSite: "https://nai4.top",
     permissionNote: "原页面声明为无偿免费分享；应用保留原始来源链接。",
     books: BOOKS,
-    entries,
+    introduction,
+    entries: promptEntries,
   };
   const json = `${JSON.stringify(snapshot)}\n`;
   const targets = [
@@ -162,7 +190,7 @@ async function main() {
     await fs.writeFile(target, json, "utf8");
   }
   process.stdout.write(
-    `total: ${entries.length}; bytes: ${Buffer.byteLength(json)}\n`,
+    `total: ${promptEntries.length}; intro: ${introduction.length}; bytes: ${Buffer.byteLength(json)}\n`,
   );
 }
 

@@ -74,7 +74,11 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
   final _artistCount = TextEditingController(text: '8');
   final _seed = TextEditingController(text: '246813579');
   final _poolSize = TextEditingController(text: '1000');
+  final _width = TextEditingController(text: '832');
+  final _height = TextEditingController(text: '1216');
+  final _negative = TextEditingController();
   final _scrollController = ScrollController();
+  GenerateParams _generationParams = GenerateParams();
   List<ArtistTagRecord> _pool = const [];
   List<ArtistRecipe> _planned = const [];
   final List<_Result> _results = [];
@@ -334,9 +338,106 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     }
   }
 
+  Map<String, String> _parameterText(String language) {
+    switch (normalizeAppLocaleCode(language)) {
+      case 'zh-TW':
+        return {
+          'title': 'NovelAI 生成參數',
+          'hint': '首次進入時繼承生成頁參數；此處修改只用於抽卡，A/B 使用相同參數。',
+          'sync': '從生成頁同步',
+          'model': '模型',
+          'size': '圖片尺寸',
+          'width': '寬度',
+          'height': '高度',
+          'negative': '負面提示詞',
+          'steps': '步數',
+          'sampler': '採樣器',
+          'noise': '噪聲計畫',
+          'uc': '負面預設',
+          'quality': '品質詞',
+        };
+      case 'en-US':
+        return {
+          'title': 'NovelAI generation settings',
+          'hint':
+              'Initially inherited from Generate. Changes affect only gacha and each A/B pair uses identical settings.',
+          'sync': 'Sync from Generate',
+          'model': 'Model',
+          'size': 'Image size',
+          'width': 'Width',
+          'height': 'Height',
+          'negative': 'Negative prompt',
+          'steps': 'Steps',
+          'sampler': 'Sampler',
+          'noise': 'Noise schedule',
+          'uc': 'UC preset',
+          'quality': 'Quality tags',
+        };
+      case 'ja-JP':
+        return {
+          'title': 'NovelAI 生成設定',
+          'hint': '初回は生成画面から継承します。変更は抽選だけに使い、A/B は同じ設定で比較します。',
+          'sync': '生成画面から同期',
+          'model': 'モデル',
+          'size': '画像サイズ',
+          'width': '幅',
+          'height': '高さ',
+          'negative': 'ネガティブプロンプト',
+          'steps': 'ステップ',
+          'sampler': 'サンプラー',
+          'noise': 'ノイズスケジュール',
+          'uc': 'UC プリセット',
+          'quality': '品質タグ',
+        };
+      case 'ko-KR':
+        return {
+          'title': 'NovelAI 생성 설정',
+          'hint': '처음에는 생성 화면 설정을 상속합니다. 변경은 뽑기에만 적용되며 A/B는 같은 설정을 사용합니다.',
+          'sync': '생성 화면에서 동기화',
+          'model': '모델',
+          'size': '이미지 크기',
+          'width': '너비',
+          'height': '높이',
+          'negative': '네거티브 프롬프트',
+          'steps': '스텝',
+          'sampler': '샘플러',
+          'noise': '노이즈 스케줄',
+          'uc': 'UC 프리셋',
+          'quality': '품질 태그',
+        };
+      default:
+        return {
+          'title': 'NovelAI 生成参数',
+          'hint': '首次进入时继承生成页参数；此处修改仅用于抽卡，A/B 使用相同参数。',
+          'sync': '从生成页同步',
+          'model': '模型',
+          'size': '图片尺寸',
+          'width': '宽度',
+          'height': '高度',
+          'negative': '负面提示词',
+          'steps': '步数',
+          'sampler': '采样器',
+          'noise': '噪声计划',
+          'uc': '负面预设',
+          'quality': '质量词',
+        };
+    }
+  }
+
+  void _syncParameterControllers() {
+    _width.text = '${_generationParams.width}';
+    _height.text = '${_generationParams.height}';
+    _negative.text = _generationParams.negativePrompt;
+  }
+
   int _positive(TextEditingController controller, [int fallback = 1]) {
     final value = int.tryParse(controller.text.trim());
     return value != null && value > 0 ? value : fallback;
+  }
+
+  int _snapDimension(String value, [int fallback = 64]) {
+    final parsed = int.tryParse(value) ?? fallback;
+    return ((parsed / 64).round() * 64).clamp(64, 4096).toInt();
   }
 
   @override
@@ -355,6 +456,19 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     _artistCount.text = '${prefs.getInt('${_prefsPrefix}artistCount') ?? 8}';
     _poolSize.text = '${prefs.getInt('${_prefsPrefix}poolSize') ?? 1000}';
     _seed.text = '${prefs.getInt('${_prefsPrefix}seed') ?? 246813579}';
+    try {
+      final saved = prefs.getString('${_prefsPrefix}generationParams');
+      _generationParams = saved == null
+          ? app.params.copy()
+          : GenerateParams.fromJson(
+              Map<String, dynamic>.from(jsonDecode(saved) as Map));
+    } catch (_) {
+      _generationParams = app.params.copy();
+    }
+    _generationParams
+      ..positivePrompt = ''
+      ..stylePrompt = '';
+    _syncParameterControllers();
     _mutateAuxiliary = prefs.getBool('${_prefsPrefix}mutate') ?? false;
     _showFavorites = prefs.getBool('${_prefsPrefix}showFavorites') ?? false;
     for (final entry in <(String, List<_Result>)>[
@@ -384,6 +498,12 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
         _positive(_artistCount, 8).clamp(1, 20).toInt());
     await prefs.setInt('${_prefsPrefix}poolSize', _poolLimit());
     await prefs.setInt('${_prefsPrefix}seed', int.tryParse(_seed.text) ?? 0);
+    _generationParams
+      ..width = _snapDimension(_width.text, 832)
+      ..height = _snapDimension(_height.text, 1216)
+      ..negativePrompt = _negative.text;
+    await prefs.setString('${_prefsPrefix}generationParams',
+        jsonEncode(_generationParams.toJson()));
     await prefs.setBool('${_prefsPrefix}mutate', _mutateAuxiliary);
     await prefs.setBool('${_prefsPrefix}showFavorites', _showFavorites);
     await prefs.setString('${_prefsPrefix}results',
@@ -464,14 +584,11 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
       result.error = null;
     });
     try {
-      final fixed = app.params.copy()
+      final fixed = _generationParams.copy()
         ..positivePrompt = _base.text.trim()
         ..stylePrompt = result.recipe.prompt
-        ..width = 512
-        ..height = 512
         ..seedMode = 'fixed'
-        ..seed = int.tryParse(_seed.text) ?? 0
-        ..qualityToggle = false;
+        ..seed = int.tryParse(_seed.text) ?? 0;
       final image = await app.generateArtistLabTemporary(
         panelParams: fixed,
         panelExtras: GenerateExtras(),
@@ -573,6 +690,9 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     _artistCount.dispose();
     _poolSize.dispose();
     _seed.dispose();
+    _width.dispose();
+    _height.dispose();
+    _negative.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -751,8 +871,36 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                         IconButton(
                           tooltip: text['apply'],
                           onPressed: result.status == 'done'
-                              ? () => app.setParam((params) =>
-                                  params.stylePrompt = result.recipe.prompt)
+                              ? () => app.setParam((params) {
+                                    final selected = _generationParams.copy()
+                                      ..positivePrompt = _base.text.trim()
+                                      ..stylePrompt = result.recipe.prompt
+                                      ..seed = int.tryParse(_seed.text) ?? 0
+                                      ..seedMode = 'fixed';
+                                    final value = selected.toJson();
+                                    final applied =
+                                        GenerateParams.fromJson(value);
+                                    params
+                                      ..model = applied.model
+                                      ..stylePrompt = applied.stylePrompt
+                                      ..positivePrompt = applied.positivePrompt
+                                      ..negativePrompt = applied.negativePrompt
+                                      ..width = applied.width
+                                      ..height = applied.height
+                                      ..steps = applied.steps
+                                      ..cfgScale = applied.cfgScale
+                                      ..cfgRescale = applied.cfgRescale
+                                      ..sampler = applied.sampler
+                                      ..noiseSchedule = applied.noiseSchedule
+                                      ..seed = applied.seed
+                                      ..seedMode = applied.seedMode
+                                      ..ucPreset = applied.ucPreset
+                                      ..qualityToggle = applied.qualityToggle
+                                      ..smea = applied.smea
+                                      ..smeaDyn = applied.smeaDyn
+                                      ..variety = applied.variety
+                                      ..fileNamePrefix = applied.fileNamePrefix;
+                                  })
                               : null,
                           icon: const Icon(Icons.call_made),
                         ),
@@ -770,6 +918,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
     final text = _text(app.settings.language);
+    final parameterText = _parameterText(app.settings.language);
     final favoriteFolderLabel = switch (app.settings.language) {
       'zh-TW' => '收藏夾',
       'en-US' => 'Favorites',
@@ -840,6 +989,328 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                       label: Text(text['refresh']!)),
                 ],
               ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Card(
+            clipBehavior: Clip.antiAlias,
+            child: ExpansionTile(
+              key: const PageStorageKey<String>(
+                  'random-artist-generation-settings'),
+              initiallyExpanded: false,
+              title: Text(parameterText['title']!),
+              subtitle: Text(parameterText['hint']!),
+              trailing: IconButton(
+                tooltip: parameterText['sync'],
+                onPressed: () {
+                  setState(() {
+                    _generationParams = app.params.copy()
+                      ..positivePrompt = ''
+                      ..stylePrompt = '';
+                    _syncParameterControllers();
+                  });
+                  _save();
+                },
+                icon: const Icon(Icons.sync),
+              ),
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+                  child: LayoutBuilder(builder: (context, constraints) {
+                    final twoColumns = constraints.maxWidth >= 620;
+                    final fieldWidth = twoColumns
+                        ? (constraints.maxWidth - 12) / 2
+                        : constraints.maxWidth;
+                    return Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: [
+                        SizedBox(
+                          width: constraints.maxWidth,
+                          child: DropdownButtonFormField<String>(
+                            value: _generationParams.model,
+                            isExpanded: true,
+                            decoration: InputDecoration(
+                                labelText: parameterText['model']),
+                            items: naiModels
+                                .map((option) => DropdownMenuItem(
+                                      value: option.value,
+                                      child: Text(localizedNaiOptionLabel(
+                                          app.settings.language,
+                                          option.value,
+                                          option.label)),
+                                    ))
+                                .toList(),
+                            onChanged: (value) {
+                              if (value == null) return;
+                              setState(() => _generationParams.model = value);
+                              _save();
+                            },
+                          ),
+                        ),
+                        SizedBox(
+                          width: constraints.maxWidth,
+                          child: Wrap(
+                            spacing: 7,
+                            runSpacing: 7,
+                            children: sizePresets
+                                .map((preset) => ChoiceChip(
+                                      label: Text(localizedSizePresetLabel(
+                                          app.settings.language,
+                                          preset.width,
+                                          preset.height,
+                                          preset.label)),
+                                      selected: _generationParams.width ==
+                                              preset.width &&
+                                          _generationParams.height ==
+                                              preset.height,
+                                      onSelected: (_) {
+                                        setState(() {
+                                          _generationParams
+                                            ..width = preset.width
+                                            ..height = preset.height;
+                                          _syncParameterControllers();
+                                        });
+                                        _save();
+                                      },
+                                    ))
+                                .toList(),
+                          ),
+                        ),
+                        SizedBox(
+                          width: fieldWidth,
+                          child: TextField(
+                            controller: _width,
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly
+                            ],
+                            decoration: InputDecoration(
+                                labelText: parameterText['width']),
+                            onChanged: (value) {
+                              _generationParams.width = _snapDimension(value);
+                              _save();
+                            },
+                          ),
+                        ),
+                        SizedBox(
+                          width: fieldWidth,
+                          child: TextField(
+                            controller: _height,
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly
+                            ],
+                            decoration: InputDecoration(
+                                labelText: parameterText['height']),
+                            onChanged: (value) {
+                              _generationParams.height = _snapDimension(value);
+                              _save();
+                            },
+                          ),
+                        ),
+                        SizedBox(
+                          width: fieldWidth,
+                          child: DropdownButtonFormField<String>(
+                            value: _generationParams.sampler,
+                            isExpanded: true,
+                            decoration: InputDecoration(
+                                labelText: parameterText['sampler']),
+                            items: naiSamplers
+                                .map((option) => DropdownMenuItem(
+                                      value: option.value,
+                                      child: Text(localizedNaiOptionLabel(
+                                          app.settings.language,
+                                          option.value,
+                                          option.label)),
+                                    ))
+                                .toList(),
+                            onChanged: (value) {
+                              if (value == null) return;
+                              setState(() => _generationParams.sampler = value);
+                              _save();
+                            },
+                          ),
+                        ),
+                        SizedBox(
+                          width: fieldWidth,
+                          child: DropdownButtonFormField<String>(
+                            value: _generationParams.noiseSchedule,
+                            isExpanded: true,
+                            decoration: InputDecoration(
+                                labelText: parameterText['noise']),
+                            items: naiNoiseSchedules
+                                .map((option) => DropdownMenuItem(
+                                      value: option.value,
+                                      child: Text(localizedNaiOptionLabel(
+                                          app.settings.language,
+                                          option.value,
+                                          option.label)),
+                                    ))
+                                .toList(),
+                            onChanged: (value) {
+                              if (value == null) return;
+                              setState(() =>
+                                  _generationParams.noiseSchedule = value);
+                              _save();
+                            },
+                          ),
+                        ),
+                        SizedBox(
+                          width: fieldWidth,
+                          child: DropdownButtonFormField<int>(
+                            value: _generationParams.ucPreset,
+                            isExpanded: true,
+                            decoration:
+                                InputDecoration(labelText: parameterText['uc']),
+                            items: ucPresets
+                                .map((option) => DropdownMenuItem(
+                                      value: int.parse(option.value),
+                                      child: Text(localizedNaiOptionLabel(
+                                          app.settings.language,
+                                          option.value,
+                                          option.label)),
+                                    ))
+                                .toList(),
+                            onChanged: (value) {
+                              if (value == null) return;
+                              setState(
+                                  () => _generationParams.ucPreset = value);
+                              _save();
+                            },
+                          ),
+                        ),
+                        SizedBox(
+                          width: fieldWidth,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                  '${parameterText['steps']} · ${_generationParams.steps}'),
+                              Slider(
+                                value: _generationParams.steps
+                                    .clamp(1, 50)
+                                    .toDouble(),
+                                min: 1,
+                                max: 50,
+                                divisions: 49,
+                                onChanged: (value) => setState(() =>
+                                    _generationParams.steps = value.round()),
+                                onChangeEnd: (_) => _save(),
+                              ),
+                            ],
+                          ),
+                        ),
+                        SizedBox(
+                          width: fieldWidth,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                  'CFG Scale · ${_generationParams.cfgScale.toStringAsFixed(1)}'),
+                              Slider(
+                                value: _generationParams.cfgScale.clamp(1, 10),
+                                min: 1,
+                                max: 10,
+                                divisions: 45,
+                                onChanged: (value) => setState(
+                                    () => _generationParams.cfgScale = value),
+                                onChangeEnd: (_) => _save(),
+                              ),
+                            ],
+                          ),
+                        ),
+                        SizedBox(
+                          width: fieldWidth,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                  'CFG Rescale · ${_generationParams.cfgRescale.toStringAsFixed(2)}'),
+                              Slider(
+                                value: _generationParams.cfgRescale.clamp(0, 1),
+                                min: 0,
+                                max: 1,
+                                divisions: 100,
+                                onChanged: (value) => setState(
+                                    () => _generationParams.cfgRescale = value),
+                                onChangeEnd: (_) => _save(),
+                              ),
+                            ],
+                          ),
+                        ),
+                        SizedBox(
+                          width: constraints.maxWidth,
+                          child: TextField(
+                            controller: _negative,
+                            minLines: 2,
+                            maxLines: 5,
+                            decoration: InputDecoration(
+                                labelText: parameterText['negative']),
+                            onChanged: (value) {
+                              _generationParams.negativePrompt = value;
+                              _save();
+                            },
+                          ),
+                        ),
+                        SizedBox(
+                          width: constraints.maxWidth,
+                          child: Wrap(
+                            spacing: 8,
+                            runSpacing: 6,
+                            children: [
+                              FilterChip(
+                                label: Text(parameterText['quality']!),
+                                selected: _generationParams.qualityToggle,
+                                onSelected: (value) {
+                                  setState(() =>
+                                      _generationParams.qualityToggle = value);
+                                  _save();
+                                },
+                              ),
+                              FilterChip(
+                                label: const Text('Variety+'),
+                                selected: _generationParams.variety,
+                                onSelected: (value) {
+                                  setState(
+                                      () => _generationParams.variety = value);
+                                  _save();
+                                },
+                              ),
+                              if (!_generationParams.isV4Plus)
+                                FilterChip(
+                                  label: const Text('SMEA'),
+                                  selected: _generationParams.smea,
+                                  onSelected: (value) {
+                                    setState(() {
+                                      _generationParams.smea = value;
+                                      if (!value) {
+                                        _generationParams.smeaDyn = false;
+                                      }
+                                    });
+                                    _save();
+                                  },
+                                ),
+                              if (!_generationParams.isV4Plus)
+                                FilterChip(
+                                  label: const Text('SMEA Dyn'),
+                                  selected: _generationParams.smeaDyn,
+                                  onSelected: _generationParams.smea
+                                      ? (value) {
+                                          setState(() => _generationParams
+                                              .smeaDyn = value);
+                                          _save();
+                                        }
+                                      : null,
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    );
+                  }),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 10),
@@ -1028,6 +1499,11 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
             onSelectionChanged: (value) {
               setState(() => _showFavorites = value.first);
               _save();
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!mounted || !_scrollController.hasClients) return;
+                _scrollController
+                    .jumpTo(_scrollController.position.minScrollExtent);
+              });
             },
           ),
           const SizedBox(height: 12),

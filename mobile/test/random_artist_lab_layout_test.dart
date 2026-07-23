@@ -203,4 +203,61 @@ void main() {
     expect(scrollable.position.pixels, closeTo(before, 0.5));
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('switching result folders returns to the top controls',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(420, 800);
+    addTearDown(tester.view.reset);
+    final rows = List.generate(
+      10,
+      (index) => {
+        'recipe': {
+          'id': 'saved-$index',
+          'prompt': '1.2::artist:saved_artist_$index ::',
+          'artists': ['saved_artist_$index'],
+          'mutations': [],
+        },
+        'sequence': index + 1,
+        'status': 'done',
+        'liked': true,
+      },
+    );
+    SharedPreferences.setMockInitialValues({
+      'artist_lab_random_v1_results': jsonEncode(rows),
+      'artist_lab_random_v1_favorites': jsonEncode(rows),
+    });
+    final state = AppState();
+    addTearDown(state.dispose);
+    await tester.pumpWidget(
+      ChangeNotifierProvider.value(
+        value: state,
+        child: MaterialApp(
+          theme: StudioTheme.light(),
+          home: RandomArtistLabScreen(
+            onBack: () {},
+            artistService: _FakeArtistService(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final bodyList =
+        find.byKey(const PageStorageKey<String>('random-artist-lab-scroll'));
+    final bodyScrollable =
+        find.descendant(of: bodyList, matching: find.byType(Scrollable)).first;
+    final favoritesTab = find.textContaining('收藏夹 (10)');
+    await tester.scrollUntilVisible(
+      favoritesTab,
+      500,
+      scrollable: bodyScrollable,
+    );
+    final scrollable = tester.state<ScrollableState>(bodyScrollable);
+    expect(scrollable.position.pixels, greaterThan(0));
+
+    await tester.tap(favoritesTab);
+    await tester.pumpAndSettle();
+    expect(scrollable.position.pixels, 0);
+    expect(tester.takeException(), isNull);
+  });
 }

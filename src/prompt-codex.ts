@@ -16,6 +16,11 @@ export type PromptCodexEntry = {
   sourceUrl: string;
 };
 
+export type PromptCodexIntroduction = {
+  title: string;
+  content: string;
+};
+
 export type PromptCodexSnapshot = {
   schemaVersion: 1;
   generatedAt: string;
@@ -23,6 +28,7 @@ export type PromptCodexSnapshot = {
   permissionNote: string;
   books: PromptCodexBook[];
   entries: PromptCodexEntry[];
+  introduction?: PromptCodexIntroduction[];
 };
 
 export const PROMPT_CODEX_BOOKS: PromptCodexBook[] = [
@@ -83,6 +89,52 @@ function categoryFor(section: string, title: string, adult: boolean) {
   if (/表情|脸|眼|嘴|头发|角色|人物|种族/.test(value)) return "character";
   if (/风格|画风|媒介|笔触|质感|style/.test(value)) return "style";
   return adult ? "adult-other" : "other";
+}
+
+/**
+ * The source pages repeat the same preface before each actual codex. These
+ * paragraphs explain the author, model era and usage; they are documentation,
+ * not prompts. Keep them out of search/copy results and render one shared
+ * introduction instead.
+ */
+export function isPromptCodexIntroductionEntry(
+  entry: Pick<PromptCodexEntry, "section" | "title" | "prompt">,
+) {
+  if (entry.section === "前言") return true;
+  if (entry.section !== "编纂者常用画师组") return false;
+  const value = entry.title.trim();
+  return (
+    /^ps[:：]/i.test(value) ||
+    /^NAI(?:3|4(?:\.5)?)时期[:：]?$/i.test(value)
+  );
+}
+
+export function extractPromptCodexIntroduction(
+  entries: PromptCodexEntry[],
+): PromptCodexIntroduction[] {
+  const seen = new Set<string>();
+  return entries
+    .filter(
+      (entry) =>
+        entry.bookId === "regular" && isPromptCodexIntroductionEntry(entry),
+    )
+    .filter((entry) => {
+      const key = `${entry.title}\n${entry.prompt}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .map((entry) => ({ title: entry.title, content: entry.prompt }));
+}
+
+export function dedupePromptCodexEntries(entries: PromptCodexEntry[]) {
+  const seen = new Set<string>();
+  return entries.filter((entry) => {
+    const key = `${entry.section}\n${entry.title}\n${entry.prompt}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 export function parsePromptCodexHtml(
@@ -157,6 +209,9 @@ export function buildPromptCodexSnapshot(
     sourceSite: "https://nai4.top",
     permissionNote: "原页面声明为无偿免费分享；应用保留原始来源链接。",
     books: pages.map(({ book }) => book),
-    entries,
+    introduction: extractPromptCodexIntroduction(entries),
+    entries: dedupePromptCodexEntries(
+      entries.filter((entry) => !isPromptCodexIntroductionEntry(entry)),
+    ),
   };
 }

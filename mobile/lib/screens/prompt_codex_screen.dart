@@ -91,6 +91,9 @@ class _PromptCodexScreenState extends State<PromptCodexScreen> {
           'adult': '成人內容',
           'empty': '沒有相符項目',
           'more': '繼續顯示',
+          'website': '造訪原網站',
+          'introduction': '法典說明',
+          'introductionHint': '作者、版本、使用方式與測試環境（不作為提示詞）',
         };
       case 'en-US':
         return {
@@ -107,6 +110,10 @@ class _PromptCodexScreenState extends State<PromptCodexScreen> {
           'adult': 'Adult content',
           'empty': 'No matching entries',
           'more': 'Show more',
+          'website': 'Visit original site',
+          'introduction': 'About these codices',
+          'introductionHint':
+              'Author, version, usage, and test environment (not prompts)',
         };
       case 'ja-JP':
         return {
@@ -123,6 +130,9 @@ class _PromptCodexScreenState extends State<PromptCodexScreen> {
           'adult': '成人向け',
           'empty': '一致する項目がありません',
           'more': 'さらに表示',
+          'website': '元サイトを開く',
+          'introduction': '法典について',
+          'introductionHint': '作者・版・使い方・テスト環境（プロンプトではありません）',
         };
       case 'ko-KR':
         return {
@@ -139,6 +149,9 @@ class _PromptCodexScreenState extends State<PromptCodexScreen> {
           'adult': '성인 콘텐츠',
           'empty': '일치하는 항목이 없습니다',
           'more': '더 보기',
+          'website': '원본 사이트 열기',
+          'introduction': '법전 안내',
+          'introductionHint': '작성자, 버전, 사용법 및 테스트 환경 (프롬프트 아님)',
         };
       default:
         return {
@@ -155,6 +168,9 @@ class _PromptCodexScreenState extends State<PromptCodexScreen> {
           'adult': '成人内容',
           'empty': '没有匹配条目',
           'more': '继续显示',
+          'website': '访问原网站',
+          'introduction': '法典说明',
+          'introductionHint': '作者、版本、使用方式与测试环境（不作为提示词）',
         };
     }
   }
@@ -200,7 +216,8 @@ class _PromptCodexScreenState extends State<PromptCodexScreen> {
         .toLowerCase()
         .split(RegExp(r'\s+'))
         .where((word) => word.isNotEmpty);
-    return snapshot.entries.where((entry) {
+    return dedupePromptCodexEntries(snapshot.entries).where((entry) {
+      if (isPromptCodexIntroductionEntry(entry)) return false;
       if (_book != 'all' && entry.bookId != _book) return false;
       if (_category != 'all' && entry.category != _category) return false;
       if (_section != 'all' && entry.section != _section) return false;
@@ -228,7 +245,12 @@ class _PromptCodexScreenState extends State<PromptCodexScreen> {
       );
     }
     final categories = _categories();
-    final sections = snapshot.entries
+    final promptEntries = dedupePromptCodexEntries(snapshot.entries
+        .where((entry) => !isPromptCodexIntroductionEntry(entry)));
+    final introduction = snapshot.introduction.isNotEmpty
+        ? snapshot.introduction
+        : extractPromptCodexIntroduction(snapshot.entries);
+    final sections = promptEntries
         .where((entry) => _book == 'all' || entry.bookId == _book)
         .map((entry) => entry.section)
         .toSet()
@@ -263,6 +285,46 @@ class _PromptCodexScreenState extends State<PromptCodexScreen> {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
             child: Column(
               children: [
+                Card(
+                  margin: EdgeInsets.zero,
+                  clipBehavior: Clip.antiAlias,
+                  child: ExpansionTile(
+                    key: const PageStorageKey<String>(
+                        'prompt-codex-introduction'),
+                    initiallyExpanded: false,
+                    title: Text(text['introduction']!),
+                    subtitle: Text(text['introductionHint']!),
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            for (final item in introduction) ...[
+                              Text(item.title,
+                                  style:
+                                      Theme.of(context).textTheme.titleSmall),
+                              const SizedBox(height: 4),
+                              SelectableText(item.content),
+                              const SizedBox(height: 12),
+                            ],
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: OutlinedButton.icon(
+                                onPressed: () => launchUrl(
+                                    Uri.parse(snapshot.sourceSite),
+                                    mode: LaunchMode.externalApplication),
+                                icon: const Icon(Icons.open_in_new),
+                                label: Text(text['website']!),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
                 TextField(
                   controller: _search,
                   decoration: InputDecoration(
@@ -293,6 +355,7 @@ class _PromptCodexScreenState extends State<PromptCodexScreen> {
                         selected: _book == 'all',
                         onSelected: (_) => setState(() {
                           _book = 'all';
+                          _category = 'all';
                           _section = 'all';
                           _limit = 100;
                         }),
@@ -308,6 +371,7 @@ class _PromptCodexScreenState extends State<PromptCodexScreen> {
                           selected: _book == book.id,
                           onSelected: (_) => setState(() {
                             _book = book.id;
+                            _category = 'all';
                             _section = 'all';
                             _limit = 100;
                           }),

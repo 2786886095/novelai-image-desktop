@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   buildPromptCodexSnapshot,
+  dedupePromptCodexEntries,
+  extractPromptCodexIntroduction,
+  isPromptCodexIntroductionEntry,
   parsePromptCodexHtml,
   type PromptCodexBook,
 } from "./prompt-codex";
@@ -54,5 +57,36 @@ describe("prompt codex parser", () => {
         },
       ]),
     ).toThrow(/incomplete/);
+  });
+
+  it("separates shared documentation from searchable prompt entries", () => {
+    const intro = {
+      id: "regular-1",
+      bookId: "regular",
+      section: "前言",
+      category: "other",
+      title: "作者：一般所长",
+      prompt: "作者与使用说明",
+      adult: false,
+      sourceUrl: book.sourceUrl,
+    };
+    const prompt = {
+      ...intro,
+      id: "regular-2",
+      section: "画风",
+      title: "水彩",
+      prompt: "watercolor",
+    };
+    expect(isPromptCodexIntroductionEntry(intro)).toBe(true);
+    expect(isPromptCodexIntroductionEntry(prompt)).toBe(false);
+    expect(extractPromptCodexIntroduction([intro, prompt])).toEqual([
+      { title: intro.title, content: intro.prompt },
+    ]);
+    expect(
+      dedupePromptCodexEntries([
+        prompt,
+        { ...prompt, id: "adult-upper-2", bookId: "adult-upper" },
+      ]),
+    ).toEqual([prompt]);
   });
 });

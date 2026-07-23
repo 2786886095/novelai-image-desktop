@@ -9,6 +9,8 @@ void main() {
     expect(snapshot.books.map((item) => item.id),
         containsAll(['regular', 'adult-upper', 'adult-lower']));
     expect(snapshot.entries.length, greaterThan(14000));
+    expect(snapshot.introduction, isNotEmpty);
+    expect(snapshot.entries.any(isPromptCodexIntroductionEntry), isFalse);
     expect(
         snapshot.entries.where((item) => item.bookId == 'regular'), isNotEmpty);
     expect(snapshot.entries.every((item) => item.prompt.isNotEmpty), isTrue);

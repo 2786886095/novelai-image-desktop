@@ -6,6 +6,11 @@ import type {
   PromptCodexEntry,
   PromptCodexSnapshot,
 } from "./prompt-codex";
+import {
+  dedupePromptCodexEntries,
+  extractPromptCodexIntroduction,
+  isPromptCodexIntroductionEntry,
+} from "./prompt-codex";
 import type { AppLanguage } from "./types";
 
 const BUNDLED = bundledSnapshot as PromptCodexSnapshot;
@@ -31,6 +36,9 @@ const TEXT = {
     results: "条结果",
     adult: "成人内容",
     date: "数据时间",
+    website: "访问原网站",
+    introduction: "法典说明",
+    introductionHint: "作者、版本、使用方式与测试环境（不作为提示词参与搜索）",
   },
   "zh-TW": {
     title: "NovelAI 個人法典",
@@ -51,6 +59,9 @@ const TEXT = {
     results: "筆結果",
     adult: "成人內容",
     date: "資料時間",
+    website: "造訪原網站",
+    introduction: "法典說明",
+    introductionHint: "作者、版本、使用方式與測試環境（不作為提示詞參與搜尋）",
   },
   "en-US": {
     title: "NovelAI Personal Codex",
@@ -72,6 +83,10 @@ const TEXT = {
     results: "results",
     adult: "Adult content",
     date: "Data date",
+    website: "Visit original site",
+    introduction: "About these codices",
+    introductionHint:
+      "Author, version, usage, and test environment (excluded from prompt search)",
   },
   "ja-JP": {
     title: "NovelAI 個人プロンプト法典",
@@ -93,6 +108,9 @@ const TEXT = {
     results: "件",
     adult: "成人向け",
     date: "データ日時",
+    website: "元サイトを開く",
+    introduction: "法典について",
+    introductionHint: "作者・版・使い方・テスト環境（プロンプト検索には含みません）",
   },
   "ko-KR": {
     title: "NovelAI 개인 프롬프트 법전",
@@ -114,6 +132,9 @@ const TEXT = {
     results: "개 결과",
     adult: "성인 콘텐츠",
     date: "데이터 시간",
+    website: "원본 사이트 열기",
+    introduction: "법전 안내",
+    introductionHint: "작성자, 버전, 사용법 및 테스트 환경 (프롬프트 검색에서 제외)",
   },
 } satisfies Record<AppLanguage, Record<string, string>>;
 
@@ -200,6 +221,28 @@ export default function PromptCodex({ onBack }: { onBack: () => void }) {
   const [limit, setLimit] = useState(PAGE_SIZE);
   const [updating, setUpdating] = useState(false);
   const [message, setMessage] = useState("");
+  const selectBook = (value: string) => {
+    setBookId(value);
+    setCategory("all");
+    setSection("all");
+    setLimit(PAGE_SIZE);
+  };
+  const introduction = useMemo(
+    () =>
+      snapshot.introduction?.length
+        ? snapshot.introduction
+        : extractPromptCodexIntroduction(snapshot.entries),
+    [snapshot],
+  );
+  const promptEntries = useMemo(
+    () =>
+      dedupePromptCodexEntries(
+        snapshot.entries.filter(
+          (entry) => !isPromptCodexIntroductionEntry(entry),
+        ),
+      ),
+    [snapshot.entries],
+  );
 
   useEffect(() => {
     void window.naiDesktop.promptCodexCache().then((cached) => {
@@ -219,17 +262,17 @@ export default function PromptCodex({ onBack }: { onBack: () => void }) {
     () =>
       Array.from(
         new Set(
-          snapshot.entries
+          promptEntries
             .filter((entry) => bookId === "all" || entry.bookId === bookId)
             .map((entry) => entry.section),
         ),
       ),
-    [bookId, snapshot.entries],
+    [bookId, promptEntries],
   );
 
   const filtered = useMemo(() => {
     const words = deferredQuery.split(/\s+/).filter(Boolean);
-    return snapshot.entries.filter((entry) => {
+    return promptEntries.filter((entry) => {
       if (bookId !== "all" && entry.bookId !== bookId) return false;
       if (category !== "all" && entry.category !== category) return false;
       if (section !== "all" && entry.section !== section) return false;
@@ -238,7 +281,7 @@ export default function PromptCodex({ onBack }: { onBack: () => void }) {
         `${entry.title}\n${entry.section}\n${entry.prompt}`.toLowerCase();
       return words.every((word) => haystack.includes(word));
     });
-  }, [bookId, category, section, deferredQuery, snapshot.entries]);
+  }, [bookId, category, section, deferredQuery, promptEntries]);
 
   const update = async () => {
     setUpdating(true);
@@ -273,11 +316,37 @@ export default function PromptCodex({ onBack }: { onBack: () => void }) {
           <small>
             {text.date} · {new Date(snapshot.generatedAt).toLocaleDateString()}
           </small>
+          <Button
+            variant="ghost"
+            onClick={() => void window.naiDesktop.openExternal(snapshot.sourceSite)}
+          >
+            ↗ {text.website}
+          </Button>
           <Button disabled={updating} onClick={() => void update()}>
             {updating ? text.updating : text.update}
           </Button>
         </div>
       </header>
+
+      {introduction.length > 0 ? (
+        <details className="prompt-codex-introduction" open>
+          <summary>
+            <span>
+              <b>{text.introduction}</b>
+              <small>{text.introductionHint}</small>
+            </span>
+            <span aria-hidden="true">⌄</span>
+          </summary>
+          <div>
+            {introduction.map((item, index) => (
+              <article key={`${item.title}-${index}`}>
+                <h3>{item.title}</h3>
+                <p>{item.content}</p>
+              </article>
+            ))}
+          </div>
+        </details>
+      ) : null}
 
       <section className="prompt-codex-filters">
         <input
@@ -289,7 +358,7 @@ export default function PromptCodex({ onBack }: { onBack: () => void }) {
         <div className="prompt-codex-book-tabs">
           <button
             className={bookId === "all" ? "active" : ""}
-            onClick={() => setBookId("all")}
+            onClick={() => selectBook("all")}
           >
             {text.all}
           </button>
@@ -297,7 +366,7 @@ export default function PromptCodex({ onBack }: { onBack: () => void }) {
             <button
               key={book.id}
               className={bookId === book.id ? "active" : ""}
-              onClick={() => setBookId(book.id)}
+              onClick={() => selectBook(book.id)}
             >
               {book.title}
               {book.adult ? <small>{text.adult}</small> : null}
