@@ -30,4 +30,47 @@ void main() {
     expect(first.map((item) => item.prompt).toList(),
         isNot(second.map((item) => item.prompt).toList()));
   });
+
+  test('style mutation adds two to six labelled weighted terms', () {
+    final pool = List.generate(
+      30,
+      (index) => ArtistTagRecord(index + 1, 'artist_$index', 1000 - index),
+    );
+    final recipes = drawArtistRecipes(
+      pool: pool,
+      count: 12,
+      minArtists: 4,
+      maxArtists: 8,
+      drawSeed: 88,
+      auxiliary: 'year 2025, masterpiece',
+      mutateAuxiliary: true,
+    );
+    expect(
+        recipes.every(
+            (item) => item.mutations.length >= 2 && item.mutations.length <= 6),
+        isTrue);
+    expect(
+        recipes
+            .expand((item) => item.mutations)
+            .every((item) => item.weight >= .3 && item.weight <= 1.5),
+        isTrue);
+    expect(
+        recipes.every((item) => item.prompt.contains('year 2025, masterpiece')),
+        isTrue);
+  });
+
+  test('artist count is capped at twenty', () {
+    final pool = List.generate(
+      40,
+      (index) => ArtistTagRecord(index + 1, 'artist_$index', 1000 - index),
+    );
+    final recipe = drawArtistRecipes(
+      pool: pool,
+      count: 1,
+      minArtists: 99,
+      maxArtists: 99,
+      drawSeed: 9,
+    ).single;
+    expect(recipe.artists.length, 20);
+  });
 }

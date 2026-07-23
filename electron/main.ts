@@ -23,6 +23,9 @@ import {
   generateComicPanel,
   generateTagComicCandidate,
   generateArtistLabImage,
+  promoteArtistLabFavorite,
+  deleteArtistLabTemporary,
+  clearArtistLabTemporary,
   generateI2I,
   generateImage,
   redrawImage,
@@ -366,6 +369,13 @@ function registerIpc() {
   ipcMain.handle("nai:generateArtistLab", (_event, params, extras, mode) =>
     generateArtistLabImage(params, extras, mode),
   );
+  ipcMain.handle("artistLab:promoteFavorite", (_event, item) =>
+    promoteArtistLabFavorite(item),
+  );
+  ipcMain.handle("artistLab:deleteTemporary", (_event, filePath) =>
+    deleteArtistLabTemporary(filePath),
+  );
+  ipcMain.handle("artistLab:clearTemporary", () => clearArtistLabTemporary());
   ipcMain.handle("nai:generateI2I", (_event, params, i2i: I2IParams, extras) =>
     generateI2I(params, i2i, extras),
   );

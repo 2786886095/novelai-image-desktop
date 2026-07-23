@@ -21,8 +21,201 @@ class ArtistRecipe {
   final String id;
   final String prompt;
   final List<String> artists;
-  const ArtistRecipe(this.id, this.prompt, this.artists);
+  final List<StyleMutationTerm> mutations;
+  const ArtistRecipe(this.id, this.prompt, this.artists,
+      [this.mutations = const []]);
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'prompt': prompt,
+        'artists': artists,
+        'mutations': mutations.map((item) => item.toJson()).toList(),
+      };
+
+  factory ArtistRecipe.fromJson(Map<String, dynamic> json) => ArtistRecipe(
+        json['id']?.toString() ?? '',
+        json['prompt']?.toString() ?? '',
+        (json['artists'] as List? ?? const [])
+            .map((item) => item.toString())
+            .toList(),
+        (json['mutations'] as List? ?? const [])
+            .whereType<Map>()
+            .map((item) =>
+                StyleMutationTerm.fromJson(Map<String, dynamic>.from(item)))
+            .toList(),
+      );
 }
+
+class StyleMutationTerm {
+  final String category;
+  final String value;
+  final double weight;
+  const StyleMutationTerm(this.category, this.value, this.weight);
+
+  Map<String, dynamic> toJson() =>
+      {'category': category, 'value': value, 'weight': weight};
+
+  factory StyleMutationTerm.fromJson(Map<String, dynamic> json) =>
+      StyleMutationTerm(
+        json['category']?.toString() ?? 'artStyle',
+        json['value']?.toString() ?? '',
+        (json['weight'] as num?)?.toDouble() ?? 1,
+      );
+}
+
+const styleMutationLibrary = <String, List<String>>{
+  'artStyle': [
+    'anime coloring',
+    'anime screencap',
+    'art nouveau',
+    'baroque',
+    'concept art',
+    'contemporary',
+    'cubism',
+    'expressionism',
+    'fantasy art',
+    'game cg',
+    'impressionism',
+    'minimalism',
+    'modernism',
+    'pop art',
+    'realism',
+    'retro artstyle',
+    'romanticism',
+    'semi-realistic',
+    'surrealism',
+    'ukiyo-e',
+    'visual novel',
+    'western comics',
+    'storybook illustration',
+    'editorial illustration',
+    'poster art',
+  ],
+  'medium': [
+    'acrylic paint',
+    'airbrush',
+    'charcoal drawing',
+    'colored pencil',
+    'digital painting',
+    'fine lineart',
+    'gouache',
+    'graphite',
+    'impasto',
+    'ink',
+    'ink wash',
+    'marker',
+    'oil painting',
+    'pastel',
+    'pencil sketch',
+    'rough sketch',
+    'thick lineart',
+    'thin lineart',
+    'visible brushstrokes',
+    'watercolor',
+    'woodcut',
+    'cel shading',
+    'soft shading',
+    'painterly',
+    'textured brush',
+    'dry brush',
+    'wet-on-wet',
+    'stippling',
+  ],
+  'color': [
+    'analogous colors',
+    'black and white',
+    'bright colors',
+    'chromatic aberration',
+    'colorful',
+    'complementary colors',
+    'cool color palette',
+    'cyan and magenta',
+    'dark colors',
+    'desaturated',
+    'duotone',
+    'earth tones',
+    'gradient',
+    'high contrast',
+    'limited palette',
+    'low contrast',
+    'monochrome',
+    'muted colors',
+    'neon colors',
+    'pastel colors',
+    'sepia',
+    'split-complementary colors',
+    'vibrant colors',
+    'warm color palette',
+    'blue and orange',
+    'gold and white',
+    'iridescent colors',
+    'rainbow gradient',
+  ],
+  'lighting': [
+    'ambient lighting',
+    'backlighting',
+    'bioluminescence',
+    'blue hour',
+    'bounced light',
+    'chiaroscuro',
+    'cinematic lighting',
+    'dappled sunlight',
+    'dramatic lighting',
+    'edge lighting',
+    'fill light',
+    'firelight',
+    'global illumination',
+    'glowing light',
+    'god rays',
+    'golden hour',
+    'hard lighting',
+    'key light',
+    'lens flare',
+    'moonlight',
+    'neon lighting',
+    'overcast lighting',
+    'rim lighting',
+    'soft lighting',
+    'spotlight',
+    'studio lighting',
+    'sunlight',
+    'underlighting',
+    'volumetric lighting',
+    'window light',
+  ],
+  'atmosphere': [
+    'atmospheric perspective',
+    'cinematic atmosphere',
+    'cozy atmosphere',
+    'dreamy',
+    'dust particles',
+    'ethereal',
+    'floating particles',
+    'foggy',
+    'hazy',
+    'magical atmosphere',
+    'melancholic',
+    'misty',
+    'moody',
+    'mysterious',
+    'nostalgic',
+    'ominous atmosphere',
+    'peaceful',
+    'romantic atmosphere',
+    'serene',
+    'soft focus',
+    'sparkles',
+    'surreal atmosphere',
+    'tranquil',
+    'vignette',
+    'whimsical',
+    'windy atmosphere',
+    'glowing dust',
+    'humid atmosphere',
+    'smoky atmosphere',
+    'rainy atmosphere',
+  ],
+};
 
 int _weightedIndex(
     List<ArtistTagRecord> pool, Random random, Set<String> favorites) {
@@ -57,6 +250,22 @@ String _number(double value) => value == value.roundToDouble()
     ? value.toInt().toString()
     : value.toStringAsFixed(2).replaceFirst(RegExp(r'0+$'), '');
 
+List<StyleMutationTerm> _drawMutations(Random random) {
+  final categories = styleMutationLibrary.keys.toList();
+  final count = 2 + random.nextInt(5);
+  final values = <String>{};
+  final output = <StyleMutationTerm>[];
+  while (output.length < count) {
+    final category = categories[random.nextInt(categories.length)];
+    final terms = styleMutationLibrary[category]!;
+    final value = terms[random.nextInt(terms.length)];
+    if (!values.add(value)) continue;
+    final weight = .3 + random.nextInt(13) / 10;
+    output.add(StyleMutationTerm(category, value, weight));
+  }
+  return output;
+}
+
 List<ArtistRecipe> drawArtistRecipes({
   required List<ArtistTagRecord> pool,
   required int count,
@@ -69,8 +278,8 @@ List<ArtistRecipe> drawArtistRecipes({
 }) {
   if (pool.isEmpty || count < 1) return const [];
   final random = Random(drawSeed);
-  final lower = minArtists.clamp(1, 24).toInt();
-  final upper = maxArtists.clamp(lower, min(24, pool.length)).toInt();
+  final lower = minArtists.clamp(1, 20).toInt();
+  final upper = maxArtists.clamp(lower, min(20, pool.length)).toInt();
   final output = <ArtistRecipe>[];
   final seen = <String>{};
   var attempts = 0;
@@ -90,15 +299,19 @@ List<ArtistRecipe> drawArtistRecipes({
     final auxiliaryTokens = auxiliary
         .split(RegExp(r'[,，]'))
         .map((item) => item.trim())
-        .where((item) => item.isNotEmpty)
-        .where((_) => !mutateAuxiliary || random.nextDouble() >= .12);
+        .where((item) => item.isNotEmpty);
     tokens.addAll(auxiliaryTokens);
+    final mutations =
+        mutateAuxiliary ? _drawMutations(random) : const <StyleMutationTerm>[];
+    tokens.addAll(
+        mutations.map((item) => '${_number(item.weight)}::${item.value} ::'));
     final prompt = tokens.join(', ');
     if (!seen.add(prompt)) continue;
     output.add(ArtistRecipe(
       '$drawSeed-${output.length}-${selected.map((item) => item.name).join('+')}',
       prompt,
       selected.map((item) => item.name).toList(),
+      mutations,
     ));
   }
   return output;

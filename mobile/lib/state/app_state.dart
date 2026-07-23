@@ -1843,6 +1843,52 @@ class AppState extends ChangeNotifier {
     return item;
   }
 
+  Future<HistoryItem> generateArtistLabTemporary({
+    required GenerateParams panelParams,
+    required GenerateExtras panelExtras,
+  }) async {
+    final token = await storage.getToken();
+    if (token == null || token.isEmpty) {
+      throw Exception(_rt('error.naiTokenRequired'));
+    }
+    final before = account.anlasBalance;
+    final (images, seed) =
+        await api.generate(token, settings, panelParams, panelExtras);
+    if (images.isEmpty) throw Exception(_rt('error.noImagesReturned'));
+    final item = await storage.saveArtistLabTemporaryImage(
+        images.first, panelParams, seed);
+    try {
+      account = await api.fetchAccount(token, settings);
+      final after = account.anlasBalance;
+      lastAnlasSpent =
+          before != null && after != null ? max(0, before - after) : null;
+      notifyListeners();
+    } catch (_) {}
+    return item;
+  }
+
+  Future<HistoryItem> saveArtistLabFavorite(HistoryItem temporary) async {
+    final bytes = await File(temporary.filePath).readAsBytes();
+    final groupId = await ensureHistoryGroup('画风实验室-随机抽卡');
+    final params = GenerateParams.fromJson(temporary.params);
+    final item = await storage.saveImage(
+      bytes,
+      params,
+      temporary.seed,
+      feature: 'artist-lab',
+      model: temporary.model,
+      width: temporary.width,
+      height: temporary.height,
+      groupId: groupId,
+    );
+    await storage.deleteArtistLabTemporaryImage(temporary.filePath);
+    _prependHistory([item]);
+    return item;
+  }
+
+  Future<void> deleteArtistLabTemporary(HistoryItem temporary) =>
+      storage.deleteArtistLabTemporaryImage(temporary.filePath);
+
   Future<HistoryItem> generateBatchRedrawItem({
     required Uint8List sourceBytes,
     required GenerateParams itemParams,

@@ -8732,6 +8732,17 @@ html.theme-dark #root {
 .random-pool-summary > div { display: grid; gap: 5px; }
 .random-pool-summary h3 { margin: 0; }
 .random-pool-summary strong { color: var(--accent); }
+.artist-pool-actions { display: flex !important; flex-wrap: wrap; align-items: end; justify-content: flex-end; gap: 8px !important; }
+.artist-pool-actions label { display: grid; gap: 4px; color: var(--text-secondary); font-size: 12px; font-weight: 700; }
+.artist-pool-actions input {
+  width: 132px;
+  min-height: 38px;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-dialog);
+  color: var(--text-primary);
+}
 .random-artist-settings {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -8776,6 +8787,25 @@ html.theme-dark #root {
 }
 .random-check input { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--accent); }
 .random-check > span { display: grid; gap: 4px; }
+.artist-mutation-block { display: grid; gap: 6px; margin: 9px 12px 0; min-width: 0; }
+.artist-mutation-block > b { color: var(--text-secondary); font-size: 12px; }
+.artist-mutation-block > div { display: flex; flex-wrap: wrap; gap: 6px; }
+.artist-mutation-block span {
+  display: inline-grid;
+  gap: 1px;
+  padding: 5px 7px;
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border));
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--accent-soft) 60%, var(--bg-panel));
+  color: var(--text-primary);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.artist-mutation-block span small { color: var(--accent); font-size: 9px; font-weight: 800; }
+.artist-combination-queue li > div { min-width: 0; }
+.artist-combination-queue .artist-mutation-block { margin: 7px 0 0; }
+.artist-favorites-panel { display: grid; gap: 14px; }
+.artist-favorites-panel > .artist-candidate-grid { margin: 0; }
 .artist-string-block em { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-style: normal; }
 @media (max-width: 900px) {
   .artist-lab { padding: 12px; }
@@ -8790,6 +8820,8 @@ html.theme-dark #root {
   .artist-lab-mode-card { min-height: 220px; }
   .random-artist-settings { grid-template-columns: 1fr; }
   .random-artist-settings .wide { grid-column: auto; }
+  .random-pool-summary { align-items: stretch; flex-direction: column; }
+  .artist-pool-actions { justify-content: flex-start; }
 }
 
 /* Tag-only comic workspace v2 ------------------------------------------------ */

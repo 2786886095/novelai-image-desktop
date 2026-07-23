@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novelai_mobile/artist/artist_recipe.dart';
@@ -53,4 +55,43 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+
+  testWidgets('failed result exposes a manual retry action', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(360, 800);
+    addTearDown(tester.view.reset);
+    SharedPreferences.setMockInitialValues({
+      'artist_lab_random_v1_results': jsonEncode([
+        {
+          'recipe': {
+            'id': 'failed-1',
+            'prompt': '1.2::artist:test_artist ::',
+            'artists': ['test_artist'],
+            'mutations': [],
+          },
+          'status': 'failed',
+          'error': 'network error',
+          'liked': false,
+        }
+      ]),
+    });
+    final state = AppState();
+    addTearDown(state.dispose);
+    await tester.pumpWidget(
+      ChangeNotifierProvider.value(
+        value: state,
+        child: MaterialApp(
+          theme: StudioTheme.light(),
+          home: RandomArtistLabScreen(
+            onBack: () {},
+            artistService: _FakeArtistService(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(ListView).first, const Offset(0, -1200));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('重试'), findsOneWidget);
+  });
 }

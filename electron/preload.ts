@@ -15,6 +15,7 @@ import type {
   GenerateExtras,
   TagSuggestion,
   GenerateParams,
+  HistoryItem,
   I2IParams,
   NAIInpaintModel,
   SettingKey,
@@ -85,6 +86,11 @@ contextBridge.exposeInMainWorld("naiDesktop", {
     extras: GenerateExtras,
     mode: "target" | "random",
   ) => ipcRenderer.invoke("nai:generateArtistLab", params, extras, mode),
+  artistLabPromoteFavorite: (item: HistoryItem) =>
+    ipcRenderer.invoke("artistLab:promoteFavorite", item),
+  artistLabDeleteTemporary: (filePath: string) =>
+    ipcRenderer.invoke("artistLab:deleteTemporary", filePath),
+  artistLabClearTemporary: () => ipcRenderer.invoke("artistLab:clearTemporary"),
   generateI2I: (
     params: GenerateParams,
     i2i: I2IParams,

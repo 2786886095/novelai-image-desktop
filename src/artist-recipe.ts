@@ -23,8 +23,56 @@ export interface GeneratedArtistRecipe {
   id: string;
   artists: ArtistWeightedTag[];
   auxiliary: ParsedRecipeToken[];
+  mutations: StyleMutationToken[];
   prompt: string;
 }
+
+export type StyleMutationCategory = "artStyle" | "medium" | "color" | "lighting" | "atmosphere";
+
+export interface StyleMutationToken extends ParsedRecipeToken {
+  category: StyleMutationCategory;
+}
+
+/**
+ * Curated NovelAI/Danbooru-friendly visual vocabulary. This is deliberately
+ * limited to rendering style rather than composition or character content, so
+ * a draw can compare artist strings without silently changing the subject.
+ */
+export const STYLE_MUTATION_LIBRARY: Record<StyleMutationCategory, readonly string[]> = {
+  artStyle: [
+    "anime coloring", "anime screencap", "art nouveau", "baroque", "concept art", "contemporary",
+    "cubism", "expressionism", "fantasy art", "game cg", "impressionism", "minimalism", "modernism",
+    "pop art", "realism", "retro artstyle", "romanticism", "semi-realistic", "surrealism", "ukiyo-e",
+    "visual novel", "western comics", "storybook illustration", "editorial illustration", "poster art",
+  ],
+  medium: [
+    "acrylic paint", "airbrush", "charcoal drawing", "colored pencil", "digital painting", "fine lineart",
+    "gouache", "graphite", "impasto", "ink", "ink wash", "marker", "oil painting", "pastel", "pencil sketch",
+    "rough sketch", "thick lineart", "thin lineart", "visible brushstrokes", "watercolor", "woodcut",
+    "cel shading", "soft shading", "painterly", "textured brush", "dry brush", "wet-on-wet", "stippling",
+  ],
+  color: [
+    "analogous colors", "black and white", "bright colors", "chromatic aberration", "colorful",
+    "complementary colors", "cool color palette", "cyan and magenta", "dark colors", "desaturated",
+    "duotone", "earth tones", "gradient", "high contrast", "limited palette", "low contrast", "monochrome",
+    "muted colors", "neon colors", "pastel colors", "sepia", "split-complementary colors", "vibrant colors",
+    "warm color palette", "blue and orange", "gold and white", "iridescent colors", "rainbow gradient",
+  ],
+  lighting: [
+    "ambient lighting", "backlighting", "bioluminescence", "blue hour", "bounced light", "chiaroscuro",
+    "cinematic lighting", "dappled sunlight", "dramatic lighting", "edge lighting", "fill light", "firelight",
+    "global illumination", "glowing light", "god rays", "golden hour", "hard lighting", "key light",
+    "lens flare", "moonlight", "neon lighting", "overcast lighting", "rim lighting", "soft lighting",
+    "spotlight", "studio lighting", "sunlight", "underlighting", "volumetric lighting", "window light",
+  ],
+  atmosphere: [
+    "atmospheric perspective", "cinematic atmosphere", "cozy atmosphere", "dreamy", "dust particles",
+    "ethereal", "floating particles", "foggy", "hazy", "magical atmosphere", "melancholic", "misty",
+    "moody", "mysterious", "nostalgic", "ominous atmosphere", "peaceful", "romantic atmosphere", "serene",
+    "soft focus", "sparkles", "surreal atmosphere", "tranquil", "vignette", "whimsical", "windy atmosphere",
+    "glowing dust", "humid atmosphere", "smoky atmosphere", "rainy atmosphere",
+  ],
+};
 
 const QUALITY_PATTERN = /^(masterpiece|best quality|amazing quality|very aesthetic|extremely detailed(?: cg)?|ultra[- ]?detailed|high quality)$/i;
 const YEAR_PATTERN = /^year[_ ]?\d{4}$/i;
@@ -149,19 +197,21 @@ function formatToken(token: ParsedRecipeToken): string {
   return `${roundWeight(token.weight)}::${token.value} ::`;
 }
 
-function mutateAuxiliaryTokens(tokens: ParsedRecipeToken[], random: () => number): ParsedRecipeToken[] {
-  return tokens.flatMap((token) => {
-    // Negative controls are structurally protected: they may be retained or
-    // removed, but are never converted into positive prompt content.
-    if (token.kind === "negative") return random() < 0.85 ? [token] : [];
-    if (random() < 0.12) return [];
-    let value = token.value;
-    if (token.kind === "year" && random() < 0.45) {
-      value = `year ${2021 + Math.floor(random() * 5)}`;
-    }
-    const jitter = random() < 0.55 ? (random() - 0.5) * 0.4 : 0;
-    return [{ ...token, value, weight: roundWeight(token.weight + jitter), kind: classify(value) }];
-  });
+function drawStyleMutations(random: () => number): StyleMutationToken[] {
+  const categories = Object.keys(STYLE_MUTATION_LIBRARY) as StyleMutationCategory[];
+  const count = 2 + Math.floor(random() * 5);
+  const selected = new Set<string>();
+  const output: StyleMutationToken[] = [];
+  while (output.length < count) {
+    const category = categories[Math.floor(random() * categories.length)];
+    const terms = STYLE_MUTATION_LIBRARY[category];
+    const value = terms[Math.floor(random() * terms.length)];
+    if (selected.has(value)) continue;
+    selected.add(value);
+    const weight = roundWeight(0.3 + Math.floor(random() * 13) / 10);
+    output.push({ raw: value, value, weight, kind: "style", category });
+  }
+  return output;
 }
 
 export function generatePopularArtistRecipes(
@@ -170,8 +220,8 @@ export function generatePopularArtistRecipes(
 ): GeneratedArtistRecipe[] {
   const random = options.random ?? Math.random;
   const count = Math.max(1, Math.floor(Number.isFinite(options.count) ? options.count : 1));
-  const minArtists = Math.max(1, Math.min(24, Math.floor(options.minArtists)));
-  const maxArtists = Math.max(minArtists, Math.min(24, Math.floor(options.maxArtists)));
+  const minArtists = Math.max(1, Math.min(20, Math.floor(options.minArtists)));
+  const maxArtists = Math.max(minArtists, Math.min(20, Math.floor(options.maxArtists)));
   const favorites = new Set((options.favoriteArtists ?? []).map((name) => name.trim()).filter(Boolean));
   const baseAuxiliary = parseArtistRecipe(options.auxiliaryPrompt ?? "")
     .filter((token) => token.kind !== "artist");
@@ -193,18 +243,19 @@ export function generatePopularArtistRecipes(
       const role = index < leadCount ? "lead" : index >= selected.length - accentCount ? "accent" : "support";
       return { name: artist.name, weight: chooseWeight(role, random) };
     });
-    const auxiliary = options.mutateAuxiliary
-      ? mutateAuxiliaryTokens(baseAuxiliary, random)
-      : baseAuxiliary;
+    const auxiliary = baseAuxiliary;
+    const mutations = options.mutateAuxiliary ? drawStyleMutations(random) : [];
     const artistText = artists.map((artist) => `${artist.weight}::artist:${artist.name} ::`).join(", ");
     const auxiliaryText = auxiliary.map(formatToken).join(", ");
-    const prompt = [artistText, auxiliaryText].filter(Boolean).join(", ");
+    const mutationText = mutations.map(formatToken).join(", ");
+    const prompt = [artistText, auxiliaryText, mutationText].filter(Boolean).join(", ");
     if (!prompt || seen.has(prompt)) continue;
     seen.add(prompt);
     output.push({
       id: `random-${output.length + 1}-${artists.map((artist) => `${artist.name}@${artist.weight}`).join("+")}`,
       artists,
       auxiliary,
+      mutations,
       prompt,
     });
   }

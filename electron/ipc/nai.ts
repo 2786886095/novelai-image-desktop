@@ -1,4 +1,4 @@
-import { dialog, nativeImage } from "electron";
+import { app, dialog, nativeImage } from "electron";
 import axios from "axios";
 import FormData from "form-data";
 import JSZip from "jszip";
@@ -1414,6 +1414,7 @@ async function saveBuffers(
   saveOptions?: {
     ignoreActiveGroup?: boolean;
     groupOverride?: { groupId: string; folderName: string };
+    temporary?: boolean;
   },
 ): Promise<HistoryItem[]> {
   const settings = getSettings();
@@ -1421,12 +1422,15 @@ async function saveBuffers(
   const date = dateStamp(now);
   // An explicit groupOverride (batch redraw / comic) wins; otherwise use the
   // user's actively-selected group unless the caller opts out.
-  const activeGroup =
-    saveOptions?.groupOverride ??
-    (saveOptions?.ignoreActiveGroup ? undefined : resolveActiveSaveGroup());
-  const dir = activeGroup
-    ? path.join(settings.outputDir, date, activeGroup.folderName)
-    : path.join(settings.outputDir, date);
+  const activeGroup = saveOptions?.temporary
+    ? undefined
+    : saveOptions?.groupOverride ??
+      (saveOptions?.ignoreActiveGroup ? undefined : resolveActiveSaveGroup());
+  const dir = saveOptions?.temporary
+    ? artistLabTemporaryRoot()
+    : activeGroup
+      ? path.join(settings.outputDir, date, activeGroup.folderName)
+      : path.join(settings.outputDir, date);
   await fs.mkdir(dir, { recursive: true });
 
   const items: HistoryItem[] = [];
@@ -1464,7 +1468,7 @@ async function saveBuffers(
       groupId: activeGroup?.groupId,
     });
   }
-  addHistory(items);
+  if (!saveOptions?.temporary) addHistory(items);
   return items;
 }
 
@@ -3092,31 +3096,78 @@ export async function generateArtistLabImage(
   rawMode: unknown,
 ): Promise<GenerateResult> {
   const mode = rawMode === "target" ? "target" : "random";
-  const group = ensureHistoryGroup(
-    mode === "target" ? "画风实验室-目标迭代" : "画风实验室-随机抽卡",
-  );
+  const group = mode === "target" ? ensureHistoryGroup("画风实验室-目标迭代") : null;
   const result = await generateImage(
     {
       ...params,
       fileNamePrefix: params.fileNamePrefix || `artist-lab-${mode}`,
     },
     extras,
-    {
-      groupOverride: {
-        groupId: group.id,
-        folderName: sanitizeGroupFolderName(group.name),
-      },
-    },
+    mode === "random"
+      ? { temporary: true }
+      : {
+          groupOverride: {
+            groupId: group!.id,
+            folderName: sanitizeGroupFolderName(group!.name),
+          },
+        },
   );
-  if (result.ok) {
+  if (result.ok && mode === "target") {
     result.items = result.items.map((item) =>
       updateHistoryItem(item.id, {
         feature: "artist-lab",
-        groupId: group.id,
-      }) ?? { ...item, feature: "artist-lab", groupId: group.id },
+        groupId: group!.id,
+      }) ?? { ...item, feature: "artist-lab", groupId: group!.id },
     );
   }
   return result;
+}
+
+function artistLabTemporaryRoot(): string {
+  return path.join(app.getPath("temp"), "langbai-novelai-studio", "artist-lab-random");
+}
+
+export async function promoteArtistLabFavorite(rawItem: HistoryItem): Promise<HistoryItem> {
+  if (!rawItem?.filePath || !isInsideDir(rawItem.filePath, artistLabTemporaryRoot())) {
+    throw new Error("无效的画风实验室临时图片。");
+  }
+  const source = path.resolve(rawItem.filePath);
+  await fs.access(source);
+  const settings = getSettings();
+  const group = ensureHistoryGroup("画风实验室-随机抽卡");
+  const date = rawItem.date || dateStamp(new Date());
+  const dir = path.join(settings.outputDir, date, sanitizeGroupFolderName(group.name));
+  await fs.mkdir(dir, { recursive: true });
+  const parsed = path.parse(source);
+  const destination = await uniqueFilePath(dir, parsed.name, parsed.ext.replace(/^\./, "") || "png");
+  try {
+    await fs.rename(source, destination);
+  } catch {
+    await fs.copyFile(source, destination);
+    await fs.unlink(source).catch(() => undefined);
+  }
+  const promoted: HistoryItem = {
+    ...rawItem,
+    filePath: destination,
+    fileUrl: pathToFileURL(destination).toString(),
+    feature: "artist-lab",
+    groupId: group.id,
+  };
+  addHistory([promoted]);
+  return promoted;
+}
+
+export async function deleteArtistLabTemporary(filePath: unknown): Promise<{ ok: boolean }> {
+  if (typeof filePath !== "string" || !isInsideDir(filePath, artistLabTemporaryRoot())) {
+    return { ok: false };
+  }
+  await fs.unlink(filePath).catch(() => undefined);
+  return { ok: true };
+}
+
+export async function clearArtistLabTemporary(): Promise<{ ok: boolean }> {
+  await fs.rm(artistLabTemporaryRoot(), { recursive: true, force: true });
+  return { ok: true };
 }
 
 export async function exportTagComicSelectedZip(
@@ -3361,6 +3412,7 @@ export async function generateImage(
   saveOptions?: {
     ignoreActiveGroup?: boolean;
     groupOverride?: { groupId: string; folderName: string };
+    temporary?: boolean;
   },
 ): Promise<GenerateResult> {
   const token = getToken();

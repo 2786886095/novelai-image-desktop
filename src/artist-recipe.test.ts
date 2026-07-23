@@ -49,7 +49,7 @@ describe("artist recipe grammar", () => {
     expect(recipes.some((recipe) => recipe.artists.some((artist) => artist.weight > 1.2))).toBe(true);
   });
 
-  it("only mutates auxiliary content when explicitly enabled", () => {
+  it("keeps user auxiliary terms fixed and draws labelled style mutations only when enabled", () => {
     const locked = generatePopularArtistRecipes(pool, {
       count: 1,
       minArtists: 5,
@@ -59,6 +59,31 @@ describe("artist recipe grammar", () => {
       random: seeded(),
     })[0];
     expect(locked.auxiliary.map((token) => token.value)).toEqual(["year 2025", "impasto", "no halo"]);
+    expect(locked.mutations).toEqual([]);
+
+    const mutated = generatePopularArtistRecipes(pool, {
+      count: 8,
+      minArtists: 5,
+      maxArtists: 5,
+      mutateAuxiliary: true,
+      auxiliaryPrompt: "year 2025, impasto",
+      random: seeded(),
+    });
+    expect(mutated.every((recipe) => recipe.auxiliary.map((token) => token.value).join(",") === "year 2025,impasto")).toBe(true);
+    expect(mutated.every((recipe) => recipe.mutations.length >= 2 && recipe.mutations.length <= 6)).toBe(true);
+    expect(mutated.flatMap((recipe) => recipe.mutations).every((token) => token.weight >= 0.3 && token.weight <= 1.5)).toBe(true);
+    expect(mutated.flatMap((recipe) => recipe.mutations).every((token) => Boolean(token.category))).toBe(true);
+  });
+
+  it("caps each string at twenty artists", () => {
+    const recipe = generatePopularArtistRecipes(pool, {
+      count: 1,
+      minArtists: 50,
+      maxArtists: 50,
+      mutateAuxiliary: false,
+      random: seeded(),
+    })[0];
+    expect(recipe.artists).toHaveLength(20);
   });
 
   it("does not impose the former one-hundred recipe ceiling", () => {

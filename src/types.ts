@@ -1,4 +1,4 @@
-export const APP_VERSION = "1.4.5";
+export const APP_VERSION = "1.4.6";
 export const APP_NAME = "Langbai NovelAI Studio";
 export const PROJECT_REPOSITORY =
   "https://github.com/2786886095/novelai-image-desktop";
@@ -1174,6 +1174,9 @@ export interface NaiDesktopApi {
     extras: GenerateExtras,
     mode: "target" | "random",
   ) => Promise<GenerateResult>;
+  artistLabPromoteFavorite: (item: HistoryItem) => Promise<HistoryItem>;
+  artistLabDeleteTemporary: (filePath: string) => Promise<{ ok: boolean }>;
+  artistLabClearTemporary: () => Promise<{ ok: boolean }>;
   generateI2I: (
     params: GenerateParams,
     i2i: I2IParams,

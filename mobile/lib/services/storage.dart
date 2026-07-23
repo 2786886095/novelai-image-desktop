@@ -363,6 +363,51 @@ class Storage {
     return item;
   }
 
+  Future<HistoryItem> saveArtistLabTemporaryImage(
+    Uint8List bytes,
+    GenerateParams params,
+    int seed,
+  ) async {
+    final now = DateTime.now();
+    final date = '${now.year}-${_pad(now.month)}-${_pad(now.day)}';
+    final root = await getTemporaryDirectory();
+    final dir = Directory(
+        '${root.path}${Platform.pathSeparator}langbai-novelai-studio${Platform.pathSeparator}artist-lab-random');
+    if (!dir.existsSync()) dir.createSync(recursive: true);
+    final id = 'artist-lab-temp-${now.microsecondsSinceEpoch}';
+    final file = File('${dir.path}${Platform.pathSeparator}$id.png');
+    final settings = await getSettings();
+    final output = settings.keepImageMetadata ? bytes : stripPngMetadata(bytes);
+    await file.writeAsBytes(output, flush: true);
+    return HistoryItem(
+      id: id,
+      filePath: file.path,
+      date: date,
+      createdAt: now.toIso8601String(),
+      seed: seed,
+      model: params.model,
+      width: params.width,
+      height: params.height,
+      prompt: params.positivePrompt,
+      feature: 'artist-lab-temp',
+      params: params.toJson(),
+    );
+  }
+
+  Future<void> deleteArtistLabTemporaryImage(String filePath) async {
+    final root = await getTemporaryDirectory();
+    final parent = Directory(
+            '${root.path}${Platform.pathSeparator}langbai-novelai-studio${Platform.pathSeparator}artist-lab-random')
+        .absolute
+        .path;
+    final candidate = File(filePath).absolute.path;
+    if (!candidate.startsWith('$parent${Platform.pathSeparator}')) return;
+    try {
+      final file = File(candidate);
+      if (file.existsSync()) await file.delete();
+    } catch (_) {}
+  }
+
   Future<void> deleteHistory(String id) async {
     final history = await getHistory();
     final item = history.where((e) => e.id == id).firstOrNull;
