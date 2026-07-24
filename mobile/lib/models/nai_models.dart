@@ -9,7 +9,7 @@ class NaiOption {
 }
 
 const appName = 'Langbai NovelAI Studio';
-const appVersion = '1.5.2';
+const appVersion = '1.5.3';
 
 const naiModels = <NaiOption>[
   NaiOption('NAI Diffusion 4.5 Full (Full model)', 'nai-diffusion-4-5-full'),
@@ -127,11 +127,11 @@ class GenerateParams {
     this.noiseSchedule = 'karras',
     this.seed = 0,
     this.seedMode = 'random',
-    this.ucPreset = 0,
+    this.ucPreset = 2,
     this.qualityToggle = true,
     this.smea = false,
     this.smeaDyn = false,
-    this.variety = true,
+    this.variety = false,
     this.fileNamePrefix = '',
   });
 
@@ -174,11 +174,11 @@ class GenerateParams {
         noiseSchedule: j['noiseSchedule'] ?? 'karras',
         seed: j['seed'] ?? 0,
         seedMode: j['seedMode'] ?? 'random',
-        ucPreset: j['ucPreset'] ?? 0,
+        ucPreset: j['ucPreset'] ?? 2,
         qualityToggle: j['qualityToggle'] ?? true,
         smea: j['smea'] ?? false,
         smeaDyn: j['smeaDyn'] ?? false,
-        variety: j['variety'] ?? true,
+        variety: j['variety'] ?? false,
         fileNamePrefix: j['fileNamePrefix'] ?? '',
       );
 
@@ -359,6 +359,7 @@ class GenerationQueueJob {
   final GenerateParams params;
   final GenerateExtras extras;
   final int quotedAnlas;
+  final String historyGroupId;
   final DateTime addedAt;
 
   const GenerationQueueJob({
@@ -366,6 +367,7 @@ class GenerationQueueJob {
     required this.params,
     required this.extras,
     required this.quotedAnlas,
+    this.historyGroupId = '',
     required this.addedAt,
   });
 
@@ -554,6 +556,7 @@ class AppSettings {
   // Images are organised as <base>/<date>/<group>/ like the desktop client.
   String imageOutputDir;
   String activeHistoryGroupId;
+  String generationGroupId;
   bool lockStylePrompt;
   bool lockNegativePrompt;
   String savedStylePrompt;
@@ -624,6 +627,7 @@ class AppSettings {
     this.saveToGallery = true,
     this.imageOutputDir = '',
     this.activeHistoryGroupId = '',
+    this.generationGroupId = '',
     this.lockStylePrompt = false,
     this.lockNegativePrompt = false,
     this.savedStylePrompt = '',
@@ -693,6 +697,7 @@ class AppSettings {
         'saveToGallery': saveToGallery,
         'imageOutputDir': imageOutputDir,
         'activeHistoryGroupId': activeHistoryGroupId,
+        'generationGroupId': generationGroupId,
         'lockStylePrompt': lockStylePrompt,
         'lockNegativePrompt': lockNegativePrompt,
         'savedStylePrompt': savedStylePrompt,
@@ -760,6 +765,7 @@ class AppSettings {
         saveToGallery: j['saveToGallery'] ?? true,
         imageOutputDir: j['imageOutputDir'] ?? '',
         activeHistoryGroupId: j['activeHistoryGroupId'] ?? '',
+        generationGroupId: j['generationGroupId'] ?? '',
         lockStylePrompt: j['lockStylePrompt'] ?? false,
         lockNegativePrompt: j['lockNegativePrompt'] ?? false,
         savedStylePrompt: j['savedStylePrompt'] ?? '',

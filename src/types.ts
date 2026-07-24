@@ -123,11 +123,11 @@ export const DEFAULT_PARAMS: GenerateParams = {
   noiseSchedule: "karras",
   seed: 0,
   seedMode: "random",
-  ucPreset: 0,
+  ucPreset: 2,
   qualityToggle: true,
   smea: false,
   smeaDyn: false,
-  variety: true,
+  variety: false,
   fileNamePrefix: "",
 };
 
@@ -229,6 +229,8 @@ export interface GenerateExtras {
   vibeImages: VibeTransferItem[];
   charCaptions: CharCaptionItem[];
   preciseReferences?: PreciseReferenceItem[];
+  /** Snapshot of the ordinary generation destination; never sent to NovelAI. */
+  historyGroupId?: string;
 }
 
 // ── Batch img2img (批量图生图) project — persisted in the store so switching
@@ -1050,6 +1052,9 @@ export interface AppSettings {
   baiduAppId: string;
   baiduSecret: string;
   activeHistoryGroupId: string;
+  // Persisted save destination for ordinary generation, independent from the
+  // history panel's current filter (`activeHistoryGroupId`).
+  generationGroupId: string;
   // Anime vs Furry model family (official site offers both; anime is default).
   modelMode: ModelMode;
   // Saved/locked style + negative prompts. When locked, they persist across

@@ -1557,13 +1557,47 @@ class _I2IControls extends StatelessWidget {
 }
 
 class _OutputControls extends StatelessWidget {
+  Future<void> _createGroup(BuildContext context, AppState state) async {
+    final controller = TextEditingController();
+    final language = state.settings.language;
+    final name = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(mobileUiTextFor(language, 'gallery.createGroup')),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: InputDecoration(
+            labelText: mobileUiTextFor(language, 'gallery.groupName'),
+            border: const OutlineInputBorder(),
+          ),
+          onSubmitted: (value) => Navigator.pop(dialogContext, value),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(mobileUiTextFor(language, 'common.cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, controller.text),
+            child: Text(mobileUiTextFor(language, 'common.create')),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (name != null && name.trim().isNotEmpty) {
+      await state.createGenerationGroup(name);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final text = generateScreenTextFor(state.settings.language);
-    final selectedExists = state.selectedGroupId.isEmpty ||
-        state.groups.any((group) => group.id == state.selectedGroupId);
-    final selected = selectedExists ? state.selectedGroupId : '';
+    final selectedExists = state.generationGroupId.isEmpty ||
+        state.groups.any((group) => group.id == state.generationGroupId);
+    final selected = selectedExists ? state.generationGroupId : '';
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -1600,8 +1634,15 @@ class _OutputControls extends StatelessWidget {
                 ),
               ],
               onChanged: (value) {
-                state.setActiveHistoryGroup(value ?? '');
+                state.setGenerationGroup(value ?? '');
               },
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: () => _createGroup(context, state),
+              icon: const Icon(Icons.create_new_folder_outlined),
+              label: Text(mobileUiTextFor(
+                  state.settings.language, 'gallery.createGroup')),
             ),
           ],
         ),

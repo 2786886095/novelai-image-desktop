@@ -6,7 +6,8 @@ void main() {
   final api = NaiApi();
   final settings = AppSettings(proxyMode: 'direct');
 
-  test('V4.5 Full quality and UC presets match the desktop payload', () async {
+  test('new-user defaults use Human Focus with Variety disabled', () async {
+    final defaults = GenerateParams();
     final payload = await api.buildPayload(
       'unused',
       settings,
@@ -21,11 +22,15 @@ void main() {
     final parameters = payload['parameters'] as Map<String, dynamic>;
     expect(payload['input'], '1girl, very aesthetic, masterpiece, no text');
     expect(payload['input'], isNot(contains('location')));
+    expect(defaults.ucPreset, 2);
+    expect(defaults.variety, isFalse);
     expect(parameters['uc'], contains('custom negative'));
-    expect(parameters['uc'], contains('dithering'));
+    expect(parameters['uc'], contains('bad anatomy'));
+    expect(parameters['uc'], contains('mismatched pupils'));
+    expect(parameters['skip_cfg_above_sigma'], isNull);
   });
 
-  test('Human Focus does not accidentally append the Light UC preset',
+  test('Human Focus appends the official character-focused UC preset',
       () async {
     final payload = await api.buildPayload(
       'unused',
@@ -40,7 +45,10 @@ void main() {
       GenerateExtras(),
     );
     final parameters = payload['parameters'] as Map<String, dynamic>;
-    expect(parameters['uc'], 'custom negative');
+    expect(parameters['uc'], contains('custom negative'));
+    expect(parameters['uc'], contains('bad anatomy'));
+    expect(parameters['uc'], contains('bad hands'));
+    expect(parameters['uc'], contains('mismatched pupils'));
     expect(payload['input'], contains('-0.8::feet::'));
   });
 

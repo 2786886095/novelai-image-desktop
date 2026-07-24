@@ -313,6 +313,7 @@ export function defaultSettings(): AppSettings {
     baiduAppId: "",
     baiduSecret: "",
     activeHistoryGroupId: "",
+    generationGroupId: "",
     modelMode: "anime" as const,
     lockStylePrompt: false,
     lockNegativePrompt: false,
@@ -895,6 +896,9 @@ export function deleteHistoryGroup(id: string): HistoryGroup[] {
   data.history = data.history.map((item) => (item.groupId === id ? { ...item, groupId: undefined } : item));
   if (data.settings.activeHistoryGroupId === id) {
     data.settings = { ...data.settings, activeHistoryGroupId: "" };
+  }
+  if (data.settings.generationGroupId === id) {
+    data.settings = { ...data.settings, generationGroupId: "" };
   }
   writeStore(data);
   return data.historyGroups;

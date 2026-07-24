@@ -23,6 +23,7 @@ void main() {
         keepImageMetadata: false,
         saveToGallery: false,
         imageNameTemplate: '{date}_{seed}_{type}',
+        generationGroupId: 'generation-group',
         promptShortcuts: [
           PromptShortcutTemplate(
             id: '1',
@@ -40,6 +41,7 @@ void main() {
       expect(restored.historyRetentionDays, 90);
       expect(restored.keepImageMetadata, isFalse);
       expect(restored.saveToGallery, isFalse);
+      expect(restored.generationGroupId, 'generation-group');
       expect(restored.promptShortcuts.single.name, '测试');
     });
 

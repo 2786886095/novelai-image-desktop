@@ -1788,6 +1788,7 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "generate.batchCount": "批量生成数量",
     "generate.fileNamePrefix": "图片命名（文件名前缀，可留空）",
     "generate.fileNamePlaceholder": "例如：我的角色 → 我的角色_20260617_01.png",
+    "generate.historyGroup": "生成到分组",
     "generate.wildcardHint":
       "支持动态提示词通配符 {example}，批量时每张随机取一项；NovelAI 的 {tag} 权重语法不受影响。",
     "generate.run": "生成",
@@ -1988,6 +1989,7 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "generate.batchCount": "批次生成數量",
     "generate.fileNamePrefix": "圖片命名（檔名前綴，可留空）",
     "generate.fileNamePlaceholder": "例如：我的角色 → 我的角色_20260617_01.png",
+    "generate.historyGroup": "生成到分組",
     "generate.wildcardHint":
       "支援動態提示詞通配符 {example}，批次時每張隨機取一項；NovelAI 的 {tag} 權重語法不受影響。",
     "generate.run": "生成",
@@ -2198,6 +2200,7 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "generate.fileNamePrefix": "Image naming (file prefix, optional)",
     "generate.fileNamePlaceholder":
       "e.g. My Character → My Character_20260617_01.png",
+    "generate.historyGroup": "Generate into group",
     "generate.wildcardHint":
       "Supports dynamic prompt wildcards {example}; each batch image picks one option randomly. NovelAI {tag} weight syntax is unaffected.",
     "generate.run": "Generate",
@@ -2410,6 +2413,7 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "generate.fileNamePrefix": "画像名（ファイル名プレフィックス、省略可）",
     "generate.fileNamePlaceholder":
       "例：My Character → My Character_20260617_01.png",
+    "generate.historyGroup": "生成先グループ",
     "generate.wildcardHint":
       "動的プロンプトワイルドカード {example} に対応。一括時は各画像でランダムに選択されます。NovelAI の {tag} 重み構文には影響しません。",
     "generate.run": "生成",
@@ -2623,6 +2627,7 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "generate.fileNamePrefix": "이미지 이름(파일 접두사, 선택)",
     "generate.fileNamePlaceholder":
       "예: My Character → My Character_20260617_01.png",
+    "generate.historyGroup": "생성 대상 그룹",
     "generate.wildcardHint":
       "동적 프롬프트 와일드카드 {example} 지원. 배치에서는 이미지마다 하나를 무작위 선택합니다. NovelAI {tag} 가중치 문법은 영향받지 않습니다.",
     "generate.run": "생성",

@@ -59,6 +59,7 @@ class AppState extends ChangeNotifier {
   String status = runtimeTextFor('zh-CN', 'common.ready');
   int batchCount = 1;
   String selectedGroupId = '';
+  String generationGroupId = '';
   String inpaintModel = 'nai-diffusion-4-5-full-inpainting';
   double inpaintStrength = 0.55;
   double inpaintNoise = 0;
@@ -194,6 +195,11 @@ class AppState extends ChangeNotifier {
         (group) => group.id == settings.activeHistoryGroupId,
       )
           ? settings.activeHistoryGroupId
+          : '';
+      generationGroupId = groups.any(
+        (group) => group.id == settings.generationGroupId,
+      )
+          ? settings.generationGroupId
           : '';
       if (settings.lockStylePrompt) {
         params.stylePrompt = settings.savedStylePrompt;
@@ -349,6 +355,34 @@ class AppState extends ChangeNotifier {
   Future<void> setActiveHistoryGroup(String value) async {
     selectedGroupId = groups.any((group) => group.id == value) ? value : '';
     settings.activeHistoryGroupId = selectedGroupId;
+    await storage.setSettings(settings);
+    notifyListeners();
+  }
+
+  Future<void> setGenerationGroup(String value) async {
+    generationGroupId = groups.any((group) => group.id == value) ? value : '';
+    settings.generationGroupId = generationGroupId;
+    await storage.setSettings(settings);
+    notifyListeners();
+  }
+
+  Future<void> createGenerationGroup(String name) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return;
+    HistoryGroup? group = groups
+        .where((item) => item.name.toLowerCase() == trimmed.toLowerCase())
+        .firstOrNull;
+    if (group == null) {
+      group = HistoryGroup(
+        id: DateTime.now().microsecondsSinceEpoch.toString(),
+        name: trimmed,
+        createdAt: DateTime.now().toIso8601String(),
+      );
+      groups = [...groups, group];
+      await storage.writeGroups(groups);
+    }
+    generationGroupId = group.id;
+    settings.generationGroupId = group.id;
     await storage.setSettings(settings);
     notifyListeners();
   }
@@ -776,6 +810,7 @@ class AppState extends ChangeNotifier {
     final initialParams = params.copy();
     final initialExtras = extras.copy();
     final initialSeed = initialParams.seed;
+    final initialHistoryGroupId = generationGroupId;
     busy = true;
     status = _rt('status.readingCharge');
     notifyListeners();
@@ -852,10 +887,12 @@ class AppState extends ChangeNotifier {
 
         GenerateParams taskParams;
         GenerateExtras taskExtras;
+        String taskHistoryGroupId;
         var taskQuote = 0;
         if (!skipInitial && initialIndex < initialTotal) {
           taskParams = initialParams.copy();
           taskExtras = initialExtras.copy();
+          taskHistoryGroupId = initialHistoryGroupId;
           taskQuote = initialCosts[initialIndex];
           if (initialParams.seedMode != 'random' && initialSeed > 0) {
             taskParams.seed = initialSeed + initialIndex;
@@ -872,6 +909,7 @@ class AppState extends ChangeNotifier {
           final job = generationQueue.removeAt(0);
           taskParams = job.params.copy();
           taskExtras = job.extras.copy();
+          taskHistoryGroupId = job.historyGroupId;
           taskQuote = job.quotedAnlas;
         }
 
@@ -904,7 +942,7 @@ class AppState extends ChangeNotifier {
               taskParams,
               seed,
               feature: 't2i',
-              groupId: selectedGroupId.ifEmptyNull,
+              groupId: taskHistoryGroupId.ifEmptyNull,
             ));
           }
           _prependHistory(items);
@@ -1018,6 +1056,7 @@ class AppState extends ChangeNotifier {
         params: snapshot,
         extras: snapshotExtras,
         quotedAnlas: quotedAnlas,
+        historyGroupId: generationGroupId,
         addedAt: DateTime.now(),
       ));
       queueReservedAnlas += quotedAnlas;
@@ -1135,7 +1174,7 @@ class AppState extends ChangeNotifier {
       final items = <HistoryItem>[];
       for (final bytes in images) {
         items.add(await storage.saveImage(bytes, taskParams, seed,
-            feature: 'i2i', groupId: selectedGroupId.ifEmptyNull));
+            feature: 'i2i', groupId: generationGroupId.ifEmptyNull));
       }
       _prependHistory(items, useAsWorkbench: true);
       status = _rf(
@@ -1188,7 +1227,7 @@ class AppState extends ChangeNotifier {
             model: usedModel,
             width: dims.width,
             height: dims.height,
-            groupId: selectedGroupId.ifEmptyNull));
+            groupId: generationGroupId.ifEmptyNull));
       }
       comparisonBefore = dims;
       comparisonAfter = WorkingImage(
@@ -1236,7 +1275,7 @@ class AppState extends ChangeNotifier {
           model: 'upscale',
           width: prepared.width * upscaleScale,
           height: prepared.height * upscaleScale,
-          groupId: selectedGroupId.ifEmptyNull);
+          groupId: generationGroupId.ifEmptyNull);
       _prependHistory([item], useAsWorkbench: true);
       status = _rf('status.upscaleDone',
           {'spent': await _finishQuotedRun(token, before)});
@@ -1289,7 +1328,7 @@ class AppState extends ChangeNotifier {
             model: 'director-$directorTool',
             width: prepared.originalWidth,
             height: prepared.originalHeight,
-            groupId: selectedGroupId.ifEmptyNull));
+            groupId: generationGroupId.ifEmptyNull));
       }
       _prependHistory(items, useAsWorkbench: true);
       final resizeNote = prepared.resized
@@ -1732,6 +1771,11 @@ class AppState extends ChangeNotifier {
     if (selectedGroupId == id) {
       selectedGroupId = '';
       settings.activeHistoryGroupId = '';
+      await storage.setSettings(settings);
+    }
+    if (generationGroupId == id) {
+      generationGroupId = '';
+      settings.generationGroupId = '';
       await storage.setSettings(settings);
     }
     notifyListeners();

@@ -18,15 +18,18 @@ void main() {
         anlasBalance: 100,
         hasActiveSubscription: true,
       )
-      ..params.positivePrompt = 'first prompt';
+      ..params.positivePrompt = 'first prompt'
+      ..generationGroupId = 'group-a';
 
     final run = state.generate();
     await _waitUntil(() => api.prompts.length == 1);
     expect(state.generationQueueRunning, isTrue);
 
     state.params.positivePrompt = 'second prompt';
+    state.generationGroupId = 'group-b';
     await state.enqueueGeneration();
     expect(state.generationQueue.single.params.positivePrompt, 'second prompt');
+    expect(state.generationQueue.single.historyGroupId, 'group-b');
 
     api.firstRequest.complete((
       [
@@ -38,6 +41,7 @@ void main() {
 
     expect(api.prompts, ['first prompt', 'second prompt']);
     expect(storage.savedPrompts, ['first prompt', 'second prompt']);
+    expect(storage.savedGroupIds, ['group-a', 'group-b']);
     expect(state.generationQueueRunning, isFalse);
     expect(state.queueProgress?.done, 2);
   });
@@ -94,6 +98,7 @@ class _QueueApi extends NaiApi {
 
 class _MemoryStorage extends Storage {
   final savedPrompts = <String>[];
+  final savedGroupIds = <String?>[];
 
   @override
   Future<String?> getToken() async => 'test-token';
@@ -110,6 +115,7 @@ class _MemoryStorage extends Storage {
     String? groupId,
   }) async {
     savedPrompts.add(params.positivePrompt);
+    savedGroupIds.add(groupId);
     final id = '${savedPrompts.length}';
     return HistoryItem(
       id: id,

@@ -277,6 +277,7 @@ interface AppState {
   historyGroups: HistoryGroup[];
   selectedDate: string;
   selectedGroupId: string;
+  generationGroupId: string;
   currentImage: HistoryItem | null;
   workbenchImage: WorkingImage | null;
   comparisonBeforeImage: WorkingImage | null;
@@ -379,6 +380,8 @@ interface AppState {
   installUpdate: () => void;
   setSelectedDate: (date: string) => Promise<void>;
   setSelectedGroupId: (groupId: string) => Promise<void>;
+  setGenerationGroupId: (groupId: string) => Promise<void>;
+  createGenerationGroup: (name: string) => Promise<void>;
   createHistoryGroup: (name: string) => Promise<void>;
   renameHistoryGroup: (id: string, name: string) => Promise<void>;
   deleteHistoryGroup: (id: string) => Promise<void>;
@@ -523,6 +526,7 @@ function buildExtras(state: AppState): GenerateExtras {
       x,
       y,
     })),
+    historyGroupId: state.generationGroupId,
   };
 }
 
@@ -627,6 +631,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   historyGroups: [],
   selectedDate: "",
   selectedGroupId: "",
+  generationGroupId: "",
   currentImage: null,
   workbenchImage: null,
   comparisonBeforeImage: null,
@@ -729,6 +734,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     const selectedDate = dates[0] ?? "";
     const selectedGroupId = settings.activeHistoryGroupId ?? "";
+    const generationGroupId = groups.some((group) => group.id === settings.generationGroupId)
+      ? settings.generationGroupId
+      : "";
     let history: HistoryItem[] = [];
     try {
       history = await window.naiDesktop.getHistory(selectedDate || undefined, selectedGroupId || undefined);
@@ -777,6 +785,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       historyGroups: groups,
       selectedDate,
       selectedGroupId,
+      generationGroupId,
       history,
       currentImage: history[0] ?? null,
       statusText: account.hasToken ? storeText(settings, "status.apiConfigured") : storeText(settings, "status.needApiToken"),
@@ -881,6 +890,33 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ selectedGroupId: groupId, history, currentImage: history[0] ?? get().currentImage });
   },
 
+  async setGenerationGroupId(groupId) {
+    const normalized = get().historyGroups.some((group) => group.id === groupId) ? groupId : "";
+    await window.naiDesktop.setSetting("generationGroupId", normalized);
+    set((state) => ({
+      generationGroupId: normalized,
+      settings: state.settings ? { ...state.settings, generationGroupId: normalized } : state.settings,
+    }));
+  },
+
+  async createGenerationGroup(name) {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      set({ toast: storeText(get().settings, "group.nameRequired") });
+      return;
+    }
+    const groups = await window.naiDesktop.createHistoryGroup(trimmed);
+    const group = groups.find((item) => item.name.toLowerCase() === trimmed.toLowerCase());
+    if (!group) return;
+    await window.naiDesktop.setSetting("generationGroupId", group.id);
+    set((state) => ({
+      historyGroups: groups,
+      generationGroupId: group.id,
+      settings: state.settings ? { ...state.settings, generationGroupId: group.id } : state.settings,
+      toast: storeFormat(state.settings, "group.created", { name: group.name }),
+    }));
+  },
+
   async createHistoryGroup(name) {
     const groups = await window.naiDesktop.createHistoryGroup(name);
     const settings = get().settings;
@@ -901,7 +937,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   async deleteHistoryGroup(id) {
     const groups = await window.naiDesktop.deleteHistoryGroup(id);
     const selectedGroupId = get().selectedGroupId === id ? "" : get().selectedGroupId;
-    set({ historyGroups: groups, selectedGroupId });
+    const generationGroupId = get().generationGroupId === id ? "" : get().generationGroupId;
+    set((state) => ({
+      historyGroups: groups,
+      selectedGroupId,
+      generationGroupId,
+      settings: state.settings ? { ...state.settings, generationGroupId } : state.settings,
+    }));
     await get().refreshHistory();
     set({ toast: storeText(get().settings, "group.deleted") });
   },

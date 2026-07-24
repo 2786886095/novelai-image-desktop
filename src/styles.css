@@ -3320,6 +3320,13 @@ html, body, #root {
   cursor: pointer;
   font-weight: 800;
 }
+.generation-group-create {
+  margin: -4px 0 12px;
+}
+.generation-group-create button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
 .history-item-group {
   width: 100%;
   margin: 0;

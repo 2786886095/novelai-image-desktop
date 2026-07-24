@@ -2258,6 +2258,11 @@ function GeneratePanel({ openSettings }: { openSettings: () => void }) {
   const setBatchCount = useAppStore((state) => state.setBatchCount);
   const fileNamePrefix = useAppStore((state) => state.params.fileNamePrefix);
   const setParam = useAppStore((state) => state.setParam);
+  const groups = useAppStore((state) => state.historyGroups);
+  const generationGroupId = useAppStore((state) => state.generationGroupId);
+  const setGenerationGroupId = useAppStore((state) => state.setGenerationGroupId);
+  const createGenerationGroup = useAppStore((state) => state.createGenerationGroup);
+  const [newGroupName, setNewGroupName] = useState("");
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
 
@@ -2285,6 +2290,45 @@ function GeneratePanel({ openSettings }: { openSettings: () => void }) {
             onChange={(e) => setParam("fileNamePrefix", e.target.value)}
           />
         </label>
+        <label className="field">
+          <span>{t("generate.historyGroup")}</span>
+          <select
+            value={groups.some((group) => group.id === generationGroupId) ? generationGroupId : ""}
+            onChange={(event) => void setGenerationGroupId(event.target.value)}
+          >
+            <option value="">{t("history.ungrouped")}</option>
+            {groups.map((group) => (
+              <option value={group.id} key={group.id}>{group.name}</option>
+            ))}
+          </select>
+        </label>
+        <div className="history-group-create generation-group-create">
+          <input
+            value={newGroupName}
+            placeholder={t("history.newGroup")}
+            onChange={(event) => setNewGroupName(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter") return;
+              event.preventDefault();
+              const name = newGroupName.trim();
+              if (!name) return;
+              void createGenerationGroup(name);
+              setNewGroupName("");
+            }}
+          />
+          <button
+            type="button"
+            disabled={!newGroupName.trim()}
+            onClick={() => {
+              const name = newGroupName.trim();
+              if (!name) return;
+              void createGenerationGroup(name);
+              setNewGroupName("");
+            }}
+          >
+            {t("history.create")}
+          </button>
+        </div>
         <p className="wildcard-hint">
           <Icon name="bulb" /> {f("generate.wildcardHint", { example: "{red|blue|green} hair", tag: "{tag}" })}
         </p>

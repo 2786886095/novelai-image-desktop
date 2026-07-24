@@ -105,6 +105,21 @@ describe("buildGenerateImageHttpBody", () => {
 });
 
 describe("V4 character prompt payload", () => {
+  it("uses Human Focus with Variety+ disabled for new-user defaults", () => {
+    const payload = buildPayload(
+      { ...DEFAULT_PARAMS, positivePrompt: "1girl", negativePrompt: "custom negative" },
+      123,
+      { vibeImages: [], preciseReferences: [], charCaptions: [] },
+    );
+
+    expect(DEFAULT_PARAMS.ucPreset).toBe(2);
+    expect(DEFAULT_PARAMS.variety).toBe(false);
+    expect(payload.parameters.uc).toContain("custom negative");
+    expect(payload.parameters.uc).toContain("bad anatomy");
+    expect(payload.parameters.uc).toContain("mismatched pupils");
+    expect(payload.parameters.skip_cfg_above_sigma).toBeNull();
+  });
+
   it("uses the AI-choice center when character position is unspecified", () => {
     const payload = buildPayload(
       { ...DEFAULT_PARAMS, positivePrompt: "2girls" },

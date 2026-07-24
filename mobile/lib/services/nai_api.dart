@@ -1298,7 +1298,8 @@ class NaiApi {
           message: 'AI call failed (HTTP ${res.statusCode}): ${res.body}',
         );
         if (recordLog) {
-          _addAiLog(label, apiKind, effectiveModel, system, userSummary, result);
+          _addAiLog(
+              label, apiKind, effectiveModel, system, userSummary, result);
         }
         return result;
       }
@@ -1464,9 +1465,21 @@ class NaiApi {
   }
 
   String _ucPresetText(String model, int preset) {
-    if (preset == 2 || preset == 3) return '';
+    if (preset == 3) return '';
+    final normalizedModel = _normalizeModel(model);
+    if (preset == 2) {
+      return switch (normalizedModel) {
+        'nai-diffusion-4-5-full' =>
+          'lowres, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, dithering, halftone, screentone, multiple views, logo, too many watermarks, negative space, blank page, @_@, mismatched pupils, glowing eyes, bad anatomy',
+        'nai-diffusion-4-5-curated' =>
+          'blurry, lowres, upscaled, artistic error, film grain, scan artifacts, bad anatomy, bad hands, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, halftone, multiple views, logo, too many watermarks, @_@, mismatched pupils, glowing eyes, negative space, blank page',
+        'nai-diffusion-3' =>
+          'lowres, {bad}, error, fewer, extra, missing, worst quality, jpeg artifacts, bad quality, watermark, unfinished, displeasing, chromatic aberration, signature, extra digits, artistic error, username, scan, [abstract], bad anatomy, bad hands, @_@, mismatched pupils, heart-shaped pupils, glowing eyes',
+        _ => '',
+      };
+    }
     final heavy = preset == 0;
-    return switch (_normalizeModel(model)) {
+    return switch (normalizedModel) {
       'nai-diffusion-4-5-full' => heavy
           ? 'lowres, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, dithering, halftone, screentone, multiple views, logo, too many watermarks, negative space, blank page'
           : 'lowres, artistic error, scan artifacts, worst quality, bad quality, jpeg artifacts, multiple views, very displeasing, too many watermarks, negative space, blank page',

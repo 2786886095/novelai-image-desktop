@@ -296,7 +296,18 @@ function qualityTags(model: string) {
 function ucPresetText(model: string, preset: number) {
   if (preset === 3) return "";
   const key = normalizeModel(model);
-  if (preset === 2) return "";
+  if (preset === 2) {
+    if (key === "nai-diffusion-4-5-full") {
+      return "lowres, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, dithering, halftone, screentone, multiple views, logo, too many watermarks, negative space, blank page, @_@, mismatched pupils, glowing eyes, bad anatomy";
+    }
+    if (key === "nai-diffusion-4-5-curated") {
+      return "blurry, lowres, upscaled, artistic error, film grain, scan artifacts, bad anatomy, bad hands, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, halftone, multiple views, logo, too many watermarks, @_@, mismatched pupils, glowing eyes, negative space, blank page";
+    }
+    if (key === "nai-diffusion-3") {
+      return "lowres, {bad}, error, fewer, extra, missing, worst quality, jpeg artifacts, bad quality, watermark, unfinished, displeasing, chromatic aberration, signature, extra digits, artistic error, username, scan, [abstract], bad anatomy, bad hands, @_@, mismatched pupils, heart-shaped pupils, glowing eyes";
+    }
+    return "";
+  }
   if (key === "nai-diffusion-4-5-full") {
     return preset === 0
       ? "lowres, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, dithering, halftone, screentone, multiple views, logo, too many watermarks, negative space, blank page"
@@ -1357,13 +1368,14 @@ function sanitizeGroupFolderName(name: string): string {
   return cleaned || "group";
 }
 
-// When the user has actively selected a history group, newly generated images
-// default into that group: they get the group's id (so the history view keeps
-// showing them) and are written to a per-group subfolder under the date folder.
-// "" / "__ungrouped" or a stale id mean "no destination group" → save flat.
-function resolveActiveSaveGroup():
+// The generation destination is independent from the history panel's filter.
+// A request may carry a snapshot so changing the selector while a queued image
+// is running cannot redirect that image midway through the request.
+function resolveGenerationSaveGroup(requestedId?: string):
   { groupId: string; folderName: string } | undefined {
-  const activeId = getSettings().activeHistoryGroupId;
+  const activeId = requestedId === undefined
+    ? getSettings().generationGroupId
+    : requestedId;
   if (!activeId || activeId === "__ungrouped") return undefined;
   const group = getHistoryGroups().find((g) => g.id === activeId);
   if (!group) return undefined;
@@ -1422,12 +1434,12 @@ async function saveBuffers(
   const settings = getSettings();
   const now = new Date();
   const date = dateStamp(now);
-  // An explicit groupOverride (batch redraw / comic) wins; otherwise use the
-  // user's actively-selected group unless the caller opts out.
+  // An explicit groupOverride (batch redraw / comic / snapshotted ordinary
+  // generation) wins; otherwise use the persisted generation destination.
   const activeGroup = saveOptions?.temporary
     ? undefined
     : saveOptions?.groupOverride ??
-      (saveOptions?.ignoreActiveGroup ? undefined : resolveActiveSaveGroup());
+      (saveOptions?.ignoreActiveGroup ? undefined : resolveGenerationSaveGroup());
   const dir = saveOptions?.temporary
     ? artistLabTemporaryRoot()
     : activeGroup
@@ -3573,13 +3585,21 @@ export async function generateImage(
         message: "API 返回成功，但压缩包中没有图片。",
         items: [],
       };
+    const requestedGroup = resolveGenerationSaveGroup(extras?.historyGroupId);
+    const ordinarySaveOptions = saveOptions?.groupOverride || saveOptions?.temporary
+      ? saveOptions
+      : {
+          ...saveOptions,
+          ignoreActiveGroup: !requestedGroup,
+          groupOverride: requestedGroup,
+        };
     const items = await saveBuffers(
       buffers,
       params,
       actualSeed,
       "t2i",
       undefined,
-      saveOptions,
+      ordinarySaveOptions,
     );
     void refreshStoredAccount();
     return {
@@ -3960,7 +3980,7 @@ export async function upscaleImg(
 
     const now = new Date();
     const date = dateStamp(now);
-    const activeGroup = resolveActiveSaveGroup();
+    const activeGroup = resolveGenerationSaveGroup();
     const dir = activeGroup
       ? path.join(settings.outputDir, date, activeGroup.folderName)
       : path.join(settings.outputDir, date);
