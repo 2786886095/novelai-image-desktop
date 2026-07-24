@@ -21,6 +21,47 @@ class PromptVariants {
       );
 }
 
+class PromptCodexMatch {
+  final String id;
+  final String title;
+  final String section;
+  final String source;
+  final String excerpt;
+  final bool adult;
+  final double score;
+
+  const PromptCodexMatch({
+    required this.id,
+    required this.title,
+    required this.section,
+    required this.source,
+    required this.excerpt,
+    required this.adult,
+    required this.score,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'title': title,
+        'section': section,
+        'source': source,
+        'excerpt': excerpt,
+        'adult': adult,
+        'score': score,
+      };
+
+  factory PromptCodexMatch.fromJson(Map<String, dynamic> json) =>
+      PromptCodexMatch(
+        id: json['id']?.toString() ?? '',
+        title: json['title']?.toString() ?? '',
+        section: json['section']?.toString() ?? '',
+        source: json['source']?.toString() ?? '',
+        excerpt: json['excerpt']?.toString() ?? '',
+        adult: json['adult'] == true,
+        score: (json['score'] as num?)?.toDouble() ?? 0,
+      );
+}
+
 enum TextToolJobStatus { processing, done, failed }
 
 /// In-flight/just-finished convert or reverse requests. Concurrent, not a
@@ -34,6 +75,7 @@ class TextToolJob {
   TextToolJobStatus status;
   String? result;
   PromptVariants? variants;
+  List<PromptCodexMatch> codexMatches;
   String? message;
   final DateTime addedAt;
 
@@ -45,6 +87,7 @@ class TextToolJob {
     required this.status,
     this.result,
     this.variants,
+    this.codexMatches = const [],
     this.message,
     required this.addedAt,
   });
@@ -61,6 +104,7 @@ class TextToolHistoryItem {
   final String? sourceImagePath;
   final String result;
   final PromptVariants? variants;
+  final List<PromptCodexMatch> codexMatches;
   final String createdAt;
 
   TextToolHistoryItem({
@@ -71,6 +115,7 @@ class TextToolHistoryItem {
     this.sourceImagePath,
     required this.result,
     this.variants,
+    this.codexMatches = const [],
     required this.createdAt,
   });
 
@@ -82,6 +127,7 @@ class TextToolHistoryItem {
         'sourceImagePath': sourceImagePath,
         'result': result,
         'variants': variants?.toJson(),
+        'codexMatches': codexMatches.map((item) => item.toJson()).toList(),
         'createdAt': createdAt,
       };
 
@@ -98,6 +144,11 @@ class TextToolHistoryItem {
         variants: (j['variants'] is Map)
             ? PromptVariants.fromJson(Map<String, dynamic>.from(j['variants']))
             : null,
+        codexMatches: (j['codexMatches'] as List? ?? const [])
+            .whereType<Map>()
+            .map((item) => PromptCodexMatch.fromJson(
+                Map<String, dynamic>.from(item)))
+            .toList(growable: false),
         createdAt: j['createdAt'] ?? '',
       );
 }

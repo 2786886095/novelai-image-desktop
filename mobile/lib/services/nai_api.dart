@@ -12,6 +12,7 @@ import '../images/image_processing.dart';
 import '../models/nai_models.dart';
 import '../prompts/prompt_mode.dart';
 import 'mcp_tag_client.dart';
+import 'prompt_codex_retrieval.dart';
 import 'proxy_http_client.dart';
 
 class AiTextResult {
@@ -19,11 +20,13 @@ class AiTextResult {
   final String message;
   final String text;
   final PromptVariants? variants;
+  final List<PromptCodexMatch> codexMatches;
   const AiTextResult({
     required this.ok,
     required this.message,
     this.text = '',
     this.variants,
+    this.codexMatches = const [],
   });
 }
 
@@ -70,6 +73,8 @@ class NaiApi {
   final _rng = Random.secure();
   final Map<String, String> _vibeEncodeCache = {};
   final List<AiCallLogEntry> _aiCallLog = [];
+  final PromptCodexRetrievalService _promptCodex =
+      PromptCodexRetrievalService();
   // Every in-flight generate/i2i/inpaint/redraw/comic call registers its own
   // client here instead of sharing one field — otherwise feature A starting
   // while B is still running overwrites B's client, and A's own request never
@@ -826,7 +831,7 @@ class NaiApi {
         ].join('\n')
       }
     ];
-    return _promptChat(
+    final first = await _promptChat(
       settings: settings,
       apiUrl: settings.visionApiUrl,
       apiKey: apiKey,
@@ -835,7 +840,88 @@ class NaiApi {
       user: user,
       source: 'reverse',
       knownCharacter: knownCharacter,
+      recordLog: !settings.promptCodexEnhanceEnabled,
     );
+    if (!settings.promptCodexEnhanceEnabled) return first;
+    if (!first.ok) {
+      _addAiLog(
+        'AI reverse · Codex enhancement (two stages)',
+        'vision',
+        settings.visionApiModel,
+        system,
+        _summarizeAiUser(user),
+        first,
+      );
+      return first;
+    }
+
+    final enhancement = await _promptCodex.retrieve(
+      [
+        hint,
+        first.text,
+        first.variants?.namePrompt ?? '',
+        first.variants?.featurePrompt ?? '',
+      ].where((value) => value.trim().isNotEmpty).join('\n'),
+      mode: 'reverse',
+      allowAdult: settings.promptCodexAdultEnabled,
+    );
+    final refineSystem = [
+      system,
+      if (enhancement.context.isNotEmpty) enhancement.context,
+      '这是法典增强的第二阶段。请以初步反推结果为事实边界，只校正结构、Tag、角色归属、互动方向、权重和冲突。不要新增图中未确认的主体、服装、动作或分级内容。',
+    ].join('\n\n');
+    final refineUser = [
+      '初步反推结果：',
+      first.text,
+      modeUserInstruction(mode, 'reverse'),
+      knownCharacterRuntimeInstruction(mode, 'reverse', knownCharacter),
+      '请只输出精修后的最终结果。',
+    ].join('\n\n');
+    final refined = await _promptChat(
+      settings: settings,
+      apiUrl: settings.visionApiUrl,
+      apiKey: apiKey,
+      model: settings.visionApiModel,
+      system: refineSystem,
+      user: refineUser,
+      source: 'reverse',
+      knownCharacter: knownCharacter,
+      recordLog: false,
+    );
+    final finalResult = AiTextResult(
+      ok: true,
+      message: refined.ok
+          ? 'Success (Personal Codex enhanced)'
+          : 'Codex refinement failed; kept the first-stage result',
+      text: refined.ok ? refined.text : first.text,
+      variants: refined.ok ? refined.variants : first.variants,
+      codexMatches: enhancement.matches,
+    );
+    final logResult = refined.ok
+        ? finalResult
+        : AiTextResult(
+            ok: true,
+            message: finalResult.message,
+            text:
+                '[Second-stage refinement failed; kept stage-one result: ${refined.message}]\n${first.text}',
+            variants: first.variants,
+            codexMatches: enhancement.matches,
+          );
+    _addAiLog(
+      'AI reverse · Codex enhancement (two stages)',
+      'vision',
+      settings.visionApiModel,
+      refineSystem,
+      [
+        _summarizeAiUser(user),
+        '[Stage 1 draft]',
+        first.text,
+        '[Local codex matches: ${enhancement.matches.length}]',
+        ...enhancement.matches.map((item) => '${item.title}｜${item.source}'),
+      ].join('\n'),
+      logResult,
+    );
+    return finalResult;
   }
 
   Future<AiTextResult> convertPrompt({
@@ -866,13 +952,21 @@ class NaiApi {
     final user =
         'User description:\n$text\n\n${modeUserInstruction(mode, 'convert')}$hintText'
         '\n\n${knownCharacterRuntimeInstruction(mode, 'convert', knownCharacter)}';
+    final enhancement = settings.promptCodexEnhanceEnabled
+        ? await _promptCodex.retrieve(
+            text,
+            mode: 'convert',
+            allowAdult: settings.promptCodexAdultEnabled,
+          )
+        : const PromptCodexEnhancement(matches: [], context: '');
     final system = [
       systemTemplate.trim().isEmpty
           ? _modeSystemPrompt(mode, reverse: false)
           : systemTemplate.trim(),
       knownCharacterRuntimeInstruction(mode, 'convert', knownCharacter),
+      if (enhancement.context.isNotEmpty) enhancement.context,
     ].join('\n\n');
-    return _promptChat(
+    final result = await _promptChat(
       settings: settings,
       apiUrl: settings.convertApiUrl,
       apiKey: apiKey,
@@ -881,6 +975,13 @@ class NaiApi {
       user: user,
       source: 'convert',
       knownCharacter: knownCharacter,
+    );
+    return AiTextResult(
+      ok: result.ok,
+      message: result.message,
+      text: result.text,
+      variants: result.variants,
+      codexMatches: enhancement.matches,
     );
   }
 
@@ -893,6 +994,7 @@ class NaiApi {
     required Object user,
     required String source,
     required bool knownCharacter,
+    bool recordLog = true,
   }) async {
     final raw = await _chat(
       settings,
@@ -903,6 +1005,7 @@ class NaiApi {
       user,
       label: source == 'reverse' ? 'AI inspect' : 'Prompt conversion',
       apiKind: source == 'reverse' ? 'vision' : 'convert',
+      recordLog: recordLog,
     );
     if (!raw.ok) return raw;
     // Known-character mode already requires both variants in the single
@@ -1161,7 +1264,8 @@ class NaiApi {
       String model, String system, Object user,
       {int maxTokens = 2000,
       String label = 'AI call',
-      String apiKind = 'convert'}) async {
+      String apiKind = 'convert',
+      bool recordLog = true}) async {
     final effectiveModel = model.trim().isEmpty ? 'gpt-4o-mini' : model.trim();
     final userSummary = _summarizeAiUser(user);
     try {
@@ -1193,7 +1297,9 @@ class NaiApi {
           ok: false,
           message: 'AI call failed (HTTP ${res.statusCode}): ${res.body}',
         );
-        _addAiLog(label, apiKind, effectiveModel, system, userSummary, result);
+        if (recordLog) {
+          _addAiLog(label, apiKind, effectiveModel, system, userSummary, result);
+        }
         return result;
       }
       var data = jsonDecode(res.body);
@@ -1224,12 +1330,16 @@ class NaiApi {
               message: 'Success',
               text: _cleanPrompt(content),
             );
-      _addAiLog(label, apiKind, effectiveModel, system, userSummary, result);
+      if (recordLog) {
+        _addAiLog(label, apiKind, effectiveModel, system, userSummary, result);
+      }
       return result;
     } catch (e) {
       final result = AiTextResult(
           ok: false, message: e.toString().replaceFirst('Exception: ', ''));
-      _addAiLog(label, apiKind, effectiveModel, system, userSummary, result);
+      if (recordLog) {
+        _addAiLog(label, apiKind, effectiveModel, system, userSummary, result);
+      }
       return result;
     }
   }

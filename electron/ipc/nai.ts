@@ -39,6 +39,7 @@ import {
   type NAIInpaintModel,
   type PreciseReferenceItem,
   type PreciseReferenceType,
+  type PromptCodexMatch,
   type ReversePromptScope,
   type VibeTransferItem,
   type SingleImageResult,
@@ -47,6 +48,7 @@ import {
   type UpscaleScale,
   type WorkingImage,
 } from "../../src/types";
+import { buildPromptCodexEnhancement } from "../../src/prompt-codex-retrieval";
 import { calculateFeatureAnlasQuote } from "../../src/anlas";
 import {
   buildTuiwenLocalPrompt,
@@ -1731,6 +1733,7 @@ async function callVisionApi(
   userContent: Array<{ type: string; [k: string]: any }>,
   maxTokens = 800,
   label = "AI 反推",
+  record = true,
 ): Promise<{ ok: boolean; content?: string; message: string }> {
   const settings = getSettings();
   const { visionApiUrl, visionApiKey, visionApiModel } = settings;
@@ -1784,27 +1787,31 @@ async function callVisionApi(
         fin === "length"
           ? "API 返回被长度截断（内容为空）：该模型把配额全用在了推理上，请改用非推理模型，或在该服务调高最大输出长度。"
           : "API 返回内容为空：请确认「模型」填的是该服务支持的模型名（例如 xAI 用 grok-4.3，而非默认 gpt-4o-mini），可点「检测模型」选择。";
+      if (record) {
+        recordAiCall({
+          label,
+          api: "vision",
+          model,
+          systemPrompt,
+          userText: summarizeUserContent(userContent),
+          ok: false,
+          response: message,
+        });
+      }
+      return { ok: false, message };
+    }
+    const cleaned = cleanPromptOutput(content);
+    if (record) {
       recordAiCall({
         label,
         api: "vision",
         model,
         systemPrompt,
         userText: summarizeUserContent(userContent),
-        ok: false,
-        response: message,
+        ok: true,
+        response: cleaned,
       });
-      return { ok: false, message };
     }
-    const cleaned = cleanPromptOutput(content);
-    recordAiCall({
-      label,
-      api: "vision",
-      model,
-      systemPrompt,
-      userText: summarizeUserContent(userContent),
-      ok: true,
-      response: cleaned,
-    });
     return { ok: true, content: cleaned, message: "成功" };
   } catch (error: any) {
     const msg =
@@ -1812,15 +1819,17 @@ async function callVisionApi(
       error?.response?.data?.message ??
       error?.message ??
       "未知错误";
-    recordAiCall({
-      label,
-      api: "vision",
-      model,
-      systemPrompt,
-      userText: summarizeUserContent(userContent),
-      ok: false,
-      response: String(msg),
-    });
+    if (record) {
+      recordAiCall({
+        label,
+        api: "vision",
+        model,
+        systemPrompt,
+        userText: summarizeUserContent(userContent),
+        ok: false,
+        response: String(msg),
+      });
+    }
     return { ok: false, message: msg };
   }
 }
@@ -2218,6 +2227,7 @@ export async function reversePromptImage(
   ok: boolean;
   prompt?: string;
   variants?: { namePrompt: string; featurePrompt: string };
+  codexMatches?: PromptCodexMatch[];
   message: string;
 }> {
   const settings = getSettings();
@@ -2251,30 +2261,34 @@ export async function reversePromptImage(
     knownCharacterRuntimeInstruction(mode, "reverse", knownCharacter),
   ].join("\n\n");
 
+  const codexEnabled = settings.promptCodexEnhanceEnabled;
+  const firstUserContent = [
+    {
+      type: "image_url",
+      image_url: {
+        url: `data:image/png;base64,${imageBase64}`,
+        detail: "high",
+      },
+    },
+    {
+      type: "text",
+      text: [
+        userScopeText,
+        "",
+        "Generate the prompt for this image.",
+        "",
+        modeUserInstruction(mode, "reverse"),
+        knownCharacterRuntimeInstruction(mode, "reverse", knownCharacter),
+      ].join("\n"),
+    },
+  ];
+
   const result = await callVisionApi(
     systemPrompt,
-    [
-      {
-        type: "image_url",
-        image_url: {
-          url: `data:image/png;base64,${imageBase64}`,
-          detail: "high",
-        },
-      },
-      {
-        type: "text",
-        text: [
-          userScopeText,
-          "",
-          "Generate the prompt for this image.",
-          "",
-          modeUserInstruction(mode, "reverse"),
-          knownCharacterRuntimeInstruction(mode, "reverse", knownCharacter),
-        ].join("\n"),
-      },
-    ],
+    firstUserContent,
     2000,
     `AI 反推 · ${mode} · ${scopeLabel}`,
+    !codexEnabled,
   );
 
   if (result.ok) {
@@ -2288,11 +2302,82 @@ export async function reversePromptImage(
       knownCharacter,
     );
     let content = parsed.primary;
+    let variants = parsed.variants;
+    let codexMatches: PromptCodexMatch[] = [];
+
+    if (codexEnabled) {
+      const retrievalQuery = [
+        hint,
+        content,
+        parsed.variants?.namePrompt,
+        parsed.variants?.featurePrompt,
+      ]
+        .filter(Boolean)
+        .join("\n");
+      const enhancement = buildPromptCodexEnhancement(
+        retrievalQuery,
+        "reverse",
+        settings.promptCodexAdultEnabled,
+      );
+      codexMatches = enhancement.matches;
+      const refineSystem = [
+        systemPrompt,
+        enhancement.context,
+        "这是法典增强的第二阶段。请以初步反推结果为事实边界，只校正结构、Tag、角色归属、互动方向、权重和冲突。不要新增图中未确认的主体、服装、动作或分级内容。",
+      ]
+        .filter(Boolean)
+        .join("\n\n");
+      const refineUserText = [
+        "初步反推结果：",
+        result.content ?? "",
+        "",
+        modeUserInstruction(mode, "reverse"),
+        knownCharacterRuntimeInstruction(mode, "reverse", knownCharacter),
+        "请只输出精修后的最终结果。",
+      ].join("\n");
+      const refined = await callVisionApi(
+        refineSystem,
+        [{ type: "text", text: refineUserText }],
+        knownCharacter ? 2400 : 2000,
+        `AI 反推 · 法典增强 · ${mode} · ${scopeLabel}`,
+        false,
+      );
+
+      if (refined.ok && refined.content) {
+        const refinedParsed = parsePromptVariantResponse(
+          refined.content,
+          knownCharacter,
+        );
+        content = refinedParsed.primary;
+        variants = refinedParsed.variants;
+      }
+
+      recordAiCall({
+        label: `AI 反推 · 法典增强两阶段 · ${mode} · ${scopeLabel}`,
+        api: "vision",
+        model: settings.visionApiModel || "gpt-4o",
+        systemPrompt: refineSystem,
+        userText: [
+          summarizeUserContent(firstUserContent),
+          "",
+          "[阶段一草稿]",
+          result.content ?? "",
+          "",
+          `[本地法典命中 ${codexMatches.length} 条]`,
+          ...codexMatches.map((match) => `${match.title}｜${match.source}`),
+        ].join("\n"),
+        ok: true,
+        response:
+          refined.ok && refined.content
+            ? content
+            : `[第二阶段精修失败，已回退初步结果：${refined.message}]\n${content}`,
+      });
+    }
     // Same reasoning as convertPromptText: known-character mode already
     // requires both variants to follow every template rule in the single
     // upfront call, and this repair pass never touched parsed.variants (what
     // the UI actually renders), so it was a wasted extra request there.
-    if (!knownCharacter && modeNeedsRepair(mode, content)) {
+    if (!codexEnabled && !knownCharacter && modeNeedsRepair(mode, content)) {
       const repaired = await callVisionApi(
         modeRepairSystemPrompt(mode),
         [
@@ -2332,9 +2417,21 @@ export async function reversePromptImage(
         mode === "natural" || knownCharacter
           ? content
           : mergeTagHints(content, hints),
-      variants: parsed.variants,
-      message: "反推成功",
+      variants,
+      codexMatches,
+      message: codexEnabled ? "反推成功（个人法典增强）" : "反推成功",
     };
+  }
+  if (codexEnabled) {
+    recordAiCall({
+      label: `AI 反推 · 法典增强两阶段 · ${mode} · ${scopeLabel}`,
+      api: "vision",
+      model: settings.visionApiModel || "gpt-4o",
+      systemPrompt,
+      userText: summarizeUserContent(firstUserContent),
+      ok: false,
+      response: result.message,
+    });
   }
   return { ok: false, message: `反推失败：${result.message}` };
 }
@@ -3307,9 +3404,17 @@ export async function convertPromptText(
   ok: boolean;
   result?: string;
   variants?: { namePrompt: string; featurePrompt: string };
+  codexMatches?: PromptCodexMatch[];
   message: string;
 }> {
   const settings = getSettings();
+  const enhancement = settings.promptCodexEnhanceEnabled
+    ? buildPromptCodexEnhancement(
+        chineseText,
+        "convert",
+        settings.promptCodexAdultEnabled,
+      )
+    : { matches: [] as PromptCodexMatch[], context: "" };
   const systemPrompt = [
     resolveModePrompt(
       mode,
@@ -3318,6 +3423,7 @@ export async function convertPromptText(
       CONVERT_SYSTEM_PROMPTS,
     ),
     knownCharacterRuntimeInstruction(mode, "convert", knownCharacter),
+    enhancement.context,
   ].join("\n\n");
 
   // Tag-server hints only make sense for tag-style output, and only when the
@@ -3376,7 +3482,10 @@ export async function convertPromptText(
           ? content
           : mergeTagHints(content, tagHints),
       variants: parsed.variants,
-      message: "转换成功",
+      codexMatches: enhancement.matches,
+      message: settings.promptCodexEnhanceEnabled
+        ? "转换成功（个人法典增强）"
+        : "转换成功",
     };
   }
   return { ok: false, message: `转换失败：${result.message}` };

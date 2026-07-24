@@ -156,6 +156,11 @@ class _ReversePanelState extends State<_ReversePanel> {
               s.markChanged();
             },
           ),
+          _PromptCodexEnhancementCard(
+            kind: InspectPageKind.reverse,
+            matches: s.reverseCodexMatches,
+          ),
+          const SizedBox(height: 8),
           FilledButton.icon(
               onPressed: s.workbenchImage == null ? null : s.reversePrompt,
               icon: const Icon(Icons.visibility),
@@ -284,6 +289,11 @@ class _ConvertPanelState extends State<_ConvertPanel> {
               s.markChanged();
             },
           ),
+          _PromptCodexEnhancementCard(
+            kind: InspectPageKind.convert,
+            matches: s.convertCodexMatches,
+          ),
+          const SizedBox(height: 8),
           FilledButton.icon(
               onPressed:
                   s.convertInput.trim().isEmpty ? null : s.convertPrompt,
@@ -338,6 +348,88 @@ class _ConvertPanelState extends State<_ConvertPanel> {
           ),
           const SizedBox(height: 8),
           Text(s.status),
+        ],
+      ),
+    );
+  }
+}
+
+class _PromptCodexEnhancementCard extends StatelessWidget {
+  final InspectPageKind kind;
+  final List<PromptCodexMatch> matches;
+
+  const _PromptCodexEnhancementCard({
+    required this.kind,
+    required this.matches,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<AppState>();
+    final language = state.settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
+    final enabled = state.settings.promptCodexEnhanceEnabled;
+    return Card(
+      child: Column(
+        children: [
+          SwitchListTile(
+            title: Text(t('promptCodex.enabled')),
+            subtitle: Text(t(kind == InspectPageKind.reverse
+                ? 'promptCodex.reverseHint'
+                : 'promptCodex.convertHint')),
+            value: enabled,
+            onChanged: (value) => state.setSettings(
+                (settings) => settings.promptCodexEnhanceEnabled = value),
+          ),
+          if (enabled) ...[
+            const Divider(height: 1),
+            SwitchListTile(
+              title: Text(t('promptCodex.adult')),
+              subtitle: Text(t('promptCodex.adultHint')),
+              value: state.settings.promptCodexAdultEnabled,
+              onChanged: (value) => state.setSettings(
+                  (settings) => settings.promptCodexAdultEnabled = value),
+            ),
+            const Divider(height: 1),
+            ExpansionTile(
+              initiallyExpanded: matches.isNotEmpty,
+              title: Text(t('promptCodex.matches')),
+              trailing: Badge(
+                label: Text('${matches.length}'),
+                child: const Icon(Icons.menu_book_outlined),
+              ),
+              children: matches.isEmpty
+                  ? [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                        child: Align(
+                          alignment: AlignmentDirectional.centerStart,
+                          child: Text(t('promptCodex.noMatches')),
+                        ),
+                      )
+                    ]
+                  : matches
+                      .map((match) => ListTile(
+                            dense: true,
+                            title: Row(
+                              children: [
+                                Flexible(child: Text(match.title)),
+                                if (match.adult) ...[
+                                  const SizedBox(width: 6),
+                                  Chip(
+                                    visualDensity: VisualDensity.compact,
+                                    label: Text(t('promptCodex.classified')),
+                                  ),
+                                ],
+                              ],
+                            ),
+                            subtitle: Text(
+                              '${match.section} · ${match.source}\n${match.excerpt}',
+                            ),
+                          ))
+                      .toList(growable: false),
+            ),
+          ],
         ],
       ),
     );

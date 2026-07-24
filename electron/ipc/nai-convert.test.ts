@@ -131,3 +131,113 @@ describe("convertComicPanels fallback path", () => {
     expect(result.panels[0].enPrompt).not.toContain("Sorry");
   });
 });
+
+describe("prompt codex enhancement", () => {
+  beforeEach(() => {
+    axiosMock.post.mockReset();
+    axiosMock.get.mockReset();
+    settingsRef.current = {
+      visionApiUrl: "https://example.test/v1",
+      visionApiKey: "sk-vision",
+      visionApiModel: "vision-test",
+      visionSystemPrompt: "",
+      reversePromptTemplates: { tags: "", natural: "", mixed: "" },
+      convertApiUrl: "https://example.test/v1",
+      convertApiKey: "sk-convert",
+      convertApiModel: "text-test",
+      convertSystemPrompt: "",
+      convertPromptTemplates: { tags: "", natural: "", mixed: "" },
+      promptCodexEnhanceEnabled: true,
+      promptCodexAdultEnabled: true,
+      mcpForReverse: false,
+      mcpForConvert: false,
+      proxyUrl: "",
+      proxyForAi: true,
+    };
+  });
+
+  it("injects locally retrieved codex context into conversion", async () => {
+    axiosMock.post.mockResolvedValue({
+      data: {
+        choices: [
+          {
+            message: {
+              content:
+                "2boys, classroom, book | boy, black hair, source#offer | boy, blue hair, target#offer",
+            },
+            finish_reason: "stop",
+          },
+        ],
+      },
+    });
+    const { convertPromptText } = await import("./nai");
+
+    const result = await convertPromptText(
+      "一个黑发男孩把书递给蓝发男孩",
+      "tags",
+      false,
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.codexMatches?.some((item) =>
+      item.id === "guidance:interaction-direction",
+    )).toBe(true);
+    const request = axiosMock.post.mock.calls[0]?.[1] as {
+      messages?: Array<{ role: string; content: string }>;
+    };
+    expect(request.messages?.[0]?.content).toContain(
+      "本地 NovelAI 提示词法典",
+    );
+  });
+
+  it("merges two-stage reverse into one visible call-log record", async () => {
+    axiosMock.post
+      .mockResolvedValueOnce({
+        data: {
+          choices: [
+            {
+              message: {
+                content:
+                  "2girls, outdoors | girl, blonde hair, hugging | girl, purple hair, hugging",
+              },
+              finish_reason: "stop",
+            },
+          ],
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          choices: [
+            {
+              message: {
+                content:
+                  "2girls, outdoors | girl, blonde hair, source#hug | girl, purple hair, target#hug",
+              },
+              finish_reason: "stop",
+            },
+          ],
+        },
+      });
+    const { clearAiCallLog, getAiCallLog, reversePromptImage } = await import(
+      "./nai"
+    );
+    clearAiCallLog();
+
+    const result = await reversePromptImage(
+      Buffer.from("fake-image").toString("base64"),
+      "tags",
+      "full",
+      "两个女孩拥抱",
+      false,
+    );
+
+    expect(result.ok).toBe(true);
+    expect(axiosMock.post).toHaveBeenCalledTimes(2);
+    expect(result.prompt).toContain("source#hug");
+    expect(result.codexMatches?.length).toBeGreaterThan(0);
+    const logs = getAiCallLog();
+    expect(logs).toHaveLength(1);
+    expect(logs[0].label).toContain("法典增强两阶段");
+    expect(logs[0].userText).toContain("阶段一草稿");
+  });
+});

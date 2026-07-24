@@ -9,7 +9,7 @@ class NaiOption {
 }
 
 const appName = 'Langbai NovelAI Studio';
-const appVersion = '1.5.1';
+const appVersion = '1.5.2';
 
 const naiModels = <NaiOption>[
   NaiOption('NAI Diffusion 4.5 Full (Full model)', 'nai-diffusion-4-5-full'),
@@ -563,6 +563,8 @@ class AppSettings {
   List<StylePromptPreset> stylePromptPresets;
   Map<String, String> reversePromptTemplates;
   Map<String, String> convertPromptTemplates;
+  bool promptCodexEnhanceEnabled;
+  bool promptCodexAdultEnabled;
   String comicPromptTemplate;
   // Last-used tool selections, persisted so they survive an app restart
   // (mirrors the desktop "last generation state").
@@ -631,6 +633,8 @@ class AppSettings {
     List<StylePromptPreset>? stylePromptPresets,
     Map<String, String>? reversePromptTemplates,
     Map<String, String>? convertPromptTemplates,
+    this.promptCodexEnhanceEnabled = true,
+    this.promptCodexAdultEnabled = true,
     this.comicPromptTemplate = '',
     this.reversePromptMode = 'tags',
     this.convertPromptMode = 'natural',
@@ -700,6 +704,8 @@ class AppSettings {
             stylePromptPresets.map((item) => item.toJson()).toList(),
         'reversePromptTemplates': reversePromptTemplates,
         'convertPromptTemplates': convertPromptTemplates,
+        'promptCodexEnhanceEnabled': promptCodexEnhanceEnabled,
+        'promptCodexAdultEnabled': promptCodexAdultEnabled,
         'comicPromptTemplate': comicPromptTemplate,
         'reversePromptMode': reversePromptMode,
         'convertPromptMode': convertPromptMode,
@@ -773,6 +779,8 @@ class AppSettings {
             [],
         reversePromptTemplates: _stringMap(j['reversePromptTemplates']),
         convertPromptTemplates: _stringMap(j['convertPromptTemplates']),
+        promptCodexEnhanceEnabled: j['promptCodexEnhanceEnabled'] ?? true,
+        promptCodexAdultEnabled: j['promptCodexAdultEnabled'] ?? true,
         comicPromptTemplate: j['comicPromptTemplate'] ?? '',
         reversePromptMode: j['reversePromptMode'] ?? 'tags',
         convertPromptMode: j['convertPromptMode'] ?? 'natural',

@@ -1,4 +1,4 @@
-export const APP_VERSION = "1.5.1";
+export const APP_VERSION = "1.5.2";
 export const APP_NAME = "Langbai NovelAI Studio";
 export const PROJECT_REPOSITORY =
   "https://github.com/2786886095/novelai-image-desktop";
@@ -303,6 +303,16 @@ export interface PromptVariants {
   featurePrompt: string;
 }
 
+export interface PromptCodexMatch {
+  id: string;
+  title: string;
+  section: string;
+  source: string;
+  excerpt: string;
+  adult: boolean;
+  score: number;
+}
+
 /** In-flight/just-finished convert or reverse requests. Concurrent, not a
  * serial queue: each job fires its API call immediately on creation and is
  * updated in place when that call resolves. Not persisted across restarts. */
@@ -316,6 +326,7 @@ export interface TextToolJob {
   status: TextToolJobStatus;
   result?: string;
   variants?: PromptVariants;
+  codexMatches?: PromptCodexMatch[];
   message?: string;
   addedAt: number;
 }
@@ -331,6 +342,7 @@ export interface TextToolHistoryItem {
   sourceImagePath?: string;
   result: string;
   variants?: PromptVariants;
+  codexMatches?: PromptCodexMatch[];
   createdAt: string;
 }
 
@@ -1011,6 +1023,10 @@ export interface AppSettings {
   // Convert output type + per-mode conversion system templates.
   convertMode: ReversePromptMode;
   convertPromptTemplates: ModePromptTemplates;
+  // Local NovelAI prompt-codex retrieval. Enabled by default. Classified
+  // entries are eligible only when the input itself is semantically relevant.
+  promptCodexEnhanceEnabled: boolean;
+  promptCodexAdultEnabled: boolean;
   // Optional Danbooru / MCP-compatible tag search service.
   tagServerEnabled: boolean;
   tagServerUrl: string;
@@ -1248,6 +1264,7 @@ export interface NaiDesktopApi {
     ok: boolean;
     prompt?: string;
     variants?: PromptVariants;
+    codexMatches?: PromptCodexMatch[];
     message: string;
   }>;
   convertPrompt: (
@@ -1258,6 +1275,7 @@ export interface NaiDesktopApi {
     ok: boolean;
     result?: string;
     variants?: PromptVariants;
+    codexMatches?: PromptCodexMatch[];
     message: string;
   }>;
   getConvertHistory: () => Promise<TextToolHistoryItem[]>;

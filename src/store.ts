@@ -322,6 +322,7 @@ interface AppState {
   reversePromptHint: string;
   reverseKnownCharacter: boolean;
   reversePromptVariants: PromptVariants | null;
+  reverseCodexMatches: import("./types").PromptCodexMatch[];
   /** Concurrent job tracker for reverse requests — every submission fires
    * immediately and updates its own entry in place; not a serial queue.
    * Whether ANY reverse job is still processing is derived from this list
@@ -338,6 +339,7 @@ interface AppState {
   convertQueueCollapsed: boolean;
   convertHistory: TextToolHistoryItem[];
   convertResultVariants: PromptVariants | null;
+  convertCodexMatches: import("./types").PromptCodexMatch[];
   isGenerating: boolean;
   isGenerateQueueRunning: boolean;
   activeGenerationRunId: string | null;
@@ -659,6 +661,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   reversePromptHint: "",
   reverseKnownCharacter: false,
   reversePromptVariants: null,
+  reverseCodexMatches: [],
   reverseJobs: [],
   reverseQueueCollapsed: true,
   reverseHistory: [],
@@ -667,6 +670,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   convertMode: "tags" as ReversePromptMode,
   convertKnownCharacter: false,
   convertResultVariants: null,
+  convertCodexMatches: [],
   convertJobs: [],
   convertQueueCollapsed: true,
   convertHistory: [],
@@ -1147,6 +1151,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       inspectImagePath: path,
       reversePromptText: "",
       reversePromptVariants: null,
+      reverseCodexMatches: [],
     });
   },
 
@@ -1158,6 +1163,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       inspectImagePath: "",
       reversePromptText: "",
       reversePromptVariants: null,
+      reverseCodexMatches: [],
     });
   },
 
@@ -1198,7 +1204,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       status: "processing",
       addedAt: Date.now(),
     };
-    set({ reverseJobs: [job, ...get().reverseJobs], reversePromptVariants: null });
+    set({ reverseJobs: [job, ...get().reverseJobs], reversePromptVariants: null, reverseCodexMatches: [] });
     const result = await window.naiDesktop.reversePrompt(
       inspectImageBase64,
       reversePromptMode,
@@ -1213,10 +1219,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (result.ok && result.prompt) {
       set({
         reverseJobs: get().reverseJobs.map((j) =>
-          j.id === job.id ? { ...j, status: "done", result: result.prompt, variants: result.variants } : j,
+          j.id === job.id ? { ...j, status: "done", result: result.prompt, variants: result.variants, codexMatches: result.codexMatches } : j,
         ),
         reversePromptText: result.prompt,
         reversePromptVariants: result.variants ?? null,
+        reverseCodexMatches: result.codexMatches ?? [],
         toast: storeText(get().settings, "toast.inspectDone"),
       });
       const historyItem: TextToolHistoryItem = {
@@ -1227,6 +1234,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         sourceImagePath: inspectImagePath || undefined,
         result: result.prompt,
         variants: result.variants,
+        codexMatches: result.codexMatches,
         createdAt: new Date().toISOString(),
       };
       set({ reverseHistory: [historyItem, ...get().reverseHistory] });
@@ -1294,17 +1302,18 @@ export const useAppStore = create<AppState>((set, get) => ({
       status: "processing",
       addedAt: Date.now(),
     };
-    set({ convertJobs: [job, ...get().convertJobs], convertResultVariants: null });
+    set({ convertJobs: [job, ...get().convertJobs], convertResultVariants: null, convertCodexMatches: [] });
     const result = await window.naiDesktop.convertPrompt(convertInput, convertMode, convertKnownCharacter);
     // See runReversePrompt: a removed job is treated as cancelled.
     if (!get().convertJobs.some((j) => j.id === job.id)) return;
     if (result.ok && result.result) {
       set({
         convertJobs: get().convertJobs.map((j) =>
-          j.id === job.id ? { ...j, status: "done", result: result.result, variants: result.variants } : j,
+          j.id === job.id ? { ...j, status: "done", result: result.result, variants: result.variants, codexMatches: result.codexMatches } : j,
         ),
         convertResult: result.result,
         convertResultVariants: result.variants ?? null,
+        convertCodexMatches: result.codexMatches ?? [],
         toast: storeText(get().settings, "toast.convertDone"),
       });
       const historyItem: TextToolHistoryItem = {
@@ -1314,6 +1323,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         input: convertInput,
         result: result.result,
         variants: result.variants,
+        codexMatches: result.codexMatches,
         createdAt: new Date().toISOString(),
       };
       set({ convertHistory: [historyItem, ...get().convertHistory] });

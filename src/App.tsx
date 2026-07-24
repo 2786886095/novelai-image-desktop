@@ -60,6 +60,7 @@ import {
   type PromptTemplate,
   type StylePromptPreset,
   type PreciseReferenceType,
+  type PromptCodexMatch,
   type PromptVariants,
   type ReversePromptMode,
   type ReversePromptScope,
@@ -2640,6 +2641,101 @@ function PromptVariantCards({
   );
 }
 
+function PromptCodexEnhancementCard({
+  kind,
+  matches,
+}: {
+  kind: "reverse" | "convert";
+  matches: PromptCodexMatch[];
+}) {
+  const settings = useAppStore((state) => state.settings);
+  const refreshSettings = useAppStore((state) => state.refreshSettings);
+  const language = settings?.language;
+  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
+  const [saving, setSaving] = useState(false);
+  const enabled = settings?.promptCodexEnhanceEnabled ?? true;
+  const adultEnabled = settings?.promptCodexAdultEnabled ?? true;
+
+  async function updateSetting(
+    key: "promptCodexEnhanceEnabled" | "promptCodexAdultEnabled",
+    value: boolean,
+  ) {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await window.naiDesktop.setSetting(key, value);
+      await refreshSettings();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="prompt-codex-enhance-card">
+      <label className="checkbox-line">
+        <input
+          type="checkbox"
+          checked={enabled}
+          disabled={saving}
+          onChange={(event) =>
+            void updateSetting("promptCodexEnhanceEnabled", event.target.checked)
+          }
+        />
+        <strong>{t("promptCodex.enabled")}</strong>
+      </label>
+      <small>
+        {t(
+          kind === "reverse"
+            ? "promptCodex.reverseHint"
+            : "promptCodex.convertHint",
+        )}
+      </small>
+      {enabled && (
+        <>
+          <label className="checkbox-line prompt-codex-adult-toggle">
+            <input
+              type="checkbox"
+              checked={adultEnabled}
+              disabled={saving}
+              onChange={(event) =>
+                void updateSetting("promptCodexAdultEnabled", event.target.checked)
+              }
+            />
+            <span>{t("promptCodex.adult")}</span>
+          </label>
+          <small>{t("promptCodex.adultHint")}</small>
+          <details className="prompt-codex-matches" open={matches.length > 0}>
+            <summary>
+              {t("promptCodex.matches")}
+              <span>{matches.length}</span>
+            </summary>
+            {matches.length === 0 ? (
+              <p>{t("promptCodex.noMatches")}</p>
+            ) : (
+              <div className="prompt-codex-match-list">
+                {matches.map((match) => (
+                  <article key={match.id}>
+                    <div>
+                      <strong>{match.title}</strong>
+                      {match.adult && (
+                        <span className="prompt-codex-classified">
+                          {t("promptCodex.classified")}
+                        </span>
+                      )}
+                    </div>
+                    <small>{match.section} · {match.source}</small>
+                    <p>{match.excerpt}</p>
+                  </article>
+                ))}
+              </div>
+            )}
+          </details>
+        </>
+      )}
+    </div>
+  );
+}
+
 function ReversePanel() {
   const setInspectImage = useAppStore((state) => state.setInspectImage);
   const clearInspect = useAppStore((state) => state.clearInspect);
@@ -2650,6 +2746,7 @@ function ReversePanel() {
   const reversePromptHint = useAppStore((state) => state.reversePromptHint);
   const reverseKnownCharacter = useAppStore((state) => state.reverseKnownCharacter);
   const reversePromptVariants = useAppStore((state) => state.reversePromptVariants);
+  const reverseCodexMatches = useAppStore((state) => state.reverseCodexMatches);
   const setReversePromptMode = useAppStore((state) => state.setReversePromptMode);
   const setReversePromptScope = useAppStore((state) => state.setReversePromptScope);
   const setReversePromptHint = useAppStore((state) => state.setReversePromptHint);
@@ -2844,6 +2941,11 @@ function ReversePanel() {
           </label>
         </div>
 
+        <PromptCodexEnhancementCard
+          kind="reverse"
+          matches={reverseCodexMatches}
+        />
+
         {hasImage && (
           <Button
             variant="primary"
@@ -2981,6 +3083,7 @@ function PromptConverterPanel() {
   const convertMode = useAppStore((state) => state.convertMode);
   const convertKnownCharacter = useAppStore((state) => state.convertKnownCharacter);
   const convertResultVariants = useAppStore((state) => state.convertResultVariants);
+  const convertCodexMatches = useAppStore((state) => state.convertCodexMatches);
   const setConvertMode = useAppStore((state) => state.setConvertMode);
   const setConvertKnownCharacter = useAppStore((state) => state.setConvertKnownCharacter);
   const runConvertPrompt = useAppStore((state) => state.runConvertPrompt);
@@ -3064,6 +3167,11 @@ function PromptConverterPanel() {
           />
           <span>{t("convert.knownCharacter")}</span>
         </label>
+
+        <PromptCodexEnhancementCard
+          kind="convert"
+          matches={convertCodexMatches}
+        />
 
         <Button
           variant="primary"

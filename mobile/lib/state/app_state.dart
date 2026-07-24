@@ -75,6 +75,7 @@ class AppState extends ChangeNotifier {
   bool convertKnownCharacter = false;
   String reverseResult = '';
   PromptVariants? reversePromptVariants;
+  List<PromptCodexMatch> reverseCodexMatches = [];
   // Concurrent job tracker for reverse requests — every submission fires
   // immediately and updates its own entry in place; not a serial queue.
   List<TextToolJob> reverseJobs = [];
@@ -86,6 +87,7 @@ class AppState extends ChangeNotifier {
   List<TextToolJob> convertJobs = [];
   bool convertQueueCollapsed = true;
   List<TextToolHistoryItem> convertHistory = [];
+  List<PromptCodexMatch> convertCodexMatches = [];
   AnlasQuote? generationQuote;
   bool quoteLoading = false;
   bool generationQueueRunning = false;
@@ -1324,6 +1326,7 @@ class AppState extends ChangeNotifier {
     );
     final owner = 'reverse-${job.id}';
     reverseJobs = [job, ...reverseJobs];
+    reverseCodexMatches = [];
     notifyListeners();
     try {
       await BackgroundQueueService.start(
@@ -1354,8 +1357,10 @@ class AppState extends ChangeNotifier {
       job.status = TextToolJobStatus.done;
       job.result = res.text;
       job.variants = res.variants;
+      job.codexMatches = res.codexMatches;
       reverseResult = res.text;
       reversePromptVariants = res.variants;
+      reverseCodexMatches = res.codexMatches;
       status = _rt('status.reverseDone');
       final historyItem = TextToolHistoryItem(
         id: job.id,
@@ -1365,6 +1370,7 @@ class AppState extends ChangeNotifier {
         sourceImagePath: sourcePath,
         result: res.text,
         variants: res.variants,
+        codexMatches: res.codexMatches,
         createdAt: DateTime.now().toIso8601String(),
       );
       reverseHistory = [historyItem, ...reverseHistory];
@@ -1393,6 +1399,7 @@ class AppState extends ChangeNotifier {
     );
     final owner = 'convert-${job.id}';
     convertJobs = [job, ...convertJobs];
+    convertCodexMatches = [];
     notifyListeners();
     try {
       await BackgroundQueueService.start(
@@ -1418,8 +1425,10 @@ class AppState extends ChangeNotifier {
       job.status = TextToolJobStatus.done;
       job.result = res.text;
       job.variants = res.variants;
+      job.codexMatches = res.codexMatches;
       convertResult = res.text;
       convertResultVariants = res.variants;
+      convertCodexMatches = res.codexMatches;
       status = _rt('status.convertDone');
       final historyItem = TextToolHistoryItem(
         id: job.id,
@@ -1428,6 +1437,7 @@ class AppState extends ChangeNotifier {
         input: convertInput,
         result: res.text,
         variants: res.variants,
+        codexMatches: res.codexMatches,
         createdAt: DateTime.now().toIso8601String(),
       );
       convertHistory = [historyItem, ...convertHistory];

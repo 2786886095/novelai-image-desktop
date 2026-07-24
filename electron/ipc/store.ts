@@ -297,6 +297,8 @@ export function defaultSettings(): AppSettings {
     convertSystemPrompt: "",
     convertMode: "tags" as const,
     convertPromptTemplates: { tags: "", natural: "", mixed: "" },
+    promptCodexEnhanceEnabled: true,
+    promptCodexAdultEnabled: true,
     tagServerEnabled: false,
     tagServerUrl: "",
     tagServerApiKey: "",

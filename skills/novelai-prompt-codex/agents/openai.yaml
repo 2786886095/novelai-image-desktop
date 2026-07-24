@@ -1,0 +1,4 @@
+interface:
+  display_name: "NovelAI 提示词法典"
+  short_description: "检索个人法典并编写、诊断 NovelAI V4.5 提示词"
+  default_prompt: "请使用 NovelAI 提示词法典，把我的画面描述转换为准确、简洁且结构清楚的 NovelAI V4.5 提示词。"

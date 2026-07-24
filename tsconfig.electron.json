@@ -9,10 +9,11 @@
     "strict": true,
     "noUnusedLocals": true,
     "esModuleInterop": true,
+    "resolveJsonModule": true,
     "skipLibCheck": true,
     "sourceMap": true,
     "types": ["node"]
   },
-  "include": ["electron/main.ts", "electron/preload.ts", "electron/ipc/**/*.ts", "src/types.ts", "src/anlas.ts", "src/aitag.ts", "src/prompt-codex.ts"],
+  "include": ["electron/main.ts", "electron/preload.ts", "electron/ipc/**/*.ts", "src/types.ts", "src/anlas.ts", "src/aitag.ts", "src/prompt-codex.ts", "src/prompt-codex-retrieval.ts"],
   "exclude": ["electron/**/*.test.ts"]
 }

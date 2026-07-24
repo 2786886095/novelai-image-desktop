@@ -1,0 +1,186 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-07-24",
+  "entries": [
+    {
+      "id": "core-output",
+      "title": "简洁输出与禁止脑补",
+      "category": "structure",
+      "keywords": ["提示词", "prompt", "转换", "反推", "tag", "danbooru", "质量词", "画师"],
+      "text": "只保留画面可见或用户明确要求的内容；Tag 用英文逗号分隔。默认不输出画师名和质量词，不堆砌无关 Tag。",
+      "adult": false,
+      "modes": ["convert", "reverse"],
+      "source": "用户提供的 NovelAI V4.5 规范"
+    },
+    {
+      "id": "multi-character",
+      "title": "V4.5 多角色分段",
+      "category": "character",
+      "keywords": ["两人", "两个", "两名", "双人", "多人", "女孩们", "男孩们", "角色", "2girls", "2boys", "multiple girls", "multiple boys", "group"],
+      "text": "双人及以上优先使用 base | character 1 | character 2。Base 只放人数、场景、道具、镜头和整体构图；角色段用 girl/boy/other，并把独有外貌、服装、动作和权重留在对应段。",
+      "adult": false,
+      "modes": ["convert", "reverse"],
+      "source": "用户提供的 NovelAI V4.5 规范"
+    },
+    {
+      "id": "interaction-direction",
+      "title": "互动主动方与被动方",
+      "category": "interaction",
+      "keywords": ["互动", "拥抱", "互相拥抱", "抱着", "背着", "递给", "递书", "牵手", "拉着", "触碰", "指着", "看着", "hug", "carry", "offer", "holding hands", "pull", "touch", "pointing", "looking at"],
+      "text": "复杂互动必须判断方向：发起者使用 source#，接受或被影响者使用 target#，双方共同完成使用 mutual#；同时保留普通动作 Tag，并在各自角色段末尾写一句简短关系说明。",
+      "adult": false,
+      "modes": ["convert", "reverse"],
+      "source": "用户提供的 NovelAI V4.5 规范"
+    },
+    {
+      "id": "original-character",
+      "title": "原创角色防串位",
+      "category": "character",
+      "keywords": ["原创", "无名", "未知角色", "男孩", "女孩", "发色", "服装", "original character", "unknown character", "hair", "clothes"],
+      "text": "原创或未知角色不能依赖自定义名字。使用性别、发色发型、服装、位置与动作绑定；两人可有限使用 another，三人及以上必须用外貌、服装、位置或方向锚点消歧。",
+      "adult": false,
+      "modes": ["convert", "reverse"],
+      "source": "用户提供的 NovelAI V4.5 规范"
+    },
+    {
+      "id": "known-character",
+      "title": "已知角色 Tag",
+      "category": "character",
+      "keywords": ["动漫角色", "游戏角色", "漫画角色", "角色名", "原作", "已知角色", "anime character", "game character", "copyright"],
+      "text": "已知角色优先使用准确 Danbooru 角色 Tag，重名时用作品名括号消歧。只写图片或用户要求中的特殊服装、状态和动作，不补齐默认外貌与默认服装。",
+      "adult": false,
+      "modes": ["convert", "reverse"],
+      "source": "用户提供的 NovelAI V4.5 规范"
+    },
+    {
+      "id": "background-object",
+      "title": "空镜、静物与物品",
+      "category": "scene",
+      "keywords": ["空镜", "无人", "风景", "背景", "静物", "物品", "道具", "动物", "landscape", "scenery", "no humans", "object", "still life", "animal"],
+      "text": "无人、静物、风景或动物主体优先以 background dataset 开头；明确无人时加入 no humans。物品主体使用 object focus，近景按需使用 close-up；动物主体可用 animal focus。",
+      "adult": false,
+      "modes": ["convert", "reverse"],
+      "source": "用户提供的 NovelAI V4.5 规范"
+    },
+    {
+      "id": "camera-framing",
+      "title": "镜头与构图映射",
+      "category": "camera",
+      "keywords": ["视角", "镜头", "构图", "俯视", "仰视", "远景", "广角", "透视", "倾斜", "全身", "背面", "正面", "第一人称", "camera", "angle", "from above", "from below", "wide shot", "full body", "pov"],
+      "text": "常用映射：第一人称 pov；俯视 from above；仰视 from below；远景 long shot/distant；广角 wide shot；透视 foreshortening；倾斜 dutch angle；牛仔镜头 cowboy shot。按实际画面选择，避免互斥镜头共存。",
+      "adult": false,
+      "modes": ["convert", "reverse"],
+      "source": "《焚诀.docx》清理提炼"
+    },
+    {
+      "id": "background-style",
+      "title": "背景表现",
+      "category": "scene",
+      "keywords": ["简单背景", "白背景", "虚化背景", "单色", "黑白", "动画上色", "simple background", "white background", "blurry background", "monochrome", "anime coloring"],
+      "text": "按画面可见特征选择 simple background、white background、blurry background、monochrome 或 anime coloring；不要同时臆造多种互斥背景。",
+      "adult": false,
+      "modes": ["convert", "reverse"],
+      "source": "《焚诀.docx》清理提炼"
+    },
+    {
+      "id": "facial-expression",
+      "title": "表情映射",
+      "category": "expression",
+      "keywords": ["表情", "坏笑", "得意", "半闭眼", "闭眼", "张嘴", "嫌弃", "吐舌", "歪头", "咬牙", "眼泪", "汗", "smile", "smug", "disgust", "tongue", "tears", "sweat"],
+      "text": "可见表情可映射为 evil smile、smug、half-closed eyes、closed eyes、open mouth、disgust、tongue out、head tilt、clenched teeth、tears、sweat。只保留实际可见且互不冲突的表情。",
+      "adult": false,
+      "modes": ["convert", "reverse"],
+      "source": "《焚诀.docx》清理提炼"
+    },
+    {
+      "id": "hand-actions",
+      "title": "手部与日常动作",
+      "category": "pose",
+      "keywords": ["手", "手势", "嘘", "叉腰", "托腮", "比耶", "整理头发", "抱住自己", "大腿", "gesture", "shushing", "v sign", "adjusting hair"],
+      "text": "常用映射：shushing、hand on own hip、hand on own cheek、v sign、adjusting hair、hair behind ear、hugging self、hand on own thigh。动作必须绑定到正确角色。",
+      "adult": false,
+      "modes": ["convert", "reverse"],
+      "source": "《焚诀.docx》清理提炼"
+    },
+    {
+      "id": "body-pose",
+      "title": "腿部与姿态",
+      "category": "pose",
+      "keywords": ["姿势", "抬腿", "盘腿", "踮脚", "站着", "坐着", "蹲着", "跪着", "弯腰", "前倾", "侧坐", "动态", "pose", "standing", "sitting", "kneeling", "leaning"],
+      "text": "常用映射：leg up、crossed legs、tiptoes、standing、sitting、squatting、kneeling、bent over、leaning forward、yokozuwari、wariza、dynamic pose。先排除 sitting/standing 等姿态冲突。",
+      "adult": false,
+      "modes": ["convert", "reverse"],
+      "source": "《焚诀.docx》清理提炼"
+    },
+    {
+      "id": "weighting",
+      "title": "关键元素权重",
+      "category": "weight",
+      "keywords": ["权重", "强调", "关键", "容易丢失", "串位", "难生成", "weight", "emphasis"],
+      "text": "普通元素不加权；重要但不难用 1.15–1.25，易丢失或串位用 1.25–1.35，关键互动、道具、文字或罕见服装用 1.35–1.5。权重放在所属角色段，默认不超过 1.5。",
+      "adult": false,
+      "modes": ["convert", "reverse"],
+      "source": "用户提供的 NovelAI V4.5 规范"
+    },
+    {
+      "id": "conflict-check",
+      "title": "提示词冲突检查",
+      "category": "quality",
+      "keywords": ["冲突", "检查", "错误", "close-up", "full body", "from front", "from behind", "from above", "from below", "sitting", "standing"],
+      "text": "禁止 close-up/full body、from front/from behind、from above/from below 同时出现；同一角色不能同时 sitting/standing 或位于左右两侧；多人动作必须逐角色绑定。",
+      "adult": false,
+      "modes": ["convert", "reverse"],
+      "source": "用户提供的 NovelAI V4.5 规范"
+    },
+    {
+      "id": "negative-hygiene",
+      "title": "负面提示词清理",
+      "category": "negative",
+      "keywords": ["负面", "negative", "坏手", "错误手指", "水印", "文字", "低质量", "bad hands", "watermark", "low quality"],
+      "text": "负面提示词应短而针对当前失败；去除重复、拼写错误、相互矛盾和模型不适用的旧词。不要照抄超长负面词库，也不要用 five fingers/five toes 作为通用解剖修复。",
+      "adult": false,
+      "modes": ["convert", "reverse"],
+      "source": "《焚诀.docx》质量清理结论"
+    },
+    {
+      "id": "quality-terms",
+      "title": "质量词按需使用",
+      "category": "quality",
+      "keywords": ["质量", "高质量", "杰作", "高清", "美学", "masterpiece", "best quality", "highres", "very aesthetic", "absurdres"],
+      "text": "masterpiece、best quality、very aesthetic、absurdres、highres 等质量词只在用户明确要求时加入；不要与“默认不输出质量词”的模板约束冲突。",
+      "adult": false,
+      "modes": ["convert", "reverse"],
+      "source": "用户规范与《焚诀.docx》对照清理"
+    },
+    {
+      "id": "classified-clothing",
+      "title": "分级衣着状态",
+      "category": "classified-clothing",
+      "keywords": ["丝袜", "连裤袜", "破损连裤袜", "大腿袜", "破丝袜", "半脱", "解开衬衫", "提裙", "pantyhose", "thighhighs", "torn pantyhose", "unbuttoned shirt", "skirt lift"],
+      "text": "仅在输入明确涉及对应衣着时使用 pantyhose、thighhighs、torn pantyhose、unworn clothes、unbuttoned shirt、skirt lift；不要从普通服装描述推断暴露状态。",
+      "adult": true,
+      "modes": ["convert", "reverse"],
+      "source": "《焚诀.docx》清理提炼"
+    },
+    {
+      "id": "classified-expression",
+      "title": "分级表情",
+      "category": "classified-expression",
+      "keywords": ["诱惑", "淫荡", "高潮脸", "翻白眼", "唾液", "seductive", "lewd expression", "orgasm", "rolling eyes", "saliva"],
+      "text": "仅在输入或图片明确呈现时使用 seductive smile、lewd expression、female orgasm、rolling eyes、blush、open mouth、tears、saliva、sweat，并避免把多个不相容表情无条件堆叠。",
+      "adult": true,
+      "modes": ["convert", "reverse"],
+      "source": "《焚诀.docx》清理提炼"
+    },
+    {
+      "id": "classified-interaction",
+      "title": "分级多人互动绑定",
+      "category": "classified-interaction",
+      "keywords": ["成人互动", "性爱", "做爱", "性交", "骑乘", "后入", "口交", "自慰", "sex", "fellatio", "masturbation", "cowgirl", "doggystyle"],
+      "text": "仅处理明确的成年角色。成人多人互动仍使用 V4.5 分段，并把行为、身体关系、source#/target# 与短自然语言放入对应角色段；不从含糊描述推断年龄、同意状态或具体行为。",
+      "adult": true,
+      "modes": ["convert", "reverse"],
+      "source": "《焚诀.docx》清理提炼与 V4.5 结构规范"
+    }
+  ]
+}
