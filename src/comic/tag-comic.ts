@@ -31,6 +31,99 @@ export class TagComicSizeImportError extends Error {
   }
 }
 
+export class TagComicPanelRangeError extends Error {
+  constructor(
+    readonly code: "empty" | "format" | "outOfRange",
+    readonly token?: string,
+  ) {
+    super(`Comic panel range failed: ${code}`);
+    this.name = "TagComicPanelRangeError";
+  }
+}
+
+export function parseTagComicPanelRange(
+  value: string,
+  panelCount: number,
+): number[] {
+  const source = value.trim().replace(/[，、]/g, ",");
+  if (!source) throw new TagComicPanelRangeError("empty");
+  const result = new Set<number>();
+  for (const rawToken of source.split(/[\s,]+/)) {
+    const token = rawToken.trim();
+    if (!token) continue;
+    const match = token.match(/^(\d+)(?:\s*[-–—~～]\s*(\d+))?$/);
+    if (!match) throw new TagComicPanelRangeError("format", token);
+    const start = Number(match[1]);
+    const end = Number(match[2] ?? match[1]);
+    if (
+      start < 1 ||
+      end < 1 ||
+      start > panelCount ||
+      end > panelCount ||
+      end < start
+    ) {
+      throw new TagComicPanelRangeError("outOfRange", token);
+    }
+    for (let index = start; index <= end; index += 1) result.add(index);
+  }
+  if (!result.size) throw new TagComicPanelRangeError("empty");
+  return [...result].sort((a, b) => a - b);
+}
+
+export function formatTagComicPanelRange(
+  panelIds: string[],
+  panels: TagComicPanel[],
+): string {
+  const ids = new Set(panelIds);
+  const numbers = panels
+    .filter((panel) => ids.has(panel.id))
+    .map((panel) => panel.index)
+    .sort((a, b) => a - b);
+  const ranges: string[] = [];
+  for (let cursor = 0; cursor < numbers.length; cursor += 1) {
+    const start = numbers[cursor];
+    let end = start;
+    while (numbers[cursor + 1] === end + 1) {
+      end = numbers[++cursor];
+    }
+    ranges.push(start === end ? String(start) : `${start}-${end}`);
+  }
+  return ranges.join(", ");
+}
+
+export function tagComicReferenceApplies(
+  reference: TagComicReferenceAsset,
+  panelId: string,
+): boolean {
+  if (reference.scope === "all") return true;
+  const listed = reference.scopePanelIds.includes(panelId);
+  return reference.scope === "include" ? listed : !listed;
+}
+
+export function resolveTagComicPanelReferences(
+  project: TagComicProject,
+  panel: TagComicPanel,
+): TagComicPanelReference[] {
+  return project.preciseReferences.flatMap((reference) => {
+    const override = panel.preciseReferences.find(
+      (item) => item.referenceId === reference.id,
+    );
+    const enabled =
+      override?.enabled ?? tagComicReferenceApplies(reference, panel.id);
+    if (!enabled) return [];
+    return [
+      override ?? {
+        referenceId: reference.id,
+        enabled: true,
+        type: reference.type,
+        strength: reference.strength,
+        fidelity: reference.fidelity,
+        informationExtracted: reference.informationExtracted,
+      },
+    ];
+  });
+}
+
 export function tagComicSizeTemplate(
   count: number,
   size: TagComicImageSize,
@@ -136,6 +229,7 @@ function referenceNumber(value: unknown, fallback: number) {
 
 function normalizeReferenceAsset(
   raw: Partial<TagComicReferenceAsset>,
+  legacyPanelIds: string[],
 ): TagComicReferenceAsset | null {
   if (!raw.id || !raw.filePath || !raw.fileUrl) return null;
   const type =
@@ -151,6 +245,13 @@ function normalizeReferenceAsset(
     strength: referenceNumber(raw.strength, 1),
     fidelity: referenceNumber(raw.fidelity, 1),
     informationExtracted: referenceNumber(raw.informationExtracted, 1),
+    scope:
+      raw.scope === "all" || raw.scope === "exclude"
+        ? raw.scope
+        : "include",
+    scopePanelIds: Array.isArray(raw.scopePanelIds)
+      ? raw.scopePanelIds.filter((item): item is string => typeof item === "string")
+      : legacyPanelIds,
   };
 }
 
@@ -165,6 +266,7 @@ function normalizePanelReference(
       : "character";
   return {
     referenceId: raw.referenceId,
+    enabled: raw.enabled !== false,
     type,
     strength: referenceNumber(raw.strength, 1),
     fidelity: referenceNumber(raw.fidelity, 1),
@@ -185,13 +287,27 @@ export function normalizeTagComicProject(
     throw new Error("Only comic project schema v2 is supported");
   }
   const base = createTagComicProject(params);
+  const panels = Array.isArray(source.panels) ? source.panels : [];
   const preciseReferences = options.trustOutputs && Array.isArray(source.preciseReferences)
     ? source.preciseReferences
-        .map((item) => normalizeReferenceAsset(item))
+        .map((item) =>
+          normalizeReferenceAsset(
+            item,
+            panels.flatMap((panel) => {
+              const rawPanel = panel as Partial<TagComicPanel>;
+              return rawPanel.id &&
+                Array.isArray(rawPanel.preciseReferences) &&
+                rawPanel.preciseReferences.some(
+                  (selection) => selection.referenceId === item.id,
+                )
+                ? [rawPanel.id]
+                : [];
+            }),
+          ),
+        )
         .filter((item): item is TagComicReferenceAsset => Boolean(item))
     : [];
   const availableReferences = new Set(preciseReferences.map((item) => item.id));
-  const panels = Array.isArray(source.panels) ? source.panels : [];
   return {
     ...base,
     id: source.id || base.id,

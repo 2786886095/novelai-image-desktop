@@ -714,6 +714,7 @@ export interface ComicExportZipResult {
  * negative-prompt fields. */
 export type TagComicPanelStatus = "ready" | "generating" | "done" | "failed";
 export type TagComicSizeMode = "uniform" | "perPanel";
+export type TagComicReferenceScope = "all" | "include" | "exclude";
 
 export interface TagComicImageSize {
   width: number;
@@ -729,10 +730,13 @@ export interface TagComicReferenceAsset {
   strength: number;
   fidelity: number;
   informationExtracted: number;
+  scope: TagComicReferenceScope;
+  scopePanelIds: string[];
 }
 
 export interface TagComicPanelReference {
   referenceId: string;
+  enabled: boolean;
   type: PreciseReferenceType;
   strength: number;
   fidelity: number;

@@ -125,6 +125,9 @@ class ComicController extends ChangeNotifier {
 
   void removePanel(String id) {
     project.panels.removeWhere((item) => item.id == id);
+    for (final reference in project.preciseReferences) {
+      reference.scopePanelIds.remove(id);
+    }
     _reindexPanels();
     activePanelId = project.panels.isEmpty ? '' : project.panels.first.id;
     changed('comic.panelRemoved');
@@ -136,6 +139,16 @@ class ComicController extends ChangeNotifier {
     if (from < 0 || to < 0 || to >= project.panels.length) return;
     final item = project.panels.removeAt(from);
     project.panels.insert(to, item);
+    _reindexPanels();
+    changed();
+  }
+
+  void reorderPanel(int oldIndex, int newIndex) {
+    if (oldIndex < 0 || oldIndex >= project.panels.length) return;
+    if (newIndex > oldIndex) newIndex--;
+    if (newIndex < 0 || newIndex >= project.panels.length) return;
+    final item = project.panels.removeAt(oldIndex);
+    project.panels.insert(newIndex, item);
     _reindexPanels();
     changed();
   }
@@ -166,6 +179,11 @@ class ComicController extends ChangeNotifier {
             : null,
       );
     }).toList();
+    for (final reference in project.preciseReferences) {
+      reference
+        ..scope = ComicReferenceScope.all
+        ..scopePanelIds = [];
+    }
     activePanelId = project.panels.first.id;
     changed('comic.imported');
   }
@@ -281,32 +299,95 @@ class ComicController extends ChangeNotifier {
 
   void togglePanelReference(
       ComicPanel panel, ComicReferenceAsset asset, bool enabled) {
+    final matches = panel.preciseReferences
+        .where((item) => item.referenceId == asset.id)
+        .toList();
+    final current = matches.isEmpty ? null : matches.first;
     panel.preciseReferences.removeWhere((item) => item.referenceId == asset.id);
-    if (enabled) {
-      panel.preciseReferences.add(ComicPanelReference(
-        referenceId: asset.id,
-        type: asset.type,
-        strength: asset.strength,
-        fidelity: asset.fidelity,
-        informationExtracted: asset.informationExtracted,
-      ));
-    }
+    panel.preciseReferences.add(ComicPanelReference(
+      referenceId: asset.id,
+      enabled: enabled,
+      type: current?.type ?? asset.type,
+      strength: current?.strength ?? asset.strength,
+      fidelity: current?.fidelity ?? asset.fidelity,
+      informationExtracted:
+          current?.informationExtracted ?? asset.informationExtracted,
+    ));
     changed();
   }
 
-  void resetPanelReference(
-      ComicPanelReference selection, ComicReferenceAsset asset) {
-    selection
-      ..type = asset.type
-      ..strength = asset.strength
-      ..fidelity = asset.fidelity
-      ..informationExtracted = asset.informationExtracted;
+  void clearPanelReferenceOverride(ComicPanel panel, String referenceId) {
+    panel.preciseReferences
+        .removeWhere((item) => item.referenceId == referenceId);
     changed();
   }
+
+  void updatePanelReference(
+    ComicPanel panel,
+    ComicReferenceAsset asset, {
+    String? type,
+    double? strength,
+    double? fidelity,
+  }) {
+    final matches = panel.preciseReferences
+        .where((item) => item.referenceId == asset.id)
+        .toList();
+    final selection = matches.isEmpty
+        ? ComicPanelReference(
+            referenceId: asset.id,
+            type: asset.type,
+            strength: asset.strength,
+            fidelity: asset.fidelity,
+            informationExtracted: asset.informationExtracted,
+          )
+        : matches.first;
+    if (matches.isEmpty) panel.preciseReferences.add(selection);
+    selection
+      ..enabled = true
+      ..type = type ?? selection.type
+      ..strength = strength ?? selection.strength
+      ..fidelity = fidelity ?? selection.fidelity
+      ..informationExtracted = fidelity ?? selection.informationExtracted;
+    changed();
+  }
+
+  void setReferenceScope(
+      ComicReferenceAsset reference, ComicReferenceScope scope) {
+    reference.scope = scope;
+    if (scope == ComicReferenceScope.all) reference.scopePanelIds = [];
+    changed();
+  }
+
+  void applyReferenceRange(ComicReferenceAsset reference, String value) {
+    try {
+      final numbers = parseComicPanelRange(value, project.panels.length);
+      reference.scopePanelIds =
+          numbers.map((number) => project.panels[number - 1].id).toList();
+      changed();
+    } on ComicPanelRangeException catch (error) {
+      final key = switch (error.code) {
+        'empty' => 'comic.preciseRangeEmpty',
+        'format' => 'comic.preciseRangeFormat',
+        _ => 'comic.preciseRangeOut',
+      };
+      throw FormatException(_t(key)
+          .replaceAll('{token}', error.token.isEmpty ? '?' : error.token));
+    }
+  }
+
+  int referenceCoverage(ComicReferenceAsset reference) =>
+      project.panels.where((panel) {
+        final matches = panel.preciseReferences
+            .where((item) => item.referenceId == reference.id)
+            .toList();
+        return matches.isEmpty
+            ? comicReferenceApplies(reference, panel.id)
+            : matches.first.enabled;
+      }).length;
 
   Future<GenerateExtras> extrasFor(ComicPanel panel) async {
     final precise = <PreciseReferenceItem>[];
-    for (final selection in panel.preciseReferences) {
+    for (final selection in resolvedComicPanelReferences(project, panel)) {
       final assets = project.preciseReferences
           .where((item) => item.id == selection.referenceId)
           .toList();
@@ -413,7 +494,8 @@ class ComicController extends ChangeNotifier {
       final local = calculateImageGenerationAnlas(
             params: params,
             account: app.account,
-            preciseReferenceCount: panel.preciseReferences.length,
+            preciseReferenceCount:
+                resolvedComicPanelReferences(project, panel).length,
             language: app.settings.language,
           ).amount ??
           0;
@@ -492,8 +574,9 @@ class ComicController extends ChangeNotifier {
     if (!hasCompletePanelSizes) {
       throw FormatException(_t('comic.sizesIncomplete'));
     }
-    if (tasks.any((panel) => panel.preciseReferences.isNotEmpty) &&
-        !project.globalParams.isV45) {
+    if (tasks.any((panel) =>
+        resolvedComicPanelReferences(project, panel).isNotEmpty &&
+        !paramsFor(panel).isV45)) {
       throw FormatException(_t('comic.preciseV45Only'));
     }
     queueRunning = true;

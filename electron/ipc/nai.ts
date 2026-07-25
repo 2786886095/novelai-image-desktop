@@ -3265,6 +3265,8 @@ export async function importTagComicReference(
         strength: 1,
         fidelity: 1,
         informationExtracted: 1,
+        scope: "all",
+        scopePanelIds: [],
       },
     };
   } catch (error) {

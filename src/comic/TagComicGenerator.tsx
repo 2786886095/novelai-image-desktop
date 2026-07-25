@@ -16,13 +16,18 @@ import {
 import {
   TAG_COMIC_STORAGE_KEY,
   TAG_COMIC_SIZE_PRESETS,
+  TagComicPanelRangeError,
   TagComicSizeImportError,
   createTagComicPanel,
   createTagComicProject,
   mergeTagComicParams,
   normalizeTagComicProject,
+  formatTagComicPanelRange,
   parseTagComicImport,
+  parseTagComicPanelRange,
   parseTagComicSizeImport,
+  resolveTagComicPanelReferences,
+  tagComicReferenceApplies,
   tagComicSizeTemplate,
 } from "./tag-comic";
 
@@ -91,6 +96,19 @@ const COPY = {
     preciseReset: "恢复全局值",
     preciseV45Only: "精准参考只能用于 NovelAI V4.5 模型。",
     preciseImportFailed: "精准参考图导入失败：{message}",
+    preciseScope: "应用范围",
+    preciseScopeAll: "全部分镜",
+    preciseScopeInclude: "仅指定分镜",
+    preciseScopeExclude: "排除指定分镜",
+    preciseRange: "分镜编号",
+    preciseRangePlaceholder: "例如：1-8, 10, 12",
+    preciseApplyRange: "应用范围",
+    preciseCoverage: "当前覆盖 {count}/{total} 个分镜",
+    preciseRangeEmpty: "请输入需要指定或排除的分镜编号。",
+    preciseRangeFormat: "分镜范围“{token}”格式错误。",
+    preciseRangeOut: "分镜范围“{token}”超出当前分镜数量。",
+    preciseManual: "手动覆盖",
+    dragPanel: "拖拽调整分镜顺序",
     syncParams: "同步生成页参数",
     model: "模型",
     width: "宽度",
@@ -206,6 +224,19 @@ const COPY = {
     preciseReset: "恢復全域值",
     preciseV45Only: "精準參考只能用於 NovelAI V4.5 模型。",
     preciseImportFailed: "精準參考圖匯入失敗：{message}",
+    preciseScope: "套用範圍",
+    preciseScopeAll: "全部分鏡",
+    preciseScopeInclude: "僅指定分鏡",
+    preciseScopeExclude: "排除指定分鏡",
+    preciseRange: "分鏡編號",
+    preciseRangePlaceholder: "例如：1-8, 10, 12",
+    preciseApplyRange: "套用範圍",
+    preciseCoverage: "目前覆蓋 {count}/{total} 個分鏡",
+    preciseRangeEmpty: "請輸入需要指定或排除的分鏡編號。",
+    preciseRangeFormat: "分鏡範圍「{token}」格式錯誤。",
+    preciseRangeOut: "分鏡範圍「{token}」超出目前分鏡數量。",
+    preciseManual: "手動覆蓋",
+    dragPanel: "拖曳調整分鏡順序",
     syncParams: "同步生成頁參數",
     model: "模型",
     width: "寬度",
@@ -325,6 +356,19 @@ const COPY = {
     preciseReset: "Reset to global",
     preciseV45Only: "Precise Reference requires a NovelAI V4.5 model.",
     preciseImportFailed: "Could not import precise reference: {message}",
+    preciseScope: "Apply to",
+    preciseScopeAll: "All panels",
+    preciseScopeInclude: "Only selected panels",
+    preciseScopeExclude: "All except selected",
+    preciseRange: "Panel numbers",
+    preciseRangePlaceholder: "Example: 1-8, 10, 12",
+    preciseApplyRange: "Apply range",
+    preciseCoverage: "Applies to {count}/{total} panels",
+    preciseRangeEmpty: "Enter panel numbers to include or exclude.",
+    preciseRangeFormat: "Panel range “{token}” has an invalid format.",
+    preciseRangeOut: "Panel range “{token}” is outside the current panel count.",
+    preciseManual: "Manual override",
+    dragPanel: "Drag to reorder panels",
     syncParams: "Sync Generate settings",
     model: "Model",
     width: "Width",
@@ -443,6 +487,19 @@ const COPY = {
     preciseReset: "共通値に戻す",
     preciseV45Only: "精密参照は NovelAI V4.5 モデル専用です。",
     preciseImportFailed: "精密参照画像を読み込めません：{message}",
+    preciseScope: "適用範囲",
+    preciseScopeAll: "すべてのコマ",
+    preciseScopeInclude: "指定したコマのみ",
+    preciseScopeExclude: "指定したコマを除外",
+    preciseRange: "コマ番号",
+    preciseRangePlaceholder: "例：1-8, 10, 12",
+    preciseApplyRange: "範囲を適用",
+    preciseCoverage: "{count}/{total} コマに適用",
+    preciseRangeEmpty: "指定または除外するコマ番号を入力してください。",
+    preciseRangeFormat: "コマ範囲「{token}」の形式が不正です。",
+    preciseRangeOut: "コマ範囲「{token}」が現在のコマ数を超えています。",
+    preciseManual: "手動上書き",
+    dragPanel: "ドラッグしてコマ順を変更",
     syncParams: "生成画面の設定を同期",
     model: "モデル",
     width: "幅",
@@ -562,6 +619,19 @@ const COPY = {
     preciseReset: "전체 값으로 복원",
     preciseV45Only: "정밀 참조는 NovelAI V4.5 모델에서만 사용할 수 있습니다.",
     preciseImportFailed: "정밀 참조를 가져오지 못했습니다: {message}",
+    preciseScope: "적용 범위",
+    preciseScopeAll: "모든 컷",
+    preciseScopeInclude: "지정한 컷만",
+    preciseScopeExclude: "지정한 컷 제외",
+    preciseRange: "컷 번호",
+    preciseRangePlaceholder: "예: 1-8, 10, 12",
+    preciseApplyRange: "범위 적용",
+    preciseCoverage: "{count}/{total}개 컷에 적용",
+    preciseRangeEmpty: "지정하거나 제외할 컷 번호를 입력하세요.",
+    preciseRangeFormat: "컷 범위 “{token}” 형식이 잘못되었습니다.",
+    preciseRangeOut: "컷 범위 “{token}”이 현재 컷 수를 벗어났습니다.",
+    preciseManual: "수동 재정의",
+    dragPanel: "드래그하여 컷 순서 변경",
     syncParams: "생성 화면 설정 동기화",
     model: "모델",
     width: "너비",
@@ -674,7 +744,9 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
   const [step, setStep] = useState<Step>("import");
   const [bulkText, setBulkText] = useState("");
   const [sizeText, setSizeText] = useState("");
+  const [referenceRanges, setReferenceRanges] = useState<Record<string, string>>({});
   const [activePanelId, setActivePanelId] = useState("");
+  const [draggedPanelId, setDraggedPanelId] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [expandedCandidates, setExpandedCandidates] = useState<Set<string>>(
     () => new Set(),
@@ -785,8 +857,14 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
         imageSize: project.sizeMode === "perPanel" ? defaultSize : undefined,
       })),
       historyGroupId: undefined,
+      preciseReferences: project.preciseReferences.map((reference) => ({
+        ...reference,
+        scope: "all",
+        scopePanelIds: [],
+      })),
     });
     setSizeText("");
+    setReferenceRanges({});
     setActivePanelId("");
     setToast(format(language, "imported", { count: items.length }));
     setStep("global");
@@ -867,6 +945,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
     setProject(createTagComicProject(currentParams));
     setBulkText("");
     setSizeText("");
+    setReferenceRanges({});
     setActivePanelId("");
     setStep("import");
   }
@@ -924,7 +1003,12 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
     patch: Partial<
       Pick<
         TagComicReferenceAsset,
-        "type" | "strength" | "fidelity" | "informationExtracted"
+        | "type"
+        | "strength"
+        | "fidelity"
+        | "informationExtracted"
+        | "scope"
+        | "scopePanelIds"
       >
     >,
   ) {
@@ -934,6 +1018,53 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
         item.id === referenceId ? { ...item, ...patch } : item,
       ),
     }));
+  }
+
+  function referenceRangeMessage(error: unknown) {
+    if (!(error instanceof TagComicPanelRangeError)) {
+      return error instanceof Error ? error.message : String(error);
+    }
+    if (error.code === "empty") return text(language, "preciseRangeEmpty");
+    return format(
+      language,
+      error.code === "format" ? "preciseRangeFormat" : "preciseRangeOut",
+      { token: error.token ?? "?" },
+    );
+  }
+
+  function setReferenceScope(
+    reference: TagComicReferenceAsset,
+    scope: TagComicReferenceAsset["scope"],
+  ) {
+    patchPreciseReference(reference.id, {
+      scope,
+      scopePanelIds: scope === "all" ? [] : reference.scopePanelIds,
+    });
+    setReferenceRanges((current) => ({
+      ...current,
+      [reference.id]:
+        scope === "all"
+          ? ""
+          : formatTagComicPanelRange(reference.scopePanelIds, panels),
+    }));
+  }
+
+  function applyReferenceRange(reference: TagComicReferenceAsset) {
+    try {
+      const numbers = parseTagComicPanelRange(
+        referenceRanges[reference.id] ??
+          formatTagComicPanelRange(reference.scopePanelIds, panels),
+        panels.length,
+      );
+      const panelIds = numbers.map((number) => panels[number - 1].id);
+      patchPreciseReference(reference.id, { scopePanelIds: panelIds });
+      setReferenceRanges((current) => ({
+        ...current,
+        [reference.id]: formatTagComicPanelRange(panelIds, panels),
+      }));
+    } catch (error) {
+      setToast(referenceRangeMessage(error));
+    }
   }
 
   async function removePreciseReference(referenceId: string) {
@@ -959,22 +1090,27 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
   ) {
     patchPanel(panelId, (panel) => ({
       ...panel,
-      preciseReferences: enabled
-        ? [
-            ...panel.preciseReferences.filter(
-              (item) => item.referenceId !== asset.id,
-            ),
-            {
-              referenceId: asset.id,
-              type: asset.type,
-              strength: asset.strength,
-              fidelity: asset.fidelity,
-              informationExtracted: asset.informationExtracted,
-            },
-          ]
-        : panel.preciseReferences.filter(
-            (item) => item.referenceId !== asset.id,
-          ),
+      preciseReferences: [
+        ...panel.preciseReferences.filter(
+          (item) => item.referenceId !== asset.id,
+        ),
+        {
+          referenceId: asset.id,
+          enabled,
+          type:
+            panel.preciseReferences.find((item) => item.referenceId === asset.id)
+              ?.type ?? asset.type,
+          strength:
+            panel.preciseReferences.find((item) => item.referenceId === asset.id)
+              ?.strength ?? asset.strength,
+          fidelity:
+            panel.preciseReferences.find((item) => item.referenceId === asset.id)
+              ?.fidelity ?? asset.fidelity,
+          informationExtracted:
+            panel.preciseReferences.find((item) => item.referenceId === asset.id)
+              ?.informationExtracted ?? asset.informationExtracted,
+        },
+      ],
     }));
   }
 
@@ -985,8 +1121,40 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
   ) {
     patchPanel(panelId, (panel) => ({
       ...panel,
-      preciseReferences: panel.preciseReferences.map((item) =>
-        item.referenceId === referenceId ? { ...item, ...patch } : item,
+      preciseReferences: panel.preciseReferences.some(
+        (item) => item.referenceId === referenceId,
+      )
+        ? panel.preciseReferences.map((item) =>
+            item.referenceId === referenceId ? { ...item, ...patch } : item,
+          )
+        : [
+            ...panel.preciseReferences,
+            {
+              referenceId,
+              enabled: true,
+              type:
+                project.preciseReferences.find((item) => item.id === referenceId)
+                  ?.type ?? "character",
+              strength:
+                project.preciseReferences.find((item) => item.id === referenceId)
+                  ?.strength ?? 1,
+              fidelity:
+                project.preciseReferences.find((item) => item.id === referenceId)
+                  ?.fidelity ?? 1,
+              informationExtracted:
+                project.preciseReferences.find((item) => item.id === referenceId)
+                  ?.informationExtracted ?? 1,
+              ...patch,
+            },
+          ],
+    }));
+  }
+
+  function clearPanelReferenceOverride(panelId: string, referenceId: string) {
+    patchPanel(panelId, (panel) => ({
+      ...panel,
+      preciseReferences: panel.preciseReferences.filter(
+        (item) => item.referenceId !== referenceId,
       ),
     }));
   }
@@ -1068,11 +1236,30 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
         index: panelIndex + 1,
       })),
     });
+    setReferenceRanges({});
+  }
+
+  function movePanelTo(panelId: string, targetId: string) {
+    if (!panelId || panelId === targetId) return;
+    const ordered = [...panels];
+    const from = ordered.findIndex((panel) => panel.id === panelId);
+    if (from < 0 || !ordered.some((panel) => panel.id === targetId)) return;
+    const [moved] = ordered.splice(from, 1);
+    const targetIndex = ordered.findIndex((panel) => panel.id === targetId);
+    ordered.splice(targetIndex, 0, moved);
+    patchProject({
+      panels: ordered.map((panel, index) => ({ ...panel, index: index + 1 })),
+    });
+    setReferenceRanges({});
   }
 
   function deletePanel(panelId: string) {
     setProject((current) => ({
       ...current,
+      preciseReferences: current.preciseReferences.map((reference) => ({
+        ...reference,
+        scopePanelIds: reference.scopePanelIds.filter((id) => id !== panelId),
+      })),
       panels: current.panels
         .filter((panel) => panel.id !== panelId)
         .map((panel, index) => ({ ...panel, index: index + 1 })),
@@ -1086,6 +1273,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
       const panel = panels.find((item) => item.id === task.panelId);
       if (!panel) continue;
       const params = mergeTagComicParams(project, panel);
+      const preciseReferences = resolveTagComicPanelReferences(project, panel);
       const key = JSON.stringify({
         model: params.model,
         width: params.width,
@@ -1093,7 +1281,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
         steps: params.steps,
         smea: params.smea,
         smeaDyn: params.smeaDyn,
-        precise: panel.preciseReferences.length > 0,
+        precise: preciseReferences.length > 0,
       });
       let value = cache.get(key);
       if (value == null) {
@@ -1109,7 +1297,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
           extras: {
             vibeImages: [],
             charCaptions: [],
-            preciseReferences: panel.preciseReferences.length
+            preciseReferences: preciseReferences.length
               ? [
                   {
                     base64: "",
@@ -1149,7 +1337,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
       globalStylePrompt: project.globalStylePrompt,
       panelPrompt: panel.prompt,
       globalNegativePrompt: project.globalNegativePrompt,
-      preciseReferences: panel.preciseReferences.flatMap((selection) => {
+      preciseReferences: resolveTagComicPanelReferences(project, panel).flatMap((selection) => {
         const asset = project.preciseReferences.find(
           (item) => item.id === selection.referenceId,
         );
@@ -1214,12 +1402,14 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
       setToast(text(language, "sizesIncomplete"));
       return;
     }
-    const usesPrecise = tasks.some((task) =>
-      panels.some(
-        (panel) => panel.id === task.panelId && panel.preciseReferences.length,
-      ),
-    );
-    if (usesPrecise && !project.globalParams.model.includes("4-5")) {
+    const invalidPreciseModel = tasks.some((task) => {
+      const panel = panels.find((item) => item.id === task.panelId);
+      return panel
+        ? resolveTagComicPanelReferences(project, panel).length > 0 &&
+            !mergeTagComicParams(project, panel).model.includes("4-5")
+        : false;
+    });
+    if (invalidPreciseModel) {
       setToast(text(language, "preciseV45Only"));
       return;
     }
@@ -1497,7 +1687,15 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
               <p>{text(language, "preciseEmpty")}</p>
             ) : (
               <div className="tag-comic-reference-grid">
-                {project.preciseReferences.map((reference) => (
+                {project.preciseReferences.map((reference) => {
+                  const coverage = panels.filter((panel) => {
+                    const manual = panel.preciseReferences.find(
+                      (item) => item.referenceId === reference.id,
+                    );
+                    return manual?.enabled ??
+                      tagComicReferenceApplies(reference, panel.id);
+                  }).length;
+                  return (
                   <article key={reference.id}>
                     <img src={reference.fileUrl} alt={reference.name} />
                     <div>
@@ -1524,12 +1722,65 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                         <input type="range" min={0} max={1} step={0.01} value={reference.fidelity}
                           onChange={(event) => patchPreciseReference(reference.id, { fidelity: Number(event.target.value), informationExtracted: Number(event.target.value) })} />
                       </label>
+                      <div className="tag-comic-reference-scope">
+                        <span>{text(language, "preciseScope")}</span>
+                        <div role="group">
+                          {(["all", "include", "exclude"] as const).map((scope) => (
+                            <button
+                              key={scope}
+                              type="button"
+                              className={clsx(reference.scope === scope && "active")}
+                              onClick={() => setReferenceScope(reference, scope)}
+                            >
+                              {text(
+                                language,
+                                scope === "all"
+                                  ? "preciseScopeAll"
+                                  : scope === "include"
+                                    ? "preciseScopeInclude"
+                                    : "preciseScopeExclude",
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                        {reference.scope !== "all" && (
+                          <div className="tag-comic-reference-range">
+                            <input
+                              aria-label={text(language, "preciseRange")}
+                              value={
+                                referenceRanges[reference.id] ??
+                                formatTagComicPanelRange(reference.scopePanelIds, panels)
+                              }
+                              placeholder={text(language, "preciseRangePlaceholder")}
+                              onChange={(event) =>
+                                setReferenceRanges((current) => ({
+                                  ...current,
+                                  [reference.id]: event.target.value,
+                                }))
+                              }
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter") applyReferenceRange(reference);
+                              }}
+                            />
+                            <Button variant="secondary" onClick={() => applyReferenceRange(reference)}>
+                              {text(language, "preciseApplyRange")}
+                            </Button>
+                          </div>
+                        )}
+                        <small>
+                          {format(language, "preciseCoverage", {
+                            count: coverage,
+                            total: panels.length,
+                          })}
+                        </small>
+                      </div>
                       <Button variant="ghost" onClick={() => void removePreciseReference(reference.id)}>
                         {text(language, "preciseRemove")}
                       </Button>
                     </div>
                   </article>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -1574,8 +1825,21 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                   <button
                     key={panel.id}
                     type="button"
-                    className={clsx(panel.id === activePanel.id && "active")}
+                    draggable
+                    title={text(language, "dragPanel")}
+                    className={clsx(
+                      panel.id === activePanel.id && "active",
+                      panel.id === draggedPanelId && "dragging",
+                    )}
                     onClick={() => setActivePanelId(panel.id)}
+                    onDragStart={() => setDraggedPanelId(panel.id)}
+                    onDragEnd={() => setDraggedPanelId("")}
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      movePanelTo(draggedPanelId, panel.id);
+                      setDraggedPanelId("");
+                    }}
                   >
                     <b>#{panel.index}</b>
                     <span>{panel.title}</span>
@@ -1677,15 +1941,27 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                     <h4>{text(language, "precisePanelHeading")}</h4>
                     <p>{text(language, "precisePanelHint")}</p>
                     {project.preciseReferences.map((asset) => {
-                      const selection = activePanel.preciseReferences.find(
+                      const manualOverride = activePanel.preciseReferences.find(
                         (item) => item.referenceId === asset.id,
                       );
+                      const inherited = tagComicReferenceApplies(asset, activePanel.id);
+                      const enabled = manualOverride?.enabled ?? inherited;
+                      const selection = enabled
+                        ? manualOverride ?? {
+                            referenceId: asset.id,
+                            enabled: true,
+                            type: asset.type,
+                            strength: asset.strength,
+                            fidelity: asset.fidelity,
+                            informationExtracted: asset.informationExtracted,
+                          }
+                        : null;
                       return (
-                        <article key={asset.id} className={clsx(selection && "selected")}>
+                        <article key={asset.id} className={clsx(enabled && "selected")}>
                           <label className="tag-comic-reference-check">
                             <input
                               type="checkbox"
-                              checked={Boolean(selection)}
+                              checked={enabled}
                               onChange={(event) =>
                                 togglePanelReference(
                                   activePanel.id,
@@ -1695,7 +1971,12 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                               }
                             />
                             <img src={asset.fileUrl} alt={asset.name} />
-                            <b>{asset.name}</b>
+                            <b>
+                              {asset.name}
+                              {manualOverride && (
+                                <small>{text(language, "preciseManual")}</small>
+                              )}
+                            </b>
                           </label>
                           {selection && (
                             <div className="tag-comic-reference-tuning">
@@ -1721,15 +2002,22 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                                 <input type="range" min={0} max={1} step={0.01} value={selection.fidelity}
                                   onChange={(event) => patchPanelReference(activePanel.id, asset.id, { fidelity: Number(event.target.value), informationExtracted: Number(event.target.value) })} />
                               </label>
-                              <Button variant="ghost" onClick={() => patchPanelReference(activePanel.id, asset.id, {
-                                type: asset.type,
-                                strength: asset.strength,
-                                fidelity: asset.fidelity,
-                                informationExtracted: asset.informationExtracted,
-                              })}>
+                              <Button variant="ghost" onClick={() =>
+                                clearPanelReferenceOverride(activePanel.id, asset.id)
+                              }>
                                 {text(language, "preciseReset")}
                               </Button>
                             </div>
+                          )}
+                          {manualOverride && !selection && (
+                            <Button
+                              variant="ghost"
+                              onClick={() =>
+                                clearPanelReferenceOverride(activePanel.id, asset.id)
+                              }
+                            >
+                              {text(language, "preciseReset")}
+                            </Button>
                           )}
                         </article>
                       );

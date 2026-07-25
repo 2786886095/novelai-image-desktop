@@ -5,8 +5,11 @@ import {
   createTagComicProject,
   mergeTagComicParams,
   normalizeTagComicProject,
+  formatTagComicPanelRange,
   parseTagComicImport,
+  parseTagComicPanelRange,
   parseTagComicSizeImport,
+  resolveTagComicPanelReferences,
   tagComicSizeTemplate,
 } from "./tag-comic";
 
@@ -134,10 +137,13 @@ describe("tag-only comic projects", () => {
       strength: 0.8,
       fidelity: 0.7,
       informationExtracted: 0.7,
+      scope: "all",
+      scopePanelIds: [],
     });
     const panel = createTagComicPanel("1girl", 1);
     panel.preciseReferences.push({
       referenceId: "reference-1",
+      enabled: true,
       type: "character&style",
       strength: 0.6,
       fidelity: 0.5,
@@ -155,5 +161,67 @@ describe("tag-only comic projects", () => {
     });
     expect(imported.preciseReferences).toEqual([]);
     expect(imported.panels[0].preciseReferences).toEqual([]);
+  });
+
+  it("parses compact reference ranges and keeps scope attached to panel ids", () => {
+    const panels = [1, 2, 3, 4, 5].map((index) =>
+      createTagComicPanel(`panel ${index}`, index),
+    );
+    expect(parseTagComicPanelRange("1-3, 5", panels.length)).toEqual([
+      1, 2, 3, 5,
+    ]);
+    const ids = [panels[0].id, panels[1].id, panels[4].id];
+    expect(formatTagComicPanelRange(ids, panels)).toBe("1-2, 5");
+    const reordered = [panels[1], panels[2], panels[3], panels[4], panels[0]].map(
+      (panel, index) => ({ ...panel, index: index + 1 }),
+    );
+    expect(formatTagComicPanelRange(ids, reordered)).toBe("1, 4-5");
+    expect(() => parseTagComicPanelRange("1-9", panels.length)).toThrow(
+      /outOfRange/,
+    );
+  });
+
+  it("resolves all/include/exclude scopes with manual overrides first", () => {
+    const project = createTagComicProject();
+    const first = createTagComicPanel("first", 1);
+    const second = createTagComicPanel("second", 2);
+    project.panels = [first, second];
+    project.preciseReferences = [
+      {
+        id: "ref",
+        name: "ref.png",
+        filePath: "C:/ref.png",
+        fileUrl: "file:///C:/ref.png",
+        type: "character",
+        strength: 1,
+        fidelity: 1,
+        informationExtracted: 1,
+        scope: "exclude",
+        scopePanelIds: [second.id],
+      },
+    ];
+    expect(resolveTagComicPanelReferences(project, first)).toHaveLength(1);
+    expect(resolveTagComicPanelReferences(project, second)).toHaveLength(0);
+    second.preciseReferences.push({
+      referenceId: "ref",
+      enabled: true,
+      type: "style",
+      strength: 0.5,
+      fidelity: 0.6,
+      informationExtracted: 0.6,
+    });
+    expect(resolveTagComicPanelReferences(project, second)[0]).toMatchObject({
+      type: "style",
+      strength: 0.5,
+    });
+    first.preciseReferences.push({
+      referenceId: "ref",
+      enabled: false,
+      type: "character",
+      strength: 1,
+      fidelity: 1,
+      informationExtracted: 1,
+    });
+    expect(resolveTagComicPanelReferences(project, first)).toHaveLength(0);
   });
 });

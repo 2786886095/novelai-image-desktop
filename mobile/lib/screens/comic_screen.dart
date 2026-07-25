@@ -495,6 +495,12 @@ class _PreciseReferenceSection extends StatelessWidget {
                                       controller.changed();
                                     },
                                   ),
+                                  _ReferenceScopeEditor(
+                                    key: ValueKey(
+                                      '${reference.id}-${reference.scope.name}-${reference.scopePanelIds.join(',')}-${controller.project.panels.map((panel) => panel.id).join(',')}',
+                                    ),
+                                    reference: reference,
+                                  ),
                                   Align(
                                     alignment: Alignment.centerRight,
                                     child: TextButton.icon(
@@ -518,6 +524,96 @@ class _PreciseReferenceSection extends StatelessWidget {
                 }).toList(),
               );
             }),
+    );
+  }
+}
+
+class _ReferenceScopeEditor extends StatefulWidget {
+  final ComicReferenceAsset reference;
+  const _ReferenceScopeEditor({super.key, required this.reference});
+
+  @override
+  State<_ReferenceScopeEditor> createState() => _ReferenceScopeEditorState();
+}
+
+class _ReferenceScopeEditorState extends State<_ReferenceScopeEditor> {
+  late final TextEditingController input;
+
+  @override
+  void initState() {
+    super.initState();
+    final controller = context.read<ComicController>();
+    input = TextEditingController(
+      text: formatComicPanelRange(
+        widget.reference.scopePanelIds,
+        controller.project.panels,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    input.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = context.watch<ComicController>();
+    final reference = widget.reference;
+    final t = _text(context);
+    final coverage = t('comic.preciseCoverage')
+        .replaceAll('{count}', '${controller.referenceCoverage(reference)}')
+        .replaceAll('{total}', '${controller.project.panels.length}');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(t('comic.preciseScope'),
+            style: Theme.of(context).textTheme.labelSmall),
+        const SizedBox(height: 5),
+        SegmentedButton<ComicReferenceScope>(
+          showSelectedIcon: false,
+          segments: [
+            ButtonSegment(
+                value: ComicReferenceScope.all,
+                label: Text(t('comic.preciseScopeAll'))),
+            ButtonSegment(
+                value: ComicReferenceScope.include,
+                label: Text(t('comic.preciseScopeInclude'))),
+            ButtonSegment(
+                value: ComicReferenceScope.exclude,
+                label: Text(t('comic.preciseScopeExclude'))),
+          ],
+          selected: {reference.scope},
+          onSelectionChanged: (value) {
+            controller.setReferenceScope(reference, value.first);
+            if (value.first == ComicReferenceScope.all) input.clear();
+          },
+        ),
+        if (reference.scope != ComicReferenceScope.all) ...[
+          const SizedBox(height: 8),
+          TextField(
+            controller: input,
+            decoration: InputDecoration(
+              labelText: t('comic.preciseRange'),
+              hintText: t('comic.preciseRangeHint'),
+              border: const OutlineInputBorder(),
+              suffixIcon: IconButton(
+                tooltip: t('comic.preciseApplyRange'),
+                onPressed: () => _run(context, () async {
+                  controller.applyReferenceRange(reference, input.text);
+                }),
+                icon: const Icon(Icons.check),
+              ),
+            ),
+            onSubmitted: (value) => _run(context, () async {
+              controller.applyReferenceRange(reference, value);
+            }),
+          ),
+        ],
+        const SizedBox(height: 5),
+        Text(coverage, style: Theme.of(context).textTheme.bodySmall),
+      ],
     );
   }
 }
@@ -703,30 +799,57 @@ class _PanelList extends StatelessWidget {
         icon: const Icon(Icons.add),
       ),
       child: Column(
-        children: controller.project.panels.map((panel) {
-          final selected = controller.activePanelId == panel.id;
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 6),
-            child: ListTile(
-              selected: selected,
-              selectedTileColor: Theme.of(context).colorScheme.primaryContainer,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-              leading: CircleAvatar(child: Text('${panel.index}')),
-              title: Text(panel.title,
-                  maxLines: 1, overflow: TextOverflow.ellipsis),
-              subtitle: Text(
-                panel.prompt,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              trailing: panel.candidates.isEmpty
-                  ? null
-                  : Badge(label: Text('${panel.candidates.length}')),
-              onTap: () => controller.selectPanel(panel.id),
-            ),
-          );
-        }).toList(),
+        children: [
+          Text(t('comic.dragPanel'),
+              style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 6),
+          ReorderableListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            buildDefaultDragHandles: false,
+            itemCount: controller.project.panels.length,
+            onReorder: controller.reorderPanel,
+            itemBuilder: (context, itemIndex) {
+              final panel = controller.project.panels[itemIndex];
+              final selected = controller.activePanelId == panel.id;
+              return Padding(
+                key: ValueKey(panel.id),
+                padding: const EdgeInsets.only(bottom: 6),
+                child: ListTile(
+                  selected: selected,
+                  selectedTileColor:
+                      Theme.of(context).colorScheme.primaryContainer,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  leading: CircleAvatar(child: Text('${panel.index}')),
+                  title: Text(panel.title,
+                      maxLines: 1, overflow: TextOverflow.ellipsis),
+                  subtitle: Text(
+                    panel.prompt,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (panel.candidates.isNotEmpty)
+                        Badge(label: Text('${panel.candidates.length}')),
+                      ReorderableDragStartListener(
+                        index: itemIndex,
+                        child: Padding(
+                          padding: const EdgeInsets.all(8),
+                          child: Icon(Icons.drag_indicator,
+                              semanticLabel: t('comic.dragPanel')),
+                        ),
+                      ),
+                    ],
+                  ),
+                  onTap: () => controller.selectPanel(panel.id),
+                ),
+              );
+            },
+          ),
+        ],
       ),
     );
   }
@@ -867,7 +990,19 @@ class _PanelPreciseReferences extends StatelessWidget {
                 final matches = panel.preciseReferences
                     .where((item) => item.referenceId == asset.id)
                     .toList();
-                final selection = matches.isEmpty ? null : matches.first;
+                final manualOverride = matches.isEmpty ? null : matches.first;
+                final inherited = comicReferenceApplies(asset, panel.id);
+                final enabled = manualOverride?.enabled ?? inherited;
+                final selection = enabled
+                    ? manualOverride ??
+                        ComicPanelReference(
+                          referenceId: asset.id,
+                          type: asset.type,
+                          strength: asset.strength,
+                          fidelity: asset.fidelity,
+                          informationExtracted: asset.informationExtracted,
+                        )
+                    : null;
                 return Card(
                   margin: const EdgeInsets.only(bottom: 8),
                   child: Padding(
@@ -876,7 +1011,7 @@ class _PanelPreciseReferences extends StatelessWidget {
                       children: [
                         CheckboxListTile(
                           contentPadding: EdgeInsets.zero,
-                          value: selection != null,
+                          value: enabled,
                           onChanged: (value) => controller.togglePanelReference(
                               panel, asset, value == true),
                           secondary: ClipRRect(
@@ -888,8 +1023,17 @@ class _PanelPreciseReferences extends StatelessWidget {
                                 errorBuilder: (_, __, ___) =>
                                     const Icon(Icons.broken_image_outlined)),
                           ),
-                          title: Text(asset.name,
-                              maxLines: 1, overflow: TextOverflow.ellipsis),
+                          title: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(asset.name,
+                                  maxLines: 1, overflow: TextOverflow.ellipsis),
+                              if (manualOverride != null)
+                                Text(t('comic.preciseManual'),
+                                    style:
+                                        Theme.of(context).textTheme.labelSmall),
+                            ],
+                          ),
                         ),
                         if (selection != null) ...[
                           DropdownButtonFormField<String>(
@@ -909,37 +1053,44 @@ class _PanelPreciseReferences extends StatelessWidget {
                                   child: Text(t('comic.preciseBoth'))),
                             ],
                             onChanged: (value) {
-                              selection.type = value ?? 'character';
-                              controller.changed();
+                              controller.updatePanelReference(panel, asset,
+                                  type: value ?? 'character');
                             },
                           ),
                           _ReferenceSlider(
                             label: t('comic.preciseStrength'),
                             value: selection.strength,
                             onChanged: (value) {
-                              selection.strength = value;
-                              controller.changed();
+                              controller.updatePanelReference(panel, asset,
+                                  strength: value);
                             },
                           ),
                           _ReferenceSlider(
                             label: t('comic.preciseFidelity'),
                             value: selection.fidelity,
                             onChanged: (value) {
-                              selection
-                                ..fidelity = value
-                                ..informationExtracted = value;
-                              controller.changed();
+                              controller.updatePanelReference(panel, asset,
+                                  fidelity: value);
                             },
                           ),
                           Align(
                             alignment: Alignment.centerRight,
                             child: TextButton(
-                              onPressed: () => controller.resetPanelReference(
-                                  selection, asset),
+                              onPressed: () => controller
+                                  .clearPanelReferenceOverride(panel, asset.id),
                               child: Text(t('comic.preciseReset')),
                             ),
                           ),
                         ],
+                        if (manualOverride != null && selection == null)
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              onPressed: () => controller
+                                  .clearPanelReferenceOverride(panel, asset.id),
+                              child: Text(t('comic.preciseReset')),
+                            ),
+                          ),
                       ],
                     ),
                   ),

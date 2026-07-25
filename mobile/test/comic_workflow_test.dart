@@ -107,6 +107,82 @@ void main() {
     expect((portable['panels'] as List).first['preciseReferences'], isEmpty);
   });
 
+  test(
+      'reference ranges follow panel ids through reorder and manual overrides win',
+      () {
+    final project = _project();
+    final reference = ComicReferenceAsset(
+      id: 'reference-1',
+      name: 'hero.png',
+      filePath: '/project/hero.png',
+      scope: ComicReferenceScope.exclude,
+      scopePanelIds: [project.panels[1].id],
+    );
+    project.preciseReferences.add(reference);
+    expect(parseComicPanelRange('1-2, 3', 3), [1, 2, 3]);
+    expect(formatComicPanelRange(reference.scopePanelIds, project.panels), '2');
+    expect(resolvedComicPanelReferences(project, project.panels.first),
+        hasLength(1));
+    expect(resolvedComicPanelReferences(project, project.panels[1]), isEmpty);
+
+    final moved = project.panels.removeAt(1);
+    project.panels.add(moved);
+    for (var index = 0; index < project.panels.length; index++) {
+      project.panels[index].index = index + 1;
+    }
+    expect(formatComicPanelRange(reference.scopePanelIds, project.panels), '3');
+    moved.preciseReferences.add(ComicPanelReference(
+      referenceId: reference.id,
+      enabled: true,
+      type: 'style',
+      strength: .5,
+    ));
+    expect(resolvedComicPanelReferences(project, moved).single.type, 'style');
+    project.panels.first.preciseReferences.add(ComicPanelReference(
+      referenceId: reference.id,
+      enabled: false,
+    ));
+    expect(
+        resolvedComicPanelReferences(project, project.panels.first), isEmpty);
+    expect(
+      () => parseComicPanelRange('1-9', 3),
+      throwsA(isA<ComicPanelRangeException>()),
+    );
+  });
+
+  testWidgets('precise reference scope controls fit a compact phone',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(360, 800);
+    addTearDown(tester.view.reset);
+    final app = AppState();
+    final project = _project()
+      ..preciseReferences.add(ComicReferenceAsset(
+        id: 'reference-1',
+        name: 'hero-reference.png',
+        filePath: 'missing-reference.png',
+      ));
+    final controller = ComicController(app)
+      ..project = project
+      ..activePanelId = project.panels.first.id
+      ..step = ComicStep.global
+      ..loaded = true;
+    addTearDown(app.dispose);
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(
+      ChangeNotifierProvider.value(
+        value: app,
+        child: MaterialApp(
+          theme: StudioTheme.light(),
+          home: ComicScreen(controller: controller),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    expect(find.text('全部分镜'), findsOneWidget);
+  });
+
   test('tag imports support text, titled JSON, and quoted CSV', () {
     expect(parseComicImport('one\ntwo').map((item) => item.$2), ['one', 'two']);
     expect(
