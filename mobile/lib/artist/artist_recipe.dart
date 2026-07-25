@@ -275,6 +275,69 @@ String _number(double value) => value == value.roundToDouble()
     ? value.toInt().toString()
     : value.toStringAsFixed(2).replaceFirst(RegExp(r'0+$'), '');
 
+String artistPromptWithTrailingComma(String value) {
+  final normalized = value.trim().replaceFirst(RegExp(r',+$'), '');
+  return normalized.isEmpty ? '' : '$normalized,';
+}
+
+String fullArtistRecipePrompt(ArtistRecipe recipe, String basePrompt) {
+  final artists = recipe.artistPrompt.trim().replaceFirst(RegExp(r',+$'), '');
+  var auxiliary = recipe.basePrompt.trim();
+  if (artists.isNotEmpty && auxiliary.startsWith(artists)) {
+    auxiliary = auxiliary.substring(artists.length).trim();
+    auxiliary = auxiliary.replaceFirst(RegExp(r'^,+\s*'), '');
+  }
+  final mutations = recipe.mutations
+      .map((item) => '${_number(item.weight)}::${item.value} ::')
+      .join(', ');
+  return [artists, mutations, auxiliary, basePrompt.trim()]
+      .where((item) => item.isNotEmpty)
+      .join(', ');
+}
+
+List<ArtistRecipe> randomizeArtistWeights({
+  required String artistPrompt,
+  required int count,
+  double variationPercent = 20,
+  required int drawSeed,
+}) {
+  final pattern = RegExp(
+    r'^\s*(?:(\d+(?:\.\d+)?)\s*::\s*)?artist\s*:\s*(.*?)\s*(?:::)?\s*$',
+    caseSensitive: false,
+  );
+  final source = artistPrompt
+      .replaceAll('，', ',')
+      .split(',')
+      .map((token) => pattern.firstMatch(token.trim()))
+      .whereType<RegExpMatch>()
+      .map((match) => (
+            match.group(2)!.replaceFirst(RegExp(r'\s*::$'), '').trim(),
+            double.tryParse(match.group(1) ?? '') ?? 1.0,
+          ))
+      .where((entry) => entry.$1.isNotEmpty && entry.$2 > 0)
+      .toList();
+  if (source.isEmpty || count < 1) return const [];
+  final random = Random(drawSeed);
+  final ratio = variationPercent.clamp(0, 100) / 100;
+  return List.generate(count, (index) {
+    final tokens = source.map((entry) {
+      final factor = 1 + (random.nextDouble() * 2 - 1) * ratio;
+      final weight = (entry.$2 * factor).clamp(.1, 10).toDouble();
+      return '${_number((weight * 100).round() / 100)}::artist:${entry.$1} ::';
+    }).toList();
+    final prompt = tokens.join(', ');
+    return ArtistRecipe(
+      'weight-$drawSeed-$index',
+      prompt,
+      source.map((entry) => entry.$1).toList(),
+      basePrompt: prompt,
+      artistPrompt: prompt,
+      pairId: 'weight-$drawSeed-$index',
+      variant: 'plain',
+    );
+  });
+}
+
 List<StyleMutationTerm> _drawMutations(
   Random random, [
   List<StyleMutationTerm> favoriteMutations = const [],

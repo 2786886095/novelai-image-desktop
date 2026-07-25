@@ -111,6 +111,12 @@ class ComicController extends ChangeNotifier {
       index: index,
       title: '${_t('comic.panelFallback')} $index',
       params: project.globalParams.copy(),
+      imageWidth: project.sizeMode == ComicSizeMode.perPanel
+          ? project.globalParams.width
+          : null,
+      imageHeight: project.sizeMode == ComicSizeMode.perPanel
+          ? project.globalParams.height
+          : null,
     );
     project.panels.add(panel);
     activePanelId = panel.id;
@@ -152,6 +158,12 @@ class ComicController extends ChangeNotifier {
             : entry.value.$1,
         prompt: entry.value.$2,
         params: project.globalParams.copy(),
+        imageWidth: project.sizeMode == ComicSizeMode.perPanel
+            ? project.globalParams.width
+            : null,
+        imageHeight: project.sizeMode == ComicSizeMode.perPanel
+            ? project.globalParams.height
+            : null,
       );
     }).toList();
     activePanelId = project.panels.first.id;
@@ -176,7 +188,8 @@ class ComicController extends ChangeNotifier {
     final temp = await getTemporaryDirectory();
     final file = File('${temp.path}/${_safeName(displayTitle)}.json');
     await file.writeAsString(
-      const JsonEncoder.withIndent('  ').convert(project.toJson()),
+      const JsonEncoder.withIndent(' ')
+          .convert(project.toJson(includeLocalReferences: false)),
       flush: true,
     );
     await Share.shareXFiles([XFile(file.path)], text: displayTitle);
@@ -210,8 +223,167 @@ class ComicController extends ChangeNotifier {
     params
       ..positivePrompt = _merge(project.globalStylePrompt, panel.prompt)
       ..negativePrompt = project.globalNegativePrompt;
+    if (project.sizeMode == ComicSizeMode.perPanel &&
+        panel.imageWidth != null &&
+        panel.imageHeight != null) {
+      params
+        ..width = panel.imageWidth!
+        ..height = panel.imageHeight!;
+    }
     return params;
   }
+
+  Future<void> pickPreciseReferences() async {
+    final remaining = max(0, 5 - project.preciseReferences.length);
+    if (remaining == 0) return;
+    final result = await FilePicker.platform.pickFiles(
+      allowMultiple: true,
+      type: FileType.custom,
+      allowedExtensions: const ['png', 'jpg', 'jpeg', 'webp'],
+      withData: true,
+    );
+    if (result == null) return;
+    final documents = await getApplicationDocumentsDirectory();
+    final root = Directory(
+        '${documents.path}${Platform.pathSeparator}comic-projects${Platform.pathSeparator}${project.id}${Platform.pathSeparator}references');
+    await root.create(recursive: true);
+    for (final picked in result.files.take(remaining)) {
+      final bytes = picked.bytes ??
+          (picked.path == null ? null : await File(picked.path!).readAsBytes());
+      if (bytes == null || bytes.isEmpty) continue;
+      final extension = picked.extension?.toLowerCase() ?? 'png';
+      final id = comicId();
+      final file = File('${root.path}${Platform.pathSeparator}$id.$extension');
+      await file.writeAsBytes(bytes, flush: true);
+      project.preciseReferences.add(ComicReferenceAsset(
+        id: id,
+        name: picked.name,
+        filePath: file.path,
+      ));
+    }
+    changed('comic.preciseImported');
+  }
+
+  Future<void> removePreciseReference(String referenceId) async {
+    final matches = project.preciseReferences
+        .where((item) => item.id == referenceId)
+        .toList();
+    for (final item in matches) {
+      await File(item.filePath).delete().catchError((_) => File(item.filePath));
+    }
+    project.preciseReferences.removeWhere((item) => item.id == referenceId);
+    for (final panel in project.panels) {
+      panel.preciseReferences
+          .removeWhere((item) => item.referenceId == referenceId);
+    }
+    changed();
+  }
+
+  void togglePanelReference(
+      ComicPanel panel, ComicReferenceAsset asset, bool enabled) {
+    panel.preciseReferences.removeWhere((item) => item.referenceId == asset.id);
+    if (enabled) {
+      panel.preciseReferences.add(ComicPanelReference(
+        referenceId: asset.id,
+        type: asset.type,
+        strength: asset.strength,
+        fidelity: asset.fidelity,
+        informationExtracted: asset.informationExtracted,
+      ));
+    }
+    changed();
+  }
+
+  void resetPanelReference(
+      ComicPanelReference selection, ComicReferenceAsset asset) {
+    selection
+      ..type = asset.type
+      ..strength = asset.strength
+      ..fidelity = asset.fidelity
+      ..informationExtracted = asset.informationExtracted;
+    changed();
+  }
+
+  Future<GenerateExtras> extrasFor(ComicPanel panel) async {
+    final precise = <PreciseReferenceItem>[];
+    for (final selection in panel.preciseReferences) {
+      final assets = project.preciseReferences
+          .where((item) => item.id == selection.referenceId)
+          .toList();
+      if (assets.isEmpty) continue;
+      final asset = assets.first;
+      try {
+        final bytes = await File(asset.filePath).readAsBytes();
+        precise.add(PreciseReferenceItem(
+          base64: base64Encode(bytes),
+          sourcePath: asset.filePath,
+          type: selection.type,
+          strength: selection.strength,
+          fidelity: selection.fidelity,
+          informationExtracted: selection.informationExtracted,
+        ));
+      } catch (_) {}
+    }
+    return GenerateExtras(preciseReferences: precise);
+  }
+
+  void setSizeMode(ComicSizeMode mode) {
+    project.sizeMode = mode;
+    if (mode == ComicSizeMode.perPanel) {
+      for (final panel in project.panels) {
+        panel
+          ..imageWidth ??= project.globalParams.width
+          ..imageHeight ??= project.globalParams.height;
+      }
+    }
+    changed();
+  }
+
+  String createSizeTemplate() => comicSizeTemplate(
+        project.panels.length,
+        ComicImageSize(project.globalParams.width, project.globalParams.height),
+      );
+
+  void importPanelSizes(String source) {
+    try {
+      final sizes = parseComicSizeImport(source, project.panels.length);
+      for (var index = 0; index < project.panels.length; index++) {
+        project.panels[index]
+          ..imageWidth = sizes[index].width
+          ..imageHeight = sizes[index].height;
+      }
+      project.sizeMode = ComicSizeMode.perPanel;
+      changed(
+        'comic.sizesApplied',
+        _t('comic.sizesApplied')
+            .replaceAll('{count}', '${project.panels.length}'),
+      );
+    } on ComicSizeImportException catch (error) {
+      final key = switch (error.code) {
+        'empty' => 'comic.sizeEmpty',
+        'count' => 'comic.sizeCount',
+        'blank' => 'comic.sizeBlank',
+        'format' => 'comic.sizeFormat',
+        _ => 'comic.sizeUnsupported',
+      };
+      throw FormatException(
+        _t(key)
+            .replaceAll('{line}', '${error.line ?? '?'}')
+            .replaceAll(
+                '{expected}', '${error.expected ?? project.panels.length}')
+            .replaceAll('{actual}', '${error.actual ?? 0}'),
+      );
+    }
+  }
+
+  bool get hasCompletePanelSizes =>
+      project.sizeMode != ComicSizeMode.perPanel ||
+      project.panels.every((panel) =>
+          panel.imageWidth != null &&
+          panel.imageHeight != null &&
+          comicSizePresets.any((size) =>
+              size.width == panel.imageWidth &&
+              size.height == panel.imageHeight));
 
   Future<int> quoteTasks(Iterable<ComicPanel> panels, {int each = 1}) async {
     final token = await app.storage.getToken();
@@ -241,6 +413,7 @@ class ComicController extends ChangeNotifier {
       final local = calculateImageGenerationAnlas(
             params: params,
             account: app.account,
+            preciseReferenceCount: panel.preciseReferences.length,
             language: app.settings.language,
           ).amount ??
           0;
@@ -261,7 +434,7 @@ class ComicController extends ChangeNotifier {
       final before = app.account.anlasBalance;
       final item = await app.generateComicPanel(
         panelParams: paramsFor(panel),
-        panelExtras: GenerateExtras(),
+        panelExtras: await extrasFor(panel),
         projectTitle: displayTitle,
         historyGroupId: project.historyGroupId,
       );
@@ -316,6 +489,13 @@ class ComicController extends ChangeNotifier {
 
   Future<void> _runQueue(List<ComicPanel> tasks) async {
     if (queueRunning || tasks.isEmpty) return;
+    if (!hasCompletePanelSizes) {
+      throw FormatException(_t('comic.sizesIncomplete'));
+    }
+    if (tasks.any((panel) => panel.preciseReferences.isNotEmpty) &&
+        !project.globalParams.isV45) {
+      throw FormatException(_t('comic.preciseV45Only'));
+    }
     queueRunning = true;
     queueCancelled = false;
     queueDone = 0;

@@ -374,6 +374,10 @@ class _GlobalStep extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
+          const _PanelSizeSection(),
+          const SizedBox(height: 12),
+          const _PreciseReferenceSection(),
+          const SizedBox(height: 12),
           _ParamsEditor(
             params: project.globalParams,
             onChanged: controller.changed,
@@ -383,6 +387,255 @@ class _GlobalStep extends StatelessWidget {
               controller.changed();
             },
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PreciseReferenceSection extends StatelessWidget {
+  const _PreciseReferenceSection();
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = context.watch<ComicController>();
+    final refs = controller.project.preciseReferences;
+    final t = _text(context);
+    return _SectionCard(
+      title: t('comic.preciseHeading'),
+      subtitle: t('comic.preciseHint'),
+      action: OutlinedButton.icon(
+        onPressed: refs.length >= 5
+            ? null
+            : () => _run(context, controller.pickPreciseReferences),
+        icon: const Icon(Icons.add_photo_alternate_outlined),
+        label: Text(t('comic.preciseUpload')),
+      ),
+      child: refs.isEmpty
+          ? Text(t('comic.preciseEmpty'))
+          : LayoutBuilder(builder: (context, constraints) {
+              final width = constraints.maxWidth >= 760
+                  ? (constraints.maxWidth - 12) / 2
+                  : constraints.maxWidth;
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: refs.map((reference) {
+                  return SizedBox(
+                    width: width,
+                    child: Card.outlined(
+                      margin: EdgeInsets.zero,
+                      child: Padding(
+                        padding: const EdgeInsets.all(10),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(10),
+                              child: Image.file(
+                                File(reference.filePath),
+                                width: 84,
+                                height: 112,
+                                fit: BoxFit.contain,
+                                errorBuilder: (_, __, ___) => const SizedBox(
+                                  width: 84,
+                                  height: 112,
+                                  child: Icon(Icons.broken_image_outlined),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Text(reference.name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis),
+                                  const SizedBox(height: 6),
+                                  DropdownButtonFormField<String>(
+                                    value: reference.type,
+                                    isExpanded: true,
+                                    decoration: const InputDecoration(
+                                      isDense: true,
+                                      border: OutlineInputBorder(),
+                                    ),
+                                    items: [
+                                      DropdownMenuItem(
+                                          value: 'character',
+                                          child: Text(
+                                              t('comic.preciseCharacter'))),
+                                      DropdownMenuItem(
+                                          value: 'style',
+                                          child: Text(t('comic.preciseStyle'))),
+                                      DropdownMenuItem(
+                                          value: 'character&style',
+                                          child: Text(t('comic.preciseBoth'))),
+                                    ],
+                                    onChanged: (value) {
+                                      reference.type = value ?? 'character';
+                                      controller.changed();
+                                    },
+                                  ),
+                                  _ReferenceSlider(
+                                    label: t('comic.preciseStrength'),
+                                    value: reference.strength,
+                                    onChanged: (value) {
+                                      reference.strength = value;
+                                      controller.changed();
+                                    },
+                                  ),
+                                  _ReferenceSlider(
+                                    label: t('comic.preciseFidelity'),
+                                    value: reference.fidelity,
+                                    onChanged: (value) {
+                                      reference
+                                        ..fidelity = value
+                                        ..informationExtracted = value;
+                                      controller.changed();
+                                    },
+                                  ),
+                                  Align(
+                                    alignment: Alignment.centerRight,
+                                    child: TextButton.icon(
+                                      onPressed: () => _run(
+                                        context,
+                                        () => controller.removePreciseReference(
+                                            reference.id),
+                                      ),
+                                      icon: const Icon(Icons.delete_outline),
+                                      label: Text(t('comic.preciseRemove')),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              );
+            }),
+    );
+  }
+}
+
+class _ReferenceSlider extends StatelessWidget {
+  final String label;
+  final double value;
+  final ValueChanged<double> onChanged;
+  const _ReferenceSlider({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('$label · ${value.toStringAsFixed(2)}',
+              style: Theme.of(context).textTheme.labelSmall),
+          Slider(value: value, min: 0, max: 1, onChanged: onChanged),
+        ],
+      );
+}
+
+class _PanelSizeSection extends StatefulWidget {
+  const _PanelSizeSection();
+
+  @override
+  State<_PanelSizeSection> createState() => _PanelSizeSectionState();
+}
+
+class _PanelSizeSectionState extends State<_PanelSizeSection> {
+  final input = TextEditingController();
+
+  @override
+  void dispose() {
+    input.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = context.watch<ComicController>();
+    final project = controller.project;
+    final t = _text(context);
+    return _SectionCard(
+      title: t('comic.sizeMode'),
+      subtitle: t('comic.sizeModeHint'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SegmentedButton<ComicSizeMode>(
+            segments: [
+              ButtonSegment(
+                value: ComicSizeMode.uniform,
+                label: Text(t('comic.sizeUniform')),
+                icon: const Icon(Icons.aspect_ratio),
+              ),
+              ButtonSegment(
+                value: ComicSizeMode.perPanel,
+                label: Text(t('comic.sizePerPanel')),
+                icon: const Icon(Icons.view_carousel_outlined),
+              ),
+            ],
+            selected: {project.sizeMode},
+            onSelectionChanged: (value) => controller.setSizeMode(value.first),
+          ),
+          if (project.sizeMode == ComicSizeMode.perPanel) ...[
+            const SizedBox(height: 12),
+            TextField(
+              controller: input,
+              minLines: 4,
+              maxLines: 12,
+              decoration: InputDecoration(
+                labelText: t('comic.sizesInput'),
+                hintText: '832×1216\n1216×832\n1024×1024',
+                border: const OutlineInputBorder(),
+                alignLabelWithHint: true,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: comicSizePresets
+                  .map((size) => Chip(
+                        visualDensity: VisualDensity.compact,
+                        label: Text('${size.width}×${size.height}'),
+                      ))
+                  .toList(),
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: project.panels.isEmpty
+                      ? null
+                      : () => setState(
+                            () => input.text = controller.createSizeTemplate(),
+                          ),
+                  icon: const Icon(Icons.description_outlined),
+                  label: Text(t('comic.sizeTemplate')),
+                ),
+                FilledButton.icon(
+                  onPressed: project.panels.isEmpty || input.text.trim().isEmpty
+                      ? null
+                      : () => _run(context, () async {
+                            controller.importPanelSizes(input.text);
+                          }),
+                  icon: const Icon(Icons.playlist_add_check),
+                  label: Text(t('comic.importSizes')),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -533,6 +786,39 @@ class _PanelEditor extends StatelessWidget {
               controller.changed();
             },
           ),
+          if (controller.project.sizeMode == ComicSizeMode.perPanel) ...[
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              value: panel.imageWidth == null || panel.imageHeight == null
+                  ? null
+                  : '${panel.imageWidth}x${panel.imageHeight}',
+              isExpanded: true,
+              decoration: InputDecoration(
+                labelText: t('comic.panelSize'),
+                border: const OutlineInputBorder(),
+              ),
+              items: comicSizePresets
+                  .map((size) => DropdownMenuItem(
+                        value: '${size.width}x${size.height}',
+                        child: Text('${size.width}×${size.height}'),
+                      ))
+                  .toList(),
+              onChanged: (value) {
+                final size = comicSizePresets
+                    .where((item) => '${item.width}x${item.height}' == value)
+                    .firstOrNull;
+                if (size == null) return;
+                panel
+                  ..imageWidth = size.width
+                  ..imageHeight = size.height;
+                controller.changed();
+              },
+            ),
+          ],
+          if (controller.project.preciseReferences.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _PanelPreciseReferences(panel: panel),
+          ],
           const SizedBox(height: 8),
           SwitchListTile.adaptive(
             contentPadding: EdgeInsets.zero,
@@ -550,6 +836,117 @@ class _PanelEditor extends StatelessWidget {
             _ParamsEditor(params: panel.params, onChanged: controller.changed),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _PanelPreciseReferences extends StatelessWidget {
+  final ComicPanel panel;
+  const _PanelPreciseReferences({required this.panel});
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = context.watch<ComicController>();
+    final t = _text(context);
+    return Card.outlined(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(t('comic.precisePanelHeading'),
+                style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: 3),
+            Text(t('comic.precisePanelHint'),
+                style: Theme.of(context).textTheme.bodySmall),
+            const SizedBox(height: 8),
+            for (final asset in controller.project.preciseReferences)
+              Builder(builder: (context) {
+                final matches = panel.preciseReferences
+                    .where((item) => item.referenceId == asset.id)
+                    .toList();
+                final selection = matches.isEmpty ? null : matches.first;
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Column(
+                      children: [
+                        CheckboxListTile(
+                          contentPadding: EdgeInsets.zero,
+                          value: selection != null,
+                          onChanged: (value) => controller.togglePanelReference(
+                              panel, asset, value == true),
+                          secondary: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.file(File(asset.filePath),
+                                width: 48,
+                                height: 48,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) =>
+                                    const Icon(Icons.broken_image_outlined)),
+                          ),
+                          title: Text(asset.name,
+                              maxLines: 1, overflow: TextOverflow.ellipsis),
+                        ),
+                        if (selection != null) ...[
+                          DropdownButtonFormField<String>(
+                            value: selection.type,
+                            isExpanded: true,
+                            decoration: const InputDecoration(
+                                border: OutlineInputBorder()),
+                            items: [
+                              DropdownMenuItem(
+                                  value: 'character',
+                                  child: Text(t('comic.preciseCharacter'))),
+                              DropdownMenuItem(
+                                  value: 'style',
+                                  child: Text(t('comic.preciseStyle'))),
+                              DropdownMenuItem(
+                                  value: 'character&style',
+                                  child: Text(t('comic.preciseBoth'))),
+                            ],
+                            onChanged: (value) {
+                              selection.type = value ?? 'character';
+                              controller.changed();
+                            },
+                          ),
+                          _ReferenceSlider(
+                            label: t('comic.preciseStrength'),
+                            value: selection.strength,
+                            onChanged: (value) {
+                              selection.strength = value;
+                              controller.changed();
+                            },
+                          ),
+                          _ReferenceSlider(
+                            label: t('comic.preciseFidelity'),
+                            value: selection.fidelity,
+                            onChanged: (value) {
+                              selection
+                                ..fidelity = value
+                                ..informationExtracted = value;
+                              controller.changed();
+                            },
+                          ),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              onPressed: () => controller.resetPanelReference(
+                                  selection, asset),
+                              child: Text(t('comic.preciseReset')),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                );
+              }),
+          ],
+        ),
       ),
     );
   }

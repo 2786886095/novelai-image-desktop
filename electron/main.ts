@@ -22,6 +22,8 @@ import {
   exportTagComicSelectedZip,
   generateComicPanel,
   generateTagComicCandidate,
+  importTagComicReference,
+  deleteTagComicReference,
   generateArtistLabImage,
   promoteArtistLabFavorite,
   deleteArtistLabTemporary,
@@ -101,6 +103,7 @@ import type {
   ComicGeneratePanelRequest,
   TagComicExportZipRequest,
   TagComicGenerateRequest,
+  TagComicReferenceImportRequest,
   DirectorTool,
   I2IParams,
   NAIInpaintModel,
@@ -478,6 +481,16 @@ function registerIpc() {
     "tagComic:generateCandidate",
     (_event, request: TagComicGenerateRequest) =>
       generateTagComicCandidate(request),
+  );
+  ipcMain.handle(
+    "tagComic:importReference",
+    (_event, request: TagComicReferenceImportRequest) =>
+      importTagComicReference(request),
+  );
+  ipcMain.handle(
+    "tagComic:deleteReference",
+    (_event, projectId: string, referenceId: string) =>
+      deleteTagComicReference(projectId, referenceId),
   );
   ipcMain.handle(
     "tagComic:exportSelectedZip",

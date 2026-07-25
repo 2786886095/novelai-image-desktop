@@ -77,6 +77,9 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
   final _width = TextEditingController(text: '832');
   final _height = TextEditingController(text: '1216');
   final _negative = TextEditingController();
+  final _weightTuneInput = TextEditingController();
+  final _weightTuneCount = TextEditingController(text: '8');
+  final _weightVariation = TextEditingController(text: '20');
   final _scrollController = ScrollController();
   GenerateParams _generationParams = GenerateParams();
   List<ArtistTagRecord> _pool = const [];
@@ -89,6 +92,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
   bool _cancelled = false;
   bool _showFavorites = false;
   String _message = '';
+  String _copiedAction = '';
   int _drawSeed = Random.secure().nextInt(0x7fffffff);
 
   void _setStateKeepingScroll(VoidCallback update) {
@@ -424,6 +428,77 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     }
   }
 
+  Map<String, String> _tuneText(String language) {
+    switch (normalizeAppLocaleCode(language)) {
+      case 'zh-TW':
+        return {
+          'title': '既有畫師串權重微調',
+          'hint': '保持畫師名單與順序不變，只在原權重上下隨機浮動。無權重標籤按 1.0 處理。',
+          'input': '貼上畫師串',
+          'count': '候選組數',
+          'variation': '權重浮動（±%）',
+          'generate': '生成權重微調候選',
+          'noArtists': '未識別到 artist: 畫師標籤。',
+          'copied': '已複製 ✓',
+          'copiedArtists': '畫師串已複製到剪貼簿。',
+          'copiedFull': '完整提示詞已複製到剪貼簿。',
+        };
+      case 'en-US':
+        return {
+          'title': 'Fine-tune an existing artist string',
+          'hint':
+              'Keep artist names and order fixed while varying only their weights around the originals. Unweighted tags use 1.0.',
+          'input': 'Paste artist string',
+          'count': 'Candidate groups',
+          'variation': 'Weight variation (±%)',
+          'generate': 'Generate weight-tuned candidates',
+          'noArtists': 'No artist: tags were recognized.',
+          'copied': 'Copied ✓',
+          'copiedArtists': 'Artist string copied to the clipboard.',
+          'copiedFull': 'Full prompt copied to the clipboard.',
+        };
+      case 'ja-JP':
+        return {
+          'title': '既存の画家列の重みを微調整',
+          'hint': '画家名と順序を固定し、元の重みだけを上下に変化させます。重みなしは 1.0 とします。',
+          'input': '画家列を貼り付け',
+          'count': '候補グループ数',
+          'variation': '重み変動（±%）',
+          'generate': '重み候補を生成',
+          'noArtists': 'artist: 画家タグを認識できませんでした。',
+          'copied': 'コピー済み ✓',
+          'copiedArtists': '画家列をクリップボードへコピーしました。',
+          'copiedFull': '完全プロンプトをクリップボードへコピーしました。',
+        };
+      case 'ko-KR':
+        return {
+          'title': '기존 작가 문자열 가중치 미세 조정',
+          'hint': '작가 목록과 순서는 유지하고 원래 가중치만 위아래로 변경합니다. 가중치가 없으면 1.0입니다.',
+          'input': '작가 문자열 붙여넣기',
+          'count': '후보 그룹 수',
+          'variation': '가중치 변동 (±%)',
+          'generate': '가중치 후보 생성',
+          'noArtists': 'artist: 작가 태그를 인식하지 못했습니다.',
+          'copied': '복사됨 ✓',
+          'copiedArtists': '작가 문자열을 클립보드에 복사했습니다.',
+          'copiedFull': '전체 프롬프트를 클립보드에 복사했습니다.',
+        };
+      default:
+        return {
+          'title': '已有画师串权重微调',
+          'hint': '保持画师名单和顺序不变，只在原权重上下随机浮动。无权重标签按 1.0 处理。',
+          'input': '粘贴画师串',
+          'count': '候选组数',
+          'variation': '权重浮动（±%）',
+          'generate': '生成权重微调候选',
+          'noArtists': '没有识别到 artist: 画师标签。',
+          'copied': '已复制 ✓',
+          'copiedArtists': '画师串已复制到剪贴板。',
+          'copiedFull': '完整提示词已复制到剪贴板。',
+        };
+    }
+  }
+
   void _syncParameterControllers() {
     _width.text = '${_generationParams.width}';
     _height.text = '${_generationParams.height}';
@@ -456,6 +531,12 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     _artistCount.text = '${prefs.getInt('${_prefsPrefix}artistCount') ?? 8}';
     _poolSize.text = '${prefs.getInt('${_prefsPrefix}poolSize') ?? 1000}';
     _seed.text = '${prefs.getInt('${_prefsPrefix}seed') ?? 246813579}';
+    _weightTuneInput.text =
+        prefs.getString('${_prefsPrefix}weightTuneInput') ?? '';
+    _weightTuneCount.text =
+        '${prefs.getInt('${_prefsPrefix}weightTuneCount') ?? 8}';
+    _weightVariation.text =
+        '${prefs.getInt('${_prefsPrefix}weightVariation') ?? 20}';
     try {
       final saved = prefs.getString('${_prefsPrefix}generationParams');
       _generationParams = saved == null
@@ -498,6 +579,12 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
         _positive(_artistCount, 8).clamp(1, 20).toInt());
     await prefs.setInt('${_prefsPrefix}poolSize', _poolLimit());
     await prefs.setInt('${_prefsPrefix}seed', int.tryParse(_seed.text) ?? 0);
+    await prefs.setString(
+        '${_prefsPrefix}weightTuneInput', _weightTuneInput.text);
+    await prefs.setInt('${_prefsPrefix}weightTuneCount',
+        _positive(_weightTuneCount, 8).clamp(1, 1000).toInt());
+    await prefs.setInt('${_prefsPrefix}weightVariation',
+        _positive(_weightVariation, 20).clamp(1, 100).toInt());
     _generationParams
       ..width = _snapDimension(_width.text, 832)
       ..height = _snapDimension(_height.text, 1216)
@@ -645,6 +732,64 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     await _save();
   }
 
+  Future<void> _generateWeightTuning() async {
+    if (_running || _base.text.trim().isEmpty) return;
+    final recipes = randomizeArtistWeights(
+      artistPrompt: _weightTuneInput.text,
+      count: _positive(_weightTuneCount, 8).clamp(1, 1000).toInt(),
+      variationPercent:
+          _positive(_weightVariation, 20).clamp(1, 100).toDouble(),
+      drawSeed: Random.secure().nextInt(0x7fffffff),
+    );
+    if (recipes.isEmpty) {
+      setState(() => _message =
+          _tuneText(context.read<AppState>().settings.language)['noArtists']!);
+      return;
+    }
+    await _clearCurrent();
+    final batch = List<_Result>.generate(
+      recipes.length,
+      (index) => _Result(recipes[index], sequence: index + 1),
+    );
+    _setStateKeepingScroll(() {
+      _planned = recipes;
+      _results
+        ..clear()
+        ..addAll(batch);
+      _running = true;
+      _cancelled = false;
+      _message = '';
+      _showFavorites = false;
+    });
+    await _save();
+    for (final result in batch) {
+      if (_cancelled) break;
+      await _generateOne(result);
+    }
+    if (mounted) {
+      _setStateKeepingScroll(() {
+        _running = false;
+        _message = _cancelled
+            ? _text(context.read<AppState>().settings.language)['stop']!
+            : _text(context.read<AppState>().settings.language)['done']!;
+      });
+    }
+    await _save();
+  }
+
+  Future<void> _copyResult(String action, String value, String message) async {
+    await Clipboard.setData(ClipboardData(text: value));
+    if (!mounted) return;
+    setState(() => _copiedAction = action);
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+    await Future<void>.delayed(const Duration(milliseconds: 1800));
+    if (mounted && _copiedAction == action) {
+      setState(() => _copiedAction = '');
+    }
+  }
+
   Future<void> _retry(_Result result) async {
     if (_running || result.status != 'failed') return;
     _setStateKeepingScroll(() => _running = true);
@@ -693,6 +838,9 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     _width.dispose();
     _height.dispose();
     _negative.dispose();
+    _weightTuneInput.dispose();
+    _weightTuneCount.dispose();
+    _weightVariation.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -762,6 +910,9 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           ),
           itemBuilder: (context, index) {
             final result = items[index];
+            final tuneText = _tuneText(app.settings.language);
+            final artistsAction = 'artists:${result.recipe.id}';
+            final fullAction = 'full:${result.recipe.id}';
             return Card(
               key: ValueKey(result.recipe.id),
               clipBehavior: Clip.antiAlias,
@@ -820,17 +971,28 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                       runSpacing: 6,
                       children: [
                         OutlinedButton.icon(
-                          onPressed: () => Clipboard.setData(
-                              ClipboardData(text: result.recipe.artistPrompt)),
+                          onPressed: () => _copyResult(
+                            artistsAction,
+                            artistPromptWithTrailingComma(
+                                result.recipe.artistPrompt),
+                            tuneText['copiedArtists']!,
+                          ),
                           icon: const Icon(Icons.people_alt_outlined, size: 16),
-                          label: Text(text['copyArtists']!),
+                          label: Text(_copiedAction == artistsAction
+                              ? tuneText['copied']!
+                              : text['copyArtists']!),
                         ),
                         OutlinedButton.icon(
-                          onPressed: () => Clipboard.setData(
-                              ClipboardData(text: result.recipe.prompt)),
+                          onPressed: () => _copyResult(
+                            fullAction,
+                            fullArtistRecipePrompt(result.recipe, _base.text),
+                            tuneText['copiedFull']!,
+                          ),
                           icon:
                               const Icon(Icons.content_copy_outlined, size: 16),
-                          label: Text(text['copyFull']!),
+                          label: Text(_copiedAction == fullAction
+                              ? tuneText['copied']!
+                              : text['copyFull']!),
                         ),
                       ],
                     ),
@@ -919,6 +1081,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     final app = context.watch<AppState>();
     final text = _text(app.settings.language);
     final parameterText = _parameterText(app.settings.language);
+    final tuneText = _tuneText(app.settings.language);
     final favoriteFolderLabel = switch (app.settings.language) {
       'zh-TW' => '收藏夾',
       'en-US' => 'Favorites',
@@ -1529,6 +1692,75 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
               ),
             ),
           ],
+          const SizedBox(height: 12),
+          Card(
+            clipBehavior: Clip.antiAlias,
+            child: ExpansionTile(
+              key: const PageStorageKey<String>('artist-weight-tuner'),
+              initiallyExpanded: false,
+              title: Text(tuneText['title']!),
+              subtitle: Text(tuneText['hint']!),
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+                  child: LayoutBuilder(builder: (context, constraints) {
+                    final fieldWidth = constraints.maxWidth >= 700
+                        ? (constraints.maxWidth - 12) / 2
+                        : constraints.maxWidth;
+                    return Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      crossAxisAlignment: WrapCrossAlignment.end,
+                      children: [
+                        SizedBox(
+                          width: constraints.maxWidth,
+                          child: TextField(
+                            controller: _weightTuneInput,
+                            minLines: 3,
+                            maxLines: 7,
+                            decoration:
+                                InputDecoration(labelText: tuneText['input']),
+                            onChanged: (_) => _save(),
+                          ),
+                        ),
+                        SizedBox(
+                          width: fieldWidth,
+                          child: TextField(
+                            controller: _weightTuneCount,
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly
+                            ],
+                            decoration:
+                                InputDecoration(labelText: tuneText['count']),
+                            onChanged: (_) => _save(),
+                          ),
+                        ),
+                        SizedBox(
+                          width: fieldWidth,
+                          child: TextField(
+                            controller: _weightVariation,
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly
+                            ],
+                            decoration: InputDecoration(
+                                labelText: tuneText['variation']),
+                            onChanged: (_) => _save(),
+                          ),
+                        ),
+                        FilledButton.icon(
+                          onPressed: _running ? null : _generateWeightTuning,
+                          icon: const Icon(Icons.tune),
+                          label: Text(tuneText['generate']!),
+                        ),
+                      ],
+                    );
+                  }),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );

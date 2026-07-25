@@ -9,15 +9,21 @@ import {
   type GenerateParams,
   type TagComicCandidate,
   type TagComicPanel,
+  type TagComicPanelReference,
   type TagComicProject,
+  type TagComicReferenceAsset,
 } from "../types";
 import {
   TAG_COMIC_STORAGE_KEY,
+  TAG_COMIC_SIZE_PRESETS,
+  TagComicSizeImportError,
   createTagComicPanel,
   createTagComicProject,
   mergeTagComicParams,
   normalizeTagComicProject,
   parseTagComicImport,
+  parseTagComicSizeImport,
+  tagComicSizeTemplate,
 } from "./tag-comic";
 
 type Step = "import" | "global" | "panels" | "generate";
@@ -54,6 +60,37 @@ const COPY = {
     globalNegative: "全局负面提示词",
     initialCount: "每个提示词初次生成次数",
     initialCountHint: "默认 1，范围 1–10；完成后仍可继续追加候选图。",
+    sizeMode: "分镜图片尺寸",
+    sizeUniform: "统一尺寸",
+    sizePerPanel: "逐分镜尺寸",
+    sizeModeHint: "逐分镜模式按分镜顺序逐行匹配，只接受下方列出的合法尺寸。",
+    sizesInput: "逐分镜尺寸（一行一个）",
+    sizesPlaceholder: "832×1216\n1216×832\n1024×1024",
+    sizeTemplate: "生成尺寸模板",
+    importSizes: "导入并匹配尺寸",
+    sizesApplied: "已为 {count} 个分镜匹配尺寸。",
+    sizeEmpty: "请先填写逐分镜尺寸。",
+    sizeCount: "尺寸数量不一致：需要 {expected} 行，实际 {actual} 行。",
+    sizeBlank: "尺寸第 {line} 行为空。",
+    sizeFormat: "尺寸第 {line} 行格式错误，请使用“宽×高”。",
+    sizeUnsupported: "尺寸第 {line} 行不是软件支持的 NovelAI 尺寸。",
+    sizesIncomplete: "部分分镜尚未指定合法尺寸，请重新导入完整尺寸列表。",
+    panelSize: "本分镜尺寸",
+    preciseHeading: "全局精准参考图",
+    preciseHint: "参考图会复制到项目资源目录。最多 5 张，仅 NovelAI V4.5 可用。",
+    preciseUpload: "添加精准参考图",
+    preciseEmpty: "尚未添加精准参考图。",
+    preciseCharacter: "角色",
+    preciseStyle: "风格",
+    preciseBoth: "角色与风格",
+    preciseStrength: "参考强度",
+    preciseFidelity: "信息保真度",
+    preciseRemove: "移除",
+    precisePanelHeading: "本分镜使用的精准参考",
+    precisePanelHint: "勾选后可为当前分镜单独调整类型、强度和保真度。",
+    preciseReset: "恢复全局值",
+    preciseV45Only: "精准参考只能用于 NovelAI V4.5 模型。",
+    preciseImportFailed: "精准参考图导入失败：{message}",
     syncParams: "同步生成页参数",
     model: "模型",
     width: "宽度",
@@ -138,6 +175,37 @@ const COPY = {
     globalNegative: "全域負面提示詞",
     initialCount: "每個提示詞初次生成次數",
     initialCountHint: "預設 1，範圍 1–10；完成後仍可繼續追加候選圖。",
+    sizeMode: "分鏡圖片尺寸",
+    sizeUniform: "統一尺寸",
+    sizePerPanel: "逐分鏡尺寸",
+    sizeModeHint: "逐分鏡模式依順序逐行配對，只接受下方列出的合法尺寸。",
+    sizesInput: "逐分鏡尺寸（一行一個）",
+    sizesPlaceholder: "832×1216\n1216×832\n1024×1024",
+    sizeTemplate: "產生尺寸範本",
+    importSizes: "匯入並配對尺寸",
+    sizesApplied: "已為 {count} 個分鏡配對尺寸。",
+    sizeEmpty: "請先填寫逐分鏡尺寸。",
+    sizeCount: "尺寸數量不一致：需要 {expected} 行，實際 {actual} 行。",
+    sizeBlank: "尺寸第 {line} 行為空。",
+    sizeFormat: "尺寸第 {line} 行格式錯誤，請使用「寬×高」。",
+    sizeUnsupported: "尺寸第 {line} 行不是軟體支援的 NovelAI 尺寸。",
+    sizesIncomplete: "部分分鏡尚未指定合法尺寸，請重新匯入完整尺寸清單。",
+    panelSize: "本分鏡尺寸",
+    preciseHeading: "全域精準參考圖",
+    preciseHint: "參考圖會複製到專案資源目錄。最多 5 張，僅 NovelAI V4.5 可用。",
+    preciseUpload: "加入精準參考圖",
+    preciseEmpty: "尚未加入精準參考圖。",
+    preciseCharacter: "角色",
+    preciseStyle: "風格",
+    preciseBoth: "角色與風格",
+    preciseStrength: "參考強度",
+    preciseFidelity: "資訊保真度",
+    preciseRemove: "移除",
+    precisePanelHeading: "本分鏡使用的精準參考",
+    precisePanelHint: "勾選後可為目前分鏡單獨調整類型、強度與保真度。",
+    preciseReset: "恢復全域值",
+    preciseV45Only: "精準參考只能用於 NovelAI V4.5 模型。",
+    preciseImportFailed: "精準參考圖匯入失敗：{message}",
     syncParams: "同步生成頁參數",
     model: "模型",
     width: "寬度",
@@ -226,6 +294,37 @@ const COPY = {
     initialCount: "Initial images per prompt",
     initialCountHint:
       "Default 1, range 1–10. More candidates can be appended after completion.",
+    sizeMode: "Panel image sizes",
+    sizeUniform: "Uniform size",
+    sizePerPanel: "Per-panel sizes",
+    sizeModeHint: "Per-panel mode matches one line to each panel in order and accepts only the listed NovelAI sizes.",
+    sizesInput: "Panel sizes (one per line)",
+    sizesPlaceholder: "832×1216\n1216×832\n1024×1024",
+    sizeTemplate: "Create size template",
+    importSizes: "Import and match sizes",
+    sizesApplied: "Matched sizes to {count} panels.",
+    sizeEmpty: "Enter panel sizes first.",
+    sizeCount: "Size count mismatch: expected {expected} lines, received {actual}.",
+    sizeBlank: "Size line {line} is blank.",
+    sizeFormat: "Size line {line} is invalid. Use width×height.",
+    sizeUnsupported: "Size line {line} is not a supported NovelAI size.",
+    sizesIncomplete: "Some panels do not have a supported size. Import a complete size list again.",
+    panelSize: "Panel size",
+    preciseHeading: "Global precise references",
+    preciseHint: "References are copied into project resources. Up to 5; NovelAI V4.5 only.",
+    preciseUpload: "Add precise references",
+    preciseEmpty: "No precise references added.",
+    preciseCharacter: "Character",
+    preciseStyle: "Style",
+    preciseBoth: "Character & style",
+    preciseStrength: "Reference strength",
+    preciseFidelity: "Information fidelity",
+    preciseRemove: "Remove",
+    precisePanelHeading: "Precise references for this panel",
+    precisePanelHint: "Select references and tune type, strength, and fidelity for this panel.",
+    preciseReset: "Reset to global",
+    preciseV45Only: "Precise Reference requires a NovelAI V4.5 model.",
+    preciseImportFailed: "Could not import precise reference: {message}",
     syncParams: "Sync Generate settings",
     model: "Model",
     width: "Width",
@@ -313,6 +412,37 @@ const COPY = {
     globalNegative: "全体ネガティブプロンプト",
     initialCount: "各プロンプトの初回生成枚数",
     initialCountHint: "既定 1、範囲 1～10。完了後も候補を追加できます。",
+    sizeMode: "コマ画像サイズ",
+    sizeUniform: "共通サイズ",
+    sizePerPanel: "コマ別サイズ",
+    sizeModeHint: "コマ別モードは順番に1行ずつ対応し、一覧内の NovelAI 対応サイズのみ受け付けます。",
+    sizesInput: "コマ別サイズ（1行1件）",
+    sizesPlaceholder: "832×1216\n1216×832\n1024×1024",
+    sizeTemplate: "サイズ雛形を作成",
+    importSizes: "サイズを読み込んで対応",
+    sizesApplied: "{count} コマにサイズを対応しました。",
+    sizeEmpty: "先にコマ別サイズを入力してください。",
+    sizeCount: "サイズ数が一致しません。必要 {expected} 行、実際 {actual} 行です。",
+    sizeBlank: "サイズの {line} 行目が空です。",
+    sizeFormat: "サイズの {line} 行目が不正です。「幅×高さ」で入力してください。",
+    sizeUnsupported: "サイズの {line} 行目は対応している NovelAI サイズではありません。",
+    sizesIncomplete: "サイズ未設定のコマがあります。完全なサイズ一覧を再読み込みしてください。",
+    panelSize: "このコマのサイズ",
+    preciseHeading: "共通精密参照画像",
+    preciseHint: "参照画像はプロジェクト資源へコピーされます。最大5枚、NovelAI V4.5専用です。",
+    preciseUpload: "精密参照画像を追加",
+    preciseEmpty: "精密参照画像はありません。",
+    preciseCharacter: "キャラクター",
+    preciseStyle: "スタイル",
+    preciseBoth: "キャラクターとスタイル",
+    preciseStrength: "参照強度",
+    preciseFidelity: "情報忠実度",
+    preciseRemove: "削除",
+    precisePanelHeading: "このコマの精密参照",
+    precisePanelHint: "選択後、このコマだけ種類・強度・忠実度を調整できます。",
+    preciseReset: "共通値に戻す",
+    preciseV45Only: "精密参照は NovelAI V4.5 モデル専用です。",
+    preciseImportFailed: "精密参照画像を読み込めません：{message}",
     syncParams: "生成画面の設定を同期",
     model: "モデル",
     width: "幅",
@@ -401,6 +531,37 @@ const COPY = {
     initialCount: "프롬프트당 최초 생성 수",
     initialCountHint:
       "기본 1, 범위 1~10. 완료 후 후보를 계속 추가할 수 있습니다.",
+    sizeMode: "컷 이미지 크기",
+    sizeUniform: "통일 크기",
+    sizePerPanel: "컷별 크기",
+    sizeModeHint: "컷별 모드는 순서대로 한 줄씩 연결하며 목록의 NovelAI 지원 크기만 허용합니다.",
+    sizesInput: "컷별 크기 (한 줄에 하나)",
+    sizesPlaceholder: "832×1216\n1216×832\n1024×1024",
+    sizeTemplate: "크기 템플릿 만들기",
+    importSizes: "크기 가져오기 및 연결",
+    sizesApplied: "{count}개 컷에 크기를 연결했습니다.",
+    sizeEmpty: "먼저 컷별 크기를 입력하세요.",
+    sizeCount: "크기 수가 맞지 않습니다. 필요 {expected}줄, 실제 {actual}줄입니다.",
+    sizeBlank: "크기 {line}번째 줄이 비어 있습니다.",
+    sizeFormat: "크기 {line}번째 줄 형식이 잘못되었습니다. 너비×높이를 사용하세요.",
+    sizeUnsupported: "크기 {line}번째 줄은 지원되는 NovelAI 크기가 아닙니다.",
+    sizesIncomplete: "일부 컷에 지원 크기가 없습니다. 전체 크기 목록을 다시 가져오세요.",
+    panelSize: "이 컷 크기",
+    preciseHeading: "전체 정밀 참조 이미지",
+    preciseHint: "참조 이미지는 프로젝트 리소스에 복사됩니다. 최대 5장, NovelAI V4.5 전용입니다.",
+    preciseUpload: "정밀 참조 추가",
+    preciseEmpty: "추가된 정밀 참조가 없습니다.",
+    preciseCharacter: "캐릭터",
+    preciseStyle: "스타일",
+    preciseBoth: "캐릭터 및 스타일",
+    preciseStrength: "참조 강도",
+    preciseFidelity: "정보 충실도",
+    preciseRemove: "제거",
+    precisePanelHeading: "이 컷의 정밀 참조",
+    precisePanelHint: "선택 후 이 컷의 유형, 강도, 충실도를 개별 조정할 수 있습니다.",
+    preciseReset: "전체 값으로 복원",
+    preciseV45Only: "정밀 참조는 NovelAI V4.5 모델에서만 사용할 수 있습니다.",
+    preciseImportFailed: "정밀 참조를 가져오지 못했습니다: {message}",
     syncParams: "생성 화면 설정 동기화",
     model: "모델",
     width: "너비",
@@ -512,6 +673,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
   });
   const [step, setStep] = useState<Step>("import");
   const [bulkText, setBulkText] = useState("");
+  const [sizeText, setSizeText] = useState("");
   const [activePanelId, setActivePanelId] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [expandedCandidates, setExpandedCandidates] = useState<Set<string>>(
@@ -613,12 +775,18 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
       )
     )
       return;
+    const defaultSize = {
+      width: project.globalParams.width,
+      height: project.globalParams.height,
+    };
     patchProject({
-      panels: items.map((item, index) =>
-        createTagComicPanel(item.prompt, index + 1, item.title),
-      ),
+      panels: items.map((item, index) => ({
+        ...createTagComicPanel(item.prompt, index + 1, item.title),
+        imageSize: project.sizeMode === "perPanel" ? defaultSize : undefined,
+      })),
       historyGroupId: undefined,
     });
+    setSizeText("");
     setActivePanelId("");
     setToast(format(language, "imported", { count: items.length }));
     setStep("global");
@@ -675,7 +843,15 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
   }
 
   function exportProjectJson() {
-    const blob = new Blob([JSON.stringify(project, null, 2)], {
+    const portableProject = {
+      ...project,
+      preciseReferences: [],
+      panels: project.panels.map((panel) => ({
+        ...panel,
+        preciseReferences: [],
+      })),
+    };
+    const blob = new Blob([JSON.stringify(portableProject, null, 2)], {
       type: "application/json",
     });
     const url = URL.createObjectURL(blob);
@@ -690,6 +866,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
     if (!window.confirm(text(language, "confirmNew"))) return;
     setProject(createTagComicProject(currentParams));
     setBulkText("");
+    setSizeText("");
     setActivePanelId("");
     setStep("import");
   }
@@ -704,12 +881,179 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
   }
 
   function addPanel() {
-    const panel = createTagComicPanel("", panels.length + 1);
+    const panel = {
+      ...createTagComicPanel("", panels.length + 1),
+      imageSize:
+        project.sizeMode === "perPanel"
+          ? {
+              width: project.globalParams.width,
+              height: project.globalParams.height,
+            }
+          : undefined,
+    };
     setProject((current) => ({
       ...current,
       panels: [...current.panels, panel],
     }));
     setActivePanelId(panel.id);
+  }
+
+  async function importPreciseReferences(files: FileList | null) {
+    if (!files?.length) return;
+    const capacity = Math.max(0, 5 - project.preciseReferences.length);
+    for (const file of Array.from(files).slice(0, capacity)) {
+      const result = await window.naiDesktop.tagComicImportReference({
+        projectId: project.id,
+        sourcePath: window.naiDesktop.getPathForFile(file),
+      });
+      if (!result.ok || !result.asset) {
+        setToast(
+          format(language, "preciseImportFailed", { message: result.message }),
+        );
+        continue;
+      }
+      setProject((current) => ({
+        ...current,
+        preciseReferences: [...current.preciseReferences, result.asset!],
+      }));
+    }
+  }
+
+  function patchPreciseReference(
+    referenceId: string,
+    patch: Partial<
+      Pick<
+        TagComicReferenceAsset,
+        "type" | "strength" | "fidelity" | "informationExtracted"
+      >
+    >,
+  ) {
+    setProject((current) => ({
+      ...current,
+      preciseReferences: current.preciseReferences.map((item) =>
+        item.id === referenceId ? { ...item, ...patch } : item,
+      ),
+    }));
+  }
+
+  async function removePreciseReference(referenceId: string) {
+    await window.naiDesktop.tagComicDeleteReference(project.id, referenceId);
+    setProject((current) => ({
+      ...current,
+      preciseReferences: current.preciseReferences.filter(
+        (item) => item.id !== referenceId,
+      ),
+      panels: current.panels.map((panel) => ({
+        ...panel,
+        preciseReferences: panel.preciseReferences.filter(
+          (item) => item.referenceId !== referenceId,
+        ),
+      })),
+    }));
+  }
+
+  function togglePanelReference(
+    panelId: string,
+    asset: TagComicReferenceAsset,
+    enabled: boolean,
+  ) {
+    patchPanel(panelId, (panel) => ({
+      ...panel,
+      preciseReferences: enabled
+        ? [
+            ...panel.preciseReferences.filter(
+              (item) => item.referenceId !== asset.id,
+            ),
+            {
+              referenceId: asset.id,
+              type: asset.type,
+              strength: asset.strength,
+              fidelity: asset.fidelity,
+              informationExtracted: asset.informationExtracted,
+            },
+          ]
+        : panel.preciseReferences.filter(
+            (item) => item.referenceId !== asset.id,
+          ),
+    }));
+  }
+
+  function patchPanelReference(
+    panelId: string,
+    referenceId: string,
+    patch: Partial<TagComicPanelReference>,
+  ) {
+    patchPanel(panelId, (panel) => ({
+      ...panel,
+      preciseReferences: panel.preciseReferences.map((item) =>
+        item.referenceId === referenceId ? { ...item, ...patch } : item,
+      ),
+    }));
+  }
+
+  function sizeImportMessage(error: unknown) {
+    if (!(error instanceof TagComicSizeImportError)) {
+      return error instanceof Error ? error.message : String(error);
+    }
+    if (error.code === "empty") return text(language, "sizeEmpty");
+    if (error.code === "count") {
+      return format(language, "sizeCount", {
+        expected: error.expected ?? panels.length,
+        actual: error.actual ?? 0,
+      });
+    }
+    const key = error.code === "blank"
+      ? "sizeBlank"
+      : error.code === "format"
+        ? "sizeFormat"
+        : "sizeUnsupported";
+    return format(language, key, { line: error.line ?? "?" });
+  }
+
+  function setSizeMode(sizeMode: TagComicProject["sizeMode"]) {
+    const fallback = {
+      width: project.globalParams.width,
+      height: project.globalParams.height,
+    };
+    patchProject({
+      sizeMode,
+      panels:
+        sizeMode === "perPanel"
+          ? project.panels.map((panel) => ({
+              ...panel,
+              imageSize: panel.imageSize ?? fallback,
+            }))
+          : project.panels,
+    });
+  }
+
+  function createSizeTemplate() {
+    if (!panels.length) {
+      setToast(text(language, "noTags"));
+      return;
+    }
+    setSizeText(
+      tagComicSizeTemplate(panels.length, {
+        width: project.globalParams.width,
+        height: project.globalParams.height,
+      }),
+    );
+  }
+
+  function importPanelSizes() {
+    try {
+      const sizes = parseTagComicSizeImport(sizeText, panels.length);
+      patchProject({
+        sizeMode: "perPanel",
+        panels: project.panels.map((panel, index) => ({
+          ...panel,
+          imageSize: sizes[index],
+        })),
+      });
+      setToast(format(language, "sizesApplied", { count: sizes.length }));
+    } catch (error) {
+      setToast(sizeImportMessage(error));
+    }
   }
 
   function movePanel(panelId: string, direction: -1 | 1) {
@@ -749,6 +1093,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
         steps: params.steps,
         smea: params.smea,
         smeaDyn: params.smeaDyn,
+        precise: panel.preciseReferences.length > 0,
       });
       let value = cache.get(key);
       if (value == null) {
@@ -761,6 +1106,21 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
             negativePrompt: "",
           },
           batchCount: 1,
+          extras: {
+            vibeImages: [],
+            charCaptions: [],
+            preciseReferences: panel.preciseReferences.length
+              ? [
+                  {
+                    base64: "",
+                    type: "character",
+                    strength: 1,
+                    fidelity: 1,
+                    informationExtracted: 1,
+                  },
+                ]
+              : [],
+          },
           account,
         });
         if (!result.ok || typeof result.amount !== "number") return null;
@@ -789,6 +1149,12 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
       globalStylePrompt: project.globalStylePrompt,
       panelPrompt: panel.prompt,
       globalNegativePrompt: project.globalNegativePrompt,
+      preciseReferences: panel.preciseReferences.flatMap((selection) => {
+        const asset = project.preciseReferences.find(
+          (item) => item.id === selection.referenceId,
+        );
+        return asset ? [{ ...selection, filePath: asset.filePath }] : [];
+      }),
     });
     const item = result.items[0];
     if (!mountedRef.current) return;
@@ -841,6 +1207,22 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
 
   async function startQueue(tasks: QueueTask[]) {
     if (queueRef.current.running || !tasks.length) return;
+    if (
+      project.sizeMode === "perPanel" &&
+      panels.some((panel) => !panel.imageSize)
+    ) {
+      setToast(text(language, "sizesIncomplete"));
+      return;
+    }
+    const usesPrecise = tasks.some((task) =>
+      panels.some(
+        (panel) => panel.id === task.panelId && panel.preciseReferences.length,
+      ),
+    );
+    if (usesPrecise && !project.globalParams.model.includes("4-5")) {
+      setToast(text(language, "preciseV45Only"));
+      return;
+    }
     const missing = tasks
       .map((task) => panels.find((panel) => panel.id === task.panelId))
       .find((panel) => panel && !panel.prompt.trim());
@@ -1038,6 +1420,119 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
               />
             </label>
           </div>
+          <div className="tag-comic-size-settings">
+            <div className="tag-comic-size-mode" role="group" aria-label={text(language, "sizeMode")}>
+              <b>{text(language, "sizeMode")}</b>
+              <button
+                type="button"
+                className={clsx(project.sizeMode === "uniform" && "active")}
+                onClick={() => setSizeMode("uniform")}
+              >
+                {text(language, "sizeUniform")}
+              </button>
+              <button
+                type="button"
+                className={clsx(project.sizeMode === "perPanel" && "active")}
+                onClick={() => setSizeMode("perPanel")}
+              >
+                {text(language, "sizePerPanel")}
+              </button>
+            </div>
+            <p>{text(language, "sizeModeHint")}</p>
+            {project.sizeMode === "perPanel" && (
+              <>
+                <label>
+                  <span>{text(language, "sizesInput")}</span>
+                  <textarea
+                    value={sizeText}
+                    onChange={(event) => setSizeText(event.target.value)}
+                    placeholder={text(language, "sizesPlaceholder")}
+                    rows={Math.min(10, Math.max(4, panels.length))}
+                  />
+                </label>
+                <div className="tag-comic-size-presets">
+                  {TAG_COMIC_SIZE_PRESETS.map((size) => (
+                    <code key={`${size.width}x${size.height}`}>
+                      {size.width}×{size.height}
+                    </code>
+                  ))}
+                </div>
+                <div className="tag-comic-actions">
+                  <Button variant="secondary" onClick={createSizeTemplate}>
+                    {text(language, "sizeTemplate")}
+                  </Button>
+                  <Button
+                    variant="primary"
+                    onClick={importPanelSizes}
+                    disabled={!sizeText.trim() || !panels.length}
+                  >
+                    {text(language, "importSizes")}
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+          <div className="tag-comic-reference-settings">
+            <div className="tag-comic-section-heading compact">
+              <div>
+                <h3>{text(language, "preciseHeading")}</h3>
+                <p>{text(language, "preciseHint")}</p>
+              </div>
+              <label className="tag-comic-file-button">
+                <Icon name="folderOpen" />
+                <span>{text(language, "preciseUpload")}</span>
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  multiple
+                  disabled={project.preciseReferences.length >= 5}
+                  onChange={(event) => {
+                    void importPreciseReferences(event.target.files);
+                    event.currentTarget.value = "";
+                  }}
+                />
+              </label>
+            </div>
+            {!project.preciseReferences.length ? (
+              <p>{text(language, "preciseEmpty")}</p>
+            ) : (
+              <div className="tag-comic-reference-grid">
+                {project.preciseReferences.map((reference) => (
+                  <article key={reference.id}>
+                    <img src={reference.fileUrl} alt={reference.name} />
+                    <div>
+                      <b title={reference.name}>{reference.name}</b>
+                      <select
+                        value={reference.type}
+                        onChange={(event) =>
+                          patchPreciseReference(reference.id, {
+                            type: event.target.value as TagComicReferenceAsset["type"],
+                          })
+                        }
+                      >
+                        <option value="character">{text(language, "preciseCharacter")}</option>
+                        <option value="style">{text(language, "preciseStyle")}</option>
+                        <option value="character&style">{text(language, "preciseBoth")}</option>
+                      </select>
+                      <label>
+                        <span>{text(language, "preciseStrength")} · {reference.strength.toFixed(2)}</span>
+                        <input type="range" min={0} max={1} step={0.01} value={reference.strength}
+                          onChange={(event) => patchPreciseReference(reference.id, { strength: Number(event.target.value) })} />
+                      </label>
+                      <label>
+                        <span>{text(language, "preciseFidelity")} · {reference.fidelity.toFixed(2)}</span>
+                        <input type="range" min={0} max={1} step={0.01} value={reference.fidelity}
+                          onChange={(event) => patchPreciseReference(reference.id, { fidelity: Number(event.target.value), informationExtracted: Number(event.target.value) })} />
+                      </label>
+                      <Button variant="ghost" onClick={() => void removePreciseReference(reference.id)}>
+                        {text(language, "preciseRemove")}
+                      </Button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </div>
           <GlobalParams
             language={language}
             params={project.globalParams}
@@ -1146,6 +1641,101 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                     rows={10}
                   />
                 </label>
+                {project.sizeMode === "perPanel" && (
+                  <label>
+                    <span>{text(language, "panelSize")}</span>
+                    <select
+                      value={
+                        activePanel.imageSize
+                          ? `${activePanel.imageSize.width}x${activePanel.imageSize.height}`
+                          : ""
+                      }
+                      onChange={(event) => {
+                        const size = TAG_COMIC_SIZE_PRESETS.find(
+                          (item) => `${item.width}x${item.height}` === event.target.value,
+                        );
+                        if (!size) return;
+                        patchPanel(activePanel.id, (panel) => ({
+                          ...panel,
+                          imageSize: { ...size },
+                        }));
+                      }}
+                    >
+                      {TAG_COMIC_SIZE_PRESETS.map((size) => (
+                        <option
+                          key={`${size.width}x${size.height}`}
+                          value={`${size.width}x${size.height}`}
+                        >
+                          {size.width}×{size.height}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+                {project.preciseReferences.length > 0 && (
+                  <section className="tag-comic-panel-references">
+                    <h4>{text(language, "precisePanelHeading")}</h4>
+                    <p>{text(language, "precisePanelHint")}</p>
+                    {project.preciseReferences.map((asset) => {
+                      const selection = activePanel.preciseReferences.find(
+                        (item) => item.referenceId === asset.id,
+                      );
+                      return (
+                        <article key={asset.id} className={clsx(selection && "selected")}>
+                          <label className="tag-comic-reference-check">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(selection)}
+                              onChange={(event) =>
+                                togglePanelReference(
+                                  activePanel.id,
+                                  asset,
+                                  event.target.checked,
+                                )
+                              }
+                            />
+                            <img src={asset.fileUrl} alt={asset.name} />
+                            <b>{asset.name}</b>
+                          </label>
+                          {selection && (
+                            <div className="tag-comic-reference-tuning">
+                              <select
+                                value={selection.type}
+                                onChange={(event) =>
+                                  patchPanelReference(activePanel.id, asset.id, {
+                                    type: event.target.value as TagComicPanelReference["type"],
+                                  })
+                                }
+                              >
+                                <option value="character">{text(language, "preciseCharacter")}</option>
+                                <option value="style">{text(language, "preciseStyle")}</option>
+                                <option value="character&style">{text(language, "preciseBoth")}</option>
+                              </select>
+                              <label>
+                                <span>{text(language, "preciseStrength")} · {selection.strength.toFixed(2)}</span>
+                                <input type="range" min={0} max={1} step={0.01} value={selection.strength}
+                                  onChange={(event) => patchPanelReference(activePanel.id, asset.id, { strength: Number(event.target.value) })} />
+                              </label>
+                              <label>
+                                <span>{text(language, "preciseFidelity")} · {selection.fidelity.toFixed(2)}</span>
+                                <input type="range" min={0} max={1} step={0.01} value={selection.fidelity}
+                                  onChange={(event) => patchPanelReference(activePanel.id, asset.id, { fidelity: Number(event.target.value), informationExtracted: Number(event.target.value) })} />
+                              </label>
+                              <Button variant="ghost" onClick={() => patchPanelReference(activePanel.id, asset.id, {
+                                type: asset.type,
+                                strength: asset.strength,
+                                fidelity: asset.fidelity,
+                                informationExtracted: asset.informationExtracted,
+                              })}>
+                                {text(language, "preciseReset")}
+                              </Button>
+                            </div>
+                          )}
+                        </article>
+                      );
+                    })}
+                  </section>
+                )}
                 <Toggle
                   checked={activePanel.paramsOverride.enabled}
                   onChange={(enabled) =>

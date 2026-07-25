@@ -2,7 +2,10 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Button } from "./components/ui";
 import {
   expandArtistRecipeComparisons,
+  formatArtistFullPrompt,
+  formatArtistString,
   generatePopularArtistRecipes,
+  randomizeArtistRecipeWeights,
   type ArtistRecipeComparison,
   type ArtistRecipeVariant,
   type GeneratedArtistRecipe,
@@ -39,6 +42,9 @@ type RandomSession = {
   drawSeed: number;
   mutateAuxiliary: boolean;
   biasFavorites: boolean;
+  weightTuneInput: string;
+  weightTuneCount: number;
+  weightVariation: number;
   generationParams: GenerateParams;
   results: RandomResult[];
   favorites: RandomResult[];
@@ -163,6 +169,59 @@ const PARAM_TEXT = {
   },
 } satisfies Record<AppLanguage, Record<string, string>>;
 
+const TUNE_TEXT = {
+  "zh-CN": {
+    title: "已有画师串权重微调",
+    hint: "保持画师名单和顺序不变，只在原权重上下随机浮动。无权重标签按 1.0 处理。",
+    input: "粘贴画师串",
+    count: "候选组数",
+    variation: "权重浮动（±%）",
+    generate: "生成权重微调候选",
+    noArtists: "没有识别到 artist: 画师标签。",
+    copied: "已复制 ✓",
+  },
+  "zh-TW": {
+    title: "既有畫師串權重微調",
+    hint: "保持畫師名單與順序不變，只在原權重上下隨機浮動。無權重標籤按 1.0 處理。",
+    input: "貼上畫師串",
+    count: "候選組數",
+    variation: "權重浮動（±%）",
+    generate: "生成權重微調候選",
+    noArtists: "未識別到 artist: 畫師標籤。",
+    copied: "已複製 ✓",
+  },
+  "en-US": {
+    title: "Fine-tune an existing artist string",
+    hint: "Keep artist names and order fixed while varying only their weights around the originals. Unweighted tags use 1.0.",
+    input: "Paste artist string",
+    count: "Candidate groups",
+    variation: "Weight variation (±%)",
+    generate: "Generate weight-tuned candidates",
+    noArtists: "No artist: tags were recognized.",
+    copied: "Copied ✓",
+  },
+  "ja-JP": {
+    title: "既存の画家列の重みを微調整",
+    hint: "画家名と順序を固定し、元の重みだけを上下に変化させます。重みなしは 1.0 とします。",
+    input: "画家列を貼り付け",
+    count: "候補グループ数",
+    variation: "重み変動（±%）",
+    generate: "重み候補を生成",
+    noArtists: "artist: 画家タグを認識できませんでした。",
+    copied: "コピー済み ✓",
+  },
+  "ko-KR": {
+    title: "기존 작가 문자열 가중치 미세 조정",
+    hint: "작가 목록과 순서는 유지하고 원래 가중치만 위아래로 변경합니다. 가중치가 없으면 1.0입니다.",
+    input: "작가 문자열 붙여넣기",
+    count: "후보 그룹 수",
+    variation: "가중치 변동 (±%)",
+    generate: "가중치 후보 생성",
+    noArtists: "artist: 작가 태그를 인식하지 못했습니다.",
+    copied: "복사됨 ✓",
+  },
+} satisfies Record<AppLanguage, Record<string, string>>;
+
 function freshSeed(): number {
   const values = new Uint32Array(1);
   globalThis.crypto?.getRandomValues?.(values);
@@ -214,12 +273,15 @@ function restore(inherited: GenerateParams): RandomSession {
       drawSeed: positiveInteger(raw?.drawSeed, freshSeed()),
       mutateAuxiliary: raw?.mutateAuxiliary === true,
       biasFavorites: raw?.biasFavorites === true,
+      weightTuneInput: typeof raw?.weightTuneInput === "string" ? raw.weightTuneInput : "",
+      weightTuneCount: positiveInteger(raw?.weightTuneCount, 8),
+      weightVariation: Math.max(0, Math.min(100, Number(raw?.weightVariation) || 20)),
       generationParams: normalizeGenerationParams(raw?.generationParams, inherited),
       results: Array.isArray(raw?.results) ? raw.results : [],
       favorites: Array.isArray(raw?.favorites) ? raw.favorites : [],
     };
   } catch {
-    sessionCache = { basePrompt: inherited.positivePrompt, auxiliaryPrompt: "", count: 8, artistCount: 8, poolSize: 1000, seed: 246813579, drawSeed: freshSeed(), mutateAuxiliary: false, biasFavorites: false, generationParams: normalizeGenerationParams(undefined, inherited), results: [], favorites: [] };
+    sessionCache = { basePrompt: inherited.positivePrompt, auxiliaryPrompt: "", count: 8, artistCount: 8, poolSize: 1000, seed: 246813579, drawSeed: freshSeed(), mutateAuxiliary: false, biasFavorites: false, weightTuneInput: "", weightTuneCount: 8, weightVariation: 20, generationParams: normalizeGenerationParams(undefined, inherited), results: [], favorites: [] };
   }
   return sessionCache;
 }
@@ -232,6 +294,7 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
   const refreshHistory = useAppStore((state) => state.refreshHistory);
   const text = TEXT[language];
   const paramText = PARAM_TEXT[language];
+  const tuneText = TUNE_TEXT[language];
   const ucLabels = paramText.ucValues.split("|");
   const favoriteFolderLabel = {
     "zh-CN": "收藏夹",
@@ -245,6 +308,8 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
   const [loading, setLoading] = useState(false);
   const [running, setRunning] = useState(false);
   const [message, setMessage] = useState("");
+  const [copiedAction, setCopiedAction] = useState("");
+  const copiedTimerRef = useRef<number | null>(null);
   const [showFavorites, setShowFavorites] = useState(
     () => localStorage.getItem("langbai.artist-lab.random.view.v1") === "favorites",
   );
@@ -289,6 +354,11 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
       showFavorites ? "favorites" : "results",
     );
   }, [showFavorites]);
+  useEffect(() => () => {
+    if (copiedTimerRef.current !== null) {
+      window.clearTimeout(copiedTimerRef.current);
+    }
+  }, []);
 
   const interpolate = (value: string, values: Record<string, unknown>) => Object.entries(values).reduce((out, [key, replacement]) => out.replaceAll(`{${key}}`, String(replacement)), value);
   const categoryLabels = useMemo(() => {
@@ -361,28 +431,18 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
     }
   };
 
-  const run = async (fromLikes = false) => {
-    if (pool.length === 0) return setMessage(text.needPool);
-    if (!session.basePrompt.trim()) return setMessage(text.needPrompt);
-    if (fromLikes && likedArtists.length === 0) return setMessage(text.needLikes);
+  const runRecipes = async (
+    recipes: GeneratedArtistRecipe[],
+    compareMutations: boolean,
+  ) => {
     await clearCurrent();
-    const recipes = fromLikes ? generatePopularArtistRecipes(pool, {
-      count: session.count,
-      minArtists: session.artistCount,
-      maxArtists: session.artistCount,
-      auxiliaryPrompt: session.auxiliaryPrompt,
-      mutateAuxiliary: session.mutateAuxiliary,
-      favoriteArtists: likedArtists,
-      favoriteMutations: session.mutateAuxiliary ? likedMutations : undefined,
-      random: createArtistLabRandom(freshSeed()),
-    }) : planned;
     const batchId = freshSeed().toString(36);
-    const comparisons = expandArtistRecipeComparisons(recipes, session.mutateAuxiliary);
+    const comparisons = expandArtistRecipeComparisons(recipes, compareMutations);
     const pending: RandomResult[] = comparisons.map((recipe, index) => ({
       ...recipe,
       id: `${batchId}-${recipe.id}`,
       pairId: `${batchId}-${recipe.pairId}`,
-      sequence: session.mutateAuxiliary ? Math.floor(index / 2) + 1 : index + 1,
+      sequence: compareMutations ? Math.floor(index / 2) + 1 : index + 1,
       status: "pending",
     }));
     rememberScrollTop();
@@ -397,6 +457,35 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
     setRunning(false);
     await Promise.allSettled([refreshAccount()]);
     if (!cancelRef.current) setMessage(text.complete);
+  };
+
+  const run = async (fromLikes = false) => {
+    if (pool.length === 0) return setMessage(text.needPool);
+    if (!session.basePrompt.trim()) return setMessage(text.needPrompt);
+    if (fromLikes && likedArtists.length === 0) return setMessage(text.needLikes);
+    const recipes = fromLikes ? generatePopularArtistRecipes(pool, {
+      count: session.count,
+      minArtists: session.artistCount,
+      maxArtists: session.artistCount,
+      auxiliaryPrompt: session.auxiliaryPrompt,
+      mutateAuxiliary: session.mutateAuxiliary,
+      favoriteArtists: likedArtists,
+      favoriteMutations: session.mutateAuxiliary ? likedMutations : undefined,
+      random: createArtistLabRandom(freshSeed()),
+    }) : planned;
+    await runRecipes(recipes, session.mutateAuxiliary);
+  };
+
+  const runWeightTuning = async () => {
+    if (!session.basePrompt.trim()) return setMessage(text.needPrompt);
+    const recipes = randomizeArtistRecipeWeights(
+      session.weightTuneInput,
+      session.weightTuneCount,
+      session.weightVariation,
+      createArtistLabRandom(freshSeed()),
+    );
+    if (!recipes.length) return setMessage(tuneText.noArtists);
+    await runRecipes(recipes, false);
   };
 
   const retry = async (result: RandomResult) => {
@@ -444,11 +533,23 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
 
   const batchDone = session.results.filter((item) => item.status === "done" || item.status === "failed").length;
   const variantOf = (result: Pick<RandomResult, "variant" | "mutations">): ArtistRecipeVariant => result.variant ?? (result.mutations.length > 0 ? "mutated" : "plain");
-  const artistString = (result: Pick<RandomResult, "artists">) => result.artists.map((artist) => `${artist.weight}::artist:${artist.name} ::`).join(", ");
+  const artistString = (result: Pick<RandomResult, "artists">) => formatArtistString(result.artists);
+  const fullPrompt = (result: RandomResult) => formatArtistFullPrompt(result, session.basePrompt);
+  const copyResult = async (value: string, action: string, feedback: string) => {
+    await navigator.clipboard.writeText(value);
+    setCopiedAction(action);
+    setMessage(feedback);
+    if (copiedTimerRef.current !== null) window.clearTimeout(copiedTimerRef.current);
+    copiedTimerRef.current = window.setTimeout(() => {
+      setCopiedAction((current) => current === action ? "" : current);
+    }, 1800);
+  };
   const renderMutationTerms = (result: GeneratedArtistRecipe) => result.mutations.length > 0 && <div className="artist-mutation-block"><b>{text.mutation}</b><div>{result.mutations.map((token, index) => <span key={`${token.value}-${index}`}><small>{categoryLabels[token.category]}</small>{token.weight}::{token.value}</span>)}</div></div>;
   const renderCard = (result: RandomResult, favorite = false) => {
     const variant = variantOf(result);
-    return <article key={result.id} className={`artist-candidate ${result.status} artist-variant-${variant}`}><header className="artist-candidate-header"><b>#{String(result.sequence).padStart(2, "0")} · {variant === "mutated" ? text.variantMutated : text.variantPlain}</b><span>{favorite || result.liked ? text.saved : text[result.status]}</span></header><div className="artist-candidate-media">{result.image ? <img src={result.image.fileUrl} alt={`${variant === "mutated" ? text.variantMutated : text.variantPlain}: ${result.prompt}`} /> : <div className="artist-candidate-placeholder">{text[result.status]}</div>}</div>{renderMutationTerms(result)}<div className="artist-string-block"><div className="artist-copy-actions"><button type="button" onClick={() => { void navigator.clipboard.writeText(artistString(result)); setMessage(text.copiedArtists); }}>{text.copyArtists}</button><button type="button" onClick={() => { void navigator.clipboard.writeText(result.prompt); setMessage(text.copiedFull); }}>{text.copyFull}</button></div><code>{result.prompt}</code></div><small className={`artist-error ${result.error ? "" : "empty"}`} title={result.error}>{result.error ?? "\u00a0"}</small><div className="artist-candidate-actions">{favorite ? <Button variant="ghost" onClick={() => void removeFavorite(result)}>{text.remove}</Button> : result.status === "failed" ? <Button variant="ghost" disabled={running} onClick={() => void retry(result)}>{text.retry}</Button> : <Button variant="ghost" disabled={result.status !== "done" || result.liked || result.saving} onClick={() => void saveFavorite(result)}>{result.saving ? text.saving : result.liked ? text.saved : text.like}</Button>}<Button variant="primary" disabled={result.status !== "done"} onClick={() => { applyParams({ ...session.generationParams, positivePrompt: session.basePrompt.trim(), stylePrompt: result.prompt, seed: session.seed, seedMode: "fixed" }); setMessage(text.applied); }}>{text.apply}</Button></div></article>;
+    const artistCopyKey = `${result.id}:artists`;
+    const fullCopyKey = `${result.id}:full`;
+    return <article key={result.id} className={`artist-candidate ${result.status} artist-variant-${variant}`}><header className="artist-candidate-header"><b>#{String(result.sequence).padStart(2, "0")} · {variant === "mutated" ? text.variantMutated : text.variantPlain}</b><span>{favorite || result.liked ? text.saved : text[result.status]}</span></header><div className="artist-candidate-media">{result.image ? <img src={result.image.fileUrl} alt={`${variant === "mutated" ? text.variantMutated : text.variantPlain}: ${result.prompt}`} /> : <div className="artist-candidate-placeholder">{text[result.status]}</div>}</div>{renderMutationTerms(result)}<div className="artist-string-block"><div className="artist-copy-actions"><button type="button" className={copiedAction === artistCopyKey ? "copied" : ""} onClick={() => { void copyResult(artistString(result), artistCopyKey, text.copiedArtists); }}>{copiedAction === artistCopyKey ? tuneText.copied : text.copyArtists}</button><button type="button" className={copiedAction === fullCopyKey ? "copied" : ""} onClick={() => { void copyResult(fullPrompt(result), fullCopyKey, text.copiedFull); }}>{copiedAction === fullCopyKey ? tuneText.copied : text.copyFull}</button></div><code>{result.prompt}</code></div><small className={`artist-error ${result.error ? "" : "empty"}`} title={result.error}>{result.error ?? "\u00a0"}</small><div className="artist-candidate-actions">{favorite ? <Button variant="ghost" onClick={() => void removeFavorite(result)}>{text.remove}</Button> : result.status === "failed" ? <Button variant="ghost" disabled={running} onClick={() => void retry(result)}>{text.retry}</Button> : <Button variant="ghost" disabled={result.status !== "done" || result.liked || result.saving} onClick={() => void saveFavorite(result)}>{result.saving ? text.saving : result.liked ? text.saved : text.like}</Button>}<Button variant="primary" disabled={result.status !== "done"} onClick={() => { applyParams({ ...session.generationParams, positivePrompt: session.basePrompt.trim(), stylePrompt: result.prompt, seed: session.seed, seedMode: "fixed" }); setMessage(text.applied); }}>{text.apply}</Button></div></article>;
   };
 
   return <main ref={scrollRef} className="artist-lab random-artist-lab">
@@ -462,6 +563,15 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
       <label><span>{text.range}</span><input type="number" min={1} max={20} value={session.artistCount} onChange={(event) => patch({ artistCount: Math.min(20, positiveInteger(event.target.value, 1)) })} /></label>
       <label><span>{text.seed}</span><input type="number" min={0} value={session.seed} onChange={(event) => patch({ seed: Math.max(0, Math.floor(Number(event.target.value) || 0)) })} /></label>
     </section>
+    <details className="artist-lab-panel artist-weight-tuner">
+      <summary><span><b>{tuneText.title}</b><small>{tuneText.hint}</small></span></summary>
+      <div className="artist-weight-tuner-grid">
+        <label className="wide"><span>{tuneText.input}</span><textarea value={session.weightTuneInput} placeholder="1::artist:foo ::, 0.8::artist:bar ::," onChange={(event) => patch({ weightTuneInput: event.target.value })} /></label>
+        <label><span>{tuneText.count}</span><input type="number" min={1} value={session.weightTuneCount} onChange={(event) => patch({ weightTuneCount: positiveInteger(event.target.value, 1) })} /></label>
+        <label><span>{tuneText.variation}</span><input type="number" min={0} max={100} step={1} value={session.weightVariation} onChange={(event) => patch({ weightVariation: Math.max(0, Math.min(100, Number(event.target.value) || 0)) })} /></label>
+        <Button variant="primary" disabled={running || !session.weightTuneInput.trim()} onClick={() => void runWeightTuning()}>{tuneText.generate}</Button>
+      </div>
+    </details>
     <details className="artist-lab-panel random-generation-settings" open>
       <summary>
         <span>

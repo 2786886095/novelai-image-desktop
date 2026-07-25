@@ -206,6 +206,66 @@ function formatToken(token: ParsedRecipeToken): string {
   return `${roundWeight(token.weight)}::${token.value} ::`;
 }
 
+export function formatArtistString(
+  artists: readonly ArtistWeightedTag[],
+): string {
+  const value = artists
+    .map((artist) => `${roundWeight(artist.weight)}::artist:${artist.name} ::`)
+    .join(", ");
+  return value ? `${value},` : "";
+}
+
+export function formatArtistFullPrompt(
+  recipe: Pick<GeneratedArtistRecipe, "artists" | "mutations" | "auxiliary">,
+  basePrompt: string,
+): string {
+  const artistText = formatArtistString(recipe.artists);
+  const mutationText = recipe.mutations.map(formatToken).join(", ");
+  const auxiliaryText = recipe.auxiliary.map(formatToken).join(", ");
+  return [artistText.replace(/,$/, ""), mutationText, auxiliaryText, basePrompt.trim()]
+    .filter(Boolean)
+    .join(", ")
+    .trim();
+}
+
+export function randomizeArtistRecipeWeights(
+  input: string,
+  count: number,
+  variationPercent = 20,
+  random: () => number = Math.random,
+): GeneratedArtistRecipe[] {
+  const source = parseArtistRecipe(input)
+    .filter((token) => token.kind === "artist" && token.weight > 0)
+    .map((token) => ({
+      name: token.value.replace(/^artist\s*:/i, "").trim(),
+      weight: token.weight,
+    }))
+    .filter((artist) => artist.name);
+  if (!source.length) return [];
+  const total = Math.max(1, Math.floor(Number.isFinite(count) ? count : 1));
+  const ratio = Math.max(0, Math.min(100, variationPercent)) / 100;
+  return Array.from({ length: total }, (_, index) => {
+    const artists = source.map((artist) => ({
+      name: artist.name,
+      weight: roundWeight(
+        Math.max(
+          0.1,
+          Math.min(10, artist.weight * (1 + (random() * 2 - 1) * ratio)),
+        ),
+      ),
+    }));
+    const artistText = formatArtistString(artists).replace(/,$/, "");
+    return {
+      id: `weight-tune-${index + 1}-${artists.map((artist) => `${artist.name}@${artist.weight}`).join("+")}`,
+      artists,
+      auxiliary: [],
+      mutations: [],
+      basePrompt: artistText,
+      prompt: artistText,
+    };
+  });
+}
+
 function drawStyleMutations(
   random: () => number,
   favoriteMutations: StyleMutationToken[] = [],
@@ -270,7 +330,7 @@ export function generatePopularArtistRecipes(
     const mutations = options.mutateAuxiliary
       ? drawStyleMutations(random, options.favoriteMutations)
       : [];
-    const artistText = artists.map((artist) => `${artist.weight}::artist:${artist.name} ::`).join(", ");
+    const artistText = formatArtistString(artists).replace(/,$/, "");
     const auxiliaryText = auxiliary.map(formatToken).join(", ");
     const mutationText = mutations.map(formatToken).join(", ");
     const basePrompt = [artistText, auxiliaryText].filter(Boolean).join(", ");

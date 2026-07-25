@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   expandArtistRecipeComparisons,
+  formatArtistFullPrompt,
+  formatArtistString,
   generatePopularArtistRecipes,
   parseArtistRecipe,
+  randomizeArtistRecipeWeights,
 } from "./artist-recipe";
 import type { ArtistTagRecord } from "./artist-lab";
 
@@ -155,5 +158,40 @@ describe("artist recipe grammar", () => {
     });
     expect(recipes).toHaveLength(137);
     expect(new Set(recipes.map((recipe) => recipe.prompt)).size).toBe(137);
+  });
+
+  it("copies artist strings with a trailing comma and builds the full prompt in the requested order", () => {
+    const recipe = generatePopularArtistRecipes(pool, {
+      count: 1,
+      minArtists: 2,
+      maxArtists: 2,
+      auxiliaryPrompt: "year 2025",
+      mutateAuxiliary: true,
+      random: seeded(),
+    })[0];
+    const artistString = formatArtistString(recipe.artists);
+    const full = formatArtistFullPrompt(recipe, "1girl, smile");
+    expect(artistString.endsWith(",")).toBe(true);
+    expect(full.startsWith(artistString)).toBe(true);
+    expect(full.indexOf(recipe.mutations[0].value)).toBeLessThan(
+      full.indexOf("year 2025"),
+    );
+    expect(full.endsWith("1girl, smile")).toBe(true);
+  });
+
+  it("keeps artist order while randomizing only weights around the originals", () => {
+    const values = [0, 1, 0.25, 0.75];
+    let index = 0;
+    const recipes = randomizeArtistRecipeWeights(
+      "1::artist:foo ::, 2::artist:bar ::,",
+      2,
+      20,
+      () => values[index++],
+    );
+    expect(recipes).toHaveLength(2);
+    expect(recipes.every((recipe) => recipe.artists.map((artist) => artist.name).join(",") === "foo,bar")).toBe(true);
+    expect(recipes[0].artists.map((artist) => artist.weight)).toEqual([0.8, 2.4]);
+    expect(recipes[1].artists.map((artist) => artist.weight)).toEqual([0.9, 2.2]);
+    expect(randomizeArtistRecipeWeights("masterpiece, 1girl", 3)).toEqual([]);
   });
 });

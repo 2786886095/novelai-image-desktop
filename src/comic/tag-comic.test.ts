@@ -6,6 +6,8 @@ import {
   mergeTagComicParams,
   normalizeTagComicProject,
   parseTagComicImport,
+  parseTagComicSizeImport,
+  tagComicSizeTemplate,
 } from "./tag-comic";
 
 describe("tag-only comic projects", () => {
@@ -85,5 +87,73 @@ describe("tag-only comic projects", () => {
     });
     expect(project.globalNegativePrompt).toBe("lowres");
     expect(panel).not.toHaveProperty("localNegativePrompt");
+  });
+
+  it("imports one supported size per panel and applies it over global dimensions", () => {
+    const sizes = parseTagComicSizeImport(
+      "832×1216\n1216x832\n1024×1024",
+      3,
+    );
+    expect(sizes).toEqual([
+      { width: 832, height: 1216 },
+      { width: 1216, height: 832 },
+      { width: 1024, height: 1024 },
+    ]);
+    const project = createTagComicProject({
+      ...DEFAULT_PARAMS,
+      width: 1024,
+      height: 1024,
+    });
+    project.sizeMode = "perPanel";
+    const panel = createTagComicPanel("1girl", 1);
+    panel.imageSize = sizes[0];
+    expect(mergeTagComicParams(project, panel)).toMatchObject(sizes[0]);
+    expect(tagComicSizeTemplate(2, sizes[1])).toBe(
+      "1216×832\n1216×832",
+    );
+  });
+
+  it("rejects size count mismatches, blank rows, and unsupported sizes", () => {
+    expect(() => parseTagComicSizeImport("832×1216", 2)).toThrow(/count/);
+    expect(() =>
+      parseTagComicSizeImport("832×1216\n\n1024×1024", 3),
+    ).toThrow(/blank/);
+    expect(() =>
+      parseTagComicSizeImport("800×1200", 1),
+    ).toThrow(/unsupported/);
+  });
+
+  it("keeps local precise-reference resources only for trusted restores", () => {
+    const project = createTagComicProject();
+    project.preciseReferences.push({
+      id: "reference-1",
+      name: "hero.png",
+      filePath: "C:/project/references/hero.png",
+      fileUrl: "file:///C:/project/references/hero.png",
+      type: "character",
+      strength: 0.8,
+      fidelity: 0.7,
+      informationExtracted: 0.7,
+    });
+    const panel = createTagComicPanel("1girl", 1);
+    panel.preciseReferences.push({
+      referenceId: "reference-1",
+      type: "character&style",
+      strength: 0.6,
+      fidelity: 0.5,
+      informationExtracted: 0.5,
+    });
+    project.panels.push(panel);
+    const trusted = normalizeTagComicProject(project, DEFAULT_PARAMS, {
+      trustOutputs: true,
+    });
+    const imported = normalizeTagComicProject(project);
+    expect(trusted.preciseReferences).toHaveLength(1);
+    expect(trusted.panels[0].preciseReferences[0]).toMatchObject({
+      referenceId: "reference-1",
+      strength: 0.6,
+    });
+    expect(imported.preciseReferences).toEqual([]);
+    expect(imported.panels[0].preciseReferences).toEqual([]);
   });
 });

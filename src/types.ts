@@ -713,6 +713,42 @@ export interface ComicExportZipResult {
  * former story splitting, reference reverse, prompt conversion, or per-panel
  * negative-prompt fields. */
 export type TagComicPanelStatus = "ready" | "generating" | "done" | "failed";
+export type TagComicSizeMode = "uniform" | "perPanel";
+
+export interface TagComicImageSize {
+  width: number;
+  height: number;
+}
+
+export interface TagComicReferenceAsset {
+  id: string;
+  name: string;
+  filePath: string;
+  fileUrl: string;
+  type: PreciseReferenceType;
+  strength: number;
+  fidelity: number;
+  informationExtracted: number;
+}
+
+export interface TagComicPanelReference {
+  referenceId: string;
+  type: PreciseReferenceType;
+  strength: number;
+  fidelity: number;
+  informationExtracted: number;
+}
+
+export interface TagComicReferenceImportRequest {
+  projectId: string;
+  sourcePath: string;
+}
+
+export interface TagComicReferenceImportResult {
+  ok: boolean;
+  message: string;
+  asset?: TagComicReferenceAsset;
+}
 
 export interface TagComicCandidate {
   id: string;
@@ -728,6 +764,8 @@ export interface TagComicPanel {
   index: number;
   title: string;
   prompt: string;
+  imageSize?: TagComicImageSize;
+  preciseReferences: TagComicPanelReference[];
   paramsOverride: ComicPanelParamsOverride;
   status: TagComicPanelStatus;
   candidates: TagComicCandidate[];
@@ -742,8 +780,10 @@ export interface TagComicProject {
   historyGroupId?: string;
   globalStylePrompt: string;
   globalNegativePrompt: string;
+  sizeMode: TagComicSizeMode;
   initialGenerationCount: number;
   globalParams: GenerateParams;
+  preciseReferences: TagComicReferenceAsset[];
   panels: TagComicPanel[];
 }
 
@@ -757,6 +797,9 @@ export interface TagComicGenerateRequest {
   globalStylePrompt: string;
   panelPrompt: string;
   globalNegativePrompt: string;
+  preciseReferences: Array<
+    TagComicPanelReference & { filePath: string }
+  >;
 }
 
 export interface TagComicExportZipRequest {
@@ -1323,6 +1366,13 @@ export interface NaiDesktopApi {
   tagComicGenerateCandidate: (
     request: TagComicGenerateRequest,
   ) => Promise<GenerateResult>;
+  tagComicImportReference: (
+    request: TagComicReferenceImportRequest,
+  ) => Promise<TagComicReferenceImportResult>;
+  tagComicDeleteReference: (
+    projectId: string,
+    referenceId: string,
+  ) => Promise<{ ok: boolean }>;
   tagComicExportSelectedZip: (
     request: TagComicExportZipRequest,
   ) => Promise<ComicExportZipResult>;

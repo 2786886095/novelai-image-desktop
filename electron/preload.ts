@@ -11,6 +11,7 @@ import type {
   ComicGeneratePanelRequest,
   TagComicExportZipRequest,
   TagComicGenerateRequest,
+  TagComicReferenceImportRequest,
   DirectorTool,
   GenerateExtras,
   TagSuggestion,
@@ -165,6 +166,10 @@ contextBridge.exposeInMainWorld("naiDesktop", {
     ipcRenderer.invoke("comic:generatePanel", request),
   tagComicGenerateCandidate: (request: TagComicGenerateRequest) =>
     ipcRenderer.invoke("tagComic:generateCandidate", request),
+  tagComicImportReference: (request: TagComicReferenceImportRequest) =>
+    ipcRenderer.invoke("tagComic:importReference", request),
+  tagComicDeleteReference: (projectId: string, referenceId: string) =>
+    ipcRenderer.invoke("tagComic:deleteReference", projectId, referenceId),
   tagComicExportSelectedZip: (request: TagComicExportZipRequest) =>
     ipcRenderer.invoke("tagComic:exportSelectedZip", request),
   tuiwenImportFile: (request: TuiwenImportFileRequest) =>

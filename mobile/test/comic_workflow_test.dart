@@ -81,6 +81,32 @@ void main() {
     );
   });
 
+  test('local precise references survive trusted restore but not export', () {
+    final source = _project();
+    source.preciseReferences.add(ComicReferenceAsset(
+      id: 'reference-1',
+      name: 'hero.png',
+      filePath: '/project/references/hero.png',
+      strength: .8,
+    ));
+    source.panels.first.preciseReferences.add(ComicPanelReference(
+      referenceId: 'reference-1',
+      type: 'character&style',
+      strength: .6,
+      fidelity: .5,
+    ));
+    final trusted = ComicProject.fromJson(
+      source.toJson(),
+      GenerateParams(),
+      trustOutputs: true,
+    );
+    final portable = source.toJson(includeLocalReferences: false);
+    expect(trusted.preciseReferences, hasLength(1));
+    expect(trusted.panels.first.preciseReferences.single.strength, .6);
+    expect(portable['preciseReferences'], isEmpty);
+    expect((portable['panels'] as List).first['preciseReferences'], isEmpty);
+  });
+
   test('tag imports support text, titled JSON, and quoted CSV', () {
     expect(parseComicImport('one\ntwo').map((item) => item.$2), ['one', 'two']);
     expect(
@@ -97,6 +123,41 @@ void main() {
       ).single,
       ('Panel, One', '1girl, smile'),
     );
+  });
+
+  test('per-panel size import is strict and overrides global dimensions', () {
+    final sizes = parseComicSizeImport(
+      '832×1216\n1216x832\n1024×1024',
+      3,
+    );
+    expect(sizes.map((size) => '${size.width}x${size.height}'),
+        ['832x1216', '1216x832', '1024x1024']);
+    expect(comicSizeTemplate(2, sizes.first), '832×1216\n832×1216');
+    expect(
+      () => parseComicSizeImport('832×1216', 2),
+      throwsA(isA<ComicSizeImportException>()),
+    );
+    expect(
+      () => parseComicSizeImport('832×1216\n\n1024×1024', 3),
+      throwsA(isA<ComicSizeImportException>()),
+    );
+    expect(
+      () => parseComicSizeImport('800×1200', 1),
+      throwsA(isA<ComicSizeImportException>()),
+    );
+
+    final app = AppState();
+    final controller = ComicController(app)
+      ..project = _project()
+      ..loaded = true;
+    addTearDown(app.dispose);
+    addTearDown(controller.dispose);
+    controller.project
+      ..sizeMode = ComicSizeMode.perPanel
+      ..panels.first.imageWidth = 832
+      ..panels.first.imageHeight = 1216;
+    final params = controller.paramsFor(controller.project.panels.first);
+    expect((params.width, params.height), (832, 1216));
   });
 
   for (final viewport in <(String, Size)>[

@@ -126,4 +126,41 @@ void main() {
     ).single;
     expect(recipe.artists.length, 20);
   });
+
+  test('artist copy ends with comma and full prompt uses the requested order', () {
+    const recipe = ArtistRecipe(
+      'one',
+      '1::artist:foo ::, year 2025, 1.2::cinematic lighting ::',
+      ['foo'],
+      artistPrompt: '1::artist:foo ::',
+      basePrompt: '1::artist:foo ::, year 2025',
+      mutations: [StyleMutationTerm('lighting', 'cinematic lighting', 1.2)],
+    );
+    expect(artistPromptWithTrailingComma(recipe.artistPrompt),
+        '1::artist:foo ::,');
+    expect(
+      fullArtistRecipePrompt(recipe, '1girl, smile'),
+      '1::artist:foo ::, 1.2::cinematic lighting ::, year 2025, 1girl, smile',
+    );
+  });
+
+  test('weight tuning preserves artist order and changes only weights', () {
+    final recipes = randomizeArtistWeights(
+      artistPrompt: '1::artist:foo ::, 2::artist:bar ::,',
+      count: 4,
+      variationPercent: 20,
+      drawSeed: 42,
+    );
+    expect(recipes, hasLength(4));
+    expect(recipes.every((item) => item.artists.join(',') == 'foo,bar'), isTrue);
+    expect(recipes.every((item) => item.prompt.contains('artist:foo') && item.prompt.contains('artist:bar')), isTrue);
+    expect(
+      randomizeArtistWeights(
+        artistPrompt: 'masterpiece, 1girl',
+        count: 2,
+        drawSeed: 1,
+      ),
+      isEmpty,
+    );
+  });
 }

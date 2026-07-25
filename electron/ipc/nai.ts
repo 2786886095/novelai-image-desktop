@@ -28,6 +28,8 @@ import {
   type ComicReferenceKind,
   type TagComicExportZipRequest,
   type TagComicGenerateRequest,
+  type TagComicReferenceImportRequest,
+  type TagComicReferenceImportResult,
   type BatchRedrawRequest,
   type DirectorTool,
   type GenerateExtras,
@@ -3172,9 +3174,29 @@ export async function generateTagComicCandidate(
     groupId: historyGroup.id,
     folderName: sanitizeGroupFolderName(historyGroup.name),
   };
+  const preciseReferences: PreciseReferenceItem[] = [];
+  for (const reference of request.preciseReferences ?? []) {
+    try {
+      const filePath = path.resolve(reference.filePath);
+      const root = tagComicReferenceRoot(request.projectId);
+      if (!isInsideDir(filePath, root)) continue;
+      const buffer = await fs.readFile(filePath);
+      if (!isImageBuffer(buffer)) continue;
+      preciseReferences.push({
+        base64: buffer.toString("base64"),
+        type: reference.type,
+        strength: reference.strength,
+        fidelity: reference.fidelity,
+        informationExtracted: reference.informationExtracted,
+      });
+    } catch {
+      // A moved/deleted project resource is ignored; the renderer keeps the
+      // selection visible so the user can replace it deliberately.
+    }
+  }
   const result = await generateImage(
     params,
-    { vibeImages: [], charCaptions: [] },
+    { vibeImages: [], charCaptions: [], preciseReferences },
     { groupOverride },
   );
   if (result.ok && result.items.length > 0) {
@@ -3197,6 +3219,79 @@ export async function generateTagComicCandidate(
     });
   }
   return result;
+}
+
+function safeComicProjectId(projectId: unknown): string {
+  const value = String(projectId ?? "").trim();
+  if (!/^[a-zA-Z0-9_-]{1,100}$/.test(value)) {
+    throw new Error("Invalid comic project id");
+  }
+  return value;
+}
+
+function tagComicReferenceRoot(projectId: unknown): string {
+  return path.join(
+    app.getPath("userData"),
+    "comic-projects",
+    safeComicProjectId(projectId),
+    "references",
+  );
+}
+
+export async function importTagComicReference(
+  request: TagComicReferenceImportRequest,
+): Promise<TagComicReferenceImportResult> {
+  try {
+    const sourcePath = path.resolve(String(request?.sourcePath ?? ""));
+    const buffer = await fs.readFile(sourcePath);
+    if (!isImageBuffer(buffer)) {
+      return { ok: false, message: "Unsupported image file." };
+    }
+    const root = tagComicReferenceRoot(request.projectId);
+    await fs.mkdir(root, { recursive: true });
+    const id = crypto.randomUUID();
+    const ext = detectExt(buffer);
+    const filePath = path.join(root, `${id}.${ext}`);
+    await fs.writeFile(filePath, buffer);
+    return {
+      ok: true,
+      message: "Reference imported.",
+      asset: {
+        id,
+        name: path.basename(sourcePath),
+        filePath,
+        fileUrl: pathToFileURL(filePath).toString(),
+        type: "character",
+        strength: 1,
+        fidelity: 1,
+        informationExtracted: 1,
+      },
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+export async function deleteTagComicReference(
+  projectId: string,
+  referenceId: string,
+): Promise<{ ok: boolean }> {
+  try {
+    if (!/^[a-f0-9-]{20,}$/i.test(referenceId)) return { ok: false };
+    const root = tagComicReferenceRoot(projectId);
+    const names = await fs.readdir(root).catch(() => []);
+    await Promise.all(
+      names
+        .filter((name) => name.startsWith(`${referenceId}.`))
+        .map((name) => fs.unlink(path.join(root, name)).catch(() => undefined)),
+    );
+    return { ok: true };
+  } catch {
+    return { ok: false };
+  }
 }
 
 export async function generateArtistLabImage(
