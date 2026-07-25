@@ -227,6 +227,8 @@ export function modeUserInstruction(mode: ReversePromptMode, source: "reverse" |
     return [
       "Output mode: mixed NovelAI V4.5 prompt.",
       "Return exactly one English prompt line.",
+      "HARD TAG-SELECTION RULE: first use an exact mature Danbooru/NovelAI tag when one tag fully expresses an action, pose, or composition. Output it once and do not add decomposed synonyms or prose that repeats the same concept. Add only the shortest tags needed for details the mature tag does not cover.",
+      "Retrieved mature-tag candidates are evidence, not mandatory words: discard any candidate that is not an exact semantic match.",
       "Use Danbooru tags plus short natural-language clauses only where they clarify composition or interaction.",
       "Do not return pure prose only.",
       "Do not ignore the V4.5 multi-character `base | character 1 | character 2` format when multiple people are described.",
@@ -236,6 +238,8 @@ export function modeUserInstruction(mode: ReversePromptMode, source: "reverse" |
   return [
     "Output mode: Danbooru tag prompt.",
     "Return exactly one English prompt line.",
+    "HARD TAG-SELECTION RULE: first use an exact mature Danbooru/NovelAI tag when one tag fully expresses an action, pose, or composition. Output it once and do not add decomposed synonyms or prose that repeats the same concept. Add only the shortest tags needed for details the mature tag does not cover.",
+    "Retrieved mature-tag candidates are evidence, not mandatory words: discard any candidate that is not an exact semantic match.",
     "Use comma-separated Danbooru / NovelAI tags.",
     "Do not output a pure natural-language sentence.",
     "For multiple people, prefer V4.5 `base prompt | character prompt 1 | character prompt 2` with tag-style segments.",
@@ -282,6 +286,128 @@ export function modeNeedsRepair(mode: ReversePromptMode, output: string) {
   if (mode === "natural") return isLikelyTagListPrompt(cleaned);
   if (mode === "tags") return isLikelyNaturalLanguagePrompt(cleaned);
   return isLikelyNaturalLanguagePrompt(cleaned) && !isLikelyTagListPrompt(cleaned);
+}
+
+function normalizedTagToken(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/^[-+]?\d+(?:\.\d+)?::/, "")
+    .replace(/::$/, "")
+    .replace(/[{}\[\]]/g, "")
+    .replace(/_/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+const PROMPT_CONFLICTS: Array<[string, string]> = [
+  ["close-up", "full body"],
+  ["close up", "full body"],
+  ["upper body", "full body"],
+  ["cowboy shot", "upper body"],
+  ["cowboy shot", "full body"],
+  ["from front", "from behind"],
+  ["from above", "from below"],
+  ["sitting", "standing"],
+];
+
+const MATURE_TAG_DECOMPOSITIONS: Record<string, string[]> = {
+  dogeza: ["bowing", "hands on floor", "kneeling on floor"],
+  wariza: ["kneeling sit", "kneeling sitting", "sitting on feet"],
+  yokozuwari: ["legs to side", "sideways sitting"],
+  "cowboy shot": ["upper body", "full body", "medium shot"],
+  "dutch angle": ["tilted angle", "tilted composition"],
+  "crossed arms": ["arms crossed"],
+  "hands behind back": ["arms behind back"],
+};
+
+/**
+ * Deterministic, deliberately conservative checks. Semantic selection remains
+ * the model's job; this validator only flags high-confidence format, duplicate,
+ * conflict, and mature-tag decomposition mistakes.
+ */
+export function promptRuleViolations(
+  mode: ReversePromptMode,
+  output: string,
+  matureTags: string[] = [],
+) {
+  if (mode === "natural") return [];
+  const cleaned = cleanPromptOutput(output);
+  if (!cleaned) return [];
+  const issues = new Set<string>();
+  if (modeNeedsRepair(mode, cleaned)) {
+    issues.add(
+      mode === "tags"
+        ? "输出不是以逗号分隔的 Danbooru Tag 格式"
+        : "混合模式输出退化成了纯自然语言，缺少 Tag 主体",
+    );
+  }
+  const tokens = cleaned
+    .split(/[|,]/)
+    .map(normalizedTagToken)
+    .filter(Boolean);
+  const tokenSet = new Set<string>();
+  for (const token of tokens) {
+    if (tokenSet.has(token)) issues.add(`重复 Tag：${token}`);
+    tokenSet.add(token);
+  }
+  for (const [left, right] of PROMPT_CONFLICTS) {
+    if (tokenSet.has(left) && tokenSet.has(right)) {
+      issues.add(`互斥 Tag 同时出现：${left} / ${right}`);
+    }
+  }
+  const candidateSet = new Set(matureTags.map(normalizedTagToken));
+  for (const [mature, decompositions] of Object.entries(
+    MATURE_TAG_DECOMPOSITIONS,
+  )) {
+    if (!candidateSet.has(mature) || !tokenSet.has(mature)) continue;
+    for (const decomposition of decompositions) {
+      if (tokenSet.has(decomposition)) {
+        issues.add(`成熟 Tag ${mature} 已完整表达概念，不应再叠加 ${decomposition}`);
+      }
+    }
+  }
+  return [...issues];
+}
+
+export function promptRuleRepairSystemPrompt(
+  mode: ReversePromptMode,
+  knownCharacter = false,
+) {
+  const outputContract = knownCharacter
+    ? "只输出严格 JSON，且只能包含 namePrompt 与 featurePrompt 两个字符串字段；两份提示词都必须完成相同检查。"
+    : "只输出修复后的单行英文 Prompt，不要解释、标题或 Markdown。";
+  return [
+    "你是 NovelAI V4.5 提示词规则校验与定向修复器。不要重新创作画面，只修复明确列出的违规项。",
+    outputContract,
+    mode === "tags"
+      ? "保持 Danbooru Tag 模式，以英文逗号分隔；多人继续使用 base | character 1 | character 2。"
+      : "保持混合模式，以 Danbooru Tag 为主，只有构图或互动确需澄清时才保留最短自然语言。",
+    "成熟整词优先：一个成熟 Tag 已完整表达动作、姿态或构图时，只保留该 Tag 一次，删除拆解词、近义词和重复自然语言；未覆盖的关键差异才允许最少量补充。",
+    "候选成熟 Tag 不贴合原始输入时必须舍弃，不能硬套；不得新增原始输入或图片中没有的内容。",
+  ].join("\n");
+}
+
+export function buildPromptRuleRepairUserText(options: {
+  mode: ReversePromptMode;
+  originalInput: string;
+  draft: string;
+  violations: string[];
+  matureTags?: string[];
+}) {
+  return [
+    `输出模式：${options.mode}`,
+    "原始输入或反推范围：",
+    options.originalInput.trim(),
+    "待校验 Prompt：",
+    options.draft.trim(),
+    "程序检测到的违规项：",
+    ...options.violations.map((issue, index) => `${index + 1}. ${issue}`),
+    options.matureTags?.length
+      ? `本地检索到的成熟 Tag 候选（仅精确贴合时使用）：${options.matureTags.join(", ")}`
+      : "本次没有可靠成熟 Tag 候选，请采用最短基础组合。",
+    "只修复上述问题并执行最终去重、互斥检查；保留其余正确内容。",
+  ].join("\n\n");
 }
 
 export function modeRepairSystemPrompt(mode: ReversePromptMode) {

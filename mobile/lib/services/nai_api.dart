@@ -11,6 +11,7 @@ import '../billing/anlas.dart';
 import '../images/image_processing.dart';
 import '../models/nai_models.dart';
 import '../prompts/prompt_mode.dart';
+import '../tags/offline_tag_store.dart';
 import 'mcp_tag_client.dart';
 import 'prompt_codex_retrieval.dart';
 import 'proxy_http_client.dart';
@@ -75,6 +76,33 @@ class NaiApi {
   final List<AiCallLogEntry> _aiCallLog = [];
   final PromptCodexRetrievalService _promptCodex =
       PromptCodexRetrievalService();
+  final OfflineTagStore _offlineTags = OfflineTagStore();
+  static const _fallbackMatureTags = <(String, String)>[
+    ('girl', '女孩'),
+    ('boy', '男孩'),
+    ('blue eyes', '蓝眼睛'),
+    ('white hair', '白发'),
+    ('black hair', '黑发'),
+    ('classroom', '教室'),
+    ('desk', '桌子'),
+    ('drawing', '画画'),
+    ('hoodie', '连帽衫'),
+    ('juggling', '抛接球'),
+    ('full body', '全身'),
+    ('from front', '正面视角'),
+    ('looking at viewer', '看向观众'),
+    ('solo', '单人'),
+    ('2boys', '两个男孩'),
+    ('2girls', '两个女孩'),
+    ('smile', '微笑'),
+    ('standing', '站立'),
+    ('sitting', '坐着'),
+    ('sketchbook', '素描本'),
+    ('cowboy shot', '七分身构图'),
+    ('from above', '俯视'),
+    ('from below', '仰视'),
+    ('dutch angle', '荷兰角'),
+  ];
   // Every in-flight generate/i2i/inpaint/redraw/comic call registers its own
   // client here instead of sharing one field — otherwise feature A starting
   // while B is still running overwrites B's client, and A's own request never
@@ -840,87 +868,162 @@ class NaiApi {
       user: user,
       source: 'reverse',
       knownCharacter: knownCharacter,
-      recordLog: !settings.promptCodexEnhanceEnabled,
+      recordLog: !settings.promptCodexEnhanceEnabled &&
+          !(settings.promptRuleAutoRepairEnabled &&
+              mode != ReversePromptMode.natural),
     );
-    if (!settings.promptCodexEnhanceEnabled) return first;
+    final ruleRepairEnabled = settings.promptRuleAutoRepairEnabled &&
+        mode != ReversePromptMode.natural;
     if (!first.ok) {
-      _addAiLog(
-        'AI reverse · Codex enhancement (two stages)',
-        'vision',
-        settings.visionApiModel,
-        system,
-        _summarizeAiUser(user),
-        first,
-      );
+      if (settings.promptCodexEnhanceEnabled || ruleRepairEnabled) {
+        _addAiLog(
+          'AI reverse · merged validation task',
+          'vision',
+          settings.visionApiModel,
+          system,
+          _summarizeAiUser(user),
+          first,
+        );
+      }
       return first;
     }
 
-    final enhancement = await _promptCodex.retrieve(
-      [
-        hint,
-        first.text,
-        first.variants?.namePrompt ?? '',
-        first.variants?.featurePrompt ?? '',
-      ].where((value) => value.trim().isNotEmpty).join('\n'),
-      mode: 'reverse',
-      allowAdult: settings.promptCodexAdultEnabled,
-    );
-    final refineSystem = [
-      system,
-      if (enhancement.context.isNotEmpty) enhancement.context,
-      '这是法典增强的第二阶段。请以初步反推结果为事实边界，只校正结构、Tag、角色归属、互动方向、权重和冲突。不要新增图中未确认的主体、服装、动作或分级内容。',
-    ].join('\n\n');
-    final refineUser = [
-      '初步反推结果：',
+    final retrievalQuery = [
+      hint,
       first.text,
-      modeUserInstruction(mode, 'reverse'),
-      knownCharacterRuntimeInstruction(mode, 'reverse', knownCharacter),
-      '请只输出精修后的最终结果。',
-    ].join('\n\n');
-    final refined = await _promptChat(
-      settings: settings,
-      apiUrl: settings.visionApiUrl,
-      apiKey: apiKey,
-      model: settings.visionApiModel,
-      system: refineSystem,
-      user: refineUser,
-      source: 'reverse',
-      knownCharacter: knownCharacter,
-      recordLog: false,
-    );
-    final finalResult = AiTextResult(
-      ok: true,
-      message: refined.ok
-          ? 'Success (Personal Codex enhanced)'
-          : 'Codex refinement failed; kept the first-stage result',
-      text: refined.ok ? refined.text : first.text,
-      variants: refined.ok ? refined.variants : first.variants,
-      codexMatches: enhancement.matches,
-    );
-    final logResult = refined.ok
-        ? finalResult
-        : AiTextResult(
-            ok: true,
-            message: finalResult.message,
-            text:
-                '[Second-stage refinement failed; kept stage-one result: ${refined.message}]\n${first.text}',
-            variants: first.variants,
-            codexMatches: enhancement.matches,
-          );
-    _addAiLog(
-      'AI reverse · Codex enhancement (two stages)',
-      'vision',
-      settings.visionApiModel,
-      refineSystem,
-      [
-        _summarizeAiUser(user),
+      first.variants?.namePrompt ?? '',
+      first.variants?.featurePrompt ?? '',
+    ].where((value) => value.trim().isNotEmpty).join('\n');
+    final matureTags = mode == ReversePromptMode.natural ||
+            !(settings.promptCodexEnhanceEnabled || ruleRepairEnabled)
+        ? const <PromptCodexTagCandidate>[]
+        : await _matureTagCandidates(retrievalQuery);
+    final matureTagNames = matureTags.map((item) => item.tag).toList();
+    final enhancement = settings.promptCodexEnhanceEnabled
+        ? await _promptCodex.retrieve(
+            retrievalQuery,
+            mode: 'reverse',
+            allowAdult: settings.promptCodexAdultEnabled,
+            matureTags: matureTags,
+          )
+        : const PromptCodexEnhancement(matches: [], context: '');
+    var current = first;
+    var mergedSystem = system;
+    var mergedUser = _summarizeAiUser(user);
+    var notes = '';
+    if (settings.promptCodexEnhanceEnabled) {
+      final refineSystem = [
+        system,
+        if (enhancement.context.isNotEmpty) enhancement.context,
+        '这是法典增强的第二阶段。请以初步反推结果为事实边界，只校正结构、Tag、角色归属、互动方向、权重和冲突。不要新增图中未确认的主体、服装、动作或分级内容。',
+      ].join('\n\n');
+      final refineUser = [
+        '初步反推结果：',
+        first.text,
+        modeUserInstruction(mode, 'reverse'),
+        knownCharacterRuntimeInstruction(mode, 'reverse', knownCharacter),
+        '请只输出精修后的最终结果。',
+      ].join('\n\n');
+      final refined = await _promptChat(
+        settings: settings,
+        apiUrl: settings.visionApiUrl,
+        apiKey: apiKey,
+        model: settings.visionApiModel,
+        system: refineSystem,
+        user: refineUser,
+        source: 'reverse',
+        knownCharacter: knownCharacter,
+        recordLog: false,
+      );
+      if (refined.ok) {
+        current = refined;
+      } else {
+        notes +=
+            '[Second-stage refinement failed; kept stage one: ${refined.message}]\n';
+      }
+      mergedSystem = refineSystem;
+      mergedUser = [
+        mergedUser,
         '[Stage 1 draft]',
         first.text,
-        '[Local codex matches: ${enhancement.matches.length}]',
+        '[Local codex/mature-tag matches: ${enhancement.matches.length}]',
         ...enhancement.matches.map((item) => '${item.title}｜${item.source}'),
-      ].join('\n'),
-      logResult,
+      ].join('\n');
+    }
+    if (ruleRepairEnabled) {
+      final violations = <String>{
+        ...promptRuleViolations(mode, current.text, matureTagNames),
+        if (current.variants != null)
+          ...promptRuleViolations(
+              mode, current.variants!.namePrompt, matureTagNames),
+        if (current.variants != null)
+          ...promptRuleViolations(
+              mode, current.variants!.featurePrompt, matureTagNames),
+      }.toList();
+      if (violations.isNotEmpty) {
+        final repairSystem = promptRuleRepairSystemPrompt(mode, knownCharacter);
+        final repairUser = buildPromptRuleRepairUserText(
+          mode: mode,
+          originalInput: 'Reverse scope: $scopeText.\n$hint',
+          draft: current.variants == null
+              ? current.text
+              : jsonEncode(current.variants!.toJson()),
+          violations: violations,
+          matureTags: matureTagNames,
+        );
+        final repaired = await _promptChat(
+          settings: settings,
+          apiUrl: settings.visionApiUrl,
+          apiKey: apiKey,
+          model: settings.visionApiModel,
+          system: repairSystem,
+          user: [
+            user.first,
+            {'type': 'text', 'text': repairUser},
+          ],
+          source: 'reverse',
+          knownCharacter: knownCharacter,
+          recordLog: false,
+        );
+        if (repaired.ok) {
+          current = repaired;
+          notes +=
+              '[Rule check found ${violations.length} issue(s) and repaired them]\n';
+        } else {
+          notes +=
+              '[Rule check found ${violations.length} issue(s), but repair failed: ${repaired.message}]\n';
+        }
+        mergedSystem = '$mergedSystem\n\n$repairSystem';
+        mergedUser = '$mergedUser\n\n[Rule check]\n$repairUser';
+      } else {
+        notes += '[Rule check passed; no extra AI repair call]\n';
+      }
+    }
+    final finalResult = AiTextResult(
+      ok: true,
+      message: settings.promptCodexEnhanceEnabled
+          ? 'Success (Personal Codex enhanced)'
+          : 'Success',
+      text: current.text,
+      variants: current.variants,
+      codexMatches: enhancement.matches,
     );
+    if (settings.promptCodexEnhanceEnabled || ruleRepairEnabled) {
+      _addAiLog(
+        'AI reverse · merged codex/rule task',
+        'vision',
+        settings.visionApiModel,
+        mergedSystem,
+        mergedUser,
+        AiTextResult(
+          ok: true,
+          message: finalResult.message,
+          text: '$notes${finalResult.text}',
+          variants: finalResult.variants,
+          codexMatches: enhancement.matches,
+        ),
+      );
+    }
     return finalResult;
   }
 
@@ -938,6 +1041,12 @@ class NaiApi {
         message: 'Enter the conversion API Key first',
       );
     }
+    final matureTags = mode != ReversePromptMode.natural &&
+            (settings.promptCodexEnhanceEnabled ||
+                settings.promptRuleAutoRepairEnabled)
+        ? await _matureTagCandidates(text)
+        : const <PromptCodexTagCandidate>[];
+    final matureTagNames = matureTags.map((item) => item.tag).toList();
     final hints = mode == ReversePromptMode.natural ||
             !settings.tagServerEnabled ||
             !settings.mcpForConvert
@@ -957,6 +1066,7 @@ class NaiApi {
             text,
             mode: 'convert',
             allowAdult: settings.promptCodexAdultEnabled,
+            matureTags: matureTags,
           )
         : const PromptCodexEnhancement(matches: [], context: '');
     final system = [
@@ -966,6 +1076,8 @@ class NaiApi {
       knownCharacterRuntimeInstruction(mode, 'convert', knownCharacter),
       if (enhancement.context.isNotEmpty) enhancement.context,
     ].join('\n\n');
+    final ruleRepairEnabled = settings.promptRuleAutoRepairEnabled &&
+        mode != ReversePromptMode.natural;
     final result = await _promptChat(
       settings: settings,
       apiUrl: settings.convertApiUrl,
@@ -975,12 +1087,90 @@ class NaiApi {
       user: user,
       source: 'convert',
       knownCharacter: knownCharacter,
+      recordLog: !ruleRepairEnabled,
     );
+    if (!result.ok) {
+      if (ruleRepairEnabled) {
+        _addAiLog(
+          'Prompt conversion · merged rule task',
+          'convert',
+          settings.convertApiModel,
+          system,
+          user,
+          result,
+        );
+      }
+      return result;
+    }
+    var current = result;
+    if (ruleRepairEnabled) {
+      final violations = <String>{
+        ...promptRuleViolations(mode, current.text, matureTagNames),
+        if (current.variants != null)
+          ...promptRuleViolations(
+              mode, current.variants!.namePrompt, matureTagNames),
+        if (current.variants != null)
+          ...promptRuleViolations(
+              mode, current.variants!.featurePrompt, matureTagNames),
+      }.toList();
+      var logSystem = system;
+      var logUser = user;
+      var notes = '';
+      if (violations.isNotEmpty) {
+        final repairSystem = promptRuleRepairSystemPrompt(mode, knownCharacter);
+        final repairUser = buildPromptRuleRepairUserText(
+          mode: mode,
+          originalInput: text,
+          draft: current.variants == null
+              ? current.text
+              : jsonEncode(current.variants!.toJson()),
+          violations: violations,
+          matureTags: matureTagNames,
+        );
+        final repaired = await _promptChat(
+          settings: settings,
+          apiUrl: settings.convertApiUrl,
+          apiKey: apiKey,
+          model: settings.convertApiModel,
+          system: repairSystem,
+          user: repairUser,
+          source: 'convert',
+          knownCharacter: knownCharacter,
+          recordLog: false,
+        );
+        if (repaired.ok) {
+          current = repaired;
+          notes =
+              '[Rule check found ${violations.length} issue(s) and repaired them]\n';
+        } else {
+          notes =
+              '[Rule check found ${violations.length} issue(s), but repair failed: ${repaired.message}]\n';
+        }
+        logSystem = '$system\n\n$repairSystem';
+        logUser = '$user\n\n[Rule check]\n$repairUser';
+      } else {
+        notes = '[Rule check passed; no extra AI repair call]\n';
+      }
+      _addAiLog(
+        'Prompt conversion · merged rule task',
+        'convert',
+        settings.convertApiModel,
+        logSystem,
+        logUser,
+        AiTextResult(
+          ok: true,
+          message: current.message,
+          text: '$notes${current.text}',
+          variants: current.variants,
+          codexMatches: enhancement.matches,
+        ),
+      );
+    }
     return AiTextResult(
-      ok: result.ok,
-      message: result.message,
-      text: result.text,
-      variants: result.variants,
+      ok: true,
+      message: current.message,
+      text: current.text,
+      variants: current.variants,
       codexMatches: enhancement.matches,
     );
   }
@@ -1608,33 +1798,43 @@ class NaiApi {
   }
 
   List<TagSuggestion> _localTags(String query, int limit) {
-    const tags = [
-      ['girl', '女孩'],
-      ['boy', '男孩'],
-      ['blue eyes', '蓝眼睛'],
-      ['white hair', '白发'],
-      ['black hair', '黑发'],
-      ['classroom', '教室'],
-      ['desk', '桌子'],
-      ['drawing', '画画'],
-      ['hoodie', '连帽衫'],
-      ['juggling', '抛接球'],
-      ['full body', '全身'],
-      ['from front', '正面视角'],
-      ['looking at viewer', '看向观众'],
-      ['solo', '单人'],
-      ['2boys', '两个男孩'],
-      ['2girls', '两个女孩'],
-      ['smile', '微笑'],
-      ['standing', '站立'],
-      ['sitting', '坐着'],
-      ['sketchbook', '素描本'],
-    ];
     final q = query.toLowerCase().trim();
-    return tags
-        .where((e) => e[0].contains(q) || e[1].contains(query))
+    return _fallbackMatureTags
+        .where((e) => e.$1.contains(q) || e.$2.contains(query))
         .take(limit)
-        .map((e) => TagSuggestion(tag: e[0], description: e[1]))
+        .map((e) => TagSuggestion(tag: e.$1, description: e.$2))
         .toList();
+  }
+
+  Future<List<PromptCodexTagCandidate>> _matureTagCandidates(
+    String query, {
+    int limit = 12,
+  }) async {
+    if (query.trim().isEmpty) return const [];
+    final output = <PromptCodexTagCandidate>[];
+    try {
+      final hits = await _offlineTags.searchConcepts(query, limit: limit);
+      output.addAll(hits.map((hit) => PromptCodexTagCandidate(
+            tag: hit.tag,
+            description: hit.chinese.join(' '),
+            count: hit.postCount,
+          )));
+    } catch (_) {
+      // Tests and first-run devices may not have the optional local dataset.
+    }
+    final normalized = query.toLowerCase().replaceAll('_', ' ');
+    for (final entry in _fallbackMatureTags) {
+      if (!normalized.contains(entry.$1) && !query.contains(entry.$2)) continue;
+      output.add(PromptCodexTagCandidate(
+        tag: entry.$1,
+        description: entry.$2,
+        source: '内置 Danbooru 标签词典',
+      ));
+    }
+    final seen = <String>{};
+    return output
+        .where((item) => seen.add(item.tag.toLowerCase().replaceAll('_', ' ')))
+        .take(limit)
+        .toList(growable: false);
   }
 }

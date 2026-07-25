@@ -68,10 +68,37 @@ void main() {
       reversePromptTemplates: {'tags': 'custom reverse'},
       convertPromptTemplates: {'mixed': 'custom convert'},
       comicPromptTemplate: 'custom comic',
+      promptRuleAutoRepairEnabled: true,
     );
     final restored = AppSettings.fromJson(settings.toJson());
     expect(restored.reversePromptTemplates['tags'], 'custom reverse');
     expect(restored.convertPromptTemplates['mixed'], 'custom convert');
     expect(restored.comicPromptTemplate, 'custom comic');
+    expect(restored.promptRuleAutoRepairEnabled, isTrue);
+  });
+
+  test('mature tag rules apply only to tags and mixed modes', () {
+    expect(modeUserInstruction(ReversePromptMode.tags, 'convert'),
+        contains('HARD TAG-SELECTION RULE'));
+    expect(modeUserInstruction(ReversePromptMode.mixed, 'reverse'),
+        contains('HARD TAG-SELECTION RULE'));
+    expect(modeUserInstruction(ReversePromptMode.natural, 'convert'),
+        isNot(contains('HARD TAG-SELECTION RULE')));
+  });
+
+  test('rule validator detects duplicate and mature tag decomposition', () {
+    final issues = promptRuleViolations(
+      ReversePromptMode.tags,
+      '1girl, cowboy shot, upper body, smile, smile',
+      ['cowboy_shot'],
+    );
+    expect(issues.any((item) => item.contains('重复 Tag：smile')), isTrue);
+    expect(issues.any((item) => item.contains('cowboy shot / upper body')),
+        isTrue);
+    expect(issues.any((item) => item.contains('成熟 Tag cowboy shot')), isTrue);
+    expect(
+        promptRuleViolations(
+            ReversePromptMode.natural, 'A girl is standing.', ['standing']),
+        isEmpty);
   });
 }

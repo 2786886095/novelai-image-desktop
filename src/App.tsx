@@ -2699,9 +2699,13 @@ function PromptCodexEnhancementCard({
   const [saving, setSaving] = useState(false);
   const enabled = settings?.promptCodexEnhanceEnabled ?? true;
   const adultEnabled = settings?.promptCodexAdultEnabled ?? true;
+  const autoRepairEnabled = settings?.promptRuleAutoRepairEnabled ?? false;
 
   async function updateSetting(
-    key: "promptCodexEnhanceEnabled" | "promptCodexAdultEnabled",
+    key:
+      | "promptCodexEnhanceEnabled"
+      | "promptCodexAdultEnabled"
+      | "promptRuleAutoRepairEnabled",
     value: boolean,
   ) {
     if (saving) return;
@@ -2734,6 +2738,21 @@ function PromptCodexEnhancementCard({
             : "promptCodex.convertHint",
         )}
       </small>
+      <label className="checkbox-line prompt-codex-auto-repair-toggle">
+        <input
+          type="checkbox"
+          checked={autoRepairEnabled}
+          disabled={saving}
+          onChange={(event) =>
+            void updateSetting(
+              "promptRuleAutoRepairEnabled",
+              event.target.checked,
+            )
+          }
+        />
+        <strong>{t("promptCodex.autoRepair")}</strong>
+      </label>
+      <small>{t("promptCodex.autoRepairHint")}</small>
       {enabled && (
         <>
           <label className="checkbox-line prompt-codex-adult-toggle">

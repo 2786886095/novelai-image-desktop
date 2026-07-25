@@ -4,6 +4,13 @@ import type { PromptCodexMatch } from "./types";
 
 export type PromptCodexMode = "convert" | "reverse";
 
+export type MatureTagCandidate = {
+  tag: string;
+  description?: string;
+  count?: number;
+  source?: string;
+};
+
 type GuidanceEntry = {
   id: string;
   title: string;
@@ -80,7 +87,11 @@ const ADULT_RELEVANCE = [
   "lewd",
 ];
 
-const ALWAYS_GUIDANCE = new Set(["core-output", "conflict-check"]);
+const ALWAYS_GUIDANCE = new Set([
+  "core-output",
+  "canonical-tag-priority",
+  "conflict-check",
+]);
 
 function normalize(value: string): string {
   return value
@@ -207,9 +218,21 @@ export function retrievePromptCodex(
 
 export function formatPromptCodexContext(matches: PromptCodexMatch[]): string {
   if (matches.length === 0) return "";
+  const mature = matches.filter((match) => match.section === "mature-tag");
+  const references = matches.filter((match) => match.section !== "mature-tag");
   return [
+    "【最高优先级：成熟整词】先判断下列成熟 Tag 是否能完整概括动作、姿态或构图。能用一个成熟 Tag 准确表达时，只使用该 Tag 一次，禁止再叠加它的拆解词、近义词或自然语言复述。只有单 Tag 缺少关键差异时，才用最少必要 Tag 补足。候选不贴合时必须舍弃，禁止硬套。",
+    ...(mature.length
+      ? [
+          "本地 Danbooru 成熟 Tag 候选：",
+          ...mature.map(
+            (match, index) =>
+              `${index + 1}. ${match.title}${match.excerpt ? ` — ${match.excerpt}` : ""}`,
+          ),
+        ]
+      : ["本次未命中可靠的本地成熟 Tag；请使用最短、无同义重复的基础组合。"]),
     "以下是本地 NovelAI 提示词法典按当前内容检索出的参考。它们只用于校正结构、补充准确 Tag 与避免冲突；不要无条件复制，不要加入画面中不存在的内容：",
-    ...matches.map(
+    ...references.map(
       (match, index) =>
         `${index + 1}. [${match.title}｜${match.source}] ${match.excerpt}`,
     ),
@@ -220,7 +243,34 @@ export function buildPromptCodexEnhancement(
   query: string,
   mode: PromptCodexMode,
   allowAdult: boolean,
+  matureTags: MatureTagCandidate[] = [],
 ): { matches: PromptCodexMatch[]; context: string } {
-  const matches = retrievePromptCodex(query, { mode, allowAdult });
+  const seen = new Set<string>();
+  const matureMatches = matureTags
+    .filter((candidate) => {
+      const key = normalize(candidate.tag);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 12)
+    .map((candidate, index): PromptCodexMatch => ({
+      id: `danbooru:${candidate.tag}`,
+      title: candidate.tag.replace(/_/g, " "),
+      section: "mature-tag",
+      source: candidate.source ?? "本地 Danbooru 标签库",
+      excerpt: [
+        candidate.description?.trim(),
+        candidate.count ? `使用量 ${candidate.count}` : "",
+      ]
+        .filter(Boolean)
+        .join(" · "),
+      adult: false,
+      score: 1000 - index,
+    }));
+  const matches = [
+    ...matureMatches,
+    ...retrievePromptCodex(query, { mode, allowAdult }),
+  ];
   return { matches, context: formatPromptCodexContext(matches) };
 }

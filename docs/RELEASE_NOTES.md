@@ -4,15 +4,23 @@
 
 | 系统 | 安装包 | 安装说明 |
 | --- | --- | --- |
-| 🪟 **Windows**（便携版，x64） | `Langbai-NovelAI-Studio-1.5.5.exe` | 双击即用，无需安装 |
-| 🪟 **Windows**（安装版，x64） | `Langbai-NovelAI-Studio-Setup-1.5.5.exe` | 安装向导可自选路径、创建快捷方式；支持软件内一键更新 |
-| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-1.5.5-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
-| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-1.5.5.zip` | 解压后即为 `.app`，同样需右键「打开」 |
-| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-1.5.5.AppImage` | `chmod +x` 后直接运行 |
+| 🪟 **Windows**（便携版，x64） | `Langbai-NovelAI-Studio-1.5.6.exe` | 双击即用，无需安装 |
+| 🪟 **Windows**（安装版，x64） | `Langbai-NovelAI-Studio-Setup-1.5.6.exe` | 安装向导可自选路径、创建快捷方式；支持软件内一键更新 |
+| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-1.5.6-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
+| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-1.5.6.zip` | 解压后即为 `.app`，同样需右键「打开」 |
+| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-1.5.6.AppImage` | `chmod +x` 后直接运行 |
 | 🤖 **Android** | `app-release.apk` | 直接安装；需允许「未知来源」 |
 | 📱 **iOS** | `novelai-mobile-unsigned.ipa` | **未签名**，需使用 AltStore / Sideloadly 等工具自行侧载 |
 
 > 桌面端与移动端均为 **API-only** 客户端，需要自备 NovelAI Persistent API Token。
+
+### v1.5.6 更新内容
+
+- AI 反推与提示词转换的 Danbooru 标签、混合模式会先检索本地个人法典和 Danbooru 标签库，优先采用能完整概括动作、姿态或构图的成熟 Tag，减少同义词、拆解词和自然语言重复。
+- 默认模板、桌面端、移动端与 `novelai-prompt-codex` 技能同步加入成熟整词优先规则；自然语言模式保持原有行为。
+- 新增可选的“提示词规则自动修复”（默认关闭）：检查格式、完全重复、明确互斥和成熟 Tag 重复拆解；仅发现问题时额外调用一次 AI，并在调用记录中合并显示为同一任务。
+- 修复漫画生成器精准参考“应用范围”输入无法稳定编辑的问题；现在可正常输入 `1-8, 10, 12`，回车或点击按钮均使用当前完整输入。
+- 上述功能已同步到桌面端、Android 与 iOS，并补齐简体中文、繁体中文、英语、日语和韩语界面说明。
 
 ### v1.5.5 更新内容
 

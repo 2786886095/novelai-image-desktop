@@ -154,6 +154,41 @@ class OfflineTagStore {
     return scored.take(limit).map((item) => item.hit).toList();
   }
 
+  /// Finds complete mature tags inside a longer description or generated
+  /// draft. Longer semantic matches outrank broad popular tags; post count is
+  /// used only as a tie-breaker.
+  Future<List<OfflineTagHit>> searchConcepts(String query,
+      {int limit = 12}) async {
+    final raw = query.trim();
+    if (raw.isEmpty) return const [];
+    final index = await _load();
+    if (index.isEmpty) return const [];
+    final english = raw.toLowerCase().replaceAll('_', ' ');
+    final scored = <({OfflineTagHit hit, int score})>[];
+    for (final hit in index) {
+      if (hit.category == 1 || hit.category == 5) continue;
+      final name = hit.tag.toLowerCase().replaceAll('_', ' ').trim();
+      var score = 0;
+      if (name.length >= 3 && english.contains(name)) {
+        score = 80 + (name.length * 4).clamp(0, 80);
+      }
+      for (final alias in hit.chinese) {
+        final candidate = alias.trim();
+        if (candidate.length < 2 || !raw.contains(candidate)) continue;
+        final aliasScore = 90 + (candidate.length * 8).clamp(0, 90);
+        if (aliasScore > score) score = aliasScore;
+      }
+      if (score > 0) scored.add((hit: hit, score: score));
+    }
+    scored.sort((left, right) {
+      final byScore = right.score.compareTo(left.score);
+      return byScore != 0
+          ? byScore
+          : right.hit.postCount.compareTo(left.hit.postCount);
+    });
+    return scored.take(limit).map((item) => item.hit).toList();
+  }
+
   Future<List<OfflineTagHit>> _load() async {
     final cached = _index;
     if (cached != null) return cached;

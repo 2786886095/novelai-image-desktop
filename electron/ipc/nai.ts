@@ -50,7 +50,10 @@ import {
   type UpscaleScale,
   type WorkingImage,
 } from "../../src/types";
-import { buildPromptCodexEnhancement } from "../../src/prompt-codex-retrieval";
+import {
+  buildPromptCodexEnhancement,
+  type MatureTagCandidate,
+} from "../../src/prompt-codex-retrieval";
 import { calculateFeatureAnlasQuote } from "../../src/anlas";
 import {
   buildTuiwenLocalPrompt,
@@ -69,7 +72,7 @@ import {
 } from "./store";
 import { TAG_DICTIONARY } from "../data/tag-dictionary";
 import { mcpSearch } from "./mcp-client";
-import { searchDanbooru } from "./danbooru-tags";
+import { searchDanbooru, searchDanbooruConcepts } from "./danbooru-tags";
 import { logError, logInfo, appendLog } from "./logger";
 import { zhForTag } from "../../src/prompt-data";
 import { proxyConfig } from "./proxy";
@@ -81,11 +84,14 @@ import {
 import {
   buildConvertUserText,
   buildModeRepairUserText,
+  buildPromptRuleRepairUserText,
   cleanPromptOutput,
   knownCharacterRuntimeInstruction,
   modeNeedsRepair,
   modeUserInstruction,
   modeRepairSystemPrompt,
+  promptRuleRepairSystemPrompt,
+  promptRuleViolations,
   parsePromptVariantResponse,
   resolveModePrompt,
 } from "../../src/prompt-mode";
@@ -1853,6 +1859,7 @@ async function callConvertApi(
   userText: string,
   maxTokens = 2000,
   label = "提示词转换",
+  record = true,
 ): Promise<{ ok: boolean; content?: string; message: string }> {
   const settings = getSettings();
   const apiUrl = settings.convertApiUrl.trim();
@@ -1906,27 +1913,31 @@ async function callConvertApi(
         fin === "length"
           ? "API 返回被长度截断（内容为空）：该模型把配额全用在了推理上，请改用非推理模型，或在该服务调高最大输出长度。"
           : "API 返回内容为空：请确认「模型」填的是该服务支持的模型名（例如 xAI 用 grok-4.3，而非默认 gpt-4o-mini），可点「检测模型」选择。";
+      if (record) {
+        recordAiCall({
+          label,
+          api: "convert",
+          model,
+          systemPrompt,
+          userText,
+          ok: false,
+          response: message,
+        });
+      }
+      return { ok: false, message };
+    }
+    const cleaned = cleanPromptOutput(content);
+    if (record) {
       recordAiCall({
         label,
         api: "convert",
         model,
         systemPrompt,
         userText,
-        ok: false,
-        response: message,
+        ok: true,
+        response: cleaned,
       });
-      return { ok: false, message };
     }
-    const cleaned = cleanPromptOutput(content);
-    recordAiCall({
-      label,
-      api: "convert",
-      model,
-      systemPrompt,
-      userText,
-      ok: true,
-      response: cleaned,
-    });
     return { ok: true, content: cleaned, message: "成功" };
   } catch (error: any) {
     const msg =
@@ -1934,15 +1945,17 @@ async function callConvertApi(
       error?.response?.data?.message ??
       error?.message ??
       "未知错误";
-    recordAiCall({
-      label,
-      api: "convert",
-      model,
-      systemPrompt,
-      userText,
-      ok: false,
-      response: String(msg),
-    });
+    if (record) {
+      recordAiCall({
+        label,
+        api: "convert",
+        model,
+        systemPrompt,
+        userText,
+        ok: false,
+        response: String(msg),
+      });
+    }
     return { ok: false, message: msg };
   }
 }
@@ -2174,6 +2187,64 @@ function mergeTagHints(prompt: string, hints: TagSuggestion[]) {
   return hintTags ? mergePrompt(prompt, hintTags) : prompt;
 }
 
+function builtInMatureTagCandidates(
+  query: string,
+  limit = 12,
+): MatureTagCandidate[] {
+  const raw = query.normalize("NFKC").trim();
+  const normalized = raw.toLowerCase().replace(/_/g, " ");
+  if (!normalized) return [];
+  return TAG_DICTIONARY.map((entry) => {
+    const fields = [entry.tag, entry.zh, ...(entry.keywords ?? []), ...(entry.aliases ?? [])]
+      .map((value) => value.normalize("NFKC").trim())
+      .filter((value) => value.length >= 2);
+    const matched = fields
+      .filter((value) =>
+        /[\u3400-\u9fff]/.test(value)
+          ? raw.includes(value)
+          : normalized.includes(value.toLowerCase().replace(/_/g, " ")),
+      )
+      .sort((left, right) => right.length - left.length)[0];
+    return { entry, matched, score: matched ? matched.length : 0 };
+  })
+    .filter((item) => item.score > 0 && item.entry.category !== 1)
+    .sort(
+      (left, right) =>
+        right.score - left.score || right.entry.count - left.entry.count,
+    )
+    .slice(0, limit)
+    .map(({ entry }) => ({
+      tag: entry.tag,
+      description: entry.zh,
+      count: entry.count,
+      source: "内置 Danbooru 标签词典",
+    }));
+}
+
+async function collectMatureTagCandidates(
+  query: string,
+  limit = 12,
+): Promise<MatureTagCandidate[]> {
+  if (!query.trim()) return [];
+  const downloaded = await searchDanbooruConcepts(query, limit);
+  const combined: MatureTagCandidate[] = [
+    ...downloaded.map((item) => ({
+      tag: item.tag,
+      description: item.description,
+      count: item.count,
+      source: "本地 Danbooru 标签库",
+    })),
+    ...builtInMatureTagCandidates(query, limit),
+  ];
+  const seen = new Set<string>();
+  return combined
+    .filter((item) => {
+      const key = item.tag.toLowerCase().replace(/_/g, " ").trim();
+      return Boolean(key) && !seen.has(key) && Boolean(seen.add(key));
+    })
+    .slice(0, limit);
+}
+
 export async function testTagServer(
   query: string,
 ): Promise<{ ok: boolean; message: string; tags: TagSuggestion[] }> {
@@ -2276,6 +2347,8 @@ export async function reversePromptImage(
   ].join("\n\n");
 
   const codexEnabled = settings.promptCodexEnhanceEnabled;
+  const ruleRepairEnabled =
+    settings.promptRuleAutoRepairEnabled && mode !== "natural";
   const firstUserContent = [
     {
       type: "image_url",
@@ -2302,7 +2375,7 @@ export async function reversePromptImage(
     firstUserContent,
     2000,
     `AI 反推 · ${mode} · ${scopeLabel}`,
-    !codexEnabled,
+    !codexEnabled && !ruleRepairEnabled,
   );
 
   if (result.ok) {
@@ -2318,20 +2391,32 @@ export async function reversePromptImage(
     let content = parsed.primary;
     let variants = parsed.variants;
     let codexMatches: PromptCodexMatch[] = [];
+    let matureTagNames: string[] = [];
+    let mergedSystemPrompt = systemPrompt;
+    let mergedUserText = summarizeUserContent(firstUserContent);
+    let refinementNote = "";
+    let repairNote = "";
+
+    const retrievalQuery = [
+      hint,
+      content,
+      parsed.variants?.namePrompt,
+      parsed.variants?.featurePrompt,
+    ]
+      .filter(Boolean)
+      .join("\n");
+    const matureTags =
+      mode !== "natural" && (codexEnabled || ruleRepairEnabled)
+        ? await collectMatureTagCandidates(retrievalQuery, 12)
+        : [];
+    matureTagNames = matureTags.map((item) => item.tag);
 
     if (codexEnabled) {
-      const retrievalQuery = [
-        hint,
-        content,
-        parsed.variants?.namePrompt,
-        parsed.variants?.featurePrompt,
-      ]
-        .filter(Boolean)
-        .join("\n");
       const enhancement = buildPromptCodexEnhancement(
         retrievalQuery,
         "reverse",
         settings.promptCodexAdultEnabled,
+        matureTags,
       );
       codexMatches = enhancement.matches;
       const refineSystem = [
@@ -2364,34 +2449,94 @@ export async function reversePromptImage(
         );
         content = refinedParsed.primary;
         variants = refinedParsed.variants;
+      } else {
+        refinementNote = `[第二阶段精修失败，已回退初步结果：${refined.message}]\n`;
       }
+      mergedSystemPrompt = refineSystem;
+      mergedUserText = [
+        summarizeUserContent(firstUserContent),
+        "",
+        "[阶段一草稿]",
+        result.content ?? "",
+        "",
+        `[本地法典/成熟 Tag 命中 ${codexMatches.length} 条]`,
+        ...codexMatches.map((match) => `${match.title}｜${match.source}`),
+      ].join("\n");
+    }
 
-      recordAiCall({
-        label: `AI 反推 · 法典增强两阶段 · ${mode} · ${scopeLabel}`,
-        api: "vision",
-        model: settings.visionApiModel || "gpt-4o",
-        systemPrompt: refineSystem,
-        userText: [
-          summarizeUserContent(firstUserContent),
-          "",
-          "[阶段一草稿]",
-          result.content ?? "",
-          "",
-          `[本地法典命中 ${codexMatches.length} 条]`,
-          ...codexMatches.map((match) => `${match.title}｜${match.source}`),
-        ].join("\n"),
-        ok: true,
-        response:
-          refined.ok && refined.content
-            ? content
-            : `[第二阶段精修失败，已回退初步结果：${refined.message}]\n${content}`,
-      });
+    if (ruleRepairEnabled) {
+      const violations = [
+        ...promptRuleViolations(mode, content, matureTagNames),
+        ...(variants
+          ? [
+              ...promptRuleViolations(
+                mode,
+                variants.namePrompt,
+                matureTagNames,
+              ),
+              ...promptRuleViolations(
+                mode,
+                variants.featurePrompt,
+                matureTagNames,
+              ),
+            ]
+          : []),
+      ].filter((issue, index, all) => all.indexOf(issue) === index);
+      if (violations.length > 0) {
+        const draft = variants ? JSON.stringify(variants) : content;
+        const repairSystem = promptRuleRepairSystemPrompt(mode, knownCharacter);
+        const repairUser = buildPromptRuleRepairUserText({
+          mode,
+          originalInput: userScopeText,
+          draft,
+          violations,
+          matureTags: matureTagNames,
+        });
+        const repaired = await callVisionApi(
+          repairSystem,
+          [
+            {
+              type: "image_url",
+              image_url: {
+                url: `data:image/png;base64,${imageBase64}`,
+                detail: "high",
+              },
+            },
+            { type: "text", text: repairUser },
+          ],
+          knownCharacter ? 2400 : 1200,
+          `AI 反推 · 规则修复 · ${mode}`,
+          false,
+        );
+        if (repaired.ok && repaired.content) {
+          const repairedParsed = parsePromptVariantResponse(
+            repaired.content,
+            knownCharacter,
+          );
+          content = repairedParsed.primary;
+          variants = repairedParsed.variants ?? variants;
+          repairNote = `[规则检查发现 ${violations.length} 项并已自动修复]\n`;
+        } else {
+          repairNote = `[规则检查发现 ${violations.length} 项，但自动修复失败：${repaired.message}]\n`;
+        }
+        mergedSystemPrompt = [mergedSystemPrompt, repairSystem].join("\n\n");
+        mergedUserText = [mergedUserText, "", "[规则检查]", repairUser].join(
+          "\n",
+        );
+      } else {
+        repairNote = "[规则检查通过，无需额外调用 AI 修复]\n";
+      }
     }
     // Same reasoning as convertPromptText: known-character mode already
     // requires both variants to follow every template rule in the single
     // upfront call, and this repair pass never touched parsed.variants (what
     // the UI actually renders), so it was a wasted extra request there.
-    if (!codexEnabled && !knownCharacter && modeNeedsRepair(mode, content)) {
+    if (
+      !codexEnabled &&
+      !knownCharacter &&
+      mode === "natural" &&
+      modeNeedsRepair(mode, content)
+    ) {
       const repaired = await callVisionApi(
         modeRepairSystemPrompt(mode),
         [
@@ -2421,6 +2566,26 @@ export async function reversePromptImage(
         content = cleanPromptOutput(repaired.content);
     }
 
+    if (codexEnabled || ruleRepairEnabled) {
+      recordAiCall({
+        label: [
+          "AI 反推",
+          codexEnabled ? "法典增强两阶段" : "",
+          ruleRepairEnabled ? "规则校验" : "",
+          mode,
+          scopeLabel,
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        api: "vision",
+        model: settings.visionApiModel || "gpt-4o",
+        systemPrompt: mergedSystemPrompt,
+        userText: mergedUserText,
+        ok: true,
+        response: `${refinementNote}${repairNote}${content}`,
+      });
+    }
+
     const hints =
       knownCharacter || mode === "natural" || !settings.mcpForReverse
         ? []
@@ -2436,7 +2601,7 @@ export async function reversePromptImage(
       message: codexEnabled ? "反推成功（个人法典增强）" : "反推成功",
     };
   }
-  if (codexEnabled) {
+  if (codexEnabled || ruleRepairEnabled) {
     recordAiCall({
       label: `AI 反推 · 法典增强两阶段 · ${mode} · ${scopeLabel}`,
       api: "vision",
@@ -3517,11 +3682,19 @@ export async function convertPromptText(
   message: string;
 }> {
   const settings = getSettings();
+  const matureTags =
+    mode !== "natural" &&
+    (settings.promptCodexEnhanceEnabled ||
+      settings.promptRuleAutoRepairEnabled)
+      ? await collectMatureTagCandidates(chineseText, 12)
+      : [];
+  const matureTagNames = matureTags.map((item) => item.tag);
   const enhancement = settings.promptCodexEnhanceEnabled
     ? buildPromptCodexEnhancement(
         chineseText,
         "convert",
         settings.promptCodexAdultEnabled,
+        matureTags,
       )
     : { matches: [] as PromptCodexMatch[], context: "" };
   const systemPrompt = [
@@ -3553,6 +3726,7 @@ export async function convertPromptText(
     userText,
     knownCharacter ? 2400 : 2000,
     `提示词转换 · ${mode}`,
+    !(settings.promptRuleAutoRepairEnabled && mode !== "natural"),
   );
 
   if (result.ok) {
@@ -3565,13 +3739,88 @@ export async function convertPromptText(
       knownCharacter,
     );
     let content = parsed.primary;
+    let variants = parsed.variants;
+    let repairNote = "";
+    const ruleRepairEnabled =
+      settings.promptRuleAutoRepairEnabled && mode !== "natural";
+    if (ruleRepairEnabled) {
+      const violations = [
+        ...promptRuleViolations(mode, content, matureTagNames),
+        ...(variants
+          ? [
+              ...promptRuleViolations(
+                mode,
+                variants.namePrompt,
+                matureTagNames,
+              ),
+              ...promptRuleViolations(
+                mode,
+                variants.featurePrompt,
+                matureTagNames,
+              ),
+            ]
+          : []),
+      ].filter((issue, index, all) => all.indexOf(issue) === index);
+      if (violations.length > 0) {
+        const repairSystem = promptRuleRepairSystemPrompt(mode, knownCharacter);
+        const repairUser = buildPromptRuleRepairUserText({
+          mode,
+          originalInput: chineseText,
+          draft: variants ? JSON.stringify(variants) : content,
+          violations,
+          matureTags: matureTagNames,
+        });
+        const repaired = await callConvertApi(
+          repairSystem,
+          repairUser,
+          knownCharacter ? 2400 : 1200,
+          `提示词转换 · 规则修复 · ${mode}`,
+          false,
+        );
+        if (repaired.ok && repaired.content) {
+          const repairedParsed = parsePromptVariantResponse(
+            repaired.content,
+            knownCharacter,
+          );
+          content = repairedParsed.primary;
+          variants = repairedParsed.variants ?? variants;
+          repairNote = `[规则检查发现 ${violations.length} 项并已自动修复]\n`;
+        } else {
+          repairNote = `[规则检查发现 ${violations.length} 项，但自动修复失败：${repaired.message}]\n`;
+        }
+        recordAiCall({
+          label: `提示词转换 · 规则校验 · ${mode}`,
+          api: "convert",
+          model: settings.convertApiModel.trim() || "gpt-4o-mini",
+          systemPrompt: [systemPrompt, repairSystem].join("\n\n"),
+          userText: [userText, "", "[规则检查]", repairUser].join("\n"),
+          ok: true,
+          response: `${repairNote}${content}`,
+        });
+      } else {
+        repairNote = "[规则检查通过，无需额外调用 AI 修复]\n";
+        recordAiCall({
+          label: `提示词转换 · 规则校验 · ${mode}`,
+          api: "convert",
+          model: settings.convertApiModel.trim() || "gpt-4o-mini",
+          systemPrompt,
+          userText,
+          ok: true,
+          response: `${repairNote}${content}`,
+        });
+      }
+    }
     // Known-character mode already asks for both variants to follow every
     // template rule in the single upfront call (knownCharacterRuntimeInstruction),
     // and this repair pass only ever rewrote `content` — never parsed.variants,
     // which is what the UI actually shows for namePrompt/featurePrompt — so it
     // was a wasted extra request for that path. Keep it for the plain
     // (non-known-character) single-prompt path, where it does affect the result.
-    if (!knownCharacter && modeNeedsRepair(mode, content)) {
+    if (
+      !knownCharacter &&
+      mode === "natural" &&
+      modeNeedsRepair(mode, content)
+    ) {
       const repaired = await callConvertApi(
         modeRepairSystemPrompt(mode),
         buildModeRepairUserText(mode, chineseText, content),
@@ -3590,12 +3839,23 @@ export async function convertPromptText(
         mode === "natural" || knownCharacter
           ? content
           : mergeTagHints(content, tagHints),
-      variants: parsed.variants,
+      variants,
       codexMatches: enhancement.matches,
       message: settings.promptCodexEnhanceEnabled
         ? "转换成功（个人法典增强）"
         : "转换成功",
     };
+  }
+  if (settings.promptRuleAutoRepairEnabled && mode !== "natural") {
+    recordAiCall({
+      label: `提示词转换 · 规则校验 · ${mode}`,
+      api: "convert",
+      model: settings.convertApiModel.trim() || "gpt-4o-mini",
+      systemPrompt,
+      userText,
+      ok: false,
+      response: result.message,
+    });
   }
   return { ok: false, message: `转换失败：${result.message}` };
 }

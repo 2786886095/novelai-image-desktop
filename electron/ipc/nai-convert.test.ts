@@ -130,6 +130,48 @@ describe("convertComicPanels fallback path", () => {
     expect(result.panels[0].enPrompt).toContain("Anime illustration");
     expect(result.panels[0].enPrompt).not.toContain("Sorry");
   });
+
+  it("repairs a tag-rule violation with one extra request and one visible log", async () => {
+    settingsRef.current.convertApiUrl = "https://example.test/v1";
+    settingsRef.current.convertApiKey = "sk-test";
+    settingsRef.current.promptCodexEnhanceEnabled = false;
+    settingsRef.current.promptRuleAutoRepairEnabled = true;
+    axiosMock.post
+      .mockResolvedValueOnce({
+        data: {
+          choices: [
+            {
+              message: { content: "1girl, dogeza, dogeza, bowing" },
+              finish_reason: "stop",
+            },
+          ],
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          choices: [
+            {
+              message: { content: "1girl, dogeza" },
+              finish_reason: "stop",
+            },
+          ],
+        },
+      });
+    const { clearAiCallLog, convertPromptText, getAiCallLog } = await import(
+      "./nai"
+    );
+    clearAiCallLog();
+
+    const result = await convertPromptText("一个女孩土下座", "tags", false);
+
+    expect(result.ok).toBe(true);
+    expect(result.result).toBe("1girl, dogeza");
+    expect(axiosMock.post).toHaveBeenCalledTimes(2);
+    const logs = getAiCallLog();
+    expect(logs).toHaveLength(1);
+    expect(logs[0].label).toContain("规则校验");
+    expect(logs[0].response).toContain("已自动修复");
+  });
 });
 
 describe("prompt codex enhancement", () => {

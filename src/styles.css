@@ -2128,6 +2128,11 @@ button { user-select: none; }
 .prompt-codex-enhance-card .checkbox-line { margin: 0; }
 .prompt-codex-enhance-card > small { color: var(--text-muted); }
 .prompt-codex-adult-toggle { margin-top: 4px !important; }
+.prompt-codex-auto-repair-toggle {
+  margin-top: 6px !important;
+  padding-top: 7px;
+  border-top: 1px solid var(--border);
+}
 .prompt-codex-matches {
   margin-top: 5px;
   border-top: 1px solid var(--border);

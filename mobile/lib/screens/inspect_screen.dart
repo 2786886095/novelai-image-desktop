@@ -295,8 +295,7 @@ class _ConvertPanelState extends State<_ConvertPanel> {
           ),
           const SizedBox(height: 8),
           FilledButton.icon(
-              onPressed:
-                  s.convertInput.trim().isEmpty ? null : s.convertPrompt,
+              onPressed: s.convertInput.trim().isEmpty ? null : s.convertPrompt,
               icon: const Icon(Icons.translate),
               label: Text(t('inspect.startConvert'))),
           _TextToolJobList(
@@ -380,6 +379,14 @@ class _PromptCodexEnhancementCard extends StatelessWidget {
             value: enabled,
             onChanged: (value) => state.setSettings(
                 (settings) => settings.promptCodexEnhanceEnabled = value),
+          ),
+          const Divider(height: 1),
+          SwitchListTile(
+            title: Text(t('promptCodex.autoRepair')),
+            subtitle: Text(t('promptCodex.autoRepairHint')),
+            value: state.settings.promptRuleAutoRepairEnabled,
+            onChanged: (value) => state.setSettings(
+                (settings) => settings.promptRuleAutoRepairEnabled = value),
           ),
           if (enabled) ...[
             const Divider(height: 1),
@@ -481,14 +488,17 @@ class _TextToolJobList extends StatelessWidget {
                       width: 18,
                       height: 18,
                       child: CircularProgressIndicator(strokeWidth: 2)),
-                  TextToolJobStatus.done =>
-                    const Icon(Icons.check_circle, color: Colors.green, size: 18),
+                  TextToolJobStatus.done => const Icon(Icons.check_circle,
+                      color: Colors.green, size: 18),
                   TextToolJobStatus.failed =>
                     const Icon(Icons.error, color: Colors.red, size: 18),
                 },
-                title: Text(job.label, maxLines: 1, overflow: TextOverflow.ellipsis),
-                subtitle: job.status == TextToolJobStatus.failed && job.message != null
-                    ? Text(job.message!, maxLines: 1, overflow: TextOverflow.ellipsis)
+                title: Text(job.label,
+                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                subtitle: job.status == TextToolJobStatus.failed &&
+                        job.message != null
+                    ? Text(job.message!,
+                        maxLines: 1, overflow: TextOverflow.ellipsis)
                     : null,
                 trailing: IconButton(
                   icon: const Icon(Icons.close, size: 18),
@@ -541,7 +551,8 @@ class _TextToolHistoryListState extends State<_TextToolHistoryList> {
         children: [
           ListTile(
             dense: true,
-            title: Text('${t('textTool.historyTitle')} · ${widget.items.length}'),
+            title:
+                Text('${t('textTool.historyTitle')} · ${widget.items.length}'),
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -550,7 +561,8 @@ class _TextToolHistoryListState extends State<_TextToolHistoryList> {
                   child: Text(t('textTool.historyClear')),
                 ),
                 IconButton(
-                  icon: Icon(_collapsed ? Icons.expand_more : Icons.expand_less),
+                  icon:
+                      Icon(_collapsed ? Icons.expand_more : Icons.expand_less),
                   onPressed: () => setState(() => _collapsed = !_collapsed),
                 ),
               ],
@@ -571,14 +583,14 @@ class _TextToolHistoryListState extends State<_TextToolHistoryList> {
                         }
                       }),
                       title: Text(
-                        item.input.trim().isNotEmpty
-                            ? item.input
-                            : item.result,
+                        item.input.trim().isNotEmpty ? item.input : item.result,
                         maxLines: 3,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      subtitle: Text(
-                          item.createdAt.replaceFirst('T', ' ').split('.').first),
+                      subtitle: Text(item.createdAt
+                          .replaceFirst('T', ' ')
+                          .split('.')
+                          .first),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -739,7 +751,8 @@ class _VariantCard extends StatelessWidget {
             OutlinedButton.icon(
               onPressed: prompt.isEmpty
                   ? null
-                  : () => (onUse ?? context.read<AppState>().applyPrompt)(prompt),
+                  : () =>
+                      (onUse ?? context.read<AppState>().applyPrompt)(prompt),
               icon: const Icon(Icons.send_outlined),
               label: Text(mobileUiTextFor(language, 'inspect.reuseToGenerate')),
             ),

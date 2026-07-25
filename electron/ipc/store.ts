@@ -299,6 +299,7 @@ export function defaultSettings(): AppSettings {
     convertPromptTemplates: { tags: "", natural: "", mixed: "" },
     promptCodexEnhanceEnabled: true,
     promptCodexAdultEnabled: true,
+    promptRuleAutoRepairEnabled: false,
     tagServerEnabled: false,
     tagServerUrl: "",
     tagServerApiKey: "",

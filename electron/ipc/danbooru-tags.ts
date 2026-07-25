@@ -252,3 +252,47 @@ export async function searchDanbooru(query: string, limit = 12): Promise<TagSugg
     description: t.cn.join(" "),
   }));
 }
+
+/**
+ * Extract mature tags whose complete English name or Chinese alias occurs in a
+ * longer description/prompt. Unlike searchDanbooru(), this is designed for a
+ * sentence rather than a search-box fragment. Longer semantic matches win;
+ * post count is only a tie-breaker so a broad popular tag cannot displace a
+ * precise pose/composition tag.
+ */
+export async function searchDanbooruConcepts(
+  query: string,
+  limit = 12,
+): Promise<TagSuggestion[]> {
+  const raw = query.normalize("NFKC").trim();
+  if (!raw) return [];
+  let idx: DanbooruTag[];
+  try {
+    idx = await loadDanbooruIndex();
+  } catch {
+    return [];
+  }
+  const english = raw.toLowerCase().replace(/_/g, " ");
+  const scored: Array<{ t: DanbooruTag; score: number }> = [];
+  for (const t of idx) {
+    if (t.category === 1 || t.category === 5) continue;
+    const name = t.name.toLowerCase().replace(/_/g, " ").trim();
+    let score = 0;
+    if (name.length >= 3 && english.includes(name)) {
+      score = Math.max(score, 80 + Math.min(80, name.length * 4));
+    }
+    for (const alias of t.cn) {
+      const candidate = alias.normalize("NFKC").trim();
+      if (candidate.length < 2 || !raw.includes(candidate)) continue;
+      score = Math.max(score, 90 + Math.min(90, candidate.length * 8));
+    }
+    if (score > 0) scored.push({ t, score });
+  }
+  scored.sort((a, b) => b.score - a.score || b.t.post - a.t.post);
+  return scored.slice(0, limit).map(({ t }) => ({
+    tag: t.name,
+    count: t.post,
+    category: t.category,
+    description: t.cn.join(" "),
+  }));
+}

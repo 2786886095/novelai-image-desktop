@@ -1076,6 +1076,9 @@ export interface AppSettings {
   // entries are eligible only when the input itself is semantically relevant.
   promptCodexEnhanceEnabled: boolean;
   promptCodexAdultEnabled: boolean;
+  // Optional post-generation rule validator/repair for tags and mixed modes.
+  // Disabled by default because a failed validation may add one external AI call.
+  promptRuleAutoRepairEnabled: boolean;
   // Optional Danbooru / MCP-compatible tag search service.
   tagServerEnabled: boolean;
   tagServerUrl: string;

@@ -45,4 +45,34 @@ describe("prompt codex retrieval", () => {
     expect(result.context).toContain("互动");
     expect(result.matches.length).toBeLessThanOrEqual(11);
   });
+
+  it("places mature Danbooru tags before ordinary codex references", () => {
+    const result = buildPromptCodexEnhancement(
+      "女孩以七分身构图站立",
+      "convert",
+      false,
+      [
+        {
+          tag: "cowboy_shot",
+          description: "七分身构图",
+          count: 600000,
+        },
+      ],
+    );
+    expect(result.matches[0].id).toBe("danbooru:cowboy_shot");
+    expect(result.context.indexOf("cowboy shot")).toBeLessThan(
+      result.context.indexOf("本地 NovelAI 提示词法典"),
+    );
+    expect(result.context).toContain("禁止再叠加它的拆解词");
+  });
+
+  it("always retrieves the mature-tag priority rule", () => {
+    const matches = retrievePromptCodex("普通女孩", {
+      mode: "reverse",
+      allowAdult: false,
+    });
+    expect(
+      matches.some((item) => item.id === "guidance:canonical-tag-priority"),
+    ).toBe(true);
+  });
 });

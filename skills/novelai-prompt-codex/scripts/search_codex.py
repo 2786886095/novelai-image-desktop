@@ -67,9 +67,9 @@ def main() -> None:
             continue
         value = score(query, [entry["title"], entry["category"], *entry["keywords"]])
         value += sum(24 for keyword in entry["keywords"] if normalize(keyword) in normalize(query))
-        if entry["id"] in {"core-output", "conflict-check"}:
+        if entry["id"] in {"core-output", "canonical-tag-priority", "conflict-check"}:
             value += 12
-        if value >= 10 or entry["id"] in {"core-output", "conflict-check"}:
+        if value >= 10 or entry["id"] in {"core-output", "canonical-tag-priority", "conflict-check"}:
             results.append({
                 "id": f"guidance:{entry['id']}",
                 "title": entry["title"],

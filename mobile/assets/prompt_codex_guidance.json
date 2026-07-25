@@ -13,6 +13,16 @@
       "source": "用户提供的 NovelAI V4.5 规范"
     },
     {
+      "id": "canonical-tag-priority",
+      "title": "成熟整词优先与最短表达",
+      "category": "tag-selection",
+      "keywords": ["动作", "姿态", "构图", "成熟tag", "整词", "单一tag", "danbooru", "pose", "composition", "canonical tag"],
+      "text": "先检索个人法典与本地 Danbooru 成熟 Tag。若一个成熟 Tag 已能准确概括动作、姿态或构图，只使用该 Tag 一次，禁止再叠加它的拆解词、近义 Tag 或自然语言复述；只有单 Tag 缺少关键差异时，才用最少必要 Tag 补足。候选语义不贴合时必须舍弃，禁止硬套。",
+      "adult": false,
+      "modes": ["convert", "reverse"],
+      "source": "NovelAI 提示词法典强制选词规则"
+    },
+    {
       "id": "multi-character",
       "title": "V4.5 多角色分段",
       "category": "character",

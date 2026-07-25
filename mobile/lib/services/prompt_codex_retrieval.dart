@@ -12,6 +12,20 @@ class PromptCodexEnhancement {
   const PromptCodexEnhancement({required this.matches, required this.context});
 }
 
+class PromptCodexTagCandidate {
+  final String tag;
+  final String description;
+  final int count;
+  final String source;
+
+  const PromptCodexTagCandidate({
+    required this.tag,
+    this.description = '',
+    this.count = 0,
+    this.source = '本地 Danbooru 标签库',
+  });
+}
+
 class _GuidanceEntry {
   final String id;
   final String title;
@@ -55,13 +69,51 @@ class PromptCodexRetrievalService {
   Future<PromptCodexSnapshot?>? _codexFuture;
 
   static const _adultRelevance = [
-    '成人', '性爱', '性交', '裸体', '裸露', '乳头', '阴部', '内裤', '内衣',
-    '丝袜', '连裤袜', '破损连裤袜', '大腿袜', '半脱', '提裙', '诱惑', '淫荡', '高潮', '口交', '自慰',
-    '后入', '骑乘', 'nsfw', 'nude', 'naked', 'nipples', 'pussy', 'panties',
-    'underwear', 'pantyhose', 'thighhighs', 'sex', 'fellatio', 'masturbation',
-    'orgasm', 'doggystyle', 'cowgirl', 'seductive', 'lewd'
+    '成人',
+    '性爱',
+    '性交',
+    '裸体',
+    '裸露',
+    '乳头',
+    '阴部',
+    '内裤',
+    '内衣',
+    '丝袜',
+    '连裤袜',
+    '破损连裤袜',
+    '大腿袜',
+    '半脱',
+    '提裙',
+    '诱惑',
+    '淫荡',
+    '高潮',
+    '口交',
+    '自慰',
+    '后入',
+    '骑乘',
+    'nsfw',
+    'nude',
+    'naked',
+    'nipples',
+    'pussy',
+    'panties',
+    'underwear',
+    'pantyhose',
+    'thighhighs',
+    'sex',
+    'fellatio',
+    'masturbation',
+    'orgasm',
+    'doggystyle',
+    'cowgirl',
+    'seductive',
+    'lewd'
   ];
-  static const _alwaysGuidance = {'core-output', 'conflict-check'};
+  static const _alwaysGuidance = {
+    'core-output',
+    'canonical-tag-priority',
+    'conflict-check'
+  };
 
   Future<List<_GuidanceEntry>> _guidance() => _guidanceFuture ??= rootBundle
       .loadString(_guidanceAsset)
@@ -73,9 +125,10 @@ class PromptCodexRetrievalService {
           .toList(growable: false))
       .catchError((_) => <_GuidanceEntry>[]);
 
-  Future<PromptCodexSnapshot?> _codex() =>
-      _codexFuture ??= PromptCodexService().load().then<PromptCodexSnapshot?>(
-          (snapshot) => snapshot).catchError((_) => null);
+  Future<PromptCodexSnapshot?> _codex() => _codexFuture ??= PromptCodexService()
+      .load()
+      .then<PromptCodexSnapshot?>((snapshot) => snapshot)
+      .catchError((_) => null);
 
   String _normalize(String value) => value
       .toLowerCase()
@@ -141,12 +194,12 @@ class PromptCodexRetrievalService {
     String query, {
     required String mode,
     required bool allowAdult,
+    List<PromptCodexTagCandidate> matureTags = const [],
     int guidanceLimit = 6,
     int codexLimit = 5,
   }) async {
     final terms = _queryTerms(query);
-    final adultRelevant =
-        allowAdult && _containsAny(query, _adultRelevance);
+    final adultRelevant = allowAdult && _containsAny(query, _adultRelevance);
     final guidance = await _guidance();
     final snapshot = await _codex();
     final bookNames = {
@@ -170,8 +223,8 @@ class PromptCodexRetrievalService {
               (_alwaysGuidance.contains(entry.id) ? 12 : 0);
           return MapEntry(entry, score);
         })
-        .where((item) =>
-            _alwaysGuidance.contains(item.key.id) || item.value >= 10)
+        .where(
+            (item) => _alwaysGuidance.contains(item.key.id) || item.value >= 10)
         .toList()
       ..sort((a, b) => b.value.compareTo(a.value));
 
@@ -186,7 +239,28 @@ class PromptCodexRetrievalService {
         .toList()
       ..sort((a, b) => b.value.compareTo(a.value));
 
+    final seenTags = <String>{};
+    final matureMatches = matureTags
+        .where((candidate) {
+          final key = _normalize(candidate.tag);
+          return key.isNotEmpty && seenTags.add(key);
+        })
+        .take(12)
+        .map((candidate) => PromptCodexMatch(
+              id: 'danbooru:${candidate.tag}',
+              title: candidate.tag.replaceAll('_', ' '),
+              section: 'mature-tag',
+              source: candidate.source,
+              excerpt: [
+                if (candidate.description.trim().isNotEmpty)
+                  candidate.description.trim(),
+                if (candidate.count > 0) '使用量 ${candidate.count}',
+              ].join(' · '),
+              adult: false,
+              score: 1000.0 - seenTags.length,
+            ));
     final matches = <PromptCodexMatch>[
+      ...matureMatches,
       ...guidanceMatches.take(guidanceLimit).map((item) => PromptCodexMatch(
             id: 'guidance:${item.key.id}',
             title: item.key.title,
@@ -206,12 +280,23 @@ class PromptCodexRetrievalService {
             score: item.value,
           )),
     ];
+    final mature =
+        matches.where((item) => item.section == 'mature-tag').toList();
+    final references =
+        matches.where((item) => item.section != 'mature-tag').toList();
     final context = matches.isEmpty
         ? ''
         : [
+            '【最高优先级：成熟整词】先判断下列成熟 Tag 是否能完整概括动作、姿态或构图。能用一个成熟 Tag 准确表达时，只使用该 Tag 一次，禁止再叠加它的拆解词、近义词或自然语言复述。只有单 Tag 缺少关键差异时，才用最少必要 Tag 补足。候选不贴合时必须舍弃，禁止硬套。',
+            if (mature.isNotEmpty) '本地 Danbooru 成熟 Tag 候选：',
+            if (mature.isNotEmpty)
+              for (var index = 0; index < mature.length; index += 1)
+                '${index + 1}. ${mature[index].title}${mature[index].excerpt.isEmpty ? '' : ' — ${mature[index].excerpt}'}'
+            else
+              '本次未命中可靠的本地成熟 Tag；请使用最短、无同义重复的基础组合。',
             '以下是本地 NovelAI 提示词法典按当前内容检索出的参考。它们只用于校正结构、补充准确 Tag 与避免冲突；不要无条件复制，不要加入画面中不存在的内容：',
-            for (var index = 0; index < matches.length; index += 1)
-              '${index + 1}. [${matches[index].title}｜${matches[index].source}] ${matches[index].excerpt}',
+            for (var index = 0; index < references.length; index += 1)
+              '${index + 1}. [${references[index].title}｜${references[index].source}] ${references[index].excerpt}',
           ].join('\n');
     return PromptCodexEnhancement(matches: matches, context: context);
   }

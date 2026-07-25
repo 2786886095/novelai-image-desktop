@@ -9,7 +9,7 @@ class NaiOption {
 }
 
 const appName = 'Langbai NovelAI Studio';
-const appVersion = '1.5.5';
+const appVersion = '1.5.6';
 
 const naiModels = <NaiOption>[
   NaiOption('NAI Diffusion 4.5 Full (Full model)', 'nai-diffusion-4-5-full'),
@@ -568,6 +568,7 @@ class AppSettings {
   Map<String, String> convertPromptTemplates;
   bool promptCodexEnhanceEnabled;
   bool promptCodexAdultEnabled;
+  bool promptRuleAutoRepairEnabled;
   String comicPromptTemplate;
   // Last-used tool selections, persisted so they survive an app restart
   // (mirrors the desktop "last generation state").
@@ -639,6 +640,7 @@ class AppSettings {
     Map<String, String>? convertPromptTemplates,
     this.promptCodexEnhanceEnabled = true,
     this.promptCodexAdultEnabled = true,
+    this.promptRuleAutoRepairEnabled = false,
     this.comicPromptTemplate = '',
     this.reversePromptMode = 'tags',
     this.convertPromptMode = 'natural',
@@ -711,6 +713,7 @@ class AppSettings {
         'convertPromptTemplates': convertPromptTemplates,
         'promptCodexEnhanceEnabled': promptCodexEnhanceEnabled,
         'promptCodexAdultEnabled': promptCodexAdultEnabled,
+        'promptRuleAutoRepairEnabled': promptRuleAutoRepairEnabled,
         'comicPromptTemplate': comicPromptTemplate,
         'reversePromptMode': reversePromptMode,
         'convertPromptMode': convertPromptMode,
@@ -787,6 +790,7 @@ class AppSettings {
         convertPromptTemplates: _stringMap(j['convertPromptTemplates']),
         promptCodexEnhanceEnabled: j['promptCodexEnhanceEnabled'] ?? true,
         promptCodexAdultEnabled: j['promptCodexAdultEnabled'] ?? true,
+        promptRuleAutoRepairEnabled: j['promptRuleAutoRepairEnabled'] ?? false,
         comicPromptTemplate: j['comicPromptTemplate'] ?? '',
         reversePromptMode: j['reversePromptMode'] ?? 'tags',
         convertPromptMode: j['convertPromptMode'] ?? 'natural',

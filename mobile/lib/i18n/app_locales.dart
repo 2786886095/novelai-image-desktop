@@ -81,6 +81,9 @@ const _mobileUiText = <String, Map<String, String>>{
     'promptCodex.reverseHint':
         '界面合并为一次任务：先识别图片，再检索法典并二次精修。会多调用一次外部 AI API，不消耗 NovelAI Anlas。',
     'promptCodex.convertHint': '根据输入检索本地法典，并注入同一次转换请求。',
+    'promptCodex.autoRepair': '规则校验失败时自动调用 AI 修复',
+    'promptCodex.autoRepairHint':
+        '默认关闭。仅作用于 Danbooru 标签和混合模式；程序检测到格式、重复、互斥或成熟 Tag 拆解问题时，可能额外调用一次外部 AI。界面与调用记录仍合并为一个任务。',
     'promptCodex.adult': '允许相关分级条目参与检索',
     'promptCodex.adultHint': '仅在内容语义明确相关时召回，不会混入普通场景。',
     'promptCodex.matches': '本次命中的法典来源',
@@ -459,6 +462,9 @@ const _mobileUiText = <String, Map<String, String>>{
     'promptCodex.reverseHint':
         '介面合併為一次任務：先辨識圖片，再檢索法典並二次精修。會多呼叫一次外部 AI API，不消耗 NovelAI Anlas。',
     'promptCodex.convertHint': '依輸入檢索本機法典，並注入同一次轉換請求。',
+    'promptCodex.autoRepair': '規則校驗失敗時自動呼叫 AI 修復',
+    'promptCodex.autoRepairHint':
+        '預設關閉。僅作用於 Danbooru 標籤與混合模式；程式偵測到格式、重複、互斥或成熟 Tag 拆解問題時，可能額外呼叫一次外部 AI。介面與呼叫記錄仍合併為一個任務。',
     'promptCodex.adult': '允許相關分級條目參與檢索',
     'promptCodex.adultHint': '只在內容語意明確相關時召回，不會混入一般場景。',
     'promptCodex.matches': '本次命中的法典來源',
@@ -840,6 +846,9 @@ const _mobileUiText = <String, Map<String, String>>{
         'Shown as one task: inspect the image, retrieve matching local codex entries, then refine it in a second external AI call. No NovelAI Anlas is spent.',
     'promptCodex.convertHint':
         'Retrieve relevant local codex entries and inject them into the same conversion request.',
+    'promptCodex.autoRepair': 'Call AI to repair failed rule checks',
+    'promptCodex.autoRepairHint':
+        'Off by default. Applies only to Danbooru-tag and mixed modes. If format, duplicate, conflict, or mature-tag decomposition issues are detected, one extra external AI call may be made. The UI and call log still show one task.',
     'promptCodex.adult': 'Allow relevant classified entries',
     'promptCodex.adultHint':
         'Only retrieved when semantically relevant; never mixed into ordinary scenes automatically.',
@@ -1245,6 +1254,9 @@ const _mobileUiText = <String, Map<String, String>>{
     'promptCodex.reverseHint':
         '画面上は1件の処理です。画像を解析し、関連法典を検索して外部AIで第2段階の精修を行います。NovelAI Anlasは消費しません。',
     'promptCodex.convertHint': '入力から関連するローカル法典を検索し、同じ変換リクエストに追加します。',
+    'promptCodex.autoRepair': 'ルール検査に失敗した場合 AI で自動修復',
+    'promptCodex.autoRepairHint':
+        '初期設定はオフです。Danbooru Tag と混合モードだけが対象です。形式、重複、競合、成熟 Tag の分解重複を検出した場合、外部 AI をもう1回呼び出すことがあります。画面と履歴では1件のタスクとして表示します。',
     'promptCodex.adult': '関連する区分コンテンツを検索対象にする',
     'promptCodex.adultHint': '意味が明確に関連する場合だけ検索し、通常の場面へ自動混入しません。',
     'promptCodex.matches': '今回一致した法典の出典',
@@ -1625,6 +1637,9 @@ const _mobileUiText = <String, Map<String, String>>{
     'promptCodex.reverseHint':
         '화면에는 하나의 작업으로 표시됩니다. 이미지를 분석하고 관련 법전을 검색한 뒤 외부 AI로 두 번째 정제를 수행합니다. NovelAI Anlas는 사용하지 않습니다.',
     'promptCodex.convertHint': '입력에서 관련 로컬 법전을 검색해 같은 변환 요청에 주입합니다.',
+    'promptCodex.autoRepair': '규칙 검사 실패 시 AI로 자동 수정',
+    'promptCodex.autoRepairHint':
+        '기본값은 꺼짐입니다. Danbooru 태그 및 혼합 모드에만 적용됩니다. 형식, 중복, 충돌 또는 성숙 Tag 분해 문제가 감지되면 외부 AI를 한 번 더 호출할 수 있습니다. 화면과 기록에는 하나의 작업으로 표시됩니다.',
     'promptCodex.adult': '관련 분류 콘텐츠 검색 허용',
     'promptCodex.adultHint': '의미가 명확히 관련될 때만 검색하며 일반 장면에 자동으로 섞지 않습니다.',
     'promptCodex.matches': '이번 실행에서 일치한 법전 출처',

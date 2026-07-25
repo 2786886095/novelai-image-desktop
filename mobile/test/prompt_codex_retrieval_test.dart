@@ -10,10 +10,12 @@ void main() {
       mode: 'convert',
       allowAdult: true,
     );
-    expect(result.matches.any(
-        (item) => item.id == 'guidance:multi-character'), isTrue);
-    expect(result.matches.any(
-        (item) => item.id == 'guidance:interaction-direction'), isTrue);
+    expect(result.matches.any((item) => item.id == 'guidance:multi-character'),
+        isTrue);
+    expect(
+        result.matches
+            .any((item) => item.id == 'guidance:interaction-direction'),
+        isTrue);
     expect(result.context, contains('本地 NovelAI 提示词法典'));
   });
 
@@ -29,8 +31,10 @@ void main() {
       mode: 'convert',
       allowAdult: false,
     );
-    expect(enabled.matches.any(
-        (item) => item.id == 'guidance:classified-clothing'), isTrue);
+    expect(
+        enabled.matches
+            .any((item) => item.id == 'guidance:classified-clothing'),
+        isTrue);
     expect(disabled.matches.any((item) => item.adult), isFalse);
   });
 
@@ -41,5 +45,27 @@ void main() {
       allowAdult: true,
     );
     expect(result.matches.any((item) => item.adult), isFalse);
+  });
+
+  test('mature Danbooru candidates are injected before codex references',
+      () async {
+    final result = await PromptCodexRetrievalService().retrieve(
+      '女孩以七分身构图站立',
+      mode: 'convert',
+      allowAdult: false,
+      matureTags: const [
+        PromptCodexTagCandidate(
+          tag: 'cowboy_shot',
+          description: '七分身构图',
+          count: 600000,
+        ),
+      ],
+    );
+    expect(result.matches.first.id, 'danbooru:cowboy_shot');
+    expect(result.context, contains('禁止再叠加它的拆解词'));
+    expect(
+        result.matches
+            .any((item) => item.id == 'guidance:canonical-tag-priority'),
+        isTrue);
   });
 }

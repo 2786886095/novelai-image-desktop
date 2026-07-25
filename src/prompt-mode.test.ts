@@ -3,12 +3,16 @@ import { CONVERT_SYSTEM_PROMPTS, REVERSE_SYSTEM_PROMPTS } from "./data/prompt-te
 import {
   buildConvertUserText,
   buildModeRepairUserText,
+  buildPromptRuleRepairUserText,
   cleanPromptOutput,
   isLikelyTagListPrompt,
   isLikelyNaturalLanguagePrompt,
   knownCharacterRuntimeInstruction,
   modeNeedsRepair,
+  modeUserInstruction,
   modeRepairSystemPrompt,
+  promptRuleRepairSystemPrompt,
+  promptRuleViolations,
   naturalRepairSystemPrompt,
   parsePromptVariantResponse,
   resolveModePrompt,
@@ -134,5 +138,47 @@ describe("prompt mode output handling", () => {
     expect(instruction).toContain("furina (genshin impact)");
     expect(instruction).not.toContain("Keep both prompts short");
     expect(instruction).not.toContain("Only add outfit, feature, pose, action");
+  });
+
+  it("adds mature-tag priority only to tags and mixed runtime rules", () => {
+    expect(modeUserInstruction("tags", "convert")).toContain(
+      "HARD TAG-SELECTION RULE",
+    );
+    expect(modeUserInstruction("mixed", "reverse")).toContain(
+      "HARD TAG-SELECTION RULE",
+    );
+    expect(modeUserInstruction("natural", "convert")).not.toContain(
+      "HARD TAG-SELECTION RULE",
+    );
+    expect(CONVERT_SYSTEM_PROMPTS.natural).not.toContain("成熟整词优先");
+  });
+
+  it("detects duplicate, conflicting and decomposed mature tags", () => {
+    const issues = promptRuleViolations(
+      "tags",
+      "1girl, cowboy shot, upper body, smile, smile",
+      ["cowboy_shot"],
+    );
+    expect(issues.some((issue) => issue.includes("重复 Tag：smile"))).toBe(true);
+    expect(issues.some((issue) => issue.includes("cowboy shot / upper body"))).toBe(true);
+    expect(issues.some((issue) => issue.includes("成熟 Tag cowboy shot"))).toBe(true);
+  });
+
+  it("keeps natural mode outside mature-tag validation and builds focused repair", () => {
+    expect(
+      promptRuleViolations("natural", "A girl is standing.", ["standing"]),
+    ).toEqual([]);
+    expect(promptRuleRepairSystemPrompt("tags", false)).toContain(
+      "只修复明确列出的违规项",
+    );
+    expect(
+      buildPromptRuleRepairUserText({
+        mode: "tags",
+        originalInput: "七分身女孩",
+        draft: "1girl, cowboy shot, upper body",
+        violations: ["互斥 Tag"],
+        matureTags: ["cowboy_shot"],
+      }),
+    ).toContain("cowboy_shot");
   });
 });

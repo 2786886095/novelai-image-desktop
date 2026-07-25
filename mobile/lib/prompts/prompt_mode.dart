@@ -99,6 +99,7 @@ class TextToolHistoryItem {
   final ReversePromptMode mode;
   final bool knownCharacter;
   final String input;
+
   /// Reverse only — used to drop the record once the source image is gone,
   /// same lazy-cleanup precedent as HistoryItem/dropMissingImage.
   final String? sourceImagePath;
@@ -131,7 +132,8 @@ class TextToolHistoryItem {
         'createdAt': createdAt,
       };
 
-  factory TextToolHistoryItem.fromJson(Map<String, dynamic> j) => TextToolHistoryItem(
+  factory TextToolHistoryItem.fromJson(Map<String, dynamic> j) =>
+      TextToolHistoryItem(
         id: j['id'],
         mode: ReversePromptMode.values.firstWhere(
           (m) => m.value == j['mode'],
@@ -146,8 +148,8 @@ class TextToolHistoryItem {
             : null,
         codexMatches: (j['codexMatches'] as List? ?? const [])
             .whereType<Map>()
-            .map((item) => PromptCodexMatch.fromJson(
-                Map<String, dynamic>.from(item)))
+            .map((item) =>
+                PromptCodexMatch.fromJson(Map<String, dynamic>.from(item)))
             .toList(growable: false),
         createdAt: j['createdAt'] ?? '',
       );
@@ -293,7 +295,8 @@ String knownCharacterRuntimeInstruction(
   // src/prompt-mode.ts knownCharacterRuntimeInstruction for the same fix.
   final modeText = switch (mode) {
     ReversePromptMode.natural => '使用简洁的英文自然语言 NovelAI 提示词。',
-    ReversePromptMode.mixed => '使用简洁的混合 NovelAI 提示词：以 Danbooru tag 为主，只在需要时加入简短的自然语言。',
+    ReversePromptMode.mixed =>
+      '使用简洁的混合 NovelAI 提示词：以 Danbooru tag 为主，只在需要时加入简短的自然语言。',
     ReversePromptMode.tags => '使用简洁的英文逗号分隔 Danbooru / NovelAI tag。',
   };
   if (knownCharacter) {
@@ -335,6 +338,8 @@ String modeUserInstruction(ReversePromptMode mode, String source) {
     return [
       'Output mode: mixed NovelAI V4.5 prompt.',
       'Return exactly one English prompt line.',
+      'HARD TAG-SELECTION RULE: first use an exact mature Danbooru/NovelAI tag when one tag fully expresses an action, pose, or composition. Output it once and do not add decomposed synonyms or prose that repeats the same concept. Add only the shortest tags needed for details the mature tag does not cover.',
+      'Retrieved mature-tag candidates are evidence, not mandatory words: discard any candidate that is not an exact semantic match.',
       'Use Danbooru tags plus short natural-language clauses only where they clarify composition or interaction.',
       'Do not return pure prose only.',
     ].join('\n');
@@ -342,7 +347,137 @@ String modeUserInstruction(ReversePromptMode mode, String source) {
   return [
     'Output mode: Danbooru tag prompt.',
     'Return exactly one English prompt line.',
+    'HARD TAG-SELECTION RULE: first use an exact mature Danbooru/NovelAI tag when one tag fully expresses an action, pose, or composition. Output it once and do not add decomposed synonyms or prose that repeats the same concept. Add only the shortest tags needed for details the mature tag does not cover.',
+    'Retrieved mature-tag candidates are evidence, not mandatory words: discard any candidate that is not an exact semantic match.',
     'Use comma-separated Danbooru / NovelAI tags.',
     'Do not output a pure natural-language sentence.',
   ].join('\n');
 }
+
+String _normalizedTagToken(String value) => value
+    .trim()
+    .toLowerCase()
+    .replaceFirst(RegExp(r'^[-+]?\d+(?:\.\d+)?::'), '')
+    .replaceFirst(RegExp(r'::$'), '')
+    .replaceAll(RegExp(r'[{}\[\]]'), '')
+    .replaceAll('_', ' ')
+    .replaceAll(RegExp(r'\s+'), ' ')
+    .trim();
+
+const _promptConflicts = <(String, String)>[
+  ('close-up', 'full body'),
+  ('close up', 'full body'),
+  ('upper body', 'full body'),
+  ('cowboy shot', 'upper body'),
+  ('cowboy shot', 'full body'),
+  ('from front', 'from behind'),
+  ('from above', 'from below'),
+  ('sitting', 'standing'),
+];
+
+const _matureTagDecompositions = <String, List<String>>{
+  'dogeza': ['bowing', 'hands on floor', 'kneeling on floor'],
+  'wariza': ['kneeling sit', 'kneeling sitting', 'sitting on feet'],
+  'yokozuwari': ['legs to side', 'sideways sitting'],
+  'cowboy shot': ['upper body', 'full body', 'medium shot'],
+  'dutch angle': ['tilted angle', 'tilted composition'],
+  'crossed arms': ['arms crossed'],
+  'hands behind back': ['arms behind back'],
+};
+
+bool _looksLikeNaturalLanguage(String value) {
+  final text = cleanPromptOutput(value);
+  final sentence = RegExp(
+    r'\b(?:A|An|The|One|Two|Three|Four|Five|No)\s+\w+\s+(?:is|are|was|were|stands?|sits?|lies?|holds?|draws?|juggles?|wears?|contains?|shows?|faces?)\b',
+    caseSensitive: false,
+  ).hasMatch(text);
+  if (!sentence) return false;
+  final chunks =
+      text.split(RegExp(r'[,|]')).where((item) => item.trim().isNotEmpty);
+  final shortTags = chunks.where((item) {
+    final token = item.trim();
+    return token.split(RegExp(r'\s+')).length <= 4 &&
+        !RegExp(r'[.!?;:]').hasMatch(token);
+  }).length;
+  return shortTags < 5;
+}
+
+List<String> promptRuleViolations(
+  ReversePromptMode mode,
+  String output, [
+  List<String> matureTags = const [],
+]) {
+  if (mode == ReversePromptMode.natural) return const [];
+  final cleaned = cleanPromptOutput(output);
+  if (cleaned.isEmpty) return const [];
+  final issues = <String>{};
+  if (_looksLikeNaturalLanguage(cleaned)) {
+    issues.add(mode == ReversePromptMode.tags
+        ? '输出不是以逗号分隔的 Danbooru Tag 格式'
+        : '混合模式输出退化成了纯自然语言，缺少 Tag 主体');
+  }
+  final tokens = cleaned
+      .split(RegExp(r'[|,]'))
+      .map(_normalizedTagToken)
+      .where((item) => item.isNotEmpty)
+      .toList();
+  final tokenSet = <String>{};
+  for (final token in tokens) {
+    if (!tokenSet.add(token)) issues.add('重复 Tag：$token');
+  }
+  for (final conflict in _promptConflicts) {
+    if (tokenSet.contains(conflict.$1) && tokenSet.contains(conflict.$2)) {
+      issues.add('互斥 Tag 同时出现：${conflict.$1} / ${conflict.$2}');
+    }
+  }
+  final candidates = matureTags.map(_normalizedTagToken).toSet();
+  for (final entry in _matureTagDecompositions.entries) {
+    if (!candidates.contains(entry.key) || !tokenSet.contains(entry.key)) {
+      continue;
+    }
+    for (final decomposition in entry.value) {
+      if (tokenSet.contains(decomposition)) {
+        issues.add('成熟 Tag ${entry.key} 已完整表达概念，不应再叠加 $decomposition');
+      }
+    }
+  }
+  return issues.toList(growable: false);
+}
+
+String promptRuleRepairSystemPrompt(
+  ReversePromptMode mode,
+  bool knownCharacter,
+) =>
+    [
+      '你是 NovelAI V4.5 提示词规则校验与定向修复器。不要重新创作画面，只修复明确列出的违规项。',
+      knownCharacter
+          ? '只输出严格 JSON，且只能包含 namePrompt 与 featurePrompt 两个字符串字段；两份提示词都必须完成相同检查。'
+          : '只输出修复后的单行英文 Prompt，不要解释、标题或 Markdown。',
+      mode == ReversePromptMode.tags
+          ? '保持 Danbooru Tag 模式，以英文逗号分隔；多人继续使用 base | character 1 | character 2。'
+          : '保持混合模式，以 Danbooru Tag 为主，只有构图或互动确需澄清时才保留最短自然语言。',
+      '成熟整词优先：一个成熟 Tag 已完整表达动作、姿态或构图时，只保留该 Tag 一次，删除拆解词、近义词和重复自然语言；未覆盖的关键差异才允许最少量补充。',
+      '候选成熟 Tag 不贴合原始输入时必须舍弃，不能硬套；不得新增原始输入或图片中没有的内容。',
+    ].join('\n');
+
+String buildPromptRuleRepairUserText({
+  required ReversePromptMode mode,
+  required String originalInput,
+  required String draft,
+  required List<String> violations,
+  List<String> matureTags = const [],
+}) =>
+    [
+      '输出模式：${mode.value}',
+      '原始输入或反推范围：',
+      originalInput.trim(),
+      '待校验 Prompt：',
+      draft.trim(),
+      '程序检测到的违规项：',
+      for (var index = 0; index < violations.length; index += 1)
+        '${index + 1}. ${violations[index]}',
+      matureTags.isNotEmpty
+          ? '本地检索到的成熟 Tag 候选（仅精确贴合时使用）：${matureTags.join(', ')}'
+          : '本次没有可靠成熟 Tag 候选，请采用最短基础组合。',
+      '只修复上述问题并执行最终去重、互斥检查；保留其余正确内容。',
+    ].join('\n\n');

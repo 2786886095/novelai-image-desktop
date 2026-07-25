@@ -1049,10 +1049,14 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
     }));
   }
 
-  function applyReferenceRange(reference: TagComicReferenceAsset) {
+  function applyReferenceRange(
+    reference: TagComicReferenceAsset,
+    rawValue?: string,
+  ) {
     try {
       const numbers = parseTagComicPanelRange(
-        referenceRanges[reference.id] ??
+        rawValue ??
+          referenceRanges[reference.id] ??
           formatTagComicPanelRange(reference.scopePanelIds, panels),
         panels.length,
       );
@@ -1746,20 +1750,31 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                         {reference.scope !== "all" && (
                           <div className="tag-comic-reference-range">
                             <input
+                              type="text"
+                              inputMode="text"
+                              autoComplete="off"
+                              spellCheck={false}
                               aria-label={text(language, "preciseRange")}
                               value={
                                 referenceRanges[reference.id] ??
                                 formatTagComicPanelRange(reference.scopePanelIds, panels)
                               }
                               placeholder={text(language, "preciseRangePlaceholder")}
-                              onChange={(event) =>
+                              onChange={(event) => {
+                                const value = event.currentTarget.value;
                                 setReferenceRanges((current) => ({
                                   ...current,
-                                  [reference.id]: event.target.value,
-                                }))
-                              }
+                                  [reference.id]: value,
+                                }));
+                              }}
                               onKeyDown={(event) => {
-                                if (event.key === "Enter") applyReferenceRange(reference);
+                                if (event.key === "Enter") {
+                                  event.preventDefault();
+                                  applyReferenceRange(
+                                    reference,
+                                    event.currentTarget.value,
+                                  );
+                                }
                               }}
                             />
                             <Button variant="secondary" onClick={() => applyReferenceRange(reference)}>
