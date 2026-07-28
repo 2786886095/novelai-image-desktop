@@ -1,0 +1,43 @@
+name: Mirror to Gitee
+
+on:
+  push:
+    branches:
+      - '**'
+    tags:
+      - '**'
+  delete:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gitee-mirror-${{ github.repository }}
+  cancel-in-progress: true
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Mirror branches and tags to Gitee
+        env:
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo="${GITHUB_REPOSITORY#*/}"
+          git fetch --prune origin \
+            '+refs/heads/*:refs/remotes/origin/*' \
+            '+refs/tags/*:refs/tags/*'
+          git update-ref -d refs/remotes/origin/HEAD || true
+          git remote add gitee "https://langbai666:${GITEE_TOKEN}@gitee.com/langbai666/${repo}.git"
+          git push --force --prune gitee \
+            'refs/remotes/origin/*:refs/heads/*'
+          git push --force --prune gitee \
+            'refs/tags/*:refs/tags/*'
