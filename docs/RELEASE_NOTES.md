@@ -4,16 +4,21 @@
 
 | 系统 | 安装包 | 安装说明 |
 | --- | --- | --- |
-| 🪟 **Windows**（便携版，x64） | `Langbai-NovelAI-Studio-1.5.7.exe` | 双击即用，无需安装 |
-| 🪟 **Windows**（安装版，x64） | `Langbai-NovelAI-Studio-Setup-1.5.7.exe` | 安装向导可自选路径、创建快捷方式；支持软件内一键更新 |
-| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-1.5.7-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
-| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-1.5.7.zip` | 解压后即为 `.app`，同样需右键「打开」 |
-| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-1.5.7.AppImage` | `chmod +x` 后直接运行 |
+| 🪟 **Windows**（便携版，x64） | `Langbai-NovelAI-Studio-1.5.8.exe` | 双击即用，无需安装 |
+| 🪟 **Windows**（安装版，x64） | `Langbai-NovelAI-Studio-Setup-1.5.8.exe` | 安装向导可自选路径、创建快捷方式；支持软件内一键更新 |
+| 🍎 **macOS** | — | 本次 Windows 构建环境未产出 macOS 包；`v1.5.8` 源码已包含此修复。 |
+| 🐧 **Linux** | — | 本次 Windows 构建环境未产出 Linux 包；`v1.5.8` 源码已包含此修复。 |
 | 🤖 **Android** | `app-release.apk` | 直接安装；需允许「未知来源」 |
-| 📱 **iOS** | `novelai-mobile-unsigned.ipa` | **未签名**，需使用 AltStore / Sideloadly 等工具自行侧载 |
+| 📱 **iOS** | — | 本次 Windows 构建环境未产出 IPA；`v1.5.8` 源码已包含此修复。 |
 
 > 桌面端与移动端均为 **API-only** 客户端，需要自备 NovelAI Persistent API Token。
 
+### v1.5.8 更新内容
+
+- 修复批量图生图在已生成后修改全局参数、单图覆盖参数、提示词、重绘强度或参考图，再次生成仍可能沿用旧数据的问题。
+- 每次点击“开始批量”“继续未完成”“重试失败”或单图“重新生成”时，都会立即采集当前编辑值；已确认开始的队列则固定使用确认时的完整快照，不会被运行期间的编辑污染。
+- 重试或取消不再自动删除既有成图：成功图会留在历史记录中，显式“清空当前生成”才会清理当前批次结果。
+- 桌面端、Android 与 iOS 同步修复，并新增覆盖队列快照、清空后重跑和单图重试的回归测试。
 ### v1.5.7 更新内容
 
 - 修复漫画生成器已生成候选图后修改参数、再次追加生成仍沿用旧参数的问题。

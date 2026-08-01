@@ -18,6 +18,24 @@ import '../services/nai_api.dart';
 import '../state/app_state.dart';
 import 'batch_redraw_models.dart';
 
+/// A confirmed batch request.  The editor keeps mutable project state, while a
+/// running queue must continue with exactly the settings that were present when
+/// the user pressed generate.  Keeping the request data separate also means a
+/// later retry can take a fresh snapshot without clearing existing results.
+class _BatchRedrawQueueJob {
+  final BatchRedrawItem item;
+  final GenerateParams params;
+  final GenerateExtras extras;
+  final double strength;
+
+  const _BatchRedrawQueueJob({
+    required this.item,
+    required this.params,
+    required this.extras,
+    required this.strength,
+  });
+}
+
 class BatchRedrawController extends ChangeNotifier {
   final AppState app;
   late BatchRedrawProject project;
@@ -280,19 +298,40 @@ class BatchRedrawController extends ChangeNotifier {
   List<BatchRedrawItem> get selected =>
       project.items.where((item) => item.selected).toList();
 
-  int quote(List<BatchRedrawItem> targets) {
+  /// Freeze all mutable inputs for a confirmed queue.  Do not retain a
+  /// reference to [project.globalParams], per-item params, prompts, strengths,
+  /// or references: the editor remains available while the queue is running.
+  List<_BatchRedrawQueueJob> _snapshotQueue(List<BatchRedrawItem> targets) {
+    final globalStyle = project.globalStyle;
+    final globalNegative = project.globalNegative;
+    final globalStrength = project.globalStrength;
+    return targets.map((item) {
+      final sourceParams =
+          item.overrideParams ? item.params : project.globalParams;
+      final params = sourceParams.copy()
+        ..positivePrompt = _merge(globalStyle, item.prompt)
+        ..negativePrompt = globalNegative;
+      return _BatchRedrawQueueJob(
+        item: item,
+        params: params,
+        extras: referencesFor(sourceParams),
+        strength: item.strength ?? globalStrength,
+      );
+    }).toList(growable: false);
+  }
+
+  int _quoteJobs(List<_BatchRedrawQueueJob> jobs) {
     var total = 0;
-    for (final item in targets) {
-      final params = item.overrideParams ? item.params : project.globalParams;
-      final extras = referencesFor(params);
+    for (final job in jobs) {
       total += calculateImageGenerationAnlas(
-            params: params,
+            params: job.params,
             account: app.account,
-            extras: extras,
+            extras: job.extras,
             imageToImage: true,
-            strength: item.strength ?? project.globalStrength,
-            alreadyEncodedVibes: app.api.countCachedVibes(params.model, extras),
-            preciseReferenceCount: extras.preciseReferences.length,
+            strength: job.strength,
+            alreadyEncodedVibes:
+                app.api.countCachedVibes(job.params.model, job.extras),
+            preciseReferenceCount: job.extras.preciseReferences.length,
             language: app.settings.language,
           ).amount ??
           0;
@@ -300,9 +339,17 @@ class BatchRedrawController extends ChangeNotifier {
     return total;
   }
 
+  int quote(List<BatchRedrawItem> targets) {
+    return _quoteJobs(_snapshotQueue(targets));
+  }
+
   Future<void> startQueue(List<BatchRedrawItem> targets) async {
     if (targets.isEmpty || queueRunning) return;
-    final amount = quote(targets);
+    // Build this before awaiting or changing any item state.  Every item in
+    // the current run then receives the same confirmed global values, while a
+    // later clear/retry call starts from the latest editor values.
+    final jobs = _snapshotQueue(targets);
+    final amount = _quoteJobs(jobs);
     final balance = app.account.anlasBalance;
     if (balance != null && amount > balance) {
       status = _rf('batch.insufficient', {
@@ -311,11 +358,8 @@ class BatchRedrawController extends ChangeNotifier {
       });
       notifyListeners();
     }
-    final incompatible = targets.any((item) {
-      final params = item.overrideParams ? item.params : project.globalParams;
-      return referencesFor(params).preciseReferences.isNotEmpty &&
-          !params.isV45;
-    });
+    final incompatible = jobs.any(
+        (job) => job.extras.preciseReferences.isNotEmpty && !job.params.isV45);
     if (incompatible) {
       status = _rt('error.preciseV45Only');
       notifyListeners();
@@ -325,7 +369,9 @@ class BatchRedrawController extends ChangeNotifier {
     queuePaused = false;
     queueCancelled = false;
     queueDone = 0;
-    queueTotal = targets.length;
+    queueTotal = jobs.length;
+    final queueGroupName = _projectName();
+    var queueHistoryGroupId = project.historyGroupId;
     if (BackgroundQueueService.shouldWarnNoBackgroundSupport()) {
       status = _rt('status.backgroundNotSupported');
     }
@@ -337,7 +383,8 @@ class BatchRedrawController extends ChangeNotifier {
       );
     } catch (_) {}
     notifyListeners();
-    for (final item in targets) {
+    for (final job in jobs) {
+      final item = job.item;
       if (queueCancelled) break;
       while (queuePaused && !queueCancelled) {
         await Future<void>.delayed(const Duration(milliseconds: 220));
@@ -355,18 +402,13 @@ class BatchRedrawController extends ChangeNotifier {
         }),
       ));
       try {
-        final params =
-            (item.overrideParams ? item.params : project.globalParams).copy();
-        params
-          ..positivePrompt = _merge(project.globalStyle, item.prompt)
-          ..negativePrompt = project.globalNegative;
         final history = await app.generateBatchRedrawItem(
           sourceBytes: base64Decode(item.base64),
-          itemParams: params,
-          itemExtras: referencesFor(params),
-          strength: item.strength ?? project.globalStrength,
-          groupName: _projectName(),
-          historyGroupId: project.historyGroupId,
+          itemParams: job.params,
+          itemExtras: job.extras,
+          strength: job.strength,
+          groupName: queueGroupName,
+          historyGroupId: queueHistoryGroupId,
           cancelled: () => queueCancelled,
         );
         if (queueCancelled) {
@@ -376,7 +418,8 @@ class BatchRedrawController extends ChangeNotifier {
           changed();
           break;
         }
-        project.historyGroupId = history.groupId;
+        queueHistoryGroupId = history.groupId;
+        project.historyGroupId = queueHistoryGroupId;
         item
           ..status = BatchItemStatus.done
           ..outputPath = history.filePath;

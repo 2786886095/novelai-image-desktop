@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildBatchRedrawRequest,
   clearBatchRedrawItemResult,
   resetInterruptedBatchItem,
   shouldStopBatchRedraw,
 } from "./batch-redraw-queue";
-import type { BatchRedrawItem } from "./types";
+import { createDefaultBatchRedraw, DEFAULT_PARAMS, type BatchRedrawItem } from "./types";
 
 function item(status: BatchRedrawItem["status"]): BatchRedrawItem {
   return {
@@ -33,6 +34,60 @@ describe("batch redraw cancellation", () => {
       error: undefined,
     });
     expect(resetInterruptedBatchItem(item("done")).status).toBe("done");
+  });
+
+  it("keeps an existing output visible when a replacement is cancelled", () => {
+    const interrupted = resetInterruptedBatchItem({
+      ...item("generating"),
+      resultUrl: "file:///existing.png",
+      resultPath: "C:/output/existing.png",
+      historyItemId: "history-existing",
+    });
+    expect(interrupted).toMatchObject({
+      status: "pending",
+      resultUrl: "file:///existing.png",
+      resultPath: "C:/output/existing.png",
+      historyItemId: "history-existing",
+    });
+  });
+
+  it("snapshots the parameters and references visible when the queue starts", () => {
+    const project = createDefaultBatchRedraw({ ...DEFAULT_PARAMS, steps: 28 });
+    project.globalStyle = "global style";
+    project.globalNegative = "new negative";
+    project.globalStrength = 0.55;
+    project.vibeImages = [{ base64: "vibe", infoExtracted: 0.6, strength: 0.7 }];
+    project.preciseReferences = [
+      { base64: "precise", type: "character", strength: 1, fidelity: 0.8 },
+    ];
+    const source: BatchRedrawItem = {
+      ...item("pending"),
+      prompt: "subject",
+      overrideParams: true,
+      params: { steps: 36, seed: 123, seedMode: "fixed" },
+    };
+
+    const request = buildBatchRedrawRequest(project, source, "Batch output");
+    project.globalStyle = "edited after start";
+    project.vibeImages[0].strength = 0.1;
+
+    expect(request).toMatchObject({
+      groupName: "Batch output",
+      strength: 0.55,
+      params: {
+        steps: 36,
+        seed: 123,
+        seedMode: "fixed",
+        positivePrompt: "global style, subject",
+        negativePrompt: "new negative",
+      },
+      extras: {
+        vibeImages: [{ base64: "vibe", infoExtracted: 0.6, strength: 0.7 }],
+        preciseReferences: [
+          { base64: "precise", type: "character", strength: 1, fidelity: 0.8 },
+        ],
+      },
+    });
   });
 
   it("clears a previous result without changing the source inputs", () => {

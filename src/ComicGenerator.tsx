@@ -9,6 +9,7 @@ import {
 } from "./i18n";
 import { useAppStore } from "./store";
 import {
+  buildBatchRedrawRequest,
   clearBatchRedrawItemResult,
   resetInterruptedBatchItem,
   shouldStopBatchRedraw,
@@ -249,24 +250,6 @@ function localizedBatchGroupName(name: string, t: (key: string) => string) {
   return trimmed === LEGACY_BATCH_GROUP_NAME
     ? t("batch.projectDefaultName")
     : trimmed;
-}
-
-function batchItemParams(
-  project: BatchRedrawProject,
-  item: BatchRedrawItem,
-): GenerateParams {
-  const base = item.overrideParams
-    ? { ...project.globalParams, ...item.params }
-    : project.globalParams;
-  const positive = [project.globalStyle.trim(), item.prompt.trim()]
-    .filter(Boolean)
-    .join(", ");
-  return {
-    ...base,
-    positivePrompt: positive,
-    negativePrompt: project.globalNegative.trim() || base.negativePrompt,
-    fileNamePrefix: item.name,
-  };
 }
 
 // normalizeBatchItem's only caller is importProject (a raw file picker read),
@@ -950,8 +933,11 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
     }
   }
 
-  // Run img2img serially over the given items. Regenerating an item first deletes
-  // its previous output (磁盘 + 历史记录) so 重试 never leaves the old image behind.
+  // Run img2img serially over the given items. The complete request for every
+  // target is captured when Generate is pressed: edits made during the queue
+  // apply to the next run, while an individual retry always starts from the
+  // freshly saved parameters. A retry never deletes the prior output from
+  // persistent History.
   async function runTargets(targets: BatchRedrawItem[]) {
     // Read the live store flag, not the captured `running` closure: a fast
     // double-click would otherwise start a second concurrent run, and because
@@ -966,7 +952,16 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
       return;
     }
     const runGroupName = localizedBatchGroupName(proj.groupName, t);
-    const ready = targets.filter((it) => it.prompt.trim());
+    // Targets may come from a prior render. Resolve IDs against the current
+    // store before snapshotting so changing a parameter then pressing Retry
+    // never submits the pre-edit object captured by React.
+    const ready = targets
+      .map((target) => proj.items.find((item) => item.id === target.id))
+      .filter((item): item is BatchRedrawItem => Boolean(item?.prompt.trim()))
+      .map((item) => ({
+        id: item.id,
+        request: buildBatchRedrawRequest(proj, item, runGroupName),
+      }));
     if (ready.length === 0) {
       setToast(t("batch.toast.noReady"));
       return;
@@ -986,50 +981,30 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
         /* group ensured by the main process anyway */
       }
 
-      const extras = {
-        vibeImages: proj.vibeImages,
-        charCaptions: [],
-        preciseReferences: proj.preciseReferences,
-      };
-
-      for (const it of ready) {
+      for (const target of ready) {
         if (cancelRefCurrent()) break;
-        if (it.historyItemId) {
-          try {
-            await window.naiDesktop.deleteHistory(it.historyItemId);
-          } catch {
-            /* previous output already gone */
-          }
-        }
-        patchItem(it.id, {
+        // Do not clear an earlier output while the replacement is running.
+        // This prevents a failed retry/cancel from visually discarding a good
+        // image and leaves it available in the persistent History panel.
+        patchItem(target.id, {
           status: "generating",
           error: undefined,
-          resultUrl: undefined,
-          resultPath: undefined,
-          historyItemId: undefined,
         });
-        const res = await window.naiDesktop.redrawImage({
-          imageBase64: it.base64,
-          params: batchItemParams(proj, it),
-          strength: it.strength ?? proj.globalStrength,
-          extras,
-          groupName: runGroupName,
-          fileNamePrefix: it.name,
-        });
+        const res = await window.naiDesktop.redrawImage(target.request);
         // Cancellation controls the whole queue; it is not a failed image.
         // Return the interrupted card to pending and never start another one.
         if (shouldStopBatchRedraw(cancelRefCurrent(), res.failureKind)) {
           setBatchRedraw((prev) => ({
             ...prev,
             items: prev.items.map((item) =>
-              item.id === it.id ? resetInterruptedBatchItem(item) : item,
+              item.id === target.id ? resetInterruptedBatchItem(item) : item,
             ),
           }));
           break;
         }
         const out = res.ok ? res.items[0] : undefined;
         if (res.ok && out) {
-          patchItem(it.id, {
+          patchItem(target.id, {
             status: "done",
             resultUrl: out.fileUrl,
             resultPath: out.filePath,
@@ -1038,7 +1013,7 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
           });
           done += 1;
         } else {
-          patchItem(it.id, { status: "failed", error: res.message });
+          patchItem(target.id, { status: "failed", error: res.message });
           failed += 1;
           lastError = res.message;
         }

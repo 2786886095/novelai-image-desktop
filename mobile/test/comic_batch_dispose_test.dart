@@ -236,6 +236,121 @@ void main() {
     expect(failed.error, isEmpty);
   });
 
+  test(
+      'BatchRedrawController freezes a running batch and uses current values after clear or selected retry',
+      () async {
+    final api = _CapturingSlowImg2ImgApi();
+    final storage = _MemoryStorage();
+    final app = AppState(api: api, storage: storage)
+      ..account = const AccountSummary(
+        hasToken: true,
+        tierLevel: 1,
+        anlasBalance: 1000,
+        hasActiveSubscription: true,
+      );
+    final controller = BatchRedrawController(app);
+    final globalItem = BatchRedrawItem(
+      id: 'global',
+      name: 'global.png',
+      base64: 'YWJj',
+      prompt: 'global prompt',
+    );
+    final overriddenItem = BatchRedrawItem(
+      id: 'overridden',
+      name: 'overridden.png',
+      base64: 'ZGVm',
+      prompt: 'overridden prompt',
+      overrideParams: true,
+      params: GenerateParams()..steps = 30,
+    );
+    controller.project = BatchRedrawProject.empty(app.params)
+      ..globalParams.steps = 28
+      ..globalStyle = 'old style'
+      ..globalNegative = 'old negative'
+      ..globalStrength = 0.4
+      ..vibeImages.add(const VibeTransferItem(base64: 'cmVmZXJlbmNl'))
+      ..items.addAll([globalItem, overriddenItem]);
+    addTearDown(app.dispose);
+    addTearDown(controller.dispose);
+
+    final firstRun = controller.startQueue([globalItem, overriddenItem]);
+    await _waitUntil(() => api.calls == 1);
+
+    // These edits belong to the next confirmed queue, not to item #2 in the
+    // currently running queue.
+    controller.project
+      ..globalStyle = 'new style'
+      ..globalNegative = 'new negative'
+      ..globalStrength = 0.65
+      ..globalParams.steps = 36;
+    overriddenItem
+      ..params.steps = 40
+      ..strength = 0.75;
+    controller.project.preciseReferences.add(
+      const PreciseReferenceItem(base64: 'bmV3LXJlZmVyZW5jZQ=='),
+    );
+    controller.changed();
+
+    api.complete(0);
+    await _waitUntil(() => api.calls == 2);
+    expect(api.params.map((params) => params.steps), [28, 30]);
+    expect(api.params.map((params) => params.positivePrompt), [
+      'old style, global prompt',
+      'old style, overridden prompt',
+    ]);
+    expect(api.params.map((params) => params.negativePrompt),
+        ['old negative', 'old negative']);
+    expect(api.strengths, [0.4, 0.4]);
+    expect(
+      api.capturedExtras.take(2).every(
+            (extras) =>
+                extras.vibeImages.length == 1 &&
+                extras.preciseReferences.isEmpty,
+          ),
+      isTrue,
+    );
+    api.complete(1);
+    await firstRun;
+
+    // Clearing only resets results. It must retain the edited values so a new
+    // batch uses the current global and per-item settings.
+    expect(await controller.clearGeneratedResults(), isTrue);
+    expect(globalItem.prompt, 'global prompt');
+    expect(overriddenItem.prompt, 'overridden prompt');
+    expect(globalItem.status, BatchItemStatus.pending);
+    expect(overriddenItem.status, BatchItemStatus.pending);
+
+    final secondRun = controller.startQueue([globalItem, overriddenItem]);
+    await _waitUntil(() => api.calls == 3);
+    expect(api.params[2].steps, 36);
+    expect(api.params[2].positivePrompt, 'new style, global prompt');
+    expect(api.params[2].negativePrompt, 'new negative');
+    expect(api.strengths[2], 0.65);
+    expect(api.capturedExtras[2].preciseReferences, hasLength(1));
+    api.complete(2);
+    await _waitUntil(() => api.calls == 4);
+    expect(api.params[3].steps, 40);
+    expect(api.params[3].positivePrompt, 'new style, overridden prompt');
+    expect(api.strengths[3], 0.75);
+    api.complete(3);
+    await secondRun;
+
+    // A selected-item re-generation takes one more fresh snapshot and does
+    // not require deleting the existing output first.
+    overriddenItem
+      ..selected = true
+      ..prompt = 'selected retry'
+      ..params.steps = 44;
+    controller.project.globalStyle = 'latest style';
+    controller.changed();
+    final retry = controller.startQueue(controller.selected);
+    await _waitUntil(() => api.calls == 5);
+    expect(api.params[4].steps, 44);
+    expect(api.params[4].positivePrompt, 'latest style, selected retry');
+    api.complete(4);
+    await retry;
+  });
+
   test('Storage.deleteHistoryFiles removes files and matching history records',
       () async {
     final directory = await Directory.systemTemp.createTemp('batch-clear-');
@@ -377,6 +492,52 @@ class _CancellableImg2ImgApi extends _SlowImg2ImgApi {
     if (!pending.isCompleted) {
       pending.completeError(const GenerationCancelledException());
     }
+  }
+}
+
+class _CapturingSlowImg2ImgApi extends NaiApi {
+  final List<Completer<(List<Uint8List>, int)>> _pending = [];
+  final List<GenerateParams> params = [];
+  final List<double> strengths = [];
+  final List<GenerateExtras> capturedExtras = [];
+  int get calls => params.length;
+
+  @override
+  Future<AccountSummary> fetchAccount(
+    String token,
+    AppSettings settings,
+  ) async =>
+      const AccountSummary(
+        hasToken: true,
+        tierLevel: 1,
+        anlasBalance: 1000,
+        hasActiveSubscription: true,
+      );
+
+  @override
+  Future<(List<Uint8List>, int)> img2img(
+    String token,
+    AppSettings settings,
+    GenerateParams value,
+    GenerateExtras extras,
+    Uint8List sourceBytes,
+    I2IParams i2i,
+  ) {
+    params.add(value.copy());
+    strengths.add(i2i.strength);
+    capturedExtras.add(extras.copy());
+    final pending = Completer<(List<Uint8List>, int)>();
+    _pending.add(pending);
+    return pending.future;
+  }
+
+  void complete(int index) {
+    _pending[index].complete((
+      [
+        Uint8List.fromList([index + 1, 2, 3])
+      ],
+      200 + index,
+    ));
   }
 }
 
