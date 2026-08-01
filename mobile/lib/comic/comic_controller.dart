@@ -16,6 +16,21 @@ import '../services/background_queue_service.dart';
 import '../state/app_state.dart';
 import 'comic_models.dart';
 
+/// Immutable request data captured when a comic run is confirmed.  Editing
+/// project settings after this point affects the next run, not a request that
+/// is already queued.
+class _ComicGenerationTask {
+  final ComicPanel panel;
+  final GenerateParams params;
+  final GenerateExtras extras;
+
+  const _ComicGenerationTask({
+    required this.panel,
+    required this.params,
+    required this.extras,
+  });
+}
+
 class ComicController extends ChangeNotifier {
   final AppState app;
 
@@ -504,7 +519,18 @@ class ComicController extends ChangeNotifier {
     return total;
   }
 
-  Future<void> generateCandidate(ComicPanel panel) async {
+  Future<_ComicGenerationTask> _captureGenerationTask(
+    ComicPanel panel,
+  ) async {
+    return _ComicGenerationTask(
+      panel: panel,
+      params: paramsFor(panel).copy(),
+      extras: (await extrasFor(panel)).copy(),
+    );
+  }
+
+  Future<void> _generateCandidate(_ComicGenerationTask task) async {
+    final panel = task.panel;
     if (panel.prompt.trim().isEmpty) {
       throw FormatException(_t('comic.emptyPrompt'));
     }
@@ -515,8 +541,8 @@ class ComicController extends ChangeNotifier {
     try {
       final before = app.account.anlasBalance;
       final item = await app.generateComicPanel(
-        panelParams: paramsFor(panel),
-        panelExtras: await extrasFor(panel),
+        panelParams: task.params,
+        panelExtras: task.extras,
         projectTitle: displayTitle,
         historyGroupId: project.historyGroupId,
       );
@@ -574,27 +600,33 @@ class ComicController extends ChangeNotifier {
     if (!hasCompletePanelSizes) {
       throw FormatException(_t('comic.sizesIncomplete'));
     }
-    if (tasks.any((panel) =>
-        resolvedComicPanelReferences(project, panel).isNotEmpty &&
-        !paramsFor(panel).isV45)) {
+    if (tasks.any((panel) => panel.prompt.trim().isEmpty)) {
+      throw FormatException(_t('comic.emptyPrompt'));
+    }
+    final planned = <_ComicGenerationTask>[];
+    for (final panel in tasks) {
+      planned.add(await _captureGenerationTask(panel));
+    }
+    if (planned.any((task) =>
+        task.extras.preciseReferences.isNotEmpty && !task.params.isV45)) {
       throw FormatException(_t('comic.preciseV45Only'));
     }
     queueRunning = true;
     queueCancelled = false;
     queueDone = 0;
-    queueTotal = tasks.length;
+    queueTotal = planned.length;
     notifyListeners();
     try {
       await BackgroundQueueService.start(
         'comic-generation',
         title: _t('notification.comicTitle'),
-        text: '${_t('comic.generateHeading')} 0/${tasks.length}',
+        text: '${_t('comic.generateHeading')} 0/${planned.length}',
       );
     } catch (_) {}
-    for (final panel in tasks) {
+    for (final task in planned) {
       if (queueCancelled) break;
       try {
-        await generateCandidate(panel);
+        await _generateCandidate(task);
       } catch (_) {}
       queueDone++;
       notifyListeners();

@@ -3,6 +3,7 @@ import { DEFAULT_PARAMS, type TagComicProject } from "../types";
 import {
   createTagComicPanel,
   createTagComicProject,
+  buildTagComicGenerateRequest,
   mergeTagComicParams,
   normalizeTagComicProject,
   formatTagComicPanelRange,
@@ -90,6 +91,29 @@ describe("tag-only comic projects", () => {
     });
     expect(project.globalNegativePrompt).toBe("lowres");
     expect(panel).not.toHaveProperty("localNegativePrompt");
+  });
+
+  it("snapshots the current parameters for each confirmed generation", () => {
+    const project = createTagComicProject({
+      ...DEFAULT_PARAMS,
+      steps: 28,
+      cfgScale: 6,
+    });
+    project.globalStylePrompt = "illustration";
+    project.globalNegativePrompt = "lowres";
+    const panel = createTagComicPanel("1girl, standing", 1);
+    project.panels.push(panel);
+
+    const first = buildTagComicGenerateRequest(project, panel);
+    project.globalParams.steps = 36;
+    project.globalStylePrompt = "painting";
+
+    expect(first.params.steps).toBe(28);
+    expect(first.globalStylePrompt).toBe("illustration");
+    expect(buildTagComicGenerateRequest(project, panel).params.steps).toBe(36);
+    expect(buildTagComicGenerateRequest(project, panel).globalStylePrompt).toBe(
+      "painting",
+    );
   });
 
   it("imports one supported size per panel and applies it over global dimensions", () => {

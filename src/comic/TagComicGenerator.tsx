@@ -8,6 +8,7 @@ import {
   NAI_SAMPLERS,
   type GenerateParams,
   type TagComicCandidate,
+  type TagComicGenerateRequest,
   type TagComicPanel,
   type TagComicPanelReference,
   type TagComicProject,
@@ -18,6 +19,7 @@ import {
   TAG_COMIC_SIZE_PRESETS,
   TagComicPanelRangeError,
   TagComicSizeImportError,
+  buildTagComicGenerateRequest,
   createTagComicPanel,
   createTagComicProject,
   mergeTagComicParams,
@@ -26,13 +28,13 @@ import {
   parseTagComicImport,
   parseTagComicPanelRange,
   parseTagComicSizeImport,
-  resolveTagComicPanelReferences,
   tagComicReferenceApplies,
   tagComicSizeTemplate,
 } from "./tag-comic";
 
 type Step = "import" | "global" | "panels" | "generate";
 type QueueTask = { panelId: string; ordinal: number };
+type PreparedQueueTask = QueueTask & { request: TagComicGenerateRequest };
 
 const COPY = {
   "zh-CN": {
@@ -757,6 +759,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
   );
   const queueRef = useRef({ running: false, cancelled: false });
   const mountedRef = useRef(true);
+  const projectRef = useRef(project);
 
   useEffect(() => {
     return () => {
@@ -773,6 +776,10 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
       localStorage.setItem(TAG_COMIC_STORAGE_KEY, JSON.stringify(project));
     }, 400);
     return () => window.clearTimeout(timer);
+  }, [project]);
+
+  useEffect(() => {
+    projectRef.current = project;
   }, [project]);
 
   const panels = useMemo(
@@ -792,33 +799,45 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
   }, [activePanelId, panels]);
 
   function patchProject(patch: Partial<TagComicProject>) {
-    setProject((current) => ({ ...current, ...patch }));
+    setProject((current) => {
+      const next = { ...current, ...patch };
+      projectRef.current = next;
+      return next;
+    });
   }
 
   function patchGlobalParam<K extends keyof GenerateParams>(
     key: K,
     value: GenerateParams[K],
   ) {
-    setProject((current) => ({
-      ...current,
-      globalParams: {
-        ...current.globalParams,
-        [key]: value,
-        positivePrompt: "",
-      },
-    }));
+    setProject((current) => {
+      const next = {
+        ...current,
+        globalParams: {
+          ...current.globalParams,
+          [key]: value,
+          positivePrompt: "",
+        },
+      };
+      projectRef.current = next;
+      return next;
+    });
   }
 
   function patchPanel(
     panelId: string,
     updater: (panel: TagComicPanel) => TagComicPanel,
   ) {
-    setProject((current) => ({
-      ...current,
-      panels: current.panels.map((panel) =>
-        panel.id === panelId ? updater(panel) : panel,
-      ),
-    }));
+    setProject((current) => {
+      const next = {
+        ...current,
+        panels: current.panels.map((panel) =>
+          panel.id === panelId ? updater(panel) : panel,
+        ),
+      };
+      projectRef.current = next;
+      return next;
+    });
   }
 
   function patchPanelParam<K extends keyof GenerateParams>(
@@ -897,11 +916,11 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
           !Array.isArray(parsed) &&
           (parsed as { schemaVersion?: unknown }).schemaVersion === 2
         ) {
-          setProject(
-            normalizeTagComicProject(parsed, currentParams, {
-              trustOutputs: false,
-            }),
-          );
+          const next = normalizeTagComicProject(parsed, currentParams, {
+            trustOutputs: false,
+          });
+          projectRef.current = next;
+          setProject(next);
           setActivePanelId("");
           setStep("global");
           return;
@@ -942,7 +961,9 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
 
   function newProject() {
     if (!window.confirm(text(language, "confirmNew"))) return;
-    setProject(createTagComicProject(currentParams));
+    const next = createTagComicProject(currentParams);
+    projectRef.current = next;
+    setProject(next);
     setBulkText("");
     setSizeText("");
     setReferenceRanges({});
@@ -951,12 +972,16 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
   }
 
   function syncParams() {
-    setProject((current) => ({
-      ...current,
-      globalStylePrompt: currentParams.stylePrompt,
-      globalNegativePrompt: currentParams.negativePrompt,
-      globalParams: { ...currentParams, positivePrompt: "" },
-    }));
+    setProject((current) => {
+      const next = {
+        ...current,
+        globalStylePrompt: currentParams.stylePrompt,
+        globalNegativePrompt: currentParams.negativePrompt,
+        globalParams: { ...currentParams, positivePrompt: "" },
+      };
+      projectRef.current = next;
+      return next;
+    });
   }
 
   function addPanel() {
@@ -1270,14 +1295,11 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
     }));
   }
 
-  async function quoteTasks(tasks: QueueTask[]) {
+  async function quoteTasks(tasks: PreparedQueueTask[]) {
     const cache = new Map<string, number>();
     let amount = 0;
     for (const task of tasks) {
-      const panel = panels.find((item) => item.id === task.panelId);
-      if (!panel) continue;
-      const params = mergeTagComicParams(project, panel);
-      const preciseReferences = resolveTagComicPanelReferences(project, panel);
+      const { params, preciseReferences } = task.request;
       const key = JSON.stringify({
         model: params.model,
         width: params.width,
@@ -1324,39 +1346,27 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
     return amount;
   }
 
-  async function generateCandidate(panel: TagComicPanel) {
-    patchPanel(panel.id, (current) => ({
+  async function generateCandidate(
+    task: PreparedQueueTask,
+    historyGroupId?: string,
+  ): Promise<string | undefined> {
+    const request = { ...task.request, historyGroupId };
+    patchPanel(request.panelId, (current) => ({
       ...current,
       status: "generating",
       error: undefined,
     }));
     const before = useAppStore.getState().account.anlasBalance;
-    const result = await window.naiDesktop.tagComicGenerateCandidate({
-      projectId: project.id,
-      projectTitle: project.title,
-      historyGroupId: project.historyGroupId,
-      panelId: panel.id,
-      panelIndex: panel.index,
-      params: mergeTagComicParams(project, panel),
-      globalStylePrompt: project.globalStylePrompt,
-      panelPrompt: panel.prompt,
-      globalNegativePrompt: project.globalNegativePrompt,
-      preciseReferences: resolveTagComicPanelReferences(project, panel).flatMap((selection) => {
-        const asset = project.preciseReferences.find(
-          (item) => item.id === selection.referenceId,
-        );
-        return asset ? [{ ...selection, filePath: asset.filePath }] : [];
-      }),
-    });
+    const result = await window.naiDesktop.tagComicGenerateCandidate(request);
     const item = result.items[0];
-    if (!mountedRef.current) return;
+    if (!mountedRef.current) return item?.groupId;
     if (queueRef.current.cancelled && (!result.ok || !item)) {
-      patchPanel(panel.id, (current) => ({
+      patchPanel(request.panelId, (current) => ({
         ...current,
         status: current.candidates.length ? "done" : "ready",
         error: undefined,
       }));
-      return;
+      return item?.groupId;
     }
     const nextAccount = item
       ? await refreshAccount()
@@ -1370,7 +1380,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
       ...current,
       historyGroupId: item?.groupId ?? current.historyGroupId,
       panels: current.panels.map((currentPanel) => {
-        if (currentPanel.id !== panel.id) return currentPanel;
+        if (currentPanel.id !== request.panelId) return currentPanel;
         if (!result.ok || !item) {
           return { ...currentPanel, status: "failed", error: result.message };
         }
@@ -1393,35 +1403,45 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
     }));
     if (item) {
       await refreshHistory(item.date);
-      setToast(format(language, "generated", { index: panel.index }));
+      setToast(format(language, "generated", { index: request.panelIndex }));
     }
+    return item?.groupId;
   }
 
   async function startQueue(tasks: QueueTask[]) {
     if (queueRef.current.running || !tasks.length) return;
+    const projectSnapshot = projectRef.current;
+    const snapshotPanels = [...projectSnapshot.panels].sort(
+      (left, right) => left.index - right.index,
+    );
     if (
-      project.sizeMode === "perPanel" &&
-      panels.some((panel) => !panel.imageSize)
+      projectSnapshot.sizeMode === "perPanel" &&
+      snapshotPanels.some((panel) => !panel.imageSize)
     ) {
       setToast(text(language, "sizesIncomplete"));
       return;
     }
-    const invalidPreciseModel = tasks.some((task) => {
-      const panel = panels.find((item) => item.id === task.panelId);
+    const prepared = tasks.flatMap((task) => {
+      const panel = snapshotPanels.find((item) => item.id === task.panelId);
       return panel
-        ? resolveTagComicPanelReferences(project, panel).length > 0 &&
-            !mergeTagComicParams(project, panel).model.includes("4-5")
-        : false;
+        ? [{ ...task, request: buildTagComicGenerateRequest(projectSnapshot, panel) }]
+        : [];
     });
+    if (!prepared.length) return;
+    const invalidPreciseModel = prepared.some(
+      (task) =>
+        task.request.preciseReferences.length > 0 &&
+        !task.request.params.model.includes("4-5"),
+    );
     if (invalidPreciseModel) {
       setToast(text(language, "preciseV45Only"));
       return;
     }
-    const missing = tasks
-      .map((task) => panels.find((panel) => panel.id === task.panelId))
-      .find((panel) => panel && !panel.prompt.trim());
+    const missing = prepared.find((task) => !task.request.panelPrompt.trim());
     if (missing) {
-      setToast(format(language, "emptyPrompt", { index: missing.index }));
+      setToast(
+        format(language, "emptyPrompt", { index: missing.request.panelIndex }),
+      );
       return;
     }
     const auth = await window.naiDesktop.hasToken();
@@ -1429,25 +1449,29 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
       setToast(text(language, "needToken"));
       return;
     }
-    const quote = await quoteTasks(tasks);
+    const quote = await quoteTasks(prepared);
     const confirmed = window.confirm(
       quote == null
         ? text(language, "quoteFailed")
         : format(language, "confirmGenerate", {
-            count: tasks.length,
+            count: prepared.length,
             quote,
           }),
     );
     if (!confirmed) return;
     queueRef.current = { running: true, cancelled: false };
-    setQueue({ total: tasks.length, done: 0 });
-    for (let index = 0; index < tasks.length; index += 1) {
+    setQueue({ total: prepared.length, done: 0 });
+    let historyGroupId = projectSnapshot.historyGroupId;
+    for (let index = 0; index < prepared.length; index += 1) {
       if (queueRef.current.cancelled) break;
-      const panel = panels.find((item) => item.id === tasks[index].panelId);
-      if (panel) await generateCandidate(panel);
+      const generatedGroupId = await generateCandidate(
+        prepared[index],
+        historyGroupId,
+      );
+      historyGroupId = generatedGroupId ?? historyGroupId;
       if (!mountedRef.current) return;
       if (queueRef.current.cancelled) break;
-      setQueue({ total: tasks.length, done: index + 1 });
+      setQueue({ total: prepared.length, done: index + 1 });
     }
     queueRef.current.running = false;
     if (mountedRef.current) setQueue(null);

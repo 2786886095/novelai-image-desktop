@@ -18,6 +18,58 @@ import 'package:novelai_mobile/state/app_state.dart';
 // and must actually stop the queue rather than let it keep running unattended.
 void main() {
   test(
+      'comic queue freezes confirmed settings but a later regeneration uses the new settings',
+      () async {
+    final api = _CapturingSlowApi();
+    final storage = _MemoryStorage();
+    final app = AppState(api: api, storage: storage)
+      ..account = const AccountSummary(
+        hasToken: true,
+        tierLevel: 1,
+        anlasBalance: 1000,
+        hasActiveSubscription: true,
+      );
+    final controller = ComicController(app);
+    controller.project = ComicProject.empty(app.params)
+      ..globalParams.steps = 28
+      ..panels = [
+        ComicPanel(
+          id: 'panel-1',
+          index: 1,
+          title: 'Panel 1',
+          prompt: 'first panel',
+          params: app.params.copy(),
+        ),
+        ComicPanel(
+          id: 'panel-2',
+          index: 2,
+          title: 'Panel 2',
+          prompt: 'second panel',
+          params: app.params.copy(),
+        ),
+      ];
+    addTearDown(app.dispose);
+    addTearDown(controller.dispose);
+
+    final firstRun = controller.addOneToAll();
+    await _waitUntil(() => api.calls == 1);
+    controller.project.globalParams.steps = 36;
+    controller.changed();
+    api.complete(0);
+    await _waitUntil(() => api.calls == 2);
+    expect(api.params.map((item) => item.steps), [28, 28]);
+    api.complete(1);
+    await firstRun;
+
+    final nextRun = controller.addOne(controller.project.panels.first);
+    await _waitUntil(() => api.calls == 3);
+    expect(api.params.last.steps, 36);
+    api.complete(2);
+    await nextRun;
+    expect(controller.project.panels.first.candidates, hasLength(2));
+  });
+
+  test(
       'ComicController.dispose() during an in-flight panel does not throw and stops the queue',
       () async {
     final pending = Completer<(List<Uint8List>, int)>();
@@ -243,6 +295,46 @@ class _SlowApi extends NaiApi {
   ) async {
     calls += 1;
     return pending.future;
+  }
+}
+
+class _CapturingSlowApi extends NaiApi {
+  final List<Completer<(List<Uint8List>, int)>> _pending = [];
+  final List<GenerateParams> params = [];
+  int get calls => params.length;
+
+  @override
+  Future<AccountSummary> fetchAccount(
+    String token,
+    AppSettings settings,
+  ) async =>
+      const AccountSummary(
+        hasToken: true,
+        tierLevel: 1,
+        anlasBalance: 1000,
+        hasActiveSubscription: true,
+      );
+
+  @override
+  Future<(List<Uint8List>, int)> generate(
+    String token,
+    AppSettings settings,
+    GenerateParams value,
+    GenerateExtras extras,
+  ) {
+    params.add(value.copy());
+    final pending = Completer<(List<Uint8List>, int)>();
+    _pending.add(pending);
+    return pending.future;
+  }
+
+  void complete(int index) {
+    _pending[index].complete((
+      [
+        Uint8List.fromList([index + 1, 2, 3])
+      ],
+      100 + index,
+    ));
   }
 }
 

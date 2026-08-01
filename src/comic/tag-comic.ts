@@ -2,6 +2,7 @@ import {
   DEFAULT_PARAMS,
   type GenerateParams,
   type TagComicCandidate,
+  type TagComicGenerateRequest,
   type TagComicImageSize,
   type TagComicPanel,
   type TagComicPanelReference,
@@ -544,4 +545,36 @@ export function mergeTagComicParams(
         height: panel.imageSize.height,
       }
     : merged;
+}
+
+/**
+ * Freeze one comic generation at the exact point the user confirms it.
+ * Candidates remain attached to the project, while a later regeneration builds
+ * a fresh request from the current global and panel-level settings.
+ */
+export function buildTagComicGenerateRequest(
+  project: TagComicProject,
+  panel: TagComicPanel,
+): TagComicGenerateRequest {
+  const params = { ...mergeTagComicParams(project, panel) };
+  const preciseReferences = resolveTagComicPanelReferences(project, panel).flatMap(
+    (selection) => {
+      const asset = project.preciseReferences.find(
+        (item) => item.id === selection.referenceId,
+      );
+      return asset ? [{ ...selection, filePath: asset.filePath }] : [];
+    },
+  );
+  return {
+    projectId: project.id,
+    projectTitle: project.title,
+    historyGroupId: project.historyGroupId,
+    panelId: panel.id,
+    panelIndex: panel.index,
+    params,
+    globalStylePrompt: project.globalStylePrompt,
+    panelPrompt: panel.prompt,
+    globalNegativePrompt: project.globalNegativePrompt,
+    preciseReferences,
+  };
 }
