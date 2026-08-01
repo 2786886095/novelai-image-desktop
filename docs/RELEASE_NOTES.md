@@ -6,10 +6,11 @@
 | --- | --- | --- |
 | 🪟 **Windows**（便携版，x64） | `Langbai-NovelAI-Studio-1.5.8.exe` | 双击即用，无需安装 |
 | 🪟 **Windows**（安装版，x64） | `Langbai-NovelAI-Studio-Setup-1.5.8.exe` | 安装向导可自选路径、创建快捷方式；支持软件内一键更新 |
-| 🍎 **macOS** | — | 本次 Windows 构建环境未产出 macOS 包；`v1.5.8` 源码已包含此修复。 |
-| 🐧 **Linux** | — | 本次 Windows 构建环境未产出 Linux 包；`v1.5.8` 源码已包含此修复。 |
+| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-1.5.8-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
+| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-1.5.8.zip` | 解压后即为 `.app`，同样需右键「打开」 |
+| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-1.5.8.AppImage` | `chmod +x` 后直接运行 |
 | 🤖 **Android** | `app-release.apk` | 直接安装；需允许「未知来源」 |
-| 📱 **iOS** | — | 本次 Windows 构建环境未产出 IPA；`v1.5.8` 源码已包含此修复。 |
+| 📱 **iOS** | `novelai-mobile-unsigned.ipa` | **未签名**，需使用 AltStore / Sideloadly 等工具自行侧载 |
 
 > 桌面端与移动端均为 **API-only** 客户端，需要自备 NovelAI Persistent API Token。
 
