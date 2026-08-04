@@ -62,12 +62,16 @@ String resolveNovelAiBaseUrl(
 ) {
   final candidate = value.trim().isEmpty ? fallback : value.trim();
   final normalized = candidate.replaceAll(RegExp(r'/+$'), '');
-  if (settings.allowCustomEndpoint) return normalized;
   final uri = Uri.tryParse(normalized);
   final host = uri?.host.toLowerCase() ?? '';
   final official = uri?.scheme == 'https' &&
       (host == 'novelai.net' || host.endsWith('.novelai.net'));
-  return official ? normalized : fallback;
+  final expectedHost = Uri.tryParse(fallback)?.host.toLowerCase() ?? '';
+  // Being under novelai.net is not enough: generation/user-data live on the
+  // image host while upscale uses the API host. Older saved settings could put
+  // api.novelai.net in the image slot and persist opaque HTTP 500 responses.
+  if (official) return host == expectedHost ? normalized : fallback;
+  return settings.allowCustomEndpoint ? normalized : fallback;
 }
 
 class NaiApi {
@@ -379,6 +383,7 @@ class NaiApi {
     GenerateParams params,
     GenerateExtras extras,
   ) async {
+    params = params.normalized();
     final seed = params.seedMode != 'random' && params.seed > 0
         ? params.seed
         : randomSeed();
@@ -409,6 +414,7 @@ class NaiApi {
     Uint8List imageBytes,
     I2IParams i2i,
   ) async {
+    params = params.normalized();
     final seed = params.seedMode != 'random' && params.seed > 0
         ? params.seed
         : randomSeed();
@@ -457,6 +463,7 @@ class NaiApi {
     double strength,
     double noise,
   ) async {
+    params = params.normalized();
     final seed = params.seedMode != 'random' && params.seed > 0
         ? params.seed
         : randomSeed();
@@ -589,6 +596,10 @@ class NaiApi {
     GenerateExtras extras, {
     bool structuredCharacters = true,
   }) async {
+    params = params.normalized(
+      allowInpaintModel: params.model.endsWith('-inpainting'),
+    );
+    seed = seed.clamp(1, 2147483647).toInt();
     final basePrompt = _merge(params.stylePrompt, params.positivePrompt);
     final effectivePrompt = params.qualityToggle
         ? _merge(basePrompt, _qualityTags(params.model))
@@ -683,9 +694,9 @@ class NaiApi {
       parameters['reference_image_multiple'] =
           encoded.map((e) => e.base64).toList();
       parameters['reference_information_extracted_multiple'] =
-          encoded.map((e) => e.infoExtracted).toList();
+          encoded.map((e) => e.infoExtracted.clamp(0, 1)).toList();
       parameters['reference_strength_multiple'] =
-          encoded.map((e) => e.strength).toList();
+          encoded.map((e) => e.strength.clamp(0, 1)).toList();
     }
 
     final precise = extras.preciseReferences;

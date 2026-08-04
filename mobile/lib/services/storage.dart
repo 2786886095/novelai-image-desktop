@@ -99,14 +99,21 @@ class Storage {
     final raw = (await _prefs).getString(_kParams);
     if (raw == null) return GenerateParams();
     try {
-      return GenerateParams.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+      final decoded = jsonDecode(raw) as Map<String, dynamic>;
+      final repaired = GenerateParams.fromJson(decoded);
+      if (jsonEncode(decoded) != jsonEncode(repaired.toJson())) {
+        await setParams(repaired);
+      }
+      return repaired;
     } catch (_) {
-      return GenerateParams();
+      final repaired = GenerateParams();
+      await setParams(repaired);
+      return repaired;
     }
   }
 
   Future<void> setParams(GenerateParams p) async =>
-      (await _prefs).setString(_kParams, jsonEncode(p.toJson()));
+      (await _prefs).setString(_kParams, jsonEncode(p.normalized().toJson()));
 
   Future<ComicProject> getComicProject(GenerateParams fallbackParams) async {
     final raw = (await _prefs).getString(_kComicProject);

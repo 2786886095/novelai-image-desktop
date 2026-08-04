@@ -25,6 +25,17 @@ import '../tags/offline_tag_store.dart';
 // history — leaving it in the tracker list just forces a manual ✕ tap.
 const _textToolDoneAutoDismiss = Duration(milliseconds: 1500);
 
+@visibleForTesting
+bool looksLikeReferenceGenerationError(Object error) {
+  final message = error.toString().toLowerCase();
+  return message.contains('reference') ||
+      message.contains('director') ||
+      message.contains('vibe') ||
+      message.contains('encode-vibe') ||
+      message.contains('information_extracted') ||
+      message.contains('controlnet');
+}
+
 class AppState extends ChangeNotifier {
   final NaiApi api;
   final Storage storage;
@@ -144,6 +155,17 @@ class AppState extends ChangeNotifier {
       // its hardcoded defaults instead of restoring the last-used values.
       if (settings.persistGenerateParams) {
         params = await storage.getParams();
+      }
+      final repairedApiBase = resolveNovelAiBaseUrl(
+          settings.apiBaseUrl, 'https://api.novelai.net', settings);
+      final repairedImageBase = resolveNovelAiBaseUrl(
+          settings.imageBaseUrl, 'https://image.novelai.net', settings);
+      if (repairedApiBase != settings.apiBaseUrl ||
+          repairedImageBase != settings.imageBaseUrl) {
+        settings
+          ..apiBaseUrl = repairedApiBase
+          ..imageBaseUrl = repairedImageBase;
+        await storage.setSettings(settings);
       }
       final expectedModelMode = params.model == 'nai-diffusion-furry-3'
           ? 'furry'
@@ -525,6 +547,7 @@ class AppState extends ChangeNotifier {
     imported.applyTo(params);
     if (settings.lockStylePrompt) params.stylePrompt = lockedStyle;
     if (settings.lockNegativePrompt) params.negativePrompt = lockedNegative;
+    params = params.normalized();
     unawaited(storage.setParams(params));
     status = _rt('status.metadataRestored');
     notifyListeners();
@@ -895,7 +918,8 @@ class AppState extends ChangeNotifier {
           taskHistoryGroupId = initialHistoryGroupId;
           taskQuote = initialCosts[initialIndex];
           if (initialParams.seedMode != 'random' && initialSeed > 0) {
-            taskParams.seed = initialSeed + initialIndex;
+            taskParams.seed =
+                ((initialSeed - 1 + initialIndex) % 2147483647) + 1;
           }
           initialIndex++;
         } else {
@@ -959,11 +983,19 @@ class AppState extends ChangeNotifier {
         } catch (error) {
           failed++;
           lastError = error.toString().replaceFirst('Exception: ', '');
-          final authFailure = lastError.contains('401') ||
+          final statusCode =
+              error is NaiHttpException ? error.statusCode : null;
+          final authFailure = statusCode == 401 ||
+              statusCode == 403 ||
+              lastError.contains('401') ||
               lastError.toLowerCase().contains('unauthorized');
           if (authFailure) {
             _cancelGenerationRequested = true;
             generationQueue.clear();
+            skipInitial = true;
+          } else if (statusCode == 400 || statusCode == 422) {
+            // Every remaining item in the initial batch has the same request
+            // shape, so repeating a rejected payload only produces more noise.
             skipInitial = true;
           }
         } finally {
@@ -975,7 +1007,12 @@ class AppState extends ChangeNotifier {
         }
       }
 
-      account = await api.fetchAccount(token, settings);
+      try {
+        account = await api.fetchAccount(token, settings);
+      } catch (_) {
+        // Generated files are already on disk; keep the completion result and
+        // let the next natural refresh update the balance.
+      }
       final after = account.anlasBalance;
       lastAnlasSpent = anlasBefore != null && after != null
           ? max(0, anlasBefore - after)
@@ -1827,12 +1864,13 @@ class AppState extends ChangeNotifier {
     if (token == null || token.isEmpty) {
       throw Exception(_rt('error.naiTokenRequired'));
     }
+    final taskParams = panelParams.normalized();
     account = await api.fetchAccount(token, settings);
     final quote = calculateImageGenerationAnlas(
-      params: panelParams,
+      params: taskParams,
       account: account,
       extras: panelExtras,
-      alreadyEncodedVibes: api.countCachedVibes(panelParams.model, panelExtras),
+      alreadyEncodedVibes: api.countCachedVibes(taskParams.model, panelExtras),
       preciseReferenceCount: panelExtras.preciseReferences.length,
       language: settings.language,
     );
@@ -1852,15 +1890,15 @@ class AppState extends ChangeNotifier {
       (images, seed) = await api.generate(
         token,
         settings,
-        panelParams,
+        taskParams,
         extrasToUse,
       );
     } catch (error) {
-      final message = error.toString().toLowerCase();
-      final referenceFailure = message.contains('reference') ||
-          message.contains('director') ||
-          message.contains('encode-vibe') ||
-          message.contains('422');
+      // A generic HTTP 400/422 can be caused by dimensions, model, prompt, or
+      // another validation field. Only retry without references when the server
+      // actually identifies a reference-related field; otherwise a second paid
+      // request both hides the real fault and may consume Anlas unnecessarily.
+      final referenceFailure = looksLikeReferenceGenerationError(error);
       final hasReferences = extrasToUse.vibeImages.isNotEmpty ||
           extrasToUse.preciseReferences.isNotEmpty;
       if (!hasReferences || !referenceFailure) rethrow;
@@ -1868,7 +1906,7 @@ class AppState extends ChangeNotifier {
       (images, seed) = await api.generate(
         token,
         settings,
-        panelParams,
+        taskParams,
         extrasToUse,
       );
       status = _rt('status.referenceRetrySucceeded');
@@ -1876,7 +1914,7 @@ class AppState extends ChangeNotifier {
     if (images.isEmpty) throw Exception(_rt('error.noImagesReturned'));
     final item = await storage.saveImage(
       images.first,
-      panelParams,
+      taskParams,
       seed,
       feature: 'comic',
       groupId: groupId,
@@ -1905,12 +1943,13 @@ class AppState extends ChangeNotifier {
     if (token == null || token.isEmpty) {
       throw Exception(_rt('error.naiTokenRequired'));
     }
+    final taskParams = panelParams.normalized();
     final before = account.anlasBalance;
     final (images, seed) =
-        await api.generate(token, settings, panelParams, panelExtras);
+        await api.generate(token, settings, taskParams, panelExtras);
     if (images.isEmpty) throw Exception(_rt('error.noImagesReturned'));
     final item = await storage.saveArtistLabTemporaryImage(
-        images.first, panelParams, seed);
+        images.first, taskParams, seed);
     try {
       account = await api.fetchAccount(token, settings);
       final after = account.anlasBalance;
@@ -1964,12 +2003,12 @@ class AppState extends ChangeNotifier {
     if (token == null || token.isEmpty) {
       throw Exception(_rt('error.naiTokenRequired'));
     }
-    if (itemExtras.preciseReferences.isNotEmpty && !itemParams.isV45) {
-      throw Exception(_rt('error.preciseV45Only'));
-    }
     final taskParams = itemParams.copy()
       ..positivePrompt = expandPromptWildcards(itemParams.positivePrompt)
       ..negativePrompt = expandPromptWildcards(itemParams.negativePrompt);
+    if (itemExtras.preciseReferences.isNotEmpty && !taskParams.isV45) {
+      throw Exception(_rt('error.preciseV45Only'));
+    }
     account = await api.fetchAccount(token, settings);
     throwIfCancelled();
     final quote = calculateImageGenerationAnlas(

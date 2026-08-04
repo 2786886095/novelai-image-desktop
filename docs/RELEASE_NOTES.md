@@ -4,15 +4,23 @@
 
 | 系统 | 安装包 | 安装说明 |
 | --- | --- | --- |
-| 🪟 **Windows**（便携版，x64） | `Langbai-NovelAI-Studio-1.5.8.exe` | 双击即用，无需安装 |
-| 🪟 **Windows**（安装版，x64） | `Langbai-NovelAI-Studio-Setup-1.5.8.exe` | 安装向导可自选路径、创建快捷方式；支持软件内一键更新 |
-| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-1.5.8-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
-| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-1.5.8.zip` | 解压后即为 `.app`，同样需右键「打开」 |
-| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-1.5.8.AppImage` | `chmod +x` 后直接运行 |
+| 🪟 **Windows**（便携版，x64） | `Langbai-NovelAI-Studio-1.5.9.exe` | 双击即用，无需安装 |
+| 🪟 **Windows**（安装版，x64） | `Langbai-NovelAI-Studio-Setup-1.5.9.exe` | 安装向导可自选路径、创建快捷方式；支持软件内一键更新 |
+| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-1.5.9-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
+| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-1.5.9.zip` | 解压后即为 `.app`，同样需右键「打开」 |
+| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-1.5.9.AppImage` | `chmod +x` 后直接运行 |
 | 🤖 **Android** | `app-release.apk` | 直接安装；需允许「未知来源」 |
 | 📱 **iOS** | `novelai-mobile-unsigned.ipa` | **未签名**，需使用 AltStore / Sideloadly 等工具自行侧载 |
 
 > 桌面端与移动端均为 **API-only** 客户端，需要自备 NovelAI Persistent API Token。
+
+### v1.5.9 更新内容
+
+- 修复旧版本持久化的模型、尺寸、采样器、Seed、CFG、重绘、超分与后期参数可能持续生成无效请求，必须清除软件数据后才能恢复的问题；桌面端和移动端现在都会在加载及请求边界自动修复旧状态。
+- 修复 NovelAI API 与图片接口地址被历史配置交换、图生图源图尺寸与请求尺寸不一致、重绘蒙版尺寸不一致，以及精准参考 multipart 重试复用已消费数据流等问题。
+- 收紧付费请求重试策略：HTTP 500 等结果不确定的服务端错误不再自动重试，避免重复生成或重复扣费；仅对 HTTP 429 与确认发生在请求发送前的 TLS 握手失败执行安全重试。
+- 修复生成前账户/报价异常造成界面卡在生成中、批量固定 Seed 越界、最终余额刷新失败误报生成失败，以及移动端漫画把普通 HTTP 422 误判为参考图错误并额外重试的问题。
+- 统一桌面端、Android 与 iOS 的生成参数范围，并补充旧状态恢复、请求重试、重绘资源和参考图错误分类回归测试。
 
 ### v1.5.8 更新内容
 

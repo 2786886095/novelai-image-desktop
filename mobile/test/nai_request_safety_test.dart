@@ -7,8 +7,107 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as image_lib;
 import 'package:novelai_mobile/models/nai_models.dart';
 import 'package:novelai_mobile/services/nai_api.dart';
+import 'package:novelai_mobile/state/app_state.dart';
 
 void main() {
+  test('generic validation errors are not misclassified as reference failures',
+      () {
+    expect(
+      looksLikeReferenceGenerationError(
+        const NaiHttpException(422, 'width must be a multiple of 64'),
+      ),
+      isFalse,
+    );
+    expect(
+      looksLikeReferenceGenerationError(
+        const NaiHttpException(422, 'director_reference_images is invalid'),
+      ),
+      isTrue,
+    );
+  });
+
+  test('official API and image endpoints cannot be silently swapped', () {
+    final settings = AppSettings(allowCustomEndpoint: false);
+    expect(
+      resolveNovelAiBaseUrl(
+        'https://api.novelai.net',
+        'https://image.novelai.net',
+        settings,
+      ),
+      'https://image.novelai.net',
+    );
+    expect(
+      resolveNovelAiBaseUrl(
+        'https://image.novelai.net',
+        'https://image.novelai.net',
+        settings,
+      ),
+      'https://image.novelai.net',
+    );
+    expect(
+      resolveNovelAiBaseUrl(
+        'https://api.novelai.net',
+        'https://image.novelai.net',
+        AppSettings(allowCustomEndpoint: true),
+      ),
+      'https://image.novelai.net',
+      reason:
+          'custom mode must not make official endpoint roles interchangeable',
+    );
+  });
+
+  test('restored generation params repair stale and out-of-range values', () {
+    final params = GenerateParams.fromJson({
+      'model': 'retired-model',
+      'width': 99999,
+      'height': 95,
+      'steps': 500,
+      'cfgScale': double.nan,
+      'cfgRescale': 4,
+      'sampler': 'retired-sampler',
+      'noiseSchedule': 'retired-schedule',
+      'seed': -10,
+      'seedMode': 'legacy',
+      'ucPreset': 99,
+      'smea': false,
+      'smeaDyn': true,
+    });
+
+    expect(params.model, 'nai-diffusion-4-5-full');
+    expect((params.width, params.height), (1600, 64));
+    expect(params.steps, 50);
+    expect(params.cfgScale, 6);
+    expect(params.cfgRescale, 1);
+    expect(params.sampler, 'k_euler_ancestral');
+    expect(params.noiseSchedule, 'karras');
+    expect(params.seed, 0);
+    expect(params.seedMode, 'random');
+    expect(params.ucPreset, 3);
+    expect(params.smeaDyn, isFalse);
+  });
+
+  test('restored tool settings repair retired and out-of-range values', () {
+    final settings = AppSettings.fromJson({
+      'inpaintModel': 'retired-inpaint-model',
+      'inpaintStrength': -2,
+      'inpaintNoise': 9,
+      'upscaleScale': 9,
+      'directorTool': 'retired-director-tool',
+      'augmentDefry': 99,
+      'augmentEmotion': 'retired-emotion',
+      'augmentEmotionLevel': -3,
+    });
+
+    expect(settings.inpaintModel, 'nai-diffusion-4-5-full-inpainting');
+    expect(settings.inpaintStrength, 0);
+    expect(settings.inpaintNoise, 0.99);
+    expect(settings.upscaleScale, 2);
+    expect(settings.directorTool, 'bg-removal');
+    expect(settings.augmentDefry, 5);
+    expect(settings.augmentEmotion, 'happy');
+    expect(settings.augmentEmotionLevel, 0);
+  });
+
   test('img2img resizes the source to the requested output dimensions',
       () async {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
@@ -18,7 +117,7 @@ void main() {
       received = jsonDecode(await utf8.decoder.bind(request).join())
           as Map<String, dynamic>;
       final png = Uint8List.fromList(
-        image_lib.encodePng(image_lib.Image(width: 64, height: 96)),
+        image_lib.encodePng(image_lib.Image(width: 64, height: 128)),
       );
       final zip = ZipEncoder().encode(
         Archive()..addFile(ArchiveFile('image.png', png.length, png)),
@@ -43,7 +142,7 @@ void main() {
       GenerateParams(
         positivePrompt: 'test',
         width: 64,
-        height: 96,
+        height: 128,
       ),
       GenerateExtras(),
       source,
@@ -52,7 +151,7 @@ void main() {
 
     final parameters = received!['parameters'] as Map<String, dynamic>;
     final sentImage = image_lib.decodeImage(base64Decode(parameters['image']))!;
-    expect((sentImage.width, sentImage.height), (64, 96));
+    expect((sentImage.width, sentImage.height), (64, 128));
   });
 
   test('img2img with precise reference uploads image as a multipart part',
@@ -79,7 +178,7 @@ void main() {
         utf8.decode(latin1.encode(requestPart.group(1)!)),
       ) as Map<String, dynamic>;
       final png = Uint8List.fromList(
-        image_lib.encodePng(image_lib.Image(width: 64, height: 96)),
+        image_lib.encodePng(image_lib.Image(width: 64, height: 128)),
       );
       final zip = ZipEncoder().encode(
         Archive()..addFile(ArchiveFile('image.png', png.length, png)),
@@ -107,7 +206,7 @@ void main() {
       GenerateParams(
         positivePrompt: 'test',
         width: 64,
-        height: 96,
+        height: 128,
       ),
       GenerateExtras(
         preciseReferences: [

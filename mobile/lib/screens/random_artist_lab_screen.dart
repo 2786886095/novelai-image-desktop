@@ -512,7 +512,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
 
   int _snapDimension(String value, [int fallback = 64]) {
     final parsed = int.tryParse(value) ?? fallback;
-    return ((parsed / 64).round() * 64).clamp(64, 4096).toInt();
+    return ((parsed / 64).round() * 64).clamp(64, 1600).toInt();
   }
 
   @override

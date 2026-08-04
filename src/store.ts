@@ -28,7 +28,7 @@ import type {
   PreciseReferenceImage,
   WorkingImage,
 } from "./types";
-import { createDefaultBatchRedraw, DEFAULT_AUGMENT_OPTIONS, DEFAULT_I2I_PARAMS, DEFAULT_PARAMS } from "./types";
+import { createDefaultBatchRedraw, DEFAULT_AUGMENT_OPTIONS, DEFAULT_I2I_PARAMS, DEFAULT_PARAMS, DIRECTOR_TOOLS, EMOTION_OPTIONS, NAI_INPAINT_MODELS, normalizeGenerateParams } from "./types";
 import { normalizeAppLanguage } from "./i18n";
 import { expandWildcards } from "./wildcards";
 
@@ -589,11 +589,101 @@ async function ensureAnlasBeforeRun(
   return quote;
 }
 
+async function preparePaidRun(
+  set: (state: Partial<AppState>) => void,
+  get: () => AppState,
+  request: (account: AccountSummary) => AnlasQuoteRequest,
+  actionLabel: string,
+  settings?: AppSettings | null,
+): Promise<{ account: AccountSummary; quote: AnlasQuoteResult } | null> {
+  try {
+    const account = await get().refreshAccount();
+    if (!get().isGenerating) return null;
+    const quote = await ensureAnlasBeforeRun(
+      set,
+      request(account),
+      actionLabel,
+      settings,
+    );
+    return quote ? { account, quote } : null;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    set({
+      isGenerating: false,
+      currentAnlasSpent: null,
+      statusText: message,
+      toast: message,
+      lastError: message,
+    });
+    return null;
+  }
+}
+
+async function refreshAccountBestEffort(get: () => AppState) {
+  try {
+    return await get().refreshAccount();
+  } catch {
+    return get().account;
+  }
+}
+
+const PERSISTED_INPAINT_MODELS = new Set<string>(NAI_INPAINT_MODELS.map((item) => item.value));
+const PERSISTED_DIRECTOR_TOOLS = new Set<string>(DIRECTOR_TOOLS.map((item) => item.value));
+const PERSISTED_EMOTIONS = new Set<string>(EMOTION_OPTIONS.map((item) => item.value));
+
+function persistedNumber(value: unknown, fallback: number, min: number, max: number) {
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) ? Math.min(max, Math.max(min, parsed)) : fallback;
+}
+
+function normalizedLastToolState(last: LastGenerationState, state: AppState) {
+  const i2i = last.i2iParams ?? state.i2iParams;
+  const augment = last.augmentOptions ?? state.augmentOptions;
+  return {
+    i2iParams: {
+      strength: persistedNumber(i2i.strength, DEFAULT_I2I_PARAMS.strength, 0, 1),
+      noise: persistedNumber(i2i.noise, DEFAULT_I2I_PARAMS.noise, 0, 0.99),
+      extraNoiseSeed: Math.round(
+        persistedNumber(i2i.extraNoiseSeed, DEFAULT_I2I_PARAMS.extraNoiseSeed, 0, 2_147_483_647),
+      ),
+    },
+    inpaintModel: (PERSISTED_INPAINT_MODELS.has(String(last.inpaintModel))
+      ? last.inpaintModel
+      : state.inpaintModel) as NAIInpaintModel,
+    inpaintStrength: persistedNumber(last.inpaintStrength, state.inpaintStrength, 0, 1),
+    inpaintNoise: persistedNumber(last.inpaintNoise, state.inpaintNoise, 0, 0.99),
+    inpaintPositivePrompt:
+      typeof last.inpaintPositivePrompt === "string" ? last.inpaintPositivePrompt : "",
+    brushSize: persistedNumber(last.brushSize, state.brushSize, 1, 128),
+    brushOpacity: persistedNumber(last.brushOpacity, state.brushOpacity, 0.05, 1),
+    upscaleScale: (last.upscaleScale === 2 || last.upscaleScale === 4
+      ? last.upscaleScale
+      : state.upscaleScale) as UpscaleScale,
+    directorTool: (PERSISTED_DIRECTOR_TOOLS.has(String(last.directorTool))
+      ? last.directorTool
+      : state.directorTool) as DirectorTool,
+    augmentOptions: {
+      defry: persistedNumber(augment.defry, DEFAULT_AUGMENT_OPTIONS.defry, 0, 5),
+      colorizePrompt:
+        typeof augment.colorizePrompt === "string" ? augment.colorizePrompt : "",
+      emotion: (PERSISTED_EMOTIONS.has(String(augment.emotion))
+        ? augment.emotion
+        : DEFAULT_AUGMENT_OPTIONS.emotion) as AugmentOptions["emotion"],
+      emotionLevel: persistedNumber(
+        augment.emotionLevel,
+        DEFAULT_AUGMENT_OPTIONS.emotionLevel,
+        0,
+        5,
+      ),
+    },
+  };
+}
+
 function buildLastGenerationState(state: AppState): LastGenerationState {
   return {
     // positivePrompt is included so it survives a restart/crash, matching the
     // mobile client (which already persists the full params unconditionally).
-    params: { ...state.params },
+    params: normalizeGenerateParams(state.params),
     batchCount: state.batchCount,
     i2iParams: state.i2iParams,
     inpaintModel: state.inpaintModel,
@@ -745,26 +835,27 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
     const last = settings.lastGenerationState;
     if (last) {
+      const repairedTools = normalizedLastToolState(last, get());
       set((state) => ({
-        params: settings.persistGenerateParams ? { ...state.params, ...last.params } : state.params,
+        params: settings.persistGenerateParams ? normalizeGenerateParams({ ...state.params, ...last.params }) : state.params,
         batchCount: settings.persistGenerateParams
           ? Math.max(1, Math.min(999, last.batchCount ?? state.batchCount))
           : state.batchCount,
-        i2iParams: settings.persistI2IParams ? { ...state.i2iParams, ...(last.i2iParams ?? {}) } : state.i2iParams,
-        inpaintModel: settings.persistInpaintParams ? last.inpaintModel ?? state.inpaintModel : state.inpaintModel,
+        i2iParams: settings.persistI2IParams ? repairedTools.i2iParams : state.i2iParams,
+        inpaintModel: settings.persistInpaintParams ? repairedTools.inpaintModel : state.inpaintModel,
         inpaintStrength: settings.persistInpaintParams
-          ? last.inpaintStrength ?? state.inpaintStrength
+          ? repairedTools.inpaintStrength
           : state.inpaintStrength,
-        inpaintNoise: settings.persistInpaintParams ? last.inpaintNoise ?? state.inpaintNoise : state.inpaintNoise,
+        inpaintNoise: settings.persistInpaintParams ? repairedTools.inpaintNoise : state.inpaintNoise,
         inpaintPositivePrompt: settings.persistInpaintParams
-          ? last.inpaintPositivePrompt ?? state.inpaintPositivePrompt
+          ? repairedTools.inpaintPositivePrompt
           : state.inpaintPositivePrompt,
-        brushSize: settings.persistInpaintParams ? last.brushSize ?? state.brushSize : state.brushSize,
-        brushOpacity: settings.persistInpaintParams ? last.brushOpacity ?? state.brushOpacity : state.brushOpacity,
-        upscaleScale: settings.persistUpscaleParams ? last.upscaleScale ?? state.upscaleScale : state.upscaleScale,
-        directorTool: settings.persistDirectorParams ? last.directorTool ?? state.directorTool : state.directorTool,
+        brushSize: settings.persistInpaintParams ? repairedTools.brushSize : state.brushSize,
+        brushOpacity: settings.persistInpaintParams ? repairedTools.brushOpacity : state.brushOpacity,
+        upscaleScale: settings.persistUpscaleParams ? repairedTools.upscaleScale : state.upscaleScale,
+        directorTool: settings.persistDirectorParams ? repairedTools.directorTool : state.directorTool,
         augmentOptions: settings.persistDirectorParams
-          ? { ...state.augmentOptions, ...(last.augmentOptions ?? {}) }
+          ? repairedTools.augmentOptions
           : state.augmentOptions,
       }));
     }
@@ -851,7 +942,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   applyParams(patch) {
-    set((state) => ({ params: { ...state.params, ...patch } }));
+    set((state) => ({ params: normalizeGenerateParams({ ...state.params, ...patch }) }));
     persistGenerationState(get);
   },
 
@@ -1568,22 +1659,39 @@ export const useAppStore = create<AppState>((set, get) => ({
       activeGenerationRunId: runId,
       statusText: storeText(state.settings, "status.preparing"),
     });
-    const freshAccount = await get().refreshAccount();
-    if (get().activeGenerationRunId !== runId) return; // cancelled during prep
-    const quote = await ensureAnlasBeforeRun(
-      set,
-      {
-        feature: "generate",
-        params: initialParams,
-        extras: initialExtras,
-        batchCount: initialTotal,
-        account: freshAccount,
-      },
-      initialTotal > 1
-        ? storeFormat(state.settings, "action.batchGenerate", { count: initialTotal })
-        : storeText(state.settings, "action.generateImage"),
-      state.settings,
-    );
+    let freshAccount: AccountSummary;
+    let quote: AnlasQuoteResult | null;
+    try {
+      freshAccount = await get().refreshAccount();
+      if (get().activeGenerationRunId !== runId) return; // cancelled during prep
+      quote = await ensureAnlasBeforeRun(
+        set,
+        {
+          feature: "generate",
+          params: initialParams,
+          extras: initialExtras,
+          batchCount: initialTotal,
+          account: freshAccount,
+        },
+        initialTotal > 1
+          ? storeFormat(state.settings, "action.batchGenerate", { count: initialTotal })
+          : storeText(state.settings, "action.generateImage"),
+        state.settings,
+      );
+    } catch (error) {
+      if (get().activeGenerationRunId === runId) {
+        const message = error instanceof Error ? error.message : String(error);
+        set({
+          isGenerating: false,
+          isGenerateQueueRunning: false,
+          activeGenerationRunId: null,
+          statusText: message,
+          toast: message,
+          lastError: message,
+        });
+      }
+      return;
+    }
     if (!quote || get().activeGenerationRunId !== runId) {
       if (get().activeGenerationRunId === runId) {
         set({ isGenerating: false, isGenerateQueueRunning: false, activeGenerationRunId: null });
@@ -1638,7 +1746,10 @@ export const useAppStore = create<AppState>((set, get) => ({
         extras = initialExtras;
         base = {
           ...base,
-          seed: initialSeed > 0 ? initialSeed + initialIndex : 0,
+          seed:
+            initialSeed > 0
+              ? ((initialSeed - 1 + initialIndex) % 2_147_483_647) + 1
+              : 0,
         };
         initialIndex++;
       } else {
@@ -1687,9 +1798,21 @@ export const useAppStore = create<AppState>((set, get) => ({
         const currentSpent = anlasSpent(anlasBefore, get().account.anlasBalance);
         set({ currentAnlasSpent: currentSpent });
       } else {
-        // Skip the failed image and continue the batch instead of aborting.
+        // Keep transient failures isolated; deterministic auth/validation
+        // failures below stop only the requests known to share that cause.
         failed++;
         lastError = result.message;
+        if (result.statusCode === 401 || result.statusCode === 403) {
+          // The same credentials back every queued request; continuing would
+          // only repeat a deterministic authentication failure.
+          skipInitial = true;
+          set({ generationQueue: [], queueAdding: false });
+        } else if (result.statusCode === 400 || result.statusCode === 422) {
+          // Initial batch items share one payload shape. Stop that identical
+          // batch after the first validation failure, but leave explicitly
+          // queued jobs (which may have different parameters) intact.
+          skipInitial = true;
+        }
       }
       set((current) => ({
         queueProgress: {
@@ -1701,7 +1824,13 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
 
     const cancelled = !get().isGenerating;
-    const finalAccount = await get().refreshAccount();
+    let finalAccount = get().account;
+    try {
+      finalAccount = await get().refreshAccount();
+    } catch {
+      // Images have already been saved. A final balance refresh must not turn a
+      // completed batch into an apparent generation failure.
+    }
     if (get().activeGenerationRunId !== runId) return;
     const spent = anlasSpent(anlasBefore, finalAccount.anlasBalance);
     const settings = get().settings;
@@ -1750,24 +1879,24 @@ export const useAppStore = create<AppState>((set, get) => ({
       lastError: "",
       statusText: storeText(state.settings, "status.preparing"),
     });
-    const freshAccount = await get().refreshAccount();
-    if (!get().isGenerating) return; // cancelled during prep
-    const quote = await ensureAnlasBeforeRun(
+    const prepared = await preparePaidRun(
       set,
-      {
+      get,
+      (account) => ({
         feature: "i2i",
         params: state.params,
         extras: buildExtras(state),
         i2iParams: state.i2iParams,
-        account: freshAccount,
-      },
+        account,
+      }),
       storeText(state.settings, "action.i2i"),
       state.settings,
     );
-    if (!quote || !get().isGenerating) {
+    if (!prepared || !get().isGenerating) {
       if (get().isGenerating) set({ isGenerating: false });
       return;
     }
+    const { account: freshAccount, quote } = prepared;
     const anlasBefore = freshAccount.anlasBalance;
     set({
       isGenerating: true,
@@ -1784,7 +1913,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const message = withAnlasSpent(get().settings, result.message, spent);
       set({ isGenerating: false, currentAnlasSpent: null, lastAnlasSpent: spent, statusText: message, toast: message });
     } else {
-      const finalAccount = await get().refreshAccount();
+      const finalAccount = await refreshAccountBestEffort(get);
       const spent = anlasSpent(anlasBefore, finalAccount.anlasBalance);
       const message = withAnlasSpent(get().settings, result.message, spent);
       set({ isGenerating: false, currentAnlasSpent: null, lastAnlasSpent: spent, lastError: message, statusText: storeText(get().settings, "status.i2iFailed"), toast: message });
@@ -1816,27 +1945,27 @@ export const useAppStore = create<AppState>((set, get) => ({
       lastError: "",
       statusText: storeText(state.settings, "status.preparing"),
     });
-    const freshAccount = await get().refreshAccount();
-    if (!get().isGenerating) return; // cancelled during prep
-    const quote = await ensureAnlasBeforeRun(
+    const prepared = await preparePaidRun(
       set,
-      {
+      get,
+      (account) => ({
         feature: "inpaint",
         params: inpaintParams,
         inpaintModel: state.inpaintModel,
         inpaintStrength: state.inpaintStrength,
         inpaintNoise: state.inpaintNoise,
         maskBase64: state.inpaintMask,
-        image: { width: state.workbenchImage.width, height: state.workbenchImage.height },
-        account: freshAccount,
-      },
+        image: { width: state.workbenchImage!.width, height: state.workbenchImage!.height },
+        account,
+      }),
       storeText(state.settings, "action.inpaint"),
       state.settings,
     );
-    if (!quote || !get().isGenerating) {
+    if (!prepared || !get().isGenerating) {
       if (get().isGenerating) set({ isGenerating: false });
       return;
     }
+    const { account: freshAccount, quote } = prepared;
     const anlasBefore = freshAccount.anlasBalance;
     set({
       isGenerating: true,
@@ -1859,7 +1988,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const message = withAnlasSpent(get().settings, result.message, spent);
       set({ isGenerating: false, currentAnlasSpent: null, lastAnlasSpent: spent, statusText: message, toast: message });
     } else {
-      const finalAccount = await get().refreshAccount();
+      const finalAccount = await refreshAccountBestEffort(get);
       const spent = anlasSpent(anlasBefore, finalAccount.anlasBalance);
       const message = withAnlasSpent(get().settings, result.message, spent);
       set({ isGenerating: false, currentAnlasSpent: null, lastAnlasSpent: spent, lastError: message, statusText: storeText(get().settings, "status.inpaintFailed"), toast: message });
@@ -1883,23 +2012,23 @@ export const useAppStore = create<AppState>((set, get) => ({
       lastError: "",
       statusText: storeText(state.settings, "status.preparing"),
     });
-    const freshAccount = await get().refreshAccount();
-    if (!get().isGenerating) return; // cancelled during prep
-    const quote = await ensureAnlasBeforeRun(
+    const prepared = await preparePaidRun(
       set,
-      {
+      get,
+      (account) => ({
         feature: "upscale",
         upscaleScale: state.upscaleScale,
-        image: { width: state.workbenchImage.width, height: state.workbenchImage.height },
-        account: freshAccount,
-      },
+        image: { width: state.workbenchImage!.width, height: state.workbenchImage!.height },
+        account,
+      }),
       storeFormat(state.settings, "action.upscale", { scale: state.upscaleScale }),
       state.settings,
     );
-    if (!quote || !get().isGenerating) {
+    if (!prepared || !get().isGenerating) {
       if (get().isGenerating) set({ isGenerating: false });
       return;
     }
+    const { account: freshAccount, quote } = prepared;
     const anlasBefore = freshAccount.anlasBalance;
     set({
       isGenerating: true,
@@ -1915,7 +2044,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const message = withAnlasSpent(get().settings, result.message, spent);
       set({ isGenerating: false, currentAnlasSpent: null, lastAnlasSpent: spent, statusText: message, toast: message });
     } else {
-      const finalAccount = await get().refreshAccount();
+      const finalAccount = await refreshAccountBestEffort(get);
       const spent = anlasSpent(anlasBefore, finalAccount.anlasBalance);
       const message = withAnlasSpent(get().settings, result.message, spent);
       set({ isGenerating: false, currentAnlasSpent: null, lastAnlasSpent: spent, lastError: message, statusText: storeText(get().settings, "status.upscaleFailed"), toast: message });
@@ -1939,23 +2068,23 @@ export const useAppStore = create<AppState>((set, get) => ({
       lastError: "",
       statusText: storeText(state.settings, "status.preparing"),
     });
-    const freshAccount = await get().refreshAccount();
-    if (!get().isGenerating) return; // cancelled during prep
-    const quote = await ensureAnlasBeforeRun(
+    const prepared = await preparePaidRun(
       set,
-      {
+      get,
+      (account) => ({
         feature: "director",
         directorTool: state.directorTool,
-        image: { width: state.workbenchImage.width, height: state.workbenchImage.height },
-        account: freshAccount,
-      },
+        image: { width: state.workbenchImage!.width, height: state.workbenchImage!.height },
+        account,
+      }),
       storeText(state.settings, "action.postprocess"),
       state.settings,
     );
-    if (!quote || !get().isGenerating) {
+    if (!prepared || !get().isGenerating) {
       if (get().isGenerating) set({ isGenerating: false });
       return;
     }
+    const { account: freshAccount, quote } = prepared;
     const anlasBefore = freshAccount.anlasBalance;
     set({
       isGenerating: true,
@@ -1972,7 +2101,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const message = withAnlasSpent(get().settings, result.message, spent);
       set({ isGenerating: false, currentAnlasSpent: null, lastAnlasSpent: spent, statusText: message, toast: message });
     } else {
-      const finalAccount = await get().refreshAccount();
+      const finalAccount = await refreshAccountBestEffort(get);
       const spent = anlasSpent(anlasBefore, finalAccount.anlasBalance);
       const message = withAnlasSpent(get().settings, result.message, spent);
       set({ isGenerating: false, currentAnlasSpent: null, lastAnlasSpent: spent, lastError: message, statusText: storeText(get().settings, "status.postFailed"), toast: message });
@@ -2014,7 +2143,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     // the user can tweak one tag and reroll a variation on the same seed.
     const seed = item.actualSeed || item.params?.seed || 0;
     set((state) => ({
-      params: { ...state.params, ...item.params, seed },
+      params: normalizeGenerateParams({ ...state.params, ...item.params, seed }),
       activeTab: "generate",
       currentImage: item,
       comparisonBeforeImage: null,

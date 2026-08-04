@@ -131,6 +131,55 @@ export const DEFAULT_PARAMS: GenerateParams = {
   fileNamePrefix: "",
 };
 
+const SUPPORTED_MODEL_VALUES = new Set<string>(NAI_MODELS.map((item) => item.value));
+const SUPPORTED_SAMPLER_VALUES = new Set<string>(NAI_SAMPLERS.map((item) => item.value));
+const SUPPORTED_NOISE_SCHEDULES = new Set(["native", "karras", "exponential"]);
+
+function finiteNumber(value: unknown, fallback: number): number {
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function normalizedDimension(value: unknown, fallback: number): number {
+  const parsed = finiteNumber(value, fallback);
+  return Math.min(1600, Math.max(64, Math.round(parsed / 64) * 64));
+}
+
+/** Repair generation state restored from older releases or imported metadata. */
+export function normalizeGenerateParams(value?: Partial<GenerateParams> | null): GenerateParams {
+  const source = value ?? {};
+  const model = String(source.model ?? DEFAULT_PARAMS.model);
+  const sampler = String(source.sampler ?? DEFAULT_PARAMS.sampler);
+  const noiseSchedule = String(source.noiseSchedule ?? DEFAULT_PARAMS.noiseSchedule);
+  const steps = Math.round(finiteNumber(source.steps, DEFAULT_PARAMS.steps));
+  const cfgScale = finiteNumber(source.cfgScale, DEFAULT_PARAMS.cfgScale);
+  const cfgRescale = finiteNumber(source.cfgRescale, DEFAULT_PARAMS.cfgRescale);
+  const seed = Math.round(finiteNumber(source.seed, DEFAULT_PARAMS.seed));
+  const ucPreset = Math.round(finiteNumber(source.ucPreset, DEFAULT_PARAMS.ucPreset));
+  const smea = typeof source.smea === "boolean" ? source.smea : DEFAULT_PARAMS.smea;
+  return {
+    model: (SUPPORTED_MODEL_VALUES.has(model) ? model : DEFAULT_PARAMS.model) as NAIModel,
+    stylePrompt: typeof source.stylePrompt === "string" ? source.stylePrompt : "",
+    positivePrompt: typeof source.positivePrompt === "string" ? source.positivePrompt : "",
+    negativePrompt: typeof source.negativePrompt === "string" ? source.negativePrompt : "",
+    width: normalizedDimension(source.width, DEFAULT_PARAMS.width),
+    height: normalizedDimension(source.height, DEFAULT_PARAMS.height),
+    steps: Math.min(50, Math.max(1, steps)),
+    cfgScale: Math.min(10, Math.max(0, cfgScale)),
+    cfgRescale: Math.min(1, Math.max(0, cfgRescale)),
+    sampler: (SUPPORTED_SAMPLER_VALUES.has(sampler) ? sampler : DEFAULT_PARAMS.sampler) as NAISampler,
+    noiseSchedule: SUPPORTED_NOISE_SCHEDULES.has(noiseSchedule) ? noiseSchedule : DEFAULT_PARAMS.noiseSchedule,
+    seed: Math.min(2_147_483_647, Math.max(0, seed)),
+    seedMode: source.seedMode === "fixed" ? "fixed" : "random",
+    ucPreset: Math.min(3, Math.max(0, ucPreset)) as UcPreset,
+    qualityToggle: typeof source.qualityToggle === "boolean" ? source.qualityToggle : DEFAULT_PARAMS.qualityToggle,
+    smea,
+    smeaDyn: smea && (typeof source.smeaDyn === "boolean" ? source.smeaDyn : DEFAULT_PARAMS.smeaDyn),
+    variety: typeof source.variety === "boolean" ? source.variety : DEFAULT_PARAMS.variety,
+    fileNamePrefix: typeof source.fileNamePrefix === "string" ? source.fileNamePrefix : "",
+  };
+}
+
 export interface LastGenerationState {
   params: GenerateParams;
   batchCount: number;

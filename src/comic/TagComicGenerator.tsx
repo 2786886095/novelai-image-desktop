@@ -2337,7 +2337,7 @@ function GlobalParams({
           label={text(language, "width")}
           value={params.width}
           min={64}
-          max={2048}
+          max={1600}
           step={64}
           onChange={(value) => patch("width", value)}
         />
@@ -2345,7 +2345,7 @@ function GlobalParams({
           label={text(language, "height")}
           value={params.height}
           min={64}
-          max={2048}
+          max={1600}
           step={64}
           onChange={(value) => patch("height", value)}
         />
@@ -2430,7 +2430,7 @@ function PanelParams({
           label={text(language, "width")}
           value={params.width}
           min={64}
-          max={2048}
+          max={1600}
           step={64}
           onChange={(value) => patch("width", value)}
         />
@@ -2440,7 +2440,7 @@ function PanelParams({
           label={text(language, "height")}
           value={params.height}
           min={64}
-          max={2048}
+          max={1600}
           step={64}
           onChange={(value) => patch("height", value)}
         />
@@ -2456,7 +2456,7 @@ function PanelParams({
         label={text(language, "cfg")}
         value={params.cfgScale}
         min={0}
-        max={20}
+        max={10}
         step={0.1}
         onChange={(value) => patch("cfgScale", value)}
       />

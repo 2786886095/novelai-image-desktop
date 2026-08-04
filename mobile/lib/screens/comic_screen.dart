@@ -10,6 +10,9 @@ import '../models/nai_models.dart';
 import '../state/app_state.dart';
 import '../ui/studio_shell.dart';
 
+int _snapNaiDimension(int value) =>
+    ((value.clamp(64, 1600) / 64).round() * 64).clamp(64, 1600).toInt();
+
 class ComicScreen extends StatelessWidget {
   final ComicController? controller;
   final VoidCallback? onBack;
@@ -1398,14 +1401,14 @@ class _ParamsEditor extends StatelessWidget {
               width: width,
               label: t('comic.width'),
               value: params.width,
-              onChanged: (value) => params.width = value.clamp(64, 4096),
+              onChanged: (value) => params.width = _snapNaiDimension(value),
               notify: onChanged,
             ),
             _NumberField(
               width: width,
               label: t('comic.height'),
               value: params.height,
-              onChanged: (value) => params.height = value.clamp(64, 4096),
+              onChanged: (value) => params.height = _snapNaiDimension(value),
               notify: onChanged,
             ),
             _NumberField(
@@ -1419,7 +1422,7 @@ class _ParamsEditor extends StatelessWidget {
               width: width,
               label: t('comic.cfg'),
               value: params.cfgScale,
-              onChanged: (value) => params.cfgScale = value.clamp(0, 20),
+              onChanged: (value) => params.cfgScale = value.clamp(0, 10),
               notify: onChanged,
             ),
             _NumberField(

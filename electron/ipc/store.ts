@@ -337,6 +337,29 @@ function normalize(raw: Partial<PersistedData> | null): PersistedData {
   const rawSettings = (raw?.settings ?? {}) as Partial<AppSettings>;
   const settings = { ...defaults, ...rawSettings };
   settings.language = normalizeLanguage(settings.language);
+  // Old releases allowed the two official subdomains to be swapped. Both are
+  // trusted hosts, but they do not serve the same routes; a stale API host in
+  // the image slot makes every generation fail until app data is reset.
+  if (!settings.allowCustomEndpoint) {
+    settings.apiBaseUrl = defaults.apiBaseUrl;
+    settings.imageBaseUrl = defaults.imageBaseUrl;
+  } else {
+    const repairOfficialRole = (value: string, fallback: string) => {
+      try {
+        const url = new URL(value);
+        const fallbackHost = new URL(fallback).hostname.toLowerCase();
+        const host = url.hostname.toLowerCase();
+        const official =
+          url.protocol === "https:" &&
+          (host === "novelai.net" || host.endsWith(".novelai.net"));
+        return official && host !== fallbackHost ? fallback : value;
+      } catch {
+        return value;
+      }
+    };
+    settings.apiBaseUrl = repairOfficialRole(settings.apiBaseUrl, defaults.apiBaseUrl);
+    settings.imageBaseUrl = repairOfficialRole(settings.imageBaseUrl, defaults.imageBaseUrl);
+  }
   if (!rawSettings.proxyMode) {
     const legacyProxy = rawSettings.proxyUrl?.trim() ?? "";
     if (!legacyProxy) {

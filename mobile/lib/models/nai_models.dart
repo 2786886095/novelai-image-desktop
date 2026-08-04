@@ -9,7 +9,7 @@ class NaiOption {
 }
 
 const appName = 'Langbai NovelAI Studio';
-const appVersion = '1.5.8';
+const appVersion = '1.5.9';
 
 const naiModels = <NaiOption>[
   NaiOption('NAI Diffusion 4.5 Full (Full model)', 'nai-diffusion-4-5-full'),
@@ -161,28 +161,95 @@ class GenerateParams {
       };
 
   factory GenerateParams.fromJson(Map<String, dynamic> j) => GenerateParams(
-        model: j['model'] ?? 'nai-diffusion-4-5-full',
-        stylePrompt: j['stylePrompt'] ?? '',
-        positivePrompt: j['positivePrompt'] ?? '',
-        negativePrompt: j['negativePrompt'] ?? '',
-        width: j['width'] ?? 832,
-        height: j['height'] ?? 1216,
-        steps: j['steps'] ?? 28,
-        cfgScale: (j['cfgScale'] ?? 6).toDouble(),
-        cfgRescale: (j['cfgRescale'] ?? 0).toDouble(),
-        sampler: j['sampler'] ?? 'k_euler_ancestral',
-        noiseSchedule: j['noiseSchedule'] ?? 'karras',
-        seed: j['seed'] ?? 0,
-        seedMode: j['seedMode'] ?? 'random',
-        ucPreset: j['ucPreset'] ?? 2,
-        qualityToggle: j['qualityToggle'] ?? true,
-        smea: j['smea'] ?? false,
-        smeaDyn: j['smeaDyn'] ?? false,
-        variety: j['variety'] ?? false,
-        fileNamePrefix: j['fileNamePrefix'] ?? '',
-      );
+        model: _stringValue(j['model'], 'nai-diffusion-4-5-full'),
+        stylePrompt: _stringValue(j['stylePrompt'], ''),
+        positivePrompt: _stringValue(j['positivePrompt'], ''),
+        negativePrompt: _stringValue(j['negativePrompt'], ''),
+        width: _intValue(j['width'], 832),
+        height: _intValue(j['height'], 1216),
+        steps: _intValue(j['steps'], 28),
+        cfgScale: _doubleValue(j['cfgScale'], 6),
+        cfgRescale: _doubleValue(j['cfgRescale'], 0),
+        sampler: _stringValue(j['sampler'], 'k_euler_ancestral'),
+        noiseSchedule: _stringValue(j['noiseSchedule'], 'karras'),
+        seed: _intValue(j['seed'], 0),
+        seedMode: _stringValue(j['seedMode'], 'random'),
+        ucPreset: _intValue(j['ucPreset'], 2),
+        qualityToggle: _boolValue(j['qualityToggle'], true),
+        smea: _boolValue(j['smea'], false),
+        smeaDyn: _boolValue(j['smeaDyn'], false),
+        variety: _boolValue(j['variety'], false),
+        fileNamePrefix: _stringValue(j['fileNamePrefix'], ''),
+      ).normalized();
+
+  /// Repairs values restored from older releases, imported metadata, or saved
+  /// projects before they reach NovelAI. Persisted JSON previously bypassed the
+  /// UI constraints and could keep a bad request alive until all app data was
+  /// cleared.
+  GenerateParams normalized({bool allowInpaintModel = false}) {
+    final supportedModels = {
+      ...naiModels.map((option) => option.value),
+      if (allowInpaintModel) ...naiInpaintModels.map((option) => option.value),
+    };
+    final supportedSamplers = naiSamplers.map((option) => option.value).toSet();
+    final supportedSchedules =
+        naiNoiseSchedules.map((option) => option.value).toSet();
+    return GenerateParams(
+      model: supportedModels.contains(model) ? model : 'nai-diffusion-4-5-full',
+      stylePrompt: stylePrompt,
+      positivePrompt: positivePrompt,
+      negativePrompt: negativePrompt,
+      width: _normalizedDimension(width, 832),
+      height: _normalizedDimension(height, 1216),
+      steps: steps.clamp(1, 50).toInt(),
+      cfgScale: _finiteClamp(cfgScale, 0, 10, 6),
+      cfgRescale: _finiteClamp(cfgRescale, 0, 1, 0),
+      sampler:
+          supportedSamplers.contains(sampler) ? sampler : 'k_euler_ancestral',
+      noiseSchedule:
+          supportedSchedules.contains(noiseSchedule) ? noiseSchedule : 'karras',
+      seed: seed.clamp(0, 2147483647).toInt(),
+      seedMode: seedMode == 'fixed' ? 'fixed' : 'random',
+      ucPreset: ucPreset.clamp(0, 3).toInt(),
+      qualityToggle: qualityToggle,
+      smea: smea,
+      smeaDyn: smea && smeaDyn,
+      variety: variety,
+      fileNamePrefix: fileNamePrefix,
+    );
+  }
 
   GenerateParams copy() => GenerateParams.fromJson(toJson());
+}
+
+String _stringValue(Object? value, String fallback) =>
+    value is String ? value : fallback;
+
+int _intValue(Object? value, int fallback) {
+  if (value is num && value.isFinite) return value.round();
+  return int.tryParse(value?.toString() ?? '') ?? fallback;
+}
+
+double _doubleValue(Object? value, double fallback) {
+  final parsed = value is num
+      ? value.toDouble()
+      : double.tryParse(value?.toString() ?? '');
+  return parsed != null && parsed.isFinite ? parsed : fallback;
+}
+
+bool _boolValue(Object? value, bool fallback) =>
+    value is bool ? value : fallback;
+
+int _normalizedDimension(int value, int fallback) {
+  if (value <= 0) return fallback;
+  final bounded = value.clamp(64, 1600);
+  return ((bounded / 64).round() * 64).clamp(64, 1600).toInt();
+}
+
+double _finiteClamp(
+    double value, double minimum, double maximum, double fallback) {
+  if (!value.isFinite) return fallback;
+  return value.clamp(minimum, maximum).toDouble();
 }
 
 class CharCaptionItem {
@@ -794,22 +861,38 @@ class AppSettings {
         comicPromptTemplate: j['comicPromptTemplate'] ?? '',
         reversePromptMode: j['reversePromptMode'] ?? 'tags',
         convertPromptMode: j['convertPromptMode'] ?? 'natural',
-        inpaintModel: j['inpaintModel'] ?? 'nai-diffusion-4-5-full-inpainting',
-        inpaintStrength: (j['inpaintStrength'] as num?)?.toDouble() ?? 0.55,
-        inpaintNoise: (j['inpaintNoise'] as num?)?.toDouble() ?? 0,
-        inpaintPositivePrompt: j['inpaintPositivePrompt'] ?? '',
-        upscaleScale: (j['upscaleScale'] as num?)?.toInt() ?? 2,
-        directorTool: j['directorTool'] ?? 'bg-removal',
-        augmentDefry: (j['augmentDefry'] as num?)?.toDouble() ?? 0,
-        augmentColorizePrompt: j['augmentColorizePrompt'] ?? '',
-        augmentEmotion: j['augmentEmotion'] ?? 'happy',
+        inpaintModel: _supportedOptionValue(j['inpaintModel'], naiInpaintModels,
+            'nai-diffusion-4-5-full-inpainting'),
+        inpaintStrength:
+            _finiteClamp(_doubleValue(j['inpaintStrength'], 0.55), 0, 1, 0.55),
+        inpaintNoise:
+            _finiteClamp(_doubleValue(j['inpaintNoise'], 0), 0, 0.99, 0),
+        inpaintPositivePrompt: _stringValue(j['inpaintPositivePrompt'], ''),
+        upscaleScale: _intValue(j['upscaleScale'], 2) == 4 ? 4 : 2,
+        directorTool: _supportedOptionValue(
+            j['directorTool'], directorTools, 'bg-removal'),
+        augmentDefry: _finiteClamp(_doubleValue(j['augmentDefry'], 0), 0, 5, 0),
+        augmentColorizePrompt: _stringValue(j['augmentColorizePrompt'], ''),
+        augmentEmotion:
+            _supportedOptionValue(j['augmentEmotion'], emotionOptions, 'happy'),
         augmentEmotionLevel:
-            (j['augmentEmotionLevel'] as num?)?.toDouble() ?? 0,
+            _finiteClamp(_doubleValue(j['augmentEmotionLevel'], 0), 0, 5, 0),
         persistGenerateParams: j['persistGenerateParams'] ?? true,
         persistInpaintParams: j['persistInpaintParams'] ?? true,
         persistUpscaleParams: j['persistUpscaleParams'] ?? true,
         persistDirectorParams: j['persistDirectorParams'] ?? true,
       );
+}
+
+String _supportedOptionValue(
+  Object? value,
+  List<NaiOption> options,
+  String fallback,
+) {
+  final candidate = _stringValue(value, fallback);
+  return options.any((option) => option.value == candidate)
+      ? candidate
+      : fallback;
 }
 
 class PromptShortcutTemplate {

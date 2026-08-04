@@ -48,6 +48,26 @@ void main() {
     expect(decodeImageDimensions(cropped), (65, 67));
   });
 
+  test('repairs a mismatched inpaint mask and blocks oversized sources', () {
+    final source = image_lib.Image(width: 128, height: 128);
+    final smallMask = image_lib.Image(width: 64, height: 64);
+    final repaired = prepareInpaintAssets(
+      Uint8List.fromList(image_lib.encodePng(source)),
+      Uint8List.fromList(image_lib.encodePng(smallMask)),
+    );
+    expect(repaired.padded, isTrue);
+    expect(decodeImageDimensions(repaired.maskBytes), (128, 128));
+
+    final oversized = image_lib.Image(width: 1601, height: 64);
+    expect(
+      () => prepareInpaintAssets(
+        Uint8List.fromList(image_lib.encodePng(oversized)),
+        Uint8List.fromList(image_lib.encodePng(oversized)),
+      ),
+      throwsFormatException,
+    );
+  });
+
   test('director preparation flattens alpha and restores original size', () {
     final source = image_lib.Image(width: 200, height: 100, numChannels: 4)
       ..setPixelRgba(0, 0, 255, 0, 0, 0);

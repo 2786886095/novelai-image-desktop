@@ -9,6 +9,8 @@ import path from "path";
 import { pathToFileURL } from "url";
 import {
   DEFAULT_PARAMS,
+  normalizeGenerateParams,
+  NAI_INPAINT_MODELS,
   MAX_NAI_DIRECTOR_INPUT_PIXELS,
   MAX_NAI_UPSCALE_INPUT_PIXELS,
   type AccountSummary,
@@ -129,7 +131,22 @@ export function isOfficialNaiHost(baseUrl: string): boolean {
 // the user opted into custom endpoints), otherwise the official fallback.
 function tokenSafeBaseUrl(rawUrl: string, fallback: string): string {
   const resolved = normalizeBaseUrl(rawUrl, fallback);
-  if (isOfficialNaiHost(resolved)) return resolved;
+  if (isOfficialNaiHost(resolved)) {
+    try {
+      const resolvedHost = new URL(resolved).hostname.toLowerCase();
+      const fallbackHost = new URL(fallback).hostname.toLowerCase();
+      const loopback = resolvedHost === "localhost" || resolvedHost === "127.0.0.1" || resolvedHost === "::1";
+      if (loopback || resolvedHost === fallbackHost) return resolved;
+      // A custom-endpoint opt-in must not turn an accidentally swapped official
+      // NovelAI subdomain into a valid target. api.novelai.net and
+      // image.novelai.net are not interchangeable and stale settings here can
+      // surface as opaque generation HTTP 500 responses.
+      const isNovelAi = resolvedHost === "novelai.net" || resolvedHost.endsWith(".novelai.net");
+      if (isNovelAi) return fallback;
+    } catch {
+      /* fall through to the configured custom-endpoint policy */
+    }
+  }
   if (getSettings().allowCustomEndpoint) return resolved;
   appendLog(
     "WARN",
@@ -284,6 +301,15 @@ function inpaintModelCandidates(model: NAIInpaintModel) {
   return [...new Set(candidates)];
 }
 
+function isInpaintModelCompatibilityError(error: any): boolean {
+  const status = error?.response?.status;
+  if (status !== 400 && status !== 422) return false;
+  const detail = responseErrorText(error) || error?.message || "";
+  return /(?:doesn'?t|does not|not)\s+support|unsupported|invalid\s+model|action\s+infill/i.test(
+    detail,
+  );
+}
+
 function qualityTags(model: string) {
   switch (normalizeModel(model)) {
     case "nai-diffusion-4-5-full":
@@ -415,6 +441,16 @@ export function buildPayload(
   extras?: GenerateExtras,
   charCaptionMode: CharCaptionMode = "structured",
 ) {
+  // Persisted/imported JSON is untrusted at the process boundary. Keep the one
+  // intentional inpaint model override while normalizing every other field.
+  const inpaintModel = NAI_INPAINT_MODELS.some((item) => item.value === params.model)
+    ? params.model
+    : null;
+  params = {
+    ...normalizeGenerateParams(params as GenerateParams),
+    ...(inpaintModel ? { model: inpaintModel } : {}),
+  } as PayloadParams;
+  actualSeed = Math.min(2_147_483_647, Math.max(1, Math.round(Number(actualSeed) || 1)));
   const basePrompt = mergePrompt(params.stylePrompt, params.positivePrompt);
   const effectivePrompt = params.qualityToggle
     ? mergePrompt(basePrompt, qualityTags(params.model))
@@ -1173,7 +1209,19 @@ function prepareInpaintAssets(
   const originalHeight = sourcePng.height;
   const width = ceilToMultiple(originalWidth, INPAINT_SIZE_MULTIPLE);
   const height = ceilToMultiple(originalHeight, INPAINT_SIZE_MULTIPLE);
-  const padded = width !== originalWidth || height !== originalHeight;
+  if (width > 1600 || height > 1600) {
+    throw new Error(
+      `重绘原图尺寸 ${originalWidth}×${originalHeight} 超出 NovelAI 允许范围；请先缩小到补齐后不超过 1600×1600。`,
+    );
+  }
+  const maskPng = PNG.sync.read(
+    Buffer.from(stripBase64Prefix(maskBase64), "base64"),
+  );
+  const padded =
+    width !== originalWidth ||
+    height !== originalHeight ||
+    maskPng.width !== width ||
+    maskPng.height !== height;
   if (!padded) {
     return {
       imageBase64: imageBuffer.toString("base64"),
@@ -1186,9 +1234,6 @@ function prepareInpaintAssets(
     };
   }
 
-  const maskPng = PNG.sync.read(
-    Buffer.from(stripBase64Prefix(maskBase64), "base64"),
-  );
   return {
     imageBase64: padPngWithEdge(sourcePng, width, height).toString("base64"),
     maskBase64: padMaskPng(maskPng, width, height).toString("base64"),
@@ -1509,23 +1554,31 @@ function sleep(ms: number, signal?: AbortSignal) {
   });
 }
 
-/**
- * Retry transient NovelAI failures (429 rate-limit, 5xx) with exponential
- * backoff. Honors a `Retry-After` header when present. Never retries on
- * user-cancel or auth/validation errors.
- */
+export function isPreflightNetworkFailure(error: any): boolean {
+  if (error?.response) return false;
+  const message = String(error?.message ?? "").toLowerCase();
+  return (
+    message.includes("before secure tls connection was established") ||
+    message.includes("tls handshake") ||
+    error?.code === "ERR_SSL_HANDSHAKE_FAILURE"
+  );
+}
+
+/** Retry only the explicitly permitted statuses/errors with exponential backoff. */
 async function requestWithRetry<T>(
   fn: () => Promise<T>,
   {
     retries = 3,
     baseDelay = 2_000,
     signal,
-    retryStatuses = [429, 500, 502, 503, 524],
+    retryStatuses = [429],
+    retryPreflightNetworkFailures = false,
   }: {
     retries?: number;
     baseDelay?: number;
     signal?: AbortSignal;
     retryStatuses?: number[];
+    retryPreflightNetworkFailures?: boolean;
   } = {},
 ): Promise<T> {
   let attempt = 0;
@@ -1541,7 +1594,8 @@ async function requestWithRetry<T>(
         throw error;
       const status = error?.response?.status;
       const retryable =
-        typeof status === "number" && retryStatuses.includes(status);
+        (typeof status === "number" && retryStatuses.includes(status)) ||
+        (retryPreflightNetworkFailures && isPreflightNetworkFailure(error));
       if (!retryable || attempt >= retries) throw error;
 
       const retryAfter = Number(error?.response?.headers?.["retry-after"]);
@@ -1623,15 +1677,14 @@ async function postGenerateImage(
     "https://image.novelai.net",
   );
 
-  // V4.5 precise references ride as multipart binary parts (director_ref_N); the
-  // JSON "request" part references them via director_reference_images_cached. This
-  // matches the official client's wire format. Every other generation stays JSON.
-  const { body, bodyHeaders } = buildGenerateImageHttpBody(payload);
-
   const postTo = (baseUrl: string) =>
     requestWithRetry(
-      () =>
-        axios.post(`${baseUrl}/ai/generate-image`, body, {
+      () => {
+        // FormData is a one-shot stream. Rebuild it for every 429 attempt or
+        // custom-endpoint fallback; reusing the consumed stream produces an
+        // empty/partial multipart request and misleading server errors.
+        const { body, bodyHeaders } = buildGenerateImageHttpBody(payload);
+        return axios.post(`${baseUrl}/ai/generate-image`, body, {
           headers: {
             Authorization: `Bearer ${token}`,
             ...bodyHeaders,
@@ -1643,11 +1696,16 @@ async function postGenerateImage(
           maxContentLength: Infinity,
           signal,
           ...proxyConfig("nai"),
-        }),
+        });
+      },
       // A paid generate POST may have already produced (and charged for) an image
       // even when the gateway reports a 5xx, so we never auto-retry server errors
       // here — only 429 rate-limits, which are rejected before any work is done.
-      { signal, retryStatuses: [429] },
+      {
+        signal,
+        retryStatuses: [429],
+        retryPreflightNetworkFailures: true,
+      },
     );
   let res;
   try {
@@ -1669,7 +1727,7 @@ async function postGenerateImage(
         error.langbaiMessage =
           `重绘失败（HTTP 500）：NovelAI 重绘接口返回内部错误。` +
           (sizeHint ||
-            "已自动重试；请尝试切换重绘模型、重新加载原图并重画蒙版，或稍后再试。") +
+            "未自动重试，以避免重复生成或重复扣费；请尝试切换重绘模型、重新加载原图并重画蒙版，或稍后再试。") +
           ` 模型：${String(payload.model)}。`;
         if (error.response) error.response.data = error.langbaiMessage;
       }
@@ -3893,6 +3951,7 @@ export async function generateImage(
     temporary?: boolean;
   },
 ): Promise<GenerateResult> {
+  params = normalizeGenerateParams(params);
   const token = getToken();
   if (!token)
     return {
@@ -3977,6 +4036,7 @@ export async function generateI2I(
   i2i: I2IParams,
   extras?: GenerateExtras,
 ): Promise<GenerateResult> {
+  params = normalizeGenerateParams(params);
   const token = getToken();
   if (!token) return { ok: false, message: "请先配置 API Token。", items: [] };
   if (!params.positivePrompt.trim())
@@ -4061,19 +4121,19 @@ export async function generateI2I(
 export async function redrawImage(
   request: BatchRedrawRequest,
 ): Promise<GenerateResult> {
+  const params = normalizeGenerateParams({
+    ...request.params,
+    fileNamePrefix:
+      request.fileNamePrefix || request.params.fileNamePrefix || "redraw",
+  });
   const token = getToken();
   if (!token) return { ok: false, message: "请先配置 API Token。", items: [] };
   if (!request.imageBase64)
     return { ok: false, message: "缺少待重绘的图片。", items: [] };
-  if (!request.params.positivePrompt.trim())
+  if (!params.positivePrompt.trim())
     return { ok: false, message: "该图片缺少提示词。", items: [] };
 
   const job = beginJob();
-  const params = {
-    ...request.params,
-    fileNamePrefix:
-      request.fileNamePrefix || request.params.fileNamePrefix || "redraw",
-  };
   const actualSeed =
     params.seedMode !== "random" && params.seed > 0
       ? params.seed
@@ -4160,6 +4220,7 @@ export async function inpaintImage(
   strength = 0.55,
   noise = 0,
 ): Promise<GenerateResult> {
+  params = normalizeGenerateParams(params);
   const token = getToken();
   if (!token) return { ok: false, message: "请先配置 API Token。", items: [] };
   if (!params.positivePrompt.trim())
@@ -4227,14 +4288,10 @@ export async function inpaintImage(
         break;
       } catch (error: any) {
         lastError = error;
-        const status = error?.response?.status;
-        const retryable =
-          status === 400 ||
-          status === 422 ||
-          status === 500 ||
-          status === 502 ||
-          status === 503 ||
-          status === 524;
+        // Only retry when the server explicitly rejects the selected inpaint
+        // model. A paid request that reaches a 5xx may already have run, so a
+        // broad server-error retry can duplicate both generation and charge.
+        const retryable = isInpaintModelCompatibilityError(error);
         if (!retryable || index >= candidates.length - 1) {
           annotateInpaintError(error, preparedAssets, candidates[index]);
           throw error;

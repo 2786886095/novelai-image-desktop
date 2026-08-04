@@ -206,6 +206,11 @@ PreparedInpaintAssets prepareInpaintAssets(
   }
   final width = max(64, (source.width / 64).ceil() * 64);
   final height = max(64, (source.height / 64).ceil() * 64);
+  if (width > 1600 || height > 1600) {
+    throw FormatException(
+      'Inpaint source ${source.width}x${source.height} exceeds the NovelAI limit; resize it so the padded dimensions stay within 1600x1600.',
+    );
+  }
   final padded = width != source.width || height != source.height;
   if (!padded && mask.width == width && mask.height == height) {
     return PreparedInpaintAssets(

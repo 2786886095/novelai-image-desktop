@@ -238,7 +238,7 @@ function clampPoolSize(value: unknown): number {
 }
 
 function snapDimension(value: unknown): number {
-  return Math.max(64, Math.min(4096, Math.round(positiveInteger(value, 64) / 64) * 64));
+  return Math.max(64, Math.min(1600, Math.round(positiveInteger(value, 64) / 64) * 64));
 }
 
 function normalizeGenerationParams(
@@ -269,7 +269,7 @@ function restore(inherited: GenerateParams): RandomSession {
       count: positiveInteger(raw?.count, 8),
       artistCount: Math.max(1, Math.min(20, positiveInteger(raw?.artistCount, 8))),
       poolSize: clampPoolSize(raw?.poolSize),
-      seed: Math.max(0, Math.floor(Number(raw?.seed) || 246813579)),
+    seed: Math.min(2_147_483_647, Math.max(0, Math.floor(Number(raw?.seed) || 246813579))),
       drawSeed: positiveInteger(raw?.drawSeed, freshSeed()),
       mutateAuxiliary: raw?.mutateAuxiliary === true,
       biasFavorites: raw?.biasFavorites === true,
@@ -561,7 +561,7 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
       <label className="random-check wide"><input type="checkbox" checked={session.mutateAuxiliary} onChange={(event) => patch({ mutateAuxiliary: event.target.checked })} /><span><b>{text.mutate}</b><small>{text.mutateHint}</small></span></label>
       <label><span>{text.count}</span><input type="number" min={1} value={session.count} onChange={(event) => patch({ count: positiveInteger(event.target.value, 1) })} /><small>{text.unlimited}</small></label>
       <label><span>{text.range}</span><input type="number" min={1} max={20} value={session.artistCount} onChange={(event) => patch({ artistCount: Math.min(20, positiveInteger(event.target.value, 1)) })} /></label>
-      <label><span>{text.seed}</span><input type="number" min={0} value={session.seed} onChange={(event) => patch({ seed: Math.max(0, Math.floor(Number(event.target.value) || 0)) })} /></label>
+        <label><span>{text.seed}</span><input type="number" min={0} max={2147483647} value={session.seed} onChange={(event) => patch({ seed: Math.min(2_147_483_647, Math.max(0, Math.floor(Number(event.target.value) || 0))) })} /></label>
     </section>
     <details className="artist-lab-panel artist-weight-tuner">
       <summary><span><b>{tuneText.title}</b><small>{tuneText.hint}</small></span></summary>
@@ -591,7 +591,7 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
       </summary>
       <div className="random-generation-grid">
         <label className="wide"><span>{paramText.model}</span><select value={session.generationParams.model} onChange={(event) => patchGeneration("model", event.target.value as GenerateParams["model"])}>{NAI_MODELS.map((model) => <option key={model.value} value={model.value}>{model.value}</option>)}</select></label>
-        <fieldset className="random-size-fields"><legend>{paramText.size}</legend><label><span>{paramText.width}</span><input type="number" min={64} max={4096} step={64} value={session.generationParams.width} onChange={(event) => patchGeneration("width", Math.max(64, positiveInteger(event.target.value, 64)))} onBlur={(event) => patchGeneration("width", snapDimension(event.target.value))} /></label><label><span>{paramText.height}</span><input type="number" min={64} max={4096} step={64} value={session.generationParams.height} onChange={(event) => patchGeneration("height", Math.max(64, positiveInteger(event.target.value, 64)))} onBlur={(event) => patchGeneration("height", snapDimension(event.target.value))} /></label></fieldset>
+        <fieldset className="random-size-fields"><legend>{paramText.size}</legend><label><span>{paramText.width}</span><input type="number" min={64} max={1600} step={64} value={session.generationParams.width} onChange={(event) => patchGeneration("width", Math.max(64, positiveInteger(event.target.value, 64)))} onBlur={(event) => patchGeneration("width", snapDimension(event.target.value))} /></label><label><span>{paramText.height}</span><input type="number" min={64} max={1600} step={64} value={session.generationParams.height} onChange={(event) => patchGeneration("height", Math.max(64, positiveInteger(event.target.value, 64)))} onBlur={(event) => patchGeneration("height", snapDimension(event.target.value))} /></label></fieldset>
         <label><span>{paramText.steps}</span><input type="number" min={1} max={50} value={session.generationParams.steps} onChange={(event) => patchGeneration("steps", Math.max(1, Math.min(50, positiveInteger(event.target.value, 1))))} /></label>
         <label><span>{paramText.cfg}</span><input type="number" min={1} max={10} step={0.1} value={session.generationParams.cfgScale} onChange={(event) => patchGeneration("cfgScale", Math.max(1, Math.min(10, Number(event.target.value) || 1)))} /></label>
         <label><span>{paramText.rescale}</span><input type="number" min={0} max={1} step={0.01} value={session.generationParams.cfgRescale} onChange={(event) => patchGeneration("cfgRescale", Math.max(0, Math.min(1, Number(event.target.value) || 0)))} /></label>

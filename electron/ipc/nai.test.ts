@@ -4,10 +4,11 @@ import {
   buildPayload,
   buildGenerateImageHttpBody,
   isOfficialNaiHost,
+  isPreflightNetworkFailure,
   prepareImageBufferForSave,
   stripPngMetadata,
 } from "./nai";
-import { DEFAULT_PARAMS } from "../../src/types";
+import { DEFAULT_PARAMS, normalizeGenerateParams } from "../../src/types";
 
 function b64(text: string) {
   return Buffer.from(text, "utf8").toString("base64");
@@ -34,6 +35,88 @@ function pngWithGenerationMetadata() {
     pngChunk("IEND"),
   ]);
 }
+
+describe("persisted generation parameter migration", () => {
+  it("repairs legacy enums, invalid numbers, dimensions, and dependent flags", () => {
+    const params = normalizeGenerateParams({
+      ...DEFAULT_PARAMS,
+      model: "retired-model" as any,
+      width: 99999,
+      height: 95,
+      steps: 500,
+      cfgScale: Number.NaN,
+      cfgRescale: 4,
+      sampler: "retired-sampler" as any,
+      noiseSchedule: "retired-schedule",
+      seed: -10,
+      seedMode: "legacy" as any,
+      ucPreset: 99 as any,
+      smea: false,
+      smeaDyn: true,
+    });
+    expect(params).toMatchObject({
+      model: "nai-diffusion-4-5-full",
+      width: 1600,
+      height: 64,
+      steps: 50,
+      cfgScale: 6,
+      cfgRescale: 1,
+      sampler: "k_euler_ancestral",
+      noiseSchedule: "karras",
+      seed: 0,
+      seedMode: "random",
+      ucPreset: 3,
+      smeaDyn: false,
+    });
+  });
+
+  it("sanitizes a direct payload even when a caller bypasses the UI store", () => {
+    const payload = buildPayload(
+      {
+        ...DEFAULT_PARAMS,
+        positivePrompt: "1girl",
+        width: 99999,
+        height: 95,
+        steps: -4,
+        cfgRescale: 8,
+        sampler: "removed" as any,
+      },
+      -100,
+    );
+    expect(payload.parameters).toMatchObject({
+      width: 1600,
+      height: 64,
+      steps: 1,
+      cfg_rescale: 1,
+      sampler: "k_euler_ancestral",
+      seed: 1,
+    });
+  });
+});
+
+describe("paid request retry boundary", () => {
+  it("retries only failures known to happen before the TLS request is sent", () => {
+    expect(
+      isPreflightNetworkFailure({
+        code: "ECONNRESET",
+        message:
+          "Client network socket disconnected before secure TLS connection was established",
+      }),
+    ).toBe(true);
+    expect(
+      isPreflightNetworkFailure({
+        code: "ECONNRESET",
+        message: "socket hang up",
+      }),
+    ).toBe(false);
+    expect(
+      isPreflightNetworkFailure({
+        message: "TLS handshake failed",
+        response: { status: 500 },
+      }),
+    ).toBe(false);
+  });
+});
 
 describe("image metadata save preference", () => {
   it("removes PNG generation metadata without re-encoding image chunks", () => {
