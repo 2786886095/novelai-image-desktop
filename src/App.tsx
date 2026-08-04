@@ -1502,7 +1502,11 @@ function PromptAndParams({
       {params.seedMode === "fixed" && (
         <div className="seed-row">
           <NumberInput label={generateText.prompt.fixedSeedValue} value={params.seed} min={1} onChange={(v) => setParam("seed", v)} />
-          <Button title={generateText.prompt.randomizeSeedTitle} onClick={() => setParam("seed", Math.floor(Math.random() * 2_147_483_647))}>
+          <Button
+            className="seed-randomize-button"
+            title={generateText.prompt.randomizeSeedTitle}
+            onClick={() => setParam("seed", Math.floor(Math.random() * 2_147_483_647))}
+          >
             ⇄
           </Button>
         </div>

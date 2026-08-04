@@ -849,9 +849,23 @@ button { user-select: none; }
 
 .seed-row {
   display: grid;
-  grid-template-columns: 1fr 32px 32px;
+  grid-template-columns: minmax(0, 1fr) 32px;
   align-items: end;
-  gap: 6px;
+  gap: 8px;
+}
+.seed-row > .field {
+  margin-bottom: 0;
+}
+.seed-randomize-button {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  line-height: 1;
+  font-size: 16px;
 }
 .checkbox-line {
   display: flex;
