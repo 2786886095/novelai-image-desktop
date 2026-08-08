@@ -4,15 +4,24 @@
 
 | 系统 | 安装包 | 安装说明 |
 | --- | --- | --- |
-| 🪟 **Windows**（便携版，x64） | `Langbai-NovelAI-Studio-1.6.0.exe` | 双击即用，无需安装 |
-| 🪟 **Windows**（安装版，x64） | `Langbai-NovelAI-Studio-Setup-1.6.0.exe` | 安装向导可自选路径、创建快捷方式；支持软件内一键更新 |
-| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-1.6.0-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
-| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-1.6.0.zip` | 解压后即为 `.app`，同样需右键「打开」 |
-| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-1.6.0.AppImage` | `chmod +x` 后直接运行 |
+| 🪟 **Windows**（便携版，x64） | `Langbai-NovelAI-Studio-1.6.1.exe` | 双击即用，无需安装 |
+| 🪟 **Windows**（安装版，x64） | `Langbai-NovelAI-Studio-Setup-1.6.1.exe` | 安装向导可自选路径、创建快捷方式；支持软件内一键更新 |
+| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-1.6.1-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
+| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-1.6.1.zip` | 解压后即为 `.app`，同样需右键「打开」 |
+| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-1.6.1.AppImage` | `chmod +x` 后直接运行 |
 | 🤖 **Android** | `app-release.apk` | 直接安装；需允许「未知来源」 |
 | 📱 **iOS** | `novelai-mobile-unsigned.ipa` | **未签名**，需使用 AltStore / Sideloadly 等工具自行侧载 |
 
 > 桌面端与移动端均为 **API-only** 客户端，需要自备 NovelAI Persistent API Token。
+
+### v1.6.1 更新内容
+
+- 新增可命名的风格提示词预设参考图库：每个风格最多保存 3 张图片，桌面端支持悬停大图与双击预览，移动端支持点击或长按预览，并可分别替换、删除或重新导入。
+- 风格参考图会复制到应用持久化目录，避免原始文件移动、删除或正常更新软件后失效；旧配置中的缺失文件和过期文件 URL 会在加载时自动整理。
+- 修复移动端 NovelAI 个人法典筛选区长期占据屏幕的问题，分类、章节与结果现在位于同一滚动区域，并加入可见滚动条；切换分类时会同步清理失效的章节筛选。
+- 为移动端 AI 绘画咒语图库加入可见、可拖动滚动条，改善手机横屏与平板浏览体验。
+- 修复桌面端风格下拉预览在滚动或窗口缩放后可能漂移的问题，并补齐简体中文、繁体中文、英语、日语和韩语界面文字。
+- 完成 5 种语言、浅色/深色主题、手机/平板横竖屏的隔离截图审计；桌面 252 项测试、移动端 199 项测试及 526 项 UI 截图用例通过。
 
 ### v1.6.0 更新内容
 

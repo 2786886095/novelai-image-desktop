@@ -14,7 +14,7 @@ class _FakePromptCodexService extends PromptCodexService {
     books: const [
       PromptCodexBook(
         id: 'regular',
-        title: '所长常规NovalAI个人法典',
+        title: '所长常规NovelAI个人法典',
         sourceUrl: 'https://nai4.top',
         adult: false,
       ),
@@ -68,6 +68,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(TextField), findsOneWidget);
       expect(find.textContaining('风格 0'), findsOneWidget);
+      expect(find.byType(Scrollbar), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   }

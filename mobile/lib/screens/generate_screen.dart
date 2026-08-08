@@ -776,6 +776,267 @@ class _StylePresetControls extends StatelessWidget {
     );
   }
 
+  Future<void> _importImages(
+    BuildContext context,
+    AppState state,
+    StylePromptPreset preset,
+    GenerateScreenText text,
+  ) async {
+    final available = 3 - preset.previewImages.length;
+    final messenger = ScaffoldMessenger.of(context);
+    if (available <= 0) {
+      messenger
+          .showSnackBar(SnackBar(content: Text(text.stylePresetImageLimit)));
+      return;
+    }
+    final picked = await ImagePicker().pickMultiImage(imageQuality: 100);
+    if (picked.isEmpty) return;
+    await state.importStylePromptPreviewImages(
+      preset: preset,
+      sources: picked
+          .take(available)
+          .map((item) => (path: item.path, name: item.name))
+          .toList(),
+    );
+  }
+
+  Future<void> _replaceImage(
+    AppState state,
+    StylePromptPreset preset,
+    StylePromptPreviewImage image,
+  ) async {
+    final picked = await ImagePicker()
+        .pickImage(source: ImageSource.gallery, imageQuality: 100);
+    if (picked == null) return;
+    await state.replaceStylePromptPreviewImage(
+      preset: preset,
+      previous: image,
+      source: (path: picked.path, name: picked.name),
+    );
+  }
+
+  void _showPreview(
+    BuildContext context,
+    StylePromptPreset preset,
+    StylePromptPreviewImage image,
+  ) {
+    showDialog<void>(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.9),
+      builder: (dialogContext) => Dialog.fullscreen(
+        backgroundColor: Colors.black,
+        child: SafeArea(
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: InteractiveViewer(
+                  minScale: 0.5,
+                  maxScale: 6,
+                  child: Center(
+                    child: Image.file(
+                      File(image.filePath),
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) => const Icon(
+                        Icons.broken_image_outlined,
+                        color: Colors.white70,
+                        size: 64,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 8,
+                right: 8,
+                child: IconButton.filledTonal(
+                  tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+                  onPressed: () => Navigator.pop(dialogContext),
+                  icon: const Icon(Icons.close),
+                ),
+              ),
+              Positioned(
+                left: 16,
+                right: 64,
+                bottom: 12,
+                child: Text(
+                  '${preset.name} · ${image.name}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Colors.white),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showImageManager(
+    BuildContext context,
+    String presetId,
+    GenerateScreenText text,
+  ) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (sheetContext) => Consumer<AppState>(
+        builder: (context, state, _) {
+          final preset = state.settings.stylePromptPresets
+              .where((item) => item.id == presetId)
+              .firstOrNull;
+          if (preset == null) return const SizedBox.shrink();
+          final images = preset.previewImages;
+          return RepaintBoundary(
+            key: const ValueKey('style-image-manager-sheet'),
+            child: DraggableScrollableSheet(
+              expand: false,
+              initialChildSize: 0.72,
+              minChildSize: 0.42,
+              maxChildSize: 0.94,
+              builder: (context, controller) => Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 0, 12, 10),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(text.stylePresetImageManager,
+                                  style:
+                                      Theme.of(context).textTheme.titleLarge),
+                              Text('${preset.name} · ${images.length}/3',
+                                  overflow: TextOverflow.ellipsis),
+                            ],
+                          ),
+                        ),
+                        FilledButton.tonalIcon(
+                          onPressed: images.length >= 3
+                              ? null
+                              : () =>
+                                  _importImages(context, state, preset, text),
+                          icon: const Icon(Icons.add_photo_alternate_outlined),
+                          label: Text(text.stylePresetAddImages),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: images.isEmpty
+                        ? Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(24),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.palette_outlined,
+                                      size: 48,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .primary),
+                                  const SizedBox(height: 12),
+                                  Text(text.stylePresetNoImages,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium),
+                                  const SizedBox(height: 6),
+                                  Text(text.stylePresetImageHint,
+                                      textAlign: TextAlign.center),
+                                ],
+                              ),
+                            ),
+                          )
+                        : GridView.builder(
+                            controller: controller,
+                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+                            gridDelegate:
+                                SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount:
+                                  MediaQuery.sizeOf(context).width >= 720
+                                      ? 3
+                                      : 2,
+                              mainAxisSpacing: 12,
+                              crossAxisSpacing: 12,
+                              childAspectRatio: 0.68,
+                            ),
+                            itemCount: images.length,
+                            itemBuilder: (context, index) {
+                              final image = images[index];
+                              return Card(
+                                clipBehavior: Clip.antiAlias,
+                                child: Column(
+                                  children: [
+                                    Expanded(
+                                      child: InkWell(
+                                        onTap: () => _showPreview(
+                                            context, preset, image),
+                                        onLongPress: () => _showPreview(
+                                            context, preset, image),
+                                        child: SizedBox.expand(
+                                          child: Image.file(
+                                            File(image.filePath),
+                                            fit: BoxFit.contain,
+                                            errorBuilder: (_, __, ___) =>
+                                                const Icon(Icons
+                                                    .broken_image_outlined),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    Padding(
+                                      padding:
+                                          const EdgeInsets.fromLTRB(8, 6, 8, 2),
+                                      child: Text(image.name,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis),
+                                    ),
+                                    Padding(
+                                      padding:
+                                          const EdgeInsets.fromLTRB(4, 0, 4, 4),
+                                      child: Row(
+                                        children: [
+                                          Expanded(
+                                            child: TextButton(
+                                              onPressed: () => _replaceImage(
+                                                  state, preset, image),
+                                              child: Text(
+                                                  text.stylePresetReplaceImage),
+                                            ),
+                                          ),
+                                          IconButton(
+                                            tooltip:
+                                                text.stylePresetDeleteImage,
+                                            onPressed: () => state
+                                                .removeStylePromptPreviewImage(
+                                              preset: preset,
+                                              image: image,
+                                            ),
+                                            icon: const Icon(
+                                                Icons.delete_outline),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
@@ -866,6 +1127,15 @@ class _StylePresetControls extends StatelessWidget {
                         },
                   icon: const Icon(Icons.delete_outline),
                   label: Text(text.deleteStylePreset),
+                ),
+                OutlinedButton.icon(
+                  onPressed: selected == null
+                      ? null
+                      : () => _showImageManager(context, selected.id, text),
+                  icon: const Icon(Icons.photo_library_outlined),
+                  label: Text(
+                    '${text.stylePresetImages} ${selected?.previewImages.length ?? 0}/3',
+                  ),
                 ),
               ],
             ),

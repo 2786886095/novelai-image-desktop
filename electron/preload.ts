@@ -28,6 +28,7 @@ import type {
   TuiwenSaveImportedAudioRequest,
   TuiwenTtsRequest,
   UpdateProgressEvent,
+  StylePromptPreviewImage,
 } from "../src/types";
 import type { AitagSearchRequest } from "../src/aitag";
 import type { PromptCodexSnapshot } from "../src/prompt-codex";
@@ -274,6 +275,21 @@ contextBridge.exposeInMainWorld("naiDesktop", {
   setSetting: <K extends SettingKey>(key: K, value: AppSettings[K]) =>
     ipcRenderer.invoke("settings:set", key, value),
   getSettings: () => ipcRenderer.invoke("settings:getAll"),
+  importStylePromptPresetImages: (
+    presetId: string,
+    availableSlots: number,
+    dialogTitle?: string,
+  ): Promise<StylePromptPreviewImage[]> =>
+    ipcRenderer.invoke(
+      "stylePreset:importImages",
+      presetId,
+      availableSlots,
+      dialogTitle,
+    ),
+  deleteStylePromptPresetImage: (presetId: string, imageId: string) =>
+    ipcRenderer.invoke("stylePreset:deleteImage", presetId, imageId),
+  deleteStylePromptPresetImages: (presetId: string) =>
+    ipcRenderer.invoke("stylePreset:deleteImages", presetId),
   isFirstRun: () => ipcRenderer.invoke("settings:isFirstRun"),
   completeSetup: () => ipcRenderer.invoke("settings:completeSetup"),
 

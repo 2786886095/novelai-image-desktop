@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -80,6 +81,78 @@ class Storage {
 
   Future<void> setSettings(AppSettings settings) async =>
       (await _prefs).setString(_kSettings, jsonEncode(settings.toJson()));
+
+  Future<Directory> _stylePromptPreviewRoot() async {
+    final root = await getApplicationDocumentsDirectory();
+    final directory =
+        Directory('${root.path}${Platform.pathSeparator}style-prompt-previews');
+    if (!directory.existsSync()) directory.createSync(recursive: true);
+    return directory;
+  }
+
+  String _safeStylePresetId(String value) {
+    final safe = value.trim().replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+    return safe.isEmpty ? 'style' : safe.substring(0, min(96, safe.length));
+  }
+
+  Future<StylePromptPreviewImage?> copyStylePromptPreviewImage({
+    required String presetId,
+    required String sourcePath,
+    required String sourceName,
+  }) async {
+    final source = File(sourcePath);
+    if (!source.existsSync()) return null;
+    final lower = sourceName.toLowerCase();
+    final extension = lower.endsWith('.jpeg')
+        ? '.jpeg'
+        : lower.endsWith('.jpg')
+            ? '.jpg'
+            : lower.endsWith('.webp')
+                ? '.webp'
+                : lower.endsWith('.png')
+                    ? '.png'
+                    : '';
+    if (extension.isEmpty) return null;
+    final root = await _stylePromptPreviewRoot();
+    final directory = Directory(
+        '${root.path}${Platform.pathSeparator}${_safeStylePresetId(presetId)}');
+    if (!directory.existsSync()) directory.createSync(recursive: true);
+    final id =
+        '${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(1 << 20)}';
+    final destination =
+        File('${directory.path}${Platform.pathSeparator}$id$extension');
+    await source.copy(destination.path);
+    return StylePromptPreviewImage(
+      id: id,
+      name: sourceName,
+      filePath: destination.path,
+      createdAt: DateTime.now().toIso8601String(),
+    );
+  }
+
+  Future<void> deleteStylePromptPreviewImage(
+      String presetId, StylePromptPreviewImage image) async {
+    final root = (await _stylePromptPreviewRoot()).absolute.path;
+    final presetRoot = Directory(
+            '$root${Platform.pathSeparator}${_safeStylePresetId(presetId)}')
+        .absolute
+        .path;
+    final candidate = File(image.filePath).absolute.path;
+    if (!candidate.startsWith('$presetRoot${Platform.pathSeparator}')) return;
+    try {
+      final file = File(candidate);
+      if (file.existsSync()) await file.delete();
+    } catch (_) {}
+  }
+
+  Future<void> deleteStylePromptPreviewImages(String presetId) async {
+    final root = await _stylePromptPreviewRoot();
+    final directory = Directory(
+        '${root.path}${Platform.pathSeparator}${_safeStylePresetId(presetId)}');
+    try {
+      if (directory.existsSync()) await directory.delete(recursive: true);
+    } catch (_) {}
+  }
 
   Future<Set<String>?> getAitagCompatibleParams() async {
     final values = (await _prefs).getStringList(_kAitagCompatibleParams);

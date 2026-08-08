@@ -9,7 +9,7 @@ class NaiOption {
 }
 
 const appName = 'Langbai NovelAI Studio';
-const appVersion = '1.6.0';
+const appVersion = '1.6.1';
 
 const naiModels = <NaiOption>[
   NaiOption('NAI Diffusion 4.5 Full (Full model)', 'nai-diffusion-4-5-full'),
@@ -933,19 +933,22 @@ class StylePromptPreset {
   String name;
   String prompt;
   String createdAt;
+  List<StylePromptPreviewImage> previewImages;
 
   StylePromptPreset({
     required this.id,
     required this.name,
     required this.prompt,
     required this.createdAt,
-  });
+    List<StylePromptPreviewImage>? previewImages,
+  }) : previewImages = previewImages ?? [];
 
   Map<String, dynamic> toJson() => {
         'id': id,
         'name': name,
         'prompt': prompt,
         'createdAt': createdAt,
+        'previewImages': previewImages.map((item) => item.toJson()).toList(),
       };
 
   factory StylePromptPreset.fromJson(Map<String, dynamic> json) =>
@@ -953,6 +956,42 @@ class StylePromptPreset {
         id: json['id']?.toString() ?? '',
         name: json['name']?.toString() ?? '',
         prompt: json['prompt']?.toString() ?? '',
+        createdAt: json['createdAt']?.toString() ?? '',
+        previewImages: (json['previewImages'] as List?)
+                ?.whereType<Map>()
+                .map((item) => StylePromptPreviewImage.fromJson(
+                    Map<String, dynamic>.from(item)))
+                .take(3)
+                .toList() ??
+            [],
+      );
+}
+
+class StylePromptPreviewImage {
+  final String id;
+  final String name;
+  final String filePath;
+  final String createdAt;
+
+  const StylePromptPreviewImage({
+    required this.id,
+    required this.name,
+    required this.filePath,
+    required this.createdAt,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'filePath': filePath,
+        'createdAt': createdAt,
+      };
+
+  factory StylePromptPreviewImage.fromJson(Map<String, dynamic> json) =>
+      StylePromptPreviewImage(
+        id: json['id']?.toString() ?? '',
+        name: json['name']?.toString() ?? '',
+        filePath: json['filePath']?.toString() ?? '',
         createdAt: json['createdAt']?.toString() ?? '',
       );
 }

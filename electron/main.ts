@@ -79,6 +79,11 @@ import {
   updatePromptCodex,
 } from "./ipc/prompt-codex";
 import {
+  deleteStylePromptPresetImage,
+  deleteStylePromptPresetImages,
+  importStylePromptPresetImages,
+} from "./ipc/style-preset-images";
+import {
   getTuiwenTtsCatalog,
   saveTuiwenImportedAudio,
   synthesizeTuiwenSpeech,
@@ -678,6 +683,19 @@ function registerIpc() {
     setSetting(key, value),
   );
   ipcMain.handle("settings:getAll", () => getSettings());
+  ipcMain.handle(
+    "stylePreset:importImages",
+    (_event, presetId: string, availableSlots: number, dialogTitle?: string) =>
+      importStylePromptPresetImages(presetId, availableSlots, dialogTitle),
+  );
+  ipcMain.handle(
+    "stylePreset:deleteImage",
+    (_event, presetId: string, imageId: string) =>
+      deleteStylePromptPresetImage(presetId, imageId),
+  );
+  ipcMain.handle("stylePreset:deleteImages", (_event, presetId: string) =>
+    deleteStylePromptPresetImages(presetId),
+  );
   ipcMain.handle("settings:getReverseDefaults", () =>
     getReversePromptTemplateDefaults(),
   );

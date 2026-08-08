@@ -337,6 +337,45 @@ function normalize(raw: Partial<PersistedData> | null): PersistedData {
   const rawSettings = (raw?.settings ?? {}) as Partial<AppSettings>;
   const settings = { ...defaults, ...rawSettings };
   settings.language = normalizeLanguage(settings.language);
+  settings.stylePromptPresets = Array.isArray(settings.stylePromptPresets)
+    ? settings.stylePromptPresets
+        .filter((preset) => preset && typeof preset === "object")
+        .map((preset) => {
+          const previewImages = Array.isArray(preset.previewImages)
+            ? preset.previewImages
+                .filter(
+                  (image) =>
+                    image &&
+                    typeof image.id === "string" &&
+                    typeof image.name === "string" &&
+                    typeof image.filePath === "string" &&
+                    fs.existsSync(image.filePath),
+                )
+                .slice(0, 3)
+                .map((image) => ({
+                  id: image.id,
+                  name: image.name,
+                  filePath: image.filePath,
+                  fileUrl: pathToFileURL(image.filePath).toString(),
+                  createdAt:
+                    typeof image.createdAt === "string"
+                      ? image.createdAt
+                      : new Date(0).toISOString(),
+                }))
+            : [];
+          return {
+            id: typeof preset.id === "string" ? preset.id : "",
+            name: typeof preset.name === "string" ? preset.name : "",
+            prompt: typeof preset.prompt === "string" ? preset.prompt : "",
+            createdAt:
+              typeof preset.createdAt === "string"
+                ? preset.createdAt
+                : new Date(0).toISOString(),
+            previewImages,
+          };
+        })
+        .filter((preset) => preset.id && preset.name)
+    : [];
   // Old releases allowed the two official subdomains to be swapped. Both are
   // trusted hosts, but they do not serve the same routes; a stale API host in
   // the image slot makes every generation fail until app data is reset.

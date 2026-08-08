@@ -21,6 +21,7 @@ class _PromptCodexScreenState extends State<PromptCodexScreen> {
   late final PromptCodexService _service =
       widget.service ?? PromptCodexService();
   final _search = TextEditingController();
+  final _scrollController = ScrollController();
   PromptCodexSnapshot? _snapshot;
   String _book = 'regular';
   String _category = 'all';
@@ -41,6 +42,7 @@ class _PromptCodexScreenState extends State<PromptCodexScreen> {
   void dispose() {
     _searchDebounce?.cancel();
     _search.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -227,6 +229,55 @@ class _PromptCodexScreenState extends State<PromptCodexScreen> {
     }).toList(growable: false);
   }
 
+  Widget _entryCard(
+    BuildContext context,
+    PromptCodexEntry entry,
+    Map<String, String> text,
+  ) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(entry.section, style: Theme.of(context).textTheme.labelMedium),
+            const SizedBox(height: 3),
+            Text(entry.title, style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 10),
+            SelectableText(entry.prompt),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              alignment: WrapAlignment.end,
+              children: [
+                TextButton.icon(
+                  onPressed: () => launchUrl(Uri.parse(entry.sourceUrl),
+                      mode: LaunchMode.externalApplication),
+                  icon: const Icon(Icons.open_in_new),
+                  label: Text(text['source']!),
+                ),
+                FilledButton.tonalIcon(
+                  onPressed: () async {
+                    await Clipboard.setData(ClipboardData(text: entry.prompt));
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context)
+                        ..clearSnackBars()
+                        ..showSnackBar(SnackBar(content: Text(text['copy']!)));
+                    }
+                  },
+                  icon: const Icon(Icons.copy),
+                  label: Text(text['copy']!),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final text = _text();
@@ -279,240 +330,181 @@ class _PromptCodexScreenState extends State<PromptCodexScreen> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: Column(
-              children: [
-                Card(
-                  margin: EdgeInsets.zero,
-                  clipBehavior: Clip.antiAlias,
-                  child: ExpansionTile(
-                    key: const PageStorageKey<String>(
-                        'prompt-codex-introduction'),
-                    initiallyExpanded: false,
-                    title: Text(text['introduction']!),
-                    subtitle: Text(text['introductionHint']!),
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            for (final item in introduction) ...[
-                              Text(item.title,
-                                  style:
-                                      Theme.of(context).textTheme.titleSmall),
-                              const SizedBox(height: 4),
-                              SelectableText(item.content),
-                              const SizedBox(height: 12),
-                            ],
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: OutlinedButton.icon(
-                                onPressed: () => launchUrl(
-                                    Uri.parse(snapshot.sourceSite),
-                                    mode: LaunchMode.externalApplication),
-                                icon: const Icon(Icons.open_in_new),
-                                label: Text(text['website']!),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: _search,
-                  decoration: InputDecoration(
-                    prefixIcon: const Icon(Icons.search),
-                    hintText: text['search'],
-                    border: const OutlineInputBorder(),
-                  ),
-                  onChanged: (value) {
-                    _searchDebounce?.cancel();
-                    _searchDebounce =
-                        Timer(const Duration(milliseconds: 180), () {
-                      if (!mounted) return;
-                      setState(() {
-                        _query = value;
-                        _limit = 100;
-                      });
-                    });
-                  },
-                ),
-                const SizedBox(height: 10),
-                SizedBox(
-                  height: 42,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
-                    children: [
-                      ChoiceChip(
-                        label: Text(text['all']!),
-                        selected: _book == 'all',
-                        onSelected: (_) => setState(() {
-                          _book = 'all';
-                          _category = 'all';
-                          _section = 'all';
-                          _limit = 100;
-                        }),
-                      ),
-                      const SizedBox(width: 8),
-                      for (final book in snapshot.books) ...[
-                        ChoiceChip(
-                          label: Text(
-                            book.adult
-                                ? '${book.title} · ${text['adult']}'
-                                : book.title,
-                          ),
-                          selected: _book == book.id,
-                          onSelected: (_) => setState(() {
-                            _book = book.id;
-                            _category = 'all';
-                            _section = 'all';
-                            _limit = 100;
-                          }),
-                        ),
-                        const SizedBox(width: 8),
-                      ],
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 10),
-                LayoutBuilder(builder: (context, constraints) {
-                  final compact = constraints.maxWidth < 620;
-                  final controls = [
-                    DropdownButtonFormField<String>(
-                      value: _category,
-                      isExpanded: true,
-                      decoration: InputDecoration(labelText: text['category']),
-                      items: categories.entries
-                          .map((item) => DropdownMenuItem(
-                              value: item.key, child: Text(item.value)))
-                          .toList(),
-                      onChanged: (value) => setState(() {
-                        _category = value ?? 'all';
-                        _limit = 100;
-                      }),
-                    ),
-                    DropdownButtonFormField<String>(
-                      value: sections.contains(_section) ? _section : 'all',
-                      isExpanded: true,
-                      decoration: InputDecoration(labelText: text['section']),
-                      items: [
-                        DropdownMenuItem(
-                            value: 'all', child: Text(text['all']!)),
-                        ...sections.map((value) => DropdownMenuItem(
-                            value: value,
-                            child:
-                                Text(value, overflow: TextOverflow.ellipsis))),
-                      ],
-                      onChanged: (value) => setState(() {
-                        _section = value ?? 'all';
-                        _limit = 100;
-                      }),
-                    ),
-                  ];
-                  if (compact) {
-                    return Column(children: [
-                      controls[0],
-                      const SizedBox(height: 8),
-                      controls[1],
-                    ]);
-                  }
-                  return Row(children: [
-                    Expanded(child: controls[0]),
-                    const SizedBox(width: 10),
-                    Expanded(child: controls[1]),
-                  ]);
-                }),
-                if (_message.isNotEmpty)
+      body: Scrollbar(
+        controller: _scrollController,
+        thumbVisibility: true,
+        interactive: true,
+        child: ListView(
+          controller: _scrollController,
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          children: [
+            Card(
+              margin: EdgeInsets.zero,
+              clipBehavior: Clip.antiAlias,
+              child: ExpansionTile(
+                key: const PageStorageKey<String>('prompt-codex-introduction'),
+                initiallyExpanded: false,
+                title: Text(text['introduction']!),
+                subtitle: Text(text['introductionHint']!),
+                children: [
                   Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Text(_message,
-                        style: TextStyle(
-                            color: Theme.of(context).colorScheme.primary)),
-                  ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: visible.isEmpty
-                ? Center(child: Text(text['empty']!))
-                : ListView.builder(
-                    keyboardDismissBehavior:
-                        ScrollViewKeyboardDismissBehavior.onDrag,
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-                    itemCount: visible.length +
-                        (visible.length < filtered.length ? 1 : 0),
-                    itemBuilder: (context, index) {
-                      if (index == visible.length) {
-                        return Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: OutlinedButton(
-                            onPressed: () => setState(() => _limit += 100),
-                            child: Text(
-                                '${text['more']} · ${visible.length}/${filtered.length}'),
-                          ),
-                        );
-                      }
-                      final entry = visible[index];
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 10),
-                        child: Padding(
-                          padding: const EdgeInsets.all(14),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Text(entry.section,
-                                  style:
-                                      Theme.of(context).textTheme.labelMedium),
-                              const SizedBox(height: 3),
-                              Text(entry.title,
-                                  style:
-                                      Theme.of(context).textTheme.titleMedium),
-                              const SizedBox(height: 10),
-                              SelectableText(entry.prompt),
-                              const SizedBox(height: 10),
-                              Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
-                                alignment: WrapAlignment.end,
-                                children: [
-                                  TextButton.icon(
-                                    onPressed: () => launchUrl(
-                                        Uri.parse(entry.sourceUrl),
-                                        mode: LaunchMode.externalApplication),
-                                    icon: const Icon(Icons.open_in_new),
-                                    label: Text(text['source']!),
-                                  ),
-                                  FilledButton.tonalIcon(
-                                    onPressed: () async {
-                                      await Clipboard.setData(
-                                          ClipboardData(text: entry.prompt));
-                                      if (context.mounted) {
-                                        ScaffoldMessenger.of(context)
-                                          ..clearSnackBars()
-                                          ..showSnackBar(SnackBar(
-                                              content: Text(text['copy']!)));
-                                      }
-                                    },
-                                    icon: const Icon(Icons.copy),
-                                    label: Text(text['copy']!),
-                                  ),
-                                ],
-                              ),
-                            ],
+                    padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (final item in introduction) ...[
+                          Text(item.title,
+                              style: Theme.of(context).textTheme.titleSmall),
+                          const SizedBox(height: 4),
+                          SelectableText(item.content),
+                          const SizedBox(height: 12),
+                        ],
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: OutlinedButton.icon(
+                            onPressed: () => launchUrl(
+                                Uri.parse(snapshot.sourceSite),
+                                mode: LaunchMode.externalApplication),
+                            icon: const Icon(Icons.open_in_new),
+                            label: Text(text['website']!),
                           ),
                         ),
-                      );
-                    },
+                      ],
+                    ),
                   ),
-          ),
-        ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _search,
+              decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.search),
+                hintText: text['search'],
+                border: const OutlineInputBorder(),
+              ),
+              onChanged: (value) {
+                _searchDebounce?.cancel();
+                _searchDebounce = Timer(const Duration(milliseconds: 180), () {
+                  if (!mounted) return;
+                  setState(() {
+                    _query = value;
+                    _limit = 100;
+                  });
+                });
+              },
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              height: 42,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: [
+                  ChoiceChip(
+                    label: Text(text['all']!),
+                    selected: _book == 'all',
+                    onSelected: (_) => setState(() {
+                      _book = 'all';
+                      _category = 'all';
+                      _section = 'all';
+                      _limit = 100;
+                    }),
+                  ),
+                  const SizedBox(width: 8),
+                  for (final book in snapshot.books) ...[
+                    ChoiceChip(
+                      label: Text(book.adult
+                          ? '${book.title} · ${text['adult']}'
+                          : book.title),
+                      selected: _book == book.id,
+                      onSelected: (_) => setState(() {
+                        _book = book.id;
+                        _category = 'all';
+                        _section = 'all';
+                        _limit = 100;
+                      }),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+            LayoutBuilder(builder: (context, constraints) {
+              final stackControls = constraints.maxWidth < 370;
+              final controls = [
+                DropdownButtonFormField<String>(
+                  value: _category,
+                  isExpanded: true,
+                  decoration: InputDecoration(labelText: text['category']),
+                  items: categories.entries
+                      .map((item) => DropdownMenuItem(
+                          value: item.key,
+                          child: Text(item.value,
+                              overflow: TextOverflow.ellipsis)))
+                      .toList(),
+                  onChanged: (value) => setState(() {
+                    _category = value ?? 'all';
+                    _section = 'all';
+                    _limit = 100;
+                  }),
+                ),
+                DropdownButtonFormField<String>(
+                  value: sections.contains(_section) ? _section : 'all',
+                  isExpanded: true,
+                  decoration: InputDecoration(labelText: text['section']),
+                  items: [
+                    DropdownMenuItem(value: 'all', child: Text(text['all']!)),
+                    ...sections.map((value) => DropdownMenuItem(
+                        value: value,
+                        child: Text(value, overflow: TextOverflow.ellipsis))),
+                  ],
+                  onChanged: (value) => setState(() {
+                    _section = value ?? 'all';
+                    _limit = 100;
+                  }),
+                ),
+              ];
+              if (stackControls) {
+                return Column(children: [
+                  controls[0],
+                  const SizedBox(height: 8),
+                  controls[1],
+                ]);
+              }
+              return Row(children: [
+                Expanded(child: controls[0]),
+                const SizedBox(width: 10),
+                Expanded(child: controls[1]),
+              ]);
+            }),
+            if (_message.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(_message,
+                    style: TextStyle(
+                        color: Theme.of(context).colorScheme.primary)),
+              ),
+            const SizedBox(height: 12),
+            if (visible.isEmpty)
+              SizedBox(
+                height: 220,
+                child: Center(child: Text(text['empty']!)),
+              )
+            else
+              ...visible.map((entry) => _entryCard(context, entry, text)),
+            if (visible.length < filtered.length)
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: OutlinedButton(
+                  onPressed: () => setState(() => _limit += 100),
+                  child: Text(
+                      '${text['more']} · ${visible.length}/${filtered.length}'),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

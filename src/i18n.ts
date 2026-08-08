@@ -647,6 +647,14 @@ type GeneratePanelText = {
     stylePresetSave: string;
     stylePresetDelete: string;
     stylePresetNamePrompt: string;
+    stylePresetImages: string;
+    stylePresetImageManager: string;
+    stylePresetAddImages: string;
+    stylePresetReplaceImage: string;
+    stylePresetDeleteImage: string;
+    stylePresetNoImages: string;
+    stylePresetImageHint: string;
+    stylePresetImageLimit: string;
     locked: string;
     lock: string;
     lockSavedTitle: string;
@@ -708,6 +716,14 @@ const GENERATE_PANEL_TEXT = {
       stylePresetSave: "保存风格",
       stylePresetDelete: "删除",
       stylePresetNamePrompt: "给这套风格提示词命名：",
+      stylePresetImages: "参考图",
+      stylePresetImageManager: "风格参考图",
+      stylePresetAddImages: "导入图片",
+      stylePresetReplaceImage: "重新导入",
+      stylePresetDeleteImage: "删除图片",
+      stylePresetNoImages: "尚未导入风格参考图",
+      stylePresetImageHint: "双击图片可全屏预览；每个风格最多保存 3 张。",
+      stylePresetImageLimit: "该风格已达到 3 张图片上限。",
       locked: "已锁定",
       lock: "锁定",
       lockSavedTitle: "已锁定：重置/模板不会改动，重启保留。点击解锁",
@@ -769,6 +785,14 @@ const GENERATE_PANEL_TEXT = {
       stylePresetSave: "保存風格",
       stylePresetDelete: "刪除",
       stylePresetNamePrompt: "為這套風格提示詞命名：",
+      stylePresetImages: "參考圖",
+      stylePresetImageManager: "風格參考圖",
+      stylePresetAddImages: "匯入圖片",
+      stylePresetReplaceImage: "重新匯入",
+      stylePresetDeleteImage: "刪除圖片",
+      stylePresetNoImages: "尚未匯入風格參考圖",
+      stylePresetImageHint: "雙擊圖片可全螢幕預覽；每個風格最多保存 3 張。",
+      stylePresetImageLimit: "此風格已達到 3 張圖片上限。",
       locked: "已鎖定",
       lock: "鎖定",
       lockSavedTitle: "已鎖定：重置/範本不會改動，重啟保留。點擊解鎖",
@@ -830,6 +854,14 @@ const GENERATE_PANEL_TEXT = {
       stylePresetSave: "Save style",
       stylePresetDelete: "Delete",
       stylePresetNamePrompt: "Name this style prompt:",
+      stylePresetImages: "Reference images",
+      stylePresetImageManager: "Style reference images",
+      stylePresetAddImages: "Import images",
+      stylePresetReplaceImage: "Re-import",
+      stylePresetDeleteImage: "Delete image",
+      stylePresetNoImages: "No style reference images yet",
+      stylePresetImageHint: "Double-click an image for full-screen preview. Up to 3 images per style.",
+      stylePresetImageLimit: "This style already has the 3-image maximum.",
       locked: "Locked",
       lock: "Lock",
       lockSavedTitle:
@@ -895,6 +927,14 @@ const GENERATE_PANEL_TEXT = {
       stylePresetSave: "スタイルを保存",
       stylePresetDelete: "削除",
       stylePresetNamePrompt: "このスタイルプロンプトの名前：",
+      stylePresetImages: "参考画像",
+      stylePresetImageManager: "スタイル参考画像",
+      stylePresetAddImages: "画像を追加",
+      stylePresetReplaceImage: "再読み込み",
+      stylePresetDeleteImage: "画像を削除",
+      stylePresetNoImages: "参考画像はまだありません",
+      stylePresetImageHint: "画像をダブルクリックすると全画面表示します。各スタイル最大3枚。",
+      stylePresetImageLimit: "このスタイルは3枚の上限に達しています。",
       locked: "ロック中",
       lock: "ロック",
       lockSavedTitle:
@@ -959,6 +999,14 @@ const GENERATE_PANEL_TEXT = {
       stylePresetSave: "스타일 저장",
       stylePresetDelete: "삭제",
       stylePresetNamePrompt: "이 스타일 프롬프트 이름:",
+      stylePresetImages: "참고 이미지",
+      stylePresetImageManager: "스타일 참고 이미지",
+      stylePresetAddImages: "이미지 가져오기",
+      stylePresetReplaceImage: "다시 가져오기",
+      stylePresetDeleteImage: "이미지 삭제",
+      stylePresetNoImages: "아직 스타일 참고 이미지가 없습니다",
+      stylePresetImageHint: "이미지를 두 번 클릭하면 전체 화면으로 볼 수 있습니다. 스타일당 최대 3장입니다.",
+      stylePresetImageLimit: "이 스타일은 이미지 3장 한도에 도달했습니다.",
       locked: "잠김",
       lock: "잠금",
       lockSavedTitle:

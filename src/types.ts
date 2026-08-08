@@ -1046,6 +1046,15 @@ export interface StylePromptPreset {
   name: string;
   prompt: string;
   createdAt: string;
+  previewImages?: StylePromptPreviewImage[];
+}
+
+export interface StylePromptPreviewImage {
+  id: string;
+  name: string;
+  filePath: string;
+  fileUrl: string;
+  createdAt: string;
 }
 
 /** A single tag suggestion from the NAI suggest-tags endpoint */
@@ -1237,6 +1246,18 @@ export interface NaiDesktopApi {
   promptCodexUpdate: () => Promise<
     import("./prompt-codex").PromptCodexSnapshot
   >;
+  importStylePromptPresetImages: (
+    presetId: string,
+    availableSlots: number,
+    dialogTitle?: string,
+  ) => Promise<StylePromptPreviewImage[]>;
+  deleteStylePromptPresetImage: (
+    presetId: string,
+    imageId: string,
+  ) => Promise<{ ok: boolean }>;
+  deleteStylePromptPresetImages: (
+    presetId: string,
+  ) => Promise<{ ok: boolean }>;
   artistLabPickTarget: () => Promise<{
     filePath: string;
     fileUrl: string;

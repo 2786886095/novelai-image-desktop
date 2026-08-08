@@ -483,6 +483,7 @@ class AppState extends ChangeNotifier {
       name: cleanName,
       prompt: cleanPrompt,
       createdAt: DateTime.now().toIso8601String(),
+      previewImages: [],
     );
     settings.stylePromptPresets.add(preset);
     await storage.setSettings(settings);
@@ -491,6 +492,7 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> removeStylePromptPreset(String id) async {
+    await storage.deleteStylePromptPreviewImages(id);
     settings.stylePromptPresets.removeWhere((item) => item.id == id);
     await storage.setSettings(settings);
     notifyListeners();
@@ -498,6 +500,59 @@ class AppState extends ChangeNotifier {
 
   void applyStylePromptPreset(StylePromptPreset preset) {
     setParam((params) => params.stylePrompt = preset.prompt);
+  }
+
+  Future<List<StylePromptPreviewImage>> importStylePromptPreviewImages({
+    required StylePromptPreset preset,
+    required List<({String path, String name})> sources,
+  }) async {
+    final available = max(0, 3 - preset.previewImages.length);
+    if (available == 0) return const [];
+    final imported = <StylePromptPreviewImage>[];
+    for (final source in sources.take(available)) {
+      final image = await storage.copyStylePromptPreviewImage(
+        presetId: preset.id,
+        sourcePath: source.path,
+        sourceName: source.name,
+      );
+      if (image != null) imported.add(image);
+    }
+    if (imported.isEmpty) return const [];
+    preset.previewImages =
+        [...preset.previewImages, ...imported].take(3).toList();
+    await storage.setSettings(settings);
+    notifyListeners();
+    return imported;
+  }
+
+  Future<StylePromptPreviewImage?> replaceStylePromptPreviewImage({
+    required StylePromptPreset preset,
+    required StylePromptPreviewImage previous,
+    required ({String path, String name}) source,
+  }) async {
+    final imported = await storage.copyStylePromptPreviewImage(
+      presetId: preset.id,
+      sourcePath: source.path,
+      sourceName: source.name,
+    );
+    if (imported == null) return null;
+    await storage.deleteStylePromptPreviewImage(preset.id, previous);
+    preset.previewImages = preset.previewImages
+        .map((item) => item.id == previous.id ? imported : item)
+        .toList();
+    await storage.setSettings(settings);
+    notifyListeners();
+    return imported;
+  }
+
+  Future<void> removeStylePromptPreviewImage({
+    required StylePromptPreset preset,
+    required StylePromptPreviewImage image,
+  }) async {
+    await storage.deleteStylePromptPreviewImage(preset.id, image);
+    preset.previewImages.removeWhere((item) => item.id == image.id);
+    await storage.setSettings(settings);
+    notifyListeners();
   }
 
   Future<void> setWorkbenchPath(String filePath) async {

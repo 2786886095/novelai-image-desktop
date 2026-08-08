@@ -368,16 +368,18 @@ String _f(String value, String key, Object replacement) =>
 
 class AitagGalleryScreen extends StatefulWidget {
   final VoidCallback onBack;
-  const AitagGalleryScreen({super.key, required this.onBack});
+  final AitagService? service;
+  const AitagGalleryScreen({super.key, required this.onBack, this.service});
 
   @override
   State<AitagGalleryScreen> createState() => _AitagGalleryScreenState();
 }
 
 class _AitagGalleryScreenState extends State<AitagGalleryScreen> {
-  final service = AitagService();
+  late final AitagService service = widget.service ?? AitagService();
   final query = TextEditingController();
   final prompt = TextEditingController();
+  final scrollController = ScrollController();
   AitagSearchResult result =
       const AitagSearchResult(page: 1, total: 0, items: []);
   String sort = 'new';
@@ -398,6 +400,7 @@ class _AitagGalleryScreenState extends State<AitagGalleryScreen> {
   void dispose() {
     query.dispose();
     prompt.dispose();
+    scrollController.dispose();
     service.close();
     super.dispose();
   }
@@ -503,176 +506,187 @@ class _AitagGalleryScreenState extends State<AitagGalleryScreen> {
                 : constraints.maxWidth >= 480
                     ? 2
                     : 1;
-        return CustomScrollView(
-          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-          slivers: [
-            SliverToBoxAdapter(
-                child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
-              child: Card(
-                  child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Text(text.subtitle,
-                          style: Theme.of(context).textTheme.bodyMedium),
-                      const SizedBox(height: 12),
-                      TextField(
-                          controller: query,
-                          textInputAction: TextInputAction.search,
-                          onSubmitted: (_) => _search(1),
-                          decoration: InputDecoration(
-                              prefixIcon: const Icon(Icons.search),
-                              hintText: text.query)),
-                      const SizedBox(height: 10),
-                      TextField(
-                          controller: prompt,
-                          textInputAction: TextInputAction.search,
-                          onSubmitted: (_) => _search(1),
-                          decoration: InputDecoration(
-                              prefixIcon:
-                                  const Icon(Icons.auto_awesome_outlined),
-                              hintText: text.prompt)),
-                      const SizedBox(height: 10),
-                      Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            SegmentedButton<String>(
-                                segments: [
-                                  ButtonSegment(
-                                      value: 'new', label: Text(text.newest)),
-                                  ButtonSegment(
-                                      value: 'monthly',
-                                      label: Text(text.monthly))
-                                ],
-                                selected: {
-                                  sort
-                                },
-                                onSelectionChanged: loading
-                                    ? null
-                                    : (value) {
-                                        final nextSort = value.first;
-                                        final nextTimeRange =
-                                            nextSort == 'monthly'
-                                                ? 'current'
-                                                : 'all';
-                                        setState(() {
-                                          sort = nextSort;
-                                          timeRange = nextTimeRange;
-                                        });
-                                        _search(1,
-                                            sortOverride: nextSort,
-                                            timeRangeOverride: nextTimeRange);
-                                      }),
-                            SizedBox(
-                              width: 240,
-                              child: DropdownButtonFormField<String>(
-                                value: timeRange,
-                                isExpanded: true,
-                                decoration: InputDecoration(
-                                  labelText: text.timeRange,
-                                  prefixIcon:
-                                      const Icon(Icons.calendar_month_outlined),
-                                ),
-                                items: timeOptions
-                                    .map((option) => DropdownMenuItem(
-                                          value: option.value,
-                                          child: Text(option.label,
-                                              overflow: TextOverflow.ellipsis),
-                                        ))
-                                    .toList(),
-                                onChanged: loading
-                                    ? null
-                                    : (value) {
-                                        if (value == null) return;
-                                        setState(() => timeRange = value);
-                                        _search(1, timeRangeOverride: value);
-                                      },
-                              ),
-                            ),
-                            FilledButton.icon(
-                                onPressed: loading ? null : () => _search(1),
-                                icon: const Icon(Icons.search),
-                                label: Text(text.search)),
-                            Text(_f(text.total, 'count', result.total)),
-                          ]),
-                    ]),
-              )),
-            )),
-            if (loading)
-              SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: Center(
-                      child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    const CircularProgressIndicator(),
-                    const SizedBox(height: 12),
-                    Text(text.loading)
-                  ])))
-            else if (failed)
-              SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: Center(
-                      child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    Text(text.failed),
-                    const SizedBox(height: 12),
-                    OutlinedButton(
-                        onPressed: () => _search(result.page),
-                        child: Text(text.retry))
-                  ])))
-            else if (result.items.isEmpty)
-              SliverFillRemaining(
-                  hasScrollBody: false, child: Center(child: Text(text.empty)))
-            else
-              SliverPadding(
-                padding: const EdgeInsets.all(16),
-                sliver: SliverGrid.builder(
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: columns,
-                      crossAxisSpacing: 10,
-                      mainAxisSpacing: 10,
-                      childAspectRatio: columns == 1 ? 1.45 : .72),
-                  itemCount: result.items.length,
-                  itemBuilder: (context, index) => _WorkCard(
-                      work: result.items[index],
-                      service: service,
-                      text: text,
-                      onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                          builder: (_) => _AitagDetailScreen(
-                              service: service,
-                              workId: result.items[index].id,
-                              text: text)))),
-                ),
-              ),
-            if (!loading && !failed && result.items.isNotEmpty)
+        return Scrollbar(
+          controller: scrollController,
+          thumbVisibility: true,
+          interactive: true,
+          child: CustomScrollView(
+            controller: scrollController,
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            slivers: [
               SliverToBoxAdapter(
-                  child: SafeArea(
-                      top: false,
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 18),
-                        child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
+                  child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+                child: Card(
+                    child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(text.subtitle,
+                            style: Theme.of(context).textTheme.bodyMedium),
+                        const SizedBox(height: 12),
+                        TextField(
+                            controller: query,
+                            textInputAction: TextInputAction.search,
+                            onSubmitted: (_) => _search(1),
+                            decoration: InputDecoration(
+                                prefixIcon: const Icon(Icons.search),
+                                hintText: text.query)),
+                        const SizedBox(height: 10),
+                        TextField(
+                            controller: prompt,
+                            textInputAction: TextInputAction.search,
+                            onSubmitted: (_) => _search(1),
+                            decoration: InputDecoration(
+                                prefixIcon:
+                                    const Icon(Icons.auto_awesome_outlined),
+                                hintText: text.prompt)),
+                        const SizedBox(height: 10),
+                        Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
-                              OutlinedButton(
-                                  onPressed: result.page > 1
-                                      ? () => _search(result.page - 1)
-                                      : null,
-                                  child: Text(text.previous)),
-                              Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 14),
-                                  child: Text(
-                                      '${_f(text.page, 'page', result.page)} / $maxPage')),
-                              OutlinedButton(
-                                  onPressed: result.page < maxPage
-                                      ? () => _search(result.page + 1)
-                                      : null,
-                                  child: Text(text.next)),
+                              SegmentedButton<String>(
+                                  segments: [
+                                    ButtonSegment(
+                                        value: 'new', label: Text(text.newest)),
+                                    ButtonSegment(
+                                        value: 'monthly',
+                                        label: Text(text.monthly))
+                                  ],
+                                  selected: {
+                                    sort
+                                  },
+                                  onSelectionChanged: loading
+                                      ? null
+                                      : (value) {
+                                          final nextSort = value.first;
+                                          final nextTimeRange =
+                                              nextSort == 'monthly'
+                                                  ? 'current'
+                                                  : 'all';
+                                          setState(() {
+                                            sort = nextSort;
+                                            timeRange = nextTimeRange;
+                                          });
+                                          _search(1,
+                                              sortOverride: nextSort,
+                                              timeRangeOverride: nextTimeRange);
+                                        }),
+                              SizedBox(
+                                width: 240,
+                                child: DropdownButtonFormField<String>(
+                                  value: timeRange,
+                                  isExpanded: true,
+                                  decoration: InputDecoration(
+                                    labelText: text.timeRange,
+                                    prefixIcon: const Icon(
+                                        Icons.calendar_month_outlined),
+                                  ),
+                                  items: timeOptions
+                                      .map((option) => DropdownMenuItem(
+                                            value: option.value,
+                                            child: Text(option.label,
+                                                overflow:
+                                                    TextOverflow.ellipsis),
+                                          ))
+                                      .toList(),
+                                  onChanged: loading
+                                      ? null
+                                      : (value) {
+                                          if (value == null) return;
+                                          setState(() => timeRange = value);
+                                          _search(1, timeRangeOverride: value);
+                                        },
+                                ),
+                              ),
+                              FilledButton.icon(
+                                  onPressed: loading ? null : () => _search(1),
+                                  icon: const Icon(Icons.search),
+                                  label: Text(text.search)),
+                              Text(_f(text.total, 'count', result.total)),
                             ]),
-                      ))),
-          ],
+                      ]),
+                )),
+              )),
+              if (loading)
+                SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Center(
+                        child:
+                            Column(mainAxisSize: MainAxisSize.min, children: [
+                      const CircularProgressIndicator(),
+                      const SizedBox(height: 12),
+                      Text(text.loading)
+                    ])))
+              else if (failed)
+                SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Center(
+                        child:
+                            Column(mainAxisSize: MainAxisSize.min, children: [
+                      Text(text.failed),
+                      const SizedBox(height: 12),
+                      OutlinedButton(
+                          onPressed: () => _search(result.page),
+                          child: Text(text.retry))
+                    ])))
+              else if (result.items.isEmpty)
+                SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Center(child: Text(text.empty)))
+              else
+                SliverPadding(
+                  padding: const EdgeInsets.all(16),
+                  sliver: SliverGrid.builder(
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: columns,
+                        crossAxisSpacing: 10,
+                        mainAxisSpacing: 10,
+                        childAspectRatio: columns == 1 ? 1.45 : .72),
+                    itemCount: result.items.length,
+                    itemBuilder: (context, index) => _WorkCard(
+                        work: result.items[index],
+                        service: service,
+                        text: text,
+                        onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                                builder: (_) => _AitagDetailScreen(
+                                    service: service,
+                                    workId: result.items[index].id,
+                                    text: text)))),
+                  ),
+                ),
+              if (!loading && !failed && result.items.isNotEmpty)
+                SliverToBoxAdapter(
+                    child: SafeArea(
+                        top: false,
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 18),
+                          child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                OutlinedButton(
+                                    onPressed: result.page > 1
+                                        ? () => _search(result.page - 1)
+                                        : null,
+                                    child: Text(text.previous)),
+                                Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 14),
+                                    child: Text(
+                                        '${_f(text.page, 'page', result.page)} / $maxPage')),
+                                OutlinedButton(
+                                    onPressed: result.page < maxPage
+                                        ? () => _search(result.page + 1)
+                                        : null,
+                                    child: Text(text.next)),
+                              ]),
+                        ))),
+            ],
+          ),
         );
       }),
     );

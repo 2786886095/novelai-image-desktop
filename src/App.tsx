@@ -59,6 +59,7 @@ import {
   type ModePromptTemplates,
   type PromptTemplate,
   type StylePromptPreset,
+  type StylePromptPreviewImage,
   type PreciseReferenceType,
   type PromptCodexMatch,
   type PromptVariants,
@@ -1000,6 +1001,97 @@ function CharCaptionsModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+function StylePresetImagesModal({
+  preset,
+  text,
+  onImport,
+  onReplace,
+  onDelete,
+  onClose,
+}: {
+  preset: StylePromptPreset;
+  text: ReturnType<typeof getGeneratePanelText>["prompt"];
+  onImport: () => void;
+  onReplace: (image: StylePromptPreviewImage) => void;
+  onDelete: (image: StylePromptPreviewImage) => void;
+  onClose: () => void;
+}) {
+  const [preview, setPreview] = useState<StylePromptPreviewImage | null>(null);
+  const images = preset.previewImages ?? [];
+  const language = useAppStore((state) => state.settings?.language);
+  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (preview) setPreview(null);
+      else onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose, preview]);
+  return (
+    <AppPortal>
+      <div className="modal-backdrop" onMouseDown={onClose}>
+        <div className="modal style-image-modal" onMouseDown={(event) => event.stopPropagation()}>
+          <header>
+            <div>
+              <h2>{text.stylePresetImageManager}</h2>
+              <small>{preset.name} · {images.length}/3</small>
+            </div>
+            <button type="button" aria-label={t("common.close")} onClick={onClose}>×</button>
+          </header>
+          <div className="style-image-modal-body">
+            {images.length === 0 ? (
+              <div className="style-image-empty">
+                <Icon name="palette" />
+                <strong>{text.stylePresetNoImages}</strong>
+                <span>{text.stylePresetImageHint}</span>
+              </div>
+            ) : (
+              <div className="style-image-grid">
+                {images.map((image) => (
+                  <article key={image.id}>
+                    <button
+                      type="button"
+                      className="style-image-preview-button"
+                      onDoubleClick={() => setPreview(image)}
+                      title={text.stylePresetImageHint}
+                    >
+                      <img src={image.fileUrl} alt={`${preset.name} · ${image.name}`} />
+                    </button>
+                    <small title={image.name}>{image.name}</small>
+                    <div>
+                      <Button type="button" variant="secondary" onClick={() => onReplace(image)}>
+                        <Icon name="folderOpen" /> {text.stylePresetReplaceImage}
+                      </Button>
+                      <Button type="button" variant="ghost" onClick={() => onDelete(image)}>
+                        <Icon name="trash" /> {text.stylePresetDeleteImage}
+                      </Button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+            <p>{text.stylePresetImageHint}</p>
+          </div>
+          <footer>
+            <Button type="button" onClick={onClose}>{t("common.close")}</Button>
+            <Button type="button" variant="primary" disabled={images.length >= 3} onClick={onImport}>
+              <Icon name="folderOpen" /> {text.stylePresetAddImages}
+            </Button>
+          </footer>
+        </div>
+      </div>
+      {preview && (
+        <div className="style-image-lightbox" role="dialog" aria-modal="true" onMouseDown={() => setPreview(null)}>
+          <button type="button" aria-label={t("common.close")} onClick={() => setPreview(null)}>×</button>
+          <img src={preview.fileUrl} alt={`${preset.name} · ${preview.name}`} onMouseDown={(event) => event.stopPropagation()} />
+        </div>
+      )}
+    </AppPortal>
+  );
+}
+
 // ── Prompt + Params ───────────────────────────────────────────────────────────
 function PromptAndParams({
   includeModel = true,
@@ -1032,6 +1124,12 @@ function PromptAndParams({
   const [showNormalize, setShowNormalize] = useState(false);
   const [translating, setTranslating] = useState(false);
   const [selectedStylePresetId, setSelectedStylePresetId] = useState("");
+  const [stylePresetMenuOpen, setStylePresetMenuOpen] = useState(false);
+  const [hoveredStylePresetId, setHoveredStylePresetId] = useState("");
+  const [styleImageManagerPresetId, setStyleImageManagerPresetId] = useState("");
+  const stylePresetPickerRef = useRef<HTMLDivElement>(null);
+  const stylePresetMenuRef = useRef<HTMLDivElement>(null);
+  const [stylePresetMenuPosition, setStylePresetMenuPosition] = useState({ left: 0, top: 0, width: 240 });
   const [styleNamePrompt, setStyleNamePrompt] = useState<{ stylePrompt: string; fallbackName: string } | null>(null);
   // Original prompt text kept per tab so a translation can be reverted (还原).
   const [translateBackup, setTranslateBackup] = useState<Record<string, string>>({});
@@ -1053,6 +1151,9 @@ function PromptAndParams({
   }
   const templates: PromptTemplate[] = settings?.promptTemplates ?? [];
   const stylePromptPresets: StylePromptPreset[] = settings?.stylePromptPresets ?? [];
+  const selectedStylePreset = stylePromptPresets.find((item) => item.id === selectedStylePresetId);
+  const hoveredStylePreset = stylePromptPresets.find((item) => item.id === hoveredStylePresetId);
+  const styleImageManagerPreset = stylePromptPresets.find((item) => item.id === styleImageManagerPresetId);
   const generateText = useMemo(() => getGeneratePanelText(settings?.language), [settings?.language]);
   const t = useCallback((key: string) => desktopUiText(settings?.language, key), [settings?.language]);
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(settings?.language, key, values), [settings?.language]);
@@ -1076,10 +1177,51 @@ function PromptAndParams({
     setSelectedStylePresetId(matched?.id ?? "");
   }, [params.stylePrompt, stylePromptPresets]);
 
+  useEffect(() => {
+    if (!stylePresetMenuOpen) return;
+    const close = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (
+        !stylePresetPickerRef.current?.contains(target) &&
+        !stylePresetMenuRef.current?.contains(target)
+      ) {
+        setStylePresetMenuOpen(false);
+        setHoveredStylePresetId("");
+      }
+    };
+    const closeFloatingMenu = () => {
+      setStylePresetMenuOpen(false);
+      setHoveredStylePresetId("");
+    };
+    document.addEventListener("pointerdown", close);
+    document.addEventListener("scroll", closeFloatingMenu, true);
+    window.addEventListener("resize", closeFloatingMenu);
+    return () => {
+      document.removeEventListener("pointerdown", close);
+      document.removeEventListener("scroll", closeFloatingMenu, true);
+      window.removeEventListener("resize", closeFloatingMenu);
+    };
+  }, [stylePresetMenuOpen]);
+
+  function toggleStylePresetMenu() {
+    if (stylePresetMenuOpen) {
+      setStylePresetMenuOpen(false);
+      setHoveredStylePresetId("");
+      return;
+    }
+    const rect = stylePresetPickerRef.current?.getBoundingClientRect();
+    if (rect) {
+      setStylePresetMenuPosition({ left: rect.left, top: rect.bottom + 6, width: Math.max(220, rect.width) });
+    }
+    setStylePresetMenuOpen(true);
+  }
+
   async function applyStylePromptPreset(id: string) {
     setSelectedStylePresetId(id);
     const preset = stylePromptPresets.find((item) => item.id === id);
     if (!preset) return;
+    setStylePresetMenuOpen(false);
+    setHoveredStylePresetId("");
     setLockedAwareParam("stylePrompt", preset.prompt);
     setToast(f("prompt.stylePresetApplied", { name: preset.name }));
   }
@@ -1102,6 +1244,7 @@ function PromptAndParams({
       name,
       prompt: styleNamePrompt.stylePrompt,
       createdAt: new Date().toISOString(),
+      previewImages: [],
     };
     setStyleNamePrompt(null);
     await window.naiDesktop.setSetting("stylePromptPresets", [...stylePromptPresets, preset]);
@@ -1113,6 +1256,7 @@ function PromptAndParams({
   async function deleteStylePromptPreset() {
     const preset = stylePromptPresets.find((item) => item.id === selectedStylePresetId);
     if (!preset) return;
+    await window.naiDesktop.deleteStylePromptPresetImages(preset.id);
     await window.naiDesktop.setSetting(
       "stylePromptPresets",
       stylePromptPresets.filter((item) => item.id !== preset.id),
@@ -1120,6 +1264,63 @@ function PromptAndParams({
     await refreshSettings();
     setSelectedStylePresetId("");
     setToast(f("prompt.stylePresetDeleted", { name: preset.name }));
+  }
+
+  async function updateStylePresetImages(
+    presetId: string,
+    images: StylePromptPreviewImage[],
+  ) {
+    await window.naiDesktop.setSetting(
+      "stylePromptPresets",
+      stylePromptPresets.map((item) =>
+        item.id === presetId ? { ...item, previewImages: images.slice(0, 3) } : item,
+      ),
+    );
+    await refreshSettings();
+  }
+
+  async function importStylePresetImages(preset: StylePromptPreset) {
+    const current = preset.previewImages ?? [];
+    const available = 3 - current.length;
+    if (available <= 0) {
+      setToast(generateText.prompt.stylePresetImageLimit);
+      return;
+    }
+    const imported = await window.naiDesktop.importStylePromptPresetImages(
+      preset.id,
+      available,
+      generateText.prompt.stylePresetImageManager,
+    );
+    if (imported.length === 0) return;
+    await updateStylePresetImages(preset.id, [...current, ...imported]);
+  }
+
+  async function replaceStylePresetImage(
+    preset: StylePromptPreset,
+    image: StylePromptPreviewImage,
+  ) {
+    const imported = await window.naiDesktop.importStylePromptPresetImages(
+      preset.id,
+      1,
+      generateText.prompt.stylePresetReplaceImage,
+    );
+    if (imported.length === 0) return;
+    await window.naiDesktop.deleteStylePromptPresetImage(preset.id, image.id);
+    const next = (preset.previewImages ?? []).map((item) =>
+      item.id === image.id ? imported[0] : item,
+    );
+    await updateStylePresetImages(preset.id, next);
+  }
+
+  async function deleteStylePresetImage(
+    preset: StylePromptPreset,
+    image: StylePromptPreviewImage,
+  ) {
+    await window.naiDesktop.deleteStylePromptPresetImage(preset.id, image.id);
+    await updateStylePresetImages(
+      preset.id,
+      (preset.previewImages ?? []).filter((item) => item.id !== image.id),
+    );
   }
 
   function appendChip(tag: string) {
@@ -1286,30 +1487,84 @@ function PromptAndParams({
         />
       </label>
       <div className="style-preset-row">
-        <select
-          value={selectedStylePresetId}
-          onChange={(event) => void applyStylePromptPreset(event.target.value)}
-          aria-label={generateText.prompt.stylePresetPlaceholder}
-        >
-          <option value="">{generateText.prompt.stylePresetPlaceholder}</option>
-          {stylePromptPresets.map((preset) => (
-            <option value={preset.id} key={preset.id}>
-              {preset.name}
-            </option>
-          ))}
-        </select>
-        <Button type="button" variant="secondary" onClick={saveStylePromptPreset}>
-          <Icon name="pin" /> {generateText.prompt.stylePresetSave}
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          disabled={!selectedStylePresetId}
-          onClick={() => void deleteStylePromptPreset()}
-        >
-          <Icon name="trash" /> {generateText.prompt.stylePresetDelete}
-        </Button>
+        <div className="style-preset-picker" ref={stylePresetPickerRef}>
+          <button
+            type="button"
+            className="style-preset-trigger"
+            aria-haspopup="listbox"
+            aria-expanded={stylePresetMenuOpen}
+            onClick={toggleStylePresetMenu}
+          >
+            <span>{selectedStylePreset?.name ?? generateText.prompt.stylePresetPlaceholder}</span>
+            <span aria-hidden="true">⌄</span>
+          </button>
+        </div>
+        <div className="style-preset-actions">
+          <Button type="button" variant="secondary" onClick={saveStylePromptPreset}>
+            <Icon name="pin" /> {generateText.prompt.stylePresetSave}
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={!selectedStylePreset}
+            onClick={() => selectedStylePreset && setStyleImageManagerPresetId(selectedStylePreset.id)}
+          >
+            <Icon name="eye" /> {generateText.prompt.stylePresetImages} {selectedStylePreset ? `${(selectedStylePreset.previewImages ?? []).length}/3` : ""}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={!selectedStylePresetId}
+            onClick={() => void deleteStylePromptPreset()}
+          >
+            <Icon name="trash" /> {generateText.prompt.stylePresetDelete}
+          </Button>
+        </div>
       </div>
+      {stylePresetMenuOpen && (
+        <AppPortal>
+          <div
+            ref={stylePresetMenuRef}
+            className="style-preset-menu"
+            role="listbox"
+            style={{
+              left: stylePresetMenuPosition.left,
+              top: stylePresetMenuPosition.top,
+              width: stylePresetMenuPosition.width,
+            }}
+          >
+            <div className="style-preset-menu-list">
+              {stylePromptPresets.length === 0 ? (
+                <p>{generateText.prompt.stylePresetPlaceholder}</p>
+              ) : stylePromptPresets.map((preset) => (
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={preset.id === selectedStylePresetId}
+                  className={clsx(preset.id === selectedStylePresetId && "active")}
+                  key={preset.id}
+                  onMouseEnter={() => setHoveredStylePresetId(preset.id)}
+                  onFocus={() => setHoveredStylePresetId(preset.id)}
+                  onClick={() => void applyStylePromptPreset(preset.id)}
+                >
+                  <span>{preset.name}</span>
+                  <small><Icon name="eye" /> {(preset.previewImages ?? []).length}/3</small>
+                </button>
+              ))}
+            </div>
+            {hoveredStylePreset && (hoveredStylePreset.previewImages ?? []).length > 0 && (
+              <aside className="style-preset-hover-preview">
+                <strong>{hoveredStylePreset.name}</strong>
+                <div>
+                  {(hoveredStylePreset.previewImages ?? []).map((image) => (
+                    <img key={image.id} src={image.fileUrl} alt={`${hoveredStylePreset.name} · ${image.name}`} />
+                  ))}
+                </div>
+              </aside>
+            )}
+          </div>
+        </AppPortal>
+      )}
       {styleNamePrompt && (
         <InputModal
           title={generateText.prompt.stylePresetSave}
@@ -1317,6 +1572,16 @@ function PromptAndParams({
           initial={styleNamePrompt.fallbackName}
           onConfirm={(value) => void confirmSaveStylePromptPreset(value)}
           onClose={() => setStyleNamePrompt(null)}
+        />
+      )}
+      {styleImageManagerPreset && (
+        <StylePresetImagesModal
+          preset={styleImageManagerPreset}
+          text={generateText.prompt}
+          onImport={() => void importStylePresetImages(styleImageManagerPreset)}
+          onReplace={(image) => void replaceStylePresetImage(styleImageManagerPreset, image)}
+          onDelete={(image) => void deleteStylePresetImage(styleImageManagerPreset, image)}
+          onClose={() => setStyleImageManagerPresetId("")}
         />
       )}
       <div className={clsx("prompt-chip-zone", !chipOpen && "collapsed")}>
