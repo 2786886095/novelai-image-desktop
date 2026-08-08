@@ -6249,6 +6249,7 @@ button.prompt-chip-head {
   min-width: 0;
   max-height: 320px;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 6px;
 }
 .style-preset-menu-list > p {

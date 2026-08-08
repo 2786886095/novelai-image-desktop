@@ -1,4 +1,9 @@
-export const APP_VERSION = "1.5.2";
+import { version as packageVersion } from "../package.json";
+
+// package.json is the single desktop release-version source. Keeping this
+// derived prevents the title bar/about page from showing an old hard-coded
+// value after the installer and updater have already moved to a new version.
+export const APP_VERSION = packageVersion;
 export const APP_NAME = "Langbai NovelAI Studio";
 export const PROJECT_REPOSITORY =
   "https://github.com/2786886095/novelai-image-desktop";

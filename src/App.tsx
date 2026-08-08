@@ -26,6 +26,7 @@ import {
 } from "./data/prompt-templates";
 import { Button, IconText, AppPortal, Toggle, NumberInput, SliderInput, SecretInput } from "./components/ui";
 import { Icon } from "./components/icons";
+import { isScrollInsideFloatingMenu } from "./floating-menu";
 import { desktopUiFormat, desktopUiText, getChromeText, getGeneratePanelText, getLocalizedTabItems, getSettingsSectionText, getSettingsShellText, getTokenGuideText, localizedDesktopOptionLabel, SUPPORTED_APP_LANGUAGES } from "./i18n";
 import {
   CAT_COLOR,
@@ -1189,7 +1190,10 @@ function PromptAndParams({
         setHoveredStylePresetId("");
       }
     };
-    const closeFloatingMenu = () => {
+    const closeFloatingMenu = (event: Event) => {
+      if (isScrollInsideFloatingMenu(stylePresetMenuRef.current, event.target)) {
+        return;
+      }
       setStylePresetMenuOpen(false);
       setHoveredStylePresetId("");
     };

@@ -36,6 +36,14 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const _enabled = bool.fromEnvironment('FULL_UI_AUDIT');
+const _auditPlatform = String.fromEnvironment(
+  'FULL_UI_AUDIT_PLATFORM',
+  defaultValue: 'android',
+);
+const _auditOutputOverride = String.fromEnvironment('FULL_UI_AUDIT_OUTPUT');
+const _auditTargetPlatform = _auditPlatform == 'ios'
+    ? TargetPlatform.iOS
+    : TargetPlatform.android;
 const _locales = ['zh-CN', 'zh-TW', 'en-US', 'ja-JP', 'ko-KR'];
 const _themes = ['light', 'dark'];
 const _fontZh = 'AuditZh';
@@ -162,6 +170,10 @@ String _repoRoot() {
       ? current.substring(0, current.length - 7)
       : current;
 }
+
+String _auditOutputRoot() => _auditOutputOverride.trim().isNotEmpty
+    ? _auditOutputOverride.replaceAll('\\', '/')
+    : '${_repoRoot()}/.tmp/ui-audit-current';
 
 String _flutterRoot() {
   var directory = File(Platform.resolvedExecutable).parent;
@@ -395,11 +407,11 @@ void main() {
             expect(tester.takeException(), isNull,
                 reason: '$locale $themeName ${viewport.$1} ${surface.name}');
             final output =
-                '${_repoRoot()}/.tmp/ui-audit/mobile/$themeName/$locale/${viewport.$1}/${surface.name}.png';
+                '${_auditOutputRoot()}/mobile/$_auditPlatform/$themeName/$locale/${viewport.$1}/${surface.name}.png';
             await tester.runAsync(() => _savePng(boundaryKey, output));
             await tester.pumpWidget(const SizedBox.shrink());
             state.dispose();
-          });
+          }, variant: TargetPlatformVariant.only(_auditTargetPlatform));
         }
       }
     }
@@ -442,11 +454,11 @@ void main() {
         expect(tester.takeException(), isNull,
             reason: 'zh-CN light ${viewport.$1} ${surface.name}');
         final output =
-            '${_repoRoot()}/.tmp/ui-audit/mobile/light/zh-CN/${viewport.$1}/${surface.name}.png';
+            '${_auditOutputRoot()}/mobile/$_auditPlatform/light/zh-CN/${viewport.$1}/${surface.name}.png';
         await tester.runAsync(() => _savePng(boundaryKey, output));
         await tester.pumpWidget(const SizedBox.shrink());
         state.dispose();
-      });
+      }, variant: TargetPlatformVariant.only(_auditTargetPlatform));
     }
   }
 
@@ -547,10 +559,10 @@ void main() {
           expect(tester.takeException(), isNull,
               reason: 'style manager $locale $themeName ${viewport.$1}');
           final output =
-              '${_repoRoot()}/.tmp/ui-audit/mobile/$themeName/$locale/${viewport.$1}/style-image-manager.png';
+              '${_auditOutputRoot()}/mobile/$_auditPlatform/$themeName/$locale/${viewport.$1}/style-image-manager.png';
           await tester.runAsync(() => _saveRenderViewPng(output));
           final managerOutput =
-              '${_repoRoot()}/.tmp/ui-audit/mobile/$themeName/$locale/${viewport.$1}/style-image-manager-panel.png';
+              '${_auditOutputRoot()}/mobile/$_auditPlatform/$themeName/$locale/${viewport.$1}/style-image-manager-panel.png';
           await tester.runAsync(
             () => _saveBoundaryFinderPng(
               tester,
@@ -560,7 +572,7 @@ void main() {
           );
           await tester.pumpWidget(const SizedBox.shrink());
           state.dispose();
-        });
+        }, variant: TargetPlatformVariant.only(_auditTargetPlatform));
       }
     }
   }
