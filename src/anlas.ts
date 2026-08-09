@@ -167,7 +167,12 @@ export function calculateUpscaleAnlas({
   scale?: UpscaleScale;
 }): AnlasQuoteResult {
   if (!image?.width || !image?.height) {
-    return { ok: false, source: "unavailable", message: "Load the image to upscale before reading the pre-generation cost." };
+    return {
+      ok: false,
+      source: "unavailable",
+      reason: "missing-image",
+      message: "Load the image to upscale before reading the pre-generation cost.",
+    };
   }
   const prepared = fitSizeWithinPixels(image.width, image.height, MAX_NAI_UPSCALE_INPUT_PIXELS);
   const pixels = prepared.width * prepared.height;
@@ -191,6 +196,7 @@ export function calculateUpscaleAnlas({
     return {
       ok: false,
       source: "unavailable",
+      reason: "image-too-large",
       balance: account?.anlasBalance,
       message: "Image resolution exceeds the quote range for NovelAI cloud upscale.",
       details,
@@ -248,7 +254,12 @@ export function calculateFeatureAnlasQuote({
     return calculateDirectorAnlas({ tool: directorTool, account });
   }
   if (!params) {
-    return { ok: false, source: "unavailable", message: "Missing generation parameters for Anlas quote." };
+    return {
+      ok: false,
+      source: "unavailable",
+      reason: "missing-params",
+      message: "Missing generation parameters for Anlas quote.",
+    };
   }
   if (feature === "i2i") {
     return calculateImageGenerationAnlas({

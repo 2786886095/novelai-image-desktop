@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  desktopUiText,
   getChromeText,
   getGeneratePanelText,
   getLocalizedTabItems,
@@ -33,6 +34,22 @@ describe("desktop i18n resources", () => {
     expect(normalizeAppLanguage("zh-TW")).toBe("zh-TW");
     expect(normalizeAppLanguage("fr-FR")).toBe("zh-CN");
     expect(normalizeAppLanguage(undefined)).toBe("zh-CN");
+  });
+
+  it("localizes every pre-run quote unavailable state", () => {
+    const keys = [
+      "cost.configureToken",
+      "cost.loadImageFirst",
+      "cost.invalidParams",
+      "cost.imageTooLarge",
+    ];
+    for (const language of SUPPORTED_APP_LANGUAGES) {
+      for (const key of keys) {
+        const value = desktopUiText(language.code, key);
+        expect(value.trim()).not.toBe("");
+        expect(value).not.toBe(key);
+      }
+    }
   });
 
   it("has complete localized labels for every main tab in every locale", () => {

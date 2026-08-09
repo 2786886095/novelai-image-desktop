@@ -2031,6 +2031,16 @@ function FeatureCostCard({
           ? t("cost.estimateFixed")
           : "";
   const isEstimate = quote?.source === "estimate-formula" || quote?.source === "estimate-fixed";
+  const unavailableText =
+    quote?.reason === "missing-token"
+      ? t("cost.configureToken")
+      : quote?.reason === "missing-image"
+        ? t("cost.loadImageFirst")
+        : quote?.reason === "missing-params"
+          ? t("cost.invalidParams")
+          : quote?.reason === "image-too-large"
+            ? t("cost.imageTooLarge")
+            : t("cost.unavailable");
   const primary =
     quote?.ok && typeof quote.amount === "number"
       ? quote.amount === 0
@@ -2040,7 +2050,7 @@ function FeatureCostCard({
           : f("cost.willSpend", { amount: quote.amount })
       : loading
         ? t("cost.loading")
-        : quote?.message || t("cost.unavailable");
+        : unavailableText;
   const actualText = isGenerating
     ? currentAnlasSpent != null
       ? f("cost.currentSpent", { amount: currentAnlasSpent })
@@ -2056,13 +2066,14 @@ function FeatureCostCard({
         isGenerating && "cost-live",
         quote?.amount === 0 && "cost-free",
         quote?.insufficient && "cost-warn",
+        !loading && (!quote || !quote.ok) && "cost-card-unavailable",
       )}
     >
       <div>
         <span>{label}</span>
         <small>{sourceLabel || t("cost.readingHint")}</small>
       </div>
-      <strong>{primary}</strong>
+      <strong className="cost-primary">{primary}</strong>
       <small className="cost-balance">
         {f("cost.balance", { balance: balance ?? t("common.unknown") })}{account.stale ? t("cost.cached") : ""} · {actualText}
         {quote?.insufficient ? t("cost.insufficient") : ""}

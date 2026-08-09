@@ -1128,6 +1128,7 @@ export async function quoteAnlasCost(
     return {
       ok: false,
       source: "unavailable",
+      reason: "missing-token",
       message: "请先配置 NovelAI Token，才能读取生成前扣费。",
     };
   }

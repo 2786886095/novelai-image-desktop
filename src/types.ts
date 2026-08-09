@@ -965,6 +965,11 @@ export type AnlasQuoteFeature =
 // which are close but NOT guaranteed to match the final charge — must be shown as estimates.
 export type AnlasQuoteSource =
   "official-api" | "estimate-formula" | "estimate-fixed" | "unavailable";
+export type AnlasQuoteUnavailableReason =
+  | "missing-token"
+  | "missing-image"
+  | "missing-params"
+  | "image-too-large";
 
 export interface AnlasQuoteRequest {
   feature: AnlasQuoteFeature;
@@ -988,6 +993,7 @@ export interface AnlasQuoteResult {
   ok: boolean;
   amount?: number;
   source?: AnlasQuoteSource;
+  reason?: AnlasQuoteUnavailableReason;
   balance?: number;
   insufficient?: boolean;
   message: string;

@@ -3296,6 +3296,19 @@ html, body, #root {
   font-size: 11px;
   line-height: 1.45;
 }
+.cost-card .cost-primary {
+  min-width: 0;
+  max-width: 100%;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.cost-card.cost-card-unavailable {
+  grid-template-columns: minmax(0, 1fr);
+}
+.cost-card.cost-card-unavailable .cost-primary {
+  grid-column: 1 / -1;
+  text-align: left;
+}
 .cost-card .cost-balance {
   grid-column: 1 / -1;
 }

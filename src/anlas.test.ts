@@ -125,6 +125,16 @@ describe("official Anlas pricing", () => {
     expect(quote.amount).toBe(7);
   });
 
+  it("returns a stable reason code when an upscale image is missing", () => {
+    const quote = calculateUpscaleAnlas({
+      image: null,
+      account: opusAccount,
+      scale: 4,
+    });
+    expect(quote.ok).toBe(false);
+    expect(quote.reason).toBe("missing-image");
+  });
+
   it("uses the fixed background-removal price", () => {
     const quote = calculateDirectorAnlas({
       tool: "bg-removal",
