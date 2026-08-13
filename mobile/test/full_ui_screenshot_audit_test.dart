@@ -12,6 +12,7 @@ import 'package:novelai_mobile/artist/artist_recipe.dart';
 import 'package:novelai_mobile/comic/comic_controller.dart';
 import 'package:novelai_mobile/comic/comic_models.dart';
 import 'package:novelai_mobile/i18n/app_locales.dart';
+import 'package:novelai_mobile/inpaint/inpaint_mask.dart';
 import 'package:novelai_mobile/main.dart';
 import 'package:novelai_mobile/models/nai_models.dart';
 import 'package:novelai_mobile/screens/ai_log_screen.dart';
@@ -21,6 +22,7 @@ import 'package:novelai_mobile/screens/comic_screen.dart';
 import 'package:novelai_mobile/screens/gallery_screen.dart';
 import 'package:novelai_mobile/screens/generate_screen.dart';
 import 'package:novelai_mobile/screens/inspect_screen.dart';
+import 'package:novelai_mobile/screens/inpaint_mask_editor.dart';
 import 'package:novelai_mobile/screens/metadata_inspector_screen.dart';
 import 'package:novelai_mobile/screens/prompt_codex_screen.dart';
 import 'package:novelai_mobile/screens/random_artist_lab_screen.dart';
@@ -41,9 +43,8 @@ const _auditPlatform = String.fromEnvironment(
   defaultValue: 'android',
 );
 const _auditOutputOverride = String.fromEnvironment('FULL_UI_AUDIT_OUTPUT');
-const _auditTargetPlatform = _auditPlatform == 'ios'
-    ? TargetPlatform.iOS
-    : TargetPlatform.android;
+const _auditTargetPlatform =
+    _auditPlatform == 'ios' ? TargetPlatform.iOS : TargetPlatform.android;
 const _locales = ['zh-CN', 'zh-TW', 'en-US', 'ja-JP', 'ko-KR'];
 const _themes = ['light', 'dark'];
 const _fontZh = 'AuditZh';
@@ -280,6 +281,28 @@ List<({String name, _SurfaceBuilder build})> _surfaces() => [
       (
         name: 'inpaint',
         build: (_) => const ToolsScreen(kind: ToolPageKind.inpaint)
+      ),
+      (
+        name: 'inpaint-mask-editor',
+        build: (state) => InpaintMaskEditor(
+              image: const WorkingImage(
+                filePath: 'Z:/isolated-ui-audit.png',
+                width: 832,
+                height: 1216,
+              ),
+              language: state.settings.language,
+              imageProvider: const AssetImage('assets/icon/app_icon.png'),
+              initialStrokes: [
+                InpaintStroke(
+                  brushFraction: 0.12,
+                  points: const [
+                    Offset(0.34, 0.42),
+                    Offset(0.5, 0.5),
+                    Offset(0.62, 0.56),
+                  ],
+                ),
+              ],
+            )
       ),
       (
         name: 'upscale',

@@ -5,11 +5,24 @@ import 'package:flutter/material.dart';
 
 class InpaintStroke {
   final double brushFraction;
+  final bool erase;
   final List<Offset> points;
 
-  InpaintStroke({required this.brushFraction, List<Offset>? points})
-      : points = points ?? <Offset>[];
+  InpaintStroke({
+    required this.brushFraction,
+    this.erase = false,
+    List<Offset>? points,
+  }) : points = points ?? <Offset>[];
+
+  InpaintStroke copy() => InpaintStroke(
+        brushFraction: brushFraction,
+        erase: erase,
+        points: List<Offset>.from(points),
+      );
 }
+
+List<InpaintStroke> copyInpaintStrokes(Iterable<InpaintStroke> strokes) =>
+    strokes.map((stroke) => stroke.copy()).toList(growable: true);
 
 Offset? normalizeCanvasPoint(Offset point, Size canvasSize) {
   if (canvasSize.isEmpty ||
@@ -65,6 +78,7 @@ Future<Uint8List> renderInpaintMask({
   required List<InpaintStroke> strokes,
   required int width,
   required int height,
+  bool inverted = false,
 }) async {
   if (width <= 0 || height <= 0) {
     throw ArgumentError('Mask dimensions must be positive.');
@@ -80,7 +94,7 @@ Future<Uint8List> renderInpaintMask({
     final strokeWidth = (stroke.brushFraction * size.shortestSide)
         .clamp(1.0, size.shortestSide);
     final paint = Paint()
-      ..color = Colors.white
+      ..color = stroke.erase ? Colors.black : Colors.white
       ..isAntiAlias = false
       ..strokeWidth = strokeWidth
       ..strokeCap = StrokeCap.round
@@ -94,7 +108,7 @@ Future<Uint8List> renderInpaintMask({
         points.first,
         strokeWidth / 2,
         Paint()
-          ..color = Colors.white
+          ..color = stroke.erase ? Colors.black : Colors.white
           ..isAntiAlias = false,
       );
       continue;
@@ -109,28 +123,31 @@ Future<Uint8List> renderInpaintMask({
   final rawImage = await recorder.endRecording().toImage(width, height);
   final rawData = await rawImage.toByteData(format: ui.ImageByteFormat.rawRgba);
   rawImage.dispose();
-  if (rawData == null) throw StateError('Unable to read the inpaint mask raster.');
+  if (rawData == null) {
+    throw StateError('Unable to read the inpaint mask raster.');
+  }
   final cells =
       await _buildLatentMaskCells(rawData, width, height, _maskCellSize);
 
   final cellRecorder = ui.PictureRecorder();
   final cellCanvas = Canvas(cellRecorder);
-  cellCanvas.drawRect(Offset.zero & size, Paint()..color = Colors.black);
-  if (cells.any) {
-    final cellPaint = Paint()..color = Colors.white;
-    for (var row = 0; row < cells.rows; row++) {
-      for (var col = 0; col < cells.cols; col++) {
-        if (cells.cellOn[row * cells.cols + col] == 0) continue;
-        cellCanvas.drawRect(
-          Rect.fromLTWH(
-            (col * _maskCellSize).toDouble(),
-            (row * _maskCellSize).toDouble(),
-            _maskCellSize.toDouble(),
-            _maskCellSize.toDouble(),
-          ),
-          cellPaint,
-        );
-      }
+  cellCanvas.drawRect(
+    Offset.zero & size,
+    Paint()..color = inverted ? Colors.white : Colors.black,
+  );
+  final selectedPaint = Paint()..color = inverted ? Colors.black : Colors.white;
+  for (var row = 0; row < cells.rows; row++) {
+    for (var col = 0; col < cells.cols; col++) {
+      if (cells.cellOn[row * cells.cols + col] == 0) continue;
+      cellCanvas.drawRect(
+        Rect.fromLTWH(
+          (col * _maskCellSize).toDouble(),
+          (row * _maskCellSize).toDouble(),
+          _maskCellSize.toDouble(),
+          _maskCellSize.toDouble(),
+        ),
+        selectedPaint,
+      );
     }
   }
   final image = await cellRecorder.endRecording().toImage(width, height);

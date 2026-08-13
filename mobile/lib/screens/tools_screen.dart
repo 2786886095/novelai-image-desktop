@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -14,6 +13,7 @@ import '../ui/studio_shell.dart';
 import '../ui/zoomable_image.dart';
 import '../ui/before_after_compare.dart';
 import 'generate_screen.dart' show PromptEditor;
+import 'inpaint_mask_editor.dart';
 
 enum ToolPageKind { inpaint, upscale, postprocess }
 
@@ -111,90 +111,9 @@ class _InpaintPanel extends StatefulWidget {
 class _InpaintPanelState extends State<_InpaintPanel> {
   final strokes = <InpaintStroke>[];
   double brush = 28;
-  double scale = 1;
-  Offset offset = Offset.zero;
-  Size canvasSize = Size.zero;
-  bool showMask = true;
-  bool drawing = false;
-  bool transforming = false;
-  double lastGestureScale = 1;
-  Offset lastFocalPoint = Offset.zero;
-
-  Offset? _toNormalized(Offset localPoint) {
-    if (canvasSize.isEmpty || scale <= 0) return null;
-    final scenePoint = (localPoint - offset) / scale;
-    return normalizeCanvasPoint(scenePoint, canvasSize);
-  }
-
-  void _startDrawing(Offset point) {
-    final normalized = _toNormalized(point);
-    if (normalized == null || canvasSize.shortestSide <= 0) return;
-    setState(() {
-      strokes.add(InpaintStroke(
-        brushFraction: brush / canvasSize.shortestSide,
-        points: [normalized],
-      ));
-    });
-  }
-
-  void _continueDrawing(Offset point) {
-    if (!drawing || strokes.isEmpty) return;
-    final normalized = _toNormalized(point);
-    if (normalized == null) return;
-    setState(() => strokes.last.points.add(normalized));
-  }
-
-  void _handleScaleStart(ScaleStartDetails details) {
-    drawing = details.pointerCount == 1;
-    transforming = false;
-    lastGestureScale = 1;
-    lastFocalPoint = details.localFocalPoint;
-    if (drawing) _startDrawing(details.localFocalPoint);
-  }
-
-  void _handleScaleUpdate(ScaleUpdateDetails details) {
-    if (details.pointerCount == 1 && drawing && !transforming) {
-      _continueDrawing(details.localFocalPoint);
-      return;
-    }
-    if (details.pointerCount < 2) return;
-    drawing = false;
-    if (!transforming) {
-      transforming = true;
-      lastGestureScale = details.scale;
-      lastFocalPoint = details.localFocalPoint;
-      return;
-    }
-
-    final relativeScale =
-        lastGestureScale == 0 ? 1.0 : details.scale / lastGestureScale;
-    final nextScale = (scale * relativeScale).clamp(1.0, 6.0).toDouble();
-    final sceneAtPreviousFocal = (lastFocalPoint - offset) / scale;
-    final nextOffset =
-        details.localFocalPoint - sceneAtPreviousFocal * nextScale;
-    setState(() {
-      scale = nextScale;
-      offset = _clampOffset(nextOffset, nextScale);
-    });
-    lastGestureScale = details.scale;
-    lastFocalPoint = details.localFocalPoint;
-  }
-
-  Offset _clampOffset(Offset value, double nextScale) {
-    final minX = canvasSize.width * (1 - nextScale);
-    final minY = canvasSize.height * (1 - nextScale);
-    return Offset(
-      value.dx.clamp(minX, 0.0).toDouble(),
-      value.dy.clamp(minY, 0.0).toDouble(),
-    );
-  }
-
-  void _resetView() {
-    setState(() {
-      scale = 1;
-      offset = Offset.zero;
-    });
-  }
+  double imageOpacity = 1;
+  double maskOpacity = 0.72;
+  bool inverted = false;
 
   Future<void> _runInpaint(AppState state) async {
     final image = state.workbenchImage;
@@ -203,13 +122,17 @@ class _InpaintPanelState extends State<_InpaintPanel> {
       strokes: strokes,
       width: image.width,
       height: image.height,
+      inverted: inverted,
     );
     if (!mounted) return;
     await context.read<AppState>().inpaint(mask);
     // A successful run replaces workbenchImage with the new result — the old
     // mask strokes no longer apply to it and must not linger on the canvas.
     if (mounted && state.workbenchImage?.filePath != image.filePath) {
-      setState(strokes.clear);
+      setState(() {
+        strokes.clear();
+        inverted = false;
+      });
     }
   }
 
@@ -221,6 +144,7 @@ class _InpaintPanelState extends State<_InpaintPanel> {
       strokes: strokes,
       width: workbench.width,
       height: workbench.height,
+      inverted: inverted,
     );
     if (!mounted) return;
     final language = context.read<AppState>().settings.language;
@@ -255,63 +179,103 @@ class _InpaintPanelState extends State<_InpaintPanel> {
     );
   }
 
-  Widget _buildCanvas(BuildContext context, WorkingImage workbench) {
-    return LayoutBuilder(
-      builder: (context, box) {
-        final maxHeight =
-            math.min(MediaQuery.sizeOf(context).height * 0.74, 900.0);
-        final fitted = applyBoxFit(
-          BoxFit.contain,
-          Size(
-            math.max(1, workbench.width).toDouble(),
-            math.max(1, workbench.height).toDouble(),
-          ),
-          Size(box.maxWidth, maxHeight),
-        ).destination;
-        canvasSize = fitted;
-        return Center(
-          child: SizedBox(
-            width: fitted.width,
-            height: fitted.height,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onScaleStart: _handleScaleStart,
-                onScaleUpdate: _handleScaleUpdate,
-                onScaleEnd: (_) {
-                  drawing = false;
-                  transforming = false;
-                },
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: Colors.black,
-                    border: Border.all(
-                      color: Theme.of(context).colorScheme.outlineVariant,
+  Future<void> _openEditor(WorkingImage workbench) async {
+    final language = context.read<AppState>().settings.language;
+    final result = await Navigator.of(context).push<InpaintMaskEditResult>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => InpaintMaskEditor(
+          image: workbench,
+          language: language,
+          initialStrokes: strokes,
+          initialInverted: inverted,
+          initialBrush: brush,
+          initialImageOpacity: imageOpacity,
+          initialMaskOpacity: maskOpacity,
+        ),
+      ),
+    );
+    if (!mounted || result == null) return;
+    setState(() {
+      strokes
+        ..clear()
+        ..addAll(copyInpaintStrokes(result.strokes));
+      inverted = result.inverted;
+      brush = result.brush;
+      imageOpacity = result.imageOpacity;
+      maskOpacity = result.maskOpacity;
+    });
+  }
+
+  Widget _buildMaskSummary(WorkingImage workbench) {
+    final language = context.read<AppState>().settings.language;
+    final colors = Theme.of(context).colorScheme;
+    return Card(
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      color: colors.surfaceContainer,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 420),
+            child: AspectRatio(
+              aspectRatio: workbench.width > 0 && workbench.height > 0
+                  ? workbench.width / workbench.height
+                  : 1,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Image.file(File(workbench.filePath), fit: BoxFit.contain),
+                  IgnorePointer(
+                    child: CustomPaint(
+                      painter: InpaintMaskPainter(
+                        strokes: strokes,
+                        inverted: inverted,
+                        opacity: maskOpacity,
+                      ),
                     ),
                   ),
-                  child: Transform(
-                    alignment: Alignment.topLeft,
-                    transform: Matrix4.identity()
-                      ..translate(offset.dx, offset.dy)
-                      ..scale(scale),
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        Image.file(File(workbench.filePath), fit: BoxFit.fill),
-                        CustomPaint(
-                          painter: _MaskPainter(strokes, showMask),
-                          size: fitted,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+                ],
               ),
             ),
           ),
-        );
-      },
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        strokes.isEmpty && !inverted
+                            ? mobileUiTextFor(language, 'tools.maskNotEdited')
+                            : mobileUiTextFor(language, 'tools.maskReady'),
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      Text(
+                        mobileUiFormatFor(
+                          language,
+                          'tools.maskStrokeCount',
+                          {'count': strokes.length},
+                        ),
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+                FilledButton.icon(
+                  key: const ValueKey('open-inpaint-mask-editor'),
+                  onPressed: () => _openEditor(workbench),
+                  icon: const Icon(Icons.draw_outlined),
+                  label: Text(mobileUiTextFor(language, 'tools.editMask')),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -323,37 +287,27 @@ class _InpaintPanelState extends State<_InpaintPanel> {
       runSpacing: 8,
       children: [
         IconButton.outlined(
-          tooltip: t('tools.undoStroke'),
-          onPressed:
-              strokes.isEmpty ? null : () => setState(strokes.removeLast),
-          icon: const Icon(Icons.undo),
-        ),
-        IconButton.outlined(
           tooltip: t('tools.clearMask'),
-          onPressed: strokes.isEmpty ? null : () => setState(strokes.clear),
+          onPressed: strokes.isEmpty && !inverted
+              ? null
+              : () => setState(() {
+                    strokes.clear();
+                    inverted = false;
+                  }),
           icon: const Icon(Icons.delete_outline),
         ),
         IconButton.outlined(
-          tooltip: showMask ? t('tools.hideMask') : t('tools.showMask'),
-          onPressed: () => setState(() => showMask = !showMask),
-          icon: Icon(showMask ? Icons.visibility : Icons.visibility_off),
-        ),
-        IconButton.outlined(
           tooltip: t('tools.previewMask'),
-          onPressed: workbench == null || strokes.isEmpty
+          onPressed: workbench == null || (strokes.isEmpty && !inverted)
               ? null
               : () => _previewMask(workbench),
           icon: const Icon(Icons.preview_outlined),
         ),
-        IconButton.outlined(
-          tooltip: t('tools.resetZoom'),
-          onPressed: scale == 1 && offset == Offset.zero ? null : _resetView,
-          icon: const Icon(Icons.fit_screen),
-        ),
         FilledButton.icon(
-          onPressed: state.busy || workbench == null || strokes.isEmpty
-              ? null
-              : () => _runInpaint(state),
+          onPressed:
+              state.busy || workbench == null || (strokes.isEmpty && !inverted)
+                  ? null
+                  : () => _runInpaint(state),
           icon: const Icon(Icons.brush),
           label: Text(t('tools.runInpaint')),
         ),
@@ -489,24 +443,13 @@ class _InpaintPanelState extends State<_InpaintPanel> {
                 ),
                 const SizedBox(height: 12),
               ],
-            Text(
-              mobileUiFormatFor(
-                  language, 'tools.brushHint', {'brush': brush.round()}),
-            ),
-            Slider(
-              value: brush,
-              min: 8,
-              max: 96,
-              divisions: 22,
-              onChanged: (value) => setState(() => brush = value),
-            ),
             if (workbench == null)
               SizedBox(
                 height: 240,
                 child: Center(child: Text(t('tools.noInpaintImage'))),
               )
             else
-              _buildCanvas(context, workbench),
+              _buildMaskSummary(workbench),
             const SizedBox(height: 12),
             _buildToolbar(state, workbench),
           ],
@@ -672,51 +615,6 @@ class _ParamSlider extends StatelessWidget {
           ),
         ],
       );
-}
-
-class _MaskPainter extends CustomPainter {
-  final List<InpaintStroke> strokes;
-  final bool visible;
-
-  _MaskPainter(this.strokes, this.visible);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (!visible) return;
-    canvas.drawRect(
-      Offset.zero & size,
-      Paint()..color = Colors.black.withOpacity(0.22),
-    );
-    for (final stroke in strokes) {
-      if (stroke.points.isEmpty) continue;
-      final width = stroke.brushFraction * size.shortestSide;
-      final paint = Paint()
-        ..color = Colors.white.withOpacity(0.72)
-        ..strokeWidth = width
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round
-        ..style = PaintingStyle.stroke;
-      final points = stroke.points
-          .map((point) => Offset(point.dx * size.width, point.dy * size.height))
-          .toList(growable: false);
-      if (points.length == 1) {
-        canvas.drawCircle(
-          points.first,
-          width / 2,
-          Paint()..color = Colors.white.withOpacity(0.72),
-        );
-        continue;
-      }
-      final path = Path()..moveTo(points.first.dx, points.first.dy);
-      for (final point in points.skip(1)) {
-        path.lineTo(point.dx, point.dy);
-      }
-      canvas.drawPath(path, paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _MaskPainter oldDelegate) => true;
 }
 
 class _UpscalePanel extends StatelessWidget {

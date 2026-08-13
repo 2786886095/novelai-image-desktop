@@ -1,8 +1,17 @@
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novelai_mobile/inpaint/inpaint_mask.dart';
+
+Future<({ui.Codec codec, ui.Image image, Uint8List pixels})> _decode(
+    Uint8List bytes) async {
+  final codec = await ui.instantiateImageCodec(bytes);
+  final frame = await codec.getNextFrame();
+  final rgba = await frame.image.toByteData(format: ui.ImageByteFormat.rawRgba);
+  return (codec: codec, image: frame.image, pixels: rgba!.buffer.asUint8List());
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -86,5 +95,51 @@ void main() {
 
     frame.image.dispose();
     codec.dispose();
+  });
+
+  test('eraser removes painted mask areas before latent quantization',
+      () async {
+    final bytes = await renderInpaintMask(
+      width: 128,
+      height: 128,
+      strokes: [
+        InpaintStroke(
+          brushFraction: 0.35,
+          points: [const Offset(0.25, 0.25)],
+        ),
+        InpaintStroke(
+          brushFraction: 0.35,
+          erase: true,
+          points: [const Offset(0.25, 0.25)],
+        ),
+      ],
+    );
+    final decoded = await _decode(bytes);
+    int redAt(int x, int y) => decoded.pixels[(y * 128 + x) * 4];
+    expect(redAt(32, 32), 0);
+    expect(redAt(0, 0), 0);
+    decoded.image.dispose();
+    decoded.codec.dispose();
+  });
+
+  test('inverted export flips selected and unselected latent cells', () async {
+    final bytes = await renderInpaintMask(
+      width: 128,
+      height: 128,
+      inverted: true,
+      strokes: [
+        InpaintStroke(
+          brushFraction: 0.05,
+          points: [const Offset(0.75, 0.75)],
+        ),
+      ],
+    );
+    final decoded = await _decode(bytes);
+    int redAt(int x, int y) => decoded.pixels[(y * 128 + x) * 4];
+    expect(redAt(96, 96), 0);
+    expect(redAt(0, 0), 255);
+    expect(redAt(63, 64), 255);
+    decoded.image.dispose();
+    decoded.codec.dispose();
   });
 }
