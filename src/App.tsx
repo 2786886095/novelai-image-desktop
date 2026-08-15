@@ -5577,6 +5577,11 @@ export default function App() {
   useEffect(() => {
     void load();
     void checkUpdate();
+    // A release may appear while the app is already open, and a transient
+    // network/proxy failure at boot should not suppress updates for the whole
+    // session. Retry once shortly after launch, then poll at a low frequency.
+    const updateRetryTimer = window.setTimeout(() => void checkUpdate(), 30_000);
+    const updatePollTimer = window.setInterval(() => void checkUpdate(), 30 * 60_000);
     // Warm public AITag data after the critical boot work. This is deliberately
     // delayed and fire-and-forget so it cannot slow the window opening.
     const prewarmTimer = window.setTimeout(() => {
@@ -5590,6 +5595,8 @@ export default function App() {
     return () => {
       window.clearTimeout(timer);
       window.clearTimeout(prewarmTimer);
+      window.clearTimeout(updateRetryTimer);
+      window.clearInterval(updatePollTimer);
     };
   }, [load, checkUpdate]);
 
