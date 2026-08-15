@@ -38,6 +38,8 @@ class Storage {
   static const _kConvertHistory = 'texttool_convert_history_v1';
   static const _kReverseHistory = 'texttool_reverse_history_v1';
   static const _kAitagCompatibleParams = 'aitag_compatible_params_v1';
+  static const _kMetadataInspectorName = 'metadata_inspector_last_name_v1';
+  static const _kMetadataInspectorPath = 'metadata_inspector_last_path_v1';
 
   final _secure = const FlutterSecureStorage();
   int _saveSequence = 0;
@@ -81,6 +83,54 @@ class Storage {
 
   Future<void> setSettings(AppSettings settings) async =>
       (await _prefs).setString(_kSettings, jsonEncode(settings.toJson()));
+
+  Future<({File file, String name})> saveMetadataInspectorImage(
+    Uint8List bytes,
+    String originalName,
+  ) async {
+    final root = await getApplicationDocumentsDirectory();
+    final directory =
+        Directory('${root.path}${Platform.pathSeparator}metadata-inspector');
+    if (!directory.existsSync()) directory.createSync(recursive: true);
+    final extensionMatch =
+        RegExp(r'\.([a-zA-Z0-9]{2,5})$').firstMatch(originalName);
+    final extension = (extensionMatch?.group(1) ?? 'png').toLowerCase();
+    final safeExtension =
+        const {'png', 'jpg', 'jpeg', 'webp'}.contains(extension)
+            ? extension
+            : 'png';
+    final file = File(
+        '${directory.path}${Platform.pathSeparator}last-image.$safeExtension');
+    for (final entity in directory.listSync()) {
+      if (entity is File && entity.path != file.path) {
+        try {
+          entity.deleteSync();
+        } catch (_) {}
+      }
+    }
+    await file.writeAsBytes(bytes, flush: true);
+    final prefs = await _prefs;
+    await prefs.setString(_kMetadataInspectorName, originalName);
+    await prefs.setString(_kMetadataInspectorPath, file.path);
+    return (file: file, name: originalName);
+  }
+
+  Future<({File file, String name})?> getMetadataInspectorImage() async {
+    final prefs = await _prefs;
+    final path = prefs.getString(_kMetadataInspectorPath);
+    if (path == null || path.isEmpty) return null;
+    final file = File(path);
+    if (!file.existsSync()) {
+      await prefs.remove(_kMetadataInspectorPath);
+      await prefs.remove(_kMetadataInspectorName);
+      return null;
+    }
+    return (
+      file: file,
+      name: prefs.getString(_kMetadataInspectorName) ??
+          file.uri.pathSegments.last,
+    );
+  }
 
   Future<Directory> _stylePromptPreviewRoot() async {
     final root = await getApplicationDocumentsDirectory();

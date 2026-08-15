@@ -954,6 +954,15 @@ function CharCaptionsModal({ onClose }: { onClose: () => void }) {
                 placeholder={t("character.placeholder")}
                 onChange={(e) => updateCharCaption(cc.id, { prompt: e.target.value })}
               />
+              <label className="field">
+                <span>{t("character.negative")}</span>
+                <textarea
+                  className="prompt-box char-prompt"
+                  value={cc.negativePrompt ?? ""}
+                  placeholder={t("character.negativePlaceholder")}
+                  onChange={(e) => updateCharCaption(cc.id, { negativePrompt: e.target.value })}
+                />
+              </label>
               <label className="checkbox-line">
                 <input
                   type="checkbox"

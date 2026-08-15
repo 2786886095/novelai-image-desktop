@@ -188,6 +188,27 @@ describe("buildGenerateImageHttpBody", () => {
 });
 
 describe("V4 character prompt payload", () => {
+  it("preserves per-character negative prompts restored from NovelAI metadata", () => {
+    const payload = buildPayload(
+      { ...DEFAULT_PARAMS, positivePrompt: "forest", qualityToggle: false, ucPreset: 3 },
+      123,
+      { vibeImages: [], preciseReferences: [], charCaptions: [{
+        prompt: "girl, blue hair",
+        negativePrompt: "short hair, smiling",
+        useCoords: false,
+        x: 0.5,
+        y: 0.5,
+      }] },
+    );
+    const negative = payload.parameters.v4_negative_prompt as {
+      caption: { char_captions: Array<{ char_caption: string }> };
+    };
+    expect(negative.caption.char_captions).toEqual([{
+      char_caption: "short hair, smiling",
+      centers: [{ x: 0.5, y: 0.5 }],
+    }]);
+  });
+
   it("uses Human Focus with Variety+ disabled for new-user defaults", () => {
     const payload = buildPayload(
       { ...DEFAULT_PARAMS, positivePrompt: "1girl", negativePrompt: "custom negative" },

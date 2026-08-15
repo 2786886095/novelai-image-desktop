@@ -210,6 +210,7 @@ const _importedEnglish = <String, String>{
 const _parameterEnglish = <String, String>{
   'positive prompt': 'Positive prompt',
   'negative prompt': 'Negative prompt',
+  'style prompt': 'Style prompt',
   'description': 'Description',
   'prompt': 'Prompt',
   'uc': 'Undesired content',
@@ -246,6 +247,9 @@ const _parameterEnglish = <String, String>{
   'sm_dyn': 'SMEA Dyn',
   'dynamic_thresholding': 'Dynamic thresholding',
   'qualitytoggle': 'Quality toggle',
+  'quality toggle': 'Quality toggle',
+  'uc preset': 'UC preset',
+  'variety+': 'Variety+',
   'params_version': 'Parameters version',
   'hires steps': 'Hires steps',
   'hires upscale': 'Hires upscale',
@@ -295,6 +299,9 @@ const _zhCnParameters = <String, String>{
   'SMEA Dyn': '动态 SMEA',
   'Dynamic thresholding': '动态阈值',
   'Quality toggle': '质量增强',
+  'Style prompt': '风格提示词',
+  'UC preset': '负面预设',
+  'Variety+': '多样化',
   'Parameters version': '参数版本',
   'Hires steps': '高清修复步数',
   'Hires upscale': '高清放大倍数',
@@ -357,6 +364,9 @@ Map<String, String> _parameterTranslations(String code) => switch (code) {
           'SMEA Dyn': '動的 SMEA',
           'Dynamic thresholding': '動的しきい値',
           'Quality toggle': '品質向上',
+          'Style prompt': 'スタイルプロンプト',
+          'UC preset': 'ネガティブプリセット',
+          'Variety+': '多様化',
           'Parameters version': 'パラメータ版',
           'Hires steps': '高解像度ステップ',
           'Hires upscale': '高解像度倍率',
@@ -401,6 +411,9 @@ Map<String, String> _parameterTranslations(String code) => switch (code) {
           'SMEA Dyn': '동적 SMEA',
           'Dynamic thresholding': '동적 임계값',
           'Quality toggle': '품질 향상',
+          'Style prompt': '스타일 프롬프트',
+          'UC preset': '네거티브 프리셋',
+          'Variety+': '다양화',
           'Parameters version': '매개변수 버전',
           'Hires steps': '고해상도 단계',
           'Hires upscale': '고해상도 배율',
@@ -494,18 +507,45 @@ class _MetadataInspectorScreenState extends State<MetadataInspectorScreen> {
   String _fileName = '';
   bool _reading = false;
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _restoreSnapshot());
+  }
+
+  Future<void> _restoreSnapshot() async {
+    try {
+      final snapshot =
+          await context.read<AppState>().storage.getMetadataInspectorImage();
+      if (snapshot == null || !mounted) return;
+      final bytes = await snapshot.file.readAsBytes();
+      final report = inspectImageMetadata(parseImageTextMetadata(bytes));
+      if (!mounted) return;
+      setState(() {
+        _report = report;
+        _filePath = snapshot.file.path;
+        _fileName = snapshot.name;
+      });
+    } catch (_) {
+      // Persistence is best-effort; image import remains available.
+    }
+  }
+
   Future<void> _pick() async {
-    final text = _metadataTextFor(context.read<AppState>().settings.language);
+    final appState = context.read<AppState>();
+    final text = _metadataTextFor(appState.settings.language);
     setState(() => _reading = true);
     try {
       final picked = await _picker.pickImage(source: ImageSource.gallery);
       if (picked == null || !mounted) return;
       final bytes = await picked.readAsBytes();
       final report = inspectImageMetadata(parseImageTextMetadata(bytes));
+      final snapshot =
+          await appState.storage.saveMetadataInspectorImage(bytes, picked.name);
       if (!mounted) return;
       setState(() {
         _report = report;
-        _filePath = picked.path;
+        _filePath = snapshot.file.path;
         _fileName = picked.name;
       });
     } catch (_) {
@@ -674,7 +714,11 @@ class _MetadataInspectorScreenState extends State<MetadataInspectorScreen> {
                           onPressed: compatible.isEmpty
                               ? null
                               : () {
-                                  state.applyImportedMetadata(report.imported);
+                                  state.applyImportedMetadata(
+                                    report.imported,
+                                    characterCaptions: report.characterCaptions,
+                                    exact: true,
+                                  );
                                   ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(content: Text(text.applied)));
                                   widget.onOpenGenerate();

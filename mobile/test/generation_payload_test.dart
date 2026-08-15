@@ -114,6 +114,36 @@ void main() {
     expect(pipeCaption['char_captions'], isEmpty);
   });
 
+  test('V4 payload includes restored per-character negative prompt', () async {
+    final payload = await api.buildPayload(
+      'unused',
+      settings,
+      GenerateParams(
+        positivePrompt: 'forest',
+        qualityToggle: false,
+        ucPreset: 3,
+      ),
+      123,
+      GenerateExtras(charCaptions: [
+        CharCaptionItem(
+          prompt: 'girl, blue hair',
+          negativePrompt: 'short hair, smiling',
+        ),
+      ]),
+    );
+    final parameters = payload['parameters'] as Map<String, dynamic>;
+    final negative =
+        (parameters['v4_negative_prompt'] as Map)['caption'] as Map;
+    expect(negative['char_captions'], [
+      {
+        'char_caption': 'short hair, smiling',
+        'centers': [
+          {'x': 0.5, 'y': 0.5}
+        ]
+      }
+    ]);
+  });
+
   test('character prompt without position uses the AI-choice center', () async {
     final payload = await api.buildPayload(
       'unused',

@@ -591,7 +591,11 @@ class AppState extends ChangeNotifier {
     applyImportedMetadata(imported);
   }
 
-  void applyImportedMetadata(ImportedGenerateParams imported) {
+  void applyImportedMetadata(
+    ImportedGenerateParams imported, {
+    List<CharCaptionItem>? characterCaptions,
+    bool exact = false,
+  }) {
     if (imported.isEmpty) {
       status = _rt('status.noMetadata');
       notifyListeners();
@@ -600,8 +604,26 @@ class AppState extends ChangeNotifier {
     final lockedStyle = params.stylePrompt;
     final lockedNegative = params.negativePrompt;
     imported.applyTo(params);
-    if (settings.lockStylePrompt) params.stylePrompt = lockedStyle;
-    if (settings.lockNegativePrompt) params.negativePrompt = lockedNegative;
+    if (!exact && settings.lockStylePrompt) {
+      params.stylePrompt = lockedStyle;
+    }
+    if (!exact && settings.lockNegativePrompt) {
+      params.negativePrompt = lockedNegative;
+    }
+    if (exact) {
+      extras
+        ..charCaptions = (characterCaptions ?? const [])
+            .map((item) => CharCaptionItem(
+                  prompt: item.prompt,
+                  negativePrompt: item.negativePrompt,
+                  useCoords: item.useCoords,
+                  x: item.x,
+                  y: item.y,
+                ))
+            .toList()
+        ..vibeImages.clear()
+        ..preciseReferences.clear();
+    }
     params = params.normalized();
     unawaited(storage.setParams(params));
     status = _rt('status.metadataRestored');

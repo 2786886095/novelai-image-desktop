@@ -398,6 +398,7 @@ function normalizedCharCaptions(extras?: GenerateExtras) {
   return (extras?.charCaptions ?? [])
     .map((c) => ({
       prompt: c.prompt.trim(),
+      negativePrompt: c.negativePrompt?.trim() ?? "",
       useCoords: Boolean(c.useCoords),
       x: finiteClamped(Number(c.x), 0.5),
       y: finiteClamped(Number(c.y), 0.5),
@@ -514,6 +515,12 @@ export function buildPayload(
       // use_coords is false. (0.5, 0.5) is the protocol's AI-choice sentinel.
       centers: [{ x: c.useCoords ? c.x : 0.5, y: c.useCoords ? c.y : 0.5 }],
     }));
+    const negativeCharCaptionsPayload = cleanedCharCaptions.some((c) => c.negativePrompt)
+      ? cleanedCharCaptions.map((c) => ({
+          char_caption: c.negativePrompt,
+          centers: [{ x: c.useCoords ? c.x : 0.5, y: c.useCoords ? c.y : 0.5 }],
+        }))
+      : [];
     const useStructuredChars = charCaptionMode === "structured";
     const useCoords =
       useStructuredChars && cleanedCharCaptions.some((c) => c.useCoords);
@@ -529,8 +536,11 @@ export function buildPayload(
       use_order: true,
     };
     parameters.v4_negative_prompt = {
-      caption: { base_caption: effectiveNegative, char_captions: [] },
-      use_coords: false,
+      caption: {
+        base_caption: effectiveNegative,
+        char_captions: useStructuredChars ? negativeCharCaptionsPayload : [],
+      },
+      use_coords: useCoords && negativeCharCaptionsPayload.length > 0,
       use_order: false,
       legacy_uc: !isV45(params.model),
     };

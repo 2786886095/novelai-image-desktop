@@ -268,6 +268,8 @@ export interface PreciseReferenceImage extends PreciseReferenceItem {
 /** Character prompt item — slim type sent over IPC */
 export interface CharCaptionItem {
   prompt: string;
+  /** Per-character undesired content used by NovelAI V4/V4.5. */
+  negativePrompt?: string;
   useCoords: boolean;
   x: number; // 0.0 – 1.0
   y: number; // 0.0 – 1.0
@@ -1235,6 +1237,7 @@ export interface AiModelListResult {
 export interface ImportedParams {
   positivePrompt?: string;
   negativePrompt?: string;
+  stylePrompt?: string;
   model?: NAIModel;
   steps?: number;
   cfgScale?: number;
@@ -1247,6 +1250,9 @@ export interface ImportedParams {
   height?: number;
   smea?: boolean;
   smeaDyn?: boolean;
+  ucPreset?: UcPreset;
+  qualityToggle?: boolean;
+  variety?: boolean;
 }
 
 export interface NaiDesktopApi {

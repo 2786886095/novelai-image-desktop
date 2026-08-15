@@ -2296,6 +2296,18 @@ class _CharCard extends StatelessWidget {
               s.markChanged();
             },
           ),
+          const SizedBox(height: 8),
+          TextFormField(
+            initialValue: c.negativePrompt,
+            decoration: InputDecoration(
+              labelText: t('generate.characterNegative'),
+              border: const OutlineInputBorder(),
+            ),
+            onChanged: (v) {
+              c.negativePrompt = v;
+              s.markChanged();
+            },
+          ),
           CheckboxListTile(
             contentPadding: EdgeInsets.zero,
             title: Text(t('generate.useCoords')),

@@ -622,6 +622,24 @@ class NaiApi {
               ],
             })
         .toList();
+    final activeCharacters = extras.charCaptions
+        .where((c) => c.prompt.trim().isNotEmpty)
+        .take(6)
+        .toList();
+    final negativeCharCaptions =
+        activeCharacters.any((c) => c.negativePrompt.trim().isNotEmpty)
+            ? activeCharacters
+                .map((c) => {
+                      'char_caption': c.negativePrompt.trim(),
+                      'centers': [
+                        {
+                          'x': c.useCoords ? c.x.clamp(0, 1) : 0.5,
+                          'y': c.useCoords ? c.y.clamp(0, 1) : 0.5,
+                        }
+                      ],
+                    })
+                .toList()
+            : <Map<String, Object>>[];
     final hasCoords = structuredCharacters &&
         extras.charCaptions
             .where((caption) => caption.prompt.trim().isNotEmpty)
@@ -675,8 +693,12 @@ class NaiApi {
         'use_order': true,
       };
       parameters['v4_negative_prompt'] = {
-        'caption': {'base_caption': effectiveNegative, 'char_captions': []},
-        'use_coords': false,
+        'caption': {
+          'base_caption': effectiveNegative,
+          'char_captions':
+              structuredCharacters ? negativeCharCaptions : <Object>[],
+        },
+        'use_coords': hasCoords && negativeCharCaptions.isNotEmpty,
         'use_order': false,
         'legacy_uc': !params.isV45,
       };

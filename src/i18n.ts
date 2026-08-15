@@ -1790,6 +1790,8 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "character.delete": "删除",
     "character.placeholder":
       "输入该角色的提示词，例如：girl, blue dress, long hair",
+    "character.negative": "角色负面提示词",
+    "character.negativePlaceholder": "输入该角色不应出现的内容，例如：short hair, smiling",
     "character.useCoords": "指定角色位置（中心点，0 = 左/上，1 = 右/下）",
     "character.x": "X 位置（左→右）",
     "character.y": "Y 位置（上→下）",
@@ -1995,6 +1997,8 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "character.delete": "刪除",
     "character.placeholder":
       "輸入該角色的提示詞，例如：girl, blue dress, long hair",
+    "character.negative": "角色負面提示詞",
+    "character.negativePlaceholder": "輸入該角色不應出現的內容，例如：short hair, smiling",
     "character.useCoords": "指定角色位置（中心點，0 = 左/上，1 = 右/下）",
     "character.x": "X 位置（左→右）",
     "character.y": "Y 位置（上→下）",
@@ -2206,6 +2210,8 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "character.delete": "Delete",
     "character.placeholder":
       "Enter this character’s prompt, e.g. girl, blue dress, long hair",
+    "character.negative": "Character negative prompt",
+    "character.negativePlaceholder": "What this character should not contain, e.g. short hair, smiling",
     "character.useCoords":
       "Specify character position (center point, 0 = left/top, 1 = right/bottom)",
     "character.x": "X position (left → right)",
@@ -2425,6 +2431,8 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "character.delete": "削除",
     "character.placeholder":
       "このキャラクターのプロンプトを入力。例：girl, blue dress, long hair",
+    "character.negative": "キャラクターのネガティブプロンプト",
+    "character.negativePlaceholder": "このキャラクターに含めない内容。例：short hair, smiling",
     "character.useCoords":
       "キャラクター位置を指定（中心点、0 = 左/上、1 = 右/下）",
     "character.x": "X 位置（左→右）",
@@ -2643,6 +2651,8 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "character.delete": "삭제",
     "character.placeholder":
       "이 캐릭터의 프롬프트를 입력하세요. 예: girl, blue dress, long hair",
+    "character.negative": "캐릭터 네거티브 프롬프트",
+    "character.negativePlaceholder": "이 캐릭터에 포함하지 않을 내용. 예: short hair, smiling",
     "character.useCoords":
       "캐릭터 위치 지정(중심점, 0 = 왼쪽/위, 1 = 오른쪽/아래)",
     "character.x": "X 위치(왼쪽→오른쪽)",

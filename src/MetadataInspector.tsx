@@ -4,6 +4,7 @@ import { Button, IconText } from "./components/ui";
 import { Icon } from "./components/icons";
 import { normalizeAppLanguage } from "./i18n";
 import { inspectImageMetadata, parseImageMeta, type ImageMetadataReport } from "./png-meta";
+import { loadMetadataSnapshot, saveMetadataSnapshot } from "./metadata-snapshot";
 import { useAppStore } from "./store";
 import type { AppLanguage, ImportedParams } from "./types";
 
@@ -200,6 +201,7 @@ const TEXT: Record<AppLanguage, MetadataText> = {
 export const IMPORT_LABELS: Record<keyof ImportedParams, string> = {
   positivePrompt: "Positive prompt",
   negativePrompt: "Negative prompt",
+  stylePrompt: "Style prompt",
   model: "Model",
   steps: "Steps",
   cfgScale: "CFG scale",
@@ -212,11 +214,15 @@ export const IMPORT_LABELS: Record<keyof ImportedParams, string> = {
   height: "Height",
   smea: "SMEA",
   smeaDyn: "SMEA Dyn",
+  ucPreset: "UC preset",
+  qualityToggle: "Quality toggle",
+  variety: "Variety+",
 };
 
 const PARAMETER_ENGLISH: Record<string, string> = {
   "positive prompt": "Positive prompt",
   "negative prompt": "Negative prompt",
+  "style prompt": "Style prompt",
   description: "Description",
   prompt: "Prompt",
   uc: "Undesired content",
@@ -253,6 +259,9 @@ const PARAMETER_ENGLISH: Record<string, string> = {
   sm_dyn: "SMEA Dyn",
   dynamic_thresholding: "Dynamic thresholding",
   qualitytoggle: "Quality toggle",
+  "quality toggle": "Quality toggle",
+  "uc preset": "UC preset",
+  "variety+": "Variety+",
   params_version: "Parameters version",
   "hires steps": "Hires steps",
   "hires upscale": "Hires upscale",
@@ -288,7 +297,7 @@ const PARAMETER_TRANSLATIONS: Record<Exclude<AppLanguage, "en-US">, Record<strin
     VAE: "VAE 模型", "VAE hash": "VAE 哈希", LoRA: "LoRA 模型", Checkpoint: "基础模型",
     Denoise: "降噪强度", "Denoising strength": "重绘强度", "Clip skip": "CLIP 跳过层数", Version: "版本",
     SMEA: "SMEA 平滑", "SMEA Dyn": "动态 SMEA", "Dynamic thresholding": "动态阈值",
-    "Quality toggle": "质量增强", "Parameters version": "参数版本", "Hires steps": "高清修复步数",
+    "Quality toggle": "质量增强", "Style prompt": "风格提示词", "UC preset": "负面预设", "Variety+": "多样化", "Parameters version": "参数版本", "Hires steps": "高清修复步数",
     "Hires upscale": "高清放大倍数", "Hires upscaler": "高清放大算法",
     "Hires prompt": "高清修复提示词", "Hires negative prompt": "高清修复负面提示词", "LoRA hashes": "LoRA 哈希",
     "ADetailer model": "细节修复模型", "ADetailer prompt": "细节修复提示词", "ADetailer negative prompt": "细节修复负面提示词",
@@ -306,7 +315,7 @@ const PARAMETER_TRANSLATIONS: Record<Exclude<AppLanguage, "en-US">, Record<strin
     VAE: "VAE 模型", "VAE hash": "VAE 雜湊", LoRA: "LoRA 模型", Checkpoint: "基礎模型",
     Denoise: "降噪強度", "Denoising strength": "重繪強度", "Clip skip": "CLIP 跳過層數", Version: "版本",
     SMEA: "SMEA 平滑", "SMEA Dyn": "動態 SMEA", "Dynamic thresholding": "動態閾值",
-    "Quality toggle": "品質增強", "Parameters version": "參數版本", "Hires steps": "高解析修復步數",
+    "Quality toggle": "品質增強", "Style prompt": "風格提示詞", "UC preset": "負面預設", "Variety+": "多樣化", "Parameters version": "參數版本", "Hires steps": "高解析修復步數",
     "Hires upscale": "高解析放大倍數", "Hires upscaler": "高解析放大演算法",
     "Hires prompt": "高解析修復提示詞", "Hires negative prompt": "高解析修復負面提示詞", "LoRA hashes": "LoRA 雜湊",
     "ADetailer model": "細節修復模型", "ADetailer prompt": "細節修復提示詞", "ADetailer negative prompt": "細節修復負面提示詞",
@@ -324,7 +333,7 @@ const PARAMETER_TRANSLATIONS: Record<Exclude<AppLanguage, "en-US">, Record<strin
     VAE: "VAE", "VAE hash": "VAE ハッシュ", LoRA: "LoRA", Checkpoint: "チェックポイント",
     Denoise: "ノイズ除去", "Denoising strength": "ノイズ除去強度", "Clip skip": "CLIP スキップ", Version: "バージョン",
     SMEA: "SMEA", "SMEA Dyn": "動的 SMEA", "Dynamic thresholding": "動的しきい値",
-    "Quality toggle": "品質向上", "Parameters version": "パラメータ版", "Hires steps": "高解像度ステップ",
+    "Quality toggle": "品質向上", "Style prompt": "スタイルプロンプト", "UC preset": "ネガティブプリセット", "Variety+": "多様化", "Parameters version": "パラメータ版", "Hires steps": "高解像度ステップ",
     "Hires upscale": "高解像度倍率", "Hires upscaler": "高解像度アップスケーラー",
     "Hires prompt": "高解像度プロンプト", "Hires negative prompt": "高解像度ネガティブプロンプト", "LoRA hashes": "LoRA ハッシュ",
     "ADetailer model": "ディテール修正モデル", "ADetailer prompt": "ディテール修正プロンプト", "ADetailer negative prompt": "ディテール修正ネガティブプロンプト",
@@ -342,7 +351,7 @@ const PARAMETER_TRANSLATIONS: Record<Exclude<AppLanguage, "en-US">, Record<strin
     VAE: "VAE 모델", "VAE hash": "VAE 해시", LoRA: "LoRA 모델", Checkpoint: "체크포인트",
     Denoise: "노이즈 제거", "Denoising strength": "노이즈 제거 강도", "Clip skip": "CLIP 건너뛰기", Version: "버전",
     SMEA: "SMEA", "SMEA Dyn": "동적 SMEA", "Dynamic thresholding": "동적 임계값",
-    "Quality toggle": "품질 향상", "Parameters version": "매개변수 버전", "Hires steps": "고해상도 단계",
+    "Quality toggle": "품질 향상", "Style prompt": "스타일 프롬프트", "UC preset": "네거티브 프리셋", "Variety+": "다양화", "Parameters version": "매개변수 버전", "Hires steps": "고해상도 단계",
     "Hires upscale": "고해상도 배율", "Hires upscaler": "고해상도 업스케일러",
     "Hires prompt": "고해상도 프롬프트", "Hires negative prompt": "고해상도 부정 프롬프트", "LoRA hashes": "LoRA 해시",
     "ADetailer model": "세부 보정 모델", "ADetailer prompt": "세부 보정 프롬프트", "ADetailer negative prompt": "세부 보정 부정 프롬프트",
@@ -394,8 +403,7 @@ function sourceLabel(report: ImageMetadataReport, text: MetadataText) {
 
 export default function MetadataInspector({ onBack }: { onBack: () => void }) {
   const language = normalizeAppLanguage(useAppStore((state) => state.settings?.language));
-  const settings = useAppStore((state) => state.settings);
-  const applyParams = useAppStore((state) => state.applyParams);
+  const restoreImportedMetadata = useAppStore((state) => state.restoreImportedMetadata);
   const setActiveTab = useAppStore((state) => state.setActiveTab);
   const setToast = useAppStore((state) => state.setToast);
   const text = TEXT[language];
@@ -418,7 +426,7 @@ export default function MetadataInspector({ onBack }: { onBack: () => void }) {
     [report],
   );
 
-  const readFile = useCallback(async (file: File) => {
+  const readFile = useCallback(async (file: File, persist = true) => {
     try {
       const buffer = await file.arrayBuffer();
       const next = inspectImageMetadata(parseImageMeta(buffer));
@@ -428,19 +436,28 @@ export default function MetadataInspector({ onBack }: { onBack: () => void }) {
         if (old) URL.revokeObjectURL(old);
         return URL.createObjectURL(file);
       });
+      if (persist) void saveMetadataSnapshot(file).catch(() => undefined);
     } catch {
       setToast(text.readFailed);
     }
   }, [setToast, text.readFailed]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadMetadataSnapshot()
+      .then((file) => {
+        if (!cancelled && file) return readFile(file, false);
+      })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [readFile]);
 
   function applyCompatible() {
     if (!report || !compatibleEntries.length) {
       setToast(text.noCompatible);
       return;
     }
-    const patch = { ...report.imported };
-    if (settings?.lockNegativePrompt) delete patch.negativePrompt;
-    applyParams(patch);
+    restoreImportedMetadata(report.imported, report.characterCaptions);
     setActiveTab("generate");
     setToast(text.applied);
   }

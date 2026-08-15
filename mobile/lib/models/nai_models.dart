@@ -9,7 +9,7 @@ class NaiOption {
 }
 
 const appName = 'Langbai NovelAI Studio';
-const appVersion = '1.6.4';
+const appVersion = '1.6.5';
 
 const naiModels = <NaiOption>[
   NaiOption('NAI Diffusion 4.5 Full (Full model)', 'nai-diffusion-4-5-full'),
@@ -254,16 +254,27 @@ double _finiteClamp(
 
 class CharCaptionItem {
   String prompt;
+  String negativePrompt;
   bool useCoords;
   double x;
   double y;
   CharCaptionItem(
-      {this.prompt = '', this.useCoords = false, this.x = 0.5, this.y = 0.5});
+      {this.prompt = '',
+      this.negativePrompt = '',
+      this.useCoords = false,
+      this.x = 0.5,
+      this.y = 0.5});
 
-  Map<String, dynamic> toJson() =>
-      {'prompt': prompt, 'useCoords': useCoords, 'x': x, 'y': y};
+  Map<String, dynamic> toJson() => {
+        'prompt': prompt,
+        'negativePrompt': negativePrompt,
+        'useCoords': useCoords,
+        'x': x,
+        'y': y
+      };
   factory CharCaptionItem.fromJson(Map<String, dynamic> j) => CharCaptionItem(
         prompt: j['prompt'] ?? '',
+        negativePrompt: j['negativePrompt'] ?? '',
         useCoords: j['useCoords'] ?? false,
         x: (j['x'] ?? 0.5).toDouble(),
         y: (j['y'] ?? 0.5).toDouble(),
@@ -401,6 +412,7 @@ class GenerateExtras {
         charCaptions: charCaptions
             .map((item) => CharCaptionItem(
                   prompt: item.prompt,
+                  negativePrompt: item.negativePrompt,
                   useCoords: item.useCoords,
                   x: item.x,
                   y: item.y,

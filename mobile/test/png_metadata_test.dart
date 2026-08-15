@@ -52,6 +52,68 @@ void main() {
     expect(parsePngTextMetadata(Uint8List.fromList([1, 2, 3])), isEmpty);
   });
 
+  test('restores V4.5 character prompts, negatives, model and effective flags',
+      () {
+    final comment = jsonEncode({
+      'steps': 28,
+      'width': 1024,
+      'height': 1024,
+      'scale': 6,
+      'cfg_rescale': 0,
+      'seed': 2058326448,
+      'sampler': 'k_euler_ancestral',
+      'noise_schedule': 'karras',
+      'skip_cfg_above_sigma': null,
+      'v4_prompt': {
+        'caption': {
+          'base_caption': 'best quality, forest',
+          'char_captions': [
+            {
+              'char_caption': 'girl, akiyama rinko, blue hair, katana',
+              'centers': [
+                {'x': 0.5, 'y': 0.5}
+              ]
+            }
+          ]
+        },
+        'use_coords': false,
+        'use_order': true,
+      },
+      'v4_negative_prompt': {
+        'caption': {
+          'base_caption': 'lowres, bad anatomy',
+          'char_captions': [
+            {
+              'char_caption': 'casual wear, short hair, smiling',
+              'centers': [
+                {'x': 0.5, 'y': 0.5}
+              ]
+            }
+          ]
+        },
+        'use_coords': false,
+      },
+    });
+    final report = inspectImageMetadata({
+      'Software': 'NovelAI',
+      'Source': 'NovelAI Diffusion V4.5 4BDE2A90',
+      'Description': 'fallback description',
+      'Comment': comment,
+    });
+    expect(report.imported.model, 'nai-diffusion-4-5-full');
+    expect(report.imported.positivePrompt, 'best quality, forest');
+    expect(report.imported.negativePrompt, 'lowres, bad anatomy');
+    expect(report.imported.stylePrompt, '');
+    expect(report.imported.qualityToggle, isFalse);
+    expect(report.imported.ucPreset, 3);
+    expect(report.imported.variety, isFalse);
+    expect(report.characterCaptions, hasLength(1));
+    expect(report.characterCaptions.single.prompt,
+        'girl, akiyama rinko, blue hair, katana');
+    expect(report.characterCaptions.single.negativePrompt,
+        'casual wear, short hair, smiling');
+  });
+
   test('applies only the globally selected compatible metadata fields', () {
     const imported = ImportedGenerateParams(
       positivePrompt: 'selected prompt',

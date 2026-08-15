@@ -4,6 +4,7 @@ import {
   parseImageMeta,
   parsePngMeta,
   parseImportedParams,
+  parseNovelAICharCaptions,
   parseStableDiffusionParameters,
 } from "./png-meta";
 
@@ -116,6 +117,64 @@ describe("parseImportedParams", () => {
   it("survives malformed Comment JSON", () => {
     const out = parseImportedParams({ Description: "x", Comment: "{not json" });
     expect(out.positivePrompt).toBe("x");
+  });
+
+  it("restores V4.5 structured character data and effective prompt state", () => {
+    const comment = JSON.stringify({
+      steps: 28,
+      width: 1024,
+      height: 1024,
+      scale: 6,
+      cfg_rescale: 0,
+      seed: 2058326448,
+      sampler: "k_euler_ancestral",
+      noise_schedule: "karras",
+      skip_cfg_above_sigma: null,
+      v4_prompt: {
+        caption: {
+          base_caption: "best quality, forest",
+          char_captions: [{
+            char_caption: "girl, akiyama rinko, blue hair, katana",
+            centers: [{ x: 0.5, y: 0.5 }],
+          }],
+        },
+        use_coords: false,
+        use_order: true,
+      },
+      v4_negative_prompt: {
+        caption: {
+          base_caption: "lowres, bad anatomy",
+          char_captions: [{
+            char_caption: "casual wear, short hair, smiling",
+            centers: [{ x: 0.5, y: 0.5 }],
+          }],
+        },
+        use_coords: false,
+        use_order: false,
+      },
+    });
+    const meta = {
+      Software: "NovelAI",
+      Source: "NovelAI Diffusion V4.5 4BDE2A90",
+      Description: "fallback description",
+      Comment: comment,
+    };
+    const out = parseImportedParams(meta);
+    const characters = parseNovelAICharCaptions(meta);
+    expect(out.model).toBe("nai-diffusion-4-5-full");
+    expect(out.positivePrompt).toBe("best quality, forest");
+    expect(out.negativePrompt).toBe("lowres, bad anatomy");
+    expect(out.stylePrompt).toBe("");
+    expect(out.qualityToggle).toBe(false);
+    expect(out.ucPreset).toBe(3);
+    expect(out.variety).toBe(false);
+    expect(characters).toEqual([{
+      prompt: "girl, akiyama rinko, blue hair, katana",
+      negativePrompt: "casual wear, short hair, smiling",
+      useCoords: false,
+      x: 0.5,
+      y: 0.5,
+    }]);
   });
 });
 

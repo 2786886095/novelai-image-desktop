@@ -8,12 +8,14 @@ import type {
   AugmentOptions,
   BatchRedrawProject,
   CharCaption,
+  CharCaptionItem,
   DirectorTool,
   GenerateExtras,
   GenerateParams,
   HistoryGroup,
   HistoryItem,
   I2IParams,
+  ImportedParams,
   LastGenerationState,
   NAIInpaintModel,
   PromptVariants,
@@ -374,6 +376,7 @@ interface AppState {
   resetWsWidths: () => void;
   setParam: <K extends keyof GenerateParams>(key: K, value: GenerateParams[K]) => void;
   applyParams: (patch: Partial<GenerateParams>) => void;
+  restoreImportedMetadata: (patch: ImportedParams, captions: CharCaptionItem[]) => void;
   checkUpdate: () => Promise<void>;
   dismissUpdate: () => void;
   downloadUpdate: () => Promise<void>;
@@ -520,8 +523,9 @@ function buildExtras(state: AppState): GenerateExtras {
       strength,
       fidelity,
     })),
-    charCaptions: state.charCaptions.map(({ prompt, useCoords, x, y }) => ({
+    charCaptions: state.charCaptions.map(({ prompt, negativePrompt, useCoords, x, y }) => ({
       prompt,
+      negativePrompt,
       useCoords,
       x,
       y,
@@ -946,6 +950,22 @@ export const useAppStore = create<AppState>((set, get) => ({
     persistGenerationState(get);
   },
 
+  restoreImportedMetadata(patch, captions) {
+    const restoredCaptions: CharCaption[] = captions.slice(0, 6).map((caption) => ({
+      ...caption,
+      id: crypto.randomUUID(),
+    }));
+    set((state) => ({
+      params: normalizeGenerateParams({ ...state.params, ...patch }),
+      charCaptions: restoredCaptions,
+      // A stale reference image changes the request even when every visible
+      // metadata parameter is identical, so explicit restore starts clean.
+      vibeImages: [],
+      preciseReferences: [],
+    }));
+    persistGenerationState(get);
+  },
+
   async checkUpdate() {
     try {
       const info = await window.naiDesktop.checkUpdate();
@@ -1228,7 +1248,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((state) => ({
       charCaptions: [
         ...state.charCaptions,
-        { id, prompt: "", useCoords: false, x: 0.5, y: 0.5 },
+        { id, prompt: "", negativePrompt: "", useCoords: false, x: 0.5, y: 0.5 },
       ],
     }));
   },

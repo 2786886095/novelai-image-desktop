@@ -10,7 +10,7 @@
 // NovelAI patch. Unsupported SD/ComfyUI values remain visible instead of being
 // silently discarded.
 import { NAI_MODELS, NAI_SAMPLERS } from "./types";
-import type { ImportedParams, NAIModel, NAISampler } from "./types";
+import type { CharCaptionItem, ImportedParams, NAIModel, NAISampler } from "./types";
 
 const PNG_SIG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
@@ -26,10 +26,68 @@ export interface ImageMetadataReport {
   kind: ImageMetadataKind;
   software: string;
   imported: ImportedParams;
+  characterCaptions: CharCaptionItem[];
   entries: ImageMetadataEntry[];
   rawMetadata: Record<string, string>;
   rawText: string;
   warnings: string[];
+}
+
+function objectValue(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+function modelToNai(value: unknown): NAIModel | undefined {
+  if (typeof value !== "string") return undefined;
+  if (NAI_MODELS.some((item) => item.value === value)) return value as NAIModel;
+  const name = value.toLowerCase();
+  if (name.includes("furry") && name.includes("v3")) return "nai-diffusion-furry-3";
+  if (name.includes("v4.5") || name.includes("v4 5")) {
+    return name.includes("curated") ? "nai-diffusion-4-5-curated" : "nai-diffusion-4-5-full";
+  }
+  if (name.includes("v4")) {
+    return name.includes("curated") ? "nai-diffusion-4-curated" : "nai-diffusion-4-full";
+  }
+  if (name.includes("v3")) return "nai-diffusion-3";
+  return undefined;
+}
+
+/** Extract NovelAI V4/V4.5 structured positive and negative character prompts. */
+export function parseNovelAICharCaptions(meta: Record<string, string>): CharCaptionItem[] {
+  let comment: Record<string, unknown> = {};
+  try {
+    comment = objectValue(JSON.parse(meta.Comment ?? meta.comment ?? "{}")) ?? {};
+  } catch {
+    return [];
+  }
+  const prompt = objectValue(comment.v4_prompt);
+  const promptCaption = objectValue(prompt?.caption);
+  const negative = objectValue(comment.v4_negative_prompt);
+  const negativeCaption = objectValue(negative?.caption);
+  const positiveItems = Array.isArray(promptCaption?.char_captions)
+    ? promptCaption.char_captions
+    : [];
+  const negativeItems = Array.isArray(negativeCaption?.char_captions)
+    ? negativeCaption.char_captions
+    : [];
+  const useCoords = prompt?.use_coords === true;
+  return positiveItems.flatMap((raw, index) => {
+    const item = objectValue(raw);
+    const value = nonEmpty(item?.char_caption);
+    if (!value) return [];
+    const negativeItem = objectValue(negativeItems[index]);
+    const centers = Array.isArray(item?.centers) ? item.centers : [];
+    const center = objectValue(centers[0]);
+    return [{
+      prompt: value,
+      negativePrompt: nonEmpty(negativeItem?.char_caption) ?? "",
+      useCoords,
+      x: finiteNumber(center?.x) ?? 0.5,
+      y: finiteNumber(center?.y) ?? 0.5,
+    }];
+  }).slice(0, 6);
 }
 
 function decodeUtf8(bytes: Uint8Array) {
@@ -278,7 +336,8 @@ function schedulerToNai(value: unknown): string | undefined {
 
 function cleanImported(imported: ImportedParams): ImportedParams {
   const out = Object.fromEntries(
-    Object.entries(imported).filter(([, value]) => value !== undefined && value !== ""),
+    Object.entries(imported).filter(([key, value]) =>
+      value !== undefined && (value !== "" || key === "stylePrompt")),
   ) as ImportedParams;
   if (out.seed !== undefined) out.seedMode = out.seed > 0 ? "fixed" : "random";
   return out;
@@ -297,14 +356,22 @@ export function parseImportedParams(meta: Record<string, string>): ImportedParam
   }
 
   const samplerValues = NAI_SAMPLERS.map((item) => item.value) as string[];
-  const modelValues = NAI_MODELS.map((item) => item.value) as string[];
-  const prompt = meta.Description ?? nonEmpty(comment.prompt);
+  const v4Prompt = objectValue(comment.v4_prompt);
+  const v4PromptCaption = objectValue(v4Prompt?.caption);
+  const v4Negative = objectValue(comment.v4_negative_prompt);
+  const v4NegativeCaption = objectValue(v4Negative?.caption);
+  const prompt = nonEmpty(v4PromptCaption?.base_caption) ?? meta.Description ?? nonEmpty(comment.prompt);
+  const negativePrompt = nonEmpty(v4NegativeCaption?.base_caption) ?? nonEmpty(comment.uc);
   const modelCandidate =
     (typeof comment.model === "string" ? comment.model : undefined) ?? meta.Source;
+  const isNovelAi = /novelai/i.test(`${meta.Software ?? ""} ${meta.Source ?? ""}`) || Boolean(v4Prompt);
 
   return cleanImported({
     positivePrompt: nonEmpty(prompt),
-    negativePrompt: nonEmpty(comment.uc),
+    negativePrompt,
+    // NovelAI embeds the already-expanded effective prompts. Restoring them
+    // while retaining local style/quality/UC presets would append text twice.
+    stylePrompt: isNovelAi ? "" : undefined,
     steps: finiteInteger(comment.steps),
     cfgScale: finiteNumber(comment.scale),
     cfgRescale: finiteNumber(comment.cfg_rescale),
@@ -318,10 +385,10 @@ export function parseImportedParams(meta: Record<string, string>): ImportedParam
     noiseSchedule: nonEmpty(comment.noise_schedule),
     smea: typeof comment.sm === "boolean" ? comment.sm : undefined,
     smeaDyn: typeof comment.sm_dyn === "boolean" ? comment.sm_dyn : undefined,
-    model:
-      modelCandidate && modelValues.includes(modelCandidate)
-        ? (modelCandidate as NAIModel)
-        : undefined,
+    model: modelToNai(modelCandidate),
+    ucPreset: isNovelAi ? 3 : undefined,
+    qualityToggle: isNovelAi ? false : undefined,
+    variety: isNovelAi ? comment.skip_cfg_above_sigma === 58 : undefined,
   });
 }
 
@@ -682,6 +749,7 @@ export function inspectImageMetadata(meta: Record<string, string>): ImageMetadat
       kind: "stable-diffusion",
       software: software || "Stable Diffusion WebUI",
       imported,
+      characterCaptions: [],
       entries,
       rawMetadata: meta,
       rawText: lower.parameters,
@@ -699,6 +767,7 @@ export function inspectImageMetadata(meta: Record<string, string>): ImageMetadat
       kind: "comfyui",
       software: software || "ComfyUI",
       imported: comfy.imported,
+      characterCaptions: [],
       entries: comfy.entries,
       rawMetadata: meta,
       rawText: rawTextFor(meta),
@@ -745,6 +814,10 @@ export function inspectImageMetadata(meta: Record<string, string>): ImageMetadat
         Comment: meta.Comment ?? meta.comment ?? "{}",
         Source: source ?? "",
       }),
+      characterCaptions: parseNovelAICharCaptions({
+        ...meta,
+        Comment: meta.Comment ?? meta.comment ?? "{}",
+      }),
       entries,
       rawMetadata: meta,
       rawText: rawTextFor(meta),
@@ -756,6 +829,7 @@ export function inspectImageMetadata(meta: Record<string, string>): ImageMetadat
     kind: "unknown",
     software: software || "Unknown",
     imported: {},
+    characterCaptions: [],
     entries: Object.entries(meta).map(([key, value]) => ({ key, value, group: "raw" })),
     rawMetadata: meta,
     rawText: rawTextFor(meta),

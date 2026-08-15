@@ -7,6 +7,7 @@ class ImportedGenerateParams {
   final String? model;
   final String? positivePrompt;
   final String? negativePrompt;
+  final String? stylePrompt;
   final int? width;
   final int? height;
   final int? steps;
@@ -17,11 +18,15 @@ class ImportedGenerateParams {
   final int? seed;
   final bool? smea;
   final bool? smeaDyn;
+  final int? ucPreset;
+  final bool? qualityToggle;
+  final bool? variety;
 
   const ImportedGenerateParams({
     this.model,
     this.positivePrompt,
     this.negativePrompt,
+    this.stylePrompt,
     this.width,
     this.height,
     this.steps,
@@ -32,12 +37,16 @@ class ImportedGenerateParams {
     this.seed,
     this.smea,
     this.smeaDyn,
+    this.ucPreset,
+    this.qualityToggle,
+    this.variety,
   });
 
   bool get isEmpty =>
       model == null &&
       positivePrompt == null &&
       negativePrompt == null &&
+      stylePrompt == null &&
       width == null &&
       height == null &&
       steps == null &&
@@ -47,12 +56,16 @@ class ImportedGenerateParams {
       noiseSchedule == null &&
       seed == null &&
       smea == null &&
-      smeaDyn == null;
+      smeaDyn == null &&
+      ucPreset == null &&
+      qualityToggle == null &&
+      variety == null;
 
   void applyTo(GenerateParams target) {
     if (model case final value?) target.model = value;
     if (positivePrompt case final value?) target.positivePrompt = value;
     if (negativePrompt case final value?) target.negativePrompt = value;
+    if (stylePrompt case final value?) target.stylePrompt = value;
     if (width case final value?) target.width = value;
     if (height case final value?) target.height = value;
     if (steps case final value?) target.steps = value;
@@ -67,11 +80,15 @@ class ImportedGenerateParams {
     }
     if (smea case final value?) target.smea = value;
     if (smeaDyn case final value?) target.smeaDyn = value;
+    if (ucPreset case final value?) target.ucPreset = value;
+    if (qualityToggle case final value?) target.qualityToggle = value;
+    if (variety case final value?) target.variety = value;
   }
 
   Map<String, Object> get compatibleValues => {
         if (positivePrompt != null) 'Positive prompt': positivePrompt!,
         if (negativePrompt != null) 'Negative prompt': negativePrompt!,
+        if (stylePrompt != null) 'Style prompt': stylePrompt!,
         if (model != null) 'Model': model!,
         if (width != null) 'Width': width!,
         if (height != null) 'Height': height!,
@@ -83,11 +100,15 @@ class ImportedGenerateParams {
         if (seed != null) 'Seed': seed!,
         if (smea != null) 'SMEA': smea!,
         if (smeaDyn != null) 'SMEA Dyn': smeaDyn!,
+        if (ucPreset != null) 'UC preset': ucPreset!,
+        if (qualityToggle != null) 'Quality toggle': qualityToggle!,
+        if (variety != null) 'Variety+': variety!,
       };
 
   Map<String, Object> get compatibleValuesByKey => {
         if (positivePrompt != null) 'positivePrompt': positivePrompt!,
         if (negativePrompt != null) 'negativePrompt': negativePrompt!,
+        if (stylePrompt != null) 'stylePrompt': stylePrompt!,
         if (model != null) 'model': model!,
         if (width != null) 'width': width!,
         if (height != null) 'height': height!,
@@ -99,12 +120,16 @@ class ImportedGenerateParams {
         if (seed != null) 'seed': seed!,
         if (smea != null) 'smea': smea!,
         if (smeaDyn != null) 'smeaDyn': smeaDyn!,
+        if (ucPreset != null) 'ucPreset': ucPreset!,
+        if (qualityToggle != null) 'qualityToggle': qualityToggle!,
+        if (variety != null) 'variety': variety!,
       };
 
   ImportedGenerateParams selecting(Set<String> keys) => ImportedGenerateParams(
         model: keys.contains('model') ? model : null,
         positivePrompt: keys.contains('positivePrompt') ? positivePrompt : null,
         negativePrompt: keys.contains('negativePrompt') ? negativePrompt : null,
+        stylePrompt: keys.contains('stylePrompt') ? stylePrompt : null,
         width: keys.contains('width') ? width : null,
         height: keys.contains('height') ? height : null,
         steps: keys.contains('steps') ? steps : null,
@@ -115,6 +140,9 @@ class ImportedGenerateParams {
         seed: keys.contains('seed') ? seed : null,
         smea: keys.contains('smea') ? smea : null,
         smeaDyn: keys.contains('smeaDyn') ? smeaDyn : null,
+        ucPreset: keys.contains('ucPreset') ? ucPreset : null,
+        qualityToggle: keys.contains('qualityToggle') ? qualityToggle : null,
+        variety: keys.contains('variety') ? variety : null,
       );
 }
 
@@ -122,6 +150,7 @@ const importedGenerateParamKeys = <String>{
   'model',
   'positivePrompt',
   'negativePrompt',
+  'stylePrompt',
   'width',
   'height',
   'steps',
@@ -132,6 +161,9 @@ const importedGenerateParamKeys = <String>{
   'seed',
   'smea',
   'smeaDyn',
+  'ucPreset',
+  'qualityToggle',
+  'variety',
 };
 
 enum ImageMetadataKind { novelAi, stableDiffusion, comfyUi, unknown }
@@ -152,6 +184,7 @@ class ImageMetadataReport {
   final ImageMetadataKind kind;
   final String software;
   final ImportedGenerateParams imported;
+  final List<CharCaptionItem> characterCaptions;
   final List<ImageMetadataEntry> entries;
   final Map<String, String> rawMetadata;
   final String rawText;
@@ -161,6 +194,7 @@ class ImageMetadataReport {
     required this.kind,
     required this.software,
     required this.imported,
+    this.characterCaptions = const [],
     required this.entries,
     required this.rawMetadata,
     required this.rawText,
@@ -425,21 +459,30 @@ ImportedGenerateParams parseImportedGenerateParams(
   } catch (_) {
     comment = const {};
   }
-  final modelValues = naiModels.map((item) => item.value).toSet();
   final samplerValues = naiSamplers.map((item) => item.value).toSet();
   final modelCandidate = comment['model'] is String
       ? comment['model'] as String
       : metadata['Source'];
-  final prompt = metadata['Description'] ??
+  final v4Prompt = _mapValue(comment['v4_prompt']);
+  final v4PromptCaption = _mapValue(v4Prompt?['caption']);
+  final v4Negative = _mapValue(comment['v4_negative_prompt']);
+  final v4NegativeCaption = _mapValue(v4Negative?['caption']);
+  final prompt = _nonEmpty(v4PromptCaption?['base_caption']?.toString()) ??
+      metadata['Description'] ??
       (comment['prompt'] is String ? comment['prompt'] as String : null);
+  final negativePrompt =
+      _nonEmpty(v4NegativeCaption?['base_caption']?.toString()) ??
+          (comment['uc'] is String ? _nonEmpty(comment['uc'] as String) : null);
+  final isNovelAi = '${metadata['Software'] ?? ''} ${metadata['Source'] ?? ''}'
+          .toLowerCase()
+          .contains('novelai') ||
+      v4Prompt != null;
 
   return ImportedGenerateParams(
-    model: modelCandidate != null && modelValues.contains(modelCandidate)
-        ? modelCandidate
-        : null,
+    model: _naiModel(modelCandidate),
     positivePrompt: _nonEmpty(prompt),
-    negativePrompt:
-        comment['uc'] is String ? _nonEmpty(comment['uc'] as String) : null,
+    negativePrompt: negativePrompt,
+    stylePrompt: isNovelAi ? '' : null,
     width: _intValue(comment['width']),
     height: _intValue(comment['height']),
     steps: _intValue(comment['steps']),
@@ -455,7 +498,77 @@ ImportedGenerateParams parseImportedGenerateParams(
     seed: _intValue(comment['seed']),
     smea: comment['sm'] is bool ? comment['sm'] as bool : null,
     smeaDyn: comment['sm_dyn'] is bool ? comment['sm_dyn'] as bool : null,
+    ucPreset: isNovelAi ? 3 : null,
+    qualityToggle: isNovelAi ? false : null,
+    variety: isNovelAi ? comment['skip_cfg_above_sigma'] == 58 : null,
   );
+}
+
+Map<String, dynamic>? _mapValue(Object? value) =>
+    value is Map ? Map<String, dynamic>.from(value) : null;
+
+String? _naiModel(Object? value) {
+  if (value is! String) return null;
+  if (naiModels.any((item) => item.value == value)) return value;
+  final name = value.toLowerCase();
+  if (name.contains('furry') && name.contains('v3')) {
+    return 'nai-diffusion-furry-3';
+  }
+  if (name.contains('v4.5') || name.contains('v4 5')) {
+    return name.contains('curated')
+        ? 'nai-diffusion-4-5-curated'
+        : 'nai-diffusion-4-5-full';
+  }
+  if (name.contains('v4')) {
+    return name.contains('curated')
+        ? 'nai-diffusion-4-curated'
+        : 'nai-diffusion-4-full';
+  }
+  if (name.contains('v3')) return 'nai-diffusion-3';
+  return null;
+}
+
+List<CharCaptionItem> parseNovelAiCharacterCaptions(
+    Map<String, String> metadata) {
+  Map<String, dynamic> comment = const {};
+  try {
+    final decoded =
+        jsonDecode(metadata['Comment'] ?? metadata['comment'] ?? '{}');
+    if (decoded is Map) comment = Map<String, dynamic>.from(decoded);
+  } catch (_) {
+    return const [];
+  }
+  final prompt = _mapValue(comment['v4_prompt']);
+  final caption = _mapValue(prompt?['caption']);
+  final negative = _mapValue(comment['v4_negative_prompt']);
+  final negativeCaption = _mapValue(negative?['caption']);
+  final positives = caption?['char_captions'] is List
+      ? caption!['char_captions'] as List
+      : const [];
+  final negatives = negativeCaption?['char_captions'] is List
+      ? negativeCaption!['char_captions'] as List
+      : const [];
+  final useCoords = prompt?['use_coords'] == true;
+  final output = <CharCaptionItem>[];
+  for (var index = 0; index < positives.length && output.length < 6; index++) {
+    final item = _mapValue(positives[index]);
+    final value = _nonEmpty(item?['char_caption']?.toString());
+    if (value == null) continue;
+    final negativeItem =
+        index < negatives.length ? _mapValue(negatives[index]) : null;
+    final centers =
+        item?['centers'] is List ? item!['centers'] as List : const [];
+    final center = centers.isNotEmpty ? _mapValue(centers.first) : null;
+    output.add(CharCaptionItem(
+      prompt: value,
+      negativePrompt:
+          _nonEmpty(negativeItem?['char_caption']?.toString()) ?? '',
+      useCoords: useCoords,
+      x: _doubleValue(center?['x']) ?? 0.5,
+      y: _doubleValue(center?['y']) ?? 0.5,
+    ));
+  }
+  return output;
 }
 
 String? _nonEmpty(String? value) {
@@ -1043,6 +1156,7 @@ ImageMetadataReport inspectImageMetadata(Map<String, String> metadata) {
       kind: ImageMetadataKind.novelAi,
       software: software.isEmpty ? 'NovelAI' : software,
       imported: parseImportedGenerateParams(normalized),
+      characterCaptions: parseNovelAiCharacterCaptions(normalized),
       entries: [
         if (description != null)
           ImageMetadataEntry(
