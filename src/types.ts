@@ -1062,6 +1062,63 @@ export interface StylePromptPreset {
   previewImages?: StylePromptPreviewImage[];
 }
 
+export type ReferencePresetKind = "vibe" | "precise";
+
+/** Durable, named reference image stored under the app's userData directory.
+ * The JSON shape intentionally matches the mobile .nairp manifest so archives
+ * can move between desktop, Android and iOS without conversion. */
+export interface ReferencePreset {
+  id: string;
+  name: string;
+  group: string;
+  kind: ReferencePresetKind;
+  filePath: string;
+  fileUrl: string;
+  createdAt: string;
+  infoExtracted: number;
+  strength: number;
+  preciseType: PreciseReferenceType;
+  fidelity: number;
+  informationExtracted: number;
+  width: number;
+  height: number;
+}
+
+export interface ReferencePresetLibrary {
+  groups: string[];
+  presets: ReferencePreset[];
+}
+
+export interface ReferencePresetSaveRequest {
+  name: string;
+  group?: string;
+  kind: ReferencePresetKind;
+  base64: string;
+  extension?: string;
+  infoExtracted?: number;
+  strength?: number;
+  preciseType?: PreciseReferenceType;
+  fidelity?: number;
+  informationExtracted?: number;
+  width?: number;
+  height?: number;
+}
+
+export interface ReferencePresetExportRequest {
+  presetId?: string;
+  group?: string;
+}
+
+export interface ReferencePresetOperationResult {
+  ok: boolean;
+  message?: string;
+  library?: ReferencePresetLibrary;
+  preset?: ReferencePreset;
+  base64?: string;
+  path?: string;
+  count?: number;
+}
+
 export interface StylePromptPreviewImage {
   id: string;
   name: string;
@@ -1275,6 +1332,23 @@ export interface NaiDesktopApi {
   deleteStylePromptPresetImages: (
     presetId: string,
   ) => Promise<{ ok: boolean }>;
+  listReferencePresets: () => Promise<ReferencePresetLibrary>;
+  saveReferencePreset: (
+    request: ReferencePresetSaveRequest,
+  ) => Promise<ReferencePresetOperationResult>;
+  readReferencePreset: (
+    presetId: string,
+  ) => Promise<ReferencePresetOperationResult>;
+  deleteReferencePreset: (
+    presetId: string,
+  ) => Promise<ReferencePresetOperationResult>;
+  createReferencePresetGroup: (
+    name: string,
+  ) => Promise<ReferencePresetOperationResult>;
+  importReferencePresets: () => Promise<ReferencePresetOperationResult>;
+  exportReferencePresets: (
+    request?: ReferencePresetExportRequest,
+  ) => Promise<ReferencePresetOperationResult>;
   artistLabPickTarget: () => Promise<{
     filePath: string;
     fileUrl: string;

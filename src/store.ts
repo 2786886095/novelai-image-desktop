@@ -517,11 +517,12 @@ function buildExtras(state: AppState): GenerateExtras {
       infoExtracted,
       strength,
     })),
-    preciseReferences: state.preciseReferences.map(({ base64, type, strength, fidelity }) => ({
+    preciseReferences: state.preciseReferences.map(({ base64, type, strength, fidelity, informationExtracted }) => ({
       base64,
       type,
       strength,
       fidelity,
+      informationExtracted,
     })),
     charCaptions: state.charCaptions.map(({ prompt, negativePrompt, useCoords, x, y }) => ({
       prompt,

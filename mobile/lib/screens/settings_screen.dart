@@ -199,7 +199,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ? '${settingsText.updateAvailable} v${state.updateInfo?.latestVersion}'
                   : settingsText.versionUpdate),
               subtitle: Text(state.updateInfo?.error != null
-                  ? '${settingsText.checkFailed}: ${state.updateInfo?.error}'
+                  ? settingsText.checkFailed
                   : '${settingsText.currentVersion} v$appVersion'),
               trailing: state.updateInfo?.hasUpdate == true &&
                       state.updateInfo?.releaseUrl != null

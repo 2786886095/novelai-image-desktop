@@ -26,6 +26,11 @@ import {
 } from "./data/prompt-templates";
 import { Button, IconText, AppPortal, Toggle, NumberInput, SliderInput, SecretInput } from "./components/ui";
 import { Icon } from "./components/icons";
+import ReferencePresetManager, {
+  ReferencePresetQuickSaveDialog,
+  referencePresetTextFor,
+  type QuickPresetSource,
+} from "./ReferencePresetManager";
 import { isScrollInsideFloatingMenu } from "./floating-menu";
 import { desktopUiFormat, desktopUiText, getChromeText, getGeneratePanelText, getLocalizedTabItems, getSettingsSectionText, getSettingsShellText, getTokenGuideText, localizedDesktopOptionLabel, SUPPORTED_APP_LANGUAGES } from "./i18n";
 import {
@@ -731,6 +736,9 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
   const setToast = useAppStore((state) => state.setToast);
   const model = useAppStore((state) => state.params.model);
   const isV45 = model.includes("4-5");
+  const presetText = referencePresetTextFor(language);
+  const [showPresetLibrary, setShowPresetLibrary] = useState(false);
+  const [quickSaveSource, setQuickSaveSource] = useState<QuickPresetSource | null>(null);
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
 
@@ -781,7 +789,10 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
       <div className="modal vibe-modal">
         <header>
           <h2>{t("reference.title")}</h2>
-          <button onClick={onClose}>×</button>
+          <div className="vibe-header-actions">
+            <Button onClick={() => setShowPresetLibrary(true)}>{presetText.open}</Button>
+            <button onClick={onClose}>×</button>
+          </div>
         </header>
         <div className="vibe-body">
           <h3 className="vibe-section-title">{t("reference.vibeTitle")}</h3>
@@ -807,6 +818,9 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
                   onChange={(v) => updateVibeImage(img.id, { strength: v })}
                 />
               </div>
+              <button className="vibe-save-preset" title={presetText.quickSave} onClick={() => setQuickSaveSource({ kind: "vibe", previewUrl: img.previewUrl, base64: img.base64, infoExtracted: img.infoExtracted, strength: img.strength })}>
+                ☆
+              </button>
               <button className="vibe-remove" title={t("reference.remove")} onClick={() => removeVibeImage(img.id)}>
                 ×
               </button>
@@ -850,6 +864,14 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
                   step={0.01}
                   onChange={(v) => updatePreciseReference(ref.id, { fidelity: v })}
                 />
+                <SliderInput
+                  label={presetText.info}
+                  value={ref.informationExtracted ?? 1}
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  onChange={(v) => updatePreciseReference(ref.id, { informationExtracted: v })}
+                />
                 {(() => {
                   const rec = recommendPreciseSize(ref.srcWidth, ref.srcHeight);
                   if (!rec) return null;
@@ -866,6 +888,9 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
                   );
                 })()}
               </div>
+              <button className="vibe-save-preset" title={presetText.quickSave} onClick={() => setQuickSaveSource({ kind: "precise", previewUrl: ref.previewUrl, base64: ref.base64, preciseType: ref.type, strength: ref.strength, fidelity: ref.fidelity, informationExtracted: ref.informationExtracted ?? 1, width: ref.srcWidth, height: ref.srcHeight })}>
+                ☆
+              </button>
               <button className="vibe-remove" title={t("reference.remove")} onClick={() => removePreciseReference(ref.id)}>
                 ×
               </button>
@@ -909,6 +934,19 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
         </footer>
       </div>
       </div>
+      {showPresetLibrary && (
+        <ReferencePresetManager
+          modal
+          onBack={() => setShowPresetLibrary(false)}
+          onApplied={() => setShowPresetLibrary(false)}
+        />
+      )}
+      {quickSaveSource && (
+        <ReferencePresetQuickSaveDialog
+          source={quickSaveSource}
+          onClose={() => setQuickSaveSource(null)}
+        />
+      )}
     </AppPortal>
   );
 }

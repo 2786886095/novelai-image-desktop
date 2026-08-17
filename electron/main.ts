@@ -79,6 +79,15 @@ import {
   updatePromptCodex,
 } from "./ipc/prompt-codex";
 import {
+  createReferencePresetGroup,
+  deleteReferencePreset,
+  exportReferencePresets,
+  importReferencePresets,
+  listReferencePresets,
+  readReferencePreset,
+  saveReferencePreset,
+} from "./ipc/reference-presets";
+import {
   deleteStylePromptPresetImage,
   deleteStylePromptPresetImages,
   importStylePromptPresetImages,
@@ -695,6 +704,23 @@ function registerIpc() {
   );
   ipcMain.handle("stylePreset:deleteImages", (_event, presetId: string) =>
     deleteStylePromptPresetImages(presetId),
+  );
+  ipcMain.handle("referencePreset:list", () => listReferencePresets());
+  ipcMain.handle("referencePreset:save", (_event, request) =>
+    saveReferencePreset(request),
+  );
+  ipcMain.handle("referencePreset:read", (_event, presetId: string) =>
+    readReferencePreset(presetId),
+  );
+  ipcMain.handle("referencePreset:delete", (_event, presetId: string) =>
+    deleteReferencePreset(presetId),
+  );
+  ipcMain.handle("referencePreset:createGroup", (_event, name: string) =>
+    createReferencePresetGroup(name),
+  );
+  ipcMain.handle("referencePreset:import", () => importReferencePresets());
+  ipcMain.handle("referencePreset:export", (_event, request) =>
+    exportReferencePresets(request),
   );
   ipcMain.handle("settings:getReverseDefaults", () =>
     getReversePromptTemplateDefaults(),

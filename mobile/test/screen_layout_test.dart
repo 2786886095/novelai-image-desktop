@@ -9,6 +9,7 @@ import 'package:novelai_mobile/screens/ai_log_screen.dart';
 import 'package:novelai_mobile/screens/settings_screen.dart';
 import 'package:novelai_mobile/screens/tools_hub_screen.dart';
 import 'package:novelai_mobile/screens/tools_screen.dart';
+import 'package:novelai_mobile/services/update_service.dart';
 import 'package:novelai_mobile/state/app_state.dart';
 import 'package:novelai_mobile/ui/studio_theme.dart';
 import 'package:provider/provider.dart';
@@ -158,6 +159,54 @@ void main() {
     expect(find.text('支持 .nairp 预设归档'), findsOneWidget);
     expect(find.text('导入'), findsOneWidget);
     expect(find.text('导出全部'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('tools hub reference preset center fits a compact phone',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(320, 640);
+    addTearDown(tester.view.reset);
+    final state = AppState();
+    addTearDown(state.dispose);
+
+    await _pumpScreen(
+      tester,
+      state,
+      const ToolsHubScreen(),
+      'reference preset tools center',
+    );
+    await tester.tap(find.text('参考图预设'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('支持 .nairp 预设归档'), findsOneWidget);
+    expect(find.text('新建参考图预设'), findsOneWidget);
+    expect(find.text('导入'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('settings hides raw update socket errors on compact phones',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(320, 640);
+    addTearDown(tester.view.reset);
+    final state = AppState()
+      ..updateInfo = const UpdateInfo(
+        hasUpdate: false,
+        currentVersion: appVersion,
+        error: 'ClientException with SocketConnection refused, port 52702',
+      );
+    addTearDown(state.dispose);
+
+    await _pumpScreen(
+      tester,
+      state,
+      const SettingsScreen(),
+      'compact update check error',
+    );
+
+    expect(find.text('检查失败'), findsOneWidget);
+    expect(find.textContaining('SocketConnection'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

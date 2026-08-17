@@ -29,6 +29,10 @@ import type {
   TuiwenTtsRequest,
   UpdateProgressEvent,
   StylePromptPreviewImage,
+  ReferencePresetExportRequest,
+  ReferencePresetLibrary,
+  ReferencePresetOperationResult,
+  ReferencePresetSaveRequest,
 } from "../src/types";
 import type { AitagSearchRequest } from "../src/aitag";
 import type { PromptCodexSnapshot } from "../src/prompt-codex";
@@ -290,6 +294,30 @@ contextBridge.exposeInMainWorld("naiDesktop", {
     ipcRenderer.invoke("stylePreset:deleteImage", presetId, imageId),
   deleteStylePromptPresetImages: (presetId: string) =>
     ipcRenderer.invoke("stylePreset:deleteImages", presetId),
+  listReferencePresets: (): Promise<ReferencePresetLibrary> =>
+    ipcRenderer.invoke("referencePreset:list"),
+  saveReferencePreset: (
+    request: ReferencePresetSaveRequest,
+  ): Promise<ReferencePresetOperationResult> =>
+    ipcRenderer.invoke("referencePreset:save", request),
+  readReferencePreset: (
+    presetId: string,
+  ): Promise<ReferencePresetOperationResult> =>
+    ipcRenderer.invoke("referencePreset:read", presetId),
+  deleteReferencePreset: (
+    presetId: string,
+  ): Promise<ReferencePresetOperationResult> =>
+    ipcRenderer.invoke("referencePreset:delete", presetId),
+  createReferencePresetGroup: (
+    name: string,
+  ): Promise<ReferencePresetOperationResult> =>
+    ipcRenderer.invoke("referencePreset:createGroup", name),
+  importReferencePresets: (): Promise<ReferencePresetOperationResult> =>
+    ipcRenderer.invoke("referencePreset:import"),
+  exportReferencePresets: (
+    request: ReferencePresetExportRequest = {},
+  ): Promise<ReferencePresetOperationResult> =>
+    ipcRenderer.invoke("referencePreset:export", request),
   isFirstRun: () => ipcRenderer.invoke("settings:isFirstRun"),
   completeSetup: () => ipcRenderer.invoke("settings:completeSetup"),
 

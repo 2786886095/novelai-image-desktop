@@ -865,6 +865,60 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  Future<String?> saveReferencePresetFromPath(
+    String sourcePath, {
+    required ReferencePresetKind kind,
+    required String name,
+    String group = '',
+    double infoExtracted = 0.7,
+    double strength = 0.6,
+    String preciseType = 'character',
+    double fidelity = 1,
+    double informationExtracted = 1,
+  }) async {
+    final title = name.trim();
+    if (title.isEmpty) return _rt('referencePresets.nameRequired');
+    try {
+      final source = File(sourcePath);
+      if (!source.existsSync()) return _rt('referencePresets.sourceMissing');
+      final bytes = await source.readAsBytes();
+      final dimensions = decodeImageDimensions(bytes);
+      final id = _newReferencePresetId();
+      final path = await storage.persistReferencePresetImage(
+        presetId: id,
+        bytes: bytes,
+        sourcePath: sourcePath,
+      );
+      final cleanGroup = group.trim();
+      if (cleanGroup.isNotEmpty &&
+          !referencePresetGroups.contains(cleanGroup)) {
+        referencePresetGroups.add(cleanGroup);
+        referencePresetGroups.sort();
+      }
+      referencePresets.add(ReferencePreset(
+        id: id,
+        name: title,
+        group: cleanGroup,
+        kind: kind,
+        filePath: path,
+        createdAt: DateTime.now().toIso8601String(),
+        infoExtracted: infoExtracted.clamp(0, 1).toDouble(),
+        strength: strength.clamp(0, 1).toDouble(),
+        preciseType: preciseType,
+        fidelity: fidelity.clamp(0, 1).toDouble(),
+        informationExtracted: informationExtracted.clamp(0, 1).toDouble(),
+        width: dimensions.$1,
+        height: dimensions.$2,
+      ));
+      await _persistReferencePresetLibrary();
+      status = _rt('referencePresets.saved');
+      notifyListeners();
+      return null;
+    } catch (_) {
+      return _rt('referencePresets.saveFailed');
+    }
+  }
+
   Future<String?> applyReferencePreset(String id) async {
     final matches = referencePresets.where((preset) => preset.id == id);
     if (matches.isEmpty) return _rt('referencePresets.sourceMissing');
@@ -2050,7 +2104,7 @@ class AppState extends ChangeNotifier {
     updateChecking = false;
     if (manual) {
       status = updateInfo?.error != null
-          ? _rf('status.updateFailed', {'error': updateInfo!.error})
+          ? _rt('status.updateFailedShort')
           : updateInfo?.hasUpdate == true
               ? _rf(
                   'status.updateFound', {'version': updateInfo!.latestVersion})

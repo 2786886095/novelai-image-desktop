@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image/image.dart' as image_lib;
 import 'package:novelai_mobile/models/nai_models.dart';
 import 'package:novelai_mobile/references/reference_presets.dart';
 import 'package:novelai_mobile/services/storage.dart';
@@ -106,6 +107,34 @@ void main() {
     expect(state.extras.vibeImages.single.infoExtracted, 0.42);
     expect(state.extras.vibeImages.single.strength, 0.81);
     expect(base64Decode(state.extras.vibeImages.single.base64), bytes);
+  });
+
+  test('arbitrary local image can be added as a named precise preset',
+      () async {
+    final source = File('${root.path}/picked.png')
+      ..writeAsBytesSync(
+          image_lib.encodePng(image_lib.Image(width: 20, height: 30)));
+
+    expect(
+      await state.saveReferencePresetFromPath(
+        source.path,
+        kind: ReferencePresetKind.precise,
+        name: '立绘参考',
+        group: '角色',
+        preciseType: 'character&style',
+        strength: 0.74,
+        fidelity: 0.88,
+        informationExtracted: 0.92,
+      ),
+      isNull,
+    );
+    final preset = state.referencePresets.single;
+    expect(preset.name, '立绘参考');
+    expect(preset.group, '角色');
+    expect((preset.width, preset.height), (20, 30));
+    expect(preset.preciseType, 'character&style');
+    expect(preset.informationExtracted, 0.92);
+    expect(File(preset.filePath).existsSync(), isTrue);
   });
 
   test('precise preset restores type, strength, fidelity and dimensions',
