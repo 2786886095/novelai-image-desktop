@@ -191,6 +191,22 @@ void main() {
     expect(storage.lastExportedGroups, containsAll(['G1', 'G2']));
   });
 
+  test('saved preset can be moved into a new or existing group', () async {
+    state.extras.vibeImages.add(VibeTransferItem(
+      base64: base64Encode(const [3, 4, 5]),
+    ));
+    await state.saveVibeReferencePreset(0, name: '夜景', group: '常用');
+    final id = state.referencePresets.single.id;
+
+    expect(await state.moveReferencePresetToGroup(id, '待整理'), isNull);
+    expect(state.referencePresets.single.group, '待整理');
+    expect(state.referencePresetGroups, containsAll(['常用', '待整理']));
+    expect(storage.library.presets.single.group, '待整理');
+
+    expect(await state.moveReferencePresetToGroup(id, ''), isNull);
+    expect(state.referencePresets.single.group, isEmpty);
+  });
+
   test('real archive round-trip includes image bytes and all parameters',
       () async {
     PathProviderPlatform.instance = _TestPathProvider(root.path);

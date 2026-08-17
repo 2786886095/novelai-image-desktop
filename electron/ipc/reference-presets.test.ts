@@ -6,6 +6,7 @@ import {
   createReferencePresetGroup,
   deleteReferencePreset,
   listReferencePresets,
+  moveReferencePresetToGroup,
   readReferencePreset,
   saveReferencePreset,
 } from "./reference-presets";
@@ -60,6 +61,10 @@ describe("reference preset persistence", () => {
 
     const grouped = await createReferencePresetGroup("备用", root);
     expect(grouped.library?.groups).toEqual(expect.arrayContaining(["常用", "备用"]));
+
+    const moved = await moveReferencePresetToGroup(saved.preset!.id, "备用", root);
+    expect(moved.preset?.group).toBe("备用");
+    expect((await listReferencePresets(root)).presets[0]?.group).toBe("备用");
 
     const deleted = await deleteReferencePreset(saved.preset!.id, root);
     expect(deleted.ok).toBe(true);

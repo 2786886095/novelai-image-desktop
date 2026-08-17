@@ -312,6 +312,11 @@ contextBridge.exposeInMainWorld("naiDesktop", {
     name: string,
   ): Promise<ReferencePresetOperationResult> =>
     ipcRenderer.invoke("referencePreset:createGroup", name),
+  moveReferencePresetToGroup: (
+    presetId: string,
+    group: string,
+  ): Promise<ReferencePresetOperationResult> =>
+    ipcRenderer.invoke("referencePreset:moveToGroup", presetId, group),
   importReferencePresets: (): Promise<ReferencePresetOperationResult> =>
     ipcRenderer.invoke("referencePreset:import"),
   exportReferencePresets: (

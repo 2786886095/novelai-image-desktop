@@ -1345,6 +1345,10 @@ export interface NaiDesktopApi {
   createReferencePresetGroup: (
     name: string,
   ) => Promise<ReferencePresetOperationResult>;
+  moveReferencePresetToGroup: (
+    presetId: string,
+    group: string,
+  ) => Promise<ReferencePresetOperationResult>;
   importReferencePresets: () => Promise<ReferencePresetOperationResult>;
   exportReferencePresets: (
     request?: ReferencePresetExportRequest,

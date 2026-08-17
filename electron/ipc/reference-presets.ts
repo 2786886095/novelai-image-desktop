@@ -224,6 +224,31 @@ export async function createReferencePresetGroup(
   return { ok: true, library: next };
 }
 
+export async function moveReferencePresetToGroup(
+  presetId: string,
+  value: string,
+  userDataRoot?: string,
+): Promise<ReferencePresetOperationResult> {
+  const library = await listReferencePresets(userDataRoot);
+  const preset = library.presets.find((item) => item.id === presetId);
+  if (!preset) return { ok: false, message: "找不到该参考图预设。" };
+  const group = cleanText(value);
+  const next = {
+    groups: group
+      ? [...new Set([...library.groups, group])]
+      : library.groups,
+    presets: library.presets.map((item) =>
+      item.id === presetId ? { ...item, group } : item,
+    ),
+  };
+  await writeLibrary(next, userDataRoot);
+  return {
+    ok: true,
+    preset: next.presets.find((item) => item.id === presetId),
+    library: next,
+  };
+}
+
 export async function exportReferencePresets(
   request: ReferencePresetExportRequest = {},
   userDataRoot?: string,

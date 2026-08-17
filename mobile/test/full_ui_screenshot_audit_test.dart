@@ -15,6 +15,7 @@ import 'package:novelai_mobile/i18n/app_locales.dart';
 import 'package:novelai_mobile/inpaint/inpaint_mask.dart';
 import 'package:novelai_mobile/main.dart';
 import 'package:novelai_mobile/models/nai_models.dart';
+import 'package:novelai_mobile/references/reference_presets.dart';
 import 'package:novelai_mobile/screens/ai_log_screen.dart';
 import 'package:novelai_mobile/screens/aitag_gallery_screen.dart';
 import 'package:novelai_mobile/screens/batch_redraw_screen.dart';
@@ -275,6 +276,51 @@ Widget _comic(AppState state, ComicStep step) {
   return ComicScreen(onBack: () {}, controller: controller);
 }
 
+void _seedReferencePresetAuditData(AppState state) {
+  const imagePath = 'asset:assets/icon/app_icon.png';
+  state.referencePresetGroups = ['常用角色', '氛围收藏'];
+  state.referencePresets = const [
+    ReferencePreset(
+      id: 'audit-vibe-1',
+      name: '柔和月光氛围',
+      group: '氛围收藏',
+      kind: ReferencePresetKind.vibe,
+      filePath: imagePath,
+      createdAt: '2026-08-17T03:00:00.000Z',
+      infoExtracted: 0.72,
+      strength: 0.58,
+    ),
+    ReferencePreset(
+      id: 'audit-precise-1',
+      name: '银发角色设定',
+      group: '常用角色',
+      kind: ReferencePresetKind.precise,
+      filePath: imagePath,
+      createdAt: '2026-08-17T02:00:00.000Z',
+      preciseType: 'character',
+      strength: 0.9,
+      fidelity: 0.85,
+      informationExtracted: 1,
+      width: 832,
+      height: 1216,
+    ),
+    ReferencePreset(
+      id: 'audit-precise-2',
+      name: '服装与画风参考',
+      group: '',
+      kind: ReferencePresetKind.precise,
+      filePath: imagePath,
+      createdAt: '2026-08-17T01:00:00.000Z',
+      preciseType: 'character&style',
+      strength: 0.76,
+      fidelity: 0.92,
+      informationExtracted: 0.88,
+      width: 1216,
+      height: 832,
+    ),
+  ];
+}
+
 List<({String name, _SurfaceBuilder build})> _surfaces() => [
       (name: 'home', build: (_) => const HomeShell()),
       (name: 'generate', build: (_) => const GenerateScreen()),
@@ -403,6 +449,9 @@ void main() {
               ..needsNetworkOnboarding = false
               ..account = const AccountSummary(
                   hasToken: true, tierName: 'Opus', anlasBalance: 9049);
+            if (surface.name == 'reference-presets') {
+              _seedReferencePresetAuditData(state);
+            }
             final boundaryKey = GlobalKey();
             final baseTheme =
                 themeName == 'dark' ? StudioTheme.dark() : StudioTheme.light();
@@ -438,6 +487,9 @@ void main() {
             );
             await tester.pump();
             await tester.pump(const Duration(milliseconds: 180));
+            await tester.runAsync(
+                () => Future<void>.delayed(const Duration(milliseconds: 120)));
+            await tester.pump();
             expect(tester.takeException(), isNull,
                 reason: '$locale $themeName ${viewport.$1} ${surface.name}');
             final output =
@@ -465,6 +517,9 @@ void main() {
           ..needsNetworkOnboarding = false
           ..account = const AccountSummary(
               hasToken: true, tierName: 'Opus', anlasBalance: 9049);
+        if (surface.name == 'reference-presets') {
+          _seedReferencePresetAuditData(state);
+        }
         final boundaryKey = GlobalKey();
         final theme = StudioTheme.light();
         await tester.pumpWidget(
@@ -485,6 +540,9 @@ void main() {
         );
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 180));
+        await tester.runAsync(
+            () => Future<void>.delayed(const Duration(milliseconds: 120)));
+        await tester.pump();
         expect(tester.takeException(), isNull,
             reason: 'zh-CN light ${viewport.$1} ${surface.name}');
         final output =

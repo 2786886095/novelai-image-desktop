@@ -84,6 +84,7 @@ import {
   exportReferencePresets,
   importReferencePresets,
   listReferencePresets,
+  moveReferencePresetToGroup,
   readReferencePreset,
   saveReferencePreset,
 } from "./ipc/reference-presets";
@@ -179,6 +180,9 @@ import {
 
 // Launching the app while it's already running should focus the existing
 // window, not spawn a second process fighting over the same userData store.
+const uiCapturePath = process.env.NAI_UI_CAPTURE_PATH?.trim();
+const uiCaptureUserData = process.env.NAI_UI_CAPTURE_USER_DATA?.trim();
+if (uiCaptureUserData) app.setPath("userData", path.resolve(uiCaptureUserData));
 if (!app.requestSingleInstanceLock()) {
   app.quit();
   process.exit(0);
@@ -310,8 +314,38 @@ function createWindow() {
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
 
   mainWindow.once("ready-to-show", () => {
-    mainWindow?.show();
+    if (!uiCapturePath) mainWindow?.show();
   });
+
+  if (uiCapturePath) {
+    mainWindow.webContents.once("did-finish-load", () => {
+      setTimeout(async () => {
+        try {
+          await mainWindow?.webContents.executeJavaScript(`(() => {
+            const skip = [...document.querySelectorAll('button')].find((button) =>
+              (button.textContent || '').includes('跳过向导'));
+            if (skip) skip.click();
+            else document.elementFromPoint(window.innerWidth - 278, 184)?.click();
+          })()`);
+          await new Promise((resolve) => setTimeout(resolve, 1200));
+          await new Promise((resolve) => setTimeout(resolve, 450));
+          if (uiCapturePath.replaceAll("\\", "/").includes("/dark/")) {
+            await mainWindow?.webContents.executeJavaScript(
+              "document.documentElement.classList.add('theme-dark')",
+            );
+          }
+          const image = await mainWindow?.webContents.capturePage();
+          if (image) {
+            const target = path.resolve(uiCapturePath);
+            fs.mkdirSync(path.dirname(target), { recursive: true });
+            fs.writeFileSync(target, image.toPNG());
+          }
+        } finally {
+          app.quit();
+        }
+      }, 5000);
+    });
+  }
 
   mainWindow.on("closed", () => {
     mainWindow = null;
@@ -320,7 +354,15 @@ function createWindow() {
   if (isDev) {
     void mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL!);
   } else {
-    void mainWindow.loadFile(path.join(__dirname, "../../dist/index.html"));
+    const captureTheme = uiCapturePath?.replaceAll("\\", "/").includes("/dark/")
+      ? "dark"
+      : "light";
+    void mainWindow.loadFile(
+      path.join(__dirname, "../../dist/index.html"),
+      uiCapturePath
+        ? { query: { uiCapture: "referencePresets", uiTheme: captureTheme } }
+        : undefined,
+    );
   }
 }
 
@@ -718,6 +760,11 @@ function registerIpc() {
   ipcMain.handle("referencePreset:createGroup", (_event, name: string) =>
     createReferencePresetGroup(name),
   );
+  ipcMain.handle(
+    "referencePreset:moveToGroup",
+    (_event, presetId: string, group: string) =>
+      moveReferencePresetToGroup(presetId, group),
+  );
   ipcMain.handle("referencePreset:import", () => importReferencePresets());
   ipcMain.handle("referencePreset:export", (_event, request) =>
     exportReferencePresets(request),
@@ -759,7 +806,7 @@ function registerIpc() {
 }
 
 app.whenReady().then(() => {
-  pinUserDataAndMigrate();
+  if (!uiCaptureUserData) pinUserDataAndMigrate();
   readStore();
   installGlobalLogging();
   registerIpc();

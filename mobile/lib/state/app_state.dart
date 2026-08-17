@@ -968,6 +968,21 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<String?> moveReferencePresetToGroup(String id, String value) async {
+    final index = referencePresets.indexWhere((preset) => preset.id == id);
+    if (index < 0) return _rt('referencePresets.sourceMissing');
+    final group = value.trim();
+    if (group.isNotEmpty && !referencePresetGroups.contains(group)) {
+      referencePresetGroups.add(group);
+      referencePresetGroups.sort();
+    }
+    referencePresets[index] = referencePresets[index].copyWith(group: group);
+    await _persistReferencePresetLibrary();
+    status = _rt('referencePresets.moved');
+    notifyListeners();
+    return null;
+  }
+
   Future<File> exportReferencePresets({String? presetId, String? group}) {
     final selected = presetId != null
         ? referencePresets.where((preset) => preset.id == presetId).toList()

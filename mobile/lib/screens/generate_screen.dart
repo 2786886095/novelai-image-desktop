@@ -2128,24 +2128,32 @@ class _ReferenceControls extends StatelessWidget {
 
 class _ReferenceThumbnail extends StatelessWidget {
   final String path;
-  const _ReferenceThumbnail({required this.path});
+  final double dimension;
+  const _ReferenceThumbnail({required this.path, this.dimension = 64});
 
   @override
   Widget build(BuildContext context) => ClipRRect(
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(dimension > 80 ? 12 : 6),
         child: SizedBox.square(
-          dimension: 64,
-          child: path.isNotEmpty && File(path).existsSync()
-              ? Image.file(
-                  File(path),
+          dimension: dimension,
+          child: path.startsWith('asset:')
+              ? Image.asset(
+                  path.substring(6),
                   fit: BoxFit.contain,
-                  cacheWidth: 160,
+                  cacheWidth: (dimension * 2.5).round(),
                   filterQuality: FilterQuality.low,
                 )
-              : const ColoredBox(
-                  color: Colors.black12,
-                  child: Icon(Icons.broken_image_outlined),
-                ),
+              : path.isNotEmpty && File(path).existsSync()
+                  ? Image.file(
+                      File(path),
+                      fit: BoxFit.contain,
+                      cacheWidth: (dimension * 2.5).round(),
+                      filterQuality: FilterQuality.low,
+                    )
+                  : const ColoredBox(
+                      color: Colors.black12,
+                      child: Icon(Icons.broken_image_outlined),
+                    ),
         ),
       );
 }
@@ -2437,6 +2445,9 @@ class _ReferencePresetLibraryPanelState
     String t(String key) => mobileUiTextFor(language, key);
     final nameController = TextEditingController();
     final groupController = TextEditingController();
+    if (_group != _allGroups && _group != _ungrouped) {
+      groupController.text = _group;
+    }
     var kind = ReferencePresetKind.vibe;
     var infoExtracted = 0.7;
     var strength = 0.6;
@@ -2660,6 +2671,49 @@ class _ReferencePresetLibraryPanelState
     }
   }
 
+  Future<void> _movePresetToGroup(
+    BuildContext context,
+    ReferencePreset preset,
+  ) async {
+    final state = context.read<AppState>();
+    final language = state.settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
+    final value = await showModalBottomSheet<String>(
+      context: context,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (sheetContext) => ListView(
+        shrinkWrap: true,
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+        children: [
+          ListTile(
+            title: Text(t('referencePresets.moveGroup')),
+            subtitle: Text(preset.name),
+          ),
+          RadioListTile<String>(
+            value: '',
+            groupValue: preset.group,
+            title: Text(t('referencePresets.ungrouped')),
+            onChanged: (next) => Navigator.pop(sheetContext, next),
+          ),
+          for (final group in state.referencePresetGroups)
+            RadioListTile<String>(
+              value: group,
+              groupValue: preset.group,
+              title: Text(group),
+              onChanged: (next) => Navigator.pop(sheetContext, next),
+            ),
+        ],
+      ),
+    );
+    if (value == null || !context.mounted) return;
+    final error = await state.moveReferencePresetToGroup(preset.id, value);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(error ?? state.displayStatus)),
+    );
+  }
+
   Future<void> _import(BuildContext context) async {
     final state = context.read<AppState>();
     final result = await FilePicker.platform.pickFiles(
@@ -2712,6 +2766,8 @@ class _ReferencePresetLibraryPanelState
     final state = context.watch<AppState>();
     final language = state.settings.language;
     String t(String key) => mobileUiTextFor(language, key);
+    String countText(String key, int count) =>
+        t(key).replaceAll('{count}', '$count');
     final presets = state.referencePresets.where((preset) {
       final matchesGroup = _group == _allGroups ||
           (_group == _ungrouped
@@ -2720,223 +2776,423 @@ class _ReferencePresetLibraryPanelState
       return matchesGroup && (_kind == null || preset.kind == _kind);
     }).toList()
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+    Widget presetCard(ReferencePreset preset) {
+      final detail = preset.kind == ReferencePresetKind.vibe
+          ? '${t('referencePresets.vibe')} · ${preset.infoExtracted.toStringAsFixed(2)} / ${preset.strength.toStringAsFixed(2)}'
+          : '${t('referencePresets.precise')} · ${preset.preciseType} · ${preset.strength.toStringAsFixed(2)} / ${preset.fidelity.toStringAsFixed(2)}';
+      final groupName =
+          preset.group.isEmpty ? t('referencePresets.ungrouped') : preset.group;
+      return Card(
+        clipBehavior: Clip.antiAlias,
+        margin: EdgeInsets.zero,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _ReferenceThumbnail(path: preset.filePath, dimension: 104),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            preset.name,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleSmall
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                        PopupMenuButton<String>(
+                          padding: EdgeInsets.zero,
+                          onSelected: (value) {
+                            if (value == 'export') {
+                              _export(context, presetId: preset.id);
+                            } else if (value == 'delete') {
+                              state.deleteReferencePreset(preset.id);
+                            }
+                          },
+                          itemBuilder: (_) => [
+                            PopupMenuItem(
+                              value: 'export',
+                              child: ListTile(
+                                dense: true,
+                                contentPadding: EdgeInsets.zero,
+                                leading: const Icon(Icons.ios_share_outlined),
+                                title: Text(t('referencePresets.exportOne')),
+                              ),
+                            ),
+                            PopupMenuItem(
+                              value: 'delete',
+                              child: ListTile(
+                                dense: true,
+                                contentPadding: EdgeInsets.zero,
+                                leading: const Icon(Icons.delete_outline),
+                                title: Text(t('common.remove')),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: [
+                        Chip(
+                          visualDensity: VisualDensity.compact,
+                          avatar: const Icon(Icons.folder_outlined, size: 16),
+                          label: Text(groupName),
+                        ),
+                        Chip(
+                          visualDensity: VisualDensity.compact,
+                          label: Text(preset.kind == ReferencePresetKind.vibe
+                              ? t('referencePresets.vibe')
+                              : t('referencePresets.precise')),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      detail,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        FilledButton.icon(
+                          onPressed: _busy
+                              ? null
+                              : () async {
+                                  final error = await state
+                                      .applyReferencePreset(preset.id);
+                                  if (!context.mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content:
+                                          Text(error ?? state.displayStatus),
+                                    ),
+                                  );
+                                },
+                          icon: const Icon(Icons.bolt_outlined),
+                          label: Text(t('referencePresets.use')),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: _busy
+                              ? null
+                              : () => _movePresetToGroup(context, preset),
+                          icon: const Icon(Icons.drive_file_move_outline),
+                          label: Text(t('referencePresets.moveGroup')),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return SizedBox(
       height: widget.standalone
           ? double.infinity
           : MediaQuery.sizeOf(context).height * 0.9,
-      child: Column(
-        children: [
-          ListTile(
-            leading: const Icon(Icons.collections_bookmark_outlined),
-            title: Text(t('referencePresets.title')),
-            subtitle: Text(t('referencePresets.importHint')),
-            trailing: widget.showClose
-                ? IconButton(
-                    onPressed: widget.onClose ?? () => Navigator.pop(context),
-                    icon: const Icon(Icons.close),
-                  )
-                : null,
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final wide = constraints.maxWidth >= 760;
+          final selectedGroupName = _group == _allGroups
+              ? t('referencePresets.allGroups')
+              : _group == _ungrouped
+                  ? t('referencePresets.ungrouped')
+                  : _group;
+          return SingleChildScrollView(
             child: Column(
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        value: _group,
-                        isExpanded: true,
-                        decoration: InputDecoration(
-                          labelText: t('referencePresets.group'),
-                          border: const OutlineInputBorder(),
-                        ),
-                        items: [
-                          DropdownMenuItem(
-                            value: _allGroups,
-                            child: Text(t('referencePresets.allGroups')),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                  child: Card(
+                    margin: EdgeInsets.zero,
+                    color: Theme.of(context).colorScheme.secondaryContainer,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 24,
+                            backgroundColor:
+                                Theme.of(context).colorScheme.primaryContainer,
+                            child: Icon(
+                              Icons.collections_bookmark_outlined,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
                           ),
-                          DropdownMenuItem(
-                            value: _ungrouped,
-                            child: Text(t('referencePresets.ungrouped')),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  t('referencePresets.title'),
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleLarge
+                                      ?.copyWith(fontWeight: FontWeight.w800),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(t('referencePresets.importHint')),
+                                const SizedBox(height: 8),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 6,
+                                  children: [
+                                    Chip(
+                                      avatar: const Icon(Icons.image_outlined,
+                                          size: 16),
+                                      label: Text(countText(
+                                          'referencePresets.presetCount',
+                                          state.referencePresets.length)),
+                                    ),
+                                    Chip(
+                                      avatar: const Icon(Icons.folder_outlined,
+                                          size: 16),
+                                      label: Text(countText(
+                                          'referencePresets.groupCount',
+                                          state.referencePresetGroups.length)),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
                           ),
-                          for (final group in state.referencePresetGroups)
-                            DropdownMenuItem(
-                              value: group,
-                              child: Text(group),
+                          if (widget.showClose)
+                            IconButton.filledTonal(
+                              onPressed: widget.onClose ??
+                                  () => Navigator.pop(context),
+                              icon: const Icon(Icons.close),
                             ),
                         ],
-                        onChanged: (value) =>
-                            setState(() => _group = value ?? _allGroups),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    IconButton.outlined(
-                      tooltip: t('referencePresets.createGroup'),
-                      onPressed: _busy ? null : () => _createGroup(context),
-                      icon: const Icon(Icons.create_new_folder_outlined),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      ChoiceChip(
-                        label: Text(t('referencePresets.filterAll')),
-                        selected: _kind == null,
-                        onSelected: (_) => setState(() => _kind = null),
-                      ),
-                      const SizedBox(width: 6),
-                      ChoiceChip(
-                        label: Text(t('referencePresets.vibe')),
-                        selected: _kind == ReferencePresetKind.vibe,
-                        onSelected: (_) =>
-                            setState(() => _kind = ReferencePresetKind.vibe),
-                      ),
-                      const SizedBox(width: 6),
-                      ChoiceChip(
-                        label: Text(t('referencePresets.precise')),
-                        selected: _kind == ReferencePresetKind.precise,
-                        onSelected: (_) =>
-                            setState(() => _kind = ReferencePresetKind.precise),
-                      ),
-                    ],
                   ),
                 ),
-                const SizedBox(height: 8),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      FilledButton.icon(
-                        onPressed: _busy ? null : () => _addPreset(context),
-                        icon: const Icon(Icons.add_photo_alternate_outlined),
-                        label: Text(t('referencePresets.add')),
-                      ),
-                      const SizedBox(width: 8),
-                      OutlinedButton.icon(
-                        onPressed: _busy ? null : () => _import(context),
-                        icon: const Icon(Icons.file_download_outlined),
-                        label: Text(t('referencePresets.import')),
-                      ),
-                      const SizedBox(width: 8),
-                      OutlinedButton.icon(
-                        onPressed: _busy || _group == _allGroups
-                            ? null
-                            : () => _export(
-                                  context,
-                                  group: _group == _ungrouped ? '' : _group,
-                                ),
-                        icon: const Icon(Icons.folder_zip_outlined),
-                        label: Text(t('referencePresets.exportGroup')),
-                      ),
-                      const SizedBox(width: 8),
-                      OutlinedButton.icon(
-                        onPressed: _busy ? null : () => _export(context),
-                        icon: const Icon(Icons.archive_outlined),
-                        label: Text(t('referencePresets.exportAll')),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const Divider(height: 20),
-          if (_busy) const LinearProgressIndicator(),
-          Expanded(
-            child: presets.isEmpty
-                ? Center(child: Text(t('referencePresets.empty')))
-                : ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                    itemCount: presets.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
-                    itemBuilder: (context, index) {
-                      final preset = presets[index];
-                      final detail = preset.kind == ReferencePresetKind.vibe
-                          ? '${t('referencePresets.vibe')} · ${preset.infoExtracted.toStringAsFixed(2)} / ${preset.strength.toStringAsFixed(2)}'
-                          : '${t('referencePresets.precise')} · ${preset.preciseType} · ${preset.strength.toStringAsFixed(2)} / ${preset.fidelity.toStringAsFixed(2)}';
-                      return Card(
-                        margin: EdgeInsets.zero,
-                        child: Padding(
-                          padding: const EdgeInsets.all(10),
-                          child: Column(
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Card(
+                    margin: EdgeInsets.zero,
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
                             children: [
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  _ReferenceThumbnail(path: preset.filePath),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          preset.name,
-                                          style: const TextStyle(
-                                              fontWeight: FontWeight.w600),
-                                        ),
-                                        const SizedBox(height: 3),
-                                        Text(preset.group.isEmpty
-                                            ? t('referencePresets.ungrouped')
-                                            : preset.group),
-                                        Text(detail),
-                                      ],
+                              Expanded(
+                                child: DropdownButtonFormField<String>(
+                                  value: _group,
+                                  isExpanded: true,
+                                  decoration: InputDecoration(
+                                    labelText:
+                                        t('referencePresets.currentGroup'),
+                                    prefixIcon:
+                                        const Icon(Icons.folder_open_outlined),
+                                    border: const OutlineInputBorder(),
+                                  ),
+                                  items: [
+                                    DropdownMenuItem(
+                                      value: _allGroups,
+                                      child:
+                                          Text(t('referencePresets.allGroups')),
                                     ),
-                                  ),
-                                ],
+                                    DropdownMenuItem(
+                                      value: _ungrouped,
+                                      child:
+                                          Text(t('referencePresets.ungrouped')),
+                                    ),
+                                    for (final group
+                                        in state.referencePresetGroups)
+                                      DropdownMenuItem(
+                                        value: group,
+                                        child: Text(group),
+                                      ),
+                                  ],
+                                  onChanged: (value) => setState(
+                                      () => _group = value ?? _allGroups),
+                                ),
                               ),
-                              const SizedBox(height: 6),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.end,
-                                children: [
-                                  IconButton(
-                                    tooltip: t('referencePresets.exportOne'),
-                                    onPressed: _busy
-                                        ? null
-                                        : () => _export(
-                                              context,
-                                              presetId: preset.id,
-                                            ),
-                                    icon: const Icon(Icons.ios_share_outlined),
-                                  ),
-                                  IconButton(
-                                    tooltip: t('common.remove'),
-                                    onPressed: _busy
-                                        ? null
-                                        : () => state
-                                            .deleteReferencePreset(preset.id),
-                                    icon: const Icon(Icons.delete_outline),
-                                  ),
-                                  FilledButton.tonal(
-                                    onPressed: _busy
-                                        ? null
-                                        : () async {
-                                            final error = await state
-                                                .applyReferencePreset(
-                                                    preset.id);
-                                            if (!context.mounted) return;
-                                            ScaffoldMessenger.of(context)
-                                                .showSnackBar(SnackBar(
-                                              content: Text(
-                                                  error ?? state.displayStatus),
-                                            ));
-                                          },
-                                    child: Text(t('referencePresets.use')),
-                                  ),
-                                ],
+                              const SizedBox(width: 8),
+                              IconButton.filledTonal(
+                                tooltip: t('referencePresets.createGroup'),
+                                onPressed:
+                                    _busy ? null : () => _createGroup(context),
+                                icon: const Icon(
+                                    Icons.create_new_folder_outlined),
                               ),
                             ],
                           ),
-                        ),
-                      );
-                    },
+                          const SizedBox(height: 8),
+                          Text(
+                            t('referencePresets.createHint'),
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                          const SizedBox(height: 10),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              ChoiceChip(
+                                label: Text(t('referencePresets.filterAll')),
+                                selected: _kind == null,
+                                onSelected: (_) => setState(() => _kind = null),
+                              ),
+                              ChoiceChip(
+                                label: Text(t('referencePresets.vibe')),
+                                selected: _kind == ReferencePresetKind.vibe,
+                                onSelected: (_) => setState(
+                                    () => _kind = ReferencePresetKind.vibe),
+                              ),
+                              ChoiceChip(
+                                label: Text(t('referencePresets.precise')),
+                                selected: _kind == ReferencePresetKind.precise,
+                                onSelected: (_) => setState(
+                                    () => _kind = ReferencePresetKind.precise),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              if (state.referencePresets.isNotEmpty)
+                                FilledButton.icon(
+                                  onPressed:
+                                      _busy ? null : () => _addPreset(context),
+                                  icon: const Icon(
+                                      Icons.add_photo_alternate_outlined),
+                                  label: Text(t('referencePresets.add')),
+                                ),
+                              OutlinedButton.icon(
+                                onPressed:
+                                    _busy ? null : () => _import(context),
+                                icon: const Icon(Icons.file_download_outlined),
+                                label: Text(t('referencePresets.import')),
+                              ),
+                              OutlinedButton.icon(
+                                onPressed: _busy || _group == _allGroups
+                                    ? null
+                                    : () => _export(
+                                          context,
+                                          group: _group == _ungrouped
+                                              ? ''
+                                              : _group,
+                                        ),
+                                icon: const Icon(Icons.folder_zip_outlined),
+                                label: Text(t('referencePresets.exportGroup')),
+                              ),
+                              OutlinedButton.icon(
+                                onPressed:
+                                    _busy ? null : () => _export(context),
+                                icon: const Icon(Icons.archive_outlined),
+                                label: Text(t('referencePresets.exportAll')),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-          ),
-        ],
+                ),
+                if (_busy) const LinearProgressIndicator(),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 12, 18, 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          selectedGroupName,
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                      Text(countText(
+                          'referencePresets.presetCount', presets.length)),
+                    ],
+                  ),
+                ),
+                presets.isEmpty
+                    ? SizedBox(
+                        height: 220,
+                        child: Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.collections_bookmark_outlined,
+                                    size: 48,
+                                    color:
+                                        Theme.of(context).colorScheme.outline),
+                                const SizedBox(height: 10),
+                                Text(t('referencePresets.empty')),
+                                const SizedBox(height: 12),
+                                FilledButton.icon(
+                                  onPressed:
+                                      _busy ? null : () => _addPreset(context),
+                                  icon: const Icon(
+                                      Icons.add_photo_alternate_outlined),
+                                  label: Text(t('referencePresets.add')),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      )
+                    : wide
+                        ? GridView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                            gridDelegate:
+                                const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2,
+                              crossAxisSpacing: 10,
+                              mainAxisSpacing: 10,
+                              mainAxisExtent: 270,
+                            ),
+                            itemCount: presets.length,
+                            itemBuilder: (_, index) =>
+                                presetCard(presets[index]),
+                          )
+                        : ListView.separated(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                            itemCount: presets.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 10),
+                            itemBuilder: (_, index) =>
+                                presetCard(presets[index]),
+                          ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }

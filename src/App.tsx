@@ -5534,10 +5534,21 @@ function MainPage() {
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const wsLeftWidth = useAppStore((state) => state.wsLeftWidth);
   const wsRightWidth = useAppStore((state) => state.wsRightWidth);
+  const uiCaptureTheme = new URLSearchParams(window.location.search).get("uiTheme");
+
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("uiCapture") === "referencePresets") {
+      useAppStore.getState().setActiveTab("referencePresets");
+    }
+  }, []);
 
   // Apply theme class
   useEffect(() => {
     if (!settings) return;
+    if (uiCaptureTheme === "dark" || uiCaptureTheme === "light") {
+      document.documentElement.classList.toggle("theme-dark", uiCaptureTheme === "dark");
+      return;
+    }
     const resolved =
       settings.theme === "system"
         ? window.matchMedia("(prefers-color-scheme: dark)").matches
@@ -5545,7 +5556,7 @@ function MainPage() {
           : "light"
         : settings.theme;
     document.documentElement.classList.toggle("theme-dark", resolved === "dark");
-  }, [settings?.theme]);
+  }, [settings?.theme, uiCaptureTheme]);
 
   // Auto-dismiss toast
   useEffect(() => {
