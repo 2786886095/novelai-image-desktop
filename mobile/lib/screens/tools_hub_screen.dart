@@ -8,17 +8,8 @@ import 'comic_screen.dart';
 import 'aitag_gallery_screen.dart';
 import 'random_artist_lab_screen.dart';
 import 'prompt_codex_screen.dart';
-import 'generate_screen.dart' show ReferencePresetLibraryPanel;
 
-enum _ActiveTool {
-  hub,
-  comic,
-  referencePresets,
-  batchRedraw,
-  aitag,
-  randomArtist,
-  promptCodex
-}
+enum _ActiveTool { hub, comic, batchRedraw, aitag, randomArtist, promptCodex }
 
 ({String title, String subtitle}) _promptCodexTileText(String language) {
   switch (language) {
@@ -67,16 +58,6 @@ class _ToolsHubScreenState extends State<ToolsHubScreen> {
       return ComicScreen(
           onBack: () => setState(() => active = _ActiveTool.hub));
     }
-    if (active == _ActiveTool.referencePresets) {
-      return Scaffold(
-        body: SafeArea(
-          child: ReferencePresetLibraryPanel(
-            standalone: true,
-            onClose: () => setState(() => active = _ActiveTool.hub),
-          ),
-        ),
-      );
-    }
     if (active == _ActiveTool.batchRedraw) {
       return BatchRedrawScreen(
           onBack: () => setState(() => active = _ActiveTool.hub));
@@ -108,13 +89,6 @@ class _ToolsHubScreenState extends State<ToolsHubScreen> {
             title: text.comicTitle,
             subtitle: text.comicSubtitle,
             onTap: () => setState(() => active = _ActiveTool.comic),
-          ),
-          const SizedBox(height: 10),
-          _ToolTile(
-            icon: Icons.collections_bookmark_outlined,
-            title: mobileUiTextFor(language, 'referencePresets.title'),
-            subtitle: mobileUiTextFor(language, 'referencePresets.subtitle'),
-            onTap: () => setState(() => active = _ActiveTool.referencePresets),
           ),
           const SizedBox(height: 10),
           _ToolTile(

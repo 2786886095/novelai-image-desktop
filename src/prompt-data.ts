@@ -727,6 +727,7 @@ export const TAB_ITEMS = [
   { value: "convert", label: "转换", icon: "⇄", title: "中文描述转标签", desc: "自然语言转 Danbooru 标签" },
   { value: "metadata", label: "原数据", icon: "▣", title: "恢复图片原数据", desc: "查看并套用 NAI / SD / ComfyUI 图片参数" },
   { value: "tools", label: "工具", icon: "▣", title: "工具板块", desc: "漫画生成器、批量工作流" },
+  { value: "referencePresets", label: "参考预设", icon: "▧", title: "参考图预设", desc: "管理氛围迁移与精准参考图片预设" },
   { value: "records", label: "记录", icon: "▤", title: "AI 调用记录", desc: "查看反推/转换/拆分镜每次发送与返回" },
 ] as const;
 

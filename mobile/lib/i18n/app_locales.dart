@@ -2418,6 +2418,7 @@ List<String> mainDestinationLabelsFor(Object? value) {
         '轉換',
         '原始資料',
         '工具',
+        '參考預設',
         '圖庫',
         '記錄',
         '設定'
@@ -2432,6 +2433,7 @@ List<String> mainDestinationLabelsFor(Object? value) {
         'Convert',
         'Metadata',
         'Tools',
+        'Presets',
         'Gallery',
         'Logs',
         'Settings'
@@ -2446,6 +2448,7 @@ List<String> mainDestinationLabelsFor(Object? value) {
         '変換',
         '元データ',
         'ツール',
+        'プリセット',
         'ギャラリー',
         '履歴',
         '設定'
@@ -2460,6 +2463,7 @@ List<String> mainDestinationLabelsFor(Object? value) {
         '변환',
         '원본 데이터',
         '도구',
+        '프리셋',
         '갤러리',
         '기록',
         '설정'
@@ -2474,6 +2478,7 @@ List<String> mainDestinationLabelsFor(Object? value) {
         '转换',
         '原数据',
         '工具',
+        '预设',
         '图库',
         '记录',
         '设置'

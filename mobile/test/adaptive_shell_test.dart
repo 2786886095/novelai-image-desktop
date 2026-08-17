@@ -20,7 +20,19 @@ const _destinations = [
       icon: Icons.translate_outlined,
       selectedIcon: Icons.translate),
   StudioDestination(
+      label: '原数据',
+      icon: Icons.data_object_outlined,
+      selectedIcon: Icons.data_object),
+  StudioDestination(
+      label: '工具', icon: Icons.widgets_outlined, selectedIcon: Icons.widgets),
+  StudioDestination(
+      label: '预设',
+      icon: Icons.collections_bookmark_outlined,
+      selectedIcon: Icons.collections_bookmark),
+  StudioDestination(
       label: '图库', icon: Icons.photo_outlined, selectedIcon: Icons.photo),
+  StudioDestination(
+      label: '记录', icon: Icons.receipt_outlined, selectedIcon: Icons.receipt),
   StudioDestination(
       label: '设置', icon: Icons.settings_outlined, selectedIcon: Icons.settings),
 ];
@@ -31,7 +43,7 @@ Widget _app() => MaterialApp(
         onDestinationSelected: (_) {},
         destinations: _destinations,
         pages: List.generate(
-            8,
+            _destinations.length,
             (index) =>
                 ColoredBox(color: Colors.white, child: Text('page-$index'))),
       ),
@@ -45,7 +57,7 @@ Widget _focusApp(FocusNode focusNode) => MaterialApp(
         pages: [
           Scaffold(body: Center(child: TextField(focusNode: focusNode))),
           ...List.generate(
-            7,
+            _destinations.length - 1,
             (index) =>
                 ColoredBox(color: Colors.white, child: Text('page-$index')),
           ),
@@ -79,6 +91,9 @@ void main() {
     expect(
         find.byKey(const ValueKey('studio-tablet-navigation')), findsNothing);
     expect(find.text('More'), findsOneWidget);
+    expect(find.text('预设'), findsOneWidget);
+    final nav = tester.widget<NavigationBar>(find.byType(NavigationBar));
+    expect(nav.destinations, hasLength(5));
   });
 
   testWidgets('landscape phone still uses compact bottom navigation',

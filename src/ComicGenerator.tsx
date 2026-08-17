@@ -18,7 +18,6 @@ import { NovelTuiwenStudio } from "./tuiwen/NovelTuiwenStudio";
 import AitagGallery from "./AitagGallery";
 import ArtistLab from "./ArtistLab";
 import { TagComicGenerator } from "./comic/TagComicGenerator";
-import ReferencePresetManager, { referencePresetTextFor } from "./ReferencePresetManager";
 import {
   createDefaultBatchRedraw,
   NAI_MODELS,
@@ -85,13 +84,9 @@ export function ToolsHub() {
     () => promptCodexCardText(language),
     [language],
   );
-  const referencePresetText = useMemo(
-    () => referencePresetTextFor(language),
-    [language],
-  );
   const isWindows = window.naiDesktop.platform === "win32";
   const [activeTool, setActiveTool] = useState<
-    "hub" | "comic" | "redraw" | "tuiwen" | "aitag" | "artistLab" | "promptCodex" | "referencePresets"
+    "hub" | "comic" | "redraw" | "tuiwen" | "aitag" | "artistLab" | "promptCodex"
   >(() => {
     const saved = localStorage.getItem("langbai.tools.active.v1");
     return saved === "comic" ||
@@ -99,7 +94,6 @@ export function ToolsHub() {
       saved === "tuiwen" ||
       saved === "aitag" ||
       saved === "promptCodex" ||
-      saved === "referencePresets" ||
       (saved === "artistLab" && isWindows)
       ? saved
       : "hub";
@@ -129,8 +123,6 @@ export function ToolsHub() {
         <PromptCodex onBack={() => setActiveTool("hub")} />
       </Suspense>
     );
-  if (activeTool === "referencePresets")
-    return <ReferencePresetManager onBack={() => setActiveTool("hub")} />;
   if (activeTool === "artistLab" && isWindows)
     return <ArtistLab onBack={() => setActiveTool("hub")} />;
 
@@ -151,15 +143,6 @@ export function ToolsHub() {
         >
           <b>{text.comicTitle}</b>
           <span>{text.comicDesc}</span>
-          <small>{text.ready}</small>
-        </button>
-        <button
-          type="button"
-          className="tool-card ready"
-          onClick={() => setActiveTool("referencePresets")}
-        >
-          <b>{referencePresetText.title}</b>
-          <span>{referencePresetText.subtitle}</span>
           <small>{text.ready}</small>
         </button>
         <button

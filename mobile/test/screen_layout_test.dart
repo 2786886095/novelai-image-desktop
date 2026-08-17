@@ -23,6 +23,17 @@ const _screens = <({String name, Widget screen})>[
   (name: 'convert', screen: InspectScreen(kind: InspectPageKind.convert)),
   (name: 'gallery', screen: GalleryScreen()),
   (name: 'tools', screen: ToolsHubScreen()),
+  (
+    name: 'reference-presets',
+    screen: Scaffold(
+      body: SafeArea(
+        child: ReferencePresetLibraryPanel(
+          standalone: true,
+          showClose: false,
+        ),
+      ),
+    ),
+  ),
   (name: 'ai-log', screen: AiLogScreen()),
   (name: 'settings', screen: SettingsScreen()),
 ];
@@ -162,7 +173,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('tools hub reference preset center fits a compact phone',
+  testWidgets('standalone reference preset page fits a compact phone',
       (tester) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(320, 640);
@@ -173,11 +184,16 @@ void main() {
     await _pumpScreen(
       tester,
       state,
-      const ToolsHubScreen(),
-      'reference preset tools center',
+      const Scaffold(
+        body: SafeArea(
+          child: ReferencePresetLibraryPanel(
+            standalone: true,
+            showClose: false,
+          ),
+        ),
+      ),
+      'standalone reference preset page',
     );
-    await tester.tap(find.text('参考图预设'));
-    await tester.pumpAndSettle();
 
     expect(find.text('支持 .nairp 预设归档'), findsOneWidget);
     expect(find.text('新建参考图预设'), findsOneWidget);
@@ -270,6 +286,60 @@ void main() {
     expect(nav.height, 66);
     expect(
         nav.labelBehavior, NavigationDestinationLabelBehavior.onlyShowSelected);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('home shell exposes reference presets in the phone bottom bar',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.reset);
+    final state = AppState()
+      ..booted = true
+      ..needsNetworkOnboarding = false;
+    addTearDown(state.dispose);
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider.value(
+        value: state,
+        child: MaterialApp(theme: StudioTheme.light(), home: const HomeShell()),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('预设'), findsOneWidget);
+    await tester.tap(find.text('预设'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('参考图预设'), findsOneWidget);
+    expect(find.text('新建参考图预设'), findsOneWidget);
+    expect(find.byIcon(Icons.close), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('tablet places reference presets immediately after tools',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1280, 800);
+    addTearDown(tester.view.reset);
+    final state = AppState()
+      ..booted = true
+      ..needsNetworkOnboarding = false;
+    addTearDown(state.dispose);
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider.value(
+        value: state,
+        child: MaterialApp(theme: StudioTheme.light(), home: const HomeShell()),
+      ),
+    );
+    await tester.pump();
+
+    final rail = tester.widget<NavigationRail>(find.byType(NavigationRail));
+    final labels = rail.destinations
+        .map((destination) => (destination.label as Text).data)
+        .toList();
+    expect(labels.indexOf('预设'), labels.indexOf('工具') + 1);
     expect(tester.takeException(), isNull);
   });
 

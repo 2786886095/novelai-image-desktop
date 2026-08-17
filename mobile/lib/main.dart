@@ -88,6 +88,10 @@ class _HomeShellState extends State<HomeShell> {
     (icon: Icons.translate_outlined, selectedIcon: Icons.translate),
     (icon: Icons.data_object_outlined, selectedIcon: Icons.data_object),
     (icon: Icons.widgets_outlined, selectedIcon: Icons.widgets),
+    (
+      icon: Icons.collections_bookmark_outlined,
+      selectedIcon: Icons.collections_bookmark
+    ),
     (icon: Icons.photo_library_outlined, selectedIcon: Icons.photo_library),
     (icon: Icons.receipt_long_outlined, selectedIcon: Icons.receipt_long),
     (icon: Icons.settings_outlined, selectedIcon: Icons.settings),
@@ -112,6 +116,14 @@ class _HomeShellState extends State<HomeShell> {
         },
       ),
       const ToolsHubScreen(),
+      const Scaffold(
+        body: SafeArea(
+          child: ReferencePresetLibraryPanel(
+            standalone: true,
+            showClose: false,
+          ),
+        ),
+      ),
       const GalleryScreen(),
       const AiLogScreen(),
       const SettingsScreen(),
@@ -166,6 +178,6 @@ class _HomeShellState extends State<HomeShell> {
     );
     if (!mounted) return;
     await context.read<AppState>().dismissNetworkOnboarding();
-    if (openSettings == true && mounted) setState(() => _index = 10);
+    if (openSettings == true && mounted) setState(() => _index = 11);
   }
 }

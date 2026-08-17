@@ -54,6 +54,9 @@ describe("desktop i18n resources", () => {
 
   it("has complete localized labels for every main tab in every locale", () => {
     const baseValues = TAB_ITEMS.map((item) => item.value);
+    expect(baseValues.indexOf("referencePresets")).toBe(
+      baseValues.indexOf("tools") + 1,
+    );
     for (const language of SUPPORTED_APP_LANGUAGES) {
       const localized = getLocalizedTabItems(language.code);
       expect(localized.map((item) => item.value)).toEqual(baseValues);

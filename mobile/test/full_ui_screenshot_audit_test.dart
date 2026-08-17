@@ -326,6 +326,17 @@ List<({String name, _SurfaceBuilder build})> _surfaces() => [
             MetadataInspectorScreen(onBack: () {}, onOpenGenerate: () {}),
       ),
       (name: 'tools-hub', build: (_) => const ToolsHubScreen()),
+      (
+        name: 'reference-presets',
+        build: (_) => const Scaffold(
+              body: SafeArea(
+                child: ReferencePresetLibraryPanel(
+                  standalone: true,
+                  showClose: false,
+                ),
+              ),
+            ),
+      ),
       (name: 'gallery', build: (_) => const GalleryScreen()),
       (name: 'ai-log', build: (_) => const AiLogScreen()),
       (name: 'settings', build: (_) => const SettingsScreen()),

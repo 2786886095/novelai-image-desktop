@@ -128,7 +128,7 @@ export function ReferencePresetQuickSaveDialog({ source, onClose }: { source: Qu
   );
 }
 
-export default function ReferencePresetManager({ onBack, modal = false, onApplied }: { onBack: () => void; modal?: boolean; onApplied?: () => void }) {
+export default function ReferencePresetManager({ onBack, modal = false, onApplied }: { onBack?: () => void; modal?: boolean; onApplied?: () => void }) {
   const text = useText();
   const setToast = useAppStore((state) => state.setToast);
   const addVibeImage = useAppStore((state) => state.addVibeImage);
@@ -198,7 +198,7 @@ export default function ReferencePresetManager({ onBack, modal = false, onApplie
       <section className="reference-preset-hero">
         <div><h2>{text.title}</h2><p>{text.subtitle}</p></div>
         <div className="reference-preset-actions">
-          <Button onClick={onBack}>{text.back}</Button>
+          {onBack && <Button onClick={onBack}>{text.back}</Button>}
           <Button onClick={() => void runOperation(() => window.naiDesktop.importReferencePresets(), text.imported)}>{text.import}</Button>
           <Button onClick={() => void runOperation(() => window.naiDesktop.exportReferencePresets(), text.exported)}>{text.exportAll}</Button>
         </div>

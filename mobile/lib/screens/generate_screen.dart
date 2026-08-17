@@ -2407,10 +2407,12 @@ Future<void> showReferencePresetLibrary(BuildContext context) =>
 class ReferencePresetLibraryPanel extends StatefulWidget {
   final VoidCallback? onClose;
   final bool standalone;
+  final bool showClose;
   const ReferencePresetLibraryPanel({
     super.key,
     this.onClose,
     this.standalone = false,
+    this.showClose = true,
   });
 
   @override
@@ -2728,10 +2730,12 @@ class _ReferencePresetLibraryPanelState
             leading: const Icon(Icons.collections_bookmark_outlined),
             title: Text(t('referencePresets.title')),
             subtitle: Text(t('referencePresets.importHint')),
-            trailing: IconButton(
-              onPressed: widget.onClose ?? () => Navigator.pop(context),
-              icon: const Icon(Icons.close),
-            ),
+            trailing: widget.showClose
+                ? IconButton(
+                    onPressed: widget.onClose ?? () => Navigator.pop(context),
+                    icon: const Icon(Icons.close),
+                  )
+                : null,
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),

@@ -96,6 +96,11 @@ const MAIN_TAB_LOCALES: Record<AppLanguage, MainTabLocale> = {
       desc: "查看并套用 NAI / SD / ComfyUI 图片参数",
     },
     tools: { label: "工具", title: "工具板块", desc: "漫画生成器、批量工作流" },
+    referencePresets: {
+      label: "参考预设",
+      title: "参考图预设",
+      desc: "管理氛围迁移与精准参考图片预设",
+    },
     records: {
       label: "记录",
       title: "AI 调用记录",
@@ -135,6 +140,11 @@ const MAIN_TAB_LOCALES: Record<AppLanguage, MainTabLocale> = {
       desc: "查看並套用 NAI / SD / ComfyUI 圖片參數",
     },
     tools: { label: "工具", title: "工具板塊", desc: "漫畫生成器、批次工作流" },
+    referencePresets: {
+      label: "參考預設",
+      title: "參考圖預設",
+      desc: "管理氛圍轉移與精準參考圖片預設",
+    },
     records: {
       label: "記錄",
       title: "AI 呼叫記錄",
@@ -181,6 +191,11 @@ const MAIN_TAB_LOCALES: Record<AppLanguage, MainTabLocale> = {
       label: "Tools",
       title: "Tool Hub",
       desc: "Comic generator and batch workflows",
+    },
+    referencePresets: {
+      label: "Presets",
+      title: "Reference Presets",
+      desc: "Manage vibe transfer and precise-reference image presets",
     },
     records: {
       label: "Logs",
@@ -229,6 +244,11 @@ const MAIN_TAB_LOCALES: Record<AppLanguage, MainTabLocale> = {
       title: "ツールハブ",
       desc: "漫画生成器とバッチワークフロー",
     },
+    referencePresets: {
+      label: "参照プリセット",
+      title: "参照画像プリセット",
+      desc: "雰囲気転送と精密参照画像のプリセットを管理",
+    },
     records: {
       label: "履歴",
       title: "AI 呼び出し履歴",
@@ -275,6 +295,11 @@ const MAIN_TAB_LOCALES: Record<AppLanguage, MainTabLocale> = {
       label: "도구",
       title: "도구 허브",
       desc: "만화 생성기와 배치 워크플로",
+    },
+    referencePresets: {
+      label: "참조 프리셋",
+      title: "참조 이미지 프리셋",
+      desc: "분위기 전송 및 정밀 참조 이미지 프리셋 관리",
     },
     records: {
       label: "기록",

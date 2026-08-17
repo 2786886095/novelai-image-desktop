@@ -5561,14 +5561,14 @@ function MainPage() {
       <MenuBar openSettings={() => setShowSettings(true)} />
       <TabBar />
       <div
-        className={clsx("workspace", (activeTab === "metadata" || activeTab === "tools" || activeTab === "records") && "workspace-tools")}
+        className={clsx("workspace", (activeTab === "metadata" || activeTab === "tools" || activeTab === "referencePresets" || activeTab === "records") && "workspace-tools")}
         style={{ "--ws-left": `${wsLeftWidth}px`, "--ws-right": `${wsRightWidth}px` } as CSSProperties}
       >
         {activeTab === "metadata" ? (
           <Suspense fallback={<div className="lazy-tool-loading">{t("tool.loadingTools")}</div>}>
             <MetadataInspector onBack={() => useAppStore.getState().setActiveTab("generate")} />
           </Suspense>
-        ) : activeTab === "tools" ? null : activeTab === "records" ? (
+        ) : activeTab === "tools" || activeTab === "referencePresets" ? null : activeTab === "records" ? (
           <AiLogPanel />
         ) : (
           <>
@@ -5589,6 +5589,9 @@ function MainPage() {
           <Suspense fallback={<div className="lazy-tool-loading">{t("tool.loadingTools")}</div>}>
             <ToolsHub />
           </Suspense>
+        </div>
+        <div className={clsx("persistent-tools-view", activeTab !== "referencePresets" && "is-hidden")} aria-hidden={activeTab !== "referencePresets"}>
+          <ReferencePresetManager />
         </div>
       </div>
       <footer className="status-bar">
