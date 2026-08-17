@@ -124,6 +124,43 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('reference preset library opens without compact-phone overflow',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(320, 640);
+    addTearDown(tester.view.reset);
+    final state = AppState();
+    addTearDown(state.dispose);
+
+    await _pumpScreen(
+      tester,
+      state,
+      const GenerateScreen(),
+      'reference preset compact phone',
+    );
+    final scrollable = find.byType(Scrollable).first;
+    await tester.scrollUntilVisible(
+      find.text('参考图'),
+      260,
+      scrollable: scrollable,
+    );
+    await tester.tap(find.text('参考图'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('reference-preset-library-open')),
+      160,
+      scrollable: scrollable,
+    );
+    await tester
+        .tap(find.byKey(const ValueKey('reference-preset-library-open')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('支持 .nairp 预设归档'), findsOneWidget);
+    expect(find.text('导入'), findsOneWidget);
+    expect(find.text('导出全部'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
       'generate screen keeps a compact bar when the queue runs in landscape',
       (tester) async {

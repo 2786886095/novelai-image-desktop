@@ -385,8 +385,9 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> {
       );
 
   Widget _controls(bool landscape) {
-    final sliders = [
-      _slider(
+    final brushSlider = KeyedSubtree(
+      key: const ValueKey('inpaint-brush-size'),
+      child: _slider(
         label: t('tools.brushSize'),
         value: _brush,
         min: 8,
@@ -395,6 +396,8 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> {
         display: '${_brush.round()}',
         onChanged: (value) => setState(() => _brush = value),
       ),
+    );
+    final opacitySliders = [
       _slider(
         label: t('tools.imageOpacity'),
         value: _imageOpacity,
@@ -424,8 +427,12 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> {
             children: [
               _modeBar(),
               const SizedBox(height: 4),
+              // Brush size is a primary drawing control. Keeping it outside
+              // the adjustments expansion avoids making it look as if the
+              // option disappeared on portrait phones.
+              brushSlider,
               if (landscape)
-                ...sliders
+                ...opacitySliders
               else
                 ExpansionTile(
                   key: const ValueKey('inpaint-mask-adjustments'),
@@ -438,7 +445,7 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> {
                       'count': _strokes.length,
                     }),
                   ),
-                  children: sliders,
+                  children: opacitySliders,
                 ),
               Row(
                 children: [
@@ -562,17 +569,21 @@ class InpaintMaskPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final selected = Colors.white.withOpacity(opacity);
-    final unselected = Colors.black.withOpacity(math.min(0.32, opacity * 0.45));
-    canvas.drawRect(
-        Offset.zero & size, Paint()..color = inverted ? selected : unselected);
+    // Paint the selection on an isolated transparent layer. Deselecting
+    // strokes use BlendMode.clear, so the eraser really removes the visible
+    // mask instead of covering it with a dark brush-shaped patch.
+    canvas.saveLayer(Offset.zero & size, Paint());
+    if (inverted) {
+      canvas.drawRect(Offset.zero & size, Paint()..color = selected);
+    }
     for (final stroke in strokes) {
       if (stroke.points.isEmpty) continue;
       final width = stroke.brushFraction * size.shortestSide;
       final rawSelected = !stroke.erase;
       final visiblySelected = inverted ? !rawSelected : rawSelected;
-      final color = visiblySelected ? selected : unselected;
       final paint = Paint()
-        ..color = color
+        ..color = visiblySelected ? selected : Colors.transparent
+        ..blendMode = visiblySelected ? BlendMode.srcOver : BlendMode.clear
         ..strokeWidth = width
         ..strokeCap = StrokeCap.round
         ..strokeJoin = StrokeJoin.round
@@ -581,7 +592,13 @@ class InpaintMaskPainter extends CustomPainter {
           .map((point) => Offset(point.dx * size.width, point.dy * size.height))
           .toList(growable: false);
       if (points.length == 1) {
-        canvas.drawCircle(points.first, width / 2, Paint()..color = color);
+        canvas.drawCircle(
+          points.first,
+          width / 2,
+          Paint()
+            ..color = visiblySelected ? selected : Colors.transparent
+            ..blendMode = visiblySelected ? BlendMode.srcOver : BlendMode.clear,
+        );
       } else {
         final path = Path()..moveTo(points.first.dx, points.first.dy);
         for (final point in points.skip(1)) {
@@ -590,6 +607,7 @@ class InpaintMaskPainter extends CustomPainter {
         canvas.drawPath(path, paint);
       }
     }
+    canvas.restore();
     final pointer = cursor;
     if (pointer != null && brushFraction > 0) {
       final center = Offset(pointer.dx * size.width, pointer.dy * size.height);

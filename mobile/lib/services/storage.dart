@@ -4,6 +4,7 @@ import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:archive/archive.dart';
 import 'package:gal/gal.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -15,6 +16,7 @@ import '../i18n/runtime_text.dart';
 import '../images/png_metadata.dart';
 import '../models/nai_models.dart';
 import '../prompts/prompt_mode.dart';
+import '../references/reference_presets.dart';
 
 // Run history JSON (de)serialisation on a background isolate once the payload is
 // large, so a big library never janks the UI thread at boot or on a save. Small
@@ -40,6 +42,7 @@ class Storage {
   static const _kAitagCompatibleParams = 'aitag_compatible_params_v1';
   static const _kMetadataInspectorName = 'metadata_inspector_last_name_v1';
   static const _kMetadataInspectorPath = 'metadata_inspector_last_path_v1';
+  static const _kReferencePresetLibrary = 'reference_preset_library_v1';
 
   final _secure = const FlutterSecureStorage();
   int _saveSequence = 0;
@@ -202,6 +205,154 @@ class Storage {
     try {
       if (directory.existsSync()) await directory.delete(recursive: true);
     } catch (_) {}
+  }
+
+  Future<Directory> _referencePresetRoot() async {
+    final root = await getApplicationDocumentsDirectory();
+    final directory =
+        Directory('${root.path}${Platform.pathSeparator}reference-presets');
+    if (!directory.existsSync()) directory.createSync(recursive: true);
+    return directory;
+  }
+
+  String _safeReferencePresetId(String value) {
+    final safe = value.trim().replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+    return safe.isEmpty ? 'reference' : safe.substring(0, min(96, safe.length));
+  }
+
+  String _referenceImageExtension(String sourcePath) {
+    final lower = sourcePath.toLowerCase();
+    if (lower.endsWith('.jpeg')) return '.jpeg';
+    if (lower.endsWith('.jpg')) return '.jpg';
+    if (lower.endsWith('.webp')) return '.webp';
+    return '.png';
+  }
+
+  Future<ReferencePresetLibrary> getReferencePresetLibrary() async {
+    final raw = (await _prefs).getString(_kReferencePresetLibrary);
+    if (raw == null || raw.isEmpty) return const ReferencePresetLibrary();
+    try {
+      final library = ReferencePresetLibrary.fromJson(
+          jsonDecode(raw) as Map<String, dynamic>);
+      final valid = library.presets
+          .where((preset) => File(preset.filePath).existsSync())
+          .toList();
+      if (valid.length != library.presets.length) {
+        final repaired =
+            ReferencePresetLibrary(groups: library.groups, presets: valid);
+        await setReferencePresetLibrary(repaired);
+        return repaired;
+      }
+      return library;
+    } catch (_) {
+      return const ReferencePresetLibrary();
+    }
+  }
+
+  Future<void> setReferencePresetLibrary(
+          ReferencePresetLibrary library) async =>
+      (await _prefs)
+          .setString(_kReferencePresetLibrary, jsonEncode(library.toJson()));
+
+  Future<String> persistReferencePresetImage({
+    required String presetId,
+    required List<int> bytes,
+    String sourcePath = '',
+  }) async {
+    final root = await _referencePresetRoot();
+    final extension = _referenceImageExtension(sourcePath);
+    final file = File(
+        '${root.path}${Platform.pathSeparator}${_safeReferencePresetId(presetId)}$extension');
+    await file.writeAsBytes(bytes, flush: true);
+    return file.path;
+  }
+
+  Future<void> deleteReferencePresetImage(ReferencePreset preset) async {
+    final root = (await _referencePresetRoot()).absolute.path;
+    final candidate = File(preset.filePath).absolute.path;
+    if (!candidate.startsWith('$root${Platform.pathSeparator}')) return;
+    try {
+      final file = File(candidate);
+      if (file.existsSync()) await file.delete();
+    } catch (_) {}
+  }
+
+  Future<File> exportReferencePresetArchive({
+    required List<ReferencePreset> presets,
+    required List<String> groups,
+    String label = 'reference-presets',
+  }) async {
+    final archive = Archive();
+    final manifestPresets = <Map<String, dynamic>>[];
+    for (var index = 0; index < presets.length; index++) {
+      final preset = presets[index];
+      final source = File(preset.filePath);
+      if (!source.existsSync()) continue;
+      final bytes = await source.readAsBytes();
+      final asset =
+          'images/${index + 1}${_referenceImageExtension(source.path)}';
+      archive.addFile(ArchiveFile(asset, bytes.length, bytes));
+      manifestPresets.add({...preset.toJson(), 'filePath': '', 'asset': asset});
+    }
+    final manifest = utf8.encode(jsonEncode({
+      'format': 'langbai-reference-presets',
+      'version': 1,
+      'groups': groups,
+      'presets': manifestPresets,
+    }));
+    archive.addFile(ArchiveFile('manifest.json', manifest.length, manifest));
+    final encoded = ZipEncoder().encode(archive);
+    if (encoded == null) throw StateError('Unable to encode preset archive.');
+    final temp = await getTemporaryDirectory();
+    final safeLabel = sanitizeFolderName(label)
+        .replaceAll(RegExp(r'\s+'), '-')
+        .replaceAll(RegExp(r'[^a-zA-Z0-9_\-\u4e00-\u9fff]'), '_');
+    final file = File(
+        '${temp.path}${Platform.pathSeparator}${safeLabel.isEmpty ? 'reference-presets' : safeLabel}-${DateTime.now().millisecondsSinceEpoch}.nairp');
+    await file.writeAsBytes(encoded, flush: true);
+    return file;
+  }
+
+  Future<ReferencePresetImport> importReferencePresetArchive(
+      String filePath) async {
+    final bytes = await File(filePath).readAsBytes();
+    final archive = ZipDecoder().decodeBytes(bytes, verify: true);
+    final manifestFile = archive.findFile('manifest.json');
+    if (manifestFile == null || !manifestFile.isFile) {
+      throw const FormatException('Missing preset manifest.');
+    }
+    final manifest =
+        jsonDecode(utf8.decode(List<int>.from(manifestFile.content as List)))
+            as Map<String, dynamic>;
+    if (manifest['format'] != 'langbai-reference-presets' ||
+        (manifest['version'] as num?)?.toInt() != 1) {
+      throw const FormatException('Unsupported preset archive.');
+    }
+    final groups = (manifest['groups'] as List<dynamic>? ?? const [])
+        .map((value) => value.toString().trim())
+        .where((value) => value.isNotEmpty)
+        .toSet()
+        .toList();
+    final imported = <ReferencePreset>[];
+    for (final raw in manifest['presets'] as List<dynamic>? ?? const []) {
+      if (raw is! Map) continue;
+      final json = Map<String, dynamic>.from(raw);
+      final asset = json['asset']?.toString() ?? '';
+      if (!asset.startsWith('images/') || asset.contains('..')) continue;
+      final imageFile = archive.findFile(asset);
+      if (imageFile == null || !imageFile.isFile) continue;
+      final original = ReferencePreset.fromJson(json);
+      if (original.name.isEmpty) continue;
+      final id =
+          '${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(1 << 30)}';
+      final storedPath = await persistReferencePresetImage(
+        presetId: id,
+        bytes: List<int>.from(imageFile.content as List),
+        sourcePath: asset,
+      );
+      imported.add(original.copyWith(id: id, filePath: storedPath));
+    }
+    return ReferencePresetImport(groups: groups, presets: imported);
   }
 
   Future<Set<String>?> getAitagCompatibleParams() async {

@@ -80,6 +80,7 @@ void main() {
     await tester.pump();
 
     expect(find.textContaining('1 笔'), findsOneWidget);
+    expect(find.byKey(const ValueKey('inpaint-brush-size')), findsOneWidget);
     final done = tester.widget<TextButton>(
       find.byKey(const ValueKey('inpaint-mask-done')),
     );

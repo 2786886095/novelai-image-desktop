@@ -14,6 +14,7 @@ import '../prompts/capsule_data.dart';
 import '../prompts/prompt_mode.dart';
 import '../prompts/prompt_templates.dart';
 import '../prompts/prompt_tools.dart';
+import '../references/reference_presets.dart';
 import '../services/nai_api.dart';
 import '../services/proxy_http_client.dart';
 import '../services/storage.dart';
@@ -57,6 +58,8 @@ class AppState extends ChangeNotifier {
   AccountSummary account = const AccountSummary(hasToken: false);
   List<HistoryItem> history = [];
   List<HistoryGroup> groups = [];
+  List<String> referencePresetGroups = [];
+  List<ReferencePreset> referencePresets = [];
   HistoryItem? current;
   WorkingImage? workbenchImage;
   ImportedGenerateParams? workbenchImportedParams;
@@ -213,6 +216,16 @@ class AppState extends ChangeNotifier {
       reverseHistory = await storage.getReverseHistory();
       unawaited(pruneMissingReverseHistory());
       groups = await storage.getGroups();
+      try {
+        final referenceLibrary = await storage.getReferencePresetLibrary();
+        referencePresetGroups = List.of(referenceLibrary.groups);
+        referencePresets = List.of(referenceLibrary.presets);
+      } catch (_) {
+        // Reference presets are optional user data. A damaged legacy entry
+        // must never prevent the generator from reaching its first frame.
+        referencePresetGroups = [];
+        referencePresets = [];
+      }
       selectedGroupId = groups.any(
         (group) => group.id == settings.activeHistoryGroupId,
       )
@@ -739,6 +752,212 @@ class AppState extends ChangeNotifier {
     extras.preciseReferences.removeAt(index);
     notifyListeners();
     _scheduleGenerationQuote();
+  }
+
+  Future<void> _persistReferencePresetLibrary() =>
+      storage.setReferencePresetLibrary(ReferencePresetLibrary(
+        groups: referencePresetGroups,
+        presets: referencePresets,
+      ));
+
+  Future<String?> addReferencePresetGroup(String value) async {
+    final group = value.trim();
+    if (group.isEmpty) return _rt('referencePresets.groupRequired');
+    if (!referencePresetGroups.contains(group)) {
+      referencePresetGroups.add(group);
+      referencePresetGroups.sort();
+      await _persistReferencePresetLibrary();
+      notifyListeners();
+    }
+    return null;
+  }
+
+  String _newReferencePresetId() =>
+      '${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(1 << 30)}';
+
+  Future<String?> saveVibeReferencePreset(
+    int index, {
+    required String name,
+    String group = '',
+  }) async {
+    if (index < 0 || index >= extras.vibeImages.length) {
+      return _rt('referencePresets.sourceMissing');
+    }
+    final title = name.trim();
+    if (title.isEmpty) return _rt('referencePresets.nameRequired');
+    try {
+      final item = extras.vibeImages[index];
+      final id = _newReferencePresetId();
+      final path = await storage.persistReferencePresetImage(
+        presetId: id,
+        bytes: base64Decode(item.base64),
+        sourcePath: item.sourcePath,
+      );
+      final cleanGroup = group.trim();
+      if (cleanGroup.isNotEmpty &&
+          !referencePresetGroups.contains(cleanGroup)) {
+        referencePresetGroups.add(cleanGroup);
+        referencePresetGroups.sort();
+      }
+      referencePresets.add(ReferencePreset(
+        id: id,
+        name: title,
+        group: cleanGroup,
+        kind: ReferencePresetKind.vibe,
+        filePath: path,
+        createdAt: DateTime.now().toIso8601String(),
+        infoExtracted: item.infoExtracted,
+        strength: item.strength,
+      ));
+      await _persistReferencePresetLibrary();
+      status = _rt('referencePresets.saved');
+      notifyListeners();
+      return null;
+    } catch (_) {
+      return _rt('referencePresets.saveFailed');
+    }
+  }
+
+  Future<String?> savePreciseReferencePreset(
+    int index, {
+    required String name,
+    String group = '',
+  }) async {
+    if (index < 0 || index >= extras.preciseReferences.length) {
+      return _rt('referencePresets.sourceMissing');
+    }
+    final title = name.trim();
+    if (title.isEmpty) return _rt('referencePresets.nameRequired');
+    try {
+      final item = extras.preciseReferences[index];
+      final id = _newReferencePresetId();
+      final path = await storage.persistReferencePresetImage(
+        presetId: id,
+        bytes: base64Decode(item.base64),
+        sourcePath: item.sourcePath,
+      );
+      final cleanGroup = group.trim();
+      if (cleanGroup.isNotEmpty &&
+          !referencePresetGroups.contains(cleanGroup)) {
+        referencePresetGroups.add(cleanGroup);
+        referencePresetGroups.sort();
+      }
+      referencePresets.add(ReferencePreset(
+        id: id,
+        name: title,
+        group: cleanGroup,
+        kind: ReferencePresetKind.precise,
+        filePath: path,
+        createdAt: DateTime.now().toIso8601String(),
+        preciseType: item.type,
+        strength: item.strength,
+        fidelity: item.fidelity,
+        informationExtracted: item.informationExtracted,
+        width: item.width,
+        height: item.height,
+      ));
+      await _persistReferencePresetLibrary();
+      status = _rt('referencePresets.saved');
+      notifyListeners();
+      return null;
+    } catch (_) {
+      return _rt('referencePresets.saveFailed');
+    }
+  }
+
+  Future<String?> applyReferencePreset(String id) async {
+    final matches = referencePresets.where((preset) => preset.id == id);
+    if (matches.isEmpty) return _rt('referencePresets.sourceMissing');
+    final preset = matches.first;
+    if (preset.kind == ReferencePresetKind.vibe &&
+        extras.vibeImages.length >= 16) {
+      return _rt('status.vibeLimit');
+    }
+    try {
+      final file = File(preset.filePath);
+      if (!file.existsSync()) throw const FileSystemException();
+      final encoded = base64Encode(await file.readAsBytes());
+      if (preset.kind == ReferencePresetKind.vibe) {
+        extras.vibeImages.add(VibeTransferItem(
+          base64: encoded,
+          infoExtracted: preset.infoExtracted,
+          strength: preset.strength,
+          sourcePath: preset.filePath,
+        ));
+      } else {
+        extras.preciseReferences.add(PreciseReferenceItem(
+          base64: encoded,
+          type: preset.preciseType,
+          strength: preset.strength,
+          fidelity: preset.fidelity,
+          informationExtracted: preset.informationExtracted,
+          sourcePath: preset.filePath,
+          width: preset.width,
+          height: preset.height,
+        ));
+      }
+      status = _rt('referencePresets.applied');
+      notifyListeners();
+      _scheduleGenerationQuote();
+      return null;
+    } catch (_) {
+      return _rt('referencePresets.sourceMissing');
+    }
+  }
+
+  Future<void> deleteReferencePreset(String id) async {
+    final index = referencePresets.indexWhere((preset) => preset.id == id);
+    if (index < 0) return;
+    final preset = referencePresets.removeAt(index);
+    await storage.deleteReferencePresetImage(preset);
+    await _persistReferencePresetLibrary();
+    notifyListeners();
+  }
+
+  Future<File> exportReferencePresets({String? presetId, String? group}) {
+    final selected = presetId != null
+        ? referencePresets.where((preset) => preset.id == presetId).toList()
+        : group != null
+            ? referencePresets.where((preset) => preset.group == group).toList()
+            : List<ReferencePreset>.of(referencePresets);
+    final selectedGroups = group != null
+        ? <String>[if (group.isNotEmpty) group]
+        : presetId != null
+            ? <String>[
+                for (final preset in selected)
+                  if (preset.group.isNotEmpty) preset.group
+              ]
+            : List<String>.of(referencePresetGroups);
+    return storage.exportReferencePresetArchive(
+      presets: selected,
+      groups: selectedGroups.toSet().toList(),
+      label: presetId != null
+          ? selected.firstOrNull?.name ?? 'reference-preset'
+          : group?.isNotEmpty == true
+              ? group!
+              : 'reference-presets',
+    );
+  }
+
+  Future<String?> importReferencePresets(String filePath) async {
+    try {
+      final imported = await storage.importReferencePresetArchive(filePath);
+      for (final group in imported.groups) {
+        if (!referencePresetGroups.contains(group)) {
+          referencePresetGroups.add(group);
+        }
+      }
+      referencePresetGroups.sort();
+      referencePresets.addAll(imported.presets);
+      await _persistReferencePresetLibrary();
+      status = _rf('referencePresets.imported', {
+        'count': imported.presets.length,
+      });
+      notifyListeners();
+      return null;
+    } catch (_) {
+      return _rt('referencePresets.importFailed');
+    }
   }
 
   Future<void> runTextOrImage() async {
