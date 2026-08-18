@@ -233,8 +233,8 @@ export const DEFAULT_I2I_PARAMS: I2IParams = {
 /** Vibe Transfer / Precise Reference — slim type sent over IPC */
 export interface VibeTransferItem {
   base64: string; // pure base64 without data-URL prefix
-  infoExtracted: number; // 0.0 – 1.0  (0.7 vibe / 1.0 precise)
-  strength: number; // 0.0 – 1.0
+  infoExtracted: number; // 0.0 – 1.0, new Vibe Transfer default 1.0
+  strength: number; // 0.0 – 1.0, new Vibe Transfer default 1.0
 }
 
 /** Renderer store representation (adds id + preview for display) */
@@ -251,9 +251,8 @@ export interface PreciseReferenceItem {
   type: PreciseReferenceType; // -> director_reference_descriptions[].caption.base_caption
   strength: number; // 0.0 – 1.0 -> director_reference_strength_values
   fidelity: number; // 0.0 – 1.0 -> secondary = round(1 - fidelity, 2)
-  /** 0.0 – 1.0 -> director_reference_information_extracted. High = pull more
-   * detail (incl. high-frequency texture like screentone/hatching). Optional for
-   * backward compat; defaults to 1.0 in the main process. */
+  /** Legacy persisted compatibility field. NovelAI's Precise Reference UI only
+   * exposes Strength and Fidelity; the main process always sends 1.0. */
   informationExtracted?: number;
 }
 

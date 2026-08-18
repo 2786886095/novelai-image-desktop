@@ -7,8 +7,10 @@ import '../comic/comic_controller.dart';
 import '../comic/comic_models.dart';
 import '../i18n/app_locales.dart';
 import '../models/nai_models.dart';
+import '../references/reference_presets.dart';
 import '../state/app_state.dart';
 import '../ui/studio_shell.dart';
+import 'generate_screen.dart';
 
 int _snapNaiDimension(int value) =>
     ((value.clamp(64, 1600) / 64).round() * 64).clamp(64, 1600).toInt();
@@ -407,12 +409,29 @@ class _PreciseReferenceSection extends StatelessWidget {
     return _SectionCard(
       title: t('comic.preciseHeading'),
       subtitle: t('comic.preciseHint'),
-      action: OutlinedButton.icon(
-        onPressed: refs.length >= 5
-            ? null
-            : () => _run(context, controller.pickPreciseReferences),
-        icon: const Icon(Icons.add_photo_alternate_outlined),
-        label: Text(t('comic.preciseUpload')),
+      action: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          OutlinedButton.icon(
+            onPressed: refs.length >= 5
+                ? null
+                : () => showReferencePresetLibrary(
+                      context,
+                      allowedKind: ReferencePresetKind.precise,
+                      onApplyPreset: controller.addPreciseReferencePreset,
+                    ),
+            icon: const Icon(Icons.collections_bookmark_outlined),
+            label: Text(t('referencePresets.title')),
+          ),
+          OutlinedButton.icon(
+            onPressed: refs.length >= 5
+                ? null
+                : () => _run(context, controller.pickPreciseReferences),
+            icon: const Icon(Icons.add_photo_alternate_outlined),
+            label: Text(t('comic.preciseUpload')),
+          ),
+        ],
       ),
       child: refs.isEmpty
           ? Text(t('comic.preciseEmpty'))
@@ -1453,6 +1472,16 @@ class _SectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final heading = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: Theme.of(context).textTheme.titleMedium),
+        if (subtitle != null) ...[
+          const SizedBox(height: 2),
+          Text(subtitle!, style: Theme.of(context).textTheme.bodySmall),
+        ],
+      ],
+    );
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
@@ -1460,25 +1489,26 @@ class _SectionCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+            LayoutBuilder(
+              builder: (context, constraints) {
+                if (action != null && constraints.maxWidth < 520) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text(title,
-                          style: Theme.of(context).textTheme.titleMedium),
-                      if (subtitle != null) ...[
-                        const SizedBox(height: 2),
-                        Text(subtitle!,
-                            style: Theme.of(context).textTheme.bodySmall),
-                      ],
+                      heading,
+                      const SizedBox(height: 10),
+                      Align(alignment: Alignment.centerLeft, child: action!),
                     ],
-                  ),
-                ),
-                if (action != null) action!,
-              ],
+                  );
+                }
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: heading),
+                    if (action != null) action!,
+                  ],
+                );
+              },
             ),
             const SizedBox(height: 14),
             child,

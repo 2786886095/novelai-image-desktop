@@ -790,7 +790,7 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
         <header>
           <h2>{t("reference.title")}</h2>
           <div className="vibe-header-actions">
-            <Button onClick={() => setShowPresetLibrary(true)}>{presetText.open}</Button>
+            <Button className="vibe-open-presets" onClick={() => setShowPresetLibrary(true)}>{presetText.open}</Button>
             <button onClick={onClose}>×</button>
           </div>
         </header>
@@ -801,22 +801,28 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
             <div className="vibe-row" key={img.id}>
               <img src={img.previewUrl} className="vibe-thumb" alt={t("reference.thumbAlt")} />
               <div className="vibe-row-sliders">
-                <SliderInput
-                  label={t("reference.infoExtracted")}
-                  value={img.infoExtracted}
-                  min={0}
-                  max={1}
-                  step={0.01}
-                  onChange={(v) => updateVibeImage(img.id, { infoExtracted: v })}
-                />
-                <SliderInput
-                  label={t("reference.strength")}
-                  value={img.strength}
-                  min={0}
-                  max={1}
-                  step={0.01}
-                  onChange={(v) => updateVibeImage(img.id, { strength: v })}
-                />
+                <div className="reference-control">
+                  <SliderInput
+                    label={t("reference.infoExtracted")}
+                    value={img.infoExtracted}
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    onChange={(v) => updateVibeImage(img.id, { infoExtracted: v })}
+                  />
+                  <p>{t("reference.infoExtractedHelp")}</p>
+                </div>
+                <div className="reference-control">
+                  <SliderInput
+                    label={t("reference.strength")}
+                    value={img.strength}
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    onChange={(v) => updateVibeImage(img.id, { strength: v })}
+                  />
+                  <p>{t("reference.vibeStrengthHelp")}</p>
+                </div>
               </div>
               <button className="vibe-save-preset" title={presetText.quickSave} onClick={() => setQuickSaveSource({ kind: "vibe", previewUrl: img.previewUrl, base64: img.base64, infoExtracted: img.infoExtracted, strength: img.strength })}>
                 ☆
@@ -847,31 +853,30 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
                       <option key={type} value={type}>{t(`reference.type.${type}`)}</option>
                     ))}
                   </select>
+                  <small className="reference-control-help">{t("reference.typeHelp")}</small>
                 </label>
-                <SliderInput
-                  label={t("reference.preciseStrength")}
-                  value={ref.strength}
-                  min={0}
-                  max={1}
-                  step={0.01}
-                  onChange={(v) => updatePreciseReference(ref.id, { strength: v })}
-                />
-                <SliderInput
-                  label={t("reference.fidelity")}
-                  value={ref.fidelity}
-                  min={0}
-                  max={1}
-                  step={0.01}
-                  onChange={(v) => updatePreciseReference(ref.id, { fidelity: v })}
-                />
-                <SliderInput
-                  label={presetText.info}
-                  value={ref.informationExtracted ?? 1}
-                  min={0}
-                  max={1}
-                  step={0.01}
-                  onChange={(v) => updatePreciseReference(ref.id, { informationExtracted: v })}
-                />
+                <div className="reference-control">
+                  <SliderInput
+                    label={t("reference.preciseStrength")}
+                    value={ref.strength}
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    onChange={(v) => updatePreciseReference(ref.id, { strength: v })}
+                  />
+                  <p>{t("reference.preciseStrengthHelp")}</p>
+                </div>
+                <div className="reference-control">
+                  <SliderInput
+                    label={t("reference.fidelity")}
+                    value={ref.fidelity}
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    onChange={(v) => updatePreciseReference(ref.id, { fidelity: v })}
+                  />
+                  <p>{t("reference.fidelityHelp")}</p>
+                </div>
                 {(() => {
                   const rec = recommendPreciseSize(ref.srcWidth, ref.srcHeight);
                   if (!rec) return null;
@@ -906,7 +911,7 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
                 accept="image/png,image/jpeg,image/webp"
                 onChange={(e) => {
                   const f = e.target.files?.[0];
-                  if (f) { handleVibeFile(f, 0.7, 0.6); e.target.value = ""; }
+                  if (f) { handleVibeFile(f, 1, 1); e.target.value = ""; }
                 }}
               />
             </label>
@@ -1179,6 +1184,19 @@ function PromptAndParams({
   const stylePresetMenuRef = useRef<HTMLDivElement>(null);
   const [stylePresetMenuPosition, setStylePresetMenuPosition] = useState({ left: 0, top: 0, width: 240 });
   const [styleNamePrompt, setStyleNamePrompt] = useState<{ stylePrompt: string; fallbackName: string } | null>(null);
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("uiCapture") !== "referenceModal") return;
+    const store = useAppStore.getState();
+    const base64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+    const previewUrl = `data:image/png;base64,${base64}`;
+    if (store.vibeImages.length === 0) {
+      store.addVibeImage({ id: "ui-capture-vibe", previewUrl, base64, infoExtracted: 1, strength: 1 });
+    }
+    if (store.preciseReferences.length === 0) {
+      store.addPreciseReference({ id: "ui-capture-precise", previewUrl, base64, type: "character", strength: 1, fidelity: 1, informationExtracted: 1, srcWidth: 1024, srcHeight: 1536 });
+    }
+    setShowVibeModal(true);
+  }, []);
   // Original prompt text kept per tab so a translation can be reverted (还原).
   const [translateBackup, setTranslateBackup] = useState<Record<string, string>>({});
   // The override (inpaint) fully replaces params.positivePrompt as the source
@@ -2029,7 +2047,7 @@ function FeatureCostCard({
     const timer = window.setTimeout(() => {
       const quoteParams = { ...params, stylePrompt: "", positivePrompt: "quote", negativePrompt: "" };
       const extras = {
-        vibeImages: Array.from({ length: vibeCount }, () => ({ base64: "", infoExtracted: 0.7, strength: 0.5 })),
+        vibeImages: Array.from({ length: vibeCount }, () => ({ base64: "", infoExtracted: 1, strength: 1 })),
         charCaptions: [],
         preciseReferences: Array.from({ length: preciseCount }, () => ({
           base64: "",

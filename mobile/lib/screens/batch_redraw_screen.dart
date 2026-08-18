@@ -9,8 +9,10 @@ import '../batch/batch_redraw_controller.dart';
 import '../batch/batch_redraw_models.dart';
 import '../i18n/app_locales.dart';
 import '../models/nai_models.dart';
+import '../references/reference_presets.dart';
 import '../state/app_state.dart';
 import '../ui/studio_shell.dart';
+import 'generate_screen.dart';
 
 class BatchRedrawScreen extends StatelessWidget {
   final VoidCallback? onBack;
@@ -452,6 +454,16 @@ class _BatchReferenceEditor extends StatelessWidget {
     }
   }
 
+  Future<void> _openPresets(
+    BuildContext context, {
+    ReferencePresetKind? kind,
+  }) =>
+      showReferencePresetLibrary(
+        context,
+        allowedKind: kind,
+        onApplyPreset: context.read<BatchRedrawController>().addReferencePreset,
+      );
+
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<BatchRedrawController>();
@@ -469,6 +481,15 @@ class _BatchReferenceEditor extends StatelessWidget {
         }),
       ),
       children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            onPressed: () => _openPresets(context),
+            icon: const Icon(Icons.collections_bookmark_outlined),
+            label: Text(t('referencePresets.title')),
+          ),
+        ),
+        const SizedBox(height: 8),
         for (var index = 0; index < project.vibeImages.length; index++)
           _BatchVibeRow(index: index),
         Align(

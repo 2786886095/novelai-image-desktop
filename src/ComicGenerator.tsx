@@ -18,6 +18,10 @@ import { NovelTuiwenStudio } from "./tuiwen/NovelTuiwenStudio";
 import AitagGallery from "./AitagGallery";
 import ArtistLab from "./ArtistLab";
 import { TagComicGenerator } from "./comic/TagComicGenerator";
+import ReferencePresetManager, {
+  referencePresetTextFor,
+  type ReferencePresetApplyPayload,
+} from "./ReferencePresetManager";
 import {
   createDefaultBatchRedraw,
   NAI_MODELS,
@@ -30,6 +34,7 @@ import {
   type NAIModel,
   type NAISampler,
   type PreciseReferenceItem,
+  type ReferencePreset,
   type ReversePromptMode,
   type UcPreset,
   type VibeTransferItem,
@@ -495,11 +500,15 @@ function BatchParamFields({
 function BatchPrecisePicker({
   refs,
   onChange,
+  onOpenPresets,
 }: {
   refs: PreciseReferenceItem[];
   onChange: (next: PreciseReferenceItem[]) => void;
+  onOpenPresets: () => void;
 }) {
   const { t } = useBatchLocale();
+  const language = useAppStore((state) => state.settings?.language);
+  const presetText = referencePresetTextFor(language);
   async function add(files: FileList | null) {
     if (!files) return;
     const next = [...refs];
@@ -519,19 +528,22 @@ function BatchPrecisePicker({
     <div className="batch-ref-block">
       <div className="batch-ref-head">
         <span>{t("batch.ref.preciseTitle")}</span>
-        <label className="btn btn-secondary btn-sm">
-          {t("batch.ref.add")}
-          <input
-            type="file"
-            hidden
-            multiple
-            accept="image/*"
-            onChange={(e) => {
-              void add(e.target.files);
-              e.target.value = "";
-            }}
-          />
-        </label>
+        <div className="batch-ref-head-actions">
+          <Button variant="secondary" onClick={onOpenPresets}>{presetText.open}</Button>
+          <label className="btn btn-secondary btn-sm">
+            {t("batch.ref.add")}
+            <input
+              type="file"
+              hidden
+              multiple
+              accept="image/*"
+              onChange={(e) => {
+                void add(e.target.files);
+                e.target.value = "";
+              }}
+            />
+          </label>
+        </div>
       </div>
       {refs.length === 0 ? (
         <p className="settings-hint" style={{ margin: 0 }}>
@@ -621,17 +633,21 @@ function BatchPrecisePicker({
 function BatchVibePicker({
   vibes,
   onChange,
+  onOpenPresets,
 }: {
   vibes: VibeTransferItem[];
   onChange: (next: VibeTransferItem[]) => void;
+  onOpenPresets: () => void;
 }) {
   const { t } = useBatchLocale();
+  const language = useAppStore((state) => state.settings?.language);
+  const presetText = referencePresetTextFor(language);
   async function add(files: FileList | null) {
     if (!files) return;
     const next = [...vibes];
     for (const f of Array.from(files)) {
       if (!f.type.startsWith("image/")) continue;
-      next.push({ base64: await toBase64(f), infoExtracted: 1, strength: 0.6 });
+      next.push({ base64: await toBase64(f), infoExtracted: 1, strength: 1 });
     }
     onChange(next);
   }
@@ -639,19 +655,22 @@ function BatchVibePicker({
     <div className="batch-ref-block">
       <div className="batch-ref-head">
         <span>{t("batch.ref.vibeTitle")}</span>
-        <label className="btn btn-secondary btn-sm">
-          {t("batch.ref.add")}
-          <input
-            type="file"
-            hidden
-            multiple
-            accept="image/*"
-            onChange={(e) => {
-              void add(e.target.files);
-              e.target.value = "";
-            }}
-          />
-        </label>
+        <div className="batch-ref-head-actions">
+          <Button variant="secondary" onClick={onOpenPresets}>{presetText.open}</Button>
+          <label className="btn btn-secondary btn-sm">
+            {t("batch.ref.add")}
+            <input
+              type="file"
+              hidden
+              multiple
+              accept="image/*"
+              onChange={(e) => {
+                void add(e.target.files);
+                e.target.value = "";
+              }}
+            />
+          </label>
+        </div>
       </div>
       {vibes.length === 0 ? (
         <p className="settings-hint" style={{ margin: 0 }}>
@@ -730,6 +749,7 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
   const { t, f } = useBatchLocale();
 
   const [aiFilling, setAiFilling] = useState(false);
+  const [showReferencePresets, setShowReferencePresets] = useState(false);
   const [lightbox, setLightbox] = useState<string | null>(null);
   const [activeItemId, setActiveItemId] = useState<string | null>(null);
   const [resultFilter, setResultFilter] = useState<
@@ -843,6 +863,37 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
       seededFromMain: true,
     });
     setToast(t("batch.toast.synced"));
+  }
+
+  async function applyReferencePreset(
+    preset: ReferencePreset,
+    payload: ReferencePresetApplyPayload,
+  ) {
+    if (preset.kind === "vibe") {
+      patch({
+        vibeImages: [
+          ...project.vibeImages,
+          {
+            base64: payload.base64,
+            infoExtracted: preset.infoExtracted,
+            strength: preset.strength,
+          },
+        ],
+      });
+    } else {
+      patch({
+        preciseReferences: [
+          ...project.preciseReferences,
+          {
+            base64: payload.base64,
+            type: preset.preciseType,
+            strength: preset.strength,
+            fidelity: preset.fidelity,
+            informationExtracted: 1,
+          },
+        ],
+      });
+    }
   }
 
   async function importImages(files: FileList | null) {
@@ -1417,10 +1468,12 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
           <BatchPrecisePicker
             refs={project.preciseReferences}
             onChange={(next) => patch({ preciseReferences: next })}
+            onOpenPresets={() => setShowReferencePresets(true)}
           />
           <BatchVibePicker
             vibes={project.vibeImages}
             onChange={(next) => patch({ vibeImages: next })}
+            onOpenPresets={() => setShowReferencePresets(true)}
           />
           <div className="redraw-step-footer">
             <span>{t("batch.params.footer")}</span>
@@ -1964,6 +2017,14 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
             ×
           </button>
         </div>
+      )}
+      {showReferencePresets && (
+        <ReferencePresetManager
+          modal
+          onBack={() => setShowReferencePresets(false)}
+          onApplied={() => setShowReferencePresets(false)}
+          onApplyPreset={applyReferencePreset}
+        />
       )}
     </main>
   );

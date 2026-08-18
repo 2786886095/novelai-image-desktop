@@ -9,7 +9,7 @@ class NaiOption {
 }
 
 const appName = 'Langbai NovelAI Studio';
-const appVersion = '1.7.0';
+const appVersion = '1.7.1';
 
 const naiModels = <NaiOption>[
   NaiOption('NAI Diffusion 4.5 Full (Full model)', 'nai-diffusion-4-5-full'),
@@ -288,8 +288,8 @@ class VibeTransferItem {
   final String sourcePath;
   const VibeTransferItem({
     required this.base64,
-    this.infoExtracted = 0.7,
-    this.strength = 0.6,
+    this.infoExtracted = 1,
+    this.strength = 1,
     this.sourcePath = '',
   });
   Map<String, dynamic> toJson() => {
@@ -309,8 +309,8 @@ class VibeTransferItem {
   factory VibeTransferItem.fromJson(Map<String, dynamic> json) =>
       VibeTransferItem(
         base64: json['base64']?.toString() ?? '',
-        infoExtracted: (json['infoExtracted'] as num?)?.toDouble() ?? 0.7,
-        strength: (json['strength'] as num?)?.toDouble() ?? 0.6,
+        infoExtracted: (json['infoExtracted'] as num?)?.toDouble() ?? 1,
+        strength: (json['strength'] as num?)?.toDouble() ?? 1,
         sourcePath: json['sourcePath']?.toString() ?? '',
       );
 }

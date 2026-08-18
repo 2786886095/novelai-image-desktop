@@ -12,6 +12,7 @@ import 'package:share_plus/share_plus.dart';
 import '../billing/anlas.dart';
 import '../i18n/app_locales.dart';
 import '../models/nai_models.dart';
+import '../references/reference_presets.dart';
 import '../services/background_queue_service.dart';
 import '../state/app_state.dart';
 import 'comic_models.dart';
@@ -295,6 +296,40 @@ class ComicController extends ChangeNotifier {
       ));
     }
     changed('comic.preciseImported');
+  }
+
+  Future<String?> addPreciseReferencePreset(ReferencePreset preset) async {
+    if (preset.kind != ReferencePresetKind.precise) return 'Unsupported preset';
+    if (project.preciseReferences.length >= 5) return _t('comic.preciseHint');
+    try {
+      final source = File(preset.filePath);
+      final bytes = await source.readAsBytes();
+      final documents = await getApplicationDocumentsDirectory();
+      final root = Directory(
+          '${documents.path}${Platform.pathSeparator}comic-projects${Platform.pathSeparator}${project.id}${Platform.pathSeparator}references');
+      await root.create(recursive: true);
+      final sourceExtension = preset.filePath.split('.').last.toLowerCase();
+      final extension =
+          const {'png', 'jpg', 'jpeg', 'webp'}.contains(sourceExtension)
+              ? sourceExtension
+              : 'png';
+      final id = comicId();
+      final file = File('${root.path}${Platform.pathSeparator}$id.$extension');
+      await file.writeAsBytes(bytes, flush: true);
+      project.preciseReferences.add(ComicReferenceAsset(
+        id: id,
+        name: preset.name,
+        filePath: file.path,
+        type: preset.preciseType,
+        strength: preset.strength,
+        fidelity: preset.fidelity,
+        informationExtracted: 1,
+      ));
+      changed('comic.preciseImported');
+      return null;
+    } catch (_) {
+      return _t('error.readReference');
+    }
   }
 
   Future<void> removePreciseReference(String referenceId) async {

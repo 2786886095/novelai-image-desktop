@@ -2180,6 +2180,7 @@ class _VibeReferenceRow extends StatelessWidget {
               children: [
                 _Slider(
                   label: t('generate.infoExtracted'),
+                  help: t('generate.infoExtractedHelp'),
                   value: item.infoExtracted,
                   min: 0,
                   max: 1,
@@ -2190,6 +2191,7 @@ class _VibeReferenceRow extends StatelessWidget {
                 ),
                 _Slider(
                   label: t('generate.referenceStrength'),
+                  help: t('generate.vibeStrengthHelp'),
                   value: item.strength,
                   min: 0,
                   max: 1,
@@ -2268,8 +2270,17 @@ class _PreciseReferenceRow extends StatelessWidget {
                       ? null
                       : state.updatePreciseReference(index, type: value),
                 ),
+                const SizedBox(height: 5),
+                Text(
+                  t('generate.referenceTypeHelp'),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        height: 1.35,
+                      ),
+                ),
                 _Slider(
                   label: t('generate.strengthLabel'),
+                  help: t('generate.preciseStrengthHelp'),
                   value: item.strength,
                   min: 0,
                   max: 1,
@@ -2280,6 +2291,7 @@ class _PreciseReferenceRow extends StatelessWidget {
                 ),
                 _Slider(
                   label: t('generate.fidelityLabel'),
+                  help: t('generate.fidelityHelp'),
                   value: item.fidelity,
                   min: 0,
                   max: 1,
@@ -2404,23 +2416,38 @@ Future<void> _saveReferencePreset(
   );
 }
 
-Future<void> showReferencePresetLibrary(BuildContext context) =>
+typedef ReferencePresetApplyCallback = Future<String?> Function(
+  ReferencePreset preset,
+);
+
+Future<void> showReferencePresetLibrary(
+  BuildContext context, {
+  ReferencePresetApplyCallback? onApplyPreset,
+  ReferencePresetKind? allowedKind,
+}) =>
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (_) => const ReferencePresetLibraryPanel(),
+      builder: (_) => ReferencePresetLibraryPanel(
+        onApplyPreset: onApplyPreset,
+        allowedKind: allowedKind,
+      ),
     );
 
 class ReferencePresetLibraryPanel extends StatefulWidget {
   final VoidCallback? onClose;
   final bool standalone;
   final bool showClose;
+  final ReferencePresetApplyCallback? onApplyPreset;
+  final ReferencePresetKind? allowedKind;
   const ReferencePresetLibraryPanel({
     super.key,
     this.onClose,
     this.standalone = false,
     this.showClose = true,
+    this.onApplyPreset,
+    this.allowedKind,
   });
 
   @override
@@ -2436,6 +2463,12 @@ class _ReferencePresetLibraryPanelState
   ReferencePresetKind? _kind;
   bool _busy = false;
 
+  @override
+  void initState() {
+    super.initState();
+    _kind = widget.allowedKind;
+  }
+
   Future<void> _addPreset(BuildContext context) async {
     final picked = await ImagePicker()
         .pickImage(source: ImageSource.gallery, imageQuality: 100);
@@ -2448,11 +2481,10 @@ class _ReferencePresetLibraryPanelState
     if (_group != _allGroups && _group != _ungrouped) {
       groupController.text = _group;
     }
-    var kind = ReferencePresetKind.vibe;
-    var infoExtracted = 0.7;
-    var strength = 0.6;
+    var kind = widget.allowedKind ?? ReferencePresetKind.vibe;
+    var infoExtracted = 1.0;
+    var strength = 1.0;
     var fidelity = 1.0;
-    var informationExtracted = 1.0;
     var preciseType = 'character';
     final result = await showDialog<ReferencePresetKind>(
       context: context,
@@ -2488,28 +2520,29 @@ class _ReferencePresetLibraryPanelState
                     ),
                   ),
                   const SizedBox(height: 10),
-                  DropdownButtonFormField<ReferencePresetKind>(
-                    value: kind,
-                    isExpanded: true,
-                    decoration: InputDecoration(
-                      labelText: t('referencePresets.kind'),
-                      border: const OutlineInputBorder(),
+                  if (widget.allowedKind == null)
+                    DropdownButtonFormField<ReferencePresetKind>(
+                      value: kind,
+                      isExpanded: true,
+                      decoration: InputDecoration(
+                        labelText: t('referencePresets.kind'),
+                        border: const OutlineInputBorder(),
+                      ),
+                      items: [
+                        DropdownMenuItem(
+                          value: ReferencePresetKind.vibe,
+                          child: Text(t('referencePresets.vibe')),
+                        ),
+                        DropdownMenuItem(
+                          value: ReferencePresetKind.precise,
+                          child: Text(t('referencePresets.precise')),
+                        ),
+                      ],
+                      onChanged: (value) => setDialogState(() {
+                        kind = value ?? ReferencePresetKind.vibe;
+                        strength = 1;
+                      }),
                     ),
-                    items: [
-                      DropdownMenuItem(
-                        value: ReferencePresetKind.vibe,
-                        child: Text(t('referencePresets.vibe')),
-                      ),
-                      DropdownMenuItem(
-                        value: ReferencePresetKind.precise,
-                        child: Text(t('referencePresets.precise')),
-                      ),
-                    ],
-                    onChanged: (value) => setDialogState(() {
-                      kind = value ?? ReferencePresetKind.vibe;
-                      strength = kind == ReferencePresetKind.precise ? 1 : 0.6;
-                    }),
-                  ),
                   if (kind == ReferencePresetKind.precise) ...[
                     const SizedBox(height: 10),
                     DropdownButtonFormField<String>(
@@ -2534,11 +2567,25 @@ class _ReferencePresetLibraryPanelState
                         () => preciseType = value ?? 'character',
                       ),
                     ),
+                    const SizedBox(height: 5),
+                    Text(
+                      t('generate.referenceTypeHelp'),
+                      style:
+                          Theme.of(dialogContext).textTheme.bodySmall?.copyWith(
+                                color: Theme.of(dialogContext)
+                                    .colorScheme
+                                    .onSurfaceVariant,
+                                height: 1.35,
+                              ),
+                    ),
                   ],
                   _Slider(
                     label: kind == ReferencePresetKind.vibe
                         ? t('generate.infoExtracted')
                         : t('generate.strengthLabel'),
+                    help: kind == ReferencePresetKind.vibe
+                        ? t('generate.infoExtractedHelp')
+                        : t('generate.preciseStrengthHelp'),
                     value: kind == ReferencePresetKind.vibe
                         ? infoExtracted
                         : strength,
@@ -2561,6 +2608,9 @@ class _ReferencePresetLibraryPanelState
                     label: kind == ReferencePresetKind.vibe
                         ? t('generate.referenceStrength')
                         : t('generate.fidelityLabel'),
+                    help: kind == ReferencePresetKind.vibe
+                        ? t('generate.vibeStrengthHelp')
+                        : t('generate.fidelityHelp'),
                     value:
                         kind == ReferencePresetKind.vibe ? strength : fidelity,
                     min: 0,
@@ -2577,18 +2627,6 @@ class _ReferencePresetLibraryPanelState
                       }
                     }),
                   ),
-                  if (kind == ReferencePresetKind.precise)
-                    _Slider(
-                      label: t('generate.infoExtracted'),
-                      value: informationExtracted,
-                      min: 0,
-                      max: 1,
-                      divisions: 100,
-                      display: informationExtracted.toStringAsFixed(2),
-                      onChanged: (value) => setDialogState(
-                        () => informationExtracted = value,
-                      ),
-                    ),
                 ],
               ),
             ),
@@ -2620,7 +2658,7 @@ class _ReferencePresetLibraryPanelState
       strength: strength,
       preciseType: preciseType,
       fidelity: fidelity,
-      informationExtracted: informationExtracted,
+      informationExtracted: 1,
     );
     nameController.dispose();
     groupController.dispose();
@@ -2773,7 +2811,11 @@ class _ReferencePresetLibraryPanelState
           (_group == _ungrouped
               ? preset.group.isEmpty
               : preset.group == _group);
-      return matchesGroup && (_kind == null || preset.kind == _kind);
+      final matchesAllowed =
+          widget.allowedKind == null || preset.kind == widget.allowedKind;
+      return matchesGroup &&
+          matchesAllowed &&
+          (_kind == null || preset.kind == _kind);
     }).toList()
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
@@ -2876,8 +2918,10 @@ class _ReferencePresetLibraryPanelState
                           onPressed: _busy
                               ? null
                               : () async {
-                                  final error = await state
-                                      .applyReferencePreset(preset.id);
+                                  final error = widget.onApplyPreset == null
+                                      ? await state
+                                          .applyReferencePreset(preset.id)
+                                      : await widget.onApplyPreset!(preset);
                                   if (!context.mounted) return;
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
@@ -3049,30 +3093,34 @@ class _ReferencePresetLibraryPanelState
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
                           const SizedBox(height: 10),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              ChoiceChip(
-                                label: Text(t('referencePresets.filterAll')),
-                                selected: _kind == null,
-                                onSelected: (_) => setState(() => _kind = null),
-                              ),
-                              ChoiceChip(
-                                label: Text(t('referencePresets.vibe')),
-                                selected: _kind == ReferencePresetKind.vibe,
-                                onSelected: (_) => setState(
-                                    () => _kind = ReferencePresetKind.vibe),
-                              ),
-                              ChoiceChip(
-                                label: Text(t('referencePresets.precise')),
-                                selected: _kind == ReferencePresetKind.precise,
-                                onSelected: (_) => setState(
-                                    () => _kind = ReferencePresetKind.precise),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
+                          if (widget.allowedKind == null) ...[
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                ChoiceChip(
+                                  label: Text(t('referencePresets.filterAll')),
+                                  selected: _kind == null,
+                                  onSelected: (_) =>
+                                      setState(() => _kind = null),
+                                ),
+                                ChoiceChip(
+                                  label: Text(t('referencePresets.vibe')),
+                                  selected: _kind == ReferencePresetKind.vibe,
+                                  onSelected: (_) => setState(
+                                      () => _kind = ReferencePresetKind.vibe),
+                                ),
+                                ChoiceChip(
+                                  label: Text(t('referencePresets.precise')),
+                                  selected:
+                                      _kind == ReferencePresetKind.precise,
+                                  onSelected: (_) => setState(() =>
+                                      _kind = ReferencePresetKind.precise),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                          ],
                           Wrap(
                             spacing: 8,
                             runSpacing: 8,
@@ -3282,6 +3330,7 @@ class _CharCard extends StatelessWidget {
 
 class _Slider extends StatelessWidget {
   final String label;
+  final String? help;
   final double value;
   final double min;
   final double max;
@@ -3290,6 +3339,7 @@ class _Slider extends StatelessWidget {
   final ValueChanged<double> onChanged;
   const _Slider(
       {required this.label,
+      this.help,
       required this.value,
       required this.min,
       required this.max,
@@ -3299,9 +3349,10 @@ class _Slider extends StatelessWidget {
   @override
   Widget build(BuildContext context) =>
       Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Text(label),
-          Text(display, style: const TextStyle(fontWeight: FontWeight.bold))
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Expanded(child: Text(label, softWrap: true)),
+          const SizedBox(width: 8),
+          Text(display, style: const TextStyle(fontWeight: FontWeight.bold)),
         ]),
         Slider(
             value: value.clamp(min, max),
@@ -3310,6 +3361,17 @@ class _Slider extends StatelessWidget {
             divisions: divisions,
             label: display,
             onChanged: onChanged),
+        if (help?.isNotEmpty == true)
+          Padding(
+            padding: const EdgeInsets.only(left: 4, right: 4, bottom: 6),
+            child: Text(
+              help!,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    height: 1.35,
+                  ),
+            ),
+          ),
       ]);
 }
 

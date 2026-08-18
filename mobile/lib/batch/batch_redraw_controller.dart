@@ -12,6 +12,7 @@ import 'package:share_plus/share_plus.dart';
 import '../billing/anlas.dart';
 import '../i18n/runtime_text.dart';
 import '../models/nai_models.dart';
+import '../references/reference_presets.dart';
 import '../services/background_queue_service.dart';
 import '../services/import_limits.dart';
 import '../services/nai_api.dart';
@@ -180,6 +181,37 @@ class BatchRedrawController extends ChangeNotifier {
         ));
       }
       changed(precise ? _rt('batch.addedPrecise') : _rt('batch.addedVibe'));
+      return null;
+    } catch (_) {
+      return _rt('error.readReference');
+    }
+  }
+
+  Future<String?> addReferencePreset(ReferencePreset preset) async {
+    try {
+      final bytes = await File(preset.filePath).readAsBytes();
+      if (preset.kind == ReferencePresetKind.precise) {
+        project.preciseReferences.add(PreciseReferenceItem(
+          base64: base64Encode(bytes),
+          sourcePath: preset.filePath,
+          type: preset.preciseType,
+          strength: preset.strength,
+          fidelity: preset.fidelity,
+          informationExtracted: 1,
+          width: preset.width,
+          height: preset.height,
+        ));
+      } else {
+        project.vibeImages.add(VibeTransferItem(
+          base64: base64Encode(bytes),
+          sourcePath: preset.filePath,
+          infoExtracted: preset.infoExtracted,
+          strength: preset.strength,
+        ));
+      }
+      changed(preset.kind == ReferencePresetKind.precise
+          ? _rt('batch.addedPrecise')
+          : _rt('batch.addedVibe'));
       return null;
     } catch (_) {
       return _rt('error.readReference');

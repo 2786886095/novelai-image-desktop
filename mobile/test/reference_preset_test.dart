@@ -66,6 +66,12 @@ class _MemoryPresetStorage extends Storage {
 }
 
 void main() {
+  test('new vibe references default information and strength to one', () {
+    const item = VibeTransferItem(base64: 'image');
+    expect(item.infoExtracted, 1);
+    expect(item.strength, 1);
+  });
+
   late Directory root;
   late _MemoryPresetStorage storage;
   late AppState state;
@@ -137,7 +143,7 @@ void main() {
     expect(File(preset.filePath).existsSync(), isTrue);
   });
 
-  test('precise preset restores type, strength, fidelity and dimensions',
+  test('precise preset restores official controls and fixes legacy info to one',
       () async {
     state.extras.preciseReferences.add(PreciseReferenceItem(
       base64: base64Encode(const [8, 9, 10]),
@@ -164,7 +170,7 @@ void main() {
     expect(restored.type, 'character&style');
     expect(restored.strength, 0.73);
     expect(restored.fidelity, 0.64);
-    expect(restored.informationExtracted, 0.91);
+    expect(restored.informationExtracted, 1);
     expect((restored.width, restored.height), (832, 1216));
   });
 

@@ -26,6 +26,21 @@ function temporaryRoot() {
 }
 
 describe("reference preset persistence", () => {
+  it("defaults new vibe preset parameters to one", async () => {
+    const root = temporaryRoot();
+    const saved = await saveReferencePreset(
+      {
+        name: "默认氛围",
+        kind: "vibe",
+        base64: Buffer.from("image").toString("base64"),
+        extension: "png",
+      },
+      root,
+    );
+
+    expect(saved.preset).toMatchObject({ infoExtracted: 1, strength: 1 });
+  });
+
   it("saves, reads, groups and deletes a local preset", async () => {
     const root = temporaryRoot();
     const image = Buffer.from("local-image-bytes");

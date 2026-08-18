@@ -11,6 +11,23 @@ import type {
 } from "./types";
 
 const EMPTY_LIBRARY: ReferencePresetLibrary = { groups: [], presets: [] };
+const ALL_REFERENCE_KINDS: ReferencePresetKind[] = ["vibe", "precise"];
+
+export interface ReferencePresetApplyPayload {
+  base64: string;
+  previewUrl: string;
+}
+
+export interface ReferencePresetManagerProps {
+  onBack?: () => void;
+  modal?: boolean;
+  onApplied?: () => void;
+  onApplyPreset?: (
+    preset: ReferencePreset,
+    payload: ReferencePresetApplyPayload,
+  ) => void | Promise<void>;
+  allowedKinds?: ReferencePresetKind[];
+}
 
 const TEXT = {
   "zh-CN": {
@@ -78,9 +95,41 @@ const TEXT = {
   },
 } as const;
 
+const REFERENCE_PRESET_HELP = {
+  "zh-CN": {
+    infoLabel: "信息提取量（Information Extracted）",
+    strengthLabel: "参考强度（Reference Strength）",
+    preciseStrengthLabel: "参考强度（Strength）",
+    fidelityLabel: "保真度（Fidelity）",
+    typeLabel: "参考类型（Reference Type）",
+    infoHelp: "调低会先减少纹理和高频细节；调高会从参考图提取更多视觉信息。",
+    vibeStrengthHelp: "越高越接近参考图的整体氛围与画风，越低越服从文字提示词。",
+    preciseStrengthHelp: "控制精准参考对结果的影响程度；越高，参考特征越明显。",
+    fidelityHelp: "控制对参考图细节的忠实程度；越高，越严格保留参考特征。",
+    typeHelp: "选择参考角色、画风，或同时参考两者。",
+  },
+  "zh-TW": {
+    infoLabel: "資訊提取量（Information Extracted）", strengthLabel: "參考強度（Reference Strength）", preciseStrengthLabel: "參考強度（Strength）", fidelityLabel: "保真度（Fidelity）", typeLabel: "參考類型（Reference Type）",
+    infoHelp: "調低會先減少紋理和高頻細節；調高會從參考圖提取更多視覺資訊。", vibeStrengthHelp: "越高越接近參考圖的整體氛圍與畫風，越低越服從文字提示詞。", preciseStrengthHelp: "控制精準參考對結果的影響程度；越高，參考特徵越明顯。", fidelityHelp: "控制對參考圖細節的忠實程度；越高，越嚴格保留參考特徵。", typeHelp: "選擇參考角色、畫風，或同時參考兩者。",
+  },
+  "en-US": {
+    infoLabel: "Information Extracted", strengthLabel: "Reference Strength", preciseStrengthLabel: "Strength", fidelityLabel: "Fidelity", typeLabel: "Reference Type",
+    infoHelp: "Lower values discard texture and high-frequency details first; higher values extract more visual information.", vibeStrengthHelp: "Higher values follow the reference vibe and style more strongly; lower values give the text prompt more control.", preciseStrengthHelp: "Controls how strongly the precise reference influences the result; higher values make its features more prominent.", fidelityHelp: "Controls how faithfully reference details are retained; higher values preserve them more strictly.", typeHelp: "Choose whether to reference the character, the style, or both.",
+  },
+  "ja-JP": {
+    infoLabel: "情報抽出量（Information Extracted）", strengthLabel: "参照強度（Reference Strength）", preciseStrengthLabel: "参照強度（Strength）", fidelityLabel: "忠実度（Fidelity）", typeLabel: "参照タイプ（Reference Type）",
+    infoHelp: "値を下げるとテクスチャや高周波の細部から減り、上げると参照画像からより多くの視覚情報を抽出します。", vibeStrengthHelp: "高いほど参照画像の雰囲気と画風を強く反映し、低いほど文字プロンプトを優先します。", preciseStrengthHelp: "精密参照が結果へ与える影響を調整します。高いほど参照特徴が強く現れます。", fidelityHelp: "参照画像の細部をどれだけ忠実に保つか調整します。高いほど厳密に保持します。", typeHelp: "キャラクター、画風、またはその両方を参照するか選択します。",
+  },
+  "ko-KR": {
+    infoLabel: "정보 추출량(Information Extracted)", strengthLabel: "참조 강도(Reference Strength)", preciseStrengthLabel: "참조 강도(Strength)", fidelityLabel: "충실도(Fidelity)", typeLabel: "참조 유형(Reference Type)",
+    infoHelp: "값을 낮추면 텍스처와 고주파 세부 정보부터 줄고, 높이면 참고 이미지에서 더 많은 시각 정보를 추출합니다.", vibeStrengthHelp: "높을수록 참고 이미지의 분위기와 화풍을 강하게 따르고, 낮을수록 텍스트 프롬프트를 우선합니다.", preciseStrengthHelp: "정밀 참조가 결과에 미치는 영향을 조절합니다. 높을수록 참조 특징이 더 뚜렷합니다.", fidelityHelp: "참고 이미지의 세부 특징을 얼마나 충실히 유지할지 조절합니다. 높을수록 더 엄격히 보존합니다.", typeHelp: "캐릭터, 화풍 또는 둘 다 참조할지 선택합니다.",
+  },
+} as const;
+
 function useText() {
   const language = useAppStore((state) => state.settings?.language) as AppLanguage | undefined;
-  return TEXT[language && language in TEXT ? language : "zh-CN"];
+  const selected = language && language in TEXT ? language : "zh-CN";
+  return { ...TEXT[selected], ...REFERENCE_PRESET_HELP[selected] };
 }
 
 export function referencePresetTextFor(language: unknown) {
@@ -146,23 +195,30 @@ export function ReferencePresetQuickSaveDialog({ source, onClose }: { source: Qu
   );
 }
 
-export default function ReferencePresetManager({ onBack, modal = false, onApplied }: { onBack?: () => void; modal?: boolean; onApplied?: () => void }) {
+export default function ReferencePresetManager({
+  onBack,
+  modal = false,
+  onApplied,
+  onApplyPreset,
+  allowedKinds = ALL_REFERENCE_KINDS,
+}: ReferencePresetManagerProps) {
   const text = useText();
   const setToast = useAppStore((state) => state.setToast);
   const addVibeImage = useAppStore((state) => state.addVibeImage);
   const addPreciseReference = useAppStore((state) => state.addPreciseReference);
   const [library, setLibrary] = useState(EMPTY_LIBRARY);
   const [groupFilter, setGroupFilter] = useState("__all__");
-  const [kindFilter, setKindFilter] = useState<ReferencePresetKind | "all">("all");
+  const [kindFilter, setKindFilter] = useState<ReferencePresetKind | "all">(
+    () => allowedKinds.length === 1 ? allowedKinds[0] : "all",
+  );
   const [name, setName] = useState("");
   const [group, setGroup] = useState("");
   const [newGroupName, setNewGroupName] = useState("");
-  const [kind, setKind] = useState<ReferencePresetKind>("vibe");
+  const [kind, setKind] = useState<ReferencePresetKind>(() => allowedKinds[0] ?? "vibe");
   const [source, setSource] = useState<Awaited<ReturnType<typeof fileToSource>> | null>(null);
-  const [infoExtracted, setInfoExtracted] = useState(0.7);
-  const [strength, setStrength] = useState(0.6);
+  const [infoExtracted, setInfoExtracted] = useState(1);
+  const [strength, setStrength] = useState(1);
   const [fidelity, setFidelity] = useState(1);
-  const [informationExtracted, setInformationExtracted] = useState(1);
   const [preciseType, setPreciseType] = useState<PreciseReferenceType>("character");
   const [busy, setBusy] = useState(false);
 
@@ -170,16 +226,17 @@ export default function ReferencePresetManager({ onBack, modal = false, onApplie
   useEffect(() => { void refresh(); }, [refresh]);
 
   const presets = useMemo(() => library.presets
+    .filter((preset) => allowedKinds.includes(preset.kind))
     .filter((preset) => groupFilter === "__all__" || preset.group === groupFilter)
     .filter((preset) => kindFilter === "all" || preset.kind === kindFilter)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [library, groupFilter, kindFilter]);
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [allowedKinds, library, groupFilter, kindFilter]);
 
   const save = async () => {
     if (!source || !name.trim()) return setToast(text.chooseRequired);
     setBusy(true);
     const result = await window.naiDesktop.saveReferencePreset({
       name, group, kind, base64: source.base64, extension: source.extension,
-      infoExtracted, strength, preciseType, fidelity, informationExtracted,
+      infoExtracted, strength, preciseType, fidelity, informationExtracted: 1,
       width: source.width, height: source.height,
     });
     setBusy(false);
@@ -194,10 +251,12 @@ export default function ReferencePresetManager({ onBack, modal = false, onApplie
     if (!result.ok || !result.base64 || !result.preset) return setToast(result.message || text.chooseRequired);
     const saved = result.preset;
     const previewUrl = saved.fileUrl;
-    if (saved.kind === "vibe") {
+    if (onApplyPreset) {
+      await onApplyPreset(saved, { base64: result.base64, previewUrl });
+    } else if (saved.kind === "vibe") {
       addVibeImage({ id: crypto.randomUUID(), previewUrl, base64: result.base64, infoExtracted: saved.infoExtracted, strength: saved.strength });
     } else {
-      addPreciseReference({ id: crypto.randomUUID(), previewUrl, base64: result.base64, type: saved.preciseType, strength: saved.strength, fidelity: saved.fidelity, informationExtracted: saved.informationExtracted, srcWidth: saved.width, srcHeight: saved.height });
+      addPreciseReference({ id: crypto.randomUUID(), previewUrl, base64: result.base64, type: saved.preciseType, strength: saved.strength, fidelity: saved.fidelity, informationExtracted: 1, srcWidth: saved.width, srcHeight: saved.height });
     }
     setToast(text.applied);
     onApplied?.();
@@ -257,22 +316,30 @@ export default function ReferencePresetManager({ onBack, modal = false, onApplie
       <div className="reference-preset-workbench">
         <section className="reference-preset-create panel-card">
           <header className="reference-preset-section-heading"><div><h3>{text.createTitle}</h3><p>{text.createHint}</p></div></header>
-          <label className={`reference-preset-create-image ${source ? "has-image" : ""}`}>
+          <label
+            className={`reference-preset-create-image ${source ? "has-image" : ""}`}
+            style={source && source.width > 0 && source.height > 0 ? { aspectRatio: `${source.width} / ${source.height}` } : undefined}
+          >
             {source ? <img src={source.previewUrl} alt={name || text.image} /> : <div><strong>{text.image}</strong><span>{text.imageHint}</span></div>}
             <span className="btn btn-secondary">{source ? text.replaceImage : text.image}</span>
             <input hidden type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { const file = event.target.files?.[0]; if (file) void fileToSource(file).then(setSource).catch(() => setToast(text.chooseRequired)); event.target.value = ""; }} />
           </label>
-          <div className="reference-preset-kind-tabs" role="group" aria-label={text.kind}>
-            <button className={kind === "vibe" ? "active" : ""} onClick={() => { setKind("vibe"); setStrength(0.6); }}>{text.vibe}</button>
-            <button className={kind === "precise" ? "active" : ""} onClick={() => { setKind("precise"); setStrength(1); }}>{text.precise}</button>
-          </div>
+          {allowedKinds.length > 1 && <div className="reference-preset-kind-tabs" role="group" aria-label={text.kind}>
+            {allowedKinds.includes("vibe") && <button className={kind === "vibe" ? "active" : ""} onClick={() => { setKind("vibe"); setStrength(1); }}>{text.vibe}</button>}
+            {allowedKinds.includes("precise") && <button className={kind === "precise" ? "active" : ""} onClick={() => { setKind("precise"); setStrength(1); }}>{text.precise}</button>}
+          </div>}
           <div className="reference-preset-create-fields">
             <label className="field reference-preset-field-wide"><span>{text.name}</span><input value={name} onChange={(event) => setName(event.target.value)} /></label>
             <label className="field reference-preset-field-wide"><span>{text.group}</span><select value={group} onChange={(event) => setGroup(event.target.value)}><option value="">{text.noGroup}</option>{library.groups.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
-            {kind === "precise" && <label className="field reference-preset-field-wide"><span>{text.type}</span><select value={preciseType} onChange={(event) => setPreciseType(event.target.value as PreciseReferenceType)}><option value="character">{text.character}</option><option value="style">{text.style}</option><option value="character&style">{text.both}</option></select></label>}
-            <NumberInput label={kind === "vibe" ? text.info : text.strength} value={kind === "vibe" ? infoExtracted : strength} min={0} max={1} step={0.01} onChange={kind === "vibe" ? setInfoExtracted : setStrength} />
-            <NumberInput label={kind === "vibe" ? text.strength : text.fidelity} value={kind === "vibe" ? strength : fidelity} min={0} max={1} step={0.01} onChange={kind === "vibe" ? setStrength : setFidelity} />
-            {kind === "precise" && <NumberInput label={text.info} value={informationExtracted} min={0} max={1} step={0.01} onChange={setInformationExtracted} />}
+            {kind === "precise" && <label className="field reference-preset-field-wide"><span>{text.typeLabel}</span><select value={preciseType} onChange={(event) => setPreciseType(event.target.value as PreciseReferenceType)}><option value="character">{text.character}</option><option value="style">{text.style}</option><option value="character&style">{text.both}</option></select><small>{text.typeHelp}</small></label>}
+            <div className="reference-preset-parameter">
+              <NumberInput label={kind === "vibe" ? text.infoLabel : text.preciseStrengthLabel} value={kind === "vibe" ? infoExtracted : strength} min={0} max={1} step={0.01} onChange={kind === "vibe" ? setInfoExtracted : setStrength} />
+              <small>{kind === "vibe" ? text.infoHelp : text.preciseStrengthHelp}</small>
+            </div>
+            <div className="reference-preset-parameter">
+              <NumberInput label={kind === "vibe" ? text.strengthLabel : text.fidelityLabel} value={kind === "vibe" ? strength : fidelity} min={0} max={1} step={0.01} onChange={kind === "vibe" ? setStrength : setFidelity} />
+              <small>{kind === "vibe" ? text.vibeStrengthHelp : text.fidelityHelp}</small>
+            </div>
           </div>
           <Button className="reference-preset-save" variant="primary" disabled={busy} onClick={() => void save()}>{group ? text.saveCurrent : text.save}</Button>
         </section>
@@ -287,14 +354,17 @@ export default function ReferencePresetManager({ onBack, modal = false, onApplie
             <label className="field reference-preset-new-group"><span>{text.groupName}</span><input value={newGroupName} onChange={(event) => setNewGroupName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void createGroup(); }} /></label>
             <Button disabled={busy || !newGroupName.trim()} onClick={() => void createGroup()}>{text.createGroup}</Button>
           </div>
-          <div className="reference-preset-kind-tabs reference-preset-filter-tabs" role="group" aria-label={text.kind}>
+          {allowedKinds.length > 1 && <div className="reference-preset-kind-tabs reference-preset-filter-tabs" role="group" aria-label={text.kind}>
             <button className={kindFilter === "all" ? "active" : ""} onClick={() => setKindFilter("all")}>{text.all}</button>
-            <button className={kindFilter === "vibe" ? "active" : ""} onClick={() => setKindFilter("vibe")}>{text.vibe}</button>
-            <button className={kindFilter === "precise" ? "active" : ""} onClick={() => setKindFilter("precise")}>{text.precise}</button>
-          </div>
+            {allowedKinds.includes("vibe") && <button className={kindFilter === "vibe" ? "active" : ""} onClick={() => setKindFilter("vibe")}>{text.vibe}</button>}
+            {allowedKinds.includes("precise") && <button className={kindFilter === "precise" ? "active" : ""} onClick={() => setKindFilter("precise")}>{text.precise}</button>}
+          </div>}
           {presets.length === 0 ? <section className="reference-preset-empty"><strong>{text.empty}</strong><span>{text.createHint}</span></section> : <section className="reference-preset-grid">{presets.map((preset) => <article className="reference-preset-card" key={preset.id}>
-            <div className="reference-preset-image-frame"><img src={preset.fileUrl} alt={preset.name} /><span>{preset.kind === "vibe" ? text.vibe : text.precise}</span></div>
-            <div className="reference-preset-card-body"><h3>{preset.name}</h3><p>{preset.group || text.noGroup}</p><small>{preset.kind === "vibe" ? `${text.info} ${preset.infoExtracted.toFixed(2)} · ${text.strength} ${preset.strength.toFixed(2)}` : `${text.type} ${preset.preciseType} · ${text.strength} ${preset.strength.toFixed(2)} · ${text.fidelity} ${preset.fidelity.toFixed(2)}`}</small>
+            <div
+              className="reference-preset-image-frame"
+              style={preset.width > 0 && preset.height > 0 ? { aspectRatio: `${preset.width} / ${preset.height}` } : undefined}
+            ><img src={preset.fileUrl} alt={preset.name} /><span>{preset.kind === "vibe" ? text.vibe : text.precise}</span></div>
+            <div className="reference-preset-card-body"><h3>{preset.name}</h3><p>{preset.group || text.noGroup}</p><small>{preset.kind === "vibe" ? `${text.infoLabel} ${preset.infoExtracted.toFixed(2)} · ${text.strengthLabel} ${preset.strength.toFixed(2)}` : `${text.typeLabel} ${preset.preciseType} · ${text.preciseStrengthLabel} ${preset.strength.toFixed(2)} · ${text.fidelityLabel} ${preset.fidelity.toFixed(2)}`}</small>
               <label className="reference-preset-card-move"><span>{text.moveGroup}</span><select value={preset.group} disabled={busy} onChange={(event) => void moveToGroup(preset.id, event.target.value)}><option value="">{text.noGroup}</option>{library.groups.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
             </div>
             <div className="reference-preset-card-actions"><Button variant="primary" onClick={() => void apply(preset)}>{text.use}</Button><Button onClick={() => void runOperation(() => window.naiDesktop.exportReferencePresets({ presetId: preset.id }), text.exported)}>{text.exportOne}</Button><Button onClick={() => void runOperation(() => window.naiDesktop.deleteReferencePreset(preset.id), text.remove)}>{text.remove}</Button></div>

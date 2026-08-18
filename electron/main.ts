@@ -357,10 +357,13 @@ function createWindow() {
     const captureTheme = uiCapturePath?.replaceAll("\\", "/").includes("/dark/")
       ? "dark"
       : "light";
+    const captureSurface = uiCapturePath?.replaceAll("\\", "/").includes("reference-modal")
+      ? "referenceModal"
+      : "referencePresets";
     void mainWindow.loadFile(
       path.join(__dirname, "../../dist/index.html"),
       uiCapturePath
-        ? { query: { uiCapture: "referencePresets", uiTheme: captureTheme } }
+        ? { query: { uiCapture: captureSurface, uiTheme: captureTheme } }
         : undefined,
     );
   }

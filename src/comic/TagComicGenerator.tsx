@@ -3,6 +3,10 @@ import clsx from "clsx";
 import { Button, NumberInput, Toggle } from "../components/ui";
 import { Icon } from "../components/icons";
 import { useAppStore } from "../store";
+import ReferencePresetManager, {
+  referencePresetTextFor,
+  type ReferencePresetApplyPayload,
+} from "../ReferencePresetManager";
 import {
   NAI_MODELS,
   NAI_SAMPLERS,
@@ -13,6 +17,7 @@ import {
   type TagComicPanelReference,
   type TagComicProject,
   type TagComicReferenceAsset,
+  type ReferencePreset,
 } from "../types";
 import {
   TAG_COMIC_STORAGE_KEY,
@@ -750,6 +755,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
   const [activePanelId, setActivePanelId] = useState("");
   const [draggedPanelId, setDraggedPanelId] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showReferencePresets, setShowReferencePresets] = useState(false);
   const [expandedCandidates, setExpandedCandidates] = useState<Set<string>>(
     () => new Set(),
   );
@@ -791,6 +797,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
   const selectedCount = panels.filter((panel) =>
     selectedCandidate(panel),
   ).length;
+  const presetText = referencePresetTextFor(language);
 
   useEffect(() => {
     if (panels.length && !panels.some((panel) => panel.id === activePanelId)) {
@@ -1021,6 +1028,38 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
         preciseReferences: [...current.preciseReferences, result.asset!],
       }));
     }
+  }
+
+  async function importPrecisePreset(
+    preset: ReferencePreset,
+    _payload: ReferencePresetApplyPayload,
+  ) {
+    if (projectRef.current.preciseReferences.length >= 5) {
+      setToast(text(language, "preciseHint"));
+      return;
+    }
+    const result = await window.naiDesktop.tagComicImportReference({
+      projectId: projectRef.current.id,
+      sourcePath: preset.filePath,
+    });
+    if (!result.ok || !result.asset) {
+      setToast(
+        format(language, "preciseImportFailed", { message: result.message }),
+      );
+      return;
+    }
+    const asset: TagComicReferenceAsset = {
+      ...result.asset,
+      name: preset.name,
+      type: preset.preciseType,
+      strength: preset.strength,
+      fidelity: preset.fidelity,
+      informationExtracted: 1,
+    };
+    setProject((current) => ({
+      ...current,
+      preciseReferences: [...current.preciseReferences, asset],
+    }));
   }
 
   function patchPreciseReference(
@@ -1696,20 +1735,29 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                 <h3>{text(language, "preciseHeading")}</h3>
                 <p>{text(language, "preciseHint")}</p>
               </div>
-              <label className="tag-comic-file-button">
-                <Icon name="folderOpen" />
-                <span>{text(language, "preciseUpload")}</span>
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  multiple
+              <div className="tag-comic-reference-actions">
+                <Button
+                  variant="secondary"
                   disabled={project.preciseReferences.length >= 5}
-                  onChange={(event) => {
-                    void importPreciseReferences(event.target.files);
-                    event.currentTarget.value = "";
-                  }}
-                />
-              </label>
+                  onClick={() => setShowReferencePresets(true)}
+                >
+                  {presetText.open}
+                </Button>
+                <label className="tag-comic-file-button">
+                  <Icon name="folderOpen" />
+                  <span>{text(language, "preciseUpload")}</span>
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    multiple
+                    disabled={project.preciseReferences.length >= 5}
+                    onChange={(event) => {
+                      void importPreciseReferences(event.target.files);
+                      event.currentTarget.value = "";
+                    }}
+                  />
+                </label>
+              </div>
             </div>
             {!project.preciseReferences.length ? (
               <p>{text(language, "preciseEmpty")}</p>
@@ -2283,6 +2331,15 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
             ×
           </button>
         </div>
+      )}
+      {showReferencePresets && (
+        <ReferencePresetManager
+          modal
+          allowedKinds={["precise"]}
+          onBack={() => setShowReferencePresets(false)}
+          onApplied={() => setShowReferencePresets(false)}
+          onApplyPreset={importPrecisePreset}
+        />
       )}
     </main>
   );

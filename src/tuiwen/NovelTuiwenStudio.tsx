@@ -2,12 +2,17 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import { Button, NumberInput } from "../components/ui";
 import { getTuiwenStudioText, normalizeAppLanguage } from "../i18n";
+import ReferencePresetManager, {
+  referencePresetTextFor,
+  type ReferencePresetApplyPayload,
+} from "../ReferencePresetManager";
 import { useAppStore } from "../store";
 import type {
   AnlasQuoteResult,
   AppLanguage,
   ComicReferenceAsset,
   ComicReferenceKind,
+  ReferencePreset,
   ReversePromptScope,
   TuiwenAspectRatio,
   TuiwenKeyframePreset,
@@ -1642,6 +1647,7 @@ export function NovelTuiwenStudio({ onBack }: { onBack?: () => void }) {
   const setToast = useAppStore((state) => state.setToast);
   const refreshAccount = useAppStore((state) => state.refreshAccount);
   const tuiwenText = useMemo(() => getTuiwenStudioText(language), [language]);
+  const presetText = referencePresetTextFor(language);
   const tw = (key: string) => tuiwenUiText(language, key);
   const twf = (key: string, values: Record<string, unknown>) =>
     tuiwenUiFormat(language, key, values);
@@ -1672,6 +1678,7 @@ export function NovelTuiwenStudio({ onBack }: { onBack?: () => void }) {
   const [ttsVolumePercent, setTtsVolumePercent] = useState(0);
   const [ttsLog, setTtsLog] = useState("");
   const [motionReplay, setMotionReplay] = useState(0);
+  const [showReferencePresets, setShowReferencePresets] = useState(false);
   const generationStopRef = useRef(false);
   const projectRef = useRef(project);
   const activeShot =
@@ -1885,7 +1892,7 @@ export function NovelTuiwenStudio({ onBack }: { onBack?: () => void }) {
           previewUrl: dataUrlFromBase64(base64),
           reversePrompt: "",
           infoExtracted: 1,
-          strength: 0.65,
+          strength: 1,
           useForGeneration: true,
         });
       }
@@ -1901,6 +1908,36 @@ export function NovelTuiwenStudio({ onBack }: { onBack?: () => void }) {
         }),
       );
     }
+  }
+
+  async function addReferencePreset(
+    preset: ReferencePreset,
+    payload: ReferencePresetApplyPayload,
+  ) {
+    const preciseKind: ComicReferenceKind =
+      preset.preciseType === "character"
+        ? "character"
+        : preset.preciseType === "style"
+          ? "scene"
+          : "precise";
+    const reference: ComicReferenceAsset = {
+      id: uid(),
+      name: preset.name,
+      kind: preset.kind === "vibe" ? "vibe" : preciseKind,
+      scope: preset.preciseType === "style" ? "full" : "character",
+      subjectHint: "",
+      base64: payload.base64,
+      previewUrl: payload.previewUrl,
+      reversePrompt: "",
+      infoExtracted:
+        preset.kind === "vibe" ? preset.infoExtracted : preset.fidelity,
+      strength: preset.strength,
+      useForGeneration: true,
+    };
+    setProject((prev) => ({
+      ...prev,
+      references: [...prev.references, reference],
+    }));
   }
 
   async function reverseReference(reference: ComicReferenceAsset) {
@@ -2279,8 +2316,8 @@ export function NovelTuiwenStudio({ onBack }: { onBack?: () => void }) {
         extras: {
           vibeImages: Array.from({ length: group.vibeCount }, () => ({
             base64: "",
-            infoExtracted: 0.7,
-            strength: 0.5,
+            infoExtracted: 1,
+            strength: 1,
           })),
           charCaptions: [],
           preciseReferences: Array.from({ length: group.preciseCount }, () => ({
@@ -3287,6 +3324,12 @@ export function NovelTuiwenStudio({ onBack }: { onBack?: () => void }) {
               <span className="redraw-flow-hint">{tw("refs.hint")}</span>
             </div>
             <div className="comic-inline-actions">
+              <Button
+                variant="secondary"
+                onClick={() => setShowReferencePresets(true)}
+              >
+                {presetText.open}
+              </Button>
               <label className="btn btn-secondary redraw-file-btn">
                 {tw("refs.upload")}
                 <input
@@ -4257,6 +4300,14 @@ export function NovelTuiwenStudio({ onBack }: { onBack?: () => void }) {
             )}
           </section>
         )}
+      {showReferencePresets && (
+        <ReferencePresetManager
+          modal
+          onBack={() => setShowReferencePresets(false)}
+          onApplied={() => setShowReferencePresets(false)}
+          onApplyPreset={addReferencePreset}
+        />
+      )}
     </main>
   );
 }

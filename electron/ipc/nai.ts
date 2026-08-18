@@ -598,9 +598,10 @@ export function buildPayload(
     parameters.director_reference_secondary_strength_values = preciseRefs.map(
       (r) => round2(clamp01(1 - r.fidelity, 0)),
     );
-    parameters.director_reference_information_extracted = preciseRefs.map((r) =>
-      round2(clamp01(r.informationExtracted ?? 1, 1)),
-    );
+    // NovelAI's Precise Reference UI exposes only Strength and Fidelity.
+    // Keep this compatibility transport field fixed instead of presenting a
+    // third user-facing control or replaying stale values from older presets.
+    parameters.director_reference_information_extracted = preciseRefs.map(() => 1);
     // Log the EXACT precise-reference fields we send (sans base64) so it can be
     // diffed against the official client's F12 "Copy request payload". This is an
     // unverified reverse-engineered shape — the log is how we confirm/correct it.
