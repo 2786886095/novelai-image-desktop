@@ -2,6 +2,7 @@ name: Publish reference catalog
 on:
   workflow_dispatch:
   push:
+    branches: [main]
     paths:
       - "catalog-site/**"
       - "public/reference-catalog/**"
