@@ -5,6 +5,7 @@ import {
   catalogGroupName,
   catalogName,
   catalogSearchText,
+  catalogSeriesMetrics,
   formatCatalogBytes,
   type ReferenceCatalogAsset,
 } from "./referenceCatalog";
@@ -52,5 +53,16 @@ describe("reference catalog localization", () => {
     expect(search).toContain("侦察骑士");
     expect(search).toContain("원신");
     expect(formatCatalogBytes(asset.bytes)).toBe("1.5 MB");
+  });
+
+  it("summarizes a whole series without counting saved assets twice", () => {
+    const second = { ...asset, id: "genshin/amber/alternate", bytes: 512 * 1024 };
+    expect(catalogSeriesMetrics([asset, second], new Set([asset.id]))).toEqual({
+      totalCount: 2,
+      downloadedCount: 1,
+      pendingCount: 1,
+      totalBytes: 2 * 1024 * 1024,
+      pendingBytes: 512 * 1024,
+    });
   });
 });

@@ -99,6 +99,28 @@ export function formatCatalogBytes(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+export function catalogSeriesMetrics(
+  assets: readonly ReferenceCatalogAsset[],
+  downloadedIds: ReadonlySet<string>,
+) {
+  let totalBytes = 0;
+  let pendingBytes = 0;
+  let downloadedCount = 0;
+  for (const asset of assets) {
+    const bytes = Number.isFinite(asset.bytes) ? Math.max(0, asset.bytes) : 0;
+    totalBytes += bytes;
+    if (downloadedIds.has(asset.id)) downloadedCount += 1;
+    else pendingBytes += bytes;
+  }
+  return {
+    totalCount: assets.length,
+    downloadedCount,
+    pendingCount: assets.length - downloadedCount,
+    totalBytes,
+    pendingBytes,
+  };
+}
+
 export function dataUrlFromBytes(bytes: Uint8Array, mime = "image/png") {
   let binary = "";
   const chunk = 0x8000;

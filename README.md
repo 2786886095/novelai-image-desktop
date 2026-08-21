@@ -3,7 +3,7 @@
 [![Build](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build.yml/badge.svg)](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build.yml)
 [![Build Mobile](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build-mobile.yml/badge.svg)](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build-mobile.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
-[![Release](https://img.shields.io/badge/release-v1.7.3-7c5cfa.svg)](https://github.com/2786886095/novelai-image-desktop/releases/tag/v1.7.3)
+[![Release](https://img.shields.io/badge/release-v1.7.4-7c5cfa.svg)](https://github.com/2786886095/novelai-image-desktop/releases/tag/v1.7.4)
 [![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android%20%7C%20iOS-20b7d8.svg)](#下载)
 
 <img width="1672" height="941" alt="ChatGPT Image 2026年6月17日 11_27_47" src="https://github.com/user-attachments/assets/66a6caef-3007-479b-9006-1c6f50570655" />
@@ -16,15 +16,15 @@
 
 ## 下载
 
-- **v1.7.3 本地版**：[GitHub Releases](https://github.com/2786886095/novelai-image-desktop/releases/tag/v1.7.3)
+- **v1.7.4 本地版**：[GitHub Releases](https://github.com/2786886095/novelai-image-desktop/releases/tag/v1.7.4)
 - **持续构建产物**：[GitHub Actions](https://github.com/2786886095/novelai-image-desktop/actions)
 
 Release 目标产物：
 
 | 平台 | 文件 |
 | --- | --- |
-| Windows（便携版） | `Langbai-NovelAI-Studio-1.7.3.exe` |
-| Windows（安装版） | `Langbai-NovelAI-Studio-Setup-1.7.3.exe` |
+| Windows（便携版） | `Langbai-NovelAI-Studio-1.7.4.exe` |
+| Windows（安装版） | `Langbai-NovelAI-Studio-Setup-1.7.4.exe` |
 | macOS | universal `.dmg` + `.zip` |
 | Linux | `.AppImage` |
 | Android | `app-release.apk` |
@@ -65,7 +65,7 @@ Release 目标产物：
 - **Tag/MCP 服务**：支持普通 HTTP 接口，以及 MCP 的 Streamable HTTP / SSE / stdio 三种传输（可直连 DanbooruSearchOnline 的 `search_tags`），补强自动补全、AI 反推和中文转换。
 - **AI 反推 / 提示词转换**：反推使用视觉模型 API；转换使用文本模型 API，二者独立配置；检测接口后可在下拉列表中切换模型。
 - **历史与素材分组**：按日期和分组筛选，新建 / 重命名 / 删除分组，给图片分组，一键 ZIP 导出。
-- **角色参考预设库**：桌面端与移动端均可管理氛围迁移/精准参考预设，并从 Gitee 优先的在线目录按游戏、分类和角色形态下载最佳尺寸精准参考图；支持五语言显示与跨语言搜索、下载进度、双击预览、分组、导入导出及离线复用。
+- **角色参考预设库**：桌面端与移动端均可管理氛围迁移/精准参考预设，并从 Gitee 优先的在线目录按游戏、分类和角色形态下载最佳尺寸精准参考图；支持按游戏整系列下载、下载前查看数量与总大小、聚合进度、五语言显示与跨语言搜索、双击预览、分组、导入导出及离线复用。
 - **生成队列**：批量任务可暂停 / 继续，失败后重试并跳过，记录实扣 Anlas。
 - **小说推文（桌面端）**：导入小说/字幕 → LLM 分镜旁白（无 API/拒答时本地模板兜底）→ 全局精准参考/角色库 → 批量生图续跑 → TTS/逐镜配音/按字幕切分长音频 → 运镜转场预览 → 写入剪映 10.9 草稿；项目会写磁盘快照，长队列中断后可恢复。
 - **漫画生成器**：直接导入逐行 Tag，或导入带分镜标题的 JSON/CSV；全局统一风格、负面词和生成参数，每个分镜可独立覆盖参数。一次生成 1～10 张候选图，可继续追加、预览并选定主图；最终 ZIP 只打包每个分镜当前选中的主图。
@@ -104,8 +104,8 @@ npm run pack
 `npm run pack` 现在会同时产出便携版和安装版：
 
 ```text
-release\Langbai-NovelAI-Studio-1.7.3.exe          # 便携版
-release\Langbai-NovelAI-Studio-Setup-1.7.3.exe    # 安装版（NSIS 向导）
+release\Langbai-NovelAI-Studio-1.7.4.exe          # 便携版
+release\Langbai-NovelAI-Studio-Setup-1.7.4.exe    # 安装版（NSIS 向导）
 release\Langbai-NovelAI-Studio.exe                # 便携版稳定别名
 release\latest.yml                                # 安装版应用内更新用的元数据
 ```
@@ -129,9 +129,9 @@ release\NovelAI-Image-Desktop.exe
 推送 `v*` tag 会触发桌面端与移动端两个 workflow，并把所有平台产物汇总到同一个 Release：
 
 ```powershell
-git tag v1.7.3
+git tag v1.7.4
 git push origin main
-git push origin v1.7.3
+git push origin v1.7.4
 ```
 
 如果 Release 上传时报 403，请在仓库 `Settings -> Actions -> General -> Workflow permissions` 中启用 `Read and write permissions`。
