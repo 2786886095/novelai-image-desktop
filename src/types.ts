@@ -1083,6 +1083,11 @@ export interface ReferencePreset {
   height: number;
   /** Stable remote catalog id, when downloaded from the online character library. */
   sourceId?: string;
+  /** Localized catalog metadata keeps downloaded preset labels language-aware offline. */
+  sourceNames?: Partial<Record<AppLanguage, string>>;
+  sourceGameNames?: Partial<Record<AppLanguage, string>>;
+  sourceGameId?: string;
+  sourceCategory?: string;
 }
 
 export interface ReferencePresetLibrary {
@@ -1104,6 +1109,10 @@ export interface ReferencePresetSaveRequest {
   width?: number;
   height?: number;
   sourceId?: string;
+  sourceNames?: Partial<Record<AppLanguage, string>>;
+  sourceGameNames?: Partial<Record<AppLanguage, string>>;
+  sourceGameId?: string;
+  sourceCategory?: string;
 }
 
 export interface ReferencePresetExportRequest {

@@ -1,6 +1,6 @@
 {
   "name": "langbai-novelai-studio",
-  "version": "1.7.1",
+  "version": "1.7.2",
   "private": true,
   "description": "Langbai NovelAI Studio: API-only NovelAI image generation desktop client with Chinese UI.",
   "author": "Langbai",
@@ -36,6 +36,7 @@
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "electron-updater": "^6.8.9",
+    "gsap": "^3.15.0",
     "http-proxy-agent": "^5.0.0",
     "https-proxy-agent": "^5.0.1",
     "jszip": "^3.10.1",
@@ -44,6 +45,7 @@
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "socks-proxy-agent": "^7.0.0",
+    "weui": "^2.6.26",
     "zustand": "^5.0.9"
   },
   "devDependencies": {

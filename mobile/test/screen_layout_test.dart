@@ -169,7 +169,8 @@ void main() {
 
     expect(find.text('支持 .nairp 预设归档'), findsOneWidget);
     expect(find.text('导入'), findsOneWidget);
-    expect(find.text('导出全部'), findsOneWidget);
+    expect(find.text('导出全部'), findsNothing);
+    expect(find.text('应用所选预设'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -198,6 +199,8 @@ void main() {
     expect(find.text('支持 .nairp 预设归档'), findsOneWidget);
     expect(find.text('新建参考图预设'), findsOneWidget);
     expect(find.text('导入'), findsOneWidget);
+    expect(find.text('在线角色精准参考库'), findsOneWidget);
+    expect(find.text('读取在线目录'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

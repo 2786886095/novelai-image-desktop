@@ -64,6 +64,11 @@ describe("reference preset persistence", () => {
         informationExtracted: 0.75,
         width: 832,
         height: 1216,
+        sourceId: "genshin/amber/default",
+        sourceNames: { "zh-CN": "安柏", "ja-JP": "アンバー", "en-US": "Amber" },
+        sourceGameNames: { "zh-CN": "原神", "en-US": "Genshin Impact" },
+        sourceGameId: "原神",
+        sourceCategory: "游戏内角色图",
       },
       root,
     );
@@ -75,6 +80,10 @@ describe("reference preset persistence", () => {
       kind: "precise",
       width: 832,
       height: 1216,
+      sourceId: "genshin/amber/default",
+      sourceNames: { "zh-CN": "安柏", "ja-JP": "アンバー", "en-US": "Amber" },
+      sourceGameId: "原神",
+      sourceCategory: "游戏内角色图",
     });
     expect(saved.preset?.fileUrl).toMatch(/^file:/);
 

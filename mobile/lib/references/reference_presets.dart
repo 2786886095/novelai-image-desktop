@@ -1,5 +1,21 @@
 enum ReferencePresetKind { vibe, precise }
 
+const defaultReferencePresetGroups = <String>[
+  '原神',
+  '妮姬',
+  '崩坏三',
+  '明日方舟',
+  '星穹铁道',
+  '绝区零',
+  '蔚蓝档案',
+  '鸣潮',
+  '终末地',
+  '异环',
+];
+
+List<String> referencePresetGroupsWithDefaults(Iterable<String> groups) =>
+    <String>{...defaultReferencePresetGroups, ...groups}.toList();
+
 ReferencePresetKind referencePresetKindFromJson(Object? value) =>
     value?.toString() == 'precise'
         ? ReferencePresetKind.precise
@@ -24,6 +40,11 @@ class ReferencePreset {
   final double informationExtracted;
   final int width;
   final int height;
+  final String sourceId;
+  final Map<String, String> sourceNames;
+  final Map<String, String> sourceGameNames;
+  final String sourceGameId;
+  final String sourceCategory;
 
   const ReferencePreset({
     required this.id,
@@ -39,7 +60,27 @@ class ReferencePreset {
     this.informationExtracted = 1,
     this.width = 0,
     this.height = 0,
+    this.sourceId = '',
+    this.sourceNames = const {},
+    this.sourceGameNames = const {},
+    this.sourceGameId = '',
+    this.sourceCategory = '',
   });
+
+  String localizedName(String language) =>
+      sourceNames[language] ?? sourceNames['zh-CN'] ?? name;
+
+  String localizedGameName(String language) =>
+      sourceGameNames[language] ?? sourceGameNames['zh-CN'] ?? sourceGameId;
+
+  String get localizedSearchText => <String>{
+        name,
+        group,
+        sourceGameId,
+        sourceCategory,
+        ...sourceNames.values,
+        ...sourceGameNames.values,
+      }.join(' ').toLowerCase();
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -55,6 +96,11 @@ class ReferencePreset {
         'informationExtracted': informationExtracted,
         'width': width,
         'height': height,
+        'sourceId': sourceId,
+        'sourceNames': sourceNames,
+        'sourceGameNames': sourceGameNames,
+        'sourceGameId': sourceGameId,
+        'sourceCategory': sourceCategory,
       };
 
   ReferencePreset copyWith({
@@ -77,6 +123,11 @@ class ReferencePreset {
         informationExtracted: informationExtracted,
         width: width,
         height: height,
+        sourceId: sourceId,
+        sourceNames: sourceNames,
+        sourceGameNames: sourceGameNames,
+        sourceGameId: sourceGameId,
+        sourceCategory: sourceCategory,
       );
 
   factory ReferencePreset.fromJson(Map<String, dynamic> json) =>
@@ -95,7 +146,21 @@ class ReferencePreset {
             (json['informationExtracted'] as num?)?.toDouble() ?? 1,
         width: (json['width'] as num?)?.toInt() ?? 0,
         height: (json['height'] as num?)?.toInt() ?? 0,
+        sourceId: json['sourceId']?.toString() ?? '',
+        sourceNames: _referencePresetStringMap(json['sourceNames']),
+        sourceGameNames: _referencePresetStringMap(json['sourceGameNames']),
+        sourceGameId: json['sourceGameId']?.toString() ?? '',
+        sourceCategory: json['sourceCategory']?.toString() ?? '',
       );
+}
+
+Map<String, String> _referencePresetStringMap(Object? value) {
+  if (value is! Map) return const {};
+  return {
+    for (final entry in value.entries)
+      if (entry.value != null && entry.value.toString().trim().isNotEmpty)
+        entry.key.toString(): entry.value.toString().trim(),
+  };
 }
 
 class ReferencePresetLibrary {
@@ -113,11 +178,11 @@ class ReferencePresetLibrary {
 
   factory ReferencePresetLibrary.fromJson(Map<String, dynamic> json) =>
       ReferencePresetLibrary(
-        groups: (json['groups'] as List<dynamic>? ?? const [])
-            .map((value) => value.toString().trim())
-            .where((value) => value.isNotEmpty)
-            .toSet()
-            .toList(),
+        groups: referencePresetGroupsWithDefaults(
+          (json['groups'] as List<dynamic>? ?? const [])
+              .map((value) => value.toString().trim())
+              .where((value) => value.isNotEmpty),
+        ),
         presets: (json['presets'] as List<dynamic>? ?? const [])
             .whereType<Map>()
             .map((value) =>

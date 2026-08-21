@@ -143,6 +143,57 @@ void main() {
     expect(File(preset.filePath).existsSync(), isTrue);
   });
 
+  test('downloaded precise preset persists source id and is idempotent',
+      () async {
+    final bytes = image_lib.encodePng(image_lib.Image(width: 32, height: 48));
+
+    expect(
+      await state.saveDownloadedPreciseReferencePreset(
+        bytes: bytes,
+        sourceId: 'genshin/amber/default',
+        name: '安柏',
+        group: '原神 · 游戏内角色图',
+        width: 32,
+        height: 48,
+        sourceNames: const {
+          'zh-CN': '安柏',
+          'ja-JP': 'アンバー',
+          'en-US': 'Amber',
+        },
+        sourceGameNames: const {
+          'zh-CN': '原神',
+          'en-US': 'Genshin Impact',
+        },
+        sourceGameId: '原神',
+        sourceCategory: '游戏内角色图',
+      ),
+      isNull,
+    );
+    expect(state.referencePresets, hasLength(1));
+    final preset = state.referencePresets.single;
+    expect(preset.sourceId, 'genshin/amber/default');
+    expect(preset.kind, ReferencePresetKind.precise);
+    expect(preset.group, '原神 · 游戏内角色图');
+    expect((preset.width, preset.height), (32, 48));
+    expect(preset.localizedName('ja-JP'), 'アンバー');
+    expect(preset.localizedName('en-US'), 'Amber');
+    expect(preset.localizedSearchText, contains('genshin impact'));
+    expect(storage.library.presets.single.sourceId, preset.sourceId);
+
+    expect(
+      await state.saveDownloadedPreciseReferencePreset(
+        bytes: bytes,
+        sourceId: 'genshin/amber/default',
+        name: 'Amber',
+        group: 'Genshin Impact · In-game character',
+        width: 32,
+        height: 48,
+      ),
+      isNull,
+    );
+    expect(state.referencePresets, hasLength(1));
+  });
+
   test('precise preset restores official controls and fixes legacy info to one',
       () async {
     state.extras.preciseReferences.add(PreciseReferenceItem(

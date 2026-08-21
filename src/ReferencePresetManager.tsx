@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppPortal, Button, NumberInput } from "./components/ui";
 import ReferenceCatalogPanel from "./ReferenceCatalogPanel";
+import { catalogCategoryName, catalogGroupName, catalogGameName } from "./referenceCatalog";
 import { useAppStore } from "./store";
 import type {
   AppLanguage,
@@ -169,6 +170,7 @@ export type QuickPresetSource = Omit<ReferencePresetSaveRequest, "name" | "group
 
 export function ReferencePresetQuickSaveDialog({ source, onClose }: { source: QuickPresetSource; onClose: () => void }) {
   const text = useText();
+  const language = useAppStore((state) => state.settings?.language) as AppLanguage | undefined;
   const setToast = useAppStore((state) => state.setToast);
   const [name, setName] = useState("");
   const [group, setGroup] = useState("");
@@ -194,7 +196,7 @@ export function ReferencePresetQuickSaveDialog({ source, onClose }: { source: Qu
           <div className="reference-preset-quick-body">
             <img src={source.previewUrl} alt="" />
             <label className="field"><span>{text.name}</span><input autoFocus value={name} onChange={(event) => setName(event.target.value)} /></label>
-            <label className="field"><span>{text.group}</span><input list="reference-preset-quick-groups" value={group} placeholder={text.createHint} onChange={(event) => setGroup(event.target.value)} /><datalist id="reference-preset-quick-groups">{groups.map((item) => <option key={item} value={item} />)}</datalist></label>
+            <label className="field"><span>{text.group}</span><input list="reference-preset-quick-groups" value={group} placeholder={text.createHint} onChange={(event) => setGroup(event.target.value)} /><datalist id="reference-preset-quick-groups">{groups.map((item) => <option key={item} value={item} label={catalogGroupName(item, language)} />)}</datalist></label>
           </div>
           <footer><Button onClick={onClose}>{text.cancel}</Button><Button variant="primary" disabled={busy} onClick={() => void save()}>{text.save}</Button></footer>
         </section>
@@ -211,6 +213,7 @@ export default function ReferencePresetManager({
   allowedKinds = ALL_REFERENCE_KINDS,
 }: ReferencePresetManagerProps) {
   const text = useText();
+  const language = useAppStore((state) => state.settings?.language) as AppLanguage | undefined;
   const setToast = useAppStore((state) => state.setToast);
   const addVibeImage = useAppStore((state) => state.addVibeImage);
   const addPreciseReference = useAppStore((state) => state.addPreciseReference);
@@ -237,13 +240,22 @@ export default function ReferencePresetManager({
   const refresh = useCallback(async () => setLibrary(await window.naiDesktop.listReferencePresets()), []);
   useEffect(() => { void refresh(); }, [refresh]);
 
+  const localizedPresetName = (preset: ReferencePreset) =>
+    preset.sourceNames?.[language ?? "zh-CN"] || preset.sourceNames?.["zh-CN"] || preset.name;
+  const localizedPresetGroup = (preset: ReferencePreset) => {
+    if (preset.sourceGameId && preset.sourceCategory) {
+      return `${catalogGameName(preset.sourceGameId, language, preset.sourceGameNames)} · ${catalogCategoryName(preset.sourceCategory, language)}`;
+    }
+    return catalogGroupName(preset.group, language);
+  };
+
   const presets = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase();
     return library.presets
       .filter((preset) => allowedKinds.includes(preset.kind))
       .filter((preset) => groupFilter === "__all__" || preset.group === groupFilter)
       .filter((preset) => kindFilter === "all" || preset.kind === kindFilter)
-      .filter((preset) => !normalizedQuery || `${preset.name}\n${preset.group}`.toLocaleLowerCase().includes(normalizedQuery))
+      .filter((preset) => !normalizedQuery || [preset.name, preset.group, preset.sourceGameId, preset.sourceCategory, ...Object.values(preset.sourceNames ?? {}), ...Object.values(preset.sourceGameNames ?? {})].filter(Boolean).join("\n").toLocaleLowerCase().includes(normalizedQuery))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }, [allowedKinds, library, groupFilter, kindFilter, query]);
 
@@ -388,15 +400,15 @@ export default function ReferencePresetManager({
       </section>
 
       <section className="reference-preset-library panel-card">
-        <header className="reference-preset-section-heading reference-preset-library-heading"><div><h3>{text.library}</h3><p>{text.currentGroup} · {groupFilter === "__all__" ? text.all : groupFilter || text.noGroup}</p></div>{!modal && groupFilter !== "__all__" && <Button onClick={() => void runOperation(() => window.naiDesktop.exportReferencePresets({ group: groupFilter }), text.exported)}>{text.exportGroup}</Button>}</header>
-        <div className="reference-preset-search-row"><input type="search" value={query} placeholder={text.search} aria-label={text.search} onChange={(event) => setQuery(event.target.value)} /><label className="field"><span>{text.currentGroup}</span><select value={groupFilter} onChange={(event) => selectGroup(event.target.value)}><option value="__all__">{text.all}</option><option value="">{text.noGroup}</option>{library.groups.map((item) => <option key={item} value={item}>{item}</option>)}</select></label></div>
+        <header className="reference-preset-section-heading reference-preset-library-heading"><div><h3>{text.library}</h3><p>{text.currentGroup} · {groupFilter === "__all__" ? text.all : groupFilter ? catalogGroupName(groupFilter, language) : text.noGroup}</p></div>{!modal && groupFilter !== "__all__" && <Button onClick={() => void runOperation(() => window.naiDesktop.exportReferencePresets({ group: groupFilter }), text.exported)}>{text.exportGroup}</Button>}</header>
+        <div className="reference-preset-search-row"><input type="search" value={query} placeholder={text.search} aria-label={text.search} onChange={(event) => setQuery(event.target.value)} /><label className="field"><span>{text.currentGroup}</span><select value={groupFilter} onChange={(event) => selectGroup(event.target.value)}><option value="__all__">{text.all}</option><option value="">{text.noGroup}</option>{library.groups.map((item) => <option key={item} value={item}>{catalogGroupName(item, language)}</option>)}</select></label></div>
         {!modal && <div className="reference-preset-group-toolbar"><label className="field reference-preset-new-group"><span>{text.groupName}</span><input value={newGroupName} onChange={(event) => setNewGroupName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void createGroup(); }} /></label><Button disabled={busy || !newGroupName.trim()} onClick={() => void createGroup()}>{text.createGroup}</Button></div>}
         {allowedKinds.length > 1 && <div className="reference-preset-kind-tabs reference-preset-filter-tabs" role="group" aria-label={text.kind}><button className={kindFilter === "all" ? "active" : ""} onClick={() => setKindFilter("all")}>{text.all}</button>{allowedKinds.includes("vibe") && <button className={kindFilter === "vibe" ? "active" : ""} onClick={() => setKindFilter("vibe")}>{text.vibe}</button>}{allowedKinds.includes("precise") && <button className={kindFilter === "precise" ? "active" : ""} onClick={() => setKindFilter("precise")}>{text.precise}</button>}</div>}
         {presets.length === 0 ? <section className="reference-preset-empty"><strong>{text.empty}</strong><span>{text.createHint}</span></section> : <section className="reference-preset-grid">{presets.map((preset) => {
           const selected = selectedIds.has(preset.id);
           return <article className={`reference-preset-card ${selected ? "is-selected" : ""}`} key={preset.id} onClick={modal ? () => toggleSelected(preset.id) : undefined} onDoubleClick={(event) => { event.stopPropagation(); setPreviewPreset(preset); }} onKeyDown={modal ? (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); toggleSelected(preset.id); } } : undefined} tabIndex={modal ? 0 : undefined} aria-selected={modal ? selected : undefined}>
-            <div className="reference-preset-image-frame" title={text.preview}><img src={preset.fileUrl} alt={preset.name} loading="lazy" /><span>{preset.kind === "vibe" ? text.vibe : text.precise}</span>{modal && <input type="checkbox" checked={selected} readOnly tabIndex={-1} aria-label={`${preset.name} ${text.selected}`} />}</div>
-            <div className="reference-preset-card-body"><h3>{preset.name}</h3><p>{preset.group || text.noGroup}</p><small>{preset.kind === "vibe" ? `${text.infoLabel} ${preset.infoExtracted.toFixed(2)} · ${text.strengthLabel} ${preset.strength.toFixed(2)}` : `${text.typeLabel} ${preset.preciseType} · ${text.preciseStrengthLabel} ${preset.strength.toFixed(2)} · ${text.fidelityLabel} ${preset.fidelity.toFixed(2)}`}</small>{!modal && <label className="reference-preset-card-move" onClick={(event) => event.stopPropagation()}><span>{text.moveGroup}</span><select value={preset.group} disabled={busy} onChange={(event) => void moveToGroup(preset.id, event.target.value)}><option value="">{text.noGroup}</option>{library.groups.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>}</div>
+            <div className="reference-preset-image-frame" title={text.preview}><img src={preset.fileUrl} alt={localizedPresetName(preset)} loading="lazy" /><span>{preset.kind === "vibe" ? text.vibe : text.precise}</span>{modal && <input type="checkbox" checked={selected} readOnly tabIndex={-1} aria-label={`${localizedPresetName(preset)} ${text.selected}`} />}</div>
+            <div className="reference-preset-card-body"><h3>{localizedPresetName(preset)}</h3><p>{preset.group ? localizedPresetGroup(preset) : text.noGroup}</p><small>{preset.kind === "vibe" ? `${text.infoLabel} ${preset.infoExtracted.toFixed(2)} · ${text.strengthLabel} ${preset.strength.toFixed(2)}` : `${text.typeLabel} ${preset.preciseType} · ${text.preciseStrengthLabel} ${preset.strength.toFixed(2)} · ${text.fidelityLabel} ${preset.fidelity.toFixed(2)}`}</small>{!modal && <label className="reference-preset-card-move" onClick={(event) => event.stopPropagation()}><span>{text.moveGroup}</span><select value={preset.group} disabled={busy} onChange={(event) => void moveToGroup(preset.id, event.target.value)}><option value="">{text.noGroup}</option>{library.groups.map((item) => <option key={item} value={item}>{catalogGroupName(item, language)}</option>)}</select></label>}</div>
             {!modal && <div className="reference-preset-card-actions"><Button variant="primary" onClick={() => void apply(preset)}>{text.use}</Button><Button onClick={() => void removePreset(preset)}>{text.remove}</Button></div>}
           </article>;
         })}</section>}
@@ -406,5 +418,5 @@ export default function ReferencePresetManager({
     </main>
   );
 
-  return <>{modal ? <AppPortal><div className="modal-backdrop reference-preset-manager-backdrop"><div className="reference-preset-manager-modal">{content}</div></div></AppPortal> : content}{showCreate && <AppPortal><div className="modal-backdrop reference-preset-create-backdrop"><div className="reference-preset-create-modal">{createPanel}</div></div></AppPortal>}{previewPreset && <AppPortal><div className="modal-backdrop reference-preset-preview-backdrop" onClick={() => setPreviewPreset(null)}><div className="reference-preset-preview" onClick={(event) => event.stopPropagation()}><button className="reference-preset-close" type="button" onClick={() => setPreviewPreset(null)} aria-label={text.cancel}>×</button><img src={previewPreset.fileUrl} alt={previewPreset.name} /><strong>{previewPreset.name}</strong></div></div></AppPortal>}</>;
+  return <>{modal ? <AppPortal><div className="modal-backdrop reference-preset-manager-backdrop"><div className="reference-preset-manager-modal">{content}</div></div></AppPortal> : content}{showCreate && <AppPortal><div className="modal-backdrop reference-preset-create-backdrop"><div className="reference-preset-create-modal">{createPanel}</div></div></AppPortal>}{previewPreset && <AppPortal><div className="modal-backdrop reference-preset-preview-backdrop" onClick={() => setPreviewPreset(null)}><div className="reference-preset-preview" onClick={(event) => event.stopPropagation()}><button className="reference-preset-close" type="button" onClick={() => setPreviewPreset(null)} aria-label={text.cancel}>×</button><img src={previewPreset.fileUrl} alt={localizedPresetName(previewPreset)} /><strong>{localizedPresetName(previewPreset)}</strong></div></div></AppPortal>}</>;
 }

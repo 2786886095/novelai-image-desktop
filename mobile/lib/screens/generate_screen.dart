@@ -13,11 +13,13 @@ import '../i18n/app_locales.dart';
 import '../models/nai_models.dart';
 import '../prompts/capsule_data.dart';
 import '../prompts/prompt_tools.dart';
+import '../references/reference_catalog.dart';
 import '../references/reference_presets.dart';
 import '../services/nai_api.dart';
 import '../state/app_state.dart';
 import '../ui/studio_shell.dart';
 import '../ui/zoomable_image.dart';
+import 'reference_catalog_panel.dart';
 
 bool _isRoomyPhoneLandscape(BuildContext context) {
   final size = MediaQuery.sizeOf(context);
@@ -2128,8 +2130,8 @@ class _ReferenceControls extends StatelessWidget {
 
 class _ReferenceThumbnail extends StatelessWidget {
   final String path;
-  final double dimension;
-  const _ReferenceThumbnail({required this.path, this.dimension = 64});
+  static const double dimension = 64;
+  const _ReferenceThumbnail({required this.path});
 
   @override
   Widget build(BuildContext context) => ClipRRect(
@@ -2462,6 +2464,12 @@ class _ReferencePresetLibraryPanelState
   String _group = _allGroups;
   ReferencePresetKind? _kind;
   bool _busy = false;
+  String _query = '';
+  final Set<String> _selectedIds = <String>{};
+
+  Widget _presetImage(String path) => path.startsWith('asset:')
+      ? Image.asset(path.substring(6), fit: BoxFit.contain)
+      : Image.file(File(path), fit: BoxFit.contain);
 
   @override
   void initState() {
@@ -2726,7 +2734,7 @@ class _ReferencePresetLibraryPanelState
         children: [
           ListTile(
             title: Text(t('referencePresets.moveGroup')),
-            subtitle: Text(preset.name),
+            subtitle: Text(preset.localizedName(language)),
           ),
           RadioListTile<String>(
             value: '',
@@ -2738,7 +2746,7 @@ class _ReferencePresetLibraryPanelState
             RadioListTile<String>(
               value: group,
               groupValue: preset.group,
-              title: Text(group),
+              title: Text(localizeReferencePresetGroup(group, language)),
               onChanged: (next) => Navigator.pop(sheetContext, next),
             ),
         ],
@@ -2799,6 +2807,89 @@ class _ReferencePresetLibraryPanelState
     }
   }
 
+  Future<void> _previewPreset(
+      BuildContext context, ReferencePreset preset) async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Dialog.fullscreen(
+        child: SafeArea(
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: InteractiveViewer(
+                  minScale: 0.5,
+                  maxScale: 5,
+                  child: Center(
+                    child: _presetImage(preset.filePath),
+                  ),
+                ),
+              ),
+              Positioned(
+                right: 12,
+                top: 12,
+                child: IconButton.filledTonal(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  icon: const Icon(Icons.close),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _deletePreset(
+      BuildContext context, ReferencePreset preset) async {
+    final state = context.read<AppState>();
+    String t(String key) => mobileUiTextFor(state.settings.language, key);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(t('referencePresets.deleteTitle')),
+        content: Text(t('referencePresets.deleteConfirm')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(t('common.cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(t('common.remove')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    await state.deleteReferencePreset(preset.id);
+    if (mounted) setState(() => _selectedIds.remove(preset.id));
+  }
+
+  Future<void> _applySelected(BuildContext context) async {
+    if (_selectedIds.isEmpty || _busy) return;
+    final state = context.read<AppState>();
+    setState(() => _busy = true);
+    String? lastError;
+    var applied = 0;
+    for (final preset in state.referencePresets
+        .where((item) => _selectedIds.contains(item.id))) {
+      final error = widget.onApplyPreset == null
+          ? await state.applyReferencePreset(preset.id)
+          : await widget.onApplyPreset!(preset);
+      if (error == null) {
+        applied += 1;
+      } else {
+        lastError = error;
+      }
+    }
+    if (!mounted || !context.mounted) return;
+    setState(() => _busy = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(lastError ?? '${state.displayStatus} · $applied')),
+    );
+    if (applied > 0 && context.mounted) Navigator.maybePop(context);
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
@@ -2806,6 +2897,10 @@ class _ReferencePresetLibraryPanelState
     String t(String key) => mobileUiTextFor(language, key);
     String countText(String key, int count) =>
         t(key).replaceAll('{count}', '$count');
+    String presetName(ReferencePreset preset) => preset.localizedName(language);
+    String groupName(String group) =>
+        localizeReferencePresetGroup(group, language);
+    final normalizedQuery = _query.trim().toLowerCase();
     final presets = state.referencePresets.where((preset) {
       final matchesGroup = _group == _allGroups ||
           (_group == _ungrouped
@@ -2813,9 +2908,12 @@ class _ReferencePresetLibraryPanelState
               : preset.group == _group);
       final matchesAllowed =
           widget.allowedKind == null || preset.kind == widget.allowedKind;
+      final matchesQuery = normalizedQuery.isEmpty ||
+          preset.localizedSearchText.contains(normalizedQuery);
       return matchesGroup &&
           matchesAllowed &&
-          (_kind == null || preset.kind == _kind);
+          (_kind == null || preset.kind == _kind) &&
+          matchesQuery;
     }).toList()
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
@@ -2823,125 +2921,108 @@ class _ReferencePresetLibraryPanelState
       final detail = preset.kind == ReferencePresetKind.vibe
           ? '${t('referencePresets.vibe')} · ${preset.infoExtracted.toStringAsFixed(2)} / ${preset.strength.toStringAsFixed(2)}'
           : '${t('referencePresets.precise')} · ${preset.preciseType} · ${preset.strength.toStringAsFixed(2)} / ${preset.fidelity.toStringAsFixed(2)}';
-      final groupName =
-          preset.group.isEmpty ? t('referencePresets.ungrouped') : preset.group;
+      final presetGroupName = preset.group.isEmpty
+          ? t('referencePresets.ungrouped')
+          : groupName(preset.group);
+      final selected = _selectedIds.contains(preset.id);
       return Card(
         clipBehavior: Clip.antiAlias,
         margin: EdgeInsets.zero,
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        color: selected ? Theme.of(context).colorScheme.primaryContainer : null,
+        child: InkWell(
+          onTap: widget.standalone
+              ? null
+              : () => setState(() {
+                    if (selected) {
+                      _selectedIds.remove(preset.id);
+                    } else {
+                      _selectedIds.add(preset.id);
+                    }
+                  }),
+          onDoubleTap: () => _previewPreset(context, preset),
+          onLongPress: () => _previewPreset(context, preset),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _ReferenceThumbnail(path: preset.filePath, dimension: 104),
-              const SizedBox(width: 12),
               Expanded(
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Container(
+                      color: Theme.of(context).colorScheme.surfaceContainerLow,
+                      child: _presetImage(preset.filePath),
+                    ),
+                    Positioned(
+                      left: 8,
+                      top: 8,
+                      child: Chip(
+                        visualDensity: VisualDensity.compact,
+                        label: Text(preset.kind == ReferencePresetKind.vibe
+                            ? t('referencePresets.vibe')
+                            : t('referencePresets.precise')),
+                      ),
+                    ),
+                    if (!widget.standalone)
+                      Positioned(
+                        right: 8,
+                        top: 8,
+                        child: Checkbox(
+                          value: selected,
+                          onChanged: (_) => setState(() {
+                            if (selected) {
+                              _selectedIds.remove(preset.id);
+                            } else {
+                              _selectedIds.add(preset.id);
+                            }
+                          }),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(10, 9, 10, 10),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            preset.name,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleSmall
-                                ?.copyWith(fontWeight: FontWeight.w700),
+                    Text(presetName(preset),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleSmall
+                            ?.copyWith(fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 3),
+                    Text(presetGroupName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall),
+                    Text(detail,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall),
+                    if (widget.standalone) ...[
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: _busy
+                                  ? null
+                                  : () => _movePresetToGroup(context, preset),
+                              child: Text(t('referencePresets.moveGroup')),
+                            ),
                           ),
-                        ),
-                        PopupMenuButton<String>(
-                          padding: EdgeInsets.zero,
-                          onSelected: (value) {
-                            if (value == 'export') {
-                              _export(context, presetId: preset.id);
-                            } else if (value == 'delete') {
-                              state.deleteReferencePreset(preset.id);
-                            }
-                          },
-                          itemBuilder: (_) => [
-                            PopupMenuItem(
-                              value: 'export',
-                              child: ListTile(
-                                dense: true,
-                                contentPadding: EdgeInsets.zero,
-                                leading: const Icon(Icons.ios_share_outlined),
-                                title: Text(t('referencePresets.exportOne')),
-                              ),
-                            ),
-                            PopupMenuItem(
-                              value: 'delete',
-                              child: ListTile(
-                                dense: true,
-                                contentPadding: EdgeInsets.zero,
-                                leading: const Icon(Icons.delete_outline),
-                                title: Text(t('common.remove')),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 4,
-                      children: [
-                        Chip(
-                          visualDensity: VisualDensity.compact,
-                          avatar: const Icon(Icons.folder_outlined, size: 16),
-                          label: Text(groupName),
-                        ),
-                        Chip(
-                          visualDensity: VisualDensity.compact,
-                          label: Text(preset.kind == ReferencePresetKind.vibe
-                              ? t('referencePresets.vibe')
-                              : t('referencePresets.precise')),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      detail,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        FilledButton.icon(
-                          onPressed: _busy
-                              ? null
-                              : () async {
-                                  final error = widget.onApplyPreset == null
-                                      ? await state
-                                          .applyReferencePreset(preset.id)
-                                      : await widget.onApplyPreset!(preset);
-                                  if (!context.mounted) return;
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content:
-                                          Text(error ?? state.displayStatus),
-                                    ),
-                                  );
-                                },
-                          icon: const Icon(Icons.bolt_outlined),
-                          label: Text(t('referencePresets.use')),
-                        ),
-                        OutlinedButton.icon(
-                          onPressed: _busy
-                              ? null
-                              : () => _movePresetToGroup(context, preset),
-                          icon: const Icon(Icons.drive_file_move_outline),
-                          label: Text(t('referencePresets.moveGroup')),
-                        ),
-                      ],
-                    ),
+                          IconButton(
+                            tooltip: t('common.remove'),
+                            onPressed: _busy
+                                ? null
+                                : () => _deletePreset(context, preset),
+                            icon: const Icon(Icons.delete_outline),
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -2958,11 +3039,18 @@ class _ReferencePresetLibraryPanelState
       child: LayoutBuilder(
         builder: (context, constraints) {
           final wide = constraints.maxWidth >= 760;
+          final columns = constraints.maxWidth >= 1180
+              ? 5
+              : constraints.maxWidth >= 920
+                  ? 4
+                  : constraints.maxWidth >= 620
+                      ? 3
+                      : 2;
           final selectedGroupName = _group == _allGroups
               ? t('referencePresets.allGroups')
               : _group == _ungrouped
                   ? t('referencePresets.ungrouped')
-                  : _group;
+                  : groupName(_group);
           return SingleChildScrollView(
             child: Column(
               children: [
@@ -3042,6 +3130,23 @@ class _ReferencePresetLibraryPanelState
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          TextField(
+                            decoration: InputDecoration(
+                              labelText: t('referencePresets.search'),
+                              prefixIcon: const Icon(Icons.search),
+                              border: const OutlineInputBorder(),
+                              suffixIcon: _query.isEmpty
+                                  ? null
+                                  : IconButton(
+                                      onPressed: () =>
+                                          setState(() => _query = ''),
+                                      icon: const Icon(Icons.close),
+                                    ),
+                            ),
+                            onChanged: (value) =>
+                                setState(() => _query = value),
+                          ),
+                          const SizedBox(height: 10),
                           Row(
                             children: [
                               Expanded(
@@ -3070,7 +3175,7 @@ class _ReferencePresetLibraryPanelState
                                         in state.referencePresetGroups)
                                       DropdownMenuItem(
                                         value: group,
-                                        child: Text(group),
+                                        child: Text(groupName(group)),
                                       ),
                                   ],
                                   onChanged: (value) => setState(
@@ -3078,21 +3183,25 @@ class _ReferencePresetLibraryPanelState
                                 ),
                               ),
                               const SizedBox(width: 8),
-                              IconButton.filledTonal(
-                                tooltip: t('referencePresets.createGroup'),
-                                onPressed:
-                                    _busy ? null : () => _createGroup(context),
-                                icon: const Icon(
-                                    Icons.create_new_folder_outlined),
-                              ),
+                              if (widget.standalone)
+                                IconButton.filledTonal(
+                                  tooltip: t('referencePresets.createGroup'),
+                                  onPressed: _busy
+                                      ? null
+                                      : () => _createGroup(context),
+                                  icon: const Icon(
+                                      Icons.create_new_folder_outlined),
+                                ),
                             ],
                           ),
-                          const SizedBox(height: 8),
-                          Text(
-                            t('referencePresets.createHint'),
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                          const SizedBox(height: 10),
+                          if (widget.standalone) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              t('referencePresets.createHint'),
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                            const SizedBox(height: 10),
+                          ],
                           if (widget.allowedKind == null) ...[
                             Wrap(
                               spacing: 8,
@@ -3121,11 +3230,11 @@ class _ReferencePresetLibraryPanelState
                             ),
                             const SizedBox(height: 10),
                           ],
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              if (state.referencePresets.isNotEmpty)
+                          if (widget.standalone)
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
                                 FilledButton.icon(
                                   onPressed:
                                       _busy ? null : () => _addPreset(context),
@@ -3133,32 +3242,40 @@ class _ReferencePresetLibraryPanelState
                                       Icons.add_photo_alternate_outlined),
                                   label: Text(t('referencePresets.add')),
                                 ),
-                              OutlinedButton.icon(
-                                onPressed:
-                                    _busy ? null : () => _import(context),
-                                icon: const Icon(Icons.file_download_outlined),
-                                label: Text(t('referencePresets.import')),
-                              ),
-                              OutlinedButton.icon(
-                                onPressed: _busy || _group == _allGroups
-                                    ? null
-                                    : () => _export(
-                                          context,
-                                          group: _group == _ungrouped
-                                              ? ''
-                                              : _group,
-                                        ),
-                                icon: const Icon(Icons.folder_zip_outlined),
-                                label: Text(t('referencePresets.exportGroup')),
-                              ),
-                              OutlinedButton.icon(
-                                onPressed:
-                                    _busy ? null : () => _export(context),
-                                icon: const Icon(Icons.archive_outlined),
-                                label: Text(t('referencePresets.exportAll')),
-                              ),
-                            ],
-                          ),
+                                OutlinedButton.icon(
+                                  onPressed:
+                                      _busy ? null : () => _import(context),
+                                  icon:
+                                      const Icon(Icons.file_download_outlined),
+                                  label: Text(t('referencePresets.import')),
+                                ),
+                                OutlinedButton.icon(
+                                  onPressed: _busy || _group == _allGroups
+                                      ? null
+                                      : () => _export(
+                                            context,
+                                            group: _group == _ungrouped
+                                                ? ''
+                                                : _group,
+                                          ),
+                                  icon: const Icon(Icons.folder_zip_outlined),
+                                  label:
+                                      Text(t('referencePresets.exportGroup')),
+                                ),
+                                OutlinedButton.icon(
+                                  onPressed:
+                                      _busy ? null : () => _export(context),
+                                  icon: const Icon(Icons.archive_outlined),
+                                  label: Text(t('referencePresets.exportAll')),
+                                ),
+                              ],
+                            ),
+                          if (!widget.standalone)
+                            OutlinedButton.icon(
+                              onPressed: _busy ? null : () => _import(context),
+                              icon: const Icon(Icons.file_download_outlined),
+                              label: Text(t('referencePresets.import')),
+                            ),
                         ],
                       ),
                     ),
@@ -3199,44 +3316,57 @@ class _ReferencePresetLibraryPanelState
                                 const SizedBox(height: 10),
                                 Text(t('referencePresets.empty')),
                                 const SizedBox(height: 12),
-                                FilledButton.icon(
-                                  onPressed:
-                                      _busy ? null : () => _addPreset(context),
-                                  icon: const Icon(
-                                      Icons.add_photo_alternate_outlined),
-                                  label: Text(t('referencePresets.add')),
-                                ),
                               ],
                             ),
                           ),
                         ),
                       )
-                    : wide
-                        ? GridView.builder(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                            gridDelegate:
-                                const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 2,
-                              crossAxisSpacing: 10,
-                              mainAxisSpacing: 10,
-                              mainAxisExtent: 270,
+                    : GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        padding: EdgeInsets.fromLTRB(
+                            16, 0, 16, widget.standalone ? 24 : 92),
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: columns,
+                          crossAxisSpacing: 10,
+                          mainAxisSpacing: 10,
+                          mainAxisExtent: wide ? 300 : 270,
+                        ),
+                        itemCount: presets.length,
+                        itemBuilder: (_, index) => presetCard(presets[index]),
+                      ),
+                if (widget.standalone) const ReferenceCatalogPanel(),
+                if (!widget.standalone)
+                  SafeArea(
+                    top: false,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '${t('referencePresets.selected')} ${_selectedIds.length}',
+                              style: Theme.of(context).textTheme.titleSmall,
                             ),
-                            itemCount: presets.length,
-                            itemBuilder: (_, index) =>
-                                presetCard(presets[index]),
-                          )
-                        : ListView.separated(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                            itemCount: presets.length,
-                            separatorBuilder: (_, __) =>
-                                const SizedBox(height: 10),
-                            itemBuilder: (_, index) =>
-                                presetCard(presets[index]),
                           ),
+                          TextButton(
+                            onPressed: _selectedIds.isEmpty
+                                ? null
+                                : () => setState(_selectedIds.clear),
+                            child: Text(t('referencePresets.clearSelection')),
+                          ),
+                          const SizedBox(width: 8),
+                          FilledButton.icon(
+                            onPressed: _selectedIds.isEmpty || _busy
+                                ? null
+                                : () => _applySelected(context),
+                            icon: const Icon(Icons.done_all),
+                            label: Text(t('referencePresets.applySelected')),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
               ],
             ),
           );

@@ -20,7 +20,7 @@ const MAX_IMAGE_BYTES = 50 * 1024 * 1024;
 const SUPPORTED_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp"]);
 export const DEFAULT_REFERENCE_PRESET_GROUPS = [
   "原神", "妮姬", "崩坏三", "明日方舟", "星穹铁道", "绝区零",
-  "碧蓝航线", "蔚蓝档案", "鸣潮", "终末地", "异环",
+  "蔚蓝档案", "鸣潮", "终末地", "异环",
 ] as const;
 
 function withDefaultGroups(groups: string[]) {
@@ -37,6 +37,16 @@ function libraryPath(userDataRoot = app.getPath("userData")) {
 
 function cleanText(value: unknown, max = 120) {
   return String(value ?? "").trim().slice(0, max);
+}
+
+function cleanLocalizedMap(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const allowed = new Set(["zh-CN", "zh-TW", "ja-JP", "ko-KR", "en-US"]);
+  const entries = Object.entries(value as Record<string, unknown>)
+    .filter(([key]) => allowed.has(key))
+    .map(([key, item]) => [key, cleanText(item, 160)] as const)
+    .filter(([, item]) => Boolean(item));
+  return entries.length ? Object.fromEntries(entries) : undefined;
 }
 
 function numberIn(value: unknown, fallback: number, min = 0, max = 1) {
@@ -82,6 +92,10 @@ function normalizePreset(raw: Record<string, unknown>, filePath: string) {
     width: Math.max(0, Math.floor(Number(raw.width) || 0)),
     height: Math.max(0, Math.floor(Number(raw.height) || 0)),
     sourceId: cleanText(raw.sourceId, 180) || undefined,
+    sourceNames: cleanLocalizedMap(raw.sourceNames),
+    sourceGameNames: cleanLocalizedMap(raw.sourceGameNames),
+    sourceGameId: cleanText(raw.sourceGameId, 120) || undefined,
+    sourceCategory: cleanText(raw.sourceCategory, 80) || undefined,
   } satisfies Omit<ReferencePreset, "fileUrl">);
 }
 

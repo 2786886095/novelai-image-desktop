@@ -58,7 +58,8 @@ class AppState extends ChangeNotifier {
   AccountSummary account = const AccountSummary(hasToken: false);
   List<HistoryItem> history = [];
   List<HistoryGroup> groups = [];
-  List<String> referencePresetGroups = [];
+  List<String> referencePresetGroups =
+      referencePresetGroupsWithDefaults(const <String>[]);
   List<ReferencePreset> referencePresets = [];
   HistoryItem? current;
   WorkingImage? workbenchImage;
@@ -218,12 +219,14 @@ class AppState extends ChangeNotifier {
       groups = await storage.getGroups();
       try {
         final referenceLibrary = await storage.getReferencePresetLibrary();
-        referencePresetGroups = List.of(referenceLibrary.groups);
+        referencePresetGroups =
+            referencePresetGroupsWithDefaults(referenceLibrary.groups);
         referencePresets = List.of(referenceLibrary.presets);
       } catch (_) {
         // Reference presets are optional user data. A damaged legacy entry
         // must never prevent the generator from reaching its first frame.
-        referencePresetGroups = [];
+        referencePresetGroups =
+            referencePresetGroupsWithDefaults(const <String>[]);
         referencePresets = [];
       }
       selectedGroupId = groups.any(
@@ -909,6 +912,70 @@ class AppState extends ChangeNotifier {
         informationExtracted: informationExtracted.clamp(0, 1).toDouble(),
         width: dimensions.$1,
         height: dimensions.$2,
+      ));
+      await _persistReferencePresetLibrary();
+      status = _rt('referencePresets.saved');
+      notifyListeners();
+      return null;
+    } catch (_) {
+      return _rt('referencePresets.saveFailed');
+    }
+  }
+
+  Future<String?> saveDownloadedPreciseReferencePreset({
+    required Uint8List bytes,
+    required String sourceId,
+    required String name,
+    required String group,
+    required int width,
+    required int height,
+    Map<String, String> sourceNames = const {},
+    Map<String, String> sourceGameNames = const {},
+    String sourceGameId = '',
+    String sourceCategory = '',
+  }) async {
+    if (referencePresets.any((preset) => preset.sourceId == sourceId)) {
+      return null;
+    }
+    final title = name.trim();
+    if (title.isEmpty || bytes.isEmpty) {
+      return _rt('referencePresets.saveFailed');
+    }
+    try {
+      final dimensions = decodeImageDimensions(bytes);
+      if (dimensions.$1 <= 0 || dimensions.$2 <= 0) {
+        return _rt('referencePresets.saveFailed');
+      }
+      final id = _newReferencePresetId();
+      final path = await storage.persistReferencePresetImage(
+        presetId: id,
+        bytes: bytes,
+        sourcePath: '$sourceId.png',
+      );
+      final cleanGroup = group.trim();
+      if (cleanGroup.isNotEmpty &&
+          !referencePresetGroups.contains(cleanGroup)) {
+        referencePresetGroups.add(cleanGroup);
+        referencePresetGroups.sort();
+      }
+      referencePresets.add(ReferencePreset(
+        id: id,
+        name: title,
+        group: cleanGroup,
+        kind: ReferencePresetKind.precise,
+        filePath: path,
+        createdAt: DateTime.now().toIso8601String(),
+        sourceId: sourceId,
+        preciseType: 'character',
+        strength: 1,
+        fidelity: 1,
+        informationExtracted: 1,
+        width: width > 0 ? width : dimensions.$1,
+        height: height > 0 ? height : dimensions.$2,
+        sourceNames: sourceNames,
+        sourceGameNames: sourceGameNames,
+        sourceGameId: sourceGameId,
+        sourceCategory: sourceCategory,
       ));
       await _persistReferencePresetLibrary();
       status = _rt('referencePresets.saved');
