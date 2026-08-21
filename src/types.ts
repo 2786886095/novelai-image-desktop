@@ -1081,6 +1081,8 @@ export interface ReferencePreset {
   informationExtracted: number;
   width: number;
   height: number;
+  /** Stable remote catalog id, when downloaded from the online character library. */
+  sourceId?: string;
 }
 
 export interface ReferencePresetLibrary {
@@ -1101,6 +1103,7 @@ export interface ReferencePresetSaveRequest {
   informationExtracted?: number;
   width?: number;
   height?: number;
+  sourceId?: string;
 }
 
 export interface ReferencePresetExportRequest {

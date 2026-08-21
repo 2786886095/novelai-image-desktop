@@ -18,6 +18,14 @@ const VERSION = 1;
 const MAX_PRESETS = 5000;
 const MAX_IMAGE_BYTES = 50 * 1024 * 1024;
 const SUPPORTED_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp"]);
+export const DEFAULT_REFERENCE_PRESET_GROUPS = [
+  "原神", "妮姬", "崩坏三", "明日方舟", "星穹铁道", "绝区零",
+  "碧蓝航线", "蔚蓝档案", "鸣潮", "终末地", "异环",
+] as const;
+
+function withDefaultGroups(groups: string[]) {
+  return [...new Set([...DEFAULT_REFERENCE_PRESET_GROUPS, ...groups])];
+}
 
 function rootDirectory(userDataRoot = app.getPath("userData")) {
   return path.join(userDataRoot, "reference-presets");
@@ -73,6 +81,7 @@ function normalizePreset(raw: Record<string, unknown>, filePath: string) {
     informationExtracted: numberIn(raw.informationExtracted, 1),
     width: Math.max(0, Math.floor(Number(raw.width) || 0)),
     height: Math.max(0, Math.floor(Number(raw.height) || 0)),
+    sourceId: cleanText(raw.sourceId, 180) || undefined,
   } satisfies Omit<ReferencePreset, "fileUrl">);
 }
 
@@ -89,7 +98,7 @@ async function writeLibrary(library: ReferencePresetLibrary, userDataRoot?: stri
   await fs.mkdir(root, { recursive: true });
   const payload = JSON.stringify({
     version: VERSION,
-    groups: [...new Set(library.groups.map((group) => cleanText(group)).filter(Boolean))],
+    groups: withDefaultGroups(library.groups.map((group) => cleanText(group)).filter(Boolean)),
     presets: library.presets.map(serializablePreset),
   });
   const target = libraryPath(userDataRoot);
@@ -117,7 +126,7 @@ export async function listReferencePresets(
       if (presets.length >= MAX_PRESETS) break;
     }
     const library = {
-      groups: [...new Set((parsed.groups ?? []).map((value) => cleanText(value)).filter(Boolean))],
+      groups: withDefaultGroups((parsed.groups ?? []).map((value) => cleanText(value)).filter(Boolean)),
       presets,
     };
     if ((parsed.presets?.length ?? 0) !== presets.length) {
@@ -125,7 +134,7 @@ export async function listReferencePresets(
     }
     return library;
   } catch {
-    return { groups: [], presets: [] };
+    return { groups: [...DEFAULT_REFERENCE_PRESET_GROUPS], presets: [] };
   }
 }
 

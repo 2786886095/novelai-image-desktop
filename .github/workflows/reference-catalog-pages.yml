@@ -1,0 +1,31 @@
+name: Publish reference catalog
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "catalog-site/**"
+      - "public/reference-catalog/index.json"
+      - ".github/workflows/reference-catalog-pages.yml"
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assemble site
+        run: |
+          mkdir -p _site/reference-catalog
+          cp catalog-site/index.html _site/index.html
+          cp public/reference-catalog/index.json _site/reference-catalog/index.json
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4
