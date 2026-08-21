@@ -52,11 +52,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Electron 42 downloads its binary lazily. Without this serial warm-up,
-      # parallel Vitest workers can race while creating electron/dist on a fresh
-      # Windows runner (error 183: directory already exists).
-      - name: Warm Electron binary (Windows)
-        if: runner.os == 'Windows'
+      # Electron 42 may download its binary lazily even after npm ci. Without a
+      # serial warm-up, parallel Vitest workers can race while creating
+      # electron/dist on fresh Windows and macOS runners (directory exists).
+      - name: Warm Electron binary
         run: npx electron --version
 
       - name: Typecheck
