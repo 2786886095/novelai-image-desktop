@@ -143,6 +143,22 @@ export async function fetchReferenceAsset(
   signal?: AbortSignal,
 ) {
   const sources = [...new Set([asset.downloadMirrors?.gitee, asset.downloadUrl, asset.downloadMirrors?.github].filter((value): value is string => Boolean(value)))];
+  if (window.naiDesktop?.downloadReferenceCatalogAsset) {
+    const requestId = `${asset.id}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+    const unsubscribe = window.naiDesktop.onReferenceCatalogDownloadProgress((progress) => {
+      if (progress.id === requestId) onProgress(progress.loaded, progress.total || asset.bytes || progress.loaded);
+    });
+    try {
+      const result = await window.naiDesktop.downloadReferenceCatalogAsset({ id: requestId, urls: sources });
+      if (!result.ok || !result.base64) throw new Error(result.message || "Reference asset is unavailable");
+      const binary = atob(result.base64);
+      const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+      onProgress(bytes.byteLength, result.bytes || asset.bytes || bytes.byteLength);
+      return bytes;
+    } finally {
+      unsubscribe();
+    }
+  }
   let response: Response | undefined;
   let lastError: unknown;
   for (const source of sources) {

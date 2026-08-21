@@ -772,6 +772,52 @@ function registerIpc() {
   ipcMain.handle("referencePreset:export", (_event, request) =>
     exportReferencePresets(request),
   );
+  ipcMain.handle(
+    "referenceCatalog:download",
+    async (event, request: { id?: string; urls?: string[] }) => {
+      const id = String(request?.id ?? "");
+      const allowedHosts = new Set([
+        "gitee.com",
+        "raw.giteeusercontent.com",
+        "media.githubusercontent.com",
+        "raw.githubusercontent.com",
+      ]);
+      const urls = [...new Set((request?.urls ?? []).filter((value) => {
+        try {
+          const parsed = new URL(value);
+          return parsed.protocol === "https:" && allowedHosts.has(parsed.hostname);
+        } catch {
+          return false;
+        }
+      }))];
+      let lastError: unknown;
+      for (const url of urls) {
+        try {
+          const response = await fetch(url, { redirect: "follow" });
+          if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`);
+          const total = Number(response.headers.get("content-length")) || 0;
+          const reader = response.body.getReader();
+          const chunks: Uint8Array[] = [];
+          let loaded = 0;
+          while (true) {
+            const next = await reader.read();
+            if (next.done) break;
+            if (!next.value) continue;
+            chunks.push(next.value);
+            loaded += next.value.byteLength;
+            if (!event.sender.isDestroyed()) {
+              event.sender.send("referenceCatalog:downloadProgress", { id, loaded, total: total || loaded });
+            }
+          }
+          const bytes = Buffer.concat(chunks.map((chunk) => Buffer.from(chunk)));
+          return { ok: true, base64: bytes.toString("base64"), bytes: bytes.byteLength };
+        } catch (error) {
+          lastError = error;
+        }
+      }
+      return { ok: false, message: lastError instanceof Error ? lastError.message : "Reference asset unavailable" };
+    },
+  );
   ipcMain.handle("settings:getReverseDefaults", () =>
     getReversePromptTemplateDefaults(),
   );

@@ -1355,6 +1355,15 @@ export interface NaiDesktopApi {
   exportReferencePresets: (
     request?: ReferencePresetExportRequest,
   ) => Promise<ReferencePresetOperationResult>;
+  downloadReferenceCatalogAsset: (request: {
+    id: string;
+    urls: string[];
+  }) => Promise<{ ok: boolean; base64?: string; bytes?: number; message?: string }>;
+  onReferenceCatalogDownloadProgress: (callback: (event: {
+    id: string;
+    loaded: number;
+    total: number;
+  }) => void) => () => void;
   artistLabPickTarget: () => Promise<{
     filePath: string;
     fileUrl: string;

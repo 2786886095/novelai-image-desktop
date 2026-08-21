@@ -323,6 +323,13 @@ contextBridge.exposeInMainWorld("naiDesktop", {
     request: ReferencePresetExportRequest = {},
   ): Promise<ReferencePresetOperationResult> =>
     ipcRenderer.invoke("referencePreset:export", request),
+  downloadReferenceCatalogAsset: (request: { id: string; urls: string[] }) =>
+    ipcRenderer.invoke("referenceCatalog:download", request),
+  onReferenceCatalogDownloadProgress: (callback: (event: { id: string; loaded: number; total: number }) => void) => {
+    const listener = (_event: unknown, payload: { id: string; loaded: number; total: number }) => callback(payload);
+    ipcRenderer.on("referenceCatalog:downloadProgress", listener);
+    return () => ipcRenderer.removeListener("referenceCatalog:downloadProgress", listener);
+  },
   isFirstRun: () => ipcRenderer.invoke("settings:isFirstRun"),
   completeSetup: () => ipcRenderer.invoke("settings:completeSetup"),
 
