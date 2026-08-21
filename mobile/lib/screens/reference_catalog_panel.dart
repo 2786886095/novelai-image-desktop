@@ -218,7 +218,15 @@ Map<String, String> _text(String language) =>
 
 class ReferenceCatalogPanel extends StatefulWidget {
   final bool autoLoad;
-  const ReferenceCatalogPanel({super.key, this.autoLoad = false});
+  final ReferenceCatalog? initialCatalog;
+  final String? initialGame;
+
+  const ReferenceCatalogPanel({
+    super.key,
+    this.autoLoad = false,
+    this.initialCatalog,
+    this.initialGame,
+  });
 
   @override
   State<ReferenceCatalogPanel> createState() => _ReferenceCatalogPanelState();
@@ -246,6 +254,8 @@ class _ReferenceCatalogPanelState extends State<ReferenceCatalogPanel> {
   @override
   void initState() {
     super.initState();
+    _catalog = widget.initialCatalog;
+    _game = widget.initialGame ?? _all;
     if (widget.autoLoad) _load();
   }
 
@@ -852,7 +862,7 @@ class _ReferenceCatalogPanelState extends State<ReferenceCatalogPanel> {
                                       ? '${text['downloadingSeries']} ${_bulkDone + _bulkFailed}/$_bulkTotal'
                                       : seriesPending.isEmpty
                                           ? text['downloaded']!
-                                          : '${text['downloadSeries']} · ${formatReferenceCatalogBytes(seriesPendingBytes)}'),
+                                          : text['downloadSeries']!),
                                 ),
                               ],
                             ),

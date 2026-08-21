@@ -100,6 +100,11 @@ export default function ReferenceCatalogPanel({ library, onDownloaded }: { libra
   const previewRef = useRef<HTMLDivElement>(null);
   const confirmRef = useRef<HTMLElement>(null);
   const inFlightRef = useRef(new Set<string>());
+  const captureGameAppliedRef = useRef(false);
+  const captureStateAppliedRef = useRef(false);
+  const captureParams = useMemo(() => new URLSearchParams(window.location.search), []);
+  const captureState = captureParams.get("uiCatalogState");
+  const captureGame = captureParams.get("uiCatalogGame");
   const language = useAppStore((state) => state.settings?.language) as AppLanguage | undefined;
   const setToast = useAppStore((state) => state.setToast);
   const text = textFor(language);
@@ -196,6 +201,42 @@ export default function ReferenceCatalogPanel({ library, onDownloaded }: { libra
     : bulk?.totalCount
       ? Math.min(100, Math.round((bulk.completedCount + bulk.failedCount) / bulk.totalCount * 100))
       : 0;
+
+  // Screenshot QA states are only enabled by Electron's explicit capture query.
+  // They let release audits cover selected-series, progress, failure, preview,
+  // and confirmation layouts without downloading hundreds of real assets.
+  useEffect(() => {
+    if (!catalog || !captureState || captureState === "empty" || captureGameAppliedRef.current) return;
+    const requestedGame = captureGame && gameOptions.some((item) => item.id === captureGame)
+      ? captureGame
+      : gameOptions[0]?.id ?? catalog.assets[0]?.game;
+    if (!requestedGame) return;
+    captureGameAppliedRef.current = true;
+    setGame(requestedGame);
+  }, [captureGame, captureState, catalog, gameOptions]);
+
+  useEffect(() => {
+    if (!captureState || captureStateAppliedRef.current || game === "__all__" || !selectedSeriesAssets.length) return;
+    captureStateAppliedRef.current = true;
+    if (captureState === "confirm") {
+      setConfirmSeries(true);
+      return;
+    }
+    if (captureState === "preview") {
+      setPreviewAsset(selectedSeriesAssets[0]);
+      return;
+    }
+    const totalCount = Math.max(1, pendingSeriesAssets.length);
+    const totalBytes = Math.max(1, seriesMetrics.pendingBytes);
+    if (captureState === "progress") {
+      const completedCount = Math.min(37, Math.max(1, Math.floor(totalCount * .22)));
+      setBulk({ game, busy: true, totalCount, completedCount, failedCount: 0, totalBytes, processedBytes: Math.floor(totalBytes * .24) });
+    } else if (captureState === "failed") {
+      setBulk({ game, busy: false, totalCount, completedCount: Math.max(0, totalCount - 3), failedCount: Math.min(3, totalCount), totalBytes, processedBytes: totalBytes });
+    } else if (captureState === "complete") {
+      setBulk({ game, busy: false, totalCount, completedCount: totalCount, failedCount: 0, totalBytes, processedBytes: totalBytes });
+    }
+  }, [captureState, game, pendingSeriesAssets.length, selectedSeriesAssets, seriesMetrics.pendingBytes]);
 
   useEffect(() => { setVisibleCount(60); }, [category, game, query]);
   useEffect(() => {
@@ -344,7 +385,7 @@ export default function ReferenceCatalogPanel({ library, onDownloaded }: { libra
           <div className="reference-catalog-series-copy"><span className="reference-catalog-series-icon" aria-hidden="true"><i className="weui-icon-download" /></span><div><span className="reference-catalog-eyebrow">{text.seriesTitle}</span><h4>{localizedGame(game)}</h4><p>{text.seriesHint}</p></div></div>
           <div className="reference-catalog-series-metrics"><span><small>{text.total}</small><strong>{seriesMetrics.totalCount} · {formatCatalogBytes(seriesMetrics.totalBytes)}</strong></span><span><small>{text.pending}</small><strong>{seriesMetrics.pendingCount} · {formatCatalogBytes(seriesMetrics.pendingBytes)}</strong></span><span><small>{text.saved}</small><strong>{seriesMetrics.downloadedCount}</strong></span></div>
           {bulk?.game === game && <div className="reference-catalog-bulk-progress" role="status" aria-live="polite"><div className="reference-catalog-bulk-progress-copy"><span>{bulk.busy ? text.downloadingSeries : bulk.failedCount ? text.seriesPartial : text.seriesDone}</span><strong>{bulk.completedCount + bulk.failedCount}/{bulk.totalCount} · {bulkPercent}%</strong></div><div className="weui-progress"><div className="weui-progress__bar"><span className="weui-progress__inner-bar" style={{ width: `${bulkPercent}%` }} /></div></div>{bulk.failedCount > 0 && <small>{text.failed} {bulk.failedCount}</small>}</div>}
-          <button type="button" className="weui-btn weui-btn_primary reference-catalog-series-action" disabled={Boolean(bulk?.busy) || seriesMetrics.pendingCount === 0} onClick={() => setConfirmSeries(true)}>{bulk?.busy && <i className="weui-loading" />}<span>{bulk?.busy ? `${text.downloadingSeries} ${bulk.completedCount + bulk.failedCount}/${bulk.totalCount}` : seriesMetrics.pendingCount ? `${text.downloadSeries} · ${formatCatalogBytes(seriesMetrics.pendingBytes)}` : text.nothingPending}</span></button>
+          <button type="button" className="weui-btn weui-btn_primary reference-catalog-series-action" disabled={Boolean(bulk?.busy) || seriesMetrics.pendingCount === 0} onClick={() => setConfirmSeries(true)}>{bulk?.busy ? <i className="weui-loading" /> : <i className="weui-icon-download" aria-hidden="true" />}<span>{bulk?.busy ? `${text.downloadingSeries} ${bulk.completedCount + bulk.failedCount}/${bulk.totalCount}` : seriesMetrics.pendingCount ? text.downloadSeries : text.nothingPending}</span></button>
         </section>}
 
         <div className="reference-catalog-result-heading"><div><strong>{text.found}</strong><span>{assets.length} / {catalog.assets.length}</span></div><span>{game === "__all__" ? text.all : localizedGame(game)}{category !== "__all__" ? ` · ${localizedCategory(category)}` : ""}</span></div>

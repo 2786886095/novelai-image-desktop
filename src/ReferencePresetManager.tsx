@@ -246,7 +246,10 @@ export default function ReferencePresetManager({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [showCreate, setShowCreate] = useState(false);
   const [previewPreset, setPreviewPreset] = useState<ReferencePreset | null>(null);
-  const [section, setSection] = useState<"online" | "local">(() => modal ? "local" : "online");
+  const [section, setSection] = useState<"online" | "local">(() => {
+    if (modal) return "local";
+    return new URLSearchParams(window.location.search).get("uiPresetSection") === "local" ? "local" : "online";
+  });
   const [deleteGroupTarget, setDeleteGroupTarget] = useState<string | null>(null);
   const [gridColumns, setGridColumns] = useState(() => {
     const stored = Number(globalThis.localStorage?.getItem(LOCAL_GRID_COLUMNS_KEY));

@@ -10530,9 +10530,14 @@ html.theme-dark #root {
 .reference-catalog-series-placeholder .weui-cell__hd { margin-right: 9px; color: var(--accent); }
 .reference-catalog-series-card {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) minmax(300px, .9fr) minmax(190px, auto);
+  grid-template-areas:
+    "copy action"
+    "metrics metrics"
+    "progress progress";
+  grid-template-columns: minmax(0, 1fr) minmax(168px, auto);
   align-items: center;
-  gap: 18px;
+  column-gap: 20px;
+  row-gap: 14px;
   margin: 0 20px 16px;
   padding: 16px;
   border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--border));
@@ -10541,11 +10546,12 @@ html.theme-dark #root {
     linear-gradient(115deg, color-mix(in srgb, var(--accent) 8%, var(--bg-panel)), color-mix(in srgb, #4cc9f0 5%, var(--bg-panel)) 58%, var(--bg-panel));
   box-shadow: 0 12px 30px color-mix(in srgb, var(--accent) 9%, transparent);
 }
-.reference-catalog-series-copy { display: flex; min-width: 0; align-items: center; gap: 12px; }
+.reference-catalog-series-copy { grid-area: copy; display: flex; min-width: 0; align-items: center; gap: 12px; }
 .reference-catalog-series-icon { width: 42px; height: 42px; border-radius: 13px; }
 .reference-catalog-series-copy h4 { overflow: hidden; font-size: 17px; text-overflow: ellipsis; white-space: nowrap; }
 .reference-catalog-series-copy p { display: -webkit-box; overflow: hidden; font-size: 11px; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .reference-catalog-series-metrics {
+  grid-area: metrics;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   overflow: hidden;
@@ -10560,14 +10566,25 @@ html.theme-dark #root {
 .reference-catalog-series-metrics small { color: var(--text-muted); font-size: 10px; }
 .reference-catalog-series-metrics strong { margin-top: 3px; color: var(--text-primary); font-size: 12px; font-variant-numeric: tabular-nums; }
 .reference-catalog-series-action.weui-btn {
-  width: 100%;
+  grid-area: action;
+  display: inline-flex;
+  width: auto;
+  max-width: min(100%, 248px);
   min-height: 46px;
   margin: 0;
+  padding: 0 18px;
+  align-items: center;
+  justify-content: center;
+  justify-self: end;
+  gap: 7px;
   border-radius: 13px;
   font-size: 13px;
   box-shadow: 0 10px 26px color-mix(in srgb, var(--accent) 18%, transparent);
 }
-.reference-catalog-bulk-progress { grid-column: 2 / -1; display: grid; gap: 6px; }
+.reference-catalog-series-action .weui-icon-download { flex: 0 0 auto; margin: 0; color: inherit; font-size: 17px; }
+.reference-catalog-series-action > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reference-catalog-bulk-progress { grid-area: progress; display: grid; min-width: 0; gap: 6px; }
+.reference-catalog-panel .weui-btn { box-sizing: border-box; min-width: 0; max-width: 100%; }
 .reference-catalog-bulk-progress-copy { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--text-secondary); font-size: 11px; }
 .reference-catalog-bulk-progress-copy span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .reference-catalog-bulk-progress-copy strong { flex: 0 0 auto; color: var(--text-primary); font-variant-numeric: tabular-nums; }
@@ -10640,9 +10657,6 @@ html.theme-dark #root {
 .theme-dark .reference-catalog-series-card { box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 7%, transparent); }
 @media (max-width: 1100px) {
   .reference-catalog-filter-shell { grid-template-columns: 1fr; }
-  .reference-catalog-series-card { grid-template-columns: minmax(240px, 1fr) minmax(300px, 1fr); }
-  .reference-catalog-series-action { grid-column: 1 / -1; }
-  .reference-catalog-bulk-progress { grid-column: 1 / -1; }
 }
 @media (max-width: 760px) {
   .reference-catalog-header { align-items: stretch; padding: 18px; }
@@ -10652,7 +10666,12 @@ html.theme-dark #root {
   .reference-catalog-result-heading { margin-left: 14px; margin-right: 14px; }
   .reference-catalog-filter-shell { padding: 8px; }
   .reference-catalog-toolbar { grid-template-columns: 1fr; }
-  .reference-catalog-series-card { grid-template-columns: 1fr; gap: 12px; }
+  .reference-catalog-series-card {
+    grid-template-areas: "copy" "metrics" "progress" "action";
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+  .reference-catalog-series-action.weui-btn { width: 100%; max-width: none; justify-self: stretch; }
   .reference-catalog-series-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .reference-catalog-grid { padding-left: 14px; padding-right: 14px; }
 }

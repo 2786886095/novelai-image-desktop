@@ -183,6 +183,7 @@ import {
 // window, not spawn a second process fighting over the same userData store.
 const uiCapturePath = process.env.NAI_UI_CAPTURE_PATH?.trim();
 const uiCaptureUserData = process.env.NAI_UI_CAPTURE_USER_DATA?.trim();
+const normalizedUiCapturePath = uiCapturePath?.replaceAll("\\", "/").toLowerCase() ?? "";
 if (uiCaptureUserData) app.setPath("userData", path.resolve(uiCaptureUserData));
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -280,8 +281,8 @@ function createWindow() {
     : path.join(__dirname, "../../dist/icon.png");
 
   mainWindow = new BrowserWindow({
-    width: 1385,
-    height: 900,
+    width: normalizedUiCapturePath.includes("/compact/") ? 1120 : 1385,
+    height: normalizedUiCapturePath.includes("/compact/") ? 760 : 900,
     minWidth: 1120,
     minHeight: 720,
     show: false,
@@ -326,11 +327,10 @@ function createWindow() {
             const skip = [...document.querySelectorAll('button')].find((button) =>
               (button.textContent || '').includes('跳过向导'));
             if (skip) skip.click();
-            else document.elementFromPoint(window.innerWidth - 278, 184)?.click();
           })()`);
           await new Promise((resolve) => setTimeout(resolve, 1200));
           await new Promise((resolve) => setTimeout(resolve, 450));
-          if (uiCapturePath.replaceAll("\\", "/").includes("/dark/")) {
+          if (normalizedUiCapturePath.includes("/dark/")) {
             await mainWindow?.webContents.executeJavaScript(
               "document.documentElement.classList.add('theme-dark')",
             );
@@ -355,16 +355,30 @@ function createWindow() {
   if (isDev) {
     void mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL!);
   } else {
-    const captureTheme = uiCapturePath?.replaceAll("\\", "/").includes("/dark/")
+    const captureTheme = normalizedUiCapturePath.includes("/dark/")
       ? "dark"
       : "light";
-    const captureSurface = uiCapturePath?.replaceAll("\\", "/").includes("reference-modal")
+    const captureSurface = normalizedUiCapturePath.includes("reference-modal")
       ? "referenceModal"
       : "referencePresets";
+    const captureCatalogState = normalizedUiCapturePath.includes("series-confirm")
+      ? "confirm"
+      : normalizedUiCapturePath.includes("series-progress")
+        ? "progress"
+        : normalizedUiCapturePath.includes("series-failed")
+          ? "failed"
+          : normalizedUiCapturePath.includes("series-complete")
+            ? "complete"
+            : normalizedUiCapturePath.includes("catalog-preview")
+              ? "preview"
+              : normalizedUiCapturePath.includes("series-selected")
+                ? "selected"
+                : "empty";
+    const capturePresetSection = normalizedUiCapturePath.includes("local-presets") ? "local" : "online";
     void mainWindow.loadFile(
       path.join(__dirname, "../../dist/index.html"),
       uiCapturePath
-        ? { query: { uiCapture: captureSurface, uiTheme: captureTheme } }
+        ? { query: { uiCapture: captureSurface, uiTheme: captureTheme, uiCatalogState: captureCatalogState, uiPresetSection: capturePresetSection } }
         : undefined,
     );
   }
