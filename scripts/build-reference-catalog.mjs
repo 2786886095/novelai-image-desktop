@@ -3,6 +3,7 @@ import path from "node:path";
 
 const root = path.resolve(process.env.REFERENCE_ASSET_ROOT || "D:/Downloads/26.08.21二游角色正面图");
 const out = path.resolve(process.env.REFERENCE_CATALOG_OUT || "public/reference-catalog/index.json");
+const assetBaseUrl = (process.env.REFERENCE_ASSET_BASE_URL || "").replace(/\/$/, "");
 const sizes = ["1024x1536", "1472x1472", "1536x1024"];
 const languages = ["zh-CN", "zh-TW", "ja-JP", "ko-KR", "en-US"];
 const imageRe = /\.(png|jpe?g|webp)$/i;
@@ -64,7 +65,9 @@ for (let index = 0; index < selected.length; index += 1) {
     width: Number(item.size.split("x")[0]),
     height: Number(item.size.split("x")[1]),
     bytes: stat.size,
-    downloadUrl: `assets/${item.rel}`,
+    downloadUrl: assetBaseUrl
+      ? `${assetBaseUrl}/${item.rel.split("/").map(encodeURIComponent).join("/")}`
+      : `assets/${item.rel}`,
     storagePath: item.rel,
     source: "local verified precise-reference catalog",
     order: index,

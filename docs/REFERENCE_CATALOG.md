@@ -19,10 +19,14 @@ node scripts/build-reference-catalog.mjs
 
 The generator prefers `1024x1536`, then `1472x1472`, then `1536x1024`, so duplicate dimensions are collapsed before publishing.
 
-## Publishing limitation
+## Publishing
 
-The current local drop is about 1.9 GB for precise references. GitHub/Gitee normal Git repositories are not suitable for this payload (individual-file and repository limits); publish images through Git LFS, a release/object store, or a Hugging Face dataset, while keeping the small catalog manifest and website in GitHub. Set `VITE_REFERENCE_CATALOG_URL` to the published manifest URL. The app tries Gitee, GitHub, then its bundled manifest by default.
+The precise-reference payload is published through Git LFS in <https://github.com/2786886095/novelai-reference-assets>. The catalog's `downloadUrl` values use GitHub media URLs, so the website and client fetch the real PNG objects rather than missing relative Pages paths.
 
-The Pages workflow is `.github/workflows/reference-catalog-pages.yml`. It publishes the catalog UI and manifest; image assets must be uploaded to the configured storage and retain the manifest's relative `assets/` paths.
+Set `REFERENCE_ASSET_BASE_URL` when regenerating a remotely usable manifest. `VITE_REFERENCE_CATALOG_URL` can override the manifest endpoint at build time. The app tries the published Pages manifest, Gitee, GitHub, then its bundled manifest.
 
-Current catalog UI: https://2786886095.github.io/novelai-image-desktop/
+The Pages workflow is `.github/workflows/reference-catalog-pages.yml`. It publishes the catalog UI and manifest.
+
+Current catalog UI: <https://2786886095.github.io/novelai-image-desktop/>
+
+Current catalog manifest: <https://2786886095.github.io/novelai-image-desktop/reference-catalog/index.json>
