@@ -10250,7 +10250,7 @@ html.theme-dark #root {
 .reference-preset-close:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 35%, transparent); outline-offset: 2px; }
 .reference-preset-manager-close { position: absolute; right: 14px; top: 14px; }
 .reference-preset-search-row {
-  display: grid; grid-template-columns: minmax(220px, 1fr) minmax(170px, 0.34fr);
+  display: grid; grid-template-columns: minmax(220px, 1fr) minmax(170px, 0.34fr) minmax(116px, .16fr);
   align-items: end; gap: 10px;
 }
 .reference-preset-search-row > input {
@@ -10259,7 +10259,43 @@ html.theme-dark #root {
   background: var(--bg-input); color: var(--text-primary); outline: 0;
 }
 .reference-preset-search-row > input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 17%, transparent); }
-.reference-preset-grid { grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 10px; }
+.reference-preset-grid { grid-template-columns: repeat(var(--reference-preset-columns, 3), minmax(0, 1fr)); gap: 12px; }
+.reference-preset-column-control select { min-height: 44px; }
+.reference-preset-primary-tabs.weui-navbar {
+  position: relative; inset: auto; z-index: 1; overflow: hidden;
+  width: min(560px, 100%); min-height: 50px; margin: 0 auto;
+  border: 1px solid var(--border); border-radius: 16px; background: var(--bg-dialog);
+  box-shadow: var(--shadow-sm);
+}
+.reference-preset-primary-tabs.weui-navbar::after { display: none; }
+.reference-preset-primary-tabs .weui-navbar__item {
+  min-height: 50px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 0 18px; border: 0; background: transparent; color: var(--text-secondary);
+  font: inherit; font-weight: 750; cursor: pointer;
+}
+.reference-preset-primary-tabs .weui-navbar__item::after { display: none; }
+.reference-preset-primary-tabs .weui-navbar__item.weui-bar__item_on {
+  color: var(--accent); background: color-mix(in srgb, var(--accent) 11%, var(--bg-panel));
+  box-shadow: inset 0 -3px 0 var(--accent);
+}
+.reference-preset-tab-count {
+  min-width: 22px; padding: 2px 7px; border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-soft)); color: inherit; font-size: 11px;
+}
+.reference-preset-section-content { min-width: 0; }
+.reference-preset-group-danger {
+  display: flex; align-items: center; gap: 12px; margin-top: 10px; padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--danger) 28%, var(--border)); border-radius: 13px;
+  background: color-mix(in srgb, var(--danger) 5%, var(--bg-panel));
+}
+.reference-preset-group-danger .btn { flex: 0 0 auto; color: var(--danger); border-color: color-mix(in srgb, var(--danger) 35%, var(--border)); }
+.reference-preset-group-danger span { color: var(--text-muted); font-size: 12px; line-height: 1.45; }
+.reference-preset-confirm-mask { z-index: 10060; display: grid; place-items: center; padding: 18px; }
+.reference-preset-confirm-dialog.weui-dialog { position: relative; inset: auto; transform: none; width: min(440px, 100%); margin: 0; background: var(--bg-dialog); color: var(--text-primary); }
+.reference-preset-confirm-dialog .weui-dialog__bd { color: var(--text-secondary); }
+.reference-preset-confirm-dialog .weui-dialog__bd b { display: block; margin-bottom: 8px; color: var(--text-primary); overflow-wrap: anywhere; }
+.reference-preset-confirm-dialog .weui-dialog__bd p { margin: 0; }
+.reference-preset-confirm-dialog .weui-dialog__btn { min-height: 50px; cursor: pointer; }
 .reference-preset-card.is-selected { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 18%, transparent); }
 .reference-preset-manager.is-picker .reference-preset-card { cursor: pointer; }
 .reference-preset-manager.is-picker .reference-preset-card:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 2px; }
@@ -10303,10 +10339,10 @@ html.theme-dark #root {
   .reference-preset-grid { grid-template-columns: 1fr; }
 }
 /* Online character reference catalog */
-.reference-catalog-panel { margin-top: 18px; --weui-BRAND: var(--accent); --weui-BRAND-100: var(--accent); --weui-BG-2: var(--bg-dialog); --weui-FG-0: var(--text-primary); --weui-FG-1: var(--text-muted); background: var(--bg-dialog); color: var(--text-primary); }
+.reference-catalog-panel { margin-top: 0; --weui-BRAND: var(--accent); --weui-BRAND-100: var(--accent); --weui-BG-2: var(--bg-dialog); --weui-FG-0: var(--text-primary); --weui-FG-1: var(--text-muted); background: var(--bg-dialog); color: var(--text-primary); }
 .reference-catalog-panel.weui-panel::before, .reference-catalog-panel.weui-panel::after { display: none; }
 .reference-catalog-load.weui-btn { flex: 0 0 auto; margin: 0; min-width: 118px; }
-.reference-catalog-toolbar { display: grid; grid-template-columns: minmax(220px, 1fr) repeat(2, minmax(150px, .32fr)); gap: 10px; margin: 14px 0; }
+.reference-catalog-toolbar { display: grid; grid-template-columns: minmax(220px, 1fr) repeat(2, minmax(145px, .3fr)) minmax(120px, .18fr); gap: 10px; margin: 14px 0; }
 .reference-catalog-toolbar input, .reference-catalog-toolbar select { width: 100%; min-height: 38px; }
 .reference-catalog-search.weui-search-bar { padding: 0; background: transparent; align-self: stretch; }
 .reference-catalog-search .weui-search-bar__form { min-height: 46px; background: var(--bg-panel); border: 1px solid var(--border); border-radius: 10px; }
@@ -10319,7 +10355,7 @@ html.theme-dark #root {
 .reference-catalog-select .weui-cell__hd { margin-right: 8px; color: var(--text-muted, #758095); font-size: 12px; }
 .reference-catalog-select .weui-select { height: 44px; line-height: 44px; padding-left: 0; color: var(--text-primary); }
 .reference-catalog-select.weui-cell_select-after::after { border-color: var(--text-muted); }
-.reference-catalog-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.reference-catalog-grid { display: grid; grid-template-columns: repeat(var(--reference-catalog-columns, 4), minmax(0, 1fr)); gap: 14px; }
 .reference-catalog-card { min-width: 0; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--bg-canvas); transition: border-color .2s ease, box-shadow .2s ease; }
 .reference-catalog-card:hover { border-color: color-mix(in srgb, var(--accent, #5b6cff) 45%, var(--border, #e6eaf0)); box-shadow: 0 12px 28px color-mix(in srgb, var(--accent, #5b6cff) 12%, transparent); }
 .reference-catalog-thumb { position: relative; aspect-ratio: 2 / 3; display: grid; place-items: center; background: repeating-conic-gradient(color-mix(in srgb, var(--text-muted) 16%, var(--bg-canvas)) 0 25%, var(--bg-canvas) 0 50%) 50% / 16px 16px; }
@@ -10351,8 +10387,8 @@ html.theme-dark #root {
 .reference-catalog-preview-stage > img { display: block; width: 100%; height: 100%; min-height: 0; object-fit: contain; }
 .reference-catalog-preview-copy { display: grid; gap: 4px; padding: 12px 4px 0; }
 .reference-catalog-preview-copy span { color: var(--text-muted, #758095); font-size: 13px; }
-@media (max-width: 1180px) { .reference-catalog-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-@media (max-width: 920px) { .reference-catalog-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 1180px) { .reference-catalog-grid { grid-template-columns: repeat(min(var(--reference-catalog-columns, 4), 4), minmax(0, 1fr)); } }
+@media (max-width: 920px) { .reference-catalog-toolbar { grid-template-columns: minmax(220px, 1fr) repeat(2, minmax(140px, .35fr)); } .reference-catalog-columns { grid-column: span 1; } .reference-catalog-grid { grid-template-columns: repeat(min(var(--reference-catalog-columns, 3), 3), minmax(0, 1fr)); } }
 @media (max-width: 760px) { .reference-catalog-toolbar { grid-template-columns: 1fr; } .reference-catalog-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 420px) { .reference-catalog-panel > .reference-preset-section-heading { flex-direction: column; } .reference-catalog-grid { grid-template-columns: 1fr; } .reference-catalog-thumb { aspect-ratio: 1 / 1; } .reference-catalog-load.weui-btn { width: 100%; margin-top: 8px; } }
 @media (hover: none) { .reference-catalog-preview-button { opacity: 1; transform: none; } }

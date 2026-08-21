@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import gsap from "gsap";
 import "weui/dist/style/weui.css";
 import { AppPortal } from "./components/ui";
@@ -17,11 +17,11 @@ import {
 } from "./referenceCatalog";
 
 const COPY = {
-  "zh-CN": { title: "在线角色精准参考库", hint: "只下载 NovelAI 精准参考图；每个角色/形态只保留一个最佳尺寸，优先使用 Gitee 大陆线路。", search: "搜索角色、形态或游戏", game: "游戏", category: "分类", all: "全部", inGame: "游戏内角色图", illustration: "角色立绘", resource: "角色资源", load: "读取在线目录", refresh: "刷新目录", loading: "正在读取…", retry: "重试", preview: "预览", close: "关闭", download: "下载到本机", downloaded: "已下载", size: "大小", progress: "下载进度", noResult: "没有匹配的角色", unavailable: "在线目录暂不可用", downloadedToast: "精准参考图已下载到本机预设库。" },
-  "zh-TW": { title: "線上角色精準參考庫", hint: "只下載 NovelAI 精準參考圖；每個角色／形態只保留一個最佳尺寸，優先使用 Gitee 中國大陸線路。", search: "搜尋角色、形態或遊戲", game: "遊戲", category: "分類", all: "全部", inGame: "遊戲內角色圖", illustration: "角色立繪", resource: "角色資源", load: "讀取線上目錄", refresh: "重新整理", loading: "讀取中…", retry: "重試", preview: "預覽", close: "關閉", download: "下載到本機", downloaded: "已下載", size: "大小", progress: "下載進度", noResult: "找不到符合的角色", unavailable: "線上目錄暫時無法使用", downloadedToast: "精準參考圖已下載到本機預設庫。" },
-  "en-US": { title: "Online Precise Reference Library", hint: "Downloads precise references only. One best size is kept per character/form, with Gitee preferred in mainland China.", search: "Search character, form, or game", game: "Game", category: "Category", all: "All", inGame: "In-game", illustration: "Illustration", resource: "Character resources", load: "Load online catalog", refresh: "Refresh catalog", loading: "Loading…", retry: "Retry", preview: "Preview", close: "Close", download: "Download locally", downloaded: "Downloaded", size: "Size", progress: "Download progress", noResult: "No matching characters", unavailable: "Online catalog unavailable", downloadedToast: "Precise reference downloaded to the local preset library." },
-  "ja-JP": { title: "オンライン精密参照ライブラリ", hint: "精密参照のみをダウンロードします。キャラクター／形態ごとに最適なサイズを1つ保持し、中国本土では Gitee を優先します。", search: "キャラクター・形態・ゲームを検索", game: "ゲーム", category: "分類", all: "すべて", inGame: "ゲーム内", illustration: "立ち絵", resource: "キャラクター素材", load: "オンラインカタログを読む", refresh: "カタログを更新", loading: "読込中…", retry: "再試行", preview: "プレビュー", close: "閉じる", download: "端末に保存", downloaded: "保存済み", size: "サイズ", progress: "ダウンロード", noResult: "一致するキャラクターがありません", unavailable: "オンラインカタログを利用できません", downloadedToast: "精密参照をローカルプリセットに保存しました。" },
-  "ko-KR": { title: "온라인 정밀 참조 라이브러리", hint: "정밀 참조만 다운로드합니다. 캐릭터/형태마다 최적 크기 하나만 유지하며 중국 본토에서는 Gitee를 우선합니다.", search: "캐릭터·형태·게임 검색", game: "게임", category: "분류", all: "전체", inGame: "게임 내", illustration: "일러스트", resource: "캐릭터 리소스", load: "온라인 카탈로그 불러오기", refresh: "목록 새로고침", loading: "불러오는 중…", retry: "재시도", preview: "미리보기", close: "닫기", download: "기기에 저장", downloaded: "저장됨", size: "크기", progress: "다운로드 진행", noResult: "일치하는 캐릭터가 없습니다", unavailable: "온라인 카탈로그를 사용할 수 없습니다", downloadedToast: "정밀 참조를 로컬 프리셋에 저장했습니다." },
+  "zh-CN": { title: "在线角色精准参考库", hint: "只下载 NovelAI 精准参考图；下载成功后才创建对应分组，已有分组会直接复用。", search: "搜索角色、形态或游戏", game: "游戏", category: "分类", cardsPerRow: "每排显示", all: "全部", inGame: "游戏内角色图", illustration: "角色立绘", resource: "角色资源", load: "读取在线目录", refresh: "刷新目录", loading: "正在读取…", retry: "重试", preview: "预览", close: "关闭", download: "下载到本机", downloaded: "已下载", size: "大小", progress: "下载进度", noResult: "没有匹配的角色", unavailable: "在线目录暂不可用", downloadedToast: "精准参考图已下载，并加入对应本机分组。" },
+  "zh-TW": { title: "線上角色精準參考庫", hint: "只下載 NovelAI 精準參考圖；下載成功後才建立分組，已有分組會直接沿用。", search: "搜尋角色、形態或遊戲", game: "遊戲", category: "分類", cardsPerRow: "每列顯示", all: "全部", inGame: "遊戲內角色圖", illustration: "角色立繪", resource: "角色資源", load: "讀取線上目錄", refresh: "重新整理", loading: "讀取中…", retry: "重試", preview: "預覽", close: "關閉", download: "下載到本機", downloaded: "已下載", size: "大小", progress: "下載進度", noResult: "找不到符合的角色", unavailable: "線上目錄暫時無法使用", downloadedToast: "精準參考圖已下載並加入對應分組。" },
+  "en-US": { title: "Online Precise Reference Library", hint: "Downloads precise references only. A group is created after a successful download; an existing group is reused.", search: "Search character, form, or game", game: "Game", category: "Category", cardsPerRow: "Cards per row", all: "All", inGame: "In-game", illustration: "Illustration", resource: "Character resources", load: "Load online catalog", refresh: "Refresh catalog", loading: "Loading…", retry: "Retry", preview: "Preview", close: "Close", download: "Download locally", downloaded: "Downloaded", size: "Size", progress: "Download progress", noResult: "No matching characters", unavailable: "Online catalog unavailable", downloadedToast: "Precise reference downloaded and added to its local group." },
+  "ja-JP": { title: "オンライン精密参照ライブラリ", hint: "精密参照のみを保存します。ダウンロード成功後にグループを作成し、既存グループは再利用します。", search: "キャラクター・形態・ゲームを検索", game: "ゲーム", category: "分類", cardsPerRow: "1行の件数", all: "すべて", inGame: "ゲーム内", illustration: "立ち絵", resource: "キャラクター素材", load: "オンラインカタログを読む", refresh: "カタログを更新", loading: "読込中…", retry: "再試行", preview: "プレビュー", close: "閉じる", download: "端末に保存", downloaded: "保存済み", size: "サイズ", progress: "ダウンロード", noResult: "一致するキャラクターがありません", unavailable: "オンラインカタログを利用できません", downloadedToast: "精密参照を保存し、対応グループへ追加しました。" },
+  "ko-KR": { title: "온라인 정밀 참조 라이브러리", hint: "정밀 참조만 저장합니다. 다운로드 성공 후 그룹을 만들며 기존 그룹은 재사용합니다.", search: "캐릭터·형태·게임 검색", game: "게임", category: "분류", cardsPerRow: "행당 카드", all: "전체", inGame: "게임 내", illustration: "일러스트", resource: "캐릭터 리소스", load: "온라인 카탈로그 불러오기", refresh: "목록 새로고침", loading: "불러오는 중…", retry: "재시도", preview: "미리보기", close: "닫기", download: "기기에 저장", downloaded: "저장됨", size: "크기", progress: "다운로드 진행", noResult: "일치하는 캐릭터가 없습니다", unavailable: "온라인 카탈로그를 사용할 수 없습니다", downloadedToast: "정밀 참조를 저장하고 해당 그룹에 추가했습니다." },
 } as const;
 
 function textFor(language: AppLanguage | undefined) { return COPY[language && language in COPY ? language : "zh-CN"]; }
@@ -47,6 +47,10 @@ export default function ReferenceCatalogPanel({ library, onDownloaded }: { libra
   const [active, setActive] = useState<Record<string, boolean>>({});
   const [visibleCount, setVisibleCount] = useState(60);
   const [previewAsset, setPreviewAsset] = useState<ReferenceCatalogAsset | null>(null);
+  const [gridColumns, setGridColumns] = useState(() => {
+    const stored = Number(globalThis.localStorage?.getItem("langbai.reference-catalog.columns.v1"));
+    return [2, 3, 4, 5].includes(stored) ? stored : 4;
+  });
 
   const load = async (refresh = false) => {
     setLoading(true); setError("");
@@ -54,6 +58,7 @@ export default function ReferenceCatalogPanel({ library, onDownloaded }: { libra
     finally { setLoading(false); }
   };
   useEffect(() => { void load(); }, []);
+  useEffect(() => { globalThis.localStorage?.setItem("langbai.reference-catalog.columns.v1", String(gridColumns)); }, [gridColumns]);
   useLayoutEffect(() => {
     if (!panelRef.current || document.hidden || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
     const animation = gsap.fromTo(panelRef.current, { autoAlpha: 0, y: 18 }, { autoAlpha: 1, y: 0, duration: 0.42, ease: "power2.out" });
@@ -123,8 +128,9 @@ export default function ReferenceCatalogPanel({ library, onDownloaded }: { libra
         <div className="weui-search-bar reference-catalog-search" role="search"><div className="weui-search-bar__form"><div className="weui-search-bar__box"><i className="weui-icon-search" /><input className="weui-search-bar__input" type="search" value={query} placeholder={text.search} aria-label={text.search} onChange={(event) => setQuery(event.target.value)} />{query && <button className="weui-icon-clear" type="button" aria-label={text.close} onClick={() => setQuery("")} />}</div></div></div>
         <label className="weui-cell weui-cell_select weui-cell_select-after reference-catalog-select"><span className="weui-cell__hd">{text.game}</span><span className="weui-cell__bd"><select className="weui-select" value={game} onChange={(event) => { setGame(event.target.value); setCategory("__all__"); }}><option value="__all__">{text.all}</option>{gameOptions.map((item) => <option value={item.id} key={item.id}>{localizedGame(item.id)}</option>)}</select></span></label>
         {(game === "__all__" || availableCategories.length > 1) && <label className="weui-cell weui-cell_select weui-cell_select-after reference-catalog-select"><span className="weui-cell__hd">{text.category}</span><span className="weui-cell__bd"><select className="weui-select" value={category} onChange={(event) => setCategory(event.target.value)}><option value="__all__">{text.all}</option>{availableCategories.map((item) => <option value={item} key={item}>{localizedCategory(item)}</option>)}</select></span></label>}
+        <label className="weui-cell weui-cell_select weui-cell_select-after reference-catalog-select reference-catalog-columns"><span className="weui-cell__hd">{text.cardsPerRow}</span><span className="weui-cell__bd"><select className="weui-select" value={gridColumns} onChange={(event) => setGridColumns(Number(event.target.value))}>{[2, 3, 4, 5].map((value) => <option value={value} key={value}>{value}</option>)}</select></span></label>
       </div>
-      <div className="reference-catalog-grid" ref={gridRef}>
+      <div className="reference-catalog-grid" ref={gridRef} style={{ "--reference-catalog-columns": gridColumns } as CSSProperties}>
         {visibleAssets.map((asset) => {
           const percent = progress[asset.id] ?? 0; const busy = Boolean(active[asset.id]); const done = downloadedIds.has(asset.id);
           return <article className="reference-catalog-card" key={asset.id} onDoubleClick={() => setPreviewAsset(asset)}>

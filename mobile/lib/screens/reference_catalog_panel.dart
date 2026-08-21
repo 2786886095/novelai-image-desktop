@@ -16,6 +16,8 @@ const _copy = <String, Map<String, String>>{
     'search': '搜索角色、形态或游戏',
     'game': '游戏',
     'category': '分类',
+    'perRow': '每排显示',
+    'auto': '自动',
     'all': '全部',
     'inGame': '游戏内角色图',
     'illustration': '角色立绘',
@@ -40,6 +42,8 @@ const _copy = <String, Map<String, String>>{
     'search': '搜尋角色、形態或遊戲',
     'game': '遊戲',
     'category': '分類',
+    'perRow': '每列顯示',
+    'auto': '自動',
     'all': '全部',
     'inGame': '遊戲內角色圖',
     'illustration': '角色立繪',
@@ -65,6 +69,8 @@ const _copy = <String, Map<String, String>>{
     'search': 'Search character, form, or game',
     'game': 'Game',
     'category': 'Category',
+    'perRow': 'Cards per row',
+    'auto': 'Auto',
     'all': 'All',
     'inGame': 'In-game character',
     'illustration': 'Character illustration',
@@ -89,6 +95,8 @@ const _copy = <String, Map<String, String>>{
     'search': 'キャラクター・形態・ゲームを検索',
     'game': 'ゲーム',
     'category': '分類',
+    'perRow': '1行の件数',
+    'auto': '自動',
     'all': 'すべて',
     'inGame': 'ゲーム内キャラクター',
     'illustration': 'キャラクター立ち絵',
@@ -113,6 +121,8 @@ const _copy = <String, Map<String, String>>{
     'search': '캐릭터·형태·게임 검색',
     'game': '게임',
     'category': '분류',
+    'perRow': '행당 카드',
+    'auto': '자동',
     'all': '전체',
     'inGame': '게임 내 캐릭터',
     'illustration': '캐릭터 일러스트',
@@ -149,6 +159,7 @@ class _ReferenceCatalogPanelState extends State<ReferenceCatalogPanel> {
   String _error = '';
   bool _loading = false;
   int _visible = 60;
+  int _columns = 0;
   final Map<String, int> _progress = {};
   final Set<String> _active = {};
 
@@ -481,6 +492,20 @@ class _ReferenceCatalogPanelState extends State<ReferenceCatalogPanel> {
                           _visible = 60;
                         }),
                       ),
+                    DropdownButtonFormField<int>(
+                      value: _columns,
+                      isExpanded: true,
+                      decoration: InputDecoration(
+                          labelText: text['perRow'],
+                          border: const OutlineInputBorder()),
+                      items: [
+                        DropdownMenuItem(value: 0, child: Text(text['auto']!)),
+                        for (final value in const [1, 2, 3, 4, 5])
+                          DropdownMenuItem(value: value, child: Text('$value')),
+                      ],
+                      onChanged: (value) =>
+                          setState(() => _columns = value ?? 0),
+                    ),
                   ];
                   return stacked
                       ? Column(children: [
@@ -508,7 +533,7 @@ class _ReferenceCatalogPanelState extends State<ReferenceCatalogPanel> {
                       child: Center(child: Text(text['empty']!)))
                 else
                   LayoutBuilder(builder: (context, constraints) {
-                    final columns = constraints.maxWidth >= 1000
+                    final automaticColumns = constraints.maxWidth >= 1000
                         ? 5
                         : constraints.maxWidth >= 760
                             ? 4
@@ -517,6 +542,9 @@ class _ReferenceCatalogPanelState extends State<ReferenceCatalogPanel> {
                                 : constraints.maxWidth >= 380
                                     ? 2
                                     : 1;
+                    final columns = _columns == 0
+                        ? automaticColumns
+                        : _columns.clamp(1, automaticColumns);
                     return GridView.builder(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),

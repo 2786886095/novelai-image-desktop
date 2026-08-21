@@ -1356,6 +1356,9 @@ export interface NaiDesktopApi {
   createReferencePresetGroup: (
     name: string,
   ) => Promise<ReferencePresetOperationResult>;
+  deleteReferencePresetGroup: (
+    name: string,
+  ) => Promise<ReferencePresetOperationResult>;
   moveReferencePresetToGroup: (
     presetId: string,
     group: string,

@@ -3,8 +3,8 @@ import os from "os";
 import path from "path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
-  DEFAULT_REFERENCE_PRESET_GROUPS,
   createReferencePresetGroup,
+  deleteReferencePresetGroup,
   deleteReferencePreset,
   listReferencePresets,
   moveReferencePresetToGroup,
@@ -27,10 +27,40 @@ function temporaryRoot() {
 }
 
 describe("reference preset persistence", () => {
-  it("seeds the built-in game groups without downloading third-party images", async () => {
+  it("does not create online game groups before a successful download", async () => {
     const library = await listReferencePresets(temporaryRoot());
-    expect(library.groups).toEqual(expect.arrayContaining([...DEFAULT_REFERENCE_PRESET_GROUPS]));
+    expect(library.groups).toEqual([]);
     expect(library.presets).toHaveLength(0);
+  });
+
+  it("prunes legacy empty game groups but preserves occupied and custom groups", async () => {
+    const root = temporaryRoot();
+    const presetRoot = path.join(root, "reference-presets");
+    const imagePath = path.join(presetRoot, "occupied.png");
+    fs.mkdirSync(presetRoot, { recursive: true });
+    fs.writeFileSync(imagePath, "image");
+    fs.writeFileSync(path.join(presetRoot, "library.json"), JSON.stringify({
+      version: 1,
+      groups: ["原神", "鸣潮", "自定义"],
+      presets: [{ id: "occupied", name: "占用", group: "鸣潮", kind: "precise", filePath: imagePath }],
+    }));
+
+    const library = await listReferencePresets(root);
+    expect(library.groups).toEqual(["鸣潮", "自定义"]);
+  });
+
+  it("reuses an existing group instead of creating duplicates", async () => {
+    const root = temporaryRoot();
+    await createReferencePresetGroup("原神", root);
+    await createReferencePresetGroup("原神 · 游戏内角色图", root);
+    await saveReferencePreset({
+      name: "安柏",
+      group: "原神 · 游戏内角色图",
+      kind: "precise",
+      base64: Buffer.from("image").toString("base64"),
+    }, root);
+    expect((await listReferencePresets(root)).groups).toContain("原神");
+    expect((await listReferencePresets(root)).groups.filter((group) => group === "原神 · 游戏内角色图")).toHaveLength(1);
   });
 
   it("defaults new vibe preset parameters to one", async () => {
@@ -96,6 +126,12 @@ describe("reference preset persistence", () => {
     const moved = await moveReferencePresetToGroup(saved.preset!.id, "备用", root);
     expect(moved.preset?.group).toBe("备用");
     expect((await listReferencePresets(root)).presets[0]?.group).toBe("备用");
+
+    const removedGroup = await deleteReferencePresetGroup("备用", root);
+    expect(removedGroup.ok).toBe(true);
+    expect(removedGroup.library?.groups).not.toContain("备用");
+    expect(removedGroup.library?.presets[0]?.group).toBe("");
+    expect(fs.existsSync(saved.preset!.filePath)).toBe(true);
 
     const deleted = await deleteReferencePreset(saved.preset!.id, root);
     expect(deleted.ok).toBe(true);

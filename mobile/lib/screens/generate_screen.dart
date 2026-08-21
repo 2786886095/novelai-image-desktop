@@ -2465,6 +2465,7 @@ class _ReferencePresetLibraryPanelState
   ReferencePresetKind? _kind;
   bool _busy = false;
   String _query = '';
+  int _section = 0;
   final Set<String> _selectedIds = <String>{};
 
   Widget _presetImage(String path) => path.startsWith('asset:')
@@ -2715,6 +2716,33 @@ class _ReferencePresetLibraryPanelState
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(error)));
     }
+  }
+
+  Future<void> _deleteGroup(BuildContext context) async {
+    if (_group == _allGroups || _group == _ungrouped) return;
+    final state = context.read<AppState>();
+    String t(String key) => mobileUiTextFor(state.settings.language, key);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(t('referencePresets.deleteGroupTitle')),
+        content: Text(t('referencePresets.deleteGroupHint')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(t('common.cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(t('referencePresets.deleteGroup')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    final target = _group;
+    await state.deleteReferencePresetGroup(target);
+    if (mounted) setState(() => _group = _allGroups);
   }
 
   Future<void> _movePresetToGroup(
@@ -3110,7 +3138,7 @@ class _ReferencePresetLibraryPanelState
                               ],
                             ),
                           ),
-                          if (widget.showClose)
+                          if (!widget.standalone && widget.showClose)
                             IconButton.filledTonal(
                               onPressed: widget.onClose ??
                                   () => Navigator.pop(context),
@@ -3121,221 +3149,266 @@ class _ReferencePresetLibraryPanelState
                     ),
                   ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Card(
-                    margin: EdgeInsets.zero,
-                    child: Padding(
-                      padding: const EdgeInsets.all(14),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          TextField(
-                            decoration: InputDecoration(
-                              labelText: t('referencePresets.search'),
-                              prefixIcon: const Icon(Icons.search),
-                              border: const OutlineInputBorder(),
-                              suffixIcon: _query.isEmpty
-                                  ? null
-                                  : IconButton(
-                                      onPressed: () =>
-                                          setState(() => _query = ''),
-                                      icon: const Icon(Icons.close),
-                                    ),
-                            ),
-                            onChanged: (value) =>
-                                setState(() => _query = value),
+                if (widget.standalone)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: SegmentedButton<int>(
+                        segments: [
+                          ButtonSegment(
+                            value: 0,
+                            icon: const Icon(Icons.cloud_download_outlined),
+                            label: Text(t('referencePresets.online')),
                           ),
-                          const SizedBox(height: 10),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: DropdownButtonFormField<String>(
-                                  value: _group,
-                                  isExpanded: true,
-                                  decoration: InputDecoration(
-                                    labelText:
-                                        t('referencePresets.currentGroup'),
-                                    prefixIcon:
-                                        const Icon(Icons.folder_open_outlined),
-                                    border: const OutlineInputBorder(),
-                                  ),
-                                  items: [
-                                    DropdownMenuItem(
-                                      value: _allGroups,
-                                      child:
-                                          Text(t('referencePresets.allGroups')),
-                                    ),
-                                    DropdownMenuItem(
-                                      value: _ungrouped,
-                                      child:
-                                          Text(t('referencePresets.ungrouped')),
-                                    ),
-                                    for (final group
-                                        in state.referencePresetGroups)
-                                      DropdownMenuItem(
-                                        value: group,
-                                        child: Text(groupName(group)),
-                                      ),
-                                  ],
-                                  onChanged: (value) => setState(
-                                      () => _group = value ?? _allGroups),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              if (widget.standalone)
-                                IconButton.filledTonal(
-                                  tooltip: t('referencePresets.createGroup'),
-                                  onPressed: _busy
-                                      ? null
-                                      : () => _createGroup(context),
-                                  icon: const Icon(
-                                      Icons.create_new_folder_outlined),
-                                ),
-                            ],
+                          ButtonSegment(
+                            value: 1,
+                            icon:
+                                const Icon(Icons.collections_bookmark_outlined),
+                            label: Text(t('referencePresets.local')),
                           ),
-                          if (widget.standalone) ...[
-                            const SizedBox(height: 8),
-                            Text(
-                              t('referencePresets.createHint'),
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                            const SizedBox(height: 10),
-                          ],
-                          if (widget.allowedKind == null) ...[
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: [
-                                ChoiceChip(
-                                  label: Text(t('referencePresets.filterAll')),
-                                  selected: _kind == null,
-                                  onSelected: (_) =>
-                                      setState(() => _kind = null),
-                                ),
-                                ChoiceChip(
-                                  label: Text(t('referencePresets.vibe')),
-                                  selected: _kind == ReferencePresetKind.vibe,
-                                  onSelected: (_) => setState(
-                                      () => _kind = ReferencePresetKind.vibe),
-                                ),
-                                ChoiceChip(
-                                  label: Text(t('referencePresets.precise')),
-                                  selected:
-                                      _kind == ReferencePresetKind.precise,
-                                  onSelected: (_) => setState(() =>
-                                      _kind = ReferencePresetKind.precise),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 10),
-                          ],
-                          if (widget.standalone)
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: [
-                                FilledButton.icon(
-                                  onPressed:
-                                      _busy ? null : () => _addPreset(context),
-                                  icon: const Icon(
-                                      Icons.add_photo_alternate_outlined),
-                                  label: Text(t('referencePresets.add')),
-                                ),
-                                OutlinedButton.icon(
-                                  onPressed:
-                                      _busy ? null : () => _import(context),
-                                  icon:
-                                      const Icon(Icons.file_download_outlined),
-                                  label: Text(t('referencePresets.import')),
-                                ),
-                                OutlinedButton.icon(
-                                  onPressed: _busy || _group == _allGroups
-                                      ? null
-                                      : () => _export(
-                                            context,
-                                            group: _group == _ungrouped
-                                                ? ''
-                                                : _group,
-                                          ),
-                                  icon: const Icon(Icons.folder_zip_outlined),
-                                  label:
-                                      Text(t('referencePresets.exportGroup')),
-                                ),
-                                OutlinedButton.icon(
-                                  onPressed:
-                                      _busy ? null : () => _export(context),
-                                  icon: const Icon(Icons.archive_outlined),
-                                  label: Text(t('referencePresets.exportAll')),
-                                ),
-                              ],
-                            ),
-                          if (!widget.standalone)
-                            OutlinedButton.icon(
-                              onPressed: _busy ? null : () => _import(context),
-                              icon: const Icon(Icons.file_download_outlined),
-                              label: Text(t('referencePresets.import')),
-                            ),
                         ],
+                        selected: {_section},
+                        onSelectionChanged: (value) =>
+                            setState(() => _section = value.first),
                       ),
                     ),
                   ),
-                ),
-                if (_busy) const LinearProgressIndicator(),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(18, 12, 18, 8),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          selectedGroupName,
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w700),
-                        ),
-                      ),
-                      Text(countText(
-                          'referencePresets.presetCount', presets.length)),
-                    ],
-                  ),
-                ),
-                presets.isEmpty
-                    ? SizedBox(
-                        height: 220,
-                        child: Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(24),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
+                if (!widget.standalone || _section == 1) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Card(
+                      margin: EdgeInsets.zero,
+                      child: Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            TextField(
+                              decoration: InputDecoration(
+                                labelText: t('referencePresets.search'),
+                                prefixIcon: const Icon(Icons.search),
+                                border: const OutlineInputBorder(),
+                                suffixIcon: _query.isEmpty
+                                    ? null
+                                    : IconButton(
+                                        onPressed: () =>
+                                            setState(() => _query = ''),
+                                        icon: const Icon(Icons.close),
+                                      ),
+                              ),
+                              onChanged: (value) =>
+                                  setState(() => _query = value),
+                            ),
+                            const SizedBox(height: 10),
+                            Row(
                               children: [
-                                Icon(Icons.collections_bookmark_outlined,
-                                    size: 48,
-                                    color:
-                                        Theme.of(context).colorScheme.outline),
-                                const SizedBox(height: 10),
-                                Text(t('referencePresets.empty')),
-                                const SizedBox(height: 12),
+                                Expanded(
+                                  child: DropdownButtonFormField<String>(
+                                    value: _group,
+                                    isExpanded: true,
+                                    decoration: InputDecoration(
+                                      labelText:
+                                          t('referencePresets.currentGroup'),
+                                      prefixIcon: const Icon(
+                                          Icons.folder_open_outlined),
+                                      border: const OutlineInputBorder(),
+                                    ),
+                                    items: [
+                                      DropdownMenuItem(
+                                        value: _allGroups,
+                                        child: Text(
+                                            t('referencePresets.allGroups')),
+                                      ),
+                                      DropdownMenuItem(
+                                        value: _ungrouped,
+                                        child: Text(
+                                            t('referencePresets.ungrouped')),
+                                      ),
+                                      for (final group
+                                          in state.referencePresetGroups)
+                                        DropdownMenuItem(
+                                          value: group,
+                                          child: Text(groupName(group)),
+                                        ),
+                                    ],
+                                    onChanged: (value) => setState(
+                                        () => _group = value ?? _allGroups),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                if (widget.standalone)
+                                  IconButton.filledTonal(
+                                    tooltip: t('referencePresets.createGroup'),
+                                    onPressed: _busy
+                                        ? null
+                                        : () => _createGroup(context),
+                                    icon: const Icon(
+                                        Icons.create_new_folder_outlined),
+                                  ),
+                                if (widget.standalone &&
+                                    _group != _allGroups &&
+                                    _group != _ungrouped)
+                                  IconButton.filledTonal(
+                                    tooltip: t('referencePresets.deleteGroup'),
+                                    onPressed: _busy
+                                        ? null
+                                        : () => _deleteGroup(context),
+                                    icon: const Icon(
+                                        Icons.folder_delete_outlined),
+                                  ),
                               ],
                             ),
+                            if (widget.standalone) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                t('referencePresets.createHint'),
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                              const SizedBox(height: 10),
+                            ],
+                            if (widget.allowedKind == null) ...[
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  ChoiceChip(
+                                    label:
+                                        Text(t('referencePresets.filterAll')),
+                                    selected: _kind == null,
+                                    onSelected: (_) =>
+                                        setState(() => _kind = null),
+                                  ),
+                                  ChoiceChip(
+                                    label: Text(t('referencePresets.vibe')),
+                                    selected: _kind == ReferencePresetKind.vibe,
+                                    onSelected: (_) => setState(
+                                        () => _kind = ReferencePresetKind.vibe),
+                                  ),
+                                  ChoiceChip(
+                                    label: Text(t('referencePresets.precise')),
+                                    selected:
+                                        _kind == ReferencePresetKind.precise,
+                                    onSelected: (_) => setState(() =>
+                                        _kind = ReferencePresetKind.precise),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                            ],
+                            if (widget.standalone)
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  FilledButton.icon(
+                                    onPressed: _busy
+                                        ? null
+                                        : () => _addPreset(context),
+                                    icon: const Icon(
+                                        Icons.add_photo_alternate_outlined),
+                                    label: Text(t('referencePresets.add')),
+                                  ),
+                                  OutlinedButton.icon(
+                                    onPressed:
+                                        _busy ? null : () => _import(context),
+                                    icon: const Icon(
+                                        Icons.file_download_outlined),
+                                    label: Text(t('referencePresets.import')),
+                                  ),
+                                  OutlinedButton.icon(
+                                    onPressed: _busy || _group == _allGroups
+                                        ? null
+                                        : () => _export(
+                                              context,
+                                              group: _group == _ungrouped
+                                                  ? ''
+                                                  : _group,
+                                            ),
+                                    icon: const Icon(Icons.folder_zip_outlined),
+                                    label:
+                                        Text(t('referencePresets.exportGroup')),
+                                  ),
+                                  OutlinedButton.icon(
+                                    onPressed:
+                                        _busy ? null : () => _export(context),
+                                    icon: const Icon(Icons.archive_outlined),
+                                    label:
+                                        Text(t('referencePresets.exportAll')),
+                                  ),
+                                ],
+                              ),
+                            if (!widget.standalone)
+                              OutlinedButton.icon(
+                                onPressed:
+                                    _busy ? null : () => _import(context),
+                                icon: const Icon(Icons.file_download_outlined),
+                                label: Text(t('referencePresets.import')),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (_busy) const LinearProgressIndicator(),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 12, 18, 8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            selectedGroupName,
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w700),
                           ),
                         ),
-                      )
-                    : GridView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        padding: EdgeInsets.fromLTRB(
-                            16, 0, 16, widget.standalone ? 24 : 92),
-                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: columns,
-                          crossAxisSpacing: 10,
-                          mainAxisSpacing: 10,
-                          mainAxisExtent: wide ? 300 : 270,
+                        Text(countText(
+                            'referencePresets.presetCount', presets.length)),
+                      ],
+                    ),
+                  ),
+                  presets.isEmpty
+                      ? SizedBox(
+                          height: 220,
+                          child: Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(24),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.collections_bookmark_outlined,
+                                      size: 48,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .outline),
+                                  const SizedBox(height: 10),
+                                  Text(t('referencePresets.empty')),
+                                  const SizedBox(height: 12),
+                                ],
+                              ),
+                            ),
+                          ),
+                        )
+                      : GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          padding: EdgeInsets.fromLTRB(
+                              16, 0, 16, widget.standalone ? 24 : 92),
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: columns,
+                            crossAxisSpacing: 10,
+                            mainAxisSpacing: 10,
+                            mainAxisExtent: wide ? 300 : 270,
+                          ),
+                          itemCount: presets.length,
+                          itemBuilder: (_, index) => presetCard(presets[index]),
                         ),
-                        itemCount: presets.length,
-                        itemBuilder: (_, index) => presetCard(presets[index]),
-                      ),
-                if (widget.standalone) const ReferenceCatalogPanel(),
+                ],
+                if (widget.standalone && _section == 0)
+                  const ReferenceCatalogPanel(autoLoad: true),
                 if (!widget.standalone)
                   SafeArea(
                     top: false,

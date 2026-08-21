@@ -1,6 +1,6 @@
 enum ReferencePresetKind { vibe, precise }
 
-const defaultReferencePresetGroups = <String>[
+const legacyReferencePresetGroups = <String>{
   '原神',
   '妮姬',
   '崩坏三',
@@ -11,10 +11,10 @@ const defaultReferencePresetGroups = <String>[
   '鸣潮',
   '终末地',
   '异环',
-];
+};
 
 List<String> referencePresetGroupsWithDefaults(Iterable<String> groups) =>
-    <String>{...defaultReferencePresetGroups, ...groups}.toList();
+    <String>{...groups.where((group) => group.trim().isNotEmpty)}.toList();
 
 ReferencePresetKind referencePresetKindFromJson(Object? value) =>
     value?.toString() == 'precise'
@@ -164,20 +164,22 @@ Map<String, String> _referencePresetStringMap(Object? value) {
 }
 
 class ReferencePresetLibrary {
+  final int version;
   final List<String> groups;
   final List<ReferencePreset> presets;
 
   const ReferencePresetLibrary(
-      {this.groups = const [], this.presets = const []});
+      {this.version = 2, this.groups = const [], this.presets = const []});
 
   Map<String, dynamic> toJson() => {
-        'version': 1,
+        'version': version,
         'groups': groups,
         'presets': presets.map((preset) => preset.toJson()).toList(),
       };
 
   factory ReferencePresetLibrary.fromJson(Map<String, dynamic> json) =>
       ReferencePresetLibrary(
+        version: (json['version'] as num?)?.toInt() ?? 1,
         groups: referencePresetGroupsWithDefaults(
           (json['groups'] as List<dynamic>? ?? const [])
               .map((value) => value.toString().trim())

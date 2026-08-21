@@ -80,6 +80,7 @@ import {
 } from "./ipc/prompt-codex";
 import {
   createReferencePresetGroup,
+  deleteReferencePresetGroup,
   deleteReferencePreset,
   exportReferencePresets,
   importReferencePresets,
@@ -762,6 +763,9 @@ function registerIpc() {
   );
   ipcMain.handle("referencePreset:createGroup", (_event, name: string) =>
     createReferencePresetGroup(name),
+  );
+  ipcMain.handle("referencePreset:deleteGroup", (_event, name: string) =>
+    deleteReferencePresetGroup(name),
   );
   ipcMain.handle(
     "referencePreset:moveToGroup",

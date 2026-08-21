@@ -312,6 +312,10 @@ contextBridge.exposeInMainWorld("naiDesktop", {
     name: string,
   ): Promise<ReferencePresetOperationResult> =>
     ipcRenderer.invoke("referencePreset:createGroup", name),
+  deleteReferencePresetGroup: (
+    name: string,
+  ): Promise<ReferencePresetOperationResult> =>
+    ipcRenderer.invoke("referencePreset:deleteGroup", name),
   moveReferencePresetToGroup: (
     presetId: string,
     group: string,

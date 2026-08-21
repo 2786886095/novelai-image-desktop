@@ -219,9 +219,13 @@ class AppState extends ChangeNotifier {
       groups = await storage.getGroups();
       try {
         final referenceLibrary = await storage.getReferencePresetLibrary();
-        referencePresetGroups =
-            referencePresetGroupsWithDefaults(referenceLibrary.groups);
         referencePresets = List.of(referenceLibrary.presets);
+        referencePresetGroups = referencePresetGroupsWithDefaults(
+          referenceLibrary.groups.where((group) =>
+              referenceLibrary.version >= 2 ||
+              !legacyReferencePresetGroups.contains(group) ||
+              referencePresets.any((preset) => preset.group == group)),
+        );
       } catch (_) {
         // Reference presets are optional user data. A damaged legacy entry
         // must never prevent the generator from reaching its first frame.
@@ -775,6 +779,24 @@ class AppState extends ChangeNotifier {
     return null;
   }
 
+  Future<void> deleteReferencePresetGroup(String value) async {
+    final group = value.trim();
+    if (group.isEmpty || !referencePresetGroups.contains(group)) return;
+    final nextGroups =
+        referencePresetGroups.where((item) => item != group).toList();
+    final nextPresets = referencePresets
+        .map((preset) =>
+            preset.group == group ? preset.copyWith(group: '') : preset)
+        .toList();
+    await storage.setReferencePresetLibrary(ReferencePresetLibrary(
+      groups: nextGroups,
+      presets: nextPresets,
+    ));
+    referencePresetGroups = nextGroups;
+    referencePresets = nextPresets;
+    notifyListeners();
+  }
+
   String _newReferencePresetId() =>
       '${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(1 << 30)}';
 
@@ -941,6 +963,7 @@ class AppState extends ChangeNotifier {
     if (title.isEmpty || bytes.isEmpty) {
       return _rt('referencePresets.saveFailed');
     }
+    String? persistedPath;
     try {
       final dimensions = decodeImageDimensions(bytes);
       if (dimensions.$1 <= 0 || dimensions.$2 <= 0) {
@@ -952,13 +975,13 @@ class AppState extends ChangeNotifier {
         bytes: bytes,
         sourcePath: '$sourceId.png',
       );
+      persistedPath = path;
       final cleanGroup = group.trim();
-      if (cleanGroup.isNotEmpty &&
-          !referencePresetGroups.contains(cleanGroup)) {
-        referencePresetGroups.add(cleanGroup);
-        referencePresetGroups.sort();
-      }
-      referencePresets.add(ReferencePreset(
+      final nextGroups = <String>{...referencePresetGroups, cleanGroup}
+          .where((value) => value.isNotEmpty)
+          .toList()
+        ..sort();
+      final preset = ReferencePreset(
         id: id,
         name: title,
         group: cleanGroup,
@@ -976,12 +999,23 @@ class AppState extends ChangeNotifier {
         sourceGameNames: sourceGameNames,
         sourceGameId: sourceGameId,
         sourceCategory: sourceCategory,
+      );
+      final nextPresets = [...referencePresets, preset];
+      await storage.setReferencePresetLibrary(ReferencePresetLibrary(
+        groups: nextGroups,
+        presets: nextPresets,
       ));
-      await _persistReferencePresetLibrary();
+      referencePresetGroups = nextGroups;
+      referencePresets = nextPresets;
       status = _rt('referencePresets.saved');
       notifyListeners();
       return null;
     } catch (_) {
+      if (persistedPath != null) {
+        try {
+          await File(persistedPath).delete();
+        } catch (_) {}
+      }
       return _rt('referencePresets.saveFailed');
     }
   }

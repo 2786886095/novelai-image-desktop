@@ -14,17 +14,24 @@ import type {
 } from "../../src/types";
 
 const FORMAT = "langbai-reference-presets";
-const VERSION = 1;
+const ARCHIVE_VERSION = 1;
+const LIBRARY_VERSION = 2;
 const MAX_PRESETS = 5000;
 const MAX_IMAGE_BYTES = 50 * 1024 * 1024;
 const SUPPORTED_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp"]);
-export const DEFAULT_REFERENCE_PRESET_GROUPS = [
+export const LEGACY_REFERENCE_PRESET_GROUPS = [
   "原神", "妮姬", "崩坏三", "明日方舟", "星穹铁道", "绝区零",
   "蔚蓝档案", "鸣潮", "终末地", "异环",
 ] as const;
 
-function withDefaultGroups(groups: string[]) {
-  return [...new Set([...DEFAULT_REFERENCE_PRESET_GROUPS, ...groups])];
+function normalizedGroups(groups: string[]) {
+  return [...new Set(groups)].filter(Boolean);
+}
+
+function migrateLegacyGroups(groups: string[], presets: Array<Pick<ReferencePreset, "group">>) {
+  const occupied = new Set(presets.map((preset) => preset.group).filter(Boolean));
+  return normalizedGroups(groups)
+    .filter((group) => !LEGACY_REFERENCE_PRESET_GROUPS.includes(group as typeof LEGACY_REFERENCE_PRESET_GROUPS[number]) || occupied.has(group));
 }
 
 function rootDirectory(userDataRoot = app.getPath("userData")) {
@@ -111,8 +118,8 @@ async function writeLibrary(library: ReferencePresetLibrary, userDataRoot?: stri
   const root = rootDirectory(userDataRoot);
   await fs.mkdir(root, { recursive: true });
   const payload = JSON.stringify({
-    version: VERSION,
-    groups: withDefaultGroups(library.groups.map((group) => cleanText(group)).filter(Boolean)),
+    version: LIBRARY_VERSION,
+    groups: normalizedGroups(library.groups.map((group) => cleanText(group)).filter(Boolean)),
     presets: library.presets.map(serializablePreset),
   });
   const target = libraryPath(userDataRoot);
@@ -127,6 +134,7 @@ export async function listReferencePresets(
   const target = libraryPath(userDataRoot);
   try {
     const parsed = JSON.parse(await fs.readFile(target, "utf8")) as {
+      version?: number;
       groups?: unknown[];
       presets?: Record<string, unknown>[];
     };
@@ -140,15 +148,17 @@ export async function listReferencePresets(
       if (presets.length >= MAX_PRESETS) break;
     }
     const library = {
-      groups: withDefaultGroups((parsed.groups ?? []).map((value) => cleanText(value)).filter(Boolean)),
+      groups: Number(parsed.version ?? 1) < LIBRARY_VERSION
+        ? migrateLegacyGroups((parsed.groups ?? []).map((value) => cleanText(value)).filter(Boolean), presets)
+        : normalizedGroups((parsed.groups ?? []).map((value) => cleanText(value)).filter(Boolean)),
       presets,
     };
-    if ((parsed.presets?.length ?? 0) !== presets.length) {
+    if ((parsed.presets?.length ?? 0) !== presets.length || Number(parsed.version ?? 1) < LIBRARY_VERSION) {
       await writeLibrary(library, userDataRoot);
     }
     return library;
   } catch {
-    return { groups: [...DEFAULT_REFERENCE_PRESET_GROUPS], presets: [] };
+    return { groups: [], presets: [] };
   }
 }
 
@@ -195,7 +205,12 @@ export async function saveReferencePreset(
     ? [...new Set([...library.groups, preset.group])]
     : library.groups;
   const next = { groups, presets: [...library.presets, preset] };
-  await writeLibrary(next, userDataRoot);
+  try {
+    await writeLibrary(next, userDataRoot);
+  } catch {
+    await fs.rm(filePath, { force: true });
+    return { ok: false, message: "预设保存失败，未创建分组。" };
+  }
   return { ok: true, preset, library: next };
 }
 
@@ -243,6 +258,24 @@ export async function createReferencePresetGroup(
   if (!name) return { ok: false, message: "请输入分组名称。" };
   const library = await listReferencePresets(userDataRoot);
   const next = { ...library, groups: [...new Set([...library.groups, name])] };
+  await writeLibrary(next, userDataRoot);
+  return { ok: true, library: next };
+}
+
+export async function deleteReferencePresetGroup(
+  value: string,
+  userDataRoot?: string,
+): Promise<ReferencePresetOperationResult> {
+  const name = cleanText(value);
+  if (!name) return { ok: false, message: "请选择要删除的分组。" };
+  const library = await listReferencePresets(userDataRoot);
+  if (!library.groups.includes(name)) return { ok: true, library };
+  const next = {
+    groups: library.groups.filter((group) => group !== name),
+    presets: library.presets.map((preset) =>
+      preset.group === name ? { ...preset, group: "" } : preset,
+    ),
+  };
   await writeLibrary(next, userDataRoot);
   return { ok: true, library: next };
 }
@@ -307,7 +340,7 @@ export async function exportReferencePresets(
     "manifest.json",
     JSON.stringify({
       format: FORMAT,
-      version: VERSION,
+      version: ARCHIVE_VERSION,
       groups: library.groups,
       presets: manifestPresets,
     }),
@@ -338,7 +371,7 @@ export async function importReferencePresets(
       groups?: unknown[];
       presets?: Record<string, unknown>[];
     };
-    if (manifest.format !== FORMAT || Number(manifest.version) !== VERSION) {
+    if (manifest.format !== FORMAT || Number(manifest.version) !== ARCHIVE_VERSION) {
       throw new Error("Unsupported format");
     }
     const library = await listReferencePresets(userDataRoot);
