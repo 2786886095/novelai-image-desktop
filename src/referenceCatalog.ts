@@ -8,12 +8,17 @@ export interface ReferenceCatalogAsset {
   category: ReferenceCatalogCategory;
   roleId: string;
   names: Partial<Record<AppLanguage, string>> & { "zh-CN": string };
+  gameNames?: Partial<Record<AppLanguage, string>>;
+  searchAliases?: string[];
   variant?: string;
   width: number;
   height: number;
   bytes: number;
   sha256?: string;
   downloadUrl: string;
+  downloadMirrors?: Partial<Record<"gitee" | "github", string>>;
+  thumbnailUrl?: string;
+  thumbnailMirrors?: Partial<Record<"gitee" | "github", string>>;
   source?: string;
 }
 
@@ -21,13 +26,14 @@ export interface ReferenceCatalogManifest {
   schema: "langbai-reference-catalog/v1";
   generatedAt: string;
   provider: string;
+  games?: Array<{ id: string; names?: Partial<Record<AppLanguage, string>>; categories: ReferenceCatalogCategory[] }>;
   assets: ReferenceCatalogAsset[];
 }
 
 export const REFERENCE_CATALOG_URLS = [
   import.meta.env.VITE_REFERENCE_CATALOG_URL,
+  "https://gitee.com/langbai666/novelai-image-desktop/raw/main/public/reference-catalog/index.json",
   "https://2786886095.github.io/novelai-image-desktop/reference-catalog/index.json",
-  "https://gitee.com/2786886095/novelai-reference-assets/raw/main/catalog/index.json",
   "https://raw.githubusercontent.com/2786886095/novelai-reference-assets/main/catalog/index.json",
   "/reference-catalog/index.json",
 ].filter((value): value is string => Boolean(value));
@@ -37,7 +43,7 @@ export function catalogName(asset: ReferenceCatalogAsset, language: AppLanguage 
 }
 
 export function catalogSearchText(asset: ReferenceCatalogAsset) {
-  return [asset.game, asset.category, asset.roleId, asset.variant, ...Object.values(asset.names)]
+  return [asset.game, asset.category, asset.roleId, asset.variant, ...(asset.searchAliases ?? []), ...Object.values(asset.names), ...Object.values(asset.gameNames ?? {})]
     .filter(Boolean)
     .join(" ")
     .toLocaleLowerCase();
@@ -75,8 +81,15 @@ export async function loadReferenceCatalog(signal?: AbortSignal): Promise<Refere
       const assets = (parsed.assets as ReferenceCatalogAsset[]).map((asset) => ({
         ...asset,
         downloadUrl: new URL(asset.downloadUrl, url).toString(),
+        downloadMirrors: asset.downloadMirrors
+          ? Object.fromEntries(Object.entries(asset.downloadMirrors).map(([key, value]) => [key, new URL(value, url).toString()]))
+          : undefined,
+        thumbnailUrl: asset.thumbnailUrl ? new URL(asset.thumbnailUrl, url).toString() : undefined,
+        thumbnailMirrors: asset.thumbnailMirrors
+          ? Object.fromEntries(Object.entries(asset.thumbnailMirrors).map(([key, value]) => [key, new URL(value, url).toString()]))
+          : undefined,
       }));
-      return { schema: parsed.schema, generatedAt: String(parsed.generatedAt ?? ""), provider: String(parsed.provider ?? ""), assets };
+      return { schema: parsed.schema, generatedAt: String(parsed.generatedAt ?? ""), provider: String(parsed.provider ?? ""), games: parsed.games, assets };
     } catch (error) {
       lastError = error;
     } finally {
@@ -92,8 +105,21 @@ export async function fetchReferenceAsset(
   onProgress: (loaded: number, total: number) => void,
   signal?: AbortSignal,
 ) {
-  const response = await fetch(asset.downloadUrl, { signal, cache: "force-cache" });
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const sources = [...new Set([asset.downloadMirrors?.gitee, asset.downloadUrl, asset.downloadMirrors?.github].filter((value): value is string => Boolean(value)))];
+  let response: Response | undefined;
+  let lastError: unknown;
+  for (const source of sources) {
+    try {
+      const candidate = await fetch(source, { signal, cache: "force-cache" });
+      if (!candidate.ok) throw new Error(`HTTP ${candidate.status}`);
+      response = candidate;
+      break;
+    } catch (error) {
+      lastError = error;
+      if (signal?.aborted) throw error;
+    }
+  }
+  if (!response) throw lastError instanceof Error ? lastError : new Error("Reference asset is unavailable");
   const total = Number(response.headers.get("content-length")) || asset.bytes || 0;
   if (!response.body) {
     const bytes = new Uint8Array(await response.arrayBuffer());

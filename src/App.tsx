@@ -5620,7 +5620,7 @@ function MainPage() {
           </Suspense>
         </div>
         <div className={clsx("persistent-tools-view", activeTab !== "referencePresets" && "is-hidden")} aria-hidden={activeTab !== "referencePresets"}>
-          <ReferencePresetManager />
+          <ReferencePresetManager onBack={() => useAppStore.getState().setActiveTab("tools")} />
         </div>
       </div>
       <footer className="status-bar">

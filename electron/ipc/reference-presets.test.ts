@@ -3,6 +3,7 @@ import os from "os";
 import path from "path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  DEFAULT_REFERENCE_PRESET_GROUPS,
   createReferencePresetGroup,
   deleteReferencePreset,
   listReferencePresets,
@@ -26,6 +27,12 @@ function temporaryRoot() {
 }
 
 describe("reference preset persistence", () => {
+  it("seeds the built-in game groups without downloading third-party images", async () => {
+    const library = await listReferencePresets(temporaryRoot());
+    expect(library.groups).toEqual(expect.arrayContaining([...DEFAULT_REFERENCE_PRESET_GROUPS]));
+    expect(library.presets).toHaveLength(0);
+  });
+
   it("defaults new vibe preset parameters to one", async () => {
     const root = temporaryRoot();
     const saved = await saveReferencePreset(
