@@ -26,8 +26,26 @@ function cardMarkup(asset,index){const files=asset.files||{precise:{url:asset.do
 function renderCards(){const visible=state.filtered.slice(0,state.visible);$("catalogGrid").innerHTML=visible.map(cardMarkup).join("");$("resultCount").textContent=`${t().result(state.filtered.length)} · ${t().shown(visible.length,state.filtered.length)}`;$("mirrorNote").textContent=state.source==="gitee"?t().giteeReady:t().githubReady;$("loadMore").hidden=visible.length>=state.filtered.length;$("emptyState").hidden=state.filtered.length!==0;wireImageFallbacks()}
 function wireImageFallbacks(){document.querySelectorAll("img[data-fallback]").forEach(img=>img.addEventListener("error",()=>{const fallback=img.dataset.fallback;if(fallback&&img.src!==fallback){img.removeAttribute("data-fallback");img.src=fallback}},{once:true}))}
 let previewLoadToken=0;
-function previewUrls(asset){const precise=asset.files?.precise||{url:asset.downloadUrl,mirrors:asset.downloadMirrors};const mirrors=precise.mirrors||{};return [...new Set([entryUrl(precise,"precise"),state.source==="gitee"?mirrors.github:mirrors.gitee,thumbnailUrl(asset),thumbnailFallback(asset)].filter(Boolean))]}
-function loadPreviewImage(asset){const token=++previewLoadToken;const urls=previewUrls(asset);let cursor=0;const target=$("previewImage");target.removeAttribute("src");const next=()=>{if(token!==previewLoadToken||cursor>=urls.length)return;const candidate=urls[cursor++];const probe=new Image();probe.onload=()=>{if(token===previewLoadToken)target.src=candidate};probe.onerror=next;probe.src=candidate};next()}
+function previewUrls(asset){const precise=asset.files?.precise||{url:asset.downloadUrl,mirrors:asset.downloadMirrors};const mirrors=precise.mirrors||{};return [...new Set([entryUrl(precise,"precise"),state.source==="gitee"?mirrors.github:mirrors.gitee].filter(Boolean))]}
+function loadPreviewImage(asset){
+  const token=++previewLoadToken;
+  const target=$("previewImage");
+  const stage=target.closest(".preview-stage");
+  const instant=thumbnailUrl(asset)||thumbnailFallback(asset);
+  // The card thumbnail is normally cached already. Paint it immediately and
+  // upgrade to the full PNG in the background instead of opening a blank modal.
+  if(instant)target.src=instant;
+  stage?.classList.add("is-upgrading");
+  const urls=previewUrls(asset);let cursor=0;
+  const next=()=>{
+    if(token!==previewLoadToken||cursor>=urls.length){stage?.classList.remove("is-upgrading");return}
+    const candidate=urls[cursor++];const probe=new Image();probe.decoding="async";let settled=false;
+    const timeout=setTimeout(()=>{if(!settled){settled=true;next()}},3500);
+    probe.onload=async()=>{if(settled)return;settled=true;clearTimeout(timeout);try{if(probe.decode)await probe.decode()}catch(_){}if(token===previewLoadToken){target.src=candidate;stage?.classList.remove("is-upgrading")}};
+    probe.onerror=()=>{if(settled)return;settled=true;clearTimeout(timeout);next()};probe.src=candidate
+  };
+  next()
+}
 function openPreview(index){state.previewIndex=index;updatePreview();const dialog=$("previewDialog");document.documentElement.classList.add("preview-open");try{if(typeof dialog.showModal==="function"&&!dialog.open)dialog.showModal();else{dialog.setAttribute("open","");dialog.classList.add("is-open")}}catch(_){dialog.setAttribute("open","");dialog.classList.add("is-open")}}
 function closePreview(){const dialog=$("previewDialog");previewLoadToken++;document.documentElement.classList.remove("preview-open");dialog.classList.remove("is-open");try{if(dialog.open&&typeof dialog.close==="function")dialog.close();else dialog.removeAttribute("open")}catch(_){dialog.removeAttribute("open")}}
 function updatePreview(){const asset=state.filtered[state.previewIndex];if(!asset)return;loadPreviewImage(asset);$("previewImage").alt=assetName(asset);$("previewTitle").textContent=assetName(asset);$("previewMeta").textContent=`${gameName(asset)} · ${categoryName(asset.category)} · ${asset.width} × ${asset.height}`;$("previewPrevious").disabled=state.previewIndex<=0;$("previewNext").disabled=state.previewIndex>=state.filtered.length-1}

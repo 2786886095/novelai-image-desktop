@@ -196,11 +196,14 @@ def file_entry(path: Path, source_root: Path, asset_repo: Path, game: str, gitee
     }
 
 
-def load_names(path: Path) -> dict[str, dict[str, str]]:
+def load_names(path: Path) -> dict[str, dict[str, dict[str, str]]]:
     if not path.exists():
         return {}
     data = json.loads(path.read_text("utf-8"))
-    return data.get("names", data)
+    if "namesByGame" in data:
+        return data["namesByGame"]
+    # Legacy v1 was globally keyed and could collide across games.
+    return {}
 
 
 def write_gitee_bootstrap(manifest: dict, target: Path) -> None:
@@ -272,7 +275,7 @@ def build(args: argparse.Namespace) -> dict:
         thumb_gitee_rel = encoded(Path("thumbnails") / Path(*item.relative.parts[1:]).with_suffix(".webp"))
         github_thumb = f"https://media.githubusercontent.com/media/2786886095/novelai-reference-assets/main/{thumb_encoded}"
         gitee_thumb = f"https://gitee.com/langbai666/{gitee_repo}/raw/main/{thumb_gitee_rel}"
-        localized = names.get(item.role, {})
+        localized = names.get(item.game, {}).get(item.role, {})
         role_names = {language: localized.get(language) or item.role for language in LANGUAGES}
         game_names = GAME_NAMES.get(item.game, {language: item.game for language in LANGUAGES})
         asset = {

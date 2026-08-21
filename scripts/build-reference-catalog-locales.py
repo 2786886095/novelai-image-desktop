@@ -1,88 +1,112 @@
 #!/usr/bin/env python3
-"""Create a cached five-language search/display-name map for the catalog.
+"""Build safe game-scoped five-language character names.
 
-Official game titles are maintained by the catalog builder. Character/form names
-use the source-library name as the stable key and machine-assisted translations
-as search/display aliases. Existing hand-corrected values in the cache are never
-overwritten unless --force is supplied.
+Proper nouns are never sent to generic machine translation. Trusted game data
+is applied when available; otherwise the canonical role ID remains visible.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import time
+import re
 from pathlib import Path
-from urllib.parse import urlencode
-from urllib.request import Request, urlopen
 
 
-TARGETS = {
-    "zh-CN": "zh-CN",
-    "zh-TW": "zh-TW",
-    "ja-JP": "ja",
-    "ko-KR": "ko",
-    "en-US": "en",
-}
+LANGUAGES = ("zh-CN", "zh-TW", "ja-JP", "ko-KR", "en-US")
+REDUNDANT_TAGS = re.compile(r"\s*\[(?:game|in-game|full-wish)\]\s*", re.IGNORECASE)
+CITY_TAG = re.compile(r"\s*\[in-game city\]\s*", re.IGNORECASE)
+CITY_LABELS = {"zh-CN": "（城市场景）", "zh-TW": "（城市場景）", "ja-JP": "（市街）", "ko-KR": " (도시)", "en-US": " (City)"}
 
 
-def translate_lines(lines: list[str], target: str) -> list[str]:
-    text = "\n".join(line.replace("\n", " ") for line in lines)
-    query = urlencode({"client": "gtx", "sl": "auto", "tl": target, "dt": "t", "q": text})
-    request = Request(
-        "https://translate.googleapis.com/translate_a/single?" + query,
-        headers={"User-Agent": "Langbai-Reference-Catalog/1.0"},
-    )
-    with urlopen(request, timeout=30) as response:
-        data = json.load(response)
-    translated = "".join(part[0] for part in data[0] if part and part[0])
-    output = translated.splitlines()
-    if len(output) != len(lines):
-        raise RuntimeError(f"line-count mismatch: expected {len(lines)}, received {len(output)}")
-    return [value.strip() or source for value, source in zip(output, lines)]
+def clean_role(role: str) -> tuple[str, bool]:
+    city = bool(CITY_TAG.search(role))
+    value = CITY_TAG.sub(" ", role)
+    value = REDUNDANT_TAGS.sub(" ", value)
+    return re.sub(r"\s+", " ", value).strip(" -"), city
+
+
+def match_override(role: str, records: dict) -> tuple[str | None, dict | None]:
+    folded = role.casefold()
+    for key, row in records.items():
+        if key.casefold() == folded:
+            return key, row
+    candidates = []
+    for key, row in records.items():
+        key_folded = key.casefold()
+        if folded.startswith(key_folded) and (len(folded) == len(key_folded) or folded[len(key_folded)] in " ([•-–—"):
+            candidates.append((len(key), key, row))
+    if not candidates:
+        return None, None
+    _, key, row = max(candidates)
+    return key, row
+
+
+def localized_role(role: str, records: dict) -> tuple[dict[str, str], dict]:
+    clean, city = clean_role(role)
+    key, row = match_override(clean, records)
+    if row:
+        suffix = clean[len(key):].strip() if key else ""
+        names = {}
+        for language in LANGUAGES:
+            base = row["names"].get(language) or row["names"].get("en-US") or key
+            value = f"{base} {suffix}".strip() if suffix else base
+            if city:
+                value += CITY_LABELS[language]
+            names[language] = value
+        return names, {"status": row.get("status", "verified"), "source": row.get("source", "trusted override"), "matchedBase": key}
+    fallback = clean or role
+    if city:
+        return {language: fallback + CITY_LABELS[language] for language in LANGUAGES}, {"status": "canonical-fallback", "source": "source-library roleId"}
+    return {language: fallback for language in LANGUAGES}, {"status": "canonical-fallback", "source": "source-library roleId"}
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--manifest", default=r"F:\AI\agent\codex\novelai-image-desktop\public\reference-catalog\index.json")
+    parser.add_argument("--overrides", default=r"F:\AI\agent\codex\novelai-image-desktop\data\reference-catalog-name-overrides.json")
     parser.add_argument("--output", default=r"F:\AI\agent\codex\novelai-image-desktop\data\reference-catalog-locales.json")
-    parser.add_argument("--batch-size", type=int, default=24)
-    parser.add_argument("--force", action="store_true")
+    parser.add_argument("--audit", default=r"F:\AI\agent\codex\novelai-image-desktop\.tmp\reference-catalog-locale-audit.json")
     args = parser.parse_args()
-
     manifest = json.loads(Path(args.manifest).read_text("utf-8"))
-    roles = sorted({asset["roleId"] for asset in manifest["assets"]}, key=str.casefold)
+    overrides = json.loads(Path(args.overrides).read_text("utf-8")).get("games", {})
+    roles_by_game: dict[str, set[str]] = {}
+    for asset in manifest["assets"]:
+        roles_by_game.setdefault(asset["game"], set()).add(asset["roleId"])
+    names_by_game = {}
+    provenance_by_game = {}
+    counts = {"verified": 0, "fallback": 0}
+    for game, roles in sorted(roles_by_game.items()):
+        records = overrides.get(game, {})
+        names_by_game[game] = {}
+        provenance_by_game[game] = {}
+        for role in sorted(roles, key=str.casefold):
+            names, provenance = localized_role(role, records)
+            names_by_game[game][role] = names
+            provenance_by_game[game][role] = provenance
+            counts["verified" if provenance["status"] != "canonical-fallback" else "fallback"] += 1
+    payload = {
+        "schema": "langbai-reference-locales/v2",
+        "languages": list(LANGUAGES),
+        "namesByGame": names_by_game,
+        "provenanceByGame": provenance_by_game,
+        "roleCount": sum(len(roles) for roles in roles_by_game.values()),
+        "counts": counts,
+        "policy": "Verified game-scoped proper names; canonical fallback when unverified; no generic machine translation.",
+    }
     output = Path(args.output)
-    cache = json.loads(output.read_text("utf-8")) if output.exists() else {"schema": "langbai-reference-locales/v1", "names": {}}
-    names = cache.setdefault("names", {})
-    for role in roles:
-        names.setdefault(role, {})
-
-    for language, target in TARGETS.items():
-        pending = [role for role in roles if args.force or not names[role].get(language)]
-        for offset in range(0, len(pending), args.batch_size):
-            batch = pending[offset: offset + args.batch_size]
-            for attempt in range(4):
-                try:
-                    translations = translate_lines(batch, target)
-                    break
-                except Exception:
-                    if attempt == 3:
-                        # Preserve functionality without inventing or dropping a name.
-                        translations = batch
-                    else:
-                        time.sleep(1.5 * (attempt + 1))
-            for role, translated in zip(batch, translations):
-                names[role][language] = translated
-            output.parent.mkdir(parents=True, exist_ok=True)
-            output.write_text(json.dumps(cache, ensure_ascii=False, indent=2), "utf-8")
-            print(f"{language}: {min(offset + len(batch), len(pending))}/{len(pending)}")
-            time.sleep(0.08)
-
-    cache["roleCount"] = len(roles)
-    cache["note"] = "Machine-assisted multilingual aliases; source-library roleId remains the stable identifier."
-    output.write_text(json.dumps(cache, ensure_ascii=False, indent=2), "utf-8")
-    print(json.dumps({"roles": len(roles), "languages": list(TARGETS)}, ensure_ascii=False))
+    output.write_text(json.dumps(payload, ensure_ascii=False, indent=2), "utf-8")
+    audit = {
+        "schema": payload["schema"], "roleCount": payload["roleCount"], "counts": counts,
+        "fallbackByGame": {game: [role for role, row in provenance_by_game[game].items() if row["status"] == "canonical-fallback"] for game in provenance_by_game},
+        "knownBadTranslationsAbsent": all(
+            value not in {"这里[游戏]", "反照率[游戏]", "游戏[游戏]", "琥珀色", "除夕夜"}
+            for game in names_by_game.values() for names in game.values() for value in names.values()
+        ),
+    }
+    Path(args.audit).parent.mkdir(parents=True, exist_ok=True)
+    Path(args.audit).write_text(json.dumps(audit, ensure_ascii=False, indent=2), "utf-8")
+    print(json.dumps({"roles": payload["roleCount"], **counts, "knownBadTranslationsAbsent": audit["knownBadTranslationsAbsent"]}, ensure_ascii=False))
 
 
 if __name__ == "__main__":
