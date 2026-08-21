@@ -38,16 +38,28 @@ def main() -> None:
     scoped_roles = sum(len(roles) for roles in locales.get("namesByGame", {}).values())
     if scoped_roles != locales.get("roleCount"):
         errors.append(f"locale roleCount mismatch: {scoped_roles} != {locales.get('roleCount')}")
+    if locales.get("counts", {}).get("fallback") != 0:
+        errors.append(f"unverified canonical fallbacks remain: {locales.get('counts', {}).get('fallback')}")
+    provenance = locales.get("provenanceByGame", {})
+    for game, roles in locales.get("namesByGame", {}).items():
+        for role_id in roles:
+            status = (provenance.get(game, {}).get(role_id) or {}).get("status")
+            if status == "canonical-fallback" or not status:
+                errors.append(f"unverified localization provenance: {(game, role_id)} -> {status!r}")
     checks = {
         "genshinAino": next(a["names"] for a in manifest["assets"] if a["game"] == "原神" and a["roleId"] == "Aino [game]"),
         "genshinAmber": next(a["names"] for a in manifest["assets"] if a["game"] == "原神" and a["roleId"] == "Amber"),
         "genshinGaming": next(a["names"] for a in manifest["assets"] if a["game"] == "原神" and a["roleId"] == "Gaming"),
+        "genshinAlhaitham": next(a["names"] for a in manifest["assets"] if a["game"] == "原神" and a["roleId"] == "Alhaitham"),
+        "genshinAlyosha": next(a["names"] for a in manifest["assets"] if a["game"] == "原神" and a["roleId"] == "Alyosha"),
         "blueArchiveAruNewYear": next(a["names"] for a in manifest["assets"] if a["game"] == "蔚蓝档案" and a["roleId"] == "Aru (New Year)"),
     }
     expected = {
         "genshinAino": {"zh-CN": "爱诺", "en-US": "Aino"},
         "genshinAmber": {"zh-CN": "安柏", "en-US": "Amber"},
         "genshinGaming": {"zh-CN": "嘉明", "en-US": "Gaming"},
+        "genshinAlhaitham": {"zh-CN": "艾尔海森", "zh-TW": "艾爾海森", "ja-JP": "アルハイゼン", "ko-KR": "알하이탐", "en-US": "Alhaitham"},
+        "genshinAlyosha": {"zh-CN": "阿罗夏", "zh-TW": "阿羅夏", "ja-JP": "アリョーシャ", "ko-KR": "알료샤", "en-US": "Alyosha"},
         "blueArchiveAruNewYear": {"zh-CN": "爱露（新年）", "en-US": "Aru (New Year)"},
     }
     for key, values in expected.items():
