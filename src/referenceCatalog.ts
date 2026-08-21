@@ -30,9 +30,18 @@ export interface ReferenceCatalogManifest {
   assets: ReferenceCatalogAsset[];
 }
 
+interface ReferenceCatalogPayload {
+  schema?: string;
+  generatedAt?: string;
+  provider?: string;
+  games?: ReferenceCatalogManifest["games"];
+  assets?: ReferenceCatalogAsset[];
+  chunks?: Array<{ game: string; url: string }>;
+}
+
 export const REFERENCE_CATALOG_URLS = [
   import.meta.env.VITE_REFERENCE_CATALOG_URL,
-  "https://gitee.com/langbai666/novelai-image-desktop/raw/main/public/reference-catalog/index.json",
+  "https://gitee.com/langbai666/novelai-image-desktop/raw/main/public/reference-catalog/gitee-index.json",
   "https://2786886095.github.io/novelai-image-desktop/reference-catalog/index.json",
   "https://raw.githubusercontent.com/2786886095/novelai-reference-assets/main/catalog/index.json",
   "/reference-catalog/index.json",
@@ -64,17 +73,45 @@ export function dataUrlFromBytes(bytes: Uint8Array, mime = "image/png") {
   return `data:${mime};base64,${btoa(binary)}`;
 }
 
+async function unpackCatalogPayload(payload: unknown): Promise<ReferenceCatalogPayload> {
+  if (!payload || typeof payload !== "object") return {};
+  const packed = payload as { encoding?: string; payload?: string };
+  if (packed.encoding !== "gzip-base64" || typeof packed.payload !== "string") return payload as ReferenceCatalogPayload;
+  const binary = atob(packed.payload);
+  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
+  return JSON.parse(await new Response(stream).text()) as ReferenceCatalogPayload;
+}
+
 export async function loadReferenceCatalog(signal?: AbortSignal): Promise<ReferenceCatalogManifest> {
   let lastError: unknown;
   for (const url of REFERENCE_CATALOG_URLS) {
     const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 7000);
+    const timeout = window.setTimeout(() => controller.abort(), 15000);
     const forwardAbort = () => controller.abort();
     signal?.addEventListener("abort", forwardAbort, { once: true });
     try {
       const response = await fetch(url, { signal: controller.signal, cache: "no-store" });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const parsed = await response.json() as Partial<ReferenceCatalogManifest>;
+      let parsed = await response.json() as ReferenceCatalogPayload;
+      if (parsed.schema === "langbai-reference-catalog/federated-v1" && Array.isArray(parsed.chunks)) {
+        const chunkManifests = await Promise.all(parsed.chunks.map(async (chunk) => {
+          const chunkResponse = await fetch(new URL(chunk.url, url), { signal: controller.signal, cache: "no-store" });
+          if (!chunkResponse.ok) throw new Error(`HTTP ${chunkResponse.status}`);
+          const chunkManifest = await unpackCatalogPayload(await chunkResponse.json());
+          if (chunkManifest.schema !== "langbai-reference-catalog/v1" || !Array.isArray(chunkManifest.assets)) {
+            throw new Error("Invalid reference catalog chunk");
+          }
+          return chunkManifest;
+        }));
+        parsed = {
+          schema: "langbai-reference-catalog/v1",
+          generatedAt: parsed.generatedAt,
+          provider: parsed.provider,
+          games: parsed.games,
+          assets: chunkManifests.flatMap((chunk) => chunk.assets ?? []),
+        };
+      }
       if (parsed.schema !== "langbai-reference-catalog/v1" || !Array.isArray(parsed.assets)) {
         throw new Error("Invalid reference catalog");
       }

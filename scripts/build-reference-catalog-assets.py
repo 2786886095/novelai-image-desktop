@@ -203,6 +203,26 @@ def load_names(path: Path) -> dict[str, dict[str, str]]:
     return data.get("names", data)
 
 
+def write_gitee_bootstrap(manifest: dict, target: Path) -> None:
+    chunks = []
+    for game in manifest["games"]:
+        slug = GAME_SLUGS[game["id"]]
+        chunks.append({
+            "game": game["id"],
+            "url": f"https://gitee.com/langbai666/novelai-ref-{slug}/raw/main/catalog-client-pack.json",
+        })
+    bootstrap = {
+        "schema": "langbai-reference-catalog/federated-v1",
+        "generatedAt": manifest["generatedAt"],
+        "updatedDate": manifest["updatedDate"],
+        "provider": manifest["provider"],
+        "games": manifest["games"],
+        "chunks": chunks,
+    }
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(bootstrap, ensure_ascii=False, separators=(",", ":")), "utf-8")
+
+
 def build(args: argparse.Namespace) -> dict:
     source_root = Path(args.source_root).resolve()
     asset_repo = Path(args.asset_repo).resolve()
@@ -306,6 +326,7 @@ def build(args: argparse.Namespace) -> dict:
     }
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), "utf-8")
+    write_gitee_bootstrap(manifest, output.with_name("gitee-index.json"))
     (asset_repo / "catalog").mkdir(parents=True, exist_ok=True)
     (asset_repo / "catalog" / "index.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), "utf-8")
     return manifest

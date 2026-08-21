@@ -33,3 +33,5 @@ python scripts/publish-reference-catalog-gitee.py
 GitHub Pages 工作流 `.github/workflows/reference-catalog-pages.yml` 发布完整静态站点和清单。精准参考和缩略图按游戏拆分到 Gitee 仓库，避免单仓库过大；完整三阶段资源由 GitHub LFS 保存。
 
 桌面端优先从 Gitee 读取清单和精准参考，失败后回退 GitHub。软件只下载用户选择的精准参考图，并显示文件大小与实时下载进度；网站允许分别下载三个阶段文件。
+
+为绕开 Gitee 匿名访问的大文件限制，`gitee-index.json` 只保存 10 个游戏分片入口；各分片使用 gzip+Base64 小型清单，客户端在内存中解包并合并，完整目录无需登录即可读取。

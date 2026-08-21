@@ -9,6 +9,8 @@ never written to this script, its reports, or repository remotes.
 from __future__ import annotations
 
 import argparse
+import base64
+import gzip
 import json
 import shutil
 import subprocess
@@ -117,6 +119,32 @@ def main() -> None:
             copied_bytes += target_thumb.stat().st_size
         catalog = {**manifest, "assets": selected, "totalAssets": len(selected), "totalBytes": sum(asset["bytes"] for asset in selected)}
         (repo / "catalog.json").write_text(json.dumps(catalog, ensure_ascii=False, indent=2), "utf-8")
+        client_fields = {
+            "id", "game", "category", "roleId", "names", "gameNames", "searchAliases", "variant",
+            "width", "height", "bytes", "downloadUrl", "downloadMirrors", "thumbnailUrl", "thumbnailMirrors",
+        }
+        client_assets = [{key: value for key, value in asset.items() if key in client_fields} for asset in selected]
+        client_catalog = {
+            "schema": "langbai-reference-catalog/v1",
+            "generatedAt": manifest["generatedAt"],
+            "provider": manifest["provider"],
+            "games": [game],
+            "assets": client_assets,
+        }
+        (repo / "catalog-client.json").write_text(
+            json.dumps(client_catalog, ensure_ascii=False, separators=(",", ":")), "utf-8"
+        )
+        packed_client = gzip.compress(
+            json.dumps(client_catalog, ensure_ascii=False, separators=(",", ":")).encode("utf-8"),
+            compresslevel=9,
+        )
+        (repo / "catalog-client-pack.json").write_text(
+            json.dumps(
+                {"encoding": "gzip-base64", "payload": base64.b64encode(packed_client).decode("ascii")},
+                separators=(",", ":"),
+            ),
+            "utf-8",
+        )
         (repo / "README.md").write_text(
             f"# {game_id} · NovelAI 精准参考镜像\n\n"
             "Langbai NovelAI Studio 中国大陆下载镜像。每个角色/形态仅保留一个最佳精准参考尺寸。\n\n"
