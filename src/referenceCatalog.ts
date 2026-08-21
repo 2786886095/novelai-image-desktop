@@ -26,6 +26,7 @@ export interface ReferenceCatalogManifest {
 
 export const REFERENCE_CATALOG_URLS = [
   import.meta.env.VITE_REFERENCE_CATALOG_URL,
+  "https://2786886095.github.io/novelai-image-desktop/reference-catalog/index.json",
   "https://gitee.com/2786886095/novelai-reference-assets/raw/main/catalog/index.json",
   "https://raw.githubusercontent.com/2786886095/novelai-reference-assets/main/catalog/index.json",
   "/reference-catalog/index.json",

@@ -24,3 +24,5 @@ The generator prefers `1024x1536`, then `1472x1472`, then `1536x1024`, so duplic
 The current local drop is about 1.9 GB for precise references. GitHub/Gitee normal Git repositories are not suitable for this payload (individual-file and repository limits); publish images through Git LFS, a release/object store, or a Hugging Face dataset, while keeping the small catalog manifest and website in GitHub. Set `VITE_REFERENCE_CATALOG_URL` to the published manifest URL. The app tries Gitee, GitHub, then its bundled manifest by default.
 
 The Pages workflow is `.github/workflows/reference-catalog-pages.yml`. It publishes the catalog UI and manifest; image assets must be uploaded to the configured storage and retain the manifest's relative `assets/` paths.
+
+Current catalog UI: https://2786886095.github.io/novelai-image-desktop/
