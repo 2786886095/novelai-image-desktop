@@ -95,29 +95,56 @@ const release = await releaseForTag();
 const releaseId = Number(release.id);
 if (!Number.isFinite(releaseId)) throw new Error("Gitee release did not return an id");
 
-const attachmentsResponse = await request(`${api}/releases/${releaseId}/attach_files`);
-const attachments = attachmentsResponse.ok ? await attachmentsResponse.json() : [];
+async function attachmentsForRelease() {
+  const response = await request(`${api}/releases/${releaseId}/attach_files`, {}, 3, 60_000);
+  if (!response.ok) return [];
+  const value = await response.json();
+  return Array.isArray(value) ? value : [];
+}
+
+async function remoteAttachment(name) {
+  const attachments = await attachmentsForRelease();
+  return attachments.find((item) => item?.name === name);
+}
+
 for (const file of uniqueFiles) {
   const name = basename(file);
-  for (const existing of Array.isArray(attachments) ? attachments.filter((item) => item?.name === name) : []) {
-    const deleted = await request(`${api}/releases/${releaseId}/attach_files/${existing.id}`, { method: "DELETE" });
-    if (!deleted.ok && deleted.status !== 404) throw new Error(`Unable to replace Gitee attachment ${name}`);
+  // Release assets are immutable for a version. A previous CI retry may have
+  // completed the upload even when Gitee never returned response headers. Do
+  // not delete that valid attachment and start the same slow transfer again.
+  if (await remoteAttachment(name)) {
+    console.log(`Kept existing ${name} on Gitee ${tag}`);
+    continue;
   }
 
   const bytes = await readFile(file);
-  const form = new FormData();
-  form.append("file", new Blob([bytes]), name);
-  // Gitee's attachment ingress can be slow from GitHub-hosted runners. Allow
-  // a long transfer window while retaining retries and post-upload checks.
-  const uploaded = await request(
-    `${api}/releases/${releaseId}/attach_files`,
-    { method: "POST", body: form },
-    3,
-    900_000,
-  );
-  if (!uploaded.ok) {
-    const detail = (await uploaded.text()).slice(0, 500);
-    throw new Error(`Unable to upload ${name} to Gitee (${uploaded.status}): ${detail}`);
+  let uploaded = false;
+  let lastError;
+  for (let attempt = 1; attempt <= 3 && !uploaded; attempt += 1) {
+    const form = new FormData();
+    form.append("file", new Blob([bytes]), name);
+    try {
+      // Gitee occasionally accepts the complete body but never returns HTTP
+      // response headers to GitHub-hosted runners. Bound each transfer, then
+      // verify the release attachment before deciding whether it failed.
+      const response = await request(
+        `${api}/releases/${releaseId}/attach_files`,
+        { method: "POST", body: form },
+        1,
+        120_000,
+      );
+      if (response.ok) uploaded = true;
+      else lastError = new Error(`Gitee upload HTTP ${response.status}: ${(await response.text()).slice(0, 500)}`);
+    } catch (error) {
+      lastError = error;
+    }
+
+    if (!uploaded) {
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, 2_000));
+      uploaded = Boolean(await remoteAttachment(name));
+    }
+    if (!uploaded && attempt < 3) await new Promise((resolveDelay) => setTimeout(resolveDelay, attempt * 2_000));
   }
+  if (!uploaded) throw new Error(`Unable to upload ${name} to Gitee after remote verification`, { cause: lastError });
   console.log(`Uploaded ${name} to Gitee ${tag}`);
 }
