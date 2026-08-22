@@ -1,5 +1,6 @@
-import { Blob } from "node:buffer";
-import { readdir, readFile, stat } from "node:fs/promises";
+import { createReadStream } from "node:fs";
+import { readdir, stat } from "node:fs/promises";
+import { request as httpsRequest } from "node:https";
 import { basename, join, resolve } from "node:path";
 
 const token = process.env.GITEE_TOKEN?.trim();
@@ -107,6 +108,48 @@ async function remoteAttachment(name) {
   return attachments.find((item) => item?.name === name);
 }
 
+async function uploadFile(releaseId, file, name, timeoutMs) {
+  const boundary = `----langbai-gitee-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const prefix = Buffer.from(
+    `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${name.replaceAll('"', "_")}"\r\n` +
+    "Content-Type: application/octet-stream\r\n\r\n",
+  );
+  const suffix = Buffer.from(`\r\n--${boundary}--\r\n`);
+  const fileSize = (await stat(file)).size;
+  const url = new URL(`${api}/releases/${releaseId}/attach_files`);
+
+  return await new Promise((resolveUpload, rejectUpload) => {
+    const req = httpsRequest({
+      protocol: url.protocol,
+      hostname: url.hostname,
+      port: url.port || undefined,
+      path: `${url.pathname}${url.search}`,
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+        "Content-Type": `multipart/form-data; boundary=${boundary}`,
+        "Content-Length": prefix.length + fileSize + suffix.length,
+      },
+    }, (response) => {
+      const chunks = [];
+      response.on("data", (chunk) => chunks.push(chunk));
+      response.on("end", () => resolveUpload({
+        ok: Boolean(response.statusCode && response.statusCode >= 200 && response.statusCode < 300),
+        status: response.statusCode ?? 0,
+        detail: Buffer.concat(chunks).toString("utf8").slice(0, 500),
+      }));
+    });
+    req.setTimeout(timeoutMs, () => req.destroy(new Error(`Gitee upload timed out after ${timeoutMs}ms`)));
+    req.on("error", rejectUpload);
+    req.write(prefix);
+    const source = createReadStream(file);
+    source.on("error", (error) => req.destroy(error));
+    source.on("end", () => req.end(suffix));
+    source.pipe(req, { end: false });
+  });
+}
+
 for (const file of uniqueFiles) {
   const name = basename(file);
   // Release assets are immutable for a version. A previous CI retry may have
@@ -117,24 +160,20 @@ for (const file of uniqueFiles) {
     continue;
   }
 
-  const bytes = await readFile(file);
+  const localSize = (await stat(file)).size;
   let uploaded = false;
   let lastError;
   for (let attempt = 1; attempt <= 3 && !uploaded; attempt += 1) {
-    const form = new FormData();
-    form.append("file", new Blob([bytes]), name);
     try {
       // Gitee occasionally accepts the complete body but never returns HTTP
       // response headers to GitHub-hosted runners. Bound each transfer, then
       // verify the release attachment before deciding whether it failed.
-      const response = await request(
-        `${api}/releases/${releaseId}/attach_files`,
-        { method: "POST", body: form },
-        1,
-        120_000,
-      );
+      // Small desktop chunks should complete quickly. The directly installable
+      // Android APK is larger and receives a longer, bounded transfer window.
+      const timeoutMs = localSize > 32 * 1024 * 1024 ? 900_000 : 180_000;
+      const response = await uploadFile(releaseId, file, name, timeoutMs);
       if (response.ok) uploaded = true;
-      else lastError = new Error(`Gitee upload HTTP ${response.status}: ${(await response.text()).slice(0, 500)}`);
+      else lastError = new Error(`Gitee upload HTTP ${response.status}: ${response.detail}`);
     } catch (error) {
       lastError = error;
     }

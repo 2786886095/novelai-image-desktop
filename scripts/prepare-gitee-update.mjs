@@ -5,9 +5,10 @@ import { basename, join, resolve } from "node:path";
 import { pipeline } from "node:stream/promises";
 
 // Keep each mainland attachment small enough to upload reliably across the
-// GitHub-runner → Gitee route. The former 90 MB parts routinely exceeded the
-// three-minute request timeout even though they were below Gitee's hard limit.
-const PART_SIZE = 24 * 1024 * 1024;
+// GitHub-runner → Gitee route. Even 24 MiB parts can stall at Gitee's ingress,
+// so use smaller chunks and verify every completed remote attachment.
+const PART_SIZE_MIB = 8;
+const PART_SIZE = PART_SIZE_MIB * 1024 * 1024;
 
 function argument(name) {
   const index = process.argv.indexOf(`--${name}`);
@@ -38,7 +39,9 @@ let offset = 0;
 let index = 1;
 while (offset < setupInfo.size) {
   const length = Math.min(PART_SIZE, setupInfo.size - offset);
-  const name = `${basename(setup)}.part${String(index).padStart(2, "0")}`;
+  // Include the chunk scheme in the filename. This keeps retries idempotent
+  // without confusing an older release attachment produced with 24 MiB parts.
+  const name = `${basename(setup)}.gitee-part${String(PART_SIZE_MIB).padStart(2, "0")}m-${String(index).padStart(3, "0")}`;
   const path = join(output, name);
   await pipeline(
     createReadStream(setup, { start: offset, end: offset + length - 1 }),
