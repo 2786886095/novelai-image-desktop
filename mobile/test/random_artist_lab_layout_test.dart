@@ -91,6 +91,12 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    final artistCountField = tester.widget<TextField>(
+      find.byWidgetPredicate((widget) =>
+          widget is TextField &&
+          widget.decoration?.labelText == '每串画师数量（1～20）'),
+    );
+    expect(artistCountField.controller?.text, '5');
     expect(find.text('NovelAI 生成参数'), findsOneWidget);
     await tester.tap(find.text('NovelAI 生成参数'));
     await tester.pumpAndSettle();

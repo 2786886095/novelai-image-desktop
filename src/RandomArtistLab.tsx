@@ -341,7 +341,7 @@ function restore(inherited: GenerateParams): RandomSession {
       basePrompt: typeof raw?.basePrompt === "string" ? raw.basePrompt : inherited.positivePrompt,
       auxiliaryPrompt: typeof raw?.auxiliaryPrompt === "string" ? raw.auxiliaryPrompt : "",
       count: positiveInteger(raw?.count, 8),
-      artistCount: Math.max(1, Math.min(20, positiveInteger(raw?.artistCount, 8))),
+      artistCount: Math.max(1, Math.min(20, positiveInteger(raw?.artistCount, 5))),
       poolSize: clampPoolSize(raw?.poolSize),
     seed: Math.min(2_147_483_647, Math.max(0, Math.floor(Number(raw?.seed) || 246813579))),
       drawSeed: positiveInteger(raw?.drawSeed, freshSeed()),
@@ -355,7 +355,7 @@ function restore(inherited: GenerateParams): RandomSession {
       favorites: Array.isArray(raw?.favorites) ? raw.favorites : [],
     };
   } catch {
-    sessionCache = { basePrompt: inherited.positivePrompt, auxiliaryPrompt: "", count: 8, artistCount: 8, poolSize: 1000, seed: 246813579, drawSeed: freshSeed(), mutateAuxiliary: false, biasFavorites: false, weightTuneInput: "", weightTuneCount: 8, weightVariation: 20, generationParams: normalizeGenerationParams(undefined, DEFAULT_PARAMS), results: [], favorites: [] };
+    sessionCache = { basePrompt: inherited.positivePrompt, auxiliaryPrompt: "", count: 8, artistCount: 5, poolSize: 1000, seed: 246813579, drawSeed: freshSeed(), mutateAuxiliary: false, biasFavorites: false, weightTuneInput: "", weightTuneCount: 8, weightVariation: 20, generationParams: normalizeGenerationParams(undefined, DEFAULT_PARAMS), results: [], favorites: [] };
   }
   return sessionCache;
 }

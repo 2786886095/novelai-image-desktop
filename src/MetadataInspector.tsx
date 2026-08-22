@@ -577,7 +577,6 @@ export default function MetadataInspector({ onBack }: { onBack: () => void }) {
       if (!file) throw new Error(text.readFailed);
       await readFile(file, false);
       setSelectedHistoryId(item.id);
-      setHistoryOpen(false);
       setToast(text.historySelected);
     } catch {
       setToast(text.readFailed);

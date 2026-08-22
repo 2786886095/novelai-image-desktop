@@ -75,7 +75,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
   final _base = TextEditingController();
   final _auxiliary = TextEditingController();
   final _count = TextEditingController(text: '8');
-  final _artistCount = TextEditingController(text: '8');
+  final _artistCount = TextEditingController(text: '5');
   final _seed = TextEditingController(text: '246813579');
   final _poolSize = TextEditingController(text: '1000');
   final _width = TextEditingController(text: '832');
@@ -582,7 +582,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
         prefs.getString('${_prefsPrefix}base') ?? app.params.positivePrompt;
     _auxiliary.text = prefs.getString('${_prefsPrefix}aux') ?? '';
     _count.text = '${prefs.getInt('${_prefsPrefix}count') ?? 8}';
-    _artistCount.text = '${prefs.getInt('${_prefsPrefix}artistCount') ?? 8}';
+    _artistCount.text = '${prefs.getInt('${_prefsPrefix}artistCount') ?? 5}';
     _poolSize.text = '${prefs.getInt('${_prefsPrefix}poolSize') ?? 1000}';
     _seed.text = '${prefs.getInt('${_prefsPrefix}seed') ?? 246813579}';
     _weightTuneInput.text =
@@ -630,7 +630,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     await prefs.setString('${_prefsPrefix}aux', _auxiliary.text);
     await prefs.setInt('${_prefsPrefix}count', _positive(_count, 8));
     await prefs.setInt('${_prefsPrefix}artistCount',
-        _positive(_artistCount, 8).clamp(1, 20).toInt());
+        _positive(_artistCount, 5).clamp(1, 20).toInt());
     await prefs.setInt('${_prefsPrefix}poolSize', _poolLimit());
     await prefs.setInt('${_prefsPrefix}seed', _seedValue());
     await prefs.setString(
@@ -662,8 +662,8 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
       drawArtistRecipes(
         pool: _pool,
         count: _positive(_count, 8),
-        minArtists: _positive(_artistCount, 8).clamp(1, 20).toInt(),
-        maxArtists: _positive(_artistCount, 8).clamp(1, 20).toInt(),
+        minArtists: _positive(_artistCount, 5).clamp(1, 20).toInt(),
+        maxArtists: _positive(_artistCount, 5).clamp(1, 20).toInt(),
         drawSeed: _drawSeed,
         auxiliary: _auxiliary.text,
         mutateAuxiliary: _mutateAuxiliary,

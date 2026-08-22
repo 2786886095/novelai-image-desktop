@@ -4,18 +4,21 @@
 
 | 系统 | 安装包 | 安装说明 |
 | --- | --- | --- |
-| 🪟 **Windows**（便携版，x64） | `Langbai-NovelAI-Studio-1.8.1.exe` | 双击即用，无需安装 |
-| 🪟 **Windows**（安装版，x64） | `Langbai-NovelAI-Studio-Setup-1.8.1.exe` | 安装向导可自选路径、创建快捷方式；支持软件内一键更新 |
-| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-1.8.1-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
-| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-1.8.1.zip` | 解压后即为 `.app`，同样需右键「打开」 |
-| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-1.8.1.AppImage` | `chmod +x` 后直接运行 |
+| 🪟 **Windows**（便携版，x64） | `Langbai-NovelAI-Studio-1.8.2.exe` | 双击即用，无需安装 |
+| 🪟 **Windows**（安装版，x64） | `Langbai-NovelAI-Studio-Setup-1.8.2.exe` | 安装向导可自选路径、创建快捷方式；支持软件内一键更新 |
+| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-1.8.2-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
+| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-1.8.2.zip` | 解压后即为 `.app`，同样需右键「打开」 |
+| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-1.8.2.AppImage` | `chmod +x` 后直接运行 |
 | 🤖 **Android** | `app-release.apk` | 直接安装；需允许「未知来源」 |
 | 📱 **iOS** | `novelai-mobile-unsigned.ipa` | **未签名**，需使用 AltStore / Sideloadly 等工具自行侧载 |
 
 > 桌面端与移动端均为 **API-only** 客户端，需要自备 NovelAI Persistent API Token。
 
-### v1.8.1 更新内容
+### v1.8.2 更新内容
 
+- 修复从历史分组选择图片后，选择区错误收缩成一条线、导致后续图片无法继续选择的问题；选择图片后现在保持分组面板展开。
+- 为分组选择区补充稳定的最小高度，即使用户手动折叠也会保留完整可点击标题，不再出现不可见或无法恢复的状态。
+- 随机画师串抽卡的“每串画师数量”新用户默认值由 8 调整为 5，桌面端与 Android / iOS 保持一致；已有用户主动保存的数量不被覆盖。
 - “恢复图片原数据”新增分组历史图片选择器：支持全部、未分组及指定分组筛选，直接点击缩略图即可查看 NovelAI、Stable Diffusion WebUI / Forge 与 ComfyUI 原数据并复用兼容参数。
 - 桌面端与 Android / iOS 同步支持分组历史读取；大量记录使用缩略图懒加载和分批展示，减少页面首次打开和滚动卡顿。
 - 原数据查看状态改为仅在本次软件运行期间保留：切换页面后仍可继续查看，完全退出并重新启动软件后自动恢复初始状态，不再长期保存最近导入图。

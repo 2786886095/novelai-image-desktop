@@ -8704,10 +8704,12 @@ html.theme-dark #root {
 
 .metadata-history-picker {
   overflow: hidden;
+  min-height: 72px;
 }
 
 .metadata-history-summary {
   width: 100%;
+  min-height: 70px;
   min-width: 0;
   display: grid;
   grid-template-columns: 42px minmax(0, 1fr) auto 20px;

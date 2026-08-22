@@ -69,6 +69,8 @@ describe("desktop UI consistency guards", () => {
     expect(source).toContain('const RANDOM_SIZE_PRESETS = [');
     expect(source).toContain('className="random-size-presets"');
     expect(source).toContain('aria-pressed={active}');
+    expect(source).toContain('artistCount: Math.max(1, Math.min(20, positiveInteger(raw?.artistCount, 5)))');
+    expect(source).toContain('count: 8, artistCount: 5, poolSize: 1000');
     expect(styles).toContain('.random-artist-settings > label');
     expect(styles).toContain('.random-size-presets > button.active');
     expect(styles).toContain('grid-template-rows: max-content 44px');
@@ -113,7 +115,9 @@ describe("desktop UI consistency guards", () => {
     expect(source).toContain('window.naiDesktop.getHistoryGroups()');
     expect(source).toContain('saveMetadataSnapshotFromPath(item.filePath)');
     expect(source).toContain('className="metadata-history-grid"');
+    expect(source).not.toContain('setHistoryOpen(false)');
     expect(styles).toContain('.metadata-history-picker');
+    expect(styles).toContain('min-height: 72px;');
     expect(styles).toContain('grid-template-columns: repeat(2, minmax(0, 1fr));');
   });
 
