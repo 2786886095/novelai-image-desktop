@@ -246,6 +246,7 @@ const SCREEN_KEY = "langbai.artist-lab.screen.v3";
 export default function ArtistLab({ onBack }: { onBack: () => void }) {
   const language = useAppStore((state) => state.settings?.language ?? "zh-CN");
   const [screen, setScreen] = useState<ArtistLabScreen>(() => {
+    if (new URLSearchParams(window.location.search).get("uiCapture") === "randomArtist") return "random";
     const saved = localStorage.getItem(SCREEN_KEY);
     return saved === "target" || saved === "random" ? saved : "home";
   });

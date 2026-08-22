@@ -4,7 +4,10 @@ import { mkdir, rm, stat, writeFile } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 import { pipeline } from "node:stream/promises";
 
-const PART_SIZE = 90 * 1024 * 1024; // Gitee community attachments are limited to 100 MB.
+// Keep each mainland attachment small enough to upload reliably across the
+// GitHub-runner → Gitee route. The former 90 MB parts routinely exceeded the
+// three-minute request timeout even though they were below Gitee's hard limit.
+const PART_SIZE = 24 * 1024 * 1024;
 
 function argument(name) {
   const index = process.argv.indexOf(`--${name}`);

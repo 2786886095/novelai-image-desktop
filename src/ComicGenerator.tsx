@@ -97,6 +97,9 @@ export function ToolsHub() {
   const [activeTool, setActiveTool] = useState<
     "hub" | "comic" | "redraw" | "tuiwen" | "aitag" | "artistLab" | "promptCodex"
   >(() => {
+    if (new URLSearchParams(window.location.search).get("uiCapture") === "randomArtist") {
+      return isWindows ? "artistLab" : "hub";
+    }
     const saved = localStorage.getItem("langbai.tools.active.v1");
     return saved === "comic" ||
       saved === "redraw" ||

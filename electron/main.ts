@@ -461,7 +461,9 @@ function createWindow() {
       ["09-records", "records"],
       ["10-records", "records"],
     ].find(([needle]) => normalizedUiCapturePath.includes(needle))?.[1];
-    const captureSurface = normalizedUiCapturePath.includes("reference-modal")
+    const captureSurface = normalizedUiCapturePath.includes("random-artist")
+      ? "randomArtist"
+      : normalizedUiCapturePath.includes("reference-modal")
       ? "referenceModal"
       : normalizedUiCapturePath.includes("settings")
         ? "settings"

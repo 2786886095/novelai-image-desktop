@@ -27,13 +27,16 @@ class _FakeArtistService extends ArtistTagService {
 
 class _FakeGenerationAppState extends AppState {
   final Completer<HistoryItem> generation = Completer<HistoryItem>();
+  GenerateParams? lastParams;
 
   @override
   Future<HistoryItem> generateArtistLabTemporary({
     required GenerateParams panelParams,
     required GenerateExtras panelExtras,
-  }) =>
-      generation.future;
+  }) {
+    lastParams = panelParams.copy();
+    return generation.future;
+  }
 }
 
 void main() {
@@ -259,6 +262,191 @@ void main() {
     await tester.tap(favoritesTab);
     await tester.pumpAndSettle();
     expect(scrollable.position.pixels, closeTo(before, 0.5));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('favorites are classified by the model used for generation',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(420, 900);
+    addTearDown(tester.view.reset);
+    final rows = <Map<String, dynamic>>[
+      {
+        'recipe': {
+          'id': 'v5-favorite',
+          'prompt': '1.2::artist:v5_artist ::',
+          'artists': ['v5_artist'],
+          'mutations': [],
+        },
+        'status': 'done',
+        'liked': true,
+        'generationModel': 'nai-diffusion-5-full',
+      },
+      {
+        'recipe': {
+          'id': 'v45-favorite',
+          'prompt': '1.2::artist:v45_artist ::',
+          'artists': ['v45_artist'],
+          'mutations': [],
+        },
+        'status': 'done',
+        'liked': true,
+        'generationModel': 'nai-diffusion-4-5-full',
+      },
+    ];
+    SharedPreferences.setMockInitialValues({
+      'artist_lab_random_v1_favorites': jsonEncode(rows),
+    });
+    final state = AppState();
+    addTearDown(state.dispose);
+    await tester.pumpWidget(
+      ChangeNotifierProvider.value(
+        value: state,
+        child: MaterialApp(
+          theme: StudioTheme.light(),
+          home: RandomArtistLabScreen(
+            onBack: () {},
+            artistService: _FakeArtistService(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final bodyList =
+        find.byKey(const PageStorageKey<String>('random-artist-lab-scroll'));
+    await tester.scrollUntilVisible(
+      find.textContaining('收藏夹 (2)'),
+      500,
+      scrollable: find
+          .descendant(of: bodyList, matching: find.byType(Scrollable))
+          .first,
+    );
+    await tester.tap(find.textContaining('收藏夹 (2)'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('NAI Diffusion V5 Full（最新完整模型）'), findsWidgets);
+    expect(find.text('NAI Diffusion 4.5 Full（完整模型）'), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('retry records the model used by the retry request',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(420, 800);
+    addTearDown(tester.view.reset);
+    SharedPreferences.setMockInitialValues({
+      'artist_lab_random_v1_results': jsonEncode([
+        {
+          'recipe': {
+            'id': 'retry-model',
+            'prompt': '1.2::artist:test_artist ::',
+            'artists': ['test_artist'],
+            'mutations': [],
+          },
+          'status': 'failed',
+          'error': 'network error',
+          'generationModel': 'nai-diffusion-4-5-full',
+          'liked': false,
+        }
+      ]),
+    });
+    final state = _FakeGenerationAppState();
+    addTearDown(state.dispose);
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppState>.value(
+        value: state,
+        child: MaterialApp(
+          theme: StudioTheme.light(),
+          home: RandomArtistLabScreen(
+            onBack: () {},
+            artistService: _FakeArtistService(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final bodyList =
+        find.byKey(const PageStorageKey<String>('random-artist-lab-scroll'));
+    await tester.scrollUntilVisible(
+      find.byTooltip('重试'),
+      500,
+      scrollable: find
+          .descendant(of: bodyList, matching: find.byType(Scrollable))
+          .first,
+    );
+    await tester.tap(find.byTooltip('重试').hitTestable());
+    await tester.pump();
+
+    expect(state.lastParams?.model, 'nai-diffusion-5-full');
+    expect(
+      find.textContaining('NAI Diffusion V5 Full（最新完整模型）'),
+      findsWidgets,
+    );
+    state.generation.complete(HistoryItem(
+      id: 'retry-v5',
+      filePath: 'missing-retry-v5.png',
+      date: '2026-08-22',
+      createdAt: '2026-08-22T00:00:00',
+      seed: 2058326448,
+      model: 'nai-diffusion-5-full',
+      width: 832,
+      height: 1216,
+      prompt: 'test',
+      feature: 'artist-lab',
+    ));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('apply favorite restores the model recorded by that card',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(420, 800);
+    addTearDown(tester.view.reset);
+    SharedPreferences.setMockInitialValues({
+      'artist_lab_random_v1_results': jsonEncode([
+        {
+          'recipe': {
+            'id': 'apply-model',
+            'prompt': '1.2::artist:test_artist ::',
+            'artists': ['test_artist'],
+            'mutations': [],
+          },
+          'status': 'done',
+          'generationModel': 'nai-diffusion-4-5-full',
+          'liked': false,
+        }
+      ]),
+    });
+    final state = AppState();
+    addTearDown(state.dispose);
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppState>.value(
+        value: state,
+        child: MaterialApp(
+          theme: StudioTheme.light(),
+          home: RandomArtistLabScreen(
+            onBack: () {},
+            artistService: _FakeArtistService(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final bodyList =
+        find.byKey(const PageStorageKey<String>('random-artist-lab-scroll'));
+    await tester.scrollUntilVisible(
+      find.byTooltip('应用到生成'),
+      500,
+      scrollable: find
+          .descendant(of: bodyList, matching: find.byType(Scrollable))
+          .first,
+    );
+    await tester.tap(find.byTooltip('应用到生成').hitTestable());
+    await tester.pump();
+
+    expect(state.params.model, 'nai-diffusion-4-5-full');
     expect(tester.takeException(), isNull);
   });
 }

@@ -19,14 +19,14 @@ function argumentsFor(name) {
   return values;
 }
 
-async function request(url, options = {}, attempts = 4) {
+async function request(url, options = {}, attempts = 4, timeoutMs = 180_000) {
   let lastError;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
       const response = await fetch(url, {
         ...options,
         headers: { Authorization: `Bearer ${token}`, Accept: "application/json", ...options.headers },
-        signal: AbortSignal.timeout(180_000),
+        signal: AbortSignal.timeout(timeoutMs),
       });
       if (response.ok || response.status === 404 || response.status === 409 || response.status === 422) {
         return response;
@@ -107,7 +107,14 @@ for (const file of uniqueFiles) {
   const bytes = await readFile(file);
   const form = new FormData();
   form.append("file", new Blob([bytes]), name);
-  const uploaded = await request(`${api}/releases/${releaseId}/attach_files`, { method: "POST", body: form });
+  // Gitee's attachment ingress can be slow from GitHub-hosted runners. Allow
+  // a long transfer window while retaining retries and post-upload checks.
+  const uploaded = await request(
+    `${api}/releases/${releaseId}/attach_files`,
+    { method: "POST", body: form },
+    3,
+    900_000,
+  );
   if (!uploaded.ok) {
     const detail = (await uploaded.text()).slice(0, 500);
     throw new Error(`Unable to upload ${name} to Gitee (${uploaded.status}): ${detail}`);

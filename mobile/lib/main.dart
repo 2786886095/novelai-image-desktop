@@ -191,7 +191,7 @@ class _HomeShellState extends State<HomeShell> {
   }
 
   Future<void> _showV5MigrationNotice() async {
-    const key = 'langbai.notice.v5-model-migration.v1';
+    const key = 'langbai.notice.v5-model-migration.v2';
     try {
       final prefs = await SharedPreferences.getInstance();
       if (prefs.getBool(key) == true || !mounted) return;
@@ -232,35 +232,35 @@ const Map<String, _V5MigrationCopy> _v5MigrationCopy = {
   'zh-CN': (
     title: 'NovelAI V5 Full 已上线',
     body:
-        '为避免改变旧项目的复现结果，升级软件不会强制覆盖已经保存的模型。旧用户如仍显示 V4 / V4.5，请在生成页的模型列表中手动选择 NAI Diffusion V5 Full；新建默认配置已经使用 V5 Full。',
+        '为避免改变旧项目的复现结果，升级软件不会强制覆盖已经保存的模型。旧用户如仍显示 V4 / V4.5，请在生成页的模型列表中手动选择 NAI Diffusion V5 Full；新建默认配置已经使用 V5 Full。\n\nV5 的训练分布不同，V4 / V4.5 时期的画师标签或画师串可能弱化、失效或呈现不同效果。需要复现旧结果时请保留旧模型，并在切换后重新测试画师串。',
     keep: '保持当前模型',
     go: '前往模型选择'
   ),
   'zh-TW': (
     title: 'NovelAI V5 Full 已上線',
     body:
-        '為避免改變舊專案的重現結果，升級軟體不會強制覆蓋已儲存的模型。舊使用者若仍顯示 V4 / V4.5，請在生成頁手動選擇 NAI Diffusion V5 Full；新建預設已使用 V5 Full。',
+        '為避免改變舊專案的重現結果，升級軟體不會強制覆蓋已儲存的模型。舊使用者若仍顯示 V4 / V4.5，請在生成頁手動選擇 NAI Diffusion V5 Full；新建預設已使用 V5 Full。\n\nV5 的訓練分佈不同，V4 / V4.5 時期的畫師標籤或畫師串可能減弱、失效或呈現不同效果。需要重現舊結果時請保留舊模型，並在切換後重新測試畫師串。',
     keep: '保留目前模型',
     go: '前往模型選擇'
   ),
   'en-US': (
     title: 'NovelAI V5 Full is available',
     body:
-        'Upgrades preserve the model saved in existing projects so their results remain reproducible. If an older installation still shows V4 or V4.5, choose NAI Diffusion V5 Full manually on Generate. New defaults already use V5 Full.',
+        'Upgrades preserve the model saved in existing projects so their results remain reproducible. If an older installation still shows V4 or V4.5, choose NAI Diffusion V5 Full manually on Generate. New defaults already use V5 Full.\n\nV5 has a different training distribution. Artist tags or artist strings tuned for V4/V4.5 may become weaker, stop working, or look different. Keep the legacy model for reproducibility and retest strings after switching.',
     keep: 'Keep current model',
     go: 'Open model selector'
   ),
   'ja-JP': (
     title: 'NovelAI V5 Full が利用できます',
     body:
-        '既存プロジェクトの再現性を守るため、更新時に保存済みモデルを強制変更しません。V4 / V4.5 のままの場合は、生成画面から NAI Diffusion V5 Full を手動で選択してください。新規既定値は V5 Full です。',
+        '既存プロジェクトの再現性を守るため、更新時に保存済みモデルを強制変更しません。V4 / V4.5 のままの場合は、生成画面から NAI Diffusion V5 Full を手動で選択してください。新規既定値は V5 Full です。\n\nV5 は旧モデルと学習分布が異なるため、V4 / V4.5 向けの画家タグや画家列が弱くなる、効かなくなる、または違う結果になる場合があります。再現には旧モデルを残し、切替後に再検証してください。',
     keep: '現在のモデルを維持',
     go: 'モデル選択へ'
   ),
   'ko-KR': (
     title: 'NovelAI V5 Full을 사용할 수 있습니다',
     body:
-        '기존 프로젝트의 재현 결과를 보호하기 위해 업데이트가 저장된 모델을 강제로 변경하지 않습니다. V4 / V4.5가 계속 표시되면 생성 화면에서 NAI Diffusion V5 Full을 직접 선택하세요. 새 기본값은 V5 Full입니다.',
+        '기존 프로젝트의 재현 결과를 보호하기 위해 업데이트가 저장된 모델을 강제로 변경하지 않습니다. V4 / V4.5가 계속 표시되면 생성 화면에서 NAI Diffusion V5 Full을 직접 선택하세요. 새 기본값은 V5 Full입니다.\n\nV5는 이전 모델과 학습 분포가 달라 V4/V4.5용 작가 태그나 작가 문자열이 약해지거나 작동하지 않거나 다른 결과를 낼 수 있습니다. 재현이 필요하면 이전 모델을 유지하고 전환 후 다시 테스트하세요.',
     keep: '현재 모델 유지',
     go: '모델 선택으로 이동'
   ),

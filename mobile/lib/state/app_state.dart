@@ -2623,21 +2623,53 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> deleteHistory(String id) async {
-    await storage.deleteHistory(id);
+    final previousIndex = history.indexWhere((item) => item.id == id);
+    final removed = previousIndex >= 0 ? history[previousIndex] : null;
+    final previousCurrent = current;
     history.removeWhere((e) => e.id == id);
     if (current?.id == id) current = history.isNotEmpty ? history.first : null;
     notifyListeners();
+    try {
+      await storage.deleteHistory(id);
+    } catch (_) {
+      if (removed != null && !history.any((item) => item.id == id)) {
+        history.insert(previousIndex.clamp(0, history.length), removed);
+      }
+      if (previousCurrent?.id == id) current = previousCurrent;
+      notifyListeners();
+      rethrow;
+    }
   }
 
   Future<void> deleteHistoryFiles(Iterable<String> filePaths) async {
     final targets = filePaths.where((path) => path.isNotEmpty).toSet();
     if (targets.isEmpty) return;
-    await storage.deleteHistoryFiles(targets);
+    final removed = <({int index, HistoryItem item})>[
+      for (var index = 0; index < history.length; index++)
+        if (targets.contains(history[index].filePath))
+          (index: index, item: history[index]),
+    ];
+    final previousCurrent = current;
     history.removeWhere((item) => targets.contains(item.filePath));
     if (current != null && targets.contains(current!.filePath)) {
       current = history.isNotEmpty ? history.first : null;
     }
     notifyListeners();
+    try {
+      await storage.deleteHistoryFiles(targets);
+    } catch (_) {
+      for (final entry in removed) {
+        if (!history.any((item) => item.id == entry.item.id)) {
+          history.insert(entry.index.clamp(0, history.length), entry.item);
+        }
+      }
+      if (previousCurrent != null &&
+          targets.contains(previousCurrent.filePath)) {
+        current = previousCurrent;
+      }
+      notifyListeners();
+      rethrow;
+    }
   }
 
   // Drop a history record whose image file is gone from disk (called when a

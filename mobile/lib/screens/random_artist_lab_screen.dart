@@ -19,6 +19,7 @@ class _Result {
   String status;
   HistoryItem? image;
   String? error;
+  String generationModel;
   bool liked;
   bool saving = false;
   _Result(this.recipe,
@@ -26,6 +27,7 @@ class _Result {
       this.status = 'pending',
       this.image,
       this.error,
+      this.generationModel = '',
       this.liked = false});
 
   Map<String, dynamic> toJson() => {
@@ -34,6 +36,7 @@ class _Result {
         'status': status,
         'image': image?.toJson(),
         'error': error,
+        'generationModel': generationModel,
         'liked': liked,
       };
 
@@ -47,6 +50,7 @@ class _Result {
                 Map<String, dynamic>.from(json['image'] as Map))
             : null,
         error: json['error']?.toString(),
+        generationModel: json['generationModel']?.toString() ?? '',
         liked: json['liked'] == true,
       );
 }
@@ -91,6 +95,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
   bool _running = false;
   bool _cancelled = false;
   bool _showFavorites = false;
+  String _favoriteModelFilter = 'all';
   String _message = '';
   String _copiedAction = '';
   int _drawSeed = Random.secure().nextInt(0x7fffffff);
@@ -157,7 +162,11 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           'variantMutated': 'B｜畫師串＋隨機風格詞',
           'copyArtists': '複製畫師串',
           'copyFull': '複製完整提示詞',
-          'pairSummary': '{pairs} 組 · {images} 張'
+          'pairSummary': '{pairs} 組 · {images} 張',
+          'validation': 'Danbooru 驗證：33/33 為目前有效、非棄用畫師標籤 · 2026-08-22',
+          'allModels': '全部模型',
+          'modelGroup': '生成模型',
+          'previewImage': '雙擊預覽大圖'
         };
       case 'en-US':
         return {
@@ -205,7 +214,12 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           'variantMutated': 'B | Artist string + random styles',
           'copyArtists': 'Copy artist string',
           'copyFull': 'Copy full prompt',
-          'pairSummary': '{pairs} groups · {images} images'
+          'pairSummary': '{pairs} groups · {images} images',
+          'validation':
+              'Danbooru check: 33/33 current, non-deprecated artist tags · 2026-08-22',
+          'allModels': 'All models',
+          'modelGroup': 'Generation model',
+          'previewImage': 'Double-tap to preview'
         };
       case 'ja-JP':
         return {
@@ -249,7 +263,11 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           'variantMutated': 'B｜画家列＋ランダム画風語',
           'copyArtists': '画家列をコピー',
           'copyFull': '完全プロンプトをコピー',
-          'pairSummary': '{pairs} 組 · {images} 枚'
+          'pairSummary': '{pairs} 組 · {images} 枚',
+          'validation': 'Danbooru 検証：33/33 が現行・非廃止の画家タグ · 2026-08-22',
+          'allModels': 'すべてのモデル',
+          'modelGroup': '生成モデル',
+          'previewImage': 'ダブルタップで拡大'
         };
       case 'ko-KR':
         return {
@@ -294,7 +312,11 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           'variantMutated': 'B｜작가 문자열＋무작위 화풍',
           'copyArtists': '작가 문자열 복사',
           'copyFull': '전체 프롬프트 복사',
-          'pairSummary': '{pairs} 그룹 · {images}장'
+          'pairSummary': '{pairs} 그룹 · {images}장',
+          'validation': 'Danbooru 검증: 33/33 현재 유효하고 폐기되지 않은 작가 태그 · 2026-08-22',
+          'allModels': '모든 모델',
+          'modelGroup': '생성 모델',
+          'previewImage': '두 번 탭하여 미리보기'
         };
       default:
         return {
@@ -338,7 +360,11 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           'variantMutated': 'B｜画师串＋随机风格词',
           'copyArtists': '复制画师串',
           'copyFull': '复制完整提示词',
-          'pairSummary': '{pairs} 组 · {images} 张'
+          'pairSummary': '{pairs} 组 · {images} 张',
+          'validation': 'Danbooru 验证：33/33 为当前有效、非弃用画师标签 · 2026-08-22',
+          'allModels': '全部模型',
+          'modelGroup': '生成模型',
+          'previewImage': '双击预览大图'
         };
     }
   }
@@ -348,8 +374,9 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
       case 'zh-TW':
         return {
           'title': 'NovelAI 生成參數',
-          'hint': '首次進入時繼承生成頁參數；此處修改只用於抽卡，A/B 使用相同參數。',
+          'hint': '首次使用軟體初始參數；此處修改只用於抽卡，A/B 使用相同參數。',
           'sync': '從生成頁同步',
+          'reset': '恢復初始參數',
           'model': '模型',
           'size': '圖片尺寸',
           'width': '寬度',
@@ -365,8 +392,9 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
         return {
           'title': 'NovelAI generation settings',
           'hint':
-              'Initially inherited from Generate. Changes affect only gacha and each A/B pair uses identical settings.',
+              'Uses app defaults initially. Changes affect only gacha and each A/B pair uses identical settings.',
           'sync': 'Sync from Generate',
+          'reset': 'Restore defaults',
           'model': 'Model',
           'size': 'Image size',
           'width': 'Width',
@@ -381,8 +409,9 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
       case 'ja-JP':
         return {
           'title': 'NovelAI 生成設定',
-          'hint': '初回は生成画面から継承します。変更は抽選だけに使い、A/B は同じ設定で比較します。',
+          'hint': '初回はアプリ既定値を使います。変更は抽選だけに使い、A/B は同じ設定で比較します。',
           'sync': '生成画面から同期',
+          'reset': '初期設定に戻す',
           'model': 'モデル',
           'size': '画像サイズ',
           'width': '幅',
@@ -397,8 +426,9 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
       case 'ko-KR':
         return {
           'title': 'NovelAI 생성 설정',
-          'hint': '처음에는 생성 화면 설정을 상속합니다. 변경은 뽑기에만 적용되며 A/B는 같은 설정을 사용합니다.',
+          'hint': '처음에는 앱 기본 설정을 사용합니다. 변경은 뽑기에만 적용되며 A/B는 같은 설정을 사용합니다.',
           'sync': '생성 화면에서 동기화',
+          'reset': '초기값 복원',
           'model': '모델',
           'size': '이미지 크기',
           'width': '너비',
@@ -413,8 +443,9 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
       default:
         return {
           'title': 'NovelAI 生成参数',
-          'hint': '首次进入时继承生成页参数；此处修改仅用于抽卡，A/B 使用相同参数。',
+          'hint': '首次使用软件初始参数；此处修改仅用于抽卡，A/B 使用相同参数。',
           'sync': '从生成页同步',
+          'reset': '恢复初始参数',
           'model': '模型',
           'size': '图片尺寸',
           'width': '宽度',
@@ -541,11 +572,11 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     try {
       final saved = prefs.getString('${_prefsPrefix}generationParams');
       _generationParams = saved == null
-          ? app.params.copy()
+          ? GenerateParams()
           : GenerateParams.fromJson(
               Map<String, dynamic>.from(jsonDecode(saved) as Map));
     } catch (_) {
-      _generationParams = app.params.copy();
+      _generationParams = GenerateParams();
     }
     _generationParams
       ..positivePrompt = ''
@@ -667,22 +698,25 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
 
   Future<void> _generateOne(_Result result) async {
     final app = context.read<AppState>();
+    final fixed = _generationParams.copy()
+      ..positivePrompt = _base.text.trim()
+      ..stylePrompt = result.recipe.prompt
+      ..seedMode = 'fixed'
+      ..seed = int.tryParse(_seed.text) ?? 0;
     _setStateKeepingScroll(() {
       result.status = 'running';
       result.error = null;
+      result.generationModel = fixed.model;
     });
     try {
-      final fixed = _generationParams.copy()
-        ..positivePrompt = _base.text.trim()
-        ..stylePrompt = result.recipe.prompt
-        ..seedMode = 'fixed'
-        ..seed = int.tryParse(_seed.text) ?? 0;
       final image = await app.generateArtistLabTemporary(
         panelParams: fixed,
         panelExtras: GenerateExtras(),
       );
       _setStateKeepingScroll(() {
         result.image = image;
+        result.generationModel =
+            image.model.isNotEmpty ? image.model : fixed.model;
         result.status = 'done';
       });
     } catch (error) {
@@ -707,6 +741,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
       (index) => _Result(
         comparisons[index],
         sequence: _mutateAuxiliary ? index ~/ 2 + 1 : index + 1,
+        generationModel: _generationParams.model,
       ),
     );
     _setStateKeepingScroll(() {
@@ -750,7 +785,8 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     await _clearCurrent();
     final batch = List<_Result>.generate(
       recipes.length,
-      (index) => _Result(recipes[index], sequence: index + 1),
+      (index) => _Result(recipes[index],
+          sequence: index + 1, generationModel: _generationParams.model),
     );
     _setStateKeepingScroll(() {
       _planned = recipes;
@@ -826,6 +862,79 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     _results.removeWhere((item) => item.recipe.id == result.recipe.id);
     if (mounted) setState(() {});
     await _save();
+  }
+
+  String _resultModel(_Result result) {
+    if (result.generationModel.isNotEmpty) return result.generationModel;
+    return result.image?.model ?? 'unknown';
+  }
+
+  String _modelLabel(_Result result, AppState app) {
+    final value = _resultModel(result);
+    NaiOption? option;
+    for (final item in naiModels) {
+      if (item.value == value) {
+        option = item;
+        break;
+      }
+    }
+    return option == null
+        ? value
+        : localizedNaiOptionLabel(
+            app.settings.language, option.value, option.label);
+  }
+
+  Future<void> _previewResult(
+      _Result result, Map<String, String> text, AppState app) async {
+    final image = result.image;
+    if (image == null) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Dialog.fullscreen(
+        child: SafeArea(
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: InteractiveViewer(
+                  minScale: .5,
+                  maxScale: 5,
+                  child: Center(
+                    child: Image.file(
+                      File(image.filePath),
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) =>
+                          const Icon(Icons.broken_image_outlined, size: 48),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 12,
+                right: 12,
+                top: 8,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '${_modelLabel(result, app)} · ${result.recipe.variant == 'mutated' ? text['variantMutated'] : text['variantPlain']}',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    IconButton.filledTonal(
+                      tooltip:
+                          MaterialLocalizations.of(context).closeButtonTooltip,
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -932,22 +1041,44 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                             .colorScheme
                             .surfaceContainerHighest
                             .withAlpha(184),
-                    child: Text(
-                      '#${result.sequence.toString().padLeft(2, '0')} · '
-                      '${result.recipe.variant == 'mutated' ? text['variantMutated']! : text['variantPlain']!}',
-                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '#${result.sequence.toString().padLeft(2, '0')} · '
+                          '${result.recipe.variant == 'mutated' ? text['variantMutated']! : text['variantPlain']!}',
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${text['modelGroup']} · ${_modelLabel(result, app)}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.labelSmall,
+                        ),
+                      ],
                     ),
                   ),
                   Expanded(
                     child: result.image == null
                         ? Center(
                             child: Text(text[result.status] ?? result.status))
-                        : Image.file(
-                            File(result.image!.filePath),
-                            width: double.infinity,
-                            fit: BoxFit.contain,
-                            errorBuilder: (_, __, ___) =>
-                                const Icon(Icons.broken_image_outlined),
+                        : GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onDoubleTap: () =>
+                                _previewResult(result, text, app),
+                            child: Tooltip(
+                              message: text['previewImage']!,
+                              child: Image.file(
+                                File(result.image!.filePath),
+                                width: double.infinity,
+                                fit: BoxFit.contain,
+                                cacheWidth: 720,
+                                filterQuality: FilterQuality.medium,
+                                errorBuilder: (_, __, ___) =>
+                                    const Icon(Icons.broken_image_outlined),
+                              ),
+                            ),
                           ),
                   ),
                   _mutationTerms(result.recipe, text),
@@ -1036,6 +1167,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                           onPressed: result.status == 'done'
                               ? () => app.setParam((params) {
                                     final selected = _generationParams.copy()
+                                      ..model = _resultModel(result)
                                       ..positivePrompt = _base.text.trim()
                                       ..stylePrompt = result.recipe.prompt
                                       ..seed = int.tryParse(_seed.text) ?? 0
@@ -1097,6 +1229,20 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     final pairSummary = text['pairSummary']!
         .replaceAll('{pairs}', '${_planned.length}')
         .replaceAll('{images}', '$plannedImages');
+    final favoriteModels = _favorites.map(_resultModel).toSet().toList()
+      ..sort();
+    final selectedFavoriteModel = _favoriteModelFilter == 'all' ||
+            favoriteModels.contains(_favoriteModelFilter)
+        ? _favoriteModelFilter
+        : 'all';
+    final favoriteGroups = <String, List<_Result>>{};
+    for (final result in _favorites) {
+      final model = _resultModel(result);
+      if (selectedFavoriteModel != 'all' && model != selectedFavoriteModel) {
+        continue;
+      }
+      favoriteGroups.putIfAbsent(model, () => []).add(result);
+    }
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -1129,6 +1275,9 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                         const SizedBox(height: 4),
                         Text(_loading ? text['empty']! : '${_pool.length}',
                             style: Theme.of(context).textTheme.bodySmall),
+                        const SizedBox(height: 4),
+                        Text(text['validation']!,
+                            style: Theme.of(context).textTheme.labelSmall),
                         const SizedBox(height: 4),
                         Text(text['hint']!,
                             style: Theme.of(context).textTheme.bodySmall),
@@ -1164,18 +1313,40 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
               initiallyExpanded: false,
               title: Text(parameterText['title']!),
               subtitle: Text(parameterText['hint']!),
-              trailing: IconButton(
-                tooltip: parameterText['sync'],
-                onPressed: () {
+              trailing: PopupMenuButton<String>(
+                tooltip: parameterText['title'],
+                icon: const Icon(Icons.tune),
+                onSelected: (value) {
                   setState(() {
-                    _generationParams = app.params.copy()
-                      ..positivePrompt = ''
-                      ..stylePrompt = '';
+                    _generationParams = value == 'sync'
+                        ? (app.params.copy()
+                          ..positivePrompt = ''
+                          ..stylePrompt = '')
+                        : GenerateParams();
                     _syncParameterControllers();
                   });
                   _save();
                 },
-                icon: const Icon(Icons.sync),
+                itemBuilder: (_) => [
+                  PopupMenuItem(
+                    value: 'sync',
+                    child: ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.sync),
+                      title: Text(parameterText['sync']!),
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'reset',
+                    child: ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.restart_alt),
+                      title: Text(parameterText['reset']!),
+                    ),
+                  ),
+                ],
               ),
               children: [
                 Padding(
@@ -1677,8 +1848,59 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text(favoriteFolderLabel,
-                        style: Theme.of(context).textTheme.titleMedium),
+                    LayoutBuilder(
+                      builder: (context, constraints) => Wrap(
+                        spacing: 12,
+                        runSpacing: 8,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          SizedBox(
+                            width: constraints.maxWidth >= 520
+                                ? constraints.maxWidth - 232
+                                : constraints.maxWidth,
+                            child: Text(favoriteFolderLabel,
+                                style: Theme.of(context).textTheme.titleMedium),
+                          ),
+                          SizedBox(
+                            width: constraints.maxWidth >= 520
+                                ? 220
+                                : constraints.maxWidth,
+                            child: DropdownButtonFormField<String>(
+                              value: selectedFavoriteModel,
+                              isExpanded: true,
+                              decoration: InputDecoration(
+                                  labelText: text['modelGroup']),
+                              items: [
+                                DropdownMenuItem(
+                                  value: 'all',
+                                  child: Text(
+                                      '${text['allModels']} (${_favorites.length})'),
+                                ),
+                                ...favoriteModels.map((model) {
+                                  final sample = _favorites.firstWhere(
+                                      (item) => _resultModel(item) == model);
+                                  final count = _favorites
+                                      .where(
+                                          (item) => _resultModel(item) == model)
+                                      .length;
+                                  return DropdownMenuItem(
+                                    value: model,
+                                    child: Text(
+                                      '${_modelLabel(sample, app)} ($count)',
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  );
+                                }),
+                              ],
+                              onChanged: (value) {
+                                if (value == null) return;
+                                setState(() => _favoriteModelFilter = value);
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                     const SizedBox(height: 4),
                     Text(text['favoritesHint']!,
                         style: Theme.of(context).textTheme.bodySmall),
@@ -1689,7 +1911,30 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                         child: Center(child: Text(text['needLikes']!)),
                       )
                     else
-                      _resultGrid(_favorites, text, app, favorites: true),
+                      ...favoriteGroups.entries.expand((entry) => [
+                            Padding(
+                              padding:
+                                  const EdgeInsets.only(top: 12, bottom: 8),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.auto_awesome_mosaic_outlined,
+                                      size: 18),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      _modelLabel(entry.value.first, app),
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleSmall,
+                                    ),
+                                  ),
+                                  Text('${entry.value.length}'),
+                                ],
+                              ),
+                            ),
+                            _resultGrid(entry.value, text, app,
+                                favorites: true),
+                          ]),
                   ],
                 ),
               ),

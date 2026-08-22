@@ -802,7 +802,15 @@ export function findMovedHistoryFile(
 // the stale record is removed — and only when the search that failed to find
 // it actually completed (see findMovedHistoryFile's `inconclusive`), so an
 // offline drive or a huge library can't wipe the whole index in one pass.
-function reconcileHistoryFiles(): void {
+let lastHistoryReconcileAt = 0;
+const HISTORY_RECONCILE_INTERVAL_MS = 10_000;
+
+function reconcileHistoryFiles(force = false): void {
+  const now = Date.now();
+  // Renderer refreshes dates, groups and rows together. Without coalescing,
+  // each read independently stats/scans the entire library three times.
+  if (!force && now - lastHistoryReconcileAt < HISTORY_RECONCILE_INTERVAL_MS) return;
+  lastHistoryReconcileAt = now;
   const data = readStore();
   if (data.history.length === 0) return;
   // If the output directory itself can't be reached at all, every item would

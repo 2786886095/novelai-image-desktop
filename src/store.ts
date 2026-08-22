@@ -1069,8 +1069,26 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   async setHistoryItemGroup(id, groupId) {
-    await window.naiDesktop.setHistoryGroup(id, groupId || undefined);
-    await get().refreshHistory();
+    const previous = get().history.find((item) => item.id === id);
+    set((state) => ({
+      history: state.history.map((item) =>
+        item.id === id ? { ...item, groupId: groupId || undefined } : item,
+      ),
+      currentImage: state.currentImage?.id === id
+        ? { ...state.currentImage, groupId: groupId || undefined }
+        : state.currentImage,
+    }));
+    try {
+      await window.naiDesktop.setHistoryGroup(id, groupId || undefined);
+    } catch (error: any) {
+      if (previous) {
+        set((state) => ({
+          history: state.history.map((item) => item.id === id ? previous : item),
+          currentImage: state.currentImage?.id === id ? previous : state.currentImage,
+          toast: error?.message ?? String(error),
+        }));
+      }
+    }
   },
 
   async refreshHistory(date) {
@@ -2178,10 +2196,25 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   async deleteHistory(id) {
-    await window.naiDesktop.deleteHistory(id);
-    await get().refreshHistory();
-    const current = get().currentImage;
-    if (current?.id === id) set({ currentImage: get().history[0] ?? null, comparisonBeforeImage: null });
+    const previousHistory = get().history;
+    const previousCurrent = get().currentImage;
+    const previousComparison = get().comparisonBeforeImage;
+    const nextHistory = previousHistory.filter((item) => item.id !== id);
+    set({
+      history: nextHistory,
+      currentImage: previousCurrent?.id === id ? nextHistory[0] ?? null : previousCurrent,
+      comparisonBeforeImage: previousCurrent?.id === id ? null : get().comparisonBeforeImage,
+    });
+    try {
+      await window.naiDesktop.deleteHistory(id);
+    } catch (error: any) {
+      set({
+        history: previousHistory,
+        currentImage: previousCurrent,
+        comparisonBeforeImage: previousComparison,
+        toast: error?.message ?? String(error),
+      });
+    }
   },
 
   // Called when a thumbnail/preview fails to load because its file was deleted
