@@ -170,7 +170,7 @@ for (const file of uniqueFiles) {
       // verify the release attachment before deciding whether it failed.
       // Small desktop chunks should complete quickly. The directly installable
       // Android APK is larger and receives a longer, bounded transfer window.
-      const timeoutMs = localSize > 32 * 1024 * 1024 ? 900_000 : 180_000;
+      const timeoutMs = localSize > 32 * 1024 * 1024 ? 1_800_000 : 180_000;
       const response = await uploadFile(releaseId, file, name, timeoutMs);
       if (response.ok) uploaded = true;
       else lastError = new Error(`Gitee upload HTTP ${response.status}: ${response.detail}`);
