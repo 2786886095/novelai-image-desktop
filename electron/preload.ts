@@ -33,6 +33,7 @@ import type {
   ReferencePresetLibrary,
   ReferencePresetOperationResult,
   ReferencePresetSaveRequest,
+  MetadataSnapshotPayload,
 } from "../src/types";
 import type { AitagSearchRequest } from "../src/aitag";
 import type { PromptCodexSnapshot } from "../src/prompt-codex";
@@ -230,6 +231,11 @@ contextBridge.exposeInMainWorld("naiDesktop", {
   loadImage: () => ipcRenderer.invoke("nai:loadImage"),
   loadImageFromPath: (filePath: string) =>
     ipcRenderer.invoke("nai:loadImageFromPath", filePath),
+  saveMetadataSnapshot: (payload: MetadataSnapshotPayload) =>
+    ipcRenderer.invoke("metadata:saveSnapshot", payload),
+  saveMetadataSnapshotFromPath: (filePath: string) =>
+    ipcRenderer.invoke("metadata:saveSnapshotFromPath", filePath),
+  loadMetadataSnapshot: () => ipcRenderer.invoke("metadata:loadSnapshot"),
   getPathForFile: (file: File) => webUtils.getPathForFile(file),
   clearWorkbenchImage: () => ipcRenderer.invoke("nai:clearWorkbenchImage"),
 

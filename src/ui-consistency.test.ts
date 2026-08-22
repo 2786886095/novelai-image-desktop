@@ -58,4 +58,60 @@ describe("desktop UI consistency guards", () => {
     expect(source).toContain('variant="primary" onClick={() => setShowCreate(true)}');
     expect(source).toContain("{!modal && <div className=\"reference-preset-actions\"");
   });
+
+  it("keeps random artist numeric parameters independently editable and baseline aligned", () => {
+    const source = fs.readFileSync(path.join(projectRoot, "src", "RandomArtistLab.tsx"), "utf8");
+    const styles = fs.readFileSync(path.join(projectRoot, "src", "styles.css"), "utf8");
+    expect(source).toContain("function NumericDraftInput");
+    expect(source).toContain("cancelBlurRef.current = true");
+    expect(source).toContain('className="artist-lab-panel random-generation-settings" open');
+    expect(source).toContain('className="artist-weight-tuner-submit"');
+    expect(source).toContain('const RANDOM_SIZE_PRESETS = [');
+    expect(source).toContain('className="random-size-presets"');
+    expect(source).toContain('aria-pressed={active}');
+    expect(styles).toContain('.random-artist-settings > label');
+    expect(styles).toContain('.random-size-presets > button.active');
+    expect(styles).toContain('grid-template-rows: max-content 44px');
+    expect(styles).toContain('grid-auto-rows: max-content');
+  });
+
+  it("shares one 44px field baseline across preset search and filters", () => {
+    const source = fs.readFileSync(path.join(projectRoot, "src", "ReferencePresetManager.tsx"), "utf8");
+    const styles = fs.readFileSync(path.join(projectRoot, "src", "styles.css"), "utf8");
+    expect(source).toContain('className="field reference-preset-search-field"');
+    expect(styles).toContain('grid-template-rows: 18px 44px');
+    expect(styles).toContain('.reference-preset-search-row .select-menu-trigger');
+  });
+
+  it("uses compact non-overflowing history hover actions", () => {
+    const source = fs.readFileSync(path.join(projectRoot, "src", "App.tsx"), "utf8");
+    const styles = fs.readFileSync(path.join(projectRoot, "src", "styles.css"), "utf8");
+    expect(source).toContain('label={<Icon name="folder" />}');
+    expect(styles).toContain('grid-template-columns: repeat(4, 36px)');
+    expect(source).toContain('saveMetadataSnapshotFromPath(item.filePath)');
+    expect(styles).toContain('.history-item-group-trigger .select-menu-value');
+  });
+
+  it("renders official V5 Opus allowance as a live progress bar", () => {
+    const source = fs.readFileSync(path.join(projectRoot, "src", "App.tsx"), "utf8");
+    const styles = fs.readFileSync(path.join(projectRoot, "src", "styles.css"), "utf8");
+    expect(source).toContain('className="opus-usage-track"');
+    expect(source).toContain('role="progressbar"');
+    expect(source).toContain('className={`account-opus-usage${account.stale ? " stale" : ""}`}');
+    expect(source).toContain('className="account-opus-track"');
+    expect(source).toContain('account.tierLevel === 3 && Boolean(model && isNAIV5Model(model))');
+    expect(source).toContain('account.opusUsage');
+    expect(source).toContain('60_000');
+    expect(source).toContain('account.stale');
+    expect(source).toContain('t("opusUsage.stale")');
+    expect(styles).toContain('.account-opus-usage');
+  });
+
+  it("supports an isolated Opus usage screenshot surface", () => {
+    const appSource = fs.readFileSync(path.join(projectRoot, "src", "App.tsx"), "utf8");
+    const mainSource = fs.readFileSync(path.join(projectRoot, "electron", "main.ts"), "utf8");
+    expect(mainSource).toContain('normalizedUiCapturePath.includes("opus-usage")');
+    expect(appSource).toContain('captureSurface === "opusUsage"');
+    expect(appSource).toContain('percent: 73.4');
+  });
 });

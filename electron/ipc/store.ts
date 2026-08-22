@@ -480,8 +480,22 @@ export function rotateBackupsSync(file: string) {
   try {
     const bak1 = `${file}.bak`;
     const bak2 = `${file}.bak2`;
-    if (fs.existsSync(bak1)) fs.copyFileSync(bak1, bak2);
-    if (fs.existsSync(file)) fs.copyFileSync(file, bak1);
+    // Rotation used to copy the complete JSON store twice for every history
+    // mutation.  On a large library that blocked Electron's main thread long
+    // enough for a single delete to feel frozen.  Renaming the previous
+    // snapshot and hard-linking the current immutable file preserves the same
+    // two recovery generations while reducing the common path to metadata-only
+    // filesystem operations.  Filesystems without hard-link support retain the
+    // old copy fallback.
+    if (fs.existsSync(bak2)) fs.unlinkSync(bak2);
+    if (fs.existsSync(bak1)) fs.renameSync(bak1, bak2);
+    if (fs.existsSync(file)) {
+      try {
+        fs.linkSync(file, bak1);
+      } catch {
+        fs.copyFileSync(file, bak1);
+      }
+    }
   } catch {
     // best-effort
   }
@@ -601,7 +615,13 @@ export function getAccountSummary(): AccountSummary {
 
 export function setAccountSummary(account: Omit<AccountSummary, "hasToken">) {
   const data = readStore();
-  data.account = account;
+  // V5 Opus allowance is live telemetry. Persisting its minute-by-minute value
+  // would rewrite and fsync the entire history store on every poll. Keep only
+  // stable account fields on disk; the live response is returned directly to
+  // the renderer and refreshed again after startup.
+  const { opusUsage: _usage, opusUsageUpdatedAt: _usageAt, ...stableAccount } = account;
+  if (JSON.stringify(data.account ?? {}) === JSON.stringify(stableAccount)) return;
+  data.account = stableAccount;
   writeStore(data);
 }
 

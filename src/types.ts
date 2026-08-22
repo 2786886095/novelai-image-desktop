@@ -1004,6 +1004,17 @@ export interface TokenStatus {
   anlasBalance?: number;
   expiresAt?: string;
   hasActiveSubscription?: boolean;
+  opusUsage?: OpusGenerationUsage;
+  opusUsageUpdatedAt?: number;
+}
+
+export interface OpusGenerationUsage {
+  /** Remaining V5 allowance percentage returned by NovelAI `/user/data`. */
+  percent: number;
+  /** Official flag indicating the free allowance has been exhausted. */
+  isNegative: boolean;
+  /** Seconds required to refill one percentage point. */
+  timeUntilNextPercent: number;
 }
 
 export interface AccountSummary {
@@ -1013,6 +1024,8 @@ export interface AccountSummary {
   anlasBalance?: number;
   expiresAt?: string;
   hasActiveSubscription?: boolean;
+  opusUsage?: OpusGenerationUsage;
+  opusUsageUpdatedAt?: number;
   // True when this summary is a cached copy returned because a live refresh
   // failed — the balance may be out of date and must be labelled as such.
   stale?: boolean;
@@ -1101,6 +1114,19 @@ export interface SingleImageResult {
 export interface LoadImageResult {
   ok: boolean;
   image?: WorkingImage;
+  message?: string;
+}
+
+export interface MetadataSnapshotPayload {
+  name: string;
+  type: string;
+  lastModified: number;
+  base64: string;
+}
+
+export interface MetadataSnapshotResult {
+  ok: boolean;
+  snapshot?: MetadataSnapshotPayload;
   message?: string;
 }
 
@@ -1525,6 +1551,9 @@ export interface NaiDesktopApi {
   cancel: () => Promise<{ ok: boolean }>;
   loadImage: () => Promise<LoadImageResult>;
   loadImageFromPath: (filePath: string) => Promise<LoadImageResult>;
+  saveMetadataSnapshot: (payload: MetadataSnapshotPayload) => Promise<MetadataSnapshotResult>;
+  saveMetadataSnapshotFromPath: (filePath: string) => Promise<MetadataSnapshotResult>;
+  loadMetadataSnapshot: () => Promise<MetadataSnapshotResult>;
   getPathForFile: (file: File) => string;
   clearWorkbenchImage: () => Promise<{ ok: boolean }>;
   getHistory: (date?: string, groupId?: string) => Promise<HistoryItem[]>;

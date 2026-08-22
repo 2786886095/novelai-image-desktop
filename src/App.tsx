@@ -554,10 +554,83 @@ function SplashPage() {
 }
 
 // ── Title bar ─────────────────────────────────────────────────────────────────
+function OpusUsageDialog({ onClose }: { onClose: () => void }) {
+  const account = useAppStore((state) => state.account);
+  const refreshAccount = useAppStore((state) => state.refreshAccount);
+  const language = useAppStore((state) => state.settings?.language);
+  const [refreshing, setRefreshing] = useState(false);
+  const captureMode = new URLSearchParams(window.location.search).get("uiCapture") === "opusUsage";
+  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
+  const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
+  const usage = account.opusUsage;
+  const remainingPercent = usage ? Math.min(100, Math.max(0, usage.isNegative ? 0 : usage.percent)) : 0;
+  const remainingImages = Math.round(17.3 * remainingPercent);
+  const refillPercent = usage && usage.timeUntilNextPercent > 0
+    ? Math.round((86_400 / usage.timeUntilNextPercent) * 10) / 10
+    : 0;
+  const refillImages = Math.round(17.3 * refillPercent);
+
+  const refresh = async () => {
+    setRefreshing(true);
+    try { await refreshAccount(); } finally { setRefreshing(false); }
+  };
+
+  useEffect(() => {
+    if (!captureMode) void refresh();
+  }, [captureMode]);
+
+  return <AppPortal>
+    <div className="modal-backdrop opus-usage-backdrop" onMouseDown={onClose}>
+      <section className="modal opus-usage-dialog" role="dialog" aria-modal="true" aria-labelledby="opus-usage-title" onMouseDown={(event) => event.stopPropagation()}>
+        <header>
+          <div>
+            <small>NovelAI Diffusion V5</small>
+            <h2 id="opus-usage-title">{t("opusUsage.title")}</h2>
+          </div>
+          <button type="button" aria-label={t("opusUsage.close")} onClick={onClose}><Icon name="close" /></button>
+        </header>
+        <p>{t("opusUsage.explanation")}</p>
+        {usage ? <>
+          <div className="opus-usage-value">
+            <strong>{f("opusUsage.remaining", { percent: Math.round(remainingPercent * 10) / 10, images: remainingImages })}</strong>
+          </div>
+          <div className="opus-usage-track" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={remainingPercent}>
+            <div style={{ width: `${remainingPercent}%` }} />
+          </div>
+          <p className="opus-usage-refill">{f("opusUsage.refill", { percent: refillPercent, images: refillImages })}</p>
+          {usage.isNegative && <p className="opus-usage-warning">{t("opusUsage.empty")}</p>}
+        </> : <p className="opus-usage-warning">{t("opusUsage.unavailable")}</p>}
+        <footer>
+          <span className={account.stale || !usage ? "stale" : ""}>
+            <span className="pulse-dot" />
+            {account.stale
+              ? t("opusUsage.stale")
+              : usage && account.opusUsageUpdatedAt
+                ? t("opusUsage.updated")
+                : t("opusUsage.unavailable")}
+          </span>
+          <Button disabled={refreshing} onClick={() => void refresh()}>{refreshing ? "…" : t("opusUsage.refresh")}</Button>
+        </footer>
+      </section>
+    </div>
+  </AppPortal>;
+}
+
 function TitleBar() {
   const account = useAppStore((state) => state.account);
+  const refreshAccount = useAppStore((state) => state.refreshAccount);
   const language = useAppStore((state) => state.settings?.language);
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
+
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("uiCapture") === "opusUsage") return;
+    if (!account.hasToken || account.tierLevel !== 3) return;
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") void refreshAccount();
+    }, 60_000);
+    return () => window.clearInterval(timer);
+  }, [account.hasToken, account.tierLevel, refreshAccount]);
+
   return (
     <header className="title-bar">
       <div className="window-title">
@@ -589,18 +662,20 @@ function MenuBar({ openSettings }: { openSettings: () => void }) {
 
   return (
     <nav className="menu-bar compact-toolbar">
-      <button
-        className="menu-action"
-        onClick={() => settings?.outputDir && window.naiDesktop.openInExplorer(settings.outputDir)}
-      >
-        <IconText icon={<Icon name="folder" />}>{chromeText.outputDir}</IconText>
-      </button>
-      <button className="menu-action" onClick={openSettings}>
-        <IconText icon={<Icon name="settings" />}>{chromeText.settings}</IconText>
-      </button>
-      <button className="menu-action" onClick={() => window.naiDesktop.openExternal(docsUrl)}>
-        <IconText icon={<Icon name="help" />}>{chromeText.docs}</IconText>
-      </button>
+      <div className="menu-actions-row">
+        <button
+          className="menu-action"
+          onClick={() => settings?.outputDir && window.naiDesktop.openInExplorer(settings.outputDir)}
+        >
+          <IconText icon={<Icon name="folder" />}>{chromeText.outputDir}</IconText>
+        </button>
+        <button className="menu-action" onClick={openSettings}>
+          <IconText icon={<Icon name="settings" />}>{chromeText.settings}</IconText>
+        </button>
+        <button className="menu-action" onClick={() => window.naiDesktop.openExternal(docsUrl)}>
+          <IconText icon={<Icon name="help" />}>{chromeText.docs}</IconText>
+        </button>
+      </div>
     </nav>
   );
 }
@@ -2654,6 +2729,7 @@ function AccountAndRunButton({
   label,
   onRun,
   openSettings,
+  model,
   allowQueue = false,
   disabled = false,
   disabledReason = "",
@@ -2661,6 +2737,7 @@ function AccountAndRunButton({
   label: string;
   onRun: () => void;
   openSettings: () => void;
+  model?: string;
   allowQueue?: boolean;
   disabled?: boolean;
   disabledReason?: string;
@@ -2679,8 +2756,20 @@ function AccountAndRunButton({
   const lastAnlasSpent = useAppStore((state) => state.lastAnlasSpent);
   const refreshAccount = useAppStore((state) => state.refreshAccount);
   const [refreshingAccount, setRefreshingAccount] = useState(false);
+  const [showOpusUsage, setShowOpusUsage] = useState(
+    () => new URLSearchParams(window.location.search).get("uiCapture") === "opusUsage",
+  );
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
+  const showV5Allowance = account.tierLevel === 3 && Boolean(model && isNAIV5Model(model));
+  const usagePercent = account.opusUsage
+    ? Math.round(Math.min(100, Math.max(0, account.opusUsage.isNegative ? 0 : account.opusUsage.percent)) * 10) / 10
+    : null;
+  const remainingImages = usagePercent === null ? null : Math.round(17.3 * usagePercent);
+  const refillPercent = account.opusUsage && account.opusUsage.timeUntilNextPercent > 0
+    ? Math.round((86_400 / account.opusUsage.timeUntilNextPercent) * 10) / 10
+    : null;
+  const refillImages = refillPercent === null ? null : Math.round(17.3 * refillPercent);
   async function refreshBalance() {
     setRefreshingAccount(true);
     try {
@@ -2703,6 +2792,28 @@ function AccountAndRunButton({
           {refreshingAccount ? t("account.refreshing") : t("account.refresh")}
         </button>
       </div>
+      {showV5Allowance && (
+        <button
+          type="button"
+          className={`account-opus-usage${account.stale ? " stale" : ""}`}
+          aria-label={account.stale ? t("opusUsage.stale") : t("opusUsage.open")}
+          onClick={() => setShowOpusUsage(true)}
+        >
+          <span className="account-opus-main">
+            <span className="account-opus-label">V5</span>
+            <span className="account-opus-track" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={usagePercent ?? 0}>
+              <span style={{ width: `${usagePercent ?? 0}%` }} />
+            </span>
+            <strong>{usagePercent === null ? "--" : `${usagePercent}%`}</strong>
+            <em>{remainingImages === null ? t("opusUsage.unavailable") : f("opusUsage.compactImages", { images: remainingImages })}</em>
+          </span>
+          <small className="account-opus-explanation">
+            {refillPercent === null || refillImages === null
+              ? t("opusUsage.compactRule")
+              : f("opusUsage.compactExplanation", { percent: refillPercent, images: refillImages })}
+          </small>
+        </button>
+      )}
       {!account.hasToken ? (
         <Button variant="primary" className="full" onClick={openSettings}>
           <IconText icon={<Icon name="key" />}>{t("account.setupFirst")}</IconText>
@@ -2749,6 +2860,7 @@ function AccountAndRunButton({
           </Button>
         </>
       )}
+      {showV5Allowance && showOpusUsage && <OpusUsageDialog onClose={() => setShowOpusUsage(false)} />}
     </div>
   );
 }
@@ -2760,6 +2872,7 @@ function GeneratePanel({ openSettings }: { openSettings: () => void }) {
   const batchCount = useAppStore((state) => state.batchCount);
   const setBatchCount = useAppStore((state) => state.setBatchCount);
   const fileNamePrefix = useAppStore((state) => state.params.fileNamePrefix);
+  const model = useAppStore((state) => state.params.model);
   const setParam = useAppStore((state) => state.setParam);
   const groups = useAppStore((state) => state.historyGroups);
   const generationGroupId = useAppStore((state) => state.generationGroupId);
@@ -2839,6 +2952,7 @@ function GeneratePanel({ openSettings }: { openSettings: () => void }) {
         label={batchCount > 1 ? f("generate.batchRun", { count: batchCount }) : t("generate.run")}
         onRun={() => void generate()}
         openSettings={openSettings}
+        model={model}
         allowQueue
       />
     </>
@@ -2849,6 +2963,7 @@ function GeneratePanel({ openSettings }: { openSettings: () => void }) {
 function I2IPanel({ openSettings }: { openSettings: () => void }) {
   const language = useAppStore((state) => state.settings?.language);
   const i2iParams = useAppStore((state) => state.i2iParams);
+  const model = useAppStore((state) => state.params.model);
   const setI2IParam = useAppStore((state) => state.setI2IParam);
   const generateI2I = useAppStore((state) => state.generateI2I);
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
@@ -2863,7 +2978,7 @@ function I2IPanel({ openSettings }: { openSettings: () => void }) {
         <PromptAndParams />
         <FeatureCostCard label={t("cost.beforeRun")} feature="i2i" />
       </div>
-      <AccountAndRunButton label={t("i2i.run")} onRun={() => void generateI2I()} openSettings={openSettings} />
+      <AccountAndRunButton label={t("i2i.run")} onRun={() => void generateI2I()} openSettings={openSettings} model={model} />
     </>
   );
 }
@@ -4436,6 +4551,8 @@ function HistoryPanel() {
   const selectImage = useAppStore((state) => state.selectImage);
   const deleteHistory = useAppStore((state) => state.deleteHistory);
   const renameHistoryItem = useAppStore((state) => state.renameHistoryItem);
+  const setActiveTab = useAppStore((state) => state.setActiveTab);
+  const setToast = useAppStore((state) => state.setToast);
   const language = useAppStore((state) => state.settings?.language);
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
@@ -4486,6 +4603,15 @@ function HistoryPanel() {
     if (window.confirm(f("history.deleteImageConfirm", { name: fileName }))) {
       void deleteHistory(item.id);
     }
+  }
+
+  async function inspectHistoryMetadata(item: HistoryItem) {
+    const result = await window.naiDesktop.saveMetadataSnapshotFromPath(item.filePath);
+    if (!result.ok) {
+      setToast(t("history.metadataFailed"));
+      return;
+    }
+    setActiveTab("metadata");
   }
 
   return (
@@ -4571,10 +4697,14 @@ function HistoryPanel() {
               <span className="history-meta">{item.model} · {item.width}×{item.height}</span>
             </button>
             <div className="history-item-controls" onClick={(event) => event.stopPropagation()}>
+              <button className="history-metadata" title={t("history.metadataTitle")} onClick={() => void inspectHistoryMetadata(item)}>
+                <Icon name="eye" />
+              </button>
               <SelectMenu
                 className="history-item-group-trigger"
                 value={item.groupId ?? ""}
                 ariaLabel={t("history.itemGroupTitle")}
+                label={<Icon name="folder" />}
                 options={[
                   { value: "", label: t("history.ungrouped") },
                   ...groups.map((group) => ({ value: group.id, label: group.name })),
@@ -5798,6 +5928,18 @@ function MainPage() {
   useEffect(() => {
     const captureSurface = uiCaptureParams.get("uiCapture");
     if (captureSurface) useAppStore.getState().setShowOnboarding(false);
+    if (captureSurface === "opusUsage" || captureSurface === "opusInline") {
+      useAppStore.setState({
+        account: {
+          hasToken: true,
+          tierName: "Opus",
+          tierLevel: 3,
+          anlasBalance: 10_000,
+          opusUsage: { percent: 73.4, isNegative: false, timeUntilNextPercent: 6042 },
+          opusUsageUpdatedAt: Date.now(),
+        },
+      });
+    }
     const captureTabs = ["generate", "inpaint", "upscale", "postprocess", "inspect", "convert", "metadata", "tools", "referencePresets", "records"] as const;
     if (captureTabs.some((tab) => tab === captureSurface)) {
       useAppStore.getState().setActiveTab(captureSurface as (typeof captureTabs)[number]);

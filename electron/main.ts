@@ -79,6 +79,11 @@ import {
   updatePromptCodex,
 } from "./ipc/prompt-codex";
 import {
+  loadMetadataSnapshotFile,
+  saveMetadataSnapshotFile,
+  saveMetadataSnapshotFromPath,
+} from "./ipc/metadata-snapshot";
+import {
   createReferencePresetGroup,
   deleteReferencePresetGroup,
   deleteReferencePreset,
@@ -122,6 +127,7 @@ import type {
   TagComicReferenceImportRequest,
   DirectorTool,
   I2IParams,
+  MetadataSnapshotPayload,
   NAIInpaintModel,
   UpscaleScale,
   TextToolHistoryItem,
@@ -335,6 +341,24 @@ function createWindow() {
               "document.documentElement.classList.add('theme-dark')",
             );
           }
+          if (normalizedUiCapturePath.includes("random-artist-params")) {
+            const revealRandomParameters = () => mainWindow?.webContents.executeJavaScript(`(() => {
+              const target = document.querySelector('.random-generation-settings');
+              const scroller = document.querySelector('.random-artist-lab');
+              if (!target || !scroller) return false;
+              scroller.scrollTop = Math.max(0, target.offsetTop - 16);
+              target.scrollIntoView({ block: 'start', inline: 'nearest', behavior: 'instant' });
+              scroller.scrollTop = Math.max(0, scroller.scrollTop - 16);
+              return true;
+            })()`);
+            // The popularity pool resolves asynchronously and can relayout the
+            // page once. Reveal twice so the evidence screenshot always shows
+            // the actual parameter editor rather than the page header.
+            await revealRandomParameters();
+            await new Promise((resolve) => setTimeout(resolve, 450));
+            await revealRandomParameters();
+            await new Promise((resolve) => setTimeout(resolve, 250));
+          }
           const audit = await mainWindow?.webContents.executeJavaScript(`(() => {
             const visible = (element) => {
               const style = getComputedStyle(element);
@@ -421,7 +445,13 @@ function createWindow() {
             const openSelectMenus = [...document.querySelectorAll('.select-menu-popover')]
               .filter(visible)
               .map((element) => ({ ...describe(element), optionCount: element.querySelectorAll('[role="option"]').length }));
-            return { viewport: { width: innerWidth, height: innerHeight }, viewportOverflow, contentOverflow, iconOverflow, iconMisalignment, textMisalignment, duplicateArrowRisk, openSelectMenus };
+            const randomArtistDetails = [...document.querySelectorAll('.random-generation-settings, .artist-weight-tuner')]
+              .map((element) => {
+                const style = getComputedStyle(element);
+                const rect = element.getBoundingClientRect();
+                return { ...describe(element), open: Boolean(element.open), scrollHeight: element.scrollHeight, clientHeight: element.clientHeight, rect: { top: rect.top, bottom: rect.bottom, height: rect.height }, display: style.display, height: style.height, maxHeight: style.maxHeight, overflow: style.overflow };
+              });
+            return { viewport: { width: innerWidth, height: innerHeight }, viewportOverflow, contentOverflow, iconOverflow, iconMisalignment, textMisalignment, duplicateArrowRisk, openSelectMenus, randomArtistDetails };
           })()`);
           const image = await mainWindow?.webContents.capturePage();
           if (image) {
@@ -463,6 +493,10 @@ function createWindow() {
     ].find(([needle]) => normalizedUiCapturePath.includes(needle))?.[1];
     const captureSurface = normalizedUiCapturePath.includes("random-artist")
       ? "randomArtist"
+      : normalizedUiCapturePath.includes("opus-inline")
+      ? "opusInline"
+      : normalizedUiCapturePath.includes("opus-usage")
+      ? "opusUsage"
       : normalizedUiCapturePath.includes("reference-modal")
       ? "referenceModal"
       : normalizedUiCapturePath.includes("settings")
@@ -594,6 +628,15 @@ function registerIpc() {
   ipcMain.handle("nai:loadImage", () => loadImageFile());
   ipcMain.handle("nai:loadImageFromPath", (_event, filePath: string) =>
     loadImageFromPath(filePath),
+  );
+  ipcMain.handle("metadata:saveSnapshot", (_event, payload: MetadataSnapshotPayload) =>
+    saveMetadataSnapshotFile(app.getPath("userData"), payload),
+  );
+  ipcMain.handle("metadata:saveSnapshotFromPath", (_event, filePath: string) =>
+    saveMetadataSnapshotFromPath(app.getPath("userData"), filePath),
+  );
+  ipcMain.handle("metadata:loadSnapshot", () =>
+    loadMetadataSnapshotFile(app.getPath("userData")),
   );
   ipcMain.handle("nai:clearWorkbenchImage", () => clearWorkbenchImage());
   ipcMain.handle(

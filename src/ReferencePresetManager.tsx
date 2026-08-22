@@ -455,7 +455,20 @@ export default function ReferencePresetManager({
       <div ref={sectionRef} className="reference-preset-section-content">
       {(modal || section === "local") && <section className="reference-preset-library panel-card">
         <header className="reference-preset-section-heading reference-preset-library-heading"><div><h3>{text.library}</h3><p>{text.currentGroup} · {groupFilter === "__all__" ? text.all : groupFilter ? catalogGroupName(groupFilter, language) : text.noGroup}</p></div>{!modal && groupFilter !== "__all__" && <Button onClick={() => void runOperation(() => window.naiDesktop.exportReferencePresets({ group: groupFilter }), text.exported)}>{text.exportGroup}</Button>}</header>
-        <div className="reference-preset-search-row"><input type="search" value={query} placeholder={text.search} aria-label={text.search} onChange={(event) => setQuery(event.target.value)} /><div className="field"><span>{text.currentGroup}</span><SelectMenu value={groupFilter} ariaLabel={text.currentGroup} options={[{ value: "__all__", label: text.all }, { value: "", label: text.noGroup }, ...library.groups.map((item) => ({ value: item, label: catalogGroupName(item, language) }))]} onChange={selectGroup} /></div><div className="field reference-preset-column-control"><span>{navText.cardsPerRow}</span><SelectMenu value={String(gridColumns)} ariaLabel={navText.cardsPerRow} options={[2, 3, 4, 5].map((item) => ({ value: String(item), label: String(item) }))} onChange={(next) => setGridColumns(Number(next))} /></div></div>
+        <div className="reference-preset-search-row">
+          <label className="field reference-preset-search-field">
+            <span>{text.search}</span>
+            <input type="search" value={query} placeholder={text.search} aria-label={text.search} onChange={(event) => setQuery(event.target.value)} />
+          </label>
+          <div className="field">
+            <span>{text.currentGroup}</span>
+            <SelectMenu value={groupFilter} ariaLabel={text.currentGroup} options={[{ value: "__all__", label: text.all }, { value: "", label: text.noGroup }, ...library.groups.map((item) => ({ value: item, label: catalogGroupName(item, language) }))]} onChange={selectGroup} />
+          </div>
+          <div className="field reference-preset-column-control">
+            <span>{navText.cardsPerRow}</span>
+            <SelectMenu value={String(gridColumns)} ariaLabel={navText.cardsPerRow} options={[2, 3, 4, 5].map((item) => ({ value: String(item), label: String(item) }))} onChange={(next) => setGridColumns(Number(next))} />
+          </div>
+        </div>
         {!modal && <div className="reference-preset-group-toolbar"><label className="field reference-preset-new-group"><span>{text.groupName}</span><input value={newGroupName} onChange={(event) => setNewGroupName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void createGroup(); }} /></label><Button disabled={busy || !newGroupName.trim()} onClick={() => void createGroup()}>{text.createGroup}</Button></div>}
         {!modal && groupFilter !== "__all__" && groupFilter !== "" && <div className="reference-preset-group-danger"><Button disabled={busy} onClick={() => setDeleteGroupTarget(groupFilter)}>{navText.deleteGroup}</Button><span>{navText.deleteGroupHint}</span></div>}
         {allowedKinds.length > 1 && <div className="reference-preset-kind-tabs reference-preset-filter-tabs" role="group" aria-label={text.kind}><button className={kindFilter === "all" ? "active" : ""} onClick={() => setKindFilter("all")}>{text.all}</button>{allowedKinds.includes("vibe") && <button className={kindFilter === "vibe" ? "active" : ""} onClick={() => setKindFilter("vibe")}>{text.vibe}</button>}{allowedKinds.includes("precise") && <button className={kindFilter === "precise" ? "active" : ""} onClick={() => setKindFilter("precise")}>{text.precise}</button>}</div>}

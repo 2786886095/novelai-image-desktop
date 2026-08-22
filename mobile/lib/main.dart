@@ -126,7 +126,11 @@ class _HomeShellState extends State<HomeShell> {
           ),
         ),
       ),
-      const GalleryScreen(),
+      GalleryScreen(
+        onOpenMetadata: () {
+          if (mounted) setState(() => _index = 6);
+        },
+      ),
       const AiLogScreen(),
       const SettingsScreen(),
     ];

@@ -122,6 +122,8 @@ class AppState extends ChangeNotifier {
 
   Timer? _quoteTimer;
   Timer? _toolPersistTimer;
+  Timer? _opusUsageTimer;
+  bool _opusUsageRefreshRunning = false;
   int _quoteVersion = 0;
   bool _cancelGenerationRequested = false;
   int _activeTaskQuote = 0;
@@ -278,11 +280,25 @@ class AppState extends ChangeNotifier {
   // Fetch the account after boot so a slow or blocked network never delays the
   // first frame. Mirrors the old inline fetch: placeholder + status note on
   // failure, no success toast.
+  Future<AccountSummary> _fetchAccountPreservingLast(String token) async {
+    final fresh = await api.fetchAccount(token, settings);
+    if (!fresh.stale) return fresh;
+    // A failed official /user/data refresh must never replace the last real
+    // allowance with a fabricated zero/placeholder. Keep the last successful
+    // values, but mark them stale so the UI cannot claim a live sync.
+    return account.hasToken ? account.copyWith(stale: true) : fresh;
+  }
+
   Future<void> _refreshAccountAtBoot() async {
     final token = await storage.getToken();
     if (token == null || token.isEmpty) return;
     try {
-      account = await api.fetchAccount(token, settings);
+      account = await _fetchAccountPreservingLast(token);
+      if (!account.stale) {
+        _scheduleOpusUsageRefresh();
+      } else {
+        status = _rt('status.accountSyncStale');
+      }
     } catch (error) {
       account = const AccountSummary(hasToken: true);
       status = _rf('status.accountReadFailed', {'error': _cleanError(error)});
@@ -340,6 +356,7 @@ class AppState extends ChangeNotifier {
       final summary = await api.verifyToken(token, settings);
       await storage.setToken(token.trim());
       account = summary;
+      _scheduleOpusUsageRefresh();
       notifyListeners();
       _scheduleGenerationQuote();
       return null;
@@ -351,6 +368,7 @@ class AppState extends ChangeNotifier {
   Future<void> clearToken() async {
     await storage.clearToken();
     account = const AccountSummary(hasToken: false);
+    _opusUsageTimer?.cancel();
     generationQuote = null;
     notifyListeners();
   }
@@ -359,13 +377,52 @@ class AppState extends ChangeNotifier {
     final token = await storage.getToken();
     if (token == null) return;
     try {
-      account = await api.fetchAccount(token, settings);
-      status = _rt('status.anlasRefreshed');
+      account = await _fetchAccountPreservingLast(token);
+      if (account.stale) {
+        status = _rt('status.accountSyncStale');
+      } else {
+        _scheduleOpusUsageRefresh();
+        status = _rt('status.anlasRefreshed');
+      }
     } catch (error) {
       status = _rf('status.anlasRefreshFailed', {'error': _cleanError(error)});
     }
     notifyListeners();
     _scheduleGenerationQuote();
+  }
+
+  void _scheduleOpusUsageRefresh() {
+    _opusUsageTimer?.cancel();
+    if (account.tierLevel != 3) return;
+    _opusUsageTimer = Timer.periodic(
+      const Duration(minutes: 1),
+      (_) => unawaited(_refreshOpusUsageSilently()),
+    );
+  }
+
+  Future<void> _refreshOpusUsageSilently() async {
+    if (_opusUsageRefreshRunning) return;
+    final token = await storage.getToken();
+    if (token == null || token.isEmpty) return;
+    _opusUsageRefreshRunning = true;
+    try {
+      final fresh = await _fetchAccountPreservingLast(token);
+      // fetchAccount deliberately returns a token-present placeholder on a
+      // transient network failure. Keep the last official V5 reading instead
+      // of replacing it with that placeholder during the silent minute poll.
+      if (fresh.stale) {
+        account = fresh;
+        notifyListeners();
+        return;
+      }
+      account = fresh;
+      notifyListeners();
+    } catch (_) {
+      // Keep the last successful reading; the visible refresh action reports
+      // network errors explicitly.
+    } finally {
+      _opusUsageRefreshRunning = false;
+    }
   }
 
   Future<String?> translateText(String text, {String target = 'en'}) async {
@@ -1350,7 +1407,7 @@ class AppState extends ChangeNotifier {
     var lastError = '';
     int? anlasBefore;
     try {
-      account = await api.fetchAccount(token, settings);
+      account = await _fetchAccountPreservingLast(token);
       final quote = await _quoteFor(
         token,
         initialParams,
@@ -1481,7 +1538,7 @@ class AppState extends ChangeNotifier {
           // The images are already saved at this point — a balance-refresh
           // hiccup here must not flip an already-successful item to failed.
           try {
-            account = await api.fetchAccount(token, settings);
+            account = await _fetchAccountPreservingLast(token);
           } catch (_) {
             /* balance will catch up on the next natural refresh */
           }
@@ -1515,7 +1572,7 @@ class AppState extends ChangeNotifier {
       }
 
       try {
-        account = await api.fetchAccount(token, settings);
+        account = await _fetchAccountPreservingLast(token);
       } catch (_) {
         // Generated files are already on disk; keep the completion result and
         // let the next natural refresh update the balance.
@@ -1571,7 +1628,7 @@ class AppState extends ChangeNotifier {
     queueAdding = true;
     notifyListeners();
     try {
-      final freshAccount = await api.fetchAccount(token, settings);
+      final freshAccount = await _fetchAccountPreservingLast(token);
       account = freshAccount;
       final quote = await _quoteFor(
         token,
@@ -2376,7 +2433,7 @@ class AppState extends ChangeNotifier {
       throw Exception(_rt('error.naiTokenRequired'));
     }
     final taskParams = panelParams.normalized();
-    account = await api.fetchAccount(token, settings);
+    account = await _fetchAccountPreservingLast(token);
     final quote = calculateImageGenerationAnlas(
       params: taskParams,
       account: account,
@@ -2435,7 +2492,7 @@ class AppState extends ChangeNotifier {
     // here must not make the caller (comic_controller's generateOne) report an
     // already-successful panel as failed.
     try {
-      account = await api.fetchAccount(token, settings);
+      account = await _fetchAccountPreservingLast(token);
       final after = account.anlasBalance;
       lastAnlasSpent =
           before != null && after != null ? max(0, before - after) : null;
@@ -2462,7 +2519,7 @@ class AppState extends ChangeNotifier {
     final item = await storage.saveArtistLabTemporaryImage(
         images.first, taskParams, seed);
     try {
-      account = await api.fetchAccount(token, settings);
+      account = await _fetchAccountPreservingLast(token);
       final after = account.anlasBalance;
       lastAnlasSpent =
           before != null && after != null ? max(0, before - after) : null;
@@ -2524,7 +2581,7 @@ class AppState extends ChangeNotifier {
         !taskParams.supportsPreciseReference) {
       throw Exception(_rt('error.preciseV45Only'));
     }
-    account = await api.fetchAccount(token, settings);
+    account = await _fetchAccountPreservingLast(token);
     throwIfCancelled();
     final quote = calculateImageGenerationAnlas(
       params: taskParams,
@@ -2567,7 +2624,7 @@ class AppState extends ChangeNotifier {
     // hiccup here must not make the caller report an already-successful item
     // as failed.
     try {
-      account = await api.fetchAccount(token, settings);
+      account = await _fetchAccountPreservingLast(token);
     } catch (_) {
       /* balance will catch up on the next natural refresh */
     }
@@ -2691,7 +2748,7 @@ class AppState extends ChangeNotifier {
     String token,
     AnlasQuote Function(AccountSummary account) buildQuote,
   ) async {
-    account = await api.fetchAccount(token, settings);
+    account = await _fetchAccountPreservingLast(token);
     final quote = buildQuote(account);
     if (!quote.ok || quote.amount == null) throw Exception(quote.message);
     if (quote.insufficient) {
@@ -2707,7 +2764,7 @@ class AppState extends ChangeNotifier {
   }
 
   Future<String> _finishQuotedRun(String token, int? before) async {
-    account = await api.fetchAccount(token, settings);
+    account = await _fetchAccountPreservingLast(token);
     final after = account.anlasBalance;
     lastAnlasSpent =
         before != null && after != null ? max(0, before - after) : null;
@@ -2730,7 +2787,7 @@ class AppState extends ChangeNotifier {
       final message = e.toString().replaceFirst('Exception: ', '');
       final before = _pendingAuthorizedBalance;
       if (before != null) {
-        account = await api.fetchAccount(token, settings);
+        account = await _fetchAccountPreservingLast(token);
         final after = account.anlasBalance;
         lastAnlasSpent = after == null ? null : max(0, before - after);
         status = lastAnlasSpent == null
@@ -2778,6 +2835,7 @@ class AppState extends ChangeNotifier {
   void dispose() {
     _quoteTimer?.cancel();
     _toolPersistTimer?.cancel();
+    _opusUsageTimer?.cancel();
     BackgroundQueueService.removeCancelHandler(cancelGeneration);
     api.cancelActiveGeneration();
     super.dispose();

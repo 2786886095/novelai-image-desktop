@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type InputHTMLAttributes } from "react";
 import { AppPortal, Button, SelectMenu } from "./components/ui";
 import { Icon } from "./components/icons";
 import {
@@ -60,6 +60,15 @@ type RandomSession = {
 const STORAGE_KEY = "langbai.artist-lab.random.v4";
 let sessionCache: RandomSession | null = null;
 
+const RANDOM_SIZE_PRESETS = [
+  { width: 832, height: 1216 },
+  { width: 1024, height: 1024 },
+  { width: 1216, height: 832 },
+  { width: 1024, height: 1536 },
+  { width: 1536, height: 1024 },
+  { width: 1472, height: 1472 },
+] as const;
+
 const TEXT = {
   "zh-CN": { title: "随机画师串抽卡", subtitle: "每次抽卡重新组合画师、权重和可选风格词；内容、Seed 与生成参数保持不变。", back: "返回画风实验室", pool: "热门画师候选库", poolSize: "按热度载入前 N 名", load: "载入", ready: "已按热度载入前 {count} 名画师", loading: "正在读取热门画师…", refresh: "刷新排行", hint: "可选择 100～5000 名热门画师，并额外加入 33 个经 Claude、Codex、Grok 联合核验的有效画师标签。Danbooru 标签有效不代表 NovelAI V5 必然还原其画风。", base: "固定内容提示词", auxiliary: "固定附加词（每次都保留）", mutate: "抽卡时额外加入随机风格词", mutateHint: "开启后，每组使用同一画师串、提示词、Seed 和参数生成 A/B 两张：A 不加风格词，B 从画风、媒介/笔触、色彩、光影、氛围中抽取 2～6 个带 0.3～1.5 权重的词。", count: "本批画师串数量", range: "每串画师数量（最多 20 名）", min: "最少", max: "最多", seed: "固定 NovelAI Seed", draw: "重新抽卡", preview: "本批抽卡预览", previewHint: "开启随机风格词时，每组生成 A/B 两张对照图；重新抽卡会清除上一批未收藏的临时图片。", generate: "生成这一批", stop: "停止任务", refine: "根据喜欢项再抽卡", needPool: "画师池尚未载入。", needPrompt: "请填写固定内容提示词。", needLikes: "请先收藏至少一个喜欢项。", running: "正在生成 {done}/{total}", complete: "本批已完成；未收藏图片会在下一次抽卡时自动清理。", pending: "等待", generating: "生成中", done: "已完成", failed: "失败", like: "收藏到喜欢", saved: "已收藏", saving: "保存中…", retry: "重试", apply: "应用到生成", copy: "复制", copied: "已复制画师串。", applied: "已应用到生成页。", empty: "画师池加载后即可抽卡。", unlimited: "输入画师串组数；开启随机风格词时，实际图片数为两倍。", mutation: "本次风格/光影变异词", favorites: "喜欢的画风", favoritesHint: "A、B 可分别收藏；收藏 B 后，开启风格词的偏好抽卡也会参考其风格词与权重。", remove: "移除收藏", removed: "已移除收藏和本地图片。", categories: "艺术风格|媒介/笔触|色彩|光影|氛围", variantPlain: "A｜仅画师串", variantMutated: "B｜画师串＋随机风格词", copyArtists: "复制画师串", copyFull: "复制完整提示词", copiedArtists: "已复制画师串。", copiedFull: "已复制完整提示词。", pairSummary: "{pairs} 组 · {images} 张", validation: "Danbooru 验证：33/33 为当前有效、非废弃画师标签 · 2026-08-22", allModels: "全部模型", modelGroup: "生成模型", previewImage: "双击预览大图" },
   "zh-TW": { title: "隨機畫師串抽卡", subtitle: "每次抽卡重新組合畫師、權重與可選風格詞；內容、Seed 與生成參數保持不變。", back: "返回畫風實驗室", pool: "熱門畫師候選庫", poolSize: "依熱度載入前 N 名", load: "載入", ready: "已依熱度載入前 {count} 名畫師", loading: "正在讀取熱門畫師…", refresh: "更新排行", hint: "可選擇 100～5000 名熱門畫師，並額外加入 33 個經 Claude、Codex、Grok 聯合核驗的有效畫師標籤。Danbooru 標籤有效不代表 NovelAI V5 必然還原其畫風。", base: "固定內容提示詞", auxiliary: "固定附加詞（每次保留）", mutate: "抽卡時額外加入隨機風格詞", mutateHint: "開啟後，每組以相同畫師串、提示詞、Seed 與參數生成 A/B 兩張：A 不加風格詞，B 抽取 2～6 個帶 0.3～1.5 權重的畫風詞。", count: "本批畫師串組數", range: "每串畫師數量（最多 20 名）", min: "最少", max: "最多", seed: "固定 NovelAI Seed", draw: "重新抽卡", preview: "本批抽卡預覽", previewHint: "開啟隨機風格詞時每組生成 A/B 兩張；重新抽卡會清除未收藏暫存圖。", generate: "生成這一批", stop: "停止任務", refine: "依喜歡項再抽卡", needPool: "畫師池尚未載入。", needPrompt: "請填寫固定內容提示詞。", needLikes: "請先收藏至少一項。", running: "正在生成 {done}/{total}", complete: "本批已完成；未收藏圖片會於下次抽卡清理。", pending: "等待", generating: "生成中", done: "已完成", failed: "失敗", like: "收藏到喜歡", saved: "已收藏", saving: "儲存中…", retry: "重試", apply: "套用到生成", copy: "複製", copied: "已複製畫師串。", applied: "已套用到生成頁。", empty: "畫師池載入後即可抽卡。", unlimited: "輸入畫師串組數；開啟隨機風格詞時實際圖片數為兩倍。", mutation: "本次風格/光影變異詞", favorites: "喜歡的畫風", favoritesHint: "A、B 可分別收藏；收藏 B 後，偏好抽卡也會參考其風格詞與權重。", remove: "移除收藏", removed: "已移除收藏與本機圖片。", categories: "藝術風格|媒介/筆觸|色彩|光影|氛圍", variantPlain: "A｜僅畫師串", variantMutated: "B｜畫師串＋隨機風格詞", copyArtists: "複製畫師串", copyFull: "複製完整提示詞", copiedArtists: "已複製畫師串。", copiedFull: "已複製完整提示詞。", pairSummary: "{pairs} 組 · {images} 張", validation: "Danbooru 驗證：33/33 為目前有效、非棄用畫師標籤 · 2026-08-22", allModels: "全部模型", modelGroup: "生成模型", previewImage: "雙擊預覽大圖" },
@@ -76,6 +85,7 @@ const PARAM_TEXT = {
     reset: "恢复初始参数",
     model: "模型",
     size: "图片尺寸",
+    sizeValues: "竖图|方图|横图|高竖图|宽横图|大方图",
     width: "宽度",
     height: "高度",
     negative: "负面提示词",
@@ -98,6 +108,7 @@ const PARAM_TEXT = {
     reset: "恢復初始參數",
     model: "模型",
     size: "圖片尺寸",
+    sizeValues: "直式|方形|橫式|高直式|寬橫式|大方形",
     width: "寬度",
     height: "高度",
     negative: "負面提示詞",
@@ -120,6 +131,7 @@ const PARAM_TEXT = {
     reset: "Restore defaults",
     model: "Model",
     size: "Image size",
+    sizeValues: "Portrait|Square|Landscape|Tall portrait|Wide landscape|Large square",
     width: "Width",
     height: "Height",
     negative: "Negative prompt",
@@ -142,6 +154,7 @@ const PARAM_TEXT = {
     reset: "初期設定に戻す",
     model: "モデル",
     size: "画像サイズ",
+    sizeValues: "縦長|正方形|横長|高い縦長|広い横長|大正方形",
     width: "幅",
     height: "高さ",
     negative: "ネガティブプロンプト",
@@ -164,6 +177,7 @@ const PARAM_TEXT = {
     reset: "초기값 복원",
     model: "모델",
     size: "이미지 크기",
+    sizeValues: "세로|정사각|가로|긴 세로|넓은 가로|큰 정사각",
     width: "너비",
     height: "높이",
     negative: "네거티브 프롬프트",
@@ -253,6 +267,54 @@ function snapDimension(value: unknown): number {
   return Math.max(64, Math.min(1600, Math.round(positiveInteger(value, 64) / 64) * 64));
 }
 
+type NumericDraftInputProps = Omit<InputHTMLAttributes<HTMLInputElement>, "value" | "onChange"> & {
+  value: number;
+  onCommit: (value: number) => void;
+  normalize?: (value: number) => number;
+};
+
+/** Preserve temporary empty/partial numeric text and validate on blur/Enter. */
+function NumericDraftInput({ value, onCommit, normalize, min, max, ...props }: NumericDraftInputProps) {
+  const [draft, setDraft] = useState(String(value));
+  const cancelBlurRef = useRef(false);
+
+  useEffect(() => setDraft(String(value)), [value]);
+
+  const commit = () => {
+    if (cancelBlurRef.current) {
+      cancelBlurRef.current = false;
+      setDraft(String(value));
+      return;
+    }
+    const parsed = Number(draft);
+    let next = Number.isFinite(parsed) ? parsed : value;
+    if (typeof min === "number") next = Math.max(min, next);
+    if (typeof max === "number") next = Math.min(max, next);
+    next = normalize ? normalize(next) : next;
+    onCommit(next);
+    setDraft(String(next));
+  };
+
+  return <input
+    {...props}
+    type="number"
+    value={draft}
+    min={min}
+    max={max}
+    onChange={(event) => setDraft(event.target.value)}
+    onBlur={commit}
+    onKeyDown={(event) => {
+      if (event.key === "Enter") event.currentTarget.blur();
+      else if (event.key === "Escape") {
+        cancelBlurRef.current = true;
+        setDraft(String(value));
+        event.currentTarget.blur();
+      }
+      props.onKeyDown?.(event);
+    }}
+  />;
+}
+
 function normalizeGenerationParams(
   value: Partial<GenerateParams> | undefined,
   inherited: GenerateParams,
@@ -309,6 +371,7 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
   const paramText = PARAM_TEXT[language];
   const tuneText = TUNE_TEXT[language];
   const ucLabels = paramText.ucValues.split("|");
+  const sizeLabels = paramText.sizeValues.split("|");
   const favoriteFolderLabel = {
     "zh-CN": "收藏夹",
     "zh-TW": "收藏夾",
@@ -325,6 +388,8 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
   const [previewResult, setPreviewResult] = useState<RandomResult | null>(null);
   const [favoriteModelFilter, setFavoriteModelFilter] = useState("all");
   const copiedTimerRef = useRef<number | null>(null);
+  const persistenceTimerRef = useRef<number | null>(null);
+  const sessionRef = useRef(session);
   const [showFavorites, setShowFavorites] = useState(
     () => localStorage.getItem("langbai.artist-lab.random.view.v1") === "favorites",
   );
@@ -346,11 +411,6 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
   const rememberScrollTop = () => {
     scrollTopToRestoreRef.current = scrollRef.current?.scrollTop ?? null;
   };
-  const updateResultsKeepingScroll = (update: (current: RandomSession) => RandomSession) => {
-    rememberScrollTop();
-    setSession(update);
-  };
-
   useLayoutEffect(() => {
     const scrollTop = scrollTopToRestoreRef.current;
     const scroller = scrollRef.current;
@@ -361,7 +421,12 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
 
   useEffect(() => {
     sessionCache = session;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+    sessionRef.current = session;
+    if (persistenceTimerRef.current !== null) window.clearTimeout(persistenceTimerRef.current);
+    persistenceTimerRef.current = window.setTimeout(() => {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(sessionRef.current));
+      persistenceTimerRef.current = null;
+    }, 300);
   }, [session]);
   useEffect(() => {
     localStorage.setItem(
@@ -373,6 +438,8 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
     if (copiedTimerRef.current !== null) {
       window.clearTimeout(copiedTimerRef.current);
     }
+    if (persistenceTimerRef.current !== null) window.clearTimeout(persistenceTimerRef.current);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(sessionRef.current));
   }, []);
 
   const interpolate = (value: string, values: Record<string, unknown>) => Object.entries(values).reduce((out, [key, replacement]) => out.replaceAll(`{${key}}`, String(replacement)), value);
@@ -392,11 +459,20 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
   };
   useEffect(() => { void loadPool(false); }, []);
 
-  const likedArtists = session.favorites.flatMap((item) => item.artists.map((artist) => artist.name));
-  const likedMutations = session.mutateAuxiliary
-    ? session.favorites.flatMap((item) => (item.variant ?? (item.mutations.length > 0 ? "mutated" : "plain")) === "mutated" ? item.mutations : [])
-    : [];
-  const poolKey = pool.map((artist) => `${artist.id}:${artist.postCount}`).join("|");
+  const likedArtists = useMemo(
+    () => session.favorites.flatMap((item) => item.artists.map((artist) => artist.name)),
+    [session.favorites],
+  );
+  const likedMutations = useMemo(
+    () => session.mutateAuxiliary
+      ? session.favorites.flatMap((item) => (item.variant ?? (item.mutations.length > 0 ? "mutated" : "plain")) === "mutated" ? item.mutations : [])
+      : [],
+    [session.favorites, session.mutateAuxiliary],
+  );
+  const poolKey = useMemo(
+    () => pool.map((artist) => `${artist.id}:${artist.postCount}`).join("|"),
+    [pool],
+  );
   const planned = useMemo(() => generatePopularArtistRecipes(pool, {
     count: session.count,
     minArtists: session.artistCount,
@@ -412,15 +488,26 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
     [planned, session.mutateAuxiliary],
   );
 
-  const clearCurrent = async () => {
+  const deleteTemporaryFiles = async (paths: string[]) => {
+    const workers = Array.from({ length: Math.min(6, paths.length) }, async (_, worker) => {
+      for (let index = worker; index < paths.length; index += 6) {
+        await window.naiDesktop.artistLabDeleteTemporary(paths[index]).catch(() => undefined);
+      }
+    });
+    await Promise.allSettled(workers);
+  };
+
+  const clearCurrent = () => {
     const temporary = session.results.filter((item) => !item.liked && item.image?.filePath).map((item) => item.image!.filePath);
-    await Promise.allSettled(temporary.map((filePath) => window.naiDesktop.artistLabDeleteTemporary(filePath)));
+    // Detach immediately so clearing a large draw never waits on hundreds of
+    // filesystem IPC calls. Cleanup remains bounded in the background.
     patch({ results: [] });
+    void deleteTemporaryFiles(temporary);
   };
 
   const draw = async (fromLikes = false) => {
     if (fromLikes && likedArtists.length === 0) return setMessage(text.needLikes);
-    await clearCurrent();
+    clearCurrent();
     patch({ drawSeed: freshSeed() + (fromLikes ? likedArtists.length : 0), biasFavorites: fromLikes });
   };
 
@@ -436,14 +523,14 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
   const generateOne = async (recipe: RandomResult) => {
     const id = recipe.id;
     const requestParams = { ...fixedParams(), stylePrompt: recipe.prompt };
-    updateResultsKeepingScroll((current) => ({ ...current, results: current.results.map((item) => item.id === id ? { ...item, status: "generating", error: undefined, generationModel: requestParams.model } : item) }));
+    setSession((current) => ({ ...current, results: current.results.map((item) => item.id === id ? { ...item, status: "generating", error: undefined, generationModel: requestParams.model } : item) }));
     try {
       const generated = await window.naiDesktop.generateArtistLab(requestParams, extras, "random");
       const image = generated.items[0];
       if (!generated.ok || !image) throw new Error(generated.message);
-      updateResultsKeepingScroll((current) => ({ ...current, results: current.results.map((item) => item.id === id ? { ...item, image, status: "done", error: undefined, generationModel: image.model || requestParams.model } : item) }));
+      setSession((current) => ({ ...current, results: current.results.map((item) => item.id === id ? { ...item, image, status: "done", error: undefined, generationModel: image.model || requestParams.model } : item) }));
     } catch (error: any) {
-      updateResultsKeepingScroll((current) => ({ ...current, results: current.results.map((item) => item.id === id ? { ...item, status: "failed", error: error?.message ?? String(error) } : item) }));
+      setSession((current) => ({ ...current, results: current.results.map((item) => item.id === id ? { ...item, status: "failed", error: error?.message ?? String(error) } : item) }));
     }
   };
 
@@ -451,7 +538,7 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
     recipes: GeneratedArtistRecipe[],
     compareMutations: boolean,
   ) => {
-    await clearCurrent();
+    clearCurrent();
     const batchId = freshSeed().toString(36);
     const comparisons = expandArtistRecipeComparisons(recipes, compareMutations);
     const pending: RandomResult[] = comparisons.map((recipe, index) => ({
@@ -538,13 +625,18 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
 
   const removeFavorite = async (result: RandomResult) => {
     if (!result.image) return;
-    await deleteHistory(result.image.id);
+    const previousFavorites = session.favorites;
+    const previousResults = session.results;
     setSession((current) => ({
       ...current,
       favorites: current.favorites.filter((item) => item.id !== result.id),
       results: current.results.filter((item) => item.id !== result.id),
     }));
-    setMessage(text.removed);
+    const deleted = await deleteHistory(result.image.id);
+    if (deleted) setMessage(text.removed);
+    else {
+      setSession((current) => ({ ...current, favorites: previousFavorites, results: previousResults }));
+    }
   };
 
   const batchDone = session.results.filter((item) => item.status === "done" || item.status === "failed").length;
@@ -589,24 +681,15 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
   return <>
   <main ref={scrollRef} className="artist-lab random-artist-lab">
     <header className="artist-lab-hero"><div><h2>{text.title}</h2><p>{text.subtitle}</p></div><Button onClick={onBack}>{text.back}</Button></header>
-    <section className="artist-lab-panel random-pool-summary"><div><h3>{text.pool}</h3><strong>{loading ? text.loading : interpolate(text.ready, { count: pool.length })}</strong><small>{text.validation}</small><small>{text.hint}</small></div><div className="artist-pool-actions"><label><span>{text.poolSize}</span><input type="number" min={100} max={5000} step={100} value={session.poolSize} onChange={(event) => patch({ poolSize: clampPoolSize(event.target.value) })} /></label><Button onClick={() => void loadPool(false)} disabled={loading}>{text.load}</Button><Button onClick={() => void loadPool(true)} disabled={loading}>{text.refresh}</Button></div></section>
+    <section className="artist-lab-panel random-pool-summary"><div><h3>{text.pool}</h3><strong>{loading ? text.loading : interpolate(text.ready, { count: pool.length })}</strong><small>{text.validation}</small><small>{text.hint}</small></div><div className="artist-pool-actions"><label><span>{text.poolSize}</span><NumericDraftInput min={100} max={5000} step={100} value={session.poolSize} normalize={clampPoolSize} onCommit={(poolSize) => patch({ poolSize })} /></label><Button onClick={() => void loadPool(false)} disabled={loading}>{text.load}</Button><Button onClick={() => void loadPool(true)} disabled={loading}>{text.refresh}</Button></div></section>
     <section className="artist-lab-panel random-artist-settings">
       <label className="wide"><span>{text.base}</span><textarea value={session.basePrompt} onChange={(event) => patch({ basePrompt: event.target.value })} /></label>
       <label className="wide"><span>{text.auxiliary}</span><textarea value={session.auxiliaryPrompt} onChange={(event) => patch({ auxiliaryPrompt: event.target.value })} /></label>
       <label className="random-check wide"><input type="checkbox" checked={session.mutateAuxiliary} onChange={(event) => patch({ mutateAuxiliary: event.target.checked })} /><span><b>{text.mutate}</b><small>{text.mutateHint}</small></span></label>
-      <label><span>{text.count}</span><input type="number" min={1} value={session.count} onChange={(event) => patch({ count: positiveInteger(event.target.value, 1) })} /><small>{text.unlimited}</small></label>
-      <label><span>{text.range}</span><input type="number" min={1} max={20} value={session.artistCount} onChange={(event) => patch({ artistCount: Math.min(20, positiveInteger(event.target.value, 1)) })} /></label>
-        <label><span>{text.seed}</span><input type="number" min={0} max={2147483647} value={session.seed} onChange={(event) => patch({ seed: Math.min(2_147_483_647, Math.max(0, Math.floor(Number(event.target.value) || 0))) })} /></label>
+      <label><span>{text.count}</span><NumericDraftInput min={1} step={1} value={session.count} normalize={(value) => positiveInteger(value, 1)} onCommit={(count) => patch({ count })} /><small>{text.unlimited}</small></label>
+      <label><span>{text.range}</span><NumericDraftInput min={1} max={20} step={1} value={session.artistCount} normalize={(value) => Math.min(20, positiveInteger(value, 1))} onCommit={(artistCount) => patch({ artistCount })} /><small aria-hidden="true">&nbsp;</small></label>
+      <label><span>{text.seed}</span><NumericDraftInput min={0} max={2147483647} step={1} value={session.seed} normalize={(value) => Math.min(2_147_483_647, Math.max(0, Math.floor(value)))} onCommit={(seed) => patch({ seed })} /><small aria-hidden="true">&nbsp;</small></label>
     </section>
-    <details className="artist-lab-panel artist-weight-tuner">
-      <summary><span><b>{tuneText.title}</b><small>{tuneText.hint}</small></span></summary>
-      <div className="artist-weight-tuner-grid">
-        <label className="wide"><span>{tuneText.input}</span><textarea value={session.weightTuneInput} placeholder="1::artist:foo ::, 0.8::artist:bar ::," onChange={(event) => patch({ weightTuneInput: event.target.value })} /></label>
-        <label><span>{tuneText.count}</span><input type="number" min={1} value={session.weightTuneCount} onChange={(event) => patch({ weightTuneCount: positiveInteger(event.target.value, 1) })} /></label>
-        <label><span>{tuneText.variation}</span><input type="number" min={0} max={100} step={1} value={session.weightVariation} onChange={(event) => patch({ weightVariation: Math.max(0, Math.min(100, Number(event.target.value) || 0)) })} /></label>
-        <Button variant="primary" disabled={running || !session.weightTuneInput.trim()} onClick={() => void runWeightTuning()}>{tuneText.generate}</Button>
-      </div>
-    </details>
     <details className="artist-lab-panel random-generation-settings" open>
       <summary>
         <span>
@@ -638,10 +721,37 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
       </summary>
       <div className="random-generation-grid">
         <label className="wide"><span>{paramText.model}</span><select value={session.generationParams.model} onChange={(event) => patchGeneration("model", event.target.value as GenerateParams["model"])}>{NAI_MODELS.map((model) => <option key={model.value} value={model.value}>{model.value}</option>)}</select></label>
-        <fieldset className="random-size-fields"><legend>{paramText.size}</legend><label><span>{paramText.width}</span><input type="number" min={64} max={1600} step={64} value={session.generationParams.width} onChange={(event) => patchGeneration("width", Math.max(64, positiveInteger(event.target.value, 64)))} onBlur={(event) => patchGeneration("width", snapDimension(event.target.value))} /></label><label><span>{paramText.height}</span><input type="number" min={64} max={1600} step={64} value={session.generationParams.height} onChange={(event) => patchGeneration("height", Math.max(64, positiveInteger(event.target.value, 64)))} onBlur={(event) => patchGeneration("height", snapDimension(event.target.value))} /></label></fieldset>
-        <label><span>{paramText.steps}</span><input type="number" min={1} max={50} value={session.generationParams.steps} onChange={(event) => patchGeneration("steps", Math.max(1, Math.min(50, positiveInteger(event.target.value, 1))))} /></label>
-        <label><span>{paramText.cfg}</span><input type="number" min={1} max={10} step={0.1} value={session.generationParams.cfgScale} onChange={(event) => patchGeneration("cfgScale", Math.max(1, Math.min(10, Number(event.target.value) || 1)))} /></label>
-        <label><span>{paramText.rescale}</span><input type="number" min={0} max={1} step={0.01} value={session.generationParams.cfgRescale} onChange={(event) => patchGeneration("cfgRescale", Math.max(0, Math.min(1, Number(event.target.value) || 0)))} /></label>
+        <fieldset className="random-size-fields">
+          <legend>{paramText.size}</legend>
+          <div className="random-size-presets" role="group" aria-label={paramText.size}>
+            {RANDOM_SIZE_PRESETS.map((preset, index) => {
+              const active = session.generationParams.width === preset.width
+                && session.generationParams.height === preset.height;
+              return <button
+                key={`${preset.width}x${preset.height}`}
+                type="button"
+                className={active ? "active" : ""}
+                aria-pressed={active}
+                onClick={() => setSession((current) => ({
+                  ...current,
+                  generationParams: {
+                    ...current.generationParams,
+                    width: preset.width,
+                    height: preset.height,
+                  },
+                }))}
+              >
+                <span>{sizeLabels[index]}</span>
+                <b>{preset.width}×{preset.height}</b>
+              </button>;
+            })}
+          </div>
+          <label><span>{paramText.width}</span><NumericDraftInput min={64} max={1600} step={64} value={session.generationParams.width} normalize={snapDimension} onCommit={(value) => patchGeneration("width", value)} /></label>
+          <label><span>{paramText.height}</span><NumericDraftInput min={64} max={1600} step={64} value={session.generationParams.height} normalize={snapDimension} onCommit={(value) => patchGeneration("height", value)} /></label>
+        </fieldset>
+        <label><span>{paramText.steps}</span><NumericDraftInput min={1} max={50} step={1} value={session.generationParams.steps} normalize={(value) => Math.max(1, Math.min(50, Math.floor(value)))} onCommit={(value) => patchGeneration("steps", value)} /></label>
+        <label><span>{paramText.cfg}</span><NumericDraftInput min={1} max={10} step={0.1} value={session.generationParams.cfgScale} onCommit={(value) => patchGeneration("cfgScale", value)} /></label>
+        <label><span>{paramText.rescale}</span><NumericDraftInput min={0} max={1} step={0.01} value={session.generationParams.cfgRescale} onCommit={(value) => patchGeneration("cfgRescale", value)} /></label>
         <label><span>{paramText.sampler}</span><select value={session.generationParams.sampler} onChange={(event) => patchGeneration("sampler", event.target.value as GenerateParams["sampler"])}>{NAI_SAMPLERS.map((sampler) => <option key={sampler.value} value={sampler.value}>{sampler.value}</option>)}</select></label>
         {supportsNAINoiseScheduleControl(session.generationParams.model) ? <label><span>{paramText.noise}</span><select value={session.generationParams.noiseSchedule} onChange={(event) => patchGeneration("noiseSchedule", event.target.value)}><option value="native">native</option><option value="karras">karras</option><option value="exponential">exponential</option></select></label> : null}
         <label><span>{paramText.uc}</span><select value={session.generationParams.ucPreset} onChange={(event) => patchGeneration("ucPreset", Number(event.target.value) as GenerateParams["ucPreset"])}>{NAI_UC_PRESETS.map((preset, index) => <option key={preset.value} value={preset.value}>{preset.value} · {ucLabels[index]}</option>)}</select></label>
@@ -651,6 +761,15 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
           {supportsNAIVariety(session.generationParams.model) ? <label><input type="checkbox" checked={session.generationParams.variety} onChange={(event) => patchGeneration("variety", event.target.checked)} /><span>{paramText.variety}</span></label> : null}
           {!isNAIV4PlusModel(session.generationParams.model) ? <><label><input type="checkbox" checked={session.generationParams.smea} onChange={(event) => patchGeneration("smea", event.target.checked)} /><span>{paramText.smea}</span></label><label><input type="checkbox" checked={session.generationParams.smeaDyn} onChange={(event) => patchGeneration("smeaDyn", event.target.checked)} /><span>{paramText.smeaDyn}</span></label></> : null}
         </div>
+      </div>
+    </details>
+    <details className="artist-lab-panel artist-weight-tuner">
+      <summary><span><b>{tuneText.title}</b><small>{tuneText.hint}</small></span></summary>
+      <div className="artist-weight-tuner-grid">
+        <label className="wide"><span>{tuneText.input}</span><textarea value={session.weightTuneInput} placeholder="1::artist:foo ::, 0.8::artist:bar ::," onChange={(event) => patch({ weightTuneInput: event.target.value })} /></label>
+        <label><span>{tuneText.count}</span><NumericDraftInput min={1} step={1} value={session.weightTuneCount} normalize={(value) => positiveInteger(value, 1)} onCommit={(weightTuneCount) => patch({ weightTuneCount })} /></label>
+        <label><span>{tuneText.variation}</span><NumericDraftInput min={0} max={100} step={1} value={session.weightVariation} onCommit={(weightVariation) => patch({ weightVariation })} /></label>
+        <Button className="artist-weight-tuner-submit" variant="primary" disabled={running || !session.weightTuneInput.trim()} onClick={() => void runWeightTuning()}>{tuneText.generate}</Button>
       </div>
     </details>
     <section className="artist-lab-panel artist-queue-panel"><div className="artist-section-heading"><div><h3>{text.preview}</h3><small>{text.previewHint}</small></div><div className="artist-preview-actions"><b>{interpolate(text.pairSummary, { pairs: planned.length, images: plannedComparisons.length })}</b><Button onClick={() => void draw(false)} disabled={running || pool.length === 0}>{text.draw}</Button></div></div>{planned.length === 0 ? <div className="artist-queue-empty">{text.empty}</div> : <ol className="artist-combination-queue">{planned.map((recipe, index) => <li key={recipe.id}><span>#{String(index + 1).padStart(2, "0")}</span><div><b className="artist-ab-label">{text.variantPlain}</b><code>{recipe.basePrompt}</code>{session.mutateAuxiliary && <><b className="artist-ab-label">{text.variantMutated}</b><code>{recipe.prompt}</code>{renderMutationTerms(recipe)}</>}</div></li>)}</ol>}</section>

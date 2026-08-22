@@ -9,7 +9,7 @@ class NaiOption {
 }
 
 const appName = 'Langbai NovelAI Studio';
-const appVersion = '1.7.9';
+const appVersion = '1.8.0';
 
 const naiModels = <NaiOption>[
   NaiOption(
@@ -529,12 +529,40 @@ class AccountSummary {
   final int? tierLevel;
   final int? anlasBalance;
   final bool? hasActiveSubscription;
+  final OpusGenerationUsage? opusUsage;
+  final int? opusUsageUpdatedAt;
+  final bool stale;
   const AccountSummary({
     this.hasToken = false,
     this.tierName,
     this.tierLevel,
     this.anlasBalance,
     this.hasActiveSubscription,
+    this.opusUsage,
+    this.opusUsageUpdatedAt,
+    this.stale = false,
+  });
+
+  AccountSummary copyWith({bool? stale}) => AccountSummary(
+        hasToken: hasToken,
+        tierName: tierName,
+        tierLevel: tierLevel,
+        anlasBalance: anlasBalance,
+        hasActiveSubscription: hasActiveSubscription,
+        opusUsage: opusUsage,
+        opusUsageUpdatedAt: opusUsageUpdatedAt,
+        stale: stale ?? this.stale,
+      );
+}
+
+class OpusGenerationUsage {
+  final double percent;
+  final bool isNegative;
+  final double timeUntilNextPercent;
+  const OpusGenerationUsage({
+    required this.percent,
+    required this.isNegative,
+    required this.timeUntilNextPercent,
   });
 }
 

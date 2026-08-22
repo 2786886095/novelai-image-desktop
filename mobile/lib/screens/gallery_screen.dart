@@ -12,8 +12,25 @@ import '../ui/zoomable_image.dart';
 
 const _ungroupedFilter = '__ungrouped';
 
+/// Copies a history image into the metadata inspector's durable snapshot.
+/// Keeping this separate from navigation makes grouped and ungrouped items use
+/// the exact same persistence path and lets the file survive later moves.
+Future<void> stageHistoryImageForMetadata(
+  AppState state,
+  HistoryItem item,
+) async {
+  final file = File(item.filePath);
+  if (!file.existsSync()) throw StateError('Image file no longer exists.');
+  await state.storage.saveMetadataInspectorImage(
+    await file.readAsBytes(),
+    _fileName(item.filePath),
+  );
+}
+
 class GalleryScreen extends StatefulWidget {
-  const GalleryScreen({super.key});
+  final VoidCallback? onOpenMetadata;
+
+  const GalleryScreen({super.key, this.onOpenMetadata});
 
   @override
   State<GalleryScreen> createState() => _GalleryScreenState();
@@ -372,6 +389,33 @@ class _GalleryScreenState extends State<GalleryScreen> {
                         SnackBar(content: Text(t('gallery.reuseParamsDone'))),
                       );
                     },
+                  ),
+                  FilledButton.tonalIcon(
+                    icon: const Icon(Icons.data_object_outlined),
+                    label: Text(t('gallery.viewMetadata')),
+                    onPressed: !file.existsSync()
+                        ? null
+                        : () async {
+                            final messenger = ScaffoldMessenger.of(context);
+                            try {
+                              await stageHistoryImageForMetadata(
+                                context.read<AppState>(),
+                                item,
+                              );
+                              if (sheetContext.mounted) {
+                                Navigator.pop(sheetContext);
+                              }
+                              widget.onOpenMetadata?.call();
+                            } catch (error) {
+                              messenger.showSnackBar(
+                                SnackBar(
+                                  content: Text(error
+                                      .toString()
+                                      .replaceFirst('Bad state: ', '')),
+                                ),
+                              );
+                            }
+                          },
                   ),
                   FilledButton.tonalIcon(
                     icon: const Icon(Icons.drive_file_rename_outline),

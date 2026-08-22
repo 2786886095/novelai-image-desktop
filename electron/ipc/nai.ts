@@ -183,8 +183,21 @@ function readNumber(value: unknown): number | undefined {
   return undefined;
 }
 
-function parseAccount(data: any): Omit<AccountSummary, "hasToken"> {
-  const sub = data?.subscription ?? data?.data?.subscription ?? {};
+function readFinite(value: unknown): number | undefined {
+  const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value) : Number.NaN;
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+export function parseAccount(data: any): Omit<AccountSummary, "hasToken"> {
+  // The website payload has changed wrappers before. Read the same
+  // subscription object whether /user/data returns it at the top level or
+  // inside `information`/`data`, without inventing allowance values.
+  const sub =
+    data?.subscription ??
+    data?.information?.subscription ??
+    data?.data?.subscription ??
+    data?.data?.information?.subscription ??
+    {};
   const tierLevel = readNumber(sub?.tier);
   const active = typeof sub?.active === "boolean" ? sub.active : true;
   let anlasBalance: number | undefined;
@@ -205,12 +218,25 @@ function parseAccount(data: any): Omit<AccountSummary, "hasToken"> {
     expiresAt = new Date(seconds * 1000).toISOString().slice(0, 10);
   }
 
+  const rawUsage = sub?.usage;
+  const usagePercent = readFinite(rawUsage?.percent);
+  const usageSeconds = readFinite(rawUsage?.timeUntilNextPercent);
+  const opusUsage = rawUsage && usagePercent !== undefined && usageSeconds !== undefined
+    ? {
+        percent: usagePercent,
+        isNegative: rawUsage.isNegative === true,
+        timeUntilNextPercent: Math.max(0, usageSeconds),
+      }
+    : undefined;
+
   return {
     tierName: tierName(tierLevel),
     tierLevel,
     anlasBalance,
     expiresAt,
     hasActiveSubscription: Boolean(active && tierLevel && tierLevel > 0),
+    opusUsage,
+    opusUsageUpdatedAt: opusUsage ? Date.now() : undefined,
   };
 }
 
@@ -240,8 +266,9 @@ export async function verifyToken(token: string): Promise<TokenStatus> {
   }
 
   try {
-    // /user/data is a documented superset of /user/information (nests the same
-    // payload under `.information`); NovelAI now intermittently 400s the latter.
+    // This is the account route used by the official image web client. It may
+    // wrap the subscription payload differently across deployments, which is
+    // why parseAccount accepts all observed wrappers above.
     const account = await fetchAccount(normalized);
 
     setToken(normalized);

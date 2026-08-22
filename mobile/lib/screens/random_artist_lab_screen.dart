@@ -547,6 +547,28 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     return ((parsed / 64).round() * 64).clamp(64, 1600).toInt();
   }
 
+  int _seedValue() =>
+      (int.tryParse(_seed.text.trim()) ?? 0).clamp(0, 2147483647).toInt();
+
+  int _weightVariationValue() =>
+      (int.tryParse(_weightVariation.text.trim()) ?? 20).clamp(0, 100).toInt();
+
+  void _commitDimension(TextEditingController controller, bool width) {
+    final snapped = _snapDimension(
+      controller.text,
+      width ? _generationParams.width : _generationParams.height,
+    );
+    setState(() {
+      controller.text = '$snapped';
+      if (width) {
+        _generationParams.width = snapped;
+      } else {
+        _generationParams.height = snapped;
+      }
+    });
+    _save();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -610,13 +632,13 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     await prefs.setInt('${_prefsPrefix}artistCount',
         _positive(_artistCount, 8).clamp(1, 20).toInt());
     await prefs.setInt('${_prefsPrefix}poolSize', _poolLimit());
-    await prefs.setInt('${_prefsPrefix}seed', int.tryParse(_seed.text) ?? 0);
+    await prefs.setInt('${_prefsPrefix}seed', _seedValue());
     await prefs.setString(
         '${_prefsPrefix}weightTuneInput', _weightTuneInput.text);
     await prefs.setInt('${_prefsPrefix}weightTuneCount',
         _positive(_weightTuneCount, 8).clamp(1, 1000).toInt());
-    await prefs.setInt('${_prefsPrefix}weightVariation',
-        _positive(_weightVariation, 20).clamp(1, 100).toInt());
+    await prefs.setInt(
+        '${_prefsPrefix}weightVariation', _weightVariationValue());
     _generationParams
       ..width = _snapDimension(_width.text, 832)
       ..height = _snapDimension(_height.text, 1216)
@@ -640,8 +662,8 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
       drawArtistRecipes(
         pool: _pool,
         count: _positive(_count, 8),
-        minArtists: _positive(_artistCount, 8),
-        maxArtists: _positive(_artistCount, 8),
+        minArtists: _positive(_artistCount, 8).clamp(1, 20).toInt(),
+        maxArtists: _positive(_artistCount, 8).clamp(1, 20).toInt(),
         drawSeed: _drawSeed,
         auxiliary: _auxiliary.text,
         mutateAuxiliary: _mutateAuxiliary,
@@ -702,7 +724,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
       ..positivePrompt = _base.text.trim()
       ..stylePrompt = result.recipe.prompt
       ..seedMode = 'fixed'
-      ..seed = int.tryParse(_seed.text) ?? 0;
+      ..seed = _seedValue();
     _setStateKeepingScroll(() {
       result.status = 'running';
       result.error = null;
@@ -773,8 +795,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     final recipes = randomizeArtistWeights(
       artistPrompt: _weightTuneInput.text,
       count: _positive(_weightTuneCount, 8).clamp(1, 1000).toInt(),
-      variationPercent:
-          _positive(_weightVariation, 20).clamp(1, 100).toDouble(),
+      variationPercent: _weightVariationValue().toDouble(),
       drawSeed: Random.secure().nextInt(0x7fffffff),
     );
     if (recipes.isEmpty) {
@@ -1170,7 +1191,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                                       ..model = _resultModel(result)
                                       ..positivePrompt = _base.text.trim()
                                       ..stylePrompt = result.recipe.prompt
-                                      ..seed = int.tryParse(_seed.text) ?? 0
+                                      ..seed = _seedValue()
                                       ..seedMode = 'fixed';
                                     final value = selected.toJson();
                                     final applied =
@@ -1311,6 +1332,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
               key: const PageStorageKey<String>(
                   'random-artist-generation-settings'),
               initiallyExpanded: false,
+              maintainState: true,
               title: Text(parameterText['title']!),
               subtitle: Text(parameterText['hint']!),
               trailing: PopupMenuButton<String>(
@@ -1422,10 +1444,9 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                             ],
                             decoration: InputDecoration(
                                 labelText: parameterText['width']),
-                            onChanged: (value) {
-                              _generationParams.width = _snapDimension(value);
-                              _save();
-                            },
+                            onEditingComplete: () =>
+                                _commitDimension(_width, true),
+                            onTapOutside: (_) => _commitDimension(_width, true),
                           ),
                         ),
                         SizedBox(
@@ -1438,10 +1459,10 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                             ],
                             decoration: InputDecoration(
                                 labelText: parameterText['height']),
-                            onChanged: (value) {
-                              _generationParams.height = _snapDimension(value);
-                              _save();
-                            },
+                            onEditingComplete: () =>
+                                _commitDimension(_height, false),
+                            onTapOutside: (_) =>
+                                _commitDimension(_height, false),
                           ),
                         ),
                         SizedBox(
@@ -1659,7 +1680,8 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                     ? (constraints.maxWidth - 12) / 2
                     : constraints.maxWidth;
                 Widget numberField(
-                        TextEditingController controller, String label) =>
+                        TextEditingController controller, String label,
+                        {required VoidCallback commit}) =>
                     SizedBox(
                       width: fieldWidth,
                       child: TextField(
@@ -1669,6 +1691,8 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                           FilteringTextInputFormatter.digitsOnly
                         ],
                         decoration: InputDecoration(labelText: label),
+                        onEditingComplete: commit,
+                        onTapOutside: (_) => commit(),
                       ),
                     );
                 return Wrap(
@@ -1710,9 +1734,19 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                         },
                       ),
                     ),
-                    numberField(_count, text['count']!),
-                    numberField(_seed, text['seed']!),
-                    numberField(_artistCount, text['max']!),
+                    numberField(_count, text['count']!, commit: () {
+                      setState(() => _planned = _buildPlan());
+                      _save();
+                    }),
+                    numberField(_artistCount, text['max']!, commit: () {
+                      setState(() => _planned = _buildPlan());
+                      _save();
+                    }),
+                    numberField(_seed, text['seed']!, commit: () {
+                      final seed = _seedValue();
+                      setState(() => _seed.text = '$seed');
+                      _save();
+                    }),
                   ],
                 );
               }),

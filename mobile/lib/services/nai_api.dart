@@ -312,12 +312,10 @@ class NaiApi {
     }
   }
 
-  // /user/data is a documented superset of /user/information (nests the same
-  // payload under `.information`). NovelAI now rejects it on api.novelai.net
-  // for at least some accounts with a 400 telling third-party tools to
-  // "update to the image URL" — confirmed live that image.novelai.net serves
-  // the identical payload successfully, so both verification and routine
-  // refresh go through image.novelai.net/user/data.
+  // This is the account route used by the official image web client. NovelAI
+  // rejects it on api.novelai.net for at least some accounts with a 400 telling
+  // third-party tools to "update to the image URL", so verification and
+  // routine refresh both go through image.novelai.net/user/data.
   Future<AccountSummary> verifyToken(String token, AppSettings settings) async {
     final t = token.trim();
     if (t.isEmpty) return const AccountSummary(hasToken: false);
@@ -351,13 +349,23 @@ class NaiApi {
       );
       return _parseAccountData(res.body);
     } catch (_) {
-      return const AccountSummary(hasToken: true, tierName: 'Verified');
+      return const AccountSummary(
+          hasToken: true, tierName: 'Verified', stale: true);
     }
   }
 
   AccountSummary _parseAccountData(String body) {
     final data = jsonDecode(body) as Map<String, dynamic>;
-    final sub = (data['subscription'] ?? {}) as Map<String, dynamic>;
+    Map<String, dynamic>? mapValue(Object? value) =>
+        value is Map ? Map<String, dynamic>.from(value) : null;
+    final directData = mapValue(data['data']);
+    final information = mapValue(data['information']);
+    final nestedInformation = mapValue(directData?['information']);
+    final sub = mapValue(data['subscription']) ??
+        mapValue(information?['subscription']) ??
+        mapValue(directData?['subscription']) ??
+        mapValue(nestedInformation?['subscription']) ??
+        const <String, dynamic>{};
     final tier = sub['tier'] as int?;
     int? anlas;
     final steps = sub['trainingStepsLeft'];
@@ -367,6 +375,19 @@ class NaiApi {
     } else if (steps is num) {
       anlas = steps.toInt();
     }
+    final usage = sub['usage'];
+    OpusGenerationUsage? opusUsage;
+    if (usage is Map) {
+      final percent = usage['percent'];
+      final seconds = usage['timeUntilNextPercent'];
+      if (percent is num && seconds is num) {
+        opusUsage = OpusGenerationUsage(
+          percent: percent.toDouble(),
+          isNegative: usage['isNegative'] == true,
+          timeUntilNextPercent: max(0, seconds.toDouble()),
+        );
+      }
+    }
     return AccountSummary(
       hasToken: true,
       tierName: _tierName(tier),
@@ -374,6 +395,9 @@ class NaiApi {
       anlasBalance: anlas,
       hasActiveSubscription:
           sub['active'] is bool ? sub['active'] as bool : null,
+      opusUsage: opusUsage,
+      opusUsageUpdatedAt:
+          opusUsage == null ? null : DateTime.now().millisecondsSinceEpoch,
     );
   }
 

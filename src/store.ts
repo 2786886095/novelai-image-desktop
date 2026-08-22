@@ -469,7 +469,7 @@ interface AppState {
   togglePause: () => void;
   selectImage: (item: HistoryItem) => void;
   variationFromImage: (item: HistoryItem) => void;
-  deleteHistory: (id: string) => Promise<void>;
+  deleteHistory: (id: string) => Promise<boolean>;
   dropMissingImage: (id: string) => Promise<void>;
   renameHistoryItem: (id: string, name: string) => Promise<void>;
   clearToast: () => void;
@@ -2197,6 +2197,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   async deleteHistory(id) {
     const previousHistory = get().history;
+    const removedIndex = previousHistory.findIndex((item) => item.id === id);
+    const removedItem = removedIndex >= 0 ? previousHistory[removedIndex] : undefined;
     const previousCurrent = get().currentImage;
     const previousComparison = get().comparisonBeforeImage;
     const nextHistory = previousHistory.filter((item) => item.id !== id);
@@ -2206,14 +2208,29 @@ export const useAppStore = create<AppState>((set, get) => ({
       comparisonBeforeImage: previousCurrent?.id === id ? null : get().comparisonBeforeImage,
     });
     try {
-      await window.naiDesktop.deleteHistory(id);
+      const result = await window.naiDesktop.deleteHistory(id);
+      if (!result?.ok) throw new Error("Delete failed");
+      return true;
     } catch (error: any) {
-      set({
-        history: previousHistory,
-        currentImage: previousCurrent,
-        comparisonBeforeImage: previousComparison,
-        toast: error?.message ?? String(error),
+      // Reinsert only this item. Restoring the complete previous array here
+      // races with a second concurrent deletion and can resurrect images that
+      // were successfully removed after this request started.
+      set((state) => {
+        const history = !removedItem || state.history.some((item) => item.id === id)
+          ? state.history
+          : [
+              ...state.history.slice(0, Math.min(removedIndex, state.history.length)),
+              removedItem,
+              ...state.history.slice(Math.min(removedIndex, state.history.length)),
+            ];
+        return {
+          history,
+          currentImage: previousCurrent?.id === id ? previousCurrent : state.currentImage,
+          comparisonBeforeImage: previousCurrent?.id === id ? previousComparison : state.comparisonBeforeImage,
+          toast: error?.message ?? String(error),
+        };
       });
+      return false;
     }
   },
 

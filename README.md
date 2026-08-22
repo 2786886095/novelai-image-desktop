@@ -3,7 +3,7 @@
 [![Build](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build.yml/badge.svg)](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build.yml)
 [![Build Mobile](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build-mobile.yml/badge.svg)](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build-mobile.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
-[![Release](https://img.shields.io/badge/release-v1.7.9-7c5cfa.svg)](https://github.com/2786886095/novelai-image-desktop/releases/tag/v1.7.9)
+[![Release](https://img.shields.io/badge/release-v1.8.0-7c5cfa.svg)](https://github.com/2786886095/novelai-image-desktop/releases/tag/v1.8.0)
 [![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android%20%7C%20iOS-20b7d8.svg)](#下载)
 
 <img width="1672" height="941" alt="ChatGPT Image 2026年6月17日 11_27_47" src="https://github.com/user-attachments/assets/66a6caef-3007-479b-9006-1c6f50570655" />
@@ -16,16 +16,16 @@
 
 ## 下载
 
-- **v1.7.9 中国大陆线路**：[Gitee Releases](https://gitee.com/langbai666/novelai-image-desktop/releases/tag/v1.7.9)
-- **v1.7.9 全球线路**：[GitHub Releases](https://github.com/2786886095/novelai-image-desktop/releases/tag/v1.7.9)
+- **v1.8.0 中国大陆线路**：[Gitee Releases](https://gitee.com/langbai666/novelai-image-desktop/releases/tag/v1.8.0)
+- **v1.8.0 全球线路**：[GitHub Releases](https://github.com/2786886095/novelai-image-desktop/releases/tag/v1.8.0)
 - **持续构建产物**：[GitHub Actions](https://github.com/2786886095/novelai-image-desktop/actions)
 
 Release 目标产物：
 
 | 平台 | 文件 |
 | --- | --- |
-| Windows（便携版） | `Langbai-NovelAI-Studio-1.7.9.exe` |
-| Windows（安装版） | `Langbai-NovelAI-Studio-Setup-1.7.9.exe` |
+| Windows（便携版） | `Langbai-NovelAI-Studio-1.8.0.exe` |
+| Windows（安装版） | `Langbai-NovelAI-Studio-Setup-1.8.0.exe` |
 | macOS | universal `.dmg` + `.zip` |
 | Linux | `.AppImage` |
 | Android | `app-release.apk` |
@@ -54,6 +54,7 @@ Release 目标产物：
 
 - **API Token 登录**：验证 NovelAI Persistent API Token，本地保存账号摘要。
 - **Anlas 余额**：支持手动刷新余额，并在生成前显示预计成本与余额不足提示。
+- **V5 Opus 额度**：直接读取 NovelAI 官方 `image.novelai.net/user/data` 账号数据，实时显示剩余比例、约可生成张数与每日恢复速度；自动与手动刷新失败时保留并标记上次成功数据，不伪造实时状态。
 - **文生图**：模型、风格词、正/负面提示词、尺寸、Seed、Steps、CFG、采样器、UC Preset、Quality Toggle、SMEA、Variety+。
 - **图生图**：加载 PNG/JPG/WebP 基图，支持 Strength、Noise、Extra Noise Seed。
 - **局部重绘**：内置蒙版画布，调用 NovelAI `infill`。
@@ -73,9 +74,9 @@ Release 目标产物：
 - **锁种变体**：复用历史图参数并锁定 seed，适合微调单个 tag。
 - **图片命名**：生成面板可填写文件名前缀；历史面板每张图片可单独重命名（同步重命名本地文件）。
 - **动态提示词通配符**：支持 `{red|blue|green} hair` 这种本地随机展开。
-- **恢复图片原数据**：顶部一级导航独立入口（”原数据”），本地解析 PNG/JPG/WebP 内嵌的 NovelAI、AUTOMATIC1111/Forge、ComfyUI 生成参数，逐项查看并一键套用兼容参数（提示词、尺寸、Steps、CFG、采样器、Seed 等），套用后自动跳转生成页；SD 模型/VAE/LoRA、ComfyUI 工作流只展示不会误套到 NovelAI；全程本地解析，不发送请求、不消耗 Anlas；参数名统一显示为”本地化名称（英文原名）”，每项可单独复制。
+- **恢复图片原数据**：顶部一级导航独立入口（”原数据”），本地解析 PNG/JPG/WebP 内嵌的 NovelAI、AUTOMATIC1111/Forge、ComfyUI 生成参数，逐项查看并一键套用兼容参数（提示词、尺寸、Steps、CFG、采样器、Seed 等），套用后自动跳转生成页；最近读取的图片持久保存，重启软件仍会恢复，分组历史图片也可直接送入原数据查看；SD 模型/VAE/LoRA、ComfyUI 工作流只展示不会误套到 NovelAI；全程本地解析，不发送请求、不消耗 Anlas；参数名统一显示为”本地化名称（英文原名）”，每项可单独复制。
 - **AI绘画咒语图库**：原生接入 [AITag](https://aitag.win/) 公开数据源（桌面走受限 IPC 代理，移动端原生 HTTP，均不携带 NovelAI Token），支持作品/作者/标签/模型/ID 搜索、提示词搜索、最新作品/月榜（含年份/季度/指定月份/更早作品筛选）与翻页，可浏览多图作品；元数据复用同一套 NAI/SD WebUI-Forge/ComfyUI 解析器（ComfyUI 节点工作流会结构化提取模型、采样、尺寸、提示词等字段，不再整块倾倒 JSON），兼容参数默认折叠、支持逐项勾选/全选/清空并只应用勾选项，选择会全局记住；预览图片本地缓存，设置页可查看缓存大小、手动清空并设置自动清理周期；离开工具页再返回会恢复此前的工具子页面。桌面端启动后会在后台预热最新作品首屏和前 12 个作品的详情/缩略图，首次进入图库基本秒开，随后静默同步真正最新的数据，不受常规数据缓存影响。
-- **画风实验室**：提供“目标画风反推”和“随机画师组合”两条流程。随机抽卡使用独立的 NovelAI 参数，可同步生成页或恢复软件默认值；结果支持 A/B 风格词对照、失败重试、双击预览和继续变异。收藏会记录实际生成模型，并按 V5 Full、V5 Curated、V4.5 等模型筛选和分组，避免不同模型的画风结果混在一起。桌面端另提供本地相似度迭代模型。
+- **画风实验室**：提供“目标画风反推”和“随机画师组合”两条流程。随机抽卡使用独立的 NovelAI 参数，提供 6 种合法尺寸快捷选择并保留自定义宽高，可同步生成页或恢复软件默认值；结果支持 A/B 风格词对照、失败重试、双击预览和继续变异。收藏会记录实际生成模型，并按 V5 Full、V5 Curated、V4.5 等模型筛选和分组，避免不同模型的画风结果混在一起。桌面端另提供本地相似度迭代模型。
 
 ## 快速开始
 
@@ -105,8 +106,8 @@ npm run pack
 `npm run pack` 现在会同时产出便携版和安装版：
 
 ```text
-release\Langbai-NovelAI-Studio-1.7.9.exe          # 便携版
-release\Langbai-NovelAI-Studio-Setup-1.7.9.exe    # 安装版（NSIS 向导）
+release\Langbai-NovelAI-Studio-1.8.0.exe          # 便携版
+release\Langbai-NovelAI-Studio-Setup-1.8.0.exe    # 安装版（NSIS 向导）
 release\Langbai-NovelAI-Studio.exe                # 便携版稳定别名
 release\latest.yml                                # 安装版应用内更新用的元数据
 ```
@@ -130,9 +131,9 @@ release\NovelAI-Image-Desktop.exe
 推送 `v*` tag 会触发桌面端与移动端两个 workflow，并把所有平台产物汇总到同一个 Release：
 
 ```powershell
-git tag v1.7.9
+git tag v1.8.0
 git push origin main
-git push origin v1.7.9
+git push origin v1.8.0
 ```
 
 如果 Release 上传时报 403，请在仓库 `Settings -> Actions -> General -> Workflow permissions` 中启用 `Read and write permissions`。

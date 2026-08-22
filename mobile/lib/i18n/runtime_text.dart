@@ -25,6 +25,7 @@ const _runtimeText = <String, Map<String, String>>{
     'error.projectJsonRoot': '项目 JSON 根节点必须是对象',
     'status.bootReadFailed': '启动数据读取失败，已使用安全默认值：{error}',
     'status.accountReadFailed': '账号信息暂时无法读取，请检查代理后刷新：{error}',
+    'status.accountSyncStale': '无法同步 NovelAI 官方接口，继续显示上次成功数据',
     'status.anlasRefreshed': '积分已刷新',
     'status.anlasRefreshFailed': '积分刷新失败：{error}',
     'status.translating': '正在翻译...',
@@ -237,6 +238,7 @@ const _runtimeText = <String, Map<String, String>>{
     'error.projectJsonRoot': '專案 JSON 根節點必須是物件',
     'status.bootReadFailed': '啟動資料讀取失敗，已使用安全預設值：{error}',
     'status.accountReadFailed': '帳號資訊暫時無法讀取，請檢查代理後重新整理：{error}',
+    'status.accountSyncStale': '無法同步 NovelAI 官方介面，繼續顯示上次成功資料',
     'status.anlasRefreshed': '積分已重新整理',
     'status.anlasRefreshFailed': '積分重新整理失敗：{error}',
     'status.translating': '正在翻譯...',
@@ -456,6 +458,8 @@ const _runtimeText = <String, Map<String, String>>{
         'Startup data could not be read; safe defaults were used: {error}',
     'status.accountReadFailed':
         'Account info is temporarily unavailable. Check your proxy and refresh: {error}',
+    'status.accountSyncStale':
+        'Could not sync the official NovelAI endpoint; showing the last successful reading',
     'status.anlasRefreshed': 'Anlas refreshed',
     'status.anlasRefreshFailed': 'Failed to refresh Anlas: {error}',
     'status.translating': 'Translating...',
@@ -721,6 +725,7 @@ const _runtimeText = <String, Map<String, String>>{
     'status.bootReadFailed': '起動データを読み込めませんでした。安全なデフォルトを使用しました: {error}',
     'status.accountReadFailed':
         'アカウント情報を一時的に読み込めません。プロキシを確認して更新してください: {error}',
+    'status.accountSyncStale': 'NovelAI 公式エンドポイントと同期できないため、前回成功時の値を表示しています',
     'status.anlasRefreshed': 'Anlas を更新しました',
     'status.anlasRefreshFailed': 'Anlas の更新に失敗しました: {error}',
     'status.translating': '翻訳中...',
@@ -947,6 +952,7 @@ const _runtimeText = <String, Map<String, String>>{
     'status.bootReadFailed': '시작 데이터를 읽을 수 없어 안전 기본값을 사용했습니다: {error}',
     'status.accountReadFailed':
         '계정 정보를 일시적으로 읽을 수 없습니다. 프록시를 확인하고 새로고침하세요: {error}',
+    'status.accountSyncStale': 'NovelAI 공식 엔드포인트와 동기화하지 못해 마지막 성공 데이터를 표시합니다',
     'status.anlasRefreshed': 'Anlas를 새로고침했습니다',
     'status.anlasRefreshFailed': 'Anlas 새로고침 실패: {error}',
     'status.translating': '번역 중...',

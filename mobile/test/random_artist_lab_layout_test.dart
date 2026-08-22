@@ -71,6 +71,37 @@ void main() {
     });
   }
 
+  testWidgets('independent NovelAI generation parameters are directly editable',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(800, 900);
+    addTearDown(tester.view.reset);
+    final state = AppState();
+    addTearDown(state.dispose);
+    await tester.pumpWidget(
+      ChangeNotifierProvider.value(
+        value: state,
+        child: MaterialApp(
+          theme: StudioTheme.light(),
+          home: RandomArtistLabScreen(
+            onBack: () {},
+            artistService: _FakeArtistService(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('NovelAI 生成参数'), findsOneWidget);
+    await tester.tap(find.text('NovelAI 生成参数'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('NAI Diffusion V5 Full'), findsWidgets);
+    expect(find.text('竖图 832×1216'), findsOneWidget);
+    expect(find.text('方形 1024×1024'), findsOneWidget);
+    expect(find.text('大方图 1472×1472'), findsOneWidget);
+    expect(find.text('宽度'), findsOneWidget);
+    expect(find.text('高度'), findsOneWidget);
+  });
+
   testWidgets('failed result exposes a manual retry action', (tester) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(360, 800);

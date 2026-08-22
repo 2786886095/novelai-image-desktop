@@ -9406,6 +9406,10 @@ html.theme-dark #root {
   scrollbar-gutter: stable;
   padding: 20px;
   display: grid;
+  /* This is a scroll document, not a viewport-sized dashboard grid. Without
+     max-content implicit rows, overflow:hidden details panels are allowed to
+     shrink to a 2px border when the whole page is taller than the viewport. */
+  grid-auto-rows: max-content;
   align-content: start;
   gap: 16px;
   background:
@@ -9815,6 +9819,46 @@ html.theme-dark #root {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
 }
+.random-size-presets {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+.random-size-presets > button {
+  min-width: 0;
+  min-height: 48px;
+  display: grid;
+  place-content: center;
+  gap: 2px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--bg-panel);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease, color 140ms ease, box-shadow 140ms ease;
+}
+.random-size-presets > button:hover {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  color: var(--text-primary);
+}
+.random-size-presets > button.active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 11%, var(--bg-panel));
+  color: var(--accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.random-size-presets > button span,
+.random-size-presets > button b {
+  min-width: 0;
+  overflow: hidden;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.random-size-presets > button span { font-size: 11px; }
+.random-size-presets > button b { color: inherit; font-size: 12px; }
 .random-generation-toggles {
   display: flex;
   flex-wrap: wrap;
@@ -10491,6 +10535,7 @@ html.theme-dark #root {
   pointer-events: auto;
   transform: translateY(0);
 }
+.history-item-controls .history-metadata,
 .history-item-controls .history-rename,
 .history-item-controls .history-delete {
   position: static;
@@ -10718,6 +10763,349 @@ html.theme-dark #root {
 }
 @media (max-width: 420px) {
   .reference-preset-grid { grid-template-columns: 1fr; }
+}
+
+/* v1.8.0 — compact, baseline-safe editing surfaces. */
+.menu-actions-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.compact-toolbar .menu-actions-row { margin-left: auto; }
+.account-opus-usage {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  display: grid;
+  gap: 4px;
+  padding: 7px 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--border));
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--bg-panel) 88%, transparent);
+  color: var(--text-secondary);
+  box-shadow: var(--shadow-sm);
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 120ms ease;
+}
+.account-opus-usage:hover {
+  border-color: color-mix(in srgb, var(--accent) 52%, var(--border));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 9%, transparent), var(--shadow-sm);
+}
+.account-opus-usage.stale {
+  border-color: color-mix(in srgb, #f59e0b 42%, var(--border));
+}
+.account-opus-usage.stale .account-opus-label,
+.account-opus-usage.stale .account-opus-main strong { color: var(--warning-text, #9a5800); }
+.account-opus-usage.stale .account-opus-track > span {
+  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+}
+.account-opus-usage:active { transform: scale(.99); }
+.account-opus-usage:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.account-opus-main {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(90px, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+}
+.account-opus-label,
+.account-opus-main strong { color: var(--text-primary); font-size: 11px; font-variant-numeric: tabular-nums; }
+.account-opus-label { color: var(--accent); font-weight: 900; }
+.account-opus-main em { overflow: hidden; color: var(--text-muted); font-size: 10.5px; font-style: normal; text-overflow: ellipsis; white-space: nowrap; }
+.account-opus-explanation {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.3;
+  text-align: left;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.account-opus-track {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-muted) 16%, transparent);
+}
+.account-opus-track > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #7c3aed, #22c1dc);
+  transition: width 500ms cubic-bezier(.2,.8,.2,1);
+}
+.title-account {
+  appearance: none;
+  font-family: inherit;
+  line-height: 1;
+  cursor: default;
+}
+.title-account.has-opus-usage { cursor: pointer; }
+.title-account.has-opus-usage:hover {
+  border-color: color-mix(in srgb, var(--accent) 42%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 10%, transparent), var(--shadow-sm);
+}
+.title-account.has-opus-usage:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.title-opus-usage {
+  padding-left: 7px;
+  border-left: 1px solid color-mix(in srgb, currentColor 24%, transparent);
+  font-variant-numeric: tabular-nums;
+}
+.opus-usage-backdrop { z-index: 1800; }
+.opus-usage-dialog {
+  width: min(460px, calc(100vw - 32px));
+  padding: 22px;
+  display: grid;
+  gap: 16px;
+  overflow: hidden;
+}
+.opus-usage-dialog > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.opus-usage-dialog > header small {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.opus-usage-dialog > header h2 { margin: 0; font-size: 22px; }
+.opus-usage-dialog > header button {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: var(--bg-soft);
+  color: var(--text-primary);
+}
+.opus-usage-dialog > p { margin: 0; color: var(--text-secondary); line-height: 1.6; }
+.opus-usage-value strong {
+  color: var(--text-primary);
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+}
+.opus-usage-track {
+  height: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-muted) 16%, transparent);
+  box-shadow: inset 0 1px 2px rgba(0,0,0,.08);
+}
+.opus-usage-track > div {
+  height: 100%;
+  min-width: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #7c3aed, #22c1dc);
+  transition: width 500ms cubic-bezier(.2,.8,.2,1);
+}
+.opus-usage-refill { font-size: 13px; }
+.opus-usage-warning {
+  padding: 10px 12px;
+  border-radius: 12px;
+  color: var(--warning-text, #9a5800) !important;
+  background: color-mix(in srgb, #f59e0b 12%, transparent);
+}
+.opus-usage-dialog > footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 4px;
+}
+.opus-usage-dialog > footer > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.opus-usage-dialog > footer .pulse-dot { background: var(--success); }
+.opus-usage-dialog > footer > span.stale { color: var(--warning-text, #9a5800); }
+.opus-usage-dialog > footer > span.stale .pulse-dot { background: #f59e0b; }
+
+.random-artist-settings > label {
+  grid-template-rows: max-content 44px minmax(1.5em, max-content);
+  align-content: start;
+}
+.random-artist-settings input[type="number"],
+.random-generation-settings input[type="number"],
+.artist-weight-tuner-grid input[type="number"] {
+  height: 44px;
+  min-height: 44px;
+  box-sizing: border-box;
+  font-variant-numeric: tabular-nums;
+}
+.random-generation-settings > summary {
+  border-bottom: 1px solid transparent;
+  transition: border-color 180ms ease, background-color 180ms ease;
+}
+.random-generation-settings[open] > summary {
+  border-bottom-color: var(--border);
+  background: color-mix(in srgb, var(--accent-soft) 38%, transparent);
+}
+.artist-weight-tuner {
+  padding: 0;
+  overflow: hidden;
+}
+.artist-weight-tuner > summary {
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  transition: background-color 180ms ease;
+}
+.artist-weight-tuner[open] > summary {
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--accent-soft) 28%, transparent);
+}
+.artist-weight-tuner-grid {
+  margin: 0;
+  padding: 14px 16px 16px;
+}
+.artist-weight-tuner-grid textarea,
+.artist-weight-tuner-grid input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font: inherit;
+  outline: 0;
+  transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+}
+.artist-weight-tuner-grid textarea {
+  min-height: 104px;
+  padding: 11px 12px;
+  line-height: 1.5;
+}
+.artist-weight-tuner-grid input { padding: 0 12px; }
+.artist-weight-tuner-grid textarea:focus,
+.artist-weight-tuner-grid input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 17%, transparent);
+}
+.artist-weight-tuner-submit {
+  width: auto;
+  min-width: 210px;
+  min-height: 44px;
+  justify-self: start;
+  grid-column: 1 / -1;
+}
+.artist-weight-tuner-submit:disabled {
+  background: var(--bg-soft);
+  color: var(--text-muted);
+  border-color: var(--border);
+  box-shadow: none;
+}
+
+.history-item-controls {
+  left: auto;
+  width: max-content;
+  grid-template-columns: repeat(4, 36px);
+  gap: 6px;
+}
+.history-item-controls .history-metadata,
+.history-item-controls .history-rename,
+.history-item-controls .history-delete,
+.history-item-controls .history-item-group-trigger.select-menu-trigger {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0;
+  place-items: center;
+  border-radius: 10px;
+}
+.history-item-controls .history-item-group-trigger.select-menu-trigger {
+  display: grid;
+}
+.history-item-controls .history-item-group-trigger .select-menu-label {
+  display: grid;
+  place-items: center;
+  color: currentColor;
+}
+.history-item-controls .history-item-group-trigger .select-menu-value,
+.history-item-controls .history-item-group-trigger .select-menu-chevron {
+  display: none;
+}
+.history-item-controls .history-item-group-trigger .ui-icon,
+.history-item-controls .history-metadata .ui-icon,
+.history-item-controls .history-rename .ui-icon,
+.history-item-controls .history-delete .ui-icon {
+  width: 17px;
+  height: 17px;
+}
+
+.reference-preset-search-row {
+  grid-template-columns: minmax(260px, 1fr) minmax(190px, .34fr) minmax(120px, .16fr);
+  align-items: start;
+}
+.reference-preset-search-row > .field {
+  min-width: 0;
+  display: grid;
+  grid-template-rows: 18px 44px;
+  gap: 6px;
+  margin: 0;
+  align-content: start;
+}
+.reference-preset-search-row > .field > span {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 18px;
+}
+.reference-preset-search-row .select-menu-trigger,
+.reference-preset-search-row input {
+  height: 44px;
+  min-height: 44px;
+  margin: 0;
+  box-sizing: border-box;
+}
+
+@media (hover: none), (pointer: coarse) {
+  .history-item-controls {
+    width: auto;
+    grid-template-columns: repeat(4, minmax(44px, 1fr));
+  }
+  .history-item-controls .history-metadata,
+  .history-item-controls .history-rename,
+  .history-item-controls .history-delete,
+  .history-item-controls .history-item-group-trigger.select-menu-trigger {
+    width: 100%;
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 760px) {
+  .reference-preset-search-row { grid-template-columns: 1fr; }
+  .artist-weight-tuner-submit { width: 100%; min-width: 0; }
+  .opus-usage-dialog { padding: 18px; }
+  .opus-usage-dialog > footer { align-items: stretch; flex-direction: column; }
+  .opus-usage-dialog > footer .btn { width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .opus-usage-track > div { transition: none; }
 }
 /* Online character reference catalog */
 .reference-catalog-panel { margin-top: 0; --weui-BRAND: var(--accent); --weui-BRAND-100: var(--accent); --weui-BG-2: var(--bg-dialog); --weui-FG-0: var(--text-primary); --weui-FG-1: var(--text-muted); background: var(--bg-dialog); color: var(--text-primary); }

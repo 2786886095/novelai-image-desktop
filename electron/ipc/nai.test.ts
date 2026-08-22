@@ -1,10 +1,12 @@
 import FormData from "form-data";
+import fs from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   buildPayload,
   buildGenerateImageHttpBody,
   isOfficialNaiHost,
   isPreflightNetworkFailure,
+  parseAccount,
   prepareImageBufferForSave,
   stripPngMetadata,
 } from "./nai";
@@ -91,6 +93,42 @@ describe("persisted generation parameter migration", () => {
       sampler: "k_euler_ancestral",
       seed: 1,
     });
+  });
+});
+
+describe("NovelAI V5 Opus usage parsing", () => {
+  it("uses the official image API user-data route for live allowance refresh", () => {
+    const source = fs.readFileSync(new URL("./nai.ts", import.meta.url), "utf8");
+    expect(source).toContain('"https://image.novelai.net"');
+    expect(source).toContain('axios.get(`${imageBaseUrl}/user/data`');
+  });
+
+  it("keeps the official percentage, exhaustion flag, and refill interval", () => {
+    const account = parseAccount({
+      subscription: {
+        tier: 3,
+        active: true,
+        trainingStepsLeft: { fixedTrainingStepsLeft: 10000, purchasedTrainingSteps: 25 },
+        usage: { percent: 73.4, isNegative: false, timeUntilNextPercent: 6041.958 },
+      },
+    });
+    expect(account).toMatchObject({
+      tierName: "Opus",
+      tierLevel: 3,
+      anlasBalance: 10025,
+      opusUsage: { percent: 73.4, isNegative: false, timeUntilNextPercent: 6041.958 },
+    });
+    expect(account.opusUsageUpdatedAt).toBeTypeOf("number");
+  });
+
+  it("does not invent usage when the official response omits it", () => {
+    expect(parseAccount({ subscription: { tier: 2 } }).opusUsage).toBeUndefined();
+  });
+
+  it("accepts the wrappers observed from the official web account route", () => {
+    const usage = { percent: 41.2, isNegative: false, timeUntilNextPercent: 7000 };
+    expect(parseAccount({ information: { subscription: { tier: 3, usage } } }).opusUsage).toEqual(usage);
+    expect(parseAccount({ data: { information: { subscription: { tier: 3, usage } } } }).opusUsage).toEqual(usage);
   });
 });
 

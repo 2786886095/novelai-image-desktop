@@ -28,6 +28,179 @@ bool _isRoomyPhoneLandscape(BuildContext context) {
       size.width >= 700;
 }
 
+Map<String, String> _opusUsageText(String language) {
+  switch (language) {
+    case 'zh-TW':
+      return {
+        'title': 'Opus 生成使用限制',
+        'body':
+            'Opus 包含一般解析度、最多 28 步的免費 NovelAI Diffusion V5 生成。額度會自動補充；用完後仍可消耗 Anlas。',
+        'remaining': '剩餘',
+        'images': '張圖片',
+        'refill': '目前每天恢復',
+        'unavailable': '官網暫未返回 V5 Opus 額度資料。',
+        'empty': '免費額度已用完，V5 生成將消耗 Anlas。',
+        'synced': '已從 NovelAI 官方介面即時同步',
+        'stale': '官網同步失敗，目前顯示上次成功資料',
+        'refresh': '重新整理',
+        'close': '關閉'
+      };
+    case 'en-US':
+      return {
+        'title': 'Opus Generation Usage Limit',
+        'body':
+            'Opus includes free NovelAI Diffusion V5 generations at normal resolutions and up to 28 steps. The allowance refills automatically; after it is depleted, V5 can still spend Anlas.',
+        'remaining': 'remaining',
+        'images': 'images',
+        'refill': 'Currently refills per day',
+        'unavailable': 'NovelAI did not return V5 Opus allowance data yet.',
+        'empty': 'The free allowance is depleted; V5 will spend Anlas.',
+        'synced': 'Live data synced from the official NovelAI endpoint',
+        'stale': 'Official sync failed; showing the last successful reading',
+        'refresh': 'Refresh',
+        'close': 'Close'
+      };
+    case 'ja-JP':
+      return {
+        'title': 'Opus 生成使用上限',
+        'body':
+            'Opus では通常解像度・最大 28 ステップの NovelAI Diffusion V5 生成を無料枠で利用できます。枠は自動回復し、使い切った後も Anlas を消費できます。',
+        'remaining': '残り',
+        'images': '枚',
+        'refill': '1 日の回復',
+        'unavailable': 'NovelAI から V5 Opus 枠の情報が返されていません。',
+        'empty': '無料枠を使い切りました。V5 は Anlas を消費します。',
+        'synced': 'NovelAI 公式エンドポイントからリアルタイム同期済み',
+        'stale': '公式同期に失敗したため、前回成功時の値を表示中',
+        'refresh': '更新',
+        'close': '閉じる'
+      };
+    case 'ko-KR':
+      return {
+        'title': 'Opus 생성 사용 한도',
+        'body':
+            'Opus에는 일반 해상도와 최대 28스텝의 무료 NovelAI Diffusion V5 생성이 포함됩니다. 한도는 자동 회복되며, 소진 후에도 Anlas를 사용할 수 있습니다.',
+        'remaining': '남음',
+        'images': '장',
+        'refill': '하루 회복',
+        'unavailable': 'NovelAI에서 V5 Opus 한도 데이터를 반환하지 않았습니다.',
+        'empty': '무료 한도를 모두 사용했습니다. V5는 Anlas를 소모합니다.',
+        'synced': 'NovelAI 공식 엔드포인트에서 실시간 동기화됨',
+        'stale': '공식 동기화에 실패하여 마지막 성공 데이터를 표시 중',
+        'refresh': '새로고침',
+        'close': '닫기'
+      };
+    default:
+      return {
+        'title': 'Opus 生成使用限制',
+        'body':
+            'Opus 包含普通分辨率、最多 28 步的免费 NovelAI Diffusion V5 生成。额度会自动补充；用完后仍可消耗 Anlas。',
+        'remaining': '剩余',
+        'images': '张图片',
+        'refill': '目前每天恢复',
+        'unavailable': '官网暂未返回 V5 Opus 额度数据。',
+        'empty': '免费额度已用完，V5 生成将消耗 Anlas。',
+        'synced': '已从 NovelAI 官方接口实时同步',
+        'stale': '官网同步失败，当前显示上次成功数据',
+        'refresh': '刷新',
+        'close': '关闭'
+      };
+  }
+}
+
+Future<void> _showOpusUsageDialog(BuildContext context) async {
+  await showDialog<void>(
+    context: context,
+    builder: (dialogContext) => Consumer<AppState>(
+      builder: (context, state, _) {
+        final text = _opusUsageText(state.settings.language);
+        final usage = state.account.opusUsage;
+        final percent = usage == null
+            ? 0.0
+            : (usage.isNegative ? 0.0 : usage.percent.clamp(0, 100).toDouble());
+        final images = (17.3 * percent).round();
+        final refill = usage != null && usage.timeUntilNextPercent > 0
+            ? (86400 / usage.timeUntilNextPercent * 10).round() / 10
+            : 0.0;
+        final refillImages = (17.3 * refill).round();
+        final officialSyncOk =
+            !state.account.stale && state.account.opusUsageUpdatedAt != null;
+        return AlertDialog(
+          title: Text(text['title']!),
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 430),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(text['body']!),
+                const SizedBox(height: 18),
+                if (usage != null) ...[
+                  Text(
+                    '${text['remaining']} ${percent.toStringAsFixed(percent % 1 == 0 ? 0 : 1)}% (~$images ${text['images']})',
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 8),
+                  Semantics(
+                    label: '${text['remaining']} $percent%',
+                    value: '$percent%',
+                    child: LinearProgressIndicator(
+                      value: percent / 100,
+                      minHeight: 12,
+                      borderRadius: BorderRadius.circular(99),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                      '${text['refill']} ${refill.toStringAsFixed(refill % 1 == 0 ? 0 : 1)}% (~$refillImages ${text['images']})'),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Icon(
+                        !officialSyncOk
+                            ? Icons.sync_problem_outlined
+                            : Icons.cloud_done_outlined,
+                        size: 16,
+                        color: !officialSyncOk
+                            ? Theme.of(context).colorScheme.error
+                            : Theme.of(context).colorScheme.primary,
+                      ),
+                      const SizedBox(width: 7),
+                      Expanded(
+                        child: Text(
+                          !officialSyncOk ? text['stale']! : text['synced']!,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (usage.isNegative) ...[
+                    const SizedBox(height: 10),
+                    Text(text['empty']!,
+                        style: TextStyle(
+                            color: Theme.of(context).colorScheme.error)),
+                  ],
+                ] else
+                  Text(text['unavailable']!),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: state.refreshAnlas, child: Text(text['refresh']!)),
+            FilledButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: Text(text['close']!)),
+          ],
+        );
+      },
+    ),
+  );
+}
+
 class GenerateScreen extends StatelessWidget {
   const GenerateScreen({super.key});
 
@@ -48,6 +221,8 @@ class GenerateScreen extends StatelessWidget {
     final windowClass = StudioBreakpoints.classify(size);
     final landscapePhone = _isRoomyPhoneLandscape(context);
     final wide = windowClass != StudioWindowClass.phone || landscapePhone;
+    final showV5Allowance =
+        state.account.tierLevel == 3 && p.model.startsWith('nai-diffusion-5-');
 
     final preview = _PreviewCard(onPick: () => _pickImage(context));
     final controls = <Widget>[
@@ -131,17 +306,21 @@ class GenerateScreen extends StatelessWidget {
               maxWidth: landscapePhone ? 166 : double.infinity,
             ),
             child: TextButton.icon(
-              onPressed: state.refreshAnlas,
+              onPressed: showV5Allowance
+                  ? () => _showOpusUsageDialog(context)
+                  : state.refreshAnlas,
               style: landscapePhone
                   ? TextButton.styleFrom(
                       visualDensity: VisualDensity.compact,
                       padding: const EdgeInsets.symmetric(horizontal: 8),
                     )
                   : null,
-              icon: const Icon(Icons.refresh),
+              icon: Icon(state.account.stale
+                  ? Icons.sync_problem_outlined
+                  : Icons.refresh),
               label: Text(
                 state.account.hasToken
-                    ? '${state.account.tierName ?? "API"} · ${state.account.anlasBalance ?? "—"}'
+                    ? '${state.account.tierName ?? "API"} · ${state.account.anlasBalance ?? "—"}${!showV5Allowance || state.account.opusUsage == null ? "" : " · V5 ${state.account.opusUsage!.isNegative ? 0 : state.account.opusUsage!.percent.clamp(0, 100).round()}%"}'
                     : text.notConfigured,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
