@@ -7,11 +7,19 @@ import 'package:provider/provider.dart';
 
 import '../i18n/app_locales.dart';
 import '../images/png_metadata.dart';
+import '../models/nai_models.dart';
 import '../state/app_state.dart';
 
 typedef _MetadataText = ({
   String title,
   String subtitle,
+  String historyTitle,
+  String historyHint,
+  String historyGroup,
+  String historyAll,
+  String historyUngrouped,
+  String historyEmpty,
+  String historyMore,
   String choose,
   String replace,
   String dropHint,
@@ -37,12 +45,38 @@ typedef _MetadataText = ({
   String readFailed,
 });
 
+const _metadataUngrouped = '__metadata_ungrouped__';
+
+/// Reads a history image through the same session-only snapshot path used by
+/// manual imports. Kept outside the widget so the grouped-history action can be
+/// verified without an image picker or navigation shell.
+Future<({ImageMetadataReport report, File file, String name})>
+    inspectHistoryImageMetadata(AppState appState, HistoryItem item) async {
+  final source = File(item.filePath);
+  if (!source.existsSync()) throw StateError('missing history image');
+  final bytes = await source.readAsBytes();
+  final report = inspectImageMetadata(parseImageTextMetadata(bytes));
+  final fileName = source.uri.pathSegments.isEmpty
+      ? item.filePath
+      : source.uri.pathSegments.last;
+  final snapshot =
+      await appState.storage.saveMetadataInspectorImage(bytes, fileName);
+  return (report: report, file: snapshot.file, name: fileName);
+}
+
 _MetadataText _metadataTextFor(Object? language) {
   switch (normalizeAppLocaleCode(language)) {
     case 'zh-TW':
       return (
         title: '恢復圖片原始資料',
         subtitle: '讀取 NovelAI、Stable Diffusion WebUI / Forge 與 ComfyUI 圖片內嵌參數。',
+        historyTitle: '從分組記錄選擇',
+        historyHint: '直接點選分組中的圖片，即可查看其完整原始資料。',
+        historyGroup: '圖片分組',
+        historyAll: '全部分組',
+        historyUngrouped: '未分組',
+        historyEmpty: '此分組暫無可讀取的圖片',
+        historyMore: '載入更多',
         choose: '選擇原始圖片',
         replace: '更換圖片',
         dropHint: '支援 PNG、JPG、JPEG、WebP。請盡量選擇未經聊天軟體壓縮的原圖。',
@@ -72,6 +106,14 @@ _MetadataText _metadataTextFor(Object? language) {
         title: 'Restore Image Metadata',
         subtitle:
             'Read embedded NovelAI, Stable Diffusion WebUI / Forge, and ComfyUI generation data.',
+        historyTitle: 'Choose from grouped history',
+        historyHint:
+            'Tap an image in any group to inspect its complete metadata.',
+        historyGroup: 'Image group',
+        historyAll: 'All groups',
+        historyUngrouped: 'Ungrouped',
+        historyEmpty: 'No readable images in this group',
+        historyMore: 'Load more',
         choose: 'Choose original image',
         replace: 'Replace image',
         dropHint:
@@ -106,6 +148,13 @@ _MetadataText _metadataTextFor(Object? language) {
         title: '画像の元データを復元',
         subtitle:
             'NovelAI、Stable Diffusion WebUI / Forge、ComfyUI の埋め込み生成情報を読み取ります。',
+        historyTitle: 'グループ履歴から選択',
+        historyHint: 'グループ内の画像をタップすると、完全な元データを確認できます。',
+        historyGroup: '画像グループ',
+        historyAll: 'すべてのグループ',
+        historyUngrouped: '未分類',
+        historyEmpty: 'このグループに読み取れる画像はありません',
+        historyMore: 'さらに読み込む',
         choose: '元画像を選択',
         replace: '画像を変更',
         dropHint: 'PNG、JPG、JPEG、WebP に対応。可能な限り未圧縮の元画像を選択してください。',
@@ -135,6 +184,13 @@ _MetadataText _metadataTextFor(Object? language) {
         title: '이미지 원본 데이터 복원',
         subtitle:
             'NovelAI, Stable Diffusion WebUI / Forge, ComfyUI 이미지의 내장 생성 정보를 읽습니다.',
+        historyTitle: '그룹 기록에서 선택',
+        historyHint: '그룹의 이미지를 누르면 전체 원본 데이터를 확인할 수 있습니다.',
+        historyGroup: '이미지 그룹',
+        historyAll: '모든 그룹',
+        historyUngrouped: '미분류',
+        historyEmpty: '이 그룹에 읽을 수 있는 이미지가 없습니다',
+        historyMore: '더 불러오기',
         choose: '원본 이미지 선택',
         replace: '이미지 변경',
         dropHint: 'PNG, JPG, JPEG, WebP 지원. 가능하면 압축되지 않은 원본을 선택하세요.',
@@ -163,6 +219,13 @@ _MetadataText _metadataTextFor(Object? language) {
       return (
         title: '恢复图片原数据',
         subtitle: '读取 NovelAI、Stable Diffusion WebUI / Forge 与 ComfyUI 图片内嵌参数。',
+        historyTitle: '从分组记录选择',
+        historyHint: '直接点击分组中的图片，即可查看其完整原数据。',
+        historyGroup: '图片分组',
+        historyAll: '全部分组',
+        historyUngrouped: '未分组',
+        historyEmpty: '该分组暂无可读取的图片',
+        historyMore: '加载更多',
         choose: '选择原始图片',
         replace: '更换图片',
         dropHint: '支持 PNG、JPG、JPEG、WebP。请尽量选择未经聊天软件压缩的原图。',
@@ -506,6 +569,10 @@ class _MetadataInspectorScreenState extends State<MetadataInspectorScreen> {
   String? _filePath;
   String _fileName = '';
   bool _reading = false;
+  bool _historyOpen = true;
+  String _historyGroupId = '';
+  String? _historyReadingId;
+  int _historyDisplayLimit = 60;
 
   @override
   void initState() {
@@ -558,6 +625,31 @@ class _MetadataInspectorScreenState extends State<MetadataInspectorScreen> {
     }
   }
 
+  Future<void> _readHistoryImage(
+    AppState appState,
+    HistoryItem item,
+    _MetadataText text,
+  ) async {
+    setState(() => _historyReadingId = item.id);
+    try {
+      final result = await inspectHistoryImageMetadata(appState, item);
+      if (!mounted) return;
+      setState(() {
+        _report = result.report;
+        _filePath = result.file.path;
+        _fileName = result.name;
+        _historyOpen = false;
+      });
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(text.readFailed)));
+      }
+    } finally {
+      if (mounted) setState(() => _historyReadingId = null);
+    }
+  }
+
   String _source(_MetadataText text, ImageMetadataKind kind) => switch (kind) {
         ImageMetadataKind.novelAi => text.sourceNovelAi,
         ImageMetadataKind.stableDiffusion => text.sourceSd,
@@ -578,6 +670,13 @@ class _MetadataInspectorScreenState extends State<MetadataInspectorScreen> {
     final text = _metadataTextFor(state.settings.language);
     final report = _report;
     final compatible = report?.imported.compatibleValues ?? const {};
+    final history = state.history.where((item) {
+      if (_historyGroupId == _metadataUngrouped) {
+        return item.groupId == null || item.groupId!.isEmpty;
+      }
+      return _historyGroupId.isEmpty || item.groupId == _historyGroupId;
+    }).toList(growable: false);
+    final visibleHistory = history.take(_historyDisplayLimit).toList();
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -595,6 +694,24 @@ class _MetadataInspectorScreenState extends State<MetadataInspectorScreen> {
             padding: const EdgeInsets.all(16),
             children: [
               Text(text.subtitle, style: Theme.of(context).textTheme.bodyLarge),
+              const SizedBox(height: 12),
+              _HistoryMetadataPicker(
+                text: text,
+                groups: state.groups,
+                items: visibleHistory,
+                totalCount: history.length,
+                selectedGroupId: _historyGroupId,
+                expanded: _historyOpen,
+                readingId: _historyReadingId,
+                onExpandedChanged: (value) =>
+                    setState(() => _historyOpen = value),
+                onGroupChanged: (value) => setState(() {
+                  _historyGroupId = value;
+                  _historyDisplayLimit = 60;
+                }),
+                onSelect: (item) => _readHistoryImage(state, item, text),
+                onLoadMore: () => setState(() => _historyDisplayLimit += 60),
+              ),
               const SizedBox(height: 12),
               Card(
                 clipBehavior: Clip.antiAlias,
@@ -829,6 +946,210 @@ class _MetadataInspectorScreenState extends State<MetadataInspectorScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _HistoryMetadataPicker extends StatelessWidget {
+  final _MetadataText text;
+  final List<HistoryGroup> groups;
+  final List<HistoryItem> items;
+  final int totalCount;
+  final String selectedGroupId;
+  final bool expanded;
+  final String? readingId;
+  final ValueChanged<bool> onExpandedChanged;
+  final ValueChanged<String> onGroupChanged;
+  final ValueChanged<HistoryItem> onSelect;
+  final VoidCallback onLoadMore;
+
+  const _HistoryMetadataPicker({
+    required this.text,
+    required this.groups,
+    required this.items,
+    required this.totalCount,
+    required this.selectedGroupId,
+    required this.expanded,
+    required this.readingId,
+    required this.onExpandedChanged,
+    required this.onGroupChanged,
+    required this.onSelect,
+    required this.onLoadMore,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          ListTile(
+            leading: const Icon(Icons.photo_library_outlined),
+            title: Text(text.historyTitle),
+            subtitle: Text(text.historyHint),
+            trailing: Icon(expanded ? Icons.expand_less : Icons.expand_more),
+            onTap: () => onExpandedChanged(!expanded),
+          ),
+          AnimatedCrossFade(
+            firstChild: const SizedBox(width: double.infinity),
+            secondChild: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  DropdownButtonFormField<String>(
+                    value: selectedGroupId,
+                    isExpanded: true,
+                    decoration: InputDecoration(
+                      labelText: text.historyGroup,
+                      prefixIcon: const Icon(Icons.folder_outlined),
+                    ),
+                    items: [
+                      DropdownMenuItem(
+                        value: '',
+                        child: Text(text.historyAll,
+                            overflow: TextOverflow.ellipsis),
+                      ),
+                      DropdownMenuItem(
+                        value: _metadataUngrouped,
+                        child: Text(text.historyUngrouped,
+                            overflow: TextOverflow.ellipsis),
+                      ),
+                      ...groups.map(
+                        (group) => DropdownMenuItem(
+                          value: group.id,
+                          child:
+                              Text(group.name, overflow: TextOverflow.ellipsis),
+                        ),
+                      ),
+                    ],
+                    onChanged: (value) => onGroupChanged(value ?? ''),
+                  ),
+                  const SizedBox(height: 12),
+                  if (items.isEmpty)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 24),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surfaceContainerLow,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Column(
+                        children: [
+                          Icon(Icons.image_not_supported_outlined,
+                              color: theme.colorScheme.outline),
+                          const SizedBox(height: 8),
+                          Text(text.historyEmpty,
+                              textAlign: TextAlign.center,
+                              style: theme.textTheme.bodyMedium),
+                        ],
+                      ),
+                    )
+                  else
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final columns = constraints.maxWidth < 420
+                            ? 2
+                            : constraints.maxWidth < 720
+                                ? 4
+                                : 6;
+                        final rows =
+                            (items.length / columns).ceil().clamp(1, 2);
+                        final cellWidth =
+                            (constraints.maxWidth - (columns - 1) * 10) /
+                                columns;
+                        final height =
+                            rows * (cellWidth * 1.22) + (rows - 1) * 10;
+                        return SizedBox(
+                          height: height.clamp(150, 360).toDouble(),
+                          child: GridView.builder(
+                            itemCount: items.length,
+                            gridDelegate:
+                                SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: columns,
+                              crossAxisSpacing: 10,
+                              mainAxisSpacing: 10,
+                              childAspectRatio: .82,
+                            ),
+                            itemBuilder: (context, index) {
+                              final item = items[index];
+                              final file = File(item.filePath);
+                              final fileName = file.uri.pathSegments.isEmpty
+                                  ? item.filePath
+                                  : file.uri.pathSegments.last;
+                              final reading = readingId == item.id;
+                              return Material(
+                                key: ValueKey('metadata-history-${item.id}'),
+                                color: theme.colorScheme.surfaceContainerLow,
+                                borderRadius: BorderRadius.circular(12),
+                                clipBehavior: Clip.antiAlias,
+                                child: InkWell(
+                                  onTap: reading ? null : () => onSelect(item),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      Expanded(
+                                        child: Stack(
+                                          fit: StackFit.expand,
+                                          children: [
+                                            Image.file(
+                                              file,
+                                              fit: BoxFit.contain,
+                                              cacheWidth: 320,
+                                              errorBuilder: (_, __, ___) =>
+                                                  const Center(
+                                                child: Icon(Icons.broken_image),
+                                              ),
+                                            ),
+                                            if (reading)
+                                              const ColoredBox(
+                                                color: Colors.black26,
+                                                child: Center(
+                                                  child:
+                                                      CircularProgressIndicator(),
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                      ),
+                                      Padding(
+                                        padding: const EdgeInsets.all(8),
+                                        child: Text(
+                                          fileName,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: theme.textTheme.labelMedium,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        );
+                      },
+                    ),
+                  if (items.length < totalCount) ...[
+                    const SizedBox(height: 10),
+                    OutlinedButton.icon(
+                      onPressed: onLoadMore,
+                      icon: const Icon(Icons.expand_more),
+                      label: Text('${text.historyMore} '
+                          '(${items.length}/$totalCount)'),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            crossFadeState:
+                expanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+            duration: const Duration(milliseconds: 180),
+          ),
+        ],
       ),
     );
   }

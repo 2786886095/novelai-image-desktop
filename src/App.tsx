@@ -2759,6 +2759,9 @@ function AccountAndRunButton({
   const [showOpusUsage, setShowOpusUsage] = useState(
     () => new URLSearchParams(window.location.search).get("uiCapture") === "opusUsage",
   );
+  const [accountDetailsCollapsed, setAccountDetailsCollapsed] = useState(
+    () => localStorage.getItem("langbai.account-details-collapsed") === "1",
+  );
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
   const showV5Allowance = account.tierLevel === 3 && Boolean(model && isNAIV5Model(model));
@@ -2778,42 +2781,65 @@ function AccountAndRunButton({
       setRefreshingAccount(false);
     }
   }
+  function toggleAccountDetails() {
+    setAccountDetailsCollapsed((collapsed) => {
+      const next = !collapsed;
+      localStorage.setItem("langbai.account-details-collapsed", next ? "1" : "0");
+      return next;
+    });
+  }
   return (
     <div className="left-footer">
-      <div className="account-mini">
-        <div>
-          <strong>{account.hasToken ? account.tierName ?? t("account.configured") : t("account.notSet")}</strong>
-          <small>
-            {f("account.anlas", { balance: account.anlasBalance ?? t("common.unknown") })}
-            {account.expiresAt ? f("account.expires", { date: account.expiresAt }) : ""}
-          </small>
-        </div>
-        <button type="button" onClick={() => void refreshBalance()} disabled={!account.hasToken || refreshingAccount}>
-          {refreshingAccount ? t("account.refreshing") : t("account.refresh")}
-        </button>
-      </div>
-      {showV5Allowance && (
+      <div className={clsx("account-details-shell", accountDetailsCollapsed && "collapsed")}>
         <button
           type="button"
-          className={`account-opus-usage${account.stale ? " stale" : ""}`}
-          aria-label={account.stale ? t("opusUsage.stale") : t("opusUsage.open")}
-          onClick={() => setShowOpusUsage(true)}
+          className="account-details-toggle"
+          onClick={toggleAccountDetails}
+          aria-expanded={!accountDetailsCollapsed}
+          aria-label={accountDetailsCollapsed ? t("account.expandDetails") : t("account.collapseDetails")}
+          title={accountDetailsCollapsed ? t("account.expandDetails") : t("account.collapseDetails")}
         >
-          <span className="account-opus-main">
-            <span className="account-opus-label">V5</span>
-            <span className="account-opus-track" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={usagePercent ?? 0}>
-              <span style={{ width: `${usagePercent ?? 0}%` }} />
-            </span>
-            <strong>{usagePercent === null ? "--" : `${usagePercent}%`}</strong>
-            <em>{remainingImages === null ? t("opusUsage.unavailable") : f("opusUsage.compactImages", { images: remainingImages })}</em>
-          </span>
-          <small className="account-opus-explanation">
-            {refillPercent === null || refillImages === null
-              ? t("opusUsage.compactRule")
-              : f("opusUsage.compactExplanation", { percent: refillPercent, images: refillImages })}
-          </small>
+          <Icon name="chevronRight" className={clsx("disclosure-chevron", !accountDetailsCollapsed && "open")} />
         </button>
-      )}
+        {!accountDetailsCollapsed && (
+          <div className="account-details-content">
+            <div className="account-mini">
+              <div>
+                <strong>{account.hasToken ? account.tierName ?? t("account.configured") : t("account.notSet")}</strong>
+                <small>
+                  {f("account.anlas", { balance: account.anlasBalance ?? t("common.unknown") })}
+                  {account.expiresAt ? f("account.expires", { date: account.expiresAt }) : ""}
+                </small>
+              </div>
+              <button type="button" onClick={() => void refreshBalance()} disabled={!account.hasToken || refreshingAccount}>
+                {refreshingAccount ? t("account.refreshing") : t("account.refresh")}
+              </button>
+            </div>
+            {showV5Allowance && (
+              <button
+                type="button"
+                className={`account-opus-usage${account.stale ? " stale" : ""}`}
+                aria-label={account.stale ? t("opusUsage.stale") : t("opusUsage.open")}
+                onClick={() => setShowOpusUsage(true)}
+              >
+                <span className="account-opus-main">
+                  <span className="account-opus-label">V5</span>
+                  <span className="account-opus-track" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={usagePercent ?? 0}>
+                    <span style={{ width: `${usagePercent ?? 0}%` }} />
+                  </span>
+                  <strong>{usagePercent === null ? "--" : `${usagePercent}%`}</strong>
+                  <em>{remainingImages === null ? t("opusUsage.unavailable") : f("opusUsage.compactImages", { images: remainingImages })}</em>
+                </span>
+                <small className="account-opus-explanation">
+                  {refillPercent === null || refillImages === null
+                    ? t("opusUsage.compactRule")
+                    : f("opusUsage.compactExplanation", { percent: refillPercent, images: refillImages })}
+                </small>
+              </button>
+            )}
+          </div>
+        )}
+      </div>
       {!account.hasToken ? (
         <Button variant="primary" className="full" onClick={openSettings}>
           <IconText icon={<Icon name="key" />}>{t("account.setupFirst")}</IconText>
@@ -4598,11 +4624,9 @@ function HistoryPanel() {
     }
   }
 
-  function confirmDeleteItem(item: HistoryItem) {
-    const fileName = item.filePath.split(/[\\/]/).pop() ?? t("history.thumbAlt");
-    if (window.confirm(f("history.deleteImageConfirm", { name: fileName }))) {
-      void deleteHistory(item.id);
-    }
+  async function deleteItem(item: HistoryItem) {
+    const deleted = await deleteHistory(item.id);
+    if (deleted) setToast(t("history.deleteImageDone"));
   }
 
   async function inspectHistoryMetadata(item: HistoryItem) {
@@ -4694,27 +4718,31 @@ function HistoryPanel() {
                   onError={() => void useAppStore.getState().dropMissingImage(item.id)}
                 />
               </div>
-              <span className="history-meta">{item.model} · {item.width}×{item.height}</span>
             </button>
+            <div className="history-item-footer">
+              <span className="history-meta">{item.model} · {item.width}×{item.height}</span>
+              <div className="history-item-group-row" onClick={(event) => event.stopPropagation()}>
+                <SelectMenu
+                  className="history-item-group-trigger"
+                  value={item.groupId ?? ""}
+                  ariaLabel={t("history.itemGroupTitle")}
+                  label={<Icon name="folder" />}
+                  options={[
+                    { value: "", label: t("history.ungrouped") },
+                    ...groups.map((group) => ({ value: group.id, label: group.name })),
+                  ]}
+                  onChange={(value) => void setHistoryItemGroup(item.id, value || undefined)}
+                />
+              </div>
+            </div>
             <div className="history-item-controls" onClick={(event) => event.stopPropagation()}>
-              <button className="history-metadata" title={t("history.metadataTitle")} onClick={() => void inspectHistoryMetadata(item)}>
+              <button className="history-metadata" title={t("history.metadataTitle")} aria-label={t("history.metadataTitle")} onClick={() => void inspectHistoryMetadata(item)}>
                 <Icon name="eye" />
               </button>
-              <SelectMenu
-                className="history-item-group-trigger"
-                value={item.groupId ?? ""}
-                ariaLabel={t("history.itemGroupTitle")}
-                label={<Icon name="folder" />}
-                options={[
-                  { value: "", label: t("history.ungrouped") },
-                  ...groups.map((group) => ({ value: group.id, label: group.name })),
-                ]}
-                onChange={(value) => void setHistoryItemGroup(item.id, value || undefined)}
-              />
-              <button className="history-rename" title={t("history.renameImageTitle")} onClick={() => renameItem(item)}>
+              <button className="history-rename" title={t("history.renameImageTitle")} aria-label={t("history.renameImageTitle")} onClick={() => renameItem(item)}>
                 <Icon name="brush" />
               </button>
-              <button className="history-delete" title={t("history.deleteImageTitle")} onClick={() => confirmDeleteItem(item)}>
+              <button className="history-delete" title={t("history.deleteImageTitle")} aria-label={t("history.deleteImageTitle")} onClick={() => void deleteItem(item)}>
                 <Icon name="close" />
               </button>
             </div>

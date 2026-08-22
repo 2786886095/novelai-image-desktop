@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
-import { Button, IconText } from "./components/ui";
+import { Button, IconText, SelectMenu } from "./components/ui";
 import { Icon } from "./components/icons";
 import { normalizeAppLanguage } from "./i18n";
 import { inspectImageMetadata, parseImageMeta, type ImageMetadataReport } from "./png-meta";
 import { loadMetadataSnapshot, saveMetadataSnapshot } from "./metadata-snapshot";
 import { useAppStore } from "./store";
-import type { AppLanguage, ImportedParams } from "./types";
+import type { AppLanguage, HistoryGroup, HistoryItem, ImportedParams } from "./types";
 
 type MetadataText = {
   eyebrow: string;
@@ -38,6 +38,19 @@ type MetadataText = {
   replace: string;
   viewOnly: string;
   readFailed: string;
+  historyTitle: string;
+  historyHint: string;
+  historyGroup: string;
+  allGroups: string;
+  ungrouped: string;
+  historyEmpty: string;
+  historyLoading: string;
+  historyFailed: string;
+  historySelected: string;
+  historyImageAlt: string;
+  collapseHistory: string;
+  expandHistory: string;
+  loadMore: string;
 };
 
 const TEXT: Record<AppLanguage, MetadataText> = {
@@ -71,6 +84,19 @@ const TEXT: Record<AppLanguage, MetadataText> = {
     replace: "更换图片",
     viewOnly: "部分 Stable Diffusion / ComfyUI 专用参数只能查看，无法直接套用到 NovelAI。",
     readFailed: "无法读取该图片，请确认文件未损坏并重新选择原图。",
+    historyTitle: "从历史与分组选择",
+    historyHint: "直接点击分组中的图片，即可读取并显示其原数据。",
+    historyGroup: "图片分组",
+    allGroups: "全部分组",
+    ungrouped: "未分组",
+    historyEmpty: "该分组中没有可读取的图片。",
+    historyLoading: "正在读取历史图片…",
+    historyFailed: "无法读取历史图片列表。",
+    historySelected: "已读取图片原数据",
+    historyImageAlt: "历史图片",
+    collapseHistory: "收起历史图片",
+    expandHistory: "展开历史图片",
+    loadMore: "加载更多",
   },
   "zh-TW": {
     eyebrow: "IMAGE METADATA",
@@ -102,6 +128,19 @@ const TEXT: Record<AppLanguage, MetadataText> = {
     replace: "更換圖片",
     viewOnly: "部分 Stable Diffusion / ComfyUI 專用參數只能查看，無法直接套用到 NovelAI。",
     readFailed: "無法讀取該圖片，請確認檔案未損壞並重新選擇原圖。",
+    historyTitle: "從歷史與分組選擇",
+    historyHint: "直接點擊分組中的圖片，即可讀取並顯示其原始資料。",
+    historyGroup: "圖片分組",
+    allGroups: "全部分組",
+    ungrouped: "未分組",
+    historyEmpty: "此分組沒有可讀取的圖片。",
+    historyLoading: "正在讀取歷史圖片…",
+    historyFailed: "無法讀取歷史圖片列表。",
+    historySelected: "已讀取圖片原始資料",
+    historyImageAlt: "歷史圖片",
+    collapseHistory: "收起歷史圖片",
+    expandHistory: "展開歷史圖片",
+    loadMore: "載入更多",
   },
   "en-US": {
     eyebrow: "IMAGE METADATA",
@@ -133,6 +172,19 @@ const TEXT: Record<AppLanguage, MetadataText> = {
     replace: "Replace image",
     viewOnly: "Some Stable Diffusion / ComfyUI-only values are view-only and cannot be applied directly to NovelAI.",
     readFailed: "Could not read this image. Check that the file is intact and choose the original again.",
+    historyTitle: "Choose from history and groups",
+    historyHint: "Click any grouped image to read and display its original metadata.",
+    historyGroup: "Image group",
+    allGroups: "All groups",
+    ungrouped: "Ungrouped",
+    historyEmpty: "No readable images are available in this group.",
+    historyLoading: "Loading history images…",
+    historyFailed: "Could not load the history image list.",
+    historySelected: "Image metadata loaded",
+    historyImageAlt: "History image",
+    collapseHistory: "Collapse history images",
+    expandHistory: "Expand history images",
+    loadMore: "Load more",
   },
   "ja-JP": {
     eyebrow: "IMAGE METADATA",
@@ -164,6 +216,19 @@ const TEXT: Record<AppLanguage, MetadataText> = {
     replace: "画像を変更",
     viewOnly: "一部の Stable Diffusion / ComfyUI 専用設定は閲覧のみで、NovelAI へ直接適用できません。",
     readFailed: "画像を読み取れません。ファイルが壊れていないか確認し、元画像を選び直してください。",
+    historyTitle: "履歴とグループから選択",
+    historyHint: "グループ内の画像をクリックすると、元データを読み取って表示します。",
+    historyGroup: "画像グループ",
+    allGroups: "すべてのグループ",
+    ungrouped: "未分類",
+    historyEmpty: "このグループに読み取れる画像はありません。",
+    historyLoading: "履歴画像を読み込み中…",
+    historyFailed: "履歴画像一覧を読み込めません。",
+    historySelected: "画像の元データを読み込みました",
+    historyImageAlt: "履歴画像",
+    collapseHistory: "履歴画像を折りたたむ",
+    expandHistory: "履歴画像を展開",
+    loadMore: "さらに読み込む",
   },
   "ko-KR": {
     eyebrow: "IMAGE METADATA",
@@ -195,6 +260,19 @@ const TEXT: Record<AppLanguage, MetadataText> = {
     replace: "이미지 변경",
     viewOnly: "일부 Stable Diffusion / ComfyUI 전용 값은 보기 전용이며 NovelAI에 직접 적용할 수 없습니다.",
     readFailed: "이미지를 읽을 수 없습니다. 파일이 손상되지 않았는지 확인하고 원본을 다시 선택하세요.",
+    historyTitle: "기록 및 그룹에서 선택",
+    historyHint: "그룹의 이미지를 클릭하면 원본 데이터를 읽어 표시합니다.",
+    historyGroup: "이미지 그룹",
+    allGroups: "모든 그룹",
+    ungrouped: "미분류",
+    historyEmpty: "이 그룹에 읽을 수 있는 이미지가 없습니다.",
+    historyLoading: "기록 이미지를 불러오는 중…",
+    historyFailed: "기록 이미지 목록을 불러올 수 없습니다.",
+    historySelected: "이미지 원본 데이터를 불러왔습니다",
+    historyImageAlt: "기록 이미지",
+    collapseHistory: "기록 이미지 접기",
+    expandHistory: "기록 이미지 펼치기",
+    loadMore: "더 불러오기",
   },
 };
 
@@ -411,6 +489,14 @@ export default function MetadataInspector({ onBack }: { onBack: () => void }) {
   const [previewUrl, setPreviewUrl] = useState("");
   const [fileName, setFileName] = useState("");
   const [dragging, setDragging] = useState(false);
+  const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
+  const [historyGroups, setHistoryGroups] = useState<HistoryGroup[]>([]);
+  const [historyGroupId, setHistoryGroupId] = useState("");
+  const [historyOpen, setHistoryOpen] = useState(true);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyReadingId, setHistoryReadingId] = useState("");
+  const [selectedHistoryId, setSelectedHistoryId] = useState("");
+  const [historyDisplayLimit, setHistoryDisplayLimit] = useState(60);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => () => {
@@ -425,6 +511,17 @@ export default function MetadataInspector({ onBack }: { onBack: () => void }) {
         : [],
     [report],
   );
+  const visibleHistoryItems = useMemo(() => historyItems.filter((item) => {
+    if (!historyGroupId) return true;
+    if (historyGroupId === "__ungrouped") return !item.groupId;
+    return item.groupId === historyGroupId;
+  }), [historyGroupId, historyItems]);
+  const renderedHistoryItems = useMemo(
+    () => visibleHistoryItems.slice(0, historyDisplayLimit),
+    [historyDisplayLimit, visibleHistoryItems],
+  );
+
+  useEffect(() => setHistoryDisplayLimit(60), [historyGroupId]);
 
   const readFile = useCallback(async (file: File, persist = true) => {
     try {
@@ -451,6 +548,43 @@ export default function MetadataInspector({ onBack }: { onBack: () => void }) {
       .catch(() => undefined);
     return () => { cancelled = true; };
   }, [readFile]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setHistoryLoading(true);
+    void Promise.all([
+      window.naiDesktop.getHistory(),
+      window.naiDesktop.getHistoryGroups(),
+    ]).then(([items, groups]) => {
+      if (cancelled) return;
+      setHistoryItems(items);
+      setHistoryGroups(groups);
+    }).catch(() => {
+      if (!cancelled) setToast(text.historyFailed);
+    }).finally(() => {
+      if (!cancelled) setHistoryLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [setToast, text.historyFailed]);
+
+  async function readHistoryItem(item: HistoryItem) {
+    if (historyReadingId) return;
+    setHistoryReadingId(item.id);
+    try {
+      const saved = await window.naiDesktop.saveMetadataSnapshotFromPath(item.filePath);
+      if (!saved.ok) throw new Error(saved.message);
+      const file = await loadMetadataSnapshot();
+      if (!file) throw new Error(text.readFailed);
+      await readFile(file, false);
+      setSelectedHistoryId(item.id);
+      setHistoryOpen(false);
+      setToast(text.historySelected);
+    } catch {
+      setToast(text.readFailed);
+    } finally {
+      setHistoryReadingId("");
+    }
+  }
 
   function applyCompatible() {
     if (!report || !compatibleEntries.length) {
@@ -483,6 +617,79 @@ export default function MetadataInspector({ onBack }: { onBack: () => void }) {
         </div>
         <Button onClick={onBack} variant="secondary">{text.back}</Button>
       </header>
+
+      <section className={clsx("metadata-history-picker", historyOpen && "open")}>
+        <button
+          type="button"
+          className="metadata-history-summary"
+          onClick={() => setHistoryOpen((open) => !open)}
+          aria-expanded={historyOpen}
+          aria-label={historyOpen ? text.collapseHistory : text.expandHistory}
+        >
+          <span className="metadata-history-summary-icon"><Icon name="folderOpen" /></span>
+          <span>
+            <strong>{text.historyTitle}</strong>
+            <small>{text.historyHint}</small>
+          </span>
+          <em>{visibleHistoryItems.length}</em>
+          <Icon name="chevronRight" className={clsx("disclosure-chevron", historyOpen && "open")} />
+        </button>
+        {historyOpen && (
+          <div className="metadata-history-content">
+            <div className="metadata-history-filter">
+              <SelectMenu
+                value={historyGroupId}
+                ariaLabel={text.historyGroup}
+                label={text.historyGroup}
+                options={[
+                  { value: "", label: text.allGroups },
+                  { value: "__ungrouped", label: text.ungrouped },
+                  ...historyGroups.map((group) => ({ value: group.id, label: group.name })),
+                ]}
+                onChange={setHistoryGroupId}
+              />
+            </div>
+            {historyLoading ? (
+              <p className="metadata-history-empty">{text.historyLoading}</p>
+            ) : visibleHistoryItems.length === 0 ? (
+              <p className="metadata-history-empty">{text.historyEmpty}</p>
+            ) : (
+              <div className="metadata-history-grid">
+                {renderedHistoryItems.map((item) => {
+                  const name = item.filePath.split(/[\\/]/).pop() || item.filePath;
+                  const selected = item.id === selectedHistoryId;
+                  return (
+                    <button
+                      type="button"
+                      className={clsx("metadata-history-item", selected && "selected")}
+                      key={item.id}
+                      disabled={Boolean(historyReadingId)}
+                      onClick={() => void readHistoryItem(item)}
+                      title={name}
+                    >
+                      <span className="metadata-history-thumb">
+                        <img src={item.fileUrl} alt={`${text.historyImageAlt}: ${name}`} loading="lazy" decoding="async" />
+                        {historyReadingId === item.id && <i className="metadata-history-spinner" aria-hidden="true" />}
+                      </span>
+                      <strong>{name}</strong>
+                      <small>{item.width} × {item.height}</small>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {visibleHistoryItems.length > renderedHistoryItems.length && (
+              <Button
+                className="metadata-history-more"
+                variant="secondary"
+                onClick={() => setHistoryDisplayLimit((limit) => limit + 60)}
+              >
+                {text.loadMore} · {renderedHistoryItems.length}/{visibleHistoryItems.length}
+              </Button>
+            )}
+          </div>
+        )}
+      </section>
 
       <section
         className={clsx("metadata-drop", dragging && "dragging", report && "has-image")}

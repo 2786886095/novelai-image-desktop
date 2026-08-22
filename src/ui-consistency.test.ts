@@ -87,9 +87,41 @@ describe("desktop UI consistency guards", () => {
     const source = fs.readFileSync(path.join(projectRoot, "src", "App.tsx"), "utf8");
     const styles = fs.readFileSync(path.join(projectRoot, "src", "styles.css"), "utf8");
     expect(source).toContain('label={<Icon name="folder" />}');
-    expect(styles).toContain('grid-template-columns: repeat(4, 36px)');
+    expect(source).toContain('className="history-item-group-row"');
+    expect(styles).toContain('grid-template-columns: repeat(3, minmax(0, 1fr))');
+    expect(styles).toContain('left: 6px;');
+    expect(styles).toContain('right: 6px;');
+    expect(styles).toContain('min-width: 0;');
+    expect(styles).toContain('.history-item:hover .history-item-group-row');
     expect(source).toContain('saveMetadataSnapshotFromPath(item.filePath)');
-    expect(styles).toContain('.history-item-group-trigger .select-menu-value');
+    expect(styles).toContain('.history-item-group-row .select-menu-value');
+  });
+
+  it("persists the compact account and V5 allowance footer", () => {
+    const source = fs.readFileSync(path.join(projectRoot, "src", "App.tsx"), "utf8");
+    expect(source).toContain('langbai.account-details-collapsed');
+    expect(source).toContain('className="account-details-toggle"');
+    expect(source).toContain('className={clsx("account-details-shell", accountDetailsCollapsed && "collapsed")}');
+    expect(source).toContain('className="account-details-content"');
+    expect(source).toContain('!accountDetailsCollapsed && (');
+  });
+
+  it("lets metadata restoration read images directly from history groups", () => {
+    const source = fs.readFileSync(path.join(projectRoot, "src", "MetadataInspector.tsx"), "utf8");
+    const styles = fs.readFileSync(path.join(projectRoot, "src", "styles.css"), "utf8");
+    expect(source).toContain('window.naiDesktop.getHistory()');
+    expect(source).toContain('window.naiDesktop.getHistoryGroups()');
+    expect(source).toContain('saveMetadataSnapshotFromPath(item.filePath)');
+    expect(source).toContain('className="metadata-history-grid"');
+    expect(styles).toContain('.metadata-history-picker');
+    expect(styles).toContain('grid-template-columns: repeat(2, minmax(0, 1fr));');
+  });
+
+  it("deletes a history image without opening a blocking native confirmation dialog", () => {
+    const source = fs.readFileSync(path.join(projectRoot, "src", "App.tsx"), "utf8");
+    expect(source).not.toContain('window.confirm(f("history.deleteImageConfirm"');
+    expect(source).toContain('const deleted = await deleteHistory(item.id)');
+    expect(source).toContain('setToast(t("history.deleteImageDone"))');
   });
 
   it("renders official V5 Opus allowance as a live progress bar", () => {

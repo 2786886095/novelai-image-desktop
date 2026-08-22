@@ -40,8 +40,6 @@ class Storage {
   static const _kConvertHistory = 'texttool_convert_history_v1';
   static const _kReverseHistory = 'texttool_reverse_history_v1';
   static const _kAitagCompatibleParams = 'aitag_compatible_params_v1';
-  static const _kMetadataInspectorName = 'metadata_inspector_last_name_v1';
-  static const _kMetadataInspectorPath = 'metadata_inspector_last_path_v1';
   static const _kReferencePresetLibrary = 'reference_preset_library_v1';
 
   final _secure = const FlutterSecureStorage();
@@ -54,6 +52,7 @@ class Storage {
   List<HistoryItem>? _historyCache;
   List<TextToolHistoryItem>? _convertHistoryCache;
   List<TextToolHistoryItem>? _reverseHistoryCache;
+  ({File file, String name})? _metadataInspectorSession;
   Future<SharedPreferences> get _prefs => SharedPreferences.getInstance();
 
   Future<String?> getToken() => _secure.read(key: _kToken);
@@ -91,7 +90,10 @@ class Storage {
     Uint8List bytes,
     String originalName,
   ) async {
-    final root = await getApplicationDocumentsDirectory();
+    // Metadata inspection is deliberately session-scoped. Keep a temporary
+    // copy so switching pages preserves the current report, but never write a
+    // path/name into SharedPreferences (a full app restart must reset it).
+    final root = await getTemporaryDirectory();
     final directory =
         Directory('${root.path}${Platform.pathSeparator}metadata-inspector');
     if (!directory.existsSync()) directory.createSync(recursive: true);
@@ -112,27 +114,20 @@ class Storage {
       }
     }
     await file.writeAsBytes(bytes, flush: true);
-    final prefs = await _prefs;
-    await prefs.setString(_kMetadataInspectorName, originalName);
-    await prefs.setString(_kMetadataInspectorPath, file.path);
-    return (file: file, name: originalName);
+    final snapshot = (file: file, name: originalName);
+    _metadataInspectorSession = snapshot;
+    return snapshot;
   }
 
   Future<({File file, String name})?> getMetadataInspectorImage() async {
-    final prefs = await _prefs;
-    final path = prefs.getString(_kMetadataInspectorPath);
-    if (path == null || path.isEmpty) return null;
-    final file = File(path);
+    final snapshot = _metadataInspectorSession;
+    if (snapshot == null) return null;
+    final file = snapshot.file;
     if (!file.existsSync()) {
-      await prefs.remove(_kMetadataInspectorPath);
-      await prefs.remove(_kMetadataInspectorName);
+      _metadataInspectorSession = null;
       return null;
     }
-    return (
-      file: file,
-      name: prefs.getString(_kMetadataInspectorName) ??
-          file.uri.pathSegments.last,
-    );
+    return snapshot;
   }
 
   Future<Directory> _stylePromptPreviewRoot() async {
