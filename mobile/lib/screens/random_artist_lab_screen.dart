@@ -119,7 +119,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
         return {
           'title': '隨機畫師串抽卡',
           'pool': '動態熱門畫師池',
-          'poolSize': '依熱度載入前 N 名（100～5000）',
+          'poolSize': '熱度前 N 名（100～5000）＋33 個聯合核驗標籤',
           'load': '載入',
           'refresh': '更新排行',
           'base': '固定內容提示詞',
@@ -163,7 +163,8 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
         return {
           'title': 'Random Artist-string Gacha',
           'pool': 'Dynamic popular-artist pool',
-          'poolSize': 'Load top N by popularity (100–5000)',
+          'poolSize':
+              'Top N by popularity (100–5000) + 33 jointly checked tags',
           'load': 'Load',
           'refresh': 'Refresh',
           'base': 'Fixed content prompt',
@@ -254,7 +255,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
         return {
           'title': '무작위 작가 조합 뽑기',
           'pool': '동적 인기 작가 풀',
-          'poolSize': '인기순 상위 N명 (100～5000)',
+          'poolSize': '인기 상위 N명 (100～5000)＋공동 검증 33태그',
           'load': '불러오기',
           'refresh': '새로고침',
           'base': '고정 내용 프롬프트',
@@ -299,7 +300,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
         return {
           'title': '随机画师串抽卡',
           'pool': '动态热门画师池',
-          'poolSize': '按热度载入前 N 名（100～5000）',
+          'poolSize': '热度前 N 名（100～5000）＋33 个联合核验标签',
           'load': '载入',
           'refresh': '刷新排行',
           'base': '固定内容提示词',

@@ -550,7 +550,12 @@ class BatchRedrawController extends ChangeNotifier {
         item
           ..status = BatchItemStatus.pending
           ..outputPath = ''
-          ..error = '';
+          ..error = ''
+          // A cleared run starts a fresh global-parameter revision. Keeping a
+          // full per-image snapshot here made later global edits appear to do
+          // nothing because the invisible old snapshot still took priority.
+          ..overrideParams = false
+          ..params = project.globalParams.copy();
       }
       queueDone = 0;
       queueTotal = 0;

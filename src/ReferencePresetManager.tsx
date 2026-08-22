@@ -259,6 +259,12 @@ export default function ReferencePresetManager({
   const sectionRef = useRef<HTMLDivElement>(null);
   const navText = MANAGER_NAV_TEXT[language && language in MANAGER_NAV_TEXT ? language : "zh-CN"];
 
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("uiPresetCreate") === "1") {
+      setShowCreate(true);
+    }
+  }, []);
+
   const refresh = useCallback(async () => setLibrary(await window.naiDesktop.listReferencePresets()), []);
   useEffect(() => { void refresh(); }, [refresh]);
   useEffect(() => { globalThis.localStorage?.setItem(LOCAL_GRID_COLUMNS_KEY, String(gridColumns)); }, [gridColumns]);
@@ -437,7 +443,7 @@ export default function ReferencePresetManager({
         <div className="reference-preset-hero-copy"><h2>{text.title}</h2><p>{text.subtitle}</p></div>
         <div className="reference-preset-summary" aria-label={text.library}><span><strong>{library.presets.length}</strong>{text.presetCount}</span><span><strong>{library.groups.length}</strong>{text.groupCount}</span></div>
         {!modal && <div className="reference-preset-actions"><Button variant="primary" onClick={() => setShowCreate(true)}>{text.createPreset}</Button><Button onClick={() => void runOperation(() => window.naiDesktop.importReferencePresets(), text.imported)}>{text.import}</Button><Button onClick={() => void runOperation(() => window.naiDesktop.exportReferencePresets(), text.exported)}>{text.exportAll}</Button></div>}
-        {modal && <Button onClick={() => void runOperation(() => window.naiDesktop.importReferencePresets(), text.imported)}>{text.import}</Button>}
+        {modal && <div className="reference-preset-actions reference-preset-picker-actions"><Button variant="primary" onClick={() => setShowCreate(true)}>{text.createPreset}</Button><Button onClick={() => void runOperation(() => window.naiDesktop.importReferencePresets(), text.imported)}>{text.import}</Button></div>}
         {modal && onBack && <button className="reference-preset-close reference-preset-manager-close" type="button" onClick={onBack} aria-label={text.cancel}><Icon name="close" /></button>}
       </section>
 

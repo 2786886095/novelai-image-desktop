@@ -1480,26 +1480,27 @@ class _BatchParamsEditor extends StatelessWidget {
             onChanged();
           },
         ),
-        DropdownButtonFormField<String>(
-          value: params.noiseSchedule,
-          isExpanded: true,
-          decoration: const InputDecoration(
-            labelText: 'Noise Schedule',
-            border: OutlineInputBorder(),
+        if (params.supportsNoiseScheduleControl)
+          DropdownButtonFormField<String>(
+            value: params.noiseSchedule,
+            isExpanded: true,
+            decoration: const InputDecoration(
+              labelText: 'Noise Schedule',
+              border: OutlineInputBorder(),
+            ),
+            items: naiNoiseSchedules
+                .map((option) => DropdownMenuItem(
+                      value: option.value,
+                      child: Text(localizedNaiOptionLabel(
+                          language, option.value, option.label)),
+                    ))
+                .toList(),
+            onChanged: (value) {
+              if (value == null) return;
+              params.noiseSchedule = value;
+              onChanged();
+            },
           ),
-          items: naiNoiseSchedules
-              .map((option) => DropdownMenuItem(
-                    value: option.value,
-                    child: Text(localizedNaiOptionLabel(
-                        language, option.value, option.label)),
-                  ))
-              .toList(),
-          onChanged: (value) {
-            if (value == null) return;
-            params.noiseSchedule = value;
-            onChanged();
-          },
-        ),
         const SizedBox(height: 8),
         DropdownButtonFormField<int>(
           value: params.ucPreset,

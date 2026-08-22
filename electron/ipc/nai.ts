@@ -289,21 +289,6 @@ function normalizeModel(model: string) {
     : model;
 }
 
-function defaultNoiseScheduleForSampler(sampler: string): string {
-  switch (sampler) {
-    case "k_euler":
-    case "k_euler_ancestral":
-    case "k_dpmpp_sde":
-    case "k_dpmpp_2s_ancestral":
-    case "k_dpmpp_2m_sde":
-      return "karras";
-    case "k_dpmpp_2m":
-      return "exponential";
-    default:
-      return "native";
-  }
-}
-
 function inpaintSizeHint(image: Pick<WorkingImage, "width" | "height">) {
   const width = image.width || 0;
   const height = image.height || 0;
@@ -506,8 +491,12 @@ export function buildPayload(
   const safeScale = Math.min(10, Math.max(0, Number(params.cfgScale) || 0));
 
   const v5 = isNAIV5Model(params.model);
+  // The official V5 frontend does not expose a noise-schedule control and
+  // normalizes every V5 request to Karras.  Do not derive it from the sampler:
+  // doing so made DPM++ requests silently use Exponential and diverge from the
+  // website even when every visible parameter matched.
   const effectiveNoiseSchedule = v5
-    ? defaultNoiseScheduleForSampler(params.sampler)
+    ? "karras"
     : params.noiseSchedule || "native";
   const parameters: Record<string, unknown> = {
     params_version: 4,

@@ -1,4 +1,5 @@
 import type { ArtistTagRecord, ArtistWeightedTag } from "./artist-lab";
+import { ARTIST_TAG_ALIASES } from "./curated-artists";
 
 export type RecipeTokenKind = "artist" | "year" | "quality" | "negative" | "style" | "other";
 
@@ -52,12 +53,12 @@ export const STYLE_MUTATION_LIBRARY: Record<StyleMutationCategory, readonly stri
     "anime coloring", "anime screencap", "art nouveau", "baroque", "concept art", "contemporary",
     "cubism", "expressionism", "fantasy art", "game cg", "impressionism", "minimalism", "modernism",
     "pop art", "realism", "retro artstyle", "romanticism", "semi-realistic", "surrealism", "ukiyo-e",
-    "visual novel", "western comics", "storybook illustration", "editorial illustration", "poster art",
+    "visual novel art", "western comics", "storybook illustration", "editorial illustration", "poster art",
   ],
   medium: [
     "acrylic paint", "airbrush", "charcoal drawing", "colored pencil", "digital painting", "fine lineart",
-    "gouache", "graphite", "impasto", "ink", "ink wash", "marker", "oil painting", "pastel", "pencil sketch",
-    "rough sketch", "thick lineart", "thin lineart", "visible brushstrokes", "watercolor", "woodcut",
+    "gouache", "graphite", "impasto", "ink (medium)", "ink wash", "marker", "oil painting (medium)", "pastel", "pencil sketch",
+    "rough sketch", "thick lineart", "thin lineart", "visible brushstrokes", "watercolor (medium)", "woodcut",
     "cel shading", "soft shading", "painterly", "textured brush", "dry brush", "wet-on-wet", "stippling",
   ],
   color: [
@@ -90,6 +91,15 @@ const STYLE_PATTERN = /(style|realism|impasto|illustration|painting|lineart|ligh
 
 function roundWeight(value: number): number {
   return Math.round(Math.max(-10, Math.min(10, value)) * 100) / 100;
+}
+
+export function canonicalArtistTagName(raw: string): string {
+  const normalized = raw
+    .normalize("NFKC")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_");
+  return ARTIST_TAG_ALIASES[normalized] ?? normalized;
 }
 
 function classify(value: string): RecipeTokenKind {
@@ -210,7 +220,7 @@ export function formatArtistString(
   artists: readonly ArtistWeightedTag[],
 ): string {
   const value = artists
-    .map((artist) => `${roundWeight(artist.weight)}::artist:${artist.name} ::`)
+    .map((artist) => `${roundWeight(artist.weight)}::artist:${canonicalArtistTagName(artist.name)} ::`)
     .join(", ");
   return value ? `${value},` : "";
 }
@@ -237,7 +247,7 @@ export function randomizeArtistRecipeWeights(
   const source = parseArtistRecipe(input)
     .filter((token) => token.kind === "artist" && token.weight > 0)
     .map((token) => ({
-      name: token.value.replace(/^artist\s*:/i, "").trim(),
+      name: canonicalArtistTagName(token.value.replace(/^artist\s*:/i, "")),
       weight: token.weight,
     }))
     .filter((artist) => artist.name);
@@ -305,7 +315,7 @@ export function generatePopularArtistRecipes(
   const count = Math.max(1, Math.floor(Number.isFinite(options.count) ? options.count : 1));
   const minArtists = Math.max(1, Math.min(20, Math.floor(options.minArtists)));
   const maxArtists = Math.max(minArtists, Math.min(20, Math.floor(options.maxArtists)));
-  const favorites = new Set((options.favoriteArtists ?? []).map((name) => name.trim()).filter(Boolean));
+  const favorites = new Set((options.favoriteArtists ?? []).map(canonicalArtistTagName).filter(Boolean));
   const baseAuxiliary = parseArtistRecipe(options.auxiliaryPrompt ?? "")
     .filter((token) => token.kind !== "artist");
   const output: GeneratedArtistRecipe[] = [];

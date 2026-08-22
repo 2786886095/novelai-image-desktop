@@ -11,7 +11,7 @@ import {
 import { useAppStore } from "./store";
 import {
   buildBatchRedrawRequest,
-  clearBatchRedrawItemResult,
+  resetBatchRedrawItemForParameterRevision,
   resetInterruptedBatchItem,
   shouldStopBatchRedraw,
 } from "./batch-redraw-queue";
@@ -1145,7 +1145,7 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
       items: prev.items.map((item) =>
         item.historyItemId && failedIds.has(item.historyItemId)
           ? item
-          : clearBatchRedrawItemResult(item),
+          : resetBatchRedrawItemForParameterRevision(item),
       ),
     }));
     setResultFilter("all");

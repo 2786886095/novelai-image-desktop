@@ -668,4 +668,110 @@ void main() {
       }
     }
   }
+
+  for (final locale in _locales) {
+    for (final themeName in _themes) {
+      for (final viewport in primaryViewports) {
+        testWidgets(
+            'captures style preset library $locale $themeName ${viewport.$1}',
+            (tester) async {
+          tester.view.devicePixelRatio = 1;
+          tester.view.physicalSize = viewport.$2;
+          addTearDown(tester.view.reset);
+          final state = AppState()
+            ..settings.language = locale
+            ..settings.theme = themeName
+            ..settings.stylePromptPresetGroups = ['Lighting']
+            ..settings.stylePromptPresets = [
+              StylePromptPreset(
+                id: 'audit-style-default',
+                name: 'Clean anime',
+                prompt: 'masterpiece, clean lineart,',
+                createdAt: '2026-08-08T00:00:00.000Z',
+              ),
+              StylePromptPreset(
+                id: 'audit-style-lighting',
+                name: 'Cinematic light',
+                prompt: 'cinematic lighting, volumetric light,',
+                createdAt: '2026-08-08T00:00:01.000Z',
+                group: 'Lighting',
+              ),
+            ]
+            ..params.stylePrompt = 'masterpiece, clean lineart,'
+            ..booted = true
+            ..needsNetworkOnboarding = false
+            ..account = const AccountSummary(
+                hasToken: true, tierName: 'Opus', anlasBalance: 9049);
+          final baseTheme =
+              themeName == 'dark' ? StudioTheme.dark() : StudioTheme.light();
+          final fontFamily = _fontFamilyFor(locale);
+          await tester.pumpWidget(
+            ChangeNotifierProvider.value(
+              value: state,
+              child: MaterialApp(
+                locale: appLocaleInfoFor(locale).locale,
+                supportedLocales:
+                    supportedAppLocales.map((item) => item.locale),
+                localizationsDelegates: const [
+                  GlobalMaterialLocalizations.delegate,
+                  GlobalWidgetsLocalizations.delegate,
+                  GlobalCupertinoLocalizations.delegate,
+                ],
+                theme: baseTheme.copyWith(
+                  textTheme: baseTheme.textTheme.apply(
+                    fontFamily: fontFamily,
+                    fontFamilyFallback: const [_fontZh],
+                  ),
+                  primaryTextTheme: baseTheme.primaryTextTheme.apply(
+                    fontFamily: fontFamily,
+                    fontFamilyFallback: const [_fontZh],
+                  ),
+                ),
+                home: const GenerateScreen(),
+              ),
+            ),
+          );
+          await tester.pumpAndSettle(const Duration(milliseconds: 120));
+          final trigger =
+              find.byKey(const ValueKey('style-preset-library-trigger'));
+          if (trigger.evaluate().isEmpty) {
+            final generateList =
+                find.byKey(const ValueKey('generate-single-layout'));
+            final scrollTarget = generateList.evaluate().isNotEmpty
+                ? generateList
+                : find.byType(ListView).last;
+            for (var attempt = 0;
+                attempt < 10 && trigger.evaluate().isEmpty;
+                attempt++) {
+              await tester.drag(scrollTarget, const Offset(0, -320));
+              await tester.pump(const Duration(milliseconds: 80));
+            }
+          }
+          expect(trigger, findsOneWidget);
+          await tester.tap(trigger);
+          await tester.pump(const Duration(milliseconds: 420));
+          expect(
+            find.byKey(const ValueKey('style-preset-library-sheet')),
+            findsOneWidget,
+          );
+          expect(tester.takeException(), isNull,
+              reason: 'style library $locale $themeName ${viewport.$1}');
+          final output =
+              '${_auditOutputRoot()}/mobile/$_auditPlatform/$themeName/$locale/${viewport.$1}/style-preset-library.png';
+          await tester.runAsync(() => _saveRenderViewPng(output));
+          final sheetOutput =
+              '${_auditOutputRoot()}/mobile/$_auditPlatform/$themeName/$locale/${viewport.$1}/style-preset-library-panel.png';
+          await tester.runAsync(
+            () => _saveBoundaryFinderPng(
+              tester,
+              find.byKey(const ValueKey('style-preset-library-sheet')),
+              sheetOutput,
+            ),
+          );
+          await tester.pumpWidget(const SizedBox.shrink());
+          state.dispose();
+        }, variant: TargetPlatformVariant.only(_auditTargetPlatform));
+      }
+    }
+  }
 }

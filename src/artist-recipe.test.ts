@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  canonicalArtistTagName,
   expandArtistRecipeComparisons,
   formatArtistFullPrompt,
   formatArtistString,
@@ -193,5 +194,14 @@ describe("artist recipe grammar", () => {
     expect(recipes[0].artists.map((artist) => artist.weight)).toEqual([0.8, 2.4]);
     expect(recipes[1].artists.map((artist) => artist.weight)).toEqual([0.9, 2.2]);
     expect(randomizeArtistRecipeWeights("masterpiece, 1girl", 3)).toEqual([]);
+  });
+
+  it("normalizes known artist aliases before copying or tuning weights", () => {
+    expect(canonicalArtistTagName(" Channel_(_Caststation) ")).toBe("channel_(caststation)");
+    expect(canonicalArtistTagName("machi_(7769)")).toBe("machi_(machi0910)");
+    const recipe = randomizeArtistRecipeWeights("1::artist:channel_(_caststation) ::", 1)[0];
+    expect(recipe.artists[0].name).toBe("channel_(caststation)");
+    expect(formatArtistString([{ name: "Machi_(7769)", weight: 1 }]))
+      .toContain("artist:machi_(machi0910)");
   });
 });

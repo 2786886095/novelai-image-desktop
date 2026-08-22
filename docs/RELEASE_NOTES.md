@@ -4,20 +4,21 @@
 
 | 系统 | 安装包 | 安装说明 |
 | --- | --- | --- |
-| 🪟 **Windows**（便携版，x64） | `Langbai-NovelAI-Studio-1.7.7.exe` | 双击即用，无需安装 |
-| 🪟 **Windows**（安装版，x64） | `Langbai-NovelAI-Studio-Setup-1.7.7.exe` | 安装向导可自选路径、创建快捷方式；支持软件内一键更新 |
-| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-1.7.7-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
-| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-1.7.7.zip` | 解压后即为 `.app`，同样需右键「打开」 |
-| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-1.7.7.AppImage` | `chmod +x` 后直接运行 |
+| 🪟 **Windows**（便携版，x64） | `Langbai-NovelAI-Studio-1.7.8.exe` | 双击即用，无需安装 |
+| 🪟 **Windows**（安装版，x64） | `Langbai-NovelAI-Studio-Setup-1.7.8.exe` | 安装向导可自选路径、创建快捷方式；支持软件内一键更新 |
+| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-1.7.8-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
+| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-1.7.8.zip` | 解压后即为 `.app`，同样需右键「打开」 |
+| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-1.7.8.AppImage` | `chmod +x` 后直接运行 |
 | 🤖 **Android** | `app-release.apk` | 直接安装；需允许「未知来源」 |
 | 📱 **iOS** | `novelai-mobile-unsigned.ipa` | **未签名**，需使用 AltStore / Sideloadly 等工具自行侧载 |
 
 > 桌面端与移动端均为 **API-only** 客户端，需要自备 NovelAI Persistent API Token。
 
-### v1.7.7 更新内容
+### v1.7.8 更新内容
 
-- 软件更新检查改为中国大陆优先：桌面端与移动端先访问 Gitee，Gitee 不可用或尚未同步时自动回退 GitHub。
-- Windows 安装版与便携版均可在软件内下载经 SHA-512 校验的 Setup.exe；下载完成后由用户确认安装。
-- 针对 Gitee 社区版单附件 100 MB 限制，发布流水线自动把安装包拆成 90 MB 分片；客户端下载后本地合并并校验，不牺牲安装包内容。
-- Android 更新入口优先直达 Gitee 的 APK 附件，GitHub Release 保留为全球线路和容灾来源。
-- GitHub 发版时自动创建同版本 Gitee Release，并同步 Windows 更新分片、更新清单、`latest.yml` 与 Android APK。
+- 新用户默认模型更新为 **NAI Diffusion V5 Full**；V5 请求按官网行为发送，界面不再展示无须手动配置的噪声计划。老用户保留既有设置，并在升级后收到一次模型迁移提醒，可自行切换到 V5 Full。
+- 批量图生图“清空当前生成”会同步清除旧的逐图参数快照；修改全局参数后重新生成将使用最新参数，不再沿用上一轮设置。
+- 风格提示词预设升级为文件夹式分组：支持创建/删除分组、移动/删除风格、预览图管理与本地持久化；桌面端和移动端均可使用。
+- 统一结构图标、按钮高度、文字行高与基线对齐，修复图标越界、文字上漂、紧凑控件错位和深色模式不一致。桌面端完成明暗主题 DOM 审计，Android/iOS 完成五语言、明暗主题、手机/平板截图复验。
+- 随机画师抽卡补充 33 个经 Danbooru 当前分类与弃用状态验证的候选标签，并统一别名、全角输入与缓存去重。标签有效不等于 V5 必然识别其画风，实际效果仍以固定 Seed 试生成结果为准。
+- 参考预设、批量任务及移动端若干交互继续统一删除确认、失败回退和状态持久化行为。

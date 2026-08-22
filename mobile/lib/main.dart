@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'i18n/app_locales.dart';
 import 'models/nai_models.dart';
@@ -77,6 +78,7 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   int _index = 0;
   bool _onboardingScheduled = false;
+  bool _v5NoticeScheduled = false;
   late final List<Widget> _pages;
 
   static const _destinationIcons = [
@@ -156,6 +158,13 @@ class _HomeShellState extends State<HomeShell> {
         if (mounted) _showNetworkOnboarding();
       });
     }
+    final currentModelIsV5 =
+        context.select<AppState, bool>((s) => s.params.isV5);
+    if (!needsOnboarding && !currentModelIsV5 && !_v5NoticeScheduled) {
+      _v5NoticeScheduled = true;
+      WidgetsBinding.instance
+          .addPostFrameCallback((_) => _showV5MigrationNotice());
+    }
     return StudioAdaptiveShell(
       selectedIndex: _index,
       onDestinationSelected: (index) {
@@ -180,4 +189,79 @@ class _HomeShellState extends State<HomeShell> {
     await context.read<AppState>().dismissNetworkOnboarding();
     if (openSettings == true && mounted) setState(() => _index = 11);
   }
+
+  Future<void> _showV5MigrationNotice() async {
+    const key = 'langbai.notice.v5-model-migration.v1';
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getBool(key) == true || !mounted) return;
+      final language = context.read<AppState>().settings.language;
+      final copy = _v5MigrationCopy[language] ?? _v5MigrationCopy['zh-CN']!;
+      final openGenerate = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          icon: const Icon(Icons.auto_awesome),
+          title: Text(copy.title),
+          content: Text(copy.body),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: Text(copy.keep)),
+            FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: Text(copy.go)),
+          ],
+        ),
+      );
+      await prefs.setBool(key, true);
+      if (openGenerate == true && mounted) setState(() => _index = 0);
+    } catch (_) {
+      // A preference backend may be unavailable in isolated widget tests.
+    }
+  }
 }
+
+typedef _V5MigrationCopy = ({
+  String title,
+  String body,
+  String keep,
+  String go
+});
+
+const Map<String, _V5MigrationCopy> _v5MigrationCopy = {
+  'zh-CN': (
+    title: 'NovelAI V5 Full 已上线',
+    body:
+        '为避免改变旧项目的复现结果，升级软件不会强制覆盖已经保存的模型。旧用户如仍显示 V4 / V4.5，请在生成页的模型列表中手动选择 NAI Diffusion V5 Full；新建默认配置已经使用 V5 Full。',
+    keep: '保持当前模型',
+    go: '前往模型选择'
+  ),
+  'zh-TW': (
+    title: 'NovelAI V5 Full 已上線',
+    body:
+        '為避免改變舊專案的重現結果，升級軟體不會強制覆蓋已儲存的模型。舊使用者若仍顯示 V4 / V4.5，請在生成頁手動選擇 NAI Diffusion V5 Full；新建預設已使用 V5 Full。',
+    keep: '保留目前模型',
+    go: '前往模型選擇'
+  ),
+  'en-US': (
+    title: 'NovelAI V5 Full is available',
+    body:
+        'Upgrades preserve the model saved in existing projects so their results remain reproducible. If an older installation still shows V4 or V4.5, choose NAI Diffusion V5 Full manually on Generate. New defaults already use V5 Full.',
+    keep: 'Keep current model',
+    go: 'Open model selector'
+  ),
+  'ja-JP': (
+    title: 'NovelAI V5 Full が利用できます',
+    body:
+        '既存プロジェクトの再現性を守るため、更新時に保存済みモデルを強制変更しません。V4 / V4.5 のままの場合は、生成画面から NAI Diffusion V5 Full を手動で選択してください。新規既定値は V5 Full です。',
+    keep: '現在のモデルを維持',
+    go: 'モデル選択へ'
+  ),
+  'ko-KR': (
+    title: 'NovelAI V5 Full을 사용할 수 있습니다',
+    body:
+        '기존 프로젝트의 재현 결과를 보호하기 위해 업데이트가 저장된 모델을 강제로 변경하지 않습니다. V4 / V4.5가 계속 표시되면 생성 화면에서 NAI Diffusion V5 Full을 직접 선택하세요. 새 기본값은 V5 Full입니다.',
+    keep: '현재 모델 유지',
+    go: '모델 선택으로 이동'
+  ),
+};

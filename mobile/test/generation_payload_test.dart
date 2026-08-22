@@ -119,20 +119,19 @@ void main() {
     expect(prompt['char_captions'], hasLength(32));
   });
 
-  test('V5 rejects unsupported Vibe Transfer before making a network call',
+  test('V5 ignores legacy Vibe Transfer state instead of failing generation',
       () async {
-    await expectLater(
-      api.buildPayload(
-        'unused',
-        settings,
-        GenerateParams(positivePrompt: '1girl'),
-        123,
-        GenerateExtras(vibeImages: const [
-          VibeTransferItem(base64: 'dmliZQ=='),
-        ]),
-      ),
-      throwsA(isA<NaiHttpException>()),
+    final payload = await api.buildPayload(
+      'unused',
+      settings,
+      GenerateParams(positivePrompt: '1girl'),
+      123,
+      GenerateExtras(vibeImages: const [
+        VibeTransferItem(base64: 'dmliZQ=='),
+      ]),
     );
+    final parameters = payload['parameters'] as Map<String, dynamic>;
+    expect(parameters.containsKey('reference_image_multiple'), isFalse);
   });
 
   test('character prompt can safely downgrade from structured to pipe form',

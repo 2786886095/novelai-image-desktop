@@ -323,6 +323,7 @@ export function defaultSettings(): AppSettings {
     imageNameTemplate: "{date}_{seq}_{model}",
     promptTemplates: [],
     stylePromptPresets: [],
+    stylePromptPresetGroups: ["Default"],
     lastGenerationState: null,
     persistGenerateParams: true,
     persistI2IParams: true,
@@ -337,6 +338,20 @@ function normalize(raw: Partial<PersistedData> | null): PersistedData {
   const rawSettings = (raw?.settings ?? {}) as Partial<AppSettings>;
   const settings = { ...defaults, ...rawSettings };
   settings.language = normalizeLanguage(settings.language);
+  settings.stylePromptPresetGroups = Array.from(
+    new Set(
+      (Array.isArray(settings.stylePromptPresetGroups)
+        ? settings.stylePromptPresetGroups
+        : ["Default"]
+      )
+        .filter((group): group is string => typeof group === "string")
+        .map((group) => group.trim())
+        .filter(Boolean),
+    ),
+  );
+  if (!settings.stylePromptPresetGroups.includes("Default")) {
+    settings.stylePromptPresetGroups.unshift("Default");
+  }
   settings.stylePromptPresets = Array.isArray(settings.stylePromptPresets)
     ? settings.stylePromptPresets
         .filter((preset) => preset && typeof preset === "object")
@@ -367,6 +382,10 @@ function normalize(raw: Partial<PersistedData> | null): PersistedData {
             id: typeof preset.id === "string" ? preset.id : "",
             name: typeof preset.name === "string" ? preset.name : "",
             prompt: typeof preset.prompt === "string" ? preset.prompt : "",
+            group:
+              typeof preset.group === "string" && preset.group.trim()
+                ? preset.group.trim()
+                : "Default",
             createdAt:
               typeof preset.createdAt === "string"
                 ? preset.createdAt
@@ -376,6 +395,11 @@ function normalize(raw: Partial<PersistedData> | null): PersistedData {
         })
         .filter((preset) => preset.id && preset.name)
     : [];
+  for (const preset of settings.stylePromptPresets) {
+    if (!settings.stylePromptPresetGroups.includes(preset.group)) {
+      settings.stylePromptPresetGroups.push(preset.group);
+    }
+  }
   // Old releases allowed the two official subdomains to be swapped. Both are
   // trusted hosts, but they do not serve the same routes; a stale API host in
   // the image slot makes every generation fail until app data is reset.

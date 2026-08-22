@@ -1116,6 +1116,8 @@ export interface StylePromptPreset {
   id: string;
   name: string;
   prompt: string;
+  /** Stable user-created folder name. Legacy presets are migrated to Default. */
+  group: string;
   createdAt: string;
   previewImages?: StylePromptPreviewImage[];
 }
@@ -1317,6 +1319,8 @@ export interface AppSettings {
   promptTemplates: PromptTemplate[];
   // Named style-prompt presets available from the generation panel.
   stylePromptPresets: StylePromptPreset[];
+  // Stored separately so empty user-created groups survive restarts.
+  stylePromptPresetGroups: string[];
   lastGenerationState: LastGenerationState | null;
   // Per-tool opt-out for restoring lastGenerationState across restarts.
   // All default true (today's behavior); turning one off means that tool

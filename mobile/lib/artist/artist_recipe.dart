@@ -4,17 +4,24 @@ class ArtistTagRecord {
   final int id;
   final String name;
   final int postCount;
-  const ArtistTagRecord(this.id, this.name, this.postCount);
+  final bool deprecated;
+  const ArtistTagRecord(this.id, this.name, this.postCount,
+      {this.deprecated = false});
 
   factory ArtistTagRecord.fromJson(Map<String, dynamic> json) =>
       ArtistTagRecord(
         (json['id'] as num?)?.toInt() ?? 0,
         json['name']?.toString() ?? '',
         (json['post_count'] as num?)?.toInt() ?? 0,
+        deprecated: json['is_deprecated'] == true || json['deprecated'] == true,
       );
 
-  Map<String, dynamic> toJson() =>
-      {'id': id, 'name': name, 'post_count': postCount};
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'post_count': postCount,
+        'is_deprecated': deprecated,
+      };
 }
 
 class ArtistRecipe {
@@ -110,7 +117,7 @@ const styleMutationLibrary = <String, List<String>>{
     'semi-realistic',
     'surrealism',
     'ukiyo-e',
-    'visual novel',
+    'visual novel art',
     'western comics',
     'storybook illustration',
     'editorial illustration',
@@ -126,17 +133,17 @@ const styleMutationLibrary = <String, List<String>>{
     'gouache',
     'graphite',
     'impasto',
-    'ink',
+    'ink (medium)',
     'ink wash',
     'marker',
-    'oil painting',
+    'oil painting (medium)',
     'pastel',
     'pencil sketch',
     'rough sketch',
     'thick lineart',
     'thin lineart',
     'visible brushstrokes',
-    'watercolor',
+    'watercolor (medium)',
     'woodcut',
     'cel shading',
     'soft shading',
@@ -275,6 +282,29 @@ String _number(double value) => value == value.roundToDouble()
     ? value.toInt().toString()
     : value.toStringAsFixed(2).replaceFirst(RegExp(r'0+$'), '');
 
+const _artistTagAliases = <String, String>{
+  'channel_(_caststation)': 'channel_(caststation)',
+  'machi_(7769)': 'machi_(machi0910)',
+};
+
+String _normalizeCompatibilityAscii(String value) => String.fromCharCodes(
+      value.runes.map((codePoint) {
+        if (codePoint == 0x3000) return 0x20;
+        if (codePoint >= 0xff01 && codePoint <= 0xff5e) {
+          return codePoint - 0xfee0;
+        }
+        return codePoint;
+      }),
+    );
+
+String canonicalArtistTagName(String raw) {
+  final normalized = _normalizeCompatibilityAscii(raw)
+      .trim()
+      .toLowerCase()
+      .replaceAll(RegExp(r'\s+'), '_');
+  return _artistTagAliases[normalized] ?? normalized;
+}
+
 String artistPromptWithTrailingComma(String value) {
   final normalized = value.trim().replaceFirst(RegExp(r',+$'), '');
   return normalized.isEmpty ? '' : '$normalized,';
@@ -311,7 +341,9 @@ List<ArtistRecipe> randomizeArtistWeights({
       .map((token) => pattern.firstMatch(token.trim()))
       .whereType<RegExpMatch>()
       .map((match) => (
-            match.group(2)!.replaceFirst(RegExp(r'\s*::$'), '').trim(),
+            canonicalArtistTagName(
+              match.group(2)!.replaceFirst(RegExp(r'\s*::$'), ''),
+            ),
             double.tryParse(match.group(1) ?? '') ?? 1.0,
           ))
       .where((entry) => entry.$1.isNotEmpty && entry.$2 > 0)
@@ -399,7 +431,7 @@ List<ArtistRecipe> drawArtistRecipes({
     final artistTokens = <String>[];
     for (var index = 0; index < selected.length; index++) {
       artistTokens.add(
-          '${_number(_weight(index, selected.length, random))}::artist:${selected[index].name} ::');
+          '${_number(_weight(index, selected.length, random))}::artist:${canonicalArtistTagName(selected[index].name)} ::');
     }
     final tokens = <String>[...artistTokens];
     final auxiliaryTokens = auxiliary

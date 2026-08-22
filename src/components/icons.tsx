@@ -59,6 +59,7 @@ export type IconName =
   | "user"
   | "loader"
   | "sliders"
+  | "moreHorizontal"
   | "chevronRight";
 
 const PATHS: Record<IconName, ReactNode> = {
@@ -383,6 +384,13 @@ const PATHS: Record<IconName, ReactNode> = {
       <circle cx="8" cy="18" r="2" />
     </>
   ),
+  moreHorizontal: (
+    <>
+      <circle cx="5" cy="12" r="1" />
+      <circle cx="12" cy="12" r="1" />
+      <circle cx="19" cy="12" r="1" />
+    </>
+  ),
   chevronRight: <path d="m9 6 6 6-6 6" />,
 };
 
@@ -426,6 +434,10 @@ const LEGACY_ICON_MAP: Record<string, IconName> = {
 
 export function iconNameForLegacyGlyph(glyph: string): IconName | undefined {
   return LEGACY_ICON_MAP[glyph];
+}
+
+export function isIconName(value: string): value is IconName {
+  return Object.prototype.hasOwnProperty.call(PATHS, value);
 }
 
 export function Icon({ name, className }: { name: IconName; className?: string }) {

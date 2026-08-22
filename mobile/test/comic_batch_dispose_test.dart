@@ -315,11 +315,13 @@ void main() {
     api.complete(1);
     await firstRun;
 
-    // Clearing only resets results. It must retain the edited values so a new
-    // batch uses the current global and per-item settings.
+    // Clearing starts a new global-parameter revision. Prompts and explicit
+    // strength tweaks survive, while stale full per-item parameter snapshots
+    // are disabled so edits on the Parameters step cannot be shadowed.
     expect(await controller.clearGeneratedResults(), isTrue);
     expect(globalItem.prompt, 'global prompt');
     expect(overriddenItem.prompt, 'overridden prompt');
+    expect(overriddenItem.overrideParams, isFalse);
     expect(globalItem.status, BatchItemStatus.pending);
     expect(overriddenItem.status, BatchItemStatus.pending);
 
@@ -332,7 +334,7 @@ void main() {
     expect(api.capturedExtras[2].preciseReferences, hasLength(1));
     api.complete(2);
     await _waitUntil(() => api.calls == 4);
-    expect(api.params[3].steps, 40);
+    expect(api.params[3].steps, 36);
     expect(api.params[3].positivePrompt, 'new style, overridden prompt');
     expect(api.strengths[3], 0.75);
     api.complete(3);
@@ -343,6 +345,7 @@ void main() {
     overriddenItem
       ..selected = true
       ..prompt = 'selected retry'
+      ..overrideParams = true
       ..params.steps = 44;
     controller.project.globalStyle = 'latest style';
     controller.changed();

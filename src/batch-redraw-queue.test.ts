@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildBatchRedrawRequest,
   clearBatchRedrawItemResult,
+  resetBatchRedrawItemForParameterRevision,
   resetInterruptedBatchItem,
   shouldStopBatchRedraw,
 } from "./batch-redraw-queue";
@@ -105,6 +106,25 @@ describe("batch redraw cancellation", () => {
       resultUrl: undefined,
       resultPath: undefined,
       historyItemId: undefined,
+    });
+  });
+
+  it("drops stale per-image parameter snapshots for a fresh revision", () => {
+    const reset = resetBatchRedrawItemForParameterRevision({
+      ...item("done"),
+      prompt: "keep prompt",
+      strength: 0.72,
+      overrideParams: true,
+      params: { steps: 40, cfgScale: 9 },
+      resultPath: "C:/output/result.png",
+    });
+    expect(reset).toMatchObject({
+      prompt: "keep prompt",
+      strength: 0.72,
+      overrideParams: false,
+      params: {},
+      status: "pending",
+      resultPath: undefined,
     });
   });
 });

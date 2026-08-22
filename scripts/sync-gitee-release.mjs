@@ -43,8 +43,14 @@ async function request(url, options = {}, attempts = 4) {
 
 async function releaseForTag() {
   const response = await request(`${api}/releases/tags/${encodeURIComponent(tag)}`, {}, 2);
-  if (response.ok) return response.json();
-  if (response.status !== 404) throw new Error(`Unable to query Gitee release (${response.status})`);
+  // Gitee currently answers `200 null` for a tag that has no release. Treat
+  // that as missing instead of dereferencing `null.id` and failing after the
+  // GitHub assets have already been published.
+  if (response.ok) {
+    const existingRelease = await response.json();
+    if (existingRelease && Number.isFinite(Number(existingRelease.id))) return existingRelease;
+  }
+  if (!response.ok && response.status !== 404) throw new Error(`Unable to query Gitee release (${response.status})`);
 
   const body = new URLSearchParams({
     tag_name: tag,
@@ -58,7 +64,10 @@ async function releaseForTag() {
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body,
   });
-  if (created.ok) return created.json();
+  if (created.ok) {
+    const createdRelease = await created.json();
+    if (createdRelease && Number.isFinite(Number(createdRelease.id))) return createdRelease;
+  }
 
   // Desktop and Android workflows can race while creating the same release.
   const existing = await request(`${api}/releases/tags/${encodeURIComponent(tag)}`, {}, 4);

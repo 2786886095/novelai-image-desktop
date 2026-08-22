@@ -3,7 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { createPortal } from "react-dom";
 import clsx from "clsx";
 import gsap from "gsap";
-import { Icon, iconNameForLegacyGlyph } from "./icons";
+import { Icon, iconNameForLegacyGlyph, isIconName } from "./icons";
 
 export function Button({
   children,
@@ -23,7 +23,7 @@ export function Button({
 export function IconText({ icon, children }: { icon: ReactNode; children: ReactNode }) {
   const normalizedIcon = typeof icon === "string"
     ? (() => {
-        const iconName = iconNameForLegacyGlyph(icon);
+        const iconName = isIconName(icon) ? icon : iconNameForLegacyGlyph(icon);
         return iconName ? <Icon name={iconName} /> : icon;
       })()
     : icon;

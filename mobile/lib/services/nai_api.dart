@@ -654,8 +654,11 @@ class NaiApi {
             ...charCaptions.map((caption) => caption['char_caption'] as String),
           ].where((value) => value.trim().isNotEmpty).join(' | ');
 
+    // NovelAI's V5 frontend fixes the schedule to Karras and hides the
+    // selector. Keep mobile payloads byte-for-byte compatible with that rule
+    // instead of deriving a different schedule from the selected sampler.
     final effectiveNoiseSchedule = params.isV5
-        ? _defaultNoiseScheduleForSampler(params.sampler)
+        ? 'karras'
         : (params.noiseSchedule.isEmpty ? 'native' : params.noiseSchedule);
     final parameters = <String, dynamic>{
       'params_version': 4,
@@ -713,11 +716,9 @@ class NaiApi {
       parameters['sm_dyn'] = params.smea && params.smeaDyn;
     }
 
-    if (extras.vibeImages.isNotEmpty && !params.supportsVibeTransfer) {
-      throw const NaiHttpException(400,
-          'NovelAI V5 does not support Vibe Transfer. Remove vibe images or use Precise Reference.');
-    }
-    if (extras.vibeImages.isNotEmpty) {
+    // V5 does not support Vibe Transfer. Ignore legacy/stored vibe images just
+    // like the desktop client instead of turning a model switch into a 400.
+    if (extras.vibeImages.isNotEmpty && params.supportsVibeTransfer) {
       final encoded = <VibeTransferItem>[];
       for (final vibe in extras.vibeImages) {
         encoded
@@ -1743,17 +1744,6 @@ class NaiApi {
   String _normalizeModel(String model) => model.endsWith('-inpainting')
       ? model.substring(0, model.length - '-inpainting'.length)
       : model;
-
-  String _defaultNoiseScheduleForSampler(String sampler) => switch (sampler) {
-        'k_euler' ||
-        'k_euler_ancestral' ||
-        'k_dpmpp_sde' ||
-        'k_dpmpp_2s_ancestral' ||
-        'k_dpmpp_2m_sde' =>
-          'karras',
-        'k_dpmpp_2m' => 'exponential',
-        _ => 'native',
-      };
 
   String _stripBase64(String value) =>
       value.contains(',') ? value.split(',').last : value;

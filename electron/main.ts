@@ -380,6 +380,40 @@ function createWindow() {
                   ? [{ icon: describe(icon), container: describe(container) }]
                   : [];
               });
+            const iconMisalignment = [...document.querySelectorAll('button .ui-icon, .btn .ui-icon')]
+              .filter(visible)
+              .flatMap((icon) => {
+                const container = icon.closest('button, .btn');
+                if (!container || !visible(container) || !(container.textContent || '').trim()) return [];
+                // Large empty-state/drop-zone buttons deliberately stack an
+                // icon above multiple text rows; they are not inline controls.
+                if (container.getBoundingClientRect().height > 58) return [];
+                const ir = icon.getBoundingClientRect();
+                const cr = container.getBoundingClientRect();
+                const deltaY = Math.abs((ir.top + ir.height / 2) - (cr.top + cr.height / 2));
+                return deltaY > 2.5 ? [{ icon: describe(icon), container: describe(container), deltaY: Number(deltaY.toFixed(2)) }] : [];
+              });
+            const textMisalignment = [...document.querySelectorAll('button, .btn')]
+              .filter(visible)
+              .flatMap((element) => {
+                if (element.getBoundingClientRect().height > 58) return [];
+                const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+                const rects = [];
+                let node;
+                while ((node = walker.nextNode())) {
+                  if (!node.textContent?.trim()) continue;
+                  const range = document.createRange();
+                  range.selectNodeContents(node);
+                  const rect = range.getBoundingClientRect();
+                  if (rect.width > 0 && rect.height > 0) rects.push(rect);
+                }
+                if (!rects.length) return [];
+                const top = Math.min(...rects.map((rect) => rect.top));
+                const bottom = Math.max(...rects.map((rect) => rect.bottom));
+                const cr = element.getBoundingClientRect();
+                const deltaY = Math.abs((top + bottom) / 2 - (cr.top + cr.height / 2));
+                return deltaY > 3 ? [{ element: describe(element), deltaY: Number(deltaY.toFixed(2)) }] : [];
+              });
             const duplicateArrowRisk = [...document.querySelectorAll('select')]
               .filter(visible)
               .filter((element) => getComputedStyle(element).appearance !== 'none' && Boolean(element.closest('.reference-catalog-select')))
@@ -387,7 +421,7 @@ function createWindow() {
             const openSelectMenus = [...document.querySelectorAll('.select-menu-popover')]
               .filter(visible)
               .map((element) => ({ ...describe(element), optionCount: element.querySelectorAll('[role="option"]').length }));
-            return { viewport: { width: innerWidth, height: innerHeight }, viewportOverflow, contentOverflow, iconOverflow, duplicateArrowRisk, openSelectMenus };
+            return { viewport: { width: innerWidth, height: innerHeight }, viewportOverflow, contentOverflow, iconOverflow, iconMisalignment, textMisalignment, duplicateArrowRisk, openSelectMenus };
           })()`);
           const image = await mainWindow?.webContents.capturePage();
           if (image) {
@@ -449,7 +483,7 @@ function createWindow() {
     void mainWindow.loadFile(
       path.join(__dirname, "../../dist/index.html"),
       uiCapturePath
-        ? { query: { uiCapture: captureSurface, uiTheme: captureTheme, uiCatalogState: captureCatalogState, uiPresetSection: capturePresetSection, uiSelectOpen: normalizedUiCapturePath.includes("select-open") ? "1" : "0" } }
+        ? { query: { uiCapture: captureSurface, uiTheme: captureTheme, uiCatalogState: captureCatalogState, uiPresetSection: capturePresetSection, uiSelectOpen: normalizedUiCapturePath.includes("select-open") ? "1" : "0", uiPresetPicker: normalizedUiCapturePath.includes("preset-picker") ? "1" : "0", uiPresetCreate: normalizedUiCapturePath.includes("preset-create") ? "1" : "0", uiStylePresetOpen: normalizedUiCapturePath.includes("style-preset-menu") ? "1" : "0", uiStylePresetActions: normalizedUiCapturePath.includes("style-preset-actions") ? "1" : "0" } }
         : undefined,
     );
   }
@@ -466,7 +500,7 @@ function registerIpc() {
   ipcMain.handle(
     "artistLab:popularArtists",
     (_event, limit: unknown, force: unknown) =>
-      loadPopularArtistTags(limit, force),
+      loadPopularArtistTags(limit, force, true),
   );
   ipcMain.handle(
     "artistLab:scoreImages",

@@ -9,7 +9,7 @@ class NaiOption {
 }
 
 const appName = 'Langbai NovelAI Studio';
-const appVersion = '1.7.7';
+const appVersion = '1.7.8';
 
 const naiModels = <NaiOption>[
   NaiOption(
@@ -663,6 +663,7 @@ class AppSettings {
   String imageNameTemplate;
   List<PromptShortcutTemplate> promptShortcuts;
   List<StylePromptPreset> stylePromptPresets;
+  List<String> stylePromptPresetGroups;
   Map<String, String> reversePromptTemplates;
   Map<String, String> convertPromptTemplates;
   bool promptCodexEnhanceEnabled;
@@ -735,6 +736,7 @@ class AppSettings {
     this.imageNameTemplate = '{date}_{seq}_{model}',
     List<PromptShortcutTemplate>? promptShortcuts,
     List<StylePromptPreset>? stylePromptPresets,
+    List<String>? stylePromptPresetGroups,
     Map<String, String>? reversePromptTemplates,
     Map<String, String>? convertPromptTemplates,
     this.promptCodexEnhanceEnabled = true,
@@ -760,7 +762,8 @@ class AppSettings {
   })  : reversePromptTemplates = reversePromptTemplates ?? {},
         convertPromptTemplates = convertPromptTemplates ?? {},
         promptShortcuts = promptShortcuts ?? [],
-        stylePromptPresets = stylePromptPresets ?? [];
+        stylePromptPresets = stylePromptPresets ?? [],
+        stylePromptPresetGroups = stylePromptPresetGroups ?? ['Default'];
 
   bool get darkMode => theme == 'dark';
 
@@ -808,6 +811,7 @@ class AppSettings {
             promptShortcuts.map((item) => item.toJson()).toList(),
         'stylePromptPresets':
             stylePromptPresets.map((item) => item.toJson()).toList(),
+        'stylePromptPresetGroups': stylePromptPresetGroups,
         'reversePromptTemplates': reversePromptTemplates,
         'convertPromptTemplates': convertPromptTemplates,
         'promptCodexEnhanceEnabled': promptCodexEnhanceEnabled,
@@ -885,6 +889,12 @@ class AppSettings {
                     StylePromptPreset.fromJson(Map<String, dynamic>.from(item)))
                 .toList() ??
             [],
+        stylePromptPresetGroups: {
+          'Default',
+          ...((j['stylePromptPresetGroups'] as List?) ?? const [])
+              .map((item) => item.toString().trim())
+              .where((item) => item.isNotEmpty),
+        }.toList(),
         reversePromptTemplates: _stringMap(j['reversePromptTemplates']),
         convertPromptTemplates: _stringMap(j['convertPromptTemplates']),
         promptCodexEnhanceEnabled: j['promptCodexEnhanceEnabled'] ?? true,
@@ -964,6 +974,7 @@ class StylePromptPreset {
   final String id;
   String name;
   String prompt;
+  String group;
   String createdAt;
   List<StylePromptPreviewImage> previewImages;
 
@@ -971,6 +982,7 @@ class StylePromptPreset {
     required this.id,
     required this.name,
     required this.prompt,
+    this.group = 'Default',
     required this.createdAt,
     List<StylePromptPreviewImage>? previewImages,
   }) : previewImages = previewImages ?? [];
@@ -979,6 +991,7 @@ class StylePromptPreset {
         'id': id,
         'name': name,
         'prompt': prompt,
+        'group': group,
         'createdAt': createdAt,
         'previewImages': previewImages.map((item) => item.toJson()).toList(),
       };
@@ -988,6 +1001,9 @@ class StylePromptPreset {
         id: json['id']?.toString() ?? '',
         name: json['name']?.toString() ?? '',
         prompt: json['prompt']?.toString() ?? '',
+        group: json['group']?.toString().trim().isNotEmpty == true
+            ? json['group'].toString().trim()
+            : 'Default',
         createdAt: json['createdAt']?.toString() ?? '',
         previewImages: (json['previewImages'] as List?)
                 ?.whereType<Map>()

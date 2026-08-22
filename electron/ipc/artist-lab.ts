@@ -11,6 +11,7 @@ import type {
   ArtistLabModelStatus,
   ArtistTagRecord,
 } from "../../src/artist-lab";
+import { ARTIST_TAG_ALIASES, CURATED_ARTIST_TAGS } from "../../src/curated-artists";
 import { proxyConfig } from "./proxy";
 
 const DANBOORU_TAGS_URL = "https://danbooru.donmai.us/tags.json";
@@ -81,6 +82,13 @@ function safeArtistQuery(value: unknown): string {
     : "";
 }
 
+function canonicalArtistName(value: unknown): string {
+  const normalized = typeof value === "string"
+    ? value.normalize("NFKC").trim().toLowerCase().replace(/\s+/g, "_")
+    : "";
+  return ARTIST_TAG_ALIASES[normalized] ?? normalized;
+}
+
 export async function searchArtistTags(rawQuery: unknown, rawLimit: unknown): Promise<ArtistTagRecord[]> {
   const query = safeArtistQuery(rawQuery);
   const limit = Math.max(1, Math.min(100, Number(rawLimit) || 40));
@@ -119,23 +127,45 @@ async function fetchArtistTagsPage(query: string, limit: number, page: number): 
     .filter((item: ArtistTagRecord | null): item is ArtistTagRecord => Boolean(item) && !item!.deprecated);
 }
 
-export async function loadPopularArtistTags(rawLimit: unknown, rawForce: unknown): Promise<ArtistTagRecord[]> {
+function appendCuratedArtistTags(items: ArtistTagRecord[], includeCurated: boolean): ArtistTagRecord[] {
+  const normalizedItems = items
+    .filter((item) => Number.isSafeInteger(item.id) && item.id > 0 && !item.deprecated)
+    .map((item) => ({ ...item, name: canonicalArtistName(item.name) }))
+    .filter((item) => Boolean(item.name));
+  const seenIds = new Set(normalizedItems.map((item) => item.id));
+  const seenNames = new Set(normalizedItems.map((item) => item.name));
+  const deduplicated = normalizedItems.filter((item, index) => (
+    normalizedItems.findIndex((candidate) => candidate.id === item.id || candidate.name === item.name) === index
+  ));
+  if (!includeCurated) return deduplicated;
+  return [
+    ...deduplicated,
+    ...CURATED_ARTIST_TAGS.filter((item) => !seenIds.has(item.id) && !seenNames.has(canonicalArtistName(item.name))),
+  ];
+}
+
+export async function loadPopularArtistTags(
+  rawLimit: unknown,
+  rawForce: unknown,
+  rawIncludeCurated: unknown = false,
+): Promise<ArtistTagRecord[]> {
   const limit = Math.max(20, Math.min(5000, Math.floor(Number(rawLimit) || 300)));
   const force = rawForce === true;
+  const includeCurated = rawIncludeCurated === true;
   let cachedItems: ArtistTagRecord[] = [];
   try {
     const cached = JSON.parse(fs.readFileSync(popularArtistCacheFile(), "utf8")) as {
       savedAt?: number;
       items?: ArtistTagRecord[];
     };
-    if (Array.isArray(cached.items)) cachedItems = cached.items;
+    if (Array.isArray(cached.items)) cachedItems = appendCuratedArtistTags(cached.items, false);
     if (!force) {
       if (
         Number.isFinite(cached.savedAt) &&
         Date.now() - Number(cached.savedAt) < POPULAR_ARTIST_CACHE_MAX_AGE &&
         cachedItems.length >= limit
       ) {
-        return cachedItems.slice(0, limit);
+        return appendCuratedArtistTags(cachedItems.slice(0, limit), includeCurated);
       }
     }
   } catch {
@@ -159,7 +189,7 @@ export async function loadPopularArtistTags(rawLimit: unknown, rawForce: unknown
       if (batch.length < pageSize) break;
     }
   } catch (error) {
-    if (cachedItems.length > 0) return cachedItems.slice(0, limit);
+    if (cachedItems.length > 0) return appendCuratedArtistTags(cachedItems.slice(0, limit), includeCurated);
     throw error;
   }
   output.sort((left, right) => right.postCount - left.postCount || left.name.localeCompare(right.name));
@@ -168,7 +198,7 @@ export async function loadPopularArtistTags(rawLimit: unknown, rawForce: unknown
   } catch {
     // The ranking is still usable for this session if persistence fails.
   }
-  return output.slice(0, limit);
+  return appendCuratedArtistTags(output.slice(0, limit), includeCurated);
 }
 
 async function scorer(mode: ArtistLabModelMode) {

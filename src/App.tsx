@@ -56,6 +56,7 @@ import {
   NAI_UC_PRESETS,
   DEFAULT_MODEL_FOR_MODE,
   isNAIV4PlusModel,
+  isNAIV5Model,
   maxNAICharacterPrompts,
   supportsNAICharacterPrompts,
   supportsNAINoiseScheduleControl,
@@ -751,6 +752,11 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
   const [quickSaveSource, setQuickSaveSource] = useState<QuickPresetSource | null>(null);
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("uiPresetPicker") === "1") {
+      setShowPresetLibrary(true);
+    }
+  }, []);
 
   function handleVibeFile(file: File, infoExtracted: number, strength: number) {
     const reader = new FileReader();
@@ -1192,7 +1198,10 @@ function PromptAndParams({
   const [showNormalize, setShowNormalize] = useState(false);
   const [translating, setTranslating] = useState(false);
   const [selectedStylePresetId, setSelectedStylePresetId] = useState("");
+  const [selectedStylePresetGroup, setSelectedStylePresetGroup] = useState("all");
+  const [styleGroupPromptOpen, setStyleGroupPromptOpen] = useState(false);
   const [stylePresetMenuOpen, setStylePresetMenuOpen] = useState(false);
+  const [stylePresetActionId, setStylePresetActionId] = useState("");
   const [hoveredStylePresetId, setHoveredStylePresetId] = useState("");
   const [styleImageManagerPresetId, setStyleImageManagerPresetId] = useState("");
   const stylePresetPickerRef = useRef<HTMLDivElement>(null);
@@ -1232,6 +1241,11 @@ function PromptAndParams({
   }
   const templates: PromptTemplate[] = settings?.promptTemplates ?? [];
   const stylePromptPresets: StylePromptPreset[] = settings?.stylePromptPresets ?? [];
+  const stylePromptPresetGroups = useMemo(() => {
+    const groups = new Set<string>(["Default", ...(settings?.stylePromptPresetGroups ?? [])]);
+    stylePromptPresets.forEach((preset) => groups.add(preset.group || "Default"));
+    return [...groups];
+  }, [settings?.stylePromptPresetGroups, stylePromptPresets]);
   const selectedStylePreset = stylePromptPresets.find((item) => item.id === selectedStylePresetId);
   const hoveredStylePreset = stylePromptPresets.find((item) => item.id === hoveredStylePresetId);
   const styleImageManagerPreset = stylePromptPresets.find((item) => item.id === styleImageManagerPresetId);
@@ -1240,6 +1254,38 @@ function PromptAndParams({
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(settings?.language, key, values), [settings?.language]);
   // Co-occurrence: tags commonly used alongside what's already in the prompt.
   const related = useMemo(() => relatedTags(effectivePositivePrompt, 8), [effectivePositivePrompt]);
+
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("uiStylePresetOpen") !== "1") return;
+    let cancelled = false;
+    const prepare = async () => {
+      if (stylePromptPresets.length === 0) {
+        await window.naiDesktop.setSetting("stylePromptPresetGroups", ["Default", "光影", "厚涂"]);
+        await window.naiDesktop.setSetting("stylePromptPresets", [
+          { id: "ui-style-1", name: "柔和逆光", prompt: "soft backlighting, rim light", group: "光影", createdAt: "2026-08-22T00:00:00.000Z", previewImages: [] },
+          { id: "ui-style-2", name: "油画厚涂", prompt: "impasto, painterly, textured brushwork", group: "厚涂", createdAt: "2026-08-22T00:00:00.000Z", previewImages: [] },
+          { id: "ui-style-3", name: "清透动画", prompt: "clean anime lineart, soft gradient", group: "Default", createdAt: "2026-08-22T00:00:00.000Z", previewImages: [] },
+        ]);
+        await refreshSettings();
+        return;
+      }
+      window.requestAnimationFrame(() => {
+        if (cancelled) return;
+        const rect = stylePresetPickerRef.current?.getBoundingClientRect();
+        if (!rect) return;
+        const width = Math.min(window.innerWidth - 24, Math.max(260, rect.width));
+        const left = Math.max(12, Math.min(rect.left, window.innerWidth - width - 12));
+        setSelectedStylePresetGroup(selectedStylePreset?.group || "Default");
+        setStylePresetMenuPosition({ left, top: rect.bottom + 6, width });
+        setStylePresetMenuOpen(true);
+        if (new URLSearchParams(window.location.search).get("uiStylePresetActions") === "1") {
+          setStylePresetActionId("ui-style-3");
+        }
+      });
+    };
+    void prepare();
+    return () => { cancelled = true; };
+  }, [stylePromptPresets.length]);
 
   function applyTemplate(tpl: PromptTemplate) {
     setShowTemplateMenu(false);
@@ -1295,8 +1341,11 @@ function PromptAndParams({
     }
     const rect = stylePresetPickerRef.current?.getBoundingClientRect();
     if (rect) {
-      setStylePresetMenuPosition({ left: rect.left, top: rect.bottom + 6, width: Math.max(220, rect.width) });
+      const width = Math.min(window.innerWidth - 24, Math.max(260, rect.width));
+      const left = Math.max(12, Math.min(rect.left, window.innerWidth - width - 12));
+      setStylePresetMenuPosition({ left, top: rect.bottom + 6, width });
     }
+    setSelectedStylePresetGroup(selectedStylePreset?.group || "Default");
     setStylePresetMenuOpen(true);
   }
 
@@ -1327,6 +1376,7 @@ function PromptAndParams({
       id: makeStylePresetId(),
       name,
       prompt: styleNamePrompt.stylePrompt,
+      group: selectedStylePresetGroup === "all" ? "Default" : selectedStylePresetGroup,
       createdAt: new Date().toISOString(),
       previewImages: [],
     };
@@ -1337,9 +1387,52 @@ function PromptAndParams({
     setToast(f("prompt.stylePresetSaved", { name }));
   }
 
-  async function deleteStylePromptPreset() {
-    const preset = stylePromptPresets.find((item) => item.id === selectedStylePresetId);
+  async function createStylePromptGroup(rawName: string) {
+    const name = rawName.trim();
+    setStyleGroupPromptOpen(false);
+    if (!name) return;
+    if (stylePromptPresetGroups.some((group) => group.toLocaleLowerCase() === name.toLocaleLowerCase())) {
+      setToast(t("prompt.styleGroupExists"));
+      return;
+    }
+    await window.naiDesktop.setSetting("stylePromptPresetGroups", [...stylePromptPresetGroups, name]);
+    await refreshSettings();
+    setSelectedStylePresetGroup(name);
+    setToast(f("prompt.styleGroupCreated", { name }));
+  }
+
+  async function moveStylePromptPreset(presetId: string, group: string) {
+    await window.naiDesktop.setSetting(
+      "stylePromptPresets",
+      stylePromptPresets.map((preset) => preset.id === presetId ? { ...preset, group } : preset),
+    );
+    await refreshSettings();
+    setStylePresetActionId("");
+    const preset = stylePromptPresets.find((item) => item.id === presetId);
+    if (preset) setToast(f("prompt.styleMoved", { name: preset.name, group: group === "Default" ? t("prompt.styleGroupDefault") : group }));
+  }
+
+  async function deleteStylePromptGroup(groupOverride?: string) {
+    const group = groupOverride ?? selectedStylePresetGroup;
+    if (group === "all" || group === "Default") return;
+    if (!window.confirm(f("prompt.styleGroupDeleteConfirm", { name: group }))) return;
+    await window.naiDesktop.setSetting(
+      "stylePromptPresets",
+      stylePromptPresets.map((preset) => preset.group === group ? { ...preset, group: "Default" } : preset),
+    );
+    await window.naiDesktop.setSetting(
+      "stylePromptPresetGroups",
+      stylePromptPresetGroups.filter((item) => item !== group),
+    );
+    await refreshSettings();
+    setSelectedStylePresetGroup("all");
+    setToast(f("prompt.styleGroupDeleted", { name: group }));
+  }
+
+  async function deleteStylePromptPreset(presetId = selectedStylePresetId) {
+    const preset = stylePromptPresets.find((item) => item.id === presetId);
     if (!preset) return;
+    if (!window.confirm(f("prompt.stylePresetDeleteConfirm", { name: preset.name }))) return;
     await window.naiDesktop.deleteStylePromptPresetImages(preset.id);
     await window.naiDesktop.setSetting(
       "stylePromptPresets",
@@ -1347,6 +1440,7 @@ function PromptAndParams({
     );
     await refreshSettings();
     setSelectedStylePresetId("");
+    setStylePresetActionId("");
     setToast(f("prompt.stylePresetDeleted", { name: preset.name }));
   }
 
@@ -1618,23 +1712,57 @@ function PromptAndParams({
             }}
           >
             <div className="style-preset-menu-list">
-              {stylePromptPresets.length === 0 ? (
-                <p>{generateText.prompt.stylePresetPlaceholder}</p>
-              ) : stylePromptPresets.map((preset) => (
-                <button
-                  type="button"
-                  role="option"
-                  aria-selected={preset.id === selectedStylePresetId}
-                  className={clsx(preset.id === selectedStylePresetId && "active")}
-                  key={preset.id}
-                  onMouseEnter={() => setHoveredStylePresetId(preset.id)}
-                  onFocus={() => setHoveredStylePresetId(preset.id)}
-                  onClick={() => void applyStylePromptPreset(preset.id)}
-                >
-                  <span>{preset.name}</span>
-                  <small><Icon name="eye" /> {(preset.previewImages ?? []).length}/3</small>
-                </button>
-              ))}
+              {stylePromptPresetGroups.map((group) => {
+                const groupPresets = stylePromptPresets.filter((preset) => (preset.group || "Default") === group);
+                const expanded = selectedStylePresetGroup === group;
+                return (
+                  <section className={clsx("style-folder", expanded && "expanded")} key={group}>
+                    <header>
+                      <button type="button" onClick={() => setSelectedStylePresetGroup(expanded ? "all" : group)} aria-expanded={expanded}>
+                        <Icon name={expanded ? "folderOpen" : "folder"} />
+                        <span>{group === "Default" ? t("prompt.styleGroupDefault") : group}</span>
+                        <small>{groupPresets.length}</small>
+                        <Icon name="chevronRight" />
+                      </button>
+                      {group !== "Default" && <button type="button" className="style-folder-delete" title={t("prompt.styleGroupDelete")} aria-label={t("prompt.styleGroupDelete")} onClick={() => void deleteStylePromptGroup(group)}><Icon name="trash" /></button>}
+                    </header>
+                    {expanded && <div className="style-folder-children">
+                      {groupPresets.length === 0 && <p>{generateText.prompt.stylePresetPlaceholder}</p>}
+                      {groupPresets.map((preset) => (
+                    <div className={clsx("style-preset-menu-item", preset.id === selectedStylePresetId && "active")} key={preset.id}>
+                      <button
+                        type="button"
+                        role="option"
+                        aria-selected={preset.id === selectedStylePresetId}
+                        onMouseEnter={() => setHoveredStylePresetId(preset.id)}
+                        onFocus={() => setHoveredStylePresetId(preset.id)}
+                        onClick={() => void applyStylePromptPreset(preset.id)}
+                      >
+                        <span>{preset.name}</span>
+                        <small>
+                          <Icon name="eye" /> {(preset.previewImages ?? []).length}/3
+                        </small>
+                      </button>
+                      <button type="button" className="style-preset-more" title={t("prompt.styleMove")} aria-label={f("prompt.styleMoveTo", { name: preset.name })} onClick={() => setStylePresetActionId((current) => current === preset.id ? "" : preset.id)}><Icon name="moreHorizontal" /></button>
+                      {stylePresetActionId === preset.id && (
+                        <div className="style-preset-item-popover">
+                          <strong>{t("prompt.styleMove")}</strong>
+                          {stylePromptPresetGroups.map((group) => (
+                            <button type="button" key={group} disabled={(preset.group || "Default") === group} onClick={() => void moveStylePromptPreset(preset.id, group)}>
+                              {(preset.group || "Default") === group && <Icon name="check" />}
+                              <span>{group === "Default" ? t("prompt.styleGroupDefault") : group}</span>
+                            </button>
+                          ))}
+                          <button type="button" className="danger" onClick={() => void deleteStylePromptPreset(preset.id)}><Icon name="trash" /><span>{generateText.prompt.stylePresetDelete}</span></button>
+                        </div>
+                      )}
+                    </div>
+                      ))}
+                    </div>}
+                  </section>
+                );
+              })}
+              <button type="button" className="style-folder-create" onClick={() => setStyleGroupPromptOpen(true)}><Icon name="plus" /><span>{t("prompt.styleGroupCreate")}</span></button>
             </div>
             {hoveredStylePreset && (hoveredStylePreset.previewImages ?? []).length > 0 && (
               <aside className="style-preset-hover-preview">
@@ -1865,6 +1993,15 @@ function PromptAndParams({
           <input type="checkbox" checked={params.variety} onChange={(e) => setParam("variety", e.target.checked)} />
           <span>{generateText.prompt.variety}</span>
         </label>
+      )}
+      {styleGroupPromptOpen && (
+        <InputModal
+          title={t("prompt.styleGroupCreate")}
+          label={t("prompt.styleGroupName")}
+          initial=""
+          onConfirm={(value) => void createStylePromptGroup(value)}
+          onClose={() => setStyleGroupPromptOpen(false)}
+        />
       )}
       <Button className="full" onClick={() => setShowAdvanced(true)}>
         <IconText icon="⚙">{generateText.prompt.advancedParams}</IconText>
@@ -3467,7 +3604,7 @@ function LeftPanel({ openSettings }: { openSettings: () => void }) {
   return (
     <aside className="left-panel">
       <div className="panel-head">
-        <span>{meta.icon}</span>
+        <span aria-hidden="true"><Icon name={meta.icon} /></span>
         <div>
           <strong>{meta.title}</strong>
           <small>{meta.desc}</small>
@@ -5502,6 +5639,77 @@ function UpdateBanner() {
   );
 }
 
+const V5_MIGRATION_NOTICE_KEY = "langbai.notice.v5-model-migration.v1";
+const V5_MIGRATION_NOTICE_TEXT = {
+  "zh-CN": {
+    eyebrow: "模型更新提醒",
+    title: "NovelAI V5 Full 已上线",
+    body: "为避免改变旧项目的复现结果，升级软件不会强制覆盖你已经保存的模型。旧用户如仍显示 V4 / V4.5，请在生成页的模型列表中手动选择 NAI Diffusion V5 Full；新建默认配置已经使用 V5 Full。",
+    keep: "保持当前模型",
+    go: "前往模型选择",
+  },
+  "zh-TW": {
+    eyebrow: "模型更新提醒",
+    title: "NovelAI V5 Full 已上線",
+    body: "為避免改變舊專案的重現結果，升級軟體不會強制覆蓋已儲存的模型。舊使用者若仍顯示 V4 / V4.5，請在生成頁的模型清單中手動選擇 NAI Diffusion V5 Full；新建預設已使用 V5 Full。",
+    keep: "保留目前模型",
+    go: "前往模型選擇",
+  },
+  "en-US": {
+    eyebrow: "Model update",
+    title: "NovelAI V5 Full is available",
+    body: "Upgrades intentionally preserve the model saved in existing projects so their results remain reproducible. If an older installation still shows V4 or V4.5, choose NAI Diffusion V5 Full manually on Generate. New default configurations already use V5 Full.",
+    keep: "Keep current model",
+    go: "Open model selector",
+  },
+  "ja-JP": {
+    eyebrow: "モデル更新のお知らせ",
+    title: "NovelAI V5 Full が利用できます",
+    body: "既存プロジェクトの再現性を守るため、更新時に保存済みモデルを強制変更しません。旧環境で V4 / V4.5 のままの場合は、生成画面のモデル一覧から NAI Diffusion V5 Full を手動で選択してください。新規既定値は V5 Full です。",
+    keep: "現在のモデルを維持",
+    go: "モデル選択へ",
+  },
+  "ko-KR": {
+    eyebrow: "모델 업데이트 안내",
+    title: "NovelAI V5 Full을 사용할 수 있습니다",
+    body: "기존 프로젝트의 재현 결과를 보호하기 위해 업데이트가 저장된 모델을 강제로 변경하지 않습니다. 이전 설치에서 V4 / V4.5가 계속 표시되면 생성 화면의 모델 목록에서 NAI Diffusion V5 Full을 직접 선택하세요. 새 기본 구성은 V5 Full입니다.",
+    keep: "현재 모델 유지",
+    go: "모델 선택으로 이동",
+  },
+} as const;
+
+function V5MigrationNotice() {
+  const paramsModel = useAppStore((state) => state.params.model);
+  const settings = useAppStore((state) => state.settings);
+  const setActiveTab = useAppStore((state) => state.setActiveTab);
+  const captureMode = new URLSearchParams(window.location.search).has("uiCapture");
+  const [dismissed, setDismissed] = useState(() => captureMode || localStorage.getItem(V5_MIGRATION_NOTICE_KEY) === "dismissed");
+  if (!settings || dismissed || isNAIV5Model(paramsModel)) return null;
+  const text = V5_MIGRATION_NOTICE_TEXT[settings.language ?? "zh-CN"] ?? V5_MIGRATION_NOTICE_TEXT["zh-CN"];
+  const dismiss = () => {
+    localStorage.setItem(V5_MIGRATION_NOTICE_KEY, "dismissed");
+    setDismissed(true);
+  };
+  return (
+    <AppPortal>
+      <div className="modal-backdrop v5-migration-backdrop">
+        <section className="modal v5-migration-notice" role="dialog" aria-modal="true" aria-labelledby="v5-migration-title">
+          <span className="v5-migration-mark" aria-hidden="true"><Icon name="sparkles" /></span>
+          <div className="v5-migration-copy">
+            <small>{text.eyebrow}</small>
+            <h2 id="v5-migration-title">{text.title}</h2>
+            <p>{text.body}</p>
+          </div>
+          <footer>
+            <Button onClick={dismiss}>{text.keep}</Button>
+            <Button variant="primary" onClick={() => { dismiss(); setActiveTab("generate"); }}>{text.go}</Button>
+          </footer>
+        </section>
+      </div>
+    </AppPortal>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 // Draggable splitter between workspace rails. Drag = resize; double-click = reset.
 // Width changes apply live (store) and persist to localStorage on release.
@@ -5610,6 +5818,7 @@ function MainPage() {
     <div className="app-shell">
       <TitleBar />
       <UpdateBanner />
+      <V5MigrationNotice />
       <MenuBar openSettings={() => setShowSettings(true)} />
       <TabBar />
       <div

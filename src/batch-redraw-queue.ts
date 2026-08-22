@@ -79,3 +79,14 @@ export function clearBatchRedrawItemResult(
     historyItemId: undefined,
   };
 }
+
+/** Start a fresh parameter revision after the user clears a completed run. */
+export function resetBatchRedrawItemForParameterRevision(
+  item: BatchRedrawItem,
+): BatchRedrawItem {
+  return {
+    ...clearBatchRedrawItemResult(item),
+    overrideParams: false,
+    params: {},
+  };
+}

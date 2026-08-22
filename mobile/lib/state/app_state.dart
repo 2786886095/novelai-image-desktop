@@ -492,6 +492,7 @@ class AppState extends ChangeNotifier {
   Future<StylePromptPreset> addStylePromptPreset({
     required String name,
     required String prompt,
+    String group = 'Default',
   }) async {
     final cleanName = name.trim();
     final cleanPrompt = prompt.trim();
@@ -502,6 +503,7 @@ class AppState extends ChangeNotifier {
       id: '${DateTime.now().microsecondsSinceEpoch}',
       name: cleanName,
       prompt: cleanPrompt,
+      group: group.trim().isEmpty ? 'Default' : group.trim(),
       createdAt: DateTime.now().toIso8601String(),
       previewImages: [],
     );
@@ -509,6 +511,45 @@ class AppState extends ChangeNotifier {
     await storage.setSettings(settings);
     notifyListeners();
     return preset;
+  }
+
+  Future<bool> addStylePromptPresetGroup(String rawName) async {
+    final name = rawName.trim();
+    if (name.isEmpty) return false;
+    if (settings.stylePromptPresetGroups
+        .any((item) => item.toLowerCase() == name.toLowerCase())) {
+      return false;
+    }
+    settings.stylePromptPresetGroups.add(name);
+    await storage.setSettings(settings);
+    notifyListeners();
+    return true;
+  }
+
+  Future<void> moveStylePromptPreset(String id, String rawGroup) async {
+    final group = rawGroup.trim().isEmpty ? 'Default' : rawGroup.trim();
+    final preset =
+        settings.stylePromptPresets.where((item) => item.id == id).firstOrNull;
+    if (preset == null || preset.group == group) return;
+    preset.group = group;
+    if (!settings.stylePromptPresetGroups.contains(group)) {
+      settings.stylePromptPresetGroups.add(group);
+    }
+    await storage.setSettings(settings);
+    notifyListeners();
+  }
+
+  Future<bool> removeStylePromptPresetGroup(String rawGroup) async {
+    final group = rawGroup.trim();
+    if (group.isEmpty || group == 'Default') return false;
+    final removed = settings.stylePromptPresetGroups.remove(group);
+    if (!removed) return false;
+    for (final preset in settings.stylePromptPresets) {
+      if (preset.group == group) preset.group = 'Default';
+    }
+    await storage.setSettings(settings);
+    notifyListeners();
+    return true;
   }
 
   Future<void> removeStylePromptPreset(String id) async {

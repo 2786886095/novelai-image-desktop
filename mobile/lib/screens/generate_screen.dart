@@ -745,8 +745,95 @@ class PromptEditorState extends State<PromptEditor> {
   }
 }
 
-class _StylePresetControls extends StatelessWidget {
+class _StylePresetControls extends StatefulWidget {
   const _StylePresetControls();
+
+  @override
+  State<_StylePresetControls> createState() => _StylePresetControlsState();
+}
+
+class _StylePresetControlsState extends State<_StylePresetControls> {
+  String _selectedGroup = 'all';
+
+  ({
+    String label,
+    String all,
+    String defaultGroup,
+    String create,
+    String name,
+    String exists,
+    String created,
+    String deleteGroup,
+    String deleteConfirm,
+    String moveTo,
+    String manage
+  }) _groupText(String language) => switch (language) {
+        'zh-TW' => (
+            label: '風格分組',
+            all: '全部分組',
+            defaultGroup: '預設分組',
+            create: '建立分組',
+            name: '分組名稱',
+            exists: '該分組已存在。',
+            created: '已建立分組',
+            deleteGroup: '刪除分組',
+            deleteConfirm: '分組內的風格會移至預設分組。',
+            moveTo: '移至分組',
+            manage: '選擇與管理風格'
+          ),
+        'en-US' => (
+            label: 'Style group',
+            all: 'All groups',
+            defaultGroup: 'Default group',
+            create: 'Create group',
+            name: 'Group name',
+            exists: 'That group already exists.',
+            created: 'Group created',
+            deleteGroup: 'Delete group',
+            deleteConfirm: 'Styles in it will move to the default group.',
+            moveTo: 'Move to group',
+            manage: 'Choose and manage styles'
+          ),
+        'ja-JP' => (
+            label: 'スタイルグループ',
+            all: 'すべてのグループ',
+            defaultGroup: 'デフォルトグループ',
+            create: 'グループを作成',
+            name: 'グループ名',
+            exists: '同じグループが既に存在します。',
+            created: 'グループを作成しました',
+            deleteGroup: 'グループを削除',
+            deleteConfirm: 'スタイルはデフォルトグループへ移動します。',
+            moveTo: 'グループへ移動',
+            manage: 'スタイルを選択・管理'
+          ),
+        'ko-KR' => (
+            label: '스타일 그룹',
+            all: '모든 그룹',
+            defaultGroup: '기본 그룹',
+            create: '그룹 만들기',
+            name: '그룹 이름',
+            exists: '같은 그룹이 이미 있습니다.',
+            created: '그룹을 만들었습니다',
+            deleteGroup: '그룹 삭제',
+            deleteConfirm: '스타일은 기본 그룹으로 이동합니다.',
+            moveTo: '그룹으로 이동',
+            manage: '스타일 선택 및 관리'
+          ),
+        _ => (
+            label: '风格分组',
+            all: '全部分组',
+            defaultGroup: '默认分组',
+            create: '创建分组',
+            name: '分组名称',
+            exists: '该分组已经存在。',
+            created: '已创建分组',
+            deleteGroup: '删除分组',
+            deleteConfirm: '分组内的风格会移动到默认分组。',
+            moveTo: '移动到分组',
+            manage: '选择与管理风格'
+          ),
+      };
 
   String _fillName(String template, String name) =>
       template.replaceAll('{name}', name);
@@ -765,6 +852,33 @@ class _StylePresetControls extends StatelessWidget {
           controller: controller,
           autofocus: true,
           decoration: InputDecoration(labelText: text.stylePresetName),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(MaterialLocalizations.of(context).cancelButtonLabel),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.pop(dialogContext, controller.text.trim()),
+            child: Text(MaterialLocalizations.of(context).okButtonLabel),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<String?> _askGroupName(BuildContext context, String language) {
+    final labels = _groupText(language);
+    final controller = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(labels.create),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: InputDecoration(labelText: labels.name),
         ),
         actions: [
           TextButton(
@@ -1042,12 +1156,319 @@ class _StylePresetControls extends StatelessWidget {
     );
   }
 
+  Future<bool> _confirmGroupDelete(
+    BuildContext context,
+    String group,
+    String language,
+  ) async {
+    final labels = _groupText(language);
+    final title = switch (language) {
+      'en-US' => '${labels.deleteGroup} “$group”?',
+      'ja-JP' => '「$group」を${labels.deleteGroup}しますか？',
+      'ko-KR' => '“$group” ${labels.deleteGroup}할까요?',
+      _ => '${labels.deleteGroup}“$group”？',
+    };
+    return await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: Text(title),
+            content: Text(labels.deleteConfirm),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child:
+                    Text(MaterialLocalizations.of(context).cancelButtonLabel),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: Text(labels.deleteGroup),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
+  Future<bool> _confirmStyleDelete(
+    BuildContext context,
+    String name,
+    String language,
+  ) async {
+    final message = switch (language) {
+      'zh-TW' => '確定刪除風格「$name」嗎？此操作無法復原。',
+      'en-US' => 'Delete style “$name”? This cannot be undone.',
+      'ja-JP' => 'スタイル「$name」を削除しますか？この操作は元に戻せません。',
+      'ko-KR' => '스타일 “$name”을 삭제할까요? 이 작업은 되돌릴 수 없습니다.',
+      _ => '确定删除风格“$name”吗？此操作无法撤销。',
+    };
+    return await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: Text(textForDeleteStyle(language)),
+            content: Text(message),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child:
+                    Text(MaterialLocalizations.of(context).cancelButtonLabel),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: Text(textForDeleteStyle(language)),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
+  String textForDeleteStyle(String language) => switch (language) {
+        'zh-TW' => '刪除風格',
+        'en-US' => 'Delete style',
+        'ja-JP' => 'スタイルを削除',
+        'ko-KR' => '스타일 삭제',
+        _ => '删除风格',
+      };
+
+  Future<void> _showStyleLibrary(
+    BuildContext context,
+    GenerateScreenText text,
+  ) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setSheetState) => Consumer<AppState>(
+          builder: (context, state, _) {
+            final labels = _groupText(state.settings.language);
+            final groups = <String>{
+              'Default',
+              ...state.settings.stylePromptPresetGroups,
+              ...state.settings.stylePromptPresets
+                  .map((preset) => preset.group),
+            }.toList();
+            if (!groups.contains(_selectedGroup)) {
+              final current = state.settings.stylePromptPresets
+                  .where((preset) =>
+                      preset.prompt.trim() == state.params.stylePrompt.trim())
+                  .firstOrNull;
+              _selectedGroup = current?.group ?? 'Default';
+            }
+
+            Future<void> createGroup() async {
+              final name =
+                  await _askGroupName(sheetContext, state.settings.language);
+              if (name == null || name.isEmpty) return;
+              final created = await state.addStylePromptPresetGroup(name);
+              if (!context.mounted) return;
+              if (created) {
+                setState(() => _selectedGroup = name);
+                setSheetState(() {});
+              }
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content:
+                    Text(created ? '${labels.created}“$name”。' : labels.exists),
+              ));
+            }
+
+            Widget presetTile(StylePromptPreset preset) {
+              final selected =
+                  preset.prompt.trim() == state.params.stylePrompt.trim();
+              return ListTile(
+                minTileHeight: 54,
+                contentPadding: const EdgeInsets.only(left: 20, right: 4),
+                leading: Icon(
+                  selected ? Icons.check_circle : Icons.palette_outlined,
+                  color:
+                      selected ? Theme.of(context).colorScheme.primary : null,
+                ),
+                title: Text(preset.name,
+                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                subtitle: Text(preset.prompt,
+                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                onTap: () {
+                  state.applyStylePromptPreset(preset);
+                  Navigator.pop(sheetContext);
+                },
+                trailing: PopupMenuButton<String>(
+                  tooltip: labels.moveTo,
+                  onSelected: (value) async {
+                    if (value == '__images') {
+                      await _showImageManager(sheetContext, preset.id, text);
+                    } else if (value == '__delete') {
+                      if (!await _confirmStyleDelete(
+                          sheetContext, preset.name, state.settings.language)) {
+                        return;
+                      }
+                      await state.removeStylePromptPreset(preset.id);
+                    } else if (value.startsWith('group:')) {
+                      await state.moveStylePromptPreset(
+                          preset.id, value.substring(6));
+                    }
+                    if (context.mounted) setSheetState(() {});
+                  },
+                  itemBuilder: (context) => [
+                    PopupMenuItem<String>(
+                      enabled: false,
+                      child: Text(labels.moveTo),
+                    ),
+                    ...groups.map((group) => PopupMenuItem<String>(
+                          value: 'group:$group',
+                          enabled: group != preset.group,
+                          child: Row(
+                            children: [
+                              if (group == preset.group)
+                                const Icon(Icons.check, size: 18)
+                              else
+                                const SizedBox(width: 18),
+                              const SizedBox(width: 8),
+                              Flexible(
+                                child: Text(group == 'Default'
+                                    ? labels.defaultGroup
+                                    : group),
+                              ),
+                            ],
+                          ),
+                        )),
+                    const PopupMenuDivider(),
+                    PopupMenuItem<String>(
+                      value: '__images',
+                      child: Text(text.stylePresetImages),
+                    ),
+                    PopupMenuItem<String>(
+                      value: '__delete',
+                      child: Text(text.deleteStylePreset),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            return RepaintBoundary(
+              key: const ValueKey('style-preset-library-sheet'),
+              child: DraggableScrollableSheet(
+                expand: false,
+                initialChildSize: 0.76,
+                minChildSize: 0.44,
+                maxChildSize: 0.96,
+                builder: (context, controller) => Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(18, 0, 18, 10),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(labels.manage,
+                                style: Theme.of(context).textTheme.titleLarge),
+                          ),
+                          Text('${state.settings.stylePromptPresets.length}',
+                              style: Theme.of(context).textTheme.labelLarge),
+                        ],
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    Expanded(
+                      child: ListView(
+                        controller: controller,
+                        padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
+                        children: [
+                          ...groups.map((group) {
+                            final presets = state.settings.stylePromptPresets
+                                .where((preset) => preset.group == group)
+                                .toList()
+                              ..sort((a, b) => a.name
+                                  .toLowerCase()
+                                  .compareTo(b.name.toLowerCase()));
+                            return Card(
+                              margin: const EdgeInsets.only(bottom: 6),
+                              clipBehavior: Clip.antiAlias,
+                              child: ExpansionTile(
+                                key: PageStorageKey('style-group-$group'),
+                                initiallyExpanded: _selectedGroup == group,
+                                leading: Icon(_selectedGroup == group
+                                    ? Icons.folder_open_outlined
+                                    : Icons.folder_outlined),
+                                title: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        group == 'Default'
+                                            ? labels.defaultGroup
+                                            : group,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    Text('${presets.length}',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .labelSmall),
+                                    if (group != 'Default')
+                                      IconButton(
+                                        tooltip: labels.deleteGroup,
+                                        visualDensity: VisualDensity.compact,
+                                        onPressed: () async {
+                                          if (!await _confirmGroupDelete(
+                                              sheetContext,
+                                              group,
+                                              state.settings.language)) return;
+                                          await state
+                                              .removeStylePromptPresetGroup(
+                                                  group);
+                                          if (!context.mounted) return;
+                                          setState(
+                                              () => _selectedGroup = 'Default');
+                                          setSheetState(() {});
+                                        },
+                                        icon: const Icon(Icons.delete_outline,
+                                            size: 20),
+                                      ),
+                                  ],
+                                ),
+                                onExpansionChanged: (expanded) {
+                                  if (expanded) {
+                                    setState(() => _selectedGroup = group);
+                                    setSheetState(() {});
+                                  }
+                                },
+                                children: presets.isEmpty
+                                    ? [
+                                        Padding(
+                                          padding: const EdgeInsets.all(16),
+                                          child: Text(text.chooseStylePreset),
+                                        ),
+                                      ]
+                                    : presets.map(presetTile).toList(),
+                              ),
+                            );
+                          }),
+                          OutlinedButton.icon(
+                            onPressed: createGroup,
+                            icon: const Icon(Icons.create_new_folder_outlined),
+                            label: Text(labels.create),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final text = generateScreenTextFor(state.settings.language);
-    final presets = state.settings.stylePromptPresets;
-    final selected = presets
+    final labels = _groupText(state.settings.language);
+    final selected = state.settings.stylePromptPresets
         .where(
             (preset) => preset.prompt.trim() == state.params.stylePrompt.trim())
         .firstOrNull;
@@ -1059,35 +1480,43 @@ class _StylePresetControls extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              text.stylePresets,
-              style: const TextStyle(fontWeight: FontWeight.bold),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(text.stylePresets,
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                ),
+                Text('${state.settings.stylePromptPresets.length}',
+                    style: Theme.of(context).textTheme.labelMedium),
+              ],
             ),
             const SizedBox(height: 8),
-            DropdownButtonFormField<String>(
-              value: selected?.id,
-              decoration: InputDecoration(
-                labelText: text.chooseStylePreset,
-                border: const OutlineInputBorder(),
-              ),
-              items: presets
-                  .map(
-                    (preset) => DropdownMenuItem(
-                      value: preset.id,
-                      child: Text(preset.name),
+            InkWell(
+              key: const ValueKey('style-preset-library-trigger'),
+              borderRadius: BorderRadius.circular(12),
+              onTap: () => _showStyleLibrary(context, text),
+              child: InputDecorator(
+                decoration: InputDecoration(
+                  labelText: labels.manage,
+                  border: const OutlineInputBorder(),
+                  suffixIcon: const Icon(Icons.keyboard_arrow_down),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.palette_outlined, size: 20),
+                    const SizedBox(width: 9),
+                    Expanded(
+                      child: Text(
+                        selected == null
+                            ? text.chooseStylePreset
+                            : '${selected.name} · ${selected.group == 'Default' ? labels.defaultGroup : selected.group}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                  )
-                  .toList(),
-              onChanged: (value) {
-                final preset =
-                    presets.where((item) => item.id == value).firstOrNull;
-                if (preset == null) return;
-                state.applyStylePromptPreset(preset);
-                messenger.showSnackBar(SnackBar(
-                  content:
-                      Text(_fillName(text.stylePresetApplied, preset.name)),
-                ));
-              },
+                  ],
+                ),
+              ),
             ),
             const SizedBox(height: 8),
             Wrap(
@@ -1110,6 +1539,8 @@ class _StylePresetControls extends StatelessWidget {
                     final preset = await state.addStylePromptPreset(
                       name: name,
                       prompt: prompt,
+                      group:
+                          _selectedGroup == 'all' ? 'Default' : _selectedGroup,
                     );
                     messenger.showSnackBar(SnackBar(
                       content:
@@ -1124,6 +1555,8 @@ class _StylePresetControls extends StatelessWidget {
                       ? null
                       : () async {
                           final name = selected.name;
+                          if (!await _confirmStyleDelete(
+                              context, name, state.settings.language)) return;
                           await state.removeStylePromptPreset(selected.id);
                           messenger.showSnackBar(SnackBar(
                             content:
