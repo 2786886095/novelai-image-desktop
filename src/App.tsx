@@ -55,6 +55,13 @@ import {
   NAI_SAMPLERS,
   NAI_UC_PRESETS,
   DEFAULT_MODEL_FOR_MODE,
+  isNAIV4PlusModel,
+  maxNAICharacterPrompts,
+  supportsNAICharacterPrompts,
+  supportsNAINoiseScheduleControl,
+  supportsNAIPreciseReference,
+  supportsNAIVibeTransfer,
+  supportsNAIVariety,
   type AnlasQuoteFeature,
   type AnlasQuoteResult,
   type ModelMode,
@@ -564,10 +571,10 @@ function TitleBar() {
           : t("title.notConnected")}
       </div>
       <div className="window-controls">
-        <button onClick={() => window.naiDesktop.minimize()}>—</button>
-        <button onClick={() => window.naiDesktop.maximize()}>□</button>
-        <button className="close" onClick={() => window.naiDesktop.close()}>
-          ×
+        <button aria-label="Minimize" onClick={() => window.naiDesktop.minimize()}><Icon name="minimize" /></button>
+        <button aria-label="Maximize" onClick={() => window.naiDesktop.maximize()}><Icon name="maximize" /></button>
+        <button aria-label="Close" className="close" onClick={() => window.naiDesktop.close()}>
+          <Icon name="close" />
         </button>
       </div>
     </header>
@@ -588,10 +595,10 @@ function MenuBar({ openSettings }: { openSettings: () => void }) {
         <IconText icon={<Icon name="folder" />}>{chromeText.outputDir}</IconText>
       </button>
       <button className="menu-action" onClick={openSettings}>
-        <IconText icon="⚙">{chromeText.settings}</IconText>
+        <IconText icon={<Icon name="settings" />}>{chromeText.settings}</IconText>
       </button>
       <button className="menu-action" onClick={() => window.naiDesktop.openExternal(docsUrl)}>
-        <IconText icon="❔">{chromeText.docs}</IconText>
+        <IconText icon={<Icon name="help" />}>{chromeText.docs}</IconText>
       </button>
     </nav>
   );
@@ -612,7 +619,7 @@ function TabBar() {
           title={title}
           onClick={() => setActiveTab(value)}
         >
-          <span className="tab-icon">{icon}</span>
+          <span className="tab-icon"><Icon name={icon} /></span>
           <span>{label}</span>
         </button>
       ))}
@@ -633,7 +640,7 @@ function AdvancedParamsModal({ onClose }: { onClose: () => void }) {
       <div className="modal advanced-modal">
         <header>
           <h2>{t("advanced.title")}</h2>
-          <button onClick={onClose}>×</button>
+          <button aria-label={t("common.close")} onClick={onClose}><Icon name="close" /></button>
         </header>
         <div className="advanced-grid">
           <NumberInput label={t("advanced.steps")} value={params.steps} min={1} max={50} onChange={(v) => setParam("steps", v)} />
@@ -647,14 +654,16 @@ function AdvancedParamsModal({ onClose }: { onClose: () => void }) {
               ))}
             </select>
           </label>
-          <label className="field">
-            <span>{t("advanced.noiseSchedule")}</span>
-            <select value={params.noiseSchedule} onChange={(e) => setParam("noiseSchedule", e.target.value)}>
-              <option value="native">{localizedDesktopOptionLabel(settings?.language, "native", "Native")}</option>
-              <option value="karras">{localizedDesktopOptionLabel(settings?.language, "karras", "Karras")}</option>
-              <option value="exponential">{localizedDesktopOptionLabel(settings?.language, "exponential", "Exponential")}</option>
-            </select>
-          </label>
+          {supportsNAINoiseScheduleControl(params.model) && (
+            <label className="field">
+              <span>{t("advanced.noiseSchedule")}</span>
+              <select value={params.noiseSchedule} onChange={(e) => setParam("noiseSchedule", e.target.value)}>
+                <option value="native">{localizedDesktopOptionLabel(settings?.language, "native", "Native")}</option>
+                <option value="karras">{localizedDesktopOptionLabel(settings?.language, "karras", "Karras")}</option>
+                <option value="exponential">{localizedDesktopOptionLabel(settings?.language, "exponential", "Exponential")}</option>
+              </select>
+            </label>
+          )}
           <label className="field">
             <span>{t("advanced.ucPreset")}</span>
             <select value={params.ucPreset} onChange={(e) => setParam("ucPreset", Number(e.target.value) as GenerateParams["ucPreset"])}>
@@ -666,9 +675,9 @@ function AdvancedParamsModal({ onClose }: { onClose: () => void }) {
         </div>
         <div className="toggle-list compact">
           <Toggle checked={params.qualityToggle} onChange={(v) => setParam("qualityToggle", v)} label={t("advanced.qualityToggle")} description={t("advanced.qualityToggleDesc")} />
-          {/* SMEA / SMEA Dyn only exist on V3-era models; V4/V4.5 ignore them, so
+          {/* SMEA / SMEA Dyn only exist on V3-era models; V4/V4.5/V5 ignore them, so
               we hide the toggles there instead of showing a control with no effect. */}
-          {!params.model.includes("-4") && (
+          {!isNAIV4PlusModel(params.model) && (
             <>
               <Toggle checked={params.smea} onChange={(v) => setParam("smea", v)} label={t("advanced.smea")} description={t("advanced.smeaDesc")} />
               <Toggle checked={params.smeaDyn} onChange={(v) => setParam("smeaDyn", v)} label={t("advanced.smeaDyn")} description={t("advanced.smeaDynDesc")} />
@@ -735,7 +744,8 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
   const clearPreciseReferences = useAppStore((state) => state.clearPreciseReferences);
   const setToast = useAppStore((state) => state.setToast);
   const model = useAppStore((state) => state.params.model);
-  const isV45 = model.includes("4-5");
+  const preciseSupported = supportsNAIPreciseReference(model);
+  const vibeSupported = supportsNAIVibeTransfer(model);
   const presetText = referencePresetTextFor(language);
   const [showPresetLibrary, setShowPresetLibrary] = useState(false);
   const [quickSaveSource, setQuickSaveSource] = useState<QuickPresetSource | null>(null);
@@ -791,11 +801,14 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
           <h2>{t("reference.title")}</h2>
           <div className="vibe-header-actions">
             <Button className="vibe-open-presets" onClick={() => setShowPresetLibrary(true)}>{presetText.open}</Button>
-            <button onClick={onClose}>×</button>
+            <button aria-label={t("common.close")} onClick={onClose}><Icon name="close" /></button>
           </div>
         </header>
         <div className="vibe-body">
-          <h3 className="vibe-section-title">{t("reference.vibeTitle")}</h3>
+          <h3 className="vibe-section-title">
+            {t("reference.vibeTitle")}
+            {!vibeSupported && <span className="vibe-hint">{t("reference.vibeUnsupportedV5")}</span>}
+          </h3>
           {vibeImages.length === 0 && <p className="vibe-empty">{t("reference.emptyVibe")}</p>}
           {vibeImages.map((img) => (
             <div className="vibe-row" key={img.id}>
@@ -825,17 +838,17 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
                 </div>
               </div>
               <button className="vibe-save-preset" title={presetText.quickSave} onClick={() => setQuickSaveSource({ kind: "vibe", previewUrl: img.previewUrl, base64: img.base64, infoExtracted: img.infoExtracted, strength: img.strength })}>
-                ☆
+                <Icon name="star" />
               </button>
               <button className="vibe-remove" title={t("reference.remove")} onClick={() => removeVibeImage(img.id)}>
-                ×
+                <Icon name="close" />
               </button>
             </div>
           ))}
 
           <h3 className="vibe-section-title">
             {t("reference.preciseTitle")}
-            {!isV45 && <span className="vibe-hint">{t("reference.preciseUnsupported")}</span>}
+            {!preciseSupported && <span className="vibe-hint">{t("reference.preciseUnsupported")}</span>}
           </h3>
           <p className="vibe-hint">{t("reference.preciseHint")}</p>
           {preciseReferences.length === 0 && <p className="vibe-empty">{t("reference.emptyPrecise")}</p>}
@@ -894,21 +907,22 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
                 })()}
               </div>
               <button className="vibe-save-preset" title={presetText.quickSave} onClick={() => setQuickSaveSource({ kind: "precise", previewUrl: ref.previewUrl, base64: ref.base64, preciseType: ref.type, strength: ref.strength, fidelity: ref.fidelity, informationExtracted: ref.informationExtracted ?? 1, width: ref.srcWidth, height: ref.srcHeight })}>
-                ☆
+                <Icon name="star" />
               </button>
               <button className="vibe-remove" title={t("reference.remove")} onClick={() => removePreciseReference(ref.id)}>
-                ×
+                <Icon name="close" />
               </button>
             </div>
           ))}
 
           <div className="vibe-add-row">
-            <label className="btn btn-secondary vibe-add-btn">
+            <label className={clsx("btn btn-secondary vibe-add-btn", !vibeSupported && "disabled")} aria-disabled={!vibeSupported}>
               <IconText icon="+">{t("reference.addVibe")}</IconText>
               <input
                 type="file"
                 hidden
                 accept="image/png,image/jpeg,image/webp"
+                disabled={!vibeSupported}
                 onChange={(e) => {
                   const f = e.target.files?.[0];
                   if (f) { handleVibeFile(f, 1, 1); e.target.value = ""; }
@@ -965,7 +979,8 @@ function CharCaptionsModal({ onClose }: { onClose: () => void }) {
   const removeCharCaption = useAppStore((state) => state.removeCharCaption);
   const updateCharCaption = useAppStore((state) => state.updateCharCaption);
   const clearCharCaptions = useAppStore((state) => state.clearCharCaptions);
-  const isV4 = params.model.includes("-4");
+  const supportsCharacters = supportsNAICharacterPrompts(params.model);
+  const maxCharacters = maxNAICharacterPrompts(params.model);
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
 
@@ -975,10 +990,10 @@ function CharCaptionsModal({ onClose }: { onClose: () => void }) {
       <div className="modal char-modal">
         <header>
           <h2>{t("character.title")}</h2>
-          <button onClick={onClose}>×</button>
+          <button aria-label={t("common.close")} onClick={onClose}><Icon name="close" /></button>
         </header>
         <div className="char-body">
-          {!isV4 && (
+          {!supportsCharacters && (
             <div className="status-box bad">
               {t("character.unsupported")}
             </div>
@@ -1036,7 +1051,7 @@ function CharCaptionsModal({ onClose }: { onClose: () => void }) {
               )}
             </div>
           ))}
-          <Button className="full" onClick={addCharCaption}>
+          <Button className="full" onClick={addCharCaption} disabled={!supportsCharacters || charCaptions.length >= maxCharacters}>
             <IconText icon="+">{t("character.add")}</IconText>
           </Button>
         </div>
@@ -1091,7 +1106,7 @@ function StylePresetImagesModal({
               <h2>{text.stylePresetImageManager}</h2>
               <small>{preset.name} · {images.length}/3</small>
             </div>
-            <button type="button" aria-label={t("common.close")} onClick={onClose}>×</button>
+            <button type="button" aria-label={t("common.close")} onClick={onClose}><Icon name="close" /></button>
           </header>
           <div className="style-image-modal-body">
             {images.length === 0 ? (
@@ -1137,7 +1152,7 @@ function StylePresetImagesModal({
       </div>
       {preview && (
         <div className="style-image-lightbox" role="dialog" aria-modal="true" onMouseDown={() => setPreview(null)}>
-          <button type="button" aria-label={t("common.close")} onClick={() => setPreview(null)}>×</button>
+          <button type="button" aria-label={t("common.close")} onClick={() => setPreview(null)}><Icon name="close" /></button>
           <img src={preview.fileUrl} alt={`${preset.name} · ${preview.name}`} onMouseDown={(event) => event.stopPropagation()} />
         </div>
       )}
@@ -1565,7 +1580,7 @@ function PromptAndParams({
             onClick={toggleStylePresetMenu}
           >
             <span>{selectedStylePreset?.name ?? generateText.prompt.stylePresetPlaceholder}</span>
-            <span aria-hidden="true">⌄</span>
+            <Icon name="chevronDown" className={clsx("select-menu-chevron-inline", stylePresetMenuOpen && "open")} />
           </button>
         </div>
         <div className="style-preset-actions">
@@ -1656,7 +1671,7 @@ function PromptAndParams({
       <div className={clsx("prompt-chip-zone", !chipOpen && "collapsed")}>
         <button type="button" className="prompt-chip-head" onClick={() => setChipOpen((v) => !v)}>
           <span className="chip-head-title">
-            <span className={clsx("chip-caret", chipOpen && "open")}>▸</span>
+            <Icon name="chevronRight" className={clsx("chip-caret", chipOpen && "open")} />
             {generateText.prompt.capsuleTitle}
           </span>
           <small className="chip-head-hint">{chipOpen ? generateText.prompt.capsuleHintOpen : generateText.prompt.capsuleHintClosed}</small>
@@ -1720,7 +1735,7 @@ function PromptAndParams({
       />
       <div className="prompt-toolbar-row">
         <button type="button" className="prompt-tool-btn" onClick={() => setShowWeights((v) => !v)} disabled={weightTags.length === 0}>
-          ⚖ {generateText.prompt.weightAdjust}{weightTags.length ? ` (${weightTags.length})` : ""} {showWeights ? "▲" : "▼"}
+          <Icon name="sliders" /> {generateText.prompt.weightAdjust}{weightTags.length ? ` (${weightTags.length})` : ""} <Icon name="chevronDown" className={clsx("prompt-tool-chevron", showWeights && "open")} />
         </button>
         <button type="button" className="prompt-tool-btn" onClick={() => void translatePrompt()} disabled={translating}>
           {translating ? generateText.prompt.translating : <><Icon name="globe" /> {generateText.prompt.translate}</>}
@@ -1748,12 +1763,12 @@ function PromptAndParams({
           <div className="weight-tag-list">
             {weightTags.map((wt, i) => (
               <div key={`${wt.core}-${i}`} className={clsx("weight-tag", wt.level > 0 && "up", wt.level < 0 && "down")}>
-                <button type="button" className="weight-btn" title={generateText.prompt.decreaseWeight} onClick={() => bumpWeight(i, -1)}>−</button>
+                <button type="button" className="weight-btn" title={generateText.prompt.decreaseWeight} onClick={() => bumpWeight(i, -1)}><Icon name="minus" /></button>
                 <span className="weight-tag-core" title={wt.raw}>
                   {wt.core || generateText.prompt.emptyTag}
                   {wt.level !== 0 && <em>{formatMultiplier(wt.level)}</em>}
                 </span>
-                <button type="button" className="weight-btn" title={generateText.prompt.increaseWeight} onClick={() => bumpWeight(i, 1)}>＋</button>
+                <button type="button" className="weight-btn" title={generateText.prompt.increaseWeight} onClick={() => bumpWeight(i, 1)}><Icon name="plus" /></button>
               </div>
             ))}
           </div>
@@ -1787,7 +1802,7 @@ function PromptAndParams({
         {templates.length > 0 && (
           <div className="template-dropdown" style={{ position: "relative" }}>
             <Button onClick={() => setShowTemplateMenu((v) => !v)}>
-              <IconText icon="▣">{generateText.prompt.template}{showTemplateMenu ? " ▲" : " ▼"}</IconText>
+              <IconText icon="▣">{generateText.prompt.template}<Icon name="chevronDown" className={clsx("prompt-tool-chevron", showTemplateMenu && "open")} /></IconText>
             </Button>
             {showTemplateMenu && (
               <div className="menu-pop template-pop">
@@ -1841,14 +1856,16 @@ function PromptAndParams({
             title={generateText.prompt.randomizeSeedTitle}
             onClick={() => setParam("seed", Math.floor(Math.random() * 2_147_483_647))}
           >
-            ⇄
+            <Icon name="swap" />
           </Button>
         </div>
       )}
-      <label className="checkbox-line">
-        <input type="checkbox" checked={params.variety} onChange={(e) => setParam("variety", e.target.checked)} />
-        <span>{generateText.prompt.variety}</span>
-      </label>
+      {supportsNAIVariety(params.model) && (
+        <label className="checkbox-line">
+          <input type="checkbox" checked={params.variety} onChange={(e) => setParam("variety", e.target.checked)} />
+          <span>{generateText.prompt.variety}</span>
+        </label>
+      )}
       <Button className="full" onClick={() => setShowAdvanced(true)}>
         <IconText icon="⚙">{generateText.prompt.advancedParams}</IconText>
       </Button>
@@ -1890,7 +1907,7 @@ function PromptNormalizeModal({
         <div className="modal normalize-modal" onMouseDown={(e) => e.stopPropagation()}>
           <header>
             <h2>{t("normalize.title")}</h2>
-            <button onClick={onClose}>×</button>
+            <button aria-label={t("common.close")} onClick={onClose}><Icon name="close" /></button>
           </header>
           <div className="normalize-body">
             <div className="normalize-options">
@@ -2189,7 +2206,7 @@ function QueuePanel() {
             onClick={toggleCollapsed}
             aria-label={collapsed ? t("queue.expand") : t("queue.collapse")}
           >
-            {collapsed ? "▸" : "▾"}
+            <Icon name="chevronRight" className={clsx("disclosure-chevron", !collapsed && "open")} />
           </button>
         </div>
       </div>
@@ -2219,7 +2236,7 @@ function QueuePanel() {
                 aria-label={t("queue.remove")}
                 title={t("queue.remove")}
               >
-                ✕
+                <Icon name="close" />
               </button>
             </li>
           ))}
@@ -2267,7 +2284,7 @@ function TextToolQueuePanel({
             onClick={onToggleCollapsed}
             aria-label={collapsed ? t("queue.expand") : t("queue.collapse")}
           >
-            {collapsed ? "▸" : "▾"}
+            <Icon name="chevronRight" className={clsx("disclosure-chevron", !collapsed && "open")} />
           </button>
         </div>
       </div>
@@ -2277,7 +2294,7 @@ function TextToolQueuePanel({
             <li className={clsx("queue-item", job.status === "processing" && "queue-item-running")} key={job.id}>
               {job.status === "processing" && <span className="queue-spinner" />}
               <span className="queue-item-label" title={job.message || job.result || job.label}>
-                {job.status === "failed" ? `⚠ ${job.label}` : job.status === "done" ? `✓ ${job.label}` : job.label}
+                {job.status === "failed" ? <><Icon name="warning" /> {job.label}</> : job.status === "done" ? <><Icon name="check" /> {job.label}</> : job.label}
               </span>
               <span className="queue-item-time">
                 {new Date(job.addedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
@@ -2289,7 +2306,7 @@ function TextToolQueuePanel({
                 aria-label={t("queue.remove")}
                 title={t("queue.remove")}
               >
-                ✕
+                <Icon name="close" />
               </button>
             </li>
           ))}
@@ -2334,7 +2351,7 @@ function TextToolHistoryPanel({
             onClick={() => setCollapsed((value) => !value)}
             aria-label={collapsed ? t("queue.expand") : t("queue.collapse")}
           >
-            {collapsed ? "▸" : "▾"}
+            <Icon name="chevronRight" className={clsx("disclosure-chevron", !collapsed && "open")} />
           </button>
         </div>
       </div>
@@ -2383,12 +2400,12 @@ function TextToolHistoryItemRow({
           aria-label={t("queue.remove")}
           title={t("queue.remove")}
         >
-          ✕
+          <Icon name="close" />
         </button>
       </div>
       <button type="button" className="texttool-history-item-toggle" onClick={() => setExpanded((value) => !value)}>
         <span className="texttool-history-item-input">{item.input.trim() || item.result}</span>
-        <span aria-hidden="true">{expanded ? "▾" : "▸"}</span>
+        <Icon name="chevronRight" className={clsx("disclosure-chevron", expanded && "open")} />
       </button>
       {expanded &&
         (hasVariants ? (
@@ -3722,7 +3739,7 @@ function AiLogPanel() {
             return (
               <div className={clsx("ai-log-item", entry.ok ? "ok" : "fail")} key={entry.id}>
                 <button type="button" className="ai-log-item-head" onClick={() => toggle(entry.id)}>
-                  <span className="ai-log-caret">{open ? "▾" : "▸"}</span>
+                  <Icon name="chevronRight" className={clsx("ai-log-caret disclosure-chevron", open && "open")} />
                   <span className={clsx("ai-log-badge", entry.ok ? "ok" : "fail")}>{entry.ok ? t("aiLog.ok") : t("aiLog.fail")}</span>
                   <span className="ai-log-label">{entry.label}</span>
                   <span className="ai-log-meta">{entry.api === "vision" ? t("aiLog.visionApi") : t("aiLog.textApi")} · {entry.model}</span>
@@ -4039,7 +4056,7 @@ function ImageCanvas() {
           <ZoomableImageStage image={{ fileUrl: inspectImageUrl, width: 1, height: 1 }} alt={t("inspect.canvasAlt")} />
         ) : (
           <div className="coming-soon">
-            <div className="coming-soon-icon">✦</div>
+            <div className="coming-soon-icon"><Icon name="scan" /></div>
             <h2>{t("inspect.canvasTitle")}</h2>
             <p>{t("inspect.canvasHint")}</p>
           </div>
@@ -4052,7 +4069,7 @@ function ImageCanvas() {
     return (
       <main className="canvas-area">
         <div className="coming-soon">
-          <div className="coming-soon-icon">⇄</div>
+          <div className="coming-soon-icon"><Icon name="swap" /></div>
           <h2>{t("convert.title")}</h2>
           <p>{t("convert.emptyHint1")}</p>
         </div>
@@ -4084,7 +4101,7 @@ function ImageCanvas() {
           <span className="empty-illustration" aria-hidden="true">
             <span className="empty-orb empty-orb-a" />
             <span className="empty-orb empty-orb-b" />
-            <span className="empty-gem">✦</span>
+            <span className="empty-gem"><Icon name="sparkles" /></span>
           </span>
           <strong>{t("canvas.emptyTitle")}</strong>
           <span>{t("canvas.emptyHint")}</span>
@@ -4125,7 +4142,7 @@ function InputModal({
         <div className="modal input-modal" onMouseDown={(e) => e.stopPropagation()}>
           <header>
             <h2>{title}</h2>
-            <button onClick={onClose}>×</button>
+            <button aria-label={t("common.close")} onClick={onClose}><Icon name="close" /></button>
           </header>
           <div className="input-modal-body">
             <label className="field">
@@ -4229,7 +4246,7 @@ function TokenGuideModal({ onClose }: { onClose: () => void }) {
               <h2>{text.title}</h2>
               <p>{text.subtitle}</p>
             </div>
-            <button type="button" aria-label={text.close} onClick={onClose}>×</button>
+            <button type="button" aria-label={text.close} onClick={onClose}><Icon name="close" /></button>
           </header>
           <div className="token-guide-body">
             {steps.map((item, index) => (
@@ -4258,7 +4275,7 @@ function TokenGuideModal({ onClose }: { onClose: () => void }) {
         </div>
         {previewImage && (
           <div className="token-guide-preview" onMouseDown={() => setPreviewImage("")}>
-            <button type="button" aria-label={text.close} onClick={() => setPreviewImage("")}>×</button>
+            <button type="button" aria-label={text.close} onClick={() => setPreviewImage("")}><Icon name="close" /></button>
             <img src={previewImage} alt={text.previewAlt} onMouseDown={(event) => event.stopPropagation()} draggable={false} />
           </div>
         )}
@@ -4367,7 +4384,7 @@ function HistoryPanel() {
             <Icon name="download" /> {t("history.export")}
           </button>
           <button type="button" disabled={!activeGroup} title={t("history.renameGroupTitle")} onClick={renameActiveGroup}>
-            ✎ {t("history.rename")}
+            <Icon name="brush" /> {t("history.rename")}
           </button>
           <button type="button" disabled={!activeGroup} title={t("history.deleteGroupTitle")} onClick={deleteActiveGroup}>
             <Icon name="trash" /> {t("history.delete")}
@@ -4377,7 +4394,7 @@ function HistoryPanel() {
       <div className="history-grid">
         {history.length === 0 && (
           <div className="history-empty">
-            <span>◇</span>
+            <span><Icon name="image" /></span>
             <strong>{t("history.emptyTitle")}</strong>
             <small>{t("history.emptyHint")}</small>
           </div>
@@ -4420,10 +4437,10 @@ function HistoryPanel() {
               ))}
             </select>
             <button className="history-rename" title={t("history.renameImageTitle")} onClick={() => renameItem(item)}>
-              ✎
+              <Icon name="brush" />
             </button>
             <button className="history-delete" title={t("history.deleteImageTitle")} onClick={() => void deleteHistory(item.id)}>
-              ×
+              <Icon name="close" />
             </button>
           </div>
         ))}
@@ -4590,7 +4607,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
       <div className="modal settings-modal">
         <header>
           <h2>{settingsShellText.title}</h2>
-          <button onClick={onClose}>×</button>
+          <button aria-label={t("common.close")} onClick={onClose}><Icon name="close" /></button>
         </header>
         <div className="settings-body">
           <nav className="settings-nav">
@@ -5413,7 +5430,7 @@ function OnboardingWizard() {
                 <div><strong>{t("onboarding.completeTitle")}</strong><span>{t("onboarding.completeDesc")}</span></div>
               </div>
             )}
-            {step === 7 && <div className="done-mark">✓</div>}
+            {step === 7 && <div className="done-mark"><Icon name="check" /></div>}
           </section>
         </div>
         <div className="onboarding-footer">
@@ -5532,7 +5549,7 @@ function WorkspaceResizer({ edge }: { edge: "left" | "right" }) {
           resetWsWidths();
         }}
       >
-        ⟲
+        <Icon name="refresh" />
       </button>
     </div>
   );
@@ -5552,13 +5569,19 @@ function MainPage() {
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const wsLeftWidth = useAppStore((state) => state.wsLeftWidth);
   const wsRightWidth = useAppStore((state) => state.wsRightWidth);
-  const uiCaptureTheme = new URLSearchParams(window.location.search).get("uiTheme");
+  const uiCaptureParams = useMemo(() => new URLSearchParams(window.location.search), []);
+  const uiCaptureTheme = uiCaptureParams.get("uiTheme");
 
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get("uiCapture") === "referencePresets") {
-      useAppStore.getState().setActiveTab("referencePresets");
+    const captureSurface = uiCaptureParams.get("uiCapture");
+    if (captureSurface) useAppStore.getState().setShowOnboarding(false);
+    const captureTabs = ["generate", "inpaint", "upscale", "postprocess", "inspect", "convert", "metadata", "tools", "referencePresets", "records"] as const;
+    if (captureTabs.some((tab) => tab === captureSurface)) {
+      useAppStore.getState().setActiveTab(captureSurface as (typeof captureTabs)[number]);
+    } else if (captureSurface === "settings") {
+      useAppStore.getState().setShowSettings(true);
     }
-  }, []);
+  }, [uiCaptureParams]);
 
   // Apply theme class
   useEffect(() => {

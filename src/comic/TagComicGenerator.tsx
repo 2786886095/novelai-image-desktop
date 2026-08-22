@@ -10,6 +10,7 @@ import ReferencePresetManager, {
 import {
   NAI_MODELS,
   NAI_SAMPLERS,
+  supportsNAIPreciseReference,
   type GenerateParams,
   type TagComicCandidate,
   type TagComicGenerateRequest,
@@ -89,7 +90,7 @@ const COPY = {
     sizesIncomplete: "部分分镜尚未指定合法尺寸，请重新导入完整尺寸列表。",
     panelSize: "本分镜尺寸",
     preciseHeading: "全局精准参考图",
-    preciseHint: "参考图会复制到项目资源目录。最多 5 张，仅 NovelAI V4.5 可用。",
+    preciseHint: "参考图会复制到项目资源目录。最多 5 张，NovelAI V4.5 / V5 可用。",
     preciseUpload: "添加精准参考图",
     preciseEmpty: "尚未添加精准参考图。",
     preciseCharacter: "角色",
@@ -101,7 +102,7 @@ const COPY = {
     precisePanelHeading: "本分镜使用的精准参考",
     precisePanelHint: "勾选后可为当前分镜单独调整类型、强度和保真度。",
     preciseReset: "恢复全局值",
-    preciseV45Only: "精准参考只能用于 NovelAI V4.5 模型。",
+    preciseV45Only: "精准参考只能用于 NovelAI V4.5 / V5 模型。",
     preciseImportFailed: "精准参考图导入失败：{message}",
     preciseScope: "应用范围",
     preciseScopeAll: "全部分镜",
@@ -217,7 +218,7 @@ const COPY = {
     sizesIncomplete: "部分分鏡尚未指定合法尺寸，請重新匯入完整尺寸清單。",
     panelSize: "本分鏡尺寸",
     preciseHeading: "全域精準參考圖",
-    preciseHint: "參考圖會複製到專案資源目錄。最多 5 張，僅 NovelAI V4.5 可用。",
+    preciseHint: "參考圖會複製到專案資源目錄。最多 5 張，NovelAI V4.5 / V5 可用。",
     preciseUpload: "加入精準參考圖",
     preciseEmpty: "尚未加入精準參考圖。",
     preciseCharacter: "角色",
@@ -229,7 +230,7 @@ const COPY = {
     precisePanelHeading: "本分鏡使用的精準參考",
     precisePanelHint: "勾選後可為目前分鏡單獨調整類型、強度與保真度。",
     preciseReset: "恢復全域值",
-    preciseV45Only: "精準參考只能用於 NovelAI V4.5 模型。",
+    preciseV45Only: "精準參考只能用於 NovelAI V4.5 / V5 模型。",
     preciseImportFailed: "精準參考圖匯入失敗：{message}",
     preciseScope: "套用範圍",
     preciseScopeAll: "全部分鏡",
@@ -349,7 +350,7 @@ const COPY = {
     sizesIncomplete: "Some panels do not have a supported size. Import a complete size list again.",
     panelSize: "Panel size",
     preciseHeading: "Global precise references",
-    preciseHint: "References are copied into project resources. Up to 5; NovelAI V4.5 only.",
+    preciseHint: "References are copied into project resources. Up to 5; NovelAI V4.5 / V5.",
     preciseUpload: "Add precise references",
     preciseEmpty: "No precise references added.",
     preciseCharacter: "Character",
@@ -361,7 +362,7 @@ const COPY = {
     precisePanelHeading: "Precise references for this panel",
     precisePanelHint: "Select references and tune type, strength, and fidelity for this panel.",
     preciseReset: "Reset to global",
-    preciseV45Only: "Precise Reference requires a NovelAI V4.5 model.",
+    preciseV45Only: "Precise Reference requires a NovelAI V4.5 / V5 model.",
     preciseImportFailed: "Could not import precise reference: {message}",
     preciseScope: "Apply to",
     preciseScopeAll: "All panels",
@@ -480,7 +481,7 @@ const COPY = {
     sizesIncomplete: "サイズ未設定のコマがあります。完全なサイズ一覧を再読み込みしてください。",
     panelSize: "このコマのサイズ",
     preciseHeading: "共通精密参照画像",
-    preciseHint: "参照画像はプロジェクト資源へコピーされます。最大5枚、NovelAI V4.5専用です。",
+    preciseHint: "参照画像はプロジェクト資源へコピーされます。最大5枚、NovelAI V4.5 / V5 対応です。",
     preciseUpload: "精密参照画像を追加",
     preciseEmpty: "精密参照画像はありません。",
     preciseCharacter: "キャラクター",
@@ -492,7 +493,7 @@ const COPY = {
     precisePanelHeading: "このコマの精密参照",
     precisePanelHint: "選択後、このコマだけ種類・強度・忠実度を調整できます。",
     preciseReset: "共通値に戻す",
-    preciseV45Only: "精密参照は NovelAI V4.5 モデル専用です。",
+    preciseV45Only: "精密参照は NovelAI V4.5 / V5 モデル専用です。",
     preciseImportFailed: "精密参照画像を読み込めません：{message}",
     preciseScope: "適用範囲",
     preciseScopeAll: "すべてのコマ",
@@ -612,7 +613,7 @@ const COPY = {
     sizesIncomplete: "일부 컷에 지원 크기가 없습니다. 전체 크기 목록을 다시 가져오세요.",
     panelSize: "이 컷 크기",
     preciseHeading: "전체 정밀 참조 이미지",
-    preciseHint: "참조 이미지는 프로젝트 리소스에 복사됩니다. 최대 5장, NovelAI V4.5 전용입니다.",
+    preciseHint: "참조 이미지는 프로젝트 리소스에 복사됩니다. 최대 5장, NovelAI V4.5 / V5 지원입니다.",
     preciseUpload: "정밀 참조 추가",
     preciseEmpty: "추가된 정밀 참조가 없습니다.",
     preciseCharacter: "캐릭터",
@@ -624,7 +625,7 @@ const COPY = {
     precisePanelHeading: "이 컷의 정밀 참조",
     precisePanelHint: "선택 후 이 컷의 유형, 강도, 충실도를 개별 조정할 수 있습니다.",
     preciseReset: "전체 값으로 복원",
-    preciseV45Only: "정밀 참조는 NovelAI V4.5 모델에서만 사용할 수 있습니다.",
+    preciseV45Only: "정밀 참조는 NovelAI V4.5 / V5 모델에서만 사용할 수 있습니다.",
     preciseImportFailed: "정밀 참조를 가져오지 못했습니다: {message}",
     preciseScope: "적용 범위",
     preciseScopeAll: "모든 컷",
@@ -1470,7 +1471,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
     const invalidPreciseModel = prepared.some(
       (task) =>
         task.request.preciseReferences.length > 0 &&
-        !task.request.params.model.includes("4-5"),
+        !supportsNAIPreciseReference(task.request.params.model),
     );
     if (invalidPreciseModel) {
       setToast(text(language, "preciseV45Only"));
@@ -2328,7 +2329,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
             aria-label={text(language, "closePreview")}
             onClick={() => setPreview(null)}
           >
-            ×
+            <Icon name="close" />
           </button>
         </div>
       )}

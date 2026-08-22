@@ -30,7 +30,7 @@ import type {
   PreciseReferenceImage,
   WorkingImage,
 } from "./types";
-import { createDefaultBatchRedraw, DEFAULT_AUGMENT_OPTIONS, DEFAULT_I2I_PARAMS, DEFAULT_PARAMS, DIRECTOR_TOOLS, EMOTION_OPTIONS, NAI_INPAINT_MODELS, normalizeGenerateParams } from "./types";
+import { createDefaultBatchRedraw, DEFAULT_AUGMENT_OPTIONS, DEFAULT_I2I_PARAMS, DEFAULT_PARAMS, DIRECTOR_TOOLS, EMOTION_OPTIONS, maxNAICharacterPrompts, NAI_INPAINT_MODELS, normalizeGenerateParams } from "./types";
 import { normalizeAppLanguage } from "./i18n";
 import { expandWildcards } from "./wildcards";
 
@@ -731,7 +731,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   workbenchImage: null,
   comparisonBeforeImage: null,
   i2iParams: { ...DEFAULT_I2I_PARAMS },
-  inpaintModel: "nai-diffusion-4-5-full-inpainting",
+  inpaintModel: "nai-diffusion-5-full-inpainting",
   inpaintStrength: 1,
   inpaintNoise: 0,
   inpaintPositivePrompt: "",
@@ -952,10 +952,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   restoreImportedMetadata(patch, captions) {
-    const restoredCaptions: CharCaption[] = captions.slice(0, 6).map((caption) => ({
+    const restoredCaptions: CharCaption[] = captions
+      .slice(0, maxNAICharacterPrompts(patch.model ?? get().params.model))
+      .map((caption) => ({
       ...caption,
       id: crypto.randomUUID(),
-    }));
+      }));
     set((state) => ({
       params: normalizeGenerateParams({ ...state.params, ...patch }),
       charCaptions: restoredCaptions,
@@ -1245,6 +1247,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // ── Character Prompt ───────────────────────────────────────────────────────
   addCharCaption() {
+    if (get().charCaptions.length >= maxNAICharacterPrompts(get().params.model)) return;
     const id = crypto.randomUUID();
     set((state) => ({
       charCaptions: [

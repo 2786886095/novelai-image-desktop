@@ -23,7 +23,7 @@ const opusAccount: AccountSummary = {
 };
 
 describe("official Anlas pricing", () => {
-  it("prices the default 832x1216, 28-step image at 20 Anlas", () => {
+  it("prices the V5 default with the established 832x1216, 28-step parameters at 20 Anlas", () => {
     const quote = calculateImageGenerationAnlas({
       params: DEFAULT_PARAMS,
       account: paidAccount,
@@ -51,7 +51,7 @@ describe("official Anlas pricing", () => {
 
   it("charges V4 vibe encoding as a one-time fee, not per batch image", () => {
     const quote = calculateImageGenerationAnlas({
-      params: DEFAULT_PARAMS,
+      params: { ...DEFAULT_PARAMS, model: "nai-diffusion-4-5-full" },
       account: opusAccount,
       batchCount: 3,
       extras: {
@@ -76,12 +76,12 @@ describe("official Anlas pricing", () => {
     };
     // Both already encoded+cached → no encode charge.
     expect(
-      calculateImageGenerationAnlas({ params: DEFAULT_PARAMS, account: opusAccount, extras: vibes, alreadyEncodedVibes: 2 })
+      calculateImageGenerationAnlas({ params: { ...DEFAULT_PARAMS, model: "nai-diffusion-4-5-full" }, account: opusAccount, extras: vibes, alreadyEncodedVibes: 2 })
         .amount,
     ).toBe(0);
     // One cached, one new → only the new one is charged (2 Anlas).
     expect(
-      calculateImageGenerationAnlas({ params: DEFAULT_PARAMS, account: opusAccount, extras: vibes, alreadyEncodedVibes: 1 })
+      calculateImageGenerationAnlas({ params: { ...DEFAULT_PARAMS, model: "nai-diffusion-4-5-full" }, account: opusAccount, extras: vibes, alreadyEncodedVibes: 1 })
         .amount,
     ).toBe(2);
   });

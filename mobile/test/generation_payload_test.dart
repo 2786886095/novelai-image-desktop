@@ -24,6 +24,9 @@ void main() {
     expect(payload['input'], isNot(contains('location')));
     expect(defaults.ucPreset, 2);
     expect(defaults.variety, isFalse);
+    expect(defaults.model, 'nai-diffusion-5-full');
+    expect(defaults.steps, 28);
+    expect(defaults.cfgScale, 6);
     expect(parameters['uc'], contains('custom negative'));
     expect(parameters['uc'], contains('bad anatomy'));
     expect(parameters['uc'], contains('mismatched pupils'));
@@ -58,6 +61,7 @@ void main() {
       'unused',
       settings,
       GenerateParams(
+        model: 'nai-diffusion-4-5-full',
         positivePrompt: 'test',
         variety: true,
         sampler: 'k_euler_ancestral',
@@ -73,6 +77,62 @@ void main() {
     expect(parameters.containsKey('variety'), isFalse);
     expect(parameters['deliberate_euler_ancestral_bug'], isFalse);
     expect(parameters['prefer_brownian'], isTrue);
+  });
+
+  test('V5 payload mirrors current model capabilities', () async {
+    final extras = GenerateExtras(
+      charCaptions: List.generate(
+        40,
+        (index) => CharCaptionItem(prompt: 'character ${index + 1}'),
+      ),
+      preciseReferences: [
+        const PreciseReferenceItem(
+          base64:
+              'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+          type: 'character',
+          strength: 1,
+          fidelity: 1,
+        ),
+      ],
+    );
+    final payload = await api.buildPayload(
+      'unused',
+      settings,
+      GenerateParams(
+        positivePrompt: 'group',
+        cfgRescale: 0.5,
+        noiseSchedule: 'exponential',
+        variety: true,
+      ),
+      123,
+      extras,
+    );
+    final parameters = payload['parameters'] as Map<String, dynamic>;
+    final prompt = (parameters['v4_prompt'] as Map)['caption'] as Map;
+
+    expect(payload['model'], 'nai-diffusion-5-full');
+    expect(parameters['params_version'], 4);
+    expect(parameters['noise_schedule'], 'karras');
+    expect(parameters['dynamic_thresholding'], isFalse);
+    expect(parameters['skip_cfg_above_sigma'], isNull);
+    expect(parameters['director_reference_images'], hasLength(1));
+    expect(prompt['char_captions'], hasLength(32));
+  });
+
+  test('V5 rejects unsupported Vibe Transfer before making a network call',
+      () async {
+    await expectLater(
+      api.buildPayload(
+        'unused',
+        settings,
+        GenerateParams(positivePrompt: '1girl'),
+        123,
+        GenerateExtras(vibeImages: const [
+          VibeTransferItem(base64: 'dmliZQ=='),
+        ]),
+      ),
+      throwsA(isA<NaiHttpException>()),
+    );
   });
 
   test('character prompt can safely downgrade from structured to pipe form',

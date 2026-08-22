@@ -1,5 +1,8 @@
 import {
   MAX_NAI_UPSCALE_INPUT_PIXELS,
+  isNAIV4PlusModel,
+  supportsNAIPreciseReference,
+  supportsNAIVibeTransfer,
   type AccountSummary,
   type AnlasQuoteFeature,
   type AnlasQuoteResult,
@@ -16,10 +19,6 @@ import {
 const BASE_PIXEL_COEFFICIENT = 2951823174884865e-21;
 const STEP_PIXEL_COEFFICIENT = 5753298233447344e-22;
 const OPUS_FREE_MAX_PIXELS = 1024 * 1024;
-
-function isV4Plus(model: string) {
-  return model.includes("-4");
-}
 
 function isActiveOpus(account?: AccountSummary) {
   return Boolean(account?.hasActiveSubscription && (account.tierLevel ?? 0) >= 3);
@@ -97,8 +96,10 @@ export function calculateImageGenerationAnlas({
   const pixels = Math.max(width * height, 65_536);
   const steps = positiveInt(params.steps, 28);
   const normalizedStrength = action === "generate" ? 1 : clamp01(strength, 1);
-  const v4Plus = isV4Plus(params.model);
-  const vibeCount = extras?.vibeImages?.length ?? 0;
+  const v4Plus = isNAIV4PlusModel(params.model);
+  const vibeCount = supportsNAIVibeTransfer(params.model)
+    ? extras?.vibeImages?.length ?? 0
+    : 0;
   const details: string[] = [];
 
   let basePerSample = 0;
@@ -141,14 +142,13 @@ export function calculateImageGenerationAnlas({
     }
   }
 
-  // Precise / Director references (V4.5): the official docs charge "an additional
+  // Precise / Director references (V4.5/V5): the official docs charge "an additional
   // cost of 5 Anlas to each image generation" — a FLAT 5 per generated image when
   // the feature is used, NOT per reference. So it scales with the request/batch
   // count only, regardless of how many references are attached.
-  // Precise Reference is V4.5-only (per the docs), and the main process drops it
-  // on other models — so only charge it for V4.5 to avoid over-quoting.
+  // Only charge models whose current frontend capability map exposes the feature.
   const preciseCount = extras?.preciseReferences?.length ?? 0;
-  if (v4Plus && params.model.includes("4-5") && preciseCount > 0) {
+  if (v4Plus && supportsNAIPreciseReference(params.model) && preciseCount > 0) {
     const preciseCost = 5 * samples;
     total += preciseCost;
     details.push(`Precise reference: 5 Anlas x ${samples} image(s) = ${preciseCost} (flat per image, ${preciseCount} ref attached).`);

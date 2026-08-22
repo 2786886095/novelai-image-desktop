@@ -44,6 +44,9 @@ function modelToNai(value: unknown): NAIModel | undefined {
   if (NAI_MODELS.some((item) => item.value === value)) return value as NAIModel;
   const name = value.toLowerCase();
   if (name.includes("furry") && name.includes("v3")) return "nai-diffusion-furry-3";
+  if (name.includes("v5")) {
+    return name.includes("curated") ? "nai-diffusion-5-curated" : "nai-diffusion-5-full";
+  }
   if (name.includes("v4.5") || name.includes("v4 5")) {
     return name.includes("curated") ? "nai-diffusion-4-5-curated" : "nai-diffusion-4-5-full";
   }
@@ -54,7 +57,7 @@ function modelToNai(value: unknown): NAIModel | undefined {
   return undefined;
 }
 
-/** Extract NovelAI V4/V4.5 structured positive and negative character prompts. */
+/** Extract NovelAI V4/V4.5/V5 structured positive and negative character prompts. */
 export function parseNovelAICharCaptions(meta: Record<string, string>): CharCaptionItem[] {
   let comment: Record<string, unknown> = {};
   try {
@@ -87,7 +90,7 @@ export function parseNovelAICharCaptions(meta: Record<string, string>): CharCapt
       x: finiteNumber(center?.x) ?? 0.5,
       y: finiteNumber(center?.y) ?? 0.5,
     }];
-  }).slice(0, 6);
+  }).slice(0, 32);
 }
 
 function decodeUtf8(bytes: Uint8Array) {

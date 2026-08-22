@@ -9,9 +9,13 @@ class NaiOption {
 }
 
 const appName = 'Langbai NovelAI Studio';
-const appVersion = '1.7.5';
+const appVersion = '1.7.6';
 
 const naiModels = <NaiOption>[
+  NaiOption(
+      'NAI Diffusion V5 Full (Latest full model)', 'nai-diffusion-5-full'),
+  NaiOption('NAI Diffusion V5 Curated (Latest curated model)',
+      'nai-diffusion-5-curated'),
   NaiOption('NAI Diffusion 4.5 Full (Full model)', 'nai-diffusion-4-5-full'),
   NaiOption(
       'NAI Diffusion 4.5 Curated (Curated model)', 'nai-diffusion-4-5-curated'),
@@ -23,6 +27,10 @@ const naiModels = <NaiOption>[
 ];
 
 const naiInpaintModels = <NaiOption>[
+  NaiOption('NAI Diffusion V5 Full Inpaint (Recommended)',
+      'nai-diffusion-5-full-inpainting'),
+  NaiOption(
+      'NAI Diffusion V5 Curated Inpaint', 'nai-diffusion-5-curated-inpainting'),
   NaiOption('NAI Diffusion 4.5 Full Inpaint (Recommended)',
       'nai-diffusion-4-5-full-inpainting'),
   NaiOption('NAI Diffusion 4.5 Curated Inpaint',
@@ -114,7 +122,7 @@ class GenerateParams {
   String fileNamePrefix;
 
   GenerateParams({
-    this.model = 'nai-diffusion-4-5-full',
+    this.model = 'nai-diffusion-5-full',
     this.stylePrompt = '',
     this.positivePrompt = '',
     this.negativePrompt = '',
@@ -135,8 +143,20 @@ class GenerateParams {
     this.fileNamePrefix = '',
   });
 
-  bool get isV4Plus => model.startsWith('nai-diffusion-4');
+  bool get isV5 => model.startsWith('nai-diffusion-5');
+  bool get isV4Plus =>
+      model.startsWith('nai-diffusion-4') ||
+      model.startsWith('nai-diffusion-5');
   bool get isV45 => model.startsWith('nai-diffusion-4-5');
+  bool get supportsPreciseReference => isV45 || isV5;
+  bool get supportsVibeTransfer => !isV5;
+  bool get supportsNoiseScheduleControl => !isV5;
+  bool get supportsVariety => !isV5;
+  int get maxCharacterPrompts => isV5
+      ? 32
+      : isV4Plus
+          ? 6
+          : 0;
 
   Map<String, dynamic> toJson() => {
         'model': model,
@@ -161,7 +181,7 @@ class GenerateParams {
       };
 
   factory GenerateParams.fromJson(Map<String, dynamic> j) => GenerateParams(
-        model: _stringValue(j['model'], 'nai-diffusion-4-5-full'),
+        model: _stringValue(j['model'], 'nai-diffusion-5-full'),
         stylePrompt: _stringValue(j['stylePrompt'], ''),
         positivePrompt: _stringValue(j['positivePrompt'], ''),
         negativePrompt: _stringValue(j['negativePrompt'], ''),
@@ -195,7 +215,7 @@ class GenerateParams {
     final supportedSchedules =
         naiNoiseSchedules.map((option) => option.value).toSet();
     return GenerateParams(
-      model: supportedModels.contains(model) ? model : 'nai-diffusion-4-5-full',
+      model: supportedModels.contains(model) ? model : 'nai-diffusion-5-full',
       stylePrompt: stylePrompt,
       positivePrompt: positivePrompt,
       negativePrompt: negativePrompt,
@@ -723,7 +743,7 @@ class AppSettings {
     this.comicPromptTemplate = '',
     this.reversePromptMode = 'tags',
     this.convertPromptMode = 'natural',
-    this.inpaintModel = 'nai-diffusion-4-5-full-inpainting',
+    this.inpaintModel = 'nai-diffusion-5-full-inpainting',
     this.inpaintStrength = 0.55,
     this.inpaintNoise = 0,
     this.inpaintPositivePrompt = '',
@@ -874,7 +894,7 @@ class AppSettings {
         reversePromptMode: j['reversePromptMode'] ?? 'tags',
         convertPromptMode: j['convertPromptMode'] ?? 'natural',
         inpaintModel: _supportedOptionValue(j['inpaintModel'], naiInpaintModels,
-            'nai-diffusion-4-5-full-inpainting'),
+            'nai-diffusion-5-full-inpainting'),
         inpaintStrength:
             _finiteClamp(_doubleValue(j['inpaintStrength'], 0.55), 0, 1, 0.55),
         inpaintNoise:

@@ -390,8 +390,16 @@ class BatchRedrawController extends ChangeNotifier {
       });
       notifyListeners();
     }
-    final incompatible = jobs.any(
-        (job) => job.extras.preciseReferences.isNotEmpty && !job.params.isV45);
+    final vibeIncompatible = jobs.any((job) =>
+        job.extras.vibeImages.isNotEmpty && !job.params.supportsVibeTransfer);
+    if (vibeIncompatible) {
+      status = _rt('error.vibeUnsupportedV5');
+      notifyListeners();
+      return;
+    }
+    final incompatible = jobs.any((job) =>
+        job.extras.preciseReferences.isNotEmpty &&
+        !job.params.supportsPreciseReference);
     if (incompatible) {
       status = _rt('error.preciseV45Only');
       notifyListeners();

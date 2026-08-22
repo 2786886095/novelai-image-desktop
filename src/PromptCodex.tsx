@@ -1,6 +1,7 @@
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import bundledSnapshot from "./data/prompt-codex.json";
 import { Button } from "./components/ui";
+import { Icon } from "./components/icons";
 import { useAppStore } from "./store";
 import type {
   PromptCodexEntry,
@@ -320,7 +321,7 @@ export default function PromptCodex({ onBack }: { onBack: () => void }) {
             variant="ghost"
             onClick={() => void window.naiDesktop.openExternal(snapshot.sourceSite)}
           >
-            ↗ {text.website}
+            <Icon name="externalLink" /> {text.website}
           </Button>
           <Button disabled={updating} onClick={() => void update()}>
             {updating ? text.updating : text.update}
@@ -335,7 +336,7 @@ export default function PromptCodex({ onBack }: { onBack: () => void }) {
               <b>{text.introduction}</b>
               <small>{text.introductionHint}</small>
             </span>
-            <span aria-hidden="true">⌄</span>
+            <Icon name="chevronDown" />
           </summary>
           <div>
             {introduction.map((item, index) => (

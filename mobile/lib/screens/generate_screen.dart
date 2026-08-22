@@ -1559,7 +1559,7 @@ class _ParamControls extends StatelessWidget {
             state.setParam((params) {
               params.model = next == 'furry'
                   ? 'nai-diffusion-furry-3'
-                  : 'nai-diffusion-4-5-full';
+                  : 'nai-diffusion-5-full';
             });
           },
         ),
@@ -1659,24 +1659,26 @@ class _ParamControls extends StatelessWidget {
             onChanged: (v) => state.setParam(
                 (x) => x.cfgRescale = double.parse(v.toStringAsFixed(2))),
             display: p.cfgRescale.toStringAsFixed(2)),
-        const SizedBox(height: 6),
-        DropdownButtonFormField<String>(
-          value: p.noiseSchedule,
-          isExpanded: true,
-          decoration: InputDecoration(
-              labelText: text.noiseSchedule,
-              border: const OutlineInputBorder()),
-          items: naiNoiseSchedules
-              .map((option) => DropdownMenuItem(
-                    value: option.value,
-                    child: Text(localizedNaiOptionLabel(
-                        language, option.value, option.label)),
-                  ))
-              .toList(),
-          onChanged: (value) => value == null
-              ? null
-              : state.setParam((x) => x.noiseSchedule = value),
-        ),
+        if (p.supportsNoiseScheduleControl) ...[
+          const SizedBox(height: 6),
+          DropdownButtonFormField<String>(
+            value: p.noiseSchedule,
+            isExpanded: true,
+            decoration: InputDecoration(
+                labelText: text.noiseSchedule,
+                border: const OutlineInputBorder()),
+            items: naiNoiseSchedules
+                .map((option) => DropdownMenuItem(
+                      value: option.value,
+                      child: Text(localizedNaiOptionLabel(
+                          language, option.value, option.label)),
+                    ))
+                .toList(),
+            onChanged: (value) => value == null
+                ? null
+                : state.setParam((x) => x.noiseSchedule = value),
+          ),
+        ],
         const SizedBox(height: 10),
         DropdownButtonFormField<int>(
           value: p.ucPreset,
@@ -1752,11 +1754,12 @@ class _ParamControls extends StatelessWidget {
             title: Text(text.qualityToggle),
             value: p.qualityToggle,
             onChanged: (v) => state.setParam((x) => x.qualityToggle = v)),
-        SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text(text.variety),
-            value: p.variety,
-            onChanged: (v) => state.setParam((x) => x.variety = v)),
+        if (p.supportsVariety)
+          SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(text.variety),
+              value: p.variety,
+              onChanged: (v) => state.setParam((x) => x.variety = v)),
         if (!p.isV4Plus) ...[
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
@@ -2083,12 +2086,20 @@ class _ReferenceControls extends StatelessWidget {
             alignment: Alignment.centerLeft,
             child: Text(t('generate.vibeHint')),
           ),
+          if (!state.params.supportsVibeTransfer)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.info_outline),
+              title: Text(t('generate.vibeUnsupportedV5')),
+            ),
           for (var index = 0; index < extras.vibeImages.length; index++)
             _VibeReferenceRow(index: index),
           Align(
             alignment: Alignment.centerLeft,
             child: OutlinedButton.icon(
-              onPressed: () => _pick(context, precise: false),
+              onPressed: state.params.supportsVibeTransfer
+                  ? () => _pick(context, precise: false)
+                  : null,
               icon: const Icon(Icons.add_photo_alternate_outlined),
               label: Text(t('generate.addVibe')),
             ),
@@ -2105,7 +2116,8 @@ class _ReferenceControls extends StatelessWidget {
               t('generate.preciseHint'),
             ),
           ),
-          if (!state.params.isV45 && extras.preciseReferences.isNotEmpty)
+          if (!state.params.supportsPreciseReference &&
+              extras.preciseReferences.isNotEmpty)
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.warning_amber_rounded),

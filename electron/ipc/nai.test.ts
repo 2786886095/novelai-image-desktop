@@ -55,7 +55,7 @@ describe("persisted generation parameter migration", () => {
       smeaDyn: true,
     });
     expect(params).toMatchObject({
-      model: "nai-diffusion-4-5-full",
+      model: "nai-diffusion-5-full",
       width: 1600,
       height: 64,
       steps: 50,
@@ -188,6 +188,58 @@ describe("buildGenerateImageHttpBody", () => {
 });
 
 describe("V4 character prompt payload", () => {
+  it("uses V5 Full while preserving the app's established V4.5 parameter defaults", () => {
+    expect(DEFAULT_PARAMS).toMatchObject({
+      model: "nai-diffusion-5-full",
+      steps: 28,
+      cfgScale: 6,
+      sampler: "k_euler_ancestral",
+      noiseSchedule: "karras",
+    });
+  });
+
+  it("builds a V5 payload with V5 capabilities instead of replaying V4-only fields", () => {
+    const charCaptions = Array.from({ length: 40 }, (_, index) => ({
+      prompt: `character ${index + 1}`,
+      negativePrompt: "",
+      useCoords: false,
+      x: 0.5,
+      y: 0.5,
+    }));
+    const payload = buildPayload(
+      {
+        ...DEFAULT_PARAMS,
+        positivePrompt: "group",
+        cfgRescale: 0.5,
+        noiseSchedule: "exponential",
+        variety: true,
+      },
+      123,
+      {
+        vibeImages: [{ base64: b64("vibe"), infoExtracted: 1, strength: 1 }],
+        charCaptions,
+        preciseReferences: [{
+          base64: b64("precise"),
+          type: "character",
+          strength: 1,
+          fidelity: 1,
+        }],
+      },
+    );
+    const prompt = payload.parameters.v4_prompt as {
+      caption: { char_captions: unknown[] };
+    };
+
+    expect(payload.model).toBe("nai-diffusion-5-full");
+    expect(payload.parameters.params_version).toBe(4);
+    expect(payload.parameters.noise_schedule).toBe("karras");
+    expect(payload.parameters.dynamic_thresholding).toBe(false);
+    expect(payload.parameters.skip_cfg_above_sigma).toBeNull();
+    expect(payload.parameters.reference_image_multiple).toBeUndefined();
+    expect(payload.parameters.director_reference_images).toHaveLength(1);
+    expect(prompt.caption.char_captions).toHaveLength(32);
+  });
+
   it("preserves per-character negative prompts restored from NovelAI metadata", () => {
     const payload = buildPayload(
       { ...DEFAULT_PARAMS, positivePrompt: "forest", qualityToggle: false, ucPreset: 3 },

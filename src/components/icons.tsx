@@ -16,6 +16,7 @@ export type IconName =
   | "plug"
   | "link"
   | "sparkles"
+  | "star"
   | "dice"
   | "pin"
   | "key"
@@ -26,7 +27,39 @@ export type IconName =
   | "copy"
   | "warning"
   | "eye"
-  | "eyeOff";
+  | "eyeOff"
+  | "settings"
+  | "help"
+  | "refresh"
+  | "check"
+  | "close"
+  | "plus"
+  | "clear"
+  | "externalLink"
+  | "play"
+  | "brush"
+  | "eraser"
+  | "scan"
+  | "swap"
+  | "arrowDownLeft"
+  | "logout"
+  | "image"
+  | "images"
+  | "history"
+  | "toolbox"
+  | "fileSearch"
+  | "wand"
+  | "minus"
+  | "maximize"
+  | "minimize"
+  | "chevronDown"
+  | "search"
+  | "info"
+  | "successCircle"
+  | "user"
+  | "loader"
+  | "sliders"
+  | "chevronRight";
 
 const PATHS: Record<IconName, ReactNode> = {
   lock: (
@@ -99,6 +132,7 @@ const PATHS: Record<IconName, ReactNode> = {
       <path d="M18 15l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7Z" />
     </>
   ),
+  star: <path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2-4.5-4.4 6.2-.9Z" />,
   dice: (
     <>
       <rect x="4" y="4" width="16" height="16" rx="3.2" />
@@ -177,12 +211,227 @@ const PATHS: Record<IconName, ReactNode> = {
       <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" />
     </>
   ),
+  settings: (
+    <>
+      <circle cx="12" cy="12" r="3.2" />
+      <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6 1.7 1.7 0 0 0 10 3v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z" />
+    </>
+  ),
+  help: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M9.7 9a2.5 2.5 0 1 1 3.7 2.2c-.9.5-1.4 1-1.4 2.1" />
+      <path d="M12 17.5h.01" />
+    </>
+  ),
+  refresh: (
+    <>
+      <path d="M20 7v5h-5" />
+      <path d="M18.5 16.5A8 8 0 1 1 20 12" />
+    </>
+  ),
+  check: <path d="m4.5 12.5 4.8 4.8L19.8 6.8" />,
+  close: (
+    <>
+      <path d="M5 5l14 14" />
+      <path d="M19 5 5 19" />
+    </>
+  ),
+  plus: (
+    <>
+      <path d="M12 5v14" />
+      <path d="M5 12h14" />
+    </>
+  ),
+  minus: <path d="M5 12h14" />,
+  clear: (
+    <>
+      <path d="m4 15 7.7-9.4a2 2 0 0 1 3-.2l4 3.4a2 2 0 0 1 .2 3L12.2 20H8.5Z" />
+      <path d="m9 9.3 7 6" />
+    </>
+  ),
+  externalLink: (
+    <>
+      <path d="M14 4h6v6" />
+      <path d="m20 4-9 9" />
+      <path d="M18 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h5" />
+    </>
+  ),
+  play: <path d="m8 5 11 7-11 7Z" />,
+  brush: (
+    <>
+      <path d="m14.7 5.3 4 4" />
+      <path d="M5 19c2.2.3 4-.4 4.8-2.1.4-.8.4-1.6.2-2.4L17.9 6.6a1.8 1.8 0 0 0-2.5-2.5L7.5 12c-.8-.2-1.7-.2-2.4.2C3.4 13 2.7 14.8 3 17Z" />
+    </>
+  ),
+  eraser: (
+    <>
+      <path d="m4.2 15.4 8.8-10a2 2 0 0 1 2.8-.2l3 2.6a2 2 0 0 1 .2 2.8l-7.6 8.6H7.6Z" />
+      <path d="m9.2 10 5.8 5.1" />
+      <path d="M12 20h8" />
+    </>
+  ),
+  scan: (
+    <>
+      <path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3" />
+      <circle cx="12" cy="12" r="3" />
+    </>
+  ),
+  swap: (
+    <>
+      <path d="M7 7h13" />
+      <path d="m16 3 4 4-4 4" />
+      <path d="M17 17H4" />
+      <path d="m8 13-4 4 4 4" />
+    </>
+  ),
+  arrowDownLeft: (
+    <>
+      <path d="M19 5 5 19" />
+      <path d="M5 10v9h9" />
+    </>
+  ),
+  logout: (
+    <>
+      <path d="M10 5H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4" />
+      <path d="M14 8l4 4-4 4M18 12H9" />
+    </>
+  ),
+  image: (
+    <>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <circle cx="8.5" cy="9" r="1.5" />
+      <path d="m4 17 4.5-4.5 3.5 3 2.5-2.5 5.5 5" />
+    </>
+  ),
+  images: (
+    <>
+      <rect x="6" y="6" width="15" height="14" rx="2" />
+      <path d="M3 16V6a2 2 0 0 1 2-2h11" />
+      <circle cx="11" cy="11" r="1.3" />
+      <path d="m7 18 4-4 2.8 2.5 2.2-2 4 3.5" />
+    </>
+  ),
+  history: (
+    <>
+      <path d="M4 7v5h5" />
+      <path d="M5.5 17.5A8.5 8.5 0 1 0 4 12" />
+      <path d="M12 7.5V12l3 2" />
+    </>
+  ),
+  toolbox: (
+    <>
+      <rect x="3" y="8" width="18" height="11" rx="2" />
+      <path d="M9 8V5h6v3M3 12h18M10 12v2h4v-2" />
+    </>
+  ),
+  fileSearch: (
+    <>
+      <path d="M6 3h8l4 4v5" />
+      <path d="M14 3v5h5" />
+      <path d="M6 3a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h6" />
+      <circle cx="16" cy="16" r="3" />
+      <path d="m18.2 18.2 2.3 2.3" />
+    </>
+  ),
+  wand: (
+    <>
+      <path d="m5 19 10.5-10.5 3 3L8 22Z" />
+      <path d="m6 3 .8 2.2L9 6l-2.2.8L6 9l-.8-2.2L3 6l2.2-.8ZM16 2l.6 1.4L18 4l-1.4.6L16 6l-.6-1.4L14 4l1.4-.6ZM20 16l.6 1.4L22 18l-1.4.6L20 20l-.6-1.4L18 18l1.4-.6Z" />
+    </>
+  ),
+  maximize: <rect x="5" y="5" width="14" height="14" rx="1" />,
+  minimize: <path d="M5 12h14" />,
+  chevronDown: <path d="m6.5 9 5.5 5.5L17.5 9" />,
+  search: (
+    <>
+      <circle cx="11" cy="11" r="7" />
+      <path d="m16.2 16.2 4.3 4.3" />
+    </>
+  ),
+  info: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 10.5v6" />
+      <path d="M12 7.2h.01" />
+    </>
+  ),
+  successCircle: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="m7.8 12.2 2.8 2.8 5.8-6" />
+    </>
+  ),
+  user: (
+    <>
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4.5 21a7.5 7.5 0 0 1 15 0" />
+    </>
+  ),
+  loader: (
+    <>
+      <path d="M21 12a9 9 0 0 1-9 9" />
+      <path d="M12 3a9 9 0 0 1 6.4 2.6" />
+      <path d="M3 12a9 9 0 0 1 3.1-6.8" />
+    </>
+  ),
+  sliders: (
+    <>
+      <path d="M4 6h16M4 12h16M4 18h16" />
+      <circle cx="9" cy="6" r="2" />
+      <circle cx="15" cy="12" r="2" />
+      <circle cx="8" cy="18" r="2" />
+    </>
+  ),
+  chevronRight: <path d="m9 6 6 6-6 6" />,
 };
+
+const LEGACY_ICON_MAP: Record<string, IconName> = {
+  "⚙": "settings",
+  "❔": "help",
+  "?": "help",
+  "↺": "refresh",
+  "↻": "refresh",
+  "⟲": "refresh",
+  "✓": "check",
+  "✕": "close",
+  "×": "close",
+  "+": "plus",
+  "＋": "plus",
+  "−": "minus",
+  "⌧": "clear",
+  "↗": "externalLink",
+  "→": "externalLink",
+  "▶": "play",
+  "✎": "brush",
+  "⌫": "eraser",
+  "◎": "scan",
+  "⇄": "swap",
+  "↔": "swap",
+  "↙": "arrowDownLeft",
+  "⇥": "logout",
+  "⧉": "copy",
+  "✦": "sparkles",
+  "☆": "star",
+  "◌": "brush",
+  "◈": "wand",
+  "▣": "toolbox",
+  "▧": "images",
+  "▤": "history",
+  "◇": "image",
+  "◒": "palette",
+  "♙": "user",
+  "…": "loader",
+};
+
+export function iconNameForLegacyGlyph(glyph: string): IconName | undefined {
+  return LEGACY_ICON_MAP[glyph];
+}
 
 export function Icon({ name, className }: { name: IconName; className?: string }) {
   return (
     <svg
-      className={clsx("ui-icon", className)}
+      className={clsx("ui-icon", name === "loader" && "ui-icon-spin", className)}
       viewBox="0 0 24 24"
       width="1em"
       height="1em"

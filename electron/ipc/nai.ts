@@ -9,8 +9,14 @@ import path from "path";
 import { pathToFileURL } from "url";
 import {
   DEFAULT_PARAMS,
+  isNAIV4PlusModel,
+  isNAIV5Model,
+  maxNAICharacterPrompts,
   normalizeGenerateParams,
   NAI_INPAINT_MODELS,
+  supportsNAIPreciseReference,
+  supportsNAIVibeTransfer,
+  supportsNAIVariety,
   MAX_NAI_DIRECTOR_INPUT_PIXELS,
   MAX_NAI_UPSCALE_INPUT_PIXELS,
   type AccountSummary,
@@ -270,17 +276,32 @@ export async function refreshStoredAccount(): Promise<AccountSummary> {
 }
 
 function isV4Plus(model: string) {
-  return model.includes("-4");
+  return isNAIV4PlusModel(model);
 }
 
-function isV45(model: string) {
-  return model.includes("4-5");
+function usesModernStructuredPrompt(model: string) {
+  return supportsNAIPreciseReference(model);
 }
 
 function normalizeModel(model: string) {
   return model.endsWith("-inpainting")
     ? model.slice(0, -"-inpainting".length)
     : model;
+}
+
+function defaultNoiseScheduleForSampler(sampler: string): string {
+  switch (sampler) {
+    case "k_euler":
+    case "k_euler_ancestral":
+    case "k_dpmpp_sde":
+    case "k_dpmpp_2s_ancestral":
+    case "k_dpmpp_2m_sde":
+      return "karras";
+    case "k_dpmpp_2m":
+      return "exponential";
+    default:
+      return "native";
+  }
 }
 
 function inpaintSizeHint(image: Pick<WorkingImage, "width" | "height">) {
@@ -293,7 +314,9 @@ function inpaintSizeHint(image: Pick<WorkingImage, "width" | "height">) {
 
 function inpaintModelCandidates(model: NAIInpaintModel) {
   const candidates = [model];
-  if (model === "nai-diffusion-4-5-curated-inpainting") {
+  if (model === "nai-diffusion-5-curated-inpainting") {
+    candidates.push("nai-diffusion-5-full-inpainting");
+  } else if (model === "nai-diffusion-4-5-curated-inpainting") {
     candidates.push("nai-diffusion-4-5-full-inpainting");
   } else if (model === "nai-diffusion-4-curated-inpainting") {
     candidates.push("nai-diffusion-4-full-inpainting");
@@ -312,6 +335,9 @@ function isInpaintModelCompatibilityError(error: any): boolean {
 
 function qualityTags(model: string) {
   switch (normalizeModel(model)) {
+    case "nai-diffusion-5-full":
+    case "nai-diffusion-5-curated":
+      return "very aesthetic, masterpiece, no text";
     case "nai-diffusion-4-5-full":
       return "very aesthetic, masterpiece, no text";
     case "nai-diffusion-4-5-curated":
@@ -329,7 +355,14 @@ function qualityTags(model: string) {
 
 function ucPresetText(model: string, preset: number) {
   if (preset === 3) return "";
-  const key = normalizeModel(model);
+  const normalized = normalizeModel(model);
+  // NovelAI's V5 frontend intentionally reuses the corresponding V4.5 Full /
+  // Curated undesired-content presets.
+  const key = normalized === "nai-diffusion-5-full"
+    ? "nai-diffusion-4-5-full"
+    : normalized === "nai-diffusion-5-curated"
+      ? "nai-diffusion-4-5-curated"
+      : normalized;
   if (preset === 2) {
     if (key === "nai-diffusion-4-5-full") {
       return "lowres, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, dithering, halftone, screentone, multiple views, logo, too many watermarks, negative space, blank page, @_@, mismatched pupils, glowing eyes, bad anatomy";
@@ -394,7 +427,7 @@ function finiteClamped(value: number, fallback: number) {
   return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : fallback;
 }
 
-function normalizedCharCaptions(extras?: GenerateExtras) {
+function normalizedCharCaptions(extras: GenerateExtras | undefined, model: string) {
   return (extras?.charCaptions ?? [])
     .map((c) => ({
       prompt: c.prompt.trim(),
@@ -404,11 +437,11 @@ function normalizedCharCaptions(extras?: GenerateExtras) {
       y: finiteClamped(Number(c.y), 0.5),
     }))
     .filter((c) => c.prompt.length > 0)
-    .slice(0, 6);
+    .slice(0, maxNAICharacterPrompts(model));
 }
 
-function hasCharCaptions(extras?: GenerateExtras) {
-  return normalizedCharCaptions(extras).length > 0;
+function hasCharCaptions(extras: GenerateExtras | undefined, model: string) {
+  return normalizedCharCaptions(extras, model).length > 0;
 }
 
 function shouldRetryCharCaptionsAsPipe(
@@ -419,7 +452,7 @@ function shouldRetryCharCaptionsAsPipe(
   const status = error?.response?.status;
   return (
     isV4Plus(params.model) &&
-    hasCharCaptions(extras) &&
+    hasCharCaptions(extras, params.model) &&
     (status === 400 || status === 422)
   );
 }
@@ -461,7 +494,7 @@ export function buildPayload(
     ucPresetText(params.model, params.ucPreset),
   );
   const v4Plus = isV4Plus(params.model);
-  const cleanedCharCaptions = normalizedCharCaptions(extras);
+  const cleanedCharCaptions = normalizedCharCaptions(extras, params.model);
   const inputPrompt =
     charCaptionMode === "pipe"
       ? withPipeCharCaptions(effectivePrompt, cleanedCharCaptions)
@@ -472,8 +505,12 @@ export function buildPayload(
   // sizes, so we must not re-snap here).
   const safeScale = Math.min(10, Math.max(0, Number(params.cfgScale) || 0));
 
+  const v5 = isNAIV5Model(params.model);
+  const effectiveNoiseSchedule = v5
+    ? defaultNoiseScheduleForSampler(params.sampler)
+    : params.noiseSchedule || "native";
   const parameters: Record<string, unknown> = {
-    params_version: 3,
+    params_version: 4,
     width: params.width,
     height: params.height,
     scale: safeScale,
@@ -481,7 +518,7 @@ export function buildPayload(
     steps: params.steps,
     n_samples: 1,
     seed: actualSeed,
-    noise_schedule: params.noiseSchedule || "native",
+    noise_schedule: effectiveNoiseSchedule,
     uc: effectiveNegative,
     negative_prompt: effectiveNegative,
     ucPreset: params.ucPreset,
@@ -489,7 +526,7 @@ export function buildPayload(
     cfg_rescale: params.cfgRescale,
     legacy: false,
     legacy_v3_extend: false,
-    dynamic_thresholding: params.cfgRescale > 0,
+    dynamic_thresholding: v5 ? false : params.cfgRescale > 0,
     skip_cfg_above_sigma: null,
     qualityToggle: params.qualityToggle,
     quality_toggle: params.qualityToggle,
@@ -497,11 +534,13 @@ export function buildPayload(
 
   // "Variety+" is implemented by skipping CFG above a sigma threshold — NovelAI
   // has no boolean `variety` field, so the previous `variety: true` was a no-op.
-  if (params.variety) parameters.skip_cfg_above_sigma = 58;
+  if (params.variety && supportsNAIVariety(params.model)) {
+    parameters.skip_cfg_above_sigma = 58;
+  }
 
   if (
     params.sampler === "k_euler_ancestral" &&
-    params.noiseSchedule !== "native"
+    effectiveNoiseSchedule !== "native"
   ) {
     parameters.deliberate_euler_ancestral_bug = false;
     parameters.prefer_brownian = true;
@@ -542,7 +581,7 @@ export function buildPayload(
       },
       use_coords: useCoords && negativeCharCaptionsPayload.length > 0,
       use_order: false,
-      legacy_uc: !isV45(params.model),
+      legacy_uc: !usesModernStructuredPrompt(params.model),
     };
   } else {
     parameters.sm = params.smea;
@@ -550,7 +589,7 @@ export function buildPayload(
   }
 
   // Vibe Transfer (reference_image_multiple) — legacy reference conditioning.
-  if (extras?.vibeImages && extras.vibeImages.length > 0) {
+  if (supportsNAIVibeTransfer(params.model) && extras?.vibeImages && extras.vibeImages.length > 0) {
     parameters.reference_image_multiple = extras.vibeImages.map(
       (v) => v.base64,
     );
@@ -562,11 +601,11 @@ export function buildPayload(
     );
   }
 
-  // Precise / Director Reference — V4.5 only. Distinct from Vibe Transfer: uses
+  // Precise / Director Reference — V4.5 and V5. Distinct from Vibe Transfer: uses
   // the director_reference_* fields with a type (character/style/character&style),
   // strength, and secondary strength derived from fidelity (1 - fidelity).
   const preciseRefs = extras?.preciseReferences ?? [];
-  if (v4Plus && isV45(params.model) && preciseRefs.length > 0) {
+  if (v4Plus && supportsNAIPreciseReference(params.model) && preciseRefs.length > 0) {
     // Confirmed against the official client's real request (F12 HAR): V4.5 precise
     // references are uploaded as multipart BINARY parts named director_ref_N (done
     // in postGenerateImage); the JSON references them via
@@ -780,7 +819,7 @@ async function prepareExtras(
   // official client.
   let preciseReferences = extras.preciseReferences;
   if (preciseReferences && preciseReferences.length > 0) {
-    preciseReferences = isV45(params.model)
+    preciseReferences = supportsNAIPreciseReference(params.model)
       ? preciseReferences.map((ref, index) => ({
           ...ref,
           base64: prepareDirectorReferenceImage(
@@ -793,6 +832,11 @@ async function prepareExtras(
 
   if (!extras.vibeImages || extras.vibeImages.length === 0) {
     return { ...extras, preciseReferences };
+  }
+  if (!supportsNAIVibeTransfer(params.model)) {
+    throw new Error(
+      "NovelAI V5 当前不支持氛围迁移（Vibe Transfer）；请移除氛围图或改用精准参考。",
+    );
   }
   if (!isV4Plus(params.model)) return { ...extras, preciseReferences }; // V3 path unchanged
 
@@ -3285,7 +3329,7 @@ function comicReferencesToExtras(
   // Precise/Director references are only available on V4.5 models. On other
   // models we fall back to Vibe Transfer so the reference still has an effect
   // instead of being silently dropped.
-  const supportsPrecise = isV45(request.params.model);
+  const supportsPrecise = supportsNAIPreciseReference(request.params.model);
 
   const vibeImages: VibeTransferItem[] = [];
   const preciseReferences: PreciseReferenceItem[] = [];

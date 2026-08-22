@@ -15,8 +15,9 @@ const _runtimeText = <String, Map<String, String>>{
     'error.i2iNoImages': '图生图成功但没有图片',
     'error.inpaintNoImages': '重绘成功但没有图片',
     'error.directorNoImages': '后期处理成功但没有图片',
-    'error.preciseV45Only': '精准参考仅支持 NovelAI V4.5，请切换模型或移除精准参考图',
-    'error.preciseV45OnlyPeriod': '精准参考仅支持 NovelAI V4.5，请切换模型或移除精准参考图。',
+    'error.preciseV45Only': '精准参考仅支持 NovelAI V4.5 / V5，请切换模型或移除精准参考图',
+    'error.preciseV45OnlyPeriod': '精准参考仅支持 NovelAI V4.5 / V5，请切换模型或移除精准参考图。',
+    'error.vibeUnsupportedV5': 'NovelAI V5 暂不支持氛围迁移，请移除氛围图或改用精准参考。',
     'error.readFile': '无法读取文件',
     'error.readReference': '无法读取参考图，请换用有效的 PNG、JPG 或 WebP 图片',
     'error.readPreciseReference': '无法读取精准参考图，请换用有效的 PNG、JPG 或 WebP 图片',
@@ -226,8 +227,9 @@ const _runtimeText = <String, Map<String, String>>{
     'error.i2iNoImages': '圖生圖成功但沒有圖片',
     'error.inpaintNoImages': '重繪成功但沒有圖片',
     'error.directorNoImages': '後期處理成功但沒有圖片',
-    'error.preciseV45Only': '精準參考僅支援 NovelAI V4.5，請切換模型或移除精準參考圖',
-    'error.preciseV45OnlyPeriod': '精準參考僅支援 NovelAI V4.5，請切換模型或移除精準參考圖。',
+    'error.preciseV45Only': '精準參考僅支援 NovelAI V4.5 / V5，請切換模型或移除精準參考圖',
+    'error.preciseV45OnlyPeriod': '精準參考僅支援 NovelAI V4.5 / V5，請切換模型或移除精準參考圖。',
+    'error.vibeUnsupportedV5': 'NovelAI V5 暫不支援氛圍遷移，請移除氛圍圖或改用精準參考。',
     'error.readFile': '無法讀取檔案',
     'error.readReference': '無法讀取參考圖，請換用有效的 PNG、JPG 或 WebP 圖片',
     'error.readPreciseReference': '無法讀取精準參考圖，請換用有效的 PNG、JPG 或 WebP 圖片',
@@ -438,9 +440,11 @@ const _runtimeText = <String, Map<String, String>>{
     'error.inpaintNoImages': 'Inpaint succeeded but returned no images',
     'error.directorNoImages': 'Postprocess succeeded but returned no images',
     'error.preciseV45Only':
-        'Precise Reference only supports NovelAI V4.5. Switch models or remove precise references',
+        'Precise Reference supports NovelAI V4.5 / V5. Switch models or remove precise references',
     'error.preciseV45OnlyPeriod':
-        'Precise Reference only supports NovelAI V4.5. Switch models or remove precise references.',
+        'Precise Reference supports NovelAI V4.5 / V5. Switch models or remove precise references.',
+    'error.vibeUnsupportedV5':
+        'NovelAI V5 does not support Vibe Transfer. Remove vibe images or use Precise Reference.',
     'error.readFile': 'Could not read the file',
     'error.readReference':
         'Could not read the reference image. Use a valid PNG, JPG, or WebP image',
@@ -704,9 +708,11 @@ const _runtimeText = <String, Map<String, String>>{
     'error.inpaintNoImages': '再描画は成功しましたが画像がありません',
     'error.directorNoImages': '後処理は成功しましたが画像がありません',
     'error.preciseV45Only':
-        'Precise Reference は NovelAI V4.5 のみ対応です。モデルを切り替えるか精密参照画像を削除してください',
+        'Precise Reference は NovelAI V4.5 / V5 に対応します。モデルを切り替えるか精密参照画像を削除してください',
     'error.preciseV45OnlyPeriod':
-        'Precise Reference は NovelAI V4.5 のみ対応です。モデルを切り替えるか精密参照画像を削除してください。',
+        'Precise Reference は NovelAI V4.5 / V5 に対応します。モデルを切り替えるか精密参照画像を削除してください。',
+    'error.vibeUnsupportedV5':
+        'NovelAI V5 は Vibe Transfer に未対応です。画像を削除するか精密参照を使用してください。',
     'error.readFile': 'ファイルを読み込めません',
     'error.readReference': '参照画像を読み込めません。有効な PNG、JPG、WebP 画像を使用してください',
     'error.readPreciseReference': '精密参照画像を読み込めません。有効な PNG、JPG、WebP 画像を使用してください',
@@ -927,9 +933,11 @@ const _runtimeText = <String, Map<String, String>>{
     'error.inpaintNoImages': '리드로우는 성공했지만 이미지가 없습니다',
     'error.directorNoImages': '후처리는 성공했지만 이미지가 없습니다',
     'error.preciseV45Only':
-        'Precise Reference는 NovelAI V4.5에서만 지원됩니다. 모델을 바꾸거나 정밀 참조 이미지를 제거하세요',
+        'Precise Reference는 NovelAI V4.5 / V5를 지원합니다. 모델을 바꾸거나 정밀 참조 이미지를 제거하세요',
     'error.preciseV45OnlyPeriod':
-        'Precise Reference는 NovelAI V4.5에서만 지원됩니다. 모델을 바꾸거나 정밀 참조 이미지를 제거하세요.',
+        'Precise Reference는 NovelAI V4.5 / V5를 지원합니다. 모델을 바꾸거나 정밀 참조 이미지를 제거하세요.',
+    'error.vibeUnsupportedV5':
+        'NovelAI V5는 Vibe Transfer를 지원하지 않습니다. 이미지를 제거하거나 정밀 참조를 사용하세요.',
     'error.readFile': '파일을 읽을 수 없습니다',
     'error.readReference': '참조 이미지를 읽을 수 없습니다. 올바른 PNG, JPG 또는 WebP 이미지를 사용하세요',
     'error.readPreciseReference':

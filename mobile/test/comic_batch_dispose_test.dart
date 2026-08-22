@@ -261,9 +261,12 @@ void main() {
       base64: 'ZGVm',
       prompt: 'overridden prompt',
       overrideParams: true,
-      params: GenerateParams()..steps = 30,
+      params: GenerateParams(model: 'nai-diffusion-4-5-full')..steps = 30,
     );
     controller.project = BatchRedrawProject.empty(app.params)
+      // Vibe Transfer is intentionally unsupported by V5. Keep this queue
+      // snapshot regression on V4.5 because the test exercises Vibe state.
+      ..globalParams.model = 'nai-diffusion-4-5-full'
       ..globalParams.steps = 28
       ..globalStyle = 'old style'
       ..globalNegative = 'old negative'

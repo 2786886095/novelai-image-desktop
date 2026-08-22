@@ -75,7 +75,7 @@ class AppState extends ChangeNotifier {
   int batchCount = 1;
   String selectedGroupId = '';
   String generationGroupId = '';
-  String inpaintModel = 'nai-diffusion-4-5-full-inpainting';
+  String inpaintModel = 'nai-diffusion-5-full-inpainting';
   double inpaintStrength = 0.55;
   double inpaintNoise = 0;
   // Independent from params.positivePrompt — inpaint must not inherit the
@@ -665,7 +665,7 @@ class AppState extends ChangeNotifier {
   }
 
   void addCharacter() {
-    if (extras.charCaptions.length >= 6) return;
+    if (extras.charCaptions.length >= params.maxCharacterPrompts) return;
     extras.charCaptions.add(CharCaptionItem());
     notifyListeners();
     _scheduleGenerationQuote();
@@ -2064,7 +2064,11 @@ class AppState extends ChangeNotifier {
   }
 
   String? _referenceValidationError() {
-    if (extras.preciseReferences.isNotEmpty && !params.isV45) {
+    if (extras.vibeImages.isNotEmpty && !params.supportsVibeTransfer) {
+      return _rt('error.vibeUnsupportedV5');
+    }
+    if (extras.preciseReferences.isNotEmpty &&
+        !params.supportsPreciseReference) {
       return _rt('error.preciseV45OnlyPeriod');
     }
     return null;
@@ -2472,7 +2476,11 @@ class AppState extends ChangeNotifier {
     final taskParams = itemParams.copy()
       ..positivePrompt = expandPromptWildcards(itemParams.positivePrompt)
       ..negativePrompt = expandPromptWildcards(itemParams.negativePrompt);
-    if (itemExtras.preciseReferences.isNotEmpty && !taskParams.isV45) {
+    if (itemExtras.vibeImages.isNotEmpty && !taskParams.supportsVibeTransfer) {
+      throw Exception(_rt('error.vibeUnsupportedV5'));
+    }
+    if (itemExtras.preciseReferences.isNotEmpty &&
+        !taskParams.supportsPreciseReference) {
       throw Exception(_rt('error.preciseV45Only'));
     }
     account = await api.fetchAccount(token, settings);

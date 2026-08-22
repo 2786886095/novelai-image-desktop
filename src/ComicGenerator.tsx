@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 import { Button, NumberInput, Toggle } from "./components/ui";
+import { Icon } from "./components/icons";
 import {
   desktopUiFormat,
   desktopUiText,
@@ -27,6 +28,9 @@ import {
   NAI_MODELS,
   NAI_SAMPLERS,
   NAI_UC_PRESETS,
+  isNAIV4PlusModel,
+  supportsNAINoiseScheduleControl,
+  supportsNAIVariety,
   type BatchExportFile,
   type BatchRedrawItem,
   type BatchRedrawProject,
@@ -421,7 +425,7 @@ function BatchParamFields({
           step={0.01}
           onChange={(v) => onPatch({ cfgRescale: v })}
         />
-        <label className="comic-field">
+        {supportsNAINoiseScheduleControl(value.model) && <label className="comic-field">
           <span>{t("batch.param.noiseSchedule")}</span>
           <select
             value={value.noiseSchedule}
@@ -441,7 +445,7 @@ function BatchParamFields({
               )}
             </option>
           </select>
-        </label>
+        </label>}
         <NumberInput
           label={t("batch.param.seed")}
           value={value.seed}
@@ -474,24 +478,26 @@ function BatchParamFields({
           label="Quality Tags"
           description={t("batch.param.qualityDesc")}
         />
-        <Toggle
+        {supportsNAIVariety(value.model) && <Toggle
           checked={value.variety}
           onChange={(v) => onPatch({ variety: v })}
           label="Variety+"
           description={t("batch.param.varietyDesc")}
-        />
-        <Toggle
-          checked={value.smea}
-          onChange={(v) => onPatch({ smea: v })}
-          label="SMEA"
-          description={t("batch.param.smeaDesc")}
-        />
-        <Toggle
-          checked={value.smeaDyn}
-          onChange={(v) => onPatch({ smeaDyn: v })}
-          label="SMEA Dyn"
-          description={t("batch.param.smeaDynDesc")}
-        />
+        />}
+        {!isNAIV4PlusModel(value.model) && <>
+          <Toggle
+            checked={value.smea}
+            onChange={(v) => onPatch({ smea: v })}
+            label="SMEA"
+            description={t("batch.param.smeaDesc")}
+          />
+          <Toggle
+            checked={value.smeaDyn}
+            onChange={(v) => onPatch({ smeaDyn: v })}
+            label="SMEA Dyn"
+            description={t("batch.param.smeaDynDesc")}
+          />
+        </>}
       </div>
     </div>
   );
@@ -620,7 +626,7 @@ function BatchPrecisePicker({
                 className="vibe-remove"
                 onClick={() => onChange(refs.filter((_, j) => j !== i))}
               >
-                ×
+                <Icon name="close" />
               </button>
             </div>
           ))}
@@ -723,7 +729,7 @@ function BatchVibePicker({
                 className="vibe-remove"
                 onClick={() => onChange(vibes.filter((_, j) => j !== i))}
               >
-                ×
+                <Icon name="close" />
               </button>
             </div>
           ))}
@@ -1312,7 +1318,7 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
           </label>
           <div className="redraw-import-hero">
             <label className="redraw-dropzone">
-              <span>＋</span>
+              <span><Icon name="plus" /></span>
               <strong>{t("batch.import.imagesTitle")}</strong>
               <small>{t("batch.import.imagesDesc")}</small>
               <input
@@ -1394,7 +1400,7 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
                     }))
                   }
                 >
-                  ×
+                  <Icon name="close" />
                 </button>
               </div>
             ))}
@@ -2014,7 +2020,7 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
             className="redraw-lightbox-close"
             onClick={() => setLightbox(null)}
           >
-            ×
+            <Icon name="close" />
           </button>
         </div>
       )}

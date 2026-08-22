@@ -514,6 +514,11 @@ String? _naiModel(Object? value) {
   if (name.contains('furry') && name.contains('v3')) {
     return 'nai-diffusion-furry-3';
   }
+  if (name.contains('v5')) {
+    return name.contains('curated')
+        ? 'nai-diffusion-5-curated'
+        : 'nai-diffusion-5-full';
+  }
   if (name.contains('v4.5') || name.contains('v4 5')) {
     return name.contains('curated')
         ? 'nai-diffusion-4-5-curated'
@@ -550,7 +555,7 @@ List<CharCaptionItem> parseNovelAiCharacterCaptions(
       : const [];
   final useCoords = prompt?['use_coords'] == true;
   final output = <CharCaptionItem>[];
-  for (var index = 0; index < positives.length && output.length < 6; index++) {
+  for (var index = 0; index < positives.length && output.length < 32; index++) {
     final item = _mapValue(positives[index]);
     final value = _nonEmpty(item?['char_caption']?.toString());
     if (value == null) continue;

@@ -12,6 +12,12 @@ void main() {
   });
 
   test('model tier detection', () {
+    final v5 = GenerateParams(model: 'nai-diffusion-5-full');
+    expect(v5.isV5, isTrue);
+    expect(v5.isV4Plus, isTrue);
+    expect(v5.supportsPreciseReference, isTrue);
+    expect(v5.supportsVibeTransfer, isFalse);
+    expect(v5.maxCharacterPrompts, 32);
     expect(GenerateParams(model: 'nai-diffusion-4-5-full').isV45, isTrue);
     expect(GenerateParams(model: 'nai-diffusion-4-full').isV4Plus, isTrue);
     expect(GenerateParams(model: 'nai-diffusion-3').isV4Plus, isFalse);

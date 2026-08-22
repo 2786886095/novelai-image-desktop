@@ -1,4 +1,4 @@
-import type { ComicReferenceAsset, GenerateParams, GenerateResult, HistoryItem, TuiwenProject, TuiwenShot } from "../types";
+import { supportsNAIPreciseReference, type ComicReferenceAsset, type GenerateParams, type GenerateResult, type HistoryItem, type TuiwenProject, type TuiwenShot } from "../types";
 
 export interface TuiwenReferenceCostCounts {
   supportsPrecise: boolean;
@@ -27,7 +27,7 @@ export function countTuiwenGenerationReferences(references: ComicReferenceAsset[
   const usableRefs = references.filter((ref) => ref.base64 && ref.useForGeneration !== false);
   const vibeKindCount = usableRefs.filter((ref) => ref.kind === "vibe").length;
   const preciseKindCount = usableRefs.length - vibeKindCount;
-  const supportsPrecise = model.includes("4-5");
+  const supportsPrecise = supportsNAIPreciseReference(model);
   return {
     supportsPrecise,
     vibeCount: supportsPrecise ? vibeKindCount : vibeKindCount + preciseKindCount,

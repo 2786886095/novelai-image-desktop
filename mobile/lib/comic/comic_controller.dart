@@ -643,7 +643,8 @@ class ComicController extends ChangeNotifier {
       planned.add(await _captureGenerationTask(panel));
     }
     if (planned.any((task) =>
-        task.extras.preciseReferences.isNotEmpty && !task.params.isV45)) {
+        task.extras.preciseReferences.isNotEmpty &&
+        !task.params.supportsPreciseReference)) {
       throw FormatException(_t('comic.preciseV45Only'));
     }
     queueRunning = true;

@@ -119,13 +119,13 @@ describe("boot resilience (P1-07)", () => {
 
     const state = useAppStore.getState();
     expect(state.params.width).toBe(1600);
-    expect(state.params.model).toBe("nai-diffusion-4-5-full");
+    expect(state.params.model).toBe("nai-diffusion-5-full");
     expect(state.i2iParams).toEqual({
       strength: 0.7,
       noise: 0.99,
       extraNoiseSeed: 2_147_483_647,
     });
-    expect(state.inpaintModel).toBe("nai-diffusion-4-5-full-inpainting");
+    expect(state.inpaintModel).toBe("nai-diffusion-5-full-inpainting");
     expect(state.inpaintStrength).toBe(0);
     expect(state.inpaintNoise).toBe(0.99);
     expect(state.inpaintPositivePrompt).toBe("");

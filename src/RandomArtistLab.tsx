@@ -18,6 +18,9 @@ import {
   NAI_MODELS,
   NAI_SAMPLERS,
   NAI_UC_PRESETS,
+  isNAIV4PlusModel,
+  supportsNAINoiseScheduleControl,
+  supportsNAIVariety,
   type AppLanguage,
   type GenerateParams,
   type HistoryItem,
@@ -596,13 +599,13 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
         <label><span>{paramText.cfg}</span><input type="number" min={1} max={10} step={0.1} value={session.generationParams.cfgScale} onChange={(event) => patchGeneration("cfgScale", Math.max(1, Math.min(10, Number(event.target.value) || 1)))} /></label>
         <label><span>{paramText.rescale}</span><input type="number" min={0} max={1} step={0.01} value={session.generationParams.cfgRescale} onChange={(event) => patchGeneration("cfgRescale", Math.max(0, Math.min(1, Number(event.target.value) || 0)))} /></label>
         <label><span>{paramText.sampler}</span><select value={session.generationParams.sampler} onChange={(event) => patchGeneration("sampler", event.target.value as GenerateParams["sampler"])}>{NAI_SAMPLERS.map((sampler) => <option key={sampler.value} value={sampler.value}>{sampler.value}</option>)}</select></label>
-        <label><span>{paramText.noise}</span><select value={session.generationParams.noiseSchedule} onChange={(event) => patchGeneration("noiseSchedule", event.target.value)}><option value="native">native</option><option value="karras">karras</option><option value="exponential">exponential</option></select></label>
+        {supportsNAINoiseScheduleControl(session.generationParams.model) ? <label><span>{paramText.noise}</span><select value={session.generationParams.noiseSchedule} onChange={(event) => patchGeneration("noiseSchedule", event.target.value)}><option value="native">native</option><option value="karras">karras</option><option value="exponential">exponential</option></select></label> : null}
         <label><span>{paramText.uc}</span><select value={session.generationParams.ucPreset} onChange={(event) => patchGeneration("ucPreset", Number(event.target.value) as GenerateParams["ucPreset"])}>{NAI_UC_PRESETS.map((preset, index) => <option key={preset.value} value={preset.value}>{preset.value} · {ucLabels[index]}</option>)}</select></label>
         <label className="wide"><span>{paramText.negative}</span><textarea value={session.generationParams.negativePrompt} onChange={(event) => patchGeneration("negativePrompt", event.target.value)} /></label>
         <div className="random-generation-toggles wide">
           <label><input type="checkbox" checked={session.generationParams.qualityToggle} onChange={(event) => patchGeneration("qualityToggle", event.target.checked)} /><span>{paramText.quality}</span></label>
-          <label><input type="checkbox" checked={session.generationParams.variety} onChange={(event) => patchGeneration("variety", event.target.checked)} /><span>{paramText.variety}</span></label>
-          {!session.generationParams.model.includes("-4") ? <><label><input type="checkbox" checked={session.generationParams.smea} onChange={(event) => patchGeneration("smea", event.target.checked)} /><span>{paramText.smea}</span></label><label><input type="checkbox" checked={session.generationParams.smeaDyn} onChange={(event) => patchGeneration("smeaDyn", event.target.checked)} /><span>{paramText.smeaDyn}</span></label></> : null}
+          {supportsNAIVariety(session.generationParams.model) ? <label><input type="checkbox" checked={session.generationParams.variety} onChange={(event) => patchGeneration("variety", event.target.checked)} /><span>{paramText.variety}</span></label> : null}
+          {!isNAIV4PlusModel(session.generationParams.model) ? <><label><input type="checkbox" checked={session.generationParams.smea} onChange={(event) => patchGeneration("smea", event.target.checked)} /><span>{paramText.smea}</span></label><label><input type="checkbox" checked={session.generationParams.smeaDyn} onChange={(event) => patchGeneration("smeaDyn", event.target.checked)} /><span>{paramText.smeaDyn}</span></label></> : null}
         </div>
       </div>
     </details>

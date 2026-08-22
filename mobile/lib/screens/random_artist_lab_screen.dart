@@ -1295,30 +1295,31 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                             },
                           ),
                         ),
-                        SizedBox(
-                          width: fieldWidth,
-                          child: DropdownButtonFormField<String>(
-                            value: _generationParams.noiseSchedule,
-                            isExpanded: true,
-                            decoration: InputDecoration(
-                                labelText: parameterText['noise']),
-                            items: naiNoiseSchedules
-                                .map((option) => DropdownMenuItem(
-                                      value: option.value,
-                                      child: Text(localizedNaiOptionLabel(
-                                          app.settings.language,
-                                          option.value,
-                                          option.label)),
-                                    ))
-                                .toList(),
-                            onChanged: (value) {
-                              if (value == null) return;
-                              setState(() =>
-                                  _generationParams.noiseSchedule = value);
-                              _save();
-                            },
+                        if (_generationParams.supportsNoiseScheduleControl)
+                          SizedBox(
+                            width: fieldWidth,
+                            child: DropdownButtonFormField<String>(
+                              value: _generationParams.noiseSchedule,
+                              isExpanded: true,
+                              decoration: InputDecoration(
+                                  labelText: parameterText['noise']),
+                              items: naiNoiseSchedules
+                                  .map((option) => DropdownMenuItem(
+                                        value: option.value,
+                                        child: Text(localizedNaiOptionLabel(
+                                            app.settings.language,
+                                            option.value,
+                                            option.label)),
+                                      ))
+                                  .toList(),
+                              onChanged: (value) {
+                                if (value == null) return;
+                                setState(() =>
+                                    _generationParams.noiseSchedule = value);
+                                _save();
+                              },
+                            ),
                           ),
-                        ),
                         SizedBox(
                           width: fieldWidth,
                           child: DropdownButtonFormField<int>(
@@ -1431,15 +1432,16 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                                   _save();
                                 },
                               ),
-                              FilterChip(
-                                label: const Text('Variety+'),
-                                selected: _generationParams.variety,
-                                onSelected: (value) {
-                                  setState(
-                                      () => _generationParams.variety = value);
-                                  _save();
-                                },
-                              ),
+                              if (_generationParams.supportsVariety)
+                                FilterChip(
+                                  label: const Text('Variety+'),
+                                  selected: _generationParams.variety,
+                                  onSelected: (value) {
+                                    setState(() =>
+                                        _generationParams.variety = value);
+                                    _save();
+                                  },
+                                ),
                               if (!_generationParams.isV4Plus)
                                 FilterChip(
                                   label: const Text('SMEA'),

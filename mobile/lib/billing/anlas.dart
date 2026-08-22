@@ -78,8 +78,9 @@ AnlasQuote calculateImageGenerationAnlas({
   final pixels = max(width * height, 65536);
   final steps = max(1, params.steps);
   final normalizedStrength = imageToImage ? strength.clamp(0, 1) : 1.0;
-  final v4Plus = params.model.contains('-4');
-  final vibeCount = extras?.vibeImages.length ?? 0;
+  final v4Plus = params.isV4Plus;
+  final vibeCount =
+      params.supportsVibeTransfer ? extras?.vibeImages.length ?? 0 : 0;
   final details = <String>[];
 
   final activeOpus =
@@ -128,7 +129,7 @@ AnlasQuote calculateImageGenerationAnlas({
     }
   }
 
-  if (v4Plus && params.model.contains('4-5') && preciseReferenceCount > 0) {
+  if (v4Plus && params.supportsPreciseReference && preciseReferenceCount > 0) {
     final preciseCost = 5 * samples;
     total += preciseCost;
     details.add(_af(language, 'anlas.preciseCost', {

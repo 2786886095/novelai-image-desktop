@@ -73,7 +73,7 @@ void main() {
       'smeaDyn': true,
     });
 
-    expect(params.model, 'nai-diffusion-4-5-full');
+    expect(params.model, 'nai-diffusion-5-full');
     expect((params.width, params.height), (1600, 64));
     expect(params.steps, 50);
     expect(params.cfgScale, 6);
@@ -98,7 +98,7 @@ void main() {
       'augmentEmotionLevel': -3,
     });
 
-    expect(settings.inpaintModel, 'nai-diffusion-4-5-full-inpainting');
+    expect(settings.inpaintModel, 'nai-diffusion-5-full-inpainting');
     expect(settings.inpaintStrength, 0);
     expect(settings.inpaintNoise, 0.99);
     expect(settings.upscaleScale, 2);

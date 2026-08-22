@@ -52,6 +52,19 @@ void main() {
     expect(parsePngTextMetadata(Uint8List.fromList([1, 2, 3])), isEmpty);
   });
 
+  test('recognizes V5 Full and Curated metadata names', () {
+    expect(
+      parseImportedGenerateParams({'Source': 'NovelAI Diffusion V5 Full'})
+          .model,
+      'nai-diffusion-5-full',
+    );
+    expect(
+      parseImportedGenerateParams({'Source': 'NovelAI Diffusion V5 Curated'})
+          .model,
+      'nai-diffusion-5-curated',
+    );
+  });
+
   test('restores V4.5 character prompts, negatives, model and effective flags',
       () {
     final comment = jsonEncode({

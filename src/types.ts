@@ -30,6 +30,16 @@ export type ModelMode = "anime" | "furry";
 
 export const NAI_MODELS = [
   {
+    label: "NAI Diffusion V5 Full（最新完整模型）",
+    value: "nai-diffusion-5-full",
+    mode: "anime",
+  },
+  {
+    label: "NAI Diffusion V5 Curated（最新精选模型）",
+    value: "nai-diffusion-5-curated",
+    mode: "anime",
+  },
+  {
     label: "NAI Diffusion 4.5 Full（完整模型）",
     value: "nai-diffusion-4-5-full",
     mode: "anime",
@@ -63,9 +73,50 @@ export const NAI_MODELS = [
 
 export type NAIModel = (typeof NAI_MODELS)[number]["value"];
 
+/** Model capability helpers mirrored from NovelAI's current Image frontend. */
+export function isNAIV5Model(model: string): boolean {
+  return normalizeNAIBaseModel(model).startsWith("nai-diffusion-5-");
+}
+
+export function isNAIV4PlusModel(model: string): boolean {
+  const normalized = normalizeNAIBaseModel(model);
+  return normalized.startsWith("nai-diffusion-4-") || normalized.startsWith("nai-diffusion-5-");
+}
+
+export function supportsNAIPreciseReference(model: string): boolean {
+  const normalized = normalizeNAIBaseModel(model);
+  return normalized.startsWith("nai-diffusion-4-5-") || normalized.startsWith("nai-diffusion-5-");
+}
+
+export function supportsNAICharacterPrompts(model: string): boolean {
+  return isNAIV4PlusModel(model);
+}
+
+export function supportsNAIVibeTransfer(model: string): boolean {
+  return !isNAIV5Model(model);
+}
+
+export function supportsNAINoiseScheduleControl(model: string): boolean {
+  return !isNAIV5Model(model);
+}
+
+export function supportsNAIVariety(model: string): boolean {
+  return !isNAIV5Model(model);
+}
+
+export function maxNAICharacterPrompts(model: string): number {
+  return isNAIV5Model(model) ? 32 : isNAIV4PlusModel(model) ? 6 : 0;
+}
+
+function normalizeNAIBaseModel(model: string): string {
+  return model.endsWith("-inpainting")
+    ? model.slice(0, -"-inpainting".length)
+    : model;
+}
+
 /** Default model selected when switching into each mode. */
 export const DEFAULT_MODEL_FOR_MODE: Record<ModelMode, NAIModel> = {
-  anime: "nai-diffusion-4-5-full",
+  anime: "nai-diffusion-5-full",
   furry: "nai-diffusion-furry-3",
 };
 
@@ -115,7 +166,7 @@ export interface GenerateParams {
 }
 
 export const DEFAULT_PARAMS: GenerateParams = {
-  model: "nai-diffusion-4-5-full",
+  model: "nai-diffusion-5-full",
   stylePrompt: "",
   positivePrompt: "",
   negativePrompt: "",
@@ -243,7 +294,7 @@ export interface VibeTransferImage extends VibeTransferItem {
   previewUrl: string; // data URL, never sent to main process
 }
 
-/** NovelAI V4.5 Precise (Director) Reference — distinct from Vibe Transfer.
+/** NovelAI V4.5/V5 Precise (Director) Reference — distinct from Vibe Transfer.
  * Sent over IPC; the main process emits director_reference_* fields. */
 export type PreciseReferenceType = "character" | "style" | "character&style";
 export interface PreciseReferenceItem {
@@ -267,7 +318,7 @@ export interface PreciseReferenceImage extends PreciseReferenceItem {
 /** Character prompt item — slim type sent over IPC */
 export interface CharCaptionItem {
   prompt: string;
-  /** Per-character undesired content used by NovelAI V4/V4.5. */
+  /** Per-character undesired content used by NovelAI V4/V4.5/V5. */
   negativePrompt?: string;
   useCoords: boolean;
   x: number; // 0.0 – 1.0
@@ -879,19 +930,27 @@ export interface AiCallLogEntry {
 
 export const NAI_INPAINT_MODELS = [
   {
-    label: "NAI Diffusion 4.5 Full（推荐）",
+    label: "NAI Diffusion V5 Full Inpaint（推荐）",
+    value: "nai-diffusion-5-full-inpainting",
+  },
+  {
+    label: "NAI Diffusion V5 Curated Inpaint",
+    value: "nai-diffusion-5-curated-inpainting",
+  },
+  {
+    label: "NAI Diffusion 4.5 Full Inpaint（推荐）",
     value: "nai-diffusion-4-5-full-inpainting",
   },
   {
-    label: "NAI Diffusion 4.5 Curated",
+    label: "NAI Diffusion 4.5 Curated Inpaint",
     value: "nai-diffusion-4-5-curated-inpainting",
   },
-  { label: "NAI Diffusion 4 Full", value: "nai-diffusion-4-full-inpainting" },
+  { label: "NAI Diffusion 4 Full Inpaint", value: "nai-diffusion-4-full-inpainting" },
   {
-    label: "NAI Diffusion 4 Curated",
+    label: "NAI Diffusion 4 Curated Inpaint",
     value: "nai-diffusion-4-curated-inpainting",
   },
-  { label: "NAI Diffusion 3", value: "nai-diffusion-3-inpainting" },
+  { label: "NAI Diffusion 3 Inpaint", value: "nai-diffusion-3-inpainting" },
 ] as const;
 
 export type NAIInpaintModel = (typeof NAI_INPAINT_MODELS)[number]["value"];

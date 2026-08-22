@@ -469,7 +469,9 @@ class NaiApi {
         : randomSeed();
     final prepared = prepareInpaintAssets(imageBytes, maskBytes);
     final candidates = <String>[inpaintModel];
-    if (inpaintModel == 'nai-diffusion-4-5-curated-inpainting') {
+    if (inpaintModel == 'nai-diffusion-5-curated-inpainting') {
+      candidates.add('nai-diffusion-5-full-inpainting');
+    } else if (inpaintModel == 'nai-diffusion-4-5-curated-inpainting') {
       candidates.add('nai-diffusion-4-5-full-inpainting');
     } else if (inpaintModel == 'nai-diffusion-4-curated-inpainting') {
       candidates.add('nai-diffusion-4-full-inpainting');
@@ -608,7 +610,7 @@ class NaiApi {
         params.negativePrompt, _ucPresetText(params.model, params.ucPreset));
     final charCaptions = extras.charCaptions
         .where((c) => c.prompt.trim().isNotEmpty)
-        .take(6)
+        .take(params.maxCharacterPrompts)
         .map((c) => {
               'char_caption': c.prompt.trim(),
               // The V4/V4.5 API requires a center even when placement is left
@@ -624,7 +626,7 @@ class NaiApi {
         .toList();
     final activeCharacters = extras.charCaptions
         .where((c) => c.prompt.trim().isNotEmpty)
-        .take(6)
+        .take(params.maxCharacterPrompts)
         .toList();
     final negativeCharCaptions =
         activeCharacters.any((c) => c.negativePrompt.trim().isNotEmpty)
@@ -643,7 +645,7 @@ class NaiApi {
     final hasCoords = structuredCharacters &&
         extras.charCaptions
             .where((caption) => caption.prompt.trim().isNotEmpty)
-            .take(6)
+            .take(params.maxCharacterPrompts)
             .any((caption) => caption.useCoords);
     final inputPrompt = structuredCharacters || charCaptions.isEmpty
         ? effectivePrompt
@@ -652,8 +654,11 @@ class NaiApi {
             ...charCaptions.map((caption) => caption['char_caption'] as String),
           ].where((value) => value.trim().isNotEmpty).join(' | ');
 
+    final effectiveNoiseSchedule = params.isV5
+        ? _defaultNoiseScheduleForSampler(params.sampler)
+        : (params.noiseSchedule.isEmpty ? 'native' : params.noiseSchedule);
     final parameters = <String, dynamic>{
-      'params_version': 3,
+      'params_version': 4,
       'width': params.width,
       'height': params.height,
       'scale': params.cfgScale.clamp(0, 10),
@@ -661,8 +666,7 @@ class NaiApi {
       'steps': params.steps,
       'n_samples': 1,
       'seed': seed,
-      'noise_schedule':
-          params.noiseSchedule.isEmpty ? 'native' : params.noiseSchedule,
+      'noise_schedule': effectiveNoiseSchedule,
       'uc': effectiveNegative,
       'negative_prompt': effectiveNegative,
       'ucPreset': params.ucPreset,
@@ -670,14 +674,16 @@ class NaiApi {
       'cfg_rescale': params.cfgRescale,
       'legacy': false,
       'legacy_v3_extend': false,
-      'dynamic_thresholding': params.cfgRescale > 0,
+      'dynamic_thresholding': params.isV5 ? false : params.cfgRescale > 0,
       'skip_cfg_above_sigma': null,
       'qualityToggle': params.qualityToggle,
       'quality_toggle': params.qualityToggle,
     };
-    if (params.variety) parameters['skip_cfg_above_sigma'] = 58;
+    if (params.variety && params.supportsVariety) {
+      parameters['skip_cfg_above_sigma'] = 58;
+    }
     if (params.sampler == 'k_euler_ancestral' &&
-        params.noiseSchedule != 'native') {
+        effectiveNoiseSchedule != 'native') {
       parameters['deliberate_euler_ancestral_bug'] = false;
       parameters['prefer_brownian'] = true;
     }
@@ -700,13 +706,17 @@ class NaiApi {
         },
         'use_coords': hasCoords && negativeCharCaptions.isNotEmpty,
         'use_order': false,
-        'legacy_uc': !params.isV45,
+        'legacy_uc': !params.supportsPreciseReference,
       };
     } else {
       parameters['sm'] = params.smea;
       parameters['sm_dyn'] = params.smea && params.smeaDyn;
     }
 
+    if (extras.vibeImages.isNotEmpty && !params.supportsVibeTransfer) {
+      throw const NaiHttpException(400,
+          'NovelAI V5 does not support Vibe Transfer. Remove vibe images or use Precise Reference.');
+    }
     if (extras.vibeImages.isNotEmpty) {
       final encoded = <VibeTransferItem>[];
       for (final vibe in extras.vibeImages) {
@@ -722,7 +732,7 @@ class NaiApi {
     }
 
     final precise = extras.preciseReferences;
-    if (params.isV45 && precise.isNotEmpty) {
+    if (params.supportsPreciseReference && precise.isNotEmpty) {
       // Confirmed against the official client's real request (multipart HAR):
       // precise references are uploaded as binary parts (director_ref_N) in
       // _sendGenerate; the JSON references them via director_reference_images_cached
@@ -1674,6 +1684,9 @@ class NaiApi {
 
   String _qualityTags(String model) {
     return switch (_normalizeModel(model)) {
+      'nai-diffusion-5-full' ||
+      'nai-diffusion-5-curated' =>
+        'very aesthetic, masterpiece, no text',
       'nai-diffusion-4-5-full' => 'very aesthetic, masterpiece, no text',
       'nai-diffusion-4-5-curated' =>
         'masterpiece, no text, -0.8::feet::, rating:general',
@@ -1689,7 +1702,12 @@ class NaiApi {
 
   String _ucPresetText(String model, int preset) {
     if (preset == 3) return '';
-    final normalizedModel = _normalizeModel(model);
+    final rawModel = _normalizeModel(model);
+    final normalizedModel = rawModel == 'nai-diffusion-5-full'
+        ? 'nai-diffusion-4-5-full'
+        : rawModel == 'nai-diffusion-5-curated'
+            ? 'nai-diffusion-4-5-curated'
+            : rawModel;
     if (preset == 2) {
       return switch (normalizedModel) {
         'nai-diffusion-4-5-full' =>
@@ -1725,6 +1743,17 @@ class NaiApi {
   String _normalizeModel(String model) => model.endsWith('-inpainting')
       ? model.substring(0, model.length - '-inpainting'.length)
       : model;
+
+  String _defaultNoiseScheduleForSampler(String sampler) => switch (sampler) {
+        'k_euler' ||
+        'k_euler_ancestral' ||
+        'k_dpmpp_sde' ||
+        'k_dpmpp_2s_ancestral' ||
+        'k_dpmpp_2m_sde' =>
+          'karras',
+        'k_dpmpp_2m' => 'exponential',
+        _ => 'native',
+      };
 
   String _stripBase64(String value) =>
       value.contains(',') ? value.split(',').last : value;

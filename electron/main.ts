@@ -335,11 +335,66 @@ function createWindow() {
               "document.documentElement.classList.add('theme-dark')",
             );
           }
+          const audit = await mainWindow?.webContents.executeJavaScript(`(() => {
+            const visible = (element) => {
+              const style = getComputedStyle(element);
+              const rect = element.getBoundingClientRect();
+              return style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity || 1) > 0 && rect.width > 0 && rect.height > 0;
+            };
+            const describe = (element) => ({
+              tag: element.tagName.toLowerCase(),
+              className: String(element.className || '').slice(0, 180),
+              text: String(element.getAttribute('aria-label') || element.textContent || '').trim().replace(/\\s+/g, ' ').slice(0, 120),
+            });
+            const hasHorizontalScroller = (element) => {
+              let parent = element.parentElement;
+              while (parent) {
+                if (['auto', 'scroll'].includes(getComputedStyle(parent).overflowX)) return true;
+                parent = parent.parentElement;
+              }
+              return false;
+            };
+            const viewportOverflow = [...document.querySelectorAll('button, input, select, textarea, [role="button"]')]
+              .filter(visible)
+              .filter((element) => {
+                const rect = element.getBoundingClientRect();
+                if (rect.bottom <= 0 || rect.top >= innerHeight) return false;
+                return !hasHorizontalScroller(element) && (rect.left < -1 || rect.right > innerWidth + 1);
+              })
+              .map(describe);
+            const contentOverflow = [...document.querySelectorAll('button, label, .btn, .menu-action, .tab-bar button, .reference-catalog-select')]
+              .filter(visible)
+              .filter((element) => {
+                const style = getComputedStyle(element);
+                return element.scrollWidth > element.clientWidth + 2 && !['auto', 'scroll'].includes(style.overflowX);
+              })
+              .map(describe);
+            const iconOverflow = [...document.querySelectorAll('.ui-icon')]
+              .filter(visible)
+              .flatMap((icon) => {
+                const container = icon.closest('.btn-icon, .tab-icon, .reference-catalog-cloud-mark, .reference-catalog-series-icon, button');
+                if (!container || !visible(container)) return [];
+                const ir = icon.getBoundingClientRect();
+                const cr = container.getBoundingClientRect();
+                return ir.left < cr.left - 1 || ir.right > cr.right + 1 || ir.top < cr.top - 1 || ir.bottom > cr.bottom + 1
+                  ? [{ icon: describe(icon), container: describe(container) }]
+                  : [];
+              });
+            const duplicateArrowRisk = [...document.querySelectorAll('select')]
+              .filter(visible)
+              .filter((element) => getComputedStyle(element).appearance !== 'none' && Boolean(element.closest('.reference-catalog-select')))
+              .map(describe);
+            const openSelectMenus = [...document.querySelectorAll('.select-menu-popover')]
+              .filter(visible)
+              .map((element) => ({ ...describe(element), optionCount: element.querySelectorAll('[role="option"]').length }));
+            return { viewport: { width: innerWidth, height: innerHeight }, viewportOverflow, contentOverflow, iconOverflow, duplicateArrowRisk, openSelectMenus };
+          })()`);
           const image = await mainWindow?.webContents.capturePage();
           if (image) {
             const target = path.resolve(uiCapturePath);
             fs.mkdirSync(path.dirname(target), { recursive: true });
             fs.writeFileSync(target, image.toPNG());
+            fs.writeFileSync(`${target}.audit.json`, JSON.stringify(audit, null, 2));
           }
         } finally {
           app.quit();
@@ -358,9 +413,25 @@ function createWindow() {
     const captureTheme = normalizedUiCapturePath.includes("/dark/")
       ? "dark"
       : "light";
+    const captureTab = [
+      ["01-generate", "generate"],
+      ["02-inpaint", "inpaint"],
+      ["03-upscale", "upscale"],
+      ["04-postprocess", "postprocess"],
+      ["05-inspect", "inspect"],
+      ["05-reverse", "inspect"],
+      ["06-convert", "convert"],
+      ["07-metadata", "metadata"],
+      ["08-tools", "tools"],
+      ["09-reference-presets", "referencePresets"],
+      ["09-records", "records"],
+      ["10-records", "records"],
+    ].find(([needle]) => normalizedUiCapturePath.includes(needle))?.[1];
     const captureSurface = normalizedUiCapturePath.includes("reference-modal")
       ? "referenceModal"
-      : "referencePresets";
+      : normalizedUiCapturePath.includes("settings")
+        ? "settings"
+        : captureTab ?? "referencePresets";
     const captureCatalogState = normalizedUiCapturePath.includes("series-confirm")
       ? "confirm"
       : normalizedUiCapturePath.includes("series-progress")
@@ -378,7 +449,7 @@ function createWindow() {
     void mainWindow.loadFile(
       path.join(__dirname, "../../dist/index.html"),
       uiCapturePath
-        ? { query: { uiCapture: captureSurface, uiTheme: captureTheme, uiCatalogState: captureCatalogState, uiPresetSection: capturePresetSection } }
+        ? { query: { uiCapture: captureSurface, uiTheme: captureTheme, uiCatalogState: captureCatalogState, uiPresetSection: capturePresetSection, uiSelectOpen: normalizedUiCapturePath.includes("select-open") ? "1" : "0" } }
         : undefined,
     );
   }

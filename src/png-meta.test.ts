@@ -109,6 +109,13 @@ describe("parseImportedParams", () => {
     expect(out.model).toBeUndefined();
   });
 
+  it("recognizes V5 Full and Curated metadata names", () => {
+    expect(parseImportedParams({ Source: "NovelAI Diffusion V5 Full" }).model)
+      .toBe("nai-diffusion-5-full");
+    expect(parseImportedParams({ Source: "NovelAI Diffusion V5 Curated" }).model)
+      .toBe("nai-diffusion-5-curated");
+  });
+
   it("omits absent fields (no undefined keys)", () => {
     const out = parseImportedParams({ Comment: "{}" });
     expect(Object.keys(out)).toHaveLength(0);

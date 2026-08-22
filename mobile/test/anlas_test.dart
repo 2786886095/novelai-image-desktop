@@ -19,7 +19,7 @@ const opusAccount = AccountSummary(
 );
 
 void main() {
-  test('default 832x1216 28-step image costs 20 Anlas', () {
+  test('V5 default with established 832x1216 28-step settings costs 20 Anlas', () {
     final quote = calculateImageGenerationAnlas(
       params: GenerateParams(),
       account: paidAccount,
@@ -47,7 +47,7 @@ void main() {
 
   test('Vibe encoding is one-time rather than multiplied by batch', () {
     final quote = calculateImageGenerationAnlas(
-      params: GenerateParams(),
+      params: GenerateParams(model: 'nai-diffusion-4-5-full'),
       account: opusAccount,
       batchCount: 3,
       extras: GenerateExtras(vibeImages: const [
