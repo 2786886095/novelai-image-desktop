@@ -12,23 +12,55 @@ void main() {
     expect(parseLatestYmlVersion('path: app.exe'), isNull);
   });
 
-  test('uses release manifest before GitHub API', () async {
+  test('uses Gitee as the primary update source', () async {
     var requests = 0;
     final info = await checkAppUpdateWithClient(MockClient((request) async {
       requests++;
-      expect(request.url.host, 'github.com');
-      return http.Response('version: 99.0.0\npath: app.exe', 200);
+      expect(request.url.host, 'gitee.com');
+      return http.Response(
+        jsonEncode({
+          'id': 99,
+          'tag_name': 'v99.0.0',
+          'assets': [
+            {
+              'name': 'app-release.apk',
+              'browser_download_url':
+                  'https://gitee.com/example/app-release.apk',
+            },
+          ],
+        }),
+        200,
+      );
     }));
     expect(info.hasUpdate, isTrue);
     expect(info.latestVersion, '99.0.0');
+    expect(info.releaseUrl, contains('gitee.com'));
     expect(requests, 1);
   });
 
-  test('falls back to GitHub API when manifest is unavailable', () async {
+  test('falls back to GitHub manifest when Gitee is unavailable', () async {
     final calls = <Uri>[];
     final info = await checkAppUpdateWithClient(MockClient((request) async {
       calls.add(request.url);
-      if (request.url.host == 'github.com') return http.Response('', 404);
+      if (request.url.host == 'gitee.com') return http.Response('', 404);
+      if (request.url.host == 'github.com') {
+        return http.Response('version: 99.1.0\npath: app.exe', 200);
+      }
+      return http.Response('', 500);
+    }));
+    expect(info.hasUpdate, isTrue);
+    expect(info.latestVersion, '99.1.0');
+    expect(calls.map((uri) => uri.host), ['gitee.com', 'github.com']);
+  });
+
+  test('falls back to GitHub API when Gitee and manifest are unavailable',
+      () async {
+    final calls = <Uri>[];
+    final info = await checkAppUpdateWithClient(MockClient((request) async {
+      calls.add(request.url);
+      if (request.url.host == 'gitee.com' || request.url.host == 'github.com') {
+        return http.Response('', 404);
+      }
       return http.Response(
         jsonEncode({
           'tag_name': 'v99.1.0',
@@ -40,7 +72,10 @@ void main() {
     expect(info.hasUpdate, isTrue);
     expect(info.latestVersion, '99.1.0');
     expect(info.releaseUrl, 'https://example.test/release');
-    expect(calls.map((uri) => uri.host), ['github.com', 'api.github.com']);
+    expect(
+      calls.map((uri) => uri.host),
+      ['gitee.com', 'github.com', 'api.github.com'],
+    );
   });
 
   test('returns a compact error instead of a raw socket exception', () async {

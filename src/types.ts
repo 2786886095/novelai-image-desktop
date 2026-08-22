@@ -1332,7 +1332,7 @@ export interface AppSettings {
 export type SettingKey = keyof AppSettings;
 
 export interface UpdateInfo {
-  /** true when a newer release is available on GitHub */
+  /** true when a newer release is available on Gitee or GitHub */
   hasUpdate: boolean;
   currentVersion: string;
   latestVersion?: string;
@@ -1342,9 +1342,8 @@ export interface UpdateInfo {
 }
 
 /**
- * In-app update pipeline (electron-updater), only functional for a real
- * (NSIS) install — the portable exe has no installed copy to replace, so it
- * always falls back to UpdateInfo.releaseUrl for a manual download instead.
+ * Windows downloads a verified NSIS installer from Gitee first and GitHub as
+ * fallback. Other desktop platforms use UpdateInfo.releaseUrl manually.
  */
 export type UpdateProgressEvent =
   | { kind: "checking" }

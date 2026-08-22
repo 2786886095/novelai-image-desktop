@@ -32,20 +32,35 @@ describe("desktop update checking", () => {
     expect(compareVersions("v1.6.4", "1.6.4")).toBe(0);
   });
 
-  it("uses latest.yml without consuming the GitHub API quota", async () => {
-    axiosGet.mockResolvedValueOnce({ data: "version: 1.6.5\npath: setup.exe\n" });
+  it("uses Gitee as the primary update source", async () => {
+    axiosGet.mockResolvedValueOnce({ data: { id: 1765, tag_name: "v1.6.5", assets: [] } });
 
     await expect(checkUpdate()).resolves.toMatchObject({
       hasUpdate: true,
       currentVersion: "1.6.4",
       latestVersion: "1.6.5",
+      releaseUrl: expect.stringContaining("gitee.com"),
     });
     expect(axiosGet).toHaveBeenCalledTimes(1);
-    expect(axiosGet.mock.calls[0][0]).toContain("/releases/latest/download/latest.yml");
+    expect(axiosGet.mock.calls[0][0]).toContain("gitee.com/api/v5");
   });
 
-  it("falls back to the GitHub API when latest.yml is unavailable", async () => {
+  it("falls back to GitHub latest.yml when Gitee is unavailable", async () => {
     axiosGet
+      .mockRejectedValueOnce(new Error("Gitee unavailable"))
+      .mockResolvedValueOnce({ data: "version: 1.6.5\npath: setup.exe\n" });
+
+    await expect(checkUpdate()).resolves.toMatchObject({
+      hasUpdate: true,
+      latestVersion: "1.6.5",
+      releaseUrl: expect.stringContaining("github.com"),
+    });
+    expect(axiosGet).toHaveBeenCalledTimes(2);
+  });
+
+  it("falls back to the GitHub API when both primary sources are unavailable", async () => {
+    axiosGet
+      .mockRejectedValueOnce(new Error("Gitee unavailable"))
       .mockRejectedValueOnce(new Error("asset unavailable"))
       .mockResolvedValueOnce({
         data: {
@@ -59,12 +74,13 @@ describe("desktop update checking", () => {
       latestVersion: "1.6.5",
       releaseUrl: "https://github.com/example/release",
     });
-    expect(axiosGet).toHaveBeenCalledTimes(2);
+    expect(axiosGet).toHaveBeenCalledTimes(3);
   });
 
   it("returns a visible diagnostic when every source fails", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
     axiosGet
+      .mockRejectedValueOnce(new Error("Gitee blocked"))
       .mockRejectedValueOnce(new Error("asset blocked"))
       .mockRejectedValueOnce(Object.assign(new Error("rate limit exceeded"), { response: { status: 403 } }));
 

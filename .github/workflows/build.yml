@@ -84,3 +84,20 @@ jobs:
         with:
           body_path: docs/RELEASE_NOTES.md
           files: ${{ matrix.artifacts }}
+
+      - name: Prepare mainland Gitee updater parts
+        if: startsWith(github.ref, 'refs/tags/v') && matrix.name == 'windows'
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem -LiteralPath release -Filter 'Langbai-NovelAI-Studio-Setup-*.exe' | Select-Object -First 1
+          if (-not $setup) { throw 'Windows Setup.exe was not produced' }
+          node scripts/prepare-gitee-update.mjs --setup $setup.FullName --output release/gitee-update --version '${{ github.ref_name }}'
+
+      - name: Publish Windows installer to Gitee Release
+        if: startsWith(github.ref, 'refs/tags/v') && matrix.name == 'windows'
+        env:
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+          GITEE_OWNER: langbai666
+          GITEE_REPO: novelai-image-desktop
+          GITEE_RELEASE_TAG: ${{ github.ref_name }}
+        run: node scripts/sync-gitee-release.mjs "${{ github.ref_name }}" --dir release/gitee-update --file release/latest.yml

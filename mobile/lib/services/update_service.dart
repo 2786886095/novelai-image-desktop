@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
@@ -48,11 +49,15 @@ Future<UpdateInfo> checkAppUpdate(AppSettings settings) async {
   }
 }
 
-const _releaseUrl =
+const _giteeReleaseUrl =
+    'https://gitee.com/langbai666/novelai-image-desktop/releases';
+const _giteeReleaseApiUrl =
+    'https://gitee.com/api/v5/repos/langbai666/novelai-image-desktop/releases/latest';
+const _githubReleaseUrl =
     'https://github.com/2786886095/novelai-image-desktop/releases/latest';
-const _latestYmlUrl =
+const _githubLatestYmlUrl =
     'https://github.com/2786886095/novelai-image-desktop/releases/latest/download/latest.yml';
-const _releaseApiUrl =
+const _githubReleaseApiUrl =
     'https://api.github.com/repos/2786886095/novelai-image-desktop/releases/latest';
 
 String? parseLatestYmlVersion(String source) {
@@ -85,32 +90,98 @@ Future<http.Response> _getWithRetry(
   throw lastError ?? Exception('update check failed');
 }
 
-/// Uses the updater manifest first because some networks block api.github.com
-/// while still allowing release downloads. The GitHub API remains a fallback.
+String? _assetUrl(dynamic value, String wantedName) {
+  if (value is! List) return null;
+  for (final item in value) {
+    if (item is! Map) continue;
+    final name = (item['name'] ?? item['filename'])?.toString();
+    if (name != wantedName) continue;
+    final url =
+        (item['browser_download_url'] ?? item['download_url'] ?? item['url'])
+            ?.toString();
+    if (url != null && Uri.tryParse(url)?.scheme == 'https') return url;
+  }
+  return null;
+}
+
+Future<UpdateInfo?> _checkGitee(http.Client client) async {
+  final response = await _getWithRetry(
+    client,
+    Uri.parse(_giteeReleaseApiUrl),
+    headers: const {'Accept': 'application/json', 'Cache-Control': 'no-cache'},
+  );
+  if (response.statusCode < 200 || response.statusCode >= 300) return null;
+  final json = jsonDecode(response.body) as Map<String, dynamic>;
+  final latest = (json['tag_name']?.toString() ?? '')
+      .replaceFirst(RegExp(r'^v'), '')
+      .trim();
+  final releaseId = int.tryParse(json['id']?.toString() ?? '');
+  if (latest.isEmpty || releaseId == null) return null;
+
+  final wantedAsset = Platform.isAndroid ? 'app-release.apk' : null;
+  var installerUrl =
+      wantedAsset == null ? null : _assetUrl(json['assets'], wantedAsset);
+  if (compareVersions(latest, appVersion) > 0 &&
+      wantedAsset != null &&
+      installerUrl == null) {
+    final attachments = await _getWithRetry(
+      client,
+      Uri.parse(
+        'https://gitee.com/api/v5/repos/langbai666/novelai-image-desktop/releases/$releaseId/attach_files',
+      ),
+      headers: const {'Accept': 'application/json'},
+    );
+    if (attachments.statusCode >= 200 && attachments.statusCode < 300) {
+      installerUrl = _assetUrl(jsonDecode(attachments.body), wantedAsset);
+    }
+  }
+  return UpdateInfo(
+    hasUpdate: compareVersions(latest, appVersion) > 0,
+    currentVersion: appVersion,
+    latestVersion: latest,
+    releaseUrl: installerUrl ?? _giteeReleaseUrl,
+  );
+}
+
+/// Gitee is the primary source for mainland users; GitHub is an automatic fallback.
 Future<UpdateInfo> checkAppUpdateWithClient(http.Client client) async {
   const current = appVersion;
   Object? primaryError;
+  UpdateInfo? giteeInfo;
   try {
-    final response = await _getWithRetry(client, Uri.parse(_latestYmlUrl));
-    if (response.statusCode >= 200 && response.statusCode < 300) {
-      final latest = parseLatestYmlVersion(response.body);
-      if (latest != null && latest.isNotEmpty) {
-        return UpdateInfo(
-          hasUpdate: compareVersions(latest, current) > 0,
-          currentVersion: current,
-          latestVersion: latest,
-          releaseUrl: _releaseUrl,
-        );
-      }
-    }
+    giteeInfo = await _checkGitee(client);
+    if (giteeInfo?.hasUpdate == true) return giteeInfo!;
   } catch (error) {
     primaryError = error;
   }
 
   try {
+    final response =
+        await _getWithRetry(client, Uri.parse(_githubLatestYmlUrl));
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      final latest = parseLatestYmlVersion(response.body);
+      if (latest != null && latest.isNotEmpty) {
+        if (compareVersions(latest, current) > 0 || giteeInfo == null) {
+          return UpdateInfo(
+            hasUpdate: compareVersions(latest, current) > 0,
+            currentVersion: current,
+            latestVersion: latest,
+            releaseUrl: _githubReleaseUrl,
+          );
+        }
+        return giteeInfo;
+      }
+    }
+  } catch (error) {
+    primaryError ??= error;
+  }
+
+  if (giteeInfo != null) return giteeInfo;
+
+  try {
     final response = await _getWithRetry(
       client,
-      Uri.parse(_releaseApiUrl),
+      Uri.parse(_githubReleaseApiUrl),
       headers: const {'Accept': 'application/vnd.github+json'},
     );
     if (response.statusCode == 404) {
@@ -130,14 +201,16 @@ Future<UpdateInfo> checkAppUpdateWithClient(http.Client client) async {
       hasUpdate: compareVersions(latest, current) > 0,
       currentVersion: current,
       latestVersion: latest,
-      releaseUrl: json['html_url']?.toString() ?? _releaseUrl,
+      releaseUrl: (Platform.isAndroid
+              ? _assetUrl(json['assets'], 'app-release.apk')
+              : null) ??
+          json['html_url']?.toString() ??
+          _githubReleaseUrl,
     );
   } catch (_) {
     return UpdateInfo(
       hasUpdate: false,
       currentVersion: current,
-      // Keep the diagnostic intentionally short. Raw socket errors are neither
-      // actionable to users nor safe for a compact settings card.
       error: primaryError == null ? 'unavailable' : 'network',
     );
   }

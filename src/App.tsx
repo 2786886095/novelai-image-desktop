@@ -5450,7 +5450,6 @@ function OnboardingWizard() {
 function UpdateBanner() {
   const updateInfo = useAppStore((state) => state.updateInfo);
   const dismissUpdate = useAppStore((state) => state.dismissUpdate);
-  const isPortable = useAppStore((state) => state.isPortable);
   const updateProgress = useAppStore((state) => state.updateProgress);
   const downloadUpdate = useAppStore((state) => state.downloadUpdate);
   const installUpdate = useAppStore((state) => state.installUpdate);
@@ -5461,8 +5460,9 @@ function UpdateBanner() {
   // slot collapses to 0 height when there's no update.
   if (!updateInfo?.hasUpdate) return <div className="update-banner-slot" />;
 
-  // The portable exe has no installed copy for electron-updater to replace —
-  // always fall back to the manual release-page link there.
+  // Windows downloads a verified Setup.exe from Gitee (GitHub fallback), so
+  // both installed and portable builds share the same update experience.
+  const manualOnly = window.naiDesktop.platform !== "win32";
   const busy = updateProgress?.kind === "checking" || updateProgress?.kind === "progress";
   const downloaded = updateProgress?.kind === "downloaded";
   const failed = updateProgress?.kind === "error";
@@ -5474,7 +5474,7 @@ function UpdateBanner() {
         {failed && <> · {updateProgress.message}</>}
       </span>
       <div className="update-banner-actions">
-        {isPortable ? (
+        {manualOnly ? (
           <button
             className="btn btn-primary"
             onClick={() => updateInfo.releaseUrl && void window.naiDesktop.openExternal(updateInfo.releaseUrl)}
