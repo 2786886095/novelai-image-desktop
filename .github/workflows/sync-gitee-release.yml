@@ -1,0 +1,59 @@
+name: Sync Gitee Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing GitHub release tag to mirror
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Download published installers
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p .tmp/gitee-source
+          gh release download "${{ inputs.tag }}" \
+            --pattern 'Langbai-NovelAI-Studio-Setup-*.exe' \
+            --pattern 'latest.yml' \
+            --pattern 'app-release.apk' \
+            --dir .tmp/gitee-source
+
+      - name: Prepare desktop updater chunks
+        run: |
+          setup="$(find .tmp/gitee-source -maxdepth 1 -name 'Langbai-NovelAI-Studio-Setup-*.exe' -print -quit)"
+          test -n "$setup"
+          node scripts/prepare-gitee-update.mjs \
+            --setup "$setup" \
+            --output .tmp/gitee-update \
+            --version "${{ inputs.tag }}"
+
+      - name: Publish desktop updater to Gitee
+        env:
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+          GITEE_OWNER: langbai666
+          GITEE_REPO: novelai-image-desktop
+          GITEE_RELEASE_TAG: ${{ inputs.tag }}
+        run: node scripts/sync-gitee-release.mjs "${{ inputs.tag }}" --dir .tmp/gitee-update --file .tmp/gitee-source/latest.yml
+
+      - name: Publish Android installer to Gitee
+        env:
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+          GITEE_OWNER: langbai666
+          GITEE_REPO: novelai-image-desktop
+          GITEE_RELEASE_TAG: ${{ inputs.tag }}
+        run: node scripts/sync-gitee-release.mjs "${{ inputs.tag }}" --file .tmp/gitee-source/app-release.apk

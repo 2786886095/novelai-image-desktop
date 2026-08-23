@@ -108,6 +108,15 @@ async function remoteAttachment(name) {
   return attachments.find((item) => item?.name === name);
 }
 
+async function waitForRemoteAttachment(name, attempts = 8) {
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const attachment = await remoteAttachment(name);
+    if (attachment) return attachment;
+    if (attempt < attempts) await new Promise((resolveDelay) => setTimeout(resolveDelay, 3_000));
+  }
+  return undefined;
+}
+
 async function uploadFile(releaseId, file, name, timeoutMs) {
   const boundary = `----langbai-gitee-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const prefix = Buffer.from(
@@ -170,7 +179,11 @@ for (const file of uniqueFiles) {
       // verify the release attachment before deciding whether it failed.
       // Small desktop chunks should complete quickly. The directly installable
       // Android APK is larger and receives a longer, bounded transfer window.
-      const timeoutMs = localSize > 32 * 1024 * 1024 ? 1_800_000 : 180_000;
+      // Gitee commonly persists a complete upload but never closes the HTTP
+      // response.  Waiting 3–30 minutes per file made a normal desktop release
+      // take close to an hour.  Bound the silent-response window, then poll the
+      // attachment list below before deciding whether a retry is necessary.
+      const timeoutMs = localSize > 32 * 1024 * 1024 ? 240_000 : 45_000;
       const response = await uploadFile(releaseId, file, name, timeoutMs);
       if (response.ok) uploaded = true;
       else lastError = new Error(`Gitee upload HTTP ${response.status}: ${response.detail}`);
@@ -180,7 +193,7 @@ for (const file of uniqueFiles) {
 
     if (!uploaded) {
       await new Promise((resolveDelay) => setTimeout(resolveDelay, 2_000));
-      uploaded = Boolean(await remoteAttachment(name));
+      uploaded = Boolean(await waitForRemoteAttachment(name));
     }
     if (!uploaded && attempt < 3) await new Promise((resolveDelay) => setTimeout(resolveDelay, attempt * 2_000));
   }
