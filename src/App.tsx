@@ -1355,6 +1355,10 @@ function PromptAndParams({
   }
   const templates: PromptTemplate[] = settings?.promptTemplates ?? [];
   const stylePromptPresets: StylePromptPreset[] = settings?.stylePromptPresets ?? [];
+  const stylePreviewRecoverySignature = stylePromptPresets
+    .map((preset) => `${preset.id}:${(preset.previewImages ?? []).map((image) => image.id).join(",")}`)
+    .join("|");
+  const attemptedStylePreviewRecoveryRef = useRef("");
   const stylePromptPresetGroups = useMemo(() => {
     const groups = new Set<string>(["Default", ...(settings?.stylePromptPresetGroups ?? [])]);
     stylePromptPresets.forEach((preset) => groups.add(preset.group || "Default"));
@@ -1421,6 +1425,41 @@ function PromptAndParams({
     const matched = stylePromptPresets.find((preset) => preset.prompt.trim() === stylePrompt);
     setSelectedStylePresetId(matched?.id ?? "");
   }, [params.stylePrompt, stylePromptPresets]);
+
+  // Recover every style preset as soon as the generate panel loads.  Recovery
+  // must not depend on opening the image manager: otherwise the picker keeps
+  // showing 0/3 after an older build lost only the previewImages metadata even
+  // though the copied image files are still present on disk.
+  useEffect(() => {
+    if (stylePromptPresets.length === 0) return;
+    if (attemptedStylePreviewRecoveryRef.current === stylePreviewRecoverySignature) return;
+    attemptedStylePreviewRecoveryRef.current = stylePreviewRecoverySignature;
+    let cancelled = false;
+    void Promise.all(
+      stylePromptPresets.map((preset) =>
+        window.naiDesktop.reconcileStylePromptPresetImages(
+          preset.id,
+          preset.previewImages ?? [],
+        ),
+      ),
+    ).then(async (restoredByPreset) => {
+      if (cancelled) return;
+      let changed = false;
+      const restoredPresets = stylePromptPresets.map((preset, index) => {
+        const current = preset.previewImages ?? [];
+        const restored = restoredByPreset[index] ?? [];
+        const currentIds = current.map((image) => image.id).join("|");
+        const restoredIds = restored.map((image) => image.id).join("|");
+        if (currentIds === restoredIds) return preset;
+        changed = true;
+        return { ...preset, previewImages: restored };
+      });
+      if (!changed) return;
+      await window.naiDesktop.setSetting("stylePromptPresets", restoredPresets);
+      if (!cancelled) await refreshSettings();
+    });
+    return () => { cancelled = true; };
+  }, [stylePreviewRecoverySignature]);
 
   useEffect(() => {
     if (!stylePresetMenuOpen) return;
