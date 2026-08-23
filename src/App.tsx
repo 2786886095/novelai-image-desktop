@@ -11,7 +11,7 @@ import { useAppStore } from "./store";
 import { relatedTags } from "./related-tags";
 import { fmtCount, wordAtCursor } from "./text-utils";
 import { inspectImageMetadata, parseImageMeta } from "./png-meta";
-import { droppedImagePath, hasDraggedFiles } from "./drag-drop";
+import { droppedImagePath, droppedImagePaths, hasDraggedFiles } from "./drag-drop";
 import { splitPromptTags, parseWeightedTag, formatMultiplier, setTagLevelInPrompt } from "./prompt-weight";
 import {
   normalizePrompt,
@@ -1154,6 +1154,7 @@ function StylePresetImagesModal({
   preset,
   text,
   onImport,
+  onDropImages,
   onReplace,
   onDelete,
   onClose,
@@ -1161,11 +1162,13 @@ function StylePresetImagesModal({
   preset: StylePromptPreset;
   text: ReturnType<typeof getGeneratePanelText>["prompt"];
   onImport: () => void;
+  onDropImages: (sourcePaths: string[]) => void;
   onReplace: (image: StylePromptPreviewImage) => void;
   onDelete: (image: StylePromptPreviewImage) => void;
   onClose: () => void;
 }) {
   const [preview, setPreview] = useState<StylePromptPreviewImage | null>(null);
+  const [dragging, setDragging] = useState(false);
   const images = preset.previewImages ?? [];
   const language = useAppStore((state) => state.settings?.language);
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
@@ -1189,11 +1192,47 @@ function StylePresetImagesModal({
             </div>
             <button type="button" aria-label={t("common.close")} onClick={onClose}><Icon name="close" /></button>
           </header>
-          <div className="style-image-modal-body">
+          <div
+            className={clsx("style-image-modal-body", dragging && "dragging")}
+            onDragEnter={(event) => {
+              if (!hasDraggedFiles(event.dataTransfer)) return;
+              event.preventDefault();
+              setDragging(true);
+            }}
+            onDragOver={(event) => {
+              if (!hasDraggedFiles(event.dataTransfer)) return;
+              event.preventDefault();
+              event.dataTransfer.dropEffect = "copy";
+              setDragging(true);
+            }}
+            onDragLeave={(event) => {
+              if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+              setDragging(false);
+            }}
+            onDrop={(event) => {
+              if (!hasDraggedFiles(event.dataTransfer)) return;
+              event.preventDefault();
+              setDragging(false);
+              const paths = droppedImagePaths(event.dataTransfer, 3 - images.length);
+              if (paths.length > 0) onDropImages(paths);
+            }}
+          >
             {images.length === 0 ? (
-              <div className="style-image-empty">
+              <div
+                className="style-image-empty"
+                role="button"
+                tabIndex={0}
+                onClick={onImport}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    onImport();
+                  }
+                }}
+              >
                 <Icon name="palette" />
                 <strong>{text.stylePresetNoImages}</strong>
+                <span>{text.stylePresetDropImages}</span>
                 <span>{text.stylePresetImageHint}</span>
               </div>
             ) : (
@@ -1342,6 +1381,10 @@ function PromptAndParams({
           { id: "ui-style-3", name: "清透动画", prompt: "clean anime lineart, soft gradient", group: "Default", createdAt: "2026-08-22T00:00:00.000Z", previewImages: [] },
         ]);
         await refreshSettings();
+        return;
+      }
+      if (new URLSearchParams(window.location.search).get("uiStylePresetImages") === "1") {
+        setStyleImageManagerPresetId(stylePromptPresets[0]?.id ?? "");
         return;
       }
       window.requestAnimationFrame(() => {
@@ -1532,8 +1575,27 @@ function PromptAndParams({
     await refreshSettings();
   }
 
+  useEffect(() => {
+    if (!styleImageManagerPresetId) return;
+    const preset = stylePromptPresets.find((item) => item.id === styleImageManagerPresetId);
+    if (!preset) return;
+    let cancelled = false;
+    void window.naiDesktop
+      .reconcileStylePromptPresetImages(preset.id, preset.previewImages ?? [])
+      .then(async (restored) => {
+        if (cancelled) return;
+        const currentIds = (preset.previewImages ?? []).map((image) => image.id).join("|");
+        const restoredIds = restored.map((image) => image.id).join("|");
+        if (currentIds !== restoredIds) await updateStylePresetImages(preset.id, restored);
+      });
+    return () => { cancelled = true; };
+  }, [styleImageManagerPresetId]);
+
   async function importStylePresetImages(preset: StylePromptPreset) {
-    const current = preset.previewImages ?? [];
+    const current = await window.naiDesktop.reconcileStylePromptPresetImages(
+      preset.id,
+      preset.previewImages ?? [],
+    );
     const available = 3 - current.length;
     if (available <= 0) {
       setToast(generateText.prompt.stylePresetImageLimit);
@@ -1546,6 +1608,34 @@ function PromptAndParams({
     );
     if (imported.length === 0) return;
     await updateStylePresetImages(preset.id, [...current, ...imported]);
+  }
+
+  async function importDroppedStylePresetImages(
+    preset: StylePromptPreset,
+    sourcePaths: string[],
+  ) {
+    const current = await window.naiDesktop.reconcileStylePromptPresetImages(
+      preset.id,
+      preset.previewImages ?? [],
+    );
+    const available = 3 - current.length;
+    if (available <= 0) {
+      setToast(generateText.prompt.stylePresetImageLimit);
+      return;
+    }
+    const imported = await window.naiDesktop.importStylePromptPresetImagePaths(
+      sourcePaths,
+      preset.id,
+      available,
+    );
+    if (imported.length === 0) return;
+    await updateStylePresetImages(preset.id, [...current, ...imported]);
+    setToast(
+      generateText.prompt.stylePresetImagesImported.replace(
+        "{count}",
+        String(imported.length),
+      ),
+    );
   }
 
   async function replaceStylePresetImage(
@@ -1866,6 +1956,7 @@ function PromptAndParams({
           preset={styleImageManagerPreset}
           text={generateText.prompt}
           onImport={() => void importStylePresetImages(styleImageManagerPreset)}
+          onDropImages={(paths) => void importDroppedStylePresetImages(styleImageManagerPreset, paths)}
           onReplace={(image) => void replaceStylePresetImage(styleImageManagerPreset, image)}
           onDelete={(image) => void deleteStylePresetImage(styleImageManagerPreset, image)}
           onClose={() => setStyleImageManagerPresetId("")}

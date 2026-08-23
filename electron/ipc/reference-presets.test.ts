@@ -155,4 +155,51 @@ describe("reference preset persistence", () => {
     fs.rmSync(saved.preset!.filePath);
     expect((await listReferencePresets(root)).presets).toHaveLength(0);
   });
+
+  it("recovers detached local images when the library index was overwritten", async () => {
+    const root = temporaryRoot();
+    const presetRoot = path.join(root, "reference-presets");
+    fs.mkdirSync(presetRoot, { recursive: true });
+    fs.writeFileSync(path.join(presetRoot, "detached.png"), "image");
+    fs.writeFileSync(
+      path.join(presetRoot, "library.json"),
+      JSON.stringify({ version: 2, groups: [], presets: [] }),
+    );
+
+    const library = await listReferencePresets(root);
+
+    expect(library.presets).toHaveLength(1);
+    expect(library.presets[0]).toMatchObject({ id: "detached", kind: "precise" });
+  });
+
+  it("restores preset names and parameters from sidecars", async () => {
+    const root = temporaryRoot();
+    const saved = await saveReferencePreset(
+      {
+        name: "保留名称",
+        group: "常用",
+        kind: "vibe",
+        base64: Buffer.from("image").toString("base64"),
+        extension: "webp",
+        infoExtracted: 0.65,
+        strength: 0.8,
+      },
+      root,
+    );
+    fs.writeFileSync(
+      path.join(root, "reference-presets", "library.json"),
+      JSON.stringify({ version: 2, groups: [], presets: [] }),
+    );
+
+    const library = await listReferencePresets(root);
+
+    expect(library.presets[0]).toMatchObject({
+      id: saved.preset!.id,
+      name: "保留名称",
+      group: "常用",
+      kind: "vibe",
+      infoExtracted: 0.65,
+      strength: 0.8,
+    });
+  });
 });

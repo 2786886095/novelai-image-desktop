@@ -679,6 +679,8 @@ type GeneratePanelText = {
     stylePresetDeleteImage: string;
     stylePresetNoImages: string;
     stylePresetImageHint: string;
+    stylePresetDropImages: string;
+    stylePresetImagesImported: string;
     stylePresetImageLimit: string;
     locked: string;
     lock: string;
@@ -748,6 +750,8 @@ const GENERATE_PANEL_TEXT = {
       stylePresetDeleteImage: "删除图片",
       stylePresetNoImages: "尚未导入风格参考图",
       stylePresetImageHint: "双击图片可全屏预览；每个风格最多保存 3 张。",
+      stylePresetDropImages: "将图片拖到这里，或点击选择图片",
+      stylePresetImagesImported: "已导入 {count} 张风格参考图。",
       stylePresetImageLimit: "该风格已达到 3 张图片上限。",
       locked: "已锁定",
       lock: "锁定",
@@ -817,6 +821,8 @@ const GENERATE_PANEL_TEXT = {
       stylePresetDeleteImage: "刪除圖片",
       stylePresetNoImages: "尚未匯入風格參考圖",
       stylePresetImageHint: "雙擊圖片可全螢幕預覽；每個風格最多保存 3 張。",
+      stylePresetDropImages: "將圖片拖到這裡，或點擊選擇圖片",
+      stylePresetImagesImported: "已匯入 {count} 張風格參考圖。",
       stylePresetImageLimit: "此風格已達到 3 張圖片上限。",
       locked: "已鎖定",
       lock: "鎖定",
@@ -886,6 +892,8 @@ const GENERATE_PANEL_TEXT = {
       stylePresetDeleteImage: "Delete image",
       stylePresetNoImages: "No style reference images yet",
       stylePresetImageHint: "Double-click an image for full-screen preview. Up to 3 images per style.",
+      stylePresetDropImages: "Drop images here, or click to choose files",
+      stylePresetImagesImported: "Imported {count} style reference image(s).",
       stylePresetImageLimit: "This style already has the 3-image maximum.",
       locked: "Locked",
       lock: "Lock",
@@ -959,6 +967,8 @@ const GENERATE_PANEL_TEXT = {
       stylePresetDeleteImage: "画像を削除",
       stylePresetNoImages: "参考画像はまだありません",
       stylePresetImageHint: "画像をダブルクリックすると全画面表示します。各スタイル最大3枚。",
+      stylePresetDropImages: "画像をここにドロップするか、クリックして選択",
+      stylePresetImagesImported: "スタイル参考画像を{count}枚読み込みました。",
       stylePresetImageLimit: "このスタイルは3枚の上限に達しています。",
       locked: "ロック中",
       lock: "ロック",
@@ -1031,6 +1041,8 @@ const GENERATE_PANEL_TEXT = {
       stylePresetDeleteImage: "이미지 삭제",
       stylePresetNoImages: "아직 스타일 참고 이미지가 없습니다",
       stylePresetImageHint: "이미지를 두 번 클릭하면 전체 화면으로 볼 수 있습니다. 스타일당 최대 3장입니다.",
+      stylePresetDropImages: "이미지를 여기에 놓거나 클릭하여 선택하세요",
+      stylePresetImagesImported: "스타일 참조 이미지 {count}장을 가져왔습니다.",
       stylePresetImageLimit: "이 스타일은 이미지 3장 한도에 도달했습니다.",
       locked: "잠김",
       lock: "잠금",

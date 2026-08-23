@@ -42,6 +42,11 @@ function libraryPath(userDataRoot = app.getPath("userData")) {
   return path.join(rootDirectory(userDataRoot), "library.json");
 }
 
+function presetMetadataPath(presetId: string, userDataRoot?: string) {
+  const safeId = cleanText(presetId, 96).replace(/[^a-zA-Z0-9_-]/g, "_");
+  return path.join(rootDirectory(userDataRoot), `${safeId}.preset.json`);
+}
+
 function cleanText(value: unknown, max = 120) {
   return String(value ?? "").trim().slice(0, max);
 }
@@ -125,7 +130,74 @@ async function writeLibrary(library: ReferencePresetLibrary, userDataRoot?: stri
   const target = libraryPath(userDataRoot);
   const temp = `${target}.tmp`;
   await fs.writeFile(temp, payload, "utf8");
+  try {
+    await fs.copyFile(target, `${target}.bak`);
+  } catch {
+    // The first write has no previous library to back up.
+  }
   await fs.rename(temp, target);
+  await Promise.all(
+    library.presets.map((preset) =>
+      fs.writeFile(
+        presetMetadataPath(preset.id, userDataRoot),
+        JSON.stringify(serializablePreset(preset)),
+        "utf8",
+      ).catch(() => undefined),
+    ),
+  );
+}
+
+async function recoverDetachedPresets(
+  presets: ReferencePreset[],
+  userDataRoot?: string,
+) {
+  const root = rootDirectory(userDataRoot);
+  await fs.mkdir(root, { recursive: true });
+  const recovered = new Map(presets.map((preset) => [preset.id, preset]));
+  const entries = await fs.readdir(root, { withFileTypes: true });
+
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith(".preset.json")) continue;
+    try {
+      const raw = JSON.parse(await fs.readFile(path.join(root, entry.name), "utf8")) as Record<string, unknown>;
+      const id = cleanText(raw.id, 96);
+      const storedPath = cleanText(raw.filePath, 4096);
+      if (
+        !id ||
+        !storedPath ||
+        path.dirname(path.resolve(storedPath)) !== path.resolve(root) ||
+        !(await fileExists(storedPath))
+      ) continue;
+      const normalized = normalizePreset(raw, storedPath);
+      if (normalized && !recovered.has(normalized.id)) recovered.set(normalized.id, normalized);
+    } catch {
+      // A damaged sidecar must not hide other valid presets.
+    }
+  }
+
+  let recoveredIndex = 1;
+  for (const entry of entries) {
+    if (!entry.isFile() || !SUPPORTED_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) continue;
+    const id = path.parse(entry.name).name;
+    if (recovered.has(id)) continue;
+    const filePath = path.join(root, entry.name);
+    const normalized = normalizePreset(
+      {
+        id,
+        name: `已恢复预设 ${recoveredIndex++}`,
+        group: "",
+        kind: "precise",
+        preciseType: "character",
+        strength: 1,
+        fidelity: 1,
+        informationExtracted: 1,
+        createdAt: (await fs.stat(filePath)).mtime.toISOString(),
+      },
+      filePath,
+    );
+    if (normalized) recovered.set(id, normalized);
+  }
+  return [...recovered.values()].slice(0, MAX_PRESETS);
 }
 
 export async function listReferencePresets(
@@ -147,18 +219,25 @@ export async function listReferencePresets(
       if (normalized) presets.push(normalized);
       if (presets.length >= MAX_PRESETS) break;
     }
+    const recoveredPresets = await recoverDetachedPresets(presets, userDataRoot);
     const library = {
       groups: Number(parsed.version ?? 1) < LIBRARY_VERSION
-        ? migrateLegacyGroups((parsed.groups ?? []).map((value) => cleanText(value)).filter(Boolean), presets)
+        ? migrateLegacyGroups((parsed.groups ?? []).map((value) => cleanText(value)).filter(Boolean), recoveredPresets)
         : normalizedGroups((parsed.groups ?? []).map((value) => cleanText(value)).filter(Boolean)),
-      presets,
+      presets: recoveredPresets,
     };
-    if ((parsed.presets?.length ?? 0) !== presets.length || Number(parsed.version ?? 1) < LIBRARY_VERSION) {
+    if ((parsed.presets?.length ?? 0) !== recoveredPresets.length || Number(parsed.version ?? 1) < LIBRARY_VERSION) {
       await writeLibrary(library, userDataRoot);
     }
     return library;
   } catch {
-    return { groups: [], presets: [] };
+    const presets = await recoverDetachedPresets([], userDataRoot);
+    const library = {
+      groups: normalizedGroups(presets.map((preset) => preset.group).filter(Boolean)),
+      presets,
+    };
+    if (presets.length) await writeLibrary(library, userDataRoot);
+    return library;
   }
 }
 
@@ -242,6 +321,7 @@ export async function deleteReferencePreset(
   const root = path.resolve(rootDirectory(userDataRoot));
   const candidate = path.resolve(preset.filePath);
   if (path.dirname(candidate) === root) await fs.rm(candidate, { force: true });
+  await fs.rm(presetMetadataPath(preset.id, userDataRoot), { force: true });
   const next = {
     groups: library.groups,
     presets: library.presets.filter((item) => item.id !== presetId),

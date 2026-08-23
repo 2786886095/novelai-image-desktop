@@ -97,7 +97,9 @@ import {
 import {
   deleteStylePromptPresetImage,
   deleteStylePromptPresetImages,
+  copyStylePromptPreviewImages,
   importStylePromptPresetImages,
+  reconcileStylePromptPreviewImages,
 } from "./ipc/style-preset-images";
 import {
   getTuiwenTtsCatalog,
@@ -129,6 +131,7 @@ import type {
   I2IParams,
   MetadataSnapshotPayload,
   NAIInpaintModel,
+  StylePromptPreviewImage,
   UpscaleScale,
   TextToolHistoryItem,
   TuiwenExportJianYingRequest,
@@ -519,7 +522,7 @@ function createWindow() {
     void mainWindow.loadFile(
       path.join(__dirname, "../../dist/index.html"),
       uiCapturePath
-        ? { query: { uiCapture: captureSurface, uiTheme: captureTheme, uiCatalogState: captureCatalogState, uiPresetSection: capturePresetSection, uiSelectOpen: normalizedUiCapturePath.includes("select-open") ? "1" : "0", uiPresetPicker: normalizedUiCapturePath.includes("preset-picker") ? "1" : "0", uiPresetCreate: normalizedUiCapturePath.includes("preset-create") ? "1" : "0", uiStylePresetOpen: normalizedUiCapturePath.includes("style-preset-menu") ? "1" : "0", uiStylePresetActions: normalizedUiCapturePath.includes("style-preset-actions") ? "1" : "0" } }
+        ? { query: { uiCapture: captureSurface, uiTheme: captureTheme, uiCatalogState: captureCatalogState, uiPresetSection: capturePresetSection, uiSelectOpen: normalizedUiCapturePath.includes("select-open") ? "1" : "0", uiPresetPicker: normalizedUiCapturePath.includes("preset-picker") ? "1" : "0", uiPresetCreate: normalizedUiCapturePath.includes("preset-create") ? "1" : "0", uiStylePresetOpen: normalizedUiCapturePath.includes("style-preset-menu") || normalizedUiCapturePath.includes("style-preset-images") ? "1" : "0", uiStylePresetActions: normalizedUiCapturePath.includes("style-preset-actions") ? "1" : "0", uiStylePresetImages: normalizedUiCapturePath.includes("style-preset-images") ? "1" : "0" } }
         : undefined,
     );
   }
@@ -914,6 +917,16 @@ function registerIpc() {
   );
   ipcMain.handle("stylePreset:deleteImages", (_event, presetId: string) =>
     deleteStylePromptPresetImages(presetId),
+  );
+  ipcMain.handle(
+    "stylePreset:importImagePaths",
+    (_event, sourcePaths: string[], presetId: string, availableSlots: number) =>
+      copyStylePromptPreviewImages(sourcePaths, presetId, availableSlots),
+  );
+  ipcMain.handle(
+    "stylePreset:reconcileImages",
+    (_event, presetId: string, knownImages: StylePromptPreviewImage[]) =>
+      reconcileStylePromptPreviewImages(presetId, knownImages),
   );
   ipcMain.handle("referencePreset:list", () => listReferencePresets());
   ipcMain.handle("referencePreset:save", (_event, request) =>

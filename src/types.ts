@@ -1424,6 +1424,15 @@ export interface NaiDesktopApi {
     availableSlots: number,
     dialogTitle?: string,
   ) => Promise<StylePromptPreviewImage[]>;
+  importStylePromptPresetImagePaths: (
+    sourcePaths: string[],
+    presetId: string,
+    availableSlots: number,
+  ) => Promise<StylePromptPreviewImage[]>;
+  reconcileStylePromptPresetImages: (
+    presetId: string,
+    knownImages: StylePromptPreviewImage[],
+  ) => Promise<StylePromptPreviewImage[]>;
   deleteStylePromptPresetImage: (
     presetId: string,
     imageId: string,

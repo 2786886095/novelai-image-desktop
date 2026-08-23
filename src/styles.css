@@ -6637,12 +6637,21 @@ button.prompt-chip-head {
   overflow-y: auto;
   padding: 18px 20px;
 }
+.style-image-modal-body.dragging {
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+.style-image-modal-body.dragging .style-image-empty,
+.style-image-modal-body.dragging .style-image-grid {
+  outline: 3px solid color-mix(in srgb, var(--accent) 38%, transparent);
+  outline-offset: -3px;
+}
 .style-image-modal-body > p {
   margin: 12px 0 0;
   color: var(--text-muted);
   font-size: 12px;
 }
 .style-image-empty {
+  width: 100%;
   min-height: 240px;
   border: 1px dashed var(--border-strong);
   border-radius: var(--radius-lg);
@@ -6652,6 +6661,13 @@ button.prompt-chip-head {
   gap: 8px;
   color: var(--text-muted);
   text-align: center;
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+.style-image-empty:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
 }
 .style-image-empty .ui-icon { font-size: 34px; color: var(--accent); }
 .style-image-empty strong { color: var(--text-primary); }

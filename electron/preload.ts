@@ -296,6 +296,22 @@ contextBridge.exposeInMainWorld("naiDesktop", {
       availableSlots,
       dialogTitle,
     ),
+  importStylePromptPresetImagePaths: (
+    sourcePaths: string[],
+    presetId: string,
+    availableSlots: number,
+  ): Promise<StylePromptPreviewImage[]> =>
+    ipcRenderer.invoke(
+      "stylePreset:importImagePaths",
+      sourcePaths,
+      presetId,
+      availableSlots,
+    ),
+  reconcileStylePromptPresetImages: (
+    presetId: string,
+    knownImages: StylePromptPreviewImage[],
+  ): Promise<StylePromptPreviewImage[]> =>
+    ipcRenderer.invoke("stylePreset:reconcileImages", presetId, knownImages),
   deleteStylePromptPresetImage: (presetId: string, imageId: string) =>
     ipcRenderer.invoke("stylePreset:deleteImage", presetId, imageId),
   deleteStylePromptPresetImages: (presetId: string) =>

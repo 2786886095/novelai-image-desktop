@@ -12,3 +12,19 @@ export async function droppedImagePath(dataTransfer: DataTransfer | null | undef
   if (file.type && !file.type.startsWith("image/")) return "";
   return IMAGE_EXT_RE.test(filePath) || file.type.startsWith("image/") ? filePath : "";
 }
+
+export function droppedImagePaths(
+  dataTransfer: DataTransfer | null | undefined,
+  limit = Number.POSITIVE_INFINITY,
+) {
+  if (!dataTransfer?.files) return [];
+  const paths: string[] = [];
+  for (const file of Array.from(dataTransfer.files)) {
+    if (paths.length >= limit) break;
+    const filePath = (file as File & { path?: string }).path || window.naiDesktop.getPathForFile(file);
+    if (!filePath) continue;
+    if (file.type && !file.type.startsWith("image/")) continue;
+    if (IMAGE_EXT_RE.test(filePath) || file.type.startsWith("image/")) paths.push(filePath);
+  }
+  return paths;
+}
