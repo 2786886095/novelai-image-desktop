@@ -97,10 +97,13 @@ const releaseId = Number(release.id);
 if (!Number.isFinite(releaseId)) throw new Error("Gitee release did not return an id");
 
 async function attachmentsForRelease() {
-  const response = await request(`${api}/releases/${releaseId}/attach_files`, {}, 3, 60_000);
+  // The dedicated attach-files listing endpoint can itself stall for a full
+  // minute.  The tag endpoint exposes the same current asset list and responds
+  // quickly, which keeps post-timeout verification bounded.
+  const response = await request(`${api}/releases/tags/${encodeURIComponent(tag)}`, {}, 2, 15_000);
   if (!response.ok) return [];
   const value = await response.json();
-  return Array.isArray(value) ? value : [];
+  return Array.isArray(value?.assets) ? value.assets : [];
 }
 
 async function remoteAttachment(name) {
@@ -108,7 +111,7 @@ async function remoteAttachment(name) {
   return attachments.find((item) => item?.name === name);
 }
 
-async function waitForRemoteAttachment(name, attempts = 8) {
+async function waitForRemoteAttachment(name, attempts = 4) {
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     const attachment = await remoteAttachment(name);
     if (attachment) return attachment;
@@ -159,14 +162,14 @@ async function uploadFile(releaseId, file, name, timeoutMs) {
   });
 }
 
-for (const file of uniqueFiles) {
+async function syncFile(file) {
   const name = basename(file);
   // Release assets are immutable for a version. A previous CI retry may have
   // completed the upload even when Gitee never returned response headers. Do
   // not delete that valid attachment and start the same slow transfer again.
   if (await remoteAttachment(name)) {
     console.log(`Kept existing ${name} on Gitee ${tag}`);
-    continue;
+    return;
   }
 
   const localSize = (await stat(file)).size;
@@ -179,11 +182,7 @@ for (const file of uniqueFiles) {
       // verify the release attachment before deciding whether it failed.
       // Small desktop chunks should complete quickly. The directly installable
       // Android APK is larger and receives a longer, bounded transfer window.
-      // Gitee commonly persists a complete upload but never closes the HTTP
-      // response.  Waiting 3–30 minutes per file made a normal desktop release
-      // take close to an hour.  Bound the silent-response window, then poll the
-      // attachment list below before deciding whether a retry is necessary.
-      const timeoutMs = localSize > 32 * 1024 * 1024 ? 240_000 : 45_000;
+      const timeoutMs = localSize > 32 * 1024 * 1024 ? 1_800_000 : 180_000;
       const response = await uploadFile(releaseId, file, name, timeoutMs);
       if (response.ok) uploaded = true;
       else lastError = new Error(`Gitee upload HTTP ${response.status}: ${response.detail}`);
@@ -200,3 +199,24 @@ for (const file of uniqueFiles) {
   if (!uploaded) throw new Error(`Unable to upload ${name} to Gitee after remote verification`, { cause: lastError });
   console.log(`Uploaded ${name} to Gitee ${tag}`);
 }
+
+async function syncWithConcurrency(filesToSync, concurrency = 4) {
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(concurrency, filesToSync.length) }, async () => {
+    while (cursor < filesToSync.length) {
+      const index = cursor;
+      cursor += 1;
+      await syncFile(filesToSync[index]);
+    }
+  });
+  await Promise.all(workers);
+}
+
+const manifestFiles = uniqueFiles.filter((file) => basename(file) === "gitee-update.json");
+const payloadFiles = uniqueFiles.filter((file) => basename(file) !== "gitee-update.json");
+// Gitee's upload response can stay open for roughly three minutes after the
+// bytes have arrived.  Upload independent chunks concurrently so that delay is
+// paid per batch rather than once for every 8 MiB part.
+await syncWithConcurrency(payloadFiles, 4);
+// Publish the updater manifest only after every installer part is visible.
+for (const manifest of manifestFiles) await syncFile(manifest);
