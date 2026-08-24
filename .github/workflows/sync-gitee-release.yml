@@ -22,6 +22,14 @@ jobs:
         with:
           node-version: 24
 
+      - name: Reclaim old Gitee release attachment quota
+        env:
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+          GITEE_OWNER: langbai666
+          GITEE_REPO: novelai-image-desktop
+          GITEE_KEEP_TAG: ${{ inputs.tag }}
+        run: node scripts/prune-gitee-release-assets.mjs
+
       - name: Download published installers
         env:
           GH_TOKEN: ${{ github.token }}
