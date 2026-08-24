@@ -140,6 +140,7 @@ void main() {
         proxyMode: 'direct',
       ),
       GenerateParams(
+        model: 'nai-diffusion-4-5-full',
         positivePrompt: 'test',
         width: 64,
         height: 128,
@@ -204,6 +205,7 @@ void main() {
         proxyMode: 'direct',
       ),
       GenerateParams(
+        model: 'nai-diffusion-4-5-full',
         positivePrompt: 'test',
         width: 64,
         height: 128,

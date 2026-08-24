@@ -2451,34 +2451,15 @@ class AppState extends ChangeNotifier {
     }
     final groupId = await ensureHistoryGroup(projectTitle, historyGroupId);
     final before = account.anlasBalance;
-    var extrasToUse = panelExtras.copy();
+    final extrasToUse = panelExtras.copy();
     late List<Uint8List> images;
     late int seed;
-    try {
-      (images, seed) = await api.generate(
-        token,
-        settings,
-        taskParams,
-        extrasToUse,
-      );
-    } catch (error) {
-      // A generic HTTP 400/422 can be caused by dimensions, model, prompt, or
-      // another validation field. Only retry without references when the server
-      // actually identifies a reference-related field; otherwise a second paid
-      // request both hides the real fault and may consume Anlas unnecessarily.
-      final referenceFailure = looksLikeReferenceGenerationError(error);
-      final hasReferences = extrasToUse.vibeImages.isNotEmpty ||
-          extrasToUse.preciseReferences.isNotEmpty;
-      if (!hasReferences || !referenceFailure) rethrow;
-      extrasToUse = GenerateExtras();
-      (images, seed) = await api.generate(
-        token,
-        settings,
-        taskParams,
-        extrasToUse,
-      );
-      status = _rt('status.referenceRetrySucceeded');
-    }
+    (images, seed) = await api.generate(
+      token,
+      settings,
+      taskParams,
+      extrasToUse,
+    );
     if (images.isEmpty) throw Exception(_rt('error.noImagesReturned'));
     final item = await storage.saveImage(
       images.first,

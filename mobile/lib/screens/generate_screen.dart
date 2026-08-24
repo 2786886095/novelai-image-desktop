@@ -2735,20 +2735,29 @@ class _ReferenceControls extends StatelessWidget {
               t('generate.preciseHint'),
             ),
           ),
-          if (!state.params.supportsPreciseReference &&
-              extras.preciseReferences.isNotEmpty)
+          if (!state.params.supportsPreciseReference)
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.warning_amber_rounded),
               title: Text(t('generate.preciseUnsupportedTitle')),
               subtitle: Text(t('generate.preciseUnsupportedSubtitle')),
+              trailing: TextButton(
+                onPressed: () => state.setParam((params) {
+                  params.model = params.model.contains('curated')
+                      ? 'nai-diffusion-4-5-curated'
+                      : 'nai-diffusion-4-5-full';
+                }),
+                child: Text(t('generate.switchV45')),
+              ),
             ),
           for (var index = 0; index < extras.preciseReferences.length; index++)
             _PreciseReferenceRow(index: index),
           Align(
             alignment: Alignment.centerLeft,
             child: OutlinedButton.icon(
-              onPressed: () => _pick(context, precise: true),
+              onPressed: state.params.supportsPreciseReference
+                  ? () => _pick(context, precise: true)
+                  : null,
               icon: const Icon(Icons.person_search_outlined),
               label: Text(t('generate.addPrecise')),
             ),

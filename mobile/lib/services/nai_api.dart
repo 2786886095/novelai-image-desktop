@@ -625,6 +625,21 @@ class NaiApi {
     params = params.normalized(
       allowInpaintModel: params.model.endsWith('-inpainting'),
     );
+    if (extras.preciseReferences.isNotEmpty &&
+        !params.supportsPreciseReference) {
+      throw const NaiHttpException(
+        0,
+        'Precise Reference is currently supported only by NovelAI V4.5. '
+        'V5 did not launch with this feature. Switch to V4.5 Full/Curated or remove precise references.',
+      );
+    }
+    if (extras.vibeImages.isNotEmpty && !params.supportsVibeTransfer) {
+      throw const NaiHttpException(
+        0,
+        'NovelAI V5 does not currently support Vibe Transfer. '
+        'Switch to V4.5 or remove vibe images.',
+      );
+    }
     seed = seed.clamp(1, 2147483647).toInt();
     final basePrompt = _merge(params.stylePrompt, params.positivePrompt);
     // NovelAI V4+ shares the Anime checkpoint in Furry mode. The official
@@ -743,15 +758,15 @@ class NaiApi {
         },
         'use_coords': hasCoords && negativeCharCaptions.isNotEmpty,
         'use_order': false,
-        'legacy_uc': !params.supportsPreciseReference,
+        'legacy_uc': !params.isV4Plus,
       };
     } else {
       parameters['sm'] = params.smea;
       parameters['sm_dyn'] = params.smea && params.smeaDyn;
     }
 
-    // V5 does not support Vibe Transfer. Ignore legacy/stored vibe images just
-    // like the desktop client instead of turning a model switch into a 400.
+    // V5 does not support Vibe Transfer. The explicit guard above prevents a
+    // silent reference-less generation when legacy/stored references remain.
     if (extras.vibeImages.isNotEmpty && params.supportsVibeTransfer) {
       final encoded = <VibeTransferItem>[];
       for (final vibe in extras.vibeImages) {

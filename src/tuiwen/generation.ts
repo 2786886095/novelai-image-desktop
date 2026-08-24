@@ -1,4 +1,4 @@
-import { supportsNAIPreciseReference, type ComicReferenceAsset, type GenerateParams, type GenerateResult, type HistoryItem, type TuiwenProject, type TuiwenShot } from "../types";
+import { supportsNAIPreciseReference, supportsNAIVibeTransfer, type ComicReferenceAsset, type GenerateParams, type GenerateResult, type HistoryItem, type TuiwenProject, type TuiwenShot } from "../types";
 
 export interface TuiwenReferenceCostCounts {
   supportsPrecise: boolean;
@@ -28,9 +28,10 @@ export function countTuiwenGenerationReferences(references: ComicReferenceAsset[
   const vibeKindCount = usableRefs.filter((ref) => ref.kind === "vibe").length;
   const preciseKindCount = usableRefs.length - vibeKindCount;
   const supportsPrecise = supportsNAIPreciseReference(model);
+  const supportsVibe = supportsNAIVibeTransfer(model);
   return {
     supportsPrecise,
-    vibeCount: supportsPrecise ? vibeKindCount : vibeKindCount + preciseKindCount,
+    vibeCount: !supportsVibe ? 0 : supportsPrecise ? vibeKindCount : vibeKindCount + preciseKindCount,
     preciseCount: supportsPrecise ? preciseKindCount : 0,
   };
 }

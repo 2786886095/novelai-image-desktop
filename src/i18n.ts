@@ -1792,7 +1792,7 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "advanced.confirm": "确认",
     "reference.title": "参考图管理（氛围迁移 / 精准参考）",
     "reference.vibeTitle": "氛围迁移（Vibe Transfer）",
-    "reference.vibeUnsupportedV5": " · V5 暂不支持，请改用精准参考",
+    "reference.vibeUnsupportedV5": " · V5 首发暂不支持，请切换到 V4.5 或移除氛围图",
     "reference.emptyVibe": "还没有氛围迁移图。",
     "reference.thumbAlt": "参考图",
     "reference.infoExtracted": "信息提取量（Information Extracted）",
@@ -1801,7 +1801,8 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "reference.vibeStrengthHelp": "越高越接近参考图的整体氛围与画风，越低越服从文字提示词。",
     "reference.remove": "移除",
     "reference.preciseTitle": "精准参考（Precise Reference）",
-    "reference.preciseUnsupported": " · 仅 V4.5 / V5 模型生效，当前模型不支持",
+    "reference.preciseUnsupported": " · 当前仅 V4.5 模型支持；V5 首发尚未开放",
+    "reference.switchV45": "切换到 V4.5",
     "reference.preciseHint":
       "任意尺寸均可：程序会按官方策略等比缩放并白边填充到最接近的官方尺寸（1024×1536 / 1472×1472 / 1536×1024），RGBA 透明图会先以白底拍平。建议参考图比例贴近三者之一以减少留白；想要角色而非画风时把类型选“角色”。",
     "reference.emptyPrecise": "还没有精准参考图。",
@@ -1820,7 +1821,7 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "reference.sizePadded":
       "（将缩放并填充约 {pad}% 白边；裁/缩到推荐尺寸可消除白边）",
     "reference.addVibe": "氛围迁移图",
-    "reference.addPrecise": "精准参考图（V4.5 / V5）",
+    "reference.addPrecise": "精准参考图（仅 V4.5）",
     "reference.clearAll": "清空所有",
     "reference.done": "完成",
     "reference.preciseReadFailed":
@@ -2019,7 +2020,7 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "advanced.confirm": "確認",
     "reference.title": "參考圖管理（氛圍遷移 / 精準參考）",
     "reference.vibeTitle": "氛圍遷移（Vibe Transfer）",
-    "reference.vibeUnsupportedV5": " · V5 暫不支援，請改用精準參考",
+    "reference.vibeUnsupportedV5": " · V5 首發暫不支援，請切換至 V4.5 或移除氛圍圖",
     "reference.emptyVibe": "還沒有氛圍遷移圖。",
     "reference.thumbAlt": "參考圖",
     "reference.infoExtracted": "資訊提取量（Information Extracted）",
@@ -2028,7 +2029,8 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "reference.vibeStrengthHelp": "越高越接近參考圖的整體氛圍與畫風，越低越服從文字提示詞。",
     "reference.remove": "移除",
     "reference.preciseTitle": "精準參考（Precise Reference）",
-    "reference.preciseUnsupported": " · 僅 V4.5 / V5 模型生效，目前模型不支援",
+    "reference.preciseUnsupported": " · 目前僅 V4.5 模型支援；V5 首發尚未開放",
+    "reference.switchV45": "切換至 V4.5",
     "reference.preciseHint":
       "任意尺寸均可：程式會依官方策略等比縮放並以白邊填充到最接近的官方尺寸（1024×1536 / 1472×1472 / 1536×1024），RGBA 透明圖會先以白底拍平。建議參考圖比例貼近三者之一以減少留白；想要角色而非畫風時把類型選「角色」。",
     "reference.emptyPrecise": "還沒有精準參考圖。",
@@ -2047,7 +2049,7 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "reference.sizePadded":
       "（將縮放並填充約 {pad}% 白邊；裁/縮到推薦尺寸可消除白邊）",
     "reference.addVibe": "氛圍遷移圖",
-    "reference.addPrecise": "精準參考圖（V4.5 / V5）",
+    "reference.addPrecise": "精準參考圖（僅 V4.5）",
     "reference.clearAll": "清空所有",
     "reference.done": "完成",
     "reference.preciseReadFailed":
@@ -2250,7 +2252,7 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "advanced.confirm": "Confirm",
     "reference.title": "Reference Images (Vibe Transfer / Precise Reference)",
     "reference.vibeTitle": "Vibe Transfer",
-    "reference.vibeUnsupportedV5": " · Not available on V5; use Precise Reference instead",
+    "reference.vibeUnsupportedV5": " · Not available in the V5 launch; switch to V4.5 or remove vibe images",
     "reference.emptyVibe": "No Vibe Transfer images yet.",
     "reference.thumbAlt": "Reference image",
     "reference.infoExtracted": "Information Extracted",
@@ -2260,7 +2262,8 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "reference.remove": "Remove",
     "reference.preciseTitle": "Precise Reference",
     "reference.preciseUnsupported":
-      " · V4.5 / V5 models only; the current model does not support this",
+      " · V4.5 only; Precise Reference is not part of the V5 launch",
+    "reference.switchV45": "Switch to V4.5",
     "reference.preciseHint":
       "Any size is accepted: the app follows the official strategy, scaling proportionally and adding white padding to the nearest official size (1024×1536 / 1472×1472 / 1536×1024). Transparent RGBA images are flattened on white first. Use a similar aspect ratio to reduce padding; choose “Character” when you want character identity rather than art style.",
     "reference.emptyPrecise": "No precise reference images yet.",
@@ -2279,7 +2282,7 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "reference.sizePadded":
       "(will scale and add about {pad}% white padding; crop/resize to the recommended size to avoid padding)",
     "reference.addVibe": "Vibe image",
-    "reference.addPrecise": "Precise reference (V4.5 / V5)",
+    "reference.addPrecise": "Precise reference (V4.5 only)",
     "reference.clearAll": "Clear all",
     "reference.done": "Done",
     "reference.preciseReadFailed":
@@ -2491,7 +2494,7 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "advanced.confirm": "確認",
     "reference.title": "参照画像管理（Vibe Transfer / 精密参照）",
     "reference.vibeTitle": "Vibe Transfer",
-    "reference.vibeUnsupportedV5": " · V5 では利用できません。精密参照を使用してください",
+    "reference.vibeUnsupportedV5": " · V5 初期リリースでは未対応です。V4.5へ切り替えるか画像を削除してください",
     "reference.emptyVibe": "Vibe Transfer 画像はまだありません。",
     "reference.thumbAlt": "参照画像",
     "reference.infoExtracted": "情報抽出量（Information Extracted）",
@@ -2501,7 +2504,8 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "reference.remove": "削除",
     "reference.preciseTitle": "精密参照（Precise Reference）",
     "reference.preciseUnsupported":
-      " · V4.5 / V5 モデルで有効です。現在のモデルは未対応",
+      " · V4.5 のみ対応。V5 初期リリースでは未対応です",
+    "reference.switchV45": "V4.5 に切り替える",
     "reference.preciseHint":
       "任意のサイズを利用できます。アプリは公式方式に合わせて等比縮小し、最も近い公式サイズ（1024×1536 / 1472×1472 / 1536×1024）へ白余白で埋めます。RGBA 透明画像は先に白背景へ合成します。余白を減らすには近い比率の画像を使い、画風ではなくキャラクターを参照したい場合は種類を「キャラクター」にしてください。",
     "reference.emptyPrecise": "精密参照画像はまだありません。",
@@ -2520,7 +2524,7 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "reference.sizePadded":
       "（約 {pad}% の白余白を追加。推奨サイズへ切り抜き/縮小すると余白をなくせます）",
     "reference.addVibe": "Vibe 画像",
-    "reference.addPrecise": "精密参照画像（V4.5 / V5）",
+    "reference.addPrecise": "精密参照画像（V4.5 のみ）",
     "reference.clearAll": "すべてクリア",
     "reference.done": "完了",
     "reference.preciseReadFailed":
@@ -2731,7 +2735,7 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "advanced.confirm": "확인",
     "reference.title": "참고 이미지 관리(Vibe Transfer / 정밀 참조)",
     "reference.vibeTitle": "Vibe Transfer",
-    "reference.vibeUnsupportedV5": " · V5에서는 지원되지 않습니다. 정밀 참조를 사용하세요",
+    "reference.vibeUnsupportedV5": " · V5 초기 릴리스에서는 지원되지 않습니다. V4.5로 전환하거나 이미지를 제거하세요",
     "reference.emptyVibe": "아직 Vibe Transfer 이미지가 없습니다.",
     "reference.thumbAlt": "참고 이미지",
     "reference.infoExtracted": "정보 추출량(Information Extracted)",
@@ -2741,7 +2745,8 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "reference.remove": "제거",
     "reference.preciseTitle": "정밀 참조(Precise Reference)",
     "reference.preciseUnsupported":
-      " · V4.5 / V5 모델에서 작동하며 현재 모델은 지원하지 않습니다",
+      " · V4.5만 지원합니다. V5 초기 릴리스에는 포함되지 않았습니다",
+    "reference.switchV45": "V4.5로 전환",
     "reference.preciseHint":
       "모든 크기를 사용할 수 있습니다. 앱이 공식 전략에 맞춰 비율을 유지해 축소하고 가장 가까운 공식 크기(1024×1536 / 1472×1472 / 1536×1024)에 흰 여백을 채웁니다. RGBA 투명 이미지는 먼저 흰 배경으로 합성합니다. 여백을 줄이려면 세 비율 중 하나에 가까운 참고 이미지를 쓰고, 화풍보다 캐릭터를 원하면 유형을 “캐릭터”로 선택하세요.",
     "reference.emptyPrecise": "아직 정밀 참조 이미지가 없습니다.",
@@ -2760,7 +2765,7 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "reference.sizePadded":
       "(약 {pad}% 흰 여백을 채움; 권장 크기로 자르거나 축소하면 여백을 없앨 수 있음)",
     "reference.addVibe": "Vibe 이미지",
-    "reference.addPrecise": "정밀 참조 이미지(V4.5 / V5)",
+    "reference.addPrecise": "정밀 참조 이미지(V4.5 전용)",
     "reference.clearAll": "모두 비우기",
     "reference.done": "완료",
     "reference.preciseReadFailed":
@@ -3691,7 +3696,7 @@ const DESKTOP_BATCH_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "batch.param.varietyDesc": "增加采样多样性",
     "batch.param.smeaDesc": "V3 高分辨率优化",
     "batch.param.smeaDynDesc": "V3 动态优化",
-    "batch.ref.preciseTitle": "全局精准参考 · 仅 V4 / V4.5 / V5（每图 +5 Anlas）",
+    "batch.ref.preciseTitle": "全局精准参考 · 仅 V4.5（每图 +5 Anlas）",
     "batch.ref.vibeTitle": "全局氛围迁移 · Vibe Transfer（首次编码会扣 Anlas）",
     "batch.ref.add": "＋ 添加",
     "batch.ref.preciseEmpty": "未添加。用于在每张重绘中保持角色 / 画风一致。",
@@ -3865,7 +3870,7 @@ const DESKTOP_BATCH_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "batch.param.varietyDesc": "增加採樣多樣性",
     "batch.param.smeaDesc": "V3 高解析最佳化",
     "batch.param.smeaDynDesc": "V3 動態最佳化",
-    "batch.ref.preciseTitle": "全域精準參考 · 僅 V4 / V4.5 / V5（每圖 +5 Anlas）",
+    "batch.ref.preciseTitle": "全域精準參考 · 僅 V4.5（每圖 +5 Anlas）",
     "batch.ref.vibeTitle": "全域氛圍遷移 · Vibe Transfer（首次編碼會扣 Anlas）",
     "batch.ref.add": "＋ 新增",
     "batch.ref.preciseEmpty": "未新增。用於每張重繪保持角色 / 畫風一致。",
@@ -4040,7 +4045,7 @@ const DESKTOP_BATCH_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "batch.param.smeaDesc": "V3 high-resolution optimization",
     "batch.param.smeaDynDesc": "V3 dynamic optimization",
     "batch.ref.preciseTitle":
-      "Global precise references · V4 / V4.5 / V5 only (+5 Anlas per image)",
+      "Global precise references · V4.5 only (+5 Anlas per image)",
     "batch.ref.vibeTitle": "Global Vibe Transfer (first encoding spends Anlas)",
     "batch.ref.add": "＋ Add",
     "batch.ref.preciseEmpty":
@@ -4235,7 +4240,7 @@ const DESKTOP_BATCH_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "batch.param.smeaDesc": "V3 高解像最適化",
     "batch.param.smeaDynDesc": "V3 動的最適化",
     "batch.ref.preciseTitle":
-      "全体精密参照 · V4 / V4.5 / V5（画像ごと +5 Anlas）",
+      "全体精密参照 · V4.5 のみ（画像ごと +5 Anlas）",
     "batch.ref.vibeTitle": "全体 Vibe Transfer（初回エンコードで Anlas 消費）",
     "batch.ref.add": "＋ 追加",
     "batch.ref.preciseEmpty":
@@ -4431,7 +4436,7 @@ const DESKTOP_BATCH_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "batch.param.smeaDesc": "V3 고해상도 최적화",
     "batch.param.smeaDynDesc": "V3 동적 최적화",
     "batch.ref.preciseTitle":
-      "전역 정밀 참조 · V4 / V4.5 / V5 전용(이미지당 +5 Anlas)",
+      "전역 정밀 참조 · V4.5 전용(이미지당 +5 Anlas)",
     "batch.ref.vibeTitle": "전역 Vibe Transfer(첫 인코딩 시 Anlas 사용)",
     "batch.ref.add": "＋ 추가",
     "batch.ref.preciseEmpty":

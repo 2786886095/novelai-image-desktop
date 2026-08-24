@@ -85,15 +85,6 @@ void main() {
         40,
         (index) => CharCaptionItem(prompt: 'character ${index + 1}'),
       ),
-      preciseReferences: [
-        const PreciseReferenceItem(
-          base64:
-              'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
-          type: 'character',
-          strength: 1,
-          fidelity: 1,
-        ),
-      ],
     );
     final payload = await api.buildPayload(
       'unused',
@@ -115,8 +106,31 @@ void main() {
     expect(parameters['noise_schedule'], 'karras');
     expect(parameters['dynamic_thresholding'], isFalse);
     expect(parameters['skip_cfg_above_sigma'], isNull);
-    expect(parameters['director_reference_images'], hasLength(1));
+    expect(parameters.containsKey('director_reference_images'), isFalse);
+    expect((parameters['v4_negative_prompt'] as Map)['legacy_uc'], isFalse);
     expect(prompt['char_captions'], hasLength(32));
+  });
+
+  test('V5 rejects Precise Reference before any request can be sent', () async {
+    final extras = GenerateExtras(
+      preciseReferences: const [
+        PreciseReferenceItem(
+          base64:
+              'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+          type: 'character',
+        ),
+      ],
+    );
+    expect(
+      () => api.buildPayload(
+        'unused',
+        settings,
+        GenerateParams(model: 'nai-diffusion-5-full'),
+        123,
+        extras,
+      ),
+      throwsA(isA<NaiHttpException>()),
+    );
   });
 
   test('Furry mode keeps V5 Full and prefixes the official dataset tag once',
@@ -154,19 +168,20 @@ void main() {
         'fur dataset'.allMatches(alreadyTagged['input'] as String).length, 1);
   });
 
-  test('V5 ignores legacy Vibe Transfer state instead of failing generation',
+  test('V5 rejects legacy Vibe Transfer state instead of silently ignoring it',
       () async {
-    final payload = await api.buildPayload(
-      'unused',
-      settings,
-      GenerateParams(positivePrompt: '1girl'),
-      123,
-      GenerateExtras(vibeImages: const [
-        VibeTransferItem(base64: 'dmliZQ=='),
-      ]),
+    expect(
+      () => api.buildPayload(
+        'unused',
+        settings,
+        GenerateParams(positivePrompt: '1girl'),
+        123,
+        GenerateExtras(vibeImages: const [
+          VibeTransferItem(base64: 'dmliZQ=='),
+        ]),
+      ),
+      throwsA(isA<NaiHttpException>()),
     );
-    final parameters = payload['parameters'] as Map<String, dynamic>;
-    expect(parameters.containsKey('reference_image_multiple'), isFalse);
   });
 
   test('character prompt can safely downgrade from structured to pipe form',

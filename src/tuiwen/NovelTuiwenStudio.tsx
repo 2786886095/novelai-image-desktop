@@ -7,6 +7,7 @@ import ReferencePresetManager, {
   type ReferencePresetApplyPayload,
 } from "../ReferencePresetManager";
 import { useAppStore } from "../store";
+import { isNAIV5Model } from "../types";
 import type {
   AnlasQuoteResult,
   AppLanguage,
@@ -133,7 +134,8 @@ const TUIWEN_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "story.subtitleOff": "隐藏字幕",
     "refs.title": "角色库 / 全局精准参考",
     "refs.hint":
-      "上传一次，后续每个分镜都会沿用；V4.5 模型走精准参考，其他模型自动回退为氛围迁移。",
+      "上传一次，后续每个分镜都会沿用；V4.5 使用精准参考，V4/V3 使用氛围迁移，V5 首发暂不支持参考图。",
+    "refs.v5Unsupported": "V5 首发暂不支持精准参考或氛围迁移。请切换到 V4.5，或禁用生成参考图。",
     "refs.upload": "上传参考图",
     "refs.fold": "反推写入全局设定",
     "refs.count": "参考图 {count} 张",
@@ -297,7 +299,8 @@ const TUIWEN_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "story.subtitleOff": "隱藏字幕",
     "refs.title": "角色庫 / 全域精準參考",
     "refs.hint":
-      "上傳一次，後續每個分鏡都會沿用；V4.5 模型走精準參考，其他模型自動回退為氛圍遷移。",
+      "上傳一次，後續每個分鏡都會沿用；V4.5 使用精準參考，V4/V3 使用氛圍遷移，V5 首發暫不支援參考圖。",
+    "refs.v5Unsupported": "V5 首發暫不支援精準參考或氛圍遷移。請切換至 V4.5，或停用生成參考圖。",
     "refs.upload": "上傳參考圖",
     "refs.fold": "反推寫入全域設定",
     "refs.count": "參考圖 {count} 張",
@@ -463,7 +466,8 @@ const TUIWEN_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "story.subtitleOff": "Hide subtitles",
     "refs.title": "Character library / global precise references",
     "refs.hint":
-      "Upload once and reuse across shots. V4.5 models use precise reference; other models fall back to vibe transfer.",
+      "Upload once and reuse across shots. V4.5 uses Precise Reference, V4/V3 uses Vibe Transfer, and the V5 launch supports neither.",
+    "refs.v5Unsupported": "The V5 launch supports neither Precise Reference nor Vibe Transfer. Switch to V4.5 or disable generation references.",
     "refs.upload": "Upload reference",
     "refs.fold": "Write reverse prompts to global setup",
     "refs.count": "{count} references",
@@ -639,7 +643,8 @@ TUIWEN_UI_TEXT["ja-JP"] = {
   "story.subtitleOff": "字幕を隠す",
   "refs.title": "キャラクターライブラリ / 全体精密参照",
   "refs.hint":
-    "一度アップロードすれば全カットで再利用できます。V4.5 は精密参照、他モデルは Vibe 転送へフォールバックします。",
+    "一度アップロードすれば全カットで再利用できます。V4.5 は精密参照、V4/V3 は Vibe 転送を使用し、V5 初期リリースはどちらも未対応です。",
+  "refs.v5Unsupported": "V5 初期リリースは精密参照と Vibe 転送の両方に未対応です。V4.5へ切り替えるか生成参照を無効にしてください。",
   "refs.upload": "参照画像をアップロード",
   "refs.fold": "解析結果を全体設定へ書き込む",
   "refs.count": "参照 {count} 件",
@@ -809,7 +814,8 @@ TUIWEN_UI_TEXT["ko-KR"] = {
   "story.subtitleOff": "자막 숨김",
   "refs.title": "캐릭터 라이브러리 / 전역 정밀 참조",
   "refs.hint":
-    "한 번 업로드하면 모든 컷에서 재사용됩니다. V4.5 모델은 정밀 참조를 사용하고, 다른 모델은 Vibe 전송으로 되돌아갑니다.",
+    "한 번 업로드하면 모든 컷에서 재사용됩니다. V4.5는 정밀 참조, V4/V3는 Vibe 전송을 사용하며 V5 초기 릴리스는 둘 다 지원하지 않습니다.",
+  "refs.v5Unsupported": "V5 초기 릴리스는 정밀 참조와 Vibe 전송을 모두 지원하지 않습니다. V4.5로 전환하거나 생성 참조를 비활성화하세요.",
   "refs.upload": "참조 이미지 업로드",
   "refs.fold": "분석 결과를 전역 설정에 쓰기",
   "refs.count": "참조 {count}개",
@@ -2427,6 +2433,16 @@ export function NovelTuiwenStudio({ onBack }: { onBack?: () => void }) {
       setToast(tw("msg.noGeneratable"));
       return;
     }
+    const hasGenerationReferences = project.references.some(
+      (ref) => ref.base64 && ref.useForGeneration !== false,
+    );
+    if (
+      hasGenerationReferences &&
+      targets.some((shot) => isNAIV5Model(mergeShotParams(project, shot).model))
+    ) {
+      setToast(tw("refs.v5Unsupported"));
+      return;
+    }
     const account = await refreshAccount();
     if (!account.hasToken) {
       setToast(tw("msg.needToken"));
@@ -2532,6 +2548,16 @@ export function NovelTuiwenStudio({ onBack }: { onBack?: () => void }) {
   async function generateOneShot(shot: TuiwenShot) {
     if (!shot.enPrompt.trim() && !shot.cnPrompt.trim()) {
       setToast(tw("msg.noShotPrompt"));
+      return;
+    }
+    const hasGenerationReferences = project.references.some(
+      (ref) => ref.base64 && ref.useForGeneration !== false,
+    );
+    if (
+      hasGenerationReferences &&
+      isNAIV5Model(mergeShotParams(project, shot).model)
+    ) {
+      setToast(tw("refs.v5Unsupported"));
       return;
     }
     const account = await refreshAccount();

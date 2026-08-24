@@ -820,6 +820,7 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
   const updatePreciseReference = useAppStore((state) => state.updatePreciseReference);
   const clearPreciseReferences = useAppStore((state) => state.clearPreciseReferences);
   const setToast = useAppStore((state) => state.setToast);
+  const setParam = useAppStore((state) => state.setParam);
   const model = useAppStore((state) => state.params.model);
   const preciseSupported = supportsNAIPreciseReference(model);
   const vibeSupported = supportsNAIVibeTransfer(model);
@@ -833,6 +834,15 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
       setShowPresetLibrary(true);
     }
   }, []);
+
+  const switchToV45 = () => {
+    setParam(
+      "model",
+      model.includes("curated")
+        ? "nai-diffusion-4-5-curated"
+        : "nai-diffusion-4-5-full",
+    );
+  };
 
   function handleVibeFile(file: File, infoExtracted: number, strength: number) {
     const reader = new FileReader();
@@ -932,6 +942,11 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
             {t("reference.preciseTitle")}
             {!preciseSupported && <span className="vibe-hint">{t("reference.preciseUnsupported")}</span>}
           </h3>
+          {!preciseSupported && (
+            <Button className="vibe-switch-model" onClick={switchToV45}>
+              {t("reference.switchV45")}
+            </Button>
+          )}
           <p className="vibe-hint">{t("reference.preciseHint")}</p>
           {preciseReferences.length === 0 && <p className="vibe-empty">{t("reference.emptyPrecise")}</p>}
           {preciseReferences.map((ref) => (
@@ -1011,12 +1026,13 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
                 }}
               />
             </label>
-            <label className="btn btn-secondary vibe-add-btn">
+            <label className={clsx("btn btn-secondary vibe-add-btn", !preciseSupported && "disabled")} aria-disabled={!preciseSupported}>
               <IconText icon="+">{t("reference.addPrecise")}</IconText>
               <input
                 type="file"
                 hidden
                 accept="image/png,image/jpeg,image/webp"
+                disabled={!preciseSupported}
                 onChange={(e) => {
                   const f = e.target.files?.[0];
                   if (f) { handlePreciseFile(f); e.target.value = ""; }

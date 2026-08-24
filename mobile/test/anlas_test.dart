@@ -19,9 +19,10 @@ const opusAccount = AccountSummary(
 );
 
 void main() {
-  test('V5 default with established 832x1216 28-step settings costs 20 Anlas', () {
+  test('V5 default with established 832x1216 28-step settings costs 20 Anlas',
+      () {
     final quote = calculateImageGenerationAnlas(
-      params: GenerateParams(),
+      params: GenerateParams(model: 'nai-diffusion-4-5-full'),
       account: paidAccount,
     );
     expect(quote.amount, 20);
@@ -29,7 +30,7 @@ void main() {
 
   test('eligible Opus text generation is free', () {
     final quote = calculateImageGenerationAnlas(
-      params: GenerateParams(),
+      params: GenerateParams(model: 'nai-diffusion-4-5-full'),
       account: opusAccount,
     );
     expect(quote.amount, 0);
@@ -60,12 +61,22 @@ void main() {
 
   test('precise reference is a flat 5 Anlas per generated image', () {
     final quote = calculateImageGenerationAnlas(
-      params: GenerateParams(),
+      params: GenerateParams(model: 'nai-diffusion-4-5-full'),
       account: opusAccount,
       batchCount: 2,
       preciseReferenceCount: 2,
     );
     expect(quote.amount, 10);
+  });
+
+  test('V5 never estimates a Precise Reference surcharge', () {
+    final quote = calculateImageGenerationAnlas(
+      params: GenerateParams(model: 'nai-diffusion-5-full'),
+      account: opusAccount,
+      batchCount: 2,
+      preciseReferenceCount: 2,
+    );
+    expect(quote.details.join('\n'), isNot(contains('精准参考')));
   });
 
   test('official price parser accepts direct and nested response shapes', () {

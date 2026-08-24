@@ -307,7 +307,7 @@ function isV4Plus(model: string) {
 }
 
 function usesModernStructuredPrompt(model: string) {
-  return supportsNAIPreciseReference(model);
+  return isNAIV4PlusModel(model);
 }
 
 function normalizeModel(model: string) {
@@ -625,7 +625,7 @@ export function buildPayload(
     );
   }
 
-  // Precise / Director Reference — V4.5 and V5. Distinct from Vibe Transfer: uses
+  // Precise / Director Reference — V4.5 only. Distinct from Vibe Transfer: uses
   // the director_reference_* fields with a type (character/style/character&style),
   // strength, and secondary strength derived from fidelity (1 - fidelity).
   const preciseRefs = extras?.preciseReferences ?? [];
@@ -831,7 +831,7 @@ function countCachedVibes(
  * NOTE: needs verification against a live V4.5 token — the encode-vibe payload
  * shape is based on the NovelAI web client and may need adjustment.
  */
-async function prepareExtras(
+export async function prepareExtras(
   params: GenerateParams,
   extras?: GenerateExtras,
   signal?: AbortSignal,
@@ -843,15 +843,18 @@ async function prepareExtras(
   // official client.
   let preciseReferences = extras.preciseReferences;
   if (preciseReferences && preciseReferences.length > 0) {
-    preciseReferences = supportsNAIPreciseReference(params.model)
-      ? preciseReferences.map((ref, index) => ({
-          ...ref,
-          base64: prepareDirectorReferenceImage(
-            stripBase64Prefix(ref.base64),
-            index,
-          ),
-        }))
-      : [];
+    if (!supportsNAIPreciseReference(params.model)) {
+      throw new Error(
+        "精准参考当前仅支持 NovelAI V4.5；V5 首发尚未开放该功能。请切换到 V4.5 Full/Curated，或移除精准参考图。",
+      );
+    }
+    preciseReferences = preciseReferences.map((ref, index) => ({
+      ...ref,
+      base64: prepareDirectorReferenceImage(
+        stripBase64Prefix(ref.base64),
+        index,
+      ),
+    }));
   }
 
   if (!extras.vibeImages || extras.vibeImages.length === 0) {
@@ -859,7 +862,7 @@ async function prepareExtras(
   }
   if (!supportsNAIVibeTransfer(params.model)) {
     throw new Error(
-      "NovelAI V5 当前不支持氛围迁移（Vibe Transfer）；请移除氛围图或改用精准参考。",
+      "NovelAI V5 当前不支持氛围迁移（Vibe Transfer）；请切换到 V4.5，或移除氛围图。",
     );
   }
   if (!isV4Plus(params.model)) return { ...extras, preciseReferences }; // V3 path unchanged
@@ -3355,10 +3358,18 @@ function comicReferencesToExtras(
   const usable = request.references.filter(
     (ref) => ref.base64 && ref.useForGeneration !== false,
   );
-  // Precise/Director references are only available on V4.5 models. On other
-  // models we fall back to Vibe Transfer so the reference still has an effect
-  // instead of being silently dropped.
+  // Precise/Director references are only available on V4.5 models. V5 also
+  // lacks Vibe Transfer at launch, so never convert a V5 precise reference into
+  // another unsupported transport.
   const supportsPrecise = supportsNAIPreciseReference(request.params.model);
+  if (
+    usable.length > 0 &&
+    isNAIV5Model(request.params.model)
+  ) {
+    throw new Error(
+      "精准参考当前仅支持 NovelAI V4.5；V5 首发尚未开放该功能。请切换漫画项目模型到 V4.5，或移除参考图。",
+    );
+  }
 
   const vibeImages: VibeTransferItem[] = [];
   const preciseReferences: PreciseReferenceItem[] = [];
@@ -3408,7 +3419,6 @@ export async function generateComicPanel(
           ),
   };
   const extras = comicReferencesToExtras(request);
-  const hasGenerationReferences = (extras.vibeImages?.length ?? 0) > 0;
   // Ensure the comic's history group UP FRONT so panels are saved INTO its disk
   // subfolder (outputDir/<date>/<group>/) and tagged with its groupId at save
   // time — previously they landed in the flat date folder and only got the
@@ -3421,27 +3431,7 @@ export async function generateComicPanel(
     groupId: historyGroup.id,
     folderName: sanitizeGroupFolderName(historyGroup.name),
   };
-  let result = await generateImage(params, extras, { groupOverride });
-  if (
-    !result.ok &&
-    hasGenerationReferences &&
-    result.failureKind === "reference"
-  ) {
-    const fallback = await generateImage(
-      params,
-      { vibeImages: [], charCaptions: [] },
-      { groupOverride },
-    );
-    result = fallback.ok
-      ? {
-          ...fallback,
-          message: `${fallback.message}（参考图生成失败，已自动无参考图重试成功。）`,
-        }
-      : {
-          ...fallback,
-          message: `带参考图生成失败：${result.message}\n无参考图重试仍失败：${fallback.message}`,
-        };
-  }
+  const result = await generateImage(params, extras, { groupOverride });
   if (result.ok && result.items.length > 0) {
     result.items = result.items.map((item) => {
       const updated = updateHistoryItem(item.id, {

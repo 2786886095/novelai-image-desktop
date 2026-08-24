@@ -70,10 +70,18 @@ describe("tuiwen generation queue helpers", () => {
       vibeCount: 3,
       preciseCount: 0,
     });
+    expect(countTuiwenGenerationReferences(refs, "nai-diffusion-5-full")).toMatchObject({
+      supportsPrecise: false,
+      vibeCount: 0,
+      preciseCount: 0,
+    });
   });
 
   it("groups quote calls by cost-affecting generation params and reference counts", () => {
-    const project = createDefaultTuiwenProject(DEFAULT_PARAMS);
+    const project = createDefaultTuiwenProject({
+      ...DEFAULT_PARAMS,
+      model: "nai-diffusion-4-5-full",
+    });
     project.references = [makeReference("vibe", "vibe"), makeReference("precise", "precise")];
     const a = makeShot("a", 1, "draft", "a");
     const b = makeShot("b", 2, "failed", "b");

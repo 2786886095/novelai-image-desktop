@@ -7,6 +7,7 @@ import {
   isOfficialNaiHost,
   isPreflightNetworkFailure,
   parseAccount,
+  prepareExtras,
   prepareImageBufferForSave,
   stripPngMetadata,
 } from "./nai";
@@ -14,6 +15,7 @@ import {
   DEFAULT_PARAMS,
   normalizeGenerateParams,
   supportsNAIModelMode,
+  supportsNAIPreciseReference,
 } from "../../src/types";
 
 function b64(text: string) {
@@ -278,8 +280,28 @@ describe("V4 character prompt payload", () => {
     expect(payload.parameters.dynamic_thresholding).toBe(false);
     expect(payload.parameters.skip_cfg_above_sigma).toBeNull();
     expect(payload.parameters.reference_image_multiple).toBeUndefined();
-    expect(payload.parameters.director_reference_images).toHaveLength(1);
+    expect(payload.parameters.director_reference_images).toBeUndefined();
+    expect(payload.parameters.v4_negative_prompt.legacy_uc).toBe(false);
     expect(prompt.caption.char_captions).toHaveLength(32);
+  });
+
+  it("keeps Precise Reference limited to V4.5 while V5 remains a structured-prompt model", () => {
+    expect(supportsNAIPreciseReference("nai-diffusion-4-5-full")).toBe(true);
+    expect(supportsNAIPreciseReference("nai-diffusion-4-5-curated-inpainting")).toBe(true);
+    expect(supportsNAIPreciseReference("nai-diffusion-5-full")).toBe(false);
+    expect(supportsNAIPreciseReference("nai-diffusion-5-curated")).toBe(false);
+  });
+
+  it("rejects V5 Precise Reference before building or posting a generation request", async () => {
+    await expect(
+      prepareExtras(DEFAULT_PARAMS, {
+        vibeImages: [],
+        charCaptions: [],
+        preciseReferences: [
+          { base64: b64("precise"), type: "character", strength: 1, fidelity: 1 },
+        ],
+      }),
+    ).rejects.toThrow(/仅支持 NovelAI V4\.5/);
   });
 
   it("uses the current V5 checkpoint in Furry mode and prefixes the official dataset tag once", () => {

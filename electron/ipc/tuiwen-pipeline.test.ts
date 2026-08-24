@@ -89,7 +89,10 @@ She walks into the corridor with a calm smile.
     expect(imported.source).toMatchObject({ type: "subtitle", subtitleFormat: "srt" });
     expect(imported.shots?.map((shot) => shot.durationMs)).toEqual([2000, 3000]);
 
-    const project = createDefaultTuiwenProject(DEFAULT_PARAMS);
+    const project = createDefaultTuiwenProject({
+      ...DEFAULT_PARAMS,
+      model: "nai-diffusion-4-5-full",
+    });
     project.id = "pipeline-project";
     project.title = "Pipeline Golden";
     project.source = imported.source!;

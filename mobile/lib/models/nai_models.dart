@@ -9,7 +9,7 @@ class NaiOption {
 }
 
 const appName = 'Langbai NovelAI Studio';
-const appVersion = '1.8.5';
+const appVersion = '1.8.6';
 
 const naiModels = <NaiOption>[
   NaiOption(
@@ -148,7 +148,10 @@ class GenerateParams {
       model.startsWith('nai-diffusion-4') ||
       model.startsWith('nai-diffusion-5');
   bool get isV45 => model.startsWith('nai-diffusion-4-5');
-  bool get supportsPreciseReference => isV45 || isV5;
+  // V5's initial release does not include Precise Reference. Do not tie this
+  // feature flag to isV4Plus: structured prompts and Director Reference are
+  // separate capabilities.
+  bool get supportsPreciseReference => isV45;
   bool get supportsVibeTransfer => !isV5;
   bool get supportsNoiseScheduleControl => !isV5;
   bool get supportsVariety => !isV5;

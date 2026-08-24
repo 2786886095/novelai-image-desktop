@@ -96,7 +96,11 @@ export function supportsNAIModelMode(model: string, mode: ModelMode): boolean {
 
 export function supportsNAIPreciseReference(model: string): boolean {
   const normalized = normalizeNAIBaseModel(model);
-  return normalized.startsWith("nai-diffusion-4-5-") || normalized.startsWith("nai-diffusion-5-");
+  // NovelAI's V5 launch does not include Precise Reference. Keep this
+  // capability separate from the V4+/structured-prompt capability so adding a
+  // new base model cannot accidentally send Director Reference fields to an
+  // unsupported backend again.
+  return normalized.startsWith("nai-diffusion-4-5-");
 }
 
 export function supportsNAICharacterPrompts(model: string): boolean {

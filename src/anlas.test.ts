@@ -25,7 +25,7 @@ const opusAccount: AccountSummary = {
 describe("official Anlas pricing", () => {
   it("prices the V5 default with the established 832x1216, 28-step parameters at 20 Anlas", () => {
     const quote = calculateImageGenerationAnlas({
-      params: DEFAULT_PARAMS,
+      params: { ...DEFAULT_PARAMS, model: "nai-diffusion-4-5-full" },
       account: paidAccount,
     });
     expect(quote.amount).toBe(20);
@@ -33,7 +33,7 @@ describe("official Anlas pricing", () => {
 
   it("makes eligible single-image text generation free for active Opus", () => {
     const quote = calculateImageGenerationAnlas({
-      params: DEFAULT_PARAMS,
+      params: { ...DEFAULT_PARAMS, model: "nai-diffusion-4-5-full" },
       account: opusAccount,
     });
     expect(quote.amount).toBe(0);
@@ -88,7 +88,7 @@ describe("official Anlas pricing", () => {
 
   it("charges a flat 5 Anlas per image for precise reference, regardless of reference count", () => {
     const oneRef = calculateImageGenerationAnlas({
-      params: DEFAULT_PARAMS,
+      params: { ...DEFAULT_PARAMS, model: "nai-diffusion-4-5-full" },
       account: opusAccount, // base image is free for Opus, so only the reference fee remains
       batchCount: 2,
       extras: {
@@ -100,7 +100,7 @@ describe("official Anlas pricing", () => {
     expect(oneRef.amount).toBe(10); // 5 Anlas x 2 images (flat per image)
 
     const twoRefs = calculateImageGenerationAnlas({
-      params: DEFAULT_PARAMS,
+      params: { ...DEFAULT_PARAMS, model: "nai-diffusion-4-5-full" },
       account: opusAccount,
       batchCount: 2,
       extras: {
@@ -114,6 +114,20 @@ describe("official Anlas pricing", () => {
     });
     // Official docs: "5 Anlas to each image generation" — flat, NOT per reference.
     expect(twoRefs.amount).toBe(10);
+  });
+
+  it("does not estimate a Precise Reference surcharge on V5", () => {
+    const quote = calculateImageGenerationAnlas({
+      params: DEFAULT_PARAMS,
+      account: opusAccount,
+      batchCount: 2,
+      extras: {
+        vibeImages: [],
+        charCaptions: [],
+        preciseReferences: [{ base64: "", type: "character", strength: 1, fidelity: 1 }],
+      },
+    });
+    expect((quote.details ?? []).join("\n")).not.toContain("Precise reference");
   });
 
   it("uses the official upscale pixel tier", () => {
