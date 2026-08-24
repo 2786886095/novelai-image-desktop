@@ -2146,7 +2146,9 @@ class _ParamControls extends StatelessWidget {
         : watched.settings.modelMode;
     final visibleModels = naiModels
         .where((model) => mode == 'furry'
-            ? model.value == 'nai-diffusion-furry-3'
+            ? model.value == 'nai-diffusion-furry-3' ||
+                model.value.startsWith('nai-diffusion-4') ||
+                model.value.startsWith('nai-diffusion-5')
             : model.value != 'nai-diffusion-furry-3')
         .toList();
     return Column(
@@ -2169,9 +2171,14 @@ class _ParamControls extends StatelessWidget {
             final next = selection.first;
             await state.setSettings((settings) => settings.modelMode = next);
             state.setParam((params) {
-              params.model = next == 'furry'
-                  ? 'nai-diffusion-furry-3'
-                  : 'nai-diffusion-5-full';
+              final supportsFurry = params.model == 'nai-diffusion-furry-3' ||
+                  params.model.startsWith('nai-diffusion-4') ||
+                  params.model.startsWith('nai-diffusion-5');
+              final supportsAnime = params.model != 'nai-diffusion-furry-3';
+              if ((next == 'furry' && !supportsFurry) ||
+                  (next == 'anime' && !supportsAnime)) {
+                params.model = 'nai-diffusion-5-full';
+              }
             });
           },
         ),

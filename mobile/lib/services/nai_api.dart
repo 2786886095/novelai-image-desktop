@@ -627,9 +627,19 @@ class NaiApi {
     );
     seed = seed.clamp(1, 2147483647).toInt();
     final basePrompt = _merge(params.stylePrompt, params.positivePrompt);
+    // NovelAI V4+ shares the Anime checkpoint in Furry mode. The official
+    // frontend activates the furry dataset by prepending this tag; Furry V3 is
+    // already a dedicated checkpoint and must not receive it.
+    final hasFurryDataset =
+        RegExp(r'(?:^|,\s*)fur dataset(?:\s*,|$)', caseSensitive: false)
+            .hasMatch(basePrompt);
+    final modePrompt =
+        settings.modelMode == 'furry' && params.isV4Plus && !hasFurryDataset
+            ? _merge('fur dataset', basePrompt)
+            : basePrompt;
     final effectivePrompt = params.qualityToggle
-        ? _merge(basePrompt, _qualityTags(params.model))
-        : basePrompt;
+        ? _merge(modePrompt, _qualityTags(params.model))
+        : modePrompt;
     final effectiveNegative = _merge(
         params.negativePrompt, _ucPresetText(params.model, params.ucPreset));
     final charCaptions = extras.charCaptions

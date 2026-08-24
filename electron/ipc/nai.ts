@@ -498,9 +498,17 @@ export function buildPayload(
   } as PayloadParams;
   actualSeed = Math.min(2_147_483_647, Math.max(1, Math.round(Number(actualSeed) || 1)));
   const basePrompt = mergePrompt(params.stylePrompt, params.positivePrompt);
+  // In the official client, Furry is a mode for every V4+ checkpoint rather
+  // than a separate V4/V5 model. It is represented by placing `fur dataset,`
+  // at the very start of the prompt. Keep the dedicated Furry V3 unchanged.
+  const modePrompt =
+    extras?.modelMode === "furry" && isV4Plus(params.model) &&
+    !/(?:^|,\s*)fur dataset(?:\s*,|$)/i.test(basePrompt)
+      ? mergePrompt("fur dataset", basePrompt)
+      : basePrompt;
   const effectivePrompt = params.qualityToggle
-    ? mergePrompt(basePrompt, qualityTags(params.model))
-    : basePrompt;
+    ? mergePrompt(modePrompt, qualityTags(params.model))
+    : modePrompt;
   const effectiveNegative = mergePrompt(
     params.negativePrompt,
     ucPresetText(params.model, params.ucPreset),
@@ -1153,7 +1161,10 @@ function extractOfficialAnlasPrice(data: unknown): number | undefined {
   return undefined;
 }
 
-async function requestOfficialGenerationPrice(params: GenerateParams) {
+async function requestOfficialGenerationPrice(
+  params: GenerateParams,
+  extras?: GenerateExtras,
+) {
   const token = getToken();
   if (!token) return undefined;
   const settings = getSettings();
@@ -1170,6 +1181,7 @@ async function requestOfficialGenerationPrice(params: GenerateParams) {
   const payload = buildPayload(quoteParams, 1, {
     vibeImages: [],
     charCaptions: [],
+    modelMode: extras?.modelMode,
   });
   try {
     const response = await axios.post(
@@ -1250,6 +1262,7 @@ export async function quoteAnlasCost(
 
   const officialPerRequest = await requestOfficialGenerationPrice(
     request.params,
+    request.extras,
   );
   if (officialPerRequest == null) return calculated;
 

@@ -532,6 +532,7 @@ function buildExtras(state: AppState): GenerateExtras {
       y,
     })),
     historyGroupId: state.generationGroupId,
+    modelMode: state.settings?.modelMode ?? "anime",
   };
 }
 

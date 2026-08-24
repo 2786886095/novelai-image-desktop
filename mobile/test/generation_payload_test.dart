@@ -119,6 +119,41 @@ void main() {
     expect(prompt['char_captions'], hasLength(32));
   });
 
+  test('Furry mode keeps V5 Full and prefixes the official dataset tag once',
+      () async {
+    final furrySettings = AppSettings(proxyMode: 'direct', modelMode: 'furry');
+    final payload = await api.buildPayload(
+      'unused',
+      furrySettings,
+      GenerateParams(
+        model: 'nai-diffusion-5-full',
+        positivePrompt: 'anthro wolf',
+        qualityToggle: false,
+      ),
+      123,
+      GenerateExtras(),
+    );
+    expect(payload['model'], 'nai-diffusion-5-full');
+    expect(payload['input'], 'fur dataset, anthro wolf');
+    final parameters = payload['parameters'] as Map<String, dynamic>;
+    final caption = (parameters['v4_prompt'] as Map)['caption'] as Map;
+    expect(caption['base_caption'], 'fur dataset, anthro wolf');
+
+    final alreadyTagged = await api.buildPayload(
+      'unused',
+      furrySettings,
+      GenerateParams(
+        model: 'nai-diffusion-5-full',
+        positivePrompt: 'fur dataset, anthro fox',
+        qualityToggle: false,
+      ),
+      123,
+      GenerateExtras(),
+    );
+    expect(
+        'fur dataset'.allMatches(alreadyTagged['input'] as String).length, 1);
+  });
+
   test('V5 ignores legacy Vibe Transfer state instead of failing generation',
       () async {
     final payload = await api.buildPayload(

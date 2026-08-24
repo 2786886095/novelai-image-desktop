@@ -10,7 +10,11 @@ import {
   prepareImageBufferForSave,
   stripPngMetadata,
 } from "./nai";
-import { DEFAULT_PARAMS, normalizeGenerateParams } from "../../src/types";
+import {
+  DEFAULT_PARAMS,
+  normalizeGenerateParams,
+  supportsNAIModelMode,
+} from "../../src/types";
 
 function b64(text: string) {
   return Buffer.from(text, "utf8").toString("base64");
@@ -276,6 +280,43 @@ describe("V4 character prompt payload", () => {
     expect(payload.parameters.reference_image_multiple).toBeUndefined();
     expect(payload.parameters.director_reference_images).toHaveLength(1);
     expect(prompt.caption.char_captions).toHaveLength(32);
+  });
+
+  it("uses the current V5 checkpoint in Furry mode and prefixes the official dataset tag once", () => {
+    expect(supportsNAIModelMode("nai-diffusion-5-full", "furry")).toBe(true);
+    expect(supportsNAIModelMode("nai-diffusion-5-curated", "furry")).toBe(true);
+    expect(supportsNAIModelMode("nai-diffusion-3", "furry")).toBe(false);
+    const furry = buildPayload(
+      { ...DEFAULT_PARAMS, positivePrompt: "anthro wolf", qualityToggle: false },
+      123,
+      { vibeImages: [], preciseReferences: [], charCaptions: [], modelMode: "furry" },
+    );
+    expect(furry.model).toBe("nai-diffusion-5-full");
+    expect(furry.input).toBe("fur dataset, anthro wolf");
+    expect((furry.parameters.v4_prompt as any).caption.base_caption).toBe(
+      "fur dataset, anthro wolf",
+    );
+
+    const alreadyTagged = buildPayload(
+      { ...DEFAULT_PARAMS, positivePrompt: "fur dataset, anthro fox", qualityToggle: false },
+      123,
+      { vibeImages: [], preciseReferences: [], charCaptions: [], modelMode: "furry" },
+    );
+    expect(alreadyTagged.input.match(/fur dataset/gi)).toHaveLength(1);
+  });
+
+  it("keeps the dedicated Furry V3 prompt unchanged", () => {
+    const payload = buildPayload(
+      {
+        ...DEFAULT_PARAMS,
+        model: "nai-diffusion-furry-3",
+        positivePrompt: "anthro wolf",
+        qualityToggle: false,
+      },
+      123,
+      { vibeImages: [], preciseReferences: [], charCaptions: [], modelMode: "furry" },
+    );
+    expect(payload.input).toBe("anthro wolf");
   });
 
   it("preserves per-character negative prompts restored from NovelAI metadata", () => {

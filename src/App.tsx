@@ -55,6 +55,7 @@ import {
   NAI_SAMPLERS,
   NAI_UC_PRESETS,
   DEFAULT_MODEL_FOR_MODE,
+  supportsNAIModelMode,
   isNAIV4PlusModel,
   isNAIV5Model,
   maxNAICharacterPrompts,
@@ -1734,7 +1735,12 @@ function PromptAndParams({
     if (mode === modelMode) return;
     await window.naiDesktop.setSetting("modelMode", mode);
     await refreshSettings();
-    setParam("model", DEFAULT_MODEL_FOR_MODE[mode]);
+    // V4/V4.5/V5 are shared by Anime and Furry modes. Preserve the user's
+    // selected modern model; only migrate when that model cannot serve the
+    // newly selected mode (Anime V3 / dedicated Furry V3).
+    if (!supportsNAIModelMode(params.model, mode)) {
+      setParam("model", DEFAULT_MODEL_FOR_MODE[mode]);
+    }
     setToast(mode === "furry" ? t("prompt.modeFurryToast") : t("prompt.modeAnimeToast"));
   }
 
@@ -1844,7 +1850,7 @@ function PromptAndParams({
             </button>
           </div>
           <select value={params.model} onChange={(e) => setParam("model", e.target.value as GenerateParams["model"])}>
-            {NAI_MODELS.filter((m) => m.mode === modelMode).map((m) => (
+            {NAI_MODELS.filter((m) => supportsNAIModelMode(m.value, modelMode)).map((m) => (
               <option value={m.value} key={m.value}>{localizedDesktopOptionLabel(settings?.language, m.value, m.label)}</option>
             ))}
           </select>

@@ -83,6 +83,17 @@ export function isNAIV4PlusModel(model: string): boolean {
   return normalized.startsWith("nai-diffusion-4-") || normalized.startsWith("nai-diffusion-5-");
 }
 
+/**
+ * NovelAI does not publish a separate V4/V4.5/V5 Furry checkpoint.  The
+ * official UI exposes those checkpoints in Furry mode and prefixes the prompt
+ * with `fur dataset,`; only Furry V3 remains a dedicated model.
+ */
+export function supportsNAIModelMode(model: string, mode: ModelMode): boolean {
+  const normalized = normalizeNAIBaseModel(model);
+  if (mode === "anime") return normalized !== "nai-diffusion-furry-3";
+  return normalized === "nai-diffusion-furry-3" || isNAIV4PlusModel(normalized);
+}
+
 export function supportsNAIPreciseReference(model: string): boolean {
   const normalized = normalizeNAIBaseModel(model);
   return normalized.startsWith("nai-diffusion-4-5-") || normalized.startsWith("nai-diffusion-5-");
@@ -117,7 +128,7 @@ function normalizeNAIBaseModel(model: string): string {
 /** Default model selected when switching into each mode. */
 export const DEFAULT_MODEL_FOR_MODE: Record<ModelMode, NAIModel> = {
   anime: "nai-diffusion-5-full",
-  furry: "nai-diffusion-furry-3",
+  furry: "nai-diffusion-5-full",
 };
 
 export const NAI_SAMPLERS = [
@@ -337,6 +348,8 @@ export interface GenerateExtras {
   preciseReferences?: PreciseReferenceItem[];
   /** Snapshot of the ordinary generation destination; never sent to NovelAI. */
   historyGroupId?: string;
+  /** Official Anime/Furry mode. V4+ Furry mode injects `fur dataset,`. */
+  modelMode?: ModelMode;
 }
 
 // ── Batch img2img (批量图生图) project — persisted in the store so switching
