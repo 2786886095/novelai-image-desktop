@@ -31,6 +31,25 @@ void main() {
         isNot(second.map((item) => item.prompt).toList()));
   });
 
+  test('qualified Danbooru names and artist prefixes are normalized uniformly',
+      () {
+    final recipes = drawArtistRecipes(
+      pool: const [
+        ArtistTagRecord(1, 'gochisousama (tanin050)', 200),
+        ArtistTagRecord(2, 'asanagi', 100),
+      ],
+      count: 1,
+      minArtists: 2,
+      maxArtists: 2,
+      drawSeed: 7,
+    );
+    expect(canonicalArtistTagName('gochisousama (tanin050)'),
+        'gochisousama_(tanin050)');
+    expect(recipes.single.artistPrompt,
+        contains('artist:gochisousama_(tanin050)'));
+    expect(recipes.single.artistPrompt, contains('artist:asanagi'));
+  });
+
   test('defaults to three-to-seven artists and configurable .3-to-2 weights',
       () {
     final pool = List.generate(

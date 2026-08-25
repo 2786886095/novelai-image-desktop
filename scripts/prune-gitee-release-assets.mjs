@@ -50,11 +50,19 @@ let reclaimedBytes = 0;
 for (const release of await listReleases()) {
   if (release?.tag_name === keepTag) continue;
   if (!Number.isFinite(Number(release?.id))) continue;
-  const assets = Array.isArray(release.assets) ? release.assets : [];
+  // The release listing omits attach-file ids, so it cannot be used for
+  // deletion. Query the dedicated endpoint to obtain immutable attachment ids
+  // and sizes; generated source archives are not returned by this endpoint.
+  const attachmentsResponse = await request(
+    `${api}/releases/${Number(release.id)}/attach_files?page=1&per_page=100`,
+  );
+  if (!attachmentsResponse.ok) {
+    throw new Error(`Unable to list Gitee release attachments for ${release.tag_name} (${attachmentsResponse.status})`);
+  }
+  const assets = await attachmentsResponse.json();
+  if (!Array.isArray(assets)) continue;
   for (const asset of assets) {
     const assetId = Number(asset?.id);
-    // Gitee also exposes generated source archives in `assets`. They do not
-    // have attach-file ids and do not consume the repository attachment quota.
     if (!Number.isFinite(assetId)) continue;
     const response = await request(
       `${api}/releases/${Number(release.id)}/attach_files/${assetId}`,

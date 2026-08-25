@@ -58,6 +58,22 @@ describe("artist recipe grammar", () => {
     expect(recipes.some((recipe) => recipe.artists.some((artist) => artist.weight > 1.2))).toBe(true);
   });
 
+  it("normalizes qualified Danbooru names and prefixes every generated artist tag", () => {
+    const recipes = generatePopularArtistRecipes([
+      { id: 1, name: "gochisousama (tanin050)", postCount: 200, deprecated: false },
+      { id: 2, name: "asanagi", postCount: 100, deprecated: false },
+    ], {
+      count: 1,
+      minArtists: 2,
+      maxArtists: 2,
+      mutateAuxiliary: false,
+      random: seeded(),
+    });
+    expect(canonicalArtistTagName("gochisousama (tanin050)")).toBe("gochisousama_(tanin050)");
+    expect(recipes[0].basePrompt).toContain("artist:gochisousama_(tanin050)");
+    expect(recipes[0].basePrompt).toContain("artist:asanagi");
+  });
+
   it("honors configurable artist weight bounds, including reversed input", () => {
     const recipes = generatePopularArtistRecipes(pool, {
       count: 20,

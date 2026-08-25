@@ -75,6 +75,9 @@ describe("desktop UI consistency guards", () => {
     expect(source).toContain('franchiseWeightMin: 0.5, franchiseWeightMax: 1.5');
     expect(source).toContain('const pairSeeds = new Map<string, number>()');
     expect(source).toContain('session.seedMode === "fixed" ? session.seed : freshNaiSeed()');
+    expect(source).toContain('ready: "当前候选库共 {count} 名画师"');
+    expect(source).toContain('hint: "画师 Tag 来源：Danbooru"');
+    expect(source).not.toContain('Pixiv 昵称或数字 ID');
     expect(source).not.toContain('Danbooru 验证：33/33');
     expect(styles).toContain('.random-artist-settings > label');
     expect(styles).toContain('.random-size-presets > button.active');

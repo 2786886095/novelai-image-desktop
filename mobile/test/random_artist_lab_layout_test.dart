@@ -67,6 +67,8 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('随机画师串抽卡'), findsOneWidget);
+      expect(find.text('当前候选库共 60 名画师'), findsOneWidget);
+      expect(find.text('画师 Tag 来源：Danbooru'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   }

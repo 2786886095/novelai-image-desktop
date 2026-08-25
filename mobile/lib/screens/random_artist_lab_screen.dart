@@ -167,6 +167,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           'liked': '依喜歡項抽卡',
           'preview': '本批組合預覽',
           'empty': '正在載入畫師池…',
+          'total': '目前候選庫共 {count} 名畫師',
           'apply': '套用到生成',
           'copy': '複製',
           'like': '喜歡',
@@ -182,8 +183,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           'mutation': '本次風格/光影變異詞',
           'categories': '藝術風格|媒介/筆觸|色彩|光照|氛圍',
           'running': '生成中',
-          'hint':
-              '熱門候選來自 Danbooru category-1（畫師）並依 post_count 排序；Pixiv 名稱或 ID 必須先映射為規範 Danbooru artist Tag 才能使用。',
+          'hint': '畫師 Tag 來源：Danbooru',
           'variantPlain': 'A｜僅畫師串',
           'variantMutated': 'B｜畫師串＋隨機風格詞',
           'copyArtists': '複製畫師串',
@@ -228,6 +228,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           'liked': 'Draw from liked',
           'preview': 'Current draw',
           'empty': 'Loading artist pool…',
+          'total': '{count} artists in the current pool',
           'apply': 'Apply to Generate',
           'copy': 'Copy',
           'like': 'Like',
@@ -245,8 +246,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           'categories':
               'Art style|Medium / brushwork|Color|Lighting|Atmosphere',
           'running': 'Generating',
-          'hint':
-              'Popular candidates come from Danbooru category 1 (artist), ordered by post_count. Pixiv names or IDs work only after mapping to a canonical Danbooru artist tag.',
+          'hint': 'Artist tag source: Danbooru',
           'variantPlain': 'A | Artist string only',
           'variantMutated': 'B | Artist string + random styles',
           'copyArtists': 'Copy artist string',
@@ -291,6 +291,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           'liked': 'お気に入りから抽選',
           'preview': '現在の抽選',
           'empty': '画家プール読込中…',
+          'total': '現在の候補は全 {count} 名',
           'apply': '生成へ適用',
           'copy': 'コピー',
           'like': 'お気に入り',
@@ -306,8 +307,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           'mutation': '今回の画風・光変異語',
           'categories': '画風|画材・筆致|色彩|光|雰囲気',
           'running': '生成中',
-          'hint':
-              '人気候補は Danbooru category-1（画家）を post_count 順に取得します。Pixiv 名／ID は正規 Danbooru artist Tag への対応付け後のみ使用できます。',
+          'hint': '画家 Tag の出典：Danbooru',
           'variantPlain': 'A｜画家列のみ',
           'variantMutated': 'B｜画家列＋ランダム画風語',
           'copyArtists': '画家列をコピー',
@@ -352,6 +352,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           'liked': '좋아요로 뽑기',
           'preview': '현재 뽑기',
           'empty': '작가 풀 로딩 중…',
+          'total': '현재 후보 풀 총 {count}명',
           'apply': '생성에 적용',
           'copy': '복사',
           'like': '좋아요',
@@ -368,8 +369,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           'mutation': '이번 화풍/조명 변이 용어',
           'categories': '화풍|매체/붓질|색상|조명|분위기',
           'running': '생성 중',
-          'hint':
-              '인기 후보는 Danbooru category-1(작가)을 post_count 순으로 가져옵니다. Pixiv 이름／ID는 정규 Danbooru artist Tag로 매핑한 뒤에만 사용할 수 있습니다.',
+          'hint': '작가 Tag 출처: Danbooru',
           'variantPlain': 'A｜작가 문자열만',
           'variantMutated': 'B｜작가 문자열＋무작위 화풍',
           'copyArtists': '작가 문자열 복사',
@@ -413,6 +413,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           'liked': '根据喜欢项抽卡',
           'preview': '本批组合预览',
           'empty': '正在载入画师池…',
+          'total': '当前候选库共 {count} 名画师',
           'apply': '应用到生成',
           'copy': '复制',
           'like': '喜欢',
@@ -428,8 +429,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           'mutation': '本次风格/光影变异词',
           'categories': '艺术风格|媒介/笔触|色彩|光照|氛围',
           'running': '生成中',
-          'hint':
-              '热门候选来自 Danbooru category-1（画师）并按 post_count 排序；Pixiv 名称或 ID 必须先映射为规范 Danbooru artist Tag 才能使用。',
+          'hint': '画师 Tag 来源：Danbooru',
           'variantPlain': 'A｜仅画师串',
           'variantMutated': 'B｜画师串＋随机风格词',
           'copyArtists': '复制画师串',
@@ -1482,7 +1482,11 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                         Text(text['pool']!,
                             style: Theme.of(context).textTheme.titleMedium),
                         const SizedBox(height: 4),
-                        Text(_loading ? text['empty']! : '${_pool.length}',
+                        Text(
+                            _loading
+                                ? text['empty']!
+                                : text['total']!
+                                    .replaceAll('{count}', '${_pool.length}'),
                             style: Theme.of(context).textTheme.bodySmall),
                         const SizedBox(height: 4),
                         Text(text['hint']!,
