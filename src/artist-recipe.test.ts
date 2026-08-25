@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  FRANCHISE_STYLE_LIBRARY,
   canonicalArtistTagName,
   expandArtistRecipeComparisons,
   formatArtistFullPrompt,
@@ -57,6 +58,46 @@ describe("artist recipe grammar", () => {
     expect(recipes.some((recipe) => recipe.artists.some((artist) => artist.weight > 1.2))).toBe(true);
   });
 
+  it("honors configurable artist weight bounds, including reversed input", () => {
+    const recipes = generatePopularArtistRecipes(pool, {
+      count: 20,
+      minArtists: 7,
+      maxArtists: 3,
+      artistWeightMin: 2,
+      artistWeightMax: 0.3,
+      mutateAuxiliary: false,
+      random: seeded(),
+    });
+    expect(recipes.every((recipe) => recipe.artists.length >= 3 && recipe.artists.length <= 7)).toBe(true);
+    expect(recipes.flatMap((recipe) => recipe.artists).every((artist) => artist.weight >= 0.3 && artist.weight <= 2)).toBe(true);
+  });
+
+  it("adds distinct optional game/anime copyright tags with configurable count and weights", () => {
+    expect(FRANCHISE_STYLE_LIBRARY).toHaveLength(30);
+    expect(new Set(FRANCHISE_STYLE_LIBRARY).size).toBe(30);
+    const recipes = generatePopularArtistRecipes(pool, {
+      count: 20,
+      minArtists: 3,
+      maxArtists: 7,
+      artistWeightMin: 0.3,
+      artistWeightMax: 2,
+      mutateAuxiliary: false,
+      includeFranchiseStyles: true,
+      minFranchiseStyles: 0,
+      maxFranchiseStyles: 2,
+      franchiseWeightMin: 0.5,
+      franchiseWeightMax: 1.5,
+      random: seeded(),
+    });
+    expect(recipes.every((recipe) => recipe.franchiseStyles.length <= 2)).toBe(true);
+    expect(recipes.some((recipe) => recipe.franchiseStyles.length > 0)).toBe(true);
+    expect(recipes.every((recipe) => new Set(recipe.franchiseStyles.map((tag) => tag.value)).size === recipe.franchiseStyles.length)).toBe(true);
+    expect(recipes.flatMap((recipe) => recipe.franchiseStyles).every((tag) => tag.weight >= 0.5 && tag.weight <= 1.5)).toBe(true);
+    for (const recipe of recipes) {
+      for (const tag of recipe.franchiseStyles) expect(recipe.basePrompt).toContain(tag.value);
+    }
+  });
+
   it("keeps user auxiliary terms fixed and draws labelled style mutations only when enabled", () => {
     const locked = generatePopularArtistRecipes(pool, {
       count: 1,
@@ -101,6 +142,7 @@ describe("artist recipe grammar", () => {
     expect(pair[0].artists).toEqual(pair[1].artists);
     expect(pair[0].prompt).toBe(recipe.basePrompt);
     expect(pair[0].mutations).toEqual([]);
+    expect(pair[0].franchiseStyles).toEqual(recipe.franchiseStyles);
     expect(pair[1].prompt).toBe(recipe.prompt);
     expect(pair[1].mutations).toEqual(recipe.mutations);
   });

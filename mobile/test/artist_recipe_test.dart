@@ -31,6 +31,86 @@ void main() {
         isNot(second.map((item) => item.prompt).toList()));
   });
 
+  test('defaults to three-to-seven artists and configurable .3-to-2 weights',
+      () {
+    final pool = List.generate(
+      30,
+      (index) => ArtistTagRecord(index + 1, 'artist_$index', 1000 - index),
+    );
+    final recipes = drawArtistRecipes(
+      pool: pool,
+      count: 30,
+      drawSeed: 23,
+      minArtistWeight: 2,
+      maxArtistWeight: .3,
+    );
+    expect(
+        recipes.every(
+            (item) => item.artists.length >= 3 && item.artists.length <= 7),
+        isTrue);
+    final weights = recipes.expand((item) => RegExp(r'(\d+(?:\.\d+)?)::artist:')
+        .allMatches(item.artistPrompt)
+        .map((match) => double.parse(match.group(1)!)));
+    expect(weights.every((weight) => weight >= .3 && weight <= 2), isTrue);
+  });
+
+  test('optional franchise tags are distinct, bounded, and survive A-B', () {
+    final pool = List.generate(
+      30,
+      (index) => ArtistTagRecord(index + 1, 'artist_$index', 1000 - index),
+    );
+    final recipes = drawArtistRecipes(
+      pool: pool,
+      count: 30,
+      drawSeed: 39,
+      includeFranchiseStyles: true,
+      minFranchiseStyles: 0,
+      maxFranchiseStyles: 2,
+      minFranchiseWeight: 1.5,
+      maxFranchiseWeight: .5,
+      mutateAuxiliary: true,
+    );
+    expect(recipes.any((item) => item.franchiseStyles.isNotEmpty), isTrue);
+    expect(recipes.every((item) => item.franchiseStyles.length <= 2), isTrue);
+    expect(
+        recipes.every((item) =>
+            item.franchiseStyles.map((tag) => tag.value).toSet().length ==
+            item.franchiseStyles.length),
+        isTrue);
+    expect(
+        recipes
+            .expand((item) => item.franchiseStyles)
+            .every((tag) => tag.weight >= .5 && tag.weight <= 1.5),
+        isTrue);
+    final pair = expandArtistRecipeComparisons([recipes.first], true);
+    expect(pair.first.franchiseStyles, pair.last.franchiseStyles);
+  });
+
+  test('seed planning shares random seeds within A-B pairs', () {
+    final randomSeeds = artistGenerationSeeds(
+      groupCount: 3,
+      variantsPerGroup: 2,
+      fixed: false,
+      fixedSeed: 123,
+      entropySeed: 99,
+    );
+    expect(randomSeeds, hasLength(6));
+    expect(randomSeeds[0], randomSeeds[1]);
+    expect(randomSeeds[2], randomSeeds[3]);
+    expect(randomSeeds[4], randomSeeds[5]);
+    expect({randomSeeds[0], randomSeeds[2], randomSeeds[4]}, hasLength(3));
+    expect(
+      artistGenerationSeeds(
+        groupCount: 2,
+        variantsPerGroup: 2,
+        fixed: true,
+        fixedSeed: 456,
+        entropySeed: 1,
+      ),
+      [456, 456, 456, 456],
+    );
+  });
+
   test('style mutation adds two to six labelled weighted terms', () {
     final pool = List.generate(
       30,
@@ -127,7 +207,8 @@ void main() {
     expect(recipe.artists.length, 20);
   });
 
-  test('artist copy ends with comma and full prompt uses the requested order', () {
+  test('artist copy ends with comma and full prompt uses the requested order',
+      () {
     const recipe = ArtistRecipe(
       'one',
       '1::artist:foo ::, year 2025, 1.2::cinematic lighting ::',
@@ -152,8 +233,13 @@ void main() {
       drawSeed: 42,
     );
     expect(recipes, hasLength(4));
-    expect(recipes.every((item) => item.artists.join(',') == 'foo,bar'), isTrue);
-    expect(recipes.every((item) => item.prompt.contains('artist:foo') && item.prompt.contains('artist:bar')), isTrue);
+    expect(
+        recipes.every((item) => item.artists.join(',') == 'foo,bar'), isTrue);
+    expect(
+        recipes.every((item) =>
+            item.prompt.contains('artist:foo') &&
+            item.prompt.contains('artist:bar')),
+        isTrue);
     expect(
       randomizeArtistWeights(
         artistPrompt: 'masterpiece, 1girl',

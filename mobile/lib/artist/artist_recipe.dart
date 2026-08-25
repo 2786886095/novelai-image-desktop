@@ -33,11 +33,13 @@ class ArtistRecipe {
   final String variant;
   final List<String> artists;
   final List<StyleMutationTerm> mutations;
+  final List<StyleMutationTerm> franchiseStyles;
   const ArtistRecipe(
     this.id,
     this.prompt,
     this.artists, {
     this.mutations = const [],
+    this.franchiseStyles = const [],
     String? basePrompt,
     String? artistPrompt,
     String? pairId,
@@ -55,6 +57,8 @@ class ArtistRecipe {
         'variant': variant,
         'artists': artists,
         'mutations': mutations.map((item) => item.toJson()).toList(),
+        'franchiseStyles':
+            franchiseStyles.map((item) => item.toJson()).toList(),
       };
 
   factory ArtistRecipe.fromJson(Map<String, dynamic> json) => ArtistRecipe(
@@ -64,6 +68,11 @@ class ArtistRecipe {
             .map((item) => item.toString())
             .toList(),
         mutations: (json['mutations'] as List? ?? const [])
+            .whereType<Map>()
+            .map((item) =>
+                StyleMutationTerm.fromJson(Map<String, dynamic>.from(item)))
+            .toList(),
+        franchiseStyles: (json['franchiseStyles'] as List? ?? const [])
             .whereType<Map>()
             .map((item) =>
                 StyleMutationTerm.fromJson(Map<String, dynamic>.from(item)))
@@ -249,6 +258,39 @@ const styleMutationLibrary = <String, List<String>>{
   ],
 };
 
+const franchiseStyleTagLibrary = <String>[
+  'touhou',
+  'kantai_collection',
+  'blue_archive',
+  'pokemon',
+  'fate_(series)',
+  'genshin_impact',
+  'fate/grand_order',
+  'idolmaster',
+  'umamusume',
+  'arknights',
+  'vocaloid',
+  'honkai_(series)',
+  'azur_lane',
+  'honkai:_star_rail',
+  'love_live!',
+  'fire_emblem',
+  'zenless_zone_zero',
+  'final_fantasy',
+  'mahou_shoujo_madoka_magica',
+  "girls'_frontline",
+  'girls_und_panzer',
+  'gundam',
+  'danganronpa_(series)',
+  'precure',
+  'kemono_friends',
+  'bang_dream!',
+  'wuthering_waves',
+  'jojo_no_kimyou_na_bouken',
+  'one_piece',
+  'honkai_impact_3rd',
+];
+
 int _weightedIndex(
     List<ArtistTagRecord> pool, Random random, Set<String> favorites) {
   final weights = pool
@@ -265,17 +307,25 @@ int _weightedIndex(
   return weights.length - 1;
 }
 
-double _weight(int index, int length, Random random) {
-  if (index == 0) {
-    const values = [1.1, 1.2, 1.35, 1.5, 1.7, 2.0, 2.5, 3.0, 4.0];
-    return values[random.nextInt(values.length)];
-  }
-  if (index >= length - max(1, (length * .25).round())) {
-    const values = [.2, .3, .4, .5, .6];
-    return values[random.nextInt(values.length)];
-  }
-  const values = [.65, .75, .85, .9, 1.0, 1.1, 1.2];
-  return values[random.nextInt(values.length)];
+({double min, double max}) _normalizedWeightBounds(
+  double first,
+  double second,
+) {
+  final double safeFirst = first.isFinite ? first.clamp(.1, 10).toDouble() : .1;
+  final double safeSecond =
+      second.isFinite ? second.clamp(.1, 10).toDouble() : 10.0;
+  return safeFirst <= safeSecond
+      ? (min: safeFirst, max: safeSecond)
+      : (min: safeSecond, max: safeFirst);
+}
+
+double _randomWeight(
+  Random random,
+  ({double min, double max}) bounds,
+) {
+  if (bounds.min == bounds.max) return bounds.min;
+  final value = bounds.min + random.nextDouble() * (bounds.max - bounds.min);
+  return (value * 100).round() / 100;
 }
 
 String _number(double value) => value == value.roundToDouble()
@@ -317,12 +367,44 @@ String fullArtistRecipePrompt(ArtistRecipe recipe, String basePrompt) {
     auxiliary = auxiliary.substring(artists.length).trim();
     auxiliary = auxiliary.replaceFirst(RegExp(r'^,+\s*'), '');
   }
+  final franchiseStyles = recipe.franchiseStyles
+      .map((item) => '${_number(item.weight)}::${item.value} ::')
+      .join(', ');
+  if (franchiseStyles.isNotEmpty && auxiliary.startsWith(franchiseStyles)) {
+    auxiliary = auxiliary.substring(franchiseStyles.length).trim();
+    auxiliary = auxiliary.replaceFirst(RegExp(r'^,+\s*'), '');
+  }
   final mutations = recipe.mutations
       .map((item) => '${_number(item.weight)}::${item.value} ::')
       .join(', ');
-  return [artists, mutations, auxiliary, basePrompt.trim()]
+  return [artists, franchiseStyles, mutations, auxiliary, basePrompt.trim()]
       .where((item) => item.isNotEmpty)
       .join(', ');
+}
+
+List<int> artistGenerationSeeds({
+  required int groupCount,
+  required int variantsPerGroup,
+  required bool fixed,
+  required int fixedSeed,
+  required int entropySeed,
+}) {
+  if (groupCount < 1 || variantsPerGroup < 1) return const [];
+  final normalizedFixed = fixedSeed.clamp(1, 0x7fffffff).toInt();
+  if (fixed) {
+    return List.filled(groupCount * variantsPerGroup, normalizedFixed);
+  }
+  final random = Random(entropySeed);
+  final used = <int>{};
+  final output = <int>[];
+  for (var group = 0; group < groupCount; group++) {
+    var seed = random.nextInt(0x7fffffff) + 1;
+    while (!used.add(seed)) {
+      seed = random.nextInt(0x7fffffff) + 1;
+    }
+    output.addAll(List.filled(variantsPerGroup, seed));
+  }
+  return output;
 }
 
 List<ArtistRecipe> randomizeArtistWeights({
@@ -405,18 +487,36 @@ List<StyleMutationTerm> _drawMutations(
 List<ArtistRecipe> drawArtistRecipes({
   required List<ArtistTagRecord> pool,
   required int count,
-  required int minArtists,
-  required int maxArtists,
+  int minArtists = 3,
+  int maxArtists = 7,
   required int drawSeed,
+  double minArtistWeight = .3,
+  double maxArtistWeight = 2,
   String auxiliary = '',
   bool mutateAuxiliary = false,
+  bool includeFranchiseStyles = false,
+  int minFranchiseStyles = 0,
+  int maxFranchiseStyles = 2,
+  double minFranchiseWeight = .5,
+  double maxFranchiseWeight = 1.5,
   Set<String> favorites = const {},
   List<StyleMutationTerm> favoriteMutations = const [],
 }) {
   if (pool.isEmpty || count < 1) return const [];
   final random = Random(drawSeed);
-  final lower = minArtists.clamp(1, 20).toInt();
-  final upper = maxArtists.clamp(lower, min(20, pool.length)).toInt();
+  final artistLimit = min(20, pool.length);
+  final firstArtistCount = minArtists.clamp(1, artistLimit).toInt();
+  final secondArtistCount = maxArtists.clamp(1, artistLimit).toInt();
+  final lower = min(firstArtistCount, secondArtistCount);
+  final upper = max(firstArtistCount, secondArtistCount);
+  final artistWeightBounds =
+      _normalizedWeightBounds(minArtistWeight, maxArtistWeight);
+  final firstFranchiseCount = minFranchiseStyles.clamp(0, 20).toInt();
+  final secondFranchiseCount = maxFranchiseStyles.clamp(0, 20).toInt();
+  final franchiseLower = min(firstFranchiseCount, secondFranchiseCount);
+  final franchiseUpper = max(firstFranchiseCount, secondFranchiseCount);
+  final franchiseWeightBounds =
+      _normalizedWeightBounds(minFranchiseWeight, maxFranchiseWeight);
   final output = <ArtistRecipe>[];
   final seen = <String>{};
   var attempts = 0;
@@ -429,11 +529,27 @@ List<ArtistRecipe> drawArtistRecipes({
       selected.add(available.removeAt(index));
     }
     final artistTokens = <String>[];
-    for (var index = 0; index < selected.length; index++) {
+    for (final artist in selected) {
       artistTokens.add(
-          '${_number(_weight(index, selected.length, random))}::artist:${canonicalArtistTagName(selected[index].name)} ::');
+          '${_number(_randomWeight(random, artistWeightBounds))}::artist:${canonicalArtistTagName(artist.name)} ::');
     }
     final tokens = <String>[...artistTokens];
+    final franchiseStyles = <StyleMutationTerm>[];
+    if (includeFranchiseStyles) {
+      final franchiseCount =
+          franchiseLower + random.nextInt(franchiseUpper - franchiseLower + 1);
+      final availableFranchises = [...franchiseStyleTagLibrary]
+        ..shuffle(random);
+      for (final value in availableFranchises.take(franchiseCount)) {
+        franchiseStyles.add(StyleMutationTerm(
+          'franchiseStyle',
+          value,
+          _randomWeight(random, franchiseWeightBounds),
+        ));
+      }
+      tokens.addAll(franchiseStyles
+          .map((item) => '${_number(item.weight)}::${item.value} ::'));
+    }
     final auxiliaryTokens = auxiliary
         .split(RegExp(r'[,，]'))
         .map((item) => item.trim())
@@ -454,6 +570,7 @@ List<ArtistRecipe> drawArtistRecipes({
       prompt,
       selected.map((item) => item.name).toList(),
       mutations: mutations,
+      franchiseStyles: franchiseStyles,
       basePrompt: basePrompt,
       artistPrompt: artistTokens.join(', '),
       pairId: id,
@@ -473,6 +590,7 @@ List<ArtistRecipe> expandArtistRecipeComparisons(
         recipe.basePrompt,
         recipe.artists,
         mutations: const [],
+        franchiseStyles: recipe.franchiseStyles,
         basePrompt: recipe.basePrompt,
         artistPrompt: recipe.artistPrompt,
         pairId: recipe.id,
@@ -488,6 +606,7 @@ List<ArtistRecipe> expandArtistRecipeComparisons(
           recipe.prompt,
           recipe.artists,
           mutations: recipe.mutations,
+          franchiseStyles: recipe.franchiseStyles,
           basePrompt: recipe.basePrompt,
           artistPrompt: recipe.artistPrompt,
           pairId: recipe.id,

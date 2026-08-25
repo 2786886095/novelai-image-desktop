@@ -14,8 +14,15 @@ export interface RandomArtistRecipeOptions {
   count: number;
   minArtists: number;
   maxArtists: number;
+  artistWeightMin?: number;
+  artistWeightMax?: number;
   auxiliaryPrompt?: string;
   mutateAuxiliary: boolean;
+  includeFranchiseStyles?: boolean;
+  minFranchiseStyles?: number;
+  maxFranchiseStyles?: number;
+  franchiseWeightMin?: number;
+  franchiseWeightMax?: number;
   favoriteArtists?: string[];
   favoriteMutations?: StyleMutationToken[];
   random?: () => number;
@@ -26,6 +33,7 @@ export interface GeneratedArtistRecipe {
   artists: ArtistWeightedTag[];
   auxiliary: ParsedRecipeToken[];
   mutations: StyleMutationToken[];
+  franchiseStyles: FranchiseStyleToken[];
   basePrompt: string;
   prompt: string;
 }
@@ -34,6 +42,11 @@ export type StyleMutationCategory = "artStyle" | "medium" | "color" | "lighting"
 
 export interface StyleMutationToken extends ParsedRecipeToken {
   category: StyleMutationCategory;
+}
+
+export interface FranchiseStyleToken extends ParsedRecipeToken {
+  kind: "style";
+  category: "franchise";
 }
 
 export type ArtistRecipeVariant = "plain" | "mutated";
@@ -83,6 +96,21 @@ export const STYLE_MUTATION_LIBRARY: Record<StyleMutationCategory, readonly stri
     "glowing dust", "humid atmosphere", "smoky atmosphere", "rainy atmosphere",
   ],
 };
+
+/**
+ * Current high-volume Danbooru copyright tags, checked against the public
+ * category-3 count ranking on 2026-08-25. Copyright tags are optional style
+ * references, not a promise that NovelAI will preserve the requested subject.
+ */
+export const FRANCHISE_STYLE_LIBRARY = [
+  "touhou", "kantai_collection", "blue_archive", "pokemon", "fate_(series)",
+  "genshin_impact", "fate/grand_order", "idolmaster", "umamusume", "arknights",
+  "vocaloid", "honkai_(series)", "azur_lane", "honkai:_star_rail", "love_live!",
+  "fire_emblem", "zenless_zone_zero", "final_fantasy", "mahou_shoujo_madoka_magica",
+  "girls'_frontline", "girls_und_panzer", "gundam", "danganronpa_(series)", "precure",
+  "kemono_friends", "bang_dream!", "wuthering_waves", "jojo_no_kimyou_na_bouken",
+  "one_piece", "honkai_impact_3rd",
+] as const;
 
 const QUALITY_PATTERN = /^(masterpiece|best quality|amazing quality|very aesthetic|extremely detailed(?: cg)?|ultra[- ]?detailed|high quality)$/i;
 const YEAR_PATTERN = /^year[_ ]?\d{4}$/i;
@@ -194,21 +222,27 @@ function chooseDistinctArtists(
   return selected;
 }
 
-function chooseWeight(role: "lead" | "support" | "accent", random: () => number): number {
-  if (role === "lead") {
-    const roll = random();
-    // Reference recipes show that very strong leads can be useful, but they
-    // should be exceptional rather than dominating routine exploration.
-    if (roll < 0.02) return 7;
-    if (roll < 0.05) return 5;
-    if (roll < 0.1) return 4;
-    const values = [1.1, 1.2, 1.35, 1.5, 1.7, 2, 2.5, 3];
-    return values[Math.min(values.length - 1, Math.floor(((roll - 0.1) / 0.9) * values.length))];
-  }
-  const values = role === "support"
-    ? [0.65, 0.75, 0.85, 0.9, 1, 1.1, 1.2]
-    : [0.2, 0.3, 0.4, 0.5, 0.6];
-  return values[Math.min(values.length - 1, Math.floor(random() * values.length))];
+function normalizedWeightBounds(rawMin: number | undefined, rawMax: number | undefined, defaults: [number, number]): [number, number] {
+  const left = Number.isFinite(rawMin) ? Number(rawMin) : defaults[0];
+  const right = Number.isFinite(rawMax) ? Number(rawMax) : defaults[1];
+  const min = Math.max(0.1, Math.min(10, Math.min(left, right)));
+  const max = Math.max(min, Math.max(0.1, Math.min(10, Math.max(left, right))));
+  return [min, max];
+}
+
+function chooseWeight(
+  role: "lead" | "support" | "accent",
+  min: number,
+  max: number,
+  random: () => number,
+): number {
+  const span = max - min;
+  const ratio = role === "lead"
+    ? 0.65 + random() * 0.35
+    : role === "support"
+      ? 0.25 + random() * 0.6
+      : random() * 0.4;
+  return roundWeight(min + span * ratio);
 }
 
 function formatToken(token: ParsedRecipeToken): string {
@@ -226,13 +260,14 @@ export function formatArtistString(
 }
 
 export function formatArtistFullPrompt(
-  recipe: Pick<GeneratedArtistRecipe, "artists" | "mutations" | "auxiliary">,
+  recipe: Pick<GeneratedArtistRecipe, "artists" | "mutations" | "auxiliary"> & Partial<Pick<GeneratedArtistRecipe, "franchiseStyles">>,
   basePrompt: string,
 ): string {
   const artistText = formatArtistString(recipe.artists);
+  const franchiseText = (recipe.franchiseStyles ?? []).map(formatToken).join(", ");
   const mutationText = recipe.mutations.map(formatToken).join(", ");
   const auxiliaryText = recipe.auxiliary.map(formatToken).join(", ");
-  return [artistText.replace(/,$/, ""), mutationText, auxiliaryText, basePrompt.trim()]
+  return [artistText.replace(/,$/, ""), franchiseText, mutationText, auxiliaryText, basePrompt.trim()]
     .filter(Boolean)
     .join(", ")
     .trim();
@@ -270,10 +305,32 @@ export function randomizeArtistRecipeWeights(
       artists,
       auxiliary: [],
       mutations: [],
+      franchiseStyles: [],
       basePrompt: artistText,
       prompt: artistText,
     };
   });
+}
+
+function drawFranchiseStyles(
+  random: () => number,
+  minCount: number,
+  maxCount: number,
+  minWeight: number,
+  maxWeight: number,
+): FranchiseStyleToken[] {
+  const lower = Math.max(0, Math.min(FRANCHISE_STYLE_LIBRARY.length, Math.floor(Math.min(minCount, maxCount))));
+  const upper = Math.max(lower, Math.min(FRANCHISE_STYLE_LIBRARY.length, Math.floor(Math.max(minCount, maxCount))));
+  const count = lower + Math.floor(random() * (upper - lower + 1));
+  const available = [...FRANCHISE_STYLE_LIBRARY];
+  const output: FranchiseStyleToken[] = [];
+  while (output.length < count && available.length > 0) {
+    const index = Math.min(available.length - 1, Math.floor(random() * available.length));
+    const value = available.splice(index, 1)[0];
+    const weight = roundWeight(minWeight + random() * (maxWeight - minWeight));
+    output.push({ raw: value, value, weight, kind: "style", category: "franchise" });
+  }
+  return output;
 }
 
 function drawStyleMutations(
@@ -313,8 +370,12 @@ export function generatePopularArtistRecipes(
 ): GeneratedArtistRecipe[] {
   const random = options.random ?? Math.random;
   const count = Math.max(1, Math.floor(Number.isFinite(options.count) ? options.count : 1));
-  const minArtists = Math.max(1, Math.min(20, Math.floor(options.minArtists)));
-  const maxArtists = Math.max(minArtists, Math.min(20, Math.floor(options.maxArtists)));
+  const requestedMinArtists = Math.max(1, Math.min(20, Math.floor(options.minArtists)));
+  const requestedMaxArtists = Math.max(1, Math.min(20, Math.floor(options.maxArtists)));
+  const minArtists = Math.min(requestedMinArtists, requestedMaxArtists);
+  const maxArtists = Math.max(requestedMinArtists, requestedMaxArtists);
+  const [artistWeightMin, artistWeightMax] = normalizedWeightBounds(options.artistWeightMin, options.artistWeightMax, [0.3, 2]);
+  const [franchiseWeightMin, franchiseWeightMax] = normalizedWeightBounds(options.franchiseWeightMin, options.franchiseWeightMax, [0.5, 1.5]);
   const favorites = new Set((options.favoriteArtists ?? []).map(canonicalArtistTagName).filter(Boolean));
   const baseAuxiliary = parseArtistRecipe(options.auxiliaryPrompt ?? "")
     .filter((token) => token.kind !== "artist");
@@ -334,24 +395,35 @@ export function generatePopularArtistRecipes(
     const accentCount = selected.length >= 5 ? Math.max(1, Math.round(selected.length * 0.25)) : 0;
     const artists = selected.map((artist, index): ArtistWeightedTag => {
       const role = index < leadCount ? "lead" : index >= selected.length - accentCount ? "accent" : "support";
-      return { name: artist.name, weight: chooseWeight(role, random) };
+      return { name: artist.name, weight: chooseWeight(role, artistWeightMin, artistWeightMax, random) };
     });
+    const franchiseStyles = options.includeFranchiseStyles
+      ? drawFranchiseStyles(
+          random,
+          options.minFranchiseStyles ?? 0,
+          options.maxFranchiseStyles ?? 2,
+          franchiseWeightMin,
+          franchiseWeightMax,
+        )
+      : [];
     const auxiliary = baseAuxiliary;
     const mutations = options.mutateAuxiliary
       ? drawStyleMutations(random, options.favoriteMutations)
       : [];
     const artistText = formatArtistString(artists).replace(/,$/, "");
+    const franchiseText = franchiseStyles.map(formatToken).join(", ");
     const auxiliaryText = auxiliary.map(formatToken).join(", ");
     const mutationText = mutations.map(formatToken).join(", ");
-    const basePrompt = [artistText, auxiliaryText].filter(Boolean).join(", ");
+    const basePrompt = [artistText, franchiseText, auxiliaryText].filter(Boolean).join(", ");
     const prompt = [basePrompt, mutationText].filter(Boolean).join(", ");
     if (!prompt || seen.has(prompt)) continue;
     seen.add(prompt);
     output.push({
-      id: `random-${output.length + 1}-${artists.map((artist) => `${artist.name}@${artist.weight}`).join("+")}`,
+      id: `random-${output.length + 1}-${artists.map((artist) => `${artist.name}@${artist.weight}`).join("+")}-${franchiseStyles.map((tag) => `${tag.value}@${tag.weight}`).join("+")}`,
       artists,
       auxiliary,
       mutations,
+      franchiseStyles,
       basePrompt,
       prompt,
     });

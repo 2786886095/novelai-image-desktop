@@ -16,6 +16,7 @@ import '../state/app_state.dart';
 class _Result {
   final ArtistRecipe recipe;
   final int sequence;
+  int? seed;
   String status;
   HistoryItem? image;
   String? error;
@@ -24,6 +25,7 @@ class _Result {
   bool saving = false;
   _Result(this.recipe,
       {this.sequence = 1,
+      this.seed,
       this.status = 'pending',
       this.image,
       this.error,
@@ -33,6 +35,7 @@ class _Result {
   Map<String, dynamic> toJson() => {
         'recipe': recipe.toJson(),
         'sequence': sequence,
+        'seed': seed,
         'status': status,
         'image': image?.toJson(),
         'error': error,
@@ -44,6 +47,7 @@ class _Result {
         ArtistRecipe.fromJson(
             Map<String, dynamic>.from(json['recipe'] as Map? ?? const {})),
         sequence: (json['sequence'] as num?)?.toInt() ?? 1,
+        seed: (json['seed'] as num?)?.toInt(),
         status: json['status']?.toString() ?? 'pending',
         image: json['image'] is Map
             ? HistoryItem.fromJson(
@@ -75,7 +79,14 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
   final _base = TextEditingController();
   final _auxiliary = TextEditingController();
   final _count = TextEditingController(text: '8');
-  final _artistCount = TextEditingController(text: '5');
+  final _minArtists = TextEditingController(text: '3');
+  final _maxArtists = TextEditingController(text: '7');
+  final _minArtistWeight = TextEditingController(text: '0.3');
+  final _maxArtistWeight = TextEditingController(text: '2.0');
+  final _minFranchiseStyles = TextEditingController(text: '0');
+  final _maxFranchiseStyles = TextEditingController(text: '2');
+  final _minFranchiseWeight = TextEditingController(text: '0.5');
+  final _maxFranchiseWeight = TextEditingController(text: '1.5');
   final _seed = TextEditingController(text: '246813579');
   final _poolSize = TextEditingController(text: '1000');
   final _width = TextEditingController(text: '832');
@@ -91,6 +102,8 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
   final List<_Result> _results = [];
   final List<_Result> _favorites = [];
   bool _mutateAuxiliary = false;
+  bool _includeFranchiseStyles = false;
+  String _seedMode = 'fixed';
   bool _loading = true;
   bool _running = false;
   bool _cancelled = false;
@@ -124,7 +137,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
         return {
           'title': '隨機畫師串抽卡',
           'pool': '動態熱門畫師池',
-          'poolSize': '熱度前 N 名（100～5000）＋33 個聯合核驗標籤',
+          'poolSize': 'Danbooru 熱度前 N 名（100～5000）',
           'load': '載入',
           'refresh': '更新排行',
           'base': '固定內容提示詞',
@@ -133,9 +146,21 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           'mutateHint':
               '開啟後以相同畫師串、提示詞、Seed 與參數生成 A/B：A 不加風格詞，B 加入 2～6 個帶 0.3～1.5 權重的風格詞。',
           'count': '本批畫師串組數',
-          'min': '最少畫師',
-          'max': '每串畫師數量（1～20）',
-          'seed': '固定 Seed',
+          'min': '每串最少畫師（1～20）',
+          'max': '每串最多畫師（1～20）',
+          'artistWeightMin': '畫師最低權重（0.1～10）',
+          'artistWeightMax': '畫師最高權重（0.1～10）',
+          'franchise': '加入遊戲／動漫作品風格 Tag',
+          'franchiseHint': '從 30 個規範 Danbooru copyright Tag 中抽取，加入每個 A/B 版本。',
+          'franchiseMin': '最少作品 Tag（0～20）',
+          'franchiseMax': '最多作品 Tag（0～20）',
+          'franchiseWeightMin': '作品 Tag 最低權重（0.1～10）',
+          'franchiseWeightMax': '作品 Tag 最高權重（0.1～10）',
+          'seed': 'Seed',
+          'seedMode': 'Seed 模式',
+          'seedRandom': '隨機',
+          'seedFixed': '固定',
+          'randomFixedSeed': '隨機產生固定 Seed',
           'draw': '重新抽卡',
           'generate': '生成這一批',
           'stop': '停止',
@@ -157,13 +182,13 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           'mutation': '本次風格/光影變異詞',
           'categories': '藝術風格|媒介/筆觸|色彩|光照|氛圍',
           'running': '生成中',
-          'hint': '開啟隨機風格詞時，每組生成 A/B 兩張；不下載代表圖。',
+          'hint':
+              '熱門候選來自 Danbooru category-1（畫師）並依 post_count 排序；Pixiv 名稱或 ID 必須先映射為規範 Danbooru artist Tag 才能使用。',
           'variantPlain': 'A｜僅畫師串',
           'variantMutated': 'B｜畫師串＋隨機風格詞',
           'copyArtists': '複製畫師串',
           'copyFull': '複製完整提示詞',
           'pairSummary': '{pairs} 組 · {images} 張',
-          'validation': 'Danbooru 驗證：33/33 為目前有效、非棄用畫師標籤 · 2026-08-22',
           'allModels': '全部模型',
           'modelGroup': '生成模型',
           'previewImage': '雙擊預覽大圖'
@@ -172,8 +197,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
         return {
           'title': 'Random Artist-string Gacha',
           'pool': 'Dynamic popular-artist pool',
-          'poolSize':
-              'Top N by popularity (100–5000) + 33 jointly checked tags',
+          'poolSize': 'Danbooru top N by popularity (100–5000)',
           'load': 'Load',
           'refresh': 'Refresh',
           'base': 'Fixed content prompt',
@@ -182,9 +206,22 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           'mutateHint':
               'Create a fair A/B pair with the same artist string, prompt, seed, and settings: A has no random styles; B adds 2–6 terms weighted 0.3–1.5.',
           'count': 'Artist-string groups in this batch',
-          'min': 'Minimum artists',
-          'max': 'Artists per string (1–20)',
-          'seed': 'Fixed seed',
+          'min': 'Minimum artists per string (1–20)',
+          'max': 'Maximum artists per string (1–20)',
+          'artistWeightMin': 'Minimum artist weight (0.1–10)',
+          'artistWeightMax': 'Maximum artist weight (0.1–10)',
+          'franchise': 'Add game / anime franchise style tags',
+          'franchiseHint':
+              'Draw from 30 canonical Danbooru copyright tags and add them to every A/B variant.',
+          'franchiseMin': 'Minimum franchise tags (0–20)',
+          'franchiseMax': 'Maximum franchise tags (0–20)',
+          'franchiseWeightMin': 'Minimum franchise weight (0.1–10)',
+          'franchiseWeightMax': 'Maximum franchise weight (0.1–10)',
+          'seed': 'Seed',
+          'seedMode': 'Seed mode',
+          'seedRandom': 'Random',
+          'seedFixed': 'Fixed',
+          'randomFixedSeed': 'Generate random fixed seed',
           'draw': 'Draw again',
           'generate': 'Generate this batch',
           'stop': 'Stop',
@@ -209,14 +246,12 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
               'Art style|Medium / brushwork|Color|Lighting|Atmosphere',
           'running': 'Generating',
           'hint':
-              'Style mode creates two A/B images per group. No representative images are downloaded.',
+              'Popular candidates come from Danbooru category 1 (artist), ordered by post_count. Pixiv names or IDs work only after mapping to a canonical Danbooru artist tag.',
           'variantPlain': 'A | Artist string only',
           'variantMutated': 'B | Artist string + random styles',
           'copyArtists': 'Copy artist string',
           'copyFull': 'Copy full prompt',
           'pairSummary': '{pairs} groups · {images} images',
-          'validation':
-              'Danbooru check: 33/33 current, non-deprecated artist tags · 2026-08-22',
           'allModels': 'All models',
           'modelGroup': 'Generation model',
           'previewImage': 'Double-tap to preview'
@@ -234,9 +269,22 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           'mutateHint':
               '同じ画家列・プロンプト・Seed・設定で A/B を生成します。A は画風語なし、B は 0.3～1.5 重みの画風語を 2～6 個追加します。',
           'count': 'このバッチの画家列グループ数',
-          'min': '最小画家数',
-          'max': '1組の画家数（1～20）',
-          'seed': '固定 Seed',
+          'min': '1組の最小画家数（1～20）',
+          'max': '1組の最大画家数（1～20）',
+          'artistWeightMin': '画家の最小ウェイト（0.1～10）',
+          'artistWeightMax': '画家の最大ウェイト（0.1～10）',
+          'franchise': 'ゲーム／アニメ作品スタイル Tag を追加',
+          'franchiseHint':
+              '30 個の正規 Danbooru copyright Tag から抽選し、すべての A/B に追加します。',
+          'franchiseMin': '作品 Tag の最小数（0～20）',
+          'franchiseMax': '作品 Tag の最大数（0～20）',
+          'franchiseWeightMin': '作品 Tag の最小ウェイト（0.1～10）',
+          'franchiseWeightMax': '作品 Tag の最大ウェイト（0.1～10）',
+          'seed': 'Seed',
+          'seedMode': 'Seed モード',
+          'seedRandom': 'ランダム',
+          'seedFixed': '固定',
+          'randomFixedSeed': '固定 Seed をランダム生成',
           'draw': '再抽選',
           'generate': 'このバッチを生成',
           'stop': '停止',
@@ -258,13 +306,13 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           'mutation': '今回の画風・光変異語',
           'categories': '画風|画材・筆致|色彩|光|雰囲気',
           'running': '生成中',
-          'hint': '画風語を有効にすると1組につき A/B の2枚を生成します。代表画像は取得しません。',
+          'hint':
+              '人気候補は Danbooru category-1（画家）を post_count 順に取得します。Pixiv 名／ID は正規 Danbooru artist Tag への対応付け後のみ使用できます。',
           'variantPlain': 'A｜画家列のみ',
           'variantMutated': 'B｜画家列＋ランダム画風語',
           'copyArtists': '画家列をコピー',
           'copyFull': '完全プロンプトをコピー',
           'pairSummary': '{pairs} 組 · {images} 枚',
-          'validation': 'Danbooru 検証：33/33 が現行・非廃止の画家タグ · 2026-08-22',
           'allModels': 'すべてのモデル',
           'modelGroup': '生成モデル',
           'previewImage': 'ダブルタップで拡大'
@@ -273,7 +321,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
         return {
           'title': '무작위 작가 조합 뽑기',
           'pool': '동적 인기 작가 풀',
-          'poolSize': '인기 상위 N명 (100～5000)＋공동 검증 33태그',
+          'poolSize': 'Danbooru 인기 상위 N명 (100～5000)',
           'load': '불러오기',
           'refresh': '새로고침',
           'base': '고정 내용 프롬프트',
@@ -282,9 +330,22 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           'mutateHint':
               '같은 작가 문자열·프롬프트·Seed·설정으로 A/B를 생성합니다. A는 화풍 용어가 없고 B는 0.3～1.5 가중치의 용어 2～6개를 추가합니다.',
           'count': '이번 배치 작가 문자열 그룹 수',
-          'min': '최소 작가 수',
-          'max': '조합당 작가 수 (1～20)',
-          'seed': '고정 Seed',
+          'min': '조합당 최소 작가 수 (1～20)',
+          'max': '조합당 최대 작가 수 (1～20)',
+          'artistWeightMin': '작가 최소 가중치 (0.1～10)',
+          'artistWeightMax': '작가 최대 가중치 (0.1～10)',
+          'franchise': '게임／애니 작품 스타일 Tag 추가',
+          'franchiseHint':
+              '정규 Danbooru copyright Tag 30개에서 뽑아 모든 A/B 버전에 추가합니다.',
+          'franchiseMin': '최소 작품 Tag 수 (0～20)',
+          'franchiseMax': '최대 작품 Tag 수 (0～20)',
+          'franchiseWeightMin': '작품 Tag 최소 가중치 (0.1～10)',
+          'franchiseWeightMax': '작품 Tag 최대 가중치 (0.1～10)',
+          'seed': 'Seed',
+          'seedMode': 'Seed 모드',
+          'seedRandom': '무작위',
+          'seedFixed': '고정',
+          'randomFixedSeed': '무작위 고정 Seed 생성',
           'draw': '다시 뽑기',
           'generate': '이 배치 생성',
           'stop': '중지',
@@ -307,13 +368,13 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           'mutation': '이번 화풍/조명 변이 용어',
           'categories': '화풍|매체/붓질|색상|조명|분위기',
           'running': '생성 중',
-          'hint': '화풍 용어를 켜면 그룹마다 A/B 두 장을 생성합니다. 대표 이미지는 받지 않습니다.',
+          'hint':
+              '인기 후보는 Danbooru category-1(작가)을 post_count 순으로 가져옵니다. Pixiv 이름／ID는 정규 Danbooru artist Tag로 매핑한 뒤에만 사용할 수 있습니다.',
           'variantPlain': 'A｜작가 문자열만',
           'variantMutated': 'B｜작가 문자열＋무작위 화풍',
           'copyArtists': '작가 문자열 복사',
           'copyFull': '전체 프롬프트 복사',
           'pairSummary': '{pairs} 그룹 · {images}장',
-          'validation': 'Danbooru 검증: 33/33 현재 유효하고 폐기되지 않은 작가 태그 · 2026-08-22',
           'allModels': '모든 모델',
           'modelGroup': '생성 모델',
           'previewImage': '두 번 탭하여 미리보기'
@@ -322,7 +383,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
         return {
           'title': '随机画师串抽卡',
           'pool': '动态热门画师池',
-          'poolSize': '热度前 N 名（100～5000）＋33 个联合核验标签',
+          'poolSize': 'Danbooru 热度前 N 名（100～5000）',
           'load': '载入',
           'refresh': '刷新排行',
           'base': '固定内容提示词',
@@ -331,9 +392,21 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           'mutateHint':
               '开启后以相同画师串、提示词、Seed 和参数生成 A/B：A 不加风格词，B 加入 2～6 个带 0.3～1.5 权重的风格词。',
           'count': '本批画师串组数',
-          'min': '最少画师',
-          'max': '每串画师数量（1～20）',
-          'seed': '固定 Seed',
+          'min': '每串最少画师（1～20）',
+          'max': '每串最多画师（1～20）',
+          'artistWeightMin': '画师最低权重（0.1～10）',
+          'artistWeightMax': '画师最高权重（0.1～10）',
+          'franchise': '加入游戏／动漫作品风格 Tag',
+          'franchiseHint': '从 30 个规范 Danbooru copyright Tag 中抽取，加入每个 A/B 版本。',
+          'franchiseMin': '最少作品 Tag（0～20）',
+          'franchiseMax': '最多作品 Tag（0～20）',
+          'franchiseWeightMin': '作品 Tag 最低权重（0.1～10）',
+          'franchiseWeightMax': '作品 Tag 最高权重（0.1～10）',
+          'seed': 'Seed',
+          'seedMode': 'Seed 模式',
+          'seedRandom': '随机',
+          'seedFixed': '固定',
+          'randomFixedSeed': '随机生成固定 Seed',
           'draw': '重新抽卡',
           'generate': '生成这一批',
           'stop': '停止',
@@ -355,13 +428,13 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           'mutation': '本次风格/光影变异词',
           'categories': '艺术风格|媒介/笔触|色彩|光照|氛围',
           'running': '生成中',
-          'hint': '开启随机风格词时，每组生成 A/B 两张；不下载代表图。',
+          'hint':
+              '热门候选来自 Danbooru category-1（画师）并按 post_count 排序；Pixiv 名称或 ID 必须先映射为规范 Danbooru artist Tag 才能使用。',
           'variantPlain': 'A｜仅画师串',
           'variantMutated': 'B｜画师串＋随机风格词',
           'copyArtists': '复制画师串',
           'copyFull': '复制完整提示词',
           'pairSummary': '{pairs} 组 · {images} 张',
-          'validation': 'Danbooru 验证：33/33 为当前有效、非弃用画师标签 · 2026-08-22',
           'allModels': '全部模型',
           'modelGroup': '生成模型',
           'previewImage': '双击预览大图'
@@ -542,13 +615,23 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     return value != null && value > 0 ? value : fallback;
   }
 
+  int _nonNegative(TextEditingController controller, [int fallback = 0]) {
+    final value = int.tryParse(controller.text.trim());
+    return value != null && value >= 0 ? value : fallback;
+  }
+
+  double _decimal(TextEditingController controller, double fallback) {
+    final value = double.tryParse(controller.text.trim());
+    return value != null && value.isFinite ? value : fallback;
+  }
+
   int _snapDimension(String value, [int fallback = 64]) {
     final parsed = int.tryParse(value) ?? fallback;
     return ((parsed / 64).round() * 64).clamp(64, 1600).toInt();
   }
 
   int _seedValue() =>
-      (int.tryParse(_seed.text.trim()) ?? 0).clamp(0, 2147483647).toInt();
+      (int.tryParse(_seed.text.trim()) ?? 1).clamp(1, 2147483647).toInt();
 
   int _weightVariationValue() =>
       (int.tryParse(_weightVariation.text.trim()) ?? 20).clamp(0, 100).toInt();
@@ -582,7 +665,23 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
         prefs.getString('${_prefsPrefix}base') ?? app.params.positivePrompt;
     _auxiliary.text = prefs.getString('${_prefsPrefix}aux') ?? '';
     _count.text = '${prefs.getInt('${_prefsPrefix}count') ?? 8}';
-    _artistCount.text = '${prefs.getInt('${_prefsPrefix}artistCount') ?? 5}';
+    final oldArtistCount = prefs.getInt('${_prefsPrefix}artistCount');
+    _minArtists.text =
+        '${prefs.getInt('${_prefsPrefix}minArtists') ?? oldArtistCount ?? 3}';
+    _maxArtists.text =
+        '${prefs.getInt('${_prefsPrefix}maxArtists') ?? oldArtistCount ?? 7}';
+    _minArtistWeight.text =
+        '${prefs.getDouble('${_prefsPrefix}minArtistWeight') ?? .3}';
+    _maxArtistWeight.text =
+        '${prefs.getDouble('${_prefsPrefix}maxArtistWeight') ?? 2.0}';
+    _minFranchiseStyles.text =
+        '${prefs.getInt('${_prefsPrefix}minFranchiseStyles') ?? 0}';
+    _maxFranchiseStyles.text =
+        '${prefs.getInt('${_prefsPrefix}maxFranchiseStyles') ?? 2}';
+    _minFranchiseWeight.text =
+        '${prefs.getDouble('${_prefsPrefix}minFranchiseWeight') ?? .5}';
+    _maxFranchiseWeight.text =
+        '${prefs.getDouble('${_prefsPrefix}maxFranchiseWeight') ?? 1.5}';
     _poolSize.text = '${prefs.getInt('${_prefsPrefix}poolSize') ?? 1000}';
     _seed.text = '${prefs.getInt('${_prefsPrefix}seed') ?? 246813579}';
     _weightTuneInput.text =
@@ -605,6 +704,11 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
       ..stylePrompt = '';
     _syncParameterControllers();
     _mutateAuxiliary = prefs.getBool('${_prefsPrefix}mutate') ?? false;
+    _includeFranchiseStyles =
+        prefs.getBool('${_prefsPrefix}includeFranchiseStyles') ?? false;
+    _seedMode = prefs.getString('${_prefsPrefix}seedMode') == 'random'
+        ? 'random'
+        : 'fixed';
     _showFavorites = prefs.getBool('${_prefsPrefix}showFavorites') ?? false;
     for (final entry in <(String, List<_Result>)>[
       ('results', _results),
@@ -629,8 +733,22 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     await prefs.setString('${_prefsPrefix}base', _base.text);
     await prefs.setString('${_prefsPrefix}aux', _auxiliary.text);
     await prefs.setInt('${_prefsPrefix}count', _positive(_count, 8));
-    await prefs.setInt('${_prefsPrefix}artistCount',
-        _positive(_artistCount, 5).clamp(1, 20).toInt());
+    await prefs.setInt('${_prefsPrefix}minArtists',
+        _positive(_minArtists, 3).clamp(1, 20).toInt());
+    await prefs.setInt('${_prefsPrefix}maxArtists',
+        _positive(_maxArtists, 7).clamp(1, 20).toInt());
+    await prefs.setDouble('${_prefsPrefix}minArtistWeight',
+        _decimal(_minArtistWeight, .3).clamp(.1, 10).toDouble());
+    await prefs.setDouble('${_prefsPrefix}maxArtistWeight',
+        _decimal(_maxArtistWeight, 2).clamp(.1, 10).toDouble());
+    await prefs.setInt('${_prefsPrefix}minFranchiseStyles',
+        _nonNegative(_minFranchiseStyles).clamp(0, 20).toInt());
+    await prefs.setInt('${_prefsPrefix}maxFranchiseStyles',
+        _nonNegative(_maxFranchiseStyles, 2).clamp(0, 20).toInt());
+    await prefs.setDouble('${_prefsPrefix}minFranchiseWeight',
+        _decimal(_minFranchiseWeight, .5).clamp(.1, 10).toDouble());
+    await prefs.setDouble('${_prefsPrefix}maxFranchiseWeight',
+        _decimal(_maxFranchiseWeight, 1.5).clamp(.1, 10).toDouble());
     await prefs.setInt('${_prefsPrefix}poolSize', _poolLimit());
     await prefs.setInt('${_prefsPrefix}seed', _seedValue());
     await prefs.setString(
@@ -646,6 +764,9 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     await prefs.setString('${_prefsPrefix}generationParams',
         jsonEncode(_generationParams.toJson()));
     await prefs.setBool('${_prefsPrefix}mutate', _mutateAuxiliary);
+    await prefs.setBool(
+        '${_prefsPrefix}includeFranchiseStyles', _includeFranchiseStyles);
+    await prefs.setString('${_prefsPrefix}seedMode', _seedMode);
     await prefs.setBool('${_prefsPrefix}showFavorites', _showFavorites);
     await prefs.setString('${_prefsPrefix}results',
         jsonEncode(_results.map((item) => item.toJson()).toList()));
@@ -662,11 +783,20 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
       drawArtistRecipes(
         pool: _pool,
         count: _positive(_count, 8),
-        minArtists: _positive(_artistCount, 5).clamp(1, 20).toInt(),
-        maxArtists: _positive(_artistCount, 5).clamp(1, 20).toInt(),
+        minArtists: _positive(_minArtists, 3).clamp(1, 20).toInt(),
+        maxArtists: _positive(_maxArtists, 7).clamp(1, 20).toInt(),
         drawSeed: _drawSeed,
+        minArtistWeight: _decimal(_minArtistWeight, .3),
+        maxArtistWeight: _decimal(_maxArtistWeight, 2),
         auxiliary: _auxiliary.text,
         mutateAuxiliary: _mutateAuxiliary,
+        includeFranchiseStyles: _includeFranchiseStyles,
+        minFranchiseStyles:
+            _nonNegative(_minFranchiseStyles).clamp(0, 20).toInt(),
+        maxFranchiseStyles:
+            _nonNegative(_maxFranchiseStyles, 2).clamp(0, 20).toInt(),
+        minFranchiseWeight: _decimal(_minFranchiseWeight, .5),
+        maxFranchiseWeight: _decimal(_maxFranchiseWeight, 1.5),
         favorites: favorites,
         favoriteMutations: _mutateAuxiliary ? favoriteMutations : const [],
       );
@@ -720,11 +850,14 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
 
   Future<void> _generateOne(_Result result) async {
     final app = context.read<AppState>();
+    result.seed ??= _seedMode == 'fixed'
+        ? _seedValue()
+        : Random.secure().nextInt(0x7fffffff) + 1;
     final fixed = _generationParams.copy()
       ..positivePrompt = _base.text.trim()
       ..stylePrompt = result.recipe.prompt
       ..seedMode = 'fixed'
-      ..seed = _seedValue();
+      ..seed = result.seed!;
     _setStateKeepingScroll(() {
       result.status = 'running';
       result.error = null;
@@ -758,10 +891,19 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
       _planned,
       _mutateAuxiliary,
     );
+    final variantsPerGroup = _mutateAuxiliary ? 2 : 1;
+    final seeds = artistGenerationSeeds(
+      groupCount: _planned.length,
+      variantsPerGroup: variantsPerGroup,
+      fixed: _seedMode == 'fixed',
+      fixedSeed: _seedValue(),
+      entropySeed: Random.secure().nextInt(0x7fffffff),
+    );
     final batch = List<_Result>.generate(
       comparisons.length,
       (index) => _Result(
         comparisons[index],
+        seed: seeds[index],
         sequence: _mutateAuxiliary ? index ~/ 2 + 1 : index + 1,
         generationModel: _generationParams.model,
       ),
@@ -804,10 +946,21 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
       return;
     }
     await _clearCurrent();
+    final seeds = artistGenerationSeeds(
+      groupCount: recipes.length,
+      variantsPerGroup: 1,
+      fixed: _seedMode == 'fixed',
+      fixedSeed: _seedValue(),
+      entropySeed: Random.secure().nextInt(0x7fffffff),
+    );
     final batch = List<_Result>.generate(
       recipes.length,
-      (index) => _Result(recipes[index],
-          sequence: index + 1, generationModel: _generationParams.model),
+      (index) => _Result(
+        recipes[index],
+        sequence: index + 1,
+        seed: seeds[index],
+        generationModel: _generationParams.model,
+      ),
     );
     _setStateKeepingScroll(() {
       _planned = recipes;
@@ -963,7 +1116,14 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     _base.dispose();
     _auxiliary.dispose();
     _count.dispose();
-    _artistCount.dispose();
+    _minArtists.dispose();
+    _maxArtists.dispose();
+    _minArtistWeight.dispose();
+    _maxArtistWeight.dispose();
+    _minFranchiseStyles.dispose();
+    _maxFranchiseStyles.dispose();
+    _minFranchiseWeight.dispose();
+    _maxFranchiseWeight.dispose();
     _poolSize.dispose();
     _seed.dispose();
     _width.dispose();
@@ -1005,6 +1165,33 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                       visualDensity: VisualDensity.compact,
                       label: Text(
                         '${categoryLabels[item.category] ?? item.category} · ${item.weight.toStringAsFixed(1)}::${item.value}',
+                        style: const TextStyle(fontSize: 10),
+                      ),
+                    ))
+                .toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _franchiseTerms(ArtistRecipe recipe, Map<String, String> text) {
+    if (recipe.franchiseStyles.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 6, 8, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(text['franchise']!, style: const TextStyle(fontSize: 11)),
+          const SizedBox(height: 4),
+          Wrap(
+            spacing: 4,
+            runSpacing: 4,
+            children: recipe.franchiseStyles
+                .map((item) => Chip(
+                      visualDensity: VisualDensity.compact,
+                      label: Text(
+                        '${item.weight.toStringAsFixed(2).replaceFirst(RegExp(r'0+$'), '').replaceFirst(RegExp(r'\.$'), '')}::${item.value}',
                         style: const TextStyle(fontSize: 10),
                       ),
                     ))
@@ -1102,6 +1289,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                             ),
                           ),
                   ),
+                  _franchiseTerms(result.recipe, text),
                   _mutationTerms(result.recipe, text),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(8, 8, 8, 2),
@@ -1191,7 +1379,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                                       ..model = _resultModel(result)
                                       ..positivePrompt = _base.text.trim()
                                       ..stylePrompt = result.recipe.prompt
-                                      ..seed = _seedValue()
+                                      ..seed = result.seed ?? _seedValue()
                                       ..seedMode = 'fixed';
                                     final value = selected.toJson();
                                     final applied =
@@ -1296,9 +1484,6 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                         const SizedBox(height: 4),
                         Text(_loading ? text['empty']! : '${_pool.length}',
                             style: Theme.of(context).textTheme.bodySmall),
-                        const SizedBox(height: 4),
-                        Text(text['validation']!,
-                            style: Theme.of(context).textTheme.labelSmall),
                         const SizedBox(height: 4),
                         Text(text['hint']!,
                             style: Theme.of(context).textTheme.bodySmall),
@@ -1695,6 +1880,20 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                         onTapOutside: (_) => commit(),
                       ),
                     );
+                Widget decimalField(
+                        TextEditingController controller, String label,
+                        {required VoidCallback commit}) =>
+                    SizedBox(
+                      width: fieldWidth,
+                      child: TextField(
+                        controller: controller,
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
+                        decoration: InputDecoration(labelText: label),
+                        onEditingComplete: commit,
+                        onTapOutside: (_) => commit(),
+                      ),
+                    );
                 return Wrap(
                   spacing: 12,
                   runSpacing: 12,
@@ -1738,15 +1937,111 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                       setState(() => _planned = _buildPlan());
                       _save();
                     }),
-                    numberField(_artistCount, text['max']!, commit: () {
+                    numberField(_minArtists, text['min']!, commit: () {
                       setState(() => _planned = _buildPlan());
                       _save();
                     }),
-                    numberField(_seed, text['seed']!, commit: () {
-                      final seed = _seedValue();
-                      setState(() => _seed.text = '$seed');
+                    numberField(_maxArtists, text['max']!, commit: () {
+                      setState(() => _planned = _buildPlan());
                       _save();
                     }),
+                    decimalField(_minArtistWeight, text['artistWeightMin']!,
+                        commit: () {
+                      setState(() => _planned = _buildPlan());
+                      _save();
+                    }),
+                    decimalField(_maxArtistWeight, text['artistWeightMax']!,
+                        commit: () {
+                      setState(() => _planned = _buildPlan());
+                      _save();
+                    }),
+                    SizedBox(
+                      width: constraints.maxWidth,
+                      child: SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(text['franchise']!),
+                        subtitle: Text(text['franchiseHint']!),
+                        value: _includeFranchiseStyles,
+                        onChanged: (value) {
+                          setState(() {
+                            _includeFranchiseStyles = value;
+                            _drawSeed = Random.secure().nextInt(0x7fffffff);
+                            _planned = _buildPlan();
+                          });
+                          _save();
+                        },
+                      ),
+                    ),
+                    if (_includeFranchiseStyles) ...[
+                      numberField(_minFranchiseStyles, text['franchiseMin']!,
+                          commit: () {
+                        setState(() => _planned = _buildPlan());
+                        _save();
+                      }),
+                      numberField(_maxFranchiseStyles, text['franchiseMax']!,
+                          commit: () {
+                        setState(() => _planned = _buildPlan());
+                        _save();
+                      }),
+                      decimalField(
+                          _minFranchiseWeight, text['franchiseWeightMin']!,
+                          commit: () {
+                        setState(() => _planned = _buildPlan());
+                        _save();
+                      }),
+                      decimalField(
+                          _maxFranchiseWeight, text['franchiseWeightMax']!,
+                          commit: () {
+                        setState(() => _planned = _buildPlan());
+                        _save();
+                      }),
+                    ],
+                    SizedBox(
+                      width: constraints.maxWidth,
+                      child: Text(text['seedMode']!,
+                          style: Theme.of(context).textTheme.labelLarge),
+                    ),
+                    SizedBox(
+                      width: constraints.maxWidth,
+                      child: SegmentedButton<String>(
+                        segments: [
+                          ButtonSegment(
+                            value: 'random',
+                            icon: const Icon(Icons.casino_outlined),
+                            label: Text(text['seedRandom']!),
+                          ),
+                          ButtonSegment(
+                            value: 'fixed',
+                            icon: const Icon(Icons.push_pin_outlined),
+                            label: Text(text['seedFixed']!),
+                          ),
+                        ],
+                        selected: {_seedMode},
+                        onSelectionChanged: (value) {
+                          setState(() => _seedMode = value.first);
+                          _save();
+                        },
+                      ),
+                    ),
+                    if (_seedMode == 'fixed') ...[
+                      numberField(_seed, text['seed']!, commit: () {
+                        final seed = _seedValue();
+                        setState(() => _seed.text = '$seed');
+                        _save();
+                      }),
+                      SizedBox(
+                        width: fieldWidth,
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            setState(() => _seed.text =
+                                '${Random.secure().nextInt(0x7fffffff) + 1}');
+                            _save();
+                          },
+                          icon: const Icon(Icons.casino_outlined),
+                          label: Text(text['randomFixedSeed']!),
+                        ),
+                      ),
+                    ],
                   ],
                 );
               }),
@@ -1793,6 +2088,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                                       Theme.of(context).textTheme.labelMedium),
                               Text(_planned[index].basePrompt,
                                   maxLines: 2, overflow: TextOverflow.ellipsis),
+                              _franchiseTerms(_planned[index], text),
                               if (_mutateAuxiliary) ...[
                                 const SizedBox(height: 5),
                                 Text(text['variantMutated']!,

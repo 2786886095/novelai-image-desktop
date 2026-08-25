@@ -4,20 +4,21 @@
 
 | 系统 | 安装包 | 安装说明 |
 | --- | --- | --- |
-| 🪟 **Windows**（便携版，x64） | `Langbai-NovelAI-Studio-1.8.6.exe` | 双击即用，无需安装 |
-| 🪟 **Windows**（安装版，x64） | `Langbai-NovelAI-Studio-Setup-1.8.6.exe` | 安装向导可自选路径、创建快捷方式；支持软件内一键更新 |
-| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-1.8.6-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
-| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-1.8.6.zip` | 解压后即为 `.app`，同样需右键「打开」 |
-| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-1.8.6.AppImage` | `chmod +x` 后直接运行 |
+| 🪟 **Windows**（便携版，x64） | `Langbai-NovelAI-Studio-1.8.7.exe` | 双击即用，无需安装 |
+| 🪟 **Windows**（安装版，x64） | `Langbai-NovelAI-Studio-Setup-1.8.7.exe` | 安装向导可自选路径、创建快捷方式；支持软件内一键更新 |
+| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-1.8.7-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
+| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-1.8.7.zip` | 解压后即为 `.app`，同样需右键「打开」 |
+| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-1.8.7.AppImage` | `chmod +x` 后直接运行 |
 | 🤖 **Android** | `app-release.apk` | 直接安装；需允许「未知来源」 |
 | 📱 **iOS** | `novelai-mobile-unsigned.ipa` | **未签名**，需使用 AltStore / Sideloadly 等工具自行侧载 |
 
 > 桌面端与移动端均为 **API-only** 客户端，需要自备 NovelAI Persistent API Token。
 
-### v1.8.6 更新内容
+### v1.8.7 更新内容
 
-- 根据 NovelAI V5 官方发布公告纠正能力判断：V5 首发暂不支持精准参考（Precise Reference）与氛围迁移（Vibe Transfer）。
-- 修复 V5 携带精准参考时触发 `Error encoding v4 director references` / `invalid.prod-ai.svc.cluster.local` HTTP 400 的问题。
-- 桌面端与 Android/iOS 移动端会在请求发出前拦截不兼容组合，并提供一键切换到 V4.5；已有参考图不会被删除。
-- 批量图生图、漫画生成器、小说推文与单图生成统一使用同一套模型能力判断，不再静默丢弃参考图或自动无参考图重试扣费。
-- 保持 V5 的结构化角色提示词协议不变，避免修正精准参考能力时误把 V5 降级成旧版负面提示词格式。
+- 随机画师串支持每串画师数量区间，默认 `3～7` 名；桌面端与 Android/iOS 可分别修改上下限。
+- 画师权重默认范围调整为 `0.3～2.0`，用户可自定义最低与最高权重；倒置输入会自动按有效区间处理。
+- 新增可选游戏／动漫系列风格 Tag：默认抽取 `0～2` 个，默认权重 `0.5～1.5`，数量与权重范围均可修改。
+- Seed 支持“每组随机”与“固定”两种模式；随机模式确保同组 A/B 使用同一 Seed，固定模式支持手动输入或由系统随机生成后固定。
+- 热门画师候选库继续使用 Danbooru 画师分类按累计作品数动态排序，并明确 Pixiv 昵称或 ID 需先映射为规范 Danbooru 画师 Tag。
+- 删除过时的固定 `33/33` Danbooru 验证日期文案，并更新五种界面语言、跨端持久化与测试。

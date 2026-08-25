@@ -91,12 +91,18 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    final artistCountField = tester.widget<TextField>(
+    final minArtistCountField = tester.widget<TextField>(
       find.byWidgetPredicate((widget) =>
           widget is TextField &&
-          widget.decoration?.labelText == '每串画师数量（1～20）'),
+          widget.decoration?.labelText == '每串最少画师（1～20）'),
     );
-    expect(artistCountField.controller?.text, '5');
+    final maxArtistCountField = tester.widget<TextField>(
+      find.byWidgetPredicate((widget) =>
+          widget is TextField &&
+          widget.decoration?.labelText == '每串最多画师（1～20）'),
+    );
+    expect(minArtistCountField.controller?.text, '3');
+    expect(maxArtistCountField.controller?.text, '7');
     expect(find.text('NovelAI 生成参数'), findsOneWidget);
     await tester.tap(find.text('NovelAI 生成参数'));
     await tester.pumpAndSettle();
@@ -142,8 +148,15 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.drag(find.byType(ListView).first, const Offset(0, -1200));
-    await tester.pumpAndSettle();
+    final bodyList =
+        find.byKey(const PageStorageKey<String>('random-artist-lab-scroll'));
+    await tester.scrollUntilVisible(
+      find.byTooltip('重试'),
+      500,
+      scrollable: find
+          .descendant(of: bodyList, matching: find.byType(Scrollable))
+          .first,
+    );
     expect(find.byTooltip('重试'), findsOneWidget);
   });
 
@@ -167,7 +180,17 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.byType(Switch));
+    await tester.tap(find.widgetWithText(SwitchListTile, '抽卡时额外加入随机风格词'));
+    await tester.pumpAndSettle();
+    final bodyList =
+        find.byKey(const PageStorageKey<String>('random-artist-lab-scroll'));
+    final scrollable =
+        find.descendant(of: bodyList, matching: find.byType(Scrollable)).first;
+    await tester.scrollUntilVisible(
+      find.textContaining('8 组 · 16 张'),
+      500,
+      scrollable: scrollable,
+    );
     await tester.pumpAndSettle();
     expect(find.text('A｜仅画师串'), findsWidgets);
     expect(find.text('B｜画师串＋随机风格词'), findsWidgets);

@@ -10042,6 +10042,31 @@ html.theme-dark #root {
 }
 .random-artist-settings textarea { min-height: 88px; resize: vertical; }
 .random-artist-settings small { color: var(--text-secondary); line-height: 1.5; }
+.random-range-fields,
+.random-seed-fields {
+  min-width: 0;
+  margin: 0;
+  padding: 9px 10px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.random-range-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.random-range-fields legend,
+.random-seed-fields legend {
+  padding: 0 5px;
+  color: var(--text-secondary);
+  font-weight: 700;
+}
+.random-seed-fields { display: grid; gap: 9px; }
+.random-seed-modes,
+.random-fixed-seed { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.random-seed-modes label { display: inline-flex !important; grid-template-columns: auto 1fr; align-items: center; gap: 6px !important; }
+.random-fixed-seed input { flex: 1 1 220px; }
+.artist-franchise-block { border-color: color-mix(in srgb, #0ea5e9 35%, var(--border)); }
 .random-generation-settings { padding: 0; overflow: hidden; }
 .random-generation-settings > summary {
   min-height: 64px;

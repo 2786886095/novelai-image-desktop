@@ -69,8 +69,13 @@ describe("desktop UI consistency guards", () => {
     expect(source).toContain('const RANDOM_SIZE_PRESETS = [');
     expect(source).toContain('className="random-size-presets"');
     expect(source).toContain('aria-pressed={active}');
-    expect(source).toContain('artistCount: Math.max(1, Math.min(20, positiveInteger(raw?.artistCount, 5)))');
-    expect(source).toContain('count: 8, artistCount: 5, poolSize: 1000');
+    expect(source).toContain('artistMinCount: 3, artistMaxCount: 7');
+    expect(source).toContain('artistWeightMin: 0.3, artistWeightMax: 2');
+    expect(source).toContain('franchiseMinCount: 0, franchiseMaxCount: 2');
+    expect(source).toContain('franchiseWeightMin: 0.5, franchiseWeightMax: 1.5');
+    expect(source).toContain('const pairSeeds = new Map<string, number>()');
+    expect(source).toContain('session.seedMode === "fixed" ? session.seed : freshNaiSeed()');
+    expect(source).not.toContain('Danbooru 验证：33/33');
     expect(styles).toContain('.random-artist-settings > label');
     expect(styles).toContain('.random-size-presets > button.active');
     expect(styles).toContain('grid-template-rows: max-content 44px');
