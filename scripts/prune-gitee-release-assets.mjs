@@ -48,7 +48,6 @@ async function listReleases() {
 let removed = 0;
 let reclaimedBytes = 0;
 for (const release of await listReleases()) {
-  if (release?.tag_name === keepTag) continue;
   if (!Number.isFinite(Number(release?.id))) continue;
   // The release listing omits attach-file ids, so it cannot be used for
   // deletion. Query the dedicated endpoint to obtain immutable attachment ids
@@ -61,7 +60,10 @@ for (const release of await listReleases()) {
   }
   const assets = await attachmentsResponse.json();
   if (!Array.isArray(assets)) continue;
-  for (const asset of assets) {
+  const assetsToDelete = release?.tag_name === keepTag
+    ? assets.filter((asset, index) => assets.findIndex((candidate) => candidate?.name === asset?.name) !== index)
+    : assets;
+  for (const asset of assetsToDelete) {
     const assetId = Number(asset?.id);
     if (!Number.isFinite(assetId)) continue;
     const response = await request(
@@ -73,10 +75,11 @@ for (const release of await listReleases()) {
     }
     removed += 1;
     reclaimedBytes += Number(asset?.size) || 0;
-    console.log(`Removed old Gitee attachment: ${release.tag_name}/${asset.name}`);
+    const reason = release?.tag_name === keepTag ? "duplicate" : "old";
+    console.log(`Removed ${reason} Gitee attachment: ${release.tag_name}/${asset.name}`);
   }
 }
 
 console.log(
-  `Pruned ${removed} old Gitee attachment(s), reclaiming approximately ${(reclaimedBytes / 1024 / 1024).toFixed(1)} MiB; kept ${keepTag}.`,
+  `Pruned ${removed} old or duplicate Gitee attachment(s), reclaiming approximately ${(reclaimedBytes / 1024 / 1024).toFixed(1)} MiB; kept unique assets for ${keepTag}.`,
 );
