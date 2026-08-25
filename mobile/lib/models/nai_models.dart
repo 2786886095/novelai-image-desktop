@@ -9,7 +9,7 @@ class NaiOption {
 }
 
 const appName = 'Langbai NovelAI Studio';
-const appVersion = '1.8.8';
+const appVersion = '1.8.9';
 
 const naiModels = <NaiOption>[
   NaiOption(
@@ -744,8 +744,8 @@ class AppSettings {
     this.language = 'zh-CN',
     this.theme = 'system',
     this.modelMode = 'anime',
-    this.proxyMode = 'direct',
-    this.proxyUrl = 'http://127.0.0.1:7890',
+    this.proxyMode = 'auto',
+    this.proxyUrl = '',
     this.proxyForNai = true,
     this.proxyForMcp = true,
     this.proxyForAi = true,
@@ -887,8 +887,8 @@ class AppSettings {
         language: normalizeAppLocaleCode(j['language']),
         theme: j['theme'] ?? ((j['darkMode'] ?? false) ? 'dark' : 'system'),
         modelMode: j['modelMode'] ?? 'anime',
-        proxyMode: j['proxyMode'] ?? 'direct',
-        proxyUrl: j['proxyUrl'] ?? 'http://127.0.0.1:7890',
+        proxyMode: j['proxyMode'] ?? 'auto',
+        proxyUrl: j['proxyUrl'] ?? '',
         proxyForNai: j['proxyForNai'] ?? true,
         proxyForMcp: j['proxyForMcp'] ?? true,
         proxyForAi: j['proxyForAi'] ?? true,

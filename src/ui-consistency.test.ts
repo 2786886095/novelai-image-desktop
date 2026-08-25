@@ -85,6 +85,18 @@ describe("desktop UI consistency guards", () => {
     expect(styles).toContain('grid-auto-rows: max-content');
   });
 
+  it("defaults proxy setup to automatic system/VPN routing", () => {
+    const appSource = fs.readFileSync(path.join(projectRoot, "src", "App.tsx"), "utf8");
+    const storeSource = fs.readFileSync(path.join(projectRoot, "electron", "ipc", "store.ts"), "utf8");
+    const proxySource = fs.readFileSync(path.join(projectRoot, "electron", "ipc", "proxy.ts"), "utf8");
+    expect(appSource).toContain('<option value="auto">{t("proxy.auto")}</option>');
+    expect(storeSource).toContain('proxyMode: "auto"');
+    expect(storeSource).toContain('settings.proxyMode = "auto"');
+    expect(proxySource).toContain("systemProxyResolver");
+    expect(proxySource).toContain("probeLocalProxy");
+    expect(proxySource).toContain('settings.proxyMode === "auto"');
+  });
+
   it("shares one 44px field baseline across preset search and filters", () => {
     const source = fs.readFileSync(path.join(projectRoot, "src", "ReferencePresetManager.tsx"), "utf8");
     const styles = fs.readFileSync(path.join(projectRoot, "src", "styles.css"), "utf8");

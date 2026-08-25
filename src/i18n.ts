@@ -3042,14 +3042,17 @@ const DESKTOP_EXTRA_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "canvas.shortcutApiOnly": "API-only 生成",
     "canvas.shortcutReuse": "历史一键复用",
     "proxy.label": "代理连接方式",
-    "proxy.http": "HTTP 本地代理（推荐） · 127.0.0.1:7890",
+    "proxy.auto": "自动跟随系统代理 / VPN（推荐）",
+    "proxy.http": "手动 HTTP 本地代理 · 127.0.0.1:7890",
     "proxy.direct": "直连（不使用代理）",
     "proxy.socks": "SOCKS5 本地代理 · 127.0.0.1:10808",
     "proxy.custom": "自定义代理地址",
     "proxy.customLabel": "自定义代理地址",
     "proxy.placeholder": "例如 http://127.0.0.1:7890",
     "proxy.currentDirect": "当前为直连",
+    "proxy.currentAuto": "当前为自动网络",
     "proxy.currentProxy": "当前代理",
+    "proxy.autoValue": "自动读取系统代理、PAC；TUN / 虚拟网卡自动直连",
     "proxy.directValue": "不经过本地代理",
     "proxy.empty": "尚未填写",
   },
@@ -3187,14 +3190,17 @@ const DESKTOP_EXTRA_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "canvas.shortcutApiOnly": "API-only 生成",
     "canvas.shortcutReuse": "歷史一鍵複用",
     "proxy.label": "代理連線方式",
-    "proxy.http": "HTTP 本地代理（推薦） · 127.0.0.1:7890",
+    "proxy.auto": "自動跟隨系統代理 / VPN（推薦）",
+    "proxy.http": "手動 HTTP 本機代理 · 127.0.0.1:7890",
     "proxy.direct": "直連（不使用代理）",
     "proxy.socks": "SOCKS5 本地代理 · 127.0.0.1:10808",
     "proxy.custom": "自訂代理地址",
     "proxy.customLabel": "自訂代理地址",
     "proxy.placeholder": "例如 http://127.0.0.1:7890",
     "proxy.currentDirect": "目前為直連",
+    "proxy.currentAuto": "目前為自動網路",
     "proxy.currentProxy": "目前代理",
+    "proxy.autoValue": "自動讀取系統代理、PAC；TUN / 虛擬網卡自動直連",
     "proxy.directValue": "不經過本地代理",
     "proxy.empty": "尚未填寫",
   },
@@ -3343,14 +3349,17 @@ const DESKTOP_EXTRA_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "canvas.shortcutApiOnly": "API-only generation",
     "canvas.shortcutReuse": "Reuse from history",
     "proxy.label": "Proxy connection",
-    "proxy.http": "HTTP local proxy (recommended) · 127.0.0.1:7890",
+    "proxy.auto": "Follow system proxy / VPN (recommended)",
+    "proxy.http": "Manual HTTP proxy · 127.0.0.1:7890",
     "proxy.direct": "Direct (no proxy)",
     "proxy.socks": "SOCKS5 local proxy · 127.0.0.1:10808",
     "proxy.custom": "Custom proxy URL",
     "proxy.customLabel": "Custom proxy URL",
     "proxy.placeholder": "Example: http://127.0.0.1:7890",
     "proxy.currentDirect": "Currently direct",
+    "proxy.currentAuto": "Automatic network mode",
     "proxy.currentProxy": "Current proxy",
+    "proxy.autoValue": "Uses the system proxy or PAC; VPN/TUN routes direct sockets",
     "proxy.directValue": "No local proxy",
     "proxy.empty": "Not set",
   },
@@ -3498,14 +3507,17 @@ const DESKTOP_EXTRA_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "canvas.shortcutApiOnly": "API-only 生成",
     "canvas.shortcutReuse": "履歴から再利用",
     "proxy.label": "プロキシ接続方式",
-    "proxy.http": "HTTP ローカルプロキシ（推奨） · 127.0.0.1:7890",
+    "proxy.auto": "システムプロキシ / VPN に自動追従（推奨）",
+    "proxy.http": "手動 HTTP ローカルプロキシ · 127.0.0.1:7890",
     "proxy.direct": "直接接続（プロキシなし）",
     "proxy.socks": "SOCKS5 ローカルプロキシ · 127.0.0.1:10808",
     "proxy.custom": "カスタムプロキシ URL",
     "proxy.customLabel": "カスタムプロキシ URL",
     "proxy.placeholder": "例 http://127.0.0.1:7890",
     "proxy.currentDirect": "現在は直接接続",
+    "proxy.currentAuto": "現在は自動ネットワーク",
     "proxy.currentProxy": "現在のプロキシ",
+    "proxy.autoValue": "システムプロキシ・PAC を自動取得し、VPN/TUN は直接接続で利用",
     "proxy.directValue": "ローカルプロキシを使用しません",
     "proxy.empty": "未入力",
   },
@@ -3649,14 +3661,17 @@ const DESKTOP_EXTRA_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "canvas.shortcutApiOnly": "API-only 생성",
     "canvas.shortcutReuse": "기록에서 바로 재사용",
     "proxy.label": "프록시 연결 방식",
-    "proxy.http": "HTTP 로컬 프록시(권장) · 127.0.0.1:7890",
+    "proxy.auto": "시스템 프록시 / VPN 자동 사용(권장)",
+    "proxy.http": "수동 HTTP 로컬 프록시 · 127.0.0.1:7890",
     "proxy.direct": "직접 연결(프록시 없음)",
     "proxy.socks": "SOCKS5 로컬 프록시 · 127.0.0.1:10808",
     "proxy.custom": "사용자 지정 프록시 URL",
     "proxy.customLabel": "사용자 지정 프록시 URL",
     "proxy.placeholder": "예: http://127.0.0.1:7890",
     "proxy.currentDirect": "현재 직접 연결",
+    "proxy.currentAuto": "현재 자동 네트워크",
     "proxy.currentProxy": "현재 프록시",
+    "proxy.autoValue": "시스템 프록시와 PAC를 자동 감지하며 VPN/TUN은 직접 연결로 사용",
     "proxy.directValue": "로컬 프록시 사용 안 함",
     "proxy.empty": "입력되지 않음",
   },
@@ -4958,9 +4973,9 @@ const DESKTOP_ONBOARDING_UI_TEXT: Record<
     "onboarding.card0.desc":
       "中文 API-only 的 NovelAI 图像创作工作台：文生图 / 图生图 / 局部重绘 / 云端超分 / 导演工具 / 漫画生成，本地中文标签补全与灵感胶囊。",
     "onboarding.card1.badge": "网络",
-    "onboarding.card1.title": "先确认代理连接",
+    "onboarding.card1.title": "自动跟随系统代理与 VPN",
     "onboarding.card1.desc":
-      "NovelAI、AI 反推、谷歌翻译及更新检查等大部分联网功能通常需要可用代理。默认使用本机 HTTP 代理 127.0.0.1:7890。",
+      "默认自动读取系统代理和 PAC；VPN 的 TUN / 虚拟网卡模式自动使用直连路由，不再要求软件端口与代理端口一致。",
     "onboarding.card2.badge": "API",
     "onboarding.card2.title": "配置 NovelAI API Token",
     "onboarding.card2.desc":
@@ -4996,7 +5011,7 @@ const DESKTOP_ONBOARDING_UI_TEXT: Record<
     "onboarding.github": "GitHub 项目主页",
     "onboarding.language": "语言",
     "onboarding.networkWarning":
-      "请先启动本机代理软件，并确认端口与下方选择一致；如果你的网络可以直接访问 NovelAI，可选择“直连”。",
+      "推荐保持“自动跟随系统代理 / VPN”。规则模式会读取系统实际端口，TUN / 虚拟网卡模式无需填写端口。",
     "onboarding.verifySave": "验证并保存",
     "onboarding.tokenConfigured":
       "已配置 Token（留空保持不变，或输入新 Token 替换）。",
@@ -5040,9 +5055,9 @@ const DESKTOP_ONBOARDING_UI_TEXT: Record<
     "onboarding.card0.desc":
       "中文 API-only 的 NovelAI 圖像創作工作台：文生圖 / 圖生圖 / 局部重繪 / 雲端超分 / 導演工具 / 漫畫生成，本地中文標籤補全與靈感膠囊。",
     "onboarding.card1.badge": "網路",
-    "onboarding.card1.title": "先確認代理連線",
+    "onboarding.card1.title": "自動跟隨系統代理與 VPN",
     "onboarding.card1.desc":
-      "NovelAI、AI 反推、Google 翻譯及更新檢查等大部分聯網功能通常需要可用代理。預設使用本機 HTTP 代理 127.0.0.1:7890。",
+      "預設自動讀取系統代理與 PAC；VPN 的 TUN / 虛擬網卡模式會使用直連路由，不再要求軟體連接埠一致。",
     "onboarding.card2.badge": "API",
     "onboarding.card2.title": "配置 NovelAI API Token",
     "onboarding.card2.desc":
@@ -5078,7 +5093,7 @@ const DESKTOP_ONBOARDING_UI_TEXT: Record<
     "onboarding.github": "GitHub 專案首頁",
     "onboarding.language": "語言",
     "onboarding.networkWarning":
-      "請先啟動本機代理軟體，並確認連接埠與下方選擇一致；如果你的網路可以直接存取 NovelAI，可選擇「直連」。",
+      "建議保持「自動跟隨系統代理 / VPN」。規則模式讀取系統實際連接埠，TUN / 虛擬網卡模式不需填寫連接埠。",
     "onboarding.verifySave": "驗證並保存",
     "onboarding.tokenConfigured":
       "已設定 Token（留空保持不變，或輸入新 Token 替換）。",
@@ -5122,9 +5137,9 @@ const DESKTOP_ONBOARDING_UI_TEXT: Record<
     "onboarding.card0.desc":
       "An API-only NovelAI image workspace: text-to-image, image-to-image, inpainting, cloud upscale, director tools, comic generation, local tag completion, and inspiration capsules.",
     "onboarding.card1.badge": "Network",
-    "onboarding.card1.title": "Check your proxy first",
+    "onboarding.card1.title": "Follow the system proxy and VPN automatically",
     "onboarding.card1.desc":
-      "NovelAI, AI reverse prompting, Google Translate, and update checks often need a working proxy. The default is local HTTP proxy 127.0.0.1:7890.",
+      "The default reads the system proxy and PAC. VPN/TUN adapters use direct sockets, so the app no longer requires a matching local port.",
     "onboarding.card2.badge": "API",
     "onboarding.card2.title": "Configure NovelAI API Token",
     "onboarding.card2.desc":
@@ -5161,7 +5176,7 @@ const DESKTOP_ONBOARDING_UI_TEXT: Record<
     "onboarding.github": "GitHub project",
     "onboarding.language": "Language",
     "onboarding.networkWarning":
-      "Start your local proxy first and make sure the port matches the choice below. If your network can access NovelAI directly, choose Direct.",
+      "Keep automatic mode recommended: rules mode uses the system's actual proxy port, while VPN/TUN mode needs no port.",
     "onboarding.verifySave": "Verify and save",
     "onboarding.tokenConfigured":
       "Token already configured (leave blank to keep it, or enter a new one to replace).",
@@ -5208,9 +5223,9 @@ const DESKTOP_ONBOARDING_UI_TEXT: Record<
     "onboarding.card0.desc":
       "API 専用の NovelAI 画像制作ワークスペースです。txt2img、img2img、インペイント、クラウド超解像、Director ツール、漫画生成、ローカルタグ補完、インスピレーションカプセルに対応します。",
     "onboarding.card1.badge": "ネットワーク",
-    "onboarding.card1.title": "まずプロキシを確認",
+    "onboarding.card1.title": "システムプロキシと VPN に自動追従",
     "onboarding.card1.desc":
-      "NovelAI、AI 逆推定、Google 翻訳、更新確認などはプロキシが必要な場合があります。既定はローカル HTTP プロキシ 127.0.0.1:7890 です。",
+      "既定でシステムプロキシと PAC を読み取ります。VPN/TUN は直接ソケットを経由するため、ローカルポートを一致させる必要はありません。",
     "onboarding.card2.badge": "API",
     "onboarding.card2.title": "NovelAI API Token を設定",
     "onboarding.card2.desc":
@@ -5246,7 +5261,7 @@ const DESKTOP_ONBOARDING_UI_TEXT: Record<
     "onboarding.github": "GitHub プロジェクト",
     "onboarding.language": "言語",
     "onboarding.networkWarning":
-      "先にローカルプロキシを起動し、下の選択とポートが一致しているか確認してください。NovelAI に直接接続できる場合は Direct を選べます。",
+      "自動モードを推奨します。ルールモードはシステムの実ポートを使用し、VPN/TUN モードではポート入力は不要です。",
     "onboarding.verifySave": "検証して保存",
     "onboarding.tokenConfigured":
       "Token 設定済み（空欄で維持、新しい Token を入力すると置き換え）。",
@@ -5293,9 +5308,9 @@ const DESKTOP_ONBOARDING_UI_TEXT: Record<
     "onboarding.card0.desc":
       "API 전용 NovelAI 이미지 작업 공간입니다. 텍스트/이미지 생성, 인페인트, 클라우드 업스케일, Director 도구, 만화 생성, 로컬 태그 완성과 영감 캡슐을 지원합니다.",
     "onboarding.card1.badge": "네트워크",
-    "onboarding.card1.title": "먼저 프록시 확인",
+    "onboarding.card1.title": "시스템 프록시와 VPN 자동 사용",
     "onboarding.card1.desc":
-      "NovelAI, AI 역추론, Google 번역, 업데이트 확인 등은 프록시가 필요할 수 있습니다. 기본값은 로컬 HTTP 프록시 127.0.0.1:7890입니다.",
+      "기본적으로 시스템 프록시와 PAC를 읽습니다. VPN/TUN은 직접 소켓 경로를 사용하므로 로컬 포트를 맞출 필요가 없습니다.",
     "onboarding.card2.badge": "API",
     "onboarding.card2.title": "NovelAI API Token 설정",
     "onboarding.card2.desc":
@@ -5331,7 +5346,7 @@ const DESKTOP_ONBOARDING_UI_TEXT: Record<
     "onboarding.github": "GitHub 프로젝트",
     "onboarding.language": "언어",
     "onboarding.networkWarning":
-      "먼저 로컬 프록시를 실행하고 아래 선택과 포트가 일치하는지 확인하세요. NovelAI에 직접 접속할 수 있다면 Direct를 선택할 수 있습니다.",
+      "자동 모드를 권장합니다. 규칙 모드는 시스템의 실제 포트를 사용하고 VPN/TUN 모드는 포트 입력이 필요 없습니다.",
     "onboarding.verifySave": "검증 후 저장",
     "onboarding.tokenConfigured":
       "Token 설정됨(비워 두면 유지, 새 Token 입력 시 교체).",
@@ -5403,7 +5418,7 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.allowCustomEndpointFallback":
       "自定义生图 Endpoint 鉴权失败（401/403）时，自动改用官方地址重试（默认关闭）。开启后重试会用你的官方账号计费，请确认这是你想要的。",
     "settings.proxyHint":
-      "NovelAI、AI 反推、谷歌翻译及更新检查等联网功能可能需要代理。请确保所选端口与本机代理软件一致。",
+      "自动模式会读取系统代理和 PAC；若启用 TUN / 虚拟网卡则自动直连交给 VPN 路由。只有手动代理模式需要填写正确端口。",
     "settings.proxyScopeTitle": "走代理的请求（关掉则该项直连）",
     "settings.proxyForNai": "NovelAI API（验证 / 生图 / 超分等）",
     "settings.proxyForAi": "AI 反推 / 转换（OpenAI 兼容）",
@@ -5563,7 +5578,7 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.allowCustomEndpointFallback":
       "自訂生圖 Endpoint 驗證失敗（401/403）時，自動改用官方地址重試（預設關閉）。開啟後重試會用你的官方帳號計費，請確認這是你要的行為。",
     "settings.proxyHint":
-      "NovelAI、AI 反推、Google 翻譯及更新檢查等聯網功能可能需要代理。請確認所選連接埠與本機代理軟體一致。",
+      "自動模式會讀取系統代理與 PAC；啟用 TUN / 虛擬網卡時會以直連交由 VPN 路由。只有手動代理需要正確連接埠。",
     "settings.proxyScopeTitle": "走代理的請求（關掉則該項直連）",
     "settings.proxyForNai": "NovelAI API（驗證 / 生圖 / 超分等）",
     "settings.proxyForAi": "AI 反推 / 轉換（OpenAI 相容）",
@@ -5723,7 +5738,7 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.allowCustomEndpointFallback":
       "When the custom image endpoint fails auth (401/403), automatically retry against the official one (off by default). Enabling this bills the retry to your official account — make sure that's what you want.",
     "settings.proxyHint":
-      "NovelAI, AI reverse, Google Translate, and update checks may need a proxy. Make sure the selected port matches your local proxy app.",
+      "Automatic mode reads the system proxy and PAC. With a VPN/TUN adapter it uses direct sockets for the VPN to route. Only manual proxy mode needs a port.",
     "settings.proxyScopeTitle":
       "Requests using proxy (off = direct for that item)",
     "settings.proxyForNai": "NovelAI API (verify / image / upscale, etc.)",
@@ -5888,7 +5903,7 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.allowCustomEndpointFallback":
       "カスタム画像 Endpoint の認証が失敗（401/403）した場合、自動的に公式 URL で再試行します（既定はオフ）。有効にすると再試行はあなたの公式アカウントに課金されます。",
     "settings.proxyHint":
-      "NovelAI、AI 解析、Google 翻訳、更新確認などはプロキシが必要な場合があります。選択したポートがローカルプロキシと一致するか確認してください。",
+      "自動モードはシステムプロキシと PAC を読み取ります。VPN/TUN 利用時は直接ソケットを VPN に任せ、手動プロキシ時のみポート入力が必要です。",
     "settings.proxyScopeTitle": "プロキシを使うリクエスト（オフなら直接接続）",
     "settings.proxyForNai": "NovelAI API（検証 / 生成 / 拡大など）",
     "settings.proxyForAi": "AI 解析 / 変換（OpenAI 互換）",
@@ -6052,7 +6067,7 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.allowCustomEndpointFallback":
       "커스텀 이미지 Endpoint 인증이 실패(401/403)하면 자동으로 공식 주소로 재시도합니다(기본 꺼짐). 활성화하면 재시도 비용이 공식 계정에 청구되니 원하는 동작인지 확인하세요.",
     "settings.proxyHint":
-      "NovelAI, AI 분석, Google 번역, 업데이트 확인 등 네트워크 기능에는 프록시가 필요할 수 있습니다. 선택한 포트가 로컬 프록시 앱과 일치하는지 확인하세요.",
+      "자동 모드는 시스템 프록시와 PAC를 읽습니다. VPN/TUN 사용 시 직접 소켓을 VPN이 라우팅하며 수동 프록시에서만 포트가 필요합니다.",
     "settings.proxyScopeTitle":
       "프록시를 사용할 요청(끄면 해당 항목은 직접 연결)",
     "settings.proxyForNai": "NovelAI API(검증 / 생성 / 업스케일 등)",

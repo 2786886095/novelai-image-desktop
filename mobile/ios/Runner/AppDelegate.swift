@@ -1,5 +1,6 @@
 import Flutter
 import UIKit
+import CFNetwork
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
@@ -41,6 +42,38 @@ import UIKit
         default:
           result(FlutterMethodNotImplemented)
         }
+      }
+
+      let networkChannel = FlutterMethodChannel(
+        name: "langbai.novelai/network",
+        binaryMessenger: controller.binaryMessenger
+      )
+      networkChannel.setMethodCallHandler { call, result in
+        guard call.method == "resolveProxy" else {
+          result(FlutterMethodNotImplemented)
+          return
+        }
+        let rawTarget = call.arguments as? String ?? "https://api.novelai.net"
+        guard let target = URL(string: rawTarget),
+              let unmanagedSettings = CFNetworkCopySystemProxySettings() else {
+          result("")
+          return
+        }
+        let settings = unmanagedSettings.takeRetainedValue()
+        let entries = CFNetworkCopyProxiesForURL(target as CFURL, settings).takeRetainedValue() as NSArray
+        for case let entry as NSDictionary in entries {
+          guard let type = entry[kCFProxyTypeKey] as? String,
+                type == (kCFProxyTypeHTTP as String) ||
+                type == (kCFProxyTypeHTTPS as String) ||
+                type == (kCFProxyTypeSOCKS as String),
+                let host = entry[kCFProxyHostNameKey] as? String,
+                let port = entry[kCFProxyPortNumberKey] as? NSNumber else { continue }
+          let scheme = type == (kCFProxyTypeSOCKS as String) ? "socks5" : "http"
+          let renderedHost = host.contains(":") ? "[\(host)]" : host
+          result("\(scheme)://\(renderedHost):\(port.intValue)")
+          return
+        }
+        result("")
       }
     }
 

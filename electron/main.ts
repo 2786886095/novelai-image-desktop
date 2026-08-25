@@ -4,6 +4,7 @@ import {
   ipcMain,
   Menu,
   nativeImage,
+  session,
   shell,
 } from "electron";
 import path from "path";
@@ -178,7 +179,11 @@ import {
   wireAutoUpdater,
 } from "./ipc/auto-update";
 import { isPortableBuild } from "./ipc/app-mode";
-import { proxyConfig } from "./ipc/proxy";
+import {
+  configureSystemProxyResolver,
+  proxyConfig,
+  refreshSystemProxy,
+} from "./ipc/proxy";
 import {
   installGlobalLogging,
   getLogInfo,
@@ -901,9 +906,20 @@ function registerIpc() {
   ipcMain.handle("log:read", () => readRecentLog());
 
   ipcMain.handle("settings:get", (_event, key) => getSetting(key));
-  ipcMain.handle("settings:set", (_event, key, value) =>
-    setSetting(key, value),
-  );
+  ipcMain.handle("settings:set", async (_event, key, value) => {
+    const saved = setSetting(key, value);
+    if ([
+      "proxyMode",
+      "proxyUrl",
+      "apiBaseUrl",
+      "visionApiUrl",
+      "convertApiUrl",
+      "tagServerUrl",
+    ].includes(String(key))) {
+      await refreshSystemProxy();
+    }
+    return saved;
+  });
   ipcMain.handle("settings:getAll", () => getSettings());
   ipcMain.handle(
     "stylePreset:importImages",
@@ -1035,10 +1051,16 @@ function registerIpc() {
   ipcMain.handle("app:installUpdate", () => installUpdate());
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   if (!uiCaptureUserData) pinUserDataAndMigrate();
   readStore();
   installGlobalLogging();
+  configureSystemProxyResolver((url) => session.defaultSession.resolveProxy(url));
+  await refreshSystemProxy();
+  const proxyRefreshTimer = setInterval(() => {
+    void refreshSystemProxy();
+  }, 30_000);
+  proxyRefreshTimer.unref();
   registerIpc();
   wireAutoUpdater(() => mainWindow);
   createWindow();

@@ -4596,9 +4596,10 @@ function InputModal({
   );
 }
 
-type ProxyPreset = "direct" | "http" | "socks" | "custom";
+type ProxyPreset = AppSettings["proxyMode"];
 
-function proxyPresetFor(value: string): ProxyPreset {
+function proxyPresetFor(mode: AppSettings["proxyMode"], value: string): ProxyPreset {
+  if (["auto", "direct", "http", "socks", "custom"].includes(mode)) return mode;
   const normalized = value.trim().toLowerCase().replace(/\/$/, "");
   if (!normalized) return "direct";
   if (normalized === DEFAULT_HTTP_PROXY) return "http";
@@ -4606,23 +4607,27 @@ function proxyPresetFor(value: string): ProxyPreset {
   return "custom";
 }
 
-function ProxyPresetControl({ value, onChange }: { value: string; onChange: (value: string) => void }) {
-  const [preset, setPreset] = useState<ProxyPreset>(() => proxyPresetFor(value));
+function ProxyPresetControl({ mode, value, onChange }: {
+  mode: AppSettings["proxyMode"];
+  value: string;
+  onChange: (mode: AppSettings["proxyMode"], value: string) => void;
+}) {
+  const [preset, setPreset] = useState<ProxyPreset>(() => proxyPresetFor(mode, value));
   const [customValue, setCustomValue] = useState(value);
   const language = useAppStore((state) => state.settings?.language);
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
 
   useEffect(() => {
     setCustomValue(value);
-    const next = proxyPresetFor(value);
-    if (next !== "custom") setPreset(next);
-  }, [value]);
+    setPreset(proxyPresetFor(mode, value));
+  }, [mode, value]);
 
   function selectPreset(next: ProxyPreset) {
     setPreset(next);
-    if (next === "direct") onChange("");
-    if (next === "http") onChange(DEFAULT_HTTP_PROXY);
-    if (next === "socks") onChange(DEFAULT_SOCKS_PROXY);
+    if (next === "auto" || next === "direct") onChange(next, "");
+    if (next === "http") onChange(next, DEFAULT_HTTP_PROXY);
+    if (next === "socks") onChange(next, DEFAULT_SOCKS_PROXY);
+    if (next === "custom") onChange(next, customValue);
   }
 
   return (
@@ -4630,6 +4635,7 @@ function ProxyPresetControl({ value, onChange }: { value: string; onChange: (val
       <label className="field">
         <span>{t("proxy.label")}</span>
         <select value={preset} onChange={(event) => selectPreset(event.target.value as ProxyPreset)}>
+          <option value="auto">{t("proxy.auto")}</option>
           <option value="http">{t("proxy.http")}</option>
           <option value="direct">{t("proxy.direct")}</option>
           <option value="socks">{t("proxy.socks")}</option>
@@ -4644,14 +4650,14 @@ function ProxyPresetControl({ value, onChange }: { value: string; onChange: (val
             placeholder={t("proxy.placeholder")}
             onChange={(event) => {
               setCustomValue(event.target.value);
-              onChange(event.target.value);
+              onChange("custom", event.target.value);
             }}
           />
         </label>
       )}
-      <div className={clsx("proxy-current", preset === "direct" && "direct")}>
-        <strong>{preset === "direct" ? t("proxy.currentDirect") : t("proxy.currentProxy")}</strong>
-        <code>{preset === "direct" ? t("proxy.directValue") : (preset === "custom" ? customValue : value) || t("proxy.empty")}</code>
+      <div className={clsx("proxy-current", (preset === "direct" || preset === "auto") && "direct")}>
+        <strong>{preset === "auto" ? t("proxy.currentAuto") : preset === "direct" ? t("proxy.currentDirect") : t("proxy.currentProxy")}</strong>
+        <code>{preset === "auto" ? t("proxy.autoValue") : preset === "direct" ? t("proxy.directValue") : (preset === "custom" ? customValue : value) || t("proxy.empty")}</code>
       </div>
     </div>
   );
@@ -4970,8 +4976,8 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
     await window.naiDesktop.setSetting(key, value);
     await refreshSettings();
   };
-  const updateProxy = async (value: string) => {
-    await window.naiDesktop.setSetting("proxyMode", proxyPresetFor(value));
+  const updateProxy = async (mode: AppSettings["proxyMode"], value: string) => {
+    await window.naiDesktop.setSetting("proxyMode", mode);
     await window.naiDesktop.setSetting("proxyUrl", value);
     await refreshSettings();
   };
@@ -5138,11 +5144,11 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                 )}
 
                 <div className="proxy-card">
-                  <ProxyPresetControl value={settings.proxyUrl} onChange={(value) => void updateProxy(value)} />
+                  <ProxyPresetControl mode={settings.proxyMode} value={settings.proxyUrl} onChange={(mode, value) => void updateProxy(mode, value)} />
                   <p className="settings-hint" style={{ margin: "2px 0 8px" }}>
                     {t("settings.proxyHint")}
                   </p>
-                  <div className="proxy-scope" style={{ opacity: settings.proxyUrl.trim() ? 1 : 0.5 }}>
+                  <div className="proxy-scope" style={{ opacity: settings.proxyMode !== "direct" ? 1 : 0.5 }}>
                     <span className="proxy-scope-title">{t("settings.proxyScopeTitle")}</span>
                     {([
                       ["proxyForNai", t("settings.proxyForNai")],
@@ -5154,7 +5160,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                       <label className="checkbox-line" key={key}>
                         <input
                           type="checkbox"
-                          disabled={!settings.proxyUrl.trim()}
+                          disabled={settings.proxyMode === "direct"}
                           checked={settings[key] as boolean}
                           onChange={(e) => void update(key, e.target.checked as never)}
                         />
@@ -5681,7 +5687,8 @@ function OnboardingWizard() {
   const [tokenStatus, setTokenStatus] = useState<TokenStatus | null>(null);
   const [checking, setChecking] = useState(false);
   const [showTokenGuide, setShowTokenGuide] = useState(false);
-  const [onboardingProxyUrl, setOnboardingProxyUrl] = useState(DEFAULT_HTTP_PROXY);
+  const [onboardingProxyMode, setOnboardingProxyMode] = useState<AppSettings["proxyMode"]>("auto");
+  const [onboardingProxyUrl, setOnboardingProxyUrl] = useState("");
   const settings = useAppStore((state) => state.settings);
   const load = useAppStore((state) => state.load);
   const setShowOnboarding = useAppStore((state) => state.setShowOnboarding);
@@ -5702,8 +5709,11 @@ function OnboardingWizard() {
     { badge: t("onboarding.card7.badge"), title: t("onboarding.card7.title"), desc: t("onboarding.card7.desc") },
   ];
   useEffect(() => {
-    if (settings) setOnboardingProxyUrl(settings.proxyUrl);
-  }, [settings?.proxyUrl]);
+    if (settings) {
+      setOnboardingProxyMode(settings.proxyMode);
+      setOnboardingProxyUrl(settings.proxyUrl);
+    }
+  }, [settings?.proxyMode, settings?.proxyUrl]);
   const finish = async () => {
     await window.naiDesktop.completeSetup();
     await load();
@@ -5774,11 +5784,13 @@ function OnboardingWizard() {
                   {t("onboarding.networkWarning")}
                 </div>
                 <ProxyPresetControl
+                  mode={onboardingProxyMode}
                   value={onboardingProxyUrl}
-                  onChange={(value) => {
+                  onChange={(mode, value) => {
+                    setOnboardingProxyMode(mode);
                     setOnboardingProxyUrl(value);
                     void (async () => {
-                      await window.naiDesktop.setSetting("proxyMode", proxyPresetFor(value));
+                      await window.naiDesktop.setSetting("proxyMode", mode);
                       await window.naiDesktop.setSetting("proxyUrl", value);
                     })();
                   }}

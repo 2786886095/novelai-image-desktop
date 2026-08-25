@@ -9,6 +9,10 @@ import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.nio.charset.Charset
+import java.net.InetSocketAddress
+import java.net.Proxy
+import java.net.ProxySelector
+import java.net.URI
 
 class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -72,6 +76,33 @@ class MainActivity : FlutterActivity() {
                         }
                     }
                     result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "langbai.novelai/network",
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "resolveProxy" -> {
+                    val target = call.arguments as? String ?: "https://api.novelai.net"
+                    try {
+                        val proxy = ProxySelector.getDefault()
+                            ?.select(URI(target))
+                            ?.firstOrNull { it.type() != Proxy.Type.DIRECT }
+                        val address = proxy?.address() as? InetSocketAddress
+                        if (proxy == null || address == null) {
+                            result.success("")
+                        } else {
+                            val scheme = if (proxy.type() == Proxy.Type.SOCKS) "socks5" else "http"
+                            val host = if (address.hostString.contains(":")) "[${address.hostString}]" else address.hostString
+                            result.success("$scheme://$host:${address.port}")
+                        }
+                    } catch (error: Exception) {
+                        result.success("")
+                    }
                 }
                 else -> result.notImplemented()
             }

@@ -266,8 +266,8 @@ export function defaultSettings(): AppSettings {
     imageBaseUrl: "https://image.novelai.net",
     allowCustomEndpoint: false,
     allowCustomEndpointFallback: false,
-    proxyMode: "http",
-    proxyUrl: "http://127.0.0.1:7890",
+    proxyMode: "auto",
+    proxyUrl: "",
     proxyForNai: true,
     proxyForMcp: true,
     proxyForAi: true,
@@ -425,16 +425,24 @@ function normalize(raw: Partial<PersistedData> | null): PersistedData {
   }
   if (!rawSettings.proxyMode) {
     const legacyProxy = rawSettings.proxyUrl?.trim() ?? "";
-    if (!legacyProxy) {
-      settings.proxyMode = "http";
-      settings.proxyUrl = defaults.proxyUrl;
+    if (!legacyProxy || legacyProxy.toLowerCase().replace(/\/$/, "") === "http://127.0.0.1:7890") {
+      settings.proxyMode = "auto";
+      settings.proxyUrl = "";
     } else if (/^socks/i.test(legacyProxy)) {
       settings.proxyMode = "socks";
-    } else if (legacyProxy.toLowerCase().replace(/\/$/, "") === defaults.proxyUrl) {
-      settings.proxyMode = "http";
     } else {
       settings.proxyMode = "custom";
     }
+  }
+  // v1.8.8 and earlier defaulted every installation to a fixed Clash port.
+  // Migrate that untouched preset to automatic system/PAC/TUN routing. Custom
+  // ports and explicit direct/SOCKS choices remain unchanged.
+  if (
+    rawSettings.proxyMode === "http" &&
+    (rawSettings.proxyUrl ?? "").trim().toLowerCase().replace(/\/$/, "") === "http://127.0.0.1:7890"
+  ) {
+    settings.proxyMode = "auto";
+    settings.proxyUrl = "";
   }
   if (isEmptyModeTemplates(rawSettings.reversePromptTemplates) || isLegacyScopedReverseTemplates(rawSettings.reversePromptTemplates)) {
     settings.reversePromptTemplates = defaults.reversePromptTemplates;

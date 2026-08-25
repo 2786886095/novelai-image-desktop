@@ -1271,9 +1271,9 @@ export interface AppSettings {
   // fails — it doesn't silently and invisibly also become a real, billed
   // request against the user's official account.
   allowCustomEndpointFallback: boolean;
-  proxyMode: "http" | "direct" | "socks" | "custom";
-  // Proxy for outbound requests. Empty = direct. Accepts http://host:port or
-  // socks5://host:port (scheme defaults to http:// when omitted).
+  proxyMode: "auto" | "http" | "direct" | "socks" | "custom";
+  // Manual proxy override. Empty in auto/direct modes. Accepts
+  // http://host:port or socks5://host:port.
   proxyUrl: string;
   // Per-category proxy opt-out (all default true = everything goes through proxy).
   proxyForNai: boolean;

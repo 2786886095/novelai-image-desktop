@@ -123,6 +123,7 @@ class AppState extends ChangeNotifier {
   Timer? _quoteTimer;
   Timer? _toolPersistTimer;
   Timer? _opusUsageTimer;
+  Timer? _proxyRefreshTimer;
   bool _opusUsageRefreshRunning = false;
   int _quoteVersion = 0;
   bool _cancelGenerationRequested = false;
@@ -182,13 +183,20 @@ class AppState extends ChangeNotifier {
         settings.modelMode = expectedModelMode;
         await storage.setSettings(settings);
       }
-      // Mobile no longer ships an in-app proxy: the phone's system VPN handles
-      // routing. Migrate any saved local-proxy mode to direct so update checks
-      // and API calls don't dead-end on a 127.0.0.1 proxy that isn't there.
-      if (settings.proxyMode != 'direct') {
-        settings.proxyMode = 'direct';
+      // Follow the phone's current system proxy when one is published; an
+      // empty result stays direct so Android/iOS VPN and TUN adapters can route
+      // the socket without any app-side localhost port.
+      if (settings.proxyMode != 'auto') {
+        settings.proxyMode = 'auto';
+        settings.proxyUrl = '';
         await storage.setSettings(settings);
       }
+      await refreshSystemProxyRoute(settings.apiBaseUrl);
+      _proxyRefreshTimer?.cancel();
+      _proxyRefreshTimer = Timer.periodic(
+        const Duration(seconds: 30),
+        (_) => unawaited(refreshSystemProxyRoute(settings.apiBaseUrl)),
+      );
       // Restore the last-used tool selections (desktop "last generation state").
       // reverseMode/convertMode aren't part of the per-tool persistence
       // toggles below — those only cover generate/inpaint/upscale/director.
@@ -2817,6 +2825,7 @@ class AppState extends ChangeNotifier {
     _quoteTimer?.cancel();
     _toolPersistTimer?.cancel();
     _opusUsageTimer?.cancel();
+    _proxyRefreshTimer?.cancel();
     BackgroundQueueService.removeCancelHandler(cancelGeneration);
     api.cancelActiveGeneration();
     super.dispose();

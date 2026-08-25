@@ -327,7 +327,7 @@ const _mobileUiText = <String, Map<String, String>>{
         '纯 API 调用的 NovelAI 创作工作台：文生图、图生图、局部重绘、超分、后期、AI 反推 / 转换、漫画与批量工具。Token 只保存在本机。',
     'onboarding.networkTitle': '先开启网络（梯子）',
     'onboarding.networkBody':
-        '移动端不内置代理。请在系统设置里开启 VPN / 全局代理后再使用——NovelAI、AI 反推 / 转换、翻译、标签库与更新检查都会走系统网络。',
+        '移动端会自动读取系统代理；VPN 的规则、TUN / 虚拟网卡模式直接由系统路由，无需在软件里填写本地端口。',
     'onboarding.tokenTitle': '获取并填入 API Token',
     'onboarding.tokenBody':
         '在 NovelAI 网页登录后：左上角菜单 → Account Settings → Get Persistent API Token，复制后粘贴到“设置 → NovelAI API”。',
@@ -773,7 +773,7 @@ const _mobileUiText = <String, Map<String, String>>{
         '純 API 呼叫的 NovelAI 創作工作台：文生圖、圖生圖、局部重繪、超分、後期、AI 反推 / 轉換、漫畫與批次工具。Token 只保存在本機。',
     'onboarding.networkTitle': '先開啟網路（代理）',
     'onboarding.networkBody':
-        '移動端不內建代理。請在系統設定開啟 VPN / 全域代理後再使用——NovelAI、AI 反推 / 轉換、翻譯、標籤庫與更新檢查都會走系統網路。',
+        '移動端會自動讀取系統代理；VPN 的規則、TUN / 虛擬網卡模式由系統直接路由，不需在軟體內填寫本機連接埠。',
     'onboarding.tokenTitle': '取得並填入 API Token',
     'onboarding.tokenBody':
         '在 NovelAI 網頁登入後：左上角選單 → Account Settings → Get Persistent API Token，複製後貼到「設定 → NovelAI API」。',
@@ -1246,7 +1246,7 @@ const _mobileUiText = <String, Map<String, String>>{
         'A pure-API NovelAI creation workspace: text-to-image, image-to-image, inpainting, upscale, Director tools, AI inspect / convert, comics, and batch tools. Your token stays on this device.',
     'onboarding.networkTitle': 'Enable network access first',
     'onboarding.networkBody':
-        'Mobile does not include an in-app proxy. Enable a system VPN or global proxy before use. NovelAI, AI inspect / convert, translation, tag libraries, and update checks all use the system network.',
+        'Mobile automatically reads the system proxy. VPN rules and TUN/virtual adapters are routed by the OS, with no local port required in the app.',
     'onboarding.tokenTitle': 'Get and enter your API Token',
     'onboarding.tokenBody':
         'After signing in on the NovelAI website: top-left menu → Account Settings → Get Persistent API Token, then paste it into Settings → NovelAI API.',
@@ -1712,7 +1712,7 @@ const _mobileUiText = <String, Map<String, String>>{
         'NovelAI を API だけで扱う制作ワークスペースです。テキスト生成、画像生成、部分再描画、拡大、後処理、AI 解析 / 変換、漫画、バッチツールを利用できます。Token は端末内だけに保存されます。',
     'onboarding.networkTitle': '先にネットワークを有効化',
     'onboarding.networkBody':
-        'モバイル版にはアプリ内プロキシはありません。システム VPN / 全体プロキシを有効にしてから使用してください。NovelAI、AI 解析 / 変換、翻訳、タグライブラリ、更新確認はすべてシステムネットワークを使います。',
+        'モバイル版はシステムプロキシを自動取得します。VPN ルールと TUN / 仮想アダプターは OS が経路制御するため、アプリでローカルポートを入力する必要はありません。',
     'onboarding.tokenTitle': 'API Token を取得して入力',
     'onboarding.tokenBody':
         'NovelAI Web にログイン後、左上メニュー → Account Settings → Get Persistent API Token を開き、コピーして「設定 → NovelAI API」に貼り付けます。',
@@ -2165,7 +2165,7 @@ const _mobileUiText = <String, Map<String, String>>{
         '순수 API 기반 NovelAI 창작 워크스페이스입니다. 텍스트 생성, 이미지 생성, 부분 리드로우, 업스케일, 후처리, AI 분석 / 변환, 만화와 배치 도구를 제공합니다. Token은 이 기기에만 저장됩니다.',
     'onboarding.networkTitle': '먼저 네트워크를 켜세요',
     'onboarding.networkBody':
-        '모바일에는 앱 내 프록시가 없습니다. 시스템 VPN 또는 전역 프록시를 켠 뒤 사용하세요. NovelAI, AI 분석 / 변환, 번역, 태그 라이브러리, 업데이트 확인은 모두 시스템 네트워크를 사용합니다.',
+        '모바일은 시스템 프록시를 자동으로 읽습니다. VPN 규칙과 TUN/가상 어댑터는 OS가 라우팅하므로 앱에 로컬 포트를 입력할 필요가 없습니다.',
     'onboarding.tokenTitle': 'API Token 가져오기 및 입력',
     'onboarding.tokenBody':
         'NovelAI 웹사이트에 로그인한 뒤 왼쪽 위 메뉴 → Account Settings → Get Persistent API Token을 열고, 복사해서 “설정 → NovelAI API”에 붙여 넣으세요.',
@@ -3479,9 +3479,9 @@ SettingsDetailText settingsDetailTextFor(Object? value) {
       return (
         tokenVerifiedSuccess: 'Token 驗證成功',
         connectionFailed: '連線失敗',
-        networkSystemVpnTitle: '請使用系統 VPN / 全域代理',
+        networkSystemVpnTitle: '自動跟隨系統代理 / VPN',
         networkSystemVpnSubtitle:
-            '移動端已移除應用內代理設定：在系統裡開啟 VPN 或全域代理後，NovelAI、AI 反推 / 轉換、翻譯、標籤庫和更新檢查都會走系統網路。',
+            '自動讀取系統代理的實際連接埠；VPN 規則、TUN / 虛擬網卡模式由系統路由，不需手動填寫連接埠。',
         networkTesting: '測試中...',
         networkTest: '測試網路連線',
         allowCustomEndpointTitle: '允許自訂 NovelAI 端點',
@@ -3574,9 +3574,9 @@ SettingsDetailText settingsDetailTextFor(Object? value) {
       return (
         tokenVerifiedSuccess: 'Token verified',
         connectionFailed: 'Connection failed',
-        networkSystemVpnTitle: 'Use the system VPN / global proxy',
+        networkSystemVpnTitle: 'Follow system proxy / VPN automatically',
         networkSystemVpnSubtitle:
-            'The mobile app no longer has an in-app proxy. Enable a VPN or global proxy in the system settings; NovelAI, AI inspect/convert, translation, tag libraries, and update checks will use the system network.',
+            'Reads the actual system proxy port automatically. VPN rules and TUN/virtual adapters are routed by the OS, so no app-side port is required.',
         networkTesting: 'Testing...',
         networkTest: 'Test network connection',
         allowCustomEndpointTitle: 'Allow custom NovelAI endpoints',
@@ -3678,9 +3678,9 @@ SettingsDetailText settingsDetailTextFor(Object? value) {
       return (
         tokenVerifiedSuccess: 'Token の確認に成功しました',
         connectionFailed: '接続に失敗しました',
-        networkSystemVpnTitle: 'システム VPN / グローバルプロキシを使用',
+        networkSystemVpnTitle: 'システムプロキシ / VPN に自動追従',
         networkSystemVpnSubtitle:
-            'モバイル版ではアプリ内プロキシ設定を削除しました。システム側で VPN またはグローバルプロキシを有効にすると、NovelAI、AI 解析/変換、翻訳、タグライブラリ、更新確認がそのネットワークを使用します。',
+            'システムプロキシの実ポートを自動取得します。VPN ルールと TUN / 仮想アダプターは OS が経路制御するため、ポート入力は不要です。',
         networkTesting: 'テスト中...',
         networkTest: 'ネットワーク接続をテスト',
         allowCustomEndpointTitle: 'NovelAI のカスタムエンドポイントを許可',
@@ -3776,9 +3776,9 @@ SettingsDetailText settingsDetailTextFor(Object? value) {
       return (
         tokenVerifiedSuccess: 'Token 검증 성공',
         connectionFailed: '연결 실패',
-        networkSystemVpnTitle: '시스템 VPN / 전역 프록시 사용',
+        networkSystemVpnTitle: '시스템 프록시 / VPN 자동 사용',
         networkSystemVpnSubtitle:
-            '모바일 앱에서는 앱 내부 프록시 설정을 제거했습니다. 시스템에서 VPN 또는 전역 프록시를 켜면 NovelAI, AI 분석/변환, 번역, 태그 라이브러리, 업데이트 확인이 시스템 네트워크를 사용합니다.',
+            '시스템 프록시의 실제 포트를 자동으로 읽습니다. VPN 규칙과 TUN/가상 어댑터는 OS가 라우팅하므로 포트 입력이 필요 없습니다.',
         networkTesting: '테스트 중...',
         networkTest: '네트워크 연결 테스트',
         allowCustomEndpointTitle: '사용자 지정 NovelAI 엔드포인트 허용',
@@ -3877,9 +3877,9 @@ SettingsDetailText settingsDetailTextFor(Object? value) {
       return (
         tokenVerifiedSuccess: 'Token 验证成功',
         connectionFailed: '连接失败',
-        networkSystemVpnTitle: '请使用系统 VPN / 全局代理（梯子）',
+        networkSystemVpnTitle: '自动跟随系统代理 / VPN',
         networkSystemVpnSubtitle:
-            '移动端已移除应用内代理设置：在系统里开启 VPN 或全局代理后，NovelAI、AI 反推 / 转换、翻译、标签库和更新检查都会走系统网络。',
+            '自动读取系统代理的实际端口；VPN 规则、TUN / 虚拟网卡模式由系统路由，无需在软件内填写端口。',
         networkTesting: '正在测试...',
         networkTest: '测试网络连接',
         allowCustomEndpointTitle: '允许自定义 NovelAI 端点',

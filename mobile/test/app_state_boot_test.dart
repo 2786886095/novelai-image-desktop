@@ -28,12 +28,11 @@ void main() {
 
     // The deferred account refresh fails and surfaces a non-fatal status note;
     // wait for it to land (it runs after load() returns).
-    for (var i = 0;
-        i < 200 && !state.status.contains('账号信息暂时无法读取');
-        i++) {
+    for (var i = 0; i < 200 && !state.status.contains('账号信息暂时无法读取'); i++) {
       await Future<void>.delayed(const Duration(milliseconds: 5));
     }
     expect(state.status, contains('账号信息暂时无法读取'));
+    state.dispose();
   });
 }
 
@@ -58,7 +57,7 @@ class _OfflineApi extends NaiApi {
 }
 
 class _BootStorage extends Storage {
-  AppSettings settings = AppSettings(proxyMode: 'direct');
+  AppSettings settings = AppSettings(proxyMode: 'auto');
 
   @override
   Future<AppSettings> getSettings() async => settings;

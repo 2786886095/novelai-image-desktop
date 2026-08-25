@@ -3,10 +3,23 @@ import 'package:novelai_mobile/models/nai_models.dart';
 import 'package:novelai_mobile/services/proxy_http_client.dart';
 
 void main() {
-  test('default settings use a direct connection (mobile relies on system VPN)',
+  tearDown(() => setResolvedSystemProxyForTesting(''));
+
+  test('default settings use automatic direct routing for a system VPN/TUN',
       () {
     final proxy = parseProxySettings(AppSettings());
     expect(proxy.kind, ProxyKind.direct);
+    expect(proxy.automatic, isTrue);
+    expect(proxy.description, contains('VPN/TUN'));
+  });
+
+  test('automatic mode uses the native system proxy port when available', () {
+    setResolvedSystemProxyForTesting('http://127.0.0.1:17890');
+    final proxy = parseProxySettings(AppSettings());
+    expect(proxy.kind, ProxyKind.http);
+    expect(proxy.host, '127.0.0.1');
+    expect(proxy.port, 17890);
+    expect(proxy.automatic, isTrue);
   });
 
   test('direct and SOCKS5 presets parse correctly', () {
