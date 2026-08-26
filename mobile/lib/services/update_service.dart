@@ -60,8 +60,6 @@ const _githubReleaseUrl =
     'https://github.com/2786886095/novelai-image-desktop/releases/latest';
 const _githubLatestYmlUrl =
     'https://github.com/2786886095/novelai-image-desktop/releases/latest/download/latest.yml';
-const _githubAndroidApkUrl =
-    'https://github.com/2786886095/novelai-image-desktop/releases/latest/download/app-release.apk';
 const _githubReleaseApiUrl =
     'https://api.github.com/repos/2786886095/novelai-image-desktop/releases/latest';
 
@@ -109,7 +107,10 @@ String? _assetUrl(dynamic value, String wantedName) {
   return null;
 }
 
-Future<UpdateInfo> _checkGitee(http.Client client) async {
+Future<UpdateInfo> _checkGitee(
+  http.Client client, {
+  required bool isAndroid,
+}) async {
   final response = await _getWithRetry(
     client,
     Uri.parse(_giteeReleaseApiUrl),
@@ -127,12 +128,11 @@ Future<UpdateInfo> _checkGitee(http.Client client) async {
     throw Exception('invalid Gitee release');
   }
 
-  final wantedAsset = Platform.isAndroid ? 'app-release.apk' : null;
+  final hasUpdate = compareVersions(latest, appVersion) > 0;
+  final wantedAsset = isAndroid ? 'app-release.apk' : null;
   var installerUrl =
       wantedAsset == null ? null : _assetUrl(json['assets'], wantedAsset);
-  if (compareVersions(latest, appVersion) > 0 &&
-      wantedAsset != null &&
-      installerUrl == null) {
+  if (hasUpdate && wantedAsset != null && installerUrl == null) {
     final attachments = await _getWithRetry(
       client,
       Uri.parse(
@@ -144,16 +144,61 @@ Future<UpdateInfo> _checkGitee(http.Client client) async {
       installerUrl = _assetUrl(jsonDecode(attachments.body), wantedAsset);
     }
   }
+  if (hasUpdate && isAndroid && installerUrl == null) {
+    throw Exception('Gitee release is missing app-release.apk');
+  }
   return UpdateInfo(
-    hasUpdate: compareVersions(latest, appVersion) > 0,
+    hasUpdate: hasUpdate,
     currentVersion: appVersion,
     latestVersion: latest,
     releaseUrl: installerUrl ?? _giteeReleaseUrl,
   );
 }
 
-Future<UpdateInfo> _checkGithub(http.Client client) async {
+Future<UpdateInfo> _checkGithubApi(
+  http.Client client, {
+  required bool isAndroid,
+}) async {
   const current = appVersion;
+  final response = await _getWithRetry(
+    client,
+    Uri.parse(_githubReleaseApiUrl),
+    headers: const {'Accept': 'application/vnd.github+json'},
+  );
+  if (response.statusCode == 404) {
+    return const UpdateInfo(hasUpdate: false, currentVersion: current);
+  }
+  if (response.statusCode < 200 || response.statusCode >= 300) {
+    throw Exception('HTTP ${response.statusCode}');
+  }
+  final json = jsonDecode(response.body) as Map<String, dynamic>;
+  final latest = (json['tag_name']?.toString() ?? '')
+      .replaceFirst(RegExp(r'^v'), '')
+      .trim();
+  if (latest.isEmpty) {
+    throw Exception('invalid GitHub release');
+  }
+  final hasUpdate = compareVersions(latest, current) > 0;
+  final installerUrl =
+      isAndroid ? _assetUrl(json['assets'], 'app-release.apk') : null;
+  if (hasUpdate && isAndroid && installerUrl == null) {
+    throw Exception('GitHub release is missing app-release.apk');
+  }
+  return UpdateInfo(
+    hasUpdate: hasUpdate,
+    currentVersion: current,
+    latestVersion: latest,
+    releaseUrl:
+        installerUrl ?? json['html_url']?.toString() ?? _githubReleaseUrl,
+  );
+}
+
+Future<UpdateInfo> _checkGithub(
+  http.Client client, {
+  required bool isAndroid,
+}) async {
+  const current = appVersion;
+  UpdateInfo manifestInfo;
   try {
     final response =
         await _getWithRetry(client, Uri.parse(_githubLatestYmlUrl));
@@ -164,50 +209,29 @@ Future<UpdateInfo> _checkGithub(http.Client client) async {
     if (latest == null || latest.isEmpty) {
       throw Exception('invalid GitHub manifest');
     }
-    return UpdateInfo(
+    manifestInfo = UpdateInfo(
       hasUpdate: compareVersions(latest, current) > 0,
       currentVersion: current,
       latestVersion: latest,
-      releaseUrl: Platform.isAndroid ? _githubAndroidApkUrl : _githubReleaseUrl,
+      releaseUrl: _githubReleaseUrl,
     );
   } catch (_) {
-    final response = await _getWithRetry(
-      client,
-      Uri.parse(_githubReleaseApiUrl),
-      headers: const {'Accept': 'application/vnd.github+json'},
-    );
-    if (response.statusCode == 404) {
-      return const UpdateInfo(hasUpdate: false, currentVersion: current);
-    }
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('HTTP ${response.statusCode}');
-    }
-    final json = jsonDecode(response.body) as Map<String, dynamic>;
-    final latest = (json['tag_name']?.toString() ?? '')
-        .replaceFirst(RegExp(r'^v'), '')
-        .trim();
-    if (latest.isEmpty) {
-      throw Exception('invalid GitHub release');
-    }
-    return UpdateInfo(
-      hasUpdate: compareVersions(latest, current) > 0,
-      currentVersion: current,
-      latestVersion: latest,
-      releaseUrl: (Platform.isAndroid
-              ? _assetUrl(json['assets'], 'app-release.apk')
-              : null) ??
-          json['html_url']?.toString() ??
-          _githubReleaseUrl,
-    );
+    return _checkGithubApi(client, isAndroid: isAndroid);
   }
+  if (isAndroid && manifestInfo.hasUpdate) {
+    return _checkGithubApi(client, isAndroid: true);
+  }
+  return manifestInfo;
 }
 
 /// Check the selected source first and automatically retry the other mirror.
 Future<UpdateInfo> checkAppUpdateWithClient(
   http.Client client, {
   String preferredSource = 'github',
+  bool? isAndroid,
 }) async {
   const current = appVersion;
+  final android = isAndroid ?? Platform.isAndroid;
   final order = preferredSource == 'gitee'
       ? const ['gitee', 'github']
       : const ['github', 'gitee'];
@@ -217,8 +241,8 @@ Future<UpdateInfo> checkAppUpdateWithClient(
   for (final source in order) {
     try {
       final result = source == 'github'
-          ? await _checkGithub(client)
-          : await _checkGitee(client);
+          ? await _checkGithub(client, isAndroid: android)
+          : await _checkGitee(client, isAndroid: android);
       preferredResult ??= result;
       if (result.hasUpdate) return result;
     } catch (error) {

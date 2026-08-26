@@ -44,6 +44,81 @@ void main() {
     expect(info.releaseUrl, contains('gitee.com'));
   });
 
+  test('Android verifies the GitHub APK asset before offering an update',
+      () async {
+    final calls = <Uri>[];
+    final info = await checkAppUpdateWithClient(
+      MockClient((request) async {
+        calls.add(request.url);
+        if (request.url.host == 'github.com') {
+          return http.Response('version: 99.0.0\npath: app.exe', 200);
+        }
+        return http.Response(
+          jsonEncode({
+            'tag_name': 'v99.0.0',
+            'html_url': 'https://github.com/example/release',
+            'assets': [
+              {
+                'name': 'app-release.apk',
+                'browser_download_url':
+                    'https://github.com/example/app-release.apk',
+              },
+            ],
+          }),
+          200,
+        );
+      }),
+      isAndroid: true,
+    );
+    expect(info.releaseUrl, 'https://github.com/example/app-release.apk');
+    expect(calls.map((uri) => uri.host), ['github.com', 'api.github.com']);
+  });
+
+  test('Android falls back when the selected mirror has no APK asset',
+      () async {
+    final calls = <Uri>[];
+    final info = await checkAppUpdateWithClient(
+      MockClient((request) async {
+        calls.add(request.url);
+        if (request.url.host == 'gitee.com' &&
+            request.url.path.endsWith('/releases/latest')) {
+          return http.Response(
+            jsonEncode({'id': 100, 'tag_name': 'v99.1.0', 'assets': const []}),
+            200,
+          );
+        }
+        if (request.url.host == 'gitee.com') {
+          return http.Response('[]', 200);
+        }
+        if (request.url.host == 'github.com') {
+          return http.Response('version: 99.1.0\npath: app.exe', 200);
+        }
+        return http.Response(
+          jsonEncode({
+            'tag_name': 'v99.1.0',
+            'assets': [
+              {
+                'name': 'app-release.apk',
+                'browser_download_url':
+                    'https://github.com/example/app-release.apk',
+              },
+            ],
+          }),
+          200,
+        );
+      }),
+      preferredSource: 'gitee',
+      isAndroid: true,
+    );
+    expect(info.releaseUrl, contains('github.com'));
+    expect(calls.map((uri) => uri.host), [
+      'gitee.com',
+      'gitee.com',
+      'github.com',
+      'api.github.com',
+    ]);
+  });
+
   test('falls back to Gitee when GitHub is unavailable', () async {
     final calls = <Uri>[];
     final info = await checkAppUpdateWithClient(MockClient((request) async {
