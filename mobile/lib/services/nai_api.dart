@@ -55,6 +55,15 @@ class NaiHttpException implements Exception {
   String toString() => message;
 }
 
+class NaiNetworkException implements Exception {
+  final Object cause;
+
+  const NaiNetworkException(this.cause);
+
+  @override
+  String toString() => 'NovelAI network connection failed';
+}
+
 String resolveNovelAiBaseUrl(
   String value,
   String fallback,
@@ -319,14 +328,9 @@ class NaiApi {
   Future<AccountSummary> verifyToken(String token, AppSettings settings) async {
     final t = token.trim();
     if (t.isEmpty) return const AccountSummary(hasToken: false);
-    final res = await _withClient(
-      settings,
-      (client) => client.get(
-        Uri.parse(
-            '${_naiBase(settings.imageBaseUrl, 'https://image.novelai.net', settings)}/user/data'),
-        headers: {'Authorization': 'Bearer $t'},
-      ).timeout(const Duration(seconds: 15)),
-    );
+    final uri = Uri.parse(
+        '${_naiBase(settings.imageBaseUrl, 'https://image.novelai.net', settings)}/user/data');
+    final res = await _getAccountData(uri, t, settings);
     if (res.statusCode == 401) {
       throw Exception('Token is invalid or expired.');
     }
@@ -339,18 +343,36 @@ class NaiApi {
   Future<AccountSummary> fetchAccount(
       String token, AppSettings settings) async {
     try {
-      final res = await _withClient(
-        settings,
-        (client) => client.get(
-          Uri.parse(
-              '${_naiBase(settings.imageBaseUrl, 'https://image.novelai.net', settings)}/user/data'),
-          headers: {'Authorization': 'Bearer $token'},
-        ).timeout(const Duration(seconds: 15)),
-      );
+      final uri = Uri.parse(
+          '${_naiBase(settings.imageBaseUrl, 'https://image.novelai.net', settings)}/user/data');
+      final res = await _getAccountData(uri, token, settings);
       return _parseAccountData(res.body);
     } catch (_) {
       return const AccountSummary(
           hasToken: true, tierName: 'Verified', stale: true);
+    }
+  }
+
+  Future<http.Response> _getAccountData(
+    Uri uri,
+    String token,
+    AppSettings settings,
+  ) async {
+    try {
+      return await getWithSafeNetworkRetry(
+        settings,
+        uri,
+        scope: ProxyScope.nai,
+        headers: {
+          'Authorization': 'Bearer ${token.trim()}',
+          'Accept': 'application/json',
+          'User-Agent': 'Langbai-NovelAI-Studio-Mobile/$appVersion',
+        },
+        timeout: const Duration(seconds: 15),
+        attempts: 3,
+      );
+    } catch (error) {
+      throw NaiNetworkException(error);
     }
   }
 

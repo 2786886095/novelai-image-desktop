@@ -1,9 +1,17 @@
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novelai_mobile/models/nai_models.dart';
 import 'package:novelai_mobile/services/proxy_http_client.dart';
 
 void main() {
-  tearDown(() => setResolvedSystemProxyForTesting(''));
+  TestWidgetsFlutterBinding.ensureInitialized();
+  const networkChannel = MethodChannel('langbai.novelai/network');
+
+  tearDown(() async {
+    setResolvedSystemProxyForTesting('');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(networkChannel, null);
+  });
 
   test('default settings use automatic direct routing for a system VPN/TUN',
       () {
@@ -20,6 +28,26 @@ void main() {
     expect(proxy.host, '127.0.0.1');
     expect(proxy.port, 17890);
     expect(proxy.automatic, isTrue);
+  });
+
+  test('automatic proxy resolution uses the actual request URL', () async {
+    String? resolvedTarget;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(networkChannel, (call) async {
+      resolvedTarget = call.arguments as String?;
+      return 'http://127.0.0.1:17891';
+    });
+
+    final route =
+        await resolveSystemProxyRoute('https://image.novelai.net/user/data');
+    final parsed = parseProxySettings(
+      AppSettings(),
+      automaticProxy: route,
+    );
+
+    expect(resolvedTarget, 'https://image.novelai.net/user/data');
+    expect(parsed.kind, ProxyKind.http);
+    expect(parsed.port, 17891);
   });
 
   test('direct and SOCKS5 presets parse correctly', () {

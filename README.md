@@ -3,7 +3,7 @@
 [![Build](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build.yml/badge.svg)](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build.yml)
 [![Build Mobile](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build-mobile.yml/badge.svg)](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build-mobile.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
-[![Release](https://img.shields.io/badge/release-v1.9.2-7c5cfa.svg)](https://github.com/2786886095/novelai-image-desktop/releases/tag/v1.9.2)
+[![Release](https://img.shields.io/badge/release-v1.9.3-7c5cfa.svg)](https://github.com/2786886095/novelai-image-desktop/releases/tag/v1.9.3)
 [![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android%20%7C%20iOS-20b7d8.svg)](#下载)
 
 <img width="1672" height="941" alt="ChatGPT Image 2026年6月17日 11_27_47" src="https://github.com/user-attachments/assets/66a6caef-3007-479b-9006-1c6f50570655" />
@@ -16,16 +16,16 @@
 
 ## 下载
 
-- **v1.9.2 中国大陆线路**：[Gitee Releases](https://gitee.com/langbai666/novelai-image-desktop/releases/tag/v1.9.2)
-- **v1.9.2 全球线路**：[GitHub Releases](https://github.com/2786886095/novelai-image-desktop/releases/tag/v1.9.2)
+- **v1.9.3 中国大陆线路**：[Gitee Releases](https://gitee.com/langbai666/novelai-image-desktop/releases/tag/v1.9.3)
+- **v1.9.3 全球线路**：[GitHub Releases](https://github.com/2786886095/novelai-image-desktop/releases/tag/v1.9.3)
 - **持续构建产物**：[GitHub Actions](https://github.com/2786886095/novelai-image-desktop/actions)
 
 Release 目标产物：
 
 | 平台 | 文件 |
 | --- | --- |
-| Windows（便携版） | `Langbai-NovelAI-Studio-1.9.2.exe` |
-| Windows（安装版） | `Langbai-NovelAI-Studio-Setup-1.9.2.exe` |
+| Windows（便携版） | `Langbai-NovelAI-Studio-1.9.3.exe` |
+| Windows（安装版） | `Langbai-NovelAI-Studio-Setup-1.9.3.exe` |
 | macOS | universal `.dmg` + `.zip` |
 | Linux | `.AppImage` |
 | Android | `app-release.apk` |
@@ -88,7 +88,7 @@ npm run dev
 
 首次启动后：
 
-1. 默认使用“自动跟随系统代理 / VPN”：系统代理或 PAC 会自动读取实际端口，TUN / 虚拟网卡模式直接交由 VPN 路由；仅手动代理模式需要填写 HTTP/SOCKS5 地址。
+1. 默认使用“自动跟随系统代理 / VPN”：系统代理或 PAC 会按每个实际请求地址读取对应线路与端口，TUN / 虚拟网卡模式直接交由 VPN 路由；仅手动代理模式需要填写 HTTP/SOCKS5 地址。移动端账户查询遇到连接重置或临时网关错误时会安全重试，不会重试可能重复扣费的生图请求。
 2. 打开“设置 > API 配置”，按应用内图文教程获取并粘贴 NovelAI Persistent API Token。
 3. 点击“验证 Token / 刷新积分”确认账号与余额。
 3. 选择模型，填写提示词与参数。
@@ -107,8 +107,8 @@ npm run pack
 `npm run pack` 现在会同时产出便携版和安装版：
 
 ```text
-release\Langbai-NovelAI-Studio-1.9.2.exe          # 便携版
-release\Langbai-NovelAI-Studio-Setup-1.9.2.exe    # 安装版（NSIS 向导）
+release\Langbai-NovelAI-Studio-1.9.3.exe          # 便携版
+release\Langbai-NovelAI-Studio-Setup-1.9.3.exe    # 安装版（NSIS 向导）
 release\Langbai-NovelAI-Studio.exe                # 便携版稳定别名
 release\latest.yml                                # 安装版应用内更新用的元数据
 ```
@@ -132,9 +132,9 @@ release\NovelAI-Image-Desktop.exe
 推送 `v*` tag 会触发桌面端与移动端两个 workflow，并把所有平台产物汇总到同一个 Release：
 
 ```powershell
-git tag v1.9.2
+git tag v1.9.3
 git push origin main
-git push origin v1.9.2
+git push origin v1.9.3
 ```
 
 如果 Release 上传时报 403，请在仓库 `Settings -> Actions -> General -> Workflow permissions` 中启用 `Read and write permissions`。

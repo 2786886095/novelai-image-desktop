@@ -6,6 +6,8 @@ const _runtimeText = <String, Map<String, String>>{
     'common.unknown': '未知',
     'error.tokenRequired': '请先在设置中配置 API Token',
     'error.naiTokenRequired': '请先配置 NovelAI Token',
+    'error.naiNetworkRetryFailed':
+        'NovelAI 连接中断，软件已按当前系统代理自动重试。请确认 VPN 规则包含 api.novelai.net 和 image.novelai.net 后再试。',
     'error.positiveRequired': '请输入正面提示词',
     'error.workbenchRequired': '请先加载工作台图片',
     'error.originalImageRequired': '请先加载原图',
@@ -220,6 +222,8 @@ const _runtimeText = <String, Map<String, String>>{
     'common.unknown': '未知',
     'error.tokenRequired': '請先在設定中配置 API Token',
     'error.naiTokenRequired': '請先配置 NovelAI Token',
+    'error.naiNetworkRetryFailed':
+        'NovelAI 連線中斷，軟體已依目前系統代理自動重試。請確認 VPN 規則包含 api.novelai.net 與 image.novelai.net 後再試。',
     'error.positiveRequired': '請輸入正面提示詞',
     'error.workbenchRequired': '請先載入工作台圖片',
     'error.originalImageRequired': '請先載入原圖',
@@ -434,6 +438,8 @@ const _runtimeText = <String, Map<String, String>>{
     'common.unknown': 'Unknown',
     'error.tokenRequired': 'Configure an API Token in Settings first',
     'error.naiTokenRequired': 'Configure your NovelAI Token first',
+    'error.naiNetworkRetryFailed':
+        'The NovelAI connection was interrupted after automatic retries. Make sure your VPN rules include api.novelai.net and image.novelai.net, then try again.',
     'error.positiveRequired': 'Enter a positive prompt first',
     'error.workbenchRequired': 'Load a workbench image first',
     'error.originalImageRequired': 'Load the original image first',
@@ -704,6 +710,8 @@ const _runtimeText = <String, Map<String, String>>{
     'common.unknown': '不明',
     'error.tokenRequired': '先に設定で API Token を設定してください',
     'error.naiTokenRequired': '先に NovelAI Token を設定してください',
+    'error.naiNetworkRetryFailed':
+        'NovelAI への接続が中断され、自動再試行も失敗しました。VPN ルールに api.novelai.net と image.novelai.net を含めてから再試行してください。',
     'error.positiveRequired': '先にポジティブプロンプトを入力してください',
     'error.workbenchRequired': '先にワークベンチ画像を読み込んでください',
     'error.originalImageRequired': '先に元画像を読み込んでください',
@@ -930,6 +938,8 @@ const _runtimeText = <String, Map<String, String>>{
     'common.unknown': '알 수 없음',
     'error.tokenRequired': '먼저 설정에서 API Token을 설정하세요',
     'error.naiTokenRequired': '먼저 NovelAI Token을 설정하세요',
+    'error.naiNetworkRetryFailed':
+        'NovelAI 연결이 중단되어 자동 재시도도 실패했습니다. VPN 규칙에 api.novelai.net 및 image.novelai.net이 포함되어 있는지 확인한 뒤 다시 시도하세요.',
     'error.positiveRequired': '먼저 포지티브 프롬프트를 입력하세요',
     'error.workbenchRequired': '먼저 작업대 이미지를 불러오세요',
     'error.originalImageRequired': '먼저 원본 이미지를 불러오세요',

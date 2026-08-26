@@ -369,6 +369,9 @@ class AppState extends ChangeNotifier {
       _scheduleGenerationQuote();
       return null;
     } catch (e) {
+      if (e is NaiNetworkException) {
+        return _rt('error.naiNetworkRetryFailed');
+      }
       return e.toString().replaceFirst('Exception: ', '');
     }
   }

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
@@ -33,37 +34,47 @@ class ParsedProxy {
 const _networkChannel = MethodChannel('langbai.novelai/network');
 String _resolvedSystemProxy = '';
 
+Future<String> resolveSystemProxyRoute([
+  String targetUrl = 'https://api.novelai.net',
+]) async {
+  try {
+    return (await _networkChannel.invokeMethod<String>(
+                'resolveProxy', targetUrl))
+            ?.trim() ??
+        '';
+  } on MissingPluginException {
+    return '';
+  } on PlatformException {
+    return '';
+  }
+}
+
 /// Refresh the native OS proxy decision. Empty means DIRECT, which deliberately
 /// leaves the socket to an Android/iOS VPN or TUN virtual adapter.
 Future<void> refreshSystemProxyRoute([
   String targetUrl = 'https://api.novelai.net',
 ]) async {
-  try {
-    _resolvedSystemProxy =
-        (await _networkChannel.invokeMethod<String>('resolveProxy', targetUrl))
-                ?.trim() ??
-            '';
-  } on MissingPluginException {
-    _resolvedSystemProxy = '';
-  } on PlatformException {
-    _resolvedSystemProxy = '';
-  }
+  _resolvedSystemProxy = await resolveSystemProxyRoute(targetUrl);
 }
 
 void setResolvedSystemProxyForTesting(String value) {
   _resolvedSystemProxy = value.trim();
 }
 
-ParsedProxy parseProxySettings(AppSettings settings) {
+ParsedProxy parseProxySettings(
+  AppSettings settings, {
+  String? automaticProxy,
+}) {
   final automatic = settings.proxyMode == 'auto';
-  if (automatic && _resolvedSystemProxy.isEmpty) {
+  final resolvedAutomaticProxy = automaticProxy ?? _resolvedSystemProxy;
+  if (automatic && resolvedAutomaticProxy.isEmpty) {
     return const ParsedProxy(ProxyKind.direct, automatic: true);
   }
   if (settings.proxyMode == 'direct') {
     return const ParsedProxy(ProxyKind.direct);
   }
   var mode = automatic ? 'custom' : settings.proxyMode;
-  var value = automatic ? _resolvedSystemProxy : settings.proxyUrl.trim();
+  var value = automatic ? resolvedAutomaticProxy : settings.proxyUrl.trim();
   if (mode == 'http' && value.isEmpty) value = 'http://127.0.0.1:7890';
   if (mode == 'socks5' && value.isEmpty) value = 'socks5://127.0.0.1:10808';
   if (!value.contains('://')) {
@@ -91,10 +102,11 @@ ParsedProxy parseProxySettings(AppSettings settings) {
 http.Client createProxyHttpClient(
   AppSettings settings, {
   ProxyScope? scope,
+  String? automaticProxy,
 }) {
   final enabled = proxyEnabledForScope(settings, scope);
   final proxy = enabled
-      ? parseProxySettings(settings)
+      ? parseProxySettings(settings, automaticProxy: automaticProxy)
       : const ParsedProxy(ProxyKind.direct);
   final ioClient = HttpClient()..idleTimeout = const Duration(seconds: 20);
   if (proxy.kind == ProxyKind.http) {
@@ -114,6 +126,66 @@ http.Client createProxyHttpClient(
   return IOClient(ioClient);
 }
 
+Future<http.Client> createProxyHttpClientForUri(
+  AppSettings settings,
+  Uri uri, {
+  ProxyScope? scope,
+}) async {
+  final enabled = proxyEnabledForScope(settings, scope);
+  final automaticProxy = enabled && settings.proxyMode == 'auto'
+      ? await resolveSystemProxyRoute(uri.toString())
+      : null;
+  return createProxyHttpClient(
+    settings,
+    scope: scope,
+    automaticProxy: automaticProxy,
+  );
+}
+
+bool isRetryableNetworkError(Object error) =>
+    error is SocketException ||
+    error is HandshakeException ||
+    error is HttpException ||
+    error is TimeoutException ||
+    error is http.ClientException;
+
+Future<http.Response> getWithSafeNetworkRetry(
+  AppSettings settings,
+  Uri uri, {
+  ProxyScope? scope,
+  Map<String, String>? headers,
+  Duration timeout = const Duration(seconds: 15),
+  int attempts = 3,
+}) async {
+  Object? lastError;
+  final safeAttempts = attempts.clamp(1, 5);
+  for (var attempt = 0; attempt < safeAttempts; attempt++) {
+    final client = await createProxyHttpClientForUri(
+      settings,
+      uri,
+      scope: scope,
+    );
+    try {
+      final response = await client.get(uri, headers: headers).timeout(timeout);
+      final retryableStatus = response.statusCode == 502 ||
+          response.statusCode == 503 ||
+          response.statusCode == 504;
+      if (!retryableStatus) return response;
+      lastError = HttpException('HTTP ${response.statusCode}', uri: uri);
+      if (attempt + 1 >= safeAttempts) throw lastError;
+    } catch (error) {
+      lastError = error;
+      if (!isRetryableNetworkError(error) || attempt + 1 >= safeAttempts) {
+        rethrow;
+      }
+    } finally {
+      client.close();
+    }
+    await Future.delayed(Duration(milliseconds: 250 * (1 << attempt)));
+  }
+  throw lastError ?? const SocketException('Network request failed');
+}
+
 bool proxyEnabledForScope(AppSettings settings, ProxyScope? scope) =>
     switch (scope) {
       ProxyScope.nai => settings.proxyForNai,
@@ -125,20 +197,24 @@ bool proxyEnabledForScope(AppSettings settings, ProxyScope? scope) =>
     };
 
 Future<String> testProxyConnection(AppSettings settings) async {
-  if (settings.proxyMode == 'auto') await refreshSystemProxyRoute();
-  final parsed = parseProxySettings(settings);
-  final client = createProxyHttpClient(settings);
-  try {
-    final stopwatch = Stopwatch()..start();
-    final response = await client
-        .get(Uri.parse('https://api.novelai.net/user/information'))
-        .timeout(const Duration(seconds: 12));
-    stopwatch.stop();
+  final stopwatch = Stopwatch()..start();
+  for (final uri in [
+    Uri.parse('https://api.novelai.net/user/information'),
+    Uri.parse('https://image.novelai.net/user/data'),
+  ]) {
+    final response = await getWithSafeNetworkRetry(
+      settings,
+      uri,
+      scope: ProxyScope.nai,
+      timeout: const Duration(seconds: 12),
+    );
     if (response.statusCode >= 500) {
       throw HttpException('NovelAI returned HTTP ${response.statusCode}');
     }
-    return '${parsed.description} connected, ${stopwatch.elapsedMilliseconds} ms';
-  } finally {
-    client.close();
   }
+  stopwatch.stop();
+  final description = settings.proxyMode == 'auto'
+      ? 'Auto per URL (system proxy/VPN)'
+      : parseProxySettings(settings).description;
+  return '$description connected, ${stopwatch.elapsedMilliseconds} ms';
 }

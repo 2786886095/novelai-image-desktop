@@ -10,6 +10,63 @@ import 'package:novelai_mobile/services/nai_api.dart';
 import 'package:novelai_mobile/state/app_state.dart';
 
 void main() {
+  test('token verification safely retries temporary account endpoint failures',
+      () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(server.close);
+    var attempts = 0;
+    server.listen((request) async {
+      attempts++;
+      if (attempts < 3) {
+        request.response.statusCode = HttpStatus.serviceUnavailable;
+      } else {
+        request.response.headers.contentType = ContentType.json;
+        request.response.write(jsonEncode({
+          'subscription': {'tier': 1}
+        }));
+      }
+      await request.response.close();
+    });
+
+    final summary = await NaiApi().verifyToken(
+      'test-token',
+      AppSettings(
+        proxyMode: 'direct',
+        allowCustomEndpoint: true,
+        imageBaseUrl:
+            'http://${InternetAddress.loopbackIPv4.address}:${server.port}',
+      ),
+    );
+
+    expect(attempts, 3);
+    expect(summary.hasToken, isTrue);
+    expect(summary.tierLevel, 1);
+  });
+
+  test('token verification reports a compact network failure after retries',
+      () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(server.close);
+    var attempts = 0;
+    server.listen((request) async {
+      attempts++;
+      request.response.statusCode = HttpStatus.badGateway;
+      await request.response.close();
+    });
+    final settings = AppSettings(
+      proxyMode: 'direct',
+      allowCustomEndpoint: true,
+      imageBaseUrl:
+          'http://${InternetAddress.loopbackIPv4.address}:${server.port}',
+    );
+
+    await expectLater(
+      NaiApi().verifyToken('test-token', settings),
+      throwsA(isA<NaiNetworkException>()),
+    );
+    expect(attempts, 3);
+  });
+
   test('generic validation errors are not misclassified as reference failures',
       () {
     expect(
