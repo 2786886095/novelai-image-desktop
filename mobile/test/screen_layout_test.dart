@@ -116,6 +116,52 @@ void main() {
     expect(field.controller?.text, '1girl, smile, blue eyes');
   });
 
+  testWidgets('character positions switch to custom mode and drag directly',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(430, 2600);
+    addTearDown(tester.view.reset);
+    final state = AppState();
+    addTearDown(state.dispose);
+    state.addCharacter();
+    state.addCharacter();
+
+    await _pumpScreen(
+      tester,
+      state,
+      const GenerateScreen(),
+      'character position editor initial layout',
+    );
+    expect(
+        find.byKey(const ValueKey('character-position-canvas')), findsNothing);
+
+    await tester.scrollUntilVisible(
+      find.text('自定义拖动'),
+      500,
+      scrollable: find.byType(Scrollable).first,
+      maxScrolls: 12,
+    );
+    await tester.tap(find.text('自定义拖动'));
+    await tester.pump();
+    expect(state.extras.charCaptions.every((item) => item.useCoords), isTrue);
+    expect(find.byKey(const ValueKey('character-position-canvas')),
+        findsOneWidget);
+
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('character-position-marker-1')),
+      300,
+      scrollable: find.byType(Scrollable).first,
+      maxScrolls: 6,
+    );
+    final before = state.extras.charCaptions[1].x;
+    await tester.drag(
+      find.byKey(const ValueKey('character-position-marker-1')),
+      const Offset(36, 0),
+    );
+    await tester.pump();
+    expect(state.extras.charCaptions[1].x, greaterThan(before));
+  });
+
   testWidgets('generate screen uses split content on roomy phone landscape',
       (tester) async {
     tester.view.devicePixelRatio = 1;

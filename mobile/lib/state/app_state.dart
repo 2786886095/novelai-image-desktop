@@ -772,7 +772,9 @@ class AppState extends ChangeNotifier {
 
   void addCharacter() {
     if (extras.charCaptions.length >= params.maxCharacterPrompts) return;
-    extras.charCaptions.add(CharCaptionItem());
+    extras.charCaptions.add(CharCaptionItem(
+      useCoords: extras.charCaptions.any((caption) => caption.useCoords),
+    ));
     notifyListeners();
     _scheduleGenerationQuote();
   }

@@ -1081,6 +1081,13 @@ function CharCaptionsModal({ onClose }: { onClose: () => void }) {
   const maxCharacters = maxNAICharacterPrompts(params.model);
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
+  const customPositions = charCaptions.some((caption) => caption.useCoords);
+
+  const setPositionMode = useCallback((custom: boolean) => {
+    for (const caption of charCaptions) {
+      updateCharCaption(caption.id, { useCoords: custom });
+    }
+  }, [charCaptions, updateCharCaption]);
 
   return (
     <AppPortal>
@@ -1095,6 +1102,96 @@ function CharCaptionsModal({ onClose }: { onClose: () => void }) {
             <div className="status-box bad">
               {t("character.unsupported")}
             </div>
+          )}
+          {supportsCharacters && charCaptions.length > 0 && (
+            <section className="char-position-section" aria-label={t("character.positionMode")}>
+              <div className="char-position-toolbar">
+                <div>
+                  <strong>{t("character.positionMode")}</strong>
+                  <small>{t("character.positionHint")}</small>
+                </div>
+                <div className="char-position-mode" role="group" aria-label={t("character.positionMode")}>
+                  <button
+                    type="button"
+                    className={clsx(!customPositions && "active")}
+                    aria-pressed={!customPositions}
+                    onClick={() => setPositionMode(false)}
+                  >
+                    {t("character.aiChoice")}
+                  </button>
+                  <button
+                    type="button"
+                    className={clsx(customPositions && "active")}
+                    aria-pressed={customPositions}
+                    onClick={() => setPositionMode(true)}
+                  >
+                    {t("character.customPosition")}
+                  </button>
+                </div>
+              </div>
+              {customPositions && (
+                <div className="char-position-stage-wrap">
+                  <div
+                    className="char-position-stage"
+                    style={{
+                      aspectRatio: `${Math.max(1, params.width)} / ${Math.max(1, params.height)}`,
+                      width: `min(100%, ${Math.min(560, 390 * (Math.max(1, params.width) / Math.max(1, params.height)))}px)`,
+                    }}
+                    aria-label={t("character.positionCanvas")}
+                  >
+                    <div className="char-position-grid" aria-hidden="true" />
+                    {charCaptions.map((caption, index) => (
+                      <button
+                        key={caption.id}
+                        type="button"
+                        className="char-position-marker"
+                        style={{
+                          left: `${(caption.useCoords ? caption.x : 0.5) * 100}%`,
+                          top: `${(caption.useCoords ? caption.y : 0.5) * 100}%`,
+                        }}
+                        aria-label={f("character.markerLabel", { index: index + 1 })}
+                        title={`${f("character.label", { index: index + 1 })} · X ${caption.x.toFixed(2)} · Y ${caption.y.toFixed(2)}`}
+                        onPointerDown={(event) => {
+                          event.currentTarget.setPointerCapture(event.pointerId);
+                          const stage = event.currentTarget.parentElement;
+                          if (!stage) return;
+                          const rect = stage.getBoundingClientRect();
+                          updateCharCaption(caption.id, {
+                            useCoords: true,
+                            x: Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width)),
+                            y: Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height)),
+                          });
+                        }}
+                        onPointerMove={(event) => {
+                          if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+                          const stage = event.currentTarget.parentElement;
+                          if (!stage) return;
+                          const rect = stage.getBoundingClientRect();
+                          updateCharCaption(caption.id, {
+                            useCoords: true,
+                            x: Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width)),
+                            y: Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height)),
+                          });
+                        }}
+                        onKeyDown={(event) => {
+                          const step = event.shiftKey ? 0.05 : 0.01;
+                          const patch: { x?: number; y?: number } = {};
+                          if (event.key === "ArrowLeft") patch.x = Math.max(0, caption.x - step);
+                          if (event.key === "ArrowRight") patch.x = Math.min(1, caption.x + step);
+                          if (event.key === "ArrowUp") patch.y = Math.max(0, caption.y - step);
+                          if (event.key === "ArrowDown") patch.y = Math.min(1, caption.y + step);
+                          if (patch.x == null && patch.y == null) return;
+                          event.preventDefault();
+                          updateCharCaption(caption.id, { ...patch, useCoords: true });
+                        }}
+                      >
+                        {index + 1}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </section>
           )}
           {charCaptions.map((cc, idx) => (
             <div className="char-row" key={cc.id}>
@@ -1119,16 +1216,8 @@ function CharCaptionsModal({ onClose }: { onClose: () => void }) {
                   onChange={(e) => updateCharCaption(cc.id, { negativePrompt: e.target.value })}
                 />
               </label>
-              <label className="checkbox-line">
-                <input
-                  type="checkbox"
-                  checked={cc.useCoords}
-                  onChange={(e) => updateCharCaption(cc.id, { useCoords: e.target.checked })}
-                />
-                <span>{t("character.useCoords")}</span>
-              </label>
               {cc.useCoords && (
-                <div className="char-coords">
+                <div className="char-coords" aria-label={t("character.exactPosition")}>
                   <NumberInput
                     label={t("character.x")}
                     value={cc.x}
@@ -2089,8 +2178,10 @@ function PromptAndParams({
         placeholder={promptTab === "positive" ? generateText.prompt.positivePlaceholder : generateText.prompt.negativePlaceholder}
       />
       <div className="prompt-toolbar-row">
-        <button type="button" className="prompt-tool-btn" onClick={() => setShowWeights((v) => !v)} disabled={weightTags.length === 0}>
-          <Icon name="sliders" /> {generateText.prompt.weightAdjust}{weightTags.length ? ` (${weightTags.length})` : ""} <Icon name="chevronDown" className={clsx("prompt-tool-chevron", showWeights && "open")} />
+        <button type="button" className="prompt-tool-btn weight-tool-btn" onClick={() => setShowWeights((v) => !v)} disabled={weightTags.length === 0}>
+          <Icon name="sliders" />
+          <span>{generateText.prompt.weightAdjust}{weightTags.length ? ` (${weightTags.length})` : ""}</span>
+          <Icon name="chevronDown" className={clsx("prompt-tool-chevron", showWeights && "open")} />
         </button>
         <button type="button" className="prompt-tool-btn" onClick={() => void translatePrompt()} disabled={translating}>
           {translating ? generateText.prompt.translating : <><Icon name="globe" /> {generateText.prompt.translate}</>}

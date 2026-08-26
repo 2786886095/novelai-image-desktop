@@ -893,10 +893,30 @@ class PromptEditorState extends State<PromptEditor> {
                 icon: const Icon(Icons.auto_fix_high, size: 18),
                 label: Text(text.normalize),
               ),
-              TextButton.icon(
+              TextButton(
                 onPressed: _editWeights,
-                icon: const Icon(Icons.tune, size: 18),
-                label: Text(text.weight),
+                child: SizedBox(
+                  width: 126,
+                  height: 24,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      const Align(
+                        alignment: Alignment.centerLeft,
+                        child: Icon(Icons.tune, size: 18),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 22),
+                        child: Text(
+                          text.weight,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ],
             if (hasPromptWildcards(controller.text))
@@ -2644,6 +2664,10 @@ class _CharacterPrompts extends StatelessWidget {
                     label: Text(t('common.add'))),
               ],
             ),
+            if (s.extras.charCaptions.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              const _CharacterPositionEditor(),
+            ],
             for (var i = 0; i < s.extras.charCaptions.length; i++)
               _CharCard(index: i),
           ],
@@ -2651,6 +2675,212 @@ class _CharacterPrompts extends StatelessWidget {
       ),
     );
   }
+}
+
+class _CharacterPositionEditor extends StatelessWidget {
+  const _CharacterPositionEditor();
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<AppState>();
+    final language = state.settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
+    final captions = state.extras.charCaptions;
+    final custom = captions.any((caption) => caption.useCoords);
+    final ratio = max(0.2, state.params.width / max(1, state.params.height));
+
+    void setMode(bool enabled) {
+      for (final caption in captions) {
+        caption.useCoords = enabled;
+      }
+      state.markChanged();
+    }
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outlineVariant,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(t('generate.positionMode'),
+                style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: 2),
+            Text(t('generate.positionHint'),
+                style: Theme.of(context).textTheme.bodySmall),
+            const SizedBox(height: 10),
+            SegmentedButton<bool>(
+              segments: [
+                ButtonSegment(
+                  value: false,
+                  icon: const Icon(Icons.auto_awesome_outlined),
+                  label: Text(t('generate.positionAiChoice')),
+                ),
+                ButtonSegment(
+                  value: true,
+                  icon: const Icon(Icons.open_with),
+                  label: Text(t('generate.positionCustom')),
+                ),
+              ],
+              selected: {custom},
+              showSelectedIcon: false,
+              onSelectionChanged: (selection) => setMode(selection.first),
+            ),
+            if (custom) ...[
+              const SizedBox(height: 12),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final maxCanvasHeight = min(
+                    420.0,
+                    MediaQuery.sizeOf(context).height * 0.45,
+                  );
+                  final canvasWidth = min(
+                    constraints.maxWidth,
+                    maxCanvasHeight * ratio,
+                  );
+                  final canvasHeight = canvasWidth / ratio;
+                  return Center(
+                    child: Container(
+                      key: const ValueKey('character-position-canvas'),
+                      width: canvasWidth,
+                      height: canvasHeight,
+                      clipBehavior: Clip.hardEdge,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF090B18),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.white24),
+                      ),
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          const Positioned.fill(
+                            child: IgnorePointer(
+                              child: CustomPaint(
+                                painter: _CharacterPositionGridPainter(),
+                              ),
+                            ),
+                          ),
+                          for (var index = 0; index < captions.length; index++)
+                            Positioned(
+                              left: ((captions[index].useCoords
+                                          ? captions[index].x
+                                          : 0.5) *
+                                      canvasWidth) -
+                                  22,
+                              top: ((captions[index].useCoords
+                                          ? captions[index].y
+                                          : 0.5) *
+                                      canvasHeight) -
+                                  22,
+                              width: 44,
+                              height: 44,
+                              child: Semantics(
+                                label: mobileUiFormatFor(
+                                  language,
+                                  'generate.positionMarker',
+                                  {'index': index + 1},
+                                ),
+                                button: true,
+                                child: Listener(
+                                  key: ValueKey(
+                                      'character-position-marker-$index'),
+                                  behavior: HitTestBehavior.opaque,
+                                  onPointerDown: (_) {
+                                    captions[index].useCoords = true;
+                                  },
+                                  onPointerMove: (event) {
+                                    final caption = captions[index];
+                                    caption
+                                      ..useCoords = true
+                                      ..x = (caption.x +
+                                              event.delta.dx / canvasWidth)
+                                          .clamp(0.0, 1.0)
+                                          .toDouble()
+                                      ..y = (caption.y +
+                                              event.delta.dy / canvasHeight)
+                                          .clamp(0.0, 1.0)
+                                          .toDouble();
+                                    state.markChanged();
+                                  },
+                                  child: Center(
+                                    child: Container(
+                                      width: 34,
+                                      height: 34,
+                                      alignment: Alignment.center,
+                                      decoration: BoxDecoration(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .primary,
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: Colors.white,
+                                          width: 3,
+                                        ),
+                                        boxShadow: const [
+                                          BoxShadow(
+                                            color: Colors.black45,
+                                            blurRadius: 8,
+                                            offset: Offset(0, 3),
+                                          ),
+                                        ],
+                                      ),
+                                      child: Text(
+                                        '${index + 1}',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CharacterPositionGridPainter extends CustomPainter {
+  const _CharacterPositionGridPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.white.withOpacity(0.09)
+      ..strokeWidth = 1;
+    for (final fraction in const [1 / 3, 2 / 3]) {
+      canvas.drawLine(
+        Offset(size.width * fraction, 0),
+        Offset(size.width * fraction, size.height),
+        paint,
+      );
+      canvas.drawLine(
+        Offset(0, size.height * fraction),
+        Offset(size.width, size.height * fraction),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _CharacterPositionGridPainter oldDelegate) =>
+      false;
 }
 
 class _ReferenceControls extends StatelessWidget {
@@ -4129,42 +4359,41 @@ class _CharCard extends StatelessWidget {
               s.markChanged();
             },
           ),
-          CheckboxListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text(t('generate.useCoords')),
-            value: c.useCoords,
-            onChanged: (v) {
-              c.useCoords = v ?? false;
-              s.markChanged();
-            },
-          ),
           if (c.useCoords)
-            Row(children: [
-              Expanded(
-                  child: _Slider(
-                      label: 'X',
-                      value: c.x,
-                      min: 0,
-                      max: 1,
-                      divisions: 20,
-                      display: c.x.toStringAsFixed(2),
-                      onChanged: (v) {
-                        c.x = v;
-                        s.markChanged();
-                      })),
-              Expanded(
-                  child: _Slider(
-                      label: 'Y',
-                      value: c.y,
-                      min: 0,
-                      max: 1,
-                      divisions: 20,
-                      display: c.y.toStringAsFixed(2),
-                      onChanged: (v) {
-                        c.y = v;
-                        s.markChanged();
-                      })),
-            ]),
+            ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              title: Text(t('generate.positionExact')),
+              subtitle: Text(
+                  'X ${c.x.toStringAsFixed(2)} · Y ${c.y.toStringAsFixed(2)}'),
+              children: [
+                Row(children: [
+                  Expanded(
+                      child: _Slider(
+                          label: 'X',
+                          value: c.x,
+                          min: 0,
+                          max: 1,
+                          divisions: 100,
+                          display: c.x.toStringAsFixed(2),
+                          onChanged: (v) {
+                            c.x = v;
+                            s.markChanged();
+                          })),
+                  Expanded(
+                      child: _Slider(
+                          label: 'Y',
+                          value: c.y,
+                          min: 0,
+                          max: 1,
+                          divisions: 100,
+                          display: c.y.toStringAsFixed(2),
+                          onChanged: (v) {
+                            c.y = v;
+                            s.markChanged();
+                          })),
+                ]),
+              ],
+            ),
         ],
       ),
     );

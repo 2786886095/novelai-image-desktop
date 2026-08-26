@@ -44,6 +44,19 @@ describe("desktop UI consistency guards", () => {
     expect(finalRule).toContain("flex: 0 0 var(--ui-icon-size, 16px)");
   });
 
+  it("centers weight text and provides direct character-position dragging", () => {
+    const source = fs.readFileSync(path.join(projectRoot, "src", "App.tsx"), "utf8");
+    const styles = fs.readFileSync(path.join(projectRoot, "src", "styles.css"), "utf8");
+    expect(source).toContain('className="prompt-tool-btn weight-tool-btn"');
+    expect(source).toContain('<span>{generateText.prompt.weightAdjust}');
+    expect(styles).toContain(".weight-tool-btn");
+    expect(styles).toContain("grid-template-columns: 15px minmax(0, 1fr) 15px");
+    expect(source).toContain('className="char-position-stage"');
+    expect(source).toContain('className="char-position-marker"');
+    expect(source).toContain("setPointerCapture(event.pointerId)");
+    expect(source).toContain('updateCharCaption(caption.id, { ...patch, useCoords: true })');
+  });
+
   it("keeps the style-folder create action on one icon and one text baseline", () => {
     const source = fs.readFileSync(path.join(projectRoot, "src", "App.tsx"), "utf8");
     const styles = fs.readFileSync(path.join(projectRoot, "src", "styles.css"), "utf8");

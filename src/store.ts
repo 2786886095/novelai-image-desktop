@@ -1271,7 +1271,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((state) => ({
       charCaptions: [
         ...state.charCaptions,
-        { id, prompt: "", negativePrompt: "", useCoords: false, x: 0.5, y: 0.5 },
+        {
+          id,
+          prompt: "",
+          negativePrompt: "",
+          useCoords: state.charCaptions.some((caption) => caption.useCoords),
+          x: 0.5,
+          y: 0.5,
+        },
       ],
     }));
   },
