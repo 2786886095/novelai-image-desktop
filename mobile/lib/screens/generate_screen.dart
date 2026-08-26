@@ -2669,7 +2669,10 @@ class _CharacterPrompts extends StatelessWidget {
               const _CharacterPositionEditor(),
             ],
             for (var i = 0; i < s.extras.charCaptions.length; i++)
-              _CharCard(index: i),
+              _CharCard(
+                key: ObjectKey(s.extras.charCaptions[i]),
+                index: i,
+              ),
           ],
         ),
       ),
@@ -4319,82 +4322,160 @@ class _ReferencePresetLibraryPanelState
   }
 }
 
-class _CharCard extends StatelessWidget {
+class _CharCard extends StatefulWidget {
   final int index;
-  const _CharCard({required this.index});
+  const _CharCard({super.key, required this.index});
+
+  @override
+  State<_CharCard> createState() => _CharCardState();
+}
+
+class _CharCardState extends State<_CharCard> {
+  bool _collapsed = false;
 
   @override
   Widget build(BuildContext context) {
     final s = context.watch<AppState>();
     final language = s.settings.language;
     String t(String key) => mobileUiTextFor(language, key);
-    final c = s.extras.charCaptions[index];
+    final c = s.extras.charCaptions[widget.index];
+    final characterLabel = mobileUiFormatFor(
+      language,
+      'generate.characterLabel',
+      {'index': widget.index + 1},
+    );
+    final positionSummary = c.useCoords
+        ? '${t('generate.positionCustom')} · '
+            'X ${c.x.toStringAsFixed(2)} · Y ${c.y.toStringAsFixed(2)}'
+        : t('generate.positionAiChoice');
+
     return Padding(
       padding: const EdgeInsets.only(top: 8),
-      child: Column(
-        children: [
-          TextFormField(
-            initialValue: c.prompt,
-            decoration: InputDecoration(
-                labelText: mobileUiFormatFor(
-                    language, 'generate.characterLabel', {'index': index + 1}),
-                border: const OutlineInputBorder(),
-                suffixIcon: IconButton(
-                    icon: const Icon(Icons.delete),
-                    onPressed: () => s.removeCharacter(index))),
-            onChanged: (v) {
-              c.prompt = v;
-              s.markChanged();
-            },
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: Theme.of(context).colorScheme.outlineVariant,
           ),
-          const SizedBox(height: 8),
-          TextFormField(
-            initialValue: c.negativePrompt,
-            decoration: InputDecoration(
-              labelText: t('generate.characterNegative'),
-              border: const OutlineInputBorder(),
-            ),
-            onChanged: (v) {
-              c.negativePrompt = v;
-              s.markChanged();
-            },
-          ),
-          if (c.useCoords)
-            ExpansionTile(
-              tilePadding: EdgeInsets.zero,
-              title: Text(t('generate.positionExact')),
-              subtitle: Text(
-                  'X ${c.x.toStringAsFixed(2)} · Y ${c.y.toStringAsFixed(2)}'),
-              children: [
-                Row(children: [
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 6, 4, 6),
+              child: Row(
+                children: [
                   Expanded(
-                      child: _Slider(
-                          label: 'X',
-                          value: c.x,
-                          min: 0,
-                          max: 1,
-                          divisions: 100,
-                          display: c.x.toStringAsFixed(2),
-                          onChanged: (v) {
-                            c.x = v;
-                            s.markChanged();
-                          })),
-                  Expanded(
-                      child: _Slider(
-                          label: 'Y',
-                          value: c.y,
-                          min: 0,
-                          max: 1,
-                          divisions: 100,
-                          display: c.y.toStringAsFixed(2),
-                          onChanged: (v) {
-                            c.y = v;
-                            s.markChanged();
-                          })),
-                ]),
-              ],
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          characterLabel,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          positionSummary,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                  ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    key: ValueKey('character-card-toggle-${widget.index}'),
+                    tooltip: t(_collapsed
+                        ? 'generate.characterExpand'
+                        : 'generate.characterCollapse'),
+                    onPressed: () => setState(() => _collapsed = !_collapsed),
+                    icon: Icon(
+                      _collapsed ? Icons.expand_more : Icons.expand_less,
+                    ),
+                  ),
+                  IconButton(
+                    key: ValueKey('character-card-delete-${widget.index}'),
+                    tooltip: t('common.delete'),
+                    icon: const Icon(Icons.delete_outline),
+                    onPressed: () => s.removeCharacter(widget.index),
+                  ),
+                ],
+              ),
             ),
-        ],
+            if (!_collapsed)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+                child: Column(
+                  children: [
+                    TextFormField(
+                      key: ValueKey('character-prompt-field-${widget.index}'),
+                      initialValue: c.prompt,
+                      decoration: InputDecoration(
+                        labelText: characterLabel,
+                        border: const OutlineInputBorder(),
+                      ),
+                      onChanged: (v) {
+                        c.prompt = v;
+                        s.markChanged();
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      key: ValueKey('character-negative-field-${widget.index}'),
+                      initialValue: c.negativePrompt,
+                      decoration: InputDecoration(
+                        labelText: t('generate.characterNegative'),
+                        border: const OutlineInputBorder(),
+                      ),
+                      onChanged: (v) {
+                        c.negativePrompt = v;
+                        s.markChanged();
+                      },
+                    ),
+                    if (c.useCoords)
+                      ExpansionTile(
+                        tilePadding: EdgeInsets.zero,
+                        title: Text(t('generate.positionExact')),
+                        subtitle: Text(
+                            'X ${c.x.toStringAsFixed(2)} · Y ${c.y.toStringAsFixed(2)}'),
+                        children: [
+                          Row(children: [
+                            Expanded(
+                                child: _Slider(
+                                    label: 'X',
+                                    value: c.x,
+                                    min: 0,
+                                    max: 1,
+                                    divisions: 100,
+                                    display: c.x.toStringAsFixed(2),
+                                    onChanged: (v) {
+                                      c.x = v;
+                                      s.markChanged();
+                                    })),
+                            Expanded(
+                                child: _Slider(
+                                    label: 'Y',
+                                    value: c.y,
+                                    min: 0,
+                                    max: 1,
+                                    divisions: 100,
+                                    display: c.y.toStringAsFixed(2),
+                                    onChanged: (v) {
+                                      c.y = v;
+                                      s.markChanged();
+                                    })),
+                          ]),
+                        ],
+                      ),
+                  ],
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

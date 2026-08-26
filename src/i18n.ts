@@ -1832,6 +1832,8 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
       "角色提示词仅支持 V4 / V4.5 / V5 模型，当前模型不兼容，生成时将忽略角色设置。",
     "character.label": "角色 {index}",
     "character.delete": "删除",
+    "character.expand": "展开",
+    "character.collapse": "折叠",
     "character.placeholder":
       "输入该角色的提示词，例如：girl, blue dress, long hair",
     "character.negative": "角色负面提示词",
@@ -2067,6 +2069,8 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
       "角色提示詞僅支援 V4 / V4.5 / V5 模型，目前模型不相容，生成時將忽略角色設定。",
     "character.label": "角色 {index}",
     "character.delete": "刪除",
+    "character.expand": "展開",
+    "character.collapse": "折疊",
     "character.placeholder":
       "輸入該角色的提示詞，例如：girl, blue dress, long hair",
     "character.negative": "角色負面提示詞",
@@ -2308,6 +2312,8 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
       "Character prompts only support V4 / V4.5 / V5 models. The current model is incompatible, so character settings will be ignored during generation.",
     "character.label": "Character {index}",
     "character.delete": "Delete",
+    "character.expand": "Expand",
+    "character.collapse": "Collapse",
     "character.placeholder":
       "Enter this character’s prompt, e.g. girl, blue dress, long hair",
     "character.negative": "Character negative prompt",
@@ -2557,6 +2563,8 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
       "キャラクタープロンプトは V4 / V4.5 / V5 モデルのみ対応です。現在のモデルでは生成時にキャラクター設定が無視されます。",
     "character.label": "キャラクター {index}",
     "character.delete": "削除",
+    "character.expand": "展開",
+    "character.collapse": "折りたたむ",
     "character.placeholder":
       "このキャラクターのプロンプトを入力。例：girl, blue dress, long hair",
     "character.negative": "キャラクターのネガティブプロンプト",
@@ -2805,6 +2813,8 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
       "캐릭터 프롬프트는 V4 / V4.5 / V5 모델에서만 지원됩니다. 현재 모델은 호환되지 않아 생성 시 캐릭터 설정이 무시됩니다.",
     "character.label": "캐릭터 {index}",
     "character.delete": "삭제",
+    "character.expand": "펼치기",
+    "character.collapse": "접기",
     "character.placeholder":
       "이 캐릭터의 프롬프트를 입력하세요. 예: girl, blue dress, long hair",
     "character.negative": "캐릭터 네거티브 프롬프트",

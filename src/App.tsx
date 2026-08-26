@@ -1082,6 +1082,16 @@ function CharCaptionsModal({ onClose }: { onClose: () => void }) {
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
   const customPositions = charCaptions.some((caption) => caption.useCoords);
+  const [collapsedCharacters, setCollapsedCharacters] = useState<Set<string>>(() => new Set());
+
+  const toggleCharacterCollapsed = useCallback((id: string) => {
+    setCollapsedCharacters((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
 
   const setPositionMode = useCallback((custom: boolean) => {
     for (const caption of charCaptions) {
@@ -1193,51 +1203,78 @@ function CharCaptionsModal({ onClose }: { onClose: () => void }) {
               )}
             </section>
           )}
-          {charCaptions.map((cc, idx) => (
-            <div className="char-row" key={cc.id}>
+          {charCaptions.map((cc, idx) => {
+            const collapsed = collapsedCharacters.has(cc.id);
+            const contentId = `character-content-${cc.id}`;
+            return (
+            <div className={clsx("char-row", collapsed && "collapsed")} key={cc.id}>
               <div className="char-row-head">
-                <strong>{f("character.label", { index: idx + 1 })}</strong>
-                <Button variant="ghost" onClick={() => removeCharCaption(cc.id)}>
-                  <IconText icon="✕">{t("character.delete")}</IconText>
-                </Button>
+                <div className="char-row-title">
+                  <strong>{f("character.label", { index: idx + 1 })}</strong>
+                  <span className="char-row-position-summary">
+                    {cc.useCoords
+                      ? `${t("character.customPosition")} · X ${cc.x.toFixed(2)} · Y ${cc.y.toFixed(2)}`
+                      : t("character.aiChoice")}
+                  </span>
+                </div>
+                <div className="char-row-actions">
+                  <button
+                    type="button"
+                    className="char-row-toggle"
+                    aria-expanded={!collapsed}
+                    aria-controls={contentId}
+                    onClick={() => toggleCharacterCollapsed(cc.id)}
+                  >
+                    <Icon name="chevronDown" />
+                    <span>{t(collapsed ? "character.expand" : "character.collapse")}</span>
+                  </button>
+                  <Button variant="ghost" onClick={() => removeCharCaption(cc.id)}>
+                    <IconText icon="✕">{t("character.delete")}</IconText>
+                  </Button>
+                </div>
               </div>
-              <textarea
-                className="prompt-box char-prompt"
-                value={cc.prompt}
-                placeholder={t("character.placeholder")}
-                onChange={(e) => updateCharCaption(cc.id, { prompt: e.target.value })}
-              />
-              <label className="field">
-                <span>{t("character.negative")}</span>
+              {!collapsed && (
+              <div className="char-row-content" id={contentId}>
                 <textarea
                   className="prompt-box char-prompt"
-                  value={cc.negativePrompt ?? ""}
-                  placeholder={t("character.negativePlaceholder")}
-                  onChange={(e) => updateCharCaption(cc.id, { negativePrompt: e.target.value })}
+                  value={cc.prompt}
+                  placeholder={t("character.placeholder")}
+                  onChange={(e) => updateCharCaption(cc.id, { prompt: e.target.value })}
                 />
-              </label>
-              {cc.useCoords && (
-                <div className="char-coords" aria-label={t("character.exactPosition")}>
-                  <NumberInput
-                    label={t("character.x")}
-                    value={cc.x}
-                    min={0}
-                    max={1}
-                    step={0.01}
-                    onChange={(v) => updateCharCaption(cc.id, { x: v })}
+                <label className="field">
+                  <span>{t("character.negative")}</span>
+                  <textarea
+                    className="prompt-box char-prompt"
+                    value={cc.negativePrompt ?? ""}
+                    placeholder={t("character.negativePlaceholder")}
+                    onChange={(e) => updateCharCaption(cc.id, { negativePrompt: e.target.value })}
                   />
-                  <NumberInput
-                    label={t("character.y")}
-                    value={cc.y}
-                    min={0}
-                    max={1}
-                    step={0.01}
-                    onChange={(v) => updateCharCaption(cc.id, { y: v })}
-                  />
-                </div>
+                </label>
+                {cc.useCoords && (
+                  <div className="char-coords" aria-label={t("character.exactPosition")}>
+                    <NumberInput
+                      label={t("character.x")}
+                      value={cc.x}
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      onChange={(v) => updateCharCaption(cc.id, { x: v })}
+                    />
+                    <NumberInput
+                      label={t("character.y")}
+                      value={cc.y}
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      onChange={(v) => updateCharCaption(cc.id, { y: v })}
+                    />
+                  </div>
+                )}
+              </div>
               )}
             </div>
-          ))}
+            );
+          })}
           <Button className="full" onClick={addCharCaption} disabled={!supportsCharacters || charCaptions.length >= maxCharacters}>
             <IconText icon="+">{t("character.add")}</IconText>
           </Button>

@@ -57,6 +57,17 @@ describe("desktop UI consistency guards", () => {
     expect(source).toContain('updateCharCaption(caption.id, { ...patch, useCoords: true })');
   });
 
+  it("lets each character prompt card collapse independently", () => {
+    const source = fs.readFileSync(path.join(projectRoot, "src", "App.tsx"), "utf8");
+    const styles = fs.readFileSync(path.join(projectRoot, "src", "styles.css"), "utf8");
+    expect(source).toContain("collapsedCharacters");
+    expect(source).toContain('aria-expanded={!collapsed}');
+    expect(source).toContain('className="char-row-content"');
+    expect(source).toContain('t(collapsed ? "character.expand" : "character.collapse")');
+    expect(styles).toContain(".char-row-toggle");
+    expect(styles).toContain(".char-row.collapsed");
+  });
+
   it("keeps the style-folder create action on one icon and one text baseline", () => {
     const source = fs.readFileSync(path.join(projectRoot, "src", "App.tsx"), "utf8");
     const styles = fs.readFileSync(path.join(projectRoot, "src", "styles.css"), "utf8");

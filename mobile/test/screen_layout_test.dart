@@ -162,6 +162,50 @@ void main() {
     expect(state.extras.charCaptions[1].x, greaterThan(before));
   });
 
+  testWidgets(
+      'character prompt cards collapse independently and start expanded',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(430, 2800);
+    addTearDown(tester.view.reset);
+    final state = AppState();
+    addTearDown(state.dispose);
+    state.addCharacter();
+    state.addCharacter();
+
+    await _pumpScreen(
+      tester,
+      state,
+      const GenerateScreen(),
+      'character prompt collapse initial layout',
+    );
+
+    final firstToggle = find.byKey(const ValueKey('character-card-toggle-0'));
+    await tester.scrollUntilVisible(
+      firstToggle,
+      400,
+      scrollable: find.byType(Scrollable).first,
+      maxScrolls: 12,
+    );
+    expect(
+        find.byKey(const ValueKey('character-prompt-field-0')), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('character-prompt-field-1')), findsOneWidget);
+
+    tester.widget<IconButton>(firstToggle).onPressed!.call();
+    await tester.pump();
+    expect(
+        find.byKey(const ValueKey('character-prompt-field-0')), findsNothing);
+    expect(
+        find.byKey(const ValueKey('character-prompt-field-1')), findsOneWidget);
+    expect(find.text('角色 1'), findsOneWidget);
+
+    tester.widget<IconButton>(firstToggle).onPressed!.call();
+    await tester.pump();
+    expect(
+        find.byKey(const ValueKey('character-prompt-field-0')), findsOneWidget);
+  });
+
   testWidgets('generate screen uses split content on roomy phone landscape',
       (tester) async {
     tester.view.devicePixelRatio = 1;
