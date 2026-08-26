@@ -360,6 +360,11 @@ String artistPromptWithTrailingComma(String value) {
   return normalized.isEmpty ? '' : '$normalized,';
 }
 
+String artistRecipeCardTagsWithTrailingComma(ArtistRecipe recipe) {
+  final normalized = recipe.prompt.trim().replaceFirst(RegExp(r',+$'), '');
+  return normalized.isEmpty ? '' : '$normalized,';
+}
+
 String fullArtistRecipePrompt(ArtistRecipe recipe, String basePrompt) {
   final artists = recipe.artistPrompt.trim().replaceFirst(RegExp(r',+$'), '');
   var auxiliary = recipe.basePrompt.trim();

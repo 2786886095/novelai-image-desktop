@@ -1314,8 +1314,8 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                         OutlinedButton.icon(
                           onPressed: () => _copyResult(
                             artistsAction,
-                            artistPromptWithTrailingComma(
-                                result.recipe.artistPrompt),
+                            artistRecipeCardTagsWithTrailingComma(
+                                result.recipe),
                             tuneText['copiedArtists']!,
                           ),
                           icon: const Icon(Icons.people_alt_outlined, size: 16),

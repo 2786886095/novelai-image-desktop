@@ -3,8 +3,8 @@ import { AppPortal, Button, SelectMenu } from "./components/ui";
 import { Icon } from "./components/icons";
 import {
   expandArtistRecipeComparisons,
+  formatArtistCardTags,
   formatArtistFullPrompt,
-  formatArtistString,
   generatePopularArtistRecipes,
   randomizeArtistRecipeWeights,
   type ArtistRecipeComparison,
@@ -718,7 +718,7 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
     .filter((model) => effectiveFavoriteModelFilter === "all" || effectiveFavoriteModelFilter === model)
     .map((model) => ({ model, items: visibleFavorites.filter((item) => resultModel(item) === model) }));
   const variantOf = (result: Pick<RandomResult, "variant" | "mutations">): ArtistRecipeVariant => result.variant ?? (result.mutations.length > 0 ? "mutated" : "plain");
-  const artistString = (result: Pick<RandomResult, "artists">) => formatArtistString(result.artists);
+  const artistString = (result: Pick<RandomResult, "prompt">) => formatArtistCardTags(result);
   const fullPrompt = (result: RandomResult) => formatArtistFullPrompt(result, session.basePrompt);
   const copyResult = async (value: string, action: string, feedback: string) => {
     await navigator.clipboard.writeText(value);

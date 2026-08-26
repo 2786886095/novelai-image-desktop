@@ -244,6 +244,28 @@ void main() {
     );
   });
 
+  test('card copy includes every displayed weighted tag', () {
+    const prompt =
+        '1.94::artist:xiujia_yihuizi ::, 1.01::artist:asteroid_ill ::, 1.17::zenless_zone_zero ::, 1.36::arknights ::, 0.8::cinematic lighting ::';
+    const recipe = ArtistRecipe(
+      'card',
+      prompt,
+      ['xiujia_yihuizi', 'asteroid_ill'],
+      artistPrompt:
+          '1.94::artist:xiujia_yihuizi ::, 1.01::artist:asteroid_ill ::',
+      franchiseStyles: [
+        StyleMutationTerm('franchiseStyle', 'zenless_zone_zero', 1.17),
+        StyleMutationTerm('franchiseStyle', 'arknights', 1.36),
+      ],
+      mutations: [StyleMutationTerm('lighting', 'cinematic lighting', 0.8)],
+    );
+    final copied = artistRecipeCardTagsWithTrailingComma(recipe);
+    expect(copied, '$prompt,');
+    expect(copied, contains('zenless_zone_zero'));
+    expect(copied, contains('arknights'));
+    expect(copied, contains('cinematic lighting'));
+  });
+
   test('weight tuning preserves artist order and changes only weights', () {
     final recipes = randomizeArtistWeights(
       artistPrompt: '1::artist:foo ::, 2::artist:bar ::,',

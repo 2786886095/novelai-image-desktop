@@ -3,6 +3,7 @@ import {
   FRANCHISE_STYLE_LIBRARY,
   canonicalArtistTagName,
   expandArtistRecipeComparisons,
+  formatArtistCardTags,
   formatArtistFullPrompt,
   formatArtistString,
   generatePopularArtistRecipes,
@@ -236,6 +237,21 @@ describe("artist recipe grammar", () => {
       full.indexOf("year 2025"),
     );
     expect(full.endsWith("1girl, smile")).toBe(true);
+  });
+
+  it("copies every weighted tag displayed on the result card", () => {
+    const prompt = [
+      "1.94::artist:xiujia_yihuizi ::",
+      "1.01::artist:asteroid_ill ::",
+      "1.17::zenless_zone_zero ::",
+      "1.36::arknights ::",
+      "0.8::cinematic lighting ::",
+    ].join(", ");
+    const copied = formatArtistCardTags({ prompt });
+    expect(copied).toBe(`${prompt},`);
+    expect(copied).toContain("zenless_zone_zero");
+    expect(copied).toContain("arknights");
+    expect(copied).toContain("cinematic lighting");
   });
 
   it("keeps artist order while randomizing only weights around the originals", () => {

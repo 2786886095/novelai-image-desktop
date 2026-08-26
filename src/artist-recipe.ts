@@ -259,6 +259,15 @@ export function formatArtistString(
   return value ? `${value},` : "";
 }
 
+/** Copy the exact artist-recipe string shown on a result card, including
+ * optional franchise, auxiliary, and mutation tags. */
+export function formatArtistCardTags(
+  recipe: Pick<GeneratedArtistRecipe, "prompt">,
+): string {
+  const value = recipe.prompt.trim().replace(/,+$/, "");
+  return value ? `${value},` : "";
+}
+
 export function formatArtistFullPrompt(
   recipe: Pick<GeneratedArtistRecipe, "artists" | "mutations" | "auxiliary"> & Partial<Pick<GeneratedArtistRecipe, "franchiseStyles">>,
   basePrompt: string,
