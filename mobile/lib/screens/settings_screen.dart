@@ -224,6 +224,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
             ),
           ),
+          _Section(title: settingsText.updateSourceTitle, children: [
+            DropdownButtonFormField<String>(
+              value: s.updateSource == 'gitee' ? 'gitee' : 'github',
+              isExpanded: true,
+              decoration: InputDecoration(
+                labelText: settingsText.updateSourceTitle,
+                border: const OutlineInputBorder(),
+              ),
+              items: [
+                DropdownMenuItem(
+                  value: 'github',
+                  child: Text(settingsText.updateSourceGithub),
+                ),
+                DropdownMenuItem(
+                  value: 'gitee',
+                  child: Text(settingsText.updateSourceGitee),
+                ),
+              ],
+              onChanged: (value) async {
+                if (value == null) return;
+                await state.setSettings((settings) {
+                  settings.updateSource = value == 'gitee' ? 'gitee' : 'github';
+                });
+                await state.checkUpdate();
+              },
+            ),
+            Text(settingsText.updateSourceFallback),
+          ]),
           _Section(title: languageText.sectionTitle, children: [
             DropdownButtonFormField<String>(
               value: normalizeAppLocaleCode(s.language),

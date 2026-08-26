@@ -14,6 +14,8 @@ import {
   latestGiteeRelease,
   latestGithubRelease,
   type RemoteReleaseAsset,
+  type UpdateSource,
+  updateSourceOrder,
 } from "./update";
 
 interface GiteeUpdateManifest {
@@ -214,7 +216,7 @@ async function downloadFromGithub(): Promise<{ path: string; version: string }> 
   return { path: installerPath, version: release.version };
 }
 
-async function runDownload(): Promise<{ ok: boolean; message: string }> {
+async function runDownload(preferredSource: UpdateSource): Promise<{ ok: boolean; message: string }> {
   if (process.platform !== "win32") {
     return { ok: false, message: "当前平台请从发行页面手动下载安装包。" };
   }
@@ -223,7 +225,8 @@ async function runDownload(): Promise<{ ok: boolean; message: string }> {
   send({ kind: "checking" });
 
   const errors: string[] = [];
-  for (const source of [downloadFromGitee, downloadFromGithub]) {
+  for (const sourceName of updateSourceOrder(preferredSource)) {
+    const source = sourceName === "gitee" ? downloadFromGitee : downloadFromGithub;
     try {
       const result = await source();
       downloadedInstallerPath = result.path;
@@ -241,10 +244,10 @@ async function runDownload(): Promise<{ ok: boolean; message: string }> {
   return { ok: false, message };
 }
 
-/** Gitee is the default source; GitHub is retried automatically on failure. */
-export function downloadUpdate(): Promise<{ ok: boolean; message: string }> {
+/** Use the selected source first and retry the other mirror on failure. */
+export function downloadUpdate(preferredSource: UpdateSource = "github"): Promise<{ ok: boolean; message: string }> {
   if (!downloadInFlight) {
-    downloadInFlight = runDownload().finally(() => {
+    downloadInFlight = runDownload(preferredSource).finally(() => {
       downloadInFlight = null;
     });
   }

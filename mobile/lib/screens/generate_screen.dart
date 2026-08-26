@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
@@ -2790,54 +2791,69 @@ class _CharacterPositionEditor extends StatelessWidget {
                                   {'index': index + 1},
                                 ),
                                 button: true,
-                                child: Listener(
+                                child: RawGestureDetector(
                                   key: ValueKey(
                                       'character-position-marker-$index'),
                                   behavior: HitTestBehavior.opaque,
-                                  onPointerDown: (_) {
-                                    captions[index].useCoords = true;
+                                  // Win the gesture arena immediately inside a
+                                  // marker. The raw listener still receives the
+                                  // exact deltas, while the parent ListView is
+                                  // prevented from scrolling during placement.
+                                  gestures: {
+                                    EagerGestureRecognizer:
+                                        GestureRecognizerFactoryWithHandlers<
+                                            EagerGestureRecognizer>(
+                                      EagerGestureRecognizer.new,
+                                      (_) {},
+                                    ),
                                   },
-                                  onPointerMove: (event) {
-                                    final caption = captions[index];
-                                    caption
-                                      ..useCoords = true
-                                      ..x = (caption.x +
-                                              event.delta.dx / canvasWidth)
-                                          .clamp(0.0, 1.0)
-                                          .toDouble()
-                                      ..y = (caption.y +
-                                              event.delta.dy / canvasHeight)
-                                          .clamp(0.0, 1.0)
-                                          .toDouble();
-                                    state.markChanged();
-                                  },
-                                  child: Center(
-                                    child: Container(
-                                      width: 34,
-                                      height: 34,
-                                      alignment: Alignment.center,
-                                      decoration: BoxDecoration(
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .primary,
-                                        shape: BoxShape.circle,
-                                        border: Border.all(
-                                          color: Colors.white,
-                                          width: 3,
-                                        ),
-                                        boxShadow: const [
-                                          BoxShadow(
-                                            color: Colors.black45,
-                                            blurRadius: 8,
-                                            offset: Offset(0, 3),
+                                  child: Listener(
+                                    behavior: HitTestBehavior.opaque,
+                                    onPointerDown: (_) {
+                                      captions[index].useCoords = true;
+                                    },
+                                    onPointerMove: (event) {
+                                      final caption = captions[index];
+                                      caption
+                                        ..useCoords = true
+                                        ..x = (caption.x +
+                                                event.delta.dx / canvasWidth)
+                                            .clamp(0.0, 1.0)
+                                            .toDouble()
+                                        ..y = (caption.y +
+                                                event.delta.dy / canvasHeight)
+                                            .clamp(0.0, 1.0)
+                                            .toDouble();
+                                      state.markChanged();
+                                    },
+                                    child: Center(
+                                      child: Container(
+                                        width: 34,
+                                        height: 34,
+                                        alignment: Alignment.center,
+                                        decoration: BoxDecoration(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .primary,
+                                          shape: BoxShape.circle,
+                                          border: Border.all(
+                                            color: Colors.white,
+                                            width: 3,
                                           ),
-                                        ],
-                                      ),
-                                      child: Text(
-                                        '${index + 1}',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.w800,
+                                          boxShadow: const [
+                                            BoxShadow(
+                                              color: Colors.black45,
+                                              blurRadius: 8,
+                                              offset: Offset(0, 3),
+                                            ),
+                                          ],
+                                        ),
+                                        child: Text(
+                                          '${index + 1}',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w800,
+                                          ),
                                         ),
                                       ),
                                     ),

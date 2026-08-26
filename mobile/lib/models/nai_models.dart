@@ -9,7 +9,7 @@ class NaiOption {
 }
 
 const appName = 'Langbai NovelAI Studio';
-const appVersion = '1.9.3';
+const appVersion = '1.9.4';
 
 const naiModels = <NaiOption>[
   NaiOption(
@@ -676,6 +676,7 @@ class AppSettings {
   bool proxyForAi;
   bool proxyForUpdate;
   bool proxyForTranslate;
+  String updateSource;
   String translateProvider;
   String baiduAppId;
   int historyRetentionDays;
@@ -751,6 +752,7 @@ class AppSettings {
     this.proxyForAi = true,
     this.proxyForUpdate = true,
     this.proxyForTranslate = true,
+    this.updateSource = 'github',
     this.translateProvider = 'google',
     this.baiduAppId = '',
     this.historyRetentionDays = 365,
@@ -824,6 +826,7 @@ class AppSettings {
         'proxyForAi': proxyForAi,
         'proxyForUpdate': proxyForUpdate,
         'proxyForTranslate': proxyForTranslate,
+        'updateSource': updateSource,
         'translateProvider': translateProvider,
         'baiduAppId': baiduAppId,
         'historyRetentionDays': historyRetentionDays,
@@ -894,6 +897,7 @@ class AppSettings {
         proxyForAi: j['proxyForAi'] ?? true,
         proxyForUpdate: j['proxyForUpdate'] ?? true,
         proxyForTranslate: j['proxyForTranslate'] ?? true,
+        updateSource: j['updateSource'] == 'gitee' ? 'gitee' : 'github',
         translateProvider: j['translateProvider'] ?? 'google',
         baiduAppId: j['baiduAppId'] ?? '',
         historyRetentionDays: j['historyRetentionDays'] ?? 365,

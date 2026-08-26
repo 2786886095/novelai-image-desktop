@@ -5430,6 +5430,20 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                     <span>{f("settings.aboutVersion", { version: APP_VERSION })}</span>
                   </div>
                 </div>
+                <label className="field">
+                  <span>{t("settings.updateSource")}</span>
+                  <select
+                    value={settings.updateSource ?? "github"}
+                    onChange={async (event) => {
+                      await update("updateSource", event.target.value as AppSettings["updateSource"]);
+                      await useAppStore.getState().checkUpdate();
+                    }}
+                  >
+                    <option value="github">{t("settings.updateSourceGithub")}</option>
+                    <option value="gitee">{t("settings.updateSourceGitee")}</option>
+                  </select>
+                  <small className="settings-hint">{t("settings.updateSourceFallback")}</small>
+                </label>
                 <div className="about-block">
                   <div>
                     <strong>{t("settings.aboutProjectTitle")}</strong>

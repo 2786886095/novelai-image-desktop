@@ -3,6 +3,12 @@ import axios from "axios";
 import type { UpdateInfo } from "../../src/types";
 import { proxyConfig } from "./proxy";
 
+export type UpdateSource = "github" | "gitee";
+
+export function updateSourceOrder(preferredSource: UpdateSource = "github"): [UpdateSource, UpdateSource] {
+  return preferredSource === "gitee" ? ["gitee", "github"] : ["github", "gitee"];
+}
+
 const REPO = "2786886095/novelai-image-desktop";
 const GITEE_OWNER = "langbai666";
 const GITEE_REPO = "novelai-image-desktop";
@@ -127,52 +133,66 @@ async function latestVersionFromGithubYaml(): Promise<string> {
   return version;
 }
 
-/** Mainland-first update check with an automatic GitHub fallback. */
-export async function checkUpdate(): Promise<UpdateInfo> {
-  const currentVersion = app.getVersion();
-  const sourceErrors: string[] = [];
-  let giteeResult: UpdateInfo | undefined;
+async function checkGiteeUpdate(currentVersion: string): Promise<UpdateInfo> {
+  const latest = await latestGiteeRelease();
+  return {
+    hasUpdate: compareVersions(latest.version, currentVersion) > 0,
+    currentVersion,
+    latestVersion: latest.version,
+    releaseUrl: latest.pageUrl,
+  };
+}
 
-  try {
-    const latest = await latestGiteeRelease();
-    giteeResult = {
-      hasUpdate: compareVersions(latest.version, currentVersion) > 0,
-      currentVersion,
-      latestVersion: latest.version,
-      releaseUrl: latest.pageUrl,
-    };
-    if (giteeResult.hasUpdate) return giteeResult;
-  } catch (error: any) {
-    sourceErrors.push(`Gitee: ${error?.message ?? String(error)}`);
-  }
-
-  // A normal release asset avoids GitHub's low unauthenticated API quota.
+async function checkGithubUpdate(currentVersion: string): Promise<UpdateInfo> {
+  // Prefer the release manifest because it does not consume GitHub's low
+  // unauthenticated API quota. Fall back to the API when the asset is blocked.
   try {
     const latestVersion = await latestVersionFromGithubYaml();
-    const githubResult = {
+    return {
       hasUpdate: compareVersions(latestVersion, currentVersion) > 0,
       currentVersion,
       latestVersion,
       releaseUrl: GITHUB_RELEASE_URL,
     };
-    return githubResult.hasUpdate || !giteeResult ? githubResult : giteeResult;
-  } catch (error: any) {
-    sourceErrors.push(`GitHub latest.yml: ${error?.message ?? String(error)}`);
+  } catch (manifestError) {
+    try {
+      const latest = await latestGithubRelease();
+      return {
+        hasUpdate: compareVersions(latest.version, currentVersion) > 0,
+        currentVersion,
+        latestVersion: latest.version,
+        releaseUrl: latest.pageUrl,
+      };
+    } catch (apiError: any) {
+      const manifestMessage = manifestError instanceof Error
+        ? manifestError.message
+        : String(manifestError);
+      const apiMessage = apiError?.message ?? String(apiError);
+      throw new Error(`latest.yml: ${manifestMessage}; API: ${apiMessage}`);
+    }
+  }
+}
+
+/** Check the selected source first and automatically retry the other mirror. */
+export async function checkUpdate(preferredSource: UpdateSource = "github"): Promise<UpdateInfo> {
+  const currentVersion = app.getVersion();
+  const sourceErrors: string[] = [];
+  let preferredResult: UpdateInfo | undefined;
+  const order = updateSourceOrder(preferredSource);
+
+  for (const source of order) {
+    try {
+      const result = source === "github"
+        ? await checkGithubUpdate(currentVersion)
+        : await checkGiteeUpdate(currentVersion);
+      preferredResult ??= result;
+      if (result.hasUpdate) return result;
+    } catch (error: any) {
+      sourceErrors.push(`${source === "github" ? "GitHub" : "Gitee"}: ${error?.message ?? String(error)}`);
+    }
   }
 
-  if (giteeResult) return giteeResult;
-
-  try {
-    const latest = await latestGithubRelease();
-    return {
-      hasUpdate: compareVersions(latest.version, currentVersion) > 0,
-      currentVersion,
-      latestVersion: latest.version,
-      releaseUrl: latest.pageUrl,
-    };
-  } catch (error: any) {
-    sourceErrors.push(`GitHub API: ${error?.message ?? String(error)}`);
-  }
+  if (preferredResult) return preferredResult;
 
   const detail = sourceErrors.join("; ");
   console.warn(`[update] all update sources failed: ${detail}`);

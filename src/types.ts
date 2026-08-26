@@ -1281,6 +1281,8 @@ export interface AppSettings {
   proxyForAi: boolean;
   proxyForUpdate: boolean;
   proxyForTranslate: boolean;
+  /** Preferred app update/download mirror. The other source remains fallback. */
+  updateSource: "github" | "gitee";
   theme: "light" | "dark" | "system";
   autoComplete: boolean;
   weightHighlight: boolean;
@@ -1389,8 +1391,9 @@ export interface UpdateInfo {
 }
 
 /**
- * Windows downloads a verified NSIS installer from Gitee first and GitHub as
- * fallback. Other desktop platforms use UpdateInfo.releaseUrl manually.
+ * Windows downloads a verified NSIS installer from the user's preferred source
+ * and automatically retries the other mirror. Other desktop platforms use
+ * UpdateInfo.releaseUrl manually.
  */
 export type UpdateProgressEvent =
   | { kind: "checking" }

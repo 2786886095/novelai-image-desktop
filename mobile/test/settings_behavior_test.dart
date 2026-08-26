@@ -16,6 +16,7 @@ void main() {
       final source = AppSettings(
         allowCustomEndpoint: true,
         theme: 'dark',
+        updateSource: 'gitee',
         proxyForNai: false,
         translateProvider: 'baidu',
         baiduAppId: 'example-id',
@@ -36,6 +37,7 @@ void main() {
 
       expect(restored.allowCustomEndpoint, isTrue);
       expect(restored.theme, 'dark');
+      expect(restored.updateSource, 'gitee');
       expect(restored.proxyForNai, isFalse);
       expect(restored.translateProvider, 'baidu');
       expect(restored.historyRetentionDays, 90);
@@ -43,6 +45,13 @@ void main() {
       expect(restored.saveToGallery, isFalse);
       expect(restored.generationGroupId, 'generation-group');
       expect(restored.promptShortcuts.single.name, '测试');
+    });
+
+    test('GitHub is the default update source and invalid values are repaired',
+        () {
+      expect(AppSettings().updateSource, 'github');
+      expect(AppSettings.fromJson({'updateSource': 'invalid'}).updateSource,
+          'github');
     });
 
     test('custom NovelAI endpoints require explicit opt-in', () {

@@ -3,7 +3,7 @@
 [![Build](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build.yml/badge.svg)](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build.yml)
 [![Build Mobile](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build-mobile.yml/badge.svg)](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build-mobile.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
-[![Release](https://img.shields.io/badge/release-v1.9.3-7c5cfa.svg)](https://github.com/2786886095/novelai-image-desktop/releases/tag/v1.9.3)
+[![Release](https://img.shields.io/badge/release-v1.9.4-7c5cfa.svg)](https://github.com/2786886095/novelai-image-desktop/releases/tag/v1.9.4)
 [![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android%20%7C%20iOS-20b7d8.svg)](#下载)
 
 <img width="1672" height="941" alt="ChatGPT Image 2026年6月17日 11_27_47" src="https://github.com/user-attachments/assets/66a6caef-3007-479b-9006-1c6f50570655" />
@@ -16,16 +16,16 @@
 
 ## 下载
 
-- **v1.9.3 中国大陆线路**：[Gitee Releases](https://gitee.com/langbai666/novelai-image-desktop/releases/tag/v1.9.3)
-- **v1.9.3 全球线路**：[GitHub Releases](https://github.com/2786886095/novelai-image-desktop/releases/tag/v1.9.3)
+- **v1.9.4 中国大陆线路**：[Gitee Releases](https://gitee.com/langbai666/novelai-image-desktop/releases/tag/v1.9.4)
+- **v1.9.4 全球线路**：[GitHub Releases](https://github.com/2786886095/novelai-image-desktop/releases/tag/v1.9.4)
 - **持续构建产物**：[GitHub Actions](https://github.com/2786886095/novelai-image-desktop/actions)
 
 Release 目标产物：
 
 | 平台 | 文件 |
 | --- | --- |
-| Windows（便携版） | `Langbai-NovelAI-Studio-1.9.3.exe` |
-| Windows（安装版） | `Langbai-NovelAI-Studio-Setup-1.9.3.exe` |
+| Windows（便携版） | `Langbai-NovelAI-Studio-1.9.4.exe` |
+| Windows（安装版） | `Langbai-NovelAI-Studio-Setup-1.9.4.exe` |
 | macOS | universal `.dmg` + `.zip` |
 | Linux | `.AppImage` |
 | Android | `app-release.apk` |
@@ -39,7 +39,7 @@ Release 目标产物：
 | --- | --- | --- |
 | 使用方式 | 双击直接用，不用安装 | 走安装向导，可自选安装路径、创建桌面/开始菜单快捷方式 |
 | 启动速度 | 每次启动需要先解压到临时目录，略慢 | 直接从安装目录运行，启动更快 |
-| 更新方式 | 软件内提示新版本后跳转 GitHub Releases，手动下载替换 | 软件内直接下载并一键重启安装，无需手动去下载 |
+| 更新方式 | 软件内提示新版本后按设置的 GitHub / Gitee 下载源打开发行页，手动下载替换 | 软件内按设置的 GitHub / Gitee 下载源直接下载并一键重启安装；失败时自动切换备用源 |
 | 适合场景 | 想即开即用、放 U 盘带走、不想在系统里留痕迹 | 想长期使用、希望免去手动更新的麻烦 |
 
 两者的账号 Token、历史记录、设置是共享的（都存在 `%APPDATA%\novelai-image-desktop\`），换用哪个都不会丢数据。
@@ -64,6 +64,7 @@ Release 目标产物：
 - **灵感胶囊**：内置 4000+ 个中文概念词库（按 14 大类 + 细分子类归好，每个 tag 都对应正确分类），支持「蓝眼白发夜景」这类复合中文查询，一键插入对应 Danbooru 标签。
 - **标签权重微调**：提示词下方按标签提供 − / ＋ 控件，基于 NovelAI 的 `{}` / `[]` 语法增减权重并显示近似倍率。
 - **角色提示词与位置**：每个角色卡片可独立展开/折叠；角色提示词可在“AI 自动选择”和“自定义拖动”间切换，桌面与移动端均可在按当前生成比例显示的画布上直接拖动编号标记，并保留精确 X/Y 调整。
+- **下载与更新源**：桌面端和 Android/iOS 均可在设置中选择 GitHub（国际线路推荐）或 Gitee（中国大陆用户推荐）；默认 GitHub，所选源不可用时自动切换备用源。
 - **中英翻译**：一键将中文提示词翻译为英文，可在设置中选择谷歌翻译（免费）或百度翻译 API（填 APP ID 与密钥）。
 - **Tag/MCP 服务**：支持普通 HTTP 接口，以及 MCP 的 Streamable HTTP / SSE / stdio 三种传输（可直连 DanbooruSearchOnline 的 `search_tags`），补强自动补全、AI 反推和中文转换。
 - **AI 反推 / 提示词转换**：反推使用视觉模型 API；转换使用文本模型 API，二者独立配置；检测接口后可在下拉列表中切换模型。
@@ -107,8 +108,8 @@ npm run pack
 `npm run pack` 现在会同时产出便携版和安装版：
 
 ```text
-release\Langbai-NovelAI-Studio-1.9.3.exe          # 便携版
-release\Langbai-NovelAI-Studio-Setup-1.9.3.exe    # 安装版（NSIS 向导）
+release\Langbai-NovelAI-Studio-1.9.4.exe          # 便携版
+release\Langbai-NovelAI-Studio-Setup-1.9.4.exe    # 安装版（NSIS 向导）
 release\Langbai-NovelAI-Studio.exe                # 便携版稳定别名
 release\latest.yml                                # 安装版应用内更新用的元数据
 ```
@@ -132,9 +133,9 @@ release\NovelAI-Image-Desktop.exe
 推送 `v*` tag 会触发桌面端与移动端两个 workflow，并把所有平台产物汇总到同一个 Release：
 
 ```powershell
-git tag v1.9.3
+git tag v1.9.4
 git push origin main
-git push origin v1.9.3
+git push origin v1.9.4
 ```
 
 如果 Release 上传时报 403，请在仓库 `Settings -> Actions -> General -> Workflow permissions` 中启用 `Read and write permissions`。

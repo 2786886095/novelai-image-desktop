@@ -273,6 +273,7 @@ export function defaultSettings(): AppSettings {
     proxyForAi: true,
     proxyForUpdate: true,
     proxyForTranslate: true,
+    updateSource: "github",
     theme: "light",
     autoComplete: true,
     weightHighlight: true,
@@ -338,6 +339,7 @@ function normalize(raw: Partial<PersistedData> | null): PersistedData {
   const rawSettings = (raw?.settings ?? {}) as Partial<AppSettings>;
   const settings = { ...defaults, ...rawSettings };
   settings.language = normalizeLanguage(settings.language);
+  settings.updateSource = settings.updateSource === "gitee" ? "gitee" : "github";
   settings.stylePromptPresetGroups = Array.from(
     new Set(
       (Array.isArray(settings.stylePromptPresetGroups)

@@ -160,6 +160,19 @@ void main() {
     );
     await tester.pump();
     expect(state.extras.charCaptions[1].x, greaterThan(before));
+
+    final scrollable = tester.state<ScrollableState>(
+      find.byType(Scrollable).first,
+    );
+    final scrollBefore = scrollable.position.pixels;
+    final yBefore = state.extras.charCaptions[1].y;
+    await tester.drag(
+      find.byKey(const ValueKey('character-position-marker-1')),
+      const Offset(0, 48),
+    );
+    await tester.pump();
+    expect(state.extras.charCaptions[1].y, greaterThan(yBefore));
+    expect(scrollable.position.pixels, closeTo(scrollBefore, 0.01));
   });
 
   testWidgets(

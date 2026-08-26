@@ -1045,9 +1045,9 @@ function registerIpc() {
     void shell.openExternal(parsed.toString());
     return { ok: true };
   });
-  ipcMain.handle("app:checkUpdate", () => checkUpdate());
+  ipcMain.handle("app:checkUpdate", () => checkUpdate(getSettings().updateSource));
   ipcMain.handle("app:isPortable", () => isPortableBuild());
-  ipcMain.handle("app:downloadUpdate", () => downloadUpdate());
+  ipcMain.handle("app:downloadUpdate", () => downloadUpdate(getSettings().updateSource));
   ipcMain.handle("app:installUpdate", () => installUpdate());
 }
 

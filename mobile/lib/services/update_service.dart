@@ -43,7 +43,10 @@ int compareVersions(String left, String right) {
 Future<UpdateInfo> checkAppUpdate(AppSettings settings) async {
   final client = createProxyHttpClient(settings, scope: ProxyScope.update);
   try {
-    return await checkAppUpdateWithClient(client);
+    return await checkAppUpdateWithClient(
+      client,
+      preferredSource: settings.updateSource,
+    );
   } finally {
     client.close();
   }
@@ -57,6 +60,8 @@ const _githubReleaseUrl =
     'https://github.com/2786886095/novelai-image-desktop/releases/latest';
 const _githubLatestYmlUrl =
     'https://github.com/2786886095/novelai-image-desktop/releases/latest/download/latest.yml';
+const _githubAndroidApkUrl =
+    'https://github.com/2786886095/novelai-image-desktop/releases/latest/download/app-release.apk';
 const _githubReleaseApiUrl =
     'https://api.github.com/repos/2786886095/novelai-image-desktop/releases/latest';
 
@@ -104,19 +109,23 @@ String? _assetUrl(dynamic value, String wantedName) {
   return null;
 }
 
-Future<UpdateInfo?> _checkGitee(http.Client client) async {
+Future<UpdateInfo> _checkGitee(http.Client client) async {
   final response = await _getWithRetry(
     client,
     Uri.parse(_giteeReleaseApiUrl),
     headers: const {'Accept': 'application/json', 'Cache-Control': 'no-cache'},
   );
-  if (response.statusCode < 200 || response.statusCode >= 300) return null;
+  if (response.statusCode < 200 || response.statusCode >= 300) {
+    throw Exception('HTTP ${response.statusCode}');
+  }
   final json = jsonDecode(response.body) as Map<String, dynamic>;
   final latest = (json['tag_name']?.toString() ?? '')
       .replaceFirst(RegExp(r'^v'), '')
       .trim();
   final releaseId = int.tryParse(json['id']?.toString() ?? '');
-  if (latest.isEmpty || releaseId == null) return null;
+  if (latest.isEmpty || releaseId == null) {
+    throw Exception('invalid Gitee release');
+  }
 
   final wantedAsset = Platform.isAndroid ? 'app-release.apk' : null;
   var installerUrl =
@@ -143,42 +152,25 @@ Future<UpdateInfo?> _checkGitee(http.Client client) async {
   );
 }
 
-/// Gitee is the primary source for mainland users; GitHub is an automatic fallback.
-Future<UpdateInfo> checkAppUpdateWithClient(http.Client client) async {
+Future<UpdateInfo> _checkGithub(http.Client client) async {
   const current = appVersion;
-  Object? primaryError;
-  UpdateInfo? giteeInfo;
-  try {
-    giteeInfo = await _checkGitee(client);
-    if (giteeInfo?.hasUpdate == true) return giteeInfo!;
-  } catch (error) {
-    primaryError = error;
-  }
-
   try {
     final response =
         await _getWithRetry(client, Uri.parse(_githubLatestYmlUrl));
-    if (response.statusCode >= 200 && response.statusCode < 300) {
-      final latest = parseLatestYmlVersion(response.body);
-      if (latest != null && latest.isNotEmpty) {
-        if (compareVersions(latest, current) > 0 || giteeInfo == null) {
-          return UpdateInfo(
-            hasUpdate: compareVersions(latest, current) > 0,
-            currentVersion: current,
-            latestVersion: latest,
-            releaseUrl: _githubReleaseUrl,
-          );
-        }
-        return giteeInfo;
-      }
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('HTTP ${response.statusCode}');
     }
-  } catch (error) {
-    primaryError ??= error;
-  }
-
-  if (giteeInfo != null) return giteeInfo;
-
-  try {
+    final latest = parseLatestYmlVersion(response.body);
+    if (latest == null || latest.isEmpty) {
+      throw Exception('invalid GitHub manifest');
+    }
+    return UpdateInfo(
+      hasUpdate: compareVersions(latest, current) > 0,
+      currentVersion: current,
+      latestVersion: latest,
+      releaseUrl: Platform.isAndroid ? _githubAndroidApkUrl : _githubReleaseUrl,
+    );
+  } catch (_) {
     final response = await _getWithRetry(
       client,
       Uri.parse(_githubReleaseApiUrl),
@@ -195,7 +187,7 @@ Future<UpdateInfo> checkAppUpdateWithClient(http.Client client) async {
         .replaceFirst(RegExp(r'^v'), '')
         .trim();
     if (latest.isEmpty) {
-      return const UpdateInfo(hasUpdate: false, currentVersion: current);
+      throw Exception('invalid GitHub release');
     }
     return UpdateInfo(
       hasUpdate: compareVersions(latest, current) > 0,
@@ -207,11 +199,37 @@ Future<UpdateInfo> checkAppUpdateWithClient(http.Client client) async {
           json['html_url']?.toString() ??
           _githubReleaseUrl,
     );
-  } catch (_) {
-    return UpdateInfo(
-      hasUpdate: false,
-      currentVersion: current,
-      error: primaryError == null ? 'unavailable' : 'network',
-    );
   }
+}
+
+/// Check the selected source first and automatically retry the other mirror.
+Future<UpdateInfo> checkAppUpdateWithClient(
+  http.Client client, {
+  String preferredSource = 'github',
+}) async {
+  const current = appVersion;
+  final order = preferredSource == 'gitee'
+      ? const ['gitee', 'github']
+      : const ['github', 'gitee'];
+  UpdateInfo? preferredResult;
+  Object? firstError;
+
+  for (final source in order) {
+    try {
+      final result = source == 'github'
+          ? await _checkGithub(client)
+          : await _checkGitee(client);
+      preferredResult ??= result;
+      if (result.hasUpdate) return result;
+    } catch (error) {
+      firstError ??= error;
+    }
+  }
+
+  if (preferredResult != null) return preferredResult;
+  return UpdateInfo(
+    hasUpdate: false,
+    currentVersion: current,
+    error: firstError == null ? 'unavailable' : 'network',
+  );
 }
