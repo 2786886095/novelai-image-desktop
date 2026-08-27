@@ -209,7 +209,9 @@ class GenerateScreen extends StatelessWidget {
     final picked = await ImagePicker()
         .pickImage(source: ImageSource.gallery, imageQuality: 100);
     if (picked != null && context.mounted) {
-      await context.read<AppState>().setWorkbenchPath(picked.path);
+      await context
+          .read<AppState>()
+          .setWorkbenchPath(picked.path, applyMetadata: true);
     }
   }
 
@@ -2353,7 +2355,7 @@ class _ParamControls extends StatelessWidget {
             // Roll a fresh seed instead of always landing on 1 — matches
             // desktop and this screen's own "randomize" button below.
             if (x.seedMode == 'fixed' && x.seed <= 0) {
-              x.seed = Random.secure().nextInt(2147483646) + 1;
+              x.seed = Random.secure().nextInt(0x100000000 - 1) + 1;
             }
           }),
         ),
@@ -2366,7 +2368,7 @@ class _ParamControls extends StatelessWidget {
                   label: 'Seed',
                   value: p.seed,
                   onChanged: (value) => state.setParam((x) {
-                    x.seed = value.clamp(1, 2147483647);
+                    x.seed = value.clamp(1, 0xffffffff);
                     x.seedMode = 'fixed';
                   }),
                 ),
@@ -2375,7 +2377,7 @@ class _ParamControls extends StatelessWidget {
               IconButton(
                 tooltip: text.fixedSeedTooltip,
                 onPressed: () => state.setParam(
-                  (x) => x.seed = Random.secure().nextInt(2147483646) + 1,
+                  (x) => x.seed = Random.secure().nextInt(0x100000000 - 1) + 1,
                 ),
                 icon: const Icon(Icons.casino_outlined),
               ),

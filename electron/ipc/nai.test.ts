@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildPayload,
   buildGenerateImageHttpBody,
+  extractEmbeddedGenerationMetadata,
   isOfficialNaiHost,
   isPreflightNetworkFailure,
   parseAccount,
@@ -37,7 +38,7 @@ function pngWithGenerationMetadata() {
     Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
     pngChunk("IHDR", Buffer.alloc(13)),
     pngChunk("tEXt", Buffer.from("Description\u00001girl, private prompt")),
-    pngChunk("iTXt", Buffer.from("Comment\u0000{\"seed\":123}")),
+    pngChunk("iTXt", Buffer.from("Comment\u0000\u0000\u0000\u0000\u0000{\"seed\":123}")),
     pngChunk("eXIf", Buffer.from("private exif")),
     pngChunk("IDAT", Buffer.from([1, 2, 3, 4])),
     pngChunk("IEND"),
@@ -98,6 +99,22 @@ describe("persisted generation parameter migration", () => {
       cfg_rescale: 1,
       sampler: "k_euler_ancestral",
       seed: 1,
+    });
+  });
+
+  it("preserves imported unsigned 32-bit NovelAI seeds through normalization and payload building", () => {
+    const seed = 4_000_000_000;
+    const params = normalizeGenerateParams({ ...DEFAULT_PARAMS, seed, seedMode: "fixed" });
+    expect(params.seed).toBe(seed);
+    expect(buildPayload({ ...params, positivePrompt: "1girl" }, seed).parameters.seed).toBe(seed);
+  });
+
+  it("extracts generation parameters for generation-workbench drops", () => {
+    const metadata = extractEmbeddedGenerationMetadata(pngWithGenerationMetadata());
+    expect(metadata?.imported).toMatchObject({
+      positivePrompt: "1girl, private prompt",
+      seed: 123,
+      seedMode: "fixed",
     });
   });
 });

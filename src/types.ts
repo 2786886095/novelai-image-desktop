@@ -202,6 +202,9 @@ export const DEFAULT_PARAMS: GenerateParams = {
   fileNamePrefix: "",
 };
 
+/** NovelAI seeds are unsigned 32-bit values in exported image metadata. */
+export const MAX_NAI_SEED = 0xffff_ffff;
+
 const SUPPORTED_MODEL_VALUES = new Set<string>(NAI_MODELS.map((item) => item.value));
 const SUPPORTED_SAMPLER_VALUES = new Set<string>(NAI_SAMPLERS.map((item) => item.value));
 const SUPPORTED_NOISE_SCHEDULES = new Set(["native", "karras", "exponential"]);
@@ -240,7 +243,7 @@ export function normalizeGenerateParams(value?: Partial<GenerateParams> | null):
     cfgRescale: Math.min(1, Math.max(0, cfgRescale)),
     sampler: (SUPPORTED_SAMPLER_VALUES.has(sampler) ? sampler : DEFAULT_PARAMS.sampler) as NAISampler,
     noiseSchedule: SUPPORTED_NOISE_SCHEDULES.has(noiseSchedule) ? noiseSchedule : DEFAULT_PARAMS.noiseSchedule,
-    seed: Math.min(2_147_483_647, Math.max(0, seed)),
+    seed: Math.min(MAX_NAI_SEED, Math.max(0, seed)),
     seedMode: source.seedMode === "fixed" ? "fixed" : "random",
     ucPreset: Math.min(3, Math.max(0, ucPreset)) as UcPreset,
     qualityToggle: typeof source.qualityToggle === "boolean" ? source.qualityToggle : DEFAULT_PARAMS.qualityToggle,
@@ -1131,6 +1134,10 @@ export interface SingleImageResult {
 export interface LoadImageResult {
   ok: boolean;
   image?: WorkingImage;
+  metadata?: {
+    imported: ImportedParams;
+    characterCaptions: CharCaptionItem[];
+  };
   message?: string;
 }
 

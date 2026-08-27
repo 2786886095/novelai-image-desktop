@@ -33,6 +33,18 @@ void main() {
     expect(parameters['skip_cfg_above_sigma'], isNull);
   });
 
+  test('preserves imported unsigned 32-bit NovelAI seeds in payloads', () async {
+    const seed = 4000000000;
+    final payload = await api.buildPayload(
+      'unused',
+      settings,
+      GenerateParams(positivePrompt: '1girl', seed: seed, seedMode: 'fixed'),
+      seed,
+      GenerateExtras(),
+    );
+    expect((payload['parameters'] as Map<String, dynamic>)['seed'], seed);
+  });
+
   test('Human Focus appends the official character-focused UC preset',
       () async {
     final payload = await api.buildPayload(

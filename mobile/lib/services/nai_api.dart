@@ -662,7 +662,7 @@ class NaiApi {
         'Switch to V4.5 or remove vibe images.',
       );
     }
-    seed = seed.clamp(1, 2147483647).toInt();
+    seed = seed.clamp(1, 0xffffffff).toInt();
     final basePrompt = _merge(params.stylePrompt, params.positivePrompt);
     // NovelAI V4+ shares the Anime checkpoint in Furry mode. The official
     // frontend activates the furry dataset by prepending this tag; Furry V3 is

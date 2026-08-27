@@ -590,7 +590,11 @@ export default function MetadataInspector({ onBack }: { onBack: () => void }) {
       setToast(text.noCompatible);
       return;
     }
-    restoreImportedMetadata(report.imported, report.characterCaptions);
+    restoreImportedMetadata(
+      report.imported,
+      report.characterCaptions,
+      { preserveMissing: true },
+    );
     setActiveTab("generate");
     setToast(text.applied);
   }

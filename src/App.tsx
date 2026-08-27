@@ -49,6 +49,7 @@ import {
   DIRECTOR_TOOLS,
   EMOTION_OPTIONS,
   MAX_NAI_DIRECTOR_INPUT_PIXELS,
+  MAX_NAI_SEED,
   MAX_NAI_UPSCALE_INPUT_PIXELS,
   NAI_INPAINT_MODELS,
   NAI_MODELS,
@@ -2325,7 +2326,7 @@ function PromptAndParams({
           className={clsx(params.seedMode === "fixed" && "active")}
           onClick={() => {
             setParam("seedMode", "fixed");
-            if (params.seed <= 0) setParam("seed", Math.floor(Math.random() * 2_147_483_647));
+            if (params.seed <= 0) setParam("seed", Math.floor(Math.random() * MAX_NAI_SEED) + 1);
           }}
         >
           <Icon name="pin" /> {generateText.prompt.fixedSeed}
@@ -2333,11 +2334,11 @@ function PromptAndParams({
       </div>
       {params.seedMode === "fixed" && (
         <div className="seed-row">
-          <NumberInput label={generateText.prompt.fixedSeedValue} value={params.seed} min={1} onChange={(v) => setParam("seed", v)} />
+          <NumberInput label={generateText.prompt.fixedSeedValue} value={params.seed} min={1} max={MAX_NAI_SEED} onChange={(v) => setParam("seed", v)} />
           <Button
             className="seed-randomize-button"
             title={generateText.prompt.randomizeSeedTitle}
-            onClick={() => setParam("seed", Math.floor(Math.random() * 2_147_483_647))}
+            onClick={() => setParam("seed", Math.floor(Math.random() * MAX_NAI_SEED) + 1)}
           >
             <Icon name="swap" />
           </Button>

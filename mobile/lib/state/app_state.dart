@@ -64,6 +64,7 @@ class AppState extends ChangeNotifier {
   HistoryItem? current;
   WorkingImage? workbenchImage;
   ImportedGenerateParams? workbenchImportedParams;
+  List<CharCaptionItem> workbenchCharacterCaptions = const [];
   Set<String> aitagCompatibleParams = {...importedGenerateParamKeys};
   WorkingImage? comparisonBefore;
   WorkingImage? comparisonAfter;
@@ -684,14 +685,27 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> setWorkbenchPath(String filePath) async {
+  Future<void> setWorkbenchPath(
+    String filePath, {
+    bool applyMetadata = false,
+  }) async {
     final bytes = await File(filePath).readAsBytes();
     final dims = readImageDimensions(bytes);
-    final imported =
-        inspectImageMetadata(parseImageTextMetadata(bytes)).imported;
+    final report = inspectImageMetadata(parseImageTextMetadata(bytes));
+    final imported = report.imported;
     workbenchImportedParams = imported.isEmpty ? null : imported;
+    workbenchCharacterCaptions = report.characterCaptions;
     workbenchImage =
         WorkingImage(filePath: filePath, width: dims.$1, height: dims.$2);
+    if (applyMetadata && !imported.isEmpty) {
+      applyImportedMetadata(
+        imported,
+        characterCaptions: report.characterCaptions,
+        exact: true,
+        preserveMissing: true,
+      );
+      return;
+    }
     status = _rt('status.workbenchLoaded');
     notifyListeners();
     _scheduleGenerationQuote();
@@ -705,6 +719,7 @@ class AppState extends ChangeNotifier {
   void clearWorkbench() {
     workbenchImage = null;
     workbenchImportedParams = null;
+    workbenchCharacterCaptions = const [];
     status = _rt('status.workbenchCleared');
     notifyListeners();
     _scheduleGenerationQuote();
@@ -717,13 +732,19 @@ class AppState extends ChangeNotifier {
       notifyListeners();
       return;
     }
-    applyImportedMetadata(imported);
+    applyImportedMetadata(
+      imported,
+      characterCaptions: workbenchCharacterCaptions,
+      exact: true,
+      preserveMissing: true,
+    );
   }
 
   void applyImportedMetadata(
     ImportedGenerateParams imported, {
     List<CharCaptionItem>? characterCaptions,
     bool exact = false,
+    bool preserveMissing = false,
   }) {
     if (imported.isEmpty) {
       status = _rt('status.noMetadata');
@@ -740,18 +761,23 @@ class AppState extends ChangeNotifier {
       params.negativePrompt = lockedNegative;
     }
     if (exact) {
-      extras
-        ..charCaptions = (characterCaptions ?? const [])
-            .map((item) => CharCaptionItem(
-                  prompt: item.prompt,
-                  negativePrompt: item.negativePrompt,
-                  useCoords: item.useCoords,
-                  x: item.x,
-                  y: item.y,
-                ))
-            .toList()
-        ..vibeImages.clear()
-        ..preciseReferences.clear();
+      final restoredCaptions = (characterCaptions ?? const [])
+          .map((item) => CharCaptionItem(
+                prompt: item.prompt,
+                negativePrompt: item.negativePrompt,
+                useCoords: item.useCoords,
+                x: item.x,
+                y: item.y,
+              ))
+          .toList();
+      if (!preserveMissing || restoredCaptions.isNotEmpty) {
+        extras.charCaptions = restoredCaptions;
+      }
+      if (!preserveMissing) {
+        extras
+          ..vibeImages.clear()
+          ..preciseReferences.clear();
+      }
     }
     params = params.normalized();
     unawaited(storage.setParams(params));
@@ -1496,7 +1522,7 @@ class AppState extends ChangeNotifier {
           taskQuote = initialCosts[initialIndex];
           if (initialParams.seedMode != 'random' && initialSeed > 0) {
             taskParams.seed =
-                ((initialSeed - 1 + initialIndex) % 2147483647) + 1;
+                ((initialSeed - 1 + initialIndex) % 4294967295) + 1;
           }
           initialIndex++;
         } else {

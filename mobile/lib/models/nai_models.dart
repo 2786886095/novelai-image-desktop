@@ -9,7 +9,7 @@ class NaiOption {
 }
 
 const appName = 'Langbai NovelAI Studio';
-const appVersion = '1.9.5';
+const appVersion = '1.9.6';
 
 const naiModels = <NaiOption>[
   NaiOption(
@@ -231,7 +231,7 @@ class GenerateParams {
           supportedSamplers.contains(sampler) ? sampler : 'k_euler_ancestral',
       noiseSchedule:
           supportedSchedules.contains(noiseSchedule) ? noiseSchedule : 'karras',
-      seed: seed.clamp(0, 2147483647).toInt(),
+      seed: seed.clamp(0, 0xffffffff).toInt(),
       seedMode: seedMode == 'fixed' ? 'fixed' : 'random',
       ucPreset: ucPreset.clamp(0, 3).toInt(),
       qualityToggle: qualityToggle,

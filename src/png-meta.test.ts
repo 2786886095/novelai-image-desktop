@@ -103,6 +103,15 @@ describe("parseImportedParams", () => {
     expect(out.smea).toBe(true);
   });
 
+  it("preserves NovelAI unsigned 32-bit seeds exactly", () => {
+    const out = parseImportedParams({
+      Description: "1girl",
+      Comment: JSON.stringify({ seed: 4_000_000_000 }),
+    });
+    expect(out.seed).toBe(4_000_000_000);
+    expect(out.seedMode).toBe("fixed");
+  });
+
   it("ignores unknown sampler/model values", () => {
     const out = parseImportedParams({ Comment: JSON.stringify({ sampler: "nope", model: "fake" }) });
     expect(out.sampler).toBeUndefined();

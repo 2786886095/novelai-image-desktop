@@ -52,6 +52,18 @@ void main() {
     expect(parsePngTextMetadata(Uint8List.fromList([1, 2, 3])), isEmpty);
   });
 
+  test('preserves NovelAI unsigned 32-bit seeds exactly', () {
+    final imported = parseImportedGenerateParams({
+      'Description': '1girl',
+      'Comment': jsonEncode({'seed': 4000000000}),
+    });
+    final target = GenerateParams();
+    imported.applyTo(target);
+    final normalized = target.normalized();
+    expect(normalized.seed, 4000000000);
+    expect(normalized.seedMode, 'fixed');
+  });
+
   test('recognizes V5 Full and Curated metadata names', () {
     expect(
       parseImportedGenerateParams({'Source': 'NovelAI Diffusion V5 Full'})

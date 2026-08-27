@@ -376,7 +376,11 @@ interface AppState {
   resetWsWidths: () => void;
   setParam: <K extends keyof GenerateParams>(key: K, value: GenerateParams[K]) => void;
   applyParams: (patch: Partial<GenerateParams>) => void;
-  restoreImportedMetadata: (patch: ImportedParams, captions: CharCaptionItem[]) => void;
+  restoreImportedMetadata: (
+    patch: ImportedParams,
+    captions: CharCaptionItem[],
+    options?: { preserveMissing?: boolean },
+  ) => void;
   checkUpdate: () => Promise<void>;
   dismissUpdate: () => void;
   downloadUpdate: () => Promise<void>;
@@ -952,7 +956,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     persistGenerationState(get);
   },
 
-  restoreImportedMetadata(patch, captions) {
+  restoreImportedMetadata(patch, captions, options) {
     const restoredCaptions: CharCaption[] = captions
       .slice(0, maxNAICharacterPrompts(patch.model ?? get().params.model))
       .map((caption) => ({
@@ -961,11 +965,14 @@ export const useAppStore = create<AppState>((set, get) => ({
       }));
     set((state) => ({
       params: normalizeGenerateParams({ ...state.params, ...patch }),
-      charCaptions: restoredCaptions,
-      // A stale reference image changes the request even when every visible
-      // metadata parameter is identical, so explicit restore starts clean.
-      vibeImages: [],
-      preciseReferences: [],
+      charCaptions:
+        options?.preserveMissing && restoredCaptions.length === 0
+          ? state.charCaptions
+          : restoredCaptions,
+      // Exact restore can start clean, while generation-workbench imports use
+      // preserveMissing so fields absent from the image keep their current value.
+      vibeImages: options?.preserveMissing ? state.vibeImages : [],
+      preciseReferences: options?.preserveMissing ? state.preciseReferences : [],
     }));
     persistGenerationState(get);
   },
@@ -1118,6 +1125,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   async loadWorkbenchImage() {
     const result = await window.naiDesktop.loadImage();
     if (result.ok && result.image) {
+      const restoreMetadata = get().activeTab === "generate" && result.metadata;
       set({
         workbenchImage: result.image,
         comparisonBeforeImage: null,
@@ -1125,6 +1133,19 @@ export const useAppStore = create<AppState>((set, get) => ({
         maskRevision: get().maskRevision + 1,
         statusText: storeFormat(get().settings, "status.imageLoaded", { width: result.image.width, height: result.image.height }),
       });
+      if (restoreMetadata) {
+        get().restoreImportedMetadata(
+          restoreMetadata.imported,
+          restoreMetadata.characterCaptions,
+          { preserveMissing: true },
+        );
+        const seed = restoreMetadata.imported.seed ?? 0;
+        set({
+          toast: seed > 0
+            ? storeFormat(get().settings, "toast.paramsLoadedSeed", { seed })
+            : storeText(get().settings, "toast.paramsLoaded"),
+        });
+      }
     } else if (result.message) {
       set({ toast: result.message, statusText: storeText(get().settings, "status.imageLoadFailed") });
     }
@@ -1141,6 +1162,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         });
         return;
       }
+      const restoreMetadata = get().activeTab === "generate" && result.metadata;
       set({
         workbenchImage: result.image,
         comparisonBeforeImage: null,
@@ -1149,6 +1171,19 @@ export const useAppStore = create<AppState>((set, get) => ({
         statusText: storeFormat(get().settings, "status.imageLoaded", { width: result.image.width, height: result.image.height }),
         toast: storeFormat(get().settings, "toast.imageLoaded", { width: result.image.width, height: result.image.height }),
       });
+      if (restoreMetadata) {
+        get().restoreImportedMetadata(
+          restoreMetadata.imported,
+          restoreMetadata.characterCaptions,
+          { preserveMissing: true },
+        );
+        const seed = restoreMetadata.imported.seed ?? 0;
+        set({
+          toast: seed > 0
+            ? storeFormat(get().settings, "toast.paramsLoadedSeed", { seed })
+            : storeText(get().settings, "toast.paramsLoaded"),
+        });
+      }
     } else if (result.message) {
       set({ toast: result.message, statusText: storeText(get().settings, "status.imageLoadFailed") });
     }

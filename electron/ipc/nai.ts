@@ -12,6 +12,7 @@ import {
   isNAIV4PlusModel,
   isNAIV5Model,
   maxNAICharacterPrompts,
+  MAX_NAI_SEED,
   normalizeGenerateParams,
   NAI_INPAINT_MODELS,
   supportsNAIPreciseReference,
@@ -58,6 +59,7 @@ import {
   type UpscaleScale,
   type WorkingImage,
 } from "../../src/types";
+import { inspectImageMetadata, parseImageMeta } from "../../src/png-meta";
 import {
   buildPromptCodexEnhancement,
   type MatureTagCandidate,
@@ -496,7 +498,7 @@ export function buildPayload(
     ...normalizeGenerateParams(params as GenerateParams),
     ...(inpaintModel ? { model: inpaintModel } : {}),
   } as PayloadParams;
-  actualSeed = Math.min(2_147_483_647, Math.max(1, Math.round(Number(actualSeed) || 1)));
+  actualSeed = Math.min(MAX_NAI_SEED, Math.max(1, Math.round(Number(actualSeed) || 1)));
   const basePrompt = mergePrompt(params.stylePrompt, params.positivePrompt);
   // In the official client, Furry is a mode for every V4+ checkpoint rather
   // than a separate V4/V5 model. It is represented by placing `fur dataset,`
@@ -1825,6 +1827,22 @@ async function postGenerateImage(
   return extractImages(res.data);
 }
 
+export function extractEmbeddedGenerationMetadata(buffer: Buffer): LoadImageResult["metadata"] | undefined {
+  try {
+    const bytes = Uint8Array.from(buffer);
+    const report = inspectImageMetadata(parseImageMeta(bytes.buffer));
+    if (!Object.keys(report.imported).length && !report.characterCaptions.length) return undefined;
+    return {
+      imported: report.imported,
+      characterCaptions: report.characterCaptions,
+    };
+  } catch {
+    // Metadata is optional. A malformed metadata block must not prevent the
+    // image itself from loading into the workbench.
+    return undefined;
+  }
+}
+
 export async function loadImageFile(): Promise<LoadImageResult> {
   const result = await dialog.showOpenDialog({
     title: "选择图片",
@@ -1846,6 +1864,7 @@ export async function loadImageFile(): Promise<LoadImageResult> {
         width: dims.width,
         height: dims.height,
       },
+      metadata: extractEmbeddedGenerationMetadata(buffer),
     };
   } catch (error: any) {
     return {
@@ -4008,6 +4027,7 @@ export async function loadImageFromPath(
         width: dims.width,
         height: dims.height,
       },
+      metadata: extractEmbeddedGenerationMetadata(buffer),
     };
   } catch (error: any) {
     return {

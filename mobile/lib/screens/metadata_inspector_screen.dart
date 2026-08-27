@@ -835,6 +835,7 @@ class _MetadataInspectorScreenState extends State<MetadataInspectorScreen> {
                                     report.imported,
                                     characterCaptions: report.characterCaptions,
                                     exact: true,
+                                    preserveMissing: true,
                                   );
                                   ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(content: Text(text.applied)));
