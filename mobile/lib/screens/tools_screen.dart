@@ -9,6 +9,7 @@ import '../i18n/app_locales.dart';
 import '../inpaint/inpaint_mask.dart';
 import '../models/nai_models.dart';
 import '../state/app_state.dart';
+import '../ui/quality_preset_control.dart';
 import '../ui/studio_shell.dart';
 import '../ui/zoomable_image.dart';
 import '../ui/before_after_compare.dart';
@@ -110,10 +111,11 @@ class _InpaintPanel extends StatefulWidget {
 
 class _InpaintPanelState extends State<_InpaintPanel> {
   final strokes = <InpaintStroke>[];
-  double brush = 28;
+  double brush = 4;
   double imageOpacity = 1;
   double maskOpacity = 0.72;
   bool inverted = false;
+  InpaintBrushShape brushShape = InpaintBrushShape.round;
 
   Future<void> _runInpaint(AppState state) async {
     final image = state.workbenchImage;
@@ -192,6 +194,7 @@ class _InpaintPanelState extends State<_InpaintPanel> {
           initialBrush: brush,
           initialImageOpacity: imageOpacity,
           initialMaskOpacity: maskOpacity,
+          initialBrushShape: brushShape,
         ),
       ),
     );
@@ -204,6 +207,7 @@ class _InpaintPanelState extends State<_InpaintPanel> {
       brush = result.brush;
       imageOpacity = result.imageOpacity;
       maskOpacity = result.maskOpacity;
+      brushShape = result.brushShape;
     });
   }
 
@@ -381,6 +385,31 @@ class _InpaintPanelState extends State<_InpaintPanel> {
               },
             ),
             const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerRight,
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  setState(() {
+                    brush = 4;
+                    brushShape = InpaintBrushShape.round;
+                  });
+                  state
+                    ..inpaintModel = 'nai-diffusion-5-full-inpainting'
+                    ..inpaintStrength = 1
+                    ..inpaintNoise = 0
+                    ..markChanged();
+                },
+                icon: const Icon(Icons.restart_alt, size: 18),
+                label: Text(switch (language) {
+                  'zh-TW' => '恢復官網預設',
+                  'en-US' => 'Restore official defaults',
+                  'ja-JP' => '公式初期値に戻す',
+                  'ko-KR' => '공식 기본값 복원',
+                  _ => '恢复官网默认',
+                }),
+              ),
+            ),
+            const SizedBox(height: 8),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -398,6 +427,19 @@ class _InpaintPanelState extends State<_InpaintPanel> {
                 state.markChanged();
               },
             ),
+            Text(
+              t(state.inpaintStrength < 0.6
+                  ? 'tools.inpaintStrengthLowHint'
+                  : state.inpaintStrength > 0.9
+                      ? 'tools.inpaintStrengthFullHint'
+                      : 'tools.inpaintStrengthHighHint'),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: state.inpaintStrength < 0.6
+                        ? Theme.of(context).colorScheme.error
+                        : Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
+            const SizedBox(height: 8),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -568,11 +610,17 @@ class _RedrawParams extends StatelessWidget {
                   state.setParam((x) => x.seed = int.tryParse(v.trim()) ?? 0),
             ),
           ],
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text(t('tools.qualityToggle')),
-            value: p.qualityToggle,
-            onChanged: (v) => state.setParam((x) => x.qualityToggle = v),
+          const SizedBox(height: 10),
+          QualityPresetControl(
+            language: language,
+            model: p.model,
+            value: p.qualityPreset,
+            transparentBackground: p.transparentBackground,
+            onChanged: (value) => state.setParam((x) => x
+              ..qualityPreset = value
+              ..qualityToggle = value != 'none'),
+            onTransparentChanged: (value) =>
+                state.setParam((x) => x.transparentBackground = value),
           ),
         ],
       ),

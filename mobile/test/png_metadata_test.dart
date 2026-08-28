@@ -139,6 +139,19 @@ void main() {
         'casual wear, short hair, smiling');
   });
 
+  test('restores imported quality and transparent-background state', () {
+    const imported = ImportedGenerateParams(
+      qualityToggle: false,
+      transparentBackground: true,
+    );
+    final target = GenerateParams();
+    imported.applyTo(target);
+
+    expect(target.qualityPreset, 'none');
+    expect(target.qualityToggle, isFalse);
+    expect(target.transparentBackground, isTrue);
+  });
+
   test('applies only the globally selected compatible metadata fields', () {
     const imported = ImportedGenerateParams(
       positivePrompt: 'selected prompt',

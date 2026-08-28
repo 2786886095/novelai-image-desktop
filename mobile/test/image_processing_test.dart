@@ -29,33 +29,40 @@ void main() {
         (prepared.width, prepared.height));
   });
 
-  test('pads inpaint image and mask to 64 then crops the response', () {
-    final source = image_lib.Image(width: 65, height: 67)
-      ..setPixelRgba(64, 66, 10, 20, 30, 255);
-    final mask = image_lib.Image(width: 65, height: 67)
-      ..setPixelRgba(10, 11, 255, 255, 255, 255);
+  test('resizes inpaint image and mask to the official 64-aligned size', () {
+    final source = image_lib.Image(width: 65, height: 67, numChannels: 4)
+      ..clear(image_lib.ColorRgba8(10, 20, 30, 255));
+    final mask = image_lib.Image(width: 65, height: 67, numChannels: 4)
+      ..clear(image_lib.ColorRgba8(255, 255, 255, 255));
     final prepared = prepareInpaintAssets(
       Uint8List.fromList(image_lib.encodePng(source)),
       Uint8List.fromList(image_lib.encodePng(mask)),
     );
     expect((prepared.width, prepared.height), (128, 128));
-    expect(prepared.padded, isTrue);
+    expect(prepared.resized, isTrue);
+    expect(decodeImageDimensions(prepared.maskBytes), (128, 128));
 
-    final paddedImage = image_lib.decodeImage(prepared.imageBytes)!;
-    final edge = paddedImage.getPixel(127, 127);
+    final resizedImage = image_lib.decodeImage(prepared.imageBytes)!;
+    final edge = resizedImage.getPixel(127, 127);
     expect((edge.r.toInt(), edge.g.toInt(), edge.b.toInt()), (10, 20, 30));
-    final cropped = cropImageToSize(prepared.imageBytes, 65, 67);
-    expect(decodeImageDimensions(cropped), (65, 67));
+    final generated = image_lib.Image(width: 128, height: 128, numChannels: 4)
+      ..clear(image_lib.ColorRgba8(200, 210, 220, 255));
+    final output = compositeInpaintResult(
+      Uint8List.fromList(image_lib.encodePng(generated)),
+      prepared,
+    );
+    expect(decodeImageDimensions(output), (128, 128));
   });
 
   test('repairs a mismatched inpaint mask and blocks oversized sources', () {
     final source = image_lib.Image(width: 128, height: 128);
-    final smallMask = image_lib.Image(width: 64, height: 64);
+    final smallMask = image_lib.Image(width: 64, height: 64)
+      ..setPixelRgba(10, 10, 255, 255, 255, 255);
     final repaired = prepareInpaintAssets(
       Uint8List.fromList(image_lib.encodePng(source)),
       Uint8List.fromList(image_lib.encodePng(smallMask)),
     );
-    expect(repaired.padded, isTrue);
+    expect(repaired.resized, isFalse);
     expect(decodeImageDimensions(repaired.maskBytes), (128, 128));
 
     final oversized = image_lib.Image(width: 1601, height: 64);
@@ -66,6 +73,36 @@ void main() {
       ),
       throwsFormatException,
     );
+  });
+
+  test('inpaint compositing preserves untouched source pixels', () {
+    final source = image_lib.Image(width: 256, height: 256, numChannels: 4)
+      ..clear(image_lib.ColorRgba8(220, 10, 10, 255));
+    final mask = image_lib.Image(width: 256, height: 256, numChannels: 4)
+      ..clear(image_lib.ColorRgba8(0, 0, 0, 255));
+    for (var y = 128; y < 136; y++) {
+      for (var x = 128; x < 136; x++) {
+        mask.setPixelRgba(x, y, 255, 255, 255, 255);
+      }
+    }
+    final prepared = prepareInpaintAssets(
+      Uint8List.fromList(image_lib.encodePng(source)),
+      Uint8List.fromList(image_lib.encodePng(mask)),
+    );
+    final generated = image_lib.Image(width: 256, height: 256, numChannels: 4)
+      ..clear(image_lib.ColorRgba8(10, 20, 230, 255));
+    final output = image_lib.decodeImage(compositeInpaintResult(
+      Uint8List.fromList(image_lib.encodePng(generated)),
+      prepared,
+    ))!;
+    final corner = output.getPixel(0, 0);
+    final center = output.getPixel(132, 132);
+    expect(
+      (corner.r.toInt(), corner.g.toInt(), corner.b.toInt()),
+      (220, 10, 10),
+    );
+    expect(center.b.toInt(), greaterThan(center.r.toInt()));
+    expect(prepared.blendAlpha[132 * prepared.width + 132], greaterThan(200));
   });
 
   test('director preparation flattens alpha and restores original size', () {

@@ -86,6 +86,7 @@ class BatchRedrawProject {
   String globalStyle;
   String globalNegative;
   GenerateParams globalParams;
+  String sizeMode;
   ReversePromptMode aiMode;
   String promptBulk;
   bool reuseMainReferences;
@@ -100,6 +101,7 @@ class BatchRedrawProject {
     this.globalStyle = '',
     this.globalNegative = '',
     GenerateParams? globalParams,
+    this.sizeMode = 'adaptive',
     this.aiMode = ReversePromptMode.tags,
     this.promptBulk = '',
     this.reuseMainReferences = false,
@@ -125,6 +127,7 @@ class BatchRedrawProject {
         'globalStyle': globalStyle,
         'globalNegative': globalNegative,
         'globalParams': globalParams.toJson(),
+        'sizeMode': sizeMode,
         'aiMode': aiMode.value,
         'promptBulk': promptBulk,
         'reuseMainReferences': reuseMainReferences,
@@ -149,6 +152,8 @@ class BatchRedrawProject {
       globalStyle: json['globalStyle']?.toString() ?? '',
       globalNegative: json['globalNegative']?.toString() ?? '',
       globalParams: global,
+      sizeMode:
+          json['sizeMode']?.toString() == 'custom' ? 'custom' : 'adaptive',
       aiMode: ReversePromptMode.values.firstWhere(
         (value) => value.value == json['aiMode']?.toString(),
         orElse: () => ReversePromptMode.tags,

@@ -752,6 +752,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Text(aboutText.authorDesc),
             ListTile(
               contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.forum_outlined),
+              title: Text(aboutText.novelAiGroup),
+              subtitle: const SelectableText('921985070'),
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.local_cafe_outlined),
               title: Text(aboutText.supportTitle),
               subtitle: Text(aboutText.supportMessage),

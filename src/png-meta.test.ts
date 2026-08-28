@@ -182,6 +182,7 @@ describe("parseImportedParams", () => {
     expect(out.negativePrompt).toBe("lowres, bad anatomy");
     expect(out.stylePrompt).toBe("");
     expect(out.qualityToggle).toBe(false);
+    expect(out.qualityPreset).toBe("none");
     expect(out.ucPreset).toBe(3);
     expect(out.variety).toBe(false);
     expect(characters).toEqual([{

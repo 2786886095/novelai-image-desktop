@@ -195,10 +195,20 @@ class _HomeShellState extends State<HomeShell> {
   }
 
   Future<void> _showV5MigrationNotice() async {
-    const key = 'langbai.notice.v5-model-migration.v2';
+    const key = 'langbai.notice.v5-model-migration.seen';
+    const legacyKey = 'langbai.notice.v5-model-migration.v2';
     try {
       final prefs = await SharedPreferences.getInstance();
-      if (prefs.getBool(key) == true || !mounted) return;
+      if (prefs.getBool(key) == true ||
+          prefs.getBool(legacyKey) == true ||
+          !mounted) {
+        if (prefs.getBool(legacyKey) == true) await prefs.setBool(key, true);
+        return;
+      }
+      // Persist before opening the dialog so force-closing the app while the
+      // reminder is visible still counts as the one allowed presentation.
+      await prefs.setBool(key, true);
+      if (!mounted) return;
       final language = context.read<AppState>().settings.language;
       final copy = _v5MigrationCopy[language] ?? _v5MigrationCopy['zh-CN']!;
       final openGenerate = await showDialog<bool>(
@@ -217,7 +227,6 @@ class _HomeShellState extends State<HomeShell> {
           ],
         ),
       );
-      await prefs.setBool(key, true);
       if (openGenerate == true && mounted) setState(() => _index = 0);
     } catch (_) {
       // A preference backend may be unavailable in isolated widget tests.

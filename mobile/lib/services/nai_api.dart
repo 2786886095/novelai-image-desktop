@@ -536,10 +536,21 @@ class NaiApi {
       final parameters = payload['parameters'] as Map<String, dynamic>;
       parameters['image'] = base64Encode(prepared.imageBytes);
       parameters['mask'] = base64Encode(prepared.maskBytes);
-      parameters['add_original_image'] = true;
-      parameters['strength'] = strength.clamp(0.1, 1);
+      final normalizedStrength = strength.clamp(0, 1).toDouble();
+      parameters['add_original_image'] = false;
+      parameters['inpaintImg2ImgStrength'] = normalizedStrength;
+      // NovelAI's current infill payload keeps the generic img2img default.
+      parameters['strength'] = 0.7;
+      if (normalizedStrength != 1) {
+        parameters['img2img'] = {
+          'strength': normalizedStrength,
+          'color_correct': true,
+        };
+      } else {
+        parameters.remove('img2img');
+      }
       parameters['noise'] = noise.clamp(0, 0.99);
-      parameters['extra_noise_seed'] = randomSeed();
+      parameters['extra_noise_seed'] = max(0, seed - 1);
       try {
         bytes = await _postGenerate(token, settings, payload);
         usedModel = candidate;
@@ -558,7 +569,7 @@ class NaiApi {
       throw StateError('Inpaint request returned no result');
     }
     final images = _extractImages(bytes)
-        .map((image) => cropImageToSize(image, width, height))
+        .map((image) => compositeInpaintResult(image, prepared))
         .toList();
     return (images, seed, usedModel);
   }
@@ -674,9 +685,15 @@ class NaiApi {
         settings.modelMode == 'furry' && params.isV4Plus && !hasFurryDataset
             ? _merge('fur dataset', basePrompt)
             : basePrompt;
-    final effectivePrompt = params.qualityToggle
-        ? _merge(modePrompt, _qualityTags(params.model))
-        : modePrompt;
+    final qualityPreset = params.qualityPreset;
+    final qualityPrompt = _merge(
+      modePrompt,
+      _qualityTags(params.model, qualityPreset),
+    );
+    final transparentBackground = params.isV5 && params.transparentBackground;
+    final effectivePrompt = transparentBackground
+        ? _merge(qualityPrompt, 'transparent background')
+        : qualityPrompt;
     final effectiveNegative = _merge(
         params.negativePrompt, _ucPresetText(params.model, params.ucPreset));
     final charCaptions = extras.charCaptions
@@ -750,9 +767,19 @@ class NaiApi {
       'legacy_v3_extend': false,
       'dynamic_thresholding': params.isV5 ? false : params.cfgRescale > 0,
       'skip_cfg_above_sigma': null,
-      'qualityToggle': params.qualityToggle,
-      'quality_toggle': params.qualityToggle,
+      'qualityPresetId': qualityPreset,
+      'qualityToggle': qualityPreset != 'none',
+      'quality_toggle': qualityPreset != 'none',
+      'tag_hint_qt': switch (qualityPreset) {
+        'standard' => 1,
+        'light' => 3,
+        _ => 0,
+      },
     };
+    if (params.isV5) {
+      parameters['tag_hint_transparent_background'] = transparentBackground;
+      parameters['straight_alpha'] = transparentBackground;
+    }
     if (params.variety && params.supportsVariety) {
       parameters['skip_cfg_above_sigma'] = 58;
     }
@@ -1754,18 +1781,23 @@ class NaiApi {
     return result.join(', ');
   }
 
-  String _qualityTags(String model) {
+  String _qualityTags(String model, [String preset = 'standard']) {
+    if (preset == 'none') return '';
+    if (preset == 'light' &&
+        _normalizeModel(model).startsWith('nai-diffusion-5')) {
+      return 'very aesthetic, amazing quality, no text';
+    }
     return switch (_normalizeModel(model)) {
       'nai-diffusion-5-full' ||
       'nai-diffusion-5-curated' =>
         'very aesthetic, masterpiece, no text',
       'nai-diffusion-4-5-full' => 'very aesthetic, masterpiece, no text',
       'nai-diffusion-4-5-curated' =>
-        'masterpiece, no text, -0.8::feet::, rating:general',
+        'very aesthetic, masterpiece, no text, -0.8::feet::, rating:general',
       'nai-diffusion-4-full' =>
         'no text, best quality, very aesthetic, absurdres',
       'nai-diffusion-4-curated' =>
-        'rating:general, amazing quality, very aesthetic, absurdres',
+        'rating:general, best quality, very aesthetic, absurdres',
       'nai-diffusion-3' =>
         'best quality, amazing quality, very aesthetic, absurdres',
       _ => '',

@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as image_lib;
+import 'package:novelai_mobile/images/image_processing.dart';
 import 'package:novelai_mobile/models/nai_models.dart';
 import 'package:novelai_mobile/services/nai_api.dart';
 import 'package:novelai_mobile/state/app_state.dart';
@@ -131,7 +132,8 @@ void main() {
     });
 
     expect(params.model, 'nai-diffusion-5-full');
-    expect((params.width, params.height), (1600, 64));
+    expect((params.width, params.height), (49152, 64));
+    expect(params.width * params.height, lessThanOrEqualTo(naiMaxPixelArea));
     expect(params.steps, 50);
     expect(params.cfgScale, 6);
     expect(params.cfgRescale, 1);
@@ -348,12 +350,16 @@ void main() {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     addTearDown(server.close);
     final models = <String>[];
+    final inpaintParameters = <Map<String, dynamic>>[];
     var requests = 0;
     server.listen((request) async {
       requests++;
       final body = jsonDecode(await utf8.decoder.bind(request).join())
           as Map<String, dynamic>;
       models.add(body['model'] as String);
+      inpaintParameters.add(
+        Map<String, dynamic>.from(body['parameters'] as Map),
+      );
       if (requests == 1) {
         request.response
           ..statusCode = 400
@@ -381,9 +387,9 @@ void main() {
     final image = Uint8List.fromList(
       image_lib.encodePng(image_lib.Image(width: 64, height: 64)),
     );
-    final mask = Uint8List.fromList(
-      image_lib.encodePng(image_lib.Image(width: 64, height: 64)),
-    );
+    final maskImage = image_lib.Image(width: 64, height: 64, numChannels: 4)
+      ..clear(image_lib.ColorRgba8(255, 255, 255, 255));
+    final mask = Uint8List.fromList(image_lib.encodePng(maskImage));
     final api = NaiApi();
     final result = await api.inpaint(
       'test-token',
@@ -409,6 +415,19 @@ void main() {
     ]);
     expect(result.$1, hasLength(1));
     expect(result.$3, 'nai-diffusion-4-5-full-inpainting');
+    expect(inpaintParameters.first['add_original_image'], isFalse);
+    expect(inpaintParameters.first['inpaintImg2ImgStrength'], 0.55);
+    expect(inpaintParameters.first['strength'], 0.7);
+    expect(inpaintParameters.first['img2img'], {
+      'strength': 0.55,
+      'color_correct': true,
+    });
+    expect(
+      decodeImageDimensions(
+        base64Decode(inpaintParameters.first['mask'] as String),
+      ),
+      (64, 64),
+    );
   });
 
   test('inpaint never retries HTTP 500', () async {
@@ -427,6 +446,9 @@ void main() {
     final image = Uint8List.fromList(
       image_lib.encodePng(image_lib.Image(width: 64, height: 64)),
     );
+    final maskImage = image_lib.Image(width: 64, height: 64, numChannels: 4)
+      ..clear(image_lib.ColorRgba8(255, 255, 255, 255));
+    final mask = Uint8List.fromList(image_lib.encodePng(maskImage));
     final api = NaiApi();
 
     await expectLater(
@@ -439,7 +461,7 @@ void main() {
         ),
         GenerateParams(positivePrompt: 'test'),
         image,
-        image,
+        mask,
         'nai-diffusion-4-5-curated-inpainting',
         64,
         64,

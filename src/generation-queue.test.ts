@@ -59,6 +59,7 @@ describe("main generation queue", () => {
     }));
     await useAppStore.getState().enqueueGeneration();
     expect(useAppStore.getState().generationQueue).toHaveLength(1);
+    expect(useAppStore.getState().generationQueue[0].quotePending).toBe(false);
 
     first.resolve(generationResult("first", 11));
     await running;
@@ -152,7 +153,7 @@ describe("main generation queue", () => {
     expect(useAppStore.getState().queueProgress).toEqual({ done: 1, failed: 0, total: 1 });
   });
 
-  it("does not enqueue a job whose quote resolves after 清空排队", async () => {
+  it("shows an optimistic queued job immediately and removes it when 清空排队", async () => {
     const first = deferred<ReturnType<typeof generationResult>>();
     const quote = deferred<{ ok: boolean; amount: number; balance: number }>();
     const generate = vi
@@ -184,6 +185,8 @@ describe("main generation queue", () => {
 
     useAppStore.setState((state) => ({ params: { ...state.params, positivePrompt: "queued prompt" } }));
     const enqueuing = useAppStore.getState().enqueueGeneration();
+    expect(useAppStore.getState().generationQueue).toHaveLength(1);
+    expect(useAppStore.getState().generationQueue[0].quotePending).toBe(true);
     // Clear the queue while the enqueue quote is still in flight.
     useAppStore.getState().clearQueue();
     quote.resolve({ ok: true, amount: 1, balance: 100 });

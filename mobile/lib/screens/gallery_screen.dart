@@ -373,7 +373,8 @@ class _GalleryScreenState extends State<GalleryScreen> {
                           .setWorkbenchFromHistory(item)
                           .then((_) {
                         messenger.showSnackBar(
-                          SnackBar(content: Text(t('gallery.setWorkbenchDone'))),
+                          SnackBar(
+                              content: Text(t('gallery.setWorkbenchDone'))),
                         );
                       });
                     },
@@ -475,7 +476,9 @@ class _GalleryScreenState extends State<GalleryScreen> {
         ..seed = params.seed
         ..seedMode = params.seedMode
         ..ucPreset = params.ucPreset
+        ..qualityPreset = params.qualityPreset
         ..qualityToggle = params.qualityToggle
+        ..transparentBackground = params.transparentBackground
         ..smea = params.smea
         ..smeaDyn = params.smeaDyn
         ..variety = params.variety

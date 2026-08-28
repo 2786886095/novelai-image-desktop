@@ -52,6 +52,7 @@ void main() {
 
   test('batch project JSON preserves independent reference settings', () {
     final project = BatchRedrawProject.empty(GenerateParams())
+      ..sizeMode = 'custom'
       ..vibeImages.add(const VibeTransferItem(
         base64: 'YWJj',
         infoExtracted: 0.4,
@@ -75,6 +76,13 @@ void main() {
     expect(restored.preciseReferences.single.type, 'character');
     expect(restored.preciseReferences.single.informationExtracted, 0.3);
     expect(restored.preciseReferences.single.width, 1024);
+    expect(restored.sizeMode, 'custom');
+
+    final legacy = project.toJson()..remove('sizeMode');
+    expect(
+      BatchRedrawProject.fromJson(legacy, GenerateParams()).sizeMode,
+      'adaptive',
+    );
   });
 
   for (final viewport in <(String, Size)>[

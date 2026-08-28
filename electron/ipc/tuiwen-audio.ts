@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
 import type { Agent } from "http";
-import { pathToFileURL } from "url";
+import { toLocalMediaUrl } from "./local-media-protocol";
 import { MsEdgeTTS, OUTPUT_FORMAT } from "msedge-tts";
 import type {
   TuiwenAudio,
@@ -136,7 +136,7 @@ export async function saveTuiwenImportedAudio(
       message: `已保存 #${index} 音频切片（${request.sourceName || "长音频"}）。`,
       audio: {
         filePath,
-        fileUrl: pathToFileURL(filePath).toString(),
+        fileUrl: toLocalMediaUrl(filePath),
         durationMs,
         source: "import",
       },
@@ -220,7 +220,7 @@ class EdgeTtsProvider implements TuiwenTtsProvider {
         || estimateTuiwenNarrationDurationMs(narration, options.ratePercent);
       return {
         filePath: finalPath,
-        fileUrl: pathToFileURL(finalPath).toString(),
+      fileUrl: toLocalMediaUrl(finalPath),
         durationMs,
         source: "tts",
         ttsVoice: options.voice,

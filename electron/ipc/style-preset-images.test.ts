@@ -37,7 +37,7 @@ describe("style prompt preview images", () => {
     expect(path.dirname(copied[0].filePath)).toBe(
       stylePromptPreviewDirectory("style/unsafe", root),
     );
-    expect(copied[0].fileUrl).toMatch(/^file:/);
+    expect(copied[0].fileUrl).toMatch(/^nai-local:\/\/file\//);
   });
 
   it("ignores unsupported files and never exceeds three images", () => {

@@ -293,7 +293,9 @@ export const IMPORT_LABELS: Record<keyof ImportedParams, string> = {
   smea: "SMEA",
   smeaDyn: "SMEA Dyn",
   ucPreset: "UC preset",
+  qualityPreset: "Quality preset",
   qualityToggle: "Quality toggle",
+  transparentBackground: "Transparent background",
   variety: "Variety+",
 };
 

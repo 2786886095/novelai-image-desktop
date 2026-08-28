@@ -391,6 +391,11 @@ export function parseImportedParams(meta: Record<string, string>): ImportedParam
     model: modelToNai(modelCandidate),
     ucPreset: isNovelAi ? 3 : undefined,
     qualityToggle: isNovelAi ? false : undefined,
+    qualityPreset: isNovelAi ? "none" : undefined,
+    transparentBackground:
+      isNovelAi && comment.tag_hint_transparent_background === true
+        ? true
+        : undefined,
     variety: isNovelAi ? comment.skip_cfg_above_sigma === 58 : undefined,
   });
 }

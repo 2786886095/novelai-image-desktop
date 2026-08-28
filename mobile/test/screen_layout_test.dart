@@ -9,6 +9,7 @@ import 'package:novelai_mobile/screens/ai_log_screen.dart';
 import 'package:novelai_mobile/screens/settings_screen.dart';
 import 'package:novelai_mobile/screens/tools_hub_screen.dart';
 import 'package:novelai_mobile/screens/tools_screen.dart';
+import 'package:novelai_mobile/screens/v5_artist_weight_repair_screen.dart';
 import 'package:novelai_mobile/services/update_service.dart';
 import 'package:novelai_mobile/state/app_state.dart';
 import 'package:novelai_mobile/ui/studio_theme.dart';
@@ -82,6 +83,27 @@ void main() {
     });
   }
 
+  testWidgets('V5 artist repair weight draw fits a tiny phone', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(320, 640);
+    addTearDown(tester.view.reset);
+    final state = AppState();
+    addTearDown(state.dispose);
+
+    await _pumpScreen(
+      tester,
+      state,
+      V5ArtistWeightRepairScreen(
+        onBack: () {},
+        mode: V5ArtistToolMode.draw,
+      ),
+      'V5 artist repair initial layout',
+    );
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    expect(find.textContaining('0.2'), findsWidgets);
+  });
+
   testWidgets('positive prompt keeps user and external edits after rebuilds',
       (tester) async {
     tester.view.devicePixelRatio = 1;
@@ -135,12 +157,23 @@ void main() {
     expect(
         find.byKey(const ValueKey('character-position-canvas')), findsNothing);
 
+    final generatePage = find.byKey(const ValueKey('generate-single-layout'));
+    final generateScroll = find
+        .descendant(of: generatePage, matching: find.byType(Scrollable))
+        .first;
     await tester.scrollUntilVisible(
       find.text('自定义拖动'),
       500,
-      scrollable: find.byType(Scrollable).first,
+      scrollable: generateScroll,
       maxScrolls: 12,
     );
+    final scrollState = tester.state<ScrollableState>(generateScroll);
+    scrollState.position.jumpTo(
+      (scrollState.position.pixels + 120)
+          .clamp(0, scrollState.position.maxScrollExtent)
+          .toDouble(),
+    );
+    await tester.pump();
     await tester.tap(find.text('自定义拖动'));
     await tester.pump();
     expect(state.extras.charCaptions.every((item) => item.useCoords), isTrue);

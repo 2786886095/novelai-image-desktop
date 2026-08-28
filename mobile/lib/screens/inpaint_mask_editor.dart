@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../i18n/app_locales.dart';
 import '../inpaint/inpaint_mask.dart';
@@ -13,6 +14,7 @@ class InpaintMaskEditResult {
   final double brush;
   final double imageOpacity;
   final double maskOpacity;
+  final InpaintBrushShape brushShape;
 
   const InpaintMaskEditResult({
     required this.strokes,
@@ -20,6 +22,7 @@ class InpaintMaskEditResult {
     required this.brush,
     required this.imageOpacity,
     required this.maskOpacity,
+    required this.brushShape,
   });
 }
 
@@ -31,6 +34,7 @@ class InpaintMaskEditor extends StatefulWidget {
   final double initialBrush;
   final double initialImageOpacity;
   final double initialMaskOpacity;
+  final InpaintBrushShape initialBrushShape;
   final ImageProvider<Object>? imageProvider;
 
   const InpaintMaskEditor({
@@ -39,9 +43,10 @@ class InpaintMaskEditor extends StatefulWidget {
     required this.language,
     this.initialStrokes = const [],
     this.initialInverted = false,
-    this.initialBrush = 28,
+    this.initialBrush = 4,
     this.initialImageOpacity = 1,
     this.initialMaskOpacity = 0.72,
+    this.initialBrushShape = InpaintBrushShape.round,
     this.imageProvider,
   });
 
@@ -57,6 +62,8 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> {
   late double _brush;
   late double _imageOpacity;
   late double _maskOpacity;
+  late InpaintBrushShape _brushShape;
+  late final TextEditingController _brushController;
   double _scale = 1;
   Offset _offset = Offset.zero;
   Size _canvasSize = Size.zero;
@@ -76,9 +83,43 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> {
     super.initState();
     _strokes = copyInpaintStrokes(widget.initialStrokes);
     _inverted = widget.initialInverted;
-    _brush = widget.initialBrush.clamp(8, 96).toDouble();
+    _brushShape = widget.initialBrushShape;
+    _brush =
+        normalizeInpaintBrushCells(widget.initialBrush, _brushShape).toDouble();
+    _brushController = TextEditingController(text: _brush.round().toString());
     _imageOpacity = widget.initialImageOpacity.clamp(0.15, 1).toDouble();
     _maskOpacity = widget.initialMaskOpacity.clamp(0.15, 1).toDouble();
+  }
+
+  double get _sourceShortest =>
+      math.max(1, math.min(widget.image.width, widget.image.height)).toDouble();
+
+  @override
+  void dispose() {
+    _brushController.dispose();
+    super.dispose();
+  }
+
+  void _setBrush(double value) {
+    final next = normalizeInpaintBrushCells(value, _brushShape).toDouble();
+    setState(() => _brush = next);
+    final text = next.round().toString();
+    if (_brushController.text != text) {
+      _brushController.value = TextEditingValue(
+        text: text,
+        selection: TextSelection.collapsed(offset: text.length),
+      );
+    }
+  }
+
+  void _commitBrushText() {
+    final parsed = double.tryParse(_brushController.text);
+    _setBrush(parsed ?? _brush);
+  }
+
+  void _setBrushShape(InpaintBrushShape shape) {
+    _brushShape = shape;
+    _setBrush(_brush);
   }
 
   Offset? _toNormalized(Offset localPoint) {
@@ -89,11 +130,12 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> {
 
   void _beginStroke(Offset localPoint) {
     final normalized = _toNormalized(localPoint);
-    if (normalized == null || _canvasSize.shortestSide <= 0) return;
+    if (normalized == null) return;
     _redo.clear();
     _strokes.add(InpaintStroke(
-      brushFraction: _brush / _canvasSize.shortestSide,
+      brushCells: _brush.round(),
       erase: _erase,
+      shape: _brushShape,
       points: [normalized],
     ));
     _activeStroke = _strokes.length - 1;
@@ -239,6 +281,7 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> {
         brush: _brush,
         imageOpacity: _imageOpacity,
         maskOpacity: _maskOpacity,
+        brushShape: _brushShape,
       ),
     );
   }
@@ -294,9 +337,11 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> {
                               inverted: _inverted,
                               opacity: _maskOpacity,
                               cursor: _cursor,
-                              brushFraction: _brush /
-                                  math.max(1, _canvasSize.shortestSide),
+                              brushCells: _brush.round(),
+                              maskGridFraction:
+                                  inpaintMaskGridSize / _sourceShortest,
                               eraseCursor: _erase,
+                              brushShape: _brushShape,
                             ),
                           ),
                         ),
@@ -355,6 +400,50 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> {
         ],
       );
 
+  Widget _shapeBar() => LayoutBuilder(
+        builder: (context, constraints) {
+          final selector = SegmentedButton<InpaintBrushShape>(
+            key: const ValueKey('inpaint-brush-shape'),
+            showSelectedIcon: false,
+            segments: [
+              ButtonSegment(
+                value: InpaintBrushShape.round,
+                icon: const Icon(Icons.circle_outlined),
+                label: Text(t('tools.roundBrush')),
+              ),
+              ButtonSegment(
+                value: InpaintBrushShape.square,
+                icon: const Icon(Icons.crop_square),
+                label: Text(t('tools.squareBrush')),
+              ),
+            ],
+            selected: {_brushShape},
+            onSelectionChanged: (value) => _setBrushShape(value.first),
+          );
+          final label = Text(
+            t('tools.brushShape'),
+            style: Theme.of(context).textTheme.labelLarge,
+          );
+          if (constraints.maxWidth < 420) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                label,
+                const SizedBox(height: 6),
+                selector,
+              ],
+            );
+          }
+          return Row(
+            children: [
+              label,
+              const SizedBox(width: 12),
+              Expanded(child: selector),
+            ],
+          );
+        },
+      );
+
   Widget _slider({
     required String label,
     required double value,
@@ -387,14 +476,57 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> {
   Widget _controls(bool landscape) {
     final brushSlider = KeyedSubtree(
       key: const ValueKey('inpaint-brush-size'),
-      child: _slider(
-        label: t('tools.brushSize'),
-        value: _brush,
-        min: 8,
-        max: 96,
-        divisions: 22,
-        display: '${_brush.round()}',
-        onChanged: (value) => setState(() => _brush = value),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Expanded(child: Text(t('tools.brushSize'))),
+              SizedBox(
+                width: 78,
+                height: 38,
+                child: TextField(
+                  key: const ValueKey('inpaint-brush-size-input'),
+                  controller: _brushController,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  textAlign: TextAlign.end,
+                  decoration: InputDecoration(
+                    isDense: true,
+                    suffixText: t('tools.gridUnit'),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 9,
+                    ),
+                  ),
+                  onSubmitted: (_) => _commitBrushText(),
+                  onTapOutside: (_) {
+                    _commitBrushText();
+                    FocusManager.instance.primaryFocus?.unfocus();
+                  },
+                ),
+              ),
+            ],
+          ),
+          Slider(
+            value: _brush
+                .clamp(inpaintBrushSliderMin, inpaintBrushSliderMax)
+                .toDouble(),
+            min: inpaintBrushSliderMin.toDouble(),
+            max: inpaintBrushSliderMax.toDouble(),
+            divisions: inpaintBrushSliderMax - inpaintBrushSliderMin,
+            onChanged: _setBrush,
+          ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              t('tools.precisionMaskHint'),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
+          ),
+        ],
       ),
     );
     final opacitySliders = [
@@ -426,7 +558,9 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> {
             mainAxisSize: MainAxisSize.min,
             children: [
               _modeBar(),
-              const SizedBox(height: 4),
+              const SizedBox(height: 8),
+              _shapeBar(),
+              const SizedBox(height: 8),
               // Brush size is a primary drawing control. Keeping it outside
               // the adjustments expansion avoids making it look as if the
               // option disappeared on portrait phones.
@@ -482,7 +616,7 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> {
     final size = MediaQuery.sizeOf(context);
     final landscape = size.width > size.height;
     Widget canvasRegion() => ColoredBox(
-          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          color: const Color(0xFF101120),
           child: Stack(
             children: [
               Positioned.fill(child: _canvas()),
@@ -542,7 +676,13 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> {
           : Column(
               children: [
                 Expanded(child: canvasRegion()),
-                _controls(false),
+                ConstrainedBox(
+                  constraints: BoxConstraints(maxHeight: size.height * 0.48),
+                  child: SingleChildScrollView(
+                    key: const ValueKey('inpaint-mask-controls-scroll'),
+                    child: _controls(false),
+                  ),
+                ),
               ],
             ),
     );
@@ -554,16 +694,20 @@ class InpaintMaskPainter extends CustomPainter {
   final bool inverted;
   final double opacity;
   final Offset? cursor;
-  final double brushFraction;
+  final int brushCells;
+  final double maskGridFraction;
   final bool eraseCursor;
+  final InpaintBrushShape brushShape;
 
   InpaintMaskPainter({
     required this.strokes,
     required this.inverted,
     required this.opacity,
     this.cursor,
-    this.brushFraction = 0,
+    this.brushCells = 0,
+    this.maskGridFraction = 0,
     this.eraseCursor = false,
+    this.brushShape = InpaintBrushShape.round,
   });
 
   @override
@@ -578,48 +722,41 @@ class InpaintMaskPainter extends CustomPainter {
     }
     for (final stroke in strokes) {
       if (stroke.points.isEmpty) continue;
-      final width = stroke.brushFraction * size.shortestSide;
       final rawSelected = !stroke.erase;
       final visiblySelected = inverted ? !rawSelected : rawSelected;
-      final paint = Paint()
-        ..color = visiblySelected ? selected : Colors.transparent
-        ..blendMode = visiblySelected ? BlendMode.srcOver : BlendMode.clear
-        ..strokeWidth = width
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round
-        ..style = PaintingStyle.stroke;
-      final points = stroke.points
-          .map((point) => Offset(point.dx * size.width, point.dy * size.height))
-          .toList(growable: false);
-      if (points.length == 1) {
-        canvas.drawCircle(
-          points.first,
-          width / 2,
-          Paint()
-            ..color = visiblySelected ? selected : Colors.transparent
-            ..blendMode = visiblySelected ? BlendMode.srcOver : BlendMode.clear,
-        );
-      } else {
-        final path = Path()..moveTo(points.first.dx, points.first.dy);
-        for (final point in points.skip(1)) {
-          path.lineTo(point.dx, point.dy);
-        }
-        canvas.drawPath(path, paint);
-      }
+      paintInpaintStroke(
+        canvas,
+        size,
+        stroke,
+        color: visiblySelected ? selected : Colors.transparent,
+        blendMode: visiblySelected ? BlendMode.srcOver : BlendMode.clear,
+        gridSize: maskGridFraction * size.shortestSide,
+      );
     }
     canvas.restore();
     final pointer = cursor;
-    if (pointer != null && brushFraction > 0) {
+    if (pointer != null && brushCells > 0 && maskGridFraction > 0) {
       final center = Offset(pointer.dx * size.width, pointer.dy * size.height);
-      final radius = brushFraction * size.shortestSide / 2;
-      canvas.drawCircle(
-        center,
-        radius,
-        Paint()
-          ..color = eraseCursor ? Colors.orangeAccent : Colors.cyanAccent
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = math.max(2, 2 / math.max(1, size.shortestSide / 300)),
-      );
+      final footprintCells = brushShape == InpaintBrushShape.round
+          ? 2 * (brushCells / 2).round() + 1
+          : brushCells;
+      final cursorSize = footprintCells * maskGridFraction * size.shortestSide;
+      final paint = Paint()
+        ..color = eraseCursor ? Colors.orangeAccent : Colors.cyanAccent
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = math.max(1.5, 2 / math.max(1, size.shortestSide / 300));
+      if (brushShape == InpaintBrushShape.square) {
+        canvas.drawRect(
+          Rect.fromCenter(
+            center: center,
+            width: cursorSize,
+            height: cursorSize,
+          ),
+          paint,
+        );
+      } else {
+        canvas.drawCircle(center, cursorSize / 2, paint);
+      }
     }
   }
 

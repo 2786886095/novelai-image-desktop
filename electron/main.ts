@@ -11,6 +11,11 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import {
+  installLocalMediaProtocol,
+  localMediaUrlToPath,
+  registerLocalMediaScheme,
+} from "./ipc/local-media-protocol";
+import {
   augmentImg,
   analyzeComicScript,
   cancelGeneration,
@@ -46,6 +51,8 @@ import {
   upscaleImg,
   verifyToken,
 } from "./ipc/nai";
+
+registerLocalMediaScheme();
 import {
   danbooruStatus,
   downloadDanbooruTags,
@@ -499,7 +506,9 @@ function createWindow() {
       ["09-records", "records"],
       ["10-records", "records"],
     ].find(([needle]) => normalizedUiCapturePath.includes(needle))?.[1];
-    const captureSurface = normalizedUiCapturePath.includes("random-artist")
+    const captureSurface = normalizedUiCapturePath.includes("v5-artist-repair")
+      ? "v5ArtistRepair"
+      : normalizedUiCapturePath.includes("random-artist")
       ? "randomArtist"
       : normalizedUiCapturePath.includes("opus-inline")
       ? "opusInline"
@@ -885,9 +894,8 @@ function registerIpc() {
   ipcMain.on("image:startDrag", (event, filePathOrUrl: string) => {
     try {
       if (!filePathOrUrl) return;
-      const filePath = filePathOrUrl.startsWith("file://")
-        ? fileURLToPath(filePathOrUrl)
-        : filePathOrUrl;
+      const filePath = localMediaUrlToPath(filePathOrUrl)
+        ?? (filePathOrUrl.startsWith("file://") ? fileURLToPath(filePathOrUrl) : filePathOrUrl);
       const icon = nativeImage.createFromPath(filePath);
       if (icon.isEmpty()) return; // startDrag throws on an empty icon
       event.sender.startDrag({
@@ -1052,6 +1060,7 @@ function registerIpc() {
 }
 
 app.whenReady().then(async () => {
+  await installLocalMediaProtocol();
   if (!uiCaptureUserData) pinUserDataAndMigrate();
   readStore();
   installGlobalLogging();

@@ -52,6 +52,7 @@ class AppState extends ChangeNotifier {
   GenerateParams params = GenerateParams();
   GenerateExtras extras = GenerateExtras();
   I2IParams i2i = I2IParams();
+  String i2iSizeMode = 'adaptive';
   AugmentOptions augmentOptions = AugmentOptions();
   AppSettings settings = AppSettings();
   PromptTemplateLibrary promptTemplates = const PromptTemplateLibrary();
@@ -77,7 +78,7 @@ class AppState extends ChangeNotifier {
   String selectedGroupId = '';
   String generationGroupId = '';
   String inpaintModel = 'nai-diffusion-5-full-inpainting';
-  double inpaintStrength = 0.55;
+  double inpaintStrength = 1;
   double inpaintNoise = 0;
   // Independent from params.positivePrompt — inpaint must not inherit the
   // main generate/i2i prompt automatically.
@@ -323,7 +324,19 @@ class AppState extends ChangeNotifier {
   }
 
   void setParam(void Function(GenerateParams p) update) {
+    final previousQualityPreset = params.qualityPreset;
+    final previousQualityToggle = params.qualityToggle;
     update(params);
+    if (params.qualityPreset != previousQualityPreset) {
+      params.qualityToggle = params.qualityPreset != 'none';
+    } else if (params.qualityToggle != previousQualityToggle) {
+      params.qualityPreset = params.qualityToggle ? 'standard' : 'none';
+    }
+    if (!params.isV5) {
+      if (params.qualityPreset == 'light') params.qualityPreset = 'standard';
+      params.qualityToggle = params.qualityPreset != 'none';
+      params.transparentBackground = false;
+    }
     var settingsChanged = false;
     if (settings.lockStylePrompt &&
         settings.savedStylePrompt != params.stylePrompt) {
@@ -352,6 +365,25 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     _scheduleGenerationQuote();
     _scheduleToolStatePersist();
+  }
+
+  void setI2ISizeMode(String value) {
+    i2iSizeMode = value == 'custom' ? 'custom' : 'adaptive';
+    notifyListeners();
+    _scheduleGenerationQuote();
+  }
+
+  (int, int) get i2iOutputSize {
+    final image = workbenchImage;
+    if (image == null || i2iSizeMode == 'custom') {
+      return (params.width, params.height);
+    }
+    return adaptiveNaiImageSize(
+      image.width,
+      image.height,
+      fallbackWidth: params.width,
+      fallbackHeight: params.height,
+    );
   }
 
   void setBatchCount(int n) {
@@ -1381,6 +1413,12 @@ class AppState extends ChangeNotifier {
     final quoteParams = params.copy();
     final quoteExtras = extras.copy();
     final imageToImage = workbenchImage != null;
+    if (imageToImage && i2iSizeMode == 'adaptive') {
+      final size = i2iOutputSize;
+      quoteParams
+        ..width = size.$1
+        ..height = size.$2;
+    }
     final count = imageToImage ? 1 : batchCount.clamp(1, 999);
     generationQuote = calculateImageGenerationAnlas(
       params: quoteParams,
@@ -1533,6 +1571,13 @@ class AppState extends ChangeNotifier {
             continue;
           }
           if (generationQueue.isEmpty) break;
+          final queued = generationQueue.first;
+          if (queued.quotePending) {
+            status = _rt('status.waitingQueueQuote');
+            notifyListeners();
+            await Future<void>.delayed(const Duration(milliseconds: 50));
+            continue;
+          }
           final job = generationQueue.removeAt(0);
           taskParams = job.params.copy();
           taskExtras = job.extras.copy();
@@ -1660,13 +1705,29 @@ class AppState extends ChangeNotifier {
       notifyListeners();
       return;
     }
-    final token = await storage.getToken();
-    if (token == null || token.isEmpty) return;
     final snapshot = params.copy();
     final snapshotExtras = extras.copy();
+    final jobId = DateTime.now().microsecondsSinceEpoch.toString();
+    final pendingJob = GenerationQueueJob(
+      id: jobId,
+      params: snapshot,
+      extras: snapshotExtras,
+      quotedAnlas: 0,
+      quotePending: true,
+      historyGroupId: generationGroupId,
+      addedAt: DateTime.now(),
+    );
     queueAdding = true;
+    generationQueue.add(pendingJob);
+    queueProgress = (queueProgress ?? const GenerationQueueProgress())
+        .copyWith(total: (queueProgress?.total ?? 0) + 1);
+    status = _rt('status.waitingQueueQuote');
     notifyListeners();
     try {
+      final token = await storage.getToken();
+      if (token == null || token.isEmpty) {
+        throw Exception(_rt('error.tokenRequired'));
+      }
       final freshAccount = await _fetchAccountPreservingLast(token);
       account = freshAccount;
       final quote = await _quoteFor(
@@ -1676,7 +1737,11 @@ class AppState extends ChangeNotifier {
         1,
         freshAccount,
       );
-      if (!generationQueueRunning || _cancelGenerationRequested) return;
+      if (!generationQueueRunning ||
+          _cancelGenerationRequested ||
+          !generationQueue.any((job) => job.id == jobId)) {
+        return;
+      }
       var quotedAnlas = 0;
       var quoteWarning = '';
       if (!quote.ok || quote.amount == null) {
@@ -1691,17 +1756,12 @@ class AppState extends ChangeNotifier {
           'balance': balance,
         });
       }
-      generationQueue.add(GenerationQueueJob(
-        id: DateTime.now().microsecondsSinceEpoch.toString(),
-        params: snapshot,
-        extras: snapshotExtras,
-        quotedAnlas: quotedAnlas,
-        historyGroupId: generationGroupId,
-        addedAt: DateTime.now(),
-      ));
+      final index = generationQueue.indexWhere((job) => job.id == jobId);
+      if (index < 0) return;
+      generationQueue[index]
+        ..quotedAnlas = quotedAnlas
+        ..quotePending = false;
       queueReservedAnlas += quotedAnlas;
-      queueProgress = (queueProgress ?? const GenerationQueueProgress())
-          .copyWith(total: (queueProgress?.total ?? 0) + 1);
       status = quoteWarning.isNotEmpty
           ? quoteWarning
           : _rf('status.queueAdded', {
@@ -1709,6 +1769,16 @@ class AppState extends ChangeNotifier {
               'amount': quotedAnlas,
             });
     } catch (error) {
+      final index = generationQueue.indexWhere((job) => job.id == jobId);
+      if (index >= 0) {
+        generationQueue.removeAt(index);
+        final progress = queueProgress;
+        if (progress != null) {
+          queueProgress = progress.copyWith(
+            total: max(progress.done + progress.failed, progress.total - 1),
+          );
+        }
+      }
       status = _rf('status.queueAddFailed',
           {'error': error.toString().replaceFirst('Exception: ', '')});
     } finally {
@@ -1734,6 +1804,7 @@ class AppState extends ChangeNotifier {
 
   void clearPendingGenerationQueue() {
     generationQueue.clear();
+    queueAdding = false;
     clearQueueRequested = generationQueueRunning;
     queueReservedAnlas = _activeTaskQuote;
     final progress = queueProgress;
@@ -1783,6 +1854,12 @@ class AppState extends ChangeNotifier {
       final taskParams = params.copy()
         ..positivePrompt = expandPromptWildcards(params.positivePrompt)
         ..negativePrompt = expandPromptWildcards(params.negativePrompt);
+      if (i2iSizeMode == 'adaptive') {
+        final size = i2iOutputSize;
+        taskParams
+          ..width = size.$1
+          ..height = size.$2;
+      }
       final before = await _authorizeQuotedRun(
         token,
         (fresh) => calculateImageGenerationAnlas(
@@ -1827,13 +1904,17 @@ class AppState extends ChangeNotifier {
       final image = await _workbenchBytes();
       final dims = workbenchImage;
       if (dims == null) throw Exception(_rt('error.originalImageRequired'));
+      final targetWidth = max(64, (dims.width / 64).ceil() * 64);
+      final targetHeight = max(64, (dims.height / 64).ceil() * 64);
       // Inpaint keeps its own independent positive prompt
       // (inpaintPositivePrompt) instead of reusing params.positivePrompt —
       // the rest of params (size, sampler, negative prompt, etc.) is still
       // shared with the main generate/i2i params.
       final taskParams = params.copy()
         ..positivePrompt = expandPromptWildcards(inpaintPositivePrompt)
-        ..negativePrompt = expandPromptWildcards(params.negativePrompt);
+        ..negativePrompt = expandPromptWildcards(params.negativePrompt)
+        ..width = targetWidth
+        ..height = targetHeight;
       final before = await _authorizeQuotedRun(
         token,
         (fresh) => calculateInpaintAnlas(
@@ -1865,15 +1946,15 @@ class AppState extends ChangeNotifier {
         items.add(await storage.saveImage(bytes, taskParams, seed,
             feature: 'inpaint',
             model: usedModel,
-            width: dims.width,
-            height: dims.height,
+            width: targetWidth,
+            height: targetHeight,
             groupId: generationGroupId.ifEmptyNull));
       }
       comparisonBefore = dims;
       comparisonAfter = WorkingImage(
         filePath: items.first.filePath,
-        width: dims.width,
-        height: dims.height,
+        width: targetWidth,
+        height: targetHeight,
       );
       _prependHistory(items, useAsWorkbench: true);
       final fallbackNote = usedModel == inpaintModel

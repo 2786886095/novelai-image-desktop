@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
-import { Button, NumberInput, Toggle } from "../components/ui";
+import { Button, CommittedNumberInput, NumberInput, Toggle } from "../components/ui";
 import { Icon } from "../components/icons";
+import { QualityPresetControl } from "../components/QualityPresetControl";
 import { useAppStore } from "../store";
 import ReferencePresetManager, {
   referencePresetTextFor,
@@ -10,6 +11,7 @@ import ReferencePresetManager, {
 import {
   NAI_MODELS,
   NAI_SAMPLERS,
+  isNAIV5Model,
   supportsNAIPreciseReference,
   type GenerateParams,
   type TagComicCandidate,
@@ -37,6 +39,12 @@ import {
   tagComicReferenceApplies,
   tagComicSizeTemplate,
 } from "./tag-comic";
+import {
+  NAI_DIMENSION_STEP,
+  NAI_MIN_DIMENSION,
+  maxNAIDimensionFor,
+  snapNAIDimensionWithinArea,
+} from "../nai-dimensions";
 
 type Step = "import" | "global" | "panels" | "generate";
 type QueueTask = { panelId: string; ordinal: number };
@@ -2405,9 +2413,17 @@ function GlobalParams({
           <span>{text(language, "model")}</span>
           <select
             value={params.model}
-            onChange={(event) =>
-              patch("model", event.target.value as GenerateParams["model"])
-            }
+            onChange={(event) => {
+              const model = event.target.value as GenerateParams["model"];
+              patch("model", model);
+              if (!isNAIV5Model(model)) {
+                if (params.qualityPreset === "light") {
+                  patch("qualityPreset", "standard");
+                  patch("qualityToggle", true);
+                }
+                patch("transparentBackground", false);
+              }
+            }}
           >
             {NAI_MODELS.map((model) => (
               <option key={model.value} value={model.value}>
@@ -2416,21 +2432,27 @@ function GlobalParams({
             ))}
           </select>
         </label>
-        <NumberInput
+        <CommittedNumberInput
           label={text(language, "width")}
           value={params.width}
-          min={64}
-          max={1600}
-          step={64}
-          onChange={(value) => patch("width", value)}
+          min={NAI_MIN_DIMENSION}
+          max={maxNAIDimensionFor(params.height)}
+          step={NAI_DIMENSION_STEP}
+          normalize={(value) =>
+            snapNAIDimensionWithinArea(value, params.height, params.width)
+          }
+          onCommit={(value) => patch("width", value)}
         />
-        <NumberInput
+        <CommittedNumberInput
           label={text(language, "height")}
           value={params.height}
-          min={64}
-          max={1600}
-          step={64}
-          onChange={(value) => patch("height", value)}
+          min={NAI_MIN_DIMENSION}
+          max={maxNAIDimensionFor(params.width)}
+          step={NAI_DIMENSION_STEP}
+          normalize={(value) =>
+            snapNAIDimensionWithinArea(value, params.width, params.height)
+          }
+          onCommit={(value) => patch("height", value)}
         />
         <NumberInput
           label={text(language, "steps")}
@@ -2438,6 +2460,11 @@ function GlobalParams({
           min={1}
           max={50}
           onChange={(value) => patch("steps", value)}
+        />
+        <TagComicQualityFields
+          language={language}
+          params={params}
+          patch={patch}
         />
       </div>
       <button
@@ -2481,9 +2508,17 @@ function PanelParams({
           <span>{text(language, "model")}</span>
           <select
             value={params.model}
-            onChange={(event) =>
-              patch("model", event.target.value as GenerateParams["model"])
-            }
+            onChange={(event) => {
+              const model = event.target.value as GenerateParams["model"];
+              patch("model", model);
+              if (!isNAIV5Model(model)) {
+                if (params.qualityPreset === "light") {
+                  patch("qualityPreset", "standard");
+                  patch("qualityToggle", true);
+                }
+                patch("transparentBackground", false);
+              }
+            }}
           >
             {NAI_MODELS.map((model) => (
               <option key={model.value} value={model.value}>
@@ -2509,23 +2544,29 @@ function PanelParams({
         </select>
       </label>
       {!compact && (
-        <NumberInput
+        <CommittedNumberInput
           label={text(language, "width")}
           value={params.width}
-          min={64}
-          max={1600}
-          step={64}
-          onChange={(value) => patch("width", value)}
+          min={NAI_MIN_DIMENSION}
+          max={maxNAIDimensionFor(params.height)}
+          step={NAI_DIMENSION_STEP}
+          normalize={(value) =>
+            snapNAIDimensionWithinArea(value, params.height, params.width)
+          }
+          onCommit={(value) => patch("width", value)}
         />
       )}
       {!compact && (
-        <NumberInput
+        <CommittedNumberInput
           label={text(language, "height")}
           value={params.height}
-          min={64}
-          max={1600}
-          step={64}
-          onChange={(value) => patch("height", value)}
+          min={NAI_MIN_DIMENSION}
+          max={maxNAIDimensionFor(params.width)}
+          step={NAI_DIMENSION_STEP}
+          normalize={(value) =>
+            snapNAIDimensionWithinArea(value, params.width, params.height)
+          }
+          onCommit={(value) => patch("height", value)}
         />
       )}
       <NumberInput
@@ -2553,6 +2594,43 @@ function PanelParams({
           patch("seedMode", value > 0 ? "fixed" : "random");
         }}
       />
+      {!compact && (
+        <TagComicQualityFields
+          language={language}
+          params={params}
+          patch={patch}
+        />
+      )}
     </div>
+  );
+}
+
+function TagComicQualityFields({
+  language,
+  params,
+  patch,
+}: {
+  language: unknown;
+  params: GenerateParams;
+  patch: <K extends keyof GenerateParams>(
+    key: K,
+    value: GenerateParams[K],
+  ) => void;
+}) {
+  return (
+    <QualityPresetControl
+      className="wide"
+      language={language}
+      model={params.model}
+      value={params.qualityPreset}
+      transparentBackground={params.transparentBackground}
+      onChange={(qualityPreset) => {
+        patch("qualityPreset", qualityPreset);
+        patch("qualityToggle", qualityPreset !== "none");
+      }}
+      onTransparentChange={(transparentBackground) =>
+        patch("transparentBackground", transparentBackground)
+      }
+    />
   );
 }

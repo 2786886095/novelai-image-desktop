@@ -118,7 +118,8 @@ describe("boot resilience (P1-07)", () => {
     await useAppStore.getState().load();
 
     const state = useAppStore.getState();
-    expect(state.params.width).toBe(1600);
+    expect(state.params.width).toBe(11264);
+    expect(state.params.height).toBe(256);
     expect(state.params.model).toBe("nai-diffusion-5-full");
     expect(state.i2iParams).toEqual({
       strength: 0.7,
@@ -129,7 +130,7 @@ describe("boot resilience (P1-07)", () => {
     expect(state.inpaintStrength).toBe(0);
     expect(state.inpaintNoise).toBe(0.99);
     expect(state.inpaintPositivePrompt).toBe("");
-    expect(state.brushSize).toBe(128);
+    expect(state.brushSize).toBe(16);
     expect(state.brushOpacity).toBe(0.05);
     expect(state.upscaleScale).toBe(4);
     expect(state.directorTool).toBe("bg-removal");

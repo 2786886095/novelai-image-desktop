@@ -33,7 +33,8 @@ void main() {
     expect(parameters['skip_cfg_above_sigma'], isNull);
   });
 
-  test('preserves imported unsigned 32-bit NovelAI seeds in payloads', () async {
+  test('preserves imported unsigned 32-bit NovelAI seeds in payloads',
+      () async {
     const seed = 4000000000;
     final payload = await api.buildPayload(
       'unused',
@@ -154,6 +155,7 @@ void main() {
       GenerateParams(
         model: 'nai-diffusion-5-full',
         positivePrompt: 'anthro wolf',
+        qualityPreset: 'none',
         qualityToggle: false,
       ),
       123,
@@ -171,6 +173,7 @@ void main() {
       GenerateParams(
         model: 'nai-diffusion-5-full',
         positivePrompt: 'fur dataset, anthro fox',
+        qualityPreset: 'none',
         qualityToggle: false,
       ),
       123,
@@ -241,6 +244,7 @@ void main() {
       settings,
       GenerateParams(
         positivePrompt: 'forest',
+        qualityPreset: 'none',
         qualityToggle: false,
         ucPreset: 3,
       ),
@@ -288,5 +292,43 @@ void main() {
     expect(character['centers'], [
       {'x': 0.5, 'y': 0.5}
     ]);
+  });
+
+  test('V5 Light quality uses the lighter official tags', () async {
+    final payload = await api.buildPayload(
+      'unused',
+      settings,
+      GenerateParams(
+        positivePrompt: '1girl',
+        qualityPreset: 'light',
+        qualityToggle: true,
+      ),
+      123,
+      GenerateExtras(),
+    );
+    final parameters = payload['parameters'] as Map<String, dynamic>;
+    expect(payload['input'], '1girl, very aesthetic, amazing quality, no text');
+    expect(payload['input'], isNot(contains('masterpiece')));
+    expect(parameters['qualityPresetId'], 'light');
+    expect(parameters['tag_hint_qt'], 3);
+  });
+
+  test('V5 Transparent BG requests straight alpha output', () async {
+    final payload = await api.buildPayload(
+      'unused',
+      settings,
+      GenerateParams(
+        positivePrompt: 'sticker',
+        qualityPreset: 'none',
+        qualityToggle: false,
+        transparentBackground: true,
+      ),
+      123,
+      GenerateExtras(),
+    );
+    final parameters = payload['parameters'] as Map<String, dynamic>;
+    expect(payload['input'], 'sticker, transparent background');
+    expect(parameters['tag_hint_transparent_background'], isTrue);
+    expect(parameters['straight_alpha'], isTrue);
   });
 }

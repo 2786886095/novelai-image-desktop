@@ -15,7 +15,9 @@ import type {
   HistoryGroup,
   HistoryItem,
   I2IParams,
+  ImageToImageSizeMode,
   ImportedParams,
+  InpaintBrushShape,
   LastGenerationState,
   NAIInpaintModel,
   PromptVariants,
@@ -30,9 +32,11 @@ import type {
   PreciseReferenceImage,
   WorkingImage,
 } from "./types";
-import { createDefaultBatchRedraw, DEFAULT_AUGMENT_OPTIONS, DEFAULT_I2I_PARAMS, DEFAULT_PARAMS, DIRECTOR_TOOLS, EMOTION_OPTIONS, maxNAICharacterPrompts, NAI_INPAINT_MODELS, normalizeGenerateParams } from "./types";
+import { createDefaultBatchRedraw, DEFAULT_AUGMENT_OPTIONS, DEFAULT_I2I_PARAMS, DEFAULT_PARAMS, DIRECTOR_TOOLS, EMOTION_OPTIONS, isNAIV5Model, maxNAICharacterPrompts, NAI_INPAINT_MODELS, normalizeGenerateParams } from "./types";
 import { normalizeAppLanguage } from "./i18n";
 import { expandWildcards } from "./wildcards";
+import { adaptiveNAIImageSize } from "./nai-dimensions";
+import { normalizeInpaintBrushSize } from "./inpaint-brush";
 
 type ActiveTab = "generate" | "inpaint" | "upscale" | "postprocess" | "inspect" | "convert" | "metadata" | "tools" | "referencePresets" | "records";
 type PromptTab = "positive" | "negative";
@@ -94,6 +98,7 @@ const STORE_TEXT: Record<AppLanguage, Record<string, string>> = {
     "toast.noQueue": "当前没有正在执行的生图队列。",
     "toast.queueNeedPrompt": "请输入正面提示词后再加入队列。",
     "toast.queueChanged": "队列已变化，本次加入已取消。",
+    "toast.queuePricing": "已立即加入队列，正在后台核算生成消耗。",
     "toast.queueAdded": "已加入队列，生成前报价 {amount} Anlas。",
     "toast.queueAddFailed": "加入队列失败：{message}",
     "toast.queueRemoved": "已移出队列。",
@@ -181,6 +186,7 @@ const STORE_TEXT: Record<AppLanguage, Record<string, string>> = {
     "toast.noQueue": "No generation queue is currently running.",
     "toast.queueNeedPrompt": "Enter a positive prompt before adding to queue.",
     "toast.queueChanged": "Queue changed; this add was cancelled.",
+    "toast.queuePricing": "Added to the queue immediately; cost is being quoted in the background.",
     "toast.queueAdded": "Added to queue; quoted {amount} Anlas.",
     "toast.queueAddFailed": "Failed to add to queue: {message}",
     "toast.queueRemoved": "Removed from queue.",
@@ -254,6 +260,8 @@ export interface QueuedGenerationJob {
   params: GenerateParams;
   extras: GenerateExtras;
   quotedAnlas: number;
+  /** The job is visible in the queue immediately while its quote is resolved. */
+  quotePending: boolean;
   addedAt: number;
   /** Short prompt preview for the queue panel. */
   label: string;
@@ -284,6 +292,7 @@ interface AppState {
   workbenchImage: WorkingImage | null;
   comparisonBeforeImage: WorkingImage | null;
   i2iParams: I2IParams;
+  i2iSizeMode: ImageToImageSizeMode;
   inpaintModel: NAIInpaintModel;
   inpaintStrength: number;
   inpaintNoise: number;
@@ -293,6 +302,7 @@ interface AppState {
   brushSize: number;
   brushOpacity: number;
   brushMode: BrushMode;
+  brushShape: InpaintBrushShape;
   inpaintMask: string | null;
   maskRevision: number;
   upscaleScale: UpscaleScale;
@@ -401,6 +411,7 @@ interface AppState {
   loadWorkbenchFromPath: (filePath: string, options?: { silent?: boolean }) => Promise<void>;
   clearWorkbenchImage: () => Promise<void>;
   setI2IParam: <K extends keyof I2IParams>(key: K, value: I2IParams[K]) => void;
+  setI2ISizeMode: (mode: ImageToImageSizeMode) => void;
   setInpaintModel: (model: NAIInpaintModel) => void;
   setInpaintStrength: (value: number) => void;
   setInpaintNoise: (value: number) => void;
@@ -408,6 +419,7 @@ interface AppState {
   setBrushSize: (size: number) => void;
   setBrushOpacity: (opacity: number) => void;
   setBrushMode: (mode: BrushMode) => void;
+  setBrushShape: (shape: InpaintBrushShape) => void;
   setInpaintMask: (mask: string | null) => void;
   clearInpaintMask: () => void;
   setUpscaleScale: (scale: UpscaleScale) => void;
@@ -649,6 +661,15 @@ function persistedNumber(value: unknown, fallback: number, min: number, max: num
 function normalizedLastToolState(last: LastGenerationState, state: AppState) {
   const i2i = last.i2iParams ?? state.i2iParams;
   const augment = last.augmentOptions ?? state.augmentOptions;
+  const brushShape: InpaintBrushShape =
+    last.brushShape === "round" || last.brushShape === "square"
+      ? last.brushShape
+      : state.brushShape;
+  const restoredBrushSize = last.brushSizeUnit === "grid8"
+    ? persistedNumber(last.brushSize, state.brushSize, 1, 500)
+    : Number.isFinite(Number(last.brushSize))
+      ? Math.round(persistedNumber(last.brushSize, state.brushSize * 8, 1, 128) / 8)
+      : state.brushSize;
   return {
     i2iParams: {
       strength: persistedNumber(i2i.strength, DEFAULT_I2I_PARAMS.strength, 0, 1),
@@ -664,8 +685,9 @@ function normalizedLastToolState(last: LastGenerationState, state: AppState) {
     inpaintNoise: persistedNumber(last.inpaintNoise, state.inpaintNoise, 0, 0.99),
     inpaintPositivePrompt:
       typeof last.inpaintPositivePrompt === "string" ? last.inpaintPositivePrompt : "",
-    brushSize: persistedNumber(last.brushSize, state.brushSize, 1, 128),
+    brushSize: normalizeInpaintBrushSize(restoredBrushSize, brushShape),
     brushOpacity: persistedNumber(last.brushOpacity, state.brushOpacity, 0.05, 1),
+    brushShape,
     upscaleScale: (last.upscaleScale === 2 || last.upscaleScale === 4
       ? last.upscaleScale
       : state.upscaleScale) as UpscaleScale,
@@ -702,6 +724,8 @@ function buildLastGenerationState(state: AppState): LastGenerationState {
     inpaintPositivePrompt: state.inpaintPositivePrompt,
     brushSize: state.brushSize,
     brushOpacity: state.brushOpacity,
+    brushShape: state.brushShape,
+    brushSizeUnit: "grid8",
     upscaleScale: state.upscaleScale,
     directorTool: state.directorTool,
     augmentOptions: state.augmentOptions,
@@ -736,13 +760,15 @@ export const useAppStore = create<AppState>((set, get) => ({
   workbenchImage: null,
   comparisonBeforeImage: null,
   i2iParams: { ...DEFAULT_I2I_PARAMS },
+  i2iSizeMode: "adaptive",
   inpaintModel: "nai-diffusion-5-full-inpainting",
   inpaintStrength: 1,
   inpaintNoise: 0,
   inpaintPositivePrompt: "",
-  brushSize: 64,
+  brushSize: 4,
   brushOpacity: 0.55,
   brushMode: "paint",
+  brushShape: "round",
   inpaintMask: null,
   maskRevision: 0,
   upscaleScale: 4,
@@ -862,6 +888,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           : state.inpaintPositivePrompt,
         brushSize: settings.persistInpaintParams ? repairedTools.brushSize : state.brushSize,
         brushOpacity: settings.persistInpaintParams ? repairedTools.brushOpacity : state.brushOpacity,
+        brushShape: settings.persistInpaintParams ? repairedTools.brushShape : state.brushShape,
         upscaleScale: settings.persistUpscaleParams ? repairedTools.upscaleScale : state.upscaleScale,
         directorTool: settings.persistDirectorParams ? repairedTools.directorTool : state.directorTool,
         augmentOptions: settings.persistDirectorParams
@@ -947,7 +974,23 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   setParam(key, value) {
-    set((state) => ({ params: { ...state.params, [key]: value } }));
+    set((state) => {
+      const next = { ...state.params, [key]: value } as GenerateParams;
+      if (key === "qualityPreset") {
+        next.qualityToggle = value !== "none";
+      } else if (key === "qualityToggle") {
+        next.qualityPreset = value
+          ? state.params.qualityPreset === "none"
+            ? "standard"
+            : state.params.qualityPreset
+          : "none";
+      } else if (key === "model" && !isNAIV5Model(String(value))) {
+        if (next.qualityPreset === "light") next.qualityPreset = "standard";
+        next.qualityToggle = next.qualityPreset !== "none";
+        next.transparentBackground = false;
+      }
+      return { params: next };
+    });
     persistGenerationState(get);
   },
 
@@ -1205,6 +1248,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     persistGenerationState(get);
   },
 
+  setI2ISizeMode(mode) {
+    set({ i2iSizeMode: mode });
+  },
+
   setInpaintModel(model) {
     set({ inpaintModel: model });
     persistGenerationState(get);
@@ -1226,7 +1273,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   setBrushSize(size) {
-    set({ brushSize: Math.max(1, Math.min(128, size)) });
+    set((state) => ({
+      brushSize: normalizeInpaintBrushSize(size, state.brushShape),
+    }));
     persistGenerationState(get);
   },
 
@@ -1237,6 +1286,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setBrushMode(mode) {
     set({ brushMode: mode });
+  },
+
+  setBrushShape(shape) {
+    set((state) => ({
+      brushShape: shape,
+      brushSize: normalizeInpaintBrushSize(state.brushSize, shape),
+    }));
+    persistGenerationState(get);
   },
 
   setInpaintMask(mask) {
@@ -1615,7 +1672,29 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (coveredVibes.has(key) || newJobSeen.has(key)) alreadyQueuedVibes += 1;
       newJobSeen.add(key);
     }
-    set({ queueAdding: true });
+    const jobId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const pendingJob: QueuedGenerationJob = {
+      id: jobId,
+      params,
+      extras,
+      quotedAnlas: 0,
+      quotePending: true,
+      addedAt: Date.now(),
+      label: params.positivePrompt.trim().slice(0, 60) || storeText(state.settings, "queue.noPromptLabel"),
+    };
+    // Optimistic enqueue: render the snapshot before the account refresh and
+    // quote round-trips. The runner waits on quotePending, so this improves
+    // responsiveness without sending an unquoted request.
+    set((current) => ({
+      queueAdding: true,
+      generationQueue: [...current.generationQueue, pendingJob],
+      queueProgress: current.queueProgress
+        ? { ...current.queueProgress, total: current.queueProgress.total + 1 }
+        : { done: 0, failed: 0, total: 1 },
+      statusText: storeFormat(current.settings, "queue.addedStatus", { count: current.generationQueue.length + 1 }),
+      toast: storeText(current.settings, "toast.queuePricing"),
+      lastError: "",
+    }));
     try {
       const freshAccount = await get().refreshAccount();
       const quote = await window.naiDesktop.quoteAnlas({
@@ -1652,27 +1731,38 @@ export const useAppStore = create<AppState>((set, get) => ({
         set({ toast: storeText(get().settings, "toast.queueChanged") });
         return;
       }
-
-      const job: QueuedGenerationJob = {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        params,
-        extras,
-        quotedAnlas,
-        addedAt: Date.now(),
-        label: params.positivePrompt.trim().slice(0, 60) || storeText(get().settings, "queue.noPromptLabel"),
-      };
+      if (!get().generationQueue.some((job) => job.id === jobId)) {
+        // The user removed this individual placeholder while the quote was in flight.
+        set({ toast: storeText(get().settings, "toast.queueChanged") });
+        return;
+      }
       set((current) => ({
-        generationQueue: [...current.generationQueue, job],
-        queueProgress: current.queueProgress
-          ? { ...current.queueProgress, total: current.queueProgress.total + 1 }
-          : { done: 0, failed: 0, total: 1 },
-        statusText: storeFormat(current.settings, "queue.addedStatus", { count: current.generationQueue.length + 1 }),
+        generationQueue: current.generationQueue.map((job) => job.id === jobId
+          ? { ...job, quotedAnlas, quotePending: false }
+          : job),
+        statusText: storeFormat(current.settings, "queue.addedStatus", { count: current.generationQueue.length }),
         toast: quoteWarning || storeFormat(current.settings, "toast.queueAdded", { amount: quotedAnlas }),
         lastError: "",
       }));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      set({ toast: storeFormat(get().settings, "toast.queueAddFailed", { message }), lastError: message });
+      set((current) => {
+        const stillQueued = current.generationQueue.some((job) => job.id === jobId);
+        return {
+          generationQueue: current.generationQueue.filter((job) => job.id !== jobId),
+          queueProgress: stillQueued && current.queueProgress
+            ? {
+                ...current.queueProgress,
+                total: Math.max(
+                  current.queueProgress.done + current.queueProgress.failed,
+                  current.queueProgress.total - 1,
+                ),
+              }
+            : current.queueProgress,
+          toast: storeFormat(current.settings, "toast.queueAddFailed", { message }),
+          lastError: message,
+        };
+      });
     } finally {
       set({ queueAdding: false });
     }
@@ -1710,6 +1800,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         : current.queueProgress;
       return {
         generationQueue: [],
+        queueAdding: false,
         clearQueueRequested: current.isGenerating,
         queueVersion: current.queueVersion + 1, // invalidate any in-flight enqueue quote
         queueProgress,
@@ -1845,6 +1936,11 @@ export const useAppStore = create<AppState>((set, get) => ({
           continue;
         }
         if (!queued) break;
+        if (queued.quotePending) {
+          set({ statusText: storeText(get().settings, "status.waitingQueueQuote") });
+          await new Promise((resolve) => setTimeout(resolve, 50));
+          continue;
+        }
         base = queued.params;
         extras = queued.extras;
         set((current) => ({ generationQueue: current.generationQueue.slice(1) }));
@@ -1964,12 +2060,20 @@ export const useAppStore = create<AppState>((set, get) => ({
       lastError: "",
       statusText: storeText(state.settings, "status.preparing"),
     });
+    const outputSize = state.i2iSizeMode === "adaptive"
+      ? adaptiveNAIImageSize(
+          state.workbenchImage.width,
+          state.workbenchImage.height,
+          state.params,
+        )
+      : { width: state.params.width, height: state.params.height };
+    const runParams: GenerateParams = { ...state.params, ...outputSize };
     const prepared = await preparePaidRun(
       set,
       get,
       (account) => ({
         feature: "i2i",
-        params: state.params,
+        params: runParams,
         extras: buildExtras(state),
         i2iParams: state.i2iParams,
         account,
@@ -1990,7 +2094,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       lastError: "",
       statusText: storeFormat(state.settings, "i2i.status", { amount: quote.amount }),
     });
-    const result = await window.naiDesktop.generateI2I(state.params, state.i2iParams, buildExtras(state));
+    const result = await window.naiDesktop.generateI2I(runParams, state.i2iParams, buildExtras(state));
     if (result.ok && result.items.length > 0) {
       const current = result.items[0];
       await refreshAfterImage(set, get, current, { compareBefore: state.workbenchImage });
@@ -2016,10 +2120,15 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ toast: storeText(state.settings, "toast.needMask"), statusText: storeText(state.settings, "status.needMask") });
       return;
     }
-    // Inpaint keeps its own independent positive prompt (state.inpaintPositivePrompt)
-    // instead of reusing params.positivePrompt — the rest of params (size, sampler,
-    // negative prompt, etc.) is still shared with the main generate/i2i params.
-    const inpaintParams: GenerateParams = { ...state.params, positivePrompt: state.inpaintPositivePrompt };
+    // Inpaint keeps its own independent positive prompt, while output dimensions
+    // are always locked to the source. The main process may temporarily pad a
+    // non-64-multiple source for NovelAI and crops it back before saving.
+    const inpaintParams: GenerateParams = {
+      ...state.params,
+      positivePrompt: state.inpaintPositivePrompt,
+      width: state.workbenchImage.width,
+      height: state.workbenchImage.height,
+    };
     // Enter the generating state BEFORE the balance refresh and price quote so a
     // fast double-click can't sneak a second paid request in before the button
     // disappears (isGenerating is what hides it — see AccountAndRunButton).

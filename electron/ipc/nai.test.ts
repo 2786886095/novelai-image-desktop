@@ -1,14 +1,18 @@
 import FormData from "form-data";
 import fs from "node:fs";
+import { PNG } from "pngjs";
 import { describe, expect, it } from "vitest";
 import {
+  applyOfficialInpaintParameters,
   buildPayload,
   buildGenerateImageHttpBody,
+  compositeInpaintBuffers,
   extractEmbeddedGenerationMetadata,
   isOfficialNaiHost,
   isPreflightNetworkFailure,
   parseAccount,
   prepareExtras,
+  prepareInpaintAssets,
   prepareImageBufferForSave,
   stripPngMetadata,
 } from "./nai";
@@ -21,6 +25,35 @@ import {
 
 function b64(text: string) {
   return Buffer.from(text, "utf8").toString("base64");
+}
+
+function solidPng(width: number, height: number, rgba: [number, number, number, number]) {
+  const png = new PNG({ width, height });
+  for (let index = 0; index < png.data.length; index += 4) {
+    png.data[index] = rgba[0];
+    png.data[index + 1] = rgba[1];
+    png.data[index + 2] = rgba[2];
+    png.data[index + 3] = rgba[3];
+  }
+  return png;
+}
+
+function pngPixel(png: PNG, x: number, y: number) {
+  const index = (y * png.width + x) * 4;
+  return {
+    red: png.data[index],
+    green: png.data[index + 1],
+    blue: png.data[index + 2],
+    alpha: png.data[index + 3],
+  };
+}
+
+function setPngPixel(png: PNG, x: number, y: number, value: number) {
+  const index = (y * png.width + x) * 4;
+  png.data[index] = value;
+  png.data[index + 1] = value;
+  png.data[index + 2] = value;
+  png.data[index + 3] = 255;
 }
 
 function pngChunk(type: string, data = Buffer.alloc(0)) {
@@ -65,7 +98,7 @@ describe("persisted generation parameter migration", () => {
     });
     expect(params).toMatchObject({
       model: "nai-diffusion-5-full",
-      width: 1600,
+      width: 49152,
       height: 64,
       steps: 50,
       cfgScale: 6,
@@ -76,6 +109,19 @@ describe("persisted generation parameter migration", () => {
       seedMode: "random",
       ucPreset: 3,
       smeaDyn: false,
+    });
+  });
+
+  it("keeps Light quality and transparent background V5-only", () => {
+    const legacy = normalizeGenerateParams({
+      ...DEFAULT_PARAMS,
+      model: "nai-diffusion-4-5-full",
+      qualityPreset: "light",
+      transparentBackground: true,
+    });
+    expect(legacy).toMatchObject({
+      qualityPreset: "standard",
+      transparentBackground: false,
     });
   });
 
@@ -93,7 +139,7 @@ describe("persisted generation parameter migration", () => {
       -100,
     );
     expect(payload.parameters).toMatchObject({
-      width: 1600,
+      width: 49152,
       height: 64,
       steps: 1,
       cfg_rescale: 1,
@@ -116,6 +162,124 @@ describe("persisted generation parameter migration", () => {
       seed: 123,
       seedMode: "fixed",
     });
+  });
+});
+
+describe("official quality and transparency controls", () => {
+  it("builds the V5 Light quality preset without Standard's masterpiece tag", () => {
+    const payload = buildPayload(
+      {
+        ...DEFAULT_PARAMS,
+        positivePrompt: "1girl",
+        qualityPreset: "light",
+        qualityToggle: true,
+      },
+      123,
+    );
+
+    expect(payload.input).toBe("1girl, very aesthetic, amazing quality, no text");
+    expect(payload.input).not.toContain("masterpiece");
+    expect(payload.parameters).toMatchObject({
+      qualityPresetId: "light",
+      tag_hint_qt: 3,
+    });
+  });
+
+  it("requests V5 straight-alpha output when Transparent BG is enabled", () => {
+    const payload = buildPayload(
+      {
+        ...DEFAULT_PARAMS,
+        positivePrompt: "sticker",
+        qualityPreset: "none",
+        qualityToggle: false,
+        transparentBackground: true,
+      },
+      123,
+    );
+
+    expect(payload.input).toBe("sticker, transparent background");
+    expect(payload.parameters).toMatchObject({
+      tag_hint_transparent_background: true,
+      straight_alpha: true,
+    });
+  });
+});
+
+describe("official-style inpaint preparation and compositing", () => {
+  it("submits a full-size mask quantized to the 8px grid and official infill fields", () => {
+    const source = solidPng(256, 256, [220, 10, 10, 255]);
+    const mask = solidPng(256, 256, [0, 0, 0, 255]);
+    for (let y = 128; y < 136; y += 1) {
+      for (let x = 128; x < 136; x += 1) {
+        setPngPixel(mask, x, y, 255);
+      }
+    }
+    const assets = prepareInpaintAssets(
+      PNG.sync.write(source),
+      PNG.sync.write(mask).toString("base64"),
+    );
+    const requestMask = PNG.sync.read(Buffer.from(assets.maskBase64, "base64"));
+    expect([requestMask.width, requestMask.height]).toEqual([256, 256]);
+    expect(requestMask.data[(128 * requestMask.width + 128) * 4]).toBe(255);
+    expect(requestMask.data[(135 * requestMask.width + 135) * 4]).toBe(255);
+    expect(requestMask.data[(136 * requestMask.width + 136) * 4]).toBe(0);
+    expect(requestMask.data[0]).toBe(0);
+
+    const parameters: Record<string, unknown> = { strength: 0.4 };
+    applyOfficialInpaintParameters(parameters, assets, 0.8, 0, 123);
+    expect(parameters).toMatchObject({
+      add_original_image: false,
+      inpaintImg2ImgStrength: 0.8,
+      img2img: { strength: 0.8, color_correct: true },
+      noise: 0,
+      extra_noise_seed: 122,
+    });
+    expect(parameters.strength).toBe(0.7);
+
+    const officialDefault: Record<string, unknown> = {};
+    applyOfficialInpaintParameters(officialDefault, assets, 1, 0, 123);
+    expect(officialDefault).toMatchObject({
+      strength: 0.7,
+      inpaintImg2ImgStrength: 1,
+    });
+    expect(officialDefault.img2img).toBeUndefined();
+  });
+
+  it("feathers the generated image over the source and preserves untouched pixels", () => {
+    const source = solidPng(256, 256, [220, 10, 10, 255]);
+    const mask = solidPng(256, 256, [0, 0, 0, 255]);
+    for (let y = 128; y < 136; y += 1) {
+      for (let x = 128; x < 136; x += 1) {
+        setPngPixel(mask, x, y, 255);
+      }
+    }
+    const assets = prepareInpaintAssets(
+      PNG.sync.write(source),
+      PNG.sync.write(mask).toString("base64"),
+    );
+    const generated = PNG.sync.write(solidPng(256, 256, [10, 20, 230, 255]));
+    const output = PNG.sync.read(compositeInpaintBuffers([generated], assets)[0]);
+    const corner = pngPixel(output, 0, 0);
+    const center = pngPixel(output, 132, 132);
+    expect([corner.red, corner.green, corner.blue, corner.alpha]).toEqual([
+      220, 10, 10, 255,
+    ]);
+    expect(center.blue).toBeGreaterThan(center.red);
+    expect(assets.blendAlpha[132 * assets.width + 132]).toBeGreaterThan(200);
+  });
+
+  it("resizes to the official 64-aligned request size and keeps that output size", () => {
+    const source = solidPng(65, 67, [20, 30, 40, 255]);
+    const mask = solidPng(65, 67, [255, 255, 255, 255]);
+    const assets = prepareInpaintAssets(
+      PNG.sync.write(source),
+      PNG.sync.write(mask).toString("base64"),
+    );
+    expect([assets.width, assets.height, assets.resized]).toEqual([128, 128, true]);
+    expect([PNG.sync.read(assets.sourcePng).width, PNG.sync.read(assets.sourcePng).height]).toEqual([128, 128]);
+    const generated = PNG.sync.write(solidPng(128, 128, [200, 210, 220, 255]));
+    const output = PNG.sync.read(compositeInpaintBuffers([generated], assets)[0]);
+    expect([output.width, output.height]).toEqual([128, 128]);
   });
 });
 
@@ -326,7 +490,7 @@ describe("V4 character prompt payload", () => {
     expect(supportsNAIModelMode("nai-diffusion-5-curated", "furry")).toBe(true);
     expect(supportsNAIModelMode("nai-diffusion-3", "furry")).toBe(false);
     const furry = buildPayload(
-      { ...DEFAULT_PARAMS, positivePrompt: "anthro wolf", qualityToggle: false },
+      { ...DEFAULT_PARAMS, positivePrompt: "anthro wolf", qualityPreset: "none", qualityToggle: false },
       123,
       { vibeImages: [], preciseReferences: [], charCaptions: [], modelMode: "furry" },
     );
@@ -337,7 +501,7 @@ describe("V4 character prompt payload", () => {
     );
 
     const alreadyTagged = buildPayload(
-      { ...DEFAULT_PARAMS, positivePrompt: "fur dataset, anthro fox", qualityToggle: false },
+      { ...DEFAULT_PARAMS, positivePrompt: "fur dataset, anthro fox", qualityPreset: "none", qualityToggle: false },
       123,
       { vibeImages: [], preciseReferences: [], charCaptions: [], modelMode: "furry" },
     );
@@ -350,6 +514,7 @@ describe("V4 character prompt payload", () => {
         ...DEFAULT_PARAMS,
         model: "nai-diffusion-furry-3",
         positivePrompt: "anthro wolf",
+        qualityPreset: "none",
         qualityToggle: false,
       },
       123,
@@ -360,7 +525,7 @@ describe("V4 character prompt payload", () => {
 
   it("preserves per-character negative prompts restored from NovelAI metadata", () => {
     const payload = buildPayload(
-      { ...DEFAULT_PARAMS, positivePrompt: "forest", qualityToggle: false, ucPreset: 3 },
+      { ...DEFAULT_PARAMS, positivePrompt: "forest", qualityPreset: "none", qualityToggle: false, ucPreset: 3 },
       123,
       { vibeImages: [], preciseReferences: [], charCaptions: [{
         prompt: "girl, blue hair",

@@ -340,7 +340,7 @@ List<({String name, _SurfaceBuilder build})> _surfaces() => [
               imageProvider: const AssetImage('assets/icon/app_icon.png'),
               initialStrokes: [
                 InpaintStroke(
-                  brushFraction: 0.12,
+                  brushCells: 4,
                   points: const [
                     Offset(0.34, 0.42),
                     Offset(0.5, 0.5),

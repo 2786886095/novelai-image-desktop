@@ -1,5 +1,7 @@
 library;
 
+import 'dart:math' as math;
+
 import '../i18n/app_locales.dart';
 
 class NaiOption {
@@ -9,7 +11,7 @@ class NaiOption {
 }
 
 const appName = 'Langbai NovelAI Studio';
-const appVersion = '1.9.6';
+const appVersion = '1.9.7';
 
 const naiModels = <NaiOption>[
   NaiOption(
@@ -98,6 +100,11 @@ const sizePresets = <SizePreset>[
   SizePreset('Portrait 1024×1536', 1024, 1536),
   SizePreset('Landscape 1536×1024', 1536, 1024),
   SizePreset('Large square 1472×1472', 1472, 1472),
+  SizePreset('Wallpaper portrait 1088×1920', 1088, 1920),
+  SizePreset('Wallpaper landscape 1920×1088', 1920, 1088),
+  SizePreset('Small portrait 512×768', 512, 768),
+  SizePreset('Small landscape 768×512', 768, 512),
+  SizePreset('Small square 640×640', 640, 640),
 ];
 
 class GenerateParams {
@@ -115,7 +122,9 @@ class GenerateParams {
   int seed;
   String seedMode;
   int ucPreset;
+  String qualityPreset;
   bool qualityToggle;
+  bool transparentBackground;
   bool smea;
   bool smeaDyn;
   bool variety;
@@ -136,7 +145,9 @@ class GenerateParams {
     this.seed = 0,
     this.seedMode = 'random',
     this.ucPreset = 2,
+    this.qualityPreset = 'standard',
     this.qualityToggle = true,
+    this.transparentBackground = false,
     this.smea = false,
     this.smeaDyn = false,
     this.variety = false,
@@ -176,7 +187,9 @@ class GenerateParams {
         'seed': seed,
         'seedMode': seedMode,
         'ucPreset': ucPreset,
+        'qualityPreset': qualityPreset,
         'qualityToggle': qualityToggle,
+        'transparentBackground': transparentBackground,
         'smea': smea,
         'smeaDyn': smeaDyn,
         'variety': variety,
@@ -198,7 +211,16 @@ class GenerateParams {
         seed: _intValue(j['seed'], 0),
         seedMode: _stringValue(j['seedMode'], 'random'),
         ucPreset: _intValue(j['ucPreset'], 2),
-        qualityToggle: _boolValue(j['qualityToggle'], true),
+        qualityPreset: _qualityPresetValue(
+          j['qualityPreset'],
+          _boolValue(j['qualityToggle'], true) ? 'standard' : 'none',
+        ),
+        qualityToggle: _qualityPresetValue(
+              j['qualityPreset'],
+              _boolValue(j['qualityToggle'], true) ? 'standard' : 'none',
+            ) !=
+            'none',
+        transparentBackground: _boolValue(j['transparentBackground'], false),
         smea: _boolValue(j['smea'], false),
         smeaDyn: _boolValue(j['smeaDyn'], false),
         variety: _boolValue(j['variety'], false),
@@ -217,13 +239,27 @@ class GenerateParams {
     final supportedSamplers = naiSamplers.map((option) => option.value).toSet();
     final supportedSchedules =
         naiNoiseSchedules.map((option) => option.value).toSet();
+    final normalizedModel =
+        supportedModels.contains(model) ? model : 'nai-diffusion-5-full';
+    final normalizedQualityPreset = qualityPreset == 'none'
+        ? 'none'
+        : qualityPreset == 'light' &&
+                normalizedModel.startsWith('nai-diffusion-5')
+            ? 'light'
+            : 'standard';
+    final dimensions = fitNaiImageSize(
+      width,
+      height,
+      fallbackWidth: 832,
+      fallbackHeight: 1216,
+    );
     return GenerateParams(
-      model: supportedModels.contains(model) ? model : 'nai-diffusion-5-full',
+      model: normalizedModel,
       stylePrompt: stylePrompt,
       positivePrompt: positivePrompt,
       negativePrompt: negativePrompt,
-      width: _normalizedDimension(width, 832),
-      height: _normalizedDimension(height, 1216),
+      width: dimensions.$1,
+      height: dimensions.$2,
       steps: steps.clamp(1, 50).toInt(),
       cfgScale: _finiteClamp(cfgScale, 0, 10, 6),
       cfgRescale: _finiteClamp(cfgRescale, 0, 1, 0),
@@ -234,7 +270,10 @@ class GenerateParams {
       seed: seed.clamp(0, 0xffffffff).toInt(),
       seedMode: seedMode == 'fixed' ? 'fixed' : 'random',
       ucPreset: ucPreset.clamp(0, 3).toInt(),
-      qualityToggle: qualityToggle,
+      qualityPreset: normalizedQualityPreset,
+      qualityToggle: normalizedQualityPreset != 'none',
+      transparentBackground: normalizedModel.startsWith('nai-diffusion-5') &&
+          transparentBackground,
       smea: smea,
       smeaDyn: smea && smeaDyn,
       variety: variety,
@@ -263,11 +302,80 @@ double _doubleValue(Object? value, double fallback) {
 bool _boolValue(Object? value, bool fallback) =>
     value is bool ? value : fallback;
 
-int _normalizedDimension(int value, int fallback) {
-  if (value <= 0) return fallback;
-  final bounded = value.clamp(64, 1600);
-  return ((bounded / 64).round() * 64).clamp(64, 1600).toInt();
+String _qualityPresetValue(Object? value, String fallback) =>
+    value == 'standard' || value == 'light' || value == 'none'
+        ? value.toString()
+        : fallback;
+
+const naiDimensionStep = 64;
+const naiMinDimension = 64;
+const naiMaxPixelArea = 3145728;
+const naiMaxDimension = naiMaxPixelArea ~/ naiMinDimension;
+
+int snapNaiDimension(int value, [int fallback = 1024]) {
+  final source = value > 0 ? value : (fallback > 0 ? fallback : 1024);
+  return ((source / naiDimensionStep).round() * naiDimensionStep)
+      .clamp(naiMinDimension, naiMaxDimension)
+      .toInt();
 }
+
+int maxNaiDimensionFor(int pairedDimension) {
+  final paired = snapNaiDimension(pairedDimension, naiMinDimension);
+  return math.max(
+    naiMinDimension,
+    (naiMaxPixelArea ~/ paired ~/ naiDimensionStep) * naiDimensionStep,
+  );
+}
+
+int snapNaiDimensionWithinArea(
+  int value,
+  int pairedDimension, [
+  int fallback = 1024,
+]) {
+  return math.min(
+    snapNaiDimension(value, fallback),
+    maxNaiDimensionFor(pairedDimension),
+  );
+}
+
+(int, int) fitNaiImageSize(
+  int width,
+  int height, {
+  int fallbackWidth = 832,
+  int fallbackHeight = 1216,
+}) {
+  final snappedWidth = snapNaiDimension(width, fallbackWidth);
+  final snappedHeight = snapNaiDimension(height, fallbackHeight);
+  if (snappedWidth * snappedHeight <= naiMaxPixelArea) {
+    return (snappedWidth, snappedHeight);
+  }
+  final scale = math.sqrt(
+    naiMaxPixelArea / (snappedWidth * snappedHeight),
+  );
+  return (
+    math.max(
+      naiMinDimension,
+      (snappedWidth * scale / naiDimensionStep).floor() * naiDimensionStep,
+    ),
+    math.max(
+      naiMinDimension,
+      (snappedHeight * scale / naiDimensionStep).floor() * naiDimensionStep,
+    ),
+  );
+}
+
+(int, int) adaptiveNaiImageSize(
+  int width,
+  int height, {
+  int fallbackWidth = 832,
+  int fallbackHeight = 1216,
+}) =>
+    fitNaiImageSize(
+      width,
+      height,
+      fallbackWidth: fallbackWidth,
+      fallbackHeight: fallbackHeight,
+    );
 
 double _finiteClamp(
     double value, double minimum, double maximum, double fallback) {
@@ -460,15 +568,17 @@ class GenerationQueueJob {
   final String id;
   final GenerateParams params;
   final GenerateExtras extras;
-  final int quotedAnlas;
+  int quotedAnlas;
+  bool quotePending;
   final String historyGroupId;
   final DateTime addedAt;
 
-  const GenerationQueueJob({
+  GenerationQueueJob({
     required this.id,
     required this.params,
     required this.extras,
     required this.quotedAnlas,
+    this.quotePending = false,
     this.historyGroupId = '',
     required this.addedAt,
   });
@@ -779,7 +889,7 @@ class AppSettings {
     this.reversePromptMode = 'tags',
     this.convertPromptMode = 'natural',
     this.inpaintModel = 'nai-diffusion-5-full-inpainting',
-    this.inpaintStrength = 0.55,
+    this.inpaintStrength = 1,
     this.inpaintNoise = 0,
     this.inpaintPositivePrompt = '',
     this.upscaleScale = 2,
@@ -941,7 +1051,7 @@ class AppSettings {
         inpaintModel: _supportedOptionValue(j['inpaintModel'], naiInpaintModels,
             'nai-diffusion-5-full-inpainting'),
         inpaintStrength:
-            _finiteClamp(_doubleValue(j['inpaintStrength'], 0.55), 0, 1, 0.55),
+            _finiteClamp(_doubleValue(j['inpaintStrength'], 1), 0, 1, 1),
         inpaintNoise:
             _finiteClamp(_doubleValue(j['inpaintNoise'], 0), 0, 0.99, 0),
         inpaintPositivePrompt: _stringValue(j['inpaintPositivePrompt'], ''),

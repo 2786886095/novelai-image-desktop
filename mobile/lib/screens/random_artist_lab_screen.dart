@@ -12,6 +12,7 @@ import '../i18n/app_locales.dart';
 import '../models/nai_models.dart';
 import '../services/artist_tag_service.dart';
 import '../state/app_state.dart';
+import '../ui/quality_preset_control.dart';
 
 class _Result {
   final ArtistRecipe recipe;
@@ -74,6 +75,10 @@ class RandomArtistLabScreen extends StatefulWidget {
 
 class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
   static const _prefsPrefix = 'artist_lab_random_v1_';
+  static const _artistWeightMinDefault = .2;
+  static const _artistWeightMaxDefault = 1.2;
+  static const _franchiseWeightMinDefault = .15;
+  static const _franchiseWeightMaxDefault = .8;
   late final ArtistTagService _service =
       widget.artistService ?? ArtistTagService();
   final _base = TextEditingController();
@@ -81,12 +86,12 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
   final _count = TextEditingController(text: '8');
   final _minArtists = TextEditingController(text: '3');
   final _maxArtists = TextEditingController(text: '7');
-  final _minArtistWeight = TextEditingController(text: '0.3');
-  final _maxArtistWeight = TextEditingController(text: '2.0');
+  final _minArtistWeight = TextEditingController(text: '0.2');
+  final _maxArtistWeight = TextEditingController(text: '1.2');
   final _minFranchiseStyles = TextEditingController(text: '0');
   final _maxFranchiseStyles = TextEditingController(text: '2');
-  final _minFranchiseWeight = TextEditingController(text: '0.5');
-  final _maxFranchiseWeight = TextEditingController(text: '1.5');
+  final _minFranchiseWeight = TextEditingController(text: '0.15');
+  final _maxFranchiseWeight = TextEditingController(text: '0.8');
   final _seed = TextEditingController(text: '246813579');
   final _poolSize = TextEditingController(text: '1000');
   final _width = TextEditingController(text: '832');
@@ -625,21 +630,57 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     return value != null && value.isFinite ? value : fallback;
   }
 
-  int _snapDimension(String value, [int fallback = 64]) {
-    final parsed = int.tryParse(value) ?? fallback;
-    return ((parsed / 64).round() * 64).clamp(64, 1600).toInt();
-  }
-
   int _seedValue() =>
       (int.tryParse(_seed.text.trim()) ?? 1).clamp(1, 2147483647).toInt();
 
   int _weightVariationValue() =>
       (int.tryParse(_weightVariation.text.trim()) ?? 20).clamp(0, 100).toInt();
 
+  String _resetDrawLabel(String language) => switch (language) {
+        'zh-TW' => '恢復抽卡預設',
+        'en-US' => 'Restore draw defaults',
+        'ja-JP' => '抽選設定を初期化',
+        'ko-KR' => '뽑기 기본값 복원',
+        _ => '恢复抽卡默认',
+      };
+
+  String _resetDrawHint(String language) => switch (language) {
+        'zh-TW' => 'V5 預設：畫師 0.2～1.2；系列風格 0.15～0.8。',
+        'en-US' => 'V5 defaults: artists 0.2–1.2; franchises 0.15–0.8.',
+        'ja-JP' => 'V5 初期値：画家 0.2～1.2、作品風格 0.15～0.8。',
+        'ko-KR' => 'V5 기본값: 작가 0.2～1.2, 작품 화풍 0.15～0.8.',
+        _ => 'V5 默认：画师 0.2～1.2；系列风格 0.15～0.8。',
+      };
+
+  Future<void> _restoreDrawDefaults(String language) async {
+    setState(() {
+      _count.text = '8';
+      _minArtists.text = '3';
+      _maxArtists.text = '7';
+      _minArtistWeight.text = '0.2';
+      _maxArtistWeight.text = '1.2';
+      _minFranchiseStyles.text = '0';
+      _maxFranchiseStyles.text = '2';
+      _minFranchiseWeight.text = '0.15';
+      _maxFranchiseWeight.text = '0.8';
+      _includeFranchiseStyles = false;
+      _mutateAuxiliary = false;
+      _seedMode = 'fixed';
+      _seed.text = '246813579';
+      _drawSeed = Random.secure().nextInt(0x7fffffff);
+      _planned = _buildPlan();
+      _message = _resetDrawHint(language);
+    });
+    await _save();
+  }
+
   void _commitDimension(TextEditingController controller, bool width) {
-    final snapped = _snapDimension(
-      controller.text,
-      width ? _generationParams.width : _generationParams.height,
+    final fallback = width ? _generationParams.width : _generationParams.height;
+    final parsed = int.tryParse(controller.text) ?? fallback;
+    final snapped = snapNaiDimensionWithinArea(
+      parsed,
+      width ? _generationParams.height : _generationParams.width,
+      fallback,
     );
     setState(() {
       controller.text = '$snapped';
@@ -670,18 +711,27 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
         '${prefs.getInt('${_prefsPrefix}minArtists') ?? oldArtistCount ?? 3}';
     _maxArtists.text =
         '${prefs.getInt('${_prefsPrefix}maxArtists') ?? oldArtistCount ?? 7}';
-    _minArtistWeight.text =
-        '${prefs.getDouble('${_prefsPrefix}minArtistWeight') ?? .3}';
-    _maxArtistWeight.text =
-        '${prefs.getDouble('${_prefsPrefix}maxArtistWeight') ?? 2.0}';
+    final migrateV5Weights =
+        (prefs.getInt('${_prefsPrefix}weightDefaultsVersion') ?? 0) < 2;
+    _minArtistWeight.text = migrateV5Weights
+        ? '0.2'
+        : '${prefs.getDouble('${_prefsPrefix}minArtistWeight') ?? _artistWeightMinDefault}';
+    _maxArtistWeight.text = migrateV5Weights
+        ? '1.2'
+        : '${prefs.getDouble('${_prefsPrefix}maxArtistWeight') ?? _artistWeightMaxDefault}';
     _minFranchiseStyles.text =
         '${prefs.getInt('${_prefsPrefix}minFranchiseStyles') ?? 0}';
     _maxFranchiseStyles.text =
         '${prefs.getInt('${_prefsPrefix}maxFranchiseStyles') ?? 2}';
-    _minFranchiseWeight.text =
-        '${prefs.getDouble('${_prefsPrefix}minFranchiseWeight') ?? .5}';
-    _maxFranchiseWeight.text =
-        '${prefs.getDouble('${_prefsPrefix}maxFranchiseWeight') ?? 1.5}';
+    _minFranchiseWeight.text = migrateV5Weights
+        ? '0.15'
+        : '${prefs.getDouble('${_prefsPrefix}minFranchiseWeight') ?? _franchiseWeightMinDefault}';
+    _maxFranchiseWeight.text = migrateV5Weights
+        ? '0.8'
+        : '${prefs.getDouble('${_prefsPrefix}maxFranchiseWeight') ?? _franchiseWeightMaxDefault}';
+    if (migrateV5Weights) {
+      await prefs.setInt('${_prefsPrefix}weightDefaultsVersion', 2);
+    }
     _poolSize.text = '${prefs.getInt('${_prefsPrefix}poolSize') ?? 1000}';
     _seed.text = '${prefs.getInt('${_prefsPrefix}seed') ?? 246813579}';
     _weightTuneInput.text =
@@ -737,18 +787,30 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
         _positive(_minArtists, 3).clamp(1, 20).toInt());
     await prefs.setInt('${_prefsPrefix}maxArtists',
         _positive(_maxArtists, 7).clamp(1, 20).toInt());
-    await prefs.setDouble('${_prefsPrefix}minArtistWeight',
-        _decimal(_minArtistWeight, .3).clamp(.1, 10).toDouble());
-    await prefs.setDouble('${_prefsPrefix}maxArtistWeight',
-        _decimal(_maxArtistWeight, 2).clamp(.1, 10).toDouble());
+    await prefs.setDouble(
+        '${_prefsPrefix}minArtistWeight',
+        _decimal(_minArtistWeight, _artistWeightMinDefault)
+            .clamp(.1, 10)
+            .toDouble());
+    await prefs.setDouble(
+        '${_prefsPrefix}maxArtistWeight',
+        _decimal(_maxArtistWeight, _artistWeightMaxDefault)
+            .clamp(.1, 10)
+            .toDouble());
     await prefs.setInt('${_prefsPrefix}minFranchiseStyles',
         _nonNegative(_minFranchiseStyles).clamp(0, 20).toInt());
     await prefs.setInt('${_prefsPrefix}maxFranchiseStyles',
         _nonNegative(_maxFranchiseStyles, 2).clamp(0, 20).toInt());
-    await prefs.setDouble('${_prefsPrefix}minFranchiseWeight',
-        _decimal(_minFranchiseWeight, .5).clamp(.1, 10).toDouble());
-    await prefs.setDouble('${_prefsPrefix}maxFranchiseWeight',
-        _decimal(_maxFranchiseWeight, 1.5).clamp(.1, 10).toDouble());
+    await prefs.setDouble(
+        '${_prefsPrefix}minFranchiseWeight',
+        _decimal(_minFranchiseWeight, _franchiseWeightMinDefault)
+            .clamp(.1, 10)
+            .toDouble());
+    await prefs.setDouble(
+        '${_prefsPrefix}maxFranchiseWeight',
+        _decimal(_maxFranchiseWeight, _franchiseWeightMaxDefault)
+            .clamp(.1, 10)
+            .toDouble());
     await prefs.setInt('${_prefsPrefix}poolSize', _poolLimit());
     await prefs.setInt('${_prefsPrefix}seed', _seedValue());
     await prefs.setString(
@@ -757,10 +819,18 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
         _positive(_weightTuneCount, 8).clamp(1, 1000).toInt());
     await prefs.setInt(
         '${_prefsPrefix}weightVariation', _weightVariationValue());
+    final dimensions = fitNaiImageSize(
+      int.tryParse(_width.text) ?? _generationParams.width,
+      int.tryParse(_height.text) ?? _generationParams.height,
+      fallbackWidth: 832,
+      fallbackHeight: 1216,
+    );
     _generationParams
-      ..width = _snapDimension(_width.text, 832)
-      ..height = _snapDimension(_height.text, 1216)
+      ..width = dimensions.$1
+      ..height = dimensions.$2
       ..negativePrompt = _negative.text;
+    _width.text = '${dimensions.$1}';
+    _height.text = '${dimensions.$2}';
     await prefs.setString('${_prefsPrefix}generationParams',
         jsonEncode(_generationParams.toJson()));
     await prefs.setBool('${_prefsPrefix}mutate', _mutateAuxiliary);
@@ -786,8 +856,8 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
         minArtists: _positive(_minArtists, 3).clamp(1, 20).toInt(),
         maxArtists: _positive(_maxArtists, 7).clamp(1, 20).toInt(),
         drawSeed: _drawSeed,
-        minArtistWeight: _decimal(_minArtistWeight, .3),
-        maxArtistWeight: _decimal(_maxArtistWeight, 2),
+        minArtistWeight: _decimal(_minArtistWeight, _artistWeightMinDefault),
+        maxArtistWeight: _decimal(_maxArtistWeight, _artistWeightMaxDefault),
         auxiliary: _auxiliary.text,
         mutateAuxiliary: _mutateAuxiliary,
         includeFranchiseStyles: _includeFranchiseStyles,
@@ -795,8 +865,10 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
             _nonNegative(_minFranchiseStyles).clamp(0, 20).toInt(),
         maxFranchiseStyles:
             _nonNegative(_maxFranchiseStyles, 2).clamp(0, 20).toInt(),
-        minFranchiseWeight: _decimal(_minFranchiseWeight, .5),
-        maxFranchiseWeight: _decimal(_maxFranchiseWeight, 1.5),
+        minFranchiseWeight:
+            _decimal(_minFranchiseWeight, _franchiseWeightMinDefault),
+        maxFranchiseWeight:
+            _decimal(_maxFranchiseWeight, _franchiseWeightMaxDefault),
         favorites: favorites,
         favoriteMutations: _mutateAuxiliary ? favoriteMutations : const [],
       );
@@ -1399,7 +1471,10 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                                       ..seed = applied.seed
                                       ..seedMode = applied.seedMode
                                       ..ucPreset = applied.ucPreset
+                                      ..qualityPreset = applied.qualityPreset
                                       ..qualityToggle = applied.qualityToggle
+                                      ..transparentBackground =
+                                          applied.transparentBackground
                                       ..smea = applied.smea
                                       ..smeaDyn = applied.smeaDyn
                                       ..variety = applied.variety
@@ -1589,7 +1664,20 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                                 .toList(),
                             onChanged: (value) {
                               if (value == null) return;
-                              setState(() => _generationParams.model = value);
+                              setState(() {
+                                _generationParams.model = value;
+                                if (!_generationParams.isV5) {
+                                  if (_generationParams.qualityPreset ==
+                                      'light') {
+                                    _generationParams.qualityPreset =
+                                        'standard';
+                                  }
+                                  _generationParams.transparentBackground =
+                                      false;
+                                }
+                                _generationParams.qualityToggle =
+                                    _generationParams.qualityPreset != 'none';
+                              });
                               _save();
                             },
                           ),
@@ -1787,6 +1875,27 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                         ),
                         SizedBox(
                           width: constraints.maxWidth,
+                          child: QualityPresetControl(
+                            language: app.settings.language,
+                            model: _generationParams.model,
+                            value: _generationParams.qualityPreset,
+                            transparentBackground:
+                                _generationParams.transparentBackground,
+                            onChanged: (value) {
+                              setState(() => _generationParams
+                                ..qualityPreset = value
+                                ..qualityToggle = value != 'none');
+                              _save();
+                            },
+                            onTransparentChanged: (value) {
+                              setState(() => _generationParams
+                                  .transparentBackground = value);
+                              _save();
+                            },
+                          ),
+                        ),
+                        SizedBox(
+                          width: constraints.maxWidth,
                           child: TextField(
                             controller: _negative,
                             minLines: 2,
@@ -1805,15 +1914,6 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                             spacing: 8,
                             runSpacing: 6,
                             children: [
-                              FilterChip(
-                                label: Text(parameterText['quality']!),
-                                selected: _generationParams.qualityToggle,
-                                onSelected: (value) {
-                                  setState(() =>
-                                      _generationParams.qualityToggle = value);
-                                  _save();
-                                },
-                              ),
                               if (_generationParams.supportsVariety)
                                 FilterChip(
                                   label: const Text('Variety+'),
@@ -1902,6 +2002,39 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                   spacing: 12,
                   runSpacing: 12,
                   children: [
+                    SizedBox(
+                      width: constraints.maxWidth,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .primaryContainer
+                              .withAlpha(92),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(12, 7, 7, 7),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  _resetDrawHint(app.settings.language),
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              TextButton.icon(
+                                onPressed: () =>
+                                    _restoreDrawDefaults(app.settings.language),
+                                icon: const Icon(Icons.restart_alt, size: 18),
+                                label: Text(
+                                    _resetDrawLabel(app.settings.language)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                     SizedBox(
                       width: constraints.maxWidth,
                       child: TextField(

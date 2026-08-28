@@ -2,7 +2,7 @@ import { app, safeStorage } from "electron";
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
-import { pathToFileURL } from "url";
+import { toLocalMediaUrl } from "./local-media-protocol";
 import type { AccountSummary, AppSettings, HistoryGroup, HistoryItem, SettingKey, TextToolHistoryItem } from "../../src/types";
 import { COMIC_ANALYZE_SYSTEM_PROMPT, SCOPED_REVERSE_SYSTEM_PROMPTS } from "../../src/data/prompt-templates";
 import { installedAppDir } from "./app-mode";
@@ -232,7 +232,7 @@ export function migrateLegacyInstalledOutput(
   const history = data.history.map((item) => {
     const nextPath = remapManagedPath(item.filePath, oldRoot, newRoot);
     if (!nextPath || nextPath === item.filePath || !fs.existsSync(nextPath)) return item;
-    return { ...item, filePath: nextPath, fileUrl: pathToFileURL(nextPath).toString() };
+    return { ...item, filePath: nextPath, fileUrl: toLocalMediaUrl(nextPath) };
   });
   return {
     data: {
@@ -373,7 +373,7 @@ function normalize(raw: Partial<PersistedData> | null): PersistedData {
                   id: image.id,
                   name: image.name,
                   filePath: image.filePath,
-                  fileUrl: pathToFileURL(image.filePath).toString(),
+                  fileUrl: toLocalMediaUrl(image.filePath),
                   createdAt:
                     typeof image.createdAt === "string"
                       ? image.createdAt
@@ -883,7 +883,7 @@ function reconcileHistoryFiles(force = false): void {
     next.push({
       ...item,
       filePath: moved.path,
-      fileUrl: pathToFileURL(moved.path).toString(),
+      fileUrl: toLocalMediaUrl(moved.path),
       groupId: inferGroupIdFromPath(moved.path, data),
     });
     changed = true;
@@ -910,7 +910,7 @@ export function pruneMissingHistoryItem(id: string): boolean {
     const updated = {
       ...item,
       filePath: moved.path,
-      fileUrl: pathToFileURL(moved.path).toString(),
+      fileUrl: toLocalMediaUrl(moved.path),
       groupId: inferGroupIdFromPath(moved.path, data),
     };
     data.history = data.history.map((h) => (h.id === id ? updated : h));
@@ -928,12 +928,19 @@ export function pruneMissingHistoryItem(id: string): boolean {
 export function getHistory(date?: string, groupId?: string): HistoryItem[] {
   reconcileHistoryFiles();
   const history = readStore().history;
-  return history.filter((item) => {
-    if (date && item.date !== date) return false;
-    if (!groupId) return true;
-    if (groupId === "__ungrouped") return !item.groupId;
-    return item.groupId === groupId;
-  });
+  return history
+    .filter((item) => {
+      if (date && item.date !== date) return false;
+      if (!groupId) return true;
+      if (groupId === "__ungrouped") return !item.groupId;
+      return item.groupId === groupId;
+    })
+    // Older releases persisted file:// URLs. Rebuild the renderer URL from the
+    // authoritative path so existing libraries recover without migration or
+    // touching the image files on disk.
+    .map((item) => item.filePath
+      ? { ...item, fileUrl: toLocalMediaUrl(item.filePath) }
+      : item);
 }
 
 export function getHistoryDates(): string[] {

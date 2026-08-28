@@ -5,6 +5,7 @@ import type {
   GenerateFailureKind,
   GenerateParams,
 } from "./types";
+import { adaptiveNAIImageSize } from "./nai-dimensions";
 
 /**
  * Create a self-contained redraw request from the parameters that are visible
@@ -21,6 +22,9 @@ export function buildBatchRedrawRequest(
   const base: GenerateParams = item.overrideParams
     ? { ...project.globalParams, ...item.params }
     : { ...project.globalParams };
+  const outputSize = project.sizeMode === "adaptive"
+    ? adaptiveNAIImageSize(item.width, item.height, base)
+    : { width: base.width, height: base.height };
   const positivePrompt = [project.globalStyle.trim(), item.prompt.trim()]
     .filter(Boolean)
     .join(", ");
@@ -29,6 +33,7 @@ export function buildBatchRedrawRequest(
     imageBase64: item.base64,
     params: {
       ...base,
+      ...outputSize,
       positivePrompt,
       negativePrompt: project.globalNegative.trim() || base.negativePrompt,
       fileNamePrefix: item.name,

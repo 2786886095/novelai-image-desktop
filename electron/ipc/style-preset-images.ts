@@ -2,7 +2,7 @@ import { app, dialog } from "electron";
 import fs from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
-import { pathToFileURL } from "url";
+import { toLocalMediaUrl } from "./local-media-protocol";
 import type { StylePromptPreviewImage } from "../../src/types";
 
 const MAX_PREVIEW_IMAGES = 3;
@@ -53,7 +53,7 @@ function normalizeStoredImage(
         ? image.name.trim()
         : matchingFile,
     filePath,
-    fileUrl: pathToFileURL(filePath).toString(),
+    fileUrl: toLocalMediaUrl(filePath),
     createdAt:
       typeof image.createdAt === "string" && image.createdAt
         ? image.createdAt
@@ -118,7 +118,7 @@ export function reconcileStylePromptPreviewImages(
       id: parsed.name,
       name,
       filePath,
-      fileUrl: pathToFileURL(filePath).toString(),
+      fileUrl: toLocalMediaUrl(filePath),
       createdAt: stats.mtime.toISOString(),
     });
   }
@@ -154,7 +154,7 @@ export function copyStylePromptPreviewImages(
       id,
       name: path.basename(sourcePath),
       filePath,
-      fileUrl: pathToFileURL(filePath).toString(),
+      fileUrl: toLocalMediaUrl(filePath),
       createdAt: new Date().toISOString(),
     });
   }

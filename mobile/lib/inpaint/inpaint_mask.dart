@@ -1,22 +1,41 @@
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
+enum InpaintBrushShape { round, square }
+
+const double inpaintMaskGridSize = 8;
+const int inpaintBrushSliderMin = 4;
+const int inpaintBrushSliderMax = 50;
+const int inpaintBrushDirectMax = 500;
+
+int normalizeInpaintBrushCells(num value, InpaintBrushShape shape) {
+  final rounded = value.isFinite ? value.round() : inpaintBrushSliderMin;
+  if (shape == InpaintBrushShape.round) {
+    return (2 * (rounded / 2).round()).clamp(2, inpaintBrushDirectMax).toInt();
+  }
+  return rounded.clamp(1, inpaintBrushDirectMax).toInt();
+}
+
 class InpaintStroke {
-  final double brushFraction;
+  final int brushCells;
   final bool erase;
+  final InpaintBrushShape shape;
   final List<Offset> points;
 
   InpaintStroke({
-    required this.brushFraction,
+    required this.brushCells,
     this.erase = false,
+    this.shape = InpaintBrushShape.round,
     List<Offset>? points,
   }) : points = points ?? <Offset>[];
 
   InpaintStroke copy() => InpaintStroke(
-        brushFraction: brushFraction,
+        brushCells: brushCells,
         erase: erase,
+        shape: shape,
         points: List<Offset>.from(points),
       );
 }
@@ -35,43 +54,107 @@ Offset? normalizeCanvasPoint(Offset point, Size canvasSize) {
   return Offset(point.dx / canvasSize.width, point.dy / canvasSize.height);
 }
 
-// Editing stays pixel-precise, but NovelAI inpainting works on a 64px latent
-// grid. Expand touched cells only in the exported mask; this preserves the
-// free round brush feel while giving the API a clean, aligned mask — mirrors
-// desktop's InpaintCanvas.tsx exportMask/buildLatentMaskCells.
-const _maskCellSize = 64;
-
-class _LatentMaskCells {
-  final Uint8List cellOn;
-  final int cols;
-  final int rows;
-  final bool any;
-  _LatentMaskCells(this.cellOn, this.cols, this.rows, this.any);
+Iterable<Offset> inpaintGridBrushSamples(
+  InpaintStroke stroke,
+  Size size,
+  double gridSize,
+) sync* {
+  if (stroke.points.isEmpty) return;
+  final points = stroke.points
+      .map((point) => Offset(
+            point.dx * size.width / gridSize,
+            point.dy * size.height / gridSize,
+          ))
+      .toList(growable: false);
+  yield points.first;
+  for (var index = 1; index < points.length; index++) {
+    final from = points[index - 1];
+    final to = points[index];
+    var x = from.dx.round();
+    var y = from.dy.round();
+    final targetX = to.dx.round();
+    final targetY = to.dy.round();
+    final deltaX = (targetX - x).abs();
+    final deltaY = (targetY - y).abs();
+    final stepX = x < targetX ? 1 : -1;
+    final stepY = y < targetY ? 1 : -1;
+    var error = deltaX - deltaY;
+    while (x != targetX || y != targetY) {
+      final doubled = error * 2;
+      if (doubled > -deltaY) {
+        error -= deltaY;
+        x += stepX;
+      }
+      if (doubled < deltaX) {
+        error += deltaX;
+        y += stepY;
+      }
+      yield Offset(x.toDouble(), y.toDouble());
+    }
+  }
 }
 
-Future<_LatentMaskCells> _buildLatentMaskCells(
-  ByteData rgba,
-  int width,
-  int height,
-  int cellSize,
-) async {
-  final bytes = rgba.buffer.asUint8List();
-  final cols = (width / cellSize).ceil();
-  final rows = (height / cellSize).ceil();
-  final cellOn = Uint8List(cols * rows);
-  var any = false;
-  for (var y = 0; y < height; y++) {
-    final rowBase = y * width;
-    final cellRow = (y ~/ cellSize) * cols;
-    for (var x = 0; x < width; x++) {
-      final index = (rowBase + x) * 4;
-      if (bytes[index] + bytes[index + 1] + bytes[index + 2] > 32) {
-        cellOn[cellRow + (x ~/ cellSize)] = 1;
-        any = true;
+void paintInpaintStroke(
+  Canvas canvas,
+  Size size,
+  InpaintStroke stroke, {
+  required Color color,
+  BlendMode blendMode = BlendMode.srcOver,
+  double gridSize = inpaintMaskGridSize,
+}) {
+  if (stroke.points.isEmpty) return;
+  final paint = Paint()
+    ..color = color
+    ..blendMode = blendMode
+    ..isAntiAlias = false
+    ..style = PaintingStyle.fill;
+  final cells = normalizeInpaintBrushCells(stroke.brushCells, stroke.shape);
+  final samples = inpaintGridBrushSamples(stroke, size, gridSize);
+  if (stroke.shape == InpaintBrushShape.square) {
+    for (final point in samples) {
+      final left = (point.dx - cells / 2).round();
+      final top = (point.dy - cells / 2).round();
+      canvas.drawRect(
+        Rect.fromLTWH(
+          left * gridSize,
+          top * gridSize,
+          cells * gridSize,
+          cells * gridSize,
+        ),
+        paint,
+      );
+    }
+    return;
+  }
+
+  final radius = (cells / 2).round();
+  final roundCells = <(int, int)>[];
+  for (var deltaY = -radius; deltaY <= radius; deltaY++) {
+    for (var deltaX = -radius; deltaX <= radius; deltaX++) {
+      final x = deltaX.abs().toDouble();
+      final y = deltaY.abs().toDouble();
+      final outer = Offset(x + 0.5, y + 0.5).distance;
+      final inner = Offset(x - 0.5, y - 0.5).distance;
+      if (math.min(outer, inner) <= radius) {
+        roundCells.add((deltaX, deltaY));
       }
     }
   }
-  return _LatentMaskCells(cellOn, cols, rows, any);
+  for (final point in samples) {
+    final centerX = point.dx.floor();
+    final centerY = point.dy.floor();
+    for (final cell in roundCells) {
+      canvas.drawRect(
+        Rect.fromLTWH(
+          (centerX + cell.$1) * gridSize,
+          (centerY + cell.$2) * gridSize,
+          gridSize,
+          gridSize,
+        ),
+        paint,
+      );
+    }
+  }
 }
 
 Future<Uint8List> renderInpaintMask({
@@ -87,70 +170,20 @@ Future<Uint8List> renderInpaintMask({
   final size = Size(width.toDouble(), height.toDouble());
   final recorder = ui.PictureRecorder();
   final canvas = Canvas(recorder);
-  canvas.drawRect(Offset.zero & size, Paint()..color = Colors.black);
-
-  for (final stroke in strokes) {
-    if (stroke.points.isEmpty) continue;
-    final strokeWidth = (stroke.brushFraction * size.shortestSide)
-        .clamp(1.0, size.shortestSide);
-    final paint = Paint()
-      ..color = stroke.erase ? Colors.black : Colors.white
-      ..isAntiAlias = false
-      ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round
-      ..style = PaintingStyle.stroke;
-    final points = stroke.points
-        .map((point) => Offset(point.dx * size.width, point.dy * size.height))
-        .toList(growable: false);
-    if (points.length == 1) {
-      canvas.drawCircle(
-        points.first,
-        strokeWidth / 2,
-        Paint()
-          ..color = stroke.erase ? Colors.black : Colors.white
-          ..isAntiAlias = false,
-      );
-      continue;
-    }
-    final path = Path()..moveTo(points.first.dx, points.first.dy);
-    for (final point in points.skip(1)) {
-      path.lineTo(point.dx, point.dy);
-    }
-    canvas.drawPath(path, paint);
-  }
-
-  final rawImage = await recorder.endRecording().toImage(width, height);
-  final rawData = await rawImage.toByteData(format: ui.ImageByteFormat.rawRgba);
-  rawImage.dispose();
-  if (rawData == null) {
-    throw StateError('Unable to read the inpaint mask raster.');
-  }
-  final cells =
-      await _buildLatentMaskCells(rawData, width, height, _maskCellSize);
-
-  final cellRecorder = ui.PictureRecorder();
-  final cellCanvas = Canvas(cellRecorder);
-  cellCanvas.drawRect(
+  canvas.drawRect(
     Offset.zero & size,
     Paint()..color = inverted ? Colors.white : Colors.black,
   );
-  final selectedPaint = Paint()..color = inverted ? Colors.black : Colors.white;
-  for (var row = 0; row < cells.rows; row++) {
-    for (var col = 0; col < cells.cols; col++) {
-      if (cells.cellOn[row * cells.cols + col] == 0) continue;
-      cellCanvas.drawRect(
-        Rect.fromLTWH(
-          (col * _maskCellSize).toDouble(),
-          (row * _maskCellSize).toDouble(),
-          _maskCellSize.toDouble(),
-          _maskCellSize.toDouble(),
-        ),
-        selectedPaint,
-      );
-    }
+
+  for (final stroke in strokes) {
+    final rawColor = stroke.erase ? Colors.black : Colors.white;
+    final color = inverted
+        ? (rawColor == Colors.white ? Colors.black : Colors.white)
+        : rawColor;
+    paintInpaintStroke(canvas, size, stroke, color: color);
   }
-  final image = await cellRecorder.endRecording().toImage(width, height);
+
+  final image = await recorder.endRecording().toImage(width, height);
   final data = await image.toByteData(format: ui.ImageByteFormat.png);
   image.dispose();
   if (data == null) throw StateError('Unable to encode the inpaint mask.');

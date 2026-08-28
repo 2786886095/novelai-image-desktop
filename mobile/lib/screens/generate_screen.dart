@@ -18,6 +18,7 @@ import '../references/reference_catalog.dart';
 import '../references/reference_presets.dart';
 import '../services/nai_api.dart';
 import '../state/app_state.dart';
+import '../ui/quality_preset_control.dart';
 import '../ui/studio_shell.dart';
 import '../ui/zoomable_image.dart';
 import 'reference_catalog_panel.dart';
@@ -393,7 +394,9 @@ class GenerateScreen extends StatelessWidget {
           : ListView(
               key: const ValueKey('generate-single-layout'),
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
+              // Keep the final controls clear of the persistent run bar even
+              // when optional parameter cards make the page taller.
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 168),
               children: [preview, const SizedBox(height: 12), ...controls],
             ),
       bottomNavigationBar: landscapePhone ? null : const _RunBar(),
@@ -2231,9 +2234,14 @@ class _ParamControls extends StatelessWidget {
                 label: Text(localizedSizePresetLabel(
                     language, s.width, s.height, s.label)),
                 selected: selected,
-                onSelected: (_) => state.setParam((x) => (x
-                  ..width = s.width
-                  ..height = s.height)));
+                onSelected: (_) {
+                  if (watched.workbenchImage != null) {
+                    state.setI2ISizeMode('custom');
+                  }
+                  state.setParam((x) => (x
+                    ..width = s.width
+                    ..height = s.height));
+                });
           }).toList(),
         ),
         const SizedBox(height: 10),
@@ -2243,9 +2251,15 @@ class _ParamControls extends StatelessWidget {
               child: _SyncedNumberField(
                 label: text.width,
                 value: p.width,
-                onChanged: (value) => state.setParam(
-                  (x) => x.width = _snapDimension(value),
-                ),
+                commitOnly: true,
+                normalize: (value) =>
+                    snapNaiDimensionWithinArea(value, p.height, p.width),
+                onChanged: (value) {
+                  if (watched.workbenchImage != null) {
+                    state.setI2ISizeMode('custom');
+                  }
+                  state.setParam((x) => x.width = value);
+                },
               ),
             ),
             const SizedBox(width: 10),
@@ -2253,12 +2267,26 @@ class _ParamControls extends StatelessWidget {
               child: _SyncedNumberField(
                 label: text.height,
                 value: p.height,
-                onChanged: (value) => state.setParam(
-                  (x) => x.height = _snapDimension(value),
-                ),
+                commitOnly: true,
+                normalize: (value) =>
+                    snapNaiDimensionWithinArea(value, p.width, p.height),
+                onChanged: (value) {
+                  if (watched.workbenchImage != null) {
+                    state.setI2ISizeMode('custom');
+                  }
+                  state.setParam((x) => x.height = value);
+                },
               ),
             ),
           ],
+        ),
+        const SizedBox(height: 4),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            t('size.commitHint'),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
         ),
         const SizedBox(height: 12),
         DropdownButtonFormField<String>(
@@ -2391,11 +2419,21 @@ class _ParamControls extends StatelessWidget {
             ),
           ],
         ),
-        SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text(text.qualityToggle),
-            value: p.qualityToggle,
-            onChanged: (v) => state.setParam((x) => x.qualityToggle = v)),
+        const SizedBox(height: 10),
+        QualityPresetControl(
+          language: language,
+          model: p.model,
+          value: p.qualityPreset,
+          transparentBackground: p.transparentBackground,
+          onChanged: (value) => state.setParam((x) {
+            x
+              ..qualityPreset = value
+              ..qualityToggle = value != 'none';
+          }),
+          onTransparentChanged: (value) => state.setParam(
+            (x) => x.transparentBackground = value,
+          ),
+        ),
         if (p.supportsVariety)
           SwitchListTile(
               contentPadding: EdgeInsets.zero,
@@ -2431,6 +2469,9 @@ class _I2IControls extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = context.watch<AppState>();
     final text = generateScreenTextFor(s.settings.language);
+    String t(String key) => mobileUiTextFor(s.settings.language, key);
+    final source = s.workbenchImage;
+    final output = s.i2iOutputSize;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -2440,6 +2481,47 @@ class _I2IControls extends StatelessWidget {
                 alignment: Alignment.centerLeft,
                 child: Text(text.i2iParams,
                     style: const TextStyle(fontWeight: FontWeight.bold))),
+            const SizedBox(height: 8),
+            SegmentedButton<String>(
+              segments: [
+                ButtonSegment(
+                  value: 'adaptive',
+                  icon: const Icon(Icons.auto_fix_high_outlined),
+                  label: Text(t('i2i.sizeAdaptive')),
+                ),
+                ButtonSegment(
+                  value: 'custom',
+                  icon: const Icon(Icons.aspect_ratio_outlined),
+                  label: Text(t('i2i.sizeCustom')),
+                ),
+              ],
+              selected: {s.i2iSizeMode},
+              onSelectionChanged: (selection) =>
+                  s.setI2ISizeMode(selection.first),
+            ),
+            if (source != null) ...[
+              const SizedBox(height: 6),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  s.i2iSizeMode == 'adaptive'
+                      ? mobileUiFormatFor(
+                          s.settings.language,
+                          'i2i.sizeAdaptivePath',
+                          {
+                            'source': '${source.width}×${source.height}',
+                            'output': '${output.$1}×${output.$2}',
+                          },
+                        )
+                      : mobileUiFormatFor(
+                          s.settings.language,
+                          'i2i.sizeCustomPath',
+                          {'output': '${output.$1}×${output.$2}'},
+                        ),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+            ],
             _Slider(
                 label: text.strength,
                 value: s.i2i.strength,
@@ -2573,20 +2655,19 @@ class _OutputControls extends StatelessWidget {
   }
 }
 
-int _snapDimension(int value) {
-  final bounded = value.clamp(64, 1600);
-  return ((bounded / 64).round() * 64).clamp(64, 1600);
-}
-
 class _SyncedNumberField extends StatefulWidget {
   final String label;
   final int value;
   final ValueChanged<int> onChanged;
+  final bool commitOnly;
+  final int Function(int value)? normalize;
 
   const _SyncedNumberField({
     required this.label,
     required this.value,
     required this.onChanged,
+    this.commitOnly = false,
+    this.normalize,
   });
 
   @override
@@ -2601,7 +2682,7 @@ class _SyncedNumberFieldState extends State<_SyncedNumberField> {
   void initState() {
     super.initState();
     controller = TextEditingController(text: '${widget.value}');
-    focusNode = FocusNode()..addListener(_syncAfterEditing);
+    focusNode = FocusNode()..addListener(_finishAfterEditing);
   }
 
   @override
@@ -2612,8 +2693,17 @@ class _SyncedNumberFieldState extends State<_SyncedNumberField> {
     }
   }
 
-  void _syncAfterEditing() {
+  void _finishAfterEditing() {
     if (focusNode.hasFocus) return;
+    if (widget.commitOnly) {
+      final parsed = int.tryParse(controller.text);
+      if (parsed != null) {
+        final next = widget.normalize?.call(parsed) ?? parsed;
+        controller.text = '$next';
+        if (next != widget.value) widget.onChanged(next);
+        return;
+      }
+    }
     if (controller.text != '${widget.value}') {
       controller.text = '${widget.value}';
     }
@@ -2622,7 +2712,7 @@ class _SyncedNumberFieldState extends State<_SyncedNumberField> {
   @override
   void dispose() {
     focusNode
-      ..removeListener(_syncAfterEditing)
+      ..removeListener(_finishAfterEditing)
       ..dispose();
     controller.dispose();
     super.dispose();
@@ -2638,9 +2728,11 @@ class _SyncedNumberFieldState extends State<_SyncedNumberField> {
           border: const OutlineInputBorder(),
         ),
         onChanged: (raw) {
+          if (widget.commitOnly) return;
           final value = int.tryParse(raw);
           if (value != null) widget.onChanged(value);
         },
+        onSubmitted: (_) => focusNode.unfocus(),
       );
 }
 
@@ -4790,7 +4882,10 @@ class _GenerationQueuePanel extends StatelessWidget {
                         '${text.batchPendingPrefix}$batchPending${text.batchPendingSuffix}'),
               for (final job in state.generationQueue)
                 _QueueLine(
-                  label: job.label,
+                  label: job.quotePending
+                      ? '${job.label} · ${text.quoting}'
+                      : job.label,
+                  pending: job.quotePending,
                   trailing: IconButton(
                     tooltip: text.removeFromQueue,
                     visualDensity: VisualDensity.compact,
@@ -4809,15 +4904,23 @@ class _GenerationQueuePanel extends StatelessWidget {
 class _QueueLine extends StatelessWidget {
   final String label;
   final Widget? trailing;
+  final bool pending;
 
-  const _QueueLine({required this.label, this.trailing});
+  const _QueueLine({required this.label, this.trailing, this.pending = false});
 
   @override
   Widget build(BuildContext context) => SizedBox(
         height: 30,
         child: Row(
           children: [
-            const Icon(Icons.schedule, size: 15),
+            if (pending)
+              const SizedBox(
+                width: 15,
+                height: 15,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            else
+              const Icon(Icons.schedule, size: 15),
             const SizedBox(width: 6),
             Expanded(
               child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),

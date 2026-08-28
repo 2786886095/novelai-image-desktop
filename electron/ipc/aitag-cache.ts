@@ -3,8 +3,8 @@ import axios from "axios";
 import { createHash } from "crypto";
 import { promises as fs } from "fs";
 import path from "path";
-import { pathToFileURL } from "url";
 import { proxyConfig } from "./proxy";
+import { toLocalMediaUrl } from "./local-media-protocol";
 
 const MAX_IMAGE_BYTES = 64 * 1024 * 1024;
 
@@ -55,7 +55,7 @@ export async function cacheAitagImage(rawUrl: unknown, rawDays?: unknown) {
     if (info.isFile() && info.size > 0) {
       const now = new Date();
       await fs.utimes(target, now, now);
-      return pathToFileURL(target).toString();
+      return toLocalMediaUrl(target);
     }
   } catch {
     // Cache miss.
@@ -77,7 +77,7 @@ export async function cacheAitagImage(rawUrl: unknown, rawDays?: unknown) {
   } catch {
     await fs.rm(temporary, { force: true });
   }
-  return pathToFileURL(target).toString();
+  return toLocalMediaUrl(target);
 }
 
 export async function aitagCacheStats() {

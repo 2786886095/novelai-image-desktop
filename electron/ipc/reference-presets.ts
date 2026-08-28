@@ -2,7 +2,7 @@ import { app, dialog } from "electron";
 import fs from "fs/promises";
 import path from "path";
 import { randomUUID } from "crypto";
-import { pathToFileURL } from "url";
+import { toLocalMediaUrl } from "./local-media-protocol";
 import JSZip from "jszip";
 import type {
   PreciseReferenceType,
@@ -73,7 +73,7 @@ function cleanExtension(value: unknown) {
 }
 
 function publicPreset(preset: Omit<ReferencePreset, "fileUrl">): ReferencePreset {
-  return { ...preset, fileUrl: pathToFileURL(preset.filePath).toString() };
+  return { ...preset, fileUrl: toLocalMediaUrl(preset.filePath) };
 }
 
 function serializablePreset(preset: ReferencePreset | Omit<ReferencePreset, "fileUrl">) {

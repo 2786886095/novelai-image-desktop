@@ -1,6 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Icon } from "./components/icons";
 import { droppedImagePath, hasDraggedFiles } from "./drag-drop";
-import { buildLatentMaskCells } from "./inpaint-mask";
+import {
+  INPAINT_BRUSH_DIRECT_MAX,
+  INPAINT_BRUSH_SLIDER_MAX,
+  INPAINT_BRUSH_SLIDER_MIN,
+  INPAINT_MASK_GRID_SIZE,
+  inpaintBrushSliderValue,
+  rasterizeInpaintGridSegment,
+  type InpaintBrushPoint,
+} from "./inpaint-brush";
+import {
+  buildBinaryInpaintMask,
+  buildInpaintMaskPreview,
+} from "./inpaint-mask";
 import { desktopUiText } from "./i18n";
 import { useAppStore } from "./store";
 
@@ -13,17 +26,27 @@ export function InpaintCanvas() {
   const workbenchImage = useAppStore((state) => state.workbenchImage);
   const comparisonBeforeImage = useAppStore((state) => state.comparisonBeforeImage);
   const brushSize = useAppStore((state) => state.brushSize);
+  const setBrushSize = useAppStore((state) => state.setBrushSize);
   const brushOpacity = useAppStore((state) => state.brushOpacity);
   const brushMode = useAppStore((state) => state.brushMode);
+  const setBrushMode = useAppStore((state) => state.setBrushMode);
+  const brushShape = useAppStore((state) => state.brushShape);
+  const setBrushShape = useAppStore((state) => state.setBrushShape);
   const maskRevision = useAppStore((state) => state.maskRevision);
   const setInpaintMask = useAppStore((state) => state.setInpaintMask);
   const loadWorkbenchFromPath = useAppStore((state) => state.loadWorkbenchFromPath);
   const stageRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawingRef = useRef(false);
+  const drawingPointerRef = useRef<number | null>(null);
   const lastPointRef = useRef<{ x: number; y: number } | null>(null);
+  const panningRef = useRef(false);
+  const panPointerRef = useRef<number | null>(null);
+  const panStartRef = useRef({ clientX: 0, clientY: 0, x: 0, y: 0 });
+  const spaceHeldRef = useRef(false);
   const historyRef = useRef<ImageData[]>([]);
   const redoRef = useRef<ImageData[]>([]);
+  const roundStampCacheRef = useRef(new Map<string, HTMLCanvasElement>());
   const [cursor, setCursor] = useState({ x: 0, y: 0, size: brushSize, visible: false });
   const [previewMaskUrl, setPreviewMaskUrl] = useState("");
   const [showExportPreview, setShowExportPreview] = useState(false);
@@ -31,10 +54,17 @@ export function InpaintCanvas() {
   const [redoCount, setRedoCount] = useState(0);
   const [stageZoom, setStageZoom] = useState(1);
   const [stagePan, setStagePan] = useState({ x: 0, y: 0 });
+  const [spaceHeld, setSpaceHeld] = useState(false);
+  const [isPanning, setIsPanning] = useState(false);
   const [compareEnabled, setCompareEnabled] = useState(Boolean(comparisonBeforeImage));
   const [compareX, setCompareX] = useState(50);
   const [compareDragging, setCompareDragging] = useState(false);
   const [dropOver, setDropOver] = useState(false);
+  const brushFootprintCells = brushShape === "round"
+    ? 2 * Math.round(brushSize / 2) + 1
+    : brushSize;
+  const brushPixelSize = brushFootprintCells * INPAINT_MASK_GRID_SIZE;
+  const sliderBrushSize = inpaintBrushSliderValue(brushSize);
   const canCompare = Boolean(comparisonBeforeImage?.fileUrl && workbenchImage?.fileUrl);
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
 
@@ -79,10 +109,6 @@ export function InpaintCanvas() {
     };
   }, [compareDragging]);
 
-  // Editing stays pixel-precise, but NovelAI inpainting works on a 64px latent
-  // grid. Expand touched cells only in the exported mask; this preserves the
-  // free round brush feel while restoring the cleaner API result.
-  const MASK_CELL = 64;
   const exportMask = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -90,89 +116,147 @@ export function InpaintCanvas() {
     const h = canvas.height;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    const data = ctx.getImageData(0, 0, w, h).data;
-    const { cells: cellOn, cols, rows, any } = buildLatentMaskCells(data, w, h, MASK_CELL);
+    const source = ctx.getImageData(0, 0, w, h);
+    const { rgba, any } = buildBinaryInpaintMask(source.data, w, h);
     const maskCanvas = document.createElement("canvas");
     maskCanvas.width = w;
     maskCanvas.height = h;
     const maskCtx = maskCanvas.getContext("2d");
     if (!maskCtx) return;
-    maskCtx.globalCompositeOperation = "source-over";
-    maskCtx.fillStyle = "black";
-    maskCtx.fillRect(0, 0, w, h);
-    maskCtx.fillStyle = "white";
-    for (let row = 0; row < rows; row += 1) {
-      for (let col = 0; col < cols; col += 1) {
-        if (cellOn[row * cols + col]) {
-          maskCtx.fillRect(col * MASK_CELL, row * MASK_CELL, MASK_CELL, MASK_CELL);
-        }
-      }
-    }
     if (!any) {
       setInpaintMask(null);
       setPreviewMaskUrl("");
       setShowExportPreview(false);
       return;
     }
+    const binaryImage = maskCtx.createImageData(w, h);
+    binaryImage.data.set(rgba);
+    maskCtx.putImageData(binaryImage, 0, 0);
     const dataUrl = maskCanvas.toDataURL("image/png");
-    setPreviewMaskUrl(dataUrl);
     setInpaintMask(dataUrl.split(",")[1] ?? null);
+    const previewImage = maskCtx.createImageData(w, h);
+    previewImage.data.set(buildInpaintMaskPreview(rgba, w, h));
+    maskCtx.putImageData(previewImage, 0, 0);
+    setPreviewMaskUrl(maskCanvas.toDataURL("image/png"));
   }, [setInpaintMask]);
 
-  const getPoint = useCallback((event: React.MouseEvent<HTMLCanvasElement>) => {
+  const getPoint = useCallback((clientX: number, clientY: number) => {
     const canvas = canvasRef.current;
     if (!canvas) return null;
     const rect = canvas.getBoundingClientRect();
     return {
-      x: (event.clientX - rect.left) * (canvas.width / rect.width),
-      y: (event.clientY - rect.top) * (canvas.height / rect.height),
+      x: (clientX - rect.left) * (canvas.width / Math.max(1, rect.width)),
+      y: (clientY - rect.top) * (canvas.height / Math.max(1, rect.height)),
     };
   }, []);
 
   const updateCursor = useCallback(
-    (event: React.MouseEvent<HTMLCanvasElement>) => {
+    (clientX: number, clientY: number) => {
       const canvas = canvasRef.current;
       if (!canvas) return;
       const rect = canvas.getBoundingClientRect();
       const stageRect = stageRef.current?.getBoundingClientRect() ?? rect;
       const displayScale = rect.width / Math.max(1, canvas.width);
       setCursor({
-        x: event.clientX - stageRect.left,
-        y: event.clientY - stageRect.top,
-        size: Math.max(8, brushSize * displayScale),
+        x: clientX - stageRect.left,
+        y: clientY - stageRect.top,
+        size: Math.max(2, brushPixelSize * displayScale),
         visible: true,
       });
     },
-    [brushSize],
+    [brushPixelSize],
   );
 
-  const drawAt = useCallback(
-    (event: React.MouseEvent<HTMLCanvasElement>) => {
+  const drawSamples = useCallback(
+    (events: ArrayLike<Pick<PointerEvent, "clientX" | "clientY">>) => {
       if (!drawingRef.current) return;
       const canvas = canvasRef.current;
-      const point = getPoint(event);
-      if (!canvas || !point) return;
+      if (!canvas) return;
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
-      const last = lastPointRef.current ?? point;
       setShowExportPreview(false);
       ctx.globalCompositeOperation = "source-over";
-      ctx.strokeStyle = brushMode === "paint" ? "white" : "black";
       ctx.fillStyle = brushMode === "paint" ? "white" : "black";
-      ctx.lineWidth = brushSize;
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      ctx.beginPath();
-      ctx.moveTo(last.x, last.y);
-      ctx.lineTo(point.x, point.y);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(point.x, point.y, brushSize / 2, 0, Math.PI * 2);
-      ctx.fill();
-      lastPointRef.current = point;
+      ctx.imageSmoothingEnabled = false;
+      const exactSize = brushSize * INPAINT_MASK_GRID_SIZE;
+      const stampColor = brushMode === "paint" ? "white" : "black";
+      const roundStamp = () => {
+        const radius = Math.round(brushSize / 2);
+        const diameter = radius * 2 + 1;
+        const key = `${diameter}-${stampColor}`;
+        const cached = roundStampCacheRef.current.get(key);
+        if (cached) return cached;
+        const stamp = document.createElement("canvas");
+        stamp.width = diameter;
+        stamp.height = diameter;
+        const stampContext = stamp.getContext("2d");
+        if (!stampContext) return stamp;
+        stampContext.fillStyle = stampColor;
+        for (let deltaY = -radius; deltaY <= radius; deltaY += 1) {
+          for (let deltaX = -radius; deltaX <= radius; deltaX += 1) {
+            const x = Math.abs(deltaX);
+            const y = Math.abs(deltaY);
+            const edgeDistance = Math.min(
+              Math.hypot(x + 0.5, y + 0.5),
+              Math.hypot(x - 0.5, y - 0.5),
+            );
+            if (edgeDistance <= radius) {
+              stampContext.fillRect(deltaX + radius, deltaY + radius, 1, 1);
+            }
+          }
+        }
+        if (roundStampCacheRef.current.size >= 24) roundStampCacheRef.current.clear();
+        roundStampCacheRef.current.set(key, stamp);
+        return stamp;
+      };
+      const stamp = (point: InpaintBrushPoint) => {
+        if (brushShape === "square") {
+          ctx.fillRect(
+            Math.round(point.x - brushSize / 2) * INPAINT_MASK_GRID_SIZE,
+            Math.round(point.y - brushSize / 2) * INPAINT_MASK_GRID_SIZE,
+            exactSize,
+            exactSize,
+          );
+          return;
+        }
+        const radius = Math.round(brushSize / 2);
+        const diameter = radius * 2 + 1;
+        ctx.drawImage(
+          roundStamp(),
+          (Math.floor(point.x) - radius) * INPAINT_MASK_GRID_SIZE,
+          (Math.floor(point.y) - radius) * INPAINT_MASK_GRID_SIZE,
+          diameter * INPAINT_MASK_GRID_SIZE,
+          diameter * INPAINT_MASK_GRID_SIZE,
+        );
+      };
+      for (let index = 0; index < events.length; index += 1) {
+        const event = events[index];
+        const sourcePoint = getPoint(event.clientX, event.clientY);
+        if (!sourcePoint) continue;
+        if (
+          sourcePoint.x < 0 ||
+          sourcePoint.y < 0 ||
+          sourcePoint.x >= canvas.width ||
+          sourcePoint.y >= canvas.height
+        ) {
+          lastPointRef.current = null;
+          continue;
+        }
+        const point = {
+          x: sourcePoint.x / INPAINT_MASK_GRID_SIZE,
+          y: sourcePoint.y / INPAINT_MASK_GRID_SIZE,
+        };
+        const last = lastPointRef.current;
+        if (last) {
+          for (const sample of rasterizeInpaintGridSegment(last, point)) stamp(sample);
+        } else {
+          stamp({ x: Math.round(point.x), y: Math.round(point.y) });
+        }
+        lastPointRef.current = point;
+      }
     },
-    [brushMode, brushSize, getPoint],
+    [brushMode, brushShape, brushSize, getPoint],
   );
 
   // Called once at the start of each new stroke: snapshot the canvas so we can
@@ -213,6 +297,82 @@ export function InpaintCanvas() {
     setShowExportPreview(false);
     exportMask();
   }, [exportMask]);
+
+  useEffect(() => {
+    const isEditable = (target: EventTarget | null) =>
+      target instanceof HTMLElement &&
+      Boolean(target.closest("input, textarea, select, [contenteditable='true']"));
+    const keyDown = (event: KeyboardEvent) => {
+      if (event.code === "Space" && !isEditable(event.target)) {
+        event.preventDefault();
+        spaceHeldRef.current = true;
+        setSpaceHeld(true);
+        return;
+      }
+      if (isEditable(event.target)) return;
+      const key = event.key.toLowerCase();
+      if ((event.ctrlKey || event.metaKey) && key === "z") {
+        event.preventDefault();
+        if (event.shiftKey) redoNextStroke();
+        else undoLastStroke();
+      } else if ((event.ctrlKey || event.metaKey) && key === "y") {
+        event.preventDefault();
+        redoNextStroke();
+      } else if (key === "b") {
+        setBrushMode("paint");
+      } else if (key === "e") {
+        setBrushMode("erase");
+      } else if (event.key === "[") {
+        event.preventDefault();
+        setBrushSize(brushSize - (brushShape === "round" ? 2 : 1));
+      } else if (event.key === "]") {
+        event.preventDefault();
+        setBrushSize(brushSize + (brushShape === "round" ? 2 : 1));
+      }
+    };
+    const keyUp = (event: KeyboardEvent) => {
+      if (event.code !== "Space") return;
+      spaceHeldRef.current = false;
+      setSpaceHeld(false);
+    };
+    const blur = () => {
+      spaceHeldRef.current = false;
+      setSpaceHeld(false);
+    };
+    window.addEventListener("keydown", keyDown);
+    window.addEventListener("keyup", keyUp);
+    window.addEventListener("blur", blur);
+    return () => {
+      window.removeEventListener("keydown", keyDown);
+      window.removeEventListener("keyup", keyUp);
+      window.removeEventListener("blur", blur);
+    };
+  }, [brushShape, brushSize, redoNextStroke, setBrushMode, setBrushSize, undoLastStroke]);
+
+  const finishPointer = useCallback(
+    (event: React.PointerEvent<HTMLCanvasElement>, cancelled = false) => {
+      if (panPointerRef.current === event.pointerId) {
+        panningRef.current = false;
+        panPointerRef.current = null;
+        setIsPanning(false);
+      }
+      if (drawingPointerRef.current === event.pointerId) {
+        if (!cancelled) {
+          const native = event.nativeEvent;
+          const samples = native.getCoalescedEvents?.() ?? [native];
+          drawSamples(samples);
+        }
+        drawingRef.current = false;
+        drawingPointerRef.current = null;
+        lastPointRef.current = null;
+        exportMask();
+      }
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+    },
+    [drawSamples, exportMask],
+  );
 
   const imageZoomStyle = { transform: `translate(${stagePan.x}px, ${stagePan.y}px) scale(${stageZoom})` };
   const canvasZoomStyle = {
@@ -294,12 +454,80 @@ export function InpaintCanvas() {
       <div className="inpaint-mask-toolbar">
         <button
           type="button"
+          className={`btn inpaint-icon-tool ${brushMode === "paint" ? "btn-primary" : "btn-ghost"}`}
+          onClick={() => setBrushMode("paint")}
+          title={`${t("inpaint.paintBrush")} · B`}
+          aria-label={t("inpaint.paintBrush")}
+          aria-pressed={brushMode === "paint"}
+        >
+          <Icon name="brush" />
+        </button>
+        <button
+          type="button"
+          className={`btn inpaint-icon-tool ${brushMode === "erase" ? "btn-primary" : "btn-ghost"}`}
+          onClick={() => setBrushMode("erase")}
+          title={`${t("inpaint.eraser")} · E`}
+          aria-label={t("inpaint.eraser")}
+          aria-pressed={brushMode === "erase"}
+        >
+          <Icon name="eraser" />
+        </button>
+        <label className="inpaint-toolbar-size" title={t("inpaint.brushSize")}>
+          <input
+            type="number"
+            min={brushShape === "round" ? 2 : 1}
+            max={INPAINT_BRUSH_DIRECT_MAX}
+            step={1}
+            value={brushSize}
+            aria-label={t("inpaint.brushSize")}
+            onChange={(event) => {
+              if (event.currentTarget.value !== "") setBrushSize(Number(event.currentTarget.value));
+            }}
+          />
+          <span>{t("inpaint.gridUnit")}</span>
+        </label>
+        <input
+          className="inpaint-toolbar-range"
+          type="range"
+          min={INPAINT_BRUSH_SLIDER_MIN}
+          max={INPAINT_BRUSH_SLIDER_MAX}
+          step={1}
+          value={sliderBrushSize}
+          aria-label={t("inpaint.brushSize")}
+          onChange={(event) => setBrushSize(Number(event.currentTarget.value))}
+        />
+        <div className="inpaint-toolbar-shapes" role="group" aria-label={t("inpaint.brushShape")}>
+          <button
+            type="button"
+            className={brushShape === "round" ? "active" : ""}
+            onClick={() => setBrushShape("round")}
+            title={t("inpaint.roundBrush")}
+            aria-label={t("inpaint.roundBrush")}
+            aria-pressed={brushShape === "round"}
+          >
+            <span className="inpaint-shape-swatch round" />
+          </button>
+          <button
+            type="button"
+            className={brushShape === "square" ? "active" : ""}
+            onClick={() => setBrushShape("square")}
+            title={t("inpaint.squareBrush")}
+            aria-label={t("inpaint.squareBrush")}
+            aria-pressed={brushShape === "square"}
+          >
+            <span className="inpaint-shape-swatch square" />
+          </button>
+        </div>
+        <span className="inpaint-toolbar-divider" />
+        <button
+          type="button"
           className="btn btn-ghost"
           disabled={historyCount === 0}
           onClick={undoLastStroke}
           title={t("inpaint.undoTitle")}
+          aria-label={t("inpaint.undoTitle")}
         >
-          <span className="inpaint-tool-arrow">↶</span> {t("inpaint.undo")}
+          <Icon name="undo" />
         </button>
         <button
           type="button"
@@ -307,17 +535,20 @@ export function InpaintCanvas() {
           disabled={redoCount === 0}
           onClick={redoNextStroke}
           title={t("inpaint.redoTitle")}
+          aria-label={t("inpaint.redoTitle")}
         >
-          <span className="inpaint-tool-arrow">↷</span> {t("inpaint.redo")}
+          <Icon name="redo" />
         </button>
         <button
           type="button"
-          className="btn btn-ghost"
+          className={`btn ${showExportPreview ? "btn-primary" : "btn-ghost"}`}
           disabled={!previewMaskUrl}
           onClick={() => setShowExportPreview((value) => !value)}
           title={t("inpaint.previewMaskTitle")}
+          aria-label={showExportPreview ? t("inpaint.backToPaint") : t("inpaint.previewMask")}
+          aria-pressed={showExportPreview}
         >
-          {showExportPreview ? t("inpaint.backToPaint") : t("inpaint.previewMask")}
+          <Icon name="eye" />
         </button>
         {canCompare ? (
           <button
@@ -325,8 +556,9 @@ export function InpaintCanvas() {
             className="btn btn-ghost"
             onClick={() => setCompareEnabled((value) => !value)}
             title={t("inpaint.compareTitle")}
+            aria-label={compareEnabled ? t("inpaint.closeCompare") : t("inpaint.beforeAfter")}
           >
-            {compareEnabled ? t("inpaint.closeCompare") : t("inpaint.beforeAfter")}
+            <Icon name="swap" />
           </button>
         ) : null}
         <span className="inpaint-zoom-readout">{Math.round(stageZoom * 100)}%</span>
@@ -339,8 +571,9 @@ export function InpaintCanvas() {
             setStagePan({ x: 0, y: 0 });
           }}
           title={t("inpaint.resetZoom")}
+          aria-label={t("inpaint.resetZoom")}
         >
-          {t("inpaint.resetZoom")}
+          <Icon name="fitScreen" />
         </button>
       </div>
       <div className="inpaint-stage" ref={stageRef} onWheel={handleStageWheel}>
@@ -392,29 +625,53 @@ export function InpaintCanvas() {
           style={{
             opacity: showExportPreview || (compareEnabled && canCompare) ? 0 : brushOpacity,
             pointerEvents: compareEnabled && canCompare ? "none" : undefined,
+            cursor: isPanning ? "grabbing" : spaceHeld ? "grab" : "none",
             ...canvasZoomStyle,
           }}
-          onMouseDown={(event) => {
-            updateCursor(event);
+          onPointerDown={(event) => {
+            if (event.button === 1 || spaceHeldRef.current) {
+              event.preventDefault();
+              event.currentTarget.setPointerCapture(event.pointerId);
+              panningRef.current = true;
+              panPointerRef.current = event.pointerId;
+              panStartRef.current = {
+                clientX: event.clientX,
+                clientY: event.clientY,
+                x: stagePan.x,
+                y: stagePan.y,
+              };
+              setIsPanning(true);
+              setCursor((current) => ({ ...current, visible: false }));
+              return;
+            }
+            if (event.pointerType === "mouse" && event.button !== 0) return;
+            event.preventDefault();
+            event.currentTarget.setPointerCapture(event.pointerId);
+            updateCursor(event.clientX, event.clientY);
             pushHistory();
             drawingRef.current = true;
-            lastPointRef.current = getPoint(event);
-            drawAt(event);
-          }}
-          onMouseMove={(event) => {
-            updateCursor(event);
-            drawAt(event);
-          }}
-          onMouseEnter={(event) => updateCursor(event)}
-          onMouseUp={() => {
-            drawingRef.current = false;
+            drawingPointerRef.current = event.pointerId;
             lastPointRef.current = null;
-            exportMask();
+            drawSamples([event.nativeEvent]);
           }}
-          onMouseLeave={() => {
-            if (drawingRef.current) exportMask();
-            drawingRef.current = false;
-            lastPointRef.current = null;
+          onPointerMove={(event) => {
+            if (panPointerRef.current === event.pointerId && panningRef.current) {
+              const start = panStartRef.current;
+              setStagePan({
+                x: start.x + event.clientX - start.clientX,
+                y: start.y + event.clientY - start.clientY,
+              });
+              return;
+            }
+            updateCursor(event.clientX, event.clientY);
+            if (drawingPointerRef.current !== event.pointerId) return;
+            const native = event.nativeEvent;
+            drawSamples(native.getCoalescedEvents?.() ?? [native]);
+          }}
+          onPointerEnter={(event) => updateCursor(event.clientX, event.clientY)}
+          onPointerUp={(event) => finishPointer(event)}
+          onPointerCancel={(event) => finishPointer(event, true)}
+          onPointerLeave={() => {
             setCursor((current) => ({ ...current, visible: false }));
           }}
         />
@@ -428,7 +685,8 @@ export function InpaintCanvas() {
             top: cursor.y,
             width: cursor.size,
             height: cursor.size,
-            opacity: cursor.visible && !showExportPreview ? 1 : 0,
+            borderRadius: brushShape === "round" ? "999px" : "3px",
+            opacity: cursor.visible && !showExportPreview && !spaceHeld && !isPanning ? 1 : 0,
           }}
         />
       </div>

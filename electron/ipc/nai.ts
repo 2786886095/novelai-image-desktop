@@ -6,7 +6,7 @@ import { PNG } from "pngjs";
 import crypto from "crypto";
 import fs from "fs/promises";
 import path from "path";
-import { pathToFileURL } from "url";
+import { toLocalMediaUrl } from "./local-media-protocol";
 import {
   DEFAULT_PARAMS,
   isNAIV4PlusModel,
@@ -347,7 +347,11 @@ function isInpaintModelCompatibilityError(error: any): boolean {
   );
 }
 
-function qualityTags(model: string) {
+function qualityTags(model: string, preset: GenerateParams["qualityPreset"] = "standard") {
+  if (preset === "none") return "";
+  if (preset === "light" && isNAIV5Model(model)) {
+    return "very aesthetic, amazing quality, no text";
+  }
   switch (normalizeModel(model)) {
     case "nai-diffusion-5-full":
     case "nai-diffusion-5-curated":
@@ -355,11 +359,11 @@ function qualityTags(model: string) {
     case "nai-diffusion-4-5-full":
       return "very aesthetic, masterpiece, no text";
     case "nai-diffusion-4-5-curated":
-      return "masterpiece, no text, -0.8::feet::, rating:general";
+      return "very aesthetic, masterpiece, no text, -0.8::feet::, rating:general";
     case "nai-diffusion-4-full":
       return "no text, best quality, very aesthetic, absurdres";
     case "nai-diffusion-4-curated":
-      return "rating:general, amazing quality, very aesthetic, absurdres";
+      return "rating:general, best quality, very aesthetic, absurdres";
     case "nai-diffusion-3":
       return "best quality, amazing quality, very aesthetic, absurdres";
     default:
@@ -508,9 +512,12 @@ export function buildPayload(
     !/(?:^|,\s*)fur dataset(?:\s*,|$)/i.test(basePrompt)
       ? mergePrompt("fur dataset", basePrompt)
       : basePrompt;
-  const effectivePrompt = params.qualityToggle
-    ? mergePrompt(modePrompt, qualityTags(params.model))
-    : modePrompt;
+  const qualityPreset = params.qualityPreset ?? (params.qualityToggle ? "standard" : "none");
+  const transparentBackground = isNAIV5Model(params.model) && params.transparentBackground;
+  const qualityPrompt = mergePrompt(modePrompt, qualityTags(params.model, qualityPreset));
+  const effectivePrompt = transparentBackground
+    ? mergePrompt(qualityPrompt, "transparent background")
+    : qualityPrompt;
   const effectiveNegative = mergePrompt(
     params.negativePrompt,
     ucPresetText(params.model, params.ucPreset),
@@ -554,9 +561,16 @@ export function buildPayload(
     legacy_v3_extend: false,
     dynamic_thresholding: v5 ? false : params.cfgRescale > 0,
     skip_cfg_above_sigma: null,
-    qualityToggle: params.qualityToggle,
-    quality_toggle: params.qualityToggle,
+    qualityPresetId: qualityPreset,
+    qualityToggle: qualityPreset !== "none",
+    quality_toggle: qualityPreset !== "none",
+    tag_hint_qt: qualityPreset === "standard" ? 1 : qualityPreset === "light" ? 3 : 0,
   };
+
+  if (v5) {
+    parameters.tag_hint_transparent_background = transparentBackground;
+    parameters.straight_alpha = transparentBackground;
+  }
 
   // "Variety+" is implemented by skipping CFG above a sigma threshold — NovelAI
   // has no boolean `variety` field, so the previous `variety: true` was a no-op.
@@ -977,15 +991,23 @@ function stripBase64Prefix(value: string) {
 }
 
 const INPAINT_SIZE_MULTIPLE = 64;
+const INPAINT_MASK_GRID_SIZE = 8;
+const INPAINT_BLEND_DILATE_CELLS = 4;
+const INPAINT_BLEND_BLUR_RADIUS = 20;
+const INPAINT_BLEND_BLUR_PASSES = 2;
 
-interface PreparedInpaintAssets {
+export interface PreparedInpaintAssets {
   imageBase64: string;
   maskBase64: string;
   width: number;
   height: number;
   originalWidth: number;
   originalHeight: number;
-  padded: boolean;
+  resized: boolean;
+  /** Normalized source resized to the request dimensions, as in NovelAI's editor. */
+  sourcePng: Buffer;
+  /** Official-client-style feathered mask, one alpha byte per request pixel. */
+  blendAlpha: Uint8Array;
 }
 
 interface PreparedLimitedImage {
@@ -1014,6 +1036,14 @@ function fitWithinPixels(width: number, height: number, maxPixels: number) {
 }
 
 function bufferToPng(buffer: Buffer) {
+  if (
+    buffer.length >= 8 &&
+    buffer
+      .subarray(0, 8)
+      .equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+  ) {
+    return buffer;
+  }
   const image = nativeImage.createFromBuffer(buffer);
   if (image.isEmpty())
     throw new Error("无法解码原图，请换用 PNG/JPG/WebP 图片。");
@@ -1072,65 +1102,218 @@ function prepareLimitedImage(
 }
 
 function resizeImageBufferToPng(buffer: Buffer, width: number, height: number) {
-  const image = nativeImage.createFromBuffer(buffer);
-  if (image.isEmpty()) return buffer;
-  return image.resize({ width, height, quality: "best" }).toPNG();
+  if (nativeImage?.createFromBuffer) {
+    const image = nativeImage.createFromBuffer(buffer);
+    if (!image.isEmpty()) {
+      return image.resize({ width, height, quality: "best" }).toPNG();
+    }
+  }
+  // Vitest and a few headless Electron contexts do not expose nativeImage.
+  // Keep the official resize behavior available instead of falling back to
+  // edge padding; the 64-alignment resize is normally only a few percent.
+  const source = PNG.sync.read(bufferToPng(buffer));
+  if (source.width === width && source.height === height) return PNG.sync.write(source);
+  const target = new PNG({ width, height });
+  for (let y = 0; y < height; y += 1) {
+    const sourceY = Math.max(
+      0,
+      Math.min(source.height - 1, ((y + 0.5) * source.height) / height - 0.5),
+    );
+    const y0 = Math.floor(sourceY);
+    const y1 = Math.min(source.height - 1, y0 + 1);
+    const fy = sourceY - y0;
+    for (let x = 0; x < width; x += 1) {
+      const sourceX = Math.max(
+        0,
+        Math.min(source.width - 1, ((x + 0.5) * source.width) / width - 0.5),
+      );
+      const x0 = Math.floor(sourceX);
+      const x1 = Math.min(source.width - 1, x0 + 1);
+      const fx = sourceX - x0;
+      const dst = (y * width + x) * 4;
+      for (let channel = 0; channel < 4; channel += 1) {
+        const top =
+          source.data[(y0 * source.width + x0) * 4 + channel] * (1 - fx) +
+          source.data[(y0 * source.width + x1) * 4 + channel] * fx;
+        const bottom =
+          source.data[(y1 * source.width + x0) * 4 + channel] * (1 - fx) +
+          source.data[(y1 * source.width + x1) * 4 + channel] * fx;
+        target.data[dst + channel] = Math.round(top * (1 - fy) + bottom * fy);
+      }
+    }
+  }
+  return PNG.sync.write(target);
 }
 
-function padPngWithEdge(
-  source: PNG,
+function prepareLatentInpaintMask(
+  mask: PNG,
   targetWidth: number,
   targetHeight: number,
 ) {
-  const target = new PNG({ width: targetWidth, height: targetHeight });
+  const width = targetWidth / INPAINT_MASK_GRID_SIZE;
+  const height = targetHeight / INPAINT_MASK_GRID_SIZE;
+  const selected = new Uint8Array(width * height);
+  let any = false;
+  // New editor masks encode selection in alpha. Keep a brightness fallback for
+  // masks exported by older Langbai builds, where every pixel was opaque.
+  let usesAlpha = false;
+  for (let index = 3; index < mask.data.length; index += 4) {
+    if (mask.data[index] !== 255) {
+      usesAlpha = true;
+      break;
+    }
+  }
+
+  for (let cellY = 0; cellY < height; cellY += 1) {
+    for (let cellX = 0; cellX < width; cellX += 1) {
+      // The official client first resizes to the 1/8 latent grid with nearest
+      // sampling, then thresholds alpha at 155. Sampling one source pixel per
+      // destination cell avoids the over-wide "any painted pixel in 8x8" mask.
+      const sourceX = Math.min(
+        mask.width - 1,
+        Math.floor(((cellX + 0.5) * mask.width) / width),
+      );
+      const sourceY = Math.min(
+        mask.height - 1,
+        Math.floor(((cellY + 0.5) * mask.height) / height),
+      );
+      const sourceIndex = (sourceY * mask.width + sourceX) * 4;
+      const alpha = mask.data[sourceIndex + 3];
+      const brightest = Math.max(
+        mask.data[sourceIndex],
+        mask.data[sourceIndex + 1],
+        mask.data[sourceIndex + 2],
+      );
+      const active = usesAlpha ? alpha > 155 : alpha > 0 && brightest > 155;
+
+      const latentIndex = cellY * width + cellX;
+      selected[latentIndex] = active ? 1 : 0;
+      any ||= active;
+    }
+  }
+
+  if (!any) throw new Error("蒙版为空，请先涂抹需要重绘的区域。");
+  // The official editor quantizes on a 1/8-resolution canvas, but its request
+  // pipeline expands that binary grid back to the requested image dimensions
+  // with nearest-neighbour sampling before upload. Sending the tiny latent PNG
+  // itself makes the API reinterpret/resize the mask and can severely degrade
+  // the inpainted region (large flat blobs, text, or unrelated content).
+  const requestMask = new PNG({ width: targetWidth, height: targetHeight });
   for (let y = 0; y < targetHeight; y += 1) {
-    const sy = Math.min(source.height - 1, y);
+    const cellY = Math.min(height - 1, Math.floor(y / INPAINT_MASK_GRID_SIZE));
     for (let x = 0; x < targetWidth; x += 1) {
-      const sx = Math.min(source.width - 1, x);
-      const src = (sy * source.width + sx) * 4;
-      const dst = (y * targetWidth + x) * 4;
-      target.data[dst] = source.data[src];
-      target.data[dst + 1] = source.data[src + 1];
-      target.data[dst + 2] = source.data[src + 2];
-      target.data[dst + 3] = source.data[src + 3];
+      const cellX = Math.min(width - 1, Math.floor(x / INPAINT_MASK_GRID_SIZE));
+      const value = selected[cellY * width + cellX] ? 255 : 0;
+      const rgbaIndex = (y * targetWidth + x) * 4;
+      requestMask.data[rgbaIndex] = value;
+      requestMask.data[rgbaIndex + 1] = value;
+      requestMask.data[rgbaIndex + 2] = value;
+      requestMask.data[rgbaIndex + 3] = 255;
     }
   }
-  return PNG.sync.write(target);
+  return { png: PNG.sync.write(requestMask), selected, width, height };
 }
 
-function padMaskPng(mask: PNG, targetWidth: number, targetHeight: number) {
-  const target = new PNG({ width: targetWidth, height: targetHeight });
-  for (let i = 0; i < target.data.length; i += 4) {
-    target.data[i] = 0;
-    target.data[i + 1] = 0;
-    target.data[i + 2] = 0;
-    target.data[i + 3] = 255;
+function dilateLatentMask(
+  source: Uint8Array,
+  width: number,
+  height: number,
+  radius: number,
+) {
+  const output = new Uint8Array(source.length);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      let active = false;
+      for (let dy = -radius; dy <= radius && !active; dy += 1) {
+        const sy = y + dy;
+        if (sy < 0 || sy >= height) continue;
+        for (let dx = -radius; dx <= radius; dx += 1) {
+          const sx = x + dx;
+          if (sx >= 0 && sx < width && source[sy * width + sx] !== 0) {
+            active = true;
+            break;
+          }
+        }
+      }
+      output[y * width + x] = active ? 1 : 0;
+    }
   }
-  const copyWidth = Math.min(mask.width, targetWidth);
-  const copyHeight = Math.min(mask.height, targetHeight);
-  for (let y = 0; y < copyHeight; y += 1) {
-    const srcStart = y * mask.width * 4;
-    const dstStart = y * targetWidth * 4;
-    mask.data.copy(target.data, dstStart, srcStart, srcStart + copyWidth * 4);
-  }
-  return PNG.sync.write(target);
+  return output;
 }
 
-function cropPngTopLeft(buffer: Buffer, width: number, height: number) {
-  try {
-    const source = PNG.sync.read(buffer);
-    if (source.width === width && source.height === height) return buffer;
-    if (source.width < width || source.height < height) return buffer;
-    const target = new PNG({ width, height });
+function officialBoxBlurAlpha(
+  source: Uint8Array,
+  width: number,
+  height: number,
+  radius: number,
+) {
+  const horizontal = new Int32Array(source.length);
+  const output = new Uint8Array(source.length);
+
+  for (let y = 0; y < height; y += 1) {
+    const row = y * width;
+    let sum = source[row] * radius;
+    for (let x = 0; x <= radius && x < width; x += 1) sum += source[row + x];
+    for (let x = 0; x < width; x += 1) {
+      horizontal[row + x] = sum;
+      const removeX = Math.max(0, x - radius);
+      const addX = Math.min(width - 1, x + radius + 1);
+      sum -= source[row + removeX];
+      sum += source[row + addX];
+    }
+  }
+
+  for (let x = 0; x < width; x += 1) {
+    let sum = horizontal[x] * radius;
+    for (let y = 0; y <= radius && y < height; y += 1) {
+      sum += horizontal[y * width + x];
+    }
     for (let y = 0; y < height; y += 1) {
-      const srcStart = y * source.width * 4;
-      const dstStart = y * width * 4;
-      source.data.copy(target.data, dstStart, srcStart, srcStart + width * 4);
+      // NovelAI's worker uses the integer approximation 39 / 65536 for the
+      // 41x41 (radius 20) box average. Preserve that result byte-for-byte.
+      output[y * width + x] = Math.max(
+        0,
+        Math.min(255, (sum * 39) >> 16),
+      );
+      const removeY = Math.max(0, y - radius);
+      const addY = Math.min(height - 1, y + radius + 1);
+      sum -= horizontal[removeY * width + x];
+      sum += horizontal[addY * width + x];
     }
-    return PNG.sync.write(target);
-  } catch {
-    return buffer;
   }
+  return output;
+}
+
+function buildInpaintBlendAlpha(
+  latentMask: Uint8Array,
+  latentWidth: number,
+  latentHeight: number,
+  width: number,
+  height: number,
+) {
+  const dilated = dilateLatentMask(
+    latentMask,
+    latentWidth,
+    latentHeight,
+    INPAINT_BLEND_DILATE_CELLS,
+  );
+  let alpha = new Uint8Array(width * height);
+  for (let y = 0; y < height; y += 1) {
+    const cellY = Math.min(latentHeight - 1, Math.floor(y / INPAINT_MASK_GRID_SIZE));
+    for (let x = 0; x < width; x += 1) {
+      const cellX = Math.min(latentWidth - 1, Math.floor(x / INPAINT_MASK_GRID_SIZE));
+      alpha[y * width + x] = dilated[cellY * latentWidth + cellX] ? 255 : 0;
+    }
+  }
+  for (let pass = 0; pass < INPAINT_BLEND_BLUR_PASSES; pass += 1) {
+    alpha = officialBoxBlurAlpha(
+      alpha,
+      width,
+      height,
+      INPAINT_BLEND_BLUR_RADIUS,
+    );
+  }
+  return alpha;
 }
 
 function extractOfficialAnlasPrice(data: unknown): number | undefined {
@@ -1290,7 +1473,7 @@ export async function quoteAnlasCost(
   };
 }
 
-function prepareInpaintAssets(
+export function prepareInpaintAssets(
   imageBuffer: Buffer,
   maskBase64: string,
 ): PreparedInpaintAssets {
@@ -1307,39 +1490,103 @@ function prepareInpaintAssets(
   const maskPng = PNG.sync.read(
     Buffer.from(stripBase64Prefix(maskBase64), "base64"),
   );
-  const padded =
-    width !== originalWidth ||
-    height !== originalHeight ||
-    maskPng.width !== width ||
-    maskPng.height !== height;
-  if (!padded) {
-    return {
-      imageBase64: imageBuffer.toString("base64"),
-      maskBase64: stripBase64Prefix(maskBase64),
-      width,
-      height,
-      originalWidth,
-      originalHeight,
-      padded: false,
-    };
-  }
-
+  const resized = width !== originalWidth || height !== originalHeight;
+  const normalizedSource = resized
+    ? resizeImageBufferToPng(PNG.sync.write(sourcePng), width, height)
+    : PNG.sync.write(sourcePng);
+  // Match the official two-stage mask path: quantize to the model's 1/8 grid,
+  // then upload a full-size nearest-neighbour expansion of that binary grid.
+  // A separately grown and feathered copy is used for local compositing.
+  const latentMask = prepareLatentInpaintMask(maskPng, width, height);
   return {
-    imageBase64: padPngWithEdge(sourcePng, width, height).toString("base64"),
-    maskBase64: padMaskPng(maskPng, width, height).toString("base64"),
+    imageBase64: normalizedSource.toString("base64"),
+    maskBase64: latentMask.png.toString("base64"),
     width,
     height,
     originalWidth,
     originalHeight,
-    padded: true,
+    resized,
+    sourcePng: normalizedSource,
+    blendAlpha: buildInpaintBlendAlpha(
+      latentMask.selected,
+      latentMask.width,
+      latentMask.height,
+      width,
+      height,
+    ),
   };
 }
 
-function cropInpaintBuffers(buffers: Buffer[], assets: PreparedInpaintAssets) {
-  if (!assets.padded) return buffers;
-  return buffers.map((buffer) =>
-    cropPngTopLeft(buffer, assets.originalWidth, assets.originalHeight),
+export function compositeInpaintBuffers(
+  buffers: Buffer[],
+  assets: PreparedInpaintAssets,
+) {
+  const source = PNG.sync.read(assets.sourcePng);
+  return buffers.map((buffer) => {
+    let generatedBuffer = buffer;
+    let generated = PNG.sync.read(bufferToPng(generatedBuffer));
+    if (generated.width !== assets.width || generated.height !== assets.height) {
+      generatedBuffer = resizeImageBufferToPng(
+        generatedBuffer,
+        assets.width,
+        assets.height,
+      );
+      generated = PNG.sync.read(generatedBuffer);
+    }
+
+    const composited = new PNG({ width: assets.width, height: assets.height });
+    for (let pixel = 0; pixel < assets.width * assets.height; pixel += 1) {
+      const alpha = assets.blendAlpha[pixel] / 255;
+      const rgba = pixel * 4;
+      for (let channel = 0; channel < 4; channel += 1) {
+        composited.data[rgba + channel] = Math.round(
+          generated.data[rgba + channel] * alpha +
+            source.data[rgba + channel] * (1 - alpha),
+        );
+      }
+    }
+
+    // The official editor keeps the 64-aligned request dimensions instead of
+    // cropping back to the imported file. Restore NovelAI's prompt/seed chunks
+    // after local compositing re-encodes the pixels.
+    return copyPngMetadataChunks(buffer, PNG.sync.write(composited));
+  });
+}
+
+/** Apply the current official frontend's infill transport fields. */
+export function applyOfficialInpaintParameters(
+  parameters: Record<string, unknown>,
+  assets: PreparedInpaintAssets,
+  strength: number,
+  noise: number,
+  seed: number,
+) {
+  const normalizedStrength = Math.max(
+    0,
+    Math.min(1, Number.isFinite(strength) ? strength : 1),
   );
+  const normalizedNoise = Math.max(
+    0,
+    Math.min(0.99, Number.isFinite(noise) ? noise : 0),
+  );
+  parameters.image = assets.imageBase64;
+  parameters.mask = assets.maskBase64;
+  parameters.add_original_image = false;
+  parameters.inpaintImg2ImgStrength = normalizedStrength;
+  // The official payload retains the generic img2img default even for infill;
+  // inpaintImg2ImgStrength/nested img2img control the editor's strength UI.
+  parameters.strength = 0.7;
+  if (normalizedStrength !== 1) {
+    parameters.img2img = {
+      strength: normalizedStrength,
+      color_correct: true,
+    };
+  } else {
+    delete parameters.img2img;
+  }
+  parameters.noise = normalizedNoise;
+  parameters.extra_noise_seed = Math.max(0, Math.round(seed) - 1);
+  return parameters;
 }
 
 function annotateInpaintError(
@@ -1347,10 +1594,10 @@ function annotateInpaintError(
   assets: PreparedInpaintAssets,
   model: string,
 ) {
-  if (!assets.padded || error?.response?.status !== 500) return;
+  if (!assets.resized || error?.response?.status !== 500) return;
   const message =
-    `重绘失败（HTTP 500）：程序已自动将原图 ${assets.originalWidth}×${assets.originalHeight} ` +
-    `补边到 ${assets.width}×${assets.height} 后发送，但 NovelAI 重绘接口仍返回内部错误。` +
+    `重绘失败（HTTP 500）：程序已按官网规则将原图 ${assets.originalWidth}×${assets.originalHeight} ` +
+    `自适应到 ${assets.width}×${assets.height} 后发送，但 NovelAI 重绘接口仍返回内部错误。` +
     `请尝试重新加载原图、重画蒙版、缩小重绘区域，或稍后再试。模型：${model}。`;
   if (error.response) error.response.data = message;
   error.langbaiMessage = message;
@@ -1430,7 +1677,7 @@ async function readWorkbenchImage(): Promise<{
     buffer,
     image: {
       filePath: workbenchImagePath,
-      fileUrl: pathToFileURL(workbenchImagePath).toString(),
+      fileUrl: toLocalMediaUrl(workbenchImagePath),
       width: dims.width,
       height: dims.height,
     },
@@ -1532,6 +1779,51 @@ const PNG_SIGNATURE = Buffer.from([
 const PNG_METADATA_CHUNKS = new Set(["tEXt", "iTXt", "zTXt", "eXIf"]);
 
 /**
+ * Copy already checksummed metadata chunks from one PNG into another without
+ * touching either image's pixel stream. This is used after local inpaint
+ * compositing, which necessarily re-encodes pixels through pngjs.
+ */
+export function copyPngMetadataChunks(source: Buffer, target: Buffer): Buffer {
+  if (
+    source.length < 8 ||
+    target.length < 8 ||
+    !source.subarray(0, 8).equals(PNG_SIGNATURE) ||
+    !target.subarray(0, 8).equals(PNG_SIGNATURE)
+  ) {
+    return target;
+  }
+
+  const metadata: Buffer[] = [];
+  let sourceOffset = 8;
+  while (sourceOffset + 12 <= source.length) {
+    const length = source.readUInt32BE(sourceOffset);
+    const type = source.toString("ascii", sourceOffset + 4, sourceOffset + 8);
+    const end = sourceOffset + 12 + length;
+    if (end > source.length) break;
+    if (PNG_METADATA_CHUNKS.has(type)) metadata.push(source.subarray(sourceOffset, end));
+    sourceOffset = end;
+    if (type === "IEND") break;
+  }
+  if (metadata.length === 0) return target;
+
+  const cleanTarget = stripPngMetadata(target);
+  let insertAt = 8;
+  while (insertAt + 12 <= cleanTarget.length) {
+    const length = cleanTarget.readUInt32BE(insertAt);
+    const type = cleanTarget.toString("ascii", insertAt + 4, insertAt + 8);
+    if (type === "IDAT" || type === "IEND") break;
+    const end = insertAt + 12 + length;
+    if (end > cleanTarget.length) return target;
+    insertAt = end;
+  }
+  return Buffer.concat([
+    cleanTarget.subarray(0, insertAt),
+    ...metadata,
+    cleanTarget.subarray(insertAt),
+  ]);
+}
+
+/**
  * Remove embedded metadata (tEXt/iTXt/zTXt/eXIf — where NovelAI stores the
  * prompt / seed / parameters JSON) from a PNG WITHOUT re-encoding the pixels, so
  * it stays lossless. Non-PNG buffers are returned untouched.
@@ -1614,7 +1906,7 @@ async function saveBuffers(
     items.push({
       id,
       filePath,
-      fileUrl: pathToFileURL(filePath).toString(),
+      fileUrl: toLocalMediaUrl(filePath),
       date,
       createdAt: now.toISOString(),
       params: { ...params, seed: actualSeed },
@@ -1860,7 +2152,7 @@ export async function loadImageFile(): Promise<LoadImageResult> {
       ok: true,
       image: {
         filePath,
-        fileUrl: pathToFileURL(filePath).toString(),
+        fileUrl: toLocalMediaUrl(filePath),
         width: dims.width,
         height: dims.height,
       },
@@ -3577,7 +3869,7 @@ export async function importTagComicReference(
         id,
         name: path.basename(sourcePath),
         filePath,
-        fileUrl: pathToFileURL(filePath).toString(),
+        fileUrl: toLocalMediaUrl(filePath),
         type: "character",
         strength: 1,
         fidelity: 1,
@@ -3672,7 +3964,7 @@ export async function promoteArtistLabFavorite(rawItem: HistoryItem): Promise<Hi
   const promoted: HistoryItem = {
     ...rawItem,
     filePath: destination,
-    fileUrl: pathToFileURL(destination).toString(),
+    fileUrl: toLocalMediaUrl(destination),
     feature: "artist-lab",
     groupId: group.id,
   };
@@ -4023,7 +4315,7 @@ export async function loadImageFromPath(
       ok: true,
       image: {
         filePath,
-        fileUrl: pathToFileURL(filePath).toString(),
+        fileUrl: toLocalMediaUrl(filePath),
         width: dims.width,
         height: dims.height,
       },
@@ -4312,7 +4604,7 @@ export async function inpaintImage(
   params: GenerateParams,
   inpaintModel: NAIInpaintModel,
   maskBase64: string,
-  strength = 0.55,
+  strength = 1,
   noise = 0,
 ): Promise<GenerateResult> {
   params = normalizeGenerateParams(params);
@@ -4336,7 +4628,7 @@ export async function inpaintImage(
         : crypto.randomInt(1, 2_147_483_647);
     const normalizedStrength = Math.max(
       0,
-      Math.min(1, Number.isFinite(strength) ? strength : 0.55),
+      Math.min(1, Number.isFinite(strength) ? strength : 1),
     );
     const normalizedNoise = Math.max(
       0,
@@ -4351,21 +4643,18 @@ export async function inpaintImage(
       };
       const historyParams: GenerateParams = {
         ...params,
-        width: preparedAssets.originalWidth,
-        height: preparedAssets.originalHeight,
+        width: preparedAssets.width,
+        height: preparedAssets.height,
       };
       const payload = buildPayload(inpaintParams, actualSeed);
       payload.action = "infill";
-      payload.parameters.image = preparedAssets.imageBase64;
-      payload.parameters.mask = preparedAssets.maskBase64;
-      // Known-good v0.9.3 infill structure. The unofficial-SDK variant
-      // (add_original_image=false + nested img2img + inpaintImg2ImgStrength +
-      // noise=0) regressed real inpainting, so we keep the standard infill payload:
-      // composite the original back outside the mask, honor the user's strength/noise.
-      payload.parameters.add_original_image = true;
-      payload.parameters.strength = normalizedStrength;
-      payload.parameters.noise = normalizedNoise;
-      payload.parameters.extra_noise_seed = crypto.randomInt(1, 2_147_483_647);
+      applyOfficialInpaintParameters(
+        payload.parameters,
+        preparedAssets,
+        normalizedStrength,
+        normalizedNoise,
+        actualSeed,
+      );
       return { payload, historyParams, model };
     };
 
@@ -4397,7 +4686,7 @@ export async function inpaintImage(
       throw lastError ?? new Error("重绘请求未返回结果。");
     if (buffers.length === 0)
       return { ok: false, message: "重绘成功但无图片返回。", items: [] };
-    const outputBuffers = cropInpaintBuffers(buffers, preparedAssets);
+    const outputBuffers = compositeInpaintBuffers(buffers, preparedAssets);
     const items = await saveBuffers(
       outputBuffers,
       chosen.historyParams,
@@ -4406,12 +4695,12 @@ export async function inpaintImage(
       chosen.model,
     );
     void refreshStoredAccount();
-    const paddedNote = preparedAssets.padded
-      ? `已自动补边 ${preparedAssets.originalWidth}×${preparedAssets.originalHeight} → ${preparedAssets.width}×${preparedAssets.height}，并裁回原尺寸。`
+    const resizedNote = preparedAssets.resized
+      ? `已按官网规则自适应尺寸 ${preparedAssets.originalWidth}×${preparedAssets.originalHeight} → ${preparedAssets.width}×${preparedAssets.height}。`
       : "";
     return {
       ok: true,
-      message: `重绘完成，已保存 ${items.length} 张图片。${paddedNote}`,
+      message: `重绘完成，已保存 ${items.length} 张图片。${resizedNote}`,
       items,
       actualSeed,
     };
@@ -4516,7 +4805,7 @@ export async function upscaleImg(
     const item: HistoryItem = {
       id: crypto.randomUUID(),
       filePath,
-      fileUrl: pathToFileURL(filePath).toString(),
+      fileUrl: toLocalMediaUrl(filePath),
       date,
       createdAt: now.toISOString(),
       params: {

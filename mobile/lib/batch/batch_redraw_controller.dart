@@ -343,6 +343,17 @@ class BatchRedrawController extends ChangeNotifier {
       final params = sourceParams.copy()
         ..positivePrompt = _merge(globalStyle, item.prompt)
         ..negativePrompt = globalNegative;
+      if (project.sizeMode == 'adaptive') {
+        final outputSize = adaptiveNaiImageSize(
+          item.width,
+          item.height,
+          fallbackWidth: params.width,
+          fallbackHeight: params.height,
+        );
+        params
+          ..width = outputSize.$1
+          ..height = outputSize.$2;
+      }
       return _BatchRedrawQueueJob(
         item: item,
         params: params,

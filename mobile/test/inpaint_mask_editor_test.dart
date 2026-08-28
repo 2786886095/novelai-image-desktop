@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:novelai_mobile/inpaint/inpaint_mask.dart';
 import 'package:novelai_mobile/models/nai_models.dart';
 import 'package:novelai_mobile/screens/inpaint_mask_editor.dart';
 
@@ -115,13 +116,20 @@ void main() {
     addTearDown(result.dispose);
     await tester.pumpWidget(MaterialApp(home: _EditorLauncher(result)));
     await tester.tap(find.byKey(const ValueKey('launch-mask-editor')));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pumpAndSettle();
 
     final canvas = find.byKey(const ValueKey('inpaint-mask-canvas'));
     final rect = tester.getRect(canvas);
+    await tester.enterText(
+      find.byKey(const ValueKey('inpaint-brush-size-input')),
+      '4',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
     await tester.dragFrom(
         rect.center - const Offset(50, 0), const Offset(60, 0));
+    await tester.pump();
+    await tester.tap(find.text('方形'));
     await tester.pump();
     await tester.tap(find.text('橡皮'));
     await tester.pump();
@@ -135,6 +143,10 @@ void main() {
     expect(result.value!.strokes, hasLength(2));
     expect(result.value!.strokes.first.erase, isFalse);
     expect(result.value!.strokes.last.erase, isTrue);
+    expect(result.value!.strokes.first.shape, InpaintBrushShape.round);
+    expect(result.value!.strokes.last.shape, InpaintBrushShape.square);
+    expect(result.value!.brush, 4);
+    expect(result.value!.brushShape, InpaintBrushShape.square);
     expect(tester.takeException(), isNull);
   });
 

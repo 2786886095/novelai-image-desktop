@@ -93,10 +93,14 @@ describe("desktop UI consistency guards", () => {
     expect(source).toContain('const RANDOM_SIZE_PRESETS = [');
     expect(source).toContain('className="random-size-presets"');
     expect(source).toContain('aria-pressed={active}');
-    expect(source).toContain('artistMinCount: 3, artistMaxCount: 7');
-    expect(source).toContain('artistWeightMin: 0.3, artistWeightMax: 2');
-    expect(source).toContain('franchiseMinCount: 0, franchiseMaxCount: 2');
-    expect(source).toContain('franchiseWeightMin: 0.5, franchiseWeightMax: 1.5');
+    expect(source).toContain('artistMinCount: 3,');
+    expect(source).toContain('artistMaxCount: 7,');
+    expect(source).toContain('artistWeightMin: 0.2,');
+    expect(source).toContain('artistWeightMax: 1.2,');
+    expect(source).toContain('franchiseMinCount: 0,');
+    expect(source).toContain('franchiseMaxCount: 2,');
+    expect(source).toContain('franchiseWeightMin: 0.15,');
+    expect(source).toContain('franchiseWeightMax: 0.8,');
     expect(source).toContain('const pairSeeds = new Map<string, number>()');
     expect(source).toContain('session.seedMode === "fixed" ? session.seed : freshNaiSeed()');
     expect(source).toContain('ready: "当前候选库共 {count} 名画师"');

@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type InputHTMLAttributes } from "react";
 import { AppPortal, Button, SelectMenu } from "./components/ui";
 import { Icon } from "./components/icons";
+import { QualityPresetControl } from "./components/QualityPresetControl";
 import {
   expandArtistRecipeComparisons,
   formatArtistCardTags,
@@ -26,6 +27,14 @@ import {
   type GenerateParams,
   type HistoryItem,
 } from "./types";
+import {
+  fitNAIImageSize,
+  maxNAIDimensionFor,
+  snapNAIDimensionWithinArea,
+} from "./nai-dimensions";
+import {
+  RANDOM_ARTIST_SESSION_STORAGE_KEY,
+} from "./artist-favorite-library";
 
 type RandomResult = ArtistRecipeComparison & {
   sequence: number;
@@ -69,9 +78,30 @@ type RandomSession = {
   favorites: RandomResult[];
 };
 
-const STORAGE_KEY = "langbai.artist-lab.random.v5";
-const LEGACY_STORAGE_KEY = "langbai.artist-lab.random.v4";
+const STORAGE_KEY = RANDOM_ARTIST_SESSION_STORAGE_KEY;
+const LEGACY_STORAGE_KEYS = [
+  "langbai.artist-lab.random.v5",
+  "langbai.artist-lab.random.v4",
+] as const;
+const RANDOM_V5_DEFAULTS = {
+  artistMinCount: 3,
+  artistMaxCount: 7,
+  artistWeightMin: 0.2,
+  artistWeightMax: 1.2,
+  franchiseMinCount: 0,
+  franchiseMaxCount: 2,
+  franchiseWeightMin: 0.15,
+  franchiseWeightMax: 0.8,
+} as const;
 let sessionCache: RandomSession | null = null;
+
+const RANDOM_RESET_TEXT = {
+  "zh-CN": { label: "恢复抽卡默认", hint: "V5 默认：画师 0.2～1.2；系列风格 0.15～0.8。", done: "已恢复 V5 抽卡默认；提示词、收藏与生成参数未清除。" },
+  "zh-TW": { label: "恢復抽卡預設", hint: "V5 預設：畫師 0.2～1.2；系列風格 0.15～0.8。", done: "已恢復 V5 抽卡預設；提示詞、收藏與生成參數未清除。" },
+  "en-US": { label: "Restore draw defaults", hint: "V5 defaults: artists 0.2–1.2; franchises 0.15–0.8.", done: "V5 draw defaults restored; prompts, favorites, and generation settings were kept." },
+  "ja-JP": { label: "抽選設定を初期化", hint: "V5 初期値：画家 0.2～1.2、作品風格 0.15～0.8。", done: "V5 初期値へ戻しました。プロンプト・お気に入り・生成設定は維持されます。" },
+  "ko-KR": { label: "뽑기 기본값 복원", hint: "V5 기본값: 작가 0.2～1.2, 작품 화풍 0.15～0.8.", done: "V5 기본값을 복원했습니다. 프롬프트·즐겨찾기·생성 설정은 유지됩니다." },
+} satisfies Record<AppLanguage, { label: string; hint: string; done: string }>;
 
 const RANDOM_SIZE_PRESETS = [
   { width: 832, height: 1216 },
@@ -290,10 +320,6 @@ function clampPoolSize(value: unknown): number {
   return Math.max(100, Math.min(5000, positiveInteger(value, 1000)));
 }
 
-function snapDimension(value: unknown): number {
-  return Math.max(64, Math.min(1600, Math.round(positiveInteger(value, 64) / 64) * 64));
-}
-
 type NumericDraftInputProps = Omit<InputHTMLAttributes<HTMLInputElement>, "value" | "onChange"> & {
   value: number;
   onCommit: (value: number) => void;
@@ -346,14 +372,19 @@ function normalizeGenerationParams(
   value: Partial<GenerateParams> | undefined,
   inherited: GenerateParams,
 ): GenerateParams {
+  const dimensions = fitNAIImageSize(
+    value?.width ?? inherited.width,
+    value?.height ?? inherited.height,
+    inherited,
+  );
   return {
     ...DEFAULT_PARAMS,
     ...inherited,
     ...(value ?? {}),
     positivePrompt: "",
     stylePrompt: "",
-    width: snapDimension(value?.width ?? inherited.width),
-    height: snapDimension(value?.height ?? inherited.height),
+    width: dimensions.width,
+    height: dimensions.height,
     steps: Math.max(1, Math.min(50, positiveInteger(value?.steps ?? inherited.steps, 28))),
     cfgScale: Math.max(1, Math.min(10, Number(value?.cfgScale ?? inherited.cfgScale) || 6)),
     cfgRescale: Math.max(0, Math.min(1, Number(value?.cfgRescale ?? inherited.cfgRescale) || 0)),
@@ -363,7 +394,10 @@ function normalizeGenerationParams(
 function restore(inherited: GenerateParams): RandomSession {
   if (sessionCache) return sessionCache;
   try {
-    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY) ?? "null") as (Partial<RandomSession> & { artistCount?: number }) | null;
+    const current = localStorage.getItem(STORAGE_KEY);
+    const legacy = LEGACY_STORAGE_KEYS.map((key) => localStorage.getItem(key)).find(Boolean) ?? null;
+    const migratingToV5Weights = current == null && legacy != null;
+    const raw = JSON.parse(current ?? legacy ?? "null") as (Partial<RandomSession> & { artistCount?: number }) | null;
     const legacyArtistCount = clampRecipeCount(raw?.artistCount, 5, 1);
     sessionCache = {
       basePrompt: typeof raw?.basePrompt === "string" ? raw.basePrompt : inherited.positivePrompt,
@@ -371,13 +405,13 @@ function restore(inherited: GenerateParams): RandomSession {
       count: positiveInteger(raw?.count, 8),
       artistMinCount: clampRecipeCount(raw?.artistMinCount, raw?.artistCount == null ? 3 : legacyArtistCount, 1),
       artistMaxCount: clampRecipeCount(raw?.artistMaxCount, raw?.artistCount == null ? 7 : legacyArtistCount, 1),
-      artistWeightMin: clampRecipeWeight(raw?.artistWeightMin, 0.3),
-      artistWeightMax: clampRecipeWeight(raw?.artistWeightMax, 2),
+      artistWeightMin: clampRecipeWeight(migratingToV5Weights ? undefined : raw?.artistWeightMin, RANDOM_V5_DEFAULTS.artistWeightMin),
+      artistWeightMax: clampRecipeWeight(migratingToV5Weights ? undefined : raw?.artistWeightMax, RANDOM_V5_DEFAULTS.artistWeightMax),
       includeFranchiseStyles: raw?.includeFranchiseStyles === true,
       franchiseMinCount: clampRecipeCount(raw?.franchiseMinCount, 0),
       franchiseMaxCount: clampRecipeCount(raw?.franchiseMaxCount, 2),
-      franchiseWeightMin: clampRecipeWeight(raw?.franchiseWeightMin, 0.5),
-      franchiseWeightMax: clampRecipeWeight(raw?.franchiseWeightMax, 1.5),
+      franchiseWeightMin: clampRecipeWeight(migratingToV5Weights ? undefined : raw?.franchiseWeightMin, RANDOM_V5_DEFAULTS.franchiseWeightMin),
+      franchiseWeightMax: clampRecipeWeight(migratingToV5Weights ? undefined : raw?.franchiseWeightMax, RANDOM_V5_DEFAULTS.franchiseWeightMax),
       poolSize: clampPoolSize(raw?.poolSize),
       seedMode: raw?.seedMode === "random" ? "random" : "fixed",
       seed: Math.min(2_147_483_647, Math.max(1, Math.floor(Number(raw?.seed) || 246813579))),
@@ -392,7 +426,7 @@ function restore(inherited: GenerateParams): RandomSession {
       favorites: Array.isArray(raw?.favorites) ? raw.favorites : [],
     };
   } catch {
-    sessionCache = { basePrompt: inherited.positivePrompt, auxiliaryPrompt: "", count: 8, artistMinCount: 3, artistMaxCount: 7, artistWeightMin: 0.3, artistWeightMax: 2, includeFranchiseStyles: false, franchiseMinCount: 0, franchiseMaxCount: 2, franchiseWeightMin: 0.5, franchiseWeightMax: 1.5, poolSize: 1000, seedMode: "fixed", seed: 246813579, drawSeed: freshSeed(), mutateAuxiliary: false, biasFavorites: false, weightTuneInput: "", weightTuneCount: 8, weightVariation: 20, generationParams: normalizeGenerationParams(undefined, DEFAULT_PARAMS), results: [], favorites: [] };
+    sessionCache = { basePrompt: inherited.positivePrompt, auxiliaryPrompt: "", count: 8, ...RANDOM_V5_DEFAULTS, includeFranchiseStyles: false, poolSize: 1000, seedMode: "fixed", seed: 246813579, drawSeed: freshSeed(), mutateAuxiliary: false, biasFavorites: false, weightTuneInput: "", weightTuneCount: 8, weightVariation: 20, generationParams: normalizeGenerationParams(undefined, DEFAULT_PARAMS), results: [], favorites: [] };
   }
   return sessionCache;
 }
@@ -407,6 +441,7 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
   const text = TEXT[language];
   const paramText = PARAM_TEXT[language];
   const tuneText = TUNE_TEXT[language];
+  const resetText = RANDOM_RESET_TEXT[language];
   const ucLabels = paramText.ucValues.split("|");
   const sizeLabels = paramText.sizeValues.split("|");
   const favoriteFolderLabel = {
@@ -434,14 +469,37 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
   const scrollRef = useRef<HTMLElement>(null);
   const scrollTopToRestoreRef = useRef<number | null>(null);
   const patch = (next: Partial<RandomSession>) => setSession((current) => ({ ...current, ...next }));
+  const restoreDrawDefaults = () => {
+    setSession((current) => ({
+      ...current,
+      ...RANDOM_V5_DEFAULTS,
+      count: 8,
+      includeFranchiseStyles: false,
+      mutateAuxiliary: false,
+      seedMode: "fixed",
+      seed: 246813579,
+      drawSeed: freshSeed(),
+    }));
+    setMessage(resetText.done);
+  };
   const patchGeneration = <K extends keyof GenerateParams>(
     key: K,
     value: GenerateParams[K],
   ) =>
-    setSession((current) => ({
-      ...current,
-      generationParams: { ...current.generationParams, [key]: value },
-    }));
+    setSession((current) => {
+      const generationParams = { ...current.generationParams, [key]: value };
+      if (key === "qualityToggle") {
+        generationParams.qualityPreset = value ? "standard" : "none";
+      }
+      if (key === "model" && !String(value).startsWith("nai-diffusion-5")) {
+        if (generationParams.qualityPreset === "light") {
+          generationParams.qualityPreset = "standard";
+        }
+        generationParams.transparentBackground = false;
+      }
+      generationParams.qualityToggle = generationParams.qualityPreset !== "none";
+      return { ...current, generationParams };
+    });
   const switchGallery = (favorites: boolean) => {
     setShowFavorites(favorites);
   };
@@ -743,14 +801,15 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
     <header className="artist-lab-hero"><div><h2>{text.title}</h2><p>{text.subtitle}</p></div><Button onClick={onBack}>{text.back}</Button></header>
     <section className="artist-lab-panel random-pool-summary"><div><h3>{text.pool}</h3><strong>{loading ? text.loading : interpolate(text.ready, { count: pool.length })}</strong><small>{text.hint}</small></div><div className="artist-pool-actions"><label><span>{text.poolSize}</span><NumericDraftInput min={100} max={5000} step={100} value={session.poolSize} normalize={clampPoolSize} onCommit={(poolSize) => patch({ poolSize })} /></label><Button onClick={() => void loadPool(false)} disabled={loading}>{text.load}</Button><Button onClick={() => void loadPool(true)} disabled={loading}>{text.refresh}</Button></div></section>
     <section className="artist-lab-panel random-artist-settings">
+      <div className="random-settings-reset wide"><small>{resetText.hint}</small><Button type="button" variant="ghost" onClick={restoreDrawDefaults}><Icon name="refresh" />{resetText.label}</Button></div>
       <label className="wide"><span>{text.base}</span><textarea value={session.basePrompt} onChange={(event) => patch({ basePrompt: event.target.value })} /></label>
       <label className="wide"><span>{text.auxiliary}</span><textarea value={session.auxiliaryPrompt} onChange={(event) => patch({ auxiliaryPrompt: event.target.value })} /></label>
       <label className="random-check wide"><input type="checkbox" checked={session.mutateAuxiliary} onChange={(event) => patch({ mutateAuxiliary: event.target.checked })} /><span><b>{text.mutate}</b><small>{text.mutateHint}</small></span></label>
       <label className="random-check wide"><input type="checkbox" checked={session.includeFranchiseStyles} onChange={(event) => patch({ includeFranchiseStyles: event.target.checked, drawSeed: freshSeed() })} /><span><b>{text.franchise}</b><small>{text.franchiseHint}</small></span></label>
       <label><span>{text.count}</span><NumericDraftInput min={1} step={1} value={session.count} normalize={(value) => positiveInteger(value, 1)} onCommit={(count) => patch({ count })} /><small>{text.unlimited}</small></label>
       <fieldset className="random-range-fields"><legend>{text.range}</legend><label><span>{text.min}</span><NumericDraftInput min={1} max={20} step={1} value={session.artistMinCount} normalize={(value) => clampRecipeCount(value, 3, 1)} onCommit={(artistMinCount) => patch({ artistMinCount, drawSeed: freshSeed() })} /></label><label><span>{text.max}</span><NumericDraftInput min={1} max={20} step={1} value={session.artistMaxCount} normalize={(value) => clampRecipeCount(value, 7, 1)} onCommit={(artistMaxCount) => patch({ artistMaxCount, drawSeed: freshSeed() })} /></label></fieldset>
-      <fieldset className="random-range-fields"><legend>{text.artistWeight}</legend><label><span>{text.min}</span><NumericDraftInput min={0.1} max={10} step={0.1} value={session.artistWeightMin} normalize={(value) => clampRecipeWeight(value, 0.3)} onCommit={(artistWeightMin) => patch({ artistWeightMin, drawSeed: freshSeed() })} /></label><label><span>{text.max}</span><NumericDraftInput min={0.1} max={10} step={0.1} value={session.artistWeightMax} normalize={(value) => clampRecipeWeight(value, 2)} onCommit={(artistWeightMax) => patch({ artistWeightMax, drawSeed: freshSeed() })} /></label></fieldset>
-      {session.includeFranchiseStyles && <><fieldset className="random-range-fields"><legend>{text.franchiseRange}</legend><label><span>{text.min}</span><NumericDraftInput min={0} max={20} step={1} value={session.franchiseMinCount} normalize={(value) => clampRecipeCount(value, 0)} onCommit={(franchiseMinCount) => patch({ franchiseMinCount, drawSeed: freshSeed() })} /></label><label><span>{text.max}</span><NumericDraftInput min={0} max={20} step={1} value={session.franchiseMaxCount} normalize={(value) => clampRecipeCount(value, 2)} onCommit={(franchiseMaxCount) => patch({ franchiseMaxCount, drawSeed: freshSeed() })} /></label></fieldset><fieldset className="random-range-fields"><legend>{text.franchiseWeight}</legend><label><span>{text.min}</span><NumericDraftInput min={0.1} max={10} step={0.1} value={session.franchiseWeightMin} normalize={(value) => clampRecipeWeight(value, 0.5)} onCommit={(franchiseWeightMin) => patch({ franchiseWeightMin, drawSeed: freshSeed() })} /></label><label><span>{text.max}</span><NumericDraftInput min={0.1} max={10} step={0.1} value={session.franchiseWeightMax} normalize={(value) => clampRecipeWeight(value, 1.5)} onCommit={(franchiseWeightMax) => patch({ franchiseWeightMax, drawSeed: freshSeed() })} /></label></fieldset></>}
+      <fieldset className="random-range-fields"><legend>{text.artistWeight}</legend><label><span>{text.min}</span><NumericDraftInput min={0.1} max={10} step={0.05} value={session.artistWeightMin} normalize={(value) => clampRecipeWeight(value, RANDOM_V5_DEFAULTS.artistWeightMin)} onCommit={(artistWeightMin) => patch({ artistWeightMin, drawSeed: freshSeed() })} /></label><label><span>{text.max}</span><NumericDraftInput min={0.1} max={10} step={0.05} value={session.artistWeightMax} normalize={(value) => clampRecipeWeight(value, RANDOM_V5_DEFAULTS.artistWeightMax)} onCommit={(artistWeightMax) => patch({ artistWeightMax, drawSeed: freshSeed() })} /></label></fieldset>
+      {session.includeFranchiseStyles && <><fieldset className="random-range-fields"><legend>{text.franchiseRange}</legend><label><span>{text.min}</span><NumericDraftInput min={0} max={20} step={1} value={session.franchiseMinCount} normalize={(value) => clampRecipeCount(value, 0)} onCommit={(franchiseMinCount) => patch({ franchiseMinCount, drawSeed: freshSeed() })} /></label><label><span>{text.max}</span><NumericDraftInput min={0} max={20} step={1} value={session.franchiseMaxCount} normalize={(value) => clampRecipeCount(value, 2)} onCommit={(franchiseMaxCount) => patch({ franchiseMaxCount, drawSeed: freshSeed() })} /></label></fieldset><fieldset className="random-range-fields"><legend>{text.franchiseWeight}</legend><label><span>{text.min}</span><NumericDraftInput min={0.1} max={10} step={0.05} value={session.franchiseWeightMin} normalize={(value) => clampRecipeWeight(value, RANDOM_V5_DEFAULTS.franchiseWeightMin)} onCommit={(franchiseWeightMin) => patch({ franchiseWeightMin, drawSeed: freshSeed() })} /></label><label><span>{text.max}</span><NumericDraftInput min={0.1} max={10} step={0.05} value={session.franchiseWeightMax} normalize={(value) => clampRecipeWeight(value, RANDOM_V5_DEFAULTS.franchiseWeightMax)} onCommit={(franchiseWeightMax) => patch({ franchiseWeightMax, drawSeed: freshSeed() })} /></label></fieldset></>}
       <fieldset className="random-seed-fields wide"><legend>{text.seedMode}</legend><div className="random-seed-modes"><label><input type="radio" name="artist-seed-mode" checked={session.seedMode === "random"} onChange={() => patch({ seedMode: "random" })} /><span>{text.seedRandom}</span></label><label><input type="radio" name="artist-seed-mode" checked={session.seedMode === "fixed"} onChange={() => patch({ seedMode: "fixed" })} /><span>{text.seedFixed}</span></label></div>{session.seedMode === "fixed" && <div className="random-fixed-seed"><NumericDraftInput aria-label={text.seed} min={1} max={2147483647} step={1} value={session.seed} normalize={(value) => Math.min(2_147_483_647, Math.max(1, Math.floor(value)))} onCommit={(seed) => patch({ seed })} /><Button type="button" variant="ghost" onClick={() => patch({ seedMode: "fixed", seed: freshNaiSeed() })}>{text.randomFixedSeed}</Button></div>}</fieldset>
     </section>
     <details className="artist-lab-panel random-generation-settings" open>
@@ -809,8 +868,8 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
               </button>;
             })}
           </div>
-          <label><span>{paramText.width}</span><NumericDraftInput min={64} max={1600} step={64} value={session.generationParams.width} normalize={snapDimension} onCommit={(value) => patchGeneration("width", value)} /></label>
-          <label><span>{paramText.height}</span><NumericDraftInput min={64} max={1600} step={64} value={session.generationParams.height} normalize={snapDimension} onCommit={(value) => patchGeneration("height", value)} /></label>
+          <label><span>{paramText.width}</span><NumericDraftInput min={64} max={maxNAIDimensionFor(session.generationParams.height)} step={64} value={session.generationParams.width} normalize={(value) => snapNAIDimensionWithinArea(value, session.generationParams.height, session.generationParams.width)} onCommit={(value) => patchGeneration("width", value)} /></label>
+          <label><span>{paramText.height}</span><NumericDraftInput min={64} max={maxNAIDimensionFor(session.generationParams.width)} step={64} value={session.generationParams.height} normalize={(value) => snapNAIDimensionWithinArea(value, session.generationParams.width, session.generationParams.height)} onCommit={(value) => patchGeneration("height", value)} /></label>
         </fieldset>
         <label><span>{paramText.steps}</span><NumericDraftInput min={1} max={50} step={1} value={session.generationParams.steps} normalize={(value) => Math.max(1, Math.min(50, Math.floor(value)))} onCommit={(value) => patchGeneration("steps", value)} /></label>
         <label><span>{paramText.cfg}</span><NumericDraftInput min={1} max={10} step={0.1} value={session.generationParams.cfgScale} onCommit={(value) => patchGeneration("cfgScale", value)} /></label>
@@ -819,8 +878,8 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
         {supportsNAINoiseScheduleControl(session.generationParams.model) ? <label><span>{paramText.noise}</span><select value={session.generationParams.noiseSchedule} onChange={(event) => patchGeneration("noiseSchedule", event.target.value)}><option value="native">native</option><option value="karras">karras</option><option value="exponential">exponential</option></select></label> : null}
         <label><span>{paramText.uc}</span><select value={session.generationParams.ucPreset} onChange={(event) => patchGeneration("ucPreset", Number(event.target.value) as GenerateParams["ucPreset"])}>{NAI_UC_PRESETS.map((preset, index) => <option key={preset.value} value={preset.value}>{preset.value} · {ucLabels[index]}</option>)}</select></label>
         <label className="wide"><span>{paramText.negative}</span><textarea value={session.generationParams.negativePrompt} onChange={(event) => patchGeneration("negativePrompt", event.target.value)} /></label>
+        <QualityPresetControl className="wide" language={language} model={session.generationParams.model} value={session.generationParams.qualityPreset} transparentBackground={session.generationParams.transparentBackground} onChange={(value) => patchGeneration("qualityPreset", value)} onTransparentChange={(value) => patchGeneration("transparentBackground", value)} />
         <div className="random-generation-toggles wide">
-          <label><input type="checkbox" checked={session.generationParams.qualityToggle} onChange={(event) => patchGeneration("qualityToggle", event.target.checked)} /><span>{paramText.quality}</span></label>
           {supportsNAIVariety(session.generationParams.model) ? <label><input type="checkbox" checked={session.generationParams.variety} onChange={(event) => patchGeneration("variety", event.target.checked)} /><span>{paramText.variety}</span></label> : null}
           {!isNAIV4PlusModel(session.generationParams.model) ? <><label><input type="checkbox" checked={session.generationParams.smea} onChange={(event) => patchGeneration("smea", event.target.checked)} /><span>{paramText.smea}</span></label><label><input type="checkbox" checked={session.generationParams.smeaDyn} onChange={(event) => patchGeneration("smeaDyn", event.target.checked)} /><span>{paramText.smeaDyn}</span></label></> : null}
         </div>

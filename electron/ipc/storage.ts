@@ -3,7 +3,7 @@ import fs from "fs/promises";
 import path from "path";
 import JSZip from "jszip";
 import type { BatchExportFile, HistoryItem } from "../../src/types";
-import { pathToFileURL } from "url";
+import { toLocalMediaUrl } from "./local-media-protocol";
 import {
   createHistoryGroup,
   deleteHistoryGroup,
@@ -217,8 +217,8 @@ export async function renameHistoryItem(id: string, rawName: string): Promise<{ 
   } catch (e: any) {
     return { ok: false, message: `重命名失败：${e?.message ?? "未知错误"}` };
   }
-  const updated = updateHistoryItem(id, { filePath: target, fileUrl: pathToFileURL(target).toString() });
-  return { ok: true, item: updated ?? { ...item, filePath: target, fileUrl: pathToFileURL(target).toString() } };
+  const updated = updateHistoryItem(id, { filePath: target, fileUrl: toLocalMediaUrl(target) });
+  return { ok: true, item: updated ?? { ...item, filePath: target, fileUrl: toLocalMediaUrl(target) } };
 }
 
 export async function deleteHistoryItem(id: string) {

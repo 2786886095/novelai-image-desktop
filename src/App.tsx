@@ -3,14 +3,15 @@ import clsx from "clsx";
 import { format } from "date-fns";
 // Code-split the heavy tool screens: they're only rendered when their tab is
 // opened, so keeping them out of the initial bundle speeds cold start. The whole
-// ComicGenerator module (comic + batch redraw) becomes its own chunk.
-const ToolsHub = lazy(() => import("./ComicGenerator").then((m) => ({ default: m.ToolsHub })));
+// Keep the lightweight tools index separate; each heavy tool loads on demand.
+const ToolsHub = lazy(() => import("./ToolsHub"));
 const InpaintCanvas = lazy(() => import("./InpaintCanvas").then((m) => ({ default: m.InpaintCanvas })));
 const MetadataInspector = lazy(() => import("./MetadataInspector"));
 import { useAppStore } from "./store";
 import { relatedTags } from "./related-tags";
 import { fmtCount, wordAtCursor } from "./text-utils";
 import { inspectImageMetadata, parseImageMeta } from "./png-meta";
+import { INPAINT_BRUSH_SLIDER_MAX, INPAINT_BRUSH_SLIDER_MIN } from "./inpaint-brush";
 import { droppedImagePath, droppedImagePaths, hasDraggedFiles } from "./drag-drop";
 import { splitPromptTags, parseWeightedTag, formatMultiplier, setTagLevelInPrompt } from "./prompt-weight";
 import {
@@ -24,8 +25,9 @@ import {
   CONVERT_SYSTEM_PROMPTS,
   SCOPED_REVERSE_SYSTEM_PROMPTS,
 } from "./data/prompt-templates";
-import { Button, IconText, AppPortal, Toggle, NumberInput, SliderInput, SecretInput, SelectMenu } from "./components/ui";
+import { Button, IconText, AppPortal, Toggle, NumberInput, CommittedNumberInput, SliderInput, SecretInput, SelectMenu } from "./components/ui";
 import { Icon } from "./components/icons";
+import { QualityPresetControl } from "./components/QualityPresetControl";
 import ReferencePresetManager, {
   ReferencePresetQuickSaveDialog,
   referencePresetTextFor,
@@ -86,13 +88,13 @@ import {
   type TextToolJob,
   type TokenStatus,
 } from "./types";
-
-// NovelAI requires generation dimensions to be a multiple of 64, in the
-// 64–1600 range. Snap user input so we never send an invalid size (→ HTTP 400).
-function snapDimension(value: number): number {
-  if (!Number.isFinite(value)) return 1024;
-  return Math.min(1600, Math.max(64, Math.round(value / 64) * 64));
-}
+import {
+  adaptiveNAIImageSize,
+  maxNAIDimensionFor,
+  NAI_MIN_DIMENSION,
+  NAI_DIMENSION_STEP,
+  snapNAIDimensionWithinArea,
+} from "./nai-dimensions";
 
 const docsUrl = "https://docs.novelai.net/en/image/";
 const novelAiImageUrl = "https://novelai.net/image";
@@ -705,6 +707,23 @@ function TabBar() {
   );
 }
 
+function QualityAndTransparencyControls({ compact = false }: { compact?: boolean }) {
+  const params = useAppStore((state) => state.params);
+  const setParam = useAppStore((state) => state.setParam);
+  const language = useAppStore((state) => state.settings?.language);
+  return (
+    <QualityPresetControl
+      language={language}
+      model={params.model}
+      value={params.qualityPreset}
+      transparentBackground={params.transparentBackground}
+      compact={compact}
+      onChange={(value) => setParam("qualityPreset", value)}
+      onTransparentChange={(value) => setParam("transparentBackground", value)}
+    />
+  );
+}
+
 // ── Advanced params modal ─────────────────────────────────────────────────────
 function AdvancedParamsModal({ onClose }: { onClose: () => void }) {
   const params = useAppStore((state) => state.params);
@@ -752,7 +771,7 @@ function AdvancedParamsModal({ onClose }: { onClose: () => void }) {
           </label>
         </div>
         <div className="toggle-list compact">
-          <Toggle checked={params.qualityToggle} onChange={(v) => setParam("qualityToggle", v)} label={t("advanced.qualityToggle")} description={t("advanced.qualityToggleDesc")} />
+          <QualityAndTransparencyControls compact />
           {/* SMEA / SMEA Dyn only exist on V3-era models; V4/V4.5/V5 ignore them, so
               we hide the toggles there instead of showing a control with no effect. */}
           {!isNAIV4PlusModel(params.model) && (
@@ -1427,9 +1446,16 @@ function StylePresetImagesModal({
 // ── Prompt + Params ───────────────────────────────────────────────────────────
 function PromptAndParams({
   includeModel = true,
+  imageToImage = false,
+  lockSizeToSource = false,
   promptOverride,
 }: {
   includeModel?: boolean;
+  imageToImage?: boolean;
+  /** Inpaint always renders against the loaded source image. Its dimensions are
+   * prepared by the main process and must not be edited through shared generate
+   * parameters. Keep only a compact read-only source-size indicator. */
+  lockSizeToSource?: boolean;
   // When set, the positive-prompt textarea (and every action that edits it —
   // templates, capsule insert, weight adjust, translate, normalize) reads and
   // writes here instead of the shared params.positivePrompt. Used by the
@@ -1438,6 +1464,9 @@ function PromptAndParams({
 }) {
   const params = useAppStore((state) => state.params);
   const setParam = useAppStore((state) => state.setParam);
+  const workbenchImage = useAppStore((state) => state.workbenchImage);
+  const i2iSizeMode = useAppStore((state) => state.i2iSizeMode);
+  const setI2ISizeMode = useAppStore((state) => state.setI2ISizeMode);
   const promptTab = useAppStore((state) => state.promptTab);
   const setPromptTab = useAppStore((state) => state.setPromptTab);
   const vibeImages = useAppStore((state) => state.vibeImages);
@@ -1466,6 +1495,9 @@ function PromptAndParams({
   const stylePresetMenuRef = useRef<HTMLDivElement>(null);
   const [stylePresetMenuPosition, setStylePresetMenuPosition] = useState({ left: 0, top: 0, width: 240 });
   const [styleNamePrompt, setStyleNamePrompt] = useState<{ stylePrompt: string; fallbackName: string } | null>(null);
+  const adaptiveI2ISize = workbenchImage
+    ? adaptiveNAIImageSize(workbenchImage.width, workbenchImage.height, params)
+    : { width: params.width, height: params.height };
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get("uiCapture") !== "referenceModal") return;
     const store = useAppStore.getState();
@@ -2273,6 +2305,7 @@ function PromptAndParams({
           </>
         )}
       </div>
+      <QualityAndTransparencyControls />
       <div className="quick-actions">
         <Button onClick={() => setShowCharModal(true)}>
           <IconText icon="♙">{generateText.prompt.characterPrompt}{charCaptions.length > 0 ? ` · ${charCaptions.length}` : ""}</IconText>
@@ -2300,19 +2333,97 @@ function PromptAndParams({
           </div>
         )}
       </div>
-      <div className="size-row">
-        <NumberInput label={generateText.prompt.width} value={params.width} min={64} max={1600} step={64} onChange={(v) => setParam("width", snapDimension(v))} />
-        <span>×</span>
-        <NumberInput label={generateText.prompt.height} value={params.height} min={64} max={1600} step={64} onChange={(v) => setParam("height", snapDimension(v))} />
-      </div>
-      <div className="preset-row">
-        <button onClick={() => { setParam("width", 1024); setParam("height", 1024); }}>1024×1024</button>
-        <button onClick={() => { setParam("width", 1216); setParam("height", 832); }}>1216×832</button>
-        <button onClick={() => { setParam("width", 832); setParam("height", 1216); }}>832×1216</button>
-        <button onClick={() => { setParam("width", 1024); setParam("height", 1536); }}>1024×1536</button>
-        <button onClick={() => { setParam("width", 1536); setParam("height", 1024); }}>1536×1024</button>
-        <button onClick={() => { setParam("width", 1472); setParam("height", 1472); }}>1472×1472</button>
-      </div>
+      {imageToImage && workbenchImage && !lockSizeToSource && (
+        <div className="i2i-size-control">
+          <div className="i2i-size-mode" role="group" aria-label={t("i2i.sizeMode")}>
+            <button
+              type="button"
+              className={clsx(i2iSizeMode === "adaptive" && "active")}
+              onClick={() => setI2ISizeMode("adaptive")}
+            >
+              {t("i2i.sizeAdaptive")}
+            </button>
+            <button
+              type="button"
+              className={clsx(i2iSizeMode === "custom" && "active")}
+              onClick={() => setI2ISizeMode("custom")}
+            >
+              {t("i2i.sizeCustom")}
+            </button>
+          </div>
+          <small>
+            {i2iSizeMode === "adaptive"
+              ? f("i2i.sizeAdaptivePath", {
+                  source: `${workbenchImage.width}×${workbenchImage.height}`,
+                  output: `${adaptiveI2ISize.width}×${adaptiveI2ISize.height}`,
+                })
+              : f("i2i.sizeCustomPath", { output: `${params.width}×${params.height}` })}
+          </small>
+        </div>
+      )}
+      {lockSizeToSource ? (
+        workbenchImage && (
+          <div className="inpaint-source-size" aria-label={t("inpaint.sourceSizeLocked")}>
+            <Icon name="image" />
+            <span>{t("inpaint.sourceSizeLocked")}</span>
+            <strong>{workbenchImage.width}×{workbenchImage.height}</strong>
+          </div>
+        )
+      ) : (
+        <>
+          <div className="size-row">
+            <CommittedNumberInput
+              label={generateText.prompt.width}
+              value={params.width}
+              min={NAI_MIN_DIMENSION}
+              max={maxNAIDimensionFor(params.height)}
+              step={NAI_DIMENSION_STEP}
+              normalize={(value) =>
+                snapNAIDimensionWithinArea(value, params.height, params.width)
+              }
+              onCommit={(value) => {
+                if (imageToImage) setI2ISizeMode("custom");
+                setParam("width", value);
+              }}
+            />
+            <span>×</span>
+            <CommittedNumberInput
+              label={generateText.prompt.height}
+              value={params.height}
+              min={NAI_MIN_DIMENSION}
+              max={maxNAIDimensionFor(params.width)}
+              step={NAI_DIMENSION_STEP}
+              normalize={(value) =>
+                snapNAIDimensionWithinArea(value, params.width, params.height)
+              }
+              onCommit={(value) => {
+                if (imageToImage) setI2ISizeMode("custom");
+                setParam("height", value);
+              }}
+            />
+          </div>
+          <small className="dimension-input-hint">{t("size.commitHint")}</small>
+          <div className="preset-row">
+            {[
+              [1024, 1024], [1216, 832], [832, 1216],
+              [1024, 1536], [1536, 1024], [1472, 1472],
+              [1088, 1920], [1920, 1088],
+              [512, 768], [768, 512], [640, 640],
+            ].map(([width, height]) => (
+              <button
+                key={`${width}x${height}`}
+                onClick={() => {
+                  if (imageToImage) setI2ISizeMode("custom");
+                  setParam("width", width);
+                  setParam("height", height);
+                }}
+              >
+                {width}×{height}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
       <div className="seed-mode-switch">
         <button
           type="button"
@@ -2502,6 +2613,7 @@ function FeatureCostCard({
   const params = useAppStore((state) => state.params);
   const batchCount = useAppStore((state) => state.batchCount);
   const i2iParams = useAppStore((state) => state.i2iParams);
+  const i2iSizeMode = useAppStore((state) => state.i2iSizeMode);
   const inpaintStrength = useAppStore((state) => state.inpaintStrength);
   const inpaintNoise = useAppStore((state) => state.inpaintNoise);
   const inpaintModel = useAppStore((state) => state.inpaintModel);
@@ -2529,6 +2641,7 @@ function FeatureCostCard({
     smeaDyn: params.smeaDyn,
     batchCount,
     strength: i2iParams.strength,
+    i2iSizeMode,
     inpaintStrength,
     inpaintNoise,
     inpaintModel,
@@ -2555,7 +2668,18 @@ function FeatureCostCard({
     }
     setLoading(true);
     const timer = window.setTimeout(() => {
-      const quoteParams = { ...params, stylePrompt: "", positivePrompt: "quote", negativePrompt: "" };
+      const quoteSize = feature === "inpaint" && workbenchImage
+        ? { width: workbenchImage.width, height: workbenchImage.height }
+        : feature === "i2i" && i2iSizeMode === "adaptive" && workbenchImage
+          ? adaptiveNAIImageSize(workbenchImage.width, workbenchImage.height, params)
+          : { width: params.width, height: params.height };
+      const quoteParams = {
+        ...params,
+        ...quoteSize,
+        stylePrompt: "",
+        positivePrompt: "quote",
+        negativePrompt: "",
+      };
       const extras = {
         vibeImages: Array.from({ length: vibeCount }, () => ({ base64: "", infoExtracted: 1, strength: 1 })),
         charCaptions: [],
@@ -2667,7 +2791,6 @@ function QueuePanel() {
   const clearQueue = useAppStore((state) => state.clearQueue);
   const progress = useAppStore((state) => state.queueProgress);
   const queuePaused = useAppStore((state) => state.queuePaused);
-  const queueAdding = useAppStore((state) => state.queueAdding);
   const language = useAppStore((state) => state.settings?.language);
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
@@ -2711,13 +2834,14 @@ function QueuePanel() {
           <li className="queue-item queue-item-running">
             <span className="queue-spinner" />
             <span className="queue-item-label">
-              {queuePaused ? t("queue.paused") : queueAdding ? t("queue.adding") : t("queue.running")}
+              {queuePaused ? t("queue.paused") : t("queue.running")}
             </span>
           </li>
           {queue.map((job) => (
             <li className="queue-item" key={job.id}>
+              {job.quotePending ? <span className="queue-spinner" aria-hidden="true" /> : null}
               <span className="queue-item-label" title={job.label}>
-                {job.label}
+                {job.label}{job.quotePending ? ` · ${t("queue.adding")}` : ""}
               </span>
               <span className="queue-item-time">
                 {new Date(job.addedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
@@ -3282,7 +3406,7 @@ function I2IPanel({ openSettings }: { openSettings: () => void }) {
         <SliderInput label={t("i2i.noise")} value={i2iParams.noise} min={0} max={0.99} step={0.01} onChange={(v) => setI2IParam("noise", v)} />
         <NumberInput label={t("i2i.extraNoiseSeed")} value={i2iParams.extraNoiseSeed} min={0} onChange={(v) => setI2IParam("extraNoiseSeed", v)} />
         <div className="panel-divider" />
-        <PromptAndParams />
+        <PromptAndParams imageToImage />
         <FeatureCostCard label={t("cost.beforeRun")} feature="i2i" />
       </div>
       <AccountAndRunButton label={t("i2i.run")} onRun={() => void generateI2I()} openSettings={openSettings} model={model} />
@@ -3307,6 +3431,8 @@ function InpaintPanel({ openSettings }: { openSettings: () => void }) {
   const setBrushOpacity = useAppStore((state) => state.setBrushOpacity);
   const brushMode = useAppStore((state) => state.brushMode);
   const setBrushMode = useAppStore((state) => state.setBrushMode);
+  const brushShape = useAppStore((state) => state.brushShape);
+  const setBrushShape = useAppStore((state) => state.setBrushShape);
   const clearInpaintMask = useAppStore((state) => state.clearInpaintMask);
   const inpaint = useAppStore((state) => state.inpaint);
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
@@ -3322,31 +3448,68 @@ function InpaintPanel({ openSettings }: { openSettings: () => void }) {
             ))}
           </select>
         </label>
+        <Button
+          className="full"
+          variant="ghost"
+          onClick={() => {
+            setInpaintModel("nai-diffusion-5-full-inpainting");
+            setInpaintStrength(1);
+            setInpaintNoise(0);
+            setBrushSize(4);
+            setBrushOpacity(0.55);
+            setBrushMode("paint");
+            setBrushShape("round");
+          }}
+        >
+          <IconText icon={<Icon name="refresh" />}>{t("inpaint.restoreDefaults")}</IconText>
+        </Button>
         <SliderInput label={t("inpaint.strength")} value={inpaintStrength} min={0.1} max={1} step={0.01} onChange={setInpaintStrength} />
+        <small className={clsx(
+          "field-hint inpaint-strength-hint",
+          inpaintStrength < 0.6 && "warning",
+        )}>
+          {t(
+            inpaintStrength < 0.6
+              ? "inpaint.strengthLowHint"
+              : inpaintStrength > 0.9
+                ? "inpaint.strengthFullHint"
+                : "inpaint.strengthHighHint",
+          )}
+        </small>
         <SliderInput label={t("inpaint.noise")} value={inpaintNoise} min={0} max={0.99} step={0.01} onChange={setInpaintNoise} />
         <SliderInput
           label={t("inpaint.brushSize")}
           value={brushSize}
-          min={2}
-          max={128}
+          min={INPAINT_BRUSH_SLIDER_MIN}
+          max={INPAINT_BRUSH_SLIDER_MAX}
           step={1}
           onChange={setBrushSize}
         />
         <SliderInput label={t("inpaint.brushOpacity")} value={brushOpacity} min={0.05} max={1} step={0.01} onChange={setBrushOpacity} />
         <div className="mode-buttons">
           <Button variant={brushMode === "paint" ? "primary" : "secondary"} onClick={() => setBrushMode("paint")}>
-            <IconText icon="✎">{t("inpaint.paintBrush")}</IconText>
+            <IconText icon={<Icon name="brush" />}>{t("inpaint.paintBrush")}</IconText>
           </Button>
           <Button variant={brushMode === "erase" ? "primary" : "secondary"} onClick={() => setBrushMode("erase")}>
-            <IconText icon="⌫">{t("inpaint.eraser")}</IconText>
+            <IconText icon={<Icon name="eraser" />}>{t("inpaint.eraser")}</IconText>
           </Button>
         </div>
+        <div className="mode-buttons inpaint-shape-panel-buttons">
+          <Button variant={brushShape === "round" ? "primary" : "secondary"} onClick={() => setBrushShape("round")}>
+            <span className="inpaint-shape-button-label"><span className="inpaint-shape-swatch round" />{t("inpaint.roundBrush")}</span>
+          </Button>
+          <Button variant={brushShape === "square" ? "primary" : "secondary"} onClick={() => setBrushShape("square")}>
+            <span className="inpaint-shape-button-label"><span className="inpaint-shape-swatch square" />{t("inpaint.squareBrush")}</span>
+          </Button>
+        </div>
+        <small className="field-hint">{t("inpaint.precisionHint")}</small>
         <Button className="full" onClick={clearInpaintMask}>
-          <IconText icon="⌧">{t("inpaint.clearMask")}</IconText>
+          <IconText icon={<Icon name="clear" />}>{t("inpaint.clearMask")}</IconText>
         </Button>
         <div className="panel-divider" />
         <PromptAndParams
           includeModel={false}
+          lockSizeToSource
           promptOverride={{ value: inpaintPositivePrompt, onChange: setInpaintPositivePrompt }}
         />
         <FeatureCostCard label={t("cost.beforeRun")} feature="inpaint" />
@@ -5467,6 +5630,10 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                     <span>{t("settings.aboutAuthorQq")}</span>
                     <strong>2786886095</strong>
                   </div>
+                  <div className="about-copyline">
+                    <span>{t("settings.aboutNovelAiGroup")}</span>
+                    <strong>921985070</strong>
+                  </div>
                 </div>
                 <div className="about-block">
                   <div>
@@ -6113,7 +6280,8 @@ function UpdateBanner() {
   );
 }
 
-const V5_MIGRATION_NOTICE_KEY = "langbai.notice.v5-model-migration.v2";
+const V5_MIGRATION_NOTICE_KEY = "langbai.notice.v5-model-migration.seen";
+const V5_MIGRATION_NOTICE_LEGACY_KEY = "langbai.notice.v5-model-migration.v2";
 const V5_MIGRATION_NOTICE_TEXT = {
   "zh-CN": {
     eyebrow: "模型更新提醒",
@@ -6162,11 +6330,20 @@ function V5MigrationNotice() {
   const settings = useAppStore((state) => state.settings);
   const setActiveTab = useAppStore((state) => state.setActiveTab);
   const captureMode = new URLSearchParams(window.location.search).has("uiCapture");
-  const [dismissed, setDismissed] = useState(() => captureMode || localStorage.getItem(V5_MIGRATION_NOTICE_KEY) === "dismissed");
-  if (!settings || dismissed || isNAIV5Model(paramsModel)) return null;
+  const [dismissed, setDismissed] = useState(() => captureMode
+    || localStorage.getItem(V5_MIGRATION_NOTICE_KEY) === "seen"
+    || localStorage.getItem(V5_MIGRATION_NOTICE_LEGACY_KEY) === "dismissed");
+  const shouldShow = Boolean(settings && !dismissed && !isNAIV5Model(paramsModel));
+  useEffect(() => {
+    if (!shouldShow) return;
+    // Mark as seen when the dialog is first presented, not only after a button
+    // click, so a force-close while it is open cannot make it recur forever.
+    localStorage.setItem(V5_MIGRATION_NOTICE_KEY, "seen");
+  }, [shouldShow]);
+  if (!shouldShow || !settings) return null;
   const text = V5_MIGRATION_NOTICE_TEXT[settings.language ?? "zh-CN"] ?? V5_MIGRATION_NOTICE_TEXT["zh-CN"];
   const dismiss = () => {
-    localStorage.setItem(V5_MIGRATION_NOTICE_KEY, "dismissed");
+    localStorage.setItem(V5_MIGRATION_NOTICE_KEY, "seen");
     setDismissed(true);
   };
   return (
@@ -6278,7 +6455,7 @@ function MainPage() {
     const captureTabs = ["generate", "inpaint", "upscale", "postprocess", "inspect", "convert", "metadata", "tools", "referencePresets", "records"] as const;
     if (captureTabs.some((tab) => tab === captureSurface)) {
       useAppStore.getState().setActiveTab(captureSurface as (typeof captureTabs)[number]);
-    } else if (captureSurface === "randomArtist") {
+    } else if (captureSurface === "randomArtist" || captureSurface === "v5ArtistRepair" || captureSurface === "artistStringDraw") {
       useAppStore.getState().setActiveTab("tools");
     } else if (captureSurface === "settings") {
       useAppStore.getState().setShowSettings(true);

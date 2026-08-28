@@ -383,8 +383,8 @@ export function generatePopularArtistRecipes(
   const requestedMaxArtists = Math.max(1, Math.min(20, Math.floor(options.maxArtists)));
   const minArtists = Math.min(requestedMinArtists, requestedMaxArtists);
   const maxArtists = Math.max(requestedMinArtists, requestedMaxArtists);
-  const [artistWeightMin, artistWeightMax] = normalizedWeightBounds(options.artistWeightMin, options.artistWeightMax, [0.3, 2]);
-  const [franchiseWeightMin, franchiseWeightMax] = normalizedWeightBounds(options.franchiseWeightMin, options.franchiseWeightMax, [0.5, 1.5]);
+  const [artistWeightMin, artistWeightMax] = normalizedWeightBounds(options.artistWeightMin, options.artistWeightMax, [0.2, 1.2]);
+  const [franchiseWeightMin, franchiseWeightMax] = normalizedWeightBounds(options.franchiseWeightMin, options.franchiseWeightMax, [0.15, 0.8]);
   const favorites = new Set((options.favoriteArtists ?? []).map(canonicalArtistTagName).filter(Boolean));
   const baseAuxiliary = parseArtistRecipe(options.auxiliaryPrompt ?? "")
     .filter((token) => token.kind !== "artist");

@@ -8,6 +8,12 @@ export default defineConfig({
     host: "127.0.0.1",
     port: 5173,
     strictPort: true,
+    // QA profiles, unpacked releases, and generated screenshots live under
+    // .tmp. Watching those Chromium databases can lock files on Windows and
+    // make the dev renderer consume gigabytes of memory or stop responding.
+    watch: {
+      ignored: ["**/.tmp/**", "**/release/**", "**/mobile/build/**"],
+    },
   },
   test: {
     // CI runners are slower and run test files in parallel; some tests load the

@@ -139,7 +139,7 @@ function TargetArtistLab({ onBack }: { onBack: () => void }) {
     let stagnant = 0;
     let round = 0;
     let resetCount = 0;
-    const fixedParams = { ...params, positivePrompt: session.basePrompt.trim(), stylePrompt: session.sharedStylePrompt.trim(), width: 512, height: 512, seedMode: "fixed" as const, seed: session.seed, qualityToggle: false };
+    const fixedParams = { ...params, positivePrompt: session.basePrompt.trim(), stylePrompt: session.sharedStylePrompt.trim(), width: 512, height: 512, seedMode: "fixed" as const, seed: session.seed, qualityPreset: "none" as const, qualityToggle: false };
     const extras = { vibeImages: [], charCaptions: [], preciseReferences: [] };
     patch({ results: [], baseline: undefined, matches: [], discoveryOffset: 0, bestProgress: 0, round: 0, resetCount: 0 });
     let baselineSimilarity = 0;

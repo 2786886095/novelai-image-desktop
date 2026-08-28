@@ -39,6 +39,9 @@ export type IconName =
   | "play"
   | "brush"
   | "eraser"
+  | "undo"
+  | "redo"
+  | "fitScreen"
   | "scan"
   | "swap"
   | "arrowDownLeft"
@@ -270,6 +273,27 @@ const PATHS: Record<IconName, ReactNode> = {
       <path d="m4.2 15.4 8.8-10a2 2 0 0 1 2.8-.2l3 2.6a2 2 0 0 1 .2 2.8l-7.6 8.6H7.6Z" />
       <path d="m9.2 10 5.8 5.1" />
       <path d="M12 20h8" />
+    </>
+  ),
+  undo: (
+    <>
+      <path d="M9 7 4 12l5 5" />
+      <path d="M5 12h8a6 6 0 0 1 6 6" />
+    </>
+  ),
+  redo: (
+    <>
+      <path d="m15 7 5 5-5 5" />
+      <path d="M19 12h-8a6 6 0 0 0-6 6" />
+    </>
+  ),
+  fitScreen: (
+    <>
+      <path d="M8 3H5a2 2 0 0 0-2 2v3" />
+      <path d="M16 3h3a2 2 0 0 1 2 2v3" />
+      <path d="M21 16v3a2 2 0 0 1-2 2h-3" />
+      <path d="M8 21H5a2 2 0 0 1-2-2v-3" />
+      <rect x="7.5" y="8" width="9" height="8" rx="1.5" />
     </>
   ),
   scan: (

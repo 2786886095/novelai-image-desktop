@@ -291,6 +291,70 @@ export function NumberInput({
   );
 }
 
+/**
+ * Numeric field that keeps a local text draft and only commits after the user
+ * has finished typing (blur or Enter).  This avoids turning `1024` into `64`
+ * as soon as the first `1` is entered when a normalizer snaps to 64-pixel
+ * generation blocks.
+ */
+export function CommittedNumberInput({
+  label,
+  value,
+  min,
+  max,
+  step = 1,
+  normalize = (next) => next,
+  onCommit,
+  disabled = false,
+}: {
+  label: string;
+  value: number;
+  min?: number;
+  max?: number;
+  step?: number;
+  normalize?: (value: number) => number;
+  onCommit: (value: number) => void;
+  disabled?: boolean;
+}) {
+  const [draft, setDraft] = useState(String(value));
+
+  useEffect(() => {
+    setDraft(String(value));
+  }, [value]);
+
+  const commit = () => {
+    const parsed = Number(draft);
+    const next = Number.isFinite(parsed) ? normalize(parsed) : value;
+    setDraft(String(next));
+    if (next !== value) onCommit(next);
+  };
+
+  return (
+    <label className="field">
+      <span>{label}</span>
+      <input
+        type="number"
+        value={draft}
+        min={min}
+        max={max}
+        step={step}
+        disabled={disabled}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={commit}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            event.currentTarget.blur();
+          } else if (event.key === "Escape") {
+            setDraft(String(value));
+            event.currentTarget.blur();
+          }
+        }}
+      />
+    </label>
+  );
+}
+
 export function SliderInput({
   label,
   value,

@@ -20,6 +20,7 @@ class ImportedGenerateParams {
   final bool? smeaDyn;
   final int? ucPreset;
   final bool? qualityToggle;
+  final bool? transparentBackground;
   final bool? variety;
 
   const ImportedGenerateParams({
@@ -39,6 +40,7 @@ class ImportedGenerateParams {
     this.smeaDyn,
     this.ucPreset,
     this.qualityToggle,
+    this.transparentBackground,
     this.variety,
   });
 
@@ -59,6 +61,7 @@ class ImportedGenerateParams {
       smeaDyn == null &&
       ucPreset == null &&
       qualityToggle == null &&
+      transparentBackground == null &&
       variety == null;
 
   void applyTo(GenerateParams target) {
@@ -81,7 +84,14 @@ class ImportedGenerateParams {
     if (smea case final value?) target.smea = value;
     if (smeaDyn case final value?) target.smeaDyn = value;
     if (ucPreset case final value?) target.ucPreset = value;
-    if (qualityToggle case final value?) target.qualityToggle = value;
+    if (qualityToggle case final value?) {
+      target
+        ..qualityToggle = value
+        ..qualityPreset = value ? 'standard' : 'none';
+    }
+    if (transparentBackground case final value?) {
+      target.transparentBackground = value;
+    }
     if (variety case final value?) target.variety = value;
   }
 
@@ -102,6 +112,8 @@ class ImportedGenerateParams {
         if (smeaDyn != null) 'SMEA Dyn': smeaDyn!,
         if (ucPreset != null) 'UC preset': ucPreset!,
         if (qualityToggle != null) 'Quality toggle': qualityToggle!,
+        if (transparentBackground != null)
+          'Transparent background': transparentBackground!,
         if (variety != null) 'Variety+': variety!,
       };
 
@@ -122,6 +134,8 @@ class ImportedGenerateParams {
         if (smeaDyn != null) 'smeaDyn': smeaDyn!,
         if (ucPreset != null) 'ucPreset': ucPreset!,
         if (qualityToggle != null) 'qualityToggle': qualityToggle!,
+        if (transparentBackground != null)
+          'transparentBackground': transparentBackground!,
         if (variety != null) 'variety': variety!,
       };
 
@@ -142,6 +156,9 @@ class ImportedGenerateParams {
         smeaDyn: keys.contains('smeaDyn') ? smeaDyn : null,
         ucPreset: keys.contains('ucPreset') ? ucPreset : null,
         qualityToggle: keys.contains('qualityToggle') ? qualityToggle : null,
+        transparentBackground: keys.contains('transparentBackground')
+            ? transparentBackground
+            : null,
         variety: keys.contains('variety') ? variety : null,
       );
 }
@@ -163,6 +180,7 @@ const importedGenerateParamKeys = <String>{
   'smeaDyn',
   'ucPreset',
   'qualityToggle',
+  'transparentBackground',
   'variety',
 };
 
@@ -500,6 +518,10 @@ ImportedGenerateParams parseImportedGenerateParams(
     smeaDyn: comment['sm_dyn'] is bool ? comment['sm_dyn'] as bool : null,
     ucPreset: isNovelAi ? 3 : null,
     qualityToggle: isNovelAi ? false : null,
+    transparentBackground:
+        isNovelAi && comment['tag_hint_transparent_background'] == true
+            ? true
+            : null,
     variety: isNovelAi ? comment['skip_cfg_above_sigma'] == 58 : null,
   );
 }

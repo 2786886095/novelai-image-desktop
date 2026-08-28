@@ -13,6 +13,8 @@ function item(status: BatchRedrawItem["status"]): BatchRedrawItem {
     id: "item-1",
     name: "source",
     base64: "YWJj",
+    width: 1000,
+    height: 1300,
     prompt: "redraw",
     strength: null,
     overrideParams: false,
@@ -76,6 +78,8 @@ describe("batch redraw cancellation", () => {
       groupName: "Batch output",
       strength: 0.55,
       params: {
+        width: 1024,
+        height: 1280,
         steps: 36,
         seed: 123,
         seedMode: "fixed",
@@ -89,6 +93,19 @@ describe("batch redraw cancellation", () => {
         ],
       },
     });
+  });
+
+  it("uses the selected custom size for every batch item", () => {
+    const project = createDefaultBatchRedraw({
+      ...DEFAULT_PARAMS,
+      width: 1216,
+      height: 832,
+    });
+    project.sizeMode = "custom";
+
+    const request = buildBatchRedrawRequest(project, item("pending"), "Batch");
+
+    expect(request.params).toMatchObject({ width: 1216, height: 832 });
   });
 
   it("clears a previous result without changing the source inputs", () => {

@@ -45,6 +45,40 @@ void main() {
     expect(state.generationQueueRunning, isFalse);
     expect(state.queueProgress?.done, 2);
   });
+
+  test('queued snapshot appears before the background quote completes',
+      () async {
+    final api = _QueueApi()..queuedQuote = Completer<int?>();
+    final state = AppState(api: api, storage: _MemoryStorage())
+      ..account = const AccountSummary(
+        hasToken: true,
+        tierLevel: 1,
+        anlasBalance: 100,
+        hasActiveSubscription: true,
+      )
+      ..params.positivePrompt = 'first prompt';
+
+    final run = state.generate();
+    await _waitUntil(() => api.prompts.length == 1);
+    state.params.positivePrompt = 'queued prompt';
+
+    final enqueue = state.enqueueGeneration();
+    expect(state.generationQueue, hasLength(1));
+    expect(state.generationQueue.single.quotePending, isTrue);
+
+    await _waitUntil(() => api.quoteRequests == 2);
+    api.queuedQuote!.complete(20);
+    await enqueue;
+    expect(state.generationQueue.single.quotePending, isFalse);
+
+    api.firstRequest.complete((
+      [
+        Uint8List.fromList([1, 2, 3])
+      ],
+      11,
+    ));
+    await run;
+  });
 }
 
 Future<void> _waitUntil(bool Function() condition) async {
@@ -57,6 +91,8 @@ Future<void> _waitUntil(bool Function() condition) async {
 class _QueueApi extends NaiApi {
   final firstRequest = Completer<(List<Uint8List>, int)>();
   final prompts = <String>[];
+  Completer<int?>? queuedQuote;
+  int quoteRequests = 0;
 
   @override
   Future<AccountSummary> fetchAccount(
@@ -75,8 +111,13 @@ class _QueueApi extends NaiApi {
     String token,
     AppSettings settings,
     GenerateParams params,
-  ) async =>
-      20;
+  ) async {
+    quoteRequests++;
+    if (quoteRequests > 1 && queuedQuote != null) {
+      return queuedQuote!.future;
+    }
+    return 20;
+  }
 
   @override
   Future<(List<Uint8List>, int)> generate(

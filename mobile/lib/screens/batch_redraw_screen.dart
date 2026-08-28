@@ -11,8 +11,29 @@ import '../i18n/app_locales.dart';
 import '../models/nai_models.dart';
 import '../references/reference_presets.dart';
 import '../state/app_state.dart';
+import '../ui/quality_preset_control.dart';
 import '../ui/studio_shell.dart';
 import 'generate_screen.dart';
+
+(int, int) _batchOutputSize(
+  BatchRedrawProject project,
+  BatchRedrawItem item,
+) {
+  final params = item.overrideParams ? item.params : project.globalParams;
+  return project.sizeMode == 'adaptive'
+      ? adaptiveNaiImageSize(
+          item.width,
+          item.height,
+          fallbackWidth: params.width,
+          fallbackHeight: params.height,
+        )
+      : (params.width, params.height);
+}
+
+String _batchSizePath(BatchRedrawProject project, BatchRedrawItem item) {
+  final output = _batchOutputSize(project, item);
+  return '${item.width}×${item.height} → ${output.$1}×${output.$2}';
+}
 
 class BatchRedrawScreen extends StatelessWidget {
   final VoidCallback? onBack;
@@ -308,7 +329,7 @@ class _ImportStep extends StatelessWidget {
                 ),
                 title: Text(item.name,
                     maxLines: 1, overflow: TextOverflow.ellipsis),
-                subtitle: Text('${item.width}x${item.height}'),
+                subtitle: Text(_batchSizePath(project, item)),
                 trailing: IconButton(
                   tooltip: t('common.remove'),
                   onPressed: () {
@@ -355,10 +376,55 @@ class _ParamsStep extends StatelessWidget {
               label: Text(t('batch.syncParams')),
             ),
           ),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    t('batch.sizeMode.title'),
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: 8),
+                  SegmentedButton<String>(
+                    showSelectedIcon: false,
+                    segments: [
+                      ButtonSegment(
+                        value: 'adaptive',
+                        label: Text(t('batch.sizeMode.adaptive')),
+                      ),
+                      ButtonSegment(
+                        value: 'custom',
+                        label: Text(t('batch.sizeMode.custom')),
+                      ),
+                    ],
+                    selected: {project.sizeMode},
+                    onSelectionChanged: (selection) {
+                      project.sizeMode = selection.first;
+                      controller.changed();
+                    },
+                  ),
+                  const SizedBox(height: 7),
+                  Text(
+                    project.sizeMode == 'adaptive'
+                        ? t('batch.sizeMode.adaptiveDesc')
+                        : mobileUiFormatFor(
+                            language,
+                            'batch.sizeMode.customDesc',
+                            {'size': '${params.width}×${params.height}'},
+                          ),
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+          ),
           _BatchParamsEditor(
             title: t('batch.globalParams'),
             params: params,
             initiallyExpanded: true,
+            onCustomSizeSelected: () => project.sizeMode = 'custom',
             onChanged: controller.changed,
           ),
           const SizedBox(height: 8),
@@ -771,8 +837,18 @@ class _BatchPromptCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: Text(item.name,
-                      maxLines: 2, overflow: TextOverflow.ellipsis),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(item.name,
+                          maxLines: 2, overflow: TextOverflow.ellipsis),
+                      const SizedBox(height: 3),
+                      Text(
+                        _batchSizePath(project, item),
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -947,6 +1023,7 @@ class _BatchGenerateStep extends StatelessWidget {
           itemBuilder: (context, index) {
             final item = project.items[index];
             return _BatchResultTile(
+              project: project,
               item: item,
               index: index,
               onTap: () {
@@ -1149,12 +1226,14 @@ class _BatchStatChip extends StatelessWidget {
 }
 
 class _BatchResultTile extends StatelessWidget {
+  final BatchRedrawProject project;
   final BatchRedrawItem item;
   final int index;
   final VoidCallback onTap;
   final ValueChanged<bool?> onSelected;
 
   const _BatchResultTile({
+    required this.project,
     required this.item,
     required this.index,
     required this.onTap,
@@ -1246,18 +1325,31 @@ class _BatchResultTile extends StatelessWidget {
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(8, 7, 8, 8),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('#${index + 1}',
-                      style: TextStyle(
-                          color: colors.primary, fontWeight: FontWeight.w800)),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      item.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                  Row(
+                    children: [
+                      Text('#${index + 1}',
+                          style: TextStyle(
+                              color: colors.primary,
+                              fontWeight: FontWeight.w800)),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          item.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    _batchSizePath(project, item),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ],
               ),
@@ -1338,12 +1430,14 @@ class _BatchParamsEditor extends StatelessWidget {
   final String title;
   final GenerateParams params;
   final VoidCallback onChanged;
+  final VoidCallback? onCustomSizeSelected;
   final bool initiallyExpanded;
 
   const _BatchParamsEditor({
     required this.title,
     required this.params,
     required this.onChanged,
+    this.onCustomSizeSelected,
     this.initiallyExpanded = false,
   });
 
@@ -1378,6 +1472,13 @@ class _BatchParamsEditor extends StatelessWidget {
           onChanged: (value) {
             if (value == null) return;
             params.model = value;
+            if (!params.isV5) {
+              if (params.qualityPreset == 'light') {
+                params.qualityPreset = 'standard';
+              }
+              params.transparentBackground = false;
+              params.qualityToggle = params.qualityPreset != 'none';
+            }
             onChanged();
           },
         ),
@@ -1392,6 +1493,7 @@ class _BatchParamsEditor extends StatelessWidget {
                     selected: params.width == size.width &&
                         params.height == size.height,
                     onSelected: (_) {
+                      onCustomSizeSelected?.call();
                       params
                         ..width = size.width
                         ..height = size.height;
@@ -1407,8 +1509,15 @@ class _BatchParamsEditor extends StatelessWidget {
               child: _BatchNumberField(
                 label: t('batch.width'),
                 value: params.width,
+                commitOnly: true,
+                normalize: (value) => snapNaiDimensionWithinArea(
+                  value,
+                  params.height,
+                  params.width,
+                ),
                 onChanged: (value) {
-                  params.width = _snapBatchDimension(value);
+                  onCustomSizeSelected?.call();
+                  params.width = value;
                   onChanged();
                 },
               ),
@@ -1418,13 +1527,28 @@ class _BatchParamsEditor extends StatelessWidget {
               child: _BatchNumberField(
                 label: t('batch.height'),
                 value: params.height,
+                commitOnly: true,
+                normalize: (value) => snapNaiDimensionWithinArea(
+                  value,
+                  params.width,
+                  params.height,
+                ),
                 onChanged: (value) {
-                  params.height = _snapBatchDimension(value);
+                  onCustomSizeSelected?.call();
+                  params.height = value;
                   onChanged();
                 },
               ),
             ),
           ],
+        ),
+        const SizedBox(height: 4),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            t('size.commitHint'),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
         ),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
@@ -1533,12 +1657,20 @@ class _BatchParamsEditor extends StatelessWidget {
             onChanged();
           },
         ),
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Quality Toggle'),
-          value: params.qualityToggle,
+        const SizedBox(height: 8),
+        QualityPresetControl(
+          language: language,
+          model: params.model,
+          value: params.qualityPreset,
+          transparentBackground: params.transparentBackground,
           onChanged: (value) {
-            params.qualityToggle = value;
+            params
+              ..qualityPreset = value
+              ..qualityToggle = value != 'none';
+            onChanged();
+          },
+          onTransparentChanged: (value) {
+            params.transparentBackground = value;
             onChanged();
           },
         ),
@@ -1579,33 +1711,83 @@ class _BatchParamsEditor extends StatelessWidget {
   }
 }
 
-class _BatchNumberField extends StatelessWidget {
+class _BatchNumberField extends StatefulWidget {
   final String label;
   final int value;
   final ValueChanged<int> onChanged;
+  final bool commitOnly;
+  final int Function(int value)? normalize;
 
   const _BatchNumberField({
     required this.label,
     required this.value,
     required this.onChanged,
+    this.commitOnly = false,
+    this.normalize,
   });
 
   @override
-  Widget build(BuildContext context) => TextFormField(
-        initialValue: '$value',
+  State<_BatchNumberField> createState() => _BatchNumberFieldState();
+}
+
+class _BatchNumberFieldState extends State<_BatchNumberField> {
+  late final TextEditingController controller;
+  late final FocusNode focusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    controller = TextEditingController(text: '${widget.value}');
+    focusNode = FocusNode()..addListener(_finishAfterEditing);
+  }
+
+  @override
+  void didUpdateWidget(covariant _BatchNumberField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!focusNode.hasFocus && controller.text != '${widget.value}') {
+      controller.text = '${widget.value}';
+    }
+  }
+
+  void _finishAfterEditing() {
+    if (focusNode.hasFocus) return;
+    if (widget.commitOnly) {
+      final parsed = int.tryParse(controller.text);
+      if (parsed != null) {
+        final next = widget.normalize?.call(parsed) ?? parsed;
+        controller.text = '$next';
+        if (next != widget.value) widget.onChanged(next);
+        return;
+      }
+    }
+    if (controller.text != '${widget.value}') {
+      controller.text = '${widget.value}';
+    }
+  }
+
+  @override
+  void dispose() {
+    focusNode
+      ..removeListener(_finishAfterEditing)
+      ..dispose();
+    controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => TextField(
+        controller: controller,
+        focusNode: focusNode,
         keyboardType: TextInputType.number,
         decoration: InputDecoration(
-          labelText: label,
+          labelText: widget.label,
           border: const OutlineInputBorder(),
         ),
         onChanged: (raw) {
+          if (widget.commitOnly) return;
           final next = int.tryParse(raw);
-          if (next != null) onChanged(next);
+          if (next != null) widget.onChanged(next);
         },
+        onSubmitted: (_) => focusNode.unfocus(),
       );
-}
-
-int _snapBatchDimension(int value) {
-  final bounded = value.clamp(64, 1600);
-  return ((bounded / 64).round() * 64).clamp(64, 1600);
 }

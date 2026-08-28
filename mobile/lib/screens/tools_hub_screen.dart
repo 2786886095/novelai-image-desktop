@@ -8,8 +8,18 @@ import 'comic_screen.dart';
 import 'aitag_gallery_screen.dart';
 import 'random_artist_lab_screen.dart';
 import 'prompt_codex_screen.dart';
+import 'v5_artist_weight_repair_screen.dart';
 
-enum _ActiveTool { hub, comic, batchRedraw, aitag, randomArtist, promptCodex }
+enum _ActiveTool {
+  hub,
+  comic,
+  batchRedraw,
+  aitag,
+  randomArtist,
+  promptCodex,
+  v5ArtistRepair,
+  artistStringDraw,
+}
 
 ({String title, String subtitle}) _promptCodexTileText(String language) {
   switch (language) {
@@ -74,6 +84,16 @@ class _ToolsHubScreenState extends State<ToolsHubScreen> {
       return PromptCodexScreen(
           onBack: () => setState(() => active = _ActiveTool.hub));
     }
+    if (active == _ActiveTool.v5ArtistRepair) {
+      return V5ArtistWeightRepairScreen(
+          onBack: () => setState(() => active = _ActiveTool.hub));
+    }
+    if (active == _ActiveTool.artistStringDraw) {
+      return V5ArtistWeightRepairScreen(
+        mode: V5ArtistToolMode.draw,
+        onBack: () => setState(() => active = _ActiveTool.hub),
+      );
+    }
     final language =
         context.select<AppState, String>((s) => s.settings.language);
     final text = mobileToolsHubTextFor(language);
@@ -110,6 +130,46 @@ class _ToolsHubScreenState extends State<ToolsHubScreen> {
             title: text.artistLabTitle,
             subtitle: text.artistLabSubtitle,
             onTap: () => setState(() => active = _ActiveTool.randomArtist),
+          ),
+          const SizedBox(height: 10),
+          _ToolTile(
+            icon: Icons.auto_fix_high_outlined,
+            title: switch (language) {
+              'zh-TW' => 'V4.5 畫師串修復器',
+              'en-US' => 'V4.5 Artist-string Repair',
+              'ja-JP' => 'V4.5 画家列修復',
+              'ko-KR' => 'V4.5 작가 문자열 복구',
+              _ => 'V4.5 画师串修复器',
+            },
+            subtitle: switch (language) {
+              'zh-TW' => '把每個 V4.5 畫師權重獨立壓到原值的 1/3～1/2，並規範為 V5 數值格式',
+              'en-US' =>
+                'Sample each V4.5 artist weight at 1/3–1/2 and normalize it to V5 numeric syntax',
+              'ja-JP' => '各 V4.5 画家ウェイトを 1/3～1/2 で個別抽選し、V5 数値形式へ正規化',
+              'ko-KR' => '각 V4.5 작가 가중치를 1/3~1/2로 개별 추첨하고 V5 숫자 형식으로 정규화',
+              _ => '把每个 V4.5 画师权重独立压到原值的 1/3～1/2，并规范为 V5 数值格式',
+            },
+            onTap: () => setState(() => active = _ActiveTool.v5ArtistRepair),
+          ),
+          const SizedBox(height: 10),
+          _ToolTile(
+            icon: Icons.tune_outlined,
+            title: switch (language) {
+              'zh-TW' => '輸入畫師串抽卡',
+              'en-US' => 'Artist-string Weight Draw',
+              'ja-JP' => '画家列ウェイト抽選',
+              'ko-KR' => '작가 문자열 가중치 뽑기',
+              _ => '输入画师串抽卡',
+            },
+            subtitle: switch (language) {
+              'zh-TW' => '貼上完整畫師串，保留全部 Tag，只重抽畫師權重，批次生圖並收藏',
+              'en-US' =>
+                'Paste a complete artist string, retain every tag, reroll weights, batch-generate, and save favorites',
+              'ja-JP' => '完全な画家列と全 Tag を保持し、画家ウェイトだけ再抽選・一括生成',
+              'ko-KR' => '전체 문자열과 모든 Tag를 유지한 채 작가 가중치만 다시 뽑아 일괄 생성·저장',
+              _ => '粘贴完整画师串，保留全部 Tag，只重抽画师权重，批量生图并收藏',
+            },
+            onTap: () => setState(() => active = _ActiveTool.artistStringDraw),
           ),
           const SizedBox(height: 10),
           _ToolTile(

@@ -56,7 +56,8 @@ describe("artist recipe grammar", () => {
     expect(recipes.every((recipe) => recipe.artists.length >= 4 && recipe.artists.length <= 10)).toBe(true);
     expect(recipes.every((recipe) => recipe.prompt.includes("year 2025, masterpiece"))).toBe(true);
     expect(recipes.some((recipe) => recipe.artists.some((artist) => artist.weight < 0.65))).toBe(true);
-    expect(recipes.some((recipe) => recipe.artists.some((artist) => artist.weight > 1.2))).toBe(true);
+    expect(recipes.some((recipe) => recipe.artists.some((artist) => artist.weight > 1))).toBe(true);
+    expect(recipes.every((recipe) => recipe.artists.every((artist) => artist.weight <= 1.2))).toBe(true);
   });
 
   it("normalizes qualified Danbooru names and prefixes every generated artist tag", () => {

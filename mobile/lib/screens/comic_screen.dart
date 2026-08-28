@@ -9,11 +9,9 @@ import '../i18n/app_locales.dart';
 import '../models/nai_models.dart';
 import '../references/reference_presets.dart';
 import '../state/app_state.dart';
+import '../ui/quality_preset_control.dart';
 import '../ui/studio_shell.dart';
 import 'generate_screen.dart';
-
-int _snapNaiDimension(int value) =>
-    ((value.clamp(64, 1600) / 64).round() * 64).clamp(64, 1600).toInt();
 
 class ComicScreen extends StatelessWidget {
   final ComicController? controller;
@@ -1371,6 +1369,7 @@ class _ParamsEditor extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = _text(context);
+    final language = context.watch<AppState>().settings.language;
     return _SectionCard(
       title: t('comic.paramsHeading'),
       child: LayoutBuilder(builder: (context, constraints) {
@@ -1412,23 +1411,44 @@ class _ParamsEditor extends StatelessWidget {
                     .toList(),
                 onChanged: (value) {
                   params.model = value ?? params.model;
+                  if (!params.isV5) {
+                    if (params.qualityPreset == 'light') {
+                      params.qualityPreset = 'standard';
+                    }
+                    params.transparentBackground = false;
+                  }
+                  params.qualityToggle = params.qualityPreset != 'none';
                   onChanged();
                 },
               ),
             ),
-            _NumberField(
+            _CommittedDimensionField(
               width: width,
               label: t('comic.width'),
               value: params.width,
-              onChanged: (value) => params.width = _snapNaiDimension(value),
-              notify: onChanged,
+              normalize: (value) => snapNaiDimensionWithinArea(
+                value,
+                params.height,
+                params.width,
+              ),
+              onCommit: (value) {
+                params.width = value;
+                onChanged();
+              },
             ),
-            _NumberField(
+            _CommittedDimensionField(
               width: width,
               label: t('comic.height'),
               value: params.height,
-              onChanged: (value) => params.height = _snapNaiDimension(value),
-              notify: onChanged,
+              normalize: (value) => snapNaiDimensionWithinArea(
+                value,
+                params.width,
+                params.height,
+              ),
+              onCommit: (value) {
+                params.height = value;
+                onChanged();
+              },
             ),
             _NumberField(
               width: width,
@@ -1450,6 +1470,25 @@ class _ParamsEditor extends StatelessWidget {
               value: params.seed,
               onChanged: (value) => params.seed = value,
               notify: onChanged,
+            ),
+            SizedBox(
+              width: constraints.maxWidth,
+              child: QualityPresetControl(
+                language: language,
+                model: params.model,
+                value: params.qualityPreset,
+                transparentBackground: params.transparentBackground,
+                onChanged: (value) {
+                  params
+                    ..qualityPreset = value
+                    ..qualityToggle = value != 'none';
+                  onChanged();
+                },
+                onTransparentChanged: (value) {
+                  params.transparentBackground = value;
+                  onChanged();
+                },
+              ),
             ),
           ],
         );
@@ -1543,6 +1582,82 @@ class _Field extends StatelessWidget {
           alignLabelWithHint: minLines > 1,
         ),
         onChanged: onChanged,
+      );
+}
+
+class _CommittedDimensionField extends StatefulWidget {
+  final double width;
+  final String label;
+  final int value;
+  final int Function(int value) normalize;
+  final ValueChanged<int> onCommit;
+  const _CommittedDimensionField({
+    required this.width,
+    required this.label,
+    required this.value,
+    required this.normalize,
+    required this.onCommit,
+  });
+
+  @override
+  State<_CommittedDimensionField> createState() =>
+      _CommittedDimensionFieldState();
+}
+
+class _CommittedDimensionFieldState extends State<_CommittedDimensionField> {
+  late final TextEditingController controller;
+  late final FocusNode focusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    controller = TextEditingController(text: '${widget.value}');
+    focusNode = FocusNode()..addListener(_commitAfterEditing);
+  }
+
+  @override
+  void didUpdateWidget(covariant _CommittedDimensionField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!focusNode.hasFocus && controller.text != '${widget.value}') {
+      controller.text = '${widget.value}';
+    }
+  }
+
+  void _commitAfterEditing() {
+    if (focusNode.hasFocus) return;
+    final parsed = int.tryParse(controller.text);
+    if (parsed == null) {
+      controller.text = '${widget.value}';
+      return;
+    }
+    final next = widget.normalize(parsed);
+    controller.text = '$next';
+    if (next != widget.value) widget.onCommit(next);
+  }
+
+  @override
+  void dispose() {
+    focusNode
+      ..removeListener(_commitAfterEditing)
+      ..dispose();
+    controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        width: widget.width,
+        child: TextField(
+          controller: controller,
+          focusNode: focusNode,
+          keyboardType: TextInputType.number,
+          decoration: InputDecoration(
+            labelText: widget.label,
+            border: const OutlineInputBorder(),
+          ),
+          onSubmitted: (_) => focusNode.unfocus(),
+          onTapOutside: (_) => focusNode.unfocus(),
+        ),
       );
 }
 

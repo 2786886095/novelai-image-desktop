@@ -115,7 +115,7 @@ describe("reference preset persistence", () => {
       sourceGameId: "原神",
       sourceCategory: "游戏内角色图",
     });
-    expect(saved.preset?.fileUrl).toMatch(/^file:/);
+    expect(saved.preset?.fileUrl).toMatch(/^nai-local:\/\/file\//);
 
     const read = await readReferencePreset(saved.preset!.id, root);
     expect(Buffer.from(read.base64!, "base64")).toEqual(image);

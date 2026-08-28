@@ -1,11 +1,11 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
-import { Button, NumberInput, Toggle } from "./components/ui";
+import { Button, CommittedNumberInput, NumberInput, Toggle } from "./components/ui";
 import { Icon } from "./components/icons";
+import { QualityPresetControl } from "./components/QualityPresetControl";
 import {
   desktopUiFormat,
   desktopUiText,
-  getToolsHubText,
   localizedDesktopOptionLabel,
 } from "./i18n";
 import { useAppStore } from "./store";
@@ -15,20 +15,18 @@ import {
   resetInterruptedBatchItem,
   shouldStopBatchRedraw,
 } from "./batch-redraw-queue";
-import { NovelTuiwenStudio } from "./tuiwen/NovelTuiwenStudio";
-import AitagGallery from "./AitagGallery";
-import ArtistLab from "./ArtistLab";
-import { TagComicGenerator } from "./comic/TagComicGenerator";
 import ReferencePresetManager, {
   referencePresetTextFor,
   type ReferencePresetApplyPayload,
 } from "./ReferencePresetManager";
 import {
   createDefaultBatchRedraw,
+  normalizeGenerateParams,
   NAI_MODELS,
   NAI_SAMPLERS,
   NAI_UC_PRESETS,
   isNAIV4PlusModel,
+  isNAIV5Model,
   supportsNAINoiseScheduleControl,
   supportsNAIVariety,
   type BatchExportFile,
@@ -43,6 +41,13 @@ import {
   type UcPreset,
   type VibeTransferItem,
 } from "./types";
+import {
+  adaptiveNAIImageSize,
+  maxNAIDimensionFor,
+  NAI_DIMENSION_STEP,
+  NAI_MIN_DIMENSION,
+  snapNAIDimensionWithinArea,
+} from "./nai-dimensions";
 
 const REDRAW_STEPS = [
   {
@@ -67,148 +72,6 @@ const REDRAW_STEPS = [
   },
 ] as const;
 
-const PromptCodex = lazy(() => import("./PromptCodex"));
-
-function promptCodexCardText(language: unknown) {
-  const text = {
-    "zh-CN": ["所长 NovelAI 个人法典", "三套法典离线收录、原章节与统一分类检索、提示词一键复制，并可手动更新。"],
-    "zh-TW": ["所長 NovelAI 個人法典", "三套法典離線收錄、原章節與統一分類搜尋、提示詞一鍵複製，並可手動更新。"],
-    "en-US": ["NovelAI Personal Codex", "Three offline codices with section/category search, one-click copy, and manual updates."],
-    "ja-JP": ["NovelAI 個人プロンプト法典", "3冊をオフライン収録。章・分類検索、ワンクリックコピー、手動更新に対応。"],
-    "ko-KR": ["NovelAI 개인 프롬프트 법전", "세 법전을 오프라인 제공하며 장·분류 검색, 원클릭 복사, 수동 업데이트를 지원합니다."],
-  } as const;
-  const [title, desc] =
-    text[
-      typeof language === "string" && language in text
-        ? (language as keyof typeof text)
-        : "zh-CN"
-    ];
-  return { title, desc };
-}
-
-export function ToolsHub() {
-  const language = useAppStore((state) => state.settings?.language);
-  const text = useMemo(() => getToolsHubText(language), [language]);
-  const codexText = useMemo(
-    () => promptCodexCardText(language),
-    [language],
-  );
-  const isWindows = window.naiDesktop.platform === "win32";
-  const [activeTool, setActiveTool] = useState<
-    "hub" | "comic" | "redraw" | "tuiwen" | "aitag" | "artistLab" | "promptCodex"
-  >(() => {
-    if (new URLSearchParams(window.location.search).get("uiCapture") === "randomArtist") {
-      return isWindows ? "artistLab" : "hub";
-    }
-    const saved = localStorage.getItem("langbai.tools.active.v1");
-    return saved === "comic" ||
-      saved === "redraw" ||
-      saved === "tuiwen" ||
-      saved === "aitag" ||
-      saved === "promptCodex" ||
-      (saved === "artistLab" && isWindows)
-      ? saved
-      : "hub";
-  });
-  useEffect(() => {
-    localStorage.setItem("langbai.tools.active.v1", activeTool);
-  }, [activeTool]);
-  if (activeTool === "comic")
-    return <TagComicGenerator onBack={() => setActiveTool("hub")} />;
-  if (activeTool === "redraw")
-    return <BatchRedraw onBack={() => setActiveTool("hub")} />;
-  if (activeTool === "tuiwen")
-    return <NovelTuiwenStudio onBack={() => setActiveTool("hub")} />;
-  if (activeTool === "aitag")
-    return <AitagGallery onBack={() => setActiveTool("hub")} />;
-  if (activeTool === "promptCodex")
-    return (
-      <Suspense
-        fallback={
-          <main className="tools-hub">
-            <section className="tools-hero">
-              <h2>{codexText.title}</h2>
-            </section>
-          </main>
-        }
-      >
-        <PromptCodex onBack={() => setActiveTool("hub")} />
-      </Suspense>
-    );
-  if (activeTool === "artistLab" && isWindows)
-    return <ArtistLab onBack={() => setActiveTool("hub")} />;
-
-  return (
-    <main className="tools-hub">
-      <section className="tools-hero">
-        <div>
-          <span className="eyebrow">{text.eyebrow}</span>
-          <h2>{text.title}</h2>
-          <p>{text.subtitle}</p>
-        </div>
-      </section>
-      <section className="tool-card-grid">
-        <button
-          type="button"
-          className="tool-card ready"
-          onClick={() => setActiveTool("comic")}
-        >
-          <b>{text.comicTitle}</b>
-          <span>{text.comicDesc}</span>
-          <small>{text.ready}</small>
-        </button>
-        <button
-          type="button"
-          className="tool-card ready"
-          onClick={() => setActiveTool("promptCodex")}
-        >
-          <b>{codexText.title}</b>
-          <span>{codexText.desc}</span>
-          <small>{text.ready}</small>
-        </button>
-        <button
-          type="button"
-          className="tool-card ready"
-          onClick={() => setActiveTool("redraw")}
-        >
-          <b>{text.batchTitle}</b>
-          <span>{text.batchDesc}</span>
-          <small>{text.ready}</small>
-        </button>
-        <button
-          type="button"
-          className="tool-card ready"
-          onClick={() => setActiveTool("tuiwen")}
-        >
-          <b>{text.tuiwenTitle}</b>
-          <span>{text.tuiwenDesc}</span>
-          <small>{text.foundation}</small>
-        </button>
-        <button
-          type="button"
-          className="tool-card ready"
-          onClick={() => setActiveTool("aitag")}
-        >
-          <b>{text.aitagTitle}</b>
-          <span>{text.aitagDesc}</span>
-          <small>{text.ready}</small>
-        </button>
-        {isWindows && (
-          <button
-            type="button"
-            className="tool-card ready"
-            onClick={() => setActiveTool("artistLab")}
-          >
-            <b>{text.artistLabTitle}</b>
-            <span>{text.artistLabDesc}</span>
-            <small>{text.ready}</small>
-          </button>
-        )}
-      </section>
-    </main>
-  );
-}
-
 function uid() {
   return (
     crypto.randomUUID?.() ??
@@ -225,6 +88,22 @@ function toBase64(file: File): Promise<string> {
       resolve(result.includes(",") ? result.split(",")[1] : result);
     };
     reader.readAsDataURL(file);
+  });
+}
+
+function readBrowserImageSize(file: File): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve({ width: image.naturalWidth, height: image.naturalHeight });
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error(`Unable to read image dimensions: ${file.name}`));
+    };
+    image.src = url;
   });
 }
 
@@ -275,14 +154,23 @@ function normalizeBatchItem(
   raw: Partial<BatchRedrawItem>,
   index: number,
 ): BatchRedrawItem {
+  const rawParams = raw.params ?? {};
+  const migratedParams: Partial<GenerateParams> = {
+    ...rawParams,
+    ...(rawParams.qualityPreset == null && typeof rawParams.qualityToggle === "boolean"
+      ? { qualityPreset: rawParams.qualityToggle ? "standard" : "none" }
+      : {}),
+  };
   return {
     id: raw.id ?? uid(),
     name: String(raw.name ?? `image_${index + 1}`),
     base64: String(raw.base64 ?? ""),
+    width: Number.isFinite(Number(raw.width)) ? Math.max(1, Number(raw.width)) : 0,
+    height: Number.isFinite(Number(raw.height)) ? Math.max(1, Number(raw.height)) : 0,
     prompt: String(raw.prompt ?? ""),
     strength: raw.strength == null ? null : Number(raw.strength),
     overrideParams: Boolean(raw.overrideParams),
-    params: raw.params ?? {},
+    params: migratedParams,
     status: "pending",
     resultUrl: undefined,
     resultPath: undefined,
@@ -299,7 +187,17 @@ function normalizeBatchProject(
   return {
     ...fallback,
     ...p,
-    globalParams: { ...fallback.globalParams, ...(p.globalParams ?? {}) },
+    globalParams: normalizeGenerateParams({
+      ...fallback.globalParams,
+      ...(p.globalParams ?? {}),
+      ...(
+        p.globalParams?.qualityPreset == null &&
+        typeof p.globalParams?.qualityToggle === "boolean"
+          ? { qualityPreset: p.globalParams.qualityToggle ? "standard" : "none" }
+          : {}
+      ),
+    }),
+    sizeMode: p.sizeMode === "custom" ? "custom" : "adaptive",
     items: Array.isArray(p.items)
       ? p.items
           .map((it, i) => normalizeBatchItem(it, i))
@@ -326,6 +224,18 @@ function BatchStatusBadge({ status }: { status: BatchRedrawItem["status"] }) {
       <span className="redraw-badge fail">{t("batch.status.failed")}</span>
     );
   return null;
+}
+
+function selectedBatchOutputSize(
+  project: BatchRedrawProject,
+  item: BatchRedrawItem,
+) {
+  const params = item.overrideParams
+    ? { ...project.globalParams, ...item.params }
+    : project.globalParams;
+  return project.sizeMode === "adaptive"
+    ? adaptiveNAIImageSize(item.width, item.height, params)
+    : { width: params.width, height: params.height };
 }
 
 // Reusable parameter editor — drives both the global params and per-image overrides.
@@ -367,7 +277,18 @@ function BatchParamFields({
           <span>{t("batch.param.model")}</span>
           <select
             value={value.model}
-            onChange={(e) => onPatch({ model: e.target.value as NAIModel })}
+            onChange={(e) => {
+              const model = e.target.value as NAIModel;
+              onPatch({
+                model,
+                ...(isNAIV5Model(model)
+                  ? {}
+                  : {
+                      qualityPreset: value.qualityPreset === "light" ? "standard" : value.qualityPreset,
+                      transparentBackground: false,
+                    }),
+              });
+            }}
           >
             {NAI_MODELS.map((m) => (
               <option key={m.value} value={m.value}>
@@ -389,21 +310,27 @@ function BatchParamFields({
             ))}
           </select>
         </label>
-        <NumberInput
+        <CommittedNumberInput
           label={t("batch.param.width")}
           value={value.width}
-          min={64}
-          max={1600}
-          step={64}
-          onChange={(v) => onPatch({ width: v })}
+          min={NAI_MIN_DIMENSION}
+          max={maxNAIDimensionFor(value.height)}
+          step={NAI_DIMENSION_STEP}
+          normalize={(next) =>
+            snapNAIDimensionWithinArea(next, value.height, value.width)
+          }
+          onCommit={(width) => onPatch({ width })}
         />
-        <NumberInput
+        <CommittedNumberInput
           label={t("batch.param.height")}
           value={value.height}
-          min={64}
-          max={1600}
-          step={64}
-          onChange={(v) => onPatch({ height: v })}
+          min={NAI_MIN_DIMENSION}
+          max={maxNAIDimensionFor(value.width)}
+          step={NAI_DIMENSION_STEP}
+          normalize={(next) =>
+            snapNAIDimensionWithinArea(next, value.width, value.height)
+          }
+          onCommit={(height) => onPatch({ height })}
         />
         <NumberInput
           label={t("batch.param.steps")}
@@ -474,12 +401,20 @@ function BatchParamFields({
           </select>
         </label>
       </div>
+      <small className="dimension-input-hint">{t("size.commitHint")}</small>
       <div className="comic-panel-param-toggles">
-        <Toggle
-          checked={value.qualityToggle}
-          onChange={(v) => onPatch({ qualityToggle: v })}
-          label="Quality Tags"
-          description={t("batch.param.qualityDesc")}
+        <QualityPresetControl
+          className="batch-quality-control"
+          language={language}
+          model={value.model}
+          value={value.qualityPreset}
+          transparentBackground={value.transparentBackground}
+          onChange={(qualityPreset) =>
+            onPatch({ qualityPreset, qualityToggle: qualityPreset !== "none" })
+          }
+          onTransparentChange={(transparentBackground) =>
+            onPatch({ transparentBackground })
+          }
         />
         {supportsNAIVariety(value.model) && <Toggle
           checked={value.variety}
@@ -742,7 +677,7 @@ function BatchVibePicker({
   );
 }
 
-function BatchRedraw({ onBack }: { onBack?: () => void }) {
+export function BatchRedraw({ onBack }: { onBack?: () => void }) {
   const params = useAppStore((state) => state.params);
   const project = useAppStore((state) => state.batchRedraw);
   const setBatchRedraw = useAppStore((state) => state.setBatchRedraw);
@@ -913,10 +848,13 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
     );
     const next: BatchRedrawItem[] = [];
     for (const f of arr) {
+      const dimensions = await readBrowserImageSize(f);
       next.push({
         id: uid(),
         name: f.name.replace(/\.[^.]+$/, ""),
         base64: await toBase64(f),
+        width: dimensions.width,
+        height: dimensions.height,
         prompt: "",
         strength: null,
         overrideParams: false,
@@ -1393,6 +1331,9 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
                 <span className="redraw-thumb-name" title={it.name}>
                   #{idx + 1} {it.name}
                 </span>
+                <small className="redraw-thumb-size">
+                  {it.width}×{it.height} → {selectedBatchOutputSize(project, it).width}×{selectedBatchOutputSize(project, it).height}
+                </small>
                 <button
                   className="vibe-remove"
                   title={t("batch.import.remove")}
@@ -1469,6 +1410,30 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
                 placeholder={t("batch.params.negativePlaceholder")}
               />
             </label>
+          </div>
+          <div className="batch-size-mode-card">
+            <strong>{t("batch.sizeMode.title")}</strong>
+            <div className="i2i-size-mode" role="group" aria-label={t("batch.sizeMode.title")}>
+              <button
+                type="button"
+                className={clsx(project.sizeMode === "adaptive" && "active")}
+                onClick={() => patch({ sizeMode: "adaptive" })}
+              >
+                {t("batch.sizeMode.adaptive")}
+              </button>
+              <button
+                type="button"
+                className={clsx(project.sizeMode === "custom" && "active")}
+                onClick={() => patch({ sizeMode: "custom" })}
+              >
+                {t("batch.sizeMode.custom")}
+              </button>
+            </div>
+            <small>
+              {project.sizeMode === "adaptive"
+                ? t("batch.sizeMode.adaptiveDesc")
+                : f("batch.sizeMode.customDesc", { size: `${globalParams.width}×${globalParams.height}` })}
+            </small>
           </div>
           <BatchParamFields
             value={globalParams}
@@ -1603,6 +1568,9 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
                     </Button>
                   </div>
                 </header>
+                <div className="batch-item-size-summary">
+                  {t("batch.sizeMode.current")}: {activeItem.width}×{activeItem.height} → {selectedBatchOutputSize(project, activeItem).width}×{selectedBatchOutputSize(project, activeItem).height}
+                </div>
                 <div className="comic-panel-editor-body">
                   {activeItem.error ? (
                     <div className="comic-panel-error">{activeItem.error}</div>
@@ -2038,5 +2006,3 @@ function BatchRedraw({ onBack }: { onBack?: () => void }) {
     </main>
   );
 }
-
-export { TagComicGenerator as ComicGenerator };

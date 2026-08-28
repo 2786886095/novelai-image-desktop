@@ -3,7 +3,7 @@ import axios from "axios";
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
-import { pathToFileURL } from "url";
+import { toLocalMediaUrl } from "./local-media-protocol";
 import type {
   ArtistDiscoveryResult,
   ArtistLabImageScore,
@@ -73,7 +73,7 @@ export async function pickArtistLabTarget() {
   });
   if (result.canceled || !result.filePaths[0]) return null;
   const filePath = result.filePaths[0];
-  return { filePath, fileUrl: pathToFileURL(filePath).toString(), name: path.basename(filePath) };
+  return { filePath, fileUrl: toLocalMediaUrl(filePath), name: path.basename(filePath) };
 }
 
 function safeArtistQuery(value: unknown): string {
@@ -350,7 +350,7 @@ export async function discoverSimilarArtists(
         artist,
         similarity: Math.max(0, Math.min(1, cosine(target, vector))),
         referencePath: filePath,
-        referenceUrl: pathToFileURL(filePath).toString(),
+        referenceUrl: toLocalMediaUrl(filePath),
       };
     } catch { return null; }
   }))

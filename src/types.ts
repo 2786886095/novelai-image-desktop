@@ -1,4 +1,5 @@
 import { version as packageVersion } from "../package.json";
+import { fitNAIImageSize } from "./nai-dimensions";
 
 // package.json is the single desktop release-version source. Keeping this
 // derived prevents the title bar/about page from showing an old hard-coded
@@ -156,6 +157,9 @@ export const NAI_UC_PRESETS = [
 
 export type UcPreset = 0 | 1 | 2 | 3;
 
+export type QualityPreset = "standard" | "light" | "none";
+export type ImageToImageSizeMode = "adaptive" | "custom";
+
 export interface GenerateParams {
   model: NAIModel;
   stylePrompt: string;
@@ -172,7 +176,12 @@ export interface GenerateParams {
   /** "fixed" uses the seed number every time; "random" rolls a new seed each run. */
   seedMode: "fixed" | "random";
   ucPreset: UcPreset;
+  /** Official quality-tag preset. Light is currently available on V5 only. */
+  qualityPreset: QualityPreset;
+  /** Legacy compatibility alias written by releases before qualityPreset. */
   qualityToggle: boolean;
+  /** V5-only transparent-background/alpha request. */
+  transparentBackground: boolean;
   smea: boolean;
   smeaDyn: boolean;
   variety: boolean;
@@ -195,7 +204,9 @@ export const DEFAULT_PARAMS: GenerateParams = {
   seed: 0,
   seedMode: "random",
   ucPreset: 2,
+  qualityPreset: "standard",
   qualityToggle: true,
+  transparentBackground: false,
   smea: false,
   smeaDyn: false,
   variety: false,
@@ -214,15 +225,13 @@ function finiteNumber(value: unknown, fallback: number): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-function normalizedDimension(value: unknown, fallback: number): number {
-  const parsed = finiteNumber(value, fallback);
-  return Math.min(1600, Math.max(64, Math.round(parsed / 64) * 64));
-}
-
 /** Repair generation state restored from older releases or imported metadata. */
 export function normalizeGenerateParams(value?: Partial<GenerateParams> | null): GenerateParams {
   const source = value ?? {};
   const model = String(source.model ?? DEFAULT_PARAMS.model);
+  const normalizedModel = (SUPPORTED_MODEL_VALUES.has(model)
+    ? model
+    : DEFAULT_PARAMS.model) as NAIModel;
   const sampler = String(source.sampler ?? DEFAULT_PARAMS.sampler);
   const noiseSchedule = String(source.noiseSchedule ?? DEFAULT_PARAMS.noiseSchedule);
   const steps = Math.round(finiteNumber(source.steps, DEFAULT_PARAMS.steps));
@@ -231,13 +240,26 @@ export function normalizeGenerateParams(value?: Partial<GenerateParams> | null):
   const seed = Math.round(finiteNumber(source.seed, DEFAULT_PARAMS.seed));
   const ucPreset = Math.round(finiteNumber(source.ucPreset, DEFAULT_PARAMS.ucPreset));
   const smea = typeof source.smea === "boolean" ? source.smea : DEFAULT_PARAMS.smea;
+  const requestedQualityPreset =
+    source.qualityPreset === "standard" ||
+    source.qualityPreset === "light" ||
+    source.qualityPreset === "none"
+      ? source.qualityPreset
+      : source.qualityToggle === false
+        ? "none"
+        : DEFAULT_PARAMS.qualityPreset;
+  const qualityPreset: QualityPreset =
+    !isNAIV5Model(normalizedModel) && requestedQualityPreset === "light"
+      ? "standard"
+      : requestedQualityPreset;
+  const dimensions = fitNAIImageSize(source.width, source.height, DEFAULT_PARAMS);
   return {
-    model: (SUPPORTED_MODEL_VALUES.has(model) ? model : DEFAULT_PARAMS.model) as NAIModel,
+    model: normalizedModel,
     stylePrompt: typeof source.stylePrompt === "string" ? source.stylePrompt : "",
     positivePrompt: typeof source.positivePrompt === "string" ? source.positivePrompt : "",
     negativePrompt: typeof source.negativePrompt === "string" ? source.negativePrompt : "",
-    width: normalizedDimension(source.width, DEFAULT_PARAMS.width),
-    height: normalizedDimension(source.height, DEFAULT_PARAMS.height),
+    width: dimensions.width,
+    height: dimensions.height,
     steps: Math.min(50, Math.max(1, steps)),
     cfgScale: Math.min(10, Math.max(0, cfgScale)),
     cfgRescale: Math.min(1, Math.max(0, cfgRescale)),
@@ -246,7 +268,10 @@ export function normalizeGenerateParams(value?: Partial<GenerateParams> | null):
     seed: Math.min(MAX_NAI_SEED, Math.max(0, seed)),
     seedMode: source.seedMode === "fixed" ? "fixed" : "random",
     ucPreset: Math.min(3, Math.max(0, ucPreset)) as UcPreset,
-    qualityToggle: typeof source.qualityToggle === "boolean" ? source.qualityToggle : DEFAULT_PARAMS.qualityToggle,
+    qualityPreset,
+    qualityToggle: qualityPreset !== "none",
+    transparentBackground:
+      isNAIV5Model(normalizedModel) && source.transparentBackground === true,
     smea,
     smeaDyn: smea && (typeof source.smeaDyn === "boolean" ? source.smeaDyn : DEFAULT_PARAMS.smeaDyn),
     variety: typeof source.variety === "boolean" ? source.variety : DEFAULT_PARAMS.variety,
@@ -264,10 +289,14 @@ export interface LastGenerationState {
   inpaintPositivePrompt: string;
   brushSize: number;
   brushOpacity: number;
+  brushShape?: InpaintBrushShape;
+  brushSizeUnit?: "grid8";
   upscaleScale: UpscaleScale;
   directorTool: DirectorTool;
   augmentOptions: AugmentOptions;
 }
+
+export type InpaintBrushShape = "round" | "square";
 
 export interface WorkingImage {
   filePath: string;
@@ -369,6 +398,9 @@ export interface BatchRedrawItem {
   id: string;
   name: string;
   base64: string; // pure source base64 (preview is derived from this)
+  /** Source dimensions captured at import for adaptive img2img sizing. */
+  width: number;
+  height: number;
   prompt: string;
   /** null → use the global change strength */
   strength: number | null;
@@ -392,6 +424,8 @@ export interface BatchRedrawProject {
   globalNegative: string;
   /** Full editable params for ALL models — defaults to the main screen params. */
   globalParams: GenerateParams;
+  /** Adaptive uses each source image's nearest 64-multiple size. */
+  sizeMode: ImageToImageSizeMode;
   preciseReferences: PreciseReferenceItem[];
   vibeImages: VibeTransferItem[];
   aiMode: ReversePromptMode;
@@ -417,6 +451,7 @@ export function createDefaultBatchRedraw(
     globalStyle: "",
     globalNegative: "",
     globalParams: { ...params, fileNamePrefix: "" },
+    sizeMode: "adaptive",
     preciseReferences: [],
     vibeImages: [],
     aiMode: "tags",
@@ -1435,6 +1470,8 @@ export interface ImportedParams {
   smeaDyn?: boolean;
   ucPreset?: UcPreset;
   qualityToggle?: boolean;
+  qualityPreset?: QualityPreset;
+  transparentBackground?: boolean;
   variety?: boolean;
 }
 
