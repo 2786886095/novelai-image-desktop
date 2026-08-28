@@ -14,14 +14,6 @@
 
 它不走网页登录、Cookie、DOM 点击或 Chrome CDP。NovelAI 图像能力由 Electron 主进程调用官方 API；渲染进程不直接持有 Token。
 
-## 交流与反馈
-
-欢迎加入 **NovelAI 交流群**，交流软件使用、提示词与创作经验。QQ群号：**921985070**。
-
-<p align="center">
-  <img src="./docs/assets/qq-group-921985070.jpg" width="360" alt="NovelAI 交流群二维码，群号 921985070" />
-</p>
-
 ## 下载
 
 - **v1.9.7 中国大陆线路**：[Gitee Releases](https://gitee.com/langbai666/novelai-image-desktop/releases/tag/v1.9.7)
@@ -190,3 +182,11 @@ flutter test
 ## 贡献
 
 欢迎提交 Issue / PR。请先阅读 [CONTRIBUTING.md](./CONTRIBUTING.md)。本项目使用 [MIT License](./LICENSE)。
+
+## 交流与反馈
+
+欢迎加入 **NovelAI 交流群**，交流软件使用、提示词与创作经验。QQ群号：**921985070**。
+
+<p align="center">
+  <img src="./docs/assets/qq-group-921985070.jpg" width="360" alt="NovelAI 交流群二维码，群号 921985070" />
+</p>
