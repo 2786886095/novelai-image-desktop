@@ -54,22 +54,53 @@ Offset? normalizeCanvasPoint(Offset point, Size canvasSize) {
   return Offset(point.dx / canvasSize.width, point.dy / canvasSize.height);
 }
 
+/// Returns the source-mask grid cell used by the pixel-accurate inpaint brush.
+///
+/// Pointer devices can report many positions while the finger is still inside
+/// the same 8 x 8 source-image cell. Keeping all of those points does not alter
+/// the exported mask, but it makes every later preview increasingly expensive.
+(int, int) inpaintGridCellForNormalizedPoint(
+  Offset point,
+  Size size, {
+  double gridSize = inpaintMaskGridSize,
+}) =>
+    (
+      (point.dx * size.width / gridSize).round(),
+      (point.dy * size.height / gridSize).round(),
+    );
+
+bool inpaintPointsShareGridCell(
+  Offset first,
+  Offset second,
+  Size size, {
+  double gridSize = inpaintMaskGridSize,
+}) =>
+    inpaintGridCellForNormalizedPoint(
+      first,
+      size,
+      gridSize: gridSize,
+    ) ==
+    inpaintGridCellForNormalizedPoint(
+      second,
+      size,
+      gridSize: gridSize,
+    );
+
 Iterable<Offset> inpaintGridBrushSamples(
   InpaintStroke stroke,
   Size size,
   double gridSize,
 ) sync* {
   if (stroke.points.isEmpty) return;
-  final points = stroke.points
-      .map((point) => Offset(
-            point.dx * size.width / gridSize,
-            point.dy * size.height / gridSize,
-          ))
-      .toList(growable: false);
-  yield points.first;
-  for (var index = 1; index < points.length; index++) {
-    final from = points[index - 1];
-    final to = points[index];
+  Offset toGridPoint(Offset point) => Offset(
+        point.dx * size.width / gridSize,
+        point.dy * size.height / gridSize,
+      );
+
+  var from = toGridPoint(stroke.points.first);
+  yield from;
+  for (var index = 1; index < stroke.points.length; index++) {
+    final to = toGridPoint(stroke.points[index]);
     var x = from.dx.round();
     var y = from.dy.round();
     final targetX = to.dx.round();
@@ -91,8 +122,28 @@ Iterable<Offset> inpaintGridBrushSamples(
       }
       yield Offset(x.toDouble(), y.toDouble());
     }
+    from = to;
   }
 }
+
+final Map<int, List<(int, int)>> _roundBrushCellCache = {};
+
+List<(int, int)> _roundBrushCells(int radius) =>
+    _roundBrushCellCache.putIfAbsent(radius, () {
+      final cells = <(int, int)>[];
+      for (var deltaY = -radius; deltaY <= radius; deltaY++) {
+        for (var deltaX = -radius; deltaX <= radius; deltaX++) {
+          final x = deltaX.abs().toDouble();
+          final y = deltaY.abs().toDouble();
+          final outer = Offset(x + 0.5, y + 0.5).distance;
+          final inner = Offset(x - 0.5, y - 0.5).distance;
+          if (math.min(outer, inner) <= radius) {
+            cells.add((deltaX, deltaY));
+          }
+        }
+      }
+      return cells;
+    });
 
 void paintInpaintStroke(
   Canvas canvas,
@@ -110,51 +161,59 @@ void paintInpaintStroke(
     ..style = PaintingStyle.fill;
   final cells = normalizeInpaintBrushCells(stroke.brushCells, stroke.shape);
   final samples = inpaintGridBrushSamples(stroke, size, gridSize);
+  // Submit rectangles to Skia in bounded paths instead of issuing one canvas
+  // draw call per source pixel. This is especially important for a large round
+  // brush, whose footprint can contain thousands of 8 x 8 cells.
+  const maxRectsPerPath = 4096;
+  var path = Path();
+  var rectCount = 0;
+  void flushPath() {
+    if (rectCount == 0) return;
+    canvas.drawPath(path, paint);
+    path = Path();
+    rectCount = 0;
+  }
+
+  void addRect(Rect rect) {
+    path.addRect(rect);
+    rectCount++;
+    if (rectCount >= maxRectsPerPath) flushPath();
+  }
+
   if (stroke.shape == InpaintBrushShape.square) {
     for (final point in samples) {
       final left = (point.dx - cells / 2).round();
       final top = (point.dy - cells / 2).round();
-      canvas.drawRect(
+      addRect(
         Rect.fromLTWH(
           left * gridSize,
           top * gridSize,
           cells * gridSize,
           cells * gridSize,
         ),
-        paint,
       );
     }
+    flushPath();
     return;
   }
 
   final radius = (cells / 2).round();
-  final roundCells = <(int, int)>[];
-  for (var deltaY = -radius; deltaY <= radius; deltaY++) {
-    for (var deltaX = -radius; deltaX <= radius; deltaX++) {
-      final x = deltaX.abs().toDouble();
-      final y = deltaY.abs().toDouble();
-      final outer = Offset(x + 0.5, y + 0.5).distance;
-      final inner = Offset(x - 0.5, y - 0.5).distance;
-      if (math.min(outer, inner) <= radius) {
-        roundCells.add((deltaX, deltaY));
-      }
-    }
-  }
+  final roundCells = _roundBrushCells(radius);
   for (final point in samples) {
     final centerX = point.dx.floor();
     final centerY = point.dy.floor();
     for (final cell in roundCells) {
-      canvas.drawRect(
+      addRect(
         Rect.fromLTWH(
           (centerX + cell.$1) * gridSize,
           (centerY + cell.$2) * gridSize,
           gridSize,
           gridSize,
         ),
-        paint,
       );
     }
   }
+  flushPath();
 }
 
 Future<Uint8List> renderInpaintMask({

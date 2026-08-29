@@ -1,4 +1,7 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novelai_mobile/inpaint/inpaint_mask.dart';
 import 'package:novelai_mobile/models/nai_models.dart';
@@ -66,6 +69,21 @@ Future<void> _pump(
   await tester.pump(const Duration(milliseconds: 50));
 }
 
+Future<int> _previewCenterAlpha(WidgetTester tester) async {
+  final boundary = tester.renderObject<RenderRepaintBoundary>(
+    find.byKey(const ValueKey('inpaint-mask-preview-boundary')),
+  );
+  return (await tester.runAsync(() async {
+    final image = boundary.toImageSync(pixelRatio: 1);
+    final bytes = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+    final x = image.width ~/ 2;
+    final y = image.height ~/ 2;
+    final alpha = bytes!.getUint8((y * image.width + x) * 4 + 3);
+    image.dispose();
+    return alpha;
+  }))!;
+}
+
 void main() {
   testWidgets('single-finger drawing is committed and enables Done',
       (tester) async {
@@ -86,6 +104,62 @@ void main() {
       find.byKey(const ValueKey('inpaint-mask-done')),
     );
     expect(done.onPressed, isNotNull);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('retained mask preview paints newly completed strokes',
+      (tester) async {
+    addTearDown(tester.view.reset);
+    await _pump(tester, const Size(390, 844));
+    expect(await _previewCenterAlpha(tester), 0);
+
+    final canvas = find.byKey(const ValueKey('inpaint-mask-canvas'));
+    final center = tester.getCenter(canvas);
+    final gesture = await tester.startGesture(center);
+    await gesture.moveBy(const Offset(48, 0));
+    await gesture.up();
+    await tester.pump();
+
+    expect(await _previewCenterAlpha(tester), greaterThan(0));
+
+    await tester.tap(find.text('橡皮'));
+    await tester.pump();
+    final eraser = await tester.startGesture(center);
+    await eraser.moveBy(const Offset(48, 0));
+    await eraser.up();
+    await tester.pump();
+    expect(await _previewCenterAlpha(tester), 0);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('dense mobile pointer streams are reduced to source-grid points',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.reset);
+    final result = ValueNotifier<InpaintMaskEditResult?>(null);
+    addTearDown(result.dispose);
+    await tester.pumpWidget(MaterialApp(home: _EditorLauncher(result)));
+    await tester.tap(find.byKey(const ValueKey('launch-mask-editor')));
+    await tester.pumpAndSettle();
+
+    final canvas = find.byKey(const ValueKey('inpaint-mask-canvas'));
+    final rect = tester.getRect(canvas);
+    final start = rect.topLeft + const Offset(64, 64);
+    final gesture = await tester.startGesture(start);
+    for (var index = 1; index <= 320; index++) {
+      final phase = index % 80;
+      final x = (phase <= 40 ? phase : 80 - phase) * 0.9;
+      await gesture.moveTo(start + Offset(x, (index % 2) * 0.1));
+    }
+    await gesture.up();
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('inpaint-mask-done')));
+    await tester.pump();
+
+    expect(result.value, isNotNull);
+    expect(result.value!.strokes, hasLength(1));
+    expect(result.value!.strokes.single.points.length, lessThan(100));
     expect(tester.takeException(), isNull);
   });
 

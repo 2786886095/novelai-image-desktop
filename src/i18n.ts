@@ -5814,7 +5814,7 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.aboutAuthorTitle": "作者",
     "settings.aboutAuthorDesc": "软件作者与维护者，欢迎反馈问题与建议。",
     "settings.aboutAuthorQq": "作者 QQ",
-    "settings.aboutNovelAiGroup": "NovelAI 交流群",
+    "settings.aboutNovelAiGroup": "NovelAI QQ交流群",
     "settings.aboutSupportTitle": "赞赏支持",
     "settings.aboutSupportMessage":
       "如果软件帮到了你，可以请我喝杯奶茶（doge），或者随手赞赏支持一下，十分感谢。",
@@ -5979,7 +5979,7 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.aboutAuthorTitle": "作者",
     "settings.aboutAuthorDesc": "軟體作者與維護者，歡迎回饋問題與建議。",
     "settings.aboutAuthorQq": "作者 QQ",
-    "settings.aboutNovelAiGroup": "NovelAI 交流群",
+    "settings.aboutNovelAiGroup": "NovelAI QQ交流群",
     "settings.aboutSupportTitle": "贊賞支持",
     "settings.aboutSupportMessage":
       "如果軟體幫到了你，可以請我喝杯奶茶（doge），或者隨手贊賞支持一下，十分感謝。",

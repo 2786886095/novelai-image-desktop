@@ -41,6 +41,26 @@ void main() {
     expect(normalizeInpaintBrushCells(999, InpaintBrushShape.square), 500);
   });
 
+  test('coalesces pointer samples that remain in one source mask cell', () {
+    const sourceSize = Size(512, 512);
+    expect(
+      inpaintPointsShareGridCell(
+        const Offset(0.1000, 0.1000),
+        const Offset(0.1010, 0.1010),
+        sourceSize,
+      ),
+      isTrue,
+    );
+    expect(
+      inpaintPointsShareGridCell(
+        const Offset(0.1000, 0.1000),
+        const Offset(0.1300, 0.1300),
+        sourceSize,
+      ),
+      isFalse,
+    );
+  });
+
   test('exports a binary PNG at the exact original dimensions', () async {
     final bytes = await renderInpaintMask(
       width: 96,
