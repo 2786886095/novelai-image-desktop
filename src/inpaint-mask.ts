@@ -34,6 +34,7 @@ export function buildInpaintMaskPreview(
   binaryRgba: Uint8ClampedArray,
   width: number,
   height: number,
+  color = "#ffffff",
 ) {
   if (
     width <= 0 ||
@@ -42,14 +43,20 @@ export function buildInpaintMaskPreview(
   ) {
     throw new RangeError("Invalid inpaint mask dimensions or RGBA buffer.");
   }
+  const match = /^#([0-9a-f]{6})$/i.exec(color);
+  const packed = Number.parseInt(match?.[1] ?? "ffffff", 16);
+  const red = (packed >> 16) & 255;
+  const green = (packed >> 8) & 255;
+  const blue = packed & 255;
   const preview = new Uint8ClampedArray(width * height * 4);
   for (let index = 0; index < preview.length; index += 4) {
     const selected = binaryRgba[index + 3] > 0;
-    const value = selected ? 255 : 0;
-    preview[index] = value;
-    preview[index + 1] = value;
-    preview[index + 2] = value;
-    preview[index + 3] = selected ? 230 : 165;
+    preview[index] = selected ? red : 0;
+    preview[index + 1] = selected ? green : 0;
+    preview[index + 2] = selected ? blue : 0;
+    // The preview is laid over the source image. Preserved pixels must stay
+    // transparent so previewing the exact mask never hides the original.
+    preview[index + 3] = selected ? 230 : 0;
   }
   return preview;
 }

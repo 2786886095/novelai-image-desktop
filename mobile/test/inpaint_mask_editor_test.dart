@@ -100,6 +100,32 @@ void main() {
 
     expect(find.textContaining('1 笔'), findsOneWidget);
     expect(find.byKey(const ValueKey('inpaint-brush-size')), findsOneWidget);
+    expect(find.byKey(const ValueKey('inpaint-mask-opacity')), findsOneWidget);
+    final maskVisibility = find.byKey(
+      const ValueKey('inpaint-mask-visibility-toggle'),
+    );
+    expect(maskVisibility, findsOneWidget);
+    expect(find.byKey(const ValueKey('inpaint-mask-source-image')),
+        findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('inpaint-mask-preview-boundary')),
+      findsOneWidget,
+    );
+    await tester.tap(maskVisibility);
+    await tester.pump();
+    expect(
+      find.descendant(
+        of: maskVisibility,
+        matching: find.byIcon(Icons.visibility_off_outlined),
+      ),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('inpaint-mask-source-image')),
+        findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('inpaint-mask-preview-boundary')),
+      findsNothing,
+    );
     final done = tester.widget<TextButton>(
       find.byKey(const ValueKey('inpaint-mask-done')),
     );
@@ -107,7 +133,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('retained mask preview paints newly completed strokes',
+  testWidgets('raster mask preview paints newly completed strokes',
       (tester) async {
     addTearDown(tester.view.reset);
     await _pump(tester, const Size(390, 844));
@@ -163,6 +189,37 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('many short strokes keep the editor interactive', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.reset);
+    final result = ValueNotifier<InpaintMaskEditResult?>(null);
+    addTearDown(result.dispose);
+    await tester.pumpWidget(MaterialApp(home: _EditorLauncher(result)));
+    await tester.tap(find.byKey(const ValueKey('launch-mask-editor')));
+    await tester.pumpAndSettle();
+
+    final rect = tester.getRect(
+      find.byKey(const ValueKey('inpaint-mask-canvas')),
+    );
+    for (var index = 0; index < 36; index++) {
+      final column = index % 6;
+      final row = index ~/ 6;
+      final start = Offset(
+        rect.left + 28 + column * (rect.width - 56) / 5,
+        rect.top + 28 + row * (rect.height - 56) / 5,
+      );
+      await tester.dragFrom(start, const Offset(10, 4));
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+
+    expect(find.textContaining('36 笔'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('inpaint-mask-done')));
+    await tester.pump();
+    expect(result.value?.strokes, hasLength(36));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('adding a second pointer pans or zooms without leaving a stroke',
       (tester) async {
     addTearDown(tester.view.reset);
@@ -207,6 +264,10 @@ void main() {
     await tester.pump();
     await tester.tap(find.text('橡皮'));
     await tester.pump();
+    await tester.tap(
+      find.byKey(const ValueKey('inpaint-mask-color-ff7c3aed')),
+    );
+    await tester.pump();
     await tester.dragFrom(
         rect.center + const Offset(30, 0), const Offset(40, 20));
     await tester.pump();
@@ -221,6 +282,7 @@ void main() {
     expect(result.value!.strokes.last.shape, InpaintBrushShape.square);
     expect(result.value!.brush, 4);
     expect(result.value!.brushShape, InpaintBrushShape.square);
+    expect(result.value!.maskColor, const Color(0xFF7C3AED));
     expect(tester.takeException(), isNull);
   });
 

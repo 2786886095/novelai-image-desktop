@@ -185,6 +185,22 @@ describe("official quality and transparency controls", () => {
     });
   });
 
+  it("drops the preset's contradictory no-text tag when Text: is requested", () => {
+    const payload = buildPayload(
+      {
+        ...DEFAULT_PARAMS,
+        positivePrompt: "1girl, text, chinese text, Text: 末班车",
+        qualityPreset: "standard",
+        qualityToggle: true,
+      },
+      123,
+    );
+
+    expect(payload.input).toContain("Text: 末班车");
+    expect(payload.input).toContain("very aesthetic, masterpiece");
+    expect(payload.input).not.toMatch(/(?:^|,\s*)no text(?:,|$)/i);
+  });
+
   it("requests V5 straight-alpha output when Transparent BG is enabled", () => {
     const payload = buildPayload(
       {
@@ -226,7 +242,7 @@ describe("official-style inpaint preparation and compositing", () => {
     expect(requestMask.data[0]).toBe(0);
 
     const parameters: Record<string, unknown> = { strength: 0.4 };
-    applyOfficialInpaintParameters(parameters, assets, 0.8, 0, 123);
+    applyOfficialInpaintParameters(parameters, assets, 0.8, 0.72, 123);
     expect(parameters).toMatchObject({
       add_original_image: false,
       inpaintImg2ImgStrength: 0.8,

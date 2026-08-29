@@ -479,7 +479,9 @@ class NaiApi {
         resizeImageToSize(imageBytes, params.width, params.height),
       );
       p['strength'] = i2i.strength.clamp(0, 1);
-      p['noise'] = i2i.noise.clamp(0, 0.99);
+      // Keep NovelAI's transport field for compatibility after removing the
+      // ineffective UI control, but always send the default value.
+      p['noise'] = 0;
       p['extra_noise_seed'] =
           i2i.extraNoiseSeed > 0 ? i2i.extraNoiseSeed : randomSeed();
       return payload;
@@ -549,7 +551,9 @@ class NaiApi {
       } else {
         parameters.remove('img2img');
       }
-      parameters['noise'] = noise.clamp(0, 0.99);
+      // `noise` remains in the method signature so older persisted callers are
+      // source-compatible; the request value is intentionally fixed at zero.
+      parameters['noise'] = 0;
       parameters['extra_noise_seed'] = max(0, seed - 1);
       try {
         bytes = await _postGenerate(token, settings, payload);
@@ -688,7 +692,7 @@ class NaiApi {
     final qualityPreset = params.qualityPreset;
     final qualityPrompt = _merge(
       modePrompt,
-      _qualityTags(params.model, qualityPreset),
+      _qualityTags(params.model, qualityPreset, modePrompt),
     );
     final transparentBackground = params.isV5 && params.transparentBackground;
     final effectivePrompt = transparentBackground
@@ -994,10 +998,6 @@ class NaiApi {
           if (hint.trim().isNotEmpty) 'Subject hint: ${hint.trim()}',
           modeUserInstruction(mode, 'reverse'),
           if (tagHints.isNotEmpty) tagHints,
-          // Reinforced in the user turn too, not just the system prompt —
-          // mirrors desktop's reversePromptImage, which sends this in both
-          // places so known-character mode reliably returns both variants.
-          knownCharacterRuntimeInstruction(mode, 'reverse', knownCharacter),
         ].join('\n')
       }
     ];
@@ -1063,7 +1063,6 @@ class NaiApi {
         '初步反推结果：',
         first.text,
         modeUserInstruction(mode, 'reverse'),
-        knownCharacterRuntimeInstruction(mode, 'reverse', knownCharacter),
         '请只输出精修后的最终结果。',
       ].join('\n\n');
       final refined = await _promptChat(
@@ -1197,12 +1196,8 @@ class NaiApi {
     final hintText = hints.isEmpty
         ? ''
         : '\nCandidate Danbooru tags:\n${hints.map((e) => e.tag).join(', ')}';
-    // Reinforced in the user turn too, not just the system prompt — mirrors
-    // desktop's convertPromptText, which sends this in both places so
-    // known-character mode reliably returns both variants.
     final user =
-        'User description:\n$text\n\n${modeUserInstruction(mode, 'convert')}$hintText'
-        '\n\n${knownCharacterRuntimeInstruction(mode, 'convert', knownCharacter)}';
+        'User description:\n$text\n\n${modeUserInstruction(mode, 'convert')}$hintText';
     final enhancement = settings.promptCodexEnhanceEnabled
         ? await _promptCodex.retrieve(
             text,
@@ -1781,27 +1776,39 @@ class NaiApi {
     return result.join(', ');
   }
 
-  String _qualityTags(String model, [String preset = 'standard']) {
+  String _qualityTags(String model,
+      [String preset = 'standard', String positivePrompt = '']) {
     if (preset == 'none') return '';
+    String tags;
     if (preset == 'light' &&
         _normalizeModel(model).startsWith('nai-diffusion-5')) {
-      return 'very aesthetic, amazing quality, no text';
+      tags = 'very aesthetic, amazing quality, no text';
+    } else {
+      tags = switch (_normalizeModel(model)) {
+        'nai-diffusion-5-full' ||
+        'nai-diffusion-5-curated' =>
+          'very aesthetic, masterpiece, no text',
+        'nai-diffusion-4-5-full' => 'very aesthetic, masterpiece, no text',
+        'nai-diffusion-4-5-curated' =>
+          'very aesthetic, masterpiece, no text, -0.8::feet::, rating:general',
+        'nai-diffusion-4-full' =>
+          'no text, best quality, very aesthetic, absurdres',
+        'nai-diffusion-4-curated' =>
+          'rating:general, best quality, very aesthetic, absurdres',
+        'nai-diffusion-3' =>
+          'best quality, amazing quality, very aesthetic, absurdres',
+        _ => '',
+      };
     }
-    return switch (_normalizeModel(model)) {
-      'nai-diffusion-5-full' ||
-      'nai-diffusion-5-curated' =>
-        'very aesthetic, masterpiece, no text',
-      'nai-diffusion-4-5-full' => 'very aesthetic, masterpiece, no text',
-      'nai-diffusion-4-5-curated' =>
-        'very aesthetic, masterpiece, no text, -0.8::feet::, rating:general',
-      'nai-diffusion-4-full' =>
-        'no text, best quality, very aesthetic, absurdres',
-      'nai-diffusion-4-curated' =>
-        'rating:general, best quality, very aesthetic, absurdres',
-      'nai-diffusion-3' =>
-        'best quality, amazing quality, very aesthetic, absurdres',
-      _ => '',
-    };
+    if (RegExp(r'(?:^|[\s,;|])Text\s*:\s*\S', caseSensitive: false)
+        .hasMatch(positivePrompt)) {
+      tags = tags
+          .split(',')
+          .map((tag) => tag.trim())
+          .where((tag) => tag.toLowerCase() != 'no text')
+          .join(', ');
+    }
+    return tags;
   }
 
   String _ucPresetText(String model, int preset) {

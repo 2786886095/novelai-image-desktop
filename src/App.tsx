@@ -2615,7 +2615,6 @@ function FeatureCostCard({
   const i2iParams = useAppStore((state) => state.i2iParams);
   const i2iSizeMode = useAppStore((state) => state.i2iSizeMode);
   const inpaintStrength = useAppStore((state) => state.inpaintStrength);
-  const inpaintNoise = useAppStore((state) => state.inpaintNoise);
   const inpaintModel = useAppStore((state) => state.inpaintModel);
   const inpaintMask = useAppStore((state) => state.inpaintMask);
   const upscaleScale = useAppStore((state) => state.upscaleScale);
@@ -2643,7 +2642,6 @@ function FeatureCostCard({
     strength: i2iParams.strength,
     i2iSizeMode,
     inpaintStrength,
-    inpaintNoise,
     inpaintModel,
     hasMask: Boolean(inpaintMask),
     upscaleScale,
@@ -2696,9 +2694,9 @@ function FeatureCostCard({
           params: quoteParams,
           extras,
           batchCount,
-          i2iParams,
+          i2iParams: { ...i2iParams, noise: 0 },
           inpaintStrength,
-          inpaintNoise,
+          inpaintNoise: 0,
           inpaintModel,
           maskBase64: inpaintMask,
           upscaleScale,
@@ -3403,7 +3401,6 @@ function I2IPanel({ openSettings }: { openSettings: () => void }) {
       <div className="panel-scroll">
         <WorkbenchImageUpload />
         <SliderInput label={t("i2i.strength")} value={i2iParams.strength} min={0} max={1} step={0.01} onChange={(v) => setI2IParam("strength", v)} />
-        <SliderInput label={t("i2i.noise")} value={i2iParams.noise} min={0} max={0.99} step={0.01} onChange={(v) => setI2IParam("noise", v)} />
         <NumberInput label={t("i2i.extraNoiseSeed")} value={i2iParams.extraNoiseSeed} min={0} onChange={(v) => setI2IParam("extraNoiseSeed", v)} />
         <div className="panel-divider" />
         <PromptAndParams imageToImage />
@@ -3423,12 +3420,12 @@ function InpaintPanel({ openSettings }: { openSettings: () => void }) {
   const setInpaintModel = useAppStore((state) => state.setInpaintModel);
   const inpaintStrength = useAppStore((state) => state.inpaintStrength);
   const setInpaintStrength = useAppStore((state) => state.setInpaintStrength);
-  const inpaintNoise = useAppStore((state) => state.inpaintNoise);
-  const setInpaintNoise = useAppStore((state) => state.setInpaintNoise);
   const brushSize = useAppStore((state) => state.brushSize);
   const setBrushSize = useAppStore((state) => state.setBrushSize);
   const brushOpacity = useAppStore((state) => state.brushOpacity);
   const setBrushOpacity = useAppStore((state) => state.setBrushOpacity);
+  const brushColor = useAppStore((state) => state.brushColor);
+  const setBrushColor = useAppStore((state) => state.setBrushColor);
   const brushMode = useAppStore((state) => state.brushMode);
   const setBrushMode = useAppStore((state) => state.setBrushMode);
   const brushShape = useAppStore((state) => state.brushShape);
@@ -3454,9 +3451,9 @@ function InpaintPanel({ openSettings }: { openSettings: () => void }) {
           onClick={() => {
             setInpaintModel("nai-diffusion-5-full-inpainting");
             setInpaintStrength(1);
-            setInpaintNoise(0);
             setBrushSize(4);
             setBrushOpacity(0.55);
+            setBrushColor("#ffffff");
             setBrushMode("paint");
             setBrushShape("round");
           }}
@@ -3476,7 +3473,6 @@ function InpaintPanel({ openSettings }: { openSettings: () => void }) {
                 : "inpaint.strengthHighHint",
           )}
         </small>
-        <SliderInput label={t("inpaint.noise")} value={inpaintNoise} min={0} max={0.99} step={0.01} onChange={setInpaintNoise} />
         <SliderInput
           label={t("inpaint.brushSize")}
           value={brushSize}
@@ -3486,6 +3482,12 @@ function InpaintPanel({ openSettings }: { openSettings: () => void }) {
           onChange={setBrushSize}
         />
         <SliderInput label={t("inpaint.brushOpacity")} value={brushOpacity} min={0.05} max={1} step={0.01} onChange={setBrushOpacity} />
+        <div className="field inpaint-color-field">
+          <span>{t("inpaint.brushColor")}</span>
+          <div className="inpaint-color-palette" role="group" aria-label={t("inpaint.brushColor")}>
+            {["#ffffff", "#7c3aed", "#06b6d4", "#22c55e", "#f59e0b", "#ef4444", "#ec4899"].map((color) => <button key={color} type="button" className={brushColor === color ? "active" : ""} style={{ backgroundColor: color }} aria-label={`${t("inpaint.brushColor")} ${color}`} aria-pressed={brushColor === color} title={color} onClick={() => setBrushColor(color)} />)}
+          </div>
+        </div>
         <div className="mode-buttons">
           <Button variant={brushMode === "paint" ? "primary" : "secondary"} onClick={() => setBrushMode("paint")}>
             <IconText icon={<Icon name="brush" />}>{t("inpaint.paintBrush")}</IconText>
@@ -5246,9 +5248,9 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
 
-  // Pull the canonical reverse-template defaults from the main process (owner file
-  // or built-in), never from current settings — otherwise a user's customized
-  // template would be treated as the default by "restore default".
+  // Pull the versioned built-in V5 defaults from the main process, never from
+  // current settings — otherwise a user's customization would be treated as
+  // the default by "restore default".
   useEffect(() => {
     void window.naiDesktop.getReverseTemplateDefaults().then((defaults) => {
       if (defaults && (defaults.tags || defaults.natural || defaults.mixed)) {

@@ -98,47 +98,10 @@ function emptyModeTemplates(): AppSettings["reversePromptTemplates"] {
   return { tags: "", natural: "", mixed: "" };
 }
 
-function parseScopedReverseTemplateFile(text: string): AppSettings["reversePromptTemplates"] | null {
-  const normalized = text.replace(/^\uFEFF/, "");
-  const tagsMarker = "danbooru标签｜支持反推范围选择";
-  const naturalMarker = "自然语言｜支持反推范围选择";
-  const mixedMarker = "混合模式｜支持反推范围选择";
-  const tagsIndex = normalized.indexOf(tagsMarker);
-  const naturalIndex = normalized.indexOf(naturalMarker);
-  const mixedIndex = normalized.indexOf(mixedMarker);
-  if (tagsIndex < 0 || naturalIndex < 0 || mixedIndex < 0) return null;
-  if (!(tagsIndex < naturalIndex && naturalIndex < mixedIndex)) return null;
-  return {
-    tags: normalized.slice(tagsIndex, naturalIndex).trim(),
-    natural: normalized.slice(naturalIndex, mixedIndex).trim(),
-    mixed: normalized.slice(mixedIndex).trim(),
-  };
-}
-
-function loadOwnerScopedReverseTemplates(): AppSettings["reversePromptTemplates"] {
-  const candidates = [
-    "D:\\Downloads\\ai反推提示词模版_支持范围选择版.txt",
-    path.join(app.getPath("downloads"), "ai反推提示词模版_支持范围选择版.txt"),
-  ];
-  for (const file of candidates) {
-    try {
-      if (!fs.existsSync(file)) continue;
-      const parsed = parseScopedReverseTemplateFile(fs.readFileSync(file, "utf8"));
-      if (parsed) return parsed;
-    } catch {
-      // Ignore unreadable optional owner template files and fall back safely.
-    }
-  }
-  return emptyModeTemplates();
-}
-
-// Canonical defaults for the AI-reverse templates: the owner-provided file when
-// present, otherwise the built-in SCOPED_REVERSE_SYSTEM_PROMPTS. The settings page
-// uses this for "restore default" so it never mistakes a user's customized
-// template for the default.
+// Canonical defaults for the AI-reverse templates. Since V5, defaults are
+// versioned with the application instead of being shadowed by an old optional
+// V4.5 text file in Downloads. User-edited overrides remain supported.
 export function getReversePromptTemplateDefaults(): AppSettings["reversePromptTemplates"] {
-  const owner = loadOwnerScopedReverseTemplates();
-  if (!isEmptyModeTemplates(owner)) return owner;
   return {
     tags: SCOPED_REVERSE_SYSTEM_PROMPTS.tags,
     natural: SCOPED_REVERSE_SYSTEM_PROMPTS.natural,
@@ -168,6 +131,26 @@ function isLegacyScopedReverseTemplates(value: unknown): boolean {
 // application directory. Always use the OS Pictures folder for every build.
 function defaultOutputDir(): string {
   return path.join(app.getPath("pictures"), "Langbai NovelAI Studio");
+}
+
+function modeTemplatesFingerprint(value: unknown): string {
+  if (!value || typeof value !== "object") return "";
+  const next = value as Partial<AppSettings["reversePromptTemplates"]>;
+  const canonical = (["tags", "natural", "mixed"] as const)
+    .map((mode) => (next[mode] ?? "").replace(/\r\n/g, "\n").trim())
+    .join("\n␞\n");
+  return crypto.createHash("sha256").update(canonical).digest("hex");
+}
+
+const KNOWN_V45_REVERSE_TEMPLATE_FINGERPRINTS = new Set([
+  // v1.9.8 built-in scoped reverse templates.
+  "4798b1d8367f42e448fb124aab6b841aaefe38b3afd3b71ddd9b0dfe05b4090a",
+  // Optional owner template file previously loaded from Downloads.
+  "e940f4b2f5eba04688265f68af186567515c75ec05336533ced5245e174c6fbd",
+]);
+
+function isKnownV45DefaultReverseTemplates(value: unknown): boolean {
+  return KNOWN_V45_REVERSE_TEMPLATE_FINGERPRINTS.has(modeTemplatesFingerprint(value));
 }
 
 function samePath(left: string, right: string): boolean {
@@ -256,7 +239,6 @@ function migrateLegacyInstalledOutputForCurrentApp(data: PersistedData) {
 }
 
 export function defaultSettings(): AppSettings {
-  const reversePromptTemplates = loadOwnerScopedReverseTemplates();
   return {
     hasOnboarded: false,
     language: "zh-CN",
@@ -289,7 +271,7 @@ export function defaultSettings(): AppSettings {
     visionApiModel: "gpt-4o",
     visionSystemPrompt: "",
     reversePromptMode: "tags" as const,
-    reversePromptTemplates,
+    reversePromptTemplates: emptyModeTemplates(),
     comicAnalyzePromptTemplates: { tags: "", natural: "", mixed: "" },
     comicAnalyzePromptTemplate: COMIC_ANALYZE_SYSTEM_PROMPT,
     convertApiUrl: "https://api.openai.com/v1",
@@ -446,7 +428,11 @@ function normalize(raw: Partial<PersistedData> | null): PersistedData {
     settings.proxyMode = "auto";
     settings.proxyUrl = "";
   }
-  if (isEmptyModeTemplates(rawSettings.reversePromptTemplates) || isLegacyScopedReverseTemplates(rawSettings.reversePromptTemplates)) {
+  if (
+    isEmptyModeTemplates(rawSettings.reversePromptTemplates) ||
+    isLegacyScopedReverseTemplates(rawSettings.reversePromptTemplates) ||
+    isKnownV45DefaultReverseTemplates(rawSettings.reversePromptTemplates)
+  ) {
     settings.reversePromptTemplates = defaults.reversePromptTemplates;
   }
   if (!settings.comicAnalyzePromptTemplate?.trim()) {

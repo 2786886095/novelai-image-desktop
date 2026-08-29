@@ -301,6 +301,7 @@ interface AppState {
   inpaintPositivePrompt: string;
   brushSize: number;
   brushOpacity: number;
+  brushColor: string;
   brushMode: BrushMode;
   brushShape: InpaintBrushShape;
   inpaintMask: string | null;
@@ -418,6 +419,7 @@ interface AppState {
   setInpaintPositivePrompt: (value: string) => void;
   setBrushSize: (size: number) => void;
   setBrushOpacity: (opacity: number) => void;
+  setBrushColor: (color: string) => void;
   setBrushMode: (mode: BrushMode) => void;
   setBrushShape: (shape: InpaintBrushShape) => void;
   setInpaintMask: (mask: string | null) => void;
@@ -658,6 +660,12 @@ function persistedNumber(value: unknown, fallback: number, min: number, max: num
   return Number.isFinite(parsed) ? Math.min(max, Math.max(min, parsed)) : fallback;
 }
 
+function normalizedBrushColor(value: unknown, fallback = "#ffffff") {
+  return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value)
+    ? value.toLowerCase()
+    : fallback;
+}
+
 function normalizedLastToolState(last: LastGenerationState, state: AppState) {
   const i2i = last.i2iParams ?? state.i2iParams;
   const augment = last.augmentOptions ?? state.augmentOptions;
@@ -687,6 +695,7 @@ function normalizedLastToolState(last: LastGenerationState, state: AppState) {
       typeof last.inpaintPositivePrompt === "string" ? last.inpaintPositivePrompt : "",
     brushSize: normalizeInpaintBrushSize(restoredBrushSize, brushShape),
     brushOpacity: persistedNumber(last.brushOpacity, state.brushOpacity, 0.05, 1),
+    brushColor: normalizedBrushColor(last.brushColor, state.brushColor),
     brushShape,
     upscaleScale: (last.upscaleScale === 2 || last.upscaleScale === 4
       ? last.upscaleScale
@@ -724,6 +733,7 @@ function buildLastGenerationState(state: AppState): LastGenerationState {
     inpaintPositivePrompt: state.inpaintPositivePrompt,
     brushSize: state.brushSize,
     brushOpacity: state.brushOpacity,
+    brushColor: state.brushColor,
     brushShape: state.brushShape,
     brushSizeUnit: "grid8",
     upscaleScale: state.upscaleScale,
@@ -767,6 +777,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   inpaintPositivePrompt: "",
   brushSize: 4,
   brushOpacity: 0.55,
+  brushColor: "#ffffff",
   brushMode: "paint",
   brushShape: "round",
   inpaintMask: null,
@@ -888,6 +899,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           : state.inpaintPositivePrompt,
         brushSize: settings.persistInpaintParams ? repairedTools.brushSize : state.brushSize,
         brushOpacity: settings.persistInpaintParams ? repairedTools.brushOpacity : state.brushOpacity,
+        brushColor: settings.persistInpaintParams ? repairedTools.brushColor : state.brushColor,
         brushShape: settings.persistInpaintParams ? repairedTools.brushShape : state.brushShape,
         upscaleScale: settings.persistUpscaleParams ? repairedTools.upscaleScale : state.upscaleScale,
         directorTool: settings.persistDirectorParams ? repairedTools.directorTool : state.directorTool,
@@ -1281,6 +1293,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setBrushOpacity(opacity) {
     set({ brushOpacity: Math.max(0.05, Math.min(1, opacity)) });
+    persistGenerationState(get);
+  },
+
+  setBrushColor(color) {
+    set((state) => ({ brushColor: normalizedBrushColor(color, state.brushColor) }));
     persistGenerationState(get);
   },
 
@@ -2075,7 +2092,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         feature: "i2i",
         params: runParams,
         extras: buildExtras(state),
-        i2iParams: state.i2iParams,
+        i2iParams: { ...state.i2iParams, noise: 0 },
         account,
       }),
       storeText(state.settings, "action.i2i"),
@@ -2094,7 +2111,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       lastError: "",
       statusText: storeFormat(state.settings, "i2i.status", { amount: quote.amount }),
     });
-    const result = await window.naiDesktop.generateI2I(runParams, state.i2iParams, buildExtras(state));
+    const result = await window.naiDesktop.generateI2I(
+      runParams,
+      { ...state.i2iParams, noise: 0 },
+      buildExtras(state),
+    );
     if (result.ok && result.items.length > 0) {
       const current = result.items[0];
       await refreshAfterImage(set, get, current, { compareBefore: state.workbenchImage });
@@ -2147,7 +2168,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         params: inpaintParams,
         inpaintModel: state.inpaintModel,
         inpaintStrength: state.inpaintStrength,
-        inpaintNoise: state.inpaintNoise,
+        inpaintNoise: 0,
         maskBase64: state.inpaintMask,
         image: { width: state.workbenchImage!.width, height: state.workbenchImage!.height },
         account,
@@ -2173,7 +2194,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       state.inpaintModel,
       state.inpaintMask,
       state.inpaintStrength,
-      state.inpaintNoise,
+      0,
     );
     if (result.ok && result.items.length > 0) {
       const current = result.items[0];

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -48,6 +49,7 @@ class ToolsScreen extends StatelessWidget {
       ]),
       body: StudioContent(
         child: ListView(
+          key: const ValueKey('tools-page-scroll'),
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
           children: [
@@ -111,15 +113,33 @@ class _InpaintPanel extends StatefulWidget {
 
 class _InpaintPanelState extends State<_InpaintPanel> {
   final strokes = <InpaintStroke>[];
+  InpaintMaskRaster? _maskRaster;
   double brush = 4;
   double imageOpacity = 1;
   double maskOpacity = 0.72;
+  Color maskColor = Colors.white;
   bool inverted = false;
+  bool _showSummaryPreview = true;
   InpaintBrushShape brushShape = InpaintBrushShape.round;
+
+  InpaintMaskRaster _rasterFor(WorkingImage workbench) {
+    final width = math.max(1, workbench.width);
+    final height = math.max(1, workbench.height);
+    final current = _maskRaster;
+    if (current != null &&
+        current.sourceWidth == width &&
+        current.sourceHeight == height) {
+      return current;
+    }
+    return _maskRaster = InpaintMaskRaster(
+      sourceWidth: width,
+      sourceHeight: height,
+    )..rebuild(strokes);
+  }
 
   Future<void> _runInpaint(AppState state) async {
     final image = state.workbenchImage;
-    if (image == null || strokes.isEmpty) return;
+    if (image == null || (strokes.isEmpty && !inverted)) return;
     final mask = await renderInpaintMask(
       strokes: strokes,
       width: image.width,
@@ -133,22 +153,17 @@ class _InpaintPanelState extends State<_InpaintPanel> {
     if (mounted && state.workbenchImage?.filePath != image.filePath) {
       setState(() {
         strokes.clear();
+        _maskRaster?.clear();
         inverted = false;
       });
     }
   }
 
-  // Renders the exact binary mask that will be sent (white = repaint area) and
-  // shows it full-screen so the user can verify coverage before paying.
+  // Shows the exact binary selection over the source image so coverage can be
+  // verified without losing visual context before a paid request.
   Future<void> _previewMask(WorkingImage workbench) async {
-    if (strokes.isEmpty) return;
-    final mask = await renderInpaintMask(
-      strokes: strokes,
-      width: workbench.width,
-      height: workbench.height,
-      inverted: inverted,
-    );
-    if (!mounted) return;
+    if (strokes.isEmpty && !inverted) return;
+    final raster = _rasterFor(workbench);
     final language = context.read<AppState>().settings.language;
     await showDialog<void>(
       context: context,
@@ -168,7 +183,26 @@ class _InpaintPanelState extends State<_InpaintPanel> {
             Flexible(
               child: InteractiveViewer(
                 maxScale: 8,
-                child: Image.memory(mask, fit: BoxFit.contain),
+                child: AspectRatio(
+                  aspectRatio: raster.sourceWidth / raster.sourceHeight,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Image.file(
+                        File(workbench.filePath),
+                        fit: BoxFit.fill,
+                      ),
+                      CustomPaint(
+                        key: const ValueKey('inpaint-mask-exact-preview'),
+                        painter: _InpaintMaskRasterPainter(
+                          raster: raster,
+                          inverted: inverted,
+                          color: maskColor.withOpacity(maskOpacity),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
             TextButton(
@@ -194,26 +228,40 @@ class _InpaintPanelState extends State<_InpaintPanel> {
           initialBrush: brush,
           initialImageOpacity: imageOpacity,
           initialMaskOpacity: maskOpacity,
+          initialMaskColor: maskColor,
           initialBrushShape: brushShape,
         ),
       ),
     );
     if (!mounted || result == null) return;
+    final nextStrokes = copyInpaintStrokes(result.strokes);
+    final nextRaster = InpaintMaskRaster(
+      sourceWidth: math.max(1, workbench.width),
+      sourceHeight: math.max(1, workbench.height),
+    )..rebuild(nextStrokes);
     setState(() {
       strokes
         ..clear()
-        ..addAll(copyInpaintStrokes(result.strokes));
+        ..addAll(nextStrokes);
+      _maskRaster = nextRaster;
       inverted = result.inverted;
       brush = result.brush;
       imageOpacity = result.imageOpacity;
       maskOpacity = result.maskOpacity;
+      maskColor = result.maskColor;
       brushShape = result.brushShape;
     });
   }
 
-  Widget _buildMaskSummary(WorkingImage workbench) {
-    final language = context.read<AppState>().settings.language;
+  Widget _buildMaskSummary(AppState state, WorkingImage workbench) {
+    final language = state.settings.language;
     final colors = Theme.of(context).colorScheme;
+    final aspect = workbench.width > 0 && workbench.height > 0
+        ? workbench.width / workbench.height
+        : 1.0;
+    final availableWidth = math.max(1.0, MediaQuery.sizeOf(context).width - 56);
+    final previewHeight = (availableWidth / aspect).clamp(160.0, 320.0);
+    final raster = _rasterFor(workbench);
     return Card(
       margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
@@ -221,63 +269,86 @@ class _InpaintPanelState extends State<_InpaintPanel> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 420),
-            child: AspectRatio(
-              aspectRatio: workbench.width > 0 && workbench.height > 0
-                  ? workbench.width / workbench.height
-                  : 1,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Image.file(File(workbench.filePath), fit: BoxFit.contain),
-                  IgnorePointer(
-                    child: CustomPaint(
-                      painter: InpaintMaskPainter(
-                        strokes: strokes,
-                        inverted: inverted,
-                        opacity: maskOpacity,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
           Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.fromLTRB(10, 8, 6, 8),
             child: Row(
               children: [
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        strokes.isEmpty && !inverted
-                            ? mobileUiTextFor(language, 'tools.maskNotEdited')
-                            : mobileUiTextFor(language, 'tools.maskReady'),
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      Text(
-                        mobileUiFormatFor(
-                          language,
-                          'tools.maskStrokeCount',
-                          {'count': strokes.length},
+                  child: Text(
+                    '${strokes.isEmpty && !inverted ? mobileUiTextFor(language, 'tools.maskNotEdited') : mobileUiTextFor(language, 'tools.maskReady')} · '
+                    '${mobileUiFormatFor(language, 'tools.maskStrokeCount', {
+                          'count': strokes.length
+                        })}',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
                         ),
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
                   ),
                 ),
-                FilledButton.icon(
-                  key: const ValueKey('open-inpaint-mask-editor'),
-                  onPressed: () => _openEditor(workbench),
-                  icon: const Icon(Icons.draw_outlined),
-                  label: Text(mobileUiTextFor(language, 'tools.editMask')),
+                IconButton(
+                  key: const ValueKey('toggle-inpaint-summary-preview'),
+                  visualDensity: VisualDensity.compact,
+                  tooltip: mobileUiTextFor(
+                    language,
+                    _showSummaryPreview ? 'tools.hideMask' : 'tools.showMask',
+                  ),
+                  onPressed: () => setState(
+                    () => _showSummaryPreview = !_showSummaryPreview,
+                  ),
+                  icon: Icon(
+                    _showSummaryPreview
+                        ? Icons.visibility_outlined
+                        : Icons.visibility_off_outlined,
+                  ),
                 ),
               ],
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+            child: _buildToolbar(state, workbench),
+          ),
+          if (_showSummaryPreview)
+            SizedBox(
+              height: previewHeight,
+              child: LayoutBuilder(builder: (context, constraints) {
+                final fitted = applyBoxFit(
+                  BoxFit.contain,
+                  Size(workbench.width.toDouble(), workbench.height.toDouble()),
+                  constraints.biggest,
+                ).destination;
+                return Center(
+                  child: SizedBox(
+                    width: fitted.width,
+                    height: fitted.height,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        RepaintBoundary(
+                          child: Image.file(
+                            File(workbench.filePath),
+                            fit: BoxFit.fill,
+                            filterQuality: FilterQuality.medium,
+                          ),
+                        ),
+                        IgnorePointer(
+                          child: RepaintBoundary(
+                            child: CustomPaint(
+                              key: const ValueKey(
+                                  'inpaint-mask-summary-preview'),
+                              painter: _InpaintMaskRasterPainter(
+                                raster: raster,
+                                inverted: inverted,
+                                color: maskColor.withOpacity(maskOpacity),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+            ),
         ],
       ),
     );
@@ -286,32 +357,53 @@ class _InpaintPanelState extends State<_InpaintPanel> {
   Widget _buildToolbar(AppState state, WorkingImage? workbench) {
     final language = state.settings.language;
     String t(String key) => mobileUiTextFor(language, key);
+    final hasMask = strokes.isNotEmpty || inverted;
+    final compactStyle = OutlinedButton.styleFrom(
+      visualDensity: VisualDensity.compact,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+    );
     return Wrap(
-      spacing: 8,
-      runSpacing: 8,
+      spacing: 6,
+      runSpacing: 6,
       children: [
-        IconButton.outlined(
-          tooltip: t('tools.clearMask'),
-          onPressed: strokes.isEmpty && !inverted
-              ? null
-              : () => setState(() {
-                    strokes.clear();
-                    inverted = false;
-                  }),
-          icon: const Icon(Icons.delete_outline),
+        OutlinedButton.icon(
+          key: const ValueKey('edit-inpaint-mask'),
+          style: compactStyle,
+          onPressed: workbench == null ? null : () => _openEditor(workbench),
+          icon: const Icon(Icons.draw_outlined),
+          label: Text(t('tools.editMask')),
         ),
-        IconButton.outlined(
-          tooltip: t('tools.previewMask'),
-          onPressed: workbench == null || (strokes.isEmpty && !inverted)
+        OutlinedButton.icon(
+          key: const ValueKey('preview-inpaint-mask'),
+          style: compactStyle,
+          onPressed: workbench == null || !hasMask
               ? null
               : () => _previewMask(workbench),
           icon: const Icon(Icons.preview_outlined),
+          label: Text(t('tools.previewMask')),
+        ),
+        OutlinedButton.icon(
+          key: const ValueKey('clear-inpaint-mask'),
+          style: compactStyle,
+          onPressed: !hasMask
+              ? null
+              : () => setState(() {
+                    strokes.clear();
+                    _maskRaster?.clear();
+                    inverted = false;
+                  }),
+          icon: const Icon(Icons.delete_outline),
+          label: Text(t('tools.clearMask')),
         ),
         FilledButton.icon(
-          onPressed:
-              state.busy || workbench == null || (strokes.isEmpty && !inverted)
-                  ? null
-                  : () => _runInpaint(state),
+          key: const ValueKey('run-inpaint'),
+          style: FilledButton.styleFrom(
+            visualDensity: VisualDensity.compact,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          ),
+          onPressed: state.busy || workbench == null || !hasMask
+              ? null
+              : () => _runInpaint(state),
           icon: const Icon(Icons.brush),
           label: Text(t('tools.runInpaint')),
         ),
@@ -391,6 +483,7 @@ class _InpaintPanelState extends State<_InpaintPanel> {
                 onPressed: () {
                   setState(() {
                     brush = 4;
+                    maskColor = Colors.white;
                     brushShape = InpaintBrushShape.round;
                   });
                   state
@@ -439,24 +532,6 @@ class _InpaintPanelState extends State<_InpaintPanel> {
                         : Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
             ),
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(t('tools.inpaintNoise')),
-                Text(state.inpaintNoise.toStringAsFixed(2)),
-              ],
-            ),
-            Slider(
-              value: state.inpaintNoise,
-              min: 0,
-              max: 0.99,
-              divisions: 99,
-              onChanged: (value) {
-                state.inpaintNoise = value;
-                state.markChanged();
-              },
-            ),
             _ToolQuoteBar(quote: state.inpaintAnlasQuote),
             const SizedBox(height: 12),
             const _RedrawParams(),
@@ -490,15 +565,39 @@ class _InpaintPanelState extends State<_InpaintPanel> {
                 height: 240,
                 child: Center(child: Text(t('tools.noInpaintImage'))),
               )
-            else
-              _buildMaskSummary(workbench),
-            const SizedBox(height: 12),
-            _buildToolbar(state, workbench),
+            else ...[
+              // Actions and preview share one compact card; controls remain
+              // before the image and the comparison can be collapsed.
+              _buildMaskSummary(state, workbench),
+            ],
           ],
         ),
       ),
     );
   }
+}
+
+class _InpaintMaskRasterPainter extends CustomPainter {
+  final InpaintMaskRaster raster;
+  final bool inverted;
+  final Color color;
+
+  const _InpaintMaskRasterPainter({
+    required this.raster,
+    required this.inverted,
+    required this.color,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) => raster.paintSelection(
+        canvas,
+        size,
+        inverted: inverted,
+        color: color,
+      );
+
+  @override
+  bool shouldRepaint(covariant _InpaintMaskRasterPainter oldDelegate) => true;
 }
 
 // Generation parameters for redraw, mirroring the generate screen (model is the

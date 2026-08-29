@@ -172,7 +172,8 @@ const _mobileUiText = <String, Map<String, String>>{
     'tools.precisionMaskHint':
         '1 格 = 原图 8×8 像素；滑块 4–50 格。手输方形最小 1 格，圆形最小 2 格并自动取偶数。',
     'tools.imageOpacity': '原图透明度',
-    'tools.maskOpacity': '蒙版透明度',
+    'tools.maskOpacity': '蒙版显示透明度',
+    'tools.maskColor': '蒙版显示颜色',
     'tools.maskAdjustments': '画笔与显示',
     'tools.invertMask': '反选蒙版',
     'tools.maskInverted': '已反选蒙版',
@@ -663,7 +664,8 @@ const _mobileUiText = <String, Map<String, String>>{
     'tools.precisionMaskHint':
         '1 格 = 原圖 8×8 像素；滑桿 4–50 格。手動輸入方形最小 1 格，圓形最小 2 格並自動取偶數。',
     'tools.imageOpacity': '原圖透明度',
-    'tools.maskOpacity': '蒙版透明度',
+    'tools.maskOpacity': '蒙版顯示透明度',
+    'tools.maskColor': '蒙版顯示顏色',
     'tools.maskAdjustments': '畫筆與顯示',
     'tools.invertMask': '反選蒙版',
     'tools.maskInverted': '已反選蒙版',
@@ -1161,7 +1163,8 @@ const _mobileUiText = <String, Map<String, String>>{
     'tools.precisionMaskHint':
         '1 cell = 8×8 source pixels; slider 4–50. Direct entry: square ≥1, round ≥2 and even.',
     'tools.imageOpacity': 'Image opacity',
-    'tools.maskOpacity': 'Mask opacity',
+    'tools.maskOpacity': 'Mask display opacity',
+    'tools.maskColor': 'Mask display color',
     'tools.maskAdjustments': 'Brush and display',
     'tools.invertMask': 'Invert mask',
     'tools.maskInverted': 'Mask inverted',
@@ -1696,7 +1699,8 @@ const _mobileUiText = <String, Map<String, String>>{
     'tools.precisionMaskHint':
         '1 マス = 元画像の 8×8 px、スライダーは 4～50。直接入力は四角が最小 1、円形が最小 2 の偶数です。',
     'tools.imageOpacity': '元画像の不透明度',
-    'tools.maskOpacity': 'マスクの不透明度',
+    'tools.maskOpacity': 'マスク表示の不透明度',
+    'tools.maskColor': 'マスク表示色',
     'tools.maskAdjustments': 'ブラシと表示',
     'tools.invertMask': 'マスクを反転',
     'tools.maskInverted': 'マスク反転中',
@@ -2195,7 +2199,8 @@ const _mobileUiText = <String, Map<String, String>>{
     'tools.precisionMaskHint':
         '1칸 = 원본 8×8픽셀, 슬라이더는 4~50입니다. 직접 입력은 사각형 최소 1칸, 원형 최소 2칸의 짝수입니다.',
     'tools.imageOpacity': '원본 이미지 불투명도',
-    'tools.maskOpacity': '마스크 불투명도',
+    'tools.maskOpacity': '마스크 표시 불투명도',
+    'tools.maskColor': '마스크 표시 색상',
     'tools.maskAdjustments': '브러시 및 표시',
     'tools.invertMask': '마스크 반전',
     'tools.maskInverted': '마스크 반전됨',

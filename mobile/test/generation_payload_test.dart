@@ -313,6 +313,24 @@ void main() {
     expect(parameters['tag_hint_qt'], 3);
   });
 
+  test('quality preset omits no text when a Text directive is present',
+      () async {
+    final payload = await api.buildPayload(
+      'unused',
+      settings,
+      GenerateParams(
+        positivePrompt: '1girl, text, chinese text, Text: 末班车',
+        qualityPreset: 'standard',
+      ),
+      123,
+      GenerateExtras(),
+    );
+
+    expect(payload['input'], contains('Text: 末班车'));
+    expect(payload['input'], contains('very aesthetic, masterpiece'));
+    expect(payload['input'], isNot(contains('no text')));
+  });
+
   test('V5 Transparent BG requests straight alpha output', () async {
     final payload = await api.buildPayload(
       'unused',

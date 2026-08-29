@@ -2533,17 +2533,6 @@ class _I2IControls extends StatelessWidget {
                   s.i2i.strength = v;
                   s.markChanged();
                 }),
-            _Slider(
-                label: text.noise,
-                value: s.i2i.noise,
-                min: 0,
-                max: 0.99,
-                divisions: 20,
-                display: s.i2i.noise.toStringAsFixed(2),
-                onChanged: (v) {
-                  s.i2i.noise = v;
-                  s.markChanged();
-                }),
             const SizedBox(height: 8),
             _SyncedNumberField(
               label: text.extraNoiseSeed,

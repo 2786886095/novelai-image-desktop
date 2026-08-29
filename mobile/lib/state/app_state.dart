@@ -1939,7 +1939,7 @@ class AppState extends ChangeNotifier {
           dims.width,
           dims.height,
           inpaintStrength,
-          inpaintNoise);
+          0);
       if (images.isEmpty) throw Exception(_rt('error.inpaintNoImages'));
       final items = <HistoryItem>[];
       for (final bytes in images) {

@@ -996,7 +996,10 @@ class _HistoryMetadataPicker extends StatelessWidget {
           AnimatedCrossFade(
             firstChild: const SizedBox(width: double.infinity),
             secondChild: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              // Keep room for the dropdown's floating label. With zero top
+              // padding AnimatedCrossFade clipped "图片分组" against its own
+              // bounds on compact Android screens.
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [

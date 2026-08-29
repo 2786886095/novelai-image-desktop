@@ -13,6 +13,32 @@ Future<({ui.Codec codec, ui.Image image, Uint8List pixels})> _decode(
   return (codec: codec, image: frame.image, pixels: rgba!.buffer.asUint8List());
 }
 
+Future<Uint8List> _renderStrokeHistory({
+  required List<InpaintStroke> strokes,
+  required int width,
+  required int height,
+  required bool inverted,
+}) async {
+  final size = Size(width.toDouble(), height.toDouble());
+  final recorder = ui.PictureRecorder();
+  final canvas = Canvas(recorder)
+    ..drawRect(
+      Offset.zero & size,
+      Paint()..color = inverted ? Colors.white : Colors.black,
+    );
+  for (final stroke in strokes) {
+    final rawColor = stroke.erase ? Colors.black : Colors.white;
+    final color = inverted
+        ? (rawColor == Colors.white ? Colors.black : Colors.white)
+        : rawColor;
+    paintInpaintStroke(canvas, size, stroke, color: color);
+  }
+  final image = await recorder.endRecording().toImage(width, height);
+  final data = await image.toByteData(format: ui.ImageByteFormat.png);
+  image.dispose();
+  return data!.buffer.asUint8List();
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -59,6 +85,64 @@ void main() {
       ),
       isFalse,
     );
+  });
+
+  test('raster storage stays bounded after many independent strokes', () {
+    final raster = InpaintMaskRaster(sourceWidth: 1216, sourceHeight: 832);
+    expect(raster.columns, 152);
+    expect(raster.rows, 104);
+
+    for (var index = 0; index < 1200; index++) {
+      final x = (index % 140 + 6) / 152;
+      final y = (index % 92 + 6) / 104;
+      raster.applyStroke(InpaintStroke(
+        brushCells: 4,
+        erase: index.isOdd,
+        points: [Offset(x, y)],
+      ));
+    }
+
+    // History length does not alter the fixed 8 x 8 source-grid dimensions.
+    expect(raster.columns * raster.rows, 15808);
+    expect(raster.selectedAt(0, 0), isFalse);
+  });
+
+  test('raster export matches mixed historical stroke rendering', () async {
+    final strokes = <InpaintStroke>[
+      InpaintStroke(
+        brushCells: 4,
+        points: const [Offset(0.12, 0.18), Offset(0.82, 0.72)],
+      ),
+      InpaintStroke(
+        brushCells: 5,
+        shape: InpaintBrushShape.square,
+        points: const [Offset(0.15, 0.8), Offset(0.75, 0.25)],
+      ),
+      InpaintStroke(
+        brushCells: 2,
+        erase: true,
+        points: const [Offset(0.4, 0.4), Offset(0.62, 0.58)],
+      ),
+    ];
+    for (final inverted in [false, true]) {
+      final current = await _decode(await renderInpaintMask(
+        strokes: strokes,
+        width: 192,
+        height: 128,
+        inverted: inverted,
+      ));
+      final historical = await _decode(await _renderStrokeHistory(
+        strokes: strokes,
+        width: 192,
+        height: 128,
+        inverted: inverted,
+      ));
+      expect(current.pixels, historical.pixels, reason: 'inverted=$inverted');
+      current.image.dispose();
+      current.codec.dispose();
+      historical.image.dispose();
+      historical.codec.dispose();
+    }
   });
 
   test('exports a binary PNG at the exact original dimensions', () async {

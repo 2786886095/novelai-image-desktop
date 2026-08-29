@@ -1469,6 +1469,36 @@ button { user-select: none; }
   backdrop-filter: blur(14px);
   box-shadow: var(--shadow-sm);
 }
+.inpaint-color-field { display: grid; gap: 7px; }
+.inpaint-color-palette {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(28px, 1fr));
+  gap: 7px;
+}
+.inpaint-color-palette button {
+  position: relative;
+  min-width: 0;
+  height: 34px;
+  padding: 0;
+  border: 2px solid color-mix(in srgb, var(--border) 84%, transparent);
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.12);
+  cursor: pointer;
+}
+.inpaint-color-palette button.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent), inset 0 0 0 1px rgba(0,0,0,.14);
+}
+.inpaint-color-palette button.active::after {
+  content: "✓";
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-weight: 900;
+  text-shadow: 0 1px 3px #000;
+}
 .inpaint-mask-toolbar .btn {
   min-height: 34px;
   padding: 7px 11px;
@@ -8384,7 +8414,7 @@ button.prompt-chip-head {
 }
 .v5-draw-card {
   display: grid;
-  grid-template-rows: auto 230px minmax(72px, auto) auto auto;
+  align-content: start;
   min-width: 0;
   overflow: hidden;
   border: 1px solid var(--border);
@@ -8415,6 +8445,7 @@ button.prompt-chip-head {
   overflow-wrap: anywhere;
 }
 .v5-draw-card > small.warning { padding: 0 12px; color: #b45309; overflow-wrap: anywhere; }
+.v5-draw-card .artist-error.empty { visibility: hidden; }
 .v5-draw-card > footer { border-top: 1px solid var(--border); }
 .v5-draw-empty {
   max-width: 1120px;
@@ -10740,7 +10771,26 @@ html.theme-dark #root {
 .artist-candidate.scoring .artist-candidate-header span { color: var(--accent); }
 .artist-candidate.failed .artist-candidate-header span { color: var(--danger); }
 .artist-candidate-media { position: relative; aspect-ratio: 1; background: var(--bg-panel); overflow: hidden; }
-.artist-candidate-media img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.artist-candidate-media img { width: 100%; height: 100%; object-fit: contain; display: block; cursor: zoom-in; }
+.artist-candidate-preview-button {
+  position: absolute;
+  right: 9px;
+  bottom: 9px;
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(255,255,255,.3);
+  border-radius: 11px;
+  color: #fff;
+  background: rgba(15, 12, 30, .72);
+  box-shadow: 0 8px 22px rgba(0,0,0,.22);
+  backdrop-filter: blur(9px);
+  cursor: zoom-in;
+}
+.artist-candidate-preview-button:hover { background: rgba(124, 58, 237, .9); }
+.artist-candidate-preview-button .ui-icon { width: 17px; height: 17px; }
 .artist-candidate-placeholder { height: 100%; display: grid; place-items: center; color: var(--text-muted); }
 .artist-score { position: absolute; right: 8px; top: 8px; border-radius: 999px; padding: 5px 9px; color: white; background: rgba(23, 18, 48, 0.82); backdrop-filter: blur(8px); }
 .artist-string-block { margin: 10px 12px 0; min-width: 0; }

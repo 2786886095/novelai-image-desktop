@@ -21,6 +21,26 @@ function clampZoom(value: number) {
   return Math.min(8, Math.max(1, value));
 }
 
+function recolorMaskCanvas(
+  canvas: HTMLCanvasElement,
+  ctx: CanvasRenderingContext2D,
+  color: string,
+) {
+  const match = /^#([0-9a-f]{6})$/i.exec(color);
+  const packed = Number.parseInt(match?.[1] ?? "ffffff", 16);
+  const red = (packed >> 16) & 255;
+  const green = (packed >> 8) & 255;
+  const blue = packed & 255;
+  const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  for (let index = 0; index < image.data.length; index += 4) {
+    if (image.data[index] + image.data[index + 1] + image.data[index + 2] <= 32) continue;
+    image.data[index] = red;
+    image.data[index + 1] = green;
+    image.data[index + 2] = blue;
+  }
+  ctx.putImageData(image, 0, 0);
+}
+
 export function InpaintCanvas() {
   const language = useAppStore((state) => state.settings?.language);
   const workbenchImage = useAppStore((state) => state.workbenchImage);
@@ -28,6 +48,7 @@ export function InpaintCanvas() {
   const brushSize = useAppStore((state) => state.brushSize);
   const setBrushSize = useAppStore((state) => state.setBrushSize);
   const brushOpacity = useAppStore((state) => state.brushOpacity);
+  const brushColor = useAppStore((state) => state.brushColor);
   const brushMode = useAppStore((state) => state.brushMode);
   const setBrushMode = useAppStore((state) => state.setBrushMode);
   const brushShape = useAppStore((state) => state.brushShape);
@@ -135,10 +156,18 @@ export function InpaintCanvas() {
     const dataUrl = maskCanvas.toDataURL("image/png");
     setInpaintMask(dataUrl.split(",")[1] ?? null);
     const previewImage = maskCtx.createImageData(w, h);
-    previewImage.data.set(buildInpaintMaskPreview(rgba, w, h));
+    previewImage.data.set(buildInpaintMaskPreview(rgba, w, h, brushColor));
     maskCtx.putImageData(previewImage, 0, 0);
     setPreviewMaskUrl(maskCanvas.toDataURL("image/png"));
-  }, [setInpaintMask]);
+  }, [brushColor, setInpaintMask]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !ctx) return;
+    recolorMaskCanvas(canvas, ctx, brushColor);
+    exportMask();
+  }, [brushColor, exportMask]);
 
   const getPoint = useCallback((clientX: number, clientY: number) => {
     const canvas = canvasRef.current;
@@ -177,10 +206,10 @@ export function InpaintCanvas() {
 
       setShowExportPreview(false);
       ctx.globalCompositeOperation = "source-over";
-      ctx.fillStyle = brushMode === "paint" ? "white" : "black";
+      ctx.fillStyle = brushMode === "paint" ? brushColor : "black";
       ctx.imageSmoothingEnabled = false;
       const exactSize = brushSize * INPAINT_MASK_GRID_SIZE;
-      const stampColor = brushMode === "paint" ? "white" : "black";
+      const stampColor = brushMode === "paint" ? brushColor : "black";
       const roundStamp = () => {
         const radius = Math.round(brushSize / 2);
         const diameter = radius * 2 + 1;
@@ -256,7 +285,7 @@ export function InpaintCanvas() {
         lastPointRef.current = point;
       }
     },
-    [brushMode, brushShape, brushSize, getPoint],
+    [brushColor, brushMode, brushShape, brushSize, getPoint],
   );
 
   // Called once at the start of each new stroke: snapshot the canvas so we can
@@ -280,10 +309,11 @@ export function InpaintCanvas() {
     redoRef.current.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
     setRedoCount(redoRef.current.length);
     ctx.putImageData(previous, 0, 0);
+    recolorMaskCanvas(canvas, ctx, brushColor);
     setHistoryCount(historyRef.current.length);
     setShowExportPreview(false);
     exportMask();
-  }, [exportMask]);
+  }, [brushColor, exportMask]);
 
   const redoNextStroke = useCallback(() => {
     const canvas = canvasRef.current;
@@ -293,10 +323,11 @@ export function InpaintCanvas() {
     historyRef.current.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
     setHistoryCount(historyRef.current.length);
     ctx.putImageData(next, 0, 0);
+    recolorMaskCanvas(canvas, ctx, brushColor);
     setRedoCount(redoRef.current.length);
     setShowExportPreview(false);
     exportMask();
-  }, [exportMask]);
+  }, [brushColor, exportMask]);
 
   useEffect(() => {
     const isEditable = (target: EventTarget | null) =>
@@ -686,6 +717,7 @@ export function InpaintCanvas() {
             width: cursor.size,
             height: cursor.size,
             borderRadius: brushShape === "round" ? "999px" : "3px",
+            borderColor: brushColor,
             opacity: cursor.visible && !showExportPreview && !spaceHeld && !isPanning ? 1 : 0,
           }}
         />

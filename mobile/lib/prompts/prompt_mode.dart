@@ -303,10 +303,9 @@ String knownCharacterRuntimeInstruction(
     return [
       '已知网络/游戏/动漫角色模式已开启。',
       '只输出严格 JSON，必须且只能包含这两个字符串字段：namePrompt 和 featurePrompt。',
-      'namePrompt 和 featurePrompt 都必须是完整的提示词，都要遵守上面系统模板里的全部格式、结构和权重规则（场景、构图、姿势、动作、互动、V4.5 多角色管道写法、source#/target#/mutual# 标签、权重语法）。两者必须用同样的详细程度描述同一个场景，区别只在于角色身份的表达方式，不能因为角色身份而减少场景内容。',
-      'namePrompt：使用准确的角色 tag/名字作为角色身份。如果角色 tag 本身已经包含默认发色、瞳色、服装或配饰，不要重复写出，除非用户明确要求不同或特殊的外观/服装。',
-      'featurePrompt：不要使用角色名字，改用简短的可见身份特征和服装 tag 作为身份，用于模型库不认识该角色的情况。除了身份表达方式之外，其余场景内容必须和 namePrompt 完全一致。',
-      '以芙宁娜为例，如果没有特殊服装或状态要求，身份部分本身可以简短到：1girl, solo, furina (genshin impact)——但两个版本都必须把用户描述的其余场景内容完整写出来。',
+      '两个字段必须描述同一完整画面，并遵守当前模式、V5 多人分段、互动、权重和 Text: 规则；区别只能是角色身份写法。',
+      'namePrompt 使用准确且已确认的角色 tag/英文名；角色 tag 已包含的默认外貌与服装不重复，除非图片或用户明确要求变化。',
+      'featurePrompt 不写角色名，只用简短的可见外貌与服装区分角色；不得减少或新增其他画面内容。',
       modeText,
       source == 'reverse'
           ? '如果反推范围是角色，除非需要识别可见的特殊服装或状态，否则不要描述整个场景。'
@@ -315,9 +314,7 @@ String knownCharacterRuntimeInstruction(
   }
   return [
     '已知网络/游戏/动漫角色模式已关闭。',
-    '不要依赖角色名字 tag 或受版权保护的角色名作为身份。',
-    '改用简短的可见外观、服装、姿势、动作和氛围描述来代替。',
-    '保持提示词简洁，避免堆砌大段外观或服装描述。',
+    '不要使用角色名；用最少必要的可见外貌、服装、位置和动作区分角色。',
     modeText,
   ].join('\n');
 }
@@ -325,32 +322,28 @@ String knownCharacterRuntimeInstruction(
 String modeUserInstruction(ReversePromptMode mode, String source) {
   if (mode == ReversePromptMode.natural) {
     return [
-      'Output mode: natural-language NovelAI V4.5 prompt.',
+      'Output mode: natural-language NovelAI V5 prompt.',
       'Return exactly one English prompt line.',
-      'Do not output a comma-separated Danbooru tag list.',
-      'For two or more original characters, use: base scene description | A boy/girl ... | A boy/girl ...',
+      'Use concise English prose, not a comma-separated tag list. Dataset prefixes, numeric weights, and `text, <language> text, Text: ...` are the only syntax exceptions.',
+      'For multiple characters use `base scene | A boy/girl ... | A boy/girl ...`; every segment must identify position and action without vague pronouns.',
       source == 'convert'
-          ? "Convert the user's description into the final natural-language prompt."
-          : 'Analyze the image and write the final natural-language prompt.',
+          ? "Convert only the user's stated content."
+          : 'Describe only visible evidence in the requested scope.',
     ].join('\n');
   }
   if (mode == ReversePromptMode.mixed) {
     return [
-      'Output mode: mixed NovelAI V4.5 prompt.',
+      'Output mode: mixed NovelAI V5 prompt.',
       'Return exactly one English prompt line.',
-      'HARD TAG-SELECTION RULE: first use an exact mature Danbooru/NovelAI tag when one tag fully expresses an action, pose, or composition. Output it once and do not add decomposed synonyms or prose that repeats the same concept. Add only the shortest tags needed for details the mature tag does not cover.',
-      'Retrieved mature-tag candidates are evidence, not mandatory words: discard any candidate that is not an exact semantic match.',
-      'Use Danbooru tags plus short natural-language clauses only where they clarify composition or interaction.',
-      'Do not return pure prose only.',
+      'Use mature tags first. Add prose only for tag-uncovered position, hand/side, target, depth, or text placement; never restate an existing tag.',
+      'Discard retrieved candidates that are not exact matches. Use `base | character 1 | character 2` for multiple people and do not return pure prose.',
     ].join('\n');
   }
   return [
     'Output mode: Danbooru tag prompt.',
     'Return exactly one English prompt line.',
-    'HARD TAG-SELECTION RULE: first use an exact mature Danbooru/NovelAI tag when one tag fully expresses an action, pose, or composition. Output it once and do not add decomposed synonyms or prose that repeats the same concept. Add only the shortest tags needed for details the mature tag does not cover.',
-    'Retrieved mature-tag candidates are evidence, not mandatory words: discard any candidate that is not an exact semantic match.',
-    'Use comma-separated Danbooru / NovelAI tags.',
-    'Do not output a pure natural-language sentence.',
+    'Use exact mature Danbooru / NovelAI tags once, discard inexact retrieved candidates, and do not add synonym or prose repetitions.',
+    'Use comma-separated tags and `base | character 1 | character 2` for multiple people; do not output prose.',
   ].join('\n');
 }
 
@@ -449,7 +442,7 @@ String promptRuleRepairSystemPrompt(
   bool knownCharacter,
 ) =>
     [
-      '你是 NovelAI V4.5 提示词规则校验与定向修复器。不要重新创作画面，只修复明确列出的违规项。',
+      '你是 NovelAI V5 提示词规则校验与定向修复器。不要重新创作画面，只修复明确列出的违规项。',
       knownCharacter
           ? '只输出严格 JSON，且只能包含 namePrompt 与 featurePrompt 两个字符串字段；两份提示词都必须完成相同检查。'
           : '只输出修复后的单行英文 Prompt，不要解释、标题或 Markdown。',

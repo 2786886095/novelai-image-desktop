@@ -289,6 +289,7 @@ export interface LastGenerationState {
   inpaintPositivePrompt: string;
   brushSize: number;
   brushOpacity: number;
+  brushColor?: string;
   brushShape?: InpaintBrushShape;
   brushSizeUnit?: "grid8";
   upscaleScale: UpscaleScale;

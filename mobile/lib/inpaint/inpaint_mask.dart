@@ -145,6 +145,165 @@ List<(int, int)> _roundBrushCells(int radius) =>
       return cells;
     });
 
+/// Compact source-grid representation of an inpaint mask.
+///
+/// NovelAI inpaint masks operate on the source image's 8 x 8 pixel grid. A
+/// raster therefore needs only a few tens of thousands of bytes for the common
+/// 1216 x 832 canvas, no matter how many pointer events or separate strokes the
+/// user draws. Keeping the current result instead of replaying all historical
+/// strokes is what makes long mobile drawing sessions stay responsive.
+class InpaintMaskRaster {
+  final int sourceWidth;
+  final int sourceHeight;
+  final int columns;
+  final int rows;
+  final Uint8List _cells;
+
+  InpaintMaskRaster({
+    required this.sourceWidth,
+    required this.sourceHeight,
+  })  : assert(sourceWidth > 0),
+        assert(sourceHeight > 0),
+        columns = math.max(1, (sourceWidth / inpaintMaskGridSize).ceil()),
+        rows = math.max(1, (sourceHeight / inpaintMaskGridSize).ceil()),
+        _cells = Uint8List(
+          math.max(1, (sourceWidth / inpaintMaskGridSize).ceil()) *
+              math.max(1, (sourceHeight / inpaintMaskGridSize).ceil()),
+        );
+
+  Size get sourceSize => Size(sourceWidth.toDouble(), sourceHeight.toDouble());
+
+  bool get hasSelection => _cells.any((value) => value != 0);
+
+  bool selectedAt(int column, int row) =>
+      column >= 0 &&
+      row >= 0 &&
+      column < columns &&
+      row < rows &&
+      _cells[row * columns + column] != 0;
+
+  bool clear() {
+    if (!hasSelection) return false;
+    _cells.fillRange(0, _cells.length, 0);
+    return true;
+  }
+
+  void rebuild(Iterable<InpaintStroke> strokes) {
+    _cells.fillRange(0, _cells.length, 0);
+    for (final stroke in strokes) {
+      applyStroke(stroke);
+    }
+  }
+
+  bool applySegment(
+    InpaintStroke stroke,
+    Offset from,
+    Offset to,
+  ) =>
+      applyStroke(InpaintStroke(
+        brushCells: stroke.brushCells,
+        erase: stroke.erase,
+        shape: stroke.shape,
+        points: [from, to],
+      ));
+
+  bool applyStroke(InpaintStroke stroke) {
+    if (stroke.points.isEmpty) return false;
+    final selected = !stroke.erase;
+    final value = selected ? 255 : 0;
+    final brushCells =
+        normalizeInpaintBrushCells(stroke.brushCells, stroke.shape);
+    var changed = false;
+
+    void setCell(int column, int row) {
+      if (column < 0 || row < 0 || column >= columns || row >= rows) return;
+      final index = row * columns + column;
+      if (_cells[index] == value) return;
+      _cells[index] = value;
+      changed = true;
+    }
+
+    final samples =
+        inpaintGridBrushSamples(stroke, sourceSize, inpaintMaskGridSize);
+    if (stroke.shape == InpaintBrushShape.square) {
+      for (final point in samples) {
+        final left = (point.dx - brushCells / 2).round();
+        final top = (point.dy - brushCells / 2).round();
+        for (var row = top; row < top + brushCells; row++) {
+          for (var column = left; column < left + brushCells; column++) {
+            setCell(column, row);
+          }
+        }
+      }
+      return changed;
+    }
+
+    final radius = (brushCells / 2).round();
+    final footprint = _roundBrushCells(radius);
+    for (final point in samples) {
+      final centerX = point.dx.floor();
+      final centerY = point.dy.floor();
+      for (final cell in footprint) {
+        setCell(centerX + cell.$1, centerY + cell.$2);
+      }
+    }
+    return changed;
+  }
+
+  /// Paints only the final selected cells, combining adjacent cells into one
+  /// horizontal run. Runtime depends on source-grid size, not stroke history.
+  void paintSelection(
+    Canvas canvas,
+    Size targetSize, {
+    required bool inverted,
+    required Color color,
+  }) {
+    if (targetSize.isEmpty || color.alpha == 0) return;
+    final path = Path();
+    for (var row = 0; row < rows; row++) {
+      var column = 0;
+      while (column < columns) {
+        final rawSelected = _cells[row * columns + column] != 0;
+        final visible = inverted ? !rawSelected : rawSelected;
+        if (!visible) {
+          column++;
+          continue;
+        }
+        final start = column;
+        column++;
+        while (column < columns) {
+          final nextRaw = _cells[row * columns + column] != 0;
+          if ((inverted ? !nextRaw : nextRaw) == false) break;
+          column++;
+        }
+        final sourceLeft = start * inpaintMaskGridSize;
+        final sourceRight = math.min(
+          sourceWidth.toDouble(),
+          column * inpaintMaskGridSize,
+        );
+        final sourceTop = row * inpaintMaskGridSize;
+        final sourceBottom = math.min(
+          sourceHeight.toDouble(),
+          (row + 1) * inpaintMaskGridSize,
+        );
+        path.addRect(Rect.fromLTRB(
+          sourceLeft * targetSize.width / sourceWidth,
+          sourceTop * targetSize.height / sourceHeight,
+          sourceRight * targetSize.width / sourceWidth,
+          sourceBottom * targetSize.height / sourceHeight,
+        ));
+      }
+    }
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = color
+        ..isAntiAlias = false
+        ..style = PaintingStyle.fill,
+    );
+  }
+}
+
 void paintInpaintStroke(
   Canvas canvas,
   Size size,
@@ -227,20 +386,22 @@ Future<Uint8List> renderInpaintMask({
   }
 
   final size = Size(width.toDouble(), height.toDouble());
+  final raster = InpaintMaskRaster(
+    sourceWidth: width,
+    sourceHeight: height,
+  )..rebuild(strokes);
   final recorder = ui.PictureRecorder();
   final canvas = Canvas(recorder);
   canvas.drawRect(
     Offset.zero & size,
-    Paint()..color = inverted ? Colors.white : Colors.black,
+    Paint()..color = Colors.black,
   );
-
-  for (final stroke in strokes) {
-    final rawColor = stroke.erase ? Colors.black : Colors.white;
-    final color = inverted
-        ? (rawColor == Colors.white ? Colors.black : Colors.white)
-        : rawColor;
-    paintInpaintStroke(canvas, size, stroke, color: color);
-  }
+  raster.paintSelection(
+    canvas,
+    size,
+    inverted: inverted,
+    color: Colors.white,
+  );
 
   final image = await recorder.endRecording().toImage(width, height);
   final data = await image.toByteData(format: ui.ImageByteFormat.png);

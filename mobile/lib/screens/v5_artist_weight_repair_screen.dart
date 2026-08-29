@@ -230,6 +230,7 @@ Map<String, String> _drawText(Object? language) {
         'apply': '套用到生成',
         'retry': '重試',
         'removed': '已移除收藏和本機圖片。',
+        'preview': '雙擊或點擊按鈕預覽大圖',
       };
     case 'en-US':
       return {
@@ -279,6 +280,7 @@ Map<String, String> _drawText(Object? language) {
         'apply': 'Apply',
         'retry': 'Retry',
         'removed': 'Favorite and local image removed.',
+        'preview': 'Double-tap or use the button to preview',
       };
     case 'ja-JP':
       return {
@@ -325,6 +327,7 @@ Map<String, String> _drawText(Object? language) {
         'apply': '生成へ適用',
         'retry': '再試行',
         'removed': 'お気に入りと画像を削除しました。',
+        'preview': 'ダブルタップまたはボタンで拡大',
       };
     case 'ko-KR':
       return {
@@ -371,6 +374,7 @@ Map<String, String> _drawText(Object? language) {
         'apply': '생성에 적용',
         'retry': '재시도',
         'removed': '즐겨찾기와 이미지를 삭제했습니다.',
+        'preview': '두 번 탭하거나 버튼으로 크게 보기',
       };
     default:
       return {
@@ -418,6 +422,7 @@ Map<String, String> _drawText(Object? language) {
         'apply': '应用到生成',
         'retry': '重试',
         'removed': '已移除收藏和本地图片。',
+        'preview': '双击或点击按钮预览大图',
       };
   }
 }
@@ -945,11 +950,68 @@ class _V5ArtistWeightRepairScreenState
     });
   }
 
+  Future<void> _previewResult(
+    _RepairDrawResult result,
+    Map<String, String> text,
+  ) async {
+    final image = result.image;
+    if (image == null) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Dialog.fullscreen(
+        child: SafeArea(
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: InteractiveViewer(
+                  minScale: .5,
+                  maxScale: 6,
+                  child: Center(
+                    child: Image.file(
+                      File(image.filePath),
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) =>
+                          const Icon(Icons.broken_image_outlined, size: 48),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 12,
+                right: 12,
+                top: 8,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '${result.generationModel} · ${image.width}×${image.height}',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    IconButton.filledTonal(
+                      tooltip:
+                          MaterialLocalizations.of(context).closeButtonTooltip,
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _drawResultCard(
     _RepairDrawResult result,
     Map<String, String> text, {
     bool favorite = false,
   }) {
+    final width = result.image?.width ?? _generationParams.width;
+    final height = result.image?.height ?? _generationParams.height;
     return Card(
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -958,23 +1020,44 @@ class _V5ArtistWeightRepairScreenState
           ListTile(
             dense: true,
             title: Text('#${result.sequence.toString().padLeft(2, '0')}'),
+            subtitle: Text('${result.generationModel} · $width×$height'),
             trailing: Text(favorite || result.liked
                 ? text['saved']!
                 : text[result.status] ?? result.status),
           ),
-          SizedBox(
-            height: 230,
+          AspectRatio(
+            aspectRatio: width / max(1, height),
             child: result.image == null
                 ? Center(
                     child: result.status == 'generating'
                         ? const CircularProgressIndicator()
                         : const Icon(Icons.image_outlined, size: 42),
                   )
-                : Image.file(
-                    File(result.image!.filePath),
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) =>
-                        const Icon(Icons.broken_image_outlined, size: 42),
+                : GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onDoubleTap: () => _previewResult(result, text),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        Image.file(
+                          File(result.image!.filePath),
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, __, ___) => const Icon(
+                            Icons.broken_image_outlined,
+                            size: 42,
+                          ),
+                        ),
+                        Positioned(
+                          right: 10,
+                          bottom: 10,
+                          child: IconButton.filledTonal(
+                            tooltip: text['preview'],
+                            onPressed: () => _previewResult(result, text),
+                            icon: const Icon(Icons.zoom_in),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
           ),
           Padding(

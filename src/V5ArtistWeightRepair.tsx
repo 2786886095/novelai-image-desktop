@@ -5,7 +5,7 @@ import {
   useState,
   type InputHTMLAttributes,
 } from "react";
-import { Button } from "./components/ui";
+import { AppPortal, Button } from "./components/ui";
 import { Icon } from "./components/icons";
 import { QualityPresetControl } from "./components/QualityPresetControl";
 import { useAppStore } from "./store";
@@ -332,10 +332,20 @@ export default function V5ArtistWeightRepair({
   const cancelRef = useRef(false);
   const [message, setMessage] = useState("");
   const [copied, setCopied] = useState(false);
+  const [previewCandidate, setPreviewCandidate] = useState<SharedArtistFavorite | null>(null);
   const tagSummary = useMemo(
     () => normalizeV45ArtistSyntax(drawMode ? drawInput : input),
     [drawInput, drawMode, input],
   );
+
+  useEffect(() => {
+    if (!previewCandidate) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setPreviewCandidate(null);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [previewCandidate]);
 
   const patchGeneration = <K extends keyof GenerateParams>(
     key: K,
@@ -527,23 +537,34 @@ export default function V5ArtistWeightRepair({
     setGenerationParams(normalizeDrawGenerationParams(DEFAULT_PARAMS));
   };
 
-  const renderCandidate = (candidate: SharedArtistFavorite, favorite = false) => (
-    <article key={candidate.id} className={`v5-draw-card ${candidate.status}`}>
-      <header><b>#{String(candidate.sequence).padStart(2, "0")}</b><span>{favorite || candidate.liked ? text.saved : text[candidate.status === "generating" ? "generatingOne" : candidate.status]}</span></header>
-      <div className="v5-draw-image">{candidate.image ? <img src={candidate.image.fileUrl} alt={candidate.prompt} loading="lazy" decoding="async" title={text.preview} /> : <Icon name={candidate.status === "generating" ? "loader" : "image"} />}</div>
-      <code>{candidate.prompt}</code>
-      {candidate.error && <small className="warning">{candidate.error}</small>}
-      <footer>
+  const modelLabel = (model: string) => NAI_MODELS.find((item) => item.value === model)?.label ?? model;
+  const candidateDimensions = (candidate: SharedArtistFavorite) => ({
+    width: candidate.image?.width || generationParams.width,
+    height: candidate.image?.height || generationParams.height,
+  });
+  const renderCandidate = (candidate: SharedArtistFavorite, favorite = false) => {
+    const dimensions = candidateDimensions(candidate);
+    const candidateModel = candidate.image?.model || candidate.generationModel || generationParams.model;
+    return (
+    <article key={candidate.id} className={`artist-candidate v5-draw-card ${candidate.status}`}>
+      <header className="artist-candidate-header"><div><b>#{String(candidate.sequence).padStart(2, "0")}</b><small>{modelLabel(candidateModel)} · {dimensions.width}×{dimensions.height}</small></div><span>{favorite || candidate.liked ? text.saved : text[candidate.status === "generating" ? "generatingOne" : candidate.status]}</span></header>
+      <div className="artist-candidate-media v5-draw-image" style={{ aspectRatio: `${dimensions.width} / ${dimensions.height}` }}>
+        {candidate.image ? <><img src={candidate.image.fileUrl} alt={candidate.prompt} loading="lazy" decoding="async" title={text.preview} onDoubleClick={() => setPreviewCandidate(candidate)} /><button type="button" className="artist-candidate-preview-button" aria-label={text.preview} title={text.preview} onClick={() => setPreviewCandidate(candidate)}><Icon name="search" /></button></> : <div className="artist-candidate-placeholder"><Icon name={candidate.status === "generating" ? "loader" : "image"} /></div>}
+      </div>
+      <div className="artist-string-block"><code>{candidate.prompt}</code></div>
+      <small className={`artist-error ${candidate.error ? "" : "empty"}`} title={candidate.error}>{candidate.error ?? "\u00a0"}</small>
+      <footer className="artist-candidate-actions">
         {favorite ? <Button variant="ghost" onClick={() => void removeFavorite(candidate)}><Icon name="trash" />{text.remove}</Button>
           : candidate.status === "failed" ? <Button variant="ghost" disabled={running} onClick={() => void retry(candidate)}><Icon name="refresh" />{text.retry}</Button>
             : <Button variant="ghost" disabled={candidate.status !== "done" || candidate.liked || candidate.saving} onClick={() => void saveFavorite(candidate)}><Icon name="star" />{candidate.saving ? text.saving : candidate.liked ? text.saved : text.favorite}</Button>}
         <Button variant="primary" disabled={candidate.status !== "done"} onClick={() => applyCandidate(candidate)}>{text.apply}</Button>
       </footer>
     </article>
-  );
+    );
+  };
 
   const completed = results.filter((item) => item.status === "done" || item.status === "failed").length;
-  return (
+  return <>
     <main className="v5-artist-repair">
       <header className="v5-artist-repair-hero">
         <div>
@@ -648,5 +669,6 @@ export default function V5ArtistWeightRepair({
       {!showFavorites && (results.length > 0 ? <section className="v5-draw-grid">{results.map((item) => renderCandidate(item))}</section> : <div className="v5-draw-empty">{drawMode ? text.noResults : text.repairNoResults}</div>)}
       {showFavorites && (favorites.length > 0 ? <section className="v5-draw-grid">{favorites.map((item) => renderCandidate(item, true))}</section> : <div className="v5-draw-empty">{text.noFavorites}</div>)}
     </main>
-  );
+    {previewCandidate?.image && <AppPortal><div className="modal-backdrop artist-result-preview-backdrop" role="dialog" aria-modal="true" aria-label={text.preview} onMouseDown={() => setPreviewCandidate(null)}><div className="artist-result-preview" onMouseDown={(event) => event.stopPropagation()}><button type="button" className="artist-result-preview-close" aria-label={text.back} onClick={() => setPreviewCandidate(null)}><Icon name="close" /></button><img src={previewCandidate.image.fileUrl} alt={previewCandidate.prompt} /><footer><b>{modelLabel(previewCandidate.image.model || previewCandidate.generationModel || generationParams.model)}</b><span>{previewCandidate.image.width}×{previewCandidate.image.height}</span></footer></div></div></AppPortal>}
+  </>;
 }

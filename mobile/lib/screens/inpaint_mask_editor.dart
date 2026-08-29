@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -15,6 +14,7 @@ class InpaintMaskEditResult {
   final double brush;
   final double imageOpacity;
   final double maskOpacity;
+  final Color maskColor;
   final InpaintBrushShape brushShape;
 
   const InpaintMaskEditResult({
@@ -23,6 +23,7 @@ class InpaintMaskEditResult {
     required this.brush,
     required this.imageOpacity,
     required this.maskOpacity,
+    required this.maskColor,
     required this.brushShape,
   });
 }
@@ -35,6 +36,7 @@ class InpaintMaskEditor extends StatefulWidget {
   final double initialBrush;
   final double initialImageOpacity;
   final double initialMaskOpacity;
+  final Color initialMaskColor;
   final InpaintBrushShape initialBrushShape;
   final ImageProvider<Object>? imageProvider;
 
@@ -47,6 +49,7 @@ class InpaintMaskEditor extends StatefulWidget {
     this.initialBrush = 4,
     this.initialImageOpacity = 1,
     this.initialMaskOpacity = 0.72,
+    this.initialMaskColor = Colors.white,
     this.initialBrushShape = InpaintBrushShape.round,
     this.imageProvider,
   });
@@ -59,12 +62,13 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> {
   late final List<InpaintStroke> _strokes;
   final List<InpaintStroke> _redo = [];
   final Map<int, Offset> _pointers = {};
-  final _preview = _InpaintMaskPreviewCache();
+  late final _InpaintMaskRasterPreview _preview;
   final _cursorController = _InpaintCursorController();
   late bool _inverted;
   late double _brush;
   late double _imageOpacity;
   late double _maskOpacity;
+  late Color _maskColor;
   late InpaintBrushShape _brushShape;
   late final TextEditingController _brushController;
   double _scale = 1;
@@ -77,6 +81,7 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> {
   double _lastPinchDistance = 0;
   Offset _lastPinchCenter = Offset.zero;
   bool _erase = false;
+  bool _showMask = true;
 
   String t(String key) => mobileUiTextFor(widget.language, key);
 
@@ -91,6 +96,13 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> {
     _brushController = TextEditingController(text: _brush.round().toString());
     _imageOpacity = widget.initialImageOpacity.clamp(0.15, 1).toDouble();
     _maskOpacity = widget.initialMaskOpacity.clamp(0.15, 1).toDouble();
+    _maskColor = widget.initialMaskColor;
+    _preview = _InpaintMaskRasterPreview(
+      InpaintMaskRaster(
+        sourceWidth: math.max(1, widget.image.width),
+        sourceHeight: math.max(1, widget.image.height),
+      ),
+    )..rebuild(_strokes, inverted: _inverted, notify: false);
     _syncCursorStyle();
   }
 
@@ -118,14 +130,9 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> {
       );
 
   void _refreshPreview({bool notify = true}) {
-    if (_canvasSize.isEmpty) return;
     _preview.rebuild(
-      size: _canvasSize,
-      strokes: _strokes,
+      _strokes,
       inverted: _inverted,
-      gridSize:
-          inpaintMaskGridSize * _canvasSize.shortestSide / _sourceShortest,
-      activeStrokeIndex: _activeStroke,
       notify: notify,
     );
   }
@@ -171,7 +178,7 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> {
     ));
     _activeStroke = _strokes.length - 1;
     _cursorController.updatePoint(normalized);
-    _preview.beginStroke(_strokes.last);
+    _preview.applyStroke(_strokes.last);
   }
 
   bool _appendStroke(Offset localPoint) {
@@ -186,14 +193,14 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> {
       return false;
     }
     stroke.points.add(normalized);
-    _preview.appendPoint(stroke, previous, normalized);
+    _preview.applySegment(stroke, previous, normalized);
     return true;
   }
 
   void _cancelActiveStroke() {
     final index = _activeStroke;
     if (index != null && index < _strokes.length) _strokes.removeAt(index);
-    _preview.cancelActiveStroke();
+    _refreshPreview();
     _cursorController.updatePoint(null);
     _activeStroke = null;
     _drawPointer = null;
@@ -234,10 +241,6 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> {
       final wasDrawing = _drawPointer == event.pointer;
       if (wasDrawing && !_transformedThisGesture && _activeStroke == null) {
         _beginStroke(_drawStart ?? event.localPosition);
-      }
-      final finishedIndex = _activeStroke;
-      if (finishedIndex != null && finishedIndex < _strokes.length) {
-        _preview.finishStroke(_strokes[finishedIndex]);
       }
       _pointers.remove(event.pointer);
       _activeStroke = null;
@@ -330,6 +333,7 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> {
         brush: _brush,
         imageOpacity: _imageOpacity,
         maskOpacity: _maskOpacity,
+        maskColor: _maskColor,
         brushShape: _brushShape,
       ),
     );
@@ -343,14 +347,6 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> {
             constraints.biggest,
           ).destination;
           _canvasSize = fitted;
-          _preview.ensureConfigured(
-            size: fitted,
-            strokes: _strokes,
-            inverted: _inverted,
-            gridSize:
-                inpaintMaskGridSize * fitted.shortestSide / _sourceShortest,
-            activeStrokeIndex: _activeStroke,
-          );
           return Center(
             child: SizedBox(
               key: const ValueKey('inpaint-mask-canvas'),
@@ -371,34 +367,37 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> {
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
+                        const ColoredBox(color: Colors.black),
                         RepaintBoundary(
-                          child: ColoredBox(
-                            color: Colors.black,
-                            child: Opacity(
-                              opacity: _imageOpacity,
-                              child: Image(
-                                image: widget.imageProvider ??
-                                    FileImage(File(widget.image.filePath)),
-                                fit: BoxFit.fill,
-                                filterQuality: FilterQuality.medium,
-                                gaplessPlayback: true,
-                              ),
-                            ),
-                          ),
-                        ),
-                        IgnorePointer(
                           child: Opacity(
-                            opacity: _maskOpacity,
-                            child: RepaintBoundary(
-                              key: const ValueKey(
-                                'inpaint-mask-preview-boundary',
-                              ),
-                              child: CustomPaint(
-                                painter: _InpaintMaskPreviewPainter(_preview),
-                              ),
+                            opacity: _imageOpacity,
+                            child: Image(
+                              key: const ValueKey('inpaint-mask-source-image'),
+                              image: widget.imageProvider ??
+                                  FileImage(File(widget.image.filePath)),
+                              fit: BoxFit.fill,
+                              filterQuality: FilterQuality.medium,
+                              gaplessPlayback: true,
                             ),
                           ),
                         ),
+                        if (_showMask)
+                          IgnorePointer(
+                            child: Opacity(
+                              opacity: _maskOpacity,
+                              child: RepaintBoundary(
+                                key: const ValueKey(
+                                  'inpaint-mask-preview-boundary',
+                                ),
+                                child: CustomPaint(
+                                  painter: _InpaintMaskPreviewPainter(
+                                    _preview,
+                                    _maskColor,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
                         IgnorePointer(
                           child: RepaintBoundary(
                             child: CustomPaint(
@@ -520,10 +519,10 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(label),
-              Text(display ?? '${(value * 100).round()}%')
+              Expanded(child: Text(label)),
+              const SizedBox(width: 8),
+              Text(display ?? '${(value * 100).round()}%'),
             ],
           ),
           Slider(
@@ -592,16 +591,17 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> {
         ],
       ),
     );
-    final opacitySliders = [
-      _slider(
-        label: t('tools.imageOpacity'),
-        value: _imageOpacity,
-        min: 0.15,
-        max: 1,
-        divisions: 17,
-        onChanged: (value) => setState(() => _imageOpacity = value),
-      ),
-      _slider(
+    final imageOpacitySlider = _slider(
+      label: t('tools.imageOpacity'),
+      value: _imageOpacity,
+      min: 0.15,
+      max: 1,
+      divisions: 17,
+      onChanged: (value) => setState(() => _imageOpacity = value),
+    );
+    final maskOpacitySlider = KeyedSubtree(
+      key: const ValueKey('inpaint-mask-opacity'),
+      child: _slider(
         label: t('tools.maskOpacity'),
         value: _maskOpacity,
         min: 0.15,
@@ -609,7 +609,79 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> {
         divisions: 17,
         onChanged: (value) => setState(() => _maskOpacity = value),
       ),
+    );
+    const palette = <Color>[
+      Colors.white,
+      Color(0xFF7C3AED),
+      Color(0xFF06B6D4),
+      Color(0xFF22C55E),
+      Color(0xFFF59E0B),
+      Color(0xFFEF4444),
+      Color(0xFFEC4899),
     ];
+    final maskColorPicker = Column(
+      key: const ValueKey('inpaint-mask-color'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(t('tools.maskColor')),
+        const SizedBox(height: 7),
+        Wrap(
+          spacing: 9,
+          runSpacing: 8,
+          children: palette.map((color) {
+            final selected = color.value == _maskColor.value;
+            return Semantics(
+              button: true,
+              selected: selected,
+              label:
+                  '${t('tools.maskColor')} #${color.value.toRadixString(16).substring(2).toUpperCase()}',
+              child: InkWell(
+                key: ValueKey(
+                  'inpaint-mask-color-${color.value.toRadixString(16)}',
+                ),
+                onTap: () => setState(() => _maskColor = color),
+                borderRadius: BorderRadius.circular(11),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 120),
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: color,
+                    borderRadius: BorderRadius.circular(11),
+                    border: Border.all(
+                      color: selected
+                          ? Theme.of(context).colorScheme.primary
+                          : Theme.of(context).colorScheme.outlineVariant,
+                      width: selected ? 3 : 1,
+                    ),
+                    boxShadow: selected
+                        ? [
+                            BoxShadow(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .primary
+                                    .withOpacity(.24),
+                                blurRadius: 8)
+                          ]
+                        : null,
+                  ),
+                  child: selected
+                      ? Icon(
+                          Icons.check,
+                          size: 20,
+                          color: color.computeLuminance() > .55
+                              ? Colors.black
+                              : Colors.white,
+                        )
+                      : null,
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
     return Material(
       elevation: landscape ? 0 : 8,
       color: Theme.of(context).colorScheme.surface,
@@ -621,6 +693,16 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> {
             mainAxisSize: MainAxisSize.min,
             children: [
               _modeBar(),
+              const SizedBox(height: 4),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  t('tools.maskGestureHint'),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                ),
+              ),
               const SizedBox(height: 8),
               _shapeBar(),
               const SizedBox(height: 8),
@@ -628,8 +710,11 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> {
               // the adjustments expansion avoids making it look as if the
               // option disappeared on portrait phones.
               brushSlider,
+              maskOpacitySlider,
+              maskColorPicker,
+              const SizedBox(height: 8),
               if (landscape)
-                ...opacitySliders
+                imageOpacitySlider
               else
                 ExpansionTile(
                   key: const ValueKey('inpaint-mask-adjustments'),
@@ -642,7 +727,7 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> {
                       'count': _strokes.length,
                     }),
                   ),
-                  children: opacitySliders,
+                  children: [imageOpacitySlider],
                 ),
               Row(
                 children: [
@@ -680,33 +765,7 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> {
     final landscape = size.width > size.height;
     Widget canvasRegion() => ColoredBox(
           color: const Color(0xFF101120),
-          child: Stack(
-            children: [
-              Positioned.fill(child: _canvas()),
-              Positioned(
-                left: 12,
-                top: 12,
-                child: IgnorePointer(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .surface
-                          .withOpacity(0.88),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      child: Text(t('tools.maskGestureHint')),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
+          child: _canvas(),
         );
     return Scaffold(
       appBar: AppBar(
@@ -717,6 +776,16 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> {
         leadingWidth: 80,
         title: Text(t('tools.maskEditorTitle')),
         actions: [
+          IconButton(
+            key: const ValueKey('inpaint-mask-visibility-toggle'),
+            tooltip: t(_showMask ? 'tools.hideMask' : 'tools.showMask'),
+            onPressed: () => setState(() => _showMask = !_showMask),
+            icon: Icon(
+              _showMask
+                  ? Icons.visibility_outlined
+                  : Icons.visibility_off_outlined,
+            ),
+          ),
           TextButton.icon(
             key: const ValueKey('inpaint-mask-done'),
             onPressed: _finish,
@@ -752,195 +821,34 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> {
   }
 }
 
-class _InpaintPreviewChunk {
-  final InpaintStroke stroke;
-  ui.Picture picture;
-
-  _InpaintPreviewChunk({required this.stroke, required this.picture});
-
-  void dispose() => picture.dispose();
-}
-
-/// Retained preview used only by the full-screen mobile editor.
+/// One compact current-state raster powers the full-screen preview.
 ///
-/// Finished strokes are recorded once. While a finger is moving, only the
-/// newest small chunk is re-recorded, so a long stroke no longer replays every
-/// point accumulated since pointer-down on every frame.
-class _InpaintMaskPreviewCache extends ChangeNotifier {
-  static const int _activeChunkPointLimit = 24;
+/// The previous retained-picture implementation still had to draw every old
+/// picture after a few strokes. This representation updates only affected 8 x
+/// 8 source cells and paints one merged path per frame, so cost stays bounded
+/// by image grid size rather than by how much the user has drawn.
+class _InpaintMaskRasterPreview extends ChangeNotifier {
+  final InpaintMaskRaster raster;
+  bool inverted = false;
 
-  final List<ui.Picture> _completedPictures = [];
-  final List<_InpaintPreviewChunk> _activeChunks = [];
-  Size _size = Size.zero;
-  double _gridSize = 0;
-  bool _inverted = false;
-  bool _configured = false;
+  _InpaintMaskRasterPreview(this.raster);
 
-  bool get inverted => _inverted;
-
-  Iterable<ui.Picture> get pictures sync* {
-    yield* _completedPictures;
-    for (final chunk in _activeChunks) {
-      yield chunk.picture;
-    }
-  }
-
-  void ensureConfigured({
-    required Size size,
-    required List<InpaintStroke> strokes,
+  void rebuild(
+    List<InpaintStroke> strokes, {
     required bool inverted,
-    required double gridSize,
-    int? activeStrokeIndex,
-  }) {
-    if (_configured &&
-        _size == size &&
-        _inverted == inverted &&
-        _gridSize == gridSize) {
-      return;
-    }
-    rebuild(
-      size: size,
-      strokes: strokes,
-      inverted: inverted,
-      gridSize: gridSize,
-      activeStrokeIndex: activeStrokeIndex,
-      notify: false,
-    );
-  }
-
-  void rebuild({
-    required Size size,
-    required List<InpaintStroke> strokes,
-    required bool inverted,
-    required double gridSize,
-    int? activeStrokeIndex,
     bool notify = true,
   }) {
-    _disposePictures();
-    _size = size;
-    _gridSize = gridSize;
-    _inverted = inverted;
-    _configured = !size.isEmpty && gridSize > 0;
-    if (_configured) {
-      for (var index = 0; index < strokes.length; index++) {
-        final stroke = strokes[index];
-        if (index == activeStrokeIndex) {
-          _buildActiveChunks(stroke);
-        } else if (stroke.points.isNotEmpty) {
-          _completedPictures.add(_recordStroke(stroke));
-        }
-      }
-    }
+    raster.rebuild(strokes);
+    this.inverted = inverted;
     if (notify) notifyListeners();
   }
 
-  void beginStroke(InpaintStroke stroke) {
-    if (!_configured || stroke.points.isEmpty) return;
-    _disposeActiveChunks();
-    _activeChunks.add(_recordChunk(InpaintStroke(
-      brushCells: stroke.brushCells,
-      erase: stroke.erase,
-      shape: stroke.shape,
-      points: [stroke.points.first],
-    )));
-    notifyListeners();
+  void applyStroke(InpaintStroke stroke) {
+    if (raster.applyStroke(stroke)) notifyListeners();
   }
 
-  void appendPoint(InpaintStroke stroke, Offset previous, Offset current) {
-    if (!_configured) return;
-    if (_activeChunks.isEmpty) beginStroke(stroke);
-    if (_activeChunks.isEmpty) return;
-
-    final last = _activeChunks.last;
-    if (last.stroke.points.length >= _activeChunkPointLimit) {
-      _activeChunks.add(_recordChunk(InpaintStroke(
-        brushCells: stroke.brushCells,
-        erase: stroke.erase,
-        shape: stroke.shape,
-        points: [previous, current],
-      )));
-    } else {
-      last.stroke.points.add(current);
-      final replacement = _recordStroke(last.stroke);
-      last.picture.dispose();
-      last.picture = replacement;
-    }
-    notifyListeners();
-  }
-
-  void finishStroke(InpaintStroke stroke) {
-    if (!_configured) return;
-    _disposeActiveChunks();
-    if (stroke.points.isNotEmpty) {
-      _completedPictures.add(_recordStroke(stroke));
-    }
-    notifyListeners();
-  }
-
-  void cancelActiveStroke() {
-    if (_activeChunks.isEmpty) return;
-    _disposeActiveChunks();
-    notifyListeners();
-  }
-
-  void _buildActiveChunks(InpaintStroke stroke) {
-    if (stroke.points.isEmpty) return;
-    var start = 0;
-    while (start < stroke.points.length) {
-      final end = math.min(
-        stroke.points.length,
-        start + _activeChunkPointLimit,
-      );
-      final points = stroke.points.sublist(start, end);
-      _activeChunks.add(_recordChunk(InpaintStroke(
-        brushCells: stroke.brushCells,
-        erase: stroke.erase,
-        shape: stroke.shape,
-        points: points,
-      )));
-      if (end == stroke.points.length) break;
-      start = end - 1;
-    }
-  }
-
-  _InpaintPreviewChunk _recordChunk(InpaintStroke stroke) =>
-      _InpaintPreviewChunk(stroke: stroke, picture: _recordStroke(stroke));
-
-  ui.Picture _recordStroke(InpaintStroke stroke) {
-    final recorder = ui.PictureRecorder();
-    final canvas = Canvas(recorder);
-    final rawSelected = !stroke.erase;
-    final visiblySelected = _inverted ? !rawSelected : rawSelected;
-    paintInpaintStroke(
-      canvas,
-      _size,
-      stroke,
-      color: visiblySelected ? Colors.white : Colors.transparent,
-      blendMode: visiblySelected ? BlendMode.srcOver : BlendMode.clear,
-      gridSize: _gridSize,
-    );
-    return recorder.endRecording();
-  }
-
-  void _disposeActiveChunks() {
-    for (final chunk in _activeChunks) {
-      chunk.dispose();
-    }
-    _activeChunks.clear();
-  }
-
-  void _disposePictures() {
-    for (final picture in _completedPictures) {
-      picture.dispose();
-    }
-    _completedPictures.clear();
-    _disposeActiveChunks();
-  }
-
-  @override
-  void dispose() {
-    _disposePictures();
-    super.dispose();
+  void applySegment(InpaintStroke stroke, Offset from, Offset to) {
+    if (raster.applySegment(stroke, from, to)) notifyListeners();
   }
 }
 
@@ -978,25 +886,25 @@ class _InpaintCursorController extends ChangeNotifier {
 }
 
 class _InpaintMaskPreviewPainter extends CustomPainter {
-  final _InpaintMaskPreviewCache preview;
+  final _InpaintMaskRasterPreview preview;
+  final Color color;
 
-  _InpaintMaskPreviewPainter(this.preview) : super(repaint: preview);
+  _InpaintMaskPreviewPainter(this.preview, this.color)
+      : super(repaint: preview);
 
   @override
   void paint(Canvas canvas, Size size) {
-    canvas.saveLayer(Offset.zero & size, Paint());
-    if (preview.inverted) {
-      canvas.drawRect(Offset.zero & size, Paint()..color = Colors.white);
-    }
-    for (final picture in preview.pictures) {
-      canvas.drawPicture(picture);
-    }
-    canvas.restore();
+    preview.raster.paintSelection(
+      canvas,
+      size,
+      inverted: preview.inverted,
+      color: color,
+    );
   }
 
   @override
   bool shouldRepaint(covariant _InpaintMaskPreviewPainter oldDelegate) =>
-      oldDelegate.preview != preview;
+      oldDelegate.preview != preview || oldDelegate.color != color;
 }
 
 class _InpaintCursorPainter extends CustomPainter {

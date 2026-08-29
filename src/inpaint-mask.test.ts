@@ -41,14 +41,14 @@ describe("buildBinaryInpaintMask", () => {
 });
 
 describe("buildInpaintMaskPreview", () => {
-  it("shows preserved pixels as translucent black and selected pixels as translucent white", () => {
+  it("keeps preserved pixels transparent and colors selected pixels", () => {
     const binary = new Uint8ClampedArray([
       0, 0, 0, 0,
       255, 255, 255, 255,
     ]);
-    expect([...buildInpaintMaskPreview(binary, 2, 1)]).toEqual([
-      0, 0, 0, 165,
-      255, 255, 255, 230,
+    expect([...buildInpaintMaskPreview(binary, 2, 1, "#7c3aed")]).toEqual([
+      0, 0, 0, 0,
+      124, 58, 237, 230,
     ]);
   });
 

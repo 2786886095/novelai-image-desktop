@@ -347,11 +347,33 @@ function isInpaintModelCompatibilityError(error: any): boolean {
   );
 }
 
-function qualityTags(model: string, preset: GenerateParams["qualityPreset"] = "standard") {
+function qualityTags(
+  model: string,
+  preset: GenerateParams["qualityPreset"] = "standard",
+  positivePrompt = "",
+) {
   if (preset === "none") return "";
+  let tags = "";
   if (preset === "light" && isNAIV5Model(model)) {
-    return "very aesthetic, amazing quality, no text";
+    tags = "very aesthetic, amazing quality, no text";
+  } else {
+    tags = switchQualityTags(model);
   }
+
+  // NovelAI's official quality presets contain `no text`. Keeping it beside
+  // V5's explicit `Text:` directive makes the request contradict itself and
+  // measurably suppresses requested lettering.
+  if (/(?:^|[\s,;|])Text\s*:\s*\S/i.test(positivePrompt)) {
+    tags = tags
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter((tag) => !/^no text$/i.test(tag))
+      .join(", ");
+  }
+  return tags;
+}
+
+function switchQualityTags(model: string) {
   switch (normalizeModel(model)) {
     case "nai-diffusion-5-full":
     case "nai-diffusion-5-curated":
@@ -514,7 +536,10 @@ export function buildPayload(
       : basePrompt;
   const qualityPreset = params.qualityPreset ?? (params.qualityToggle ? "standard" : "none");
   const transparentBackground = isNAIV5Model(params.model) && params.transparentBackground;
-  const qualityPrompt = mergePrompt(modePrompt, qualityTags(params.model, qualityPreset));
+  const qualityPrompt = mergePrompt(
+    modePrompt,
+    qualityTags(params.model, qualityPreset, modePrompt),
+  );
   const effectivePrompt = transparentBackground
     ? mergePrompt(qualityPrompt, "transparent background")
     : qualityPrompt;
@@ -1565,10 +1590,10 @@ export function applyOfficialInpaintParameters(
     0,
     Math.min(1, Number.isFinite(strength) ? strength : 1),
   );
-  const normalizedNoise = Math.max(
-    0,
-    Math.min(0.99, Number.isFinite(noise) ? noise : 0),
-  );
+  // Keep the argument and transport field for compatibility after removing
+  // the ineffective control, but never forward a stale persisted value.
+  void noise;
+  const normalizedNoise = 0;
   parameters.image = assets.imageBase64;
   parameters.mask = assets.maskBase64;
   parameters.add_original_image = false;
@@ -2822,7 +2847,6 @@ export async function reversePromptImage(
         "Generate the prompt for this image.",
         "",
         modeUserInstruction(mode, "reverse"),
-        knownCharacterRuntimeInstruction(mode, "reverse", knownCharacter),
       ].join("\n"),
     },
   ];
@@ -2888,7 +2912,6 @@ export async function reversePromptImage(
         result.content ?? "",
         "",
         modeUserInstruction(mode, "reverse"),
-        knownCharacterRuntimeInstruction(mode, "reverse", knownCharacter),
         "请只输出精修后的最终结果。",
       ].join("\n");
       const refined = await callVisionApi(
@@ -4161,10 +4184,11 @@ export async function convertPromptText(
   const hintText = tagHints.length
     ? `\n\nCandidate Danbooru tags from the configured tag server:\n${tagHints.map((tag) => tag.tag).join(", ")}`
     : "";
-  const userText = [
-    buildConvertUserText(chineseText, mode, knownCharacter ? "" : hintText),
-    knownCharacterRuntimeInstruction(mode, "convert", knownCharacter),
-  ].join("\n\n");
+  const userText = buildConvertUserText(
+    chineseText,
+    mode,
+    knownCharacter ? "" : hintText,
+  );
   const result = await callConvertApi(
     systemPrompt,
     userText,
@@ -4460,7 +4484,9 @@ export async function generateI2I(
       payload.action = "img2img";
       payload.parameters.image = base64Image;
       payload.parameters.strength = strength;
-      payload.parameters.noise = Math.min(0.99, Math.max(0, i2i.noise));
+      // The UI no longer exposes this ineffective control. Keep the field for
+      // API compatibility, but always send the official/default value.
+      payload.parameters.noise = 0;
       // NOTE: the unofficial SDK's nested `img2img` descriptor was dropped — it
       // is unverified and the same change regressed inpaint. We keep the standard
       // flat strength/noise img2img payload plus the source-resize fix above.
@@ -4551,10 +4577,7 @@ export async function redrawImage(
       payload.action = "img2img";
       payload.parameters.image = base64Image;
       payload.parameters.strength = strength;
-      payload.parameters.noise = Math.min(
-        0.99,
-        Math.max(0, request.noise ?? 0),
-      );
+      payload.parameters.noise = 0;
       payload.parameters.extra_noise_seed = crypto.randomInt(1, 2_147_483_647);
       return payload;
     };
@@ -4630,10 +4653,10 @@ export async function inpaintImage(
       0,
       Math.min(1, Number.isFinite(strength) ? strength : 1),
     );
-    const normalizedNoise = Math.max(
-      0,
-      Math.min(0.99, Number.isFinite(noise) ? noise : 0),
-    );
+    // Retain the argument and transport field for backward compatibility while
+    // intentionally pinning the removed UI control to zero.
+    void noise;
+    const normalizedNoise = 0;
     const buildInpaintPayload = (model: NAIInpaintModel) => {
       const inpaintParams: PayloadParams = {
         ...params,

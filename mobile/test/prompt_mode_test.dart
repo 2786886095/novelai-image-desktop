@@ -48,9 +48,9 @@ void main() {
       false,
     );
     expect(known, contains('namePrompt 和 featurePrompt'));
-    expect(known, contains('furina (genshin impact)'));
+    expect(known, contains('同一完整画面'));
     expect(known, isNot(contains('Keep both prompts short')));
-    expect(unknown, contains('不要依赖角色名字 tag'));
+    expect(unknown, contains('不要使用角色名'));
   });
 
   test('desktop templates are bundled for all modes', () async {
@@ -79,11 +79,86 @@ void main() {
 
   test('mature tag rules apply only to tags and mixed modes', () {
     expect(modeUserInstruction(ReversePromptMode.tags, 'convert'),
-        contains('HARD TAG-SELECTION RULE'));
+        contains('exact mature'));
     expect(modeUserInstruction(ReversePromptMode.mixed, 'reverse'),
-        contains('HARD TAG-SELECTION RULE'));
+        contains('mature tags first'));
     expect(modeUserInstruction(ReversePromptMode.natural, 'convert'),
-        isNot(contains('HARD TAG-SELECTION RULE')));
+        isNot(contains('mature tags first')));
+  });
+
+  test('bundled reverse and convert templates use the concise V5 contract',
+      () async {
+    final library = await PromptTemplateLibrary.load();
+    for (final kind in ['scopedReverse', 'convert']) {
+      for (final mode in ReversePromptMode.values) {
+        final template = library.get(kind, mode);
+        expect(template, contains('NovelAI V5'));
+        expect(template.length, inInclusiveRange(1000, 2500));
+        expect(template, contains('fur dataset'));
+        expect(template, contains('background dataset'));
+        expect(template, contains('Text:'));
+        expect(template, contains('最多 22'));
+        expect(template, contains('transparent background'));
+        expect(template, isNot(contains('优先使用 mcp 服务搜索')));
+        expect(template, isNot(contains('不要默认全部无权重')));
+        expect(template, isNot(contains('图片分析顺序')));
+      }
+    }
+  });
+
+  test('bundled templates preserve audited V5 prompt-quality safeguards',
+      () async {
+    final library = await PromptTemplateLibrary.load();
+    for (final kind in ['scopedReverse', 'convert']) {
+      for (final mode in [ReversePromptMode.tags, ReversePromptMode.mixed]) {
+        final template = library.get(kind, mode);
+        expect(template, contains('不得留下孤立锚点'));
+        expect(template, contains('1.2::tag ::'));
+        expect(template, contains('source#giving/target#giving'));
+        expect(template, isNot(contains('source#handing item')));
+        expect(template, contains('交接中的道具不算共享道具'));
+        expect(template, contains('属于关键互动'));
+      }
+      final natural = library.get(kind, ReversePromptMode.natural);
+      expect(natural, contains('text, <language> text'));
+      expect(natural, contains('不复述文字内容'));
+      expect(natural, isNot(contains('reads OPEN')));
+      for (final mode in ReversePromptMode.values) {
+        final template = library.get(kind, mode);
+        expect(template, isNot(contains('base 最末、第一个 | 之前')));
+        expect(template, isNot(contains('不写 portrait、landscape')));
+        expect(template, contains('同一层级互斥'));
+        expect(template, contains('不视为互斥'));
+      }
+    }
+    expect(
+      library.get('scopedReverse', ReversePromptMode.mixed),
+      contains('无成熟 Tag 的关键可见状态或表情'),
+    );
+    expect(
+      library.get('scopedReverse', ReversePromptMode.mixed),
+      contains('角色残差紧跟被限定的 Tag 或动作'),
+    );
+    expect(
+      library.get('scopedReverse', ReversePromptMode.tags),
+      contains('本模式允许省略且不得混入自然语言'),
+    );
+    expect(
+      library.get('convert', ReversePromptMode.tags),
+      contains('空间关系优先由角色段顺序表达'),
+    );
+    expect(
+      library.get('convert', ReversePromptMode.tags),
+      contains('mutual#holding hands'),
+    );
+    expect(
+      library.get('convert', ReversePromptMode.mixed),
+      contains('mutual#holding hands'),
+    );
+    expect(
+      library.get('convert', ReversePromptMode.mixed),
+      contains('无成熟 Tag 的关键可见状态或表情'),
+    );
   });
 
   test('rule validator detects duplicate and mature tag decomposition', () {

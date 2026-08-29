@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { CONVERT_SYSTEM_PROMPTS, REVERSE_SYSTEM_PROMPTS } from "./data/prompt-templates";
+import {
+  CONVERT_SYSTEM_PROMPTS,
+  REVERSE_SYSTEM_PROMPTS,
+  SCOPED_REVERSE_SYSTEM_PROMPTS,
+} from "./data/prompt-templates";
 import {
   buildConvertUserText,
   buildModeRepairUserText,
@@ -27,7 +31,7 @@ describe("resolveModePrompt", () => {
       CONVERT_SYSTEM_PROMPTS,
     );
     expect(result).toBe(CONVERT_SYSTEM_PROMPTS.natural);
-    expect(result).toContain("不要使用 Danbooru tag 列表");
+    expect(result).toContain("简洁英文自然语言提示词");
   });
 
   it("does not let a legacy tag template override reverse natural mode", () => {
@@ -38,7 +42,7 @@ describe("resolveModePrompt", () => {
       REVERSE_SYSTEM_PROMPTS,
     );
     expect(result).toBe(REVERSE_SYSTEM_PROMPTS.natural);
-    expect(result).toContain("100% 英文自然语言");
+    expect(result).toContain("简洁英文自然语言提示词");
   });
 
   it("does not let a legacy template override tags mode either", () => {
@@ -77,8 +81,8 @@ describe("prompt mode output handling", () => {
     const text = buildConvertUserText("一个黑发男孩坐着画画", "natural");
     expect(text).toContain("User description:");
     expect(text).toContain("一个黑发男孩坐着画画");
-    expect(text).toContain("Do not output a comma-separated Danbooru tag list.");
-    expect(text).toContain("base scene description | A boy/girl");
+    expect(text).toContain("not a comma-separated tag list");
+    expect(text).toContain("base scene | A boy/girl");
   });
 
   it("builds a repair prompt anchored to the target example style", () => {
@@ -128,28 +132,22 @@ describe("prompt mode output handling", () => {
   it("adds concise no-name guidance when known character mode is off", () => {
     const instruction = knownCharacterRuntimeInstruction("tags", "convert", false);
     expect(instruction).toContain("已知网络/游戏/动漫角色模式已关闭");
-    expect(instruction).toContain("不要依赖角色名字 tag");
-    expect(instruction).toContain("保持提示词简洁");
+    expect(instruction).toContain("不要使用角色名");
+    expect(instruction).toContain("最少必要");
   });
 
   it("requires both known-character variants to keep full template detail", () => {
     const instruction = knownCharacterRuntimeInstruction("tags", "convert", true);
     expect(instruction).toContain("namePrompt 和 featurePrompt");
-    expect(instruction).toContain("furina (genshin impact)");
+    expect(instruction).toContain("同一完整画面");
     expect(instruction).not.toContain("Keep both prompts short");
     expect(instruction).not.toContain("Only add outfit, feature, pose, action");
   });
 
   it("adds mature-tag priority only to tags and mixed runtime rules", () => {
-    expect(modeUserInstruction("tags", "convert")).toContain(
-      "HARD TAG-SELECTION RULE",
-    );
-    expect(modeUserInstruction("mixed", "reverse")).toContain(
-      "HARD TAG-SELECTION RULE",
-    );
-    expect(modeUserInstruction("natural", "convert")).not.toContain(
-      "HARD TAG-SELECTION RULE",
-    );
+    expect(modeUserInstruction("tags", "convert")).toContain("exact mature");
+    expect(modeUserInstruction("mixed", "reverse")).toContain("mature tags first");
+    expect(modeUserInstruction("natural", "convert")).not.toContain("mature tags first");
     expect(CONVERT_SYSTEM_PROMPTS.natural).not.toContain("成熟整词优先");
   });
 
@@ -180,5 +178,92 @@ describe("prompt mode output handling", () => {
         matureTags: ["cowboy_shot"],
       }),
     ).toContain("cowboy_shot");
+  });
+});
+
+describe("concise NovelAI V5 production templates", () => {
+  const six = [
+    ...Object.values(SCOPED_REVERSE_SYSTEM_PROMPTS),
+    ...Object.values(CONVERT_SYSTEM_PROMPTS),
+  ];
+
+  it("keeps all six V5 templates bounded and free of obsolete workflow commands", () => {
+    expect(six).toHaveLength(6);
+    for (const template of six) {
+      expect(template).toContain("NovelAI V5");
+      expect(template.length).toBeGreaterThan(1_000);
+      expect(template.length).toBeLessThan(2_500);
+      expect(template).not.toContain("优先使用 mcp 服务搜索");
+      expect(template).not.toContain("不要默认全部无权重");
+      expect(template).not.toContain("图片分析顺序");
+    }
+  });
+
+  it("preserves official dataset, text and multi-character boundaries", () => {
+    for (const template of six) {
+      expect(template).toContain("fur dataset");
+      expect(template).toContain("background dataset");
+      expect(template).toContain("Text:");
+      expect(template).toContain("最多 22");
+      expect(template).toContain("transparent background");
+    }
+    expect(SCOPED_REVERSE_SYSTEM_PROMPTS.mixed).toContain(
+      "角色残差紧跟被限定的 Tag 或动作",
+    );
+    expect(CONVERT_SYSTEM_PROMPTS.mixed).toContain("自然语言不是必填");
+  });
+
+  it("locks in the audited V5 output-quality safeguards", () => {
+    for (const template of [
+      SCOPED_REVERSE_SYSTEM_PROMPTS.tags,
+      SCOPED_REVERSE_SYSTEM_PROMPTS.mixed,
+      CONVERT_SYSTEM_PROMPTS.tags,
+      CONVERT_SYSTEM_PROMPTS.mixed,
+    ]) {
+      expect(template).toContain("不得留下孤立锚点");
+      expect(template).toContain("1.2::tag ::");
+      expect(template).toContain("source#giving/target#giving");
+      expect(template).not.toContain("source#handing item");
+      expect(template).toContain("交接中的道具不算共享道具");
+      expect(template).toContain("属于关键互动");
+    }
+    for (const template of [
+      SCOPED_REVERSE_SYSTEM_PROMPTS.natural,
+      CONVERT_SYSTEM_PROMPTS.natural,
+    ]) {
+      expect(template).toContain("text, <language> text");
+      expect(template).toContain("不复述文字内容");
+      expect(template).not.toContain("reads OPEN");
+    }
+    for (const template of six) {
+      expect(template).not.toContain("base 最末、第一个 | 之前");
+      expect(template).not.toContain("不写 portrait、landscape");
+      expect(template).toContain("同一层级互斥");
+      expect(template).toContain("不视为互斥");
+    }
+    expect(SCOPED_REVERSE_SYSTEM_PROMPTS.tags).toContain(
+      "本模式允许省略且不得混入自然语言",
+    );
+    expect(CONVERT_SYSTEM_PROMPTS.tags).toContain(
+      "空间关系优先由角色段顺序表达",
+    );
+    expect(SCOPED_REVERSE_SYSTEM_PROMPTS.natural).not.toContain(
+      "人数 Tag/人数描述",
+    );
+    expect(CONVERT_SYSTEM_PROMPTS.natural).not.toContain(
+      "人数 Tag/人数描述",
+    );
+    expect(CONVERT_SYSTEM_PROMPTS.tags).toContain("mutual#holding hands");
+    expect(CONVERT_SYSTEM_PROMPTS.mixed).toContain("mutual#holding hands");
+    expect(SCOPED_REVERSE_SYSTEM_PROMPTS.mixed).toContain(
+      "无成熟 Tag 的关键可见状态或表情",
+    );
+    expect(CONVERT_SYSTEM_PROMPTS.mixed).toContain(
+      "无成熟 Tag 的关键可见状态或表情",
+    );
+    for (const template of Object.values(CONVERT_SYSTEM_PROMPTS)) {
+      expect(template).toContain("-1::");
+      expect(template).toContain("Text:");
+    }
   });
 });
