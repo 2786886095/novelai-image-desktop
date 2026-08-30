@@ -20,6 +20,7 @@ import '../services/proxy_http_client.dart';
 import '../services/storage.dart';
 import '../services/update_service.dart';
 import '../services/background_queue_service.dart';
+import '../services/data_backup_service.dart';
 import '../tags/offline_tag_store.dart';
 
 // A finished convert/reverse job is already reflected in the result box and
@@ -131,6 +132,7 @@ class AppState extends ChangeNotifier {
   bool _cancelGenerationRequested = false;
   int _activeTaskQuote = 0;
   int? _pendingAuthorizedBalance;
+  bool _automaticBackupScheduled = false;
 
   String _rt(String key) => runtimeTextFor(settings.language, key);
   String _rf(String key, Map<String, Object?> values) =>
@@ -284,6 +286,19 @@ class AppState extends ChangeNotifier {
       _scheduleGenerationQuote();
       unawaited(checkUpdate());
       unawaited(_refreshAccountAtBoot());
+      if (!_automaticBackupScheduled) {
+        _automaticBackupScheduled = true;
+        // Compression stays off the first-frame path. The service performs a
+        // due check and only rotates files named auto-*.naisbackup.
+        unawaited(Future<void>.delayed(const Duration(seconds: 20), () async {
+          try {
+            await DataBackupService(storage).runAutomaticBackup();
+          } catch (_) {
+            // Automatic backup is best-effort; manual export and import remain
+            // available even when the platform file system is temporarily busy.
+          }
+        }));
+      }
     }
   }
 

@@ -13,7 +13,14 @@ import type {
   TagComicGenerateRequest,
   TagComicReferenceImportRequest,
   DirectorTool,
+  DataBackupExportRequest,
+  DataBackupImportRequest,
+  DataBackupImportResult,
+  DataBackupInspectResult,
+  DataBackupOperationResult,
+  DataBackupStatus,
   GenerateExtras,
+  GenerationPreviewEvent,
   TagSuggestion,
   GenerateParams,
   HistoryItem,
@@ -34,12 +41,49 @@ import type {
   ReferencePresetOperationResult,
   ReferencePresetSaveRequest,
   MetadataSnapshotPayload,
+  ResourceDatabaseDownloadResult,
+  ResourceDatabaseId,
+  ResourceDatabaseOverview,
+  ResourceDatabaseProgressEvent,
 } from "../src/types";
 import type { AitagSearchRequest } from "../src/aitag";
 import type { PromptCodexSnapshot } from "../src/prompt-codex";
 
 contextBridge.exposeInMainWorld("naiDesktop", {
   platform: process.platform,
+  getResourceDatabaseOverview: (): Promise<ResourceDatabaseOverview> =>
+    ipcRenderer.invoke("resource-database:overview"),
+  downloadResourceDatabase: (id: ResourceDatabaseId, confirmReplace = false): Promise<ResourceDatabaseDownloadResult> =>
+    ipcRenderer.invoke("resource-database:download", id, confirmReplace),
+  pauseResourceDatabaseDownload: (id: ResourceDatabaseId): Promise<{ ok: boolean; message: string }> =>
+    ipcRenderer.invoke("resource-database:pause", id),
+  restorePreviousResourceDatabase: (id: ResourceDatabaseId, confirmed = false): Promise<ResourceDatabaseDownloadResult> =>
+    ipcRenderer.invoke("resource-database:restore-previous", id, confirmed),
+  openResourceDatabaseDirectory: (): Promise<{ ok: boolean; message?: string }> =>
+    ipcRenderer.invoke("resource-database:open-directory"),
+  clearResourceQueryCache: (): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke("resource-database:clear-cache"),
+  relatedResourceTags: (tags: string[], limit?: number): Promise<TagSuggestion[]> =>
+    ipcRenderer.invoke("resource-database:related-tags", tags, limit),
+  onResourceDatabaseProgress: (callback: (event: ResourceDatabaseProgressEvent) => void) => {
+    const listener = (_event: unknown, payload: ResourceDatabaseProgressEvent) => callback(payload);
+    ipcRenderer.on("resource-database:progress", listener);
+    return () => ipcRenderer.removeListener("resource-database:progress", listener);
+  },
+  exportDataBackup: (request: DataBackupExportRequest): Promise<DataBackupOperationResult> =>
+    ipcRenderer.invoke("dataBackup:export", request),
+  inspectDataBackup: (): Promise<DataBackupInspectResult> =>
+    ipcRenderer.invoke("dataBackup:inspect"),
+  importDataBackup: (request: DataBackupImportRequest): Promise<DataBackupImportResult> =>
+    ipcRenderer.invoke("dataBackup:import", request),
+  getDataBackupStatus: (): Promise<DataBackupStatus> =>
+    ipcRenderer.invoke("dataBackup:status"),
+  runAutomaticBackup: (workspaceData?: Record<string, string>): Promise<DataBackupOperationResult> =>
+    ipcRenderer.invoke("dataBackup:runAutomatic", workspaceData),
+  selectBackupDirectory: (): Promise<string | null> =>
+    ipcRenderer.invoke("dataBackup:selectDirectory"),
+  openBackupDirectory: (): Promise<{ ok: boolean; message?: string }> =>
+    ipcRenderer.invoke("dataBackup:openDirectory"),
   promptCodexCache: (): Promise<PromptCodexSnapshot | null> =>
     ipcRenderer.invoke("promptCodex:cache"),
   promptCodexUpdate: (): Promise<PromptCodexSnapshot> =>
@@ -81,18 +125,37 @@ contextBridge.exposeInMainWorld("naiDesktop", {
   aitagPrewarm: (retentionDays?: number) =>
     ipcRenderer.invoke("aitag:prewarm", retentionDays),
   aitagClearDataCache: () => ipcRenderer.invoke("aitag:clear-data-cache"),
-  aitagCacheImage: (url: string, retentionDays?: number) =>
-    ipcRenderer.invoke("aitag:cache-image", url, retentionDays),
+  aitagCacheImage: (url: string, retentionDays?: number, force?: boolean) =>
+    ipcRenderer.invoke("aitag:cache-image", url, retentionDays, force),
   aitagCacheStats: () => ipcRenderer.invoke("aitag:cache-stats"),
   aitagClearCache: () => ipcRenderer.invoke("aitag:clear-cache"),
+  onlineGallerySearch: (request: import("../src/online-gallery").OnlineGallerySearchRequest) =>
+    ipcRenderer.invoke("online-gallery:search", request),
+  onlineGalleryDetail: (request: import("../src/online-gallery").OnlineGalleryDetailRequest) =>
+    ipcRenderer.invoke("online-gallery:detail", request),
+  onlineGalleryClearDataCache: () => ipcRenderer.invoke("online-gallery:clear-data-cache"),
+  onlineGalleryCacheImage: (
+    source: import("../src/online-gallery").OnlineGallerySourceId,
+    url: string,
+    retentionDays?: number,
+    force?: boolean,
+  ) => ipcRenderer.invoke("online-gallery:cache-image", source, url, retentionDays, force),
   hasToken: () => ipcRenderer.invoke("nai:hasToken"),
   accountCached: () => ipcRenderer.invoke("nai:accountCached"),
   verifyToken: (token: string) => ipcRenderer.invoke("nai:verify", token),
   clearToken: () => ipcRenderer.invoke("nai:clearToken"),
   quoteAnlas: (request: AnlasQuoteRequest) =>
     ipcRenderer.invoke("nai:quoteAnlas", request),
-  generate: (params: GenerateParams, extras: GenerateExtras) =>
-    ipcRenderer.invoke("nai:generate", params, extras),
+  generate: (
+    params: GenerateParams,
+    extras: GenerateExtras,
+    previewRequestId?: string,
+  ) => ipcRenderer.invoke("nai:generate", params, extras, previewRequestId),
+  onGenerationPreview: (callback: (event: GenerationPreviewEvent) => void) => {
+    const listener = (_event: unknown, payload: GenerationPreviewEvent) => callback(payload);
+    ipcRenderer.on("nai:generationPreview", listener);
+    return () => ipcRenderer.removeListener("nai:generationPreview", listener);
+  },
   generateArtistLab: (
     params: GenerateParams,
     extras: GenerateExtras,
@@ -216,6 +279,9 @@ contextBridge.exposeInMainWorld("naiDesktop", {
       downloaded: boolean;
       sizeBytes: number;
       count: number;
+      catalogDownloaded: boolean;
+      bilingualDownloaded: boolean;
+      bilingualCount: number;
     }>,
   downloadDanbooru: () =>
     ipcRenderer.invoke("nai:downloadDanbooru") as Promise<{

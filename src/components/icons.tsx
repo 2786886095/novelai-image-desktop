@@ -1,8 +1,79 @@
-// Cohesive line-icon set (Feather-style, 24px grid, stroke = currentColor).
-// Replaces the clashing color emoji so every functional glyph shares one look
-// and inherits the surrounding text color / size (1em).
+// Material icons match Flutter's built-in Icons vocabulary. Every functional
+// glyph inherits the surrounding color and size so desktop and mobile use the
+// same visual language; the old inline paths remain only as a safe fallback.
 import clsx from "clsx";
 import type { ReactNode } from "react";
+import type { IconType } from "react-icons";
+import {
+  MdAdd,
+  MdArchive,
+  MdAutoAwesome,
+  MdAutoFixHigh,
+  MdBackup,
+  MdBackspace,
+  MdBrush,
+  MdBuild,
+  MdCasino,
+  MdCenterFocusStrong,
+  MdCheck,
+  MdCheckCircleOutline,
+  MdChevronRight,
+  MdCleaningServices,
+  MdCloudSync,
+  MdCollections,
+  MdContentCopy,
+  MdDataObject,
+  MdDeleteOutline,
+  MdDownload,
+  MdDraw,
+  MdExpandMore,
+  MdFitScreen,
+  MdFolder,
+  MdFolderOpen,
+  MdHelpOutline,
+  MdHistory,
+  MdImage,
+  MdInfoOutline,
+  MdKey,
+  MdLanguage,
+  MdLightbulbOutline,
+  MdLink,
+  MdLocationOn,
+  MdLockOpen,
+  MdLockOutline,
+  MdLogout,
+  MdManageSearch,
+  MdMoreHoriz,
+  MdOpenInNew,
+  MdOutlineRestore,
+  MdOutlineSecurity,
+  MdPalette,
+  MdPersonOutline,
+  MdPets,
+  MdPlayArrow,
+  MdPower,
+  MdPushPin,
+  MdRedo,
+  MdRefresh,
+  MdRemove,
+  MdSearch,
+  MdSettings,
+  MdSmartToy,
+  MdSpeed,
+  MdStarBorder,
+  MdStorage,
+  MdSwapHoriz,
+  MdSync,
+  MdTune,
+  MdTranslate,
+  MdUndo,
+  MdUpload,
+  MdUpgrade,
+  MdVisibility,
+  MdVisibilityOff,
+  MdViewQuilt,
+  MdWarningAmber,
+} from "react-icons/md";
 
 export type IconName =
   | "lock"
@@ -63,9 +134,96 @@ export type IconName =
   | "loader"
   | "sliders"
   | "moreHorizontal"
-  | "chevronRight";
+  | "chevronRight"
+  | "database"
+  | "archive"
+  | "backup"
+  | "upload"
+  | "restore"
+  | "cloudSync"
+  | "smartToy"
+  | "translate"
+  | "template"
+  | "speed"
+  | "shield"
+  | "code"
+  | "collections"
+  | "draw";
 
-const PATHS: Record<IconName, ReactNode> = {
+const MATERIAL_ICONS: Partial<Record<IconName, IconType>> = {
+  lock: MdLockOutline,
+  unlock: MdLockOpen,
+  bulb: MdLightbulbOutline,
+  globe: MdLanguage,
+  folder: MdFolder,
+  folderOpen: MdFolderOpen,
+  palette: MdPalette,
+  paw: MdPets,
+  plug: MdPower,
+  link: MdLink,
+  sparkles: MdAutoAwesome,
+  star: MdStarBorder,
+  dice: MdCasino,
+  pin: MdPushPin,
+  key: MdKey,
+  mapPin: MdLocationOn,
+  trash: MdDeleteOutline,
+  upgrade: MdUpgrade,
+  download: MdDownload,
+  copy: MdContentCopy,
+  warning: MdWarningAmber,
+  eye: MdVisibility,
+  eyeOff: MdVisibilityOff,
+  settings: MdSettings,
+  help: MdHelpOutline,
+  refresh: MdRefresh,
+  check: MdCheck,
+  plus: MdAdd,
+  clear: MdBackspace,
+  externalLink: MdOpenInNew,
+  play: MdPlayArrow,
+  brush: MdBrush,
+  eraser: MdCleaningServices,
+  undo: MdUndo,
+  redo: MdRedo,
+  fitScreen: MdFitScreen,
+  scan: MdCenterFocusStrong,
+  swap: MdSwapHoriz,
+  arrowDownLeft: MdDownload,
+  logout: MdLogout,
+  image: MdImage,
+  images: MdCollections,
+  history: MdHistory,
+  toolbox: MdBuild,
+  fileSearch: MdManageSearch,
+  wand: MdAutoFixHigh,
+  minus: MdRemove,
+  chevronDown: MdExpandMore,
+  search: MdSearch,
+  info: MdInfoOutline,
+  successCircle: MdCheckCircleOutline,
+  user: MdPersonOutline,
+  loader: MdSync,
+  sliders: MdTune,
+  moreHorizontal: MdMoreHoriz,
+  chevronRight: MdChevronRight,
+  database: MdStorage,
+  archive: MdArchive,
+  backup: MdBackup,
+  upload: MdUpload,
+  restore: MdOutlineRestore,
+  cloudSync: MdCloudSync,
+  smartToy: MdSmartToy,
+  translate: MdTranslate,
+  template: MdViewQuilt,
+  speed: MdSpeed,
+  shield: MdOutlineSecurity,
+  code: MdDataObject,
+  collections: MdCollections,
+  draw: MdDraw,
+};
+
+const PATHS: Partial<Record<IconName, ReactNode>> = {
   lock: (
     <>
       <rect x="3.5" y="11" width="17" height="10.5" rx="2.2" />
@@ -461,10 +619,22 @@ export function iconNameForLegacyGlyph(glyph: string): IconName | undefined {
 }
 
 export function isIconName(value: string): value is IconName {
-  return Object.prototype.hasOwnProperty.call(PATHS, value);
+  return Object.prototype.hasOwnProperty.call(PATHS, value)
+    || Object.prototype.hasOwnProperty.call(MATERIAL_ICONS, value);
 }
 
 export function Icon({ name, className }: { name: IconName; className?: string }) {
+  const MaterialIcon = MATERIAL_ICONS[name];
+  if (MaterialIcon) {
+    return (
+      <MaterialIcon
+        className={clsx("ui-icon", name === "loader" && "ui-icon-spin", className)}
+        size="1em"
+        aria-hidden="true"
+        focusable={false}
+      />
+    );
+  }
   return (
     <svg
       className={clsx("ui-icon", name === "loader" && "ui-icon-spin", className)}

@@ -1,12 +1,17 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import clsx from "clsx";
 import { format } from "date-fns";
-// Code-split the heavy tool screens: they're only rendered when their tab is
-// opened, so keeping them out of the initial bundle speeds cold start. The whole
-// Keep the lightweight tools index separate; each heavy tool loads on demand.
-const ToolsHub = lazy(() => import("./ToolsHub"));
-const InpaintCanvas = lazy(() => import("./InpaintCanvas").then((m) => ({ default: m.InpaintCanvas })));
-const MetadataInspector = lazy(() => import("./MetadataInspector"));
+// Keep Tools in deferred chunks, but resolve every one behind the splash. The
+// custom preloader in ToolsHub retains each resolved component, so card clicks
+// do not encounter a second parse step or a visible Suspense frame.
+const loadToolsHub = () => import("./ToolsHub");
+const ToolsHub = lazy(loadToolsHub);
+const loadOnlineGalleryPage = () => import("./features/online-gallery/OnlineGalleryPage");
+const loadInpaintCanvas = () => import("./InpaintCanvas").then((m) => ({ default: m.InpaintCanvas }));
+const loadMetadataInspector = () => import("./MetadataInspector");
+const OnlineGalleryPage = lazy(loadOnlineGalleryPage);
+const InpaintCanvas = lazy(loadInpaintCanvas);
+const MetadataInspector = lazy(loadMetadataInspector);
 import { useAppStore } from "./store";
 import { relatedTags } from "./related-tags";
 import { fmtCount, wordAtCursor } from "./text-utils";
@@ -14,7 +19,10 @@ import { inspectImageMetadata, parseImageMeta } from "./png-meta";
 import { INPAINT_BRUSH_SLIDER_MAX, INPAINT_BRUSH_SLIDER_MIN } from "./inpaint-brush";
 import { droppedImagePath, droppedImagePaths, hasDraggedFiles } from "./drag-drop";
 import { compactRemoteErrorText } from "./error-message";
-import { hydrateArtistFavoriteLibrary } from "./artist-favorite-library";
+import { flushArtistFavoritePersistence, hydrateArtistFavoriteLibrary } from "./artist-favorite-library";
+import { BackupRestoreSettings, DataPortabilitySettings } from "./features/settings/DataBackupSettings";
+import ResourceDatabaseSettings from "./features/settings/ResourceDatabaseSettings";
+import { collectPortableWorkspaceData } from "./features/settings/data-backup-workspace";
 import { splitPromptTags, parseWeightedTag, formatMultiplier, setTagLevelInPrompt } from "./prompt-weight";
 import {
   normalizePrompt,
@@ -32,7 +40,10 @@ import {
   V45_SCOPED_REVERSE_SYSTEM_PROMPTS,
 } from "./data/prompt-templates-v45";
 import { Button, IconText, AppPortal, Toggle, NumberInput, CommittedNumberInput, SliderInput, SecretInput, SelectMenu } from "./components/ui";
-import { Icon } from "./components/icons";
+import { Icon, type IconName } from "./components/icons";
+import { AppMenuBar, AppTitleBar } from "./app/AppChrome";
+import AppTabBar from "./app/AppTabBar";
+import { isActiveTab, WIDE_WORKSPACE_TABS } from "./app/navigation";
 import { QualityPresetControl } from "./components/QualityPresetControl";
 import ReferencePresetManager, {
   ReferencePresetQuickSaveDialog,
@@ -40,7 +51,7 @@ import ReferencePresetManager, {
   type QuickPresetSource,
 } from "./ReferencePresetManager";
 import { isScrollInsideFloatingMenu } from "./floating-menu";
-import { desktopUiFormat, desktopUiText, getChromeText, getGeneratePanelText, getLocalizedTabItems, getSettingsSectionText, getSettingsShellText, getTokenGuideText, localizedDesktopOptionLabel, SUPPORTED_APP_LANGUAGES } from "./i18n";
+import { desktopUiFormat, desktopUiText, getGeneratePanelText, getLocalizedTabItems, getSettingsSectionText, getSettingsShellText, getTokenGuideText, localizedDesktopOptionLabel, SUPPORTED_APP_LANGUAGES } from "./i18n";
 import {
   CAT_COLOR,
   CAPSULE_TAXONOMY,
@@ -103,7 +114,6 @@ import {
   snapNAIDimensionWithinArea,
 } from "./nai-dimensions";
 
-const docsUrl = "https://docs.novelai.net/en/image/";
 const novelAiImageUrl = "https://novelai.net/image";
 const DEFAULT_HTTP_PROXY = "http://127.0.0.1:7890";
 const DEFAULT_SOCKS_PROXY = "socks5://127.0.0.1:10808";
@@ -146,7 +156,10 @@ function TagLibrarySettingsSection({ onChanged }: { onChanged?: () => void }) {
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
 
   const refresh = useCallback(() => {
-    void window.naiDesktop.danbooruStatus().then((s) => setStatus({ downloaded: s.downloaded, count: s.count }));
+    void window.naiDesktop.danbooruStatus().then((s) => setStatus({
+      downloaded: s.bilingualDownloaded,
+      count: s.bilingualCount,
+    }));
   }, []);
   useEffect(() => {
     refresh();
@@ -225,7 +238,9 @@ function CapsuleBrowser({ query, onPick, language }: { query: string; onPick: (t
   const text = capsuleBrowserText(language);
 
   useEffect(() => {
-    void window.naiDesktop.danbooruStatus().then((s) => setDownloaded(s.downloaded));
+    void window.naiDesktop.danbooruStatus().then((s) => {
+      setDownloaded(/[㐀-鿿]/.test(q) ? s.bilingualDownloaded : s.downloaded);
+    });
   }, [query]);
 
   useEffect(() => {
@@ -625,93 +640,6 @@ function OpusUsageDialog({ onClose }: { onClose: () => void }) {
       </section>
     </div>
   </AppPortal>;
-}
-
-function TitleBar() {
-  const account = useAppStore((state) => state.account);
-  const refreshAccount = useAppStore((state) => state.refreshAccount);
-  const language = useAppStore((state) => state.settings?.language);
-  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
-
-  useEffect(() => {
-    if (new URLSearchParams(window.location.search).get("uiCapture") === "opusUsage") return;
-    if (!account.hasToken || account.tierLevel !== 3) return;
-    const timer = window.setInterval(() => {
-      if (document.visibilityState === "visible") void refreshAccount();
-    }, 60_000);
-    return () => window.clearInterval(timer);
-  }, [account.hasToken, account.tierLevel, refreshAccount]);
-
-  return (
-    <header className="title-bar">
-      <div className="window-title">
-        <img className="title-icon" src={appIconUrl} alt="" />
-        {APP_NAME}
-        <span className="title-ver">v{APP_VERSION}</span>
-      </div>
-      <div className={clsx("title-account", account.hasToken && "online")}>
-        <span className="pulse-dot" />
-        {account.hasToken
-          ? `${account.tierName ?? t("title.connected")} · Anlas ${account.anlasBalance ?? t("common.unknown")}${account.stale ? t("title.cached") : ""}`
-          : t("title.notConnected")}
-      </div>
-      <div className="window-controls">
-        <button aria-label="Minimize" onClick={() => window.naiDesktop.minimize()}><Icon name="minimize" /></button>
-        <button aria-label="Maximize" onClick={() => window.naiDesktop.maximize()}><Icon name="maximize" /></button>
-        <button aria-label="Close" className="close" onClick={() => window.naiDesktop.close()}>
-          <Icon name="close" />
-        </button>
-      </div>
-    </header>
-  );
-}
-
-// ── Menu bar ──────────────────────────────────────────────────────────────────
-function MenuBar({ openSettings }: { openSettings: () => void }) {
-  const settings = useAppStore((state) => state.settings);
-  const chromeText = getChromeText(settings?.language);
-
-  return (
-    <nav className="menu-bar compact-toolbar">
-      <div className="menu-actions-row">
-        <button
-          className="menu-action"
-          onClick={() => settings?.outputDir && window.naiDesktop.openInExplorer(settings.outputDir)}
-        >
-          <IconText icon={<Icon name="folder" />}>{chromeText.outputDir}</IconText>
-        </button>
-        <button className="menu-action" onClick={openSettings}>
-          <IconText icon={<Icon name="settings" />}>{chromeText.settings}</IconText>
-        </button>
-        <button className="menu-action" onClick={() => window.naiDesktop.openExternal(docsUrl)}>
-          <IconText icon={<Icon name="help" />}>{chromeText.docs}</IconText>
-        </button>
-      </div>
-    </nav>
-  );
-}
-
-// ── Tab bar ───────────────────────────────────────────────────────────────────
-function TabBar() {
-  const activeTab = useAppStore((state) => state.activeTab);
-  const setActiveTab = useAppStore((state) => state.setActiveTab);
-  const language = useAppStore((state) => state.settings?.language);
-  const tabItems = useMemo(() => getLocalizedTabItems(language), [language]);
-  return (
-    <div className="tab-bar">
-      {tabItems.map(({ value, label, icon, title }) => (
-        <button
-          key={value}
-          className={clsx(activeTab === value && "active")}
-          title={title}
-          onClick={() => setActiveTab(value)}
-        >
-          <span className="tab-icon"><Icon name={icon} /></span>
-          <span>{label}</span>
-        </button>
-      ))}
-    </div>
-  );
 }
 
 function QualityAndTransparencyControls({ compact = false }: { compact?: boolean }) {
@@ -1553,8 +1481,37 @@ function PromptAndParams({
   const generateText = useMemo(() => getGeneratePanelText(settings?.language), [settings?.language]);
   const t = useCallback((key: string) => desktopUiText(settings?.language, key), [settings?.language]);
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(settings?.language, key, values), [settings?.language]);
-  // Co-occurrence: tags commonly used alongside what's already in the prompt.
-  const related = useMemo(() => relatedTags(effectivePositivePrompt, 8), [effectivePositivePrompt]);
+  // Co-occurrence: prefer the user-installed SQLite pack and retain the small
+  // built-in table as an offline fallback until that pack is installed.
+  const fallbackRelated = useMemo(() => relatedTags(effectivePositivePrompt, 8), [effectivePositivePrompt]);
+  const [databaseRelated, setDatabaseRelated] = useState(fallbackRelated);
+  useEffect(() => {
+    setDatabaseRelated([]);
+    const sourceTags = splitPromptTags(effectivePositivePrompt)
+      .map((segment) => parseWeightedTag(segment).core)
+      .filter(Boolean);
+    if (!sourceTags.length) {
+      setDatabaseRelated([]);
+      return;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void window.naiDesktop.relatedResourceTags(sourceTags, 8).then((items) => {
+        if (cancelled) return;
+        setDatabaseRelated(items.map((item) => ({
+          tag: item.tag.replaceAll("_", " "),
+          zh: item.description || "本地相关标签",
+        })));
+      }).catch(() => {
+        if (!cancelled) setDatabaseRelated([]);
+      });
+    }, 140);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [effectivePositivePrompt]);
+  const related = databaseRelated.length > 0 ? databaseRelated : fallbackRelated;
 
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get("uiStylePresetOpen") !== "1") return;
@@ -3215,6 +3172,10 @@ function AccountAndRunButton({
           aria-label={accountDetailsCollapsed ? t("account.expandDetails") : t("account.collapseDetails")}
           title={accountDetailsCollapsed ? t("account.expandDetails") : t("account.collapseDetails")}
         >
+          <span className="account-details-toggle-copy">
+            <strong>{account.hasToken ? account.tierName ?? t("account.configured") : t("account.notSet")}</strong>
+            <small>{f("account.anlas", { balance: account.anlasBalance ?? t("common.unknown") })}</small>
+          </span>
           <Icon name="chevronRight" className={clsx("disclosure-chevron", !accountDetailsCollapsed && "open")} />
         </button>
         {!accountDetailsCollapsed && (
@@ -4809,6 +4770,7 @@ function ImageCanvas() {
   const currentImage = useAppStore((state) => state.currentImage);
   const comparisonBeforeImage = useAppStore((state) => state.comparisonBeforeImage);
   const isGenerating = useAppStore((state) => state.isGenerating);
+  const generationPreview = useAppStore((state) => state.generationPreview);
   const activeTab = useAppStore((state) => state.activeTab);
   const generate = useAppStore((state) => state.generate);
   const settings = useAppStore((state) => state.settings);
@@ -4819,6 +4781,7 @@ function ImageCanvas() {
   const superDrop = settings?.superDrop ?? false;
   const dropEnabled = superDrop || activeTab === "generate" || activeTab === "upscale" || activeTab === "postprocess";
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
+  const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
 
   function handleDragOver(e: React.DragEvent) {
     if (!dropEnabled || !hasDraggedFiles(e.dataTransfer)) return;
@@ -4877,10 +4840,33 @@ function ImageCanvas() {
         </div>
       )}
       {isGenerating && (
-        <div className="generating-overlay">
-          <div className="spinner" />
-          <strong>{t("canvas.generatingTitle")}</strong>
-          <small>{t("canvas.generatingHint")}</small>
+        <div className={clsx("generating-overlay", generationPreview?.imageDataUrl && "has-stream-preview")}>
+          {generationPreview?.imageDataUrl ? (
+            <>
+              <div className="generation-stream-frame">
+                <img src={generationPreview.imageDataUrl} alt={t("canvas.streamingTitle")} />
+              </div>
+              <div className="generation-stream-status">
+                <strong>{t("canvas.streamingTitle")}</strong>
+                <small>
+                  {f("canvas.streamingProgress", {
+                    current: generationPreview.currentStep ?? 0,
+                    total: generationPreview.totalSteps ?? 0,
+                    percent: Math.round(generationPreview.progress * 100),
+                  })}
+                </small>
+                <span aria-hidden="true">
+                  <i style={{ width: `${Math.round(generationPreview.progress * 100)}%` }} />
+                </span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="spinner" />
+              <strong>{t("canvas.generatingTitle")}</strong>
+              <small>{t("canvas.generatingHint")}</small>
+            </>
+          )}
         </div>
       )}
       {!currentImage && !isGenerating && (
@@ -5411,17 +5397,18 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
 
   const settingsShellText = getSettingsShellText(settings.language);
   const settingsSectionText = getSettingsSectionText(settings.language);
-  const nav = [
-    ["api", settingsShellText.nav.api],
-    ["storage", settingsShellText.nav.storage],
-    ["ai-reverse", settingsShellText.nav["ai-reverse"]],
-    ["convert-api", settingsShellText.nav["convert-api"]],
-    ["templates", settingsShellText.nav.templates],
-    ["prompt", settingsShellText.nav.prompt],
-    ["language", settingsShellText.nav.language],
-    ["appearance", settingsShellText.nav.appearance],
-    ["performance", settingsShellText.nav.performance],
-    ["about", settingsShellText.nav.about],
+  const nav: Array<[string, string, IconName]> = [
+    ["api", settingsShellText.nav.api, "key"],
+    ["storage", settingsShellText.nav.storage, "database"],
+    ["backup", settingsShellText.nav.backup, "cloudSync"],
+    ["ai-reverse", settingsShellText.nav["ai-reverse"], "smartToy"],
+    ["convert-api", settingsShellText.nav["convert-api"], "translate"],
+    ["templates", settingsShellText.nav.templates, "template"],
+    ["prompt", settingsShellText.nav.prompt, "wand"],
+    ["language", settingsShellText.nav.language, "globe"],
+    ["appearance", settingsShellText.nav.appearance, "palette"],
+    ["performance", settingsShellText.nav.performance, "speed"],
+    ["about", settingsShellText.nav.about, "info"],
   ];
 
   return (
@@ -5434,9 +5421,9 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
         </header>
         <div className="settings-body">
           <nav className="settings-nav">
-            {nav.map(([value, label]) => (
+            {nav.map(([value, label, icon]) => (
               <button className={clsx(section === value && "active")} key={value} onClick={() => setSection(value)}>
-                {label}
+                <Icon name={icon} /><span>{label}</span>
               </button>
             ))}
           </nav>
@@ -5578,6 +5565,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                   loggingEnabled={settings.loggingEnabled ?? true}
                   refreshSettings={refreshSettings}
                 />
+                <ResourceDatabaseSettings language={settings.language} />
                 <TagLibrarySettingsSection />
                 <div className="row-actions">
                   <Button
@@ -5600,6 +5588,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                     {f("settings.imageNameHint", { placeholders: "{date} {time} {seq} {seed} {model} {type} {ts}" })}
                   </small>
                 </label>
+                <DataPortabilitySettings language={settings.language} />
               </div>
             )}
             {section === "performance" && (
@@ -5614,6 +5603,12 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                     onChange={(v) => void update("superDrop", v)}
                     label={settingsSectionText.performance.superDropLabel}
                     description={settingsSectionText.performance.superDropDesc}
+                  />
+                  <Toggle
+                    checked={settings.streamPreviewEnabled ?? true}
+                    onChange={(v) => void update("streamPreviewEnabled", v)}
+                    label={settingsSectionText.performance.streamPreviewLabel}
+                    description={settingsSectionText.performance.streamPreviewDesc}
                   />
                 </div>
                 <div className="info-card">
@@ -5757,6 +5752,9 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                   <small className="settings-hint">{settingsSectionText.language.hint}</small>
                 </label>
               </div>
+            )}
+            {section === "backup" && (
+              <BackupRestoreSettings settings={settings} update={update} />
             )}
             {section === "ai-reverse" && (
               <div className="settings-form">
@@ -6590,9 +6588,10 @@ function MainPage() {
         },
       });
     }
-    const captureTabs = ["generate", "inpaint", "upscale", "postprocess", "inspect", "convert", "metadata", "tools", "referencePresets", "records"] as const;
-    if (captureTabs.some((tab) => tab === captureSurface)) {
-      useAppStore.getState().setActiveTab(captureSurface as (typeof captureTabs)[number]);
+    if (isActiveTab(captureSurface)) {
+      useAppStore.getState().setActiveTab(captureSurface);
+    } else if (captureSurface === "aitag") {
+      useAppStore.getState().setActiveTab("onlineGallery");
     } else if (captureSurface === "randomArtist" || captureSurface === "v5ArtistRepair" || captureSurface === "artistStringDraw") {
       useAppStore.getState().setActiveTab("tools");
     } else if (captureSurface === "settings") {
@@ -6625,20 +6624,16 @@ function MainPage() {
 
   return (
     <div className="app-shell">
-      <TitleBar />
+      <AppTitleBar />
       <UpdateBanner />
       <V5MigrationNotice />
-      <MenuBar openSettings={() => setShowSettings(true)} />
-      <TabBar />
+      <AppMenuBar openSettings={() => setShowSettings(true)} />
+      <AppTabBar />
       <div
-        className={clsx("workspace", (activeTab === "metadata" || activeTab === "tools" || activeTab === "referencePresets" || activeTab === "records") && "workspace-tools")}
+        className={clsx("workspace", WIDE_WORKSPACE_TABS.has(activeTab) && "workspace-tools")}
         style={{ "--ws-left": `${wsLeftWidth}px`, "--ws-right": `${wsRightWidth}px` } as CSSProperties}
       >
-        {activeTab === "metadata" ? (
-          <Suspense fallback={<div className="lazy-tool-loading">{t("tool.loadingTools")}</div>}>
-            <MetadataInspector onBack={() => useAppStore.getState().setActiveTab("generate")} />
-          </Suspense>
-        ) : activeTab === "tools" || activeTab === "referencePresets" ? null : activeTab === "records" ? (
+        {activeTab === "metadata" || activeTab === "tools" || activeTab === "referencePresets" || activeTab === "onlineGallery" ? null : activeTab === "records" ? (
           <AiLogPanel />
         ) : (
           <>
@@ -6658,6 +6653,16 @@ function MainPage() {
         <div className={clsx("persistent-tools-view", activeTab !== "tools" && "is-hidden")} aria-hidden={activeTab !== "tools"}>
           <Suspense fallback={<div className="lazy-tool-loading">{t("tool.loadingTools")}</div>}>
             <ToolsHub />
+          </Suspense>
+        </div>
+        <div className={clsx("persistent-tools-view", activeTab !== "metadata" && "is-hidden")} aria-hidden={activeTab !== "metadata"}>
+          <Suspense fallback={<div className="lazy-tool-loading">{t("tool.loadingTools")}</div>}>
+            <MetadataInspector onBack={() => useAppStore.getState().setActiveTab("generate")} />
+          </Suspense>
+        </div>
+        <div className={clsx("persistent-tools-view", activeTab !== "onlineGallery" && "is-hidden")} aria-hidden={activeTab !== "onlineGallery"}>
+          <Suspense fallback={<div className="lazy-tool-loading">{t("tool.loadingTools")}</div>}>
+            <OnlineGalleryPage />
           </Suspense>
         </div>
         <div className={clsx("persistent-tools-view", activeTab !== "referencePresets" && "is-hidden")} aria-hidden={activeTab !== "referencePresets"}>
@@ -6693,30 +6698,48 @@ export default function App() {
   const checkUpdate = useAppStore((state) => state.checkUpdate);
 
   useEffect(() => {
+    let cancelled = false;
+    // Keep code splitting for a fast renderer parse, but evaluate every screen
+    // while the deliberate splash is visible. Once the workbench appears,
+    // Metadata, Gallery, Inpaint and every Tools card can open without exposing
+    // a one-frame Suspense loader or a large first-click parse hitch.
+    const warmScreens = Promise.allSettled([
+      loadToolsHub().then((module) => module.preloadToolScreens()),
+      loadOnlineGalleryPage(),
+      loadInpaintCanvas(),
+      loadMetadataInspector(),
+    ]);
+    const minimumSplash = new Promise<void>((resolve) => {
+      window.setTimeout(resolve, SPLASH_MIN_VISIBLE_MS);
+    });
+    void Promise.all([warmScreens, minimumSplash]).then(() => {
+      if (!cancelled) setSplash(false);
+    });
     void load();
     void checkUpdate();
     // Favorites are mirrored to a filesystem sidecar and random-gacha history.
     // Merge every available source at boot before a profile rename can make a
     // still-existing collection appear empty.
     void hydrateArtistFavoriteLibrary();
+    // Automatic archives are intentionally delayed until after the interactive
+    // workbench is ready. Compression runs in the main process, so it never
+    // becomes part of the Tools/Metadata first-click path.
+    const automaticBackupTimer = window.setTimeout(() => {
+      void flushArtistFavoritePersistence().then(() => (
+        window.naiDesktop.runAutomaticBackup(collectPortableWorkspaceData())
+      ));
+    }, 20_000);
     // A release may appear while the app is already open, and a transient
     // network/proxy failure at boot should not suppress updates for the whole
     // session. Retry once shortly after launch, then poll at a low frequency.
     const updateRetryTimer = window.setTimeout(() => void checkUpdate(), 30_000);
     const updatePollTimer = window.setInterval(() => void checkUpdate(), 30 * 60_000);
-    // Warm public AITag data after the critical boot work. This is deliberately
-    // delayed and fire-and-forget so it cannot slow the window opening.
-    const prewarmTimer = window.setTimeout(() => {
-      const days = Number(localStorage.getItem("langbai.aitag.cache-retention-days.v1") ?? "30");
-      void window.naiDesktop.aitagPrewarm(Number.isFinite(days) ? days : 30).catch(() => undefined);
-    }, 400);
     // Keep the real boot path fast, but let the entrance breathe. 300ms felt
     // like a flash-cut from the splash artwork into the workbench; ~0.9s keeps
     // the app feeling responsive while making the transition intentional.
-    const timer = window.setTimeout(() => setSplash(false), SPLASH_MIN_VISIBLE_MS);
     return () => {
-      window.clearTimeout(timer);
-      window.clearTimeout(prewarmTimer);
+      cancelled = true;
+      window.clearTimeout(automaticBackupTimer);
       window.clearTimeout(updateRetryTimer);
       window.clearInterval(updatePollTimer);
     };

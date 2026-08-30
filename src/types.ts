@@ -1162,6 +1162,15 @@ export interface GenerateResult {
   statusCode?: number;
 }
 
+export interface GenerationPreviewEvent {
+  requestId: string;
+  progress: number;
+  currentStep?: number;
+  totalSteps?: number;
+  sampleIndex: number;
+  imageDataUrl: string;
+}
+
 export interface SingleImageResult {
   ok: boolean;
   message: string;
@@ -1189,6 +1198,146 @@ export interface MetadataSnapshotResult {
   ok: boolean;
   snapshot?: MetadataSnapshotPayload;
   message?: string;
+}
+
+export type DataBackupCategory =
+  | "configuration"
+  | "apiCredentials"
+  | "artistLibrary"
+  | "textHistory"
+  | "referencePresets"
+  | "imageHistory"
+  | "promptPresets"
+  | "workspaceData";
+
+export interface DataBackupExportRequest {
+  categories: DataBackupCategory[];
+  /** App-owned localStorage values. The main process cannot read Chromium's
+   * storage directly, so the renderer supplies this portable workspace layer. */
+  workspaceData?: Record<string, string>;
+  destination?: "dialog" | "automatic" | "internal";
+}
+
+export interface DataBackupCategorySummary {
+  category: DataBackupCategory;
+  items: number;
+  bytes: number;
+}
+
+export interface DataBackupInspectResult {
+  ok: boolean;
+  cancelled?: boolean;
+  message?: string;
+  path?: string;
+  formatVersion?: number;
+  createdAt?: string;
+  sourcePlatform?: string;
+  appVersion?: string;
+  categories: DataBackupCategorySummary[];
+  requiresConfigurationConfirmation?: boolean;
+}
+
+export interface DataBackupImportRequest {
+  path: string;
+  categories: DataBackupCategory[];
+  /** Must be true whenever configuration or API credentials are selected.
+   * The settings screen only sets it after the dedicated second confirmation. */
+  confirmConfigurationOverwrite: boolean;
+  currentWorkspaceData?: Record<string, string>;
+}
+
+export interface DataBackupImportResult {
+  ok: boolean;
+  message: string;
+  imported: number;
+  skipped: number;
+  renamed: number;
+  /** Non-destructive renderer storage additions. Existing conflicting keys are
+   * intentionally returned but never silently overwritten by the main process. */
+  workspaceData?: Record<string, string>;
+  rescueBackupPath?: string;
+}
+
+export interface DataBackupOperationResult {
+  ok: boolean;
+  cancelled?: boolean;
+  message: string;
+  path?: string;
+  categories?: DataBackupCategorySummary[];
+}
+
+export interface DataBackupStatus {
+  directory: string;
+  automaticEnabled: boolean;
+  intervalHours: number;
+  retentionCount: number;
+  latestPath?: string;
+  latestCreatedAt?: string;
+  backupCount: number;
+  totalBytes: number;
+  due: boolean;
+}
+
+export type ResourceDatabaseId = "tagCatalog" | "cooccurrence";
+
+export interface ResourceDatabaseStatus {
+  id: ResourceDatabaseId;
+  label: string;
+  description: string;
+  installed: boolean;
+  valid: boolean;
+  version: string;
+  count: number;
+  sizeBytes: number;
+  downloadBytes: number;
+  databaseBytes: number;
+  downloading: boolean;
+  resumableBytes: number;
+  hasPrevious: boolean;
+  replacementRequiresConfirmation: boolean;
+  sourceName: string;
+  sourceUrl: string;
+  license: string;
+  message?: string;
+}
+
+export interface ResourceCacheStats {
+  memoryEntries: number;
+  memoryHits: number;
+  memoryMisses: number;
+  memoryHitRate: number;
+}
+
+export interface ResourceDatabaseOverview {
+  dataDirectory: string;
+  resources: ResourceDatabaseStatus[];
+  cache: ResourceCacheStats;
+}
+
+export type ResourceDatabaseProgressPhase =
+  | "downloading"
+  | "paused"
+  | "verifying"
+  | "extracting"
+  | "installing"
+  | "complete"
+  | "error";
+
+export interface ResourceDatabaseProgressEvent {
+  id: ResourceDatabaseId;
+  phase: ResourceDatabaseProgressPhase;
+  receivedBytes: number;
+  totalBytes: number;
+  percent: number;
+  speedBytesPerSecond: number;
+  message: string;
+}
+
+export interface ResourceDatabaseDownloadResult {
+  ok: boolean;
+  paused?: boolean;
+  requiresConfirmation?: boolean;
+  message: string;
 }
 
 export interface PromptTemplate {
@@ -1332,6 +1481,9 @@ export interface AppSettings {
   weightHighlight: boolean;
   promptRandomizer: boolean;
   superDrop: boolean;
+  /** Show intermediate NovelAI generation frames. Defaults on; unsupported
+   * endpoints safely keep using the normal ZIP response. */
+  streamPreviewEnabled: boolean;
   showFloatingToolbar: boolean;
   historyJumpAfterGenerate: boolean;
   historyRetentionDays: number;
@@ -1341,6 +1493,14 @@ export interface AppSettings {
    * PNG) on disk. Default on. Turn off to save clean images with the embedded
    * info stripped — useful before sharing. */
   keepImageMetadata: boolean;
+  /** Local portable archive schedule. All user data, including images, is
+   * included by default; retention only removes old automatic archives. */
+  autoBackupEnabled: boolean;
+  autoBackupIntervalHours: number;
+  autoBackupRetentionCount: number;
+  autoBackupIncludeImages: boolean;
+  /** Empty = <userData>/backups. */
+  backupDir: string;
   // Vision / Reverse-prompt
   visionApiUrl: string;
   visionApiKey: string;
@@ -1484,6 +1644,21 @@ export interface ImportedParams {
 
 export interface NaiDesktopApi {
   platform: NodeJS.Platform;
+  getResourceDatabaseOverview: () => Promise<ResourceDatabaseOverview>;
+  downloadResourceDatabase: (id: ResourceDatabaseId, confirmReplace?: boolean) => Promise<ResourceDatabaseDownloadResult>;
+  pauseResourceDatabaseDownload: (id: ResourceDatabaseId) => Promise<{ ok: boolean; message: string }>;
+  restorePreviousResourceDatabase: (id: ResourceDatabaseId, confirmed?: boolean) => Promise<ResourceDatabaseDownloadResult>;
+  openResourceDatabaseDirectory: () => Promise<{ ok: boolean; message?: string }>;
+  clearResourceQueryCache: () => Promise<{ ok: boolean }>;
+  relatedResourceTags: (tags: string[], limit?: number) => Promise<TagSuggestion[]>;
+  onResourceDatabaseProgress: (callback: (event: ResourceDatabaseProgressEvent) => void) => () => void;
+  exportDataBackup: (request: DataBackupExportRequest) => Promise<DataBackupOperationResult>;
+  inspectDataBackup: () => Promise<DataBackupInspectResult>;
+  importDataBackup: (request: DataBackupImportRequest) => Promise<DataBackupImportResult>;
+  getDataBackupStatus: () => Promise<DataBackupStatus>;
+  runAutomaticBackup: (workspaceData?: Record<string, string>) => Promise<DataBackupOperationResult>;
+  selectBackupDirectory: () => Promise<string | null>;
+  openBackupDirectory: () => Promise<{ ok: boolean; message?: string }>;
   promptCodexCache: () => Promise<
     import("./prompt-codex").PromptCodexSnapshot | null
   >;
@@ -1590,9 +1765,22 @@ export interface NaiDesktopApi {
     retentionDays?: number,
   ) => Promise<{ works: number; images: number }>;
   aitagClearDataCache: () => Promise<void>;
-  aitagCacheImage: (url: string, retentionDays?: number) => Promise<string>;
+  aitagCacheImage: (url: string, retentionDays?: number, force?: boolean) => Promise<string>;
   aitagCacheStats: () => Promise<{ bytes: number; files: number }>;
   aitagClearCache: () => Promise<{ bytes: number; files: number }>;
+  onlineGallerySearch: (
+    request: import("./online-gallery").OnlineGallerySearchRequest,
+  ) => Promise<import("./online-gallery").OnlineGalleryPage>;
+  onlineGalleryDetail: (
+    request: import("./online-gallery").OnlineGalleryDetailRequest,
+  ) => Promise<import("./online-gallery").OnlineGalleryDetail>;
+  onlineGalleryClearDataCache: () => Promise<void>;
+  onlineGalleryCacheImage: (
+    source: import("./online-gallery").OnlineGallerySourceId,
+    url: string,
+    retentionDays?: number,
+    force?: boolean,
+  ) => Promise<string>;
   hasToken: () => Promise<AccountSummary>;
   accountCached: () => Promise<AccountSummary>;
   verifyToken: (token: string) => Promise<TokenStatus>;
@@ -1601,7 +1789,11 @@ export interface NaiDesktopApi {
   generate: (
     params: GenerateParams,
     extras: GenerateExtras,
+    previewRequestId?: string,
   ) => Promise<GenerateResult>;
+  onGenerationPreview: (
+    callback: (event: GenerationPreviewEvent) => void,
+  ) => () => void;
   generateArtistLab: (
     params: GenerateParams,
     extras: GenerateExtras,
@@ -1788,6 +1980,9 @@ export interface NaiDesktopApi {
     downloaded: boolean;
     sizeBytes: number;
     count: number;
+    catalogDownloaded: boolean;
+    bilingualDownloaded: boolean;
+    bilingualCount: number;
   }>;
   downloadDanbooru: () => Promise<{
     ok: boolean;

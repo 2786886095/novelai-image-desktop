@@ -11,7 +11,7 @@ class NaiOption {
 }
 
 const appName = 'Langbai NovelAI Studio';
-const appVersion = '2.0.1';
+const appVersion = '2.0.2';
 
 const naiModels = <NaiOption>[
   NaiOption(
@@ -836,6 +836,13 @@ class AppSettings {
   bool persistInpaintParams;
   bool persistUpscaleParams;
   bool persistDirectorParams;
+  // Cross-device archive and local safety-copy policy. Mobile keeps backup
+  // files in its application documents directory and uses the system share
+  // sheet for manual export.
+  bool autoBackupEnabled;
+  int autoBackupIntervalHours;
+  int autoBackupRetentionCount;
+  bool autoBackupIncludeImages;
 
   AppSettings({
     this.apiBaseUrl = 'https://api.novelai.net',
@@ -904,6 +911,10 @@ class AppSettings {
     this.persistInpaintParams = true,
     this.persistUpscaleParams = true,
     this.persistDirectorParams = true,
+    this.autoBackupEnabled = true,
+    this.autoBackupIntervalHours = 24,
+    this.autoBackupRetentionCount = 7,
+    this.autoBackupIncludeImages = true,
   })  : reversePromptTemplates = reversePromptTemplates ?? {},
         convertPromptTemplates = convertPromptTemplates ?? {},
         promptShortcuts = promptShortcuts ?? [],
@@ -981,6 +992,10 @@ class AppSettings {
         'persistInpaintParams': persistInpaintParams,
         'persistUpscaleParams': persistUpscaleParams,
         'persistDirectorParams': persistDirectorParams,
+        'autoBackupEnabled': autoBackupEnabled,
+        'autoBackupIntervalHours': autoBackupIntervalHours,
+        'autoBackupRetentionCount': autoBackupRetentionCount,
+        'autoBackupIncludeImages': autoBackupIncludeImages,
       };
 
   factory AppSettings.fromJson(Map<String, dynamic> j) => AppSettings(
@@ -1073,6 +1088,12 @@ class AppSettings {
         persistInpaintParams: j['persistInpaintParams'] ?? true,
         persistUpscaleParams: j['persistUpscaleParams'] ?? true,
         persistDirectorParams: j['persistDirectorParams'] ?? true,
+        autoBackupEnabled: j['autoBackupEnabled'] ?? true,
+        autoBackupIntervalHours:
+            _intValue(j['autoBackupIntervalHours'], 24).clamp(1, 720).toInt(),
+        autoBackupRetentionCount:
+            _intValue(j['autoBackupRetentionCount'], 7).clamp(1, 100).toInt(),
+        autoBackupIncludeImages: j['autoBackupIncludeImages'] ?? true,
       );
 }
 

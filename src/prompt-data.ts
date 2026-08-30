@@ -728,6 +728,7 @@ export const TAB_ITEMS = [
   { value: "metadata", label: "原数据", icon: "fileSearch", title: "恢复图片原数据", desc: "查看并套用 NAI / SD / ComfyUI 图片参数" },
   { value: "tools", label: "工具", icon: "toolbox", title: "工具板块", desc: "漫画生成器、批量工作流" },
   { value: "referencePresets", label: "参考预设", icon: "images", title: "参考图预设", desc: "管理氛围迁移与精准参考图片预设" },
+  { value: "onlineGallery", label: "在线画廊", icon: "globe", title: "在线画廊", desc: "浏览公开作品并提取提示词与参数" },
   { value: "records", label: "记录", icon: "history", title: "AI 调用记录", desc: "查看反推/转换/拆分镜每次发送与返回" },
 ] as const;
 

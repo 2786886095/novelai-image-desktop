@@ -13,6 +13,7 @@ import type {
   GenerateExtras,
   GenerateParams,
   GenerateResult,
+  GenerationPreviewEvent,
   HistoryGroup,
   HistoryItem,
   I2IParams,
@@ -39,8 +40,8 @@ import { expandWildcards } from "./wildcards";
 import { adaptiveNAIImageSize } from "./nai-dimensions";
 import { normalizeInpaintBrushSize } from "./inpaint-brush";
 import { compactRemoteErrorText } from "./error-message";
+import type { ActiveTab } from "./app/navigation";
 
-type ActiveTab = "generate" | "inpaint" | "upscale" | "postprocess" | "inspect" | "convert" | "metadata" | "tools" | "referencePresets" | "records";
 type PromptTab = "positive" | "negative";
 type BrushMode = "paint" | "erase";
 
@@ -59,6 +60,10 @@ const WS_RIGHT_MAX = 480;
 // the workbench, deleting its selected history item, or starting generation
 // invalidates older responses so stale metadata cannot overwrite live prompts.
 let workbenchLoadRevision = 0;
+let generationPreviewListenerAttached = false;
+// Invalidates a slow post-generation balance refresh as soon as a newer run or
+// cancellation starts, so stale bookkeeping can never overwrite newer UI.
+let generationSettlementRevision = 0;
 function readWsWidth(key: string, fallback: number): number {
   try {
     const v = Number(localStorage.getItem(key));
@@ -151,6 +156,7 @@ const STORE_TEXT: Record<AppLanguage, Record<string, string>> = {
     "generate.batchDone": "批量生成完成，共 {done} 张{spent}。",
     "generate.singleDone": "生成完成，已保存 1 张图片{spent}。",
     "generate.spent": "，实扣 {spent} Anlas",
+    "generate.spentPending": "，实扣统计更新中",
     "generate.spentFailed": "，实扣读取失败",
     "i2i.status": "正在图生图，生成前报价 {amount} Anlas...",
     "inpaint.status": "正在局部重绘，生成前报价 {amount} Anlas...",
@@ -240,6 +246,7 @@ const STORE_TEXT: Record<AppLanguage, Record<string, string>> = {
     "generate.batchDone": "Batch generation complete: {done} images{spent}.",
     "generate.singleDone": "Generation complete; saved 1 image{spent}.",
     "generate.spent": ", spent {spent} Anlas",
+    "generate.spentPending": ", actual cost updating",
     "generate.spentFailed": ", actual cost unavailable",
     "i2i.status": "Running img2img, quoted {amount} Anlas...",
     "inpaint.status": "Running inpaint, quoted {amount} Anlas...",
@@ -377,6 +384,7 @@ interface AppState {
   isGenerating: boolean;
   isGenerateQueueRunning: boolean;
   activeGenerationRunId: string | null;
+  generationPreview: GenerationPreviewEvent | null;
   queueAdding: boolean;
   generationQueue: QueuedGenerationJob[];
   queueCollapsed: boolean;
@@ -429,7 +437,10 @@ interface AppState {
   refreshSettings: () => Promise<void>;
   refreshAccount: () => Promise<AccountSummary>;
   loadWorkbenchImage: () => Promise<void>;
-  loadWorkbenchFromPath: (filePath: string, options?: { silent?: boolean }) => Promise<void>;
+  loadWorkbenchFromPath: (
+    filePath: string,
+    options?: { silent?: boolean; restoreMetadata?: boolean },
+  ) => Promise<void>;
   clearWorkbenchImage: () => Promise<void>;
   setI2IParam: <K extends keyof I2IParams>(key: K, value: I2IParams[K]) => void;
   setI2ISizeMode: (mode: ImageToImageSizeMode) => void;
@@ -519,13 +530,39 @@ function requireToken(set: (state: Partial<AppState>) => void, hasToken: boolean
   return false;
 }
 
-async function refreshAfterImage(
-  set: (state: Partial<AppState>) => void,
+function showCompletedImage(
+  set: (state: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void,
   get: () => AppState,
   item: HistoryItem,
   options: { compareBefore?: WorkingImage | null; loadWorkbench?: boolean } = {},
 ) {
-  set({ currentImage: item, comparisonBeforeImage: options.compareBefore ?? null });
+  set((state) => {
+    const selectedGroup = state.selectedGroupId;
+    const matchesGroup = !selectedGroup
+      || (selectedGroup === "__ungrouped" ? !item.groupId : item.groupId === selectedGroup);
+    const sameDateVisible = state.history.filter((candidate) => {
+      if (candidate.date !== item.date) return false;
+      if (!selectedGroup) return true;
+      if (selectedGroup === "__ungrouped") return !candidate.groupId;
+      return candidate.groupId === selectedGroup;
+    });
+    return {
+      currentImage: item,
+      comparisonBeforeImage: options.compareBefore ?? null,
+      selectedDate: item.date,
+      historyDates: [item.date, ...state.historyDates.filter((date) => date !== item.date)].sort((a, b) => b.localeCompare(a)),
+      history: matchesGroup
+        ? [item, ...sameDateVisible.filter((candidate) => candidate.id !== item.id)]
+        : sameDateVisible,
+    };
+  });
+}
+
+async function runAfterImageRefresh(
+  get: () => AppState,
+  item: HistoryItem,
+  options: { compareBefore?: WorkingImage | null; loadWorkbench?: boolean } = {},
+) {
   // The generation itself already succeeded (the caller only reaches here on a
   // successful save) — a hiccup refreshing history/balance/workbench afterwards
   // must not mask that success or leave isGenerating stuck true forever.
@@ -661,6 +698,32 @@ async function preparePaidRun(
       lastError: message,
     });
     return null;
+  }
+}
+
+async function refreshAfterImage(
+  set: (state: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void,
+  get: () => AppState,
+  item: HistoryItem,
+  options: { compareBefore?: WorkingImage | null; loadWorkbench?: boolean } = {},
+) {
+  showCompletedImage(set, get, item, options);
+  await runAfterImageRefresh(get, item, options);
+}
+
+function refreshAfterImageInBackground(
+  set: (state: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void,
+  get: () => AppState,
+  item: HistoryItem,
+  options: { compareBefore?: WorkingImage | null; loadWorkbench?: boolean } = {},
+) {
+  showCompletedImage(set, get, item, options);
+  // A completed queue item must be painted and counted immediately. Disk
+  // reconciliation can finish later, and account balance is fetched only once
+  // after the whole run rather than once per image.
+  void get().refreshHistory(item.date).catch(() => undefined);
+  if (options.loadWorkbench) {
+    void get().loadWorkbenchFromPath(item.filePath, { silent: true }).catch(() => undefined);
   }
 }
 
@@ -869,6 +932,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   isGenerating: false,
   isGenerateQueueRunning: false,
   activeGenerationRunId: null,
+  generationPreview: null,
   queueAdding: false,
   generationQueue: [],
   queueCollapsed: false,
@@ -887,6 +951,18 @@ export const useAppStore = create<AppState>((set, get) => ({
   updateProgress: null,
 
   async load() {
+    if (!generationPreviewListenerAttached) {
+      generationPreviewListenerAttached = true;
+      window.naiDesktop.onGenerationPreview((event) => {
+        const state = get();
+        if (
+          state.isGenerating &&
+          state.activeGenerationRunId === event.requestId
+        ) {
+          set({ generationPreview: event });
+        }
+      });
+    }
     window.naiDesktop.onUpdateEvent((event) => set({ updateProgress: event }));
 
     // Settings drive almost everything below (language, persisted params, lock
@@ -1274,7 +1350,10 @@ export const useAppStore = create<AppState>((set, get) => ({
         });
         return;
       }
-      const restoreMetadata = get().activeTab === "generate" && result.metadata;
+      const restoreMetadata =
+        options?.restoreMetadata !== false &&
+        get().activeTab === "generate" &&
+        result.metadata;
       set({
         workbenchImage: result.image,
         comparisonBeforeImage: null,
@@ -1913,6 +1992,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     // for a second or two after a click. A cancel during prep clears the run id,
     // which we honor below so the click can still be aborted.
     const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const settlementRevision = ++generationSettlementRevision;
     // A history image selected just before Generate may still be decoding and
     // carrying embedded parameters. Invalidate that stale load before locking
     // this run's immutable prompt snapshot.
@@ -1921,6 +2001,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       isGenerating: true,
       isGenerateQueueRunning: true,
       activeGenerationRunId: runId,
+      generationPreview: null,
       statusText: storeText(state.settings, "status.preparing"),
     });
     let freshAccount: AccountSummary;
@@ -1967,6 +2048,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       isGenerating: true,
       isGenerateQueueRunning: true,
       activeGenerationRunId: runId,
+      generationPreview: null,
       queueAdding: false,
       generationQueue: [],
       clearQueueRequested: false,
@@ -2058,7 +2140,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       // main-process retry). The main process now retries only pre-charge 429s.
       let result: GenerateResult;
       try {
-        result = await window.naiDesktop.generate(currentParams, extras);
+        set({ generationPreview: null });
+        result = await window.naiDesktop.generate(currentParams, extras, runId);
       } catch (error) {
         // ipcRenderer.invoke can reject before the main handler returns its
         // normal GenerateResult (process restart, serialization fault, etc.).
@@ -2077,9 +2160,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         completed++;
         const current = result.items[0];
         set({ params: { ...get().params, seed: result.actualSeed ?? current.actualSeed } });
-        await refreshAfterImage(set, get, current);
-        const currentSpent = anlasSpent(anlasBefore, get().account.anlasBalance);
-        set({ currentAnlasSpent: currentSpent });
+        refreshAfterImageInBackground(set, get, current);
       } else {
         // Keep transient failures isolated; deterministic auth/validation
         // failures below stop only the requests known to share that cause.
@@ -2107,42 +2188,49 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
 
     const cancelled = !get().isGenerating;
-    let finalAccount = get().account;
-    try {
-      finalAccount = await get().refreshAccount();
-    } catch {
-      // Images have already been saved. A final balance refresh must not turn a
-      // completed batch into an apparent generation failure.
-    }
     if (get().activeGenerationRunId !== runId) return;
-    const spent = anlasSpent(anlasBefore, finalAccount.anlasBalance);
     const settings = get().settings;
-    const spentText = spent != null
-      ? storeFormat(settings, "generate.spent", { spent })
-      : storeText(settings, "generate.spentFailed");
-    const finalMsg =
-      cancelled
-        ? storeFormat(settings, "generate.cancelled", { spent: spentText })
-        : failed > 0 && completed === 0
-          ? imageGenerationFailureMessage(settings, lastError)
-          : failed > 0
-            ? storeFormat(settings, "generate.doneFailed", { done: completed, failed, spent: spentText, error: lastError || storeText(settings, "error.unknown") })
-            : completed > 1
-              ? storeFormat(settings, "generate.batchDone", { done: completed, spent: spentText })
-              : storeFormat(settings, "generate.singleDone", { spent: spentText });
+    const finalMessage = (spentText: string) => cancelled
+      ? storeFormat(settings, "generate.cancelled", { spent: spentText })
+      : failed > 0 && completed === 0
+        ? imageGenerationFailureMessage(settings, lastError)
+        : failed > 0
+          ? storeFormat(settings, "generate.doneFailed", { done: completed, failed, spent: spentText, error: lastError || storeText(settings, "error.unknown") })
+          : completed > 1
+            ? storeFormat(settings, "generate.batchDone", { done: completed, spent: spentText })
+            : storeFormat(settings, "generate.singleDone", { spent: spentText });
+    const finalMsg = finalMessage(storeText(settings, "generate.spentPending"));
     set({
       isGenerating: false,
       isGenerateQueueRunning: false,
       activeGenerationRunId: null,
+      generationPreview: null,
       queueAdding: false,
       generationQueue: [],
       queuePaused: false,
       currentAnlasSpent: null,
-      lastAnlasSpent: spent,
+      lastAnlasSpent: null,
       lastError: cancelled ? "" : failed > 0 ? lastError : "",
       statusText: finalMsg,
       toast: finalMsg,
     });
+    // Do not hold the completed queue UI behind one final network round-trip.
+    // The balance label and exact-spend text settle in the background, guarded
+    // by a revision so this old run cannot overwrite a newer one.
+    void window.naiDesktop.hasToken().then((finalAccount) => {
+      if (generationSettlementRevision !== settlementRevision || get().isGenerating) return;
+      const spent = anlasSpent(anlasBefore, finalAccount.anlasBalance);
+      const spentText = spent != null
+        ? storeFormat(get().settings, "generate.spent", { spent })
+        : storeText(get().settings, "generate.spentFailed");
+      const settledMessage = finalMessage(spentText);
+      set({
+        account: finalAccount,
+        lastAnlasSpent: spent,
+        statusText: settledMessage,
+        toast: settledMessage,
+      });
+    }).catch(() => undefined);
   },
 
   async generateI2I() {
@@ -2441,11 +2529,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   async cancel() {
+    generationSettlementRevision += 1;
     const wasGenerateQueue = get().isGenerateQueueRunning;
     set((current) => ({
       isGenerating: false,
       isGenerateQueueRunning: false,
       activeGenerationRunId: null,
+      generationPreview: null,
       queueAdding: false,
       generationQueue: [],
       queueVersion: current.queueVersion + 1, // invalidate any in-flight enqueue quote
@@ -2468,9 +2558,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   selectImage(item) {
     const generating = get().isGenerating;
     set({ currentImage: item, comparisonBeforeImage: null, statusText: storeFormat(get().settings, "status.historySelected", { date: item.date }) });
-    // While a paid request is active, selecting a thumbnail is preview-only.
-    // Embedded metadata must not replace the editor prompt behind that request.
-    void get().loadWorkbenchFromPath(item.filePath, { silent: generating });
+    // A history thumbnail is always a preview-only action. Embedded PNG
+    // metadata must never replace the user's current prompt or generation
+    // parameters implicitly; explicit parameter/variation actions own that job.
+    void get().loadWorkbenchFromPath(item.filePath, {
+      silent: generating,
+      restoreMetadata: false,
+    });
   },
 
   variationFromImage(item) {

@@ -24,6 +24,7 @@ const FAVORITE_STORAGE_KEYS: Record<ArtistFavoriteCollection, string> = {
   "v5-repair": "langbai.artist-lab.v5-repair.favorites.v1",
   "artist-string-draw": "langbai.artist-lab.artist-string-draw.favorites.v1",
 };
+const pendingFavoriteWrites = new Set<Promise<unknown>>();
 
 export type SharedArtistFavorite = ArtistRecipeComparison & {
   sequence: number;
@@ -180,15 +181,36 @@ export function replaceArtistFavorites(
   collection: ArtistFavoriteCollection,
   favorites: SharedArtistFavorite[],
 ) {
+  writeArtistFavorites(collection, favorites, true);
+}
+
+function writeArtistFavorites(
+  collection: ArtistFavoriteCollection,
+  favorites: SharedArtistFavorite[],
+  persistToFilesystem: boolean,
+) {
   const normalized = normalizeFavoriteArray(favorites);
   localStorage.setItem(FAVORITE_STORAGE_KEYS[collection], JSON.stringify(normalized));
-  const save = desktopApi()?.artistLabSaveFavoriteCollection;
-  if (typeof save === "function") {
-    void save(collection, normalized).catch(() => undefined);
+  if (persistToFilesystem) {
+    const save = desktopApi()?.artistLabSaveFavoriteCollection;
+    if (typeof save === "function") {
+      const pending = save(collection, normalized);
+      pendingFavoriteWrites.add(pending);
+      void pending.finally(() => pendingFavoriteWrites.delete(pending)).catch(() => undefined);
+    }
   }
   window.dispatchEvent(new CustomEvent(ARTIST_FAVORITES_CHANGED_EVENT, {
     detail: { collection },
   }));
+}
+
+/** Wait until every renderer-initiated favorite mirror has reached the durable
+ * sidecar. Backup/export calls use this barrier so the newest click cannot be
+ * omitted when the workspace category was intentionally deselected. */
+export async function flushArtistFavoritePersistence(): Promise<void> {
+  while (pendingFavoriteWrites.size > 0) {
+    await Promise.allSettled([...pendingFavoriteWrites]);
+  }
 }
 
 /** Merge the current Chromium profile, the filesystem backup, and promoted
@@ -207,6 +229,10 @@ export async function hydrateArtistFavoriteLibrary(): Promise<void> {
   ]);
   const disk = diskResult.status === "fulfilled" ? diskResult.value?.collections : undefined;
   const promoted = historyResult.status === "fulfilled" ? historyResult.value : [];
+  // A failed disk read is not the same thing as an empty disk collection. Keep
+  // the intact filesystem sidecar untouched on transient IPC/read errors; only
+  // refresh the Chromium copy until a later boot can merge all sources again.
+  const canWriteFilesystem = diskResult.status === "fulfilled";
 
   const random = recoverRandomArtistFavoritesFromHistory(
     promoted,
@@ -224,9 +250,9 @@ export async function hydrateArtistFavoriteLibrary(): Promise<void> {
     normalizeFavoriteArray(disk?.["artist-string-draw"]),
   );
 
-  replaceArtistFavorites("random", random);
-  replaceArtistFavorites("v5-repair", repair);
-  replaceArtistFavorites("artist-string-draw", draw);
+  writeArtistFavorites("random", random, canWriteFilesystem);
+  writeArtistFavorites("v5-repair", repair, canWriteFilesystem);
+  writeArtistFavorites("artist-string-draw", draw, canWriteFilesystem);
 }
 
 export function addArtistFavorite(

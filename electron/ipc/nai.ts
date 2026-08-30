@@ -44,6 +44,7 @@ import {
   type GenerateExtras,
   type GenerateParams,
   type GenerateResult,
+  type GenerationPreviewEvent,
   type HistoryItem,
   type I2IParams,
   type LoadImageResult,
@@ -113,6 +114,7 @@ import {
   resolveModePrompt,
 } from "../../src/prompt-mode";
 import { beginJob, cancelAllJobs } from "./job-registry";
+import { NaiSseFrameDecoder, NaiStreamFrameDecoder, type NaiStreamFrame } from "./nai-stream";
 
 let workbenchImagePath: string | null = null;
 
@@ -2152,6 +2154,285 @@ async function postGenerateImage(
     }
   }
   return extractImages(res.data);
+}
+
+type GenerationPreviewCallback = (
+  event: Omit<GenerationPreviewEvent, "requestId">,
+) => void;
+
+function buildGenerateImageStreamHttpBody(
+  payload: ReturnType<typeof buildPayload>,
+) {
+  // The streaming endpoint follows the official multipart shape even for a
+  // plain text-to-image request: one JSON file part named `request`. Reference
+  // images use a more involved cached-part protocol, so those requests stay on
+  // the proven ZIP path below instead of risking a silently ignored reference.
+  const form = new FormData();
+  form.append("request", JSON.stringify(payload), {
+    filename: "blob",
+    contentType: "application/json",
+  });
+  return form;
+}
+
+function supportsSafeStreamTransport(
+  payload: ReturnType<typeof buildPayload>,
+) {
+  const parameters = payload.parameters as Record<string, unknown>;
+  return (
+    payload.action === "generate" &&
+    !parameters.image &&
+    !parameters.mask &&
+    !parameters.reference_image &&
+    !(Array.isArray(parameters.reference_image_multiple) && parameters.reference_image_multiple.length > 0) &&
+    !(Array.isArray(parameters.director_reference_images) && parameters.director_reference_images.length > 0) &&
+    !(Array.isArray(parameters.director_reference_images_cached) && parameters.director_reference_images_cached.length > 0)
+  );
+}
+
+function isStreamingNotAllowedMessage(value: unknown) {
+  const text = String(value ?? "").toLowerCase();
+  return (
+    text.includes("streaming is not allowed") ||
+    text.includes("streaming not allowed") ||
+    text.includes("stream is not allowed") ||
+    text.includes("stream not allowed")
+  );
+}
+
+function imageDataUrl(buffer: Buffer) {
+  const mime =
+    buffer.length >= 8 && buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+      ? "image/png"
+      : buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff
+        ? "image/jpeg"
+        : buffer.length >= 12 && buffer.subarray(0, 4).toString("ascii") === "RIFF" && buffer.subarray(8, 12).toString("ascii") === "WEBP"
+          ? "image/webp"
+          : "image/png";
+  return `data:${mime};base64,${buffer.toString("base64")}`;
+}
+
+async function readStreamErrorText(error: any): Promise<string> {
+  const data = error?.response?.data;
+  if (typeof data === "string") return data.slice(0, 65_536);
+  if (Buffer.isBuffer(data) || data instanceof Uint8Array) {
+    return Buffer.from(data).subarray(0, 65_536).toString("utf8");
+  }
+  if (!data || typeof data[Symbol.asyncIterator] !== "function") {
+    return String(error?.message ?? "");
+  }
+  const chunks: Buffer[] = [];
+  let length = 0;
+  try {
+    for await (const chunk of data as AsyncIterable<Uint8Array>) {
+      if (length >= 65_536) break;
+      const bytes = Buffer.from(chunk);
+      const kept = bytes.subarray(0, 65_536 - length);
+      chunks.push(kept);
+      length += kept.length;
+    }
+  } catch {
+    return String(error?.message ?? "");
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+async function consumeGenerateImageStream(
+  responseStream: AsyncIterable<Uint8Array>,
+  totalSteps: number,
+  onPreview: GenerationPreviewCallback,
+  contentType = "",
+): Promise<Buffer[]> {
+  const msgpackDecoder = new NaiStreamFrameDecoder();
+  const sseDecoder = new NaiSseFrameDecoder();
+  const finals = new Map<number, Buffer>();
+  let mode: "unknown" | "msgpack" | "sse" | "zip" = contentType.toLowerCase().includes("text/event-stream")
+    ? "sse"
+    : "unknown";
+  let prefix = Buffer.alloc(0);
+  const zipChunks: Buffer[] = [];
+  let previewStarted = false;
+  let lastPreviewAt = 0;
+
+  const consumeFrames = (frames: NaiStreamFrame[]) => {
+    for (const frame of frames) {
+      if (frame.error) throw new Error(frame.error);
+      if (!frame.image?.length) continue;
+      previewStarted = true;
+      const currentStep = (frame.stepIndex ?? 0) + 1;
+      if (frame.eventType === "final") {
+        finals.set(frame.sampleIndex, frame.image);
+        onPreview({
+          progress: 1,
+          currentStep: totalSteps,
+          totalSteps,
+          sampleIndex: frame.sampleIndex,
+          imageDataUrl: imageDataUrl(frame.image),
+        });
+      } else {
+        const now = Date.now();
+        if (now - lastPreviewAt >= 110 || currentStep >= totalSteps) {
+          lastPreviewAt = now;
+          onPreview({
+            progress: Math.min(0.99, Math.max(0, currentStep / Math.max(1, totalSteps))),
+            currentStep,
+            totalSteps,
+            sampleIndex: frame.sampleIndex,
+            imageDataUrl: imageDataUrl(frame.image),
+          });
+        }
+      }
+    }
+  };
+
+  try {
+    for await (const rawChunk of responseStream) {
+      const chunk = Buffer.from(rawChunk);
+      if (mode === "unknown") {
+        prefix = prefix.length ? Buffer.concat([prefix, chunk]) : chunk;
+        if (prefix.length < 4) continue;
+        const textualPrefix = prefix.subarray(0, Math.min(prefix.length, 32)).toString("utf8").replace(/^\uFEFF/, "").trimStart();
+        const framedLength = prefix.readUInt32BE(0);
+        mode = prefix[0] === 0x50 && prefix[1] === 0x4b
+          ? "zip"
+          : /^(?:event|data|id|retry)\s*:|^:/.test(textualPrefix)
+            ? "sse"
+            : framedLength > 0 && framedLength <= 128 * 1024 * 1024
+              ? "msgpack"
+              : "sse";
+        if (mode === "zip") zipChunks.push(prefix);
+        else if (mode === "sse") consumeFrames(sseDecoder.push(prefix));
+        else consumeFrames(msgpackDecoder.push(prefix));
+        prefix = Buffer.alloc(0);
+        continue;
+      }
+
+      if (mode === "zip") {
+        zipChunks.push(chunk);
+        continue;
+      }
+      if (mode === "sse") consumeFrames(sseDecoder.push(chunk));
+      else consumeFrames(msgpackDecoder.push(chunk));
+    }
+
+    if (mode === "zip") return extractImages(Buffer.concat(zipChunks));
+    if (mode === "sse") consumeFrames(sseDecoder.finish());
+    if (finals.size === 0) {
+      throw new Error("流式生成结束，但没有收到最终图片。为避免重复扣费，未自动重发请求。");
+    }
+    return Array.from(finals.entries())
+      .sort(([left], [right]) => left - right)
+      .map(([, image]) => image);
+  } catch (error: any) {
+    if (previewStarted) error.streamPreviewStarted = true;
+    throw error;
+  }
+}
+
+/** Returns null only when the server explicitly rejects/doesn't implement
+ * streaming before generation starts, allowing a safe one-time ZIP fallback. */
+async function postGenerateImageStream(
+  payload: ReturnType<typeof buildPayload>,
+  signal: AbortSignal | undefined,
+  onPreview: GenerationPreviewCallback,
+): Promise<Buffer[] | null> {
+  const token = getToken();
+  if (!token) throw new Error("请先配置 API Token。");
+  const settings = getSettings();
+  const configuredBaseUrl = tokenSafeBaseUrl(
+    settings.imageBaseUrl,
+    "https://image.novelai.net",
+  );
+  const postTo = async (baseUrl: string): Promise<Buffer[] | null> => {
+    let response;
+    try {
+      response = await requestWithRetry(
+        () => {
+          const form = buildGenerateImageStreamHttpBody(payload);
+          return axios.post(`${baseUrl}/ai/generate-image-stream`, form, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              ...form.getHeaders(),
+              Accept: "application/x-msgpack, text/event-stream, application/zip",
+              "x-correlation-id": crypto.randomBytes(8).toString("base64url").slice(0, 6),
+              "x-initiated-at": new Date().toISOString(),
+            },
+            responseType: "stream",
+            timeout: 180_000,
+            maxBodyLength: Infinity,
+            maxContentLength: Infinity,
+            signal,
+            ...proxyConfig("nai"),
+          });
+        },
+        {
+          signal,
+          retryStatuses: [429],
+          retryPreflightNetworkFailures: true,
+        },
+      );
+    } catch (error: any) {
+      const status = Number(error?.response?.status);
+      const body = await readStreamErrorText(error);
+      if (
+        [404, 405, 415, 501].includes(status) ||
+        isStreamingNotAllowedMessage(body) ||
+        isStreamingNotAllowedMessage(error?.message)
+      ) {
+        logInfo(`stream preview unavailable; using ZIP response (HTTP ${status || "n/a"})`);
+        return null;
+      }
+      if (body) {
+        error.langbaiMessage = compactRemoteErrorText(body, {
+          serviceLabel: "NovelAI 流式生成",
+          maxLength: 420,
+        });
+        if (error.response) error.response.data = error.langbaiMessage;
+      }
+      throw error;
+    }
+    return consumeGenerateImageStream(
+      response.data as AsyncIterable<Uint8Array>,
+      Math.max(1, Number(payload.parameters?.steps) || 1),
+      onPreview,
+      String(response.headers?.["content-type"] ?? ""),
+    ).catch((error: any) => {
+      if (!error?.streamPreviewStarted && isStreamingNotAllowedMessage(error?.message)) return null;
+      throw error;
+    });
+  };
+
+  try {
+    return await postTo(configuredBaseUrl);
+  } catch (error: any) {
+    const officialBaseUrl = "https://image.novelai.net";
+    const status = error?.response?.status;
+    if (
+      (status === 401 || status === 403) &&
+      configuredBaseUrl !== officialBaseUrl &&
+      settings.allowCustomEndpointFallback
+    ) {
+      return postTo(officialBaseUrl);
+    }
+    throw error;
+  }
+}
+
+async function postGenerateImageWithOptionalPreview(
+  payload: ReturnType<typeof buildPayload>,
+  signal: AbortSignal | undefined,
+  onPreview?: GenerationPreviewCallback,
+) {
+  const settings = getSettings();
+  if (
+    onPreview &&
+    settings.streamPreviewEnabled !== false &&
+    supportsSafeStreamTransport(payload)
+  ) {
+    const streamed = await postGenerateImageStream(payload, signal, onPreview);
+    if (streamed) return streamed;
+  }
+  return postGenerateImage(payload, signal);
 }
 
 export function extractEmbeddedGenerationMetadata(buffer: Buffer): LoadImageResult["metadata"] | undefined {
@@ -4559,6 +4840,7 @@ export async function generateImage(
     ignoreActiveGroup?: boolean;
     groupOverride?: { groupId: string; folderName: string };
     temporary?: boolean;
+    onPreview?: GenerationPreviewCallback;
   },
 ): Promise<GenerateResult> {
   params = normalizeGenerateParams(params);
@@ -4593,9 +4875,16 @@ export async function generateImage(
     const payload = buildPayload(params, actualSeed, preparedExtras);
     let buffers: Buffer[];
     try {
-      buffers = await postGenerateImage(payload, job.controller.signal);
+      buffers = await postGenerateImageWithOptionalPreview(
+        payload,
+        job.controller.signal,
+        saveOptions?.onPreview,
+      );
     } catch (error: any) {
-      if (!shouldRetryCharCaptionsAsPipe(error, params, preparedExtras))
+      if (
+        error?.streamPreviewStarted ||
+        !shouldRetryCharCaptionsAsPipe(error, params, preparedExtras)
+      )
         throw error;
       const pipePayload = buildPayload(
         params,
@@ -4603,7 +4892,11 @@ export async function generateImage(
         preparedExtras,
         "pipe",
       );
-      buffers = await postGenerateImage(pipePayload, job.controller.signal);
+      buffers = await postGenerateImageWithOptionalPreview(
+        pipePayload,
+        job.controller.signal,
+        saveOptions?.onPreview,
+      );
     }
     if (buffers.length === 0)
       return {

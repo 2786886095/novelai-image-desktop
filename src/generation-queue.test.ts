@@ -294,4 +294,45 @@ describe("main generation queue", () => {
     expect(useAppStore.getState().currentImage?.id).toBe("fresh");
     expect(useAppStore.getState().history.some((item) => item.id === deletedItem.id)).toBe(false);
   });
+
+  it("loads a clicked history image without importing its embedded prompt", async () => {
+    const loadImageFromPath = vi.fn().mockResolvedValue({
+      ok: true,
+      image: {
+        filePath: "history.png",
+        fileUrl: "local-media://history.png",
+        width: 832,
+        height: 1216,
+      },
+      metadata: {
+        imported: { positivePrompt: "embedded history prompt", seed: 123 },
+        characterCaptions: [],
+      },
+    });
+    vi.stubGlobal("window", { naiDesktop: { loadImageFromPath } });
+    const item = {
+      id: "history-preview",
+      date: "2026-08-30",
+      createdAt: "2026-08-30T00:00:00.000Z",
+      filePath: "history.png",
+      fileUrl: "local-media://history.png",
+      params: { ...useAppStore.getState().params, positivePrompt: "embedded history prompt" },
+      actualSeed: 123,
+      model: "nai-diffusion-5-full",
+      width: 832,
+      height: 1216,
+    };
+    useAppStore.setState((state) => ({
+      activeTab: "generate",
+      params: { ...state.params, positivePrompt: "keep this editor prompt", seed: 456 },
+      history: [item],
+    }));
+
+    useAppStore.getState().selectImage(item);
+    await vi.waitFor(() => expect(useAppStore.getState().workbenchImage?.filePath).toBe("history.png"));
+
+    expect(useAppStore.getState().currentImage?.id).toBe(item.id);
+    expect(useAppStore.getState().params.positivePrompt).toBe("keep this editor prompt");
+    expect(useAppStore.getState().params.seed).toBe(456);
+  });
 });

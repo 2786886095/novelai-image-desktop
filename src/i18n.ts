@@ -101,6 +101,11 @@ const MAIN_TAB_LOCALES: Record<AppLanguage, MainTabLocale> = {
       title: "参考图预设",
       desc: "管理氛围迁移与精准参考图片预设",
     },
+    onlineGallery: {
+      label: "在线画廊",
+      title: "在线画廊",
+      desc: "浏览公开作品并提取提示词与原参数",
+    },
     records: {
       label: "记录",
       title: "AI 调用记录",
@@ -144,6 +149,11 @@ const MAIN_TAB_LOCALES: Record<AppLanguage, MainTabLocale> = {
       label: "參考預設",
       title: "參考圖預設",
       desc: "管理氛圍轉移與精準參考圖片預設",
+    },
+    onlineGallery: {
+      label: "線上畫廊",
+      title: "線上畫廊",
+      desc: "瀏覽公開作品並擷取提示詞與原始參數",
     },
     records: {
       label: "記錄",
@@ -197,6 +207,11 @@ const MAIN_TAB_LOCALES: Record<AppLanguage, MainTabLocale> = {
       title: "Reference Presets",
       desc: "Manage vibe transfer and precise-reference image presets",
     },
+    onlineGallery: {
+      label: "Gallery",
+      title: "Online Gallery",
+      desc: "Browse public works and reuse prompts and original parameters",
+    },
     records: {
       label: "Logs",
       title: "AI Call Logs",
@@ -248,6 +263,11 @@ const MAIN_TAB_LOCALES: Record<AppLanguage, MainTabLocale> = {
       label: "参照プリセット",
       title: "参照画像プリセット",
       desc: "雰囲気転送と精密参照画像のプリセットを管理",
+    },
+    onlineGallery: {
+      label: "ギャラリー",
+      title: "オンラインギャラリー",
+      desc: "公開作品を閲覧し、プロンプトと元パラメータを利用",
     },
     records: {
       label: "履歴",
@@ -301,6 +321,11 @@ const MAIN_TAB_LOCALES: Record<AppLanguage, MainTabLocale> = {
       title: "참조 이미지 프리셋",
       desc: "분위기 전송 및 정밀 참조 이미지 프리셋 관리",
     },
+    onlineGallery: {
+      label: "갤러리",
+      title: "온라인 갤러리",
+      desc: "공개 작품을 탐색하고 프롬프트와 원본 설정을 활용",
+    },
     records: {
       label: "기록",
       title: "AI 호출 기록",
@@ -315,18 +340,21 @@ export function getLocalizedTabItems(language: unknown) {
 }
 
 const CHROME_TEXT = {
-  "zh-CN": { outputDir: "输出目录", settings: "设置", docs: "文档" },
-  "zh-TW": { outputDir: "輸出目錄", settings: "設定", docs: "文件" },
-  "en-US": { outputDir: "Output Folder", settings: "Settings", docs: "Docs" },
+  "zh-CN": { outputDir: "输出目录", settings: "设置", docs: "文档", streamPreview: "流式预览", streamOn: "已开启", streamOff: "已关闭" },
+  "zh-TW": { outputDir: "輸出目錄", settings: "設定", docs: "文件", streamPreview: "串流預覽", streamOn: "已開啟", streamOff: "已關閉" },
+  "en-US": { outputDir: "Output Folder", settings: "Settings", docs: "Docs", streamPreview: "Live Preview", streamOn: "On", streamOff: "Off" },
   "ja-JP": {
     outputDir: "出力フォルダ",
     settings: "設定",
     docs: "ドキュメント",
+    streamPreview: "ストリームプレビュー",
+    streamOn: "オン",
+    streamOff: "オフ",
   },
-  "ko-KR": { outputDir: "출력 폴더", settings: "설정", docs: "문서" },
+  "ko-KR": { outputDir: "출력 폴더", settings: "설정", docs: "문서", streamPreview: "스트림 미리보기", streamOn: "켜짐", streamOff: "꺼짐" },
 } satisfies Record<
   AppLanguage,
-  Record<"outputDir" | "settings" | "docs", string>
+  Record<"outputDir" | "settings" | "docs" | "streamPreview" | "streamOn" | "streamOff", string>
 >;
 
 export function getChromeText(language: unknown) {
@@ -1442,7 +1470,8 @@ const SETTINGS_SHELL_TEXT = {
     title: "设置",
     nav: {
       api: "API 配置",
-      storage: "存储",
+      storage: "数据与存储",
+      backup: "备份与恢复",
       "ai-reverse": "AI 反推",
       "convert-api": "转换 API",
       templates: "提示词模板",
@@ -1457,7 +1486,8 @@ const SETTINGS_SHELL_TEXT = {
     title: "設定",
     nav: {
       api: "API 設定",
-      storage: "儲存",
+      storage: "資料與儲存",
+      backup: "備份與還原",
       "ai-reverse": "AI 反推",
       "convert-api": "轉換 API",
       templates: "提示詞範本",
@@ -1472,7 +1502,8 @@ const SETTINGS_SHELL_TEXT = {
     title: "Settings",
     nav: {
       api: "API",
-      storage: "Storage",
+      storage: "Data & storage",
+      backup: "Backup & restore",
       "ai-reverse": "AI Inspect",
       "convert-api": "Convert API",
       templates: "Prompt Templates",
@@ -1487,7 +1518,8 @@ const SETTINGS_SHELL_TEXT = {
     title: "設定",
     nav: {
       api: "API 設定",
-      storage: "保存",
+      storage: "データと保存",
+      backup: "バックアップと復元",
       "ai-reverse": "AI 解析",
       "convert-api": "変換 API",
       templates: "プロンプトテンプレート",
@@ -1502,7 +1534,8 @@ const SETTINGS_SHELL_TEXT = {
     title: "설정",
     nav: {
       api: "API 설정",
-      storage: "저장소",
+      storage: "데이터 및 저장소",
+      backup: "백업 및 복원",
       "ai-reverse": "AI 분석",
       "convert-api": "변환 API",
       templates: "프롬프트 템플릿",
@@ -1541,6 +1574,8 @@ const SETTINGS_SECTION_TEXT = {
         "当前版本使用单任务顺序执行：批量生成会逐张调用 API，避免并发导致取消和历史写入异常。",
       superDropLabel: "中央画布拖拽加载",
       superDropDesc: "将图片拖入中央画布即可加载为工作台图片。",
+      streamPreviewLabel: "生成时流式预览",
+      streamPreviewDesc: "默认开启；生成过程中逐步显示中间图。接口不支持时会在确认未开始生成后安全回退为普通响应。",
       persistSectionTitle: "跨次启动记住参数",
       persistSectionDesc:
         "以下开关默认全部开启，关闭后对应工具在下次打开软件时不再恢复上次使用的参数，改用默认值。",
@@ -1577,6 +1612,8 @@ const SETTINGS_SECTION_TEXT = {
         "目前版本使用單任務循序執行：批次生成會逐張呼叫 API，避免並行造成取消與歷史寫入異常。",
       superDropLabel: "中央畫布拖曳載入",
       superDropDesc: "將圖片拖入中央畫布即可載入為工作台圖片。",
+      streamPreviewLabel: "生成時串流預覽",
+      streamPreviewDesc: "預設開啟；生成期間逐步顯示中間圖。介面不支援時會在確認尚未開始生成後安全回退為一般回應。",
       persistSectionTitle: "跨次啟動記住參數",
       persistSectionDesc:
         "以下開關預設全部開啟，關閉後對應工具在下次開啟軟體時不再恢復上次使用的參數，改用預設值。",
@@ -1614,6 +1651,9 @@ const SETTINGS_SECTION_TEXT = {
       superDropLabel: "Drop to center canvas",
       superDropDesc:
         "Drop an image onto the center canvas to load it as the workspace image.",
+      streamPreviewLabel: "Streaming generation preview",
+      streamPreviewDesc:
+        "On by default. Shows intermediate frames while generating and safely falls back only when the endpoint rejects streaming before generation starts.",
       persistSectionTitle: "Remember params across restarts",
       persistSectionDesc:
         "All toggles below default on. Turning one off means that tool uses its built-in defaults next time you open the app instead of restoring what you last used.",
@@ -1654,6 +1694,9 @@ const SETTINGS_SECTION_TEXT = {
       superDropLabel: "中央キャンバスへドロップ",
       superDropDesc:
         "画像を中央キャンバスへドロップすると、ワークスペース画像として読み込みます。",
+      streamPreviewLabel: "生成中のストリーミングプレビュー",
+      streamPreviewDesc:
+        "既定でオンです。生成途中の画像を段階的に表示し、開始前にストリーミング非対応と確認できた場合のみ通常応答へ安全に切り替えます。",
       persistSectionTitle: "再起動後もパラメータを記憶",
       persistSectionDesc:
         "以下のスイッチは既定ですべてオンです。オフにすると、そのツールは次回起動時に前回の設定を復元せず初期値を使用します。",
@@ -1693,6 +1736,9 @@ const SETTINGS_SECTION_TEXT = {
       superDropLabel: "중앙 캔버스 드롭 로드",
       superDropDesc:
         "이미지를 중앙 캔버스에 드롭하면 작업공간 이미지로 불러옵니다.",
+      streamPreviewLabel: "생성 스트리밍 미리보기",
+      streamPreviewDesc:
+        "기본으로 켜집니다. 생성 중 중간 이미지를 표시하며, 생성 시작 전에 스트리밍 미지원이 확인된 경우에만 일반 응답으로 안전하게 전환합니다.",
       persistSectionTitle: "재시작 후에도 파라미터 기억",
       persistSectionDesc:
         "아래 스위치는 기본적으로 모두 켜져 있습니다. 끄면 해당 도구는 다음 실행 시 마지막 설정을 복원하지 않고 기본값을 사용합니다.",
@@ -1728,6 +1774,8 @@ const SETTINGS_SECTION_TEXT = {
       | "strategyDesc"
       | "superDropLabel"
       | "superDropDesc"
+      | "streamPreviewLabel"
+      | "streamPreviewDesc"
       | "persistSectionTitle"
       | "persistSectionDesc"
       | "persistGenerateLabel"
@@ -3320,6 +3368,8 @@ const DESKTOP_EXTRA_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "canvas.dropToLoad": "放开以加载图片",
     "canvas.generatingTitle": "正在处理图片...",
     "canvas.generatingHint": "请求 NovelAI API，完成后会自动保存并写入历史。",
+    "canvas.streamingTitle": "正在生成预览",
+    "canvas.streamingProgress": "第 {current}/{total} 步 · {percent}%",
     "canvas.emptyTitle": "准备开始创作",
     "canvas.emptyHint":
       "在左侧输入英文 tag 或自然提示词，点击下方生成按钮；结果会自动保存并进入右侧历史。",
@@ -3476,6 +3526,8 @@ const DESKTOP_EXTRA_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "canvas.dropToLoad": "放開以載入圖片",
     "canvas.generatingTitle": "正在處理圖片...",
     "canvas.generatingHint": "請求 NovelAI API，完成後會自動保存並寫入歷史。",
+    "canvas.streamingTitle": "正在生成預覽",
+    "canvas.streamingProgress": "第 {current}/{total} 步 · {percent}%",
     "canvas.emptyTitle": "準備開始創作",
     "canvas.emptyHint":
       "在左側輸入英文 tag 或自然提示詞，點擊下方生成按鈕；結果會自動保存並進入右側歷史。",
@@ -3643,6 +3695,8 @@ const DESKTOP_EXTRA_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "canvas.generatingTitle": "Processing image...",
     "canvas.generatingHint":
       "Calling the NovelAI API. The result will be saved and added to history automatically.",
+    "canvas.streamingTitle": "Generating preview",
+    "canvas.streamingProgress": "Step {current}/{total} · {percent}%",
     "canvas.emptyTitle": "Ready to create",
     "canvas.emptyHint":
       "Enter English tags or a natural prompt on the left, then click Generate. Results are saved and added to history automatically.",
@@ -3809,6 +3863,8 @@ const DESKTOP_EXTRA_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "canvas.generatingTitle": "画像を処理中...",
     "canvas.generatingHint":
       "NovelAI API を呼び出しています。完了後は自動保存され履歴へ追加されます。",
+    "canvas.streamingTitle": "生成プレビュー",
+    "canvas.streamingProgress": "{current}/{total} ステップ · {percent}%",
     "canvas.emptyTitle": "創作を始めましょう",
     "canvas.emptyHint":
       "左側で英語タグまたは自然文プロンプトを入力し、生成ボタンを押してください。結果は自動保存され履歴へ入ります。",
@@ -3971,6 +4027,8 @@ const DESKTOP_EXTRA_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "canvas.generatingTitle": "이미지 처리 중...",
     "canvas.generatingHint":
       "NovelAI API 요청 중입니다. 완료되면 자동 저장되고 기록에 추가됩니다.",
+    "canvas.streamingTitle": "생성 미리보기",
+    "canvas.streamingProgress": "{current}/{total}단계 · {percent}%",
     "canvas.emptyTitle": "창작 준비 완료",
     "canvas.emptyHint":
       "왼쪽에 영어 tag 또는 자연어 프롬프트를 입력하고 생성 버튼을 누르세요. 결과는 자동 저장되고 오른쪽 기록에 추가됩니다.",

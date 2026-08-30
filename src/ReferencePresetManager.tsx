@@ -267,6 +267,11 @@ export default function ReferencePresetManager({
 
   const refresh = useCallback(async () => setLibrary(await window.naiDesktop.listReferencePresets()), []);
   useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => {
+    const onImported = () => void refresh();
+    window.addEventListener("langbai:reference-presets-changed", onImported);
+    return () => window.removeEventListener("langbai:reference-presets-changed", onImported);
+  }, [refresh]);
   useEffect(() => { globalThis.localStorage?.setItem(LOCAL_GRID_COLUMNS_KEY, String(gridColumns)); }, [gridColumns]);
   useLayoutEffect(() => {
     if (!sectionRef.current || document.hidden || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;

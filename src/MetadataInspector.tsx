@@ -494,8 +494,9 @@ export default function MetadataInspector({ onBack }: { onBack: () => void }) {
   const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
   const [historyGroups, setHistoryGroups] = useState<HistoryGroup[]>([]);
   const [historyGroupId, setHistoryGroupId] = useState("");
-  const [historyOpen, setHistoryOpen] = useState(true);
-  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
   const [historyReadingId, setHistoryReadingId] = useState("");
   const [selectedHistoryId, setSelectedHistoryId] = useState("");
   const [historyDisplayLimit, setHistoryDisplayLimit] = useState(60);
@@ -542,16 +543,7 @@ export default function MetadataInspector({ onBack }: { onBack: () => void }) {
   }, [setToast, text.readFailed]);
 
   useEffect(() => {
-    let cancelled = false;
-    void loadMetadataSnapshot()
-      .then((file) => {
-        if (!cancelled && file) return readFile(file, false);
-      })
-      .catch(() => undefined);
-    return () => { cancelled = true; };
-  }, [readFile]);
-
-  useEffect(() => {
+    if (!historyOpen || historyLoaded) return;
     let cancelled = false;
     setHistoryLoading(true);
     void Promise.all([
@@ -561,13 +553,14 @@ export default function MetadataInspector({ onBack }: { onBack: () => void }) {
       if (cancelled) return;
       setHistoryItems(items);
       setHistoryGroups(groups);
+      setHistoryLoaded(true);
     }).catch(() => {
       if (!cancelled) setToast(text.historyFailed);
     }).finally(() => {
       if (!cancelled) setHistoryLoading(false);
     });
     return () => { cancelled = true; };
-  }, [setToast, text.historyFailed]);
+  }, [historyLoaded, historyOpen, setToast, text.historyFailed]);
 
   async function readHistoryItem(item: HistoryItem) {
     if (historyReadingId) return;

@@ -5676,6 +5676,129 @@ html, body, #root {
   .redraw-results-grid { grid-template-columns: 1fr; }
 }
 
+/* Local resource databases: compact, explicit and non-destructive. */
+.resource-settings-stack {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.resource-paths-card,
+.resource-database-card,
+.cache-maintenance-card { display: grid; gap: 14px; }
+.resource-path-row {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px 11px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--bg-elev) 64%, transparent);
+}
+.resource-path-row > .ui-icon { color: var(--text-secondary); font-size: 18px; }
+.resource-path-row > span { display: grid; gap: 2px; min-width: 0; }
+.resource-path-row strong { color: var(--text-primary); font-size: 12.5px; }
+.resource-path-row small {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.resource-path-row .btn { width: 32px; min-width: 32px; height: 30px; padding: 0; }
+.resource-merge-notice {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  padding: 9px 11px;
+  border: 1px solid color-mix(in srgb, var(--success, #16a34a) 28%, var(--border));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--success, #16a34a) 7%, var(--bg-panel));
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+.resource-merge-notice > .ui-icon { margin-top: 1px; color: var(--success, #16a34a); }
+.resource-merge-notice strong { color: var(--text-primary); }
+.resource-list { display: grid; gap: 9px; min-width: 0; }
+.resource-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px 14px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg-elev) 74%, transparent);
+}
+.resource-item-main {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  min-width: 0;
+}
+.resource-item-main > div { display: grid; gap: 2px; min-width: 0; }
+.resource-item-main strong { color: var(--text-primary); font-size: 13px; }
+.resource-item-main p { margin: 0; color: var(--text-secondary); font-size: 11.5px; line-height: 1.45; }
+.resource-item-main small { color: var(--text-muted); font-size: 10.5px; line-height: 1.4; overflow-wrap: anywhere; }
+.resource-item-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.resource-item-icon .ui-icon { width: 18px; height: 18px; }
+.resource-item-actions { display: flex; justify-content: flex-end; align-items: center; gap: 6px; flex-wrap: wrap; }
+.resource-item-actions .btn { min-height: 31px; padding: 5px 10px; font-size: 11px; }
+.resource-progress { grid-column: 1 / -1; display: grid; gap: 5px; }
+.resource-progress > div { display: flex; justify-content: space-between; gap: 12px; color: var(--text-secondary); font-size: 11px; }
+.resource-progress > div strong { color: var(--accent); }
+.resource-progress progress {
+  width: 100%;
+  height: 6px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 99px;
+  background: var(--bg-input);
+  accent-color: var(--accent);
+}
+.resource-progress progress::-webkit-progress-bar { border-radius: 99px; background: var(--bg-input); }
+.resource-progress progress::-webkit-progress-value { border-radius: 99px; background: linear-gradient(90deg, var(--accent), var(--accent-2, var(--accent))); }
+.resource-progress small { color: var(--text-muted); font-size: 10.5px; }
+.resource-progress.error > div strong { color: var(--danger); }
+.resource-loading { padding: 14px; color: var(--text-muted); font-size: 12px; text-align: center; }
+.resource-loading .ui-icon { margin-right: 6px; }
+.cache-level-list { display: grid; gap: 8px; }
+.cache-level {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bg-elev) 68%, transparent);
+}
+.cache-level > .ui-icon { justify-self: center; font-size: 18px; color: var(--accent); }
+.cache-level > span { display: grid; gap: 1px; min-width: 0; }
+.cache-level strong { color: var(--text-primary); font-size: 12px; }
+.cache-level small { color: var(--text-muted); font-size: 10.5px; }
+.cache-level.l2 > .ui-icon { color: var(--warning, #d97706); }
+.cache-level.l3 > .ui-icon { color: #a855f7; }
+.resource-confirm-card { width: min(540px, 100%); }
+
+@media (max-width: 760px) {
+  .resource-item { grid-template-columns: 1fr; }
+  .resource-item-actions { justify-content: flex-start; }
+}
+
 /* ── 小说推文 / Novel-to-video planning tool ─────────────────────────────── */
 .tuiwen-studio {
   padding: 10px 16px 26px;
@@ -8736,6 +8859,14 @@ button.prompt-chip-head {
   font-size: 14px;
 }
 .comic-step-btn.active b { background: var(--accent); color: #fff; }
+.comic-step-btn span,
+.comic-step-btn small {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .comic-step-btn span { font-size: 14px; font-weight: 600; color: var(--text-primary); }
 .comic-step-btn small { font-size: 11px; color: var(--text-muted); }
 
@@ -10477,6 +10608,159 @@ html.theme-dark #root {
 .theme-dark .aitag-work-facts,
 .theme-dark .aitag-detail-grid { background: var(--bg-dialog); }
 
+.online-gallery-title-line {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.online-gallery-title-line h2 { min-width: 0; }
+
+.online-gallery-source-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 174px;
+  padding: 5px 7px 5px 11px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg-panel) 88%, transparent);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.online-gallery-source-picker select {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.online-gallery-search-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.online-gallery-search-row input,
+.online-gallery-credentials input {
+  min-width: 0;
+  min-height: 42px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--bg-input);
+  color: var(--text);
+}
+
+.online-gallery-search-row input:focus,
+.online-gallery-credentials input:focus {
+  border-color: var(--accent);
+  outline: 3px solid color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.online-gallery-filter-row { margin-top: 11px; }
+
+.online-gallery-safe-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-input);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.online-gallery-safe-toggle input {
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.online-gallery-credentials {
+  display: grid;
+  grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.3fr);
+  gap: 10px;
+  margin-top: 11px;
+}
+
+.online-gallery-credentials small {
+  grid-column: 1 / -1;
+  color: var(--muted);
+}
+
+.online-gallery-work-grid {
+  align-items: start;
+}
+
+.online-gallery-card .aitag-card-image {
+  min-height: 180px;
+  max-height: 360px;
+}
+
+.online-gallery-card .aitag-card-image img { object-fit: cover; }
+
+.online-gallery-inline-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.online-gallery-tag-section {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-input);
+}
+
+.online-gallery-tag-section h3 {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.online-gallery-tag-section > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.online-gallery-tag-section button {
+  padding: 5px 8px;
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border));
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg-panel));
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.online-gallery-tag-section button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.online-gallery-detail-info {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+}
+
+.theme-dark .online-gallery-source-picker,
+.theme-dark .online-gallery-safe-toggle,
+.theme-dark .online-gallery-tag-section {
+  background: color-mix(in srgb, var(--bg-panel) 94%, var(--accent) 6%);
+}
+
 @media (max-width: 920px) {
   .aitag-search-fields,
   .aitag-detail-grid { grid-template-columns: 1fr; }
@@ -10495,6 +10779,11 @@ html.theme-dark #root {
   .aitag-time-filter { flex: 1 1 100%; margin-left: 0; }
   .aitag-time-filter select { flex: 1; max-width: none; }
   .aitag-compatible-options { grid-template-columns: 1fr; }
+  .online-gallery-title-line { align-items: flex-start; flex-direction: column; }
+  .online-gallery-source-picker { width: 100%; }
+  .online-gallery-search-row,
+  .online-gallery-credentials { grid-template-columns: 1fr; }
+  .online-gallery-credentials small { grid-column: auto; }
   .aitag-work-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
   .aitag-card-copy p { display: none; }
   .aitag-card-copy div { flex-direction: column; gap: 3px; }
@@ -13146,4 +13435,1091 @@ button:has(> .ui-icon) {
   .reference-catalog-card,
   .reference-catalog-preview-button { transition: none !important; transform: none !important; }
   .ui-icon-spin { animation: none !important; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   VISUAL SYSTEM REFINEMENT (2026-08-30)
+   依据 docs/KIMI_K3_UI_ART_DIRECTION_REPORT.md 的统一视觉优化层。
+   本层位于文件末尾，仅通过层叠覆盖旧规则，不删除任何历史样式，功能逻辑零改动。
+   原则：一屏一个主强调动作；玻璃只用于全局导航/浮层/画布工具条；
+        渐变只用于品牌环境光与主 CTA；同层只用一种分隔手段；深浅主题共享语义 token。
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+/* ── 1. Light semantic tokens（对齐报告 §6.4 语义色，覆盖 STUDIO V2 的半透明玻璃 token）── */
+:root {
+  /* Backgrounds — 内容面一律稳定实色，不再用半透明叠加制造层级 */
+  --bg-window:   #f3f3fa;
+  --bg-panel:    #f8f7fc;
+  --bg-canvas:   #ffffff;
+  --bg-dialog:   #ffffff;
+  --bg-input:    #ffffff;
+  --bg-subtle:   #eeeaf8;
+  --bg-hover:    #ece7f9;
+  --bg-selected: #e3dcf7;
+
+  /* Borders */
+  --border:        #dcd7ee;
+  --border-strong: #bfb5da;
+
+  /* Brand violet + cyan accent（cyan 仅配合品牌/状态） */
+  --accent:       #7047d8;
+  --accent-hover: #5e35c7;
+  --accent-soft:  #eee9fb;
+  --accent-text:  #ffffff;
+  --accent-cyan:  #0799b6;
+
+  /* Semantic */
+  --danger:       #d14343;
+  --danger-soft:  #fbeded;
+  --success:      #238a57;
+  --success-soft: #eaf5ef;
+
+  /* Text — muted 不得比 #817891 更淡（对比度 ≥ 4.5:1） */
+  --text-primary:   #211b2e;
+  --text-secondary: #625a75;
+  --text-muted:     #817891;
+
+  /* Radius scale：6 / 10 / 14 / 20 */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+
+  /* 统一聚焦环 */
+  --focus-ring: 0 0 0 3px rgba(112, 71, 216, 0.20);
+}
+
+/* ── 2. Dark semantic tokens（对齐报告 §6.5；让深色成为 token 驱动的系统，
+      现有 .theme-dark 组件级补丁因优先级更高仍然生效，本块负责补齐语义底座）── */
+.theme-dark {
+  --bg-window:   #090a12;
+  --bg-panel:    #11111d;
+  --bg-canvas:   #181725;
+  --bg-dialog:   #201e30;
+  --bg-input:    #0e0f19;
+  --bg-subtle:   #201e30;
+  --bg-hover:    rgba(157, 130, 240, 0.10);
+  --bg-selected: rgba(157, 130, 240, 0.16);
+
+  --border:        rgba(205, 195, 235, 0.14);
+  --border-strong: rgba(215, 205, 245, 0.28);
+
+  --accent:       #9d82f0;
+  --accent-hover: #b09af8;
+  --accent-soft:  rgba(157, 130, 240, 0.16);
+  --accent-text:  #17122a;
+  --accent-cyan:  #25b6cf;
+
+  --danger:       #d14343;
+  --danger-soft:  rgba(209, 67, 67, 0.14);
+  --success:      #3da877;
+  --success-soft: rgba(61, 168, 119, 0.16);
+
+  --text-primary:   #eeeaf6;
+  --text-secondary: #b9b1c8;
+  --text-muted:     #8f869f;
+
+  --focus-ring: 0 0 0 3px rgba(157, 130, 240, 0.28);
+}
+
+/* ── 3. 选中态着色，统一品牌感 ─────────────────────────────────────────────── */
+::selection { background: var(--accent-soft); color: var(--text-primary); }
+
+/* ── 4. 按钮系统：统一 32px 高、6px 圆角、一致 hover/focus/disabled ────────── */
+.btn {
+  min-height: 32px;
+  border-radius: var(--radius-sm);
+  transition:
+    background  0.14s var(--ease-out),
+    border-color 0.14s var(--ease-out),
+    color       0.14s var(--ease-out),
+    box-shadow  0.14s var(--ease-out),
+    transform   0.10s var(--ease-spring);
+}
+/* 主 CTA：全产品唯一保留品牌强调填充的按钮，纯色不用渐变 */
+.btn-primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-text);
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+/* 危险按钮：去渐变，统一实心语义色 */
+.btn-danger {
+  border-color: var(--danger) !important;
+  background: var(--danger) !important;
+  color: #fff !important;
+}
+.btn-danger:hover:not(:disabled) {
+  border-color: #b93a3a !important;
+  background: #b93a3a !important;
+  color: #fff !important;
+}
+/* disabled：降低饱和度但保持文字可读，不再整体半透明到看不清 */
+.btn:disabled {
+  opacity: 0.55;
+  color: var(--text-muted);
+}
+
+/* ── 5. 全局键盘聚焦可见性（验收要求：focus 可见）────────────────────────── */
+.btn:focus-visible,
+.menu-action:focus-visible,
+.tab-bar button:focus-visible,
+.title-actions button:focus-visible,
+.window-controls button:focus-visible,
+.select-menu-option:focus-visible,
+.ws-resizer-reset:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+.field input:focus,
+.field select:focus,
+.field textarea:focus,
+.prompt-chip-search:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+
+/* ── 6. 输入与选择器：34px 高、6px 圆角、统一实色底 ───────────────────────── */
+.field input,
+.field select {
+  min-height: 34px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+}
+.field textarea {
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+}
+
+/* ── 7. 顶部标签导航：去胶囊化/去每标签渐变，active = 轻底色 + 强文本 + 底线 ── */
+.tab-bar button {
+  height: 34px;
+  border-color: transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  color: var(--text-secondary);
+  transition: background 0.14s var(--ease-out), color 0.14s var(--ease-out);
+}
+.tab-bar button:hover {
+  border-color: transparent;
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  transform: none;
+}
+.tab-bar button.active {
+  border-color: transparent;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 650;
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+.tab-icon { background: transparent; color: var(--text-muted); }
+.tab-bar button:hover .tab-icon { color: var(--text-secondary); }
+.tab-bar button.active .tab-icon { background: transparent; color: var(--accent); }
+
+/* 深色下导航沿用同一套结构，只换语义色（覆盖旧玻璃胶囊补丁） */
+.theme-dark .tab-bar button {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  color: var(--text-secondary);
+}
+.theme-dark .tab-bar button:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.theme-dark .tab-bar button.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+/* ── 8. 卡片与浮层：标准卡只留 1px 边框，不默认大阴影 ─────────────────────── */
+.info-card {
+  border-radius: var(--radius-md);
+  background: var(--bg-canvas);
+  box-shadow: none;
+}
+.coming-soon {
+  border-radius: var(--radius-lg);
+  box-shadow: none;
+}
+.modal {
+  border-radius: var(--radius-lg);
+  background: var(--bg-dialog);
+}
+.prompt-chip-search { border-radius: var(--radius-sm); }
+.prompt-chip-list button { border-radius: var(--radius-sm); }
+.select-menu-popover { border-radius: var(--radius-md); }
+.select-menu-option { border-radius: var(--radius-sm); }
+.modal > header > button:not(.btn),
+.style-image-lightbox > button,
+.token-guide-preview > button { border-radius: var(--radius-sm); }
+
+/* 可点击结果卡 hover 只提升边框/背景，不缩放，避免布局晃动 */
+.reference-catalog-card,
+.prompt-variant-card,
+.reverse-scope-card,
+.tag-server-card {
+  transition: border-color 0.14s var(--ease-out), background 0.14s var(--ease-out), box-shadow 0.14s var(--ease-out);
+}
+.reference-catalog-card:hover,
+.prompt-variant-card:hover,
+.reverse-scope-card:hover,
+.tag-server-card:hover {
+  border-color: var(--border-strong);
+}
+
+/* ── 9. 加载状态：spinner 跟随语义色；提供 .btn.is-loading 按钮加载态 ────── */
+.spinner {
+  border-color: color-mix(in srgb, var(--accent) 16%, transparent);
+  border-top-color: var(--accent);
+}
+.btn.is-loading {
+  pointer-events: none;
+  color: transparent !important;
+  position: relative;
+}
+.btn.is-loading::after {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border: 2px solid color-mix(in srgb, var(--accent) 22%, transparent);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+.btn-primary.is-loading::after,
+.btn-danger.is-loading::after {
+  border-color: rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+}
+.theme-dark .btn-primary.is-loading::after {
+  border-color: rgba(23, 18, 42, 0.25);
+  border-top-color: var(--accent-text);
+}
+
+/* ── 10. 窄窗口适配补充：标签栏更紧凑、弹窗不溢出 ────────────────────────── */
+@media (max-width: 1180px) {
+  .tab-bar button { height: 32px; }
+}
+@media (max-width: 720px) {
+  .tab-bar { gap: 4px; padding-inline: 8px; }
+  .tab-bar button { padding: 0 10px; }
+  .modal { max-width: calc(100vw - 24px); }
+  .coming-soon { padding: 24px 20px; }
+}
+
+/* ── 12. 深色主 CTA 与浅色统一为纯色（废弃深色专属的紫青渐变补丁）────────── */
+.theme-dark .btn-primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-text);
+  box-shadow: 0 4px 14px rgba(157, 130, 240, 0.22);
+}
+.theme-dark .btn-primary:hover:not(:disabled) {
+  border-color: var(--accent-hover);
+  background: var(--accent-hover);
+  color: var(--accent-text);
+  box-shadow: 0 6px 18px rgba(157, 130, 240, 0.30);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   13. INTERACTION & MOTION REFINEMENT (2026-08-30 第二轮)
+   目标：自然流畅。所有动效短促（≤0.3s）、缓出（ease-out/spring）、不产生布局位移；
+   全局 prefers-reduced-motion 兜底已在上方生效，本层动画会被自动关闭。
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+/* 13.1 页面切换：直接子级挂载时淡入 + 轻微上浮（0.26s，只播一次）
+   持续挂载的面板（左栏/历史栏）不会因同族标签切换而重复播放 */
+@keyframes page-enter {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.workspace > * { animation: page-enter 0.26s var(--ease-out) both; }
+
+/* 13.2 浮层入场：下拉/弹层统一 popIn（复用现有关键帧） */
+.select-menu-popover { animation: popIn 0.16s var(--ease-out); }
+
+/* 13.3 输入控件：聚焦/失焦的边框与聚焦环平滑过渡 */
+.field input,
+.field select,
+.field textarea,
+.prompt-chip-search {
+  transition:
+    border-color 0.14s var(--ease-out),
+    box-shadow  0.14s var(--ease-out),
+    background  0.14s var(--ease-out);
+}
+
+/* 13.4 主题切换：外壳与容器背景/边框 0.18s 交叉淡化，不再生硬跳变 */
+.title-bar,
+.menu-bar,
+.tab-bar,
+.status-bar,
+.left-panel,
+.history-panel,
+.canvas-area,
+.ai-log-panel,
+.modal {
+  transition: background-color 0.18s ease, border-color 0.18s ease;
+}
+
+/* 13.5 作品图片：加载后 0.3s 淡入；卡片 hover 时图片轻微推近（裁剪在卡片内，不动布局） */
+.aitag-card-image img,
+.history-item img {
+  animation: fadeIn 0.3s var(--ease-out);
+  transition: transform 0.32s var(--ease-out);
+}
+.aitag-card:hover .aitag-card-image img { transform: scale(1.03); }
+.history-item:hover img { transform: scale(1.04); }
+
+/* 13.6 下拉选项 hover 平滑 */
+.select-menu-option { transition: background 0.12s var(--ease-out); }
+
+/* 13.7 懒加载占位：淡入 + 柔和呼吸，缓解等待焦虑 */
+.lazy-tool-loading { animation: fadeIn 0.2s var(--ease-out), lazy-breathe 1.6s ease-in-out 0.2s infinite; }
+@keyframes lazy-breathe {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.55; }
+}
+
+/* 13.8 在线状态点：缓慢呼吸光环（仅在线时） */
+.title-account.online .pulse-dot { animation: pulse-soft 2.6s ease-in-out infinite; }
+@keyframes pulse-soft {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(35, 138, 87, 0.10); }
+  50%      { box-shadow: 0 0 0 6px rgba(35, 138, 87, 0.16); }
+}
+
+/* 13.9 滚动平滑（第三轮起始终启用：平滑滚动不属前庭刺激类动效） */
+.panel-scroll,
+.history-grid,
+.modal { scroll-behavior: smooth; }
+
+/* ── 11. 减少动态效果：本机 reduced-motion=true 来自 Windows 性能调优，
+      用户明确要求丝滑交互（2026-08-30 第三轮决策）：
+      仅关闭装饰性/循环动画；短促的 UI 反馈过渡与入场动画全部保留。
+      若未来需要严格遵循系统减少动态（如前庭敏感用户），恢复为全局 0.01ms 即可。── */
+@media (prefers-reduced-motion: reduce) {
+  /* 装饰性与循环动画关闭 */
+  .splash-orb, .logo-ring,
+  .app-shell::before, .app-shell::after,
+  .empty-orb-a, .empty-orb-b,
+  .title-account.online .pulse-dot,
+  .lazy-tool-loading,
+  .ui-icon-spin { animation: none !important; }
+
+  /* 保留短促 UI 反馈过渡（覆盖旧代码中 transition:none !important 的补丁，层叠靠后胜出） */
+  .btn {
+    transition: background 0.14s var(--ease-out), border-color 0.14s var(--ease-out),
+      color 0.14s var(--ease-out), box-shadow 0.14s var(--ease-out), transform 0.10s var(--ease-spring) !important;
+  }
+  .tab-bar button {
+    transition: background 0.16s var(--ease-out), color 0.16s var(--ease-out), box-shadow 0.16s var(--ease-out) !important;
+  }
+  .menu-action, .title-actions button, .window-controls button {
+    transition: background 0.14s var(--ease-out), color 0.14s var(--ease-out),
+      border-color 0.14s var(--ease-out), transform 0.10s var(--ease-spring) !important;
+  }
+  .tool-card, .aitag-card {
+    transition: transform 0.16s var(--ease-out), border-color 0.16s var(--ease-out),
+      box-shadow 0.16s var(--ease-out), background 0.16s var(--ease-out) !important;
+  }
+  .comic-step-btn {
+    transition: background 0.16s var(--ease-out), border-color 0.16s var(--ease-out),
+      box-shadow 0.16s var(--ease-out), transform 0.12s var(--ease-spring) !important;
+  }
+  .field input, .field select, .field textarea, .prompt-chip-search {
+    transition: border-color 0.14s var(--ease-out), box-shadow 0.14s var(--ease-out), background 0.14s var(--ease-out) !important;
+  }
+  .select-menu-option { transition: background 0.12s var(--ease-out) !important; }
+  .aitag-card-image img, .history-item img { transition: transform 0.32s var(--ease-out) !important; }
+  .reference-catalog-card, .reference-catalog-preview-button, .prompt-variant-card, .reverse-scope-card, .tag-server-card {
+    transition: border-color 0.14s var(--ease-out), background 0.14s var(--ease-out), box-shadow 0.14s var(--ease-out) !important;
+  }
+  /* 旧补丁的 transform:none !important 会吃掉按压/浮起反馈，逐状态恢复 */
+  .btn:active:not(:disabled) { transform: scale(0.96) !important; }
+  .menu-action:active { transform: scale(0.96) !important; }
+  .ws-resizer-reset, .ws-resizer-grip { transition: none !important; }
+
+  /* 加载指示保留旋转 */
+  .spinner, .queue-spinner, .metadata-history-spinner, .btn.is-loading::after {
+    animation: spin 1.2s linear infinite !important;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   14. MOTION COVERAGE & LAYOUT FIXES (2026-08-30 第三轮)
+   用户反馈：工具页内部切换/步骤切换仍然瞬现；批量图生图底部按钮被裁切。
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+/* 14.1 页面入场动画加深一点（更易感知的丝滑），并覆盖工具页内部导航：
+   - .tools-hub 的直接子级 = 工具首页视图与各工具根组件（activeTool 切换时挂载）
+   - .redraw-wizard/.comic-generator 的 section = 向导步骤切换时挂载 */
+@keyframes page-enter {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes page-enter-soft {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.workspace > *,
+.tools-hub > * { animation: page-enter 0.3s var(--ease-out) backwards; }
+.redraw-wizard > section,
+.comic-generator > section { animation: page-enter-soft 0.24s var(--ease-out) backwards; }
+
+/* 14.2 工具卡片 hover：浮起 + 边框提亮（带过渡，不再瞬变） */
+.tool-card {
+  transition: transform 0.16s var(--ease-out), border-color 0.16s var(--ease-out), box-shadow 0.16s var(--ease-out), background 0.16s var(--ease-out);
+}
+.tool-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-md);
+}
+.tool-card:active { transform: translateY(0) scale(0.99); }
+
+/* 14.3 菜单/标题栏按钮补齐过渡，hover 不再瞬变 */
+.menu-action,
+.title-actions button,
+.window-controls button {
+  transition: background 0.14s var(--ease-out), color 0.14s var(--ease-out), border-color 0.14s var(--ease-out), transform 0.1s var(--ease-spring);
+}
+.menu-action:active { transform: scale(0.96); }
+
+/* 14.4 按钮按压感加深一档 */
+.btn:active:not(:disabled) { transform: scale(0.96); }
+
+/* 14.5 标签 active 指示线平滑切换 */
+.tab-bar button { transition: background 0.16s var(--ease-out), color 0.16s var(--ease-out), box-shadow 0.16s var(--ease-out); }
+
+/* 14.6 步骤条按钮状态过渡 */
+.comic-step-btn { transition: background 0.16s var(--ease-out), border-color 0.16s var(--ease-out), box-shadow 0.16s var(--ease-out), transform 0.12s var(--ease-spring); }
+.comic-step-btn:active { transform: scale(0.98); }
+
+/* 14.7 修复：批量图生图底部操作条被窗口裁切 → 吸底悬浮（玻璃工具条，滚动时始终可见） */
+.redraw-wizard .redraw-step-footer {
+  position: sticky;
+  bottom: 8px;
+  z-index: 8;
+  border-color: var(--border);
+  background: color-mix(in srgb, var(--bg-panel) 86%, transparent);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 -6px 24px rgba(60, 40, 120, 0.08), 0 1px 3px rgba(60, 40, 120, 0.06);
+}
+.theme-dark .redraw-wizard .redraw-step-footer {
+  border-color: var(--border);
+  background: color-mix(in srgb, var(--bg-panel) 82%, transparent);
+  box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.35);
+}
+
+/* 15. Streaming generation preview — follows the refined solid-surface,
+   single-accent visual system rather than adding another glass treatment. */
+.generating-overlay.has-stream-preview {
+  grid-template-rows: minmax(0, 1fr) auto;
+  align-content: stretch;
+  gap: 12px;
+  padding: 24px;
+  background: color-mix(in srgb, var(--bg-canvas) 92%, transparent);
+}
+.generation-stream-frame {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-panel);
+}
+.generation-stream-frame img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.generation-stream-status {
+  width: min(520px, 100%);
+  justify-self: center;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-panel);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
+.generation-stream-status strong { font-size: 13px; }
+.generation-stream-status small { color: var(--text-secondary); font-size: 12px; }
+.generation-stream-status > span {
+  grid-column: 1 / -1;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--accent-soft);
+}
+.generation-stream-status > span > i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 0.14s var(--ease-out);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   16. DATA SAFETY, MATERIAL ICONS & COHESION (2026-08-30)
+   Final override layer. It follows the solid semantic-surface system from the
+   Kimi K3 refinement report: restrained accent, 6/10/14px radii, no detached
+   native popups, and no layout-shifting decoration.
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+/* 16.1 Settings navigation: Flutter/Material-style functional icon rhythm. */
+.settings-nav {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.settings-nav button {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  min-height: 40px;
+  border-radius: 10px;
+}
+.settings-nav button .ui-icon {
+  width: 18px;
+  height: 18px;
+  color: currentColor;
+}
+.settings-nav button span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 16.2 Data & storage / backup & restore. */
+.settings-section-card,
+.backup-status-card {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-panel);
+  box-shadow: var(--shadow-sm);
+}
+.settings-section-heading {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  align-items: start;
+  gap: 11px;
+}
+.settings-section-heading > div,
+.data-import-file > span,
+.backup-status-card > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+.settings-section-heading strong { font-size: 14px; color: var(--text-primary); }
+.settings-section-heading span,
+.backup-status-card span,
+.backup-status-card small {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.settings-section-icon,
+.data-confirm-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.settings-section-icon .ui-icon,
+.data-confirm-icon .ui-icon { width: 20px; height: 20px; }
+.data-sensitive-note {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 10px 11px;
+  border: 1px solid color-mix(in srgb, var(--warning, #d97706) 26%, var(--border));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--warning, #d97706) 8%, var(--bg-panel));
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.data-sensitive-note .ui-icon { width: 17px; height: 17px; color: var(--warning-text, #9a5800); }
+.data-selection-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin: 12px 0 8px;
+}
+.data-selection-toolbar .btn { min-height: 32px; padding: 5px 10px; }
+.data-category-checklist {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.data-category-row {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: start;
+  gap: 9px;
+  padding: 10px 11px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-canvas);
+  cursor: pointer;
+  transition: border-color 0.14s var(--ease-out), background 0.14s var(--ease-out);
+}
+.data-category-row:hover {
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--border));
+  background: var(--bg-hover);
+}
+.data-category-row input { margin: 2px 0 0; accent-color: var(--accent); }
+.data-category-row > span { min-width: 0; display: grid; gap: 2px; }
+.data-category-row strong {
+  overflow-wrap: anywhere;
+  color: var(--text-primary);
+  font-size: 12.5px;
+  line-height: 1.35;
+}
+.data-category-row small { color: var(--text-muted); font-size: 11px; }
+.data-primary-actions { margin-top: 12px; }
+.data-import-preview {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.data-import-file {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+.data-import-file > .ui-icon { color: var(--accent); }
+.data-import-file strong,
+.data-import-file small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.data-import-file small { color: var(--text-muted); font-size: 11px; }
+.data-confirm-backdrop {
+  position: fixed;
+  z-index: 22000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(18, 12, 39, 0.48);
+}
+.data-confirm-card {
+  width: min(500px, 100%);
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+  background: var(--bg-dialog);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-lg);
+}
+.data-confirm-card strong { display: block; margin-top: 2px; }
+.data-confirm-card p { margin: 7px 0 0; color: var(--text-secondary); font-size: 12.5px; line-height: 1.6; }
+.data-confirm-card > .row-actions { grid-column: 1 / -1; justify-content: flex-end; margin-top: 4px; }
+.backup-restore-settings { max-width: 820px; }
+.backup-restore-settings .toggle-list { margin-top: 14px; }
+.backup-number-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+.backup-number-grid .field { min-width: 0; }
+.backup-status-card {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+.backup-status-card > .ui-icon { color: var(--accent); }
+.backup-status-card strong { font-size: 13px; }
+.backup-status-card small { color: var(--text-muted); }
+
+/* 16.3 Tool index: solid cards and Material icon anchors. */
+.tools-hero,
+.tool-card {
+  border-color: var(--border);
+  border-radius: 14px;
+  background: var(--bg-panel);
+  box-shadow: var(--shadow-sm);
+}
+.tool-card { min-width: 0; min-height: 158px; padding: 18px; cursor: default; }
+.tool-card.ready { border-color: var(--border); }
+.tool-card.ready:hover {
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--border));
+  box-shadow: var(--shadow-md);
+}
+.tool-card-heading {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+.tool-card .tool-card-heading > i {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-style: normal;
+}
+.tool-card .tool-card-heading > i .ui-icon { width: 20px; height: 20px; }
+.tool-card .tool-card-heading > b {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text-primary);
+}
+.tool-card > span:not(.tool-card-heading) {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.tool-card small { border-radius: 6px; background: var(--accent-soft); }
+
+/* 16.4 Online gallery source uses the shared portal menu instead of a detached
+   operating-system dropdown. */
+.online-gallery-title-line { flex-wrap: wrap; }
+.online-gallery-source-picker {
+  display: block;
+  min-width: min(230px, 100%);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+.online-gallery-source-menu { width: 230px; max-width: 100%; }
+.online-gallery-source-menu .select-menu-trigger {
+  min-height: 40px;
+  border-radius: 10px;
+  background: var(--bg-input);
+  box-shadow: none;
+}
+.select-menu-popover {
+  border-color: var(--border-strong);
+  border-radius: 10px;
+  background: var(--bg-dialog);
+  box-shadow: var(--shadow-lg);
+}
+
+/* 16.5 Batch project title and metrics read as one connected header. */
+.redraw-page-title {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border-color: var(--border);
+  border-radius: 14px;
+  background: var(--bg-panel);
+  box-shadow: var(--shadow-sm);
+}
+.redraw-page-title strong { min-width: 0; overflow-wrap: anywhere; font-size: 22px; }
+.redraw-page-metrics {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(76px, auto);
+  gap: 0;
+  overflow: hidden;
+  max-width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-canvas);
+}
+.redraw-page-metrics span {
+  justify-content: center;
+  min-width: 0;
+  min-height: 38px;
+  padding: 7px 10px;
+  border: 0;
+  border-right: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  white-space: nowrap;
+}
+.redraw-page-metrics span:last-child { border-right: 0; }
+
+/* 16.6 Narrow left columns must never force controls/text outside the panel. */
+.left-panel,
+.panel-scroll,
+.left-footer,
+.account-details-shell,
+.account-details-content,
+.account-mini,
+.account-mini > div,
+.account-opus-usage,
+.account-opus-main,
+.run-disabled-reason,
+.run-button-row,
+.left-panel .field,
+.left-panel .toggle-row,
+.left-panel .row-actions {
+  min-width: 0;
+  max-width: 100%;
+}
+.left-panel input,
+.left-panel textarea,
+.left-panel select,
+.left-panel button { max-width: 100%; }
+.account-mini {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+.account-mini strong,
+.account-mini small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.account-mini button { white-space: nowrap; }
+.account-opus-main {
+  grid-template-columns: auto minmax(56px, 1fr) auto auto;
+  gap: 6px;
+}
+.account-opus-main em {
+  grid-column: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.account-opus-usage {
+  min-height: 32px;
+  gap: 0;
+  padding: 5px 8px;
+  border-radius: 9px;
+  box-shadow: none;
+}
+.account-opus-track { height: 5px; }
+.account-opus-main strong,
+.account-opus-main em { font-size: 10px; }
+/* The full refill explanation remains available in the click-through detail
+   dialog; repeating it in the fixed footer made the left panel unnecessarily
+   tall and visually heavier than the primary controls. */
+.account-opus-explanation { display: none; }
+
+/* 2026-08-31: compact live-preview switch beside Output Folder. Window controls
+   deliberately remain untouched. */
+.stream-preview-toggle {
+  gap: 8px;
+  padding-inline: 10px !important;
+}
+.stream-preview-toggle.active {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+  background: color-mix(in srgb, var(--accent) 9%, var(--bg-elev));
+}
+.stream-preview-toggle:disabled { cursor: wait; opacity: .65; }
+.stream-preview-state {
+  position: relative;
+  width: 24px;
+  height: 14px;
+  flex: 0 0 24px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-muted) 36%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-muted) 24%, transparent);
+}
+.stream-preview-state i {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--bg-elev);
+  box-shadow: 0 1px 3px rgba(28, 20, 55, .22);
+  transition: transform 140ms var(--ease-out), background 140ms var(--ease-out);
+}
+.stream-preview-toggle.active .stream-preview-state {
+  background: var(--accent);
+  box-shadow: none;
+}
+.stream-preview-toggle.active .stream-preview-state i {
+  transform: translateX(10px);
+  background: #fff;
+}
+
+/* Account disclosure is a quiet right-aligned affordance rather than an
+   isolated circle occupying the left edge of the fixed footer. */
+.account-details-shell {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+.account-details-content { padding-right: 28px; }
+.account-details-toggle {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  right: 0;
+  left: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  padding: 0 !important;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-muted);
+  box-shadow: none;
+}
+.account-details-toggle:hover {
+  border-color: transparent;
+  background: var(--bg-hover);
+  color: var(--accent);
+}
+.account-details-toggle-copy { display: none; }
+.account-details-shell.collapsed {
+  display: block;
+  width: 100%;
+}
+.account-details-shell.collapsed .account-details-toggle {
+  position: static;
+  width: 100%;
+  min-height: 34px;
+  height: auto;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 2px 2px 4px !important;
+  text-align: left;
+}
+.account-details-shell.collapsed .account-details-toggle-copy {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+.account-details-toggle-copy strong,
+.account-details-toggle-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.account-details-toggle-copy strong { color: var(--text-primary); font-size: 12px; }
+.account-details-toggle-copy small { color: var(--text-muted); font-size: 10px; font-weight: 500; }
+
+/* Keep the inpaint controls as one coherent toolbar. On genuinely narrow
+   canvases it scrolls inside the pill instead of wrapping one orphan button. */
+.inpaint-mask-toolbar {
+  max-width: calc(100% - 24px);
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  gap: 5px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  overscroll-behavior-inline: contain;
+}
+.inpaint-mask-toolbar::-webkit-scrollbar { display: none; }
+.inpaint-mask-toolbar .btn {
+  flex: 0 0 auto;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 6px 8px;
+}
+.inpaint-mask-toolbar .inpaint-icon-tool { width: 32px; }
+.inpaint-toolbar-size { min-width: 62px; height: 32px; padding-inline: 6px; }
+.inpaint-toolbar-size input { width: 34px; min-width: 34px; }
+.inpaint-toolbar-range { flex-basis: 72px; width: 72px; }
+.inpaint-toolbar-divider { flex: 0 0 1px; }
+.inpaint-zoom-readout { flex: 0 0 40px; min-width: 40px; }
+
+@media (max-width: 900px) {
+  .stream-preview-label { display: none; }
+  .stream-preview-toggle { padding-inline: 8px !important; }
+}
+
+.online-gallery-credentials {
+  grid-template-columns: minmax(150px, .7fr) minmax(220px, 1.3fr) auto;
+  align-items: end;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--border));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--bg-elev) 92%, var(--accent) 3%);
+}
+.online-gallery-credentials-heading {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+.online-gallery-credentials-heading > div { display: grid; gap: 3px; min-width: 0; }
+.online-gallery-credentials-heading strong { color: var(--text-primary); font-size: 13px; }
+.online-gallery-credentials-heading small {
+  grid-column: auto;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+.online-gallery-credentials > label { display: grid; gap: 5px; min-width: 0; }
+.online-gallery-credentials > label > span { color: var(--text-secondary); font-size: 11px; font-weight: 700; }
+
+@media (max-width: 780px) {
+  .online-gallery-credentials { grid-template-columns: 1fr; }
+  .online-gallery-credentials-heading { align-items: flex-start; }
+}
+.run-disabled-reason,
+.left-panel .field-hint,
+.left-panel .settings-hint,
+.left-panel small { overflow-wrap: anywhere; }
+
+@media (max-width: 940px) {
+  .settings-body { grid-template-columns: 176px minmax(0, 1fr); }
+  .settings-content { padding: 18px 22px; }
+  .redraw-page-title { grid-template-columns: 1fr; }
+  .redraw-page-metrics { justify-self: stretch; grid-auto-columns: minmax(0, 1fr); }
+}
+@media (max-width: 720px) {
+  .data-category-checklist,
+  .backup-number-grid { grid-template-columns: 1fr; }
+  .backup-status-card { grid-template-columns: 24px minmax(0, 1fr); }
+  .backup-status-card .btn { grid-column: 1 / -1; justify-self: start; }
+  .redraw-page-metrics { grid-auto-flow: row; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .redraw-page-metrics span:nth-child(2) { border-right: 0; }
+  .redraw-page-metrics span { border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+  .redraw-page-metrics span:nth-last-child(-n + 2) { border-bottom: 0; }
 }

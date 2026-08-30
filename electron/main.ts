@@ -11,6 +11,12 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import {
+  LEGACY_USER_DATA_DIRS,
+  migrateLegacyUserDataStore,
+  STABLE_USER_DATA_DIR,
+  STORE_FILE_NAME,
+} from "./user-data-migration";
+import {
   installLocalMediaProtocol,
   localMediaUrlToPath,
   registerLocalMediaScheme,
@@ -60,6 +66,15 @@ import {
   searchDanbooru,
 } from "./ipc/danbooru-tags";
 import {
+  clearResourceQueryCache,
+  downloadResourceDatabase,
+  getResourceDatabaseOverview,
+  openResourceDatabaseDirectory,
+  pauseResourceDatabaseDownload,
+  relatedResourceTags,
+  restorePreviousResourceDatabase,
+} from "./ipc/resource-databases";
+import {
   clearAitagDataCache,
   getAitagConfig,
   getAitagSnapshot,
@@ -72,7 +87,9 @@ import {
   aitagCacheStats,
   cacheAitagImage,
   clearAitagCache,
+  cacheOnlineGalleryImage,
 } from "./ipc/aitag-cache";
+import { clearOnlineGalleryDataCache, getOnlineGalleryDetail, searchOnlineGallery } from "./ipc/online-gallery";
 import {
   artistLabModelStatus,
   discoverSimilarArtists,
@@ -116,6 +133,15 @@ import {
   reconcileStylePromptPreviewImages,
 } from "./ipc/style-preset-images";
 import {
+  exportDataBackup,
+  getDataBackupStatus,
+  importDataBackup,
+  inspectDataBackup,
+  openBackupDirectory,
+  runAutomaticBackup,
+  selectBackupDirectory,
+} from "./ipc/data-backup";
+import {
   getTuiwenTtsCatalog,
   saveTuiwenImportedAudio,
   synthesizeTuiwenSpeech,
@@ -142,6 +168,9 @@ import type {
   TagComicGenerateRequest,
   TagComicReferenceImportRequest,
   DirectorTool,
+  DataBackupExportRequest,
+  DataBackupImportRequest,
+  GenerationPreviewEvent,
   I2IParams,
   MetadataSnapshotPayload,
   NAIInpaintModel,
@@ -153,6 +182,7 @@ import type {
   TuiwenProject,
   TuiwenSaveImportedAudioRequest,
   TuiwenTtsRequest,
+  ResourceDatabaseId,
 } from "../src/types";
 import {
   addTextToolHistoryItem,
@@ -255,48 +285,17 @@ function attachEditContextMenu(win: BrowserWindow) {
   });
 }
 
-const STORE_FILE = "novelai-image-desktop.json";
-// Legacy userData folder names this app has shipped under. Renames change
-// app.getName()/productName which moves userData, orphaning the saved token and
-// history. We pin userData to a stable folder and migrate the newest legacy
-// store into it so settings survive any future rename.
-const LEGACY_DIRS = [
-  "Langbai NovelAI Studio",
-  "langbai-novelai-studio",
-  "NovelAI Studio",
-];
-
 function pinUserDataAndMigrate() {
   const appData = app.getPath("appData");
-  const stableDir = path.join(appData, "novelai-image-desktop");
+  const stableDir = path.join(appData, STABLE_USER_DATA_DIR);
   try {
-    fs.mkdirSync(stableDir, { recursive: true });
     app.setPath("userData", stableDir);
-
-    const target = path.join(stableDir, STORE_FILE);
-    const targetHasToken = (() => {
-      try {
-        return Boolean(JSON.parse(fs.readFileSync(target, "utf8"))?.token);
-      } catch {
-        return false;
-      }
-    })();
-    if (targetHasToken) return;
-
-    // Find the newest legacy store that actually holds a token.
-    let best: { file: string; mtime: number } | null = null;
-    for (const dir of LEGACY_DIRS) {
-      const candidate = path.join(appData, dir, STORE_FILE);
-      try {
-        const raw = JSON.parse(fs.readFileSync(candidate, "utf8"));
-        if (!raw?.token) continue;
-        const mtime = fs.statSync(candidate).mtimeMs;
-        if (!best || mtime > best.mtime) best = { file: candidate, mtime };
-      } catch {
-        // missing or unreadable — skip
-      }
-    }
-    if (best) fs.copyFileSync(best.file, target);
+    migrateLegacyUserDataStore({
+      appData,
+      stableDir,
+      legacyDirs: LEGACY_USER_DATA_DIRS,
+      storeFile: STORE_FILE_NAME,
+    });
   } catch {
     // Non-fatal: fall back to whatever userData Electron resolved.
   }
@@ -500,7 +499,15 @@ function createWindow() {
               });
             const settingsScroll = [...document.querySelectorAll('.settings-content')]
               .map((element) => ({ scrollTop: element.scrollTop, scrollHeight: element.scrollHeight, clientHeight: element.clientHeight }));
-            return { viewport: { width: innerWidth, height: innerHeight }, viewportOverflow, contentOverflow, iconOverflow, iconMisalignment, textMisalignment, duplicateArrowRisk, openSelectMenus, randomArtistDetails, settingsScroll };
+            const galleryImageStates = [...document.querySelectorAll('.aitag-card-image')]
+              .slice(0, 12)
+              .map((element) => {
+                const image = element.querySelector('img');
+                return image
+                  ? { hasImage: true, complete: image.complete, naturalWidth: image.naturalWidth, src: image.currentSrc || image.src }
+                  : { hasImage: false, text: String(element.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 80) };
+              });
+            return { viewport: { width: innerWidth, height: innerHeight }, viewportOverflow, contentOverflow, iconOverflow, iconMisalignment, textMisalignment, duplicateArrowRisk, openSelectMenus, randomArtistDetails, settingsScroll, galleryImageStates };
           })()`);
           const image = await mainWindow?.webContents.capturePage();
           if (image) {
@@ -537,6 +544,8 @@ function createWindow() {
       ["07-metadata", "metadata"],
       ["08-tools", "tools"],
       ["09-reference-presets", "referencePresets"],
+      ["10-online-gallery", "onlineGallery"],
+      ["11-records", "records"],
       ["09-records", "records"],
       ["10-records", "records"],
     ].find(([needle]) => normalizedUiCapturePath.includes(needle))?.[1];
@@ -630,11 +639,17 @@ function registerIpc() {
     prewarmAitag(days),
   );
   ipcMain.handle("aitag:clear-data-cache", () => clearAitagDataCache());
-  ipcMain.handle("aitag:cache-image", (_event, url: unknown, days: unknown) =>
-    cacheAitagImage(url, days),
+  ipcMain.handle("aitag:cache-image", (_event, url: unknown, days: unknown, force: unknown) =>
+    cacheAitagImage(url, days, force),
   );
   ipcMain.handle("aitag:cache-stats", () => aitagCacheStats());
   ipcMain.handle("aitag:clear-cache", () => clearAitagCache());
+  ipcMain.handle("online-gallery:search", (_event, request: unknown) => searchOnlineGallery(request));
+  ipcMain.handle("online-gallery:detail", (_event, request: unknown) => getOnlineGalleryDetail(request));
+  ipcMain.handle("online-gallery:clear-data-cache", () => clearOnlineGalleryDataCache());
+  ipcMain.handle("online-gallery:cache-image", (_event, source: unknown, url: unknown, days: unknown, force: unknown) =>
+    cacheOnlineGalleryImage(source, url, days, force),
+  );
   ipcMain.handle("nai:hasToken", async () => {
     const summary = getAccountSummary();
     if (!summary.hasToken) return summary;
@@ -652,9 +667,18 @@ function registerIpc() {
   ipcMain.handle("nai:quoteAnlas", (_event, request: AnlasQuoteRequest) =>
     quoteAnlasCost(request),
   );
-  ipcMain.handle("nai:generate", (_event, params, extras) =>
-    generateImage(params, extras),
-  );
+  ipcMain.handle("nai:generate", (event, params, extras, previewRequestId?: string) => {
+    const onPreview = typeof previewRequestId === "string" && previewRequestId
+      ? (preview: Omit<GenerationPreviewEvent, "requestId">) => {
+          if (event.sender.isDestroyed()) return;
+          event.sender.send("nai:generationPreview", {
+            ...preview,
+            requestId: previewRequestId,
+          } satisfies GenerationPreviewEvent);
+        }
+      : undefined;
+    return generateImage(params, extras, { onPreview });
+  });
   ipcMain.handle("nai:generateArtistLab", (_event, params, extras, mode) =>
     generateArtistLabImage(params, extras, mode),
   );
@@ -874,6 +898,21 @@ function registerIpc() {
   );
   ipcMain.handle("nai:danbooruSearch", (_event, query: string, limit: number) =>
     searchDanbooru(query, limit),
+  );
+  ipcMain.handle("resource-database:overview", () => getResourceDatabaseOverview());
+  ipcMain.handle("resource-database:download", (_event, id: ResourceDatabaseId, confirmReplace?: boolean) =>
+    downloadResourceDatabase(id, confirmReplace),
+  );
+  ipcMain.handle("resource-database:pause", (_event, id: ResourceDatabaseId) =>
+    pauseResourceDatabaseDownload(id),
+  );
+  ipcMain.handle("resource-database:restore-previous", (_event, id: ResourceDatabaseId, confirmed?: boolean) =>
+    restorePreviousResourceDatabase(id, confirmed),
+  );
+  ipcMain.handle("resource-database:open-directory", () => openResourceDatabaseDirectory());
+  ipcMain.handle("resource-database:clear-cache", () => clearResourceQueryCache());
+  ipcMain.handle("resource-database:related-tags", (_event, tags: string[], limit?: number) =>
+    relatedResourceTags(Array.isArray(tags) ? tags : [], limit),
   );
   ipcMain.handle("nai:translate", (_event, text: string, target?: string) =>
     translateText(text, target),
@@ -1100,6 +1139,19 @@ function registerIpc() {
   ipcMain.handle("settings:getReverseDefaults", () =>
     getReversePromptTemplateDefaults(),
   );
+  ipcMain.handle("dataBackup:export", (_event, request: DataBackupExportRequest) =>
+    exportDataBackup(request),
+  );
+  ipcMain.handle("dataBackup:inspect", () => inspectDataBackup());
+  ipcMain.handle("dataBackup:import", (_event, request: DataBackupImportRequest) =>
+    importDataBackup(request),
+  );
+  ipcMain.handle("dataBackup:status", () => getDataBackupStatus());
+  ipcMain.handle("dataBackup:runAutomatic", (_event, workspaceData?: Record<string, string>) =>
+    runAutomaticBackup(workspaceData),
+  );
+  ipcMain.handle("dataBackup:selectDirectory", () => selectBackupDirectory());
+  ipcMain.handle("dataBackup:openDirectory", () => openBackupDirectory());
   ipcMain.handle("settings:isFirstRun", () => !getSettings().hasOnboarded);
   ipcMain.handle("settings:completeSetup", () => {
     completeSetup();

@@ -22,6 +22,11 @@ import path from "path";
 import { app } from "electron";
 import type { TagSuggestion } from "../../src/types";
 import { proxyConfig } from "./proxy";
+import {
+  browseResourceTagCatalog,
+  getResourceDatabaseOverview,
+  searchResourceTagCatalog,
+} from "./resource-databases";
 
 // Pinned to a specific commit (NOT the mutable `main` branch) so the downloaded
 // data can't silently change shape underneath us.
@@ -46,18 +51,60 @@ function dataPath(): string {
 
 // "downloaded" means present AND valid (parses with enough Chinese records). A
 // corrupt/truncated file reports downloaded:false so the UI offers re-download.
-export async function danbooruStatus(): Promise<{ downloaded: boolean; sizeBytes: number; count: number }> {
+export async function danbooruStatus(): Promise<{
+  downloaded: boolean;
+  sizeBytes: number;
+  count: number;
+  catalogDownloaded: boolean;
+  bilingualDownloaded: boolean;
+  bilingualCount: number;
+}> {
+  let catalogDownloaded = false;
+  let catalogSize = 0;
+  let catalogCount = 0;
+  try {
+    const catalog = (await getResourceDatabaseOverview()).resources.find((resource) => resource.id === "tagCatalog");
+    if (catalog?.installed && catalog.valid) {
+      catalogDownloaded = true;
+      catalogSize = catalog.sizeBytes;
+      catalogCount = catalog.count || 221_787;
+    }
+  } catch {
+    /* fall through to the optional bilingual CSV supplement */
+  }
   let sizeBytes = 0;
   try {
     sizeBytes = (await fs.stat(dataPath())).size;
   } catch {
-    return { downloaded: false, sizeBytes: 0, count: 0 };
+    return {
+      downloaded: catalogDownloaded,
+      sizeBytes: catalogSize,
+      count: catalogCount,
+      catalogDownloaded,
+      bilingualDownloaded: false,
+      bilingualCount: 0,
+    };
   }
   try {
     const idx = await loadDanbooruIndex();
-    return { downloaded: idx.length >= MIN_RECORDS, sizeBytes, count: idx.length };
+    const bilingualDownloaded = idx.length >= MIN_RECORDS;
+    return {
+      downloaded: catalogDownloaded || bilingualDownloaded,
+      sizeBytes: catalogSize + sizeBytes,
+      count: catalogDownloaded ? catalogCount : idx.length,
+      catalogDownloaded,
+      bilingualDownloaded,
+      bilingualCount: idx.length,
+    };
   } catch {
-    return { downloaded: false, sizeBytes, count: 0 };
+    return {
+      downloaded: catalogDownloaded,
+      sizeBytes: catalogSize + sizeBytes,
+      count: catalogCount,
+      catalogDownloaded,
+      bilingualDownloaded: false,
+      bilingualCount: 0,
+    };
   }
 }
 
@@ -190,6 +237,8 @@ export async function loadDanbooruIndex(): Promise<DanbooruTag[]> {
  * character); pass -1 for all categories. Paginated via offset/limit.
  */
 export async function browseDanbooru(category: number, offset: number, limit: number): Promise<TagSuggestion[]> {
+  const catalog = browseResourceTagCatalog(category, offset, limit);
+  if (catalog.length > 0) return catalog;
   let idx: DanbooruTag[];
   try {
     idx = await loadDanbooruIndex();
@@ -214,6 +263,11 @@ export async function browseDanbooru(category: number, offset: number, limit: nu
 export async function searchDanbooru(query: string, limit = 12): Promise<TagSuggestion[]> {
   const raw = query.trim();
   if (!raw) return [];
+  const isCjk = /[㐀-鿿]/.test(raw);
+  if (!isCjk) {
+    const catalog = searchResourceTagCatalog(raw, limit);
+    if (catalog.length > 0) return catalog;
+  }
   let idx: DanbooruTag[];
   try {
     idx = await loadDanbooruIndex();
@@ -221,7 +275,6 @@ export async function searchDanbooru(query: string, limit = 12): Promise<TagSugg
     return []; // not downloaded yet
   }
   if (idx.length === 0) return [];
-  const isCjk = /[㐀-鿿]/.test(raw);
   const q = raw.toLowerCase();
   const normalized = q.replace(/_/g, " ");
   const scored: Array<{ t: DanbooruTag; score: number }> = [];

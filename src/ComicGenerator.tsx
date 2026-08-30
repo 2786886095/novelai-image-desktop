@@ -1205,6 +1205,7 @@ export function BatchRedraw({ onBack }: { onBack?: () => void }) {
             onClick={() => setStep(meta.key)}
             disabled={running && meta.key !== "generate"}
             aria-current={step === meta.key ? "step" : undefined}
+            title={`${t(meta.labelKey)} · ${t(meta.hintKey)}`}
           >
             <b>{index + 1}</b>
             <span>{t(meta.labelKey)}</span>

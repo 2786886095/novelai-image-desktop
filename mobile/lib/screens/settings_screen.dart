@@ -11,6 +11,7 @@ import '../services/storage_permission.dart';
 import '../services/aitag_service.dart';
 import '../state/app_state.dart';
 import '../ui/studio_shell.dart';
+import 'data_backup_settings.dart';
 
 const _projectGithubUrl = 'https://github.com/2786886095/novelai-image-desktop';
 const _wechatRewardAsset = 'assets/about/wechat-reward.jpg';
@@ -643,6 +644,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     state.setSettings((x) => x.imageOutputDir = value),
               ),
           ]),
+          const DataBackupSettingsPanel(),
           _Section(title: persistText.sectionTitle, children: [
             Text(persistText.sectionDesc),
             SwitchListTile(

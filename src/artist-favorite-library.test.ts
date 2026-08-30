@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   addArtistFavorite,
+  flushArtistFavoritePersistence,
   hydrateArtistFavoriteLibrary,
   loadArtistFavorites,
   mergeArtistFavorites,
@@ -141,5 +142,48 @@ describe("artist favorite collections", () => {
     expect(loadArtistFavorites("v5-repair").map((item) => item.id)).toEqual(["disk-repair"]);
     expect(loadArtistFavorites("artist-string-draw").map((item) => item.id)).toEqual(["disk-draw"]);
     expect(save).toHaveBeenCalledTimes(3);
+  });
+
+  it("does not overwrite the filesystem sidecar when loading it fails", async () => {
+    values.set("langbai.artist-lab.random.favorites.v1", JSON.stringify([favorite("local-random")]));
+    const save = vi.fn().mockResolvedValue({ ok: true });
+    (window as any).naiDesktop = {
+      artistLabLoadFavoriteLibrary: vi.fn().mockRejectedValue(new Error("temporary read failure")),
+      artistLabListPromotedFavorites: vi.fn().mockResolvedValue([
+        historyFavorite("history-image", "0.8::artist:history_artist ::,"),
+      ]),
+      artistLabSaveFavoriteCollection: save,
+    };
+
+    await hydrateArtistFavoriteLibrary();
+
+    expect(loadArtistFavorites("random").map((item) => item.id)).toEqual([
+      "local-random",
+      "history-history-image",
+    ]);
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it("waits for the latest filesystem mirror before a backup can continue", async () => {
+    let releaseSave!: () => void;
+    const saveFinished = new Promise<{ ok: true }>((resolve) => {
+      releaseSave = () => resolve({ ok: true });
+    });
+    (window as any).naiDesktop = {
+      artistLabSaveFavoriteCollection: vi.fn().mockReturnValue(saveFinished),
+    };
+
+    replaceArtistFavorites("random", [favorite("latest-click")]);
+    let flushed = false;
+    const flush = flushArtistFavoritePersistence().then(() => {
+      flushed = true;
+    });
+
+    await Promise.resolve();
+    expect(flushed).toBe(false);
+
+    releaseSave();
+    await flush;
+    expect(flushed).toBe(true);
   });
 });

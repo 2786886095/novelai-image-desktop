@@ -1,16 +1,73 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { createElement, Suspense, useCallback, useEffect, useMemo, useState, type ComponentType } from "react";
 import { getToolsHubText } from "./i18n";
 import { useAppStore } from "./store";
+import { Icon, type IconName } from "./components/icons";
 
-const TagComicGenerator = lazy(() => import("./comic/TagComicGenerator").then((module) => ({ default: module.TagComicGenerator })));
-const BatchRedraw = lazy(() => import("./ComicGenerator").then((module) => ({ default: module.BatchRedraw })));
-const AitagGallery = lazy(() => import("./AitagGallery"));
-const ArtistLab = lazy(() => import("./ArtistLab"));
-const PromptCodex = lazy(() => import("./PromptCodex"));
-const V5ArtistWeightRepair = lazy(() => import("./V5ArtistWeightRepair"));
-const ArtistStringWeightDraw = lazy(() => import("./ArtistStringWeightDraw"));
+type ToolScreenProps = { onBack: () => void };
 
-type ToolId = "hub" | "comic" | "redraw" | "aitag" | "artistLab" | "promptCodex" | "v5ArtistRepair" | "artistStringDraw";
+/** Unlike React.lazy alone, this wrapper remembers the resolved component when
+ * preload() runs. Rendering after the splash is therefore synchronous rather
+ * than briefly suspending on an already-cached dynamic import. */
+function createPreloadedTool(
+  loader: () => Promise<{ default: ComponentType<ToolScreenProps> }>,
+) {
+  let resolved: ComponentType<ToolScreenProps> | undefined;
+  let pending: Promise<void> | undefined;
+  const preload = () => {
+    if (resolved) return Promise.resolve();
+    pending ??= loader()
+      .then((module) => { resolved = module.default; })
+      .catch((error) => {
+        pending = undefined;
+        throw error;
+      });
+    return pending;
+  };
+  function PreloadedTool(props: ToolScreenProps) {
+    if (!resolved) throw preload();
+    return createElement(resolved, props);
+  }
+  return { Component: PreloadedTool, preload };
+}
+
+const comicTool = createPreloadedTool(() => import("./comic/TagComicGenerator").then((module) => ({ default: module.TagComicGenerator })));
+const redrawTool = createPreloadedTool(() => import("./ComicGenerator").then((module) => ({ default: module.BatchRedraw })));
+const artistLabTool = createPreloadedTool(() => import("./ArtistLab"));
+const promptCodexTool = createPreloadedTool(() => import("./PromptCodex"));
+const v5ArtistRepairTool = createPreloadedTool(() => import("./V5ArtistWeightRepair"));
+const artistStringDrawTool = createPreloadedTool(() => import("./ArtistStringWeightDraw"));
+
+const TagComicGenerator = comicTool.Component;
+const BatchRedraw = redrawTool.Component;
+const ArtistLab = artistLabTool.Component;
+const PromptCodex = promptCodexTool.Component;
+const V5ArtistWeightRepair = v5ArtistRepairTool.Component;
+const ArtistStringWeightDraw = artistStringDrawTool.Component;
+
+type ToolId = "hub" | "comic" | "redraw" | "artistLab" | "promptCodex" | "v5ArtistRepair" | "artistStringDraw";
+
+const TOOL_ICONS: Record<Exclude<ToolId, "hub">, IconName> = {
+  comic: "collections",
+  redraw: "draw",
+  artistLab: "palette",
+  promptCodex: "code",
+  v5ArtistRepair: "restore",
+  artistStringDraw: "dice",
+};
+
+const TOOL_LOADERS: Partial<Record<ToolId, () => Promise<void>>> = {
+  comic: comicTool.preload,
+  redraw: redrawTool.preload,
+  artistLab: artistLabTool.preload,
+  promptCodex: promptCodexTool.preload,
+  v5ArtistRepair: v5ArtistRepairTool.preload,
+  artistStringDraw: artistStringDrawTool.preload,
+};
+
+/** Evaluate every independent tool chunk behind the application splash. */
+export function preloadToolScreens() {
+  return Promise.allSettled(Object.values(TOOL_LOADERS).map((loader) => loader?.()));
+}
 
 function promptCodexCardText(language: unknown) {
   const text = {
@@ -41,23 +98,41 @@ export default function ToolsHub() {
   const language = useAppStore((state) => state.settings?.language);
   const text = useMemo(() => getToolsHubText(language), [language]);
   const codexText = useMemo(() => promptCodexCardText(language), [language]);
+  const setActiveTab = useAppStore((state) => state.setActiveTab);
   const isWindows = window.naiDesktop.platform === "win32";
+  const [redirectLegacyAitag] = useState(() =>
+    localStorage.getItem("langbai.tools.active.v1") === "aitag",
+  );
   const [activeTool, setActiveTool] = useState<ToolId>(() => {
     const capture = new URLSearchParams(window.location.search).get("uiCapture");
     if (capture === "v5ArtistRepair") return "v5ArtistRepair";
     if (capture === "artistStringDraw") return "artistStringDraw";
     if (capture === "randomArtist") return isWindows ? "artistLab" : "hub";
-    const saved = localStorage.getItem("langbai.tools.active.v1");
-    return saved === "comic" || saved === "redraw" || saved === "aitag" ||
-      saved === "v5ArtistRepair" || saved === "artistStringDraw" ||
-      saved === "promptCodex" || (saved === "artistLab" && isWindows)
-      ? saved
-      : "hub";
+    // A fresh application session always enters the lightweight index. Restoring
+    // a previously-opened heavy tool here made the top-level Tools tab appear to
+    // freeze while that screen mounted and loaded its data in the background.
+    // Within the current session this component remains mounted, so switching
+    // tabs still preserves the user's active tool and in-progress state.
+    return "hub";
   });
 
   useEffect(() => {
     localStorage.setItem("langbai.tools.active.v1", activeTool);
   }, [activeTool]);
+
+  useEffect(() => {
+    if (redirectLegacyAitag) setActiveTab("onlineGallery");
+  }, [redirectLegacyAitag, setActiveTab]);
+
+  const warmTool = useCallback((tool: ToolId) => {
+    void TOOL_LOADERS[tool]?.();
+  }, []);
+
+  const toolCardHandlers = useCallback((tool: ToolId) => ({
+    onPointerEnter: () => warmTool(tool),
+    onFocus: () => warmTool(tool),
+    onPointerDown: () => warmTool(tool),
+  }), [warmTool]);
 
   const back = () => setActiveTool("hub");
   if (activeTool !== "hub") {
@@ -66,7 +141,6 @@ export default function ToolsHub() {
       <Suspense fallback={<ToolLoading title={title} />}>
         {activeTool === "comic" ? <TagComicGenerator onBack={back} /> : null}
         {activeTool === "redraw" ? <BatchRedraw onBack={back} /> : null}
-        {activeTool === "aitag" ? <AitagGallery onBack={back} /> : null}
         {activeTool === "promptCodex" ? <PromptCodex onBack={back} /> : null}
         {activeTool === "artistLab" && isWindows ? <ArtistLab onBack={back} /> : null}
         {activeTool === "v5ArtistRepair" ? <V5ArtistWeightRepair onBack={back} /> : null}
@@ -81,13 +155,12 @@ export default function ToolsHub() {
         <div><span className="eyebrow">{text.eyebrow}</span><h2>{text.title}</h2><p>{text.subtitle}</p></div>
       </section>
       <section className="tool-card-grid">
-        <button type="button" className="tool-card ready" onClick={() => setActiveTool("comic")}><b>{text.comicTitle}</b><span>{text.comicDesc}</span><small>{text.ready}</small></button>
-        <button type="button" className="tool-card ready" onClick={() => setActiveTool("promptCodex")}><b>{codexText.title}</b><span>{codexText.desc}</span><small>{text.ready}</small></button>
-        <button type="button" className="tool-card ready" onClick={() => setActiveTool("redraw")}><b>{text.batchTitle}</b><span>{text.batchDesc}</span><small>{text.ready}</small></button>
-        <button type="button" className="tool-card ready" onClick={() => setActiveTool("aitag")}><b>{text.aitagTitle}</b><span>{text.aitagDesc}</span><small>{text.ready}</small></button>
-        {isWindows ? <button type="button" className="tool-card ready" onClick={() => setActiveTool("artistLab")}><b>{text.artistLabTitle}</b><span>{text.artistLabDesc}</span><small>{text.ready}</small></button> : null}
-        <button type="button" className="tool-card ready" onClick={() => setActiveTool("v5ArtistRepair")}><b>{text.v5ArtistRepairTitle}</b><span>{text.v5ArtistRepairDesc}</span><small>{text.ready}</small></button>
-        <button type="button" className="tool-card ready" onClick={() => setActiveTool("artistStringDraw")}><b>{text.artistStringDrawTitle}</b><span>{text.artistStringDrawDesc}</span><small>{text.ready}</small></button>
+        <button type="button" className="tool-card ready" {...toolCardHandlers("comic")} onClick={() => setActiveTool("comic")}><span className="tool-card-heading"><i><Icon name={TOOL_ICONS.comic} /></i><b>{text.comicTitle}</b></span><span>{text.comicDesc}</span><small>{text.ready}</small></button>
+        <button type="button" className="tool-card ready" {...toolCardHandlers("promptCodex")} onClick={() => setActiveTool("promptCodex")}><span className="tool-card-heading"><i><Icon name={TOOL_ICONS.promptCodex} /></i><b>{codexText.title}</b></span><span>{codexText.desc}</span><small>{text.ready}</small></button>
+        <button type="button" className="tool-card ready" {...toolCardHandlers("redraw")} onClick={() => setActiveTool("redraw")}><span className="tool-card-heading"><i><Icon name={TOOL_ICONS.redraw} /></i><b>{text.batchTitle}</b></span><span>{text.batchDesc}</span><small>{text.ready}</small></button>
+        {isWindows ? <button type="button" className="tool-card ready" {...toolCardHandlers("artistLab")} onClick={() => setActiveTool("artistLab")}><span className="tool-card-heading"><i><Icon name={TOOL_ICONS.artistLab} /></i><b>{text.artistLabTitle}</b></span><span>{text.artistLabDesc}</span><small>{text.ready}</small></button> : null}
+        <button type="button" className="tool-card ready" {...toolCardHandlers("v5ArtistRepair")} onClick={() => setActiveTool("v5ArtistRepair")}><span className="tool-card-heading"><i><Icon name={TOOL_ICONS.v5ArtistRepair} /></i><b>{text.v5ArtistRepairTitle}</b></span><span>{text.v5ArtistRepairDesc}</span><small>{text.ready}</small></button>
+        <button type="button" className="tool-card ready" {...toolCardHandlers("artistStringDraw")} onClick={() => setActiveTool("artistStringDraw")}><span className="tool-card-heading"><i><Icon name={TOOL_ICONS.artistStringDraw} /></i><b>{text.artistStringDrawTitle}</b></span><span>{text.artistStringDrawDesc}</span><small>{text.ready}</small></button>
       </section>
     </main>
   );
