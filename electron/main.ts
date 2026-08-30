@@ -665,6 +665,7 @@ function registerIpc() {
       scope?: string,
       hint?: string,
       knownCharacter?: boolean,
+      templateVersion?: string,
     ) =>
       reversePromptImage(
         imageBase64,
@@ -672,6 +673,7 @@ function registerIpc() {
         scope,
         hint,
         knownCharacter,
+        templateVersion === "v4.5" ? "v4.5" : "v5",
       ),
   );
   ipcMain.handle(

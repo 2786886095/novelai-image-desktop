@@ -10,6 +10,7 @@ export const PROJECT_REPOSITORY =
   "https://github.com/2786886095/novelai-image-desktop";
 
 export type ReversePromptMode = "tags" | "natural" | "mixed";
+export type ReversePromptTemplateVersion = "v4.5" | "v5";
 export type ReversePromptScope = "full" | "character" | "object" | "scene";
 export type TagServerType = "rest" | "http" | "sse" | "stdio";
 export type TranslateProvider = "google" | "baidu";
@@ -1346,6 +1347,8 @@ export interface AppSettings {
   visionApiModel: string;
   visionSystemPrompt: string;
   reversePromptMode: ReversePromptMode;
+  /** Built-in reverse template generation selected on the reverse page. */
+  reversePromptTemplateVersion: ReversePromptTemplateVersion;
   // Per-mode reverse-prompt system templates (empty string = use built-in default).
   reversePromptTemplates: ModePromptTemplates;
   // Legacy per-mode comic storyboard templates. Kept for migration only.
@@ -1668,6 +1671,7 @@ export interface NaiDesktopApi {
     scope?: ReversePromptScope,
     hint?: string,
     knownCharacter?: boolean,
+    templateVersion?: ReversePromptTemplateVersion,
   ) => Promise<{
     ok: boolean;
     prompt?: string;

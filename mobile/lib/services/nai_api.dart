@@ -956,6 +956,7 @@ class NaiApi {
     required String hint,
     required bool knownCharacter,
     required String systemTemplate,
+    String templateVersion = 'v5',
   }) async {
     if (apiKey.trim().isEmpty) {
       return const AiTextResult(
@@ -966,9 +967,13 @@ class NaiApi {
     final system = [
       systemTemplate.trim().isEmpty
           ? _modeSystemPrompt(mode, reverse: true)
-          : systemTemplate.trim(),
-      knownCharacterRuntimeInstruction(mode, 'reverse', knownCharacter),
-    ].join('\n\n');
+          : systemTemplate
+              .trim()
+              .replaceAll('{{image}}', '<uploaded image>')
+              .replaceAll('{{input}}', '<provided in the user message>'),
+      knownCharacterRuntimeInstruction(
+          mode, 'reverse', knownCharacter, templateVersion),
+    ].where((item) => item.trim().isNotEmpty).join('\n\n');
     final scopeText = switch (scope) {
       ReversePromptScope.full => 'full image',
       ReversePromptScope.character => 'character only',
@@ -996,7 +1001,12 @@ class NaiApi {
         'text': [
           'Reverse scope: $scopeText.',
           if (hint.trim().isNotEmpty) 'Subject hint: ${hint.trim()}',
-          modeUserInstruction(mode, 'reverse'),
+          modeUserInstruction(
+            mode,
+            'reverse',
+            knownCharacter: knownCharacter,
+            templateVersion: templateVersion,
+          ),
           if (tagHints.isNotEmpty) tagHints,
         ].join('\n')
       }
@@ -1035,6 +1045,7 @@ class NaiApi {
       first.text,
       first.variants?.namePrompt ?? '',
       first.variants?.featurePrompt ?? '',
+      if (knownCharacter) '已知角色 角色名版 特征版 动漫角色 游戏角色 角色 Tag',
     ].where((value) => value.trim().isNotEmpty).join('\n');
     final matureTags = mode == ReversePromptMode.natural ||
             !(settings.promptCodexEnhanceEnabled || ruleRepairEnabled)
@@ -1058,11 +1069,18 @@ class NaiApi {
         system,
         if (enhancement.context.isNotEmpty) enhancement.context,
         '这是法典增强的第二阶段。请以初步反推结果为事实边界，只校正结构、Tag、角色归属、互动方向、权重和冲突。不要新增图中未确认的主体、服装、动作或分级内容。',
+        knownCharacterRuntimeInstruction(
+            mode, 'reverse', knownCharacter, templateVersion),
       ].join('\n\n');
       final refineUser = [
         '初步反推结果：',
         first.text,
-        modeUserInstruction(mode, 'reverse'),
+        modeUserInstruction(
+          mode,
+          'reverse',
+          knownCharacter: knownCharacter,
+          templateVersion: templateVersion,
+        ),
         '请只输出精修后的最终结果。',
       ].join('\n\n');
       final refined = await _promptChat(
@@ -1102,7 +1120,13 @@ class NaiApi {
               mode, current.variants!.featurePrompt, matureTagNames),
       }.toList();
       if (violations.isNotEmpty) {
-        final repairSystem = promptRuleRepairSystemPrompt(mode, knownCharacter);
+        final repairSystem = [
+          promptRuleRepairSystemPrompt(mode, knownCharacter, templateVersion),
+          if (enhancement.context.isNotEmpty) enhancement.context,
+          if (knownCharacter)
+            knownCharacterRuntimeInstruction(
+                mode, 'reverse', true, templateVersion),
+        ].join('\n\n');
         final repairUser = buildPromptRuleRepairUserText(
           mode: mode,
           originalInput: 'Reverse scope: $scopeText.\n$hint',
@@ -1126,10 +1150,16 @@ class NaiApi {
           knownCharacter: knownCharacter,
           recordLog: false,
         );
-        if (repaired.ok) {
+        final repairedPairIsComplete = !knownCharacter ||
+            (repaired.variants?.namePrompt.trim().isNotEmpty == true &&
+                repaired.variants?.featurePrompt.trim().isNotEmpty == true);
+        if (repaired.ok && repairedPairIsComplete) {
           current = repaired;
           notes +=
               '[Rule check found ${violations.length} issue(s) and repaired them]\n';
+        } else if (repaired.ok) {
+          notes +=
+              '[Rule repair omitted the name or feature variant; kept the complete pre-repair pair]\n';
         } else {
           notes +=
               '[Rule check found ${violations.length} issue(s), but repair failed: ${repaired.message}]\n';
@@ -1139,6 +1169,51 @@ class NaiApi {
       } else {
         notes += '[Rule check passed; no extra AI repair call]\n';
       }
+    }
+    if (knownCharacter &&
+        (current.variants?.namePrompt.trim().isEmpty != false ||
+            current.variants?.featurePrompt.trim().isEmpty != false)) {
+      final recovered = await _promptChat(
+        settings: settings,
+        apiUrl: settings.visionApiUrl,
+        apiKey: apiKey,
+        model: settings.visionApiModel,
+        system: [
+          mergedSystem,
+          '上一条回复没有同时提供完整的角色名版与特征版。现在只补全双版本与 JSON 格式；仍然只能依据图片可见证据，不得新增不可见的角色设定。',
+        ].join('\n\n'),
+        user: [
+          user.first,
+          {
+            'type': 'text',
+            'text': [
+              '未完成的回复：',
+              current.variants == null
+                  ? current.text
+                  : jsonEncode(current.variants!.toJson()),
+              '',
+              '只返回严格 JSON：{"namePrompt":"...","featurePrompt":"..."}。namePrompt 只用可靠确认的规范角色 Tag；featurePrompt 删除全部角色名/作品名，并逐人改用图片中实际可见的外貌、服装与配饰。两个版本的其他内容及个人法典规则必须完全一致。',
+            ].join('\n'),
+          },
+        ],
+        source: 'reverse',
+        knownCharacter: true,
+        recordLog: false,
+      );
+      if (recovered.ok &&
+          recovered.variants?.namePrompt.trim().isNotEmpty == true &&
+          recovered.variants?.featurePrompt.trim().isNotEmpty == true) {
+        current = recovered;
+      }
+    }
+    if (knownCharacter &&
+        (current.variants?.namePrompt.trim().isEmpty != false ||
+            current.variants?.featurePrompt.trim().isEmpty != false)) {
+      return AiTextResult(
+        ok: false,
+        message: 'AI 未能同时返回完整的角色名版与特征版。已自动重试一次，请补充角色提示，或改用识图能力更强的反推模型后重试。',
+        codexMatches: enhancement.matches,
+      );
     }
     final finalResult = AiTextResult(
       ok: true,
@@ -1188,7 +1263,8 @@ class NaiApi {
         ? await _matureTagCandidates(text)
         : const <PromptCodexTagCandidate>[];
     final matureTagNames = matureTags.map((item) => item.tag).toList();
-    final hints = mode == ReversePromptMode.natural ||
+    final hints = knownCharacter ||
+            mode == ReversePromptMode.natural ||
             !settings.tagServerEnabled ||
             !settings.mcpForConvert
         ? <TagSuggestion>[]
@@ -1196,11 +1272,22 @@ class NaiApi {
     final hintText = hints.isEmpty
         ? ''
         : '\nCandidate Danbooru tags:\n${hints.map((e) => e.tag).join(', ')}';
-    final user =
-        'User description:\n$text\n\n${modeUserInstruction(mode, 'convert')}$hintText';
+    final user = [
+      'User description:',
+      text,
+      '',
+      modeUserInstruction(
+        mode,
+        'convert',
+        knownCharacter: knownCharacter,
+      ),
+      if (hintText.isNotEmpty) hintText,
+    ].join('\n');
+    final codexQuery =
+        knownCharacter ? '$text\n已知角色 角色名版 特征版 动漫角色 游戏角色 角色 Tag' : text;
     final enhancement = settings.promptCodexEnhanceEnabled
         ? await _promptCodex.retrieve(
-            text,
+            codexQuery,
             mode: 'convert',
             allowAdult: settings.promptCodexAdultEnabled,
             matureTags: matureTags,
@@ -1209,10 +1296,14 @@ class NaiApi {
     final system = [
       systemTemplate.trim().isEmpty
           ? _modeSystemPrompt(mode, reverse: false)
-          : systemTemplate.trim(),
-      knownCharacterRuntimeInstruction(mode, 'convert', knownCharacter),
+          : systemTemplate
+              .trim()
+              .replaceAll('{{input}}', '<provided in the user message>'),
       if (enhancement.context.isNotEmpty) enhancement.context,
-    ].join('\n\n');
+      // Keep the paired-output contract last so the base template's ordinary
+      // one-line instruction cannot override it.
+      knownCharacterRuntimeInstruction(mode, 'convert', knownCharacter),
+    ].where((item) => item.trim().isNotEmpty).join('\n\n');
     final ruleRepairEnabled = settings.promptRuleAutoRepairEnabled &&
         mode != ReversePromptMode.natural;
     final result = await _promptChat(
@@ -1240,6 +1331,47 @@ class NaiApi {
       return result;
     }
     var current = result;
+    if (knownCharacter &&
+        (current.variants?.namePrompt.trim().isEmpty != false ||
+            current.variants?.featurePrompt.trim().isEmpty != false)) {
+      final recovery = await _promptChat(
+        settings: settings,
+        apiUrl: settings.convertApiUrl,
+        apiKey: apiKey,
+        model: settings.convertApiModel,
+        system: [
+          system,
+          '上一条回复没有同时提供完整的角色名版与特征版。现在只做格式和双版本补全，不改变用户描述，不新增动作、场景、表情或道具。',
+        ].join('\n\n'),
+        user: [
+          '原始用户描述：',
+          text,
+          '',
+          '未完成的回复：',
+          result.text,
+          '',
+          '只返回严格 JSON：{"namePrompt":"...","featurePrompt":"..."}。namePrompt 使用已确认的规范角色 Tag；featurePrompt 删除全部角色名/作品名，并逐人改用高置信度标志性外貌、服装和配饰。用户指定的换装或外观变化优先，两个版本的其他内容及个人法典规则必须完全一致。',
+        ].join('\n'),
+        source: 'convert',
+        knownCharacter: true,
+        recordLog: false,
+      );
+      if (recovery.ok &&
+          recovery.variants?.namePrompt.trim().isNotEmpty == true &&
+          recovery.variants?.featurePrompt.trim().isNotEmpty == true) {
+        current = recovery;
+      }
+    }
+    if (knownCharacter &&
+        (current.variants?.namePrompt.trim().isEmpty != false ||
+            current.variants?.featurePrompt.trim().isEmpty != false)) {
+      return AiTextResult(
+        ok: false,
+        message:
+            'AI 未能同时返回完整的角色名版与特征版。已自动重试一次，请检查角色名称/作品是否明确，或改用识别能力更强的转换模型后重试。',
+        codexMatches: enhancement.matches,
+      );
+    }
     if (ruleRepairEnabled) {
       final violations = <String>{
         ...promptRuleViolations(mode, current.text, matureTagNames),
@@ -1254,7 +1386,12 @@ class NaiApi {
       var logUser = user;
       var notes = '';
       if (violations.isNotEmpty) {
-        final repairSystem = promptRuleRepairSystemPrompt(mode, knownCharacter);
+        final repairSystem = [
+          promptRuleRepairSystemPrompt(mode, knownCharacter),
+          if (enhancement.context.isNotEmpty) enhancement.context,
+          if (knownCharacter)
+            knownCharacterRuntimeInstruction(mode, 'convert', true),
+        ].join('\n\n');
         final repairUser = buildPromptRuleRepairUserText(
           mode: mode,
           originalInput: text,
@@ -1275,10 +1412,16 @@ class NaiApi {
           knownCharacter: knownCharacter,
           recordLog: false,
         );
-        if (repaired.ok) {
+        final repairedPairIsComplete = !knownCharacter ||
+            (repaired.variants?.namePrompt.trim().isNotEmpty == true &&
+                repaired.variants?.featurePrompt.trim().isNotEmpty == true);
+        if (repaired.ok && repairedPairIsComplete) {
           current = repaired;
           notes =
               '[Rule check found ${violations.length} issue(s) and repaired them]\n';
+        } else if (repaired.ok) {
+          notes =
+              '[Rule repair omitted the name or feature variant; kept the complete pre-repair pair]\n';
         } else {
           notes =
               '[Rule check found ${violations.length} issue(s), but repair failed: ${repaired.message}]\n';
@@ -1305,7 +1448,9 @@ class NaiApi {
     }
     return AiTextResult(
       ok: true,
-      message: current.message,
+      message: settings.promptCodexEnhanceEnabled
+          ? 'Success (Personal Codex enhanced)'
+          : current.message,
       text: current.text,
       variants: current.variants,
       codexMatches: enhancement.matches,
@@ -1335,11 +1480,8 @@ class NaiApi {
       recordLog: recordLog,
     );
     if (!raw.ok) return raw;
-    // Known-character mode already requires both variants in the single
-    // upfront call (knownCharacterRuntimeInstruction), so we accept whatever
-    // parsePromptVariantResponse extracts rather than spending a second
-    // request repairing an incomplete JSON response — same single-request
-    // strategy for both convert and reverse.
+    // Pair completeness is enforced by reversePrompt/convertPrompt, where the
+    // original user input and the full template context are still available.
     final parsed = parsePromptVariantResponse(raw.text, knownCharacter);
     return AiTextResult(
       ok: true,

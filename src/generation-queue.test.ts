@@ -200,4 +200,98 @@ describe("main generation queue", () => {
     expect(generate).toHaveBeenCalledTimes(1); // only the initial image ran
     expect(useAppStore.getState().generationQueue).toHaveLength(0);
   });
+
+  it("recovers the Generate button when the IPC request rejects with a Cloudflare page", async () => {
+    const generate = vi.fn().mockRejectedValue(
+      new Error("Error invoking remote method 'nai:generate': <html><body><h1>Bad Gateway</h1><p>Error code 502</p></body></html>"),
+    );
+    const naiDesktop = {
+      hasToken: vi.fn().mockResolvedValue({ hasToken: true, anlasBalance: 100, tierName: "Opus" }),
+      quoteAnlas: vi.fn().mockResolvedValue({ ok: true, amount: 1, balance: 100 }),
+      generate,
+      getHistoryDates: vi.fn().mockResolvedValue([]),
+      getHistoryGroups: vi.fn().mockResolvedValue([]),
+      getHistory: vi.fn().mockResolvedValue([]),
+      cancel: vi.fn().mockResolvedValue(undefined),
+    };
+    vi.stubGlobal("window", { naiDesktop });
+    useAppStore.setState((state) => ({
+      account: { hasToken: true, anlasBalance: 100, tierName: "Opus" },
+      params: { ...state.params, positivePrompt: "1girl" },
+      batchCount: 1,
+    }));
+
+    await useAppStore.getState().generate();
+
+    const state = useAppStore.getState();
+    expect(generate).toHaveBeenCalledTimes(1);
+    expect(state.isGenerating).toBe(false);
+    expect(state.isGenerateQueueRunning).toBe(false);
+    expect(state.activeGenerationRunId).toBeNull();
+    expect(state.toast).toContain("HTTP 502 Bad Gateway");
+    expect(state.toast).not.toContain("<html");
+    expect(state.statusText).not.toContain("<html");
+  });
+
+  it("ignores deleted history metadata and keeps the active generation prompt snapshot", async () => {
+    const metadataLoad = deferred<any>();
+    const generation = deferred<ReturnType<typeof generationResult>>();
+    const generate = vi.fn().mockReturnValue(generation.promise);
+    const naiDesktop = {
+      hasToken: vi.fn().mockResolvedValue({ hasToken: true, anlasBalance: 100, tierName: "Opus" }),
+      quoteAnlas: vi.fn().mockResolvedValue({ ok: true, amount: 1, balance: 100 }),
+      generate,
+      loadImageFromPath: vi.fn().mockReturnValue(metadataLoad.promise),
+      deleteHistory: vi.fn().mockResolvedValue({ ok: true }),
+      getHistoryDates: vi.fn().mockResolvedValue(["2026-06-21"]),
+      getHistoryGroups: vi.fn().mockResolvedValue([]),
+      getHistory: vi.fn().mockResolvedValue([]),
+      cancel: vi.fn().mockResolvedValue(undefined),
+    };
+    vi.stubGlobal("window", { naiDesktop });
+    const deletedItem = {
+      id: "deleted",
+      date: "2026-06-21",
+      createdAt: "2026-06-21T00:00:00.000Z",
+      filePath: "deleted.png",
+      fileUrl: "local-media://deleted.png",
+      params: { ...useAppStore.getState().params, positivePrompt: "deleted history prompt" },
+      actualSeed: 7,
+      model: "nai-diffusion-5-full",
+      width: 832,
+      height: 1216,
+    };
+    useAppStore.setState((state) => ({
+      account: { hasToken: true, anlasBalance: 100, tierName: "Opus" },
+      params: { ...state.params, positivePrompt: "active generation prompt" },
+      history: [deletedItem],
+      batchCount: 1,
+    }));
+
+    useAppStore.getState().selectImage(deletedItem);
+    await vi.waitFor(() => expect(naiDesktop.loadImageFromPath).toHaveBeenCalledTimes(1));
+    const running = useAppStore.getState().generate();
+    await vi.waitFor(() => expect(generate).toHaveBeenCalledTimes(1));
+    await useAppStore.getState().deleteHistory(deletedItem.id);
+
+    metadataLoad.resolve({
+      ok: true,
+      image: { filePath: "deleted.png", fileUrl: "local-media://deleted.png", width: 832, height: 1216 },
+      metadata: {
+        imported: { positivePrompt: "deleted history prompt", seed: 7 },
+        characterCaptions: [],
+      },
+    });
+    await Promise.resolve();
+    expect(useAppStore.getState().params.positivePrompt).toBe("active generation prompt");
+    expect(useAppStore.getState().currentImage).toBeNull();
+
+    generation.resolve(generationResult("fresh", 22));
+    await running;
+
+    expect(generate.mock.calls[0][0].positivePrompt).toBe("active generation prompt");
+    expect(useAppStore.getState().params.positivePrompt).toBe("active generation prompt");
+    expect(useAppStore.getState().currentImage?.id).toBe("fresh");
+    expect(useAppStore.getState().history.some((item) => item.id === deletedItem.id)).toBe(false);
+  });
 });

@@ -49,6 +49,9 @@ void main() {
     );
     expect(known, contains('namePrompt 和 featurePrompt'));
     expect(known, contains('同一完整画面'));
+    expect(known, contains('规范 Danbooru 角色 Tag'));
+    expect(known, contains('高置信度标志性外貌、默认服装与配饰'));
+    expect(known, contains('个人法典规则'));
     expect(known, isNot(contains('Keep both prompts short')));
     expect(unknown, contains('不要使用角色名'));
   });
@@ -59,6 +62,11 @@ void main() {
       expect(library.get('reverse', mode).length, greaterThan(500));
       expect(library.get('convert', mode).length, greaterThan(500));
       expect(library.get('scopedReverse', mode).length, greaterThan(300));
+      expect(
+          library
+              .getReverse(mode, scoped: false, templateVersion: 'v4.5')
+              .length,
+          greaterThan(300));
       expect(library.get('comic', mode).length, greaterThan(300));
     }
   });
@@ -69,21 +77,37 @@ void main() {
       convertPromptTemplates: {'mixed': 'custom convert'},
       comicPromptTemplate: 'custom comic',
       promptRuleAutoRepairEnabled: true,
+      reversePromptTemplateVersion: 'v4.5',
     );
     final restored = AppSettings.fromJson(settings.toJson());
     expect(restored.reversePromptTemplates['tags'], 'custom reverse');
     expect(restored.convertPromptTemplates['mixed'], 'custom convert');
     expect(restored.comicPromptTemplate, 'custom comic');
     expect(restored.promptRuleAutoRepairEnabled, isTrue);
+    expect(restored.reversePromptTemplateVersion, 'v4.5');
   });
 
   test('mature tag rules apply only to tags and mixed modes', () {
     expect(modeUserInstruction(ReversePromptMode.tags, 'convert'),
         contains('exact mature'));
     expect(modeUserInstruction(ReversePromptMode.mixed, 'reverse'),
-        contains('mature tags first'));
+        contains('mature Danbooru'));
     expect(modeUserInstruction(ReversePromptMode.natural, 'convert'),
-        isNot(contains('mature tags first')));
+        isNot(contains('mature Danbooru')));
+  });
+
+  test('known-character conversion uses a strict paired JSON contract', () {
+    final instruction = modeUserInstruction(
+      ReversePromptMode.mixed,
+      'convert',
+      knownCharacter: true,
+    );
+    expect(instruction, contains('exactly two string fields'));
+    expect(instruction, contains('namePrompt'));
+    expect(instruction, contains('featurePrompt'));
+    expect(
+        instruction, contains('signature appearance, outfit, and accessories'));
+    expect(instruction, contains('75–85%'));
   });
 
   test('bundled reverse and convert templates use the concise V5 contract',
@@ -93,7 +117,7 @@ void main() {
       for (final mode in ReversePromptMode.values) {
         final template = library.get(kind, mode);
         expect(template, contains('NovelAI V5'));
-        expect(template.length, inInclusiveRange(1000, 2500));
+        expect(template.length, inInclusiveRange(1000, 2700));
         expect(template, contains('fur dataset'));
         expect(template, contains('background dataset'));
         expect(template, contains('Text:'));
@@ -137,7 +161,7 @@ void main() {
     );
     expect(
       library.get('scopedReverse', ReversePromptMode.mixed),
-      contains('角色残差紧跟被限定的 Tag 或动作'),
+      contains('其他关系短语紧跟被限定的 Tag 或动作'),
     );
     expect(
       library.get('scopedReverse', ReversePromptMode.tags),
@@ -159,6 +183,10 @@ void main() {
       library.get('convert', ReversePromptMode.mixed),
       contains('无成熟 Tag 的关键可见状态或表情'),
     );
+    expect(
+      library.get('convert', ReversePromptMode.mixed),
+      allOf(contains('75–85%'), contains('15–25%'), contains('示例中文含义')),
+    );
   });
 
   test('rule validator detects duplicate and mature tag decomposition', () {
@@ -175,5 +203,22 @@ void main() {
         promptRuleViolations(
             ReversePromptMode.natural, 'A girl is standing.', ['standing']),
         isEmpty);
+  });
+
+  test('mixed validator rejects pure tags but accepts tag plus relation prose',
+      () {
+    const tags =
+        '2girls, cafe, indoors, evening, upper body, counter, cake | girl, black hair, green eyes, holding plate | girl, red hair, blue eyes, reaching';
+    expect(
+      promptRuleViolations(ReversePromptMode.mixed, tags),
+      contains('混合模式缺少约 20% 的自然语言关系短语'),
+    );
+    expect(
+      promptRuleViolations(
+        ReversePromptMode.mixed,
+        '$tags, on the right, reaching with both hands',
+      ).where((item) => item.contains('混合模式')),
+      isEmpty,
+    );
   });
 }

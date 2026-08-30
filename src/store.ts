@@ -12,6 +12,7 @@ import type {
   DirectorTool,
   GenerateExtras,
   GenerateParams,
+  GenerateResult,
   HistoryGroup,
   HistoryItem,
   I2IParams,
@@ -37,6 +38,7 @@ import { normalizeAppLanguage } from "./i18n";
 import { expandWildcards } from "./wildcards";
 import { adaptiveNAIImageSize } from "./nai-dimensions";
 import { normalizeInpaintBrushSize } from "./inpaint-brush";
+import { compactRemoteErrorText } from "./error-message";
 
 type ActiveTab = "generate" | "inpaint" | "upscale" | "postprocess" | "inspect" | "convert" | "metadata" | "tools" | "referencePresets" | "records";
 type PromptTab = "positive" | "negative";
@@ -53,6 +55,10 @@ const WS_LEFT_MIN = 260;
 const WS_LEFT_MAX = 560;
 const WS_RIGHT_MIN = 220;
 const WS_RIGHT_MAX = 480;
+// Every async workbench load gets a revision. Starting a newer load, clearing
+// the workbench, deleting its selected history item, or starting generation
+// invalidates older responses so stale metadata cannot overwrite live prompts.
+let workbenchLoadRevision = 0;
 function readWsWidth(key: string, fallback: number): number {
   try {
     const v = Number(localStorage.getItem(key));
@@ -119,6 +125,7 @@ const STORE_TEXT: Record<AppLanguage, Record<string, string>> = {
     "group.deleted": "已删除分组（图片已转为未分组）",
     "group.packing": "正在打包分组...",
     "error.unknown": "未知错误",
+    "error.requestFailed": "请求失败，请稍后重试。",
     "error.generationFailed": "图片生成失败：{detail}",
     "anlas.spent": "{message} 实扣 {spent} Anlas。",
     "anlas.spentFailed": "{message} 实扣读取失败，请刷新积分确认。",
@@ -207,6 +214,7 @@ const STORE_TEXT: Record<AppLanguage, Record<string, string>> = {
     "group.deleted": "Group deleted; images moved to Ungrouped",
     "group.packing": "Packaging group...",
     "error.unknown": "Unknown error",
+    "error.requestFailed": "Request failed. Please try again later.",
     "error.generationFailed": "Image generation failed: {detail}",
     "anlas.spent": "{message} Spent {spent} Anlas.",
     "anlas.spentFailed": "{message} Could not read actual cost; refresh balance to confirm.",
@@ -253,6 +261,18 @@ function storeText(settings: AppSettings | null | undefined, key: string) {
 
 function storeFormat(settings: AppSettings | null | undefined, key: string, values: Record<string, unknown>) {
   return storeText(settings, key).replace(/\{(\w+)\}/g, (_, name: string) => String(values[name] ?? ""));
+}
+
+function compactStoreError(
+  settings: AppSettings | null | undefined,
+  error: unknown,
+  fallback = storeText(settings, "error.requestFailed"),
+) {
+  return compactRemoteErrorText(error, {
+    fallback,
+    serviceLabel: "NovelAI API 源",
+    maxLength: 360,
+  });
 }
 
 export interface QueuedGenerationJob {
@@ -566,7 +586,7 @@ function extrasVibeKeys(model: string, extras: GenerateExtras): string[] {
 }
 
 function imageGenerationFailureMessage(settings: AppSettings | null | undefined, message?: string) {
-  const detail = message?.trim() || storeText(settings, "error.unknown");
+  const detail = compactStoreError(settings, message, storeText(settings, "error.unknown"));
   return detail.includes("图片生成失败") || detail.includes("Image generation failed")
     ? detail
     : storeFormat(settings, "error.generationFailed", { detail });
@@ -578,8 +598,9 @@ function anlasSpent(before?: number, after?: number) {
 }
 
 function withAnlasSpent(settings: AppSettings | null | undefined, message: string, spent: number | null) {
-  if (spent == null) return storeFormat(settings, "anlas.spentFailed", { message });
-  return storeFormat(settings, "anlas.spent", { message, spent });
+  const safeMessage = compactStoreError(settings, message);
+  if (spent == null) return storeFormat(settings, "anlas.spentFailed", { message: safeMessage });
+  return storeFormat(settings, "anlas.spent", { message: safeMessage, spent });
 }
 
 async function ensureAnlasBeforeRun(
@@ -590,16 +611,16 @@ async function ensureAnlasBeforeRun(
 ): Promise<AnlasQuoteResult | null> {
   const quote = await window.naiDesktop.quoteAnlas(request);
   if (!quote.ok || typeof quote.amount !== "number") {
-    const message = quote.message || storeFormat(settings, "quote.readFailedTry", { action: actionLabel });
     const fallbackMessage = storeFormat(settings, "quote.readFailedTry", { action: actionLabel });
-    set({ statusText: fallbackMessage, toast: message || fallbackMessage, lastError: "" });
+    const message = compactStoreError(settings, quote.message, fallbackMessage);
+    set({ statusText: fallbackMessage, toast: message, lastError: "" });
     return {
       ok: true,
       amount: 0,
       source: "unavailable",
       balance: request.account?.anlasBalance,
       insufficient: false,
-      message: message || fallbackMessage,
+      message,
       details: quote.details,
     };
   }
@@ -631,7 +652,7 @@ async function preparePaidRun(
     );
     return quote ? { account, quote } : null;
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = compactStoreError(settings, error);
     set({
       isGenerating: false,
       currentAnlasSpent: null,
@@ -648,6 +669,35 @@ async function refreshAccountBestEffort(get: () => AppState) {
     return await get().refreshAccount();
   } catch {
     return get().account;
+  }
+}
+
+async function invokePaidRequest<T>(
+  set: (state: Partial<AppState>) => void,
+  get: () => AppState,
+  request: () => Promise<T>,
+  anlasBefore: number | undefined,
+  failedStatusKey: string,
+): Promise<T | null> {
+  try {
+    return await request();
+  } catch (error) {
+    const finalAccount = await refreshAccountBestEffort(get);
+    const spent = anlasSpent(anlasBefore, finalAccount.anlasBalance);
+    const message = withAnlasSpent(
+      get().settings,
+      compactStoreError(get().settings, error),
+      spent,
+    );
+    set({
+      isGenerating: false,
+      currentAnlasSpent: null,
+      lastAnlasSpent: spent,
+      lastError: message,
+      statusText: storeText(get().settings, failedStatusKey),
+      toast: message,
+    });
+    return null;
   }
 }
 
@@ -1178,7 +1228,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   async loadWorkbenchImage() {
+    const loadRevision = ++workbenchLoadRevision;
     const result = await window.naiDesktop.loadImage();
+    if (loadRevision !== workbenchLoadRevision) return;
     if (result.ok && result.image) {
       const restoreMetadata = get().activeTab === "generate" && result.metadata;
       set({
@@ -1202,14 +1254,19 @@ export const useAppStore = create<AppState>((set, get) => ({
         });
       }
     } else if (result.message) {
-      set({ toast: result.message, statusText: storeText(get().settings, "status.imageLoadFailed") });
+      set({ toast: compactStoreError(get().settings, result.message), statusText: storeText(get().settings, "status.imageLoadFailed") });
     }
   },
 
   async loadWorkbenchFromPath(filePath, options) {
+    const loadRevision = ++workbenchLoadRevision;
     const result = await window.naiDesktop.loadImageFromPath(filePath);
+    if (loadRevision !== workbenchLoadRevision) return;
     if (result.ok && result.image) {
-      if (options?.silent) {
+      // History metadata may update prompts. Never let a delayed selection do
+      // that after generation has begun; the paid request already owns a fixed
+      // parameter snapshot and the editor must keep the user's current prompt.
+      if (options?.silent || get().isGenerating) {
         set({
           workbenchImage: result.image,
           inpaintMask: null,
@@ -1240,12 +1297,14 @@ export const useAppStore = create<AppState>((set, get) => ({
         });
       }
     } else if (result.message) {
-      set({ toast: result.message, statusText: storeText(get().settings, "status.imageLoadFailed") });
+      set({ toast: compactStoreError(get().settings, result.message), statusText: storeText(get().settings, "status.imageLoadFailed") });
     }
   },
 
   async clearWorkbenchImage() {
+    const loadRevision = ++workbenchLoadRevision;
     await window.naiDesktop.clearWorkbenchImage();
+    if (loadRevision !== workbenchLoadRevision) return;
     set({
       workbenchImage: null,
       comparisonBeforeImage: null,
@@ -1484,6 +1543,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   // can be in flight (and the button never disables while one runs).
   async runReversePrompt() {
     const { inspectImageBase64, inspectImagePath, reversePromptMode, reversePromptScope, reversePromptHint, reverseKnownCharacter } = get();
+    const templateVersion = get().settings?.reversePromptTemplateVersion ?? "v5";
     if (!inspectImageBase64) {
       set({ toast: storeText(get().settings, "toast.needImage") });
       return;
@@ -1503,6 +1563,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       reversePromptScope,
       reversePromptHint,
       reverseKnownCharacter,
+      templateVersion,
     );
     // "Cancel" just removes the job from the tracker (the in-flight HTTP
     // request itself isn't aborted) — but once it resolves, treat a removed
@@ -1846,6 +1907,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     // for a second or two after a click. A cancel during prep clears the run id,
     // which we honor below so the click can still be aborted.
     const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    // A history image selected just before Generate may still be decoding and
+    // carrying embedded parameters. Invalidate that stale load before locking
+    // this run's immutable prompt snapshot.
+    workbenchLoadRevision += 1;
     set({
       isGenerating: true,
       isGenerateQueueRunning: true,
@@ -1873,7 +1938,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       );
     } catch (error) {
       if (get().activeGenerationRunId === runId) {
-        const message = error instanceof Error ? error.message : String(error);
+        const message = compactStoreError(state.settings, error);
         set({
           isGenerating: false,
           isGenerateQueueRunning: false,
@@ -1985,7 +2050,21 @@ export const useAppStore = create<AppState>((set, get) => ({
       // and charged for an image on NovelAI's side, so resending here risked
       // double-charging (up to 8 paid POSTs per image when stacked on the old
       // main-process retry). The main process now retries only pre-charge 429s.
-      const result = await window.naiDesktop.generate(currentParams, extras);
+      let result: GenerateResult;
+      try {
+        result = await window.naiDesktop.generate(currentParams, extras);
+      } catch (error) {
+        // ipcRenderer.invoke can reject before the main handler returns its
+        // normal GenerateResult (process restart, serialization fault, etc.).
+        // Convert that rejection into a regular failed item so the queue always
+        // reaches its final state reset instead of hiding Generate until restart.
+        result = {
+          ok: false,
+          message: compactStoreError(get().settings, error),
+          items: [],
+          failureKind: "api",
+        };
+      }
       if (get().activeGenerationRunId !== runId) return;
 
       if (result.ok && result.items.length > 0) {
@@ -1999,7 +2078,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         // Keep transient failures isolated; deterministic auth/validation
         // failures below stop only the requests known to share that cause.
         failed++;
-        lastError = result.message;
+        lastError = compactStoreError(get().settings, result.message);
         if (result.statusCode === 401 || result.statusCode === 403) {
           // The same credentials back every queued request; continuing would
           // only repeat a deterministic authentication failure.
@@ -2070,6 +2149,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     // Enter the generating state BEFORE the balance refresh and price quote so a
     // fast double-click can't sneak a second paid request in before the button
     // disappears (isGenerating is what hides it — see AccountAndRunButton).
+    workbenchLoadRevision += 1;
     set({
       isGenerating: true,
       currentAnlasSpent: null,
@@ -2111,11 +2191,18 @@ export const useAppStore = create<AppState>((set, get) => ({
       lastError: "",
       statusText: storeFormat(state.settings, "i2i.status", { amount: quote.amount }),
     });
-    const result = await window.naiDesktop.generateI2I(
-      runParams,
-      { ...state.i2iParams, noise: 0 },
-      buildExtras(state),
+    const result = await invokePaidRequest(
+      set,
+      get,
+      () => window.naiDesktop.generateI2I(
+        runParams,
+        { ...state.i2iParams, noise: 0 },
+        buildExtras(state),
+      ),
+      anlasBefore,
+      "status.i2iFailed",
     );
+    if (!result) return;
     if (result.ok && result.items.length > 0) {
       const current = result.items[0];
       await refreshAfterImage(set, get, current, { compareBefore: state.workbenchImage });
@@ -2153,6 +2240,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     // Enter the generating state BEFORE the balance refresh and price quote so a
     // fast double-click can't sneak a second paid request in before the button
     // disappears (isGenerating is what hides it — see AccountAndRunButton).
+    workbenchLoadRevision += 1;
     set({
       isGenerating: true,
       currentAnlasSpent: null,
@@ -2189,13 +2277,20 @@ export const useAppStore = create<AppState>((set, get) => ({
       lastError: "",
       statusText: storeFormat(state.settings, "inpaint.status", { amount: quote.amount }),
     });
-    const result = await window.naiDesktop.inpaint(
-      inpaintParams,
-      state.inpaintModel,
-      state.inpaintMask,
-      state.inpaintStrength,
-      0,
+    const result = await invokePaidRequest(
+      set,
+      get,
+      () => window.naiDesktop.inpaint(
+        inpaintParams,
+        state.inpaintModel,
+        state.inpaintMask!,
+        state.inpaintStrength,
+        0,
+      ),
+      anlasBefore,
+      "status.inpaintFailed",
     );
+    if (!result) return;
     if (result.ok && result.items.length > 0) {
       const current = result.items[0];
       await refreshAfterImage(set, get, current, { compareBefore: state.workbenchImage, loadWorkbench: true });
@@ -2220,6 +2315,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     // Enter the generating state BEFORE the balance refresh and price quote so a
     // fast double-click can't sneak a second paid request in before the button
     // disappears (isGenerating is what hides it — see AccountAndRunButton).
+    workbenchLoadRevision += 1;
     set({
       isGenerating: true,
       currentAnlasSpent: null,
@@ -2252,7 +2348,14 @@ export const useAppStore = create<AppState>((set, get) => ({
       lastError: "",
       statusText: storeFormat(state.settings, "upscale.status", { scale: state.upscaleScale, amount: quote.amount }),
     });
-    const result = await window.naiDesktop.upscaleImage(state.upscaleScale);
+    const result = await invokePaidRequest(
+      set,
+      get,
+      () => window.naiDesktop.upscaleImage(state.upscaleScale),
+      anlasBefore,
+      "status.upscaleFailed",
+    );
+    if (!result) return;
     if (result.ok && result.item) {
       await refreshAfterImage(set, get, result.item, { compareBefore: state.workbenchImage });
       const spent = anlasSpent(anlasBefore, get().account.anlasBalance);
@@ -2276,6 +2379,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     // Enter the generating state BEFORE the balance refresh and price quote so a
     // fast double-click can't sneak a second paid request in before the button
     // disappears (isGenerating is what hides it — see AccountAndRunButton).
+    workbenchLoadRevision += 1;
     set({
       isGenerating: true,
       currentAnlasSpent: null,
@@ -2308,7 +2412,14 @@ export const useAppStore = create<AppState>((set, get) => ({
       lastError: "",
       statusText: storeFormat(state.settings, "post.status", { tool: state.directorTool, amount: quote.amount }),
     });
-    const result = await window.naiDesktop.augmentImage(state.directorTool, state.augmentOptions);
+    const result = await invokePaidRequest(
+      set,
+      get,
+      () => window.naiDesktop.augmentImage(state.directorTool, state.augmentOptions),
+      anlasBefore,
+      "status.postFailed",
+    );
+    if (!result) return;
     if (result.ok && result.items.length > 0) {
       const current = result.items[0];
       await refreshAfterImage(set, get, current, { compareBefore: state.workbenchImage });
@@ -2349,8 +2460,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   selectImage(item) {
+    const generating = get().isGenerating;
     set({ currentImage: item, comparisonBeforeImage: null, statusText: storeFormat(get().settings, "status.historySelected", { date: item.date }) });
-    void get().loadWorkbenchFromPath(item.filePath);
+    // While a paid request is active, selecting a thumbnail is preview-only.
+    // Embedded metadata must not replace the editor prompt behind that request.
+    void get().loadWorkbenchFromPath(item.filePath, { silent: generating });
   },
 
   variationFromImage(item) {
@@ -2375,10 +2489,20 @@ export const useAppStore = create<AppState>((set, get) => ({
     const previousCurrent = get().currentImage;
     const previousComparison = get().comparisonBeforeImage;
     const nextHistory = previousHistory.filter((item) => item.id !== id);
+    const deletingCurrent = previousCurrent?.id === id;
+    if (deletingCurrent) workbenchLoadRevision += 1;
     set({
       history: nextHistory,
-      currentImage: previousCurrent?.id === id ? nextHistory[0] ?? null : previousCurrent,
-      comparisonBeforeImage: previousCurrent?.id === id ? null : get().comparisonBeforeImage,
+      // Do not swap an arbitrary old thumbnail into the canvas underneath an
+      // active generating overlay. It looked like the running request had
+      // changed to the deleted record. The successful result will become the
+      // current image naturally; a failed run leaves an honest empty canvas.
+      currentImage: deletingCurrent
+        ? get().isGenerating
+          ? null
+          : nextHistory[0] ?? null
+        : previousCurrent,
+      comparisonBeforeImage: deletingCurrent ? null : get().comparisonBeforeImage,
     });
     try {
       const result = await window.naiDesktop.deleteHistory(id);
@@ -2400,7 +2524,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           history,
           currentImage: previousCurrent?.id === id ? previousCurrent : state.currentImage,
           comparisonBeforeImage: previousCurrent?.id === id ? previousComparison : state.comparisonBeforeImage,
-          toast: error?.message ?? String(error),
+          toast: compactStoreError(state.settings, error),
         };
       });
       return false;

@@ -65,6 +65,7 @@ import {
   type MatureTagCandidate,
 } from "../../src/prompt-codex-retrieval";
 import { calculateFeatureAnlasQuote } from "../../src/anlas";
+import { compactRemoteErrorText } from "../../src/error-message";
 import {
   buildTuiwenLocalPrompt,
   isTuiwenPromptRefusal,
@@ -89,8 +90,13 @@ import { proxyConfig } from "./proxy";
 import {
   COMIC_ANALYZE_SYSTEM_PROMPT,
   CONVERT_SYSTEM_PROMPTS,
+  REVERSE_SYSTEM_PROMPTS,
   SCOPED_REVERSE_SYSTEM_PROMPTS,
 } from "../../src/data/prompt-templates";
+import {
+  V45_REVERSE_SYSTEM_PROMPTS,
+  V45_SCOPED_REVERSE_SYSTEM_PROMPTS,
+} from "../../src/data/prompt-templates-v45";
 import {
   buildConvertUserText,
   buildModeRepairUserText,
@@ -1000,14 +1006,17 @@ function detectExt(buffer: Buffer) {
 
 function responseErrorText(error: any) {
   const data = error?.response?.data;
-  if (!data) return error?.message ?? "";
-  if (Buffer.isBuffer(data)) return data.toString("utf8");
-  if (data instanceof ArrayBuffer) return Buffer.from(data).toString("utf8");
-  try {
-    return JSON.stringify(data);
-  } catch {
-    return String(data);
-  }
+  const status = Number(error?.response?.status);
+  const source = Buffer.isBuffer(data)
+    ? data.toString("utf8")
+    : data instanceof ArrayBuffer
+      ? Buffer.from(data).toString("utf8")
+      : data ?? error?.message ?? "";
+  return compactRemoteErrorText(source, {
+    status: Number.isInteger(status) ? status : undefined,
+    fallback: "网络错误",
+    serviceLabel: "NovelAI API 源",
+  });
 }
 
 function stripBase64Prefix(value: string) {
@@ -2790,6 +2799,7 @@ export async function reversePromptImage(
   scope: string = "full",
   hint: string = "",
   knownCharacter = false,
+  templateVersion: "v4.5" | "v5" = "v5",
 ): Promise<{
   ok: boolean;
   prompt?: string;
@@ -2816,16 +2826,32 @@ export async function reversePromptImage(
   ]
     .filter(Boolean)
     .join("\n");
+  const safeTemplateVersion = templateVersion === "v4.5" ? "v4.5" : "v5";
+  const builtInTemplates =
+    safeTemplateVersion === "v4.5"
+      ? safeScope === "full"
+        ? V45_REVERSE_SYSTEM_PROMPTS
+        : V45_SCOPED_REVERSE_SYSTEM_PROMPTS
+      : safeScope === "full"
+        ? REVERSE_SYSTEM_PROMPTS
+        : SCOPED_REVERSE_SYSTEM_PROMPTS;
   const systemPrompt = [
     resolveModePrompt(
       mode,
-      settings.reversePromptTemplates,
+      safeTemplateVersion === "v5"
+        ? settings.reversePromptTemplates
+        : undefined,
       settings.visionSystemPrompt,
-      SCOPED_REVERSE_SYSTEM_PROMPTS,
+      builtInTemplates,
     )
       .replace(/\{\{input\}\}/g, userScopeText)
       .replace(/\{\{image\}\}/g, "<uploaded image>"),
-    knownCharacterRuntimeInstruction(mode, "reverse", knownCharacter),
+    knownCharacterRuntimeInstruction(
+      mode,
+      "reverse",
+      knownCharacter,
+      safeTemplateVersion,
+    ),
   ].join("\n\n");
 
   const codexEnabled = settings.promptCodexEnhanceEnabled;
@@ -2846,7 +2872,12 @@ export async function reversePromptImage(
         "",
         "Generate the prompt for this image.",
         "",
-        modeUserInstruction(mode, "reverse"),
+        modeUserInstruction(
+          mode,
+          "reverse",
+          knownCharacter,
+          safeTemplateVersion,
+        ),
       ].join("\n"),
     },
   ];
@@ -2855,16 +2886,11 @@ export async function reversePromptImage(
     systemPrompt,
     firstUserContent,
     2000,
-    `AI 反推 · ${mode} · ${scopeLabel}`,
+    `AI 反推 · ${safeTemplateVersion} · ${mode} · ${scopeLabel}`,
     !codexEnabled && !ruleRepairEnabled,
   );
 
   if (result.ok) {
-    // Known-character mode already requires both variants in the single
-    // upfront call (knownCharacterRuntimeInstruction), so we accept whatever
-    // parsePromptVariantResponse extracts rather than spending a second
-    // request repairing an incomplete JSON response — same single-request
-    // strategy as convertPromptText.
     const parsed = parsePromptVariantResponse(
       result.content ?? "",
       knownCharacter,
@@ -2872,6 +2898,7 @@ export async function reversePromptImage(
     let content = parsed.primary;
     let variants = parsed.variants;
     let codexMatches: PromptCodexMatch[] = [];
+    let codexContext = "";
     let matureTagNames: string[] = [];
     let mergedSystemPrompt = systemPrompt;
     let mergedUserText = summarizeUserContent(firstUserContent);
@@ -2883,6 +2910,9 @@ export async function reversePromptImage(
       content,
       parsed.variants?.namePrompt,
       parsed.variants?.featurePrompt,
+      knownCharacter
+        ? "已知角色 角色名版 特征版 动漫角色 游戏角色 角色 Tag"
+        : "",
     ]
       .filter(Boolean)
       .join("\n");
@@ -2900,10 +2930,17 @@ export async function reversePromptImage(
         matureTags,
       );
       codexMatches = enhancement.matches;
+      codexContext = enhancement.context;
       const refineSystem = [
         systemPrompt,
         enhancement.context,
         "这是法典增强的第二阶段。请以初步反推结果为事实边界，只校正结构、Tag、角色归属、互动方向、权重和冲突。不要新增图中未确认的主体、服装、动作或分级内容。",
+        knownCharacterRuntimeInstruction(
+          mode,
+          "reverse",
+          knownCharacter,
+          safeTemplateVersion,
+        ),
       ]
         .filter(Boolean)
         .join("\n\n");
@@ -2911,7 +2948,12 @@ export async function reversePromptImage(
         "初步反推结果：",
         result.content ?? "",
         "",
-        modeUserInstruction(mode, "reverse"),
+        modeUserInstruction(
+          mode,
+          "reverse",
+          knownCharacter,
+          safeTemplateVersion,
+        ),
         "请只输出精修后的最终结果。",
       ].join("\n");
       const refined = await callVisionApi(
@@ -2964,7 +3006,24 @@ export async function reversePromptImage(
       ].filter((issue, index, all) => all.indexOf(issue) === index);
       if (violations.length > 0) {
         const draft = variants ? JSON.stringify(variants) : content;
-        const repairSystem = promptRuleRepairSystemPrompt(mode, knownCharacter);
+        const repairSystem = [
+          promptRuleRepairSystemPrompt(
+            mode,
+            knownCharacter,
+            safeTemplateVersion,
+          ),
+          codexContext,
+          knownCharacter
+            ? knownCharacterRuntimeInstruction(
+                mode,
+                "reverse",
+                true,
+                safeTemplateVersion,
+              )
+            : "",
+        ]
+          .filter(Boolean)
+          .join("\n\n");
         const repairUser = buildPromptRuleRepairUserText({
           mode,
           originalInput: userScopeText,
@@ -2993,9 +3052,17 @@ export async function reversePromptImage(
             repaired.content,
             knownCharacter,
           );
-          content = repairedParsed.primary;
-          variants = repairedParsed.variants ?? variants;
-          repairNote = `[规则检查发现 ${violations.length} 项并已自动修复]\n`;
+          if (
+            !knownCharacter ||
+            (repairedParsed.variants?.namePrompt.trim() &&
+              repairedParsed.variants.featurePrompt.trim())
+          ) {
+            content = repairedParsed.primary;
+            variants = repairedParsed.variants ?? variants;
+            repairNote = `[规则检查发现 ${violations.length} 项并已自动修复]\n`;
+          } else {
+            repairNote = `[规则检查修复结果缺少角色名版或特征版，已保留修复前的完整双版本]\n`;
+          }
         } else {
           repairNote = `[规则检查发现 ${violations.length} 项，但自动修复失败：${repaired.message}]\n`;
         }
@@ -3007,10 +3074,8 @@ export async function reversePromptImage(
         repairNote = "[规则检查通过，无需额外调用 AI 修复]\n";
       }
     }
-    // Same reasoning as convertPromptText: known-character mode already
-    // requires both variants to follow every template rule in the single
-    // upfront call, and this repair pass never touched parsed.variants (what
-    // the UI actually renders), so it was a wasted extra request there.
+    // The generic natural-mode fallback only handles a single prompt. Paired
+    // known-character JSON is validated and recovered separately below.
     if (
       !codexEnabled &&
       !knownCharacter &&
@@ -3018,7 +3083,7 @@ export async function reversePromptImage(
       modeNeedsRepair(mode, content)
     ) {
       const repaired = await callVisionApi(
-        modeRepairSystemPrompt(mode),
+        modeRepairSystemPrompt(mode, safeTemplateVersion),
         [
           {
             type: "image_url",
@@ -3044,6 +3109,58 @@ export async function reversePromptImage(
       // not discard an otherwise-usable result.
       if (repaired.ok && repaired.content)
         content = cleanPromptOutput(repaired.content);
+    }
+    if (
+      knownCharacter &&
+      (!variants?.namePrompt.trim() || !variants.featurePrompt.trim())
+    ) {
+      const recoverySystem = [
+        mergedSystemPrompt,
+        "上一条回复没有同时提供完整的角色名版与特征版。现在只补全双版本与 JSON 格式；仍然只能依据图片可见证据，不得新增不可见的角色设定。",
+      ].join("\n\n");
+      const recoveryUser = [
+        ...firstUserContent,
+        {
+          type: "text" as const,
+          text: [
+            "未完成的回复：",
+            variants ? JSON.stringify(variants) : content,
+            "",
+            "只返回严格 JSON：{\"namePrompt\":\"...\",\"featurePrompt\":\"...\"}。namePrompt 只用可靠确认的规范角色 Tag；featurePrompt 删除全部角色名/作品名，并逐人改用图片中实际可见的外貌、服装与配饰。两个版本的其他内容及个人法典规则必须完全一致。",
+          ].join("\n"),
+        },
+      ];
+      const recovered = await callVisionApi(
+        recoverySystem,
+        recoveryUser,
+        2400,
+        `AI 反推 · 已知角色双版本修复 · ${mode}`,
+        false,
+      );
+      if (recovered.ok && recovered.content) {
+        const parsedRecovery = parsePromptVariantResponse(
+          recovered.content,
+          true,
+        );
+        if (
+          parsedRecovery.variants?.namePrompt.trim() &&
+          parsedRecovery.variants.featurePrompt.trim()
+        ) {
+          variants = parsedRecovery.variants;
+          content = parsedRecovery.primary;
+        }
+      }
+    }
+    if (
+      knownCharacter &&
+      (!variants?.namePrompt.trim() || !variants.featurePrompt.trim())
+    ) {
+      return {
+        ok: false,
+        codexMatches,
+        message:
+          "AI 未能同时返回完整的角色名版与特征版。已自动重试一次，请补充角色提示，或改用识图能力更强的反推模型后重试。",
+      };
     }
 
     if (codexEnabled || ruleRepairEnabled) {
@@ -4156,24 +4273,35 @@ export async function convertPromptText(
       ? await collectMatureTagCandidates(chineseText, 12)
       : [];
   const matureTagNames = matureTags.map((item) => item.tag);
+  const codexQuery = knownCharacter
+    ? [
+        chineseText,
+        "已知角色 角色名版 特征版 动漫角色 游戏角色 角色 Tag",
+      ].join("\n")
+    : chineseText;
   const enhancement = settings.promptCodexEnhanceEnabled
     ? buildPromptCodexEnhancement(
-        chineseText,
+        codexQuery,
         "convert",
         settings.promptCodexAdultEnabled,
         matureTags,
       )
     : { matches: [] as PromptCodexMatch[], context: "" };
+  const baseSystemPrompt = resolveModePrompt(
+    mode,
+    settings.convertPromptTemplates,
+    settings.convertSystemPrompt,
+    CONVERT_SYSTEM_PROMPTS,
+  ).replace(/\{\{input\}\}/g, "<provided in the user message>");
   const systemPrompt = [
-    resolveModePrompt(
-      mode,
-      settings.convertPromptTemplates,
-      settings.convertSystemPrompt,
-      CONVERT_SYSTEM_PROMPTS,
-    ),
-    knownCharacterRuntimeInstruction(mode, "convert", knownCharacter),
+    baseSystemPrompt,
     enhancement.context,
-  ].join("\n\n");
+    // Keep the dual-output contract last so it cannot be weakened by a base
+    // template's ordinary "one prompt line" wording or by retrieved codex text.
+    knownCharacterRuntimeInstruction(mode, "convert", knownCharacter),
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 
   // Tag-server hints only make sense for tag-style output, and only when the
   // user opted convert into using the MCP/tag service.
@@ -4188,6 +4316,7 @@ export async function convertPromptText(
     chineseText,
     mode,
     knownCharacter ? "" : hintText,
+    knownCharacter,
   );
   const result = await callConvertApi(
     systemPrompt,
@@ -4198,16 +4327,56 @@ export async function convertPromptText(
   );
 
   if (result.ok) {
-    // Known-character mode already requires both variants in the single
-    // upfront call (knownCharacterRuntimeInstruction), so we accept whatever
-    // parsePromptVariantResponse extracts rather than spending a second
-    // request repairing an incomplete JSON response.
     const parsed = parsePromptVariantResponse(
       result.content ?? "",
       knownCharacter,
     );
     let content = parsed.primary;
     let variants = parsed.variants;
+    if (
+      knownCharacter &&
+      (!variants?.namePrompt.trim() || !variants.featurePrompt.trim())
+    ) {
+      const recovery = await callConvertApi(
+        [
+          systemPrompt,
+          "上一条回复没有同时提供完整的角色名版与特征版。现在只做格式修复，不改变用户描述，也不新增内容。",
+        ].join("\n\n"),
+        [
+          "原始用户描述：",
+          chineseText,
+          "",
+          "未完成的回复：",
+          result.content ?? "",
+          "",
+          "只返回严格 JSON：{\"namePrompt\":\"...\",\"featurePrompt\":\"...\"}。两个字段都必须非空并描述同一完整画面。namePrompt 使用已确认的规范角色 Tag；featurePrompt 删除全部角色名/作品名，并逐人改用高置信度标志性外貌、服装和配饰。用户指定的换装或外观变化优先，两个版本的其他内容及个人法典规则必须完全一致。",
+        ].join("\n"),
+        2400,
+        `提示词转换 · 已知角色双版本修复 · ${mode}`,
+        false,
+      );
+      if (recovery.ok && recovery.content) {
+        const recovered = parsePromptVariantResponse(recovery.content, true);
+        if (
+          recovered.variants?.namePrompt.trim() &&
+          recovered.variants.featurePrompt.trim()
+        ) {
+          variants = recovered.variants;
+          content = recovered.primary;
+        }
+      }
+    }
+    if (
+      knownCharacter &&
+      (!variants?.namePrompt.trim() || !variants.featurePrompt.trim())
+    ) {
+      return {
+        ok: false,
+        codexMatches: enhancement.matches,
+        message:
+          "AI 未能同时返回完整的角色名版与特征版。已自动重试一次，请检查角色名称/作品是否明确，或改用识别能力更强的转换模型后重试。",
+      };
+    }
     let repairNote = "";
     const ruleRepairEnabled =
       settings.promptRuleAutoRepairEnabled && mode !== "natural";
@@ -4230,7 +4399,15 @@ export async function convertPromptText(
           : []),
       ].filter((issue, index, all) => all.indexOf(issue) === index);
       if (violations.length > 0) {
-        const repairSystem = promptRuleRepairSystemPrompt(mode, knownCharacter);
+        const repairSystem = [
+          promptRuleRepairSystemPrompt(mode, knownCharacter),
+          enhancement.context,
+          knownCharacter
+            ? knownCharacterRuntimeInstruction(mode, "convert", true)
+            : "",
+        ]
+          .filter(Boolean)
+          .join("\n\n");
         const repairUser = buildPromptRuleRepairUserText({
           mode,
           originalInput: chineseText,
@@ -4250,9 +4427,17 @@ export async function convertPromptText(
             repaired.content,
             knownCharacter,
           );
-          content = repairedParsed.primary;
-          variants = repairedParsed.variants ?? variants;
-          repairNote = `[规则检查发现 ${violations.length} 项并已自动修复]\n`;
+          if (
+            !knownCharacter ||
+            (repairedParsed.variants?.namePrompt.trim() &&
+              repairedParsed.variants.featurePrompt.trim())
+          ) {
+            content = repairedParsed.primary;
+            variants = repairedParsed.variants ?? variants;
+            repairNote = `[规则检查发现 ${violations.length} 项并已自动修复]\n`;
+          } else {
+            repairNote = `[规则检查修复结果缺少角色名版或特征版，已保留修复前的完整双版本]\n`;
+          }
         } else {
           repairNote = `[规则检查发现 ${violations.length} 项，但自动修复失败：${repaired.message}]\n`;
         }
@@ -4278,12 +4463,8 @@ export async function convertPromptText(
         });
       }
     }
-    // Known-character mode already asks for both variants to follow every
-    // template rule in the single upfront call (knownCharacterRuntimeInstruction),
-    // and this repair pass only ever rewrote `content` — never parsed.variants,
-    // which is what the UI actually shows for namePrompt/featurePrompt — so it
-    // was a wasted extra request for that path. Keep it for the plain
-    // (non-known-character) single-prompt path, where it does affect the result.
+    // The generic natural-mode fallback only handles a single prompt. Known-
+    // character JSON is validated and recovered above as a paired result.
     if (
       !knownCharacter &&
       mode === "natural" &&

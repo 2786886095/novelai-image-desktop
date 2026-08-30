@@ -16,7 +16,8 @@ class _ScriptedApi extends NaiApi {
   int convertCalls = 0;
   int reverseCalls = 0;
 
-  _ScriptedApi({this.convertResponses = const [], this.reverseResponses = const []});
+  _ScriptedApi(
+      {this.convertResponses = const [], this.reverseResponses = const []});
 
   @override
   Future<AiTextResult> convertPrompt({
@@ -42,6 +43,7 @@ class _ScriptedApi extends NaiApi {
     required String hint,
     required bool knownCharacter,
     required String systemTemplate,
+    String templateVersion = 'v5',
   }) {
     final response = reverseResponses[reverseCalls];
     reverseCalls++;
@@ -82,7 +84,8 @@ void main() {
         offlineTags: _StubOfflineTags(),
       )..settings = AppSettings(proxyMode: 'direct');
 
-  test('runs two convert submissions concurrently instead of blocking the second',
+  test(
+      'runs two convert submissions concurrently instead of blocking the second',
       () async {
     final firstCompleter = Completer<AiTextResult>();
     final secondCompleter = Completer<AiTextResult>();
@@ -111,7 +114,8 @@ void main() {
       isTrue,
     );
 
-    firstCompleter.complete(const AiTextResult(ok: true, message: 'ok', text: '1girl, solo'));
+    firstCompleter.complete(
+        const AiTextResult(ok: true, message: 'ok', text: '1girl, solo'));
     await runningFirst;
     expect(
       state.convertJobs.firstWhere((j) => j.label == '第一段描述').status,
@@ -122,7 +126,8 @@ void main() {
       TextToolJobStatus.processing,
     );
 
-    secondCompleter.complete(const AiTextResult(ok: true, message: 'ok', text: '1boy, solo'));
+    secondCompleter.complete(
+        const AiTextResult(ok: true, message: 'ok', text: '1boy, solo'));
     await runningSecond;
     expect(
       state.convertJobs.every((j) => j.status == TextToolJobStatus.done),
@@ -148,15 +153,16 @@ void main() {
   });
 
   test('persists a reverse history item with the source image path', () async {
-    final tempFile =
-        File('${Directory.systemTemp.path}/texttool_test_${DateTime.now().microsecondsSinceEpoch}.png');
+    final tempFile = File(
+        '${Directory.systemTemp.path}/texttool_test_${DateTime.now().microsecondsSinceEpoch}.png');
     await tempFile.writeAsBytes([0, 1, 2, 3]);
     addTearDown(() {
       if (tempFile.existsSync()) tempFile.deleteSync();
     });
 
     final api = _ScriptedApi(reverseResponses: [
-      () async => const AiTextResult(ok: true, message: 'ok', text: '1girl, blue hair'),
+      () async =>
+          const AiTextResult(ok: true, message: 'ok', text: '1girl, blue hair'),
     ]);
     final storage = _FakeStorage();
     final state = buildState(api, storage);
@@ -179,7 +185,8 @@ void main() {
     expect(state.reverseHistory, isEmpty);
   });
 
-  test('removes a finished job from the tracker without touching history', () async {
+  test('removes a finished job from the tracker without touching history',
+      () async {
     final api = _ScriptedApi();
     final storage = _FakeStorage();
     final state = buildState(api, storage);
@@ -211,7 +218,8 @@ void main() {
     expect(state.convertHistory, hasLength(1));
   });
 
-  test('deletes and clears convert history through the persistence bridge', () async {
+  test('deletes and clears convert history through the persistence bridge',
+      () async {
     final api = _ScriptedApi();
     final storage = _FakeStorage();
     final state = buildState(api, storage);
@@ -243,7 +251,8 @@ void main() {
     expect(storage.convertHistory, isEmpty);
   });
 
-  test('treats removing an in-flight job as cancellation: no result, no history entry',
+  test(
+      'treats removing an in-flight job as cancellation: no result, no history entry',
       () async {
     final pending = Completer<AiTextResult>();
     final api = _ScriptedApi(convertResponses: [
@@ -263,7 +272,8 @@ void main() {
 
     // The underlying request keeps running and eventually succeeds, but since
     // its job is gone from the tracker the result must be fully discarded.
-    pending.complete(const AiTextResult(ok: true, message: 'ok', text: '1girl, solo'));
+    pending.complete(
+        const AiTextResult(ok: true, message: 'ok', text: '1girl, solo'));
     await running;
 
     expect(state.convertResult, isEmpty);
@@ -274,7 +284,8 @@ void main() {
       'auto-dismisses a done job from the tracker shortly after it finishes, without touching history',
       () async {
     final api = _ScriptedApi(convertResponses: [
-      () async => const AiTextResult(ok: true, message: 'ok', text: '1girl, solo'),
+      () async =>
+          const AiTextResult(ok: true, message: 'ok', text: '1girl, solo'),
     ]);
     final storage = _FakeStorage();
     final state = buildState(api, storage);

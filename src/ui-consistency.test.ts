@@ -113,6 +113,44 @@ describe("desktop UI consistency guards", () => {
     expect(styles).toContain('grid-auto-rows: max-content');
   });
 
+  it("shares preview, aspect-ratio, tabs, and action placement across artist draws", () => {
+    const randomSource = fs.readFileSync(path.join(projectRoot, "src", "RandomArtistLab.tsx"), "utf8");
+    const repairSource = fs.readFileSync(path.join(projectRoot, "src", "V5ArtistWeightRepair.tsx"), "utf8");
+    const drawEntrySource = fs.readFileSync(path.join(projectRoot, "src", "ArtistStringWeightDraw.tsx"), "utf8");
+    const styles = fs.readFileSync(path.join(projectRoot, "src", "styles.css"), "utf8");
+
+    expect(drawEntrySource).toContain('<V5ArtistWeightRepair mode="draw"');
+    for (const source of [randomSource, repairSource]) {
+      expect(source).toContain('className="artist-candidate-media');
+      expect(source).toContain('className="artist-candidate-preview-button"');
+      expect(source).toContain('style={{ aspectRatio:');
+      expect(source).toContain('className="artist-candidate-actions"');
+      expect(source).toContain('className="artist-result-preview"');
+      expect(source).toContain('<AppPortal>');
+    }
+    expect(randomSource).toContain('onDoubleClick={() => setPreviewResult(result)}');
+    expect(repairSource).toContain('onDoubleClick={() => setPreviewCandidate(candidate)}');
+    expect(randomSource).toContain('className="artist-result-tabs"');
+    expect(repairSource).toContain('className="artist-result-tabs artist-string-result-tabs"');
+    expect(randomSource).toContain('className="artist-candidate-grid"');
+    expect(repairSource).toContain('className="artist-candidate-grid v5-draw-grid"');
+    expect(randomSource).toContain('className="artist-result-toolbar"');
+    expect(repairSource).toContain('className="artist-result-toolbar artist-string-result-toolbar"');
+    expect(randomSource).toContain('className="artist-result-actions"');
+    expect(repairSource).toContain('className="artist-result-actions"');
+    expect(randomSource.indexOf('className="artist-lab-panel artist-queue-panel"')).toBeLessThan(
+      randomSource.indexOf('className="artist-result-toolbar"'),
+    );
+    expect(repairSource.indexOf('v5-draw-generation-settings')).toBeLessThan(
+      repairSource.indexOf('className="artist-result-toolbar artist-string-result-toolbar"'),
+    );
+    expect(repairSource).not.toContain('className="v5-artist-repair-actions"');
+    expect(styles).toContain('.artist-candidate-media img { width: 100%; height: 100%; object-fit: contain;');
+    expect(styles).toContain('.artist-result-preview > img { width: 100%; height: 100%; object-fit: contain; }');
+    expect(styles).toContain('.artist-result-toolbar {');
+    expect(styles).not.toContain('.v5-draw-tabs {');
+  });
+
   it("defaults proxy setup to automatic system/VPN routing", () => {
     const appSource = fs.readFileSync(path.join(projectRoot, "src", "App.tsx"), "utf8");
     const storeSource = fs.readFileSync(path.join(projectRoot, "electron", "ipc", "store.ts"), "utf8");

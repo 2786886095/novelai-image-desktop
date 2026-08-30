@@ -108,6 +108,13 @@ class _ReversePanelState extends State<_ReversePanel> {
             ),
             const SizedBox(height: 12),
           ],
+          _ReverseTemplateVersionSelector(
+            value: s.settings.reversePromptTemplateVersion,
+            onChanged: (value) => s.setSettings(
+              (settings) => settings.reversePromptTemplateVersion = value,
+            ),
+          ),
+          const SizedBox(height: 12),
           _ModeSelector(
               value: s.reverseMode,
               onChanged: (m) {
@@ -280,8 +287,8 @@ class _ConvertPanelState extends State<_ConvertPanel> {
           const SizedBox(height: 12),
           CheckboxListTile(
             contentPadding: EdgeInsets.zero,
-            title: Text(t('inspect.knownCharacterTitle')),
-            subtitle: Text(t('inspect.knownCharacterSubtitle')),
+            title: Text(t('convert.knownCharacterTitle')),
+            subtitle: Text(t('convert.knownCharacterSubtitle')),
             value: s.convertKnownCharacter,
             onChanged: (value) {
               s.convertKnownCharacter = value ?? false;
@@ -557,7 +564,27 @@ class _TextToolHistoryListState extends State<_TextToolHistoryList> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 TextButton(
-                  onPressed: widget.onClear,
+                  onPressed: () async {
+                    final confirmed = await showDialog<bool>(
+                      context: context,
+                      builder: (dialogContext) => AlertDialog(
+                        title: Text(t('textTool.historyClear')),
+                        content: Text(t('textTool.historyClearConfirm')),
+                        actions: [
+                          TextButton(
+                            onPressed: () =>
+                                Navigator.pop(dialogContext, false),
+                            child: Text(t('common.cancel')),
+                          ),
+                          FilledButton(
+                            onPressed: () => Navigator.pop(dialogContext, true),
+                            child: Text(t('textTool.historyClear')),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirmed == true) widget.onClear();
+                  },
                   child: Text(t('textTool.historyClear')),
                 ),
                 IconButton(
@@ -779,6 +806,58 @@ class _ModeSelector extends StatelessWidget {
           .toList(),
       selected: {value},
       onSelectionChanged: (v) => onChanged(v.first),
+    );
+  }
+}
+
+class _ReverseTemplateVersionSelector extends StatelessWidget {
+  final String value;
+  final ValueChanged<String> onChanged;
+
+  const _ReverseTemplateVersionSelector({
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final language = context.watch<AppState>().settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
+    final selected = value == 'v4.5' ? 'v4.5' : 'v5';
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              t('inspect.templateVersionTitle'),
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const SizedBox(height: 8),
+            SegmentedButton<String>(
+              segments: [
+                ButtonSegment(
+                  value: 'v4.5',
+                  label: Text(t('inspect.templateVersion.v45')),
+                ),
+                ButtonSegment(
+                  value: 'v5',
+                  label: Text(t('inspect.templateVersion.v5')),
+                ),
+              ],
+              selected: {selected},
+              onSelectionChanged: (selection) => onChanged(selection.first),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              t('inspect.templateVersionHint'),
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

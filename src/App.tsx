@@ -13,6 +13,7 @@ import { fmtCount, wordAtCursor } from "./text-utils";
 import { inspectImageMetadata, parseImageMeta } from "./png-meta";
 import { INPAINT_BRUSH_SLIDER_MAX, INPAINT_BRUSH_SLIDER_MIN } from "./inpaint-brush";
 import { droppedImagePath, droppedImagePaths, hasDraggedFiles } from "./drag-drop";
+import { compactRemoteErrorText } from "./error-message";
 import { splitPromptTags, parseWeightedTag, formatMultiplier, setTagLevelInPrompt } from "./prompt-weight";
 import {
   normalizePrompt,
@@ -2957,7 +2958,13 @@ function TextToolHistoryPanel({
           {t("textTool.historyTitle")} · {items.length}
         </span>
         <div className="queue-panel-actions">
-          <button type="button" className="queue-mini-btn" onClick={onClear}>
+          <button
+            type="button"
+            className="queue-mini-btn"
+            onClick={() => {
+              if (window.confirm(t("textTool.historyClearConfirm"))) onClear();
+            }}
+          >
             {t("textTool.historyClear")}
           </button>
           <button
@@ -3915,12 +3922,14 @@ function ReversePanel() {
   const setParam = useAppStore((state) => state.setParam);
   const setToast = useAppStore((state) => state.setToast);
   const settings = useAppStore((state) => state.settings);
+  const refreshSettings = useAppStore((state) => state.refreshSettings);
   const language = settings?.language;
   const inspectMeta = useAppStore((state) => state.inspectMeta);
   const applyParams = useAppStore((state) => state.applyParams);
   const setActiveTab = useAppStore((state) => state.setActiveTab);
   const [dragging, setDragging] = useState(false);
   const hasImage = Boolean(inspectImageUrl);
+  const reverseTemplateVersion = settings?.reversePromptTemplateVersion ?? "v5";
   const reverseBusy = reverseJobs.some((job) => job.status === "processing");
   useEffect(() => {
     void loadReverseHistory();
@@ -3985,6 +3994,12 @@ function ReversePanel() {
     setToast(t("shared.reusedToGenerate"));
   }
 
+  async function setReverseTemplateVersion(version: "v4.5" | "v5") {
+    if (version === reverseTemplateVersion) return;
+    await window.naiDesktop.setSetting("reversePromptTemplateVersion", version);
+    await refreshSettings();
+  }
+
   // Apply selected template to the reverse prompt result
   function applyTemplate(tpl: PromptTemplate) {
     const base = reversePromptText.trim();
@@ -4046,6 +4061,22 @@ function ReversePanel() {
             </small>
           </div>
         )}
+
+        <div className="reverse-scope-card reverse-template-version-card">
+          <span className="field-label-row">{t("inspect.templateVersionTitle")}</span>
+          <div className="mode-selector compact">
+            {(["v4.5", "v5"] as const).map((version) => (
+              <button
+                key={version}
+                className={clsx("mode-btn", reverseTemplateVersion === version && "active")}
+                onClick={() => void setReverseTemplateVersion(version)}
+              >
+                {t(`inspect.templateVersion.${version === "v4.5" ? "v45" : "v5"}`)}
+              </button>
+            ))}
+          </div>
+          <small>{t("inspect.templateVersionHint")}</small>
+        </div>
 
         <div className="mode-selector">
           {modes.map(([val, label, tip]) => (
@@ -4318,6 +4349,9 @@ function PromptConverterPanel() {
           />
           <span>{t("convert.knownCharacter")}</span>
         </label>
+        <small className="prompt-character-hint">
+          {t("convert.knownCharacterHint")}
+        </small>
 
         <PromptCodexEnhancementCard
           kind="convert"
@@ -6438,6 +6472,16 @@ function MainPage() {
   const wsRightWidth = useAppStore((state) => state.wsRightWidth);
   const uiCaptureParams = useMemo(() => new URLSearchParams(window.location.search), []);
   const uiCaptureTheme = uiCaptureParams.get("uiTheme");
+  // Final render-boundary guard: even if a future IPC path forgets to sanitize
+  // an upstream HTML error page, it can never expand across the application.
+  const displayStatusText = useMemo(
+    () => statusText ? compactRemoteErrorText(statusText, { serviceLabel: "NovelAI API 源", maxLength: 240 }) : "",
+    [statusText],
+  );
+  const displayToast = useMemo(
+    () => toast ? compactRemoteErrorText(toast, { serviceLabel: "NovelAI API 源", maxLength: 360 }) : "",
+    [toast],
+  );
 
   useEffect(() => {
     const captureSurface = uiCaptureParams.get("uiCapture");
@@ -6529,14 +6573,21 @@ function MainPage() {
         </div>
       </div>
       <footer className="status-bar">
-        <span>{statusText}</span>
+        <span className="status-bar-message" title={displayStatusText}>{displayStatusText}</span>
         {currentImage && (
           <span>{format(new Date(currentImage.createdAt), "yyyy-MM-dd HH:mm:ss")}</span>
         )}
       </footer>
       {showOnboarding && <OnboardingWizard />}
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
-      {toast && <div className="toast">{toast}</div>}
+      {displayToast && (
+        <div className="toast" role="alert">
+          <span>{displayToast}</span>
+          <button type="button" aria-label={t("common.close")} title={t("common.close")} onClick={clearToast}>
+            <Icon name="close" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

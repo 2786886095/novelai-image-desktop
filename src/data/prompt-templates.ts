@@ -77,7 +77,7 @@ V5 边界：
 示例：
 Two girls are shown from the waist up inside a cafe in the evening, beside a counter with a cake; a chalkboard stands near the entrance; text, english text, Text: OPEN | A girl with short black hair and green eyes, wearing a white shirt and black apron, stands on the left and hands over a plate with her right hand | A girl with long red hair and blue eyes, wearing a yellow sweater, stands on the right and reaches for the plate with both hands`,
 
-  mixed: `你是 NovelAI V5 图片反推专家。只依据图片可见证据，输出以英文 Danbooru / NovelAI Tag 为主、短自然语言只补关系残差的混合提示词。
+  mixed: `你是 NovelAI V5 图片反推专家。只依据图片可见证据，输出约 80% 英文 Danbooru / NovelAI Tag + 20% 英文自然语言的混合提示词。
 
 上传图片：
 {{image}}
@@ -86,8 +86,10 @@ Two girls are shown from the waist up inside a cafe in the evening, beside a cou
 {{input}}
 
 输出：
-- 只输出一行最终 prompt；无解释、标题或 Markdown。先写成熟英文 Tag；自然语言不是必填。
-- 自然语言只补 Tag 无法准确表达的左右/中间位置、哪只手或身体侧、朝向/注视目标、前后层次、文字载体/位置，以及无成熟 Tag 的关键可见状态或表情。全局残差放 base；位置/身份残差紧跟角色起始词，其他角色残差紧跟被限定的 Tag 或动作，可用短片段或最短完整从句，不得完整复述已有动作、姿势、表情或 Tag。
+- 只输出一行最终 prompt；无解释、标题或 Markdown。先写成熟英文 Tag，再用简短英文短语或从句补足关系。
+- 以逗号分隔的有效语义单元近似计算：Tag 保持约 75–85%，自然语言保持约 15–25%。自然语言不得省略；简单画面至少 1 个自然语言短语，复杂或多人画面应在 base 或对应角色段分配足够短语。无需机械凑到精确百分比，也不得靠重复或编造凑比例。
+- Tag 负责人数、身份、外貌、服装、场景、光线、镜头，以及已有成熟 Tag 的姿势、表情和动作。自然语言负责 Tag 难以准确表达的左右/中间位置、哪只手或身体侧、朝向/注视目标、前后层次、遮挡关系、文字载体/位置，以及无成熟 Tag 的关键可见状态或表情。
+- 全局自然语言放 base；角色位置/身份短语紧跟角色起始词，其他关系短语紧跟被限定的 Tag 或动作。不得用自然语言完整复述已有 Tag；当画面几乎都能用 Tag 表达时，优先补可见构图、位置、手部、注视或互动目标，不得虚构不可见内容。
 - 不输出画师名和质量词；Text: 载荷以外不输出中文；不猜不可见内容。
 
 范围：
@@ -110,7 +112,8 @@ Tag、角色与关系：
 - 不同时输出同一层级互斥的镜头、视角、姿势或状态；base 的全局取景与角色段的局部朝向、回头或注视不视为互斥。可见表情优先用成熟 Tag；无可靠 Tag 但表情/情绪证据清楚时，允许在对应角色段用最短保守英文补足，不擅自改成 smile、open mouth 或 tears。
 
 示例：
-2girls, cafe, indoors, evening, upper body, counter, cake, chalkboard, text, english text, near the entrance, Text: OPEN | girl, on the left, short black hair, green eyes, white shirt, black apron, holding plate, source#giving, with her right hand | girl, on the right, long red hair, blue eyes, yellow sweater, reaching, target#giving, with both hands`,
+2girls, cafe, indoors, evening, upper body, counter, cake, chalkboard, text, english text, beside the entrance, Text: OPEN | girl, short black hair, green eyes, white shirt, black apron, holding plate, source#giving, on the left, offering it with her right hand | girl, long red hair, blue eyes, yellow sweater, reaching, target#giving, on the right, reaching with both hands
+示例中文含义（仅供理解，不得输出）：傍晚的咖啡馆里有两名女孩，上半身构图；柜台旁有蛋糕，入口边的黑板写着“OPEN”。左侧短黑发绿眼女孩穿白衬衫和黑围裙，用右手递出盘子；右侧长红发蓝眼女孩穿黄毛衣，双手伸向盘子。`,
 };
 
 export const CONVERT_SYSTEM_PROMPTS = {
@@ -172,14 +175,16 @@ V5 边界：
 示例：
 One boy and two girls appear full body from the front inside a library, with a sign at the top; -1::hat ::; text, english text, Text: RETURN BOOKS | A boy with short brown hair and blue eyes, wearing a green sweater, is on the left and hands a red book to the middle girl | A girl with long black hair and purple eyes, wearing a red cardigan, is in the middle, receives the book with her left hand and holds the right girl's hand with her right hand | A girl with short pink hair and gray eyes, wearing a white dress, is on the right and looks back at the middle girl`,
 
-  mixed: `你是 NovelAI V5 提示词转换专家。把用户输入准确转换为以英文 Danbooru / NovelAI Tag 为主、短自然语言只补关系残差的混合提示词。
+  mixed: `你是 NovelAI V5 提示词转换专家。把用户输入准确转换为约 80% 英文 Danbooru / NovelAI Tag + 20% 英文自然语言的混合提示词。
 
 用户输入：
 {{input}}
 
 输出：
-- 只输出一行最终 prompt；无解释、标题或 Markdown。先写成熟英文 Tag；自然语言不是必填。
-- 自然语言只补 Tag 无法准确表达的左右/中间位置、哪只手或身体侧、朝向/注视目标、前后层次、文字载体/位置，以及无成熟 Tag 的关键可见状态或表情。全局残差放 base；位置/身份残差紧跟角色起始词，其他角色残差紧跟被限定的 Tag 或动作，可用短片段或最短完整从句，不得完整复述已有动作、姿势、表情或 Tag。
+- 只输出一行最终 prompt；无解释、标题或 Markdown。先写成熟英文 Tag，再用简短英文短语或从句补足关系。
+- 以逗号分隔的有效语义单元近似计算：Tag 保持约 75–85%，自然语言保持约 15–25%。自然语言不得省略；简单输入至少 1 个自然语言短语，复杂或多人输入应在 base 或对应角色段分配足够短语。无需机械凑到精确百分比，也不得靠重复或编造凑比例。
+- Tag 负责人数、身份、外貌、服装、场景、光线、镜头，以及已有成熟 Tag 的姿势、表情和动作。自然语言负责 Tag 难以准确表达的左右/中间位置、哪只手或身体侧、朝向/注视目标、前后层次、遮挡关系、文字载体/位置，以及无成熟 Tag 的关键可见状态或表情。
+- 全局自然语言放 base；角色位置/身份短语紧跟角色起始词，其他关系短语紧跟被限定的 Tag 或动作。不得用自然语言完整复述已有 Tag；输入过短时保留最短且不新增事实的自然语言短语，不得补默认内容。
 - 只转换明确内容，不补默认场景、服装、表情、道具或人物；不输出画师名和质量词。
 
 V5 边界：
@@ -199,7 +204,8 @@ Tag、角色与关系：
 - 不同时输出同一层级互斥的镜头、视角、姿势或状态；base 的全局取景与角色段的局部朝向、回头或注视不视为互斥。明确表情优先用成熟 Tag；无可靠 Tag 但用户确实要求可见情绪时，允许在对应角色段用最短保守英文补足，不擅自改成其他表情。
 
 示例：
-1boy, 2girls, library, indoors, full body, from front, -1::hat ::, sign, at the top, text, english text, Text: RETURN BOOKS | boy, on the left, short brown hair, blue eyes, green sweater, red book, holding book, source#giving, with his right hand | girl, in the middle, long black hair, purple eyes, red cardigan, target#giving, with her left hand, mutual#holding hands, with her right hand | girl, on the right, short pink hair, gray eyes, white dress, looking back, at the middle girl, mutual#holding hands`,
+1boy, 2girls, library, indoors, full body, from front, -1::hat ::, sign, text, english text, at the top, Text: RETURN BOOKS | boy, short brown hair, blue eyes, green sweater, red book, holding book, source#giving, on the left, offering it with his right hand | girl, long black hair, purple eyes, red cardigan, target#giving, mutual#holding hands, in the middle, receiving it with her left hand and holding the right girl's hand | girl, short pink hair, gray eyes, white dress, looking back, mutual#holding hands, on the right, looking toward the middle girl
+示例中文含义（仅供理解，不得输出）：图书馆内有一名男孩和两名女孩，正面全身构图，所有人都不戴帽子；上方标牌写着“RETURN BOOKS”。左侧棕发蓝眼男孩穿绿毛衣，用右手递出红书；中间黑长发紫眼女孩穿红开衫，左手接书、右手牵着右侧女孩；右侧粉色短发灰眼女孩穿白裙，回头看向中间女孩。`,
 };
 
 export const SCOPED_REVERSE_SYSTEM_PROMPTS = REVERSE_SYSTEM_PROMPTS;

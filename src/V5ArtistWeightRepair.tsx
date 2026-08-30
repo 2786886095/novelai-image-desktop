@@ -565,8 +565,8 @@ export default function V5ArtistWeightRepair({
 
   const completed = results.filter((item) => item.status === "done" || item.status === "failed").length;
   return <>
-    <main className="v5-artist-repair">
-      <header className="v5-artist-repair-hero">
+    <main className="artist-lab v5-artist-repair artist-string-tool">
+      <header className="artist-lab-hero v5-artist-repair-hero">
         <div>
           <span>{drawMode ? "V5 ARTIST DRAW" : "V4.5 → V5"}</span>
           <h2>{drawMode ? text.drawPageTitle : text.title}</h2>
@@ -577,11 +577,11 @@ export default function V5ArtistWeightRepair({
 
       {!drawMode && (
         <>
-          <section className="v5-artist-repair-card evidence">
+          <section className="artist-lab-panel v5-artist-repair-card evidence">
             <div className="v5-artist-repair-note-icon"><Icon name="info" /></div>
             <div><b>{text.noteTitle}</b><p>{text.note}</p><small>{text.safe}</small></div>
           </section>
-          <section className="v5-artist-repair-card editor">
+          <section className="artist-lab-panel v5-artist-repair-card editor">
             <div className="v5-artist-repair-section-head"><div><b>{text.strategy}</b><span>×0.333–0.5</span></div></div>
             <div className="v5-artist-repair-editors">
               <label className="source"><span>{text.input}</span><textarea value={input} placeholder={text.inputHint} onChange={(event) => { setInput(event.target.value); setOutput(""); }} /></label>
@@ -594,13 +594,12 @@ export default function V5ArtistWeightRepair({
               <label className="wide"><span>{text.basePrompt}</span><textarea value={basePrompt} onChange={(event) => setBasePrompt(event.target.value)} /></label>
               <fieldset className="v5-seed-control wide"><legend>{text.seedMode}</legend><label><input type="radio" checked={seedMode === "fixed"} onChange={() => setSeedMode("fixed")} />{text.fixedSeed}</label><label><input type="radio" checked={seedMode === "random"} onChange={() => setSeedMode("random")} />{text.randomSeed}</label>{seedMode === "fixed" && <div><NumericDraftInput aria-label={text.seed} min={1} max={2147483647} step={1} value={seed} normalize={(value) => Math.floor(value)} onCommit={setSeed} /><Button variant="ghost" onClick={() => setSeed(freshSeed())}>{text.randomizeSeed}</Button></div>}</fieldset>
             </div>
-            <div className="v5-artist-repair-actions"><Button variant="primary" onClick={repair}>{text.run}</Button><Button disabled={!output} onClick={() => void navigator.clipboard.writeText(output).then(() => setCopied(true))}>{copied ? text.copied : text.copy}</Button><span className={message === text.none ? "warning" : ""}>{message}</span></div>
           </section>
         </>
       )}
 
       {drawMode && (
-          <section className="v5-artist-repair-card v5-weight-draw-panel">
+          <section className="artist-lab-panel v5-artist-repair-card v5-weight-draw-panel">
             <div className="v5-weight-draw-heading">
               <div><h3>{text.drawTitle}</h3><p>{text.drawHint}</p></div>
               <Button variant="ghost" onClick={restoreDefaults}><Icon name="refresh" /> {text.reset}</Button>
@@ -625,7 +624,7 @@ export default function V5ArtistWeightRepair({
           </section>
       )}
 
-      <details className="v5-artist-repair-card random-generation-settings v5-draw-generation-settings" open>
+      <details className="artist-lab-panel v5-artist-repair-card random-generation-settings v5-draw-generation-settings" open>
             <summary>
               <span><b>{paramText.title}</b><small>{paramText.hint}</small></span>
               <span className="random-generation-header-actions">
@@ -661,13 +660,18 @@ export default function V5ArtistWeightRepair({
             </div>
       </details>
 
-      <section className="v5-artist-repair-card v5-draw-run-card">
-        <div className="v5-weight-draw-actions">{drawMode && <Button onClick={draw} disabled={running}><Icon name="dice" />{text.draw}</Button>}{running ? <Button variant="danger" onClick={() => { cancelRef.current = true; void window.naiDesktop.cancel(); }}>{text.stop}</Button> : <Button variant="primary" onClick={() => void generateBatch()} disabled={results.length === 0}>{text.generate}</Button>}<span className={message === text.drawNone || message === text.none ? "warning" : ""}>{running ? interpolate(text.generating, { done: completed, total: results.length }) : message}</span></div>
+      <section className="artist-result-toolbar artist-string-result-toolbar">
+        <div className="artist-result-actions">
+          {drawMode ? <Button onClick={draw} disabled={running}><Icon name="dice" />{text.draw}</Button> : <Button onClick={repair} disabled={running}><Icon name="dice" />{text.run}</Button>}
+          {running ? <Button variant="danger" onClick={() => { cancelRef.current = true; void window.naiDesktop.cancel(); }}>{text.stop}</Button> : <Button variant="primary" onClick={() => void generateBatch()} disabled={results.length === 0}>{text.generate}</Button>}
+          {!drawMode && <Button disabled={!output} onClick={() => void navigator.clipboard.writeText(output).then(() => setCopied(true))}>{copied ? text.copied : text.copy}</Button>}
+          <span className={message === text.drawNone || message === text.none ? "warning" : ""}>{running ? interpolate(text.generating, { done: completed, total: results.length }) : message}</span>
+        </div>
+        <nav className="artist-result-tabs artist-string-result-tabs" aria-label={`${text.results} / ${text.favorites}`}><button type="button" className={!showFavorites ? "active" : ""} onClick={() => setShowFavorites(false)}><span>{text.results}</span><b>{results.length}</b></button><button type="button" className={showFavorites ? "active" : ""} onClick={() => { setFavorites(loadArtistFavorites(favoriteCollection)); setShowFavorites(true); }}><span>{text.favorites}</span><b>{favorites.length}</b></button></nav>
+        <small className="artist-result-library-note">{text.sharedFavorites}</small>
       </section>
-
-      <nav className="v5-draw-tabs"><button className={!showFavorites ? "active" : ""} onClick={() => setShowFavorites(false)}>{text.results}<b>{results.length}</b></button><button className={showFavorites ? "active" : ""} onClick={() => { setFavorites(loadArtistFavorites(favoriteCollection)); setShowFavorites(true); }}>{text.favorites}<b>{favorites.length}</b></button><small>{text.sharedFavorites}</small></nav>
-      {!showFavorites && (results.length > 0 ? <section className="v5-draw-grid">{results.map((item) => renderCandidate(item))}</section> : <div className="v5-draw-empty">{drawMode ? text.noResults : text.repairNoResults}</div>)}
-      {showFavorites && (favorites.length > 0 ? <section className="v5-draw-grid">{favorites.map((item) => renderCandidate(item, true))}</section> : <div className="v5-draw-empty">{text.noFavorites}</div>)}
+      {!showFavorites && (results.length > 0 ? <section className="artist-candidate-grid v5-draw-grid">{results.map((item) => renderCandidate(item))}</section> : <div className="artist-queue-empty v5-draw-empty">{drawMode ? text.noResults : text.repairNoResults}</div>)}
+      {showFavorites && (favorites.length > 0 ? <section className="artist-candidate-grid v5-draw-grid">{favorites.map((item) => renderCandidate(item, true))}</section> : <div className="artist-queue-empty v5-draw-empty">{text.noFavorites}</div>)}
     </main>
     {previewCandidate?.image && <AppPortal><div className="modal-backdrop artist-result-preview-backdrop" role="dialog" aria-modal="true" aria-label={text.preview} onMouseDown={() => setPreviewCandidate(null)}><div className="artist-result-preview" onMouseDown={(event) => event.stopPropagation()}><button type="button" className="artist-result-preview-close" aria-label={text.back} onClick={() => setPreviewCandidate(null)}><Icon name="close" /></button><img src={previewCandidate.image.fileUrl} alt={previewCandidate.prompt} /><footer><b>{modelLabel(previewCandidate.image.model || previewCandidate.generationModel || generationParams.model)}</b><span>{previewCandidate.image.width}×{previewCandidate.image.height}</span></footer></div></div></AppPortal>}
   </>;

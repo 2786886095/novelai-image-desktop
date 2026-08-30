@@ -2107,6 +2107,7 @@ class AppState extends ChangeNotifier {
       knownCharacter: reverseKnownCharacter,
       systemTemplate: resolvedPromptTemplate('reverse', reverseMode,
           scoped: reverseScope != ReversePromptScope.full),
+      templateVersion: settings.reversePromptTemplateVersion,
     );
     await BackgroundQueueService.stop(owner);
     // "Cancel" just removes the job from the tracker (the in-flight HTTP
@@ -2299,9 +2300,15 @@ class AppState extends ChangeNotifier {
   }) {
     final key = mode.value;
     if (kind == 'reverse') {
-      final override = settings.reversePromptTemplates[key]?.trim() ?? '';
-      if (override.isNotEmpty) return override;
-      return promptTemplates.get(scoped ? 'scopedReverse' : 'reverse', mode);
+      if (settings.reversePromptTemplateVersion == 'v5') {
+        final override = settings.reversePromptTemplates[key]?.trim() ?? '';
+        if (override.isNotEmpty) return override;
+      }
+      return promptTemplates.getReverse(
+        mode,
+        scoped: scoped,
+        templateVersion: settings.reversePromptTemplateVersion,
+      );
     }
     if (kind == 'convert') {
       final override = settings.convertPromptTemplates[key]?.trim() ?? '';

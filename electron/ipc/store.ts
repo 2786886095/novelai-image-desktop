@@ -271,6 +271,7 @@ export function defaultSettings(): AppSettings {
     visionApiModel: "gpt-4o",
     visionSystemPrompt: "",
     reversePromptMode: "tags" as const,
+    reversePromptTemplateVersion: "v5" as const,
     reversePromptTemplates: emptyModeTemplates(),
     comicAnalyzePromptTemplates: { tags: "", natural: "", mixed: "" },
     comicAnalyzePromptTemplate: COMIC_ANALYZE_SYSTEM_PROMPT,

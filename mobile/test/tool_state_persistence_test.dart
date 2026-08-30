@@ -15,6 +15,7 @@ void main() {
       final storage = _MemoryStorage(
         AppSettings(
           reversePromptMode: 'mixed',
+          reversePromptTemplateVersion: 'v4.5',
           convertPromptMode: 'mixed',
           inpaintModel: 'nai-diffusion-3-inpainting',
           inpaintStrength: 0.82,
@@ -37,6 +38,7 @@ void main() {
 
       expect(state.booted, isTrue);
       expect(state.reverseMode, ReversePromptMode.mixed);
+      expect(state.settings.reversePromptTemplateVersion, 'v4.5');
       expect(state.convertMode, ReversePromptMode.mixed);
       expect(state.inpaintModel, 'nai-diffusion-3-inpainting');
       expect(state.inpaintStrength, closeTo(0.82, 1e-9));
@@ -66,10 +68,13 @@ void main() {
         ..upscaleScale = 4
         ..directorTool = 'declutter'
         ..augmentOptions.emotion = 'sad';
+      await state.setSettings(
+          (settings) => settings.reversePromptTemplateVersion = 'v4.5');
       await state.persistToolState();
 
       final saved = storage.settings;
       expect(saved.reversePromptMode, 'natural');
+      expect(saved.reversePromptTemplateVersion, 'v4.5');
       expect(saved.convertPromptMode, 'tags');
       expect(saved.inpaintModel, 'nai-diffusion-4-curated-inpainting');
       expect(saved.upscaleScale, 4);
@@ -84,6 +89,7 @@ void main() {
       );
       await reopened.load();
       expect(reopened.convertMode, ReversePromptMode.tags);
+      expect(reopened.settings.reversePromptTemplateVersion, 'v4.5');
       expect(reopened.directorTool, 'declutter');
       expect(reopened.upscaleScale, 4);
     });

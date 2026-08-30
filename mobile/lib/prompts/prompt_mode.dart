@@ -285,31 +285,44 @@ ParsedPromptResult parsePromptVariantResponse(String raw, bool knownCharacter) {
 String knownCharacterRuntimeInstruction(
   ReversePromptMode mode,
   String source,
-  bool knownCharacter,
-) {
+  bool knownCharacter, [
+  String templateVersion = 'v5',
+]) {
   // Kept in Chinese to match the main system template (synced from desktop's
   // CONVERT_SYSTEM_PROMPTS/REVERSE_SYSTEM_PROMPTS, both Chinese) — mixing
   // languages within one system prompt measurably hurt output quality (the
   // model treated an appended English block as a lower-priority afterthought
   // instead of an integral part of the template). See desktop's
   // src/prompt-mode.ts knownCharacterRuntimeInstruction for the same fix.
+  final versionLabel = templateVersion == 'v4.5' ? 'V4.5' : 'V5';
   final modeText = switch (mode) {
-    ReversePromptMode.natural => '使用简洁的英文自然语言 NovelAI 提示词。',
+    ReversePromptMode.natural => '使用简洁的英文自然语言 NovelAI $versionLabel 提示词。',
     ReversePromptMode.mixed =>
-      '使用简洁的混合 NovelAI 提示词：以 Danbooru tag 为主，只在需要时加入简短的自然语言。',
-    ReversePromptMode.tags => '使用简洁的英文逗号分隔 Danbooru / NovelAI tag。',
+      '使用 NovelAI $versionLabel 混合提示词：约 80% Danbooru tag + 20% 简短英文自然语言，两部分都不得省略。',
+    ReversePromptMode.tags =>
+      '使用简洁的英文逗号分隔 Danbooru / NovelAI $versionLabel tag。',
   };
   if (knownCharacter) {
+    final identityRules = source == 'convert'
+        ? [
+            'namePrompt：先确认角色与作品，使用规范 Danbooru 角色 Tag；重名角色用作品名括号消歧。角色 Tag 已包含的默认外貌和默认服装不重复，只保留用户明确要求的变化、动作与场景。',
+            'featurePrompt：删除全部角色名、作品名和版权 Tag；把每名已确认角色替换为足以辨认的高置信度标志性外貌、默认服装与配饰。若用户指定了换装或外观变化，以用户描述为准，不得再混入默认服装；无法确认的细节不要猜。',
+          ]
+        : [
+            'namePrompt：只有能从图片或用户提示可靠确认时才使用规范角色 Tag；重名角色用作品名括号消歧。角色 Tag 已包含的默认外貌和默认服装不重复，只保留图片中可见的特殊服装、状态、动作与场景。',
+            'featurePrompt：删除全部角色名、作品名和版权 Tag；只用图片中可见的外貌、服装与配饰识别每名角色，不调用不可见的角色设定补全画面。',
+          ];
     return [
       '已知网络/游戏/动漫角色模式已开启。',
+      '本段输出契约高于基础模板中的“只输出一行最终 prompt”：外层只返回 JSON，两个字段值各自仍必须是一行英文 Prompt。',
       '只输出严格 JSON，必须且只能包含这两个字符串字段：namePrompt 和 featurePrompt。',
-      '两个字段必须描述同一完整画面，并遵守当前模式、V5 多人分段、互动、权重和 Text: 规则；区别只能是角色身份写法。',
-      'namePrompt 使用准确且已确认的角色 tag/英文名；角色 tag 已包含的默认外貌与服装不重复，除非图片或用户明确要求变化。',
-      'featurePrompt 不写角色名，只用简短的可见外貌与服装区分角色；不得减少或新增其他画面内容。',
+      '两个字段必须描述同一完整画面，并分别遵守当前模式、NovelAI $versionLabel 多人分段、互动、权重、Text: 与个人法典规则；场景、动作、位置、构图、道具和文字必须一致，区别只能是角色身份写法。',
+      ...identityRules,
+      '多人时，namePrompt 与 featurePrompt 的角色段数量和顺序必须完全一致，并逐人完成角色 Tag ↔ 特征组替换。',
       modeText,
       source == 'reverse'
           ? '如果反推范围是角色，除非需要识别可见的特殊服装或状态，否则不要描述整个场景。'
-          : '不要凭空编造角色 tag 或用户描述之外的额外默认服装、外观细节。',
+          : '角色知识只用于确认规范角色 Tag 和生成特征版所需的高置信度标志性特征；不得借此新增用户未要求的动作、场景、表情或道具。',
     ].join('\n');
   }
   return [
@@ -319,11 +332,26 @@ String knownCharacterRuntimeInstruction(
   ].join('\n');
 }
 
-String modeUserInstruction(ReversePromptMode mode, String source) {
+String modeUserInstruction(
+  ReversePromptMode mode,
+  String source, {
+  bool knownCharacter = false,
+  String templateVersion = 'v5',
+}) {
+  final versionLabel = templateVersion == 'v4.5' ? 'V4.5' : 'V5';
+  final outputContract = knownCharacter
+      ? [
+          'Return strict JSON only, with exactly two string fields: `namePrompt` and `featurePrompt`; do not add Markdown or any third field.',
+          'Each field must contain one complete English prompt line for the same image. Keep scene, action, position, composition, props, text, character count, and character order identical in both fields.',
+          source == 'convert'
+              ? 'In namePrompt use verified canonical character tags. In featurePrompt remove all character/copyright names and replace each character with high-confidence signature appearance, outfit, and accessories; explicit user changes override canonical defaults.'
+              : 'In namePrompt use only reliably verified character tags. In featurePrompt remove all character/copyright names and replace each character only with appearance, outfit, and accessories visible in the image.',
+        ]
+      : ['Return exactly one English prompt line.'];
   if (mode == ReversePromptMode.natural) {
     return [
-      'Output mode: natural-language NovelAI V5 prompt.',
-      'Return exactly one English prompt line.',
+      'Output mode: natural-language NovelAI $versionLabel prompt.',
+      ...outputContract,
       'Use concise English prose, not a comma-separated tag list. Dataset prefixes, numeric weights, and `text, <language> text, Text: ...` are the only syntax exceptions.',
       'For multiple characters use `base scene | A boy/girl ... | A boy/girl ...`; every segment must identify position and action without vague pronouns.',
       source == 'convert'
@@ -333,15 +361,16 @@ String modeUserInstruction(ReversePromptMode mode, String source) {
   }
   if (mode == ReversePromptMode.mixed) {
     return [
-      'Output mode: mixed NovelAI V5 prompt.',
-      'Return exactly one English prompt line.',
-      'Use mature tags first. Add prose only for tag-uncovered position, hand/side, target, depth, or text placement; never restate an existing tag.',
+      'Output mode: mixed NovelAI $versionLabel prompt.',
+      ...outputContract,
+      'Keep approximately 75–85% mature Danbooru/NovelAI tag units and 15–25% concise English natural-language relation phrases. Both parts are mandatory; even a short prompt needs at least one non-invented prose phrase.',
+      'Use prose for tag-uncovered position, hand/side, target, depth, overlap, or text placement; never pad the ratio by inventing facts or fully restating existing tags.',
       'Discard retrieved candidates that are not exact matches. Use `base | character 1 | character 2` for multiple people and do not return pure prose.',
     ].join('\n');
   }
   return [
-    'Output mode: Danbooru tag prompt.',
-    'Return exactly one English prompt line.',
+    'Output mode: Danbooru tag prompt for NovelAI $versionLabel.',
+    ...outputContract,
     'Use exact mature Danbooru / NovelAI tags once, discard inexact retrieved candidates, and do not add synonym or prose repetitions.',
     'Use comma-separated tags and `base | character 1 | character 2` for multiple people; do not output prose.',
   ].join('\n');
@@ -395,6 +424,40 @@ bool _looksLikeNaturalLanguage(String value) {
   return shortTags < 5;
 }
 
+double _tagTokenRatio(String value) {
+  final tokens = cleanPromptOutput(value)
+      .split(RegExp(r'[,|]'))
+      .map((item) => item.trim())
+      .where((item) => item.isNotEmpty)
+      .toList(growable: false);
+  if (tokens.length < 5) return 0;
+  final tagLike = tokens.where((token) {
+    final words = token.split(RegExp(r'\s+')).where((item) => item.isNotEmpty);
+    if (words.length > 4 || RegExp(r'[.!?;:]').hasMatch(token)) return false;
+    return !RegExp(
+      r'\b(?:is|are|was|were|with|while|shown|view|beside|nearby|inside|outside|drawing|juggling)\b',
+      caseSensitive: false,
+    ).hasMatch(token);
+  }).length;
+  return tagLike / tokens.length;
+}
+
+bool _looksLikeTagList(String value) {
+  final text = cleanPromptOutput(value);
+  if (text.isEmpty) return false;
+  final startsWithCount = RegExp(
+    r'^(?:\d+\s*(?:girls?|boys?|people|others?)|[1-6](?:girl|boy)|solo|no humans|background dataset)\b',
+    caseSensitive: false,
+  ).hasMatch(text);
+  final commas = ','.allMatches(text).length;
+  return (startsWithCount && commas >= 3) || _tagTokenRatio(text) >= 0.72;
+}
+
+bool _hasMixedNaturalLanguage(String value) => RegExp(
+      r'\b(?:on the left|on the right|in the middle|at the center|beside|next to|in front of|behind|toward|towards|with (?:his|her|their|its|both)|while|who |offering|receiving|reaching with|looking (?:at|toward)|partly hidden|overlapping)\b',
+      caseSensitive: false,
+    ).hasMatch(cleanPromptOutput(value));
+
 List<String> promptRuleViolations(
   ReversePromptMode mode,
   String output, [
@@ -404,10 +467,15 @@ List<String> promptRuleViolations(
   final cleaned = cleanPromptOutput(output);
   if (cleaned.isEmpty) return const [];
   final issues = <String>{};
-  if (_looksLikeNaturalLanguage(cleaned)) {
-    issues.add(mode == ReversePromptMode.tags
-        ? '输出不是以逗号分隔的 Danbooru Tag 格式'
-        : '混合模式输出退化成了纯自然语言，缺少 Tag 主体');
+  if (mode == ReversePromptMode.tags && _looksLikeNaturalLanguage(cleaned)) {
+    issues.add('输出不是以逗号分隔的 Danbooru Tag 格式');
+  } else if (mode == ReversePromptMode.mixed) {
+    if (_looksLikeNaturalLanguage(cleaned) && !_looksLikeTagList(cleaned)) {
+      issues.add('混合模式输出退化成了纯自然语言，缺少 Tag 主体');
+    } else if (_looksLikeTagList(cleaned) &&
+        !_hasMixedNaturalLanguage(cleaned)) {
+      issues.add('混合模式缺少约 20% 的自然语言关系短语');
+    }
   }
   final tokens = cleaned
       .split(RegExp(r'[|,]'))
@@ -439,16 +507,17 @@ List<String> promptRuleViolations(
 
 String promptRuleRepairSystemPrompt(
   ReversePromptMode mode,
-  bool knownCharacter,
-) =>
+  bool knownCharacter, [
+  String templateVersion = 'v5',
+]) =>
     [
-      '你是 NovelAI V5 提示词规则校验与定向修复器。不要重新创作画面，只修复明确列出的违规项。',
+      '你是 NovelAI ${templateVersion == 'v4.5' ? 'V4.5' : 'V5'} 提示词规则校验与定向修复器。不要重新创作画面，只修复明确列出的违规项。',
       knownCharacter
           ? '只输出严格 JSON，且只能包含 namePrompt 与 featurePrompt 两个字符串字段；两份提示词都必须完成相同检查。'
           : '只输出修复后的单行英文 Prompt，不要解释、标题或 Markdown。',
       mode == ReversePromptMode.tags
           ? '保持 Danbooru Tag 模式，以英文逗号分隔；多人继续使用 base | character 1 | character 2。'
-          : '保持混合模式，以 Danbooru Tag 为主，只有构图或互动确需澄清时才保留最短自然语言。',
+          : '保持混合模式：约 75–85% Danbooru Tag + 15–25% 简短英文自然语言，两部分都不得省略；不得靠重复或编造凑比例。',
       '成熟整词优先：一个成熟 Tag 已完整表达动作、姿态或构图时，只保留该 Tag 一次，删除拆解词、近义词和重复自然语言；未覆盖的关键差异才允许最少量补充。',
       '候选成熟 Tag 不贴合原始输入时必须舍弃，不能硬套；不得新增原始输入或图片中没有的内容。',
     ].join('\n');

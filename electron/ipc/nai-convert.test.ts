@@ -232,6 +232,162 @@ describe("prompt codex enhancement", () => {
     );
   });
 
+  it("applies known-character codex rules to both conversion variants", async () => {
+    axiosMock.post.mockResolvedValue({
+      data: {
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                namePrompt:
+                  "1girl, solo, furina_(genshin_impact), cafe, drinking tea",
+                featurePrompt:
+                  "1girl, solo, white hair, blue eyes, blue formal outfit, cafe, drinking tea",
+              }),
+            },
+            finish_reason: "stop",
+          },
+        ],
+      },
+    });
+    const { convertPromptText } = await import("./nai");
+
+    const result = await convertPromptText(
+      "芙宁娜在咖啡馆喝茶",
+      "tags",
+      true,
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.variants?.namePrompt).toContain("furina_(genshin_impact)");
+    expect(result.variants?.featurePrompt).not.toContain("furina");
+    expect(result.codexMatches?.some((item) =>
+      item.id === "guidance:known-character",
+    )).toBe(true);
+    const request = axiosMock.post.mock.calls[0]?.[1] as {
+      messages?: Array<{ role: string; content: string }>;
+    };
+    expect(request.messages?.[0]?.content).toContain(
+      "特征版必须删除角色名与作品名",
+    );
+    expect(request.messages?.[0]?.content).toContain(
+      "两个字段必须描述同一完整画面",
+    );
+    expect(request.messages?.[0]?.content).not.toContain("{{input}}");
+  });
+
+  it("retries once when a known-character conversion omits one variant", async () => {
+    axiosMock.post
+      .mockResolvedValueOnce({
+        data: {
+          choices: [
+            {
+              message: {
+                content:
+                  "1girl, solo, furina_(genshin_impact), cafe, drinking tea",
+              },
+              finish_reason: "stop",
+            },
+          ],
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  namePrompt:
+                    "1girl, solo, furina_(genshin_impact), cafe, drinking tea",
+                  featurePrompt:
+                    "1girl, solo, white hair, blue eyes, blue formal outfit, cafe, drinking tea",
+                }),
+              },
+              finish_reason: "stop",
+            },
+          ],
+        },
+      });
+    const { convertPromptText } = await import("./nai");
+
+    const result = await convertPromptText(
+      "芙宁娜在咖啡馆喝茶",
+      "tags",
+      true,
+    );
+
+    expect(result.ok).toBe(true);
+    expect(axiosMock.post).toHaveBeenCalledTimes(2);
+    expect(result.variants?.namePrompt).toContain("furina_(genshin_impact)");
+    expect(result.variants?.featurePrompt).toContain("white hair");
+    const recoveryRequest = axiosMock.post.mock.calls[1]?.[1] as {
+      messages?: Array<{ role: string; content: string }>;
+    };
+    expect(recoveryRequest.messages?.[0]?.content).toContain(
+      "个人法典规则",
+    );
+    expect(recoveryRequest.messages?.[1]?.content).toContain(
+      '"namePrompt":"...","featurePrompt":"..."',
+    );
+  });
+
+  it("keeps a complete known-character pair when rule repair returns only one variant", async () => {
+    settingsRef.current.promptRuleAutoRepairEnabled = true;
+    axiosMock.post
+      .mockResolvedValueOnce({
+        data: {
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  namePrompt:
+                    "1girl, furina_(genshin_impact), cafe, cafe, drinking tea",
+                  featurePrompt:
+                    "1girl, white hair, blue eyes, blue formal outfit, cafe, cafe, drinking tea",
+                }),
+              },
+              finish_reason: "stop",
+            },
+          ],
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  namePrompt:
+                    "1girl, furina_(genshin_impact), cafe, drinking tea",
+                }),
+              },
+              finish_reason: "stop",
+            },
+          ],
+        },
+      });
+    const { convertPromptText } = await import("./nai");
+
+    const result = await convertPromptText(
+      "芙宁娜在咖啡馆喝茶",
+      "tags",
+      true,
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.variants?.namePrompt).toContain("furina_(genshin_impact)");
+    expect(result.variants?.featurePrompt).toContain("white hair");
+    const repairRequest = axiosMock.post.mock.calls[1]?.[1] as {
+      messages?: Array<{ role: string; content: string }>;
+    };
+    expect(repairRequest.messages?.[0]?.content).toContain(
+      "特征版必须删除角色名与作品名",
+    );
+    expect(repairRequest.messages?.[0]?.content).toContain(
+      "本地 NovelAI 提示词法典",
+    );
+  });
+
   it("merges two-stage reverse into one visible call-log record", async () => {
     axiosMock.post
       .mockResolvedValueOnce({

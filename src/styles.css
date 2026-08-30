@@ -1881,6 +1881,12 @@ button { user-select: none; }
   color: var(--text-muted);
   font-size: 11.5px;
 }
+.status-bar-message {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 /* ── Modal ───────────────────────────────────────────────────────────────────── */
 .modal-backdrop {
@@ -2893,8 +2899,14 @@ button { user-select: none; }
   right: 20px;
   bottom: 34px;
   z-index: 2000;
-  pointer-events: none;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  pointer-events: auto;
+  width: min(480px, calc(100vw - 40px));
   max-width: 480px;
+  max-height: min(240px, 40vh);
+  overflow: auto;
   border: 1px solid rgba(109, 40, 217, 0.18);
   border-radius: var(--radius-xl);
   padding: 11px 16px;
@@ -2902,8 +2914,27 @@ button { user-select: none; }
   backdrop-filter: blur(12px);
   box-shadow: var(--shadow-lg);
   font-size: 13px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
   animation: toastIn 0.28s var(--ease-spring);
 }
+.toast > span { min-width: 0; flex: 1; }
+.toast > button {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: rgba(109, 40, 217, 0.08);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.toast > button:hover { background: rgba(109, 40, 217, 0.16); color: var(--text-primary); }
+.toast > button .ui-icon { width: 14px; height: 14px; }
 @keyframes toastIn {
   from { opacity: 0; transform: translateY(8px) scale(0.95); }
   to   { opacity: 1; transform: translateY(0)  scale(1);     }
@@ -8115,6 +8146,8 @@ button.prompt-chip-head {
 
 .v5-artist-repair-hero {
   display: flex;
+  width: 100%;
+  box-sizing: border-box;
   align-items: flex-start;
   justify-content: space-between;
   gap: 18px;
@@ -8133,6 +8166,8 @@ button.prompt-chip-head {
 .v5-artist-repair-hero p { margin: 0; color: var(--text-secondary); }
 
 .v5-artist-repair-card {
+  width: 100%;
+  box-sizing: border-box;
   max-width: 1120px;
   margin: 0 auto 14px;
   padding: 18px;
@@ -8163,8 +8198,7 @@ button.prompt-chip-head {
 .v5-artist-repair-card.evidence p { margin: 5px 0 8px; line-height: 1.65; }
 .v5-artist-repair-card.evidence small { color: var(--text-secondary); }
 
-.v5-artist-repair-section-head,
-.v5-artist-repair-actions {
+.v5-artist-repair-section-head {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -8256,10 +8290,6 @@ button.prompt-chip-head {
   font-size: 16px;
   font-weight: 800;
 }
-
-.v5-artist-repair-actions { flex-wrap: wrap; margin-top: 14px; }
-.v5-artist-repair-actions > span { color: var(--success); }
-.v5-artist-repair-actions > span.warning { color: #b45309; }
 
 .v5-weight-draw-panel { display: grid; gap: 16px; }
 .v5-weight-draw-heading {
@@ -8371,83 +8401,23 @@ button.prompt-chip-head {
   background: color-mix(in srgb, var(--accent-soft) 38%, var(--bg-canvas));
 }
 .v5-current-params span { color: var(--text-secondary); font-size: 12px; line-height: 1.4; }
-.v5-weight-draw-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; }
-.v5-weight-draw-actions > span { color: var(--accent); font-weight: 700; }
-.v5-draw-run-card { padding-block: 14px; }
-.v5-draw-tabs {
-  position: sticky;
-  top: -22px;
-  z-index: 4;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  max-width: 1120px;
-  margin: 18px auto 12px;
-  padding: 7px;
-  border: 1px solid var(--border);
-  border-radius: 17px;
-  background: color-mix(in srgb, var(--bg-canvas) 94%, transparent);
-  backdrop-filter: blur(16px);
-  box-shadow: var(--shadow-sm);
-}
-.v5-draw-tabs button {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-height: 38px;
-  padding: 0 14px;
-  border: 0;
-  border-radius: 12px;
-  color: var(--text-secondary);
-  background: transparent;
-  cursor: pointer;
-}
-.v5-draw-tabs button.active { color: white; background: linear-gradient(120deg, var(--accent), #22b8cf); }
-.v5-draw-tabs button b { min-width: 20px; padding: 2px 6px; border-radius: 999px; background: color-mix(in srgb, currentColor 14%, transparent); }
-.v5-draw-tabs small { margin-left: auto; padding-right: 9px; color: var(--text-secondary); }
 .v5-draw-grid {
   display: grid;
+  width: 100%;
+  box-sizing: border-box;
   grid-template-columns: repeat(auto-fill, minmax(245px, 1fr));
   gap: 13px;
   max-width: 1120px;
   margin: 0 auto;
 }
-.v5-draw-card {
-  display: grid;
-  align-content: start;
-  min-width: 0;
-  overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  background: var(--bg-canvas);
-  box-shadow: var(--shadow-sm);
-  content-visibility: auto;
-  contain-intrinsic-size: 430px;
-}
-.v5-draw-card > header,
-.v5-draw-card > footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; }
-.v5-draw-card > header { background: color-mix(in srgb, var(--accent-soft) 45%, var(--bg-canvas)); }
-.v5-draw-card > header span { color: var(--text-secondary); font-size: 12px; }
 .v5-draw-image { display: grid; place-items: center; overflow: hidden; color: var(--text-secondary); background: var(--bg-panel); }
 .v5-draw-image > svg { width: 34px; height: 34px; }
 .v5-draw-card.generating .v5-draw-image > svg { animation: spin .9s linear infinite; }
 .v5-draw-image img { width: 100%; height: 100%; object-fit: contain; }
-.v5-draw-card > code {
-  display: block;
-  max-height: 118px;
-  overflow: auto;
-  padding: 11px 12px;
-  color: var(--text-secondary);
-  background: color-mix(in srgb, var(--bg-panel) 72%, transparent);
-  font-family: inherit;
-  font-size: 12px;
-  line-height: 1.5;
-  overflow-wrap: anywhere;
-}
-.v5-draw-card > small.warning { padding: 0 12px; color: #b45309; overflow-wrap: anywhere; }
 .v5-draw-card .artist-error.empty { visibility: hidden; }
-.v5-draw-card > footer { border-top: 1px solid var(--border); }
 .v5-draw-empty {
+  width: 100%;
+  box-sizing: border-box;
   max-width: 1120px;
   margin: 0 auto;
   padding: 42px 18px;
@@ -8488,8 +8458,6 @@ button.prompt-chip-head {
   .v5-seed-control,
   .v5-current-params { grid-column: 1 / -1; }
   .v5-seed-control { align-items: stretch; flex-wrap: wrap; }
-  .v5-draw-tabs { top: -22px; flex-wrap: wrap; }
-  .v5-draw-tabs small { width: 100%; margin: 0; padding: 2px 8px; }
   .v5-draw-grid { grid-template-columns: 1fr; }
 }
 .comic-hero { display: none !important; }
@@ -11153,6 +11121,70 @@ html.theme-dark #root {
 .artist-result-tabs button.active b {
   background: var(--accent);
   color: white;
+}
+.artist-result-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 480px);
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: color-mix(in srgb, var(--bg-canvas) 92%, transparent);
+  box-shadow: var(--shadow-sm);
+}
+.artist-string-result-toolbar {
+  width: 100%;
+  box-sizing: border-box;
+  max-width: 1120px;
+  margin: 0 auto;
+}
+.artist-result-actions {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.artist-result-actions > span {
+  flex: 1 1 150px;
+  min-width: 0;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+.artist-result-actions > span.warning { color: #b45309; font-weight: 700; }
+.artist-result-toolbar > .artist-result-tabs {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+}
+.artist-result-library-note {
+  display: block;
+  width: 100%;
+  max-width: 1120px;
+  margin: -7px auto 0;
+  padding: 0 8px;
+  box-sizing: border-box;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+  text-align: right;
+}
+.artist-result-toolbar > .artist-result-library-note {
+  grid-column: 1 / -1;
+  max-width: none;
+  margin: -2px 0 0;
+  padding: 0 4px;
+}
+@media (max-width: 900px) {
+  .artist-result-toolbar { grid-template-columns: minmax(0, 1fr); }
+  .artist-result-toolbar > .artist-result-library-note { text-align: left; }
 }
 .artist-string-block em { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-style: normal; }
 .artist-copy-actions { display: flex; flex-wrap: wrap; gap: 6px; }

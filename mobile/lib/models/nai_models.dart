@@ -11,7 +11,7 @@ class NaiOption {
 }
 
 const appName = 'Langbai NovelAI Studio';
-const appVersion = '1.9.9';
+const appVersion = '2.0.0';
 
 const naiModels = <NaiOption>[
   NaiOption(
@@ -815,6 +815,7 @@ class AppSettings {
   // Last-used tool selections, persisted so they survive an app restart
   // (mirrors the desktop "last generation state").
   String reversePromptMode;
+  String reversePromptTemplateVersion;
   String convertPromptMode;
   String inpaintModel;
   double inpaintStrength;
@@ -887,6 +888,7 @@ class AppSettings {
     this.promptRuleAutoRepairEnabled = false,
     this.comicPromptTemplate = '',
     this.reversePromptMode = 'tags',
+    this.reversePromptTemplateVersion = 'v5',
     this.convertPromptMode = 'natural',
     this.inpaintModel = 'nai-diffusion-5-full-inpainting',
     this.inpaintStrength = 1,
@@ -963,6 +965,7 @@ class AppSettings {
         'promptRuleAutoRepairEnabled': promptRuleAutoRepairEnabled,
         'comicPromptTemplate': comicPromptTemplate,
         'reversePromptMode': reversePromptMode,
+        'reversePromptTemplateVersion': reversePromptTemplateVersion,
         'convertPromptMode': convertPromptMode,
         'inpaintModel': inpaintModel,
         'inpaintStrength': inpaintStrength,
@@ -1047,6 +1050,8 @@ class AppSettings {
         promptRuleAutoRepairEnabled: j['promptRuleAutoRepairEnabled'] ?? false,
         comicPromptTemplate: j['comicPromptTemplate'] ?? '',
         reversePromptMode: j['reversePromptMode'] ?? 'tags',
+        reversePromptTemplateVersion:
+            j['reversePromptTemplateVersion'] == 'v4.5' ? 'v4.5' : 'v5',
         convertPromptMode: j['convertPromptMode'] ?? 'natural',
         inpaintModel: _supportedOptionValue(j['inpaintModel'], naiInpaintModels,
             'nai-diffusion-5-full-inpainting'),

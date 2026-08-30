@@ -105,7 +105,19 @@ describe("prompt mode output handling", () => {
   it("repairs mixed mode when the model returns pure prose only", () => {
     const prose = "Two boys are in a classroom while one boy is drawing and another boy is juggling balls.";
     expect(modeNeedsRepair("mixed", prose)).toBe(true);
-    expect(modeRepairSystemPrompt("mixed")).toContain("mostly Danbooru tags");
+    expect(modeRepairSystemPrompt("mixed")).toContain("75–85%");
+  });
+
+  it("repairs mixed mode when the model returns a pure tag list", () => {
+    const tags =
+      "2girls, cafe, indoors, evening, upper body, counter, cake | girl, black hair, green eyes, holding plate | girl, red hair, blue eyes, reaching";
+    expect(modeNeedsRepair("mixed", tags)).toBe(true);
+    expect(
+      modeNeedsRepair(
+        "mixed",
+        `${tags}, on the right, reaching with both hands`,
+      ),
+    ).toBe(false);
   });
 
   it("parses known-character JSON variants", () => {
@@ -142,12 +154,25 @@ describe("prompt mode output handling", () => {
     expect(instruction).toContain("同一完整画面");
     expect(instruction).not.toContain("Keep both prompts short");
     expect(instruction).not.toContain("Only add outfit, feature, pose, action");
+    expect(instruction).toContain("规范 Danbooru 角色 Tag");
+    expect(instruction).toContain("高置信度标志性外貌、默认服装与配饰");
+    expect(instruction).toContain("用户指定了换装或外观变化");
+    expect(instruction).toContain("个人法典规则");
+  });
+
+  it("gives known-character conversion an unambiguous paired JSON contract", () => {
+    const text = buildConvertUserText("芙宁娜在咖啡馆喝茶", "mixed", "", true);
+    expect(text).toContain("exactly two string fields");
+    expect(text).toContain("namePrompt");
+    expect(text).toContain("featurePrompt");
+    expect(text).toContain("signature appearance, outfit, and accessories");
+    expect(text).toContain("75–85%");
   });
 
   it("adds mature-tag priority only to tags and mixed runtime rules", () => {
     expect(modeUserInstruction("tags", "convert")).toContain("exact mature");
-    expect(modeUserInstruction("mixed", "reverse")).toContain("mature tags first");
-    expect(modeUserInstruction("natural", "convert")).not.toContain("mature tags first");
+    expect(modeUserInstruction("mixed", "reverse")).toContain("mature Danbooru");
+    expect(modeUserInstruction("natural", "convert")).not.toContain("mature Danbooru");
     expect(CONVERT_SYSTEM_PROMPTS.natural).not.toContain("成熟整词优先");
   });
 
@@ -192,7 +217,7 @@ describe("concise NovelAI V5 production templates", () => {
     for (const template of six) {
       expect(template).toContain("NovelAI V5");
       expect(template.length).toBeGreaterThan(1_000);
-      expect(template.length).toBeLessThan(2_500);
+      expect(template.length).toBeLessThan(2_700);
       expect(template).not.toContain("优先使用 mcp 服务搜索");
       expect(template).not.toContain("不要默认全部无权重");
       expect(template).not.toContain("图片分析顺序");
@@ -208,9 +233,13 @@ describe("concise NovelAI V5 production templates", () => {
       expect(template).toContain("transparent background");
     }
     expect(SCOPED_REVERSE_SYSTEM_PROMPTS.mixed).toContain(
-      "角色残差紧跟被限定的 Tag 或动作",
+      "其他关系短语紧跟被限定的 Tag 或动作",
     );
-    expect(CONVERT_SYSTEM_PROMPTS.mixed).toContain("自然语言不是必填");
+    expect(CONVERT_SYSTEM_PROMPTS.mixed).toContain("75–85%");
+    expect(CONVERT_SYSTEM_PROMPTS.mixed).toContain("15–25%");
+    expect(CONVERT_SYSTEM_PROMPTS.mixed).toContain("自然语言不得省略");
+    expect(CONVERT_SYSTEM_PROMPTS.mixed).toContain("示例中文含义");
+    expect(SCOPED_REVERSE_SYSTEM_PROMPTS.mixed).toContain("示例中文含义");
   });
 
   it("locks in the audited V5 output-quality safeguards", () => {

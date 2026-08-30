@@ -68,4 +68,17 @@ void main() {
             .any((item) => item.id == 'guidance:canonical-tag-priority'),
         isTrue);
   });
+
+  test('retrieves the dual-version known-character rule for conversion',
+      () async {
+    final result = await PromptCodexRetrievalService().retrieve(
+      '芙宁娜\n已知角色 角色名版 特征版 动漫角色 游戏角色 角色 Tag',
+      mode: 'convert',
+      allowAdult: false,
+    );
+    expect(result.matches.any((item) => item.id == 'guidance:known-character'),
+        isTrue);
+    expect(result.context, contains('特征版必须删除角色名与作品名'));
+    expect(result.context, contains('角色名版与特征版的场景'));
+  });
 }
