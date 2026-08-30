@@ -84,6 +84,7 @@ describe("desktop i18n resources", () => {
       expect(Object.keys(settings.nav)).toEqual([
         "api",
         "storage",
+        "backup",
         "ai-reverse",
         "convert-api",
         "templates",
