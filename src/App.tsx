@@ -26,6 +26,10 @@ import {
   CONVERT_SYSTEM_PROMPTS,
   SCOPED_REVERSE_SYSTEM_PROMPTS,
 } from "./data/prompt-templates";
+import {
+  V45_CONVERT_SYSTEM_PROMPTS,
+  V45_SCOPED_REVERSE_SYSTEM_PROMPTS,
+} from "./data/prompt-templates-v45";
 import { Button, IconText, AppPortal, Toggle, NumberInput, CommittedNumberInput, SliderInput, SecretInput, SelectMenu } from "./components/ui";
 import { Icon } from "./components/icons";
 import { QualityPresetControl } from "./components/QualityPresetControl";
@@ -84,6 +88,7 @@ import {
   type PromptVariants,
   type ReversePromptMode,
   type ReversePromptScope,
+  type ReversePromptTemplateVersion,
   type TagSuggestion,
   type TextToolHistoryItem,
   type TextToolJob,
@@ -3492,7 +3497,7 @@ function InpaintPanel({ openSettings }: { openSettings: () => void }) {
         <div className="field inpaint-color-field">
           <span>{t("inpaint.brushColor")}</span>
           <div className="inpaint-color-palette" role="group" aria-label={t("inpaint.brushColor")}>
-            {["#ffffff", "#7c3aed", "#06b6d4", "#22c55e", "#f59e0b", "#ef4444", "#ec4899"].map((color) => <button key={color} type="button" className={brushColor === color ? "active" : ""} style={{ backgroundColor: color }} aria-label={`${t("inpaint.brushColor")} ${color}`} aria-pressed={brushColor === color} title={color} onClick={() => setBrushColor(color)} />)}
+            {["#ffffff", "#000000", "#ef4444", "#7c3aed", "#06b6d4", "#22c55e", "#f59e0b"].map((color) => <button key={color} type="button" className={brushColor === color ? "active" : ""} style={{ backgroundColor: color }} aria-label={`${t("inpaint.brushColor")} ${color}`} aria-pressed={brushColor === color} title={color} onClick={() => setBrushColor(color)} />)}
           </div>
         </div>
         <div className="mode-buttons">
@@ -4280,8 +4285,10 @@ function PromptConverterPanel() {
   const setParam = useAppStore((state) => state.setParam);
   const setToast = useAppStore((state) => state.setToast);
   const settings = useAppStore((state) => state.settings);
+  const refreshSettings = useAppStore((state) => state.refreshSettings);
   const templates: PromptTemplate[] = settings?.promptTemplates ?? [];
   const language = settings?.language;
+  const convertTemplateVersion = settings?.convertPromptTemplateVersion ?? "v5";
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
   const convertBusy = convertJobs.some((job) => job.status === "processing");
@@ -4300,6 +4307,12 @@ function PromptConverterPanel() {
     const parts = [tpl.prefix.trim(), base, tpl.suffix.trim()].filter(Boolean);
     setConvertResult(parts.join(", "));
     setToast(f("prompt.templateApplied", { name: tpl.name }));
+  }
+
+  async function setConvertTemplateVersion(version: ReversePromptTemplateVersion) {
+    if (version === convertTemplateVersion) return;
+    await window.naiDesktop.setSetting("convertPromptTemplateVersion", version);
+    await refreshSettings();
   }
 
   return (
@@ -4324,6 +4337,23 @@ function PromptConverterPanel() {
             onChange={(e) => setConvertInput(e.target.value)}
           />
         </label>
+
+        <div className="reverse-scope-card reverse-template-version-card">
+          <span className="field-label-row">{t("convert.templateVersionTitle")}</span>
+          <div className="mode-selector compact">
+            {(["v4.5", "v5"] as const).map((version) => (
+              <button
+                type="button"
+                key={version}
+                className={clsx("mode-btn", convertTemplateVersion === version && "active")}
+                onClick={() => void setConvertTemplateVersion(version)}
+              >
+                {t(`inspect.templateVersion.${version === "v4.5" ? "v45" : "v5"}`)}
+              </button>
+            ))}
+          </div>
+          <small>{t("convert.templateVersionHint")}</small>
+        </div>
 
         <div className="mode-selector">
           {([
@@ -5251,7 +5281,9 @@ function HistoryPanel() {
 
 // ── Settings modal ────────────────────────────────────────────────────────────
 function SettingsModal({ onClose }: { onClose: () => void }) {
-  const [section, setSection] = useState("api");
+  const [section, setSection] = useState(
+    () => new URLSearchParams(window.location.search).get("uiSettingsSection") ?? "api",
+  );
   const settings = useAppStore((state) => state.settings);
   const account = useAppStore((state) => state.account);
   const refreshAccount = useAppStore((state) => state.refreshAccount);
@@ -5837,17 +5869,35 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                   <strong>{t("settings.unifiedTemplate")}</strong>
                   <span>{t("settings.unifiedTemplateDesc")}</span>
                 </div>
-                <ModeTemplateEditor
+                <VersionedModeTemplateEditor
                   title={t("settings.reverseTemplateTitle")}
-                  value={settings.reversePromptTemplates}
-                  defaults={reverseTemplateDefaults}
-                  onChange={(next) => void update("reversePromptTemplates", next)}
+                  values={{
+                    "v4.5": settings.reversePromptTemplatesV45,
+                    v5: settings.reversePromptTemplates,
+                  }}
+                  defaults={{
+                    "v4.5": V45_SCOPED_REVERSE_SYSTEM_PROMPTS,
+                    v5: reverseTemplateDefaults,
+                  }}
+                  onChange={(version, next) => void update(
+                    version === "v4.5" ? "reversePromptTemplatesV45" : "reversePromptTemplates",
+                    next,
+                  )}
                 />
-                <ModeTemplateEditor
+                <VersionedModeTemplateEditor
                   title={t("settings.convertTemplateTitle")}
-                  value={settings.convertPromptTemplates}
-                  defaults={CONVERT_SYSTEM_PROMPTS}
-                  onChange={(next) => void update("convertPromptTemplates", next)}
+                  values={{
+                    "v4.5": settings.convertPromptTemplatesV45,
+                    v5: settings.convertPromptTemplates,
+                  }}
+                  defaults={{
+                    "v4.5": V45_CONVERT_SYSTEM_PROMPTS,
+                    v5: CONVERT_SYSTEM_PROMPTS,
+                  }}
+                  onChange={(version, next) => void update(
+                    version === "v4.5" ? "convertPromptTemplatesV45" : "convertPromptTemplates",
+                    next,
+                  )}
                 />
                 <SingleTemplateEditor
                   title={t("settings.comicAnalyzeTemplateTitle")}
@@ -6312,6 +6362,47 @@ function UpdateBanner() {
           {t("update.later")}
         </button>
       </div>
+    </div>
+  );
+}
+
+function VersionedModeTemplateEditor({
+  title,
+  values,
+  defaults,
+  onChange,
+}: {
+  title: string;
+  values: Record<ReversePromptTemplateVersion, ModePromptTemplates>;
+  defaults: Record<ReversePromptTemplateVersion, ModePromptTemplates>;
+  onChange: (
+    version: ReversePromptTemplateVersion,
+    next: ModePromptTemplates,
+  ) => void;
+}) {
+  const language = useAppStore((state) => state.settings?.language);
+  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
+  const [version, setVersion] = useState<ReversePromptTemplateVersion>("v5");
+  return (
+    <div className="versioned-template-editor">
+      <div className="mode-selector compact template-version-selector" role="group" aria-label={title}>
+        {(["v4.5", "v5"] as const).map((item) => (
+          <button
+            type="button"
+            key={item}
+            className={clsx("mode-btn", version === item && "active")}
+            onClick={() => setVersion(item)}
+          >
+            {t(`inspect.templateVersion.${item === "v4.5" ? "v45" : "v5"}`)}
+          </button>
+        ))}
+      </div>
+      <ModeTemplateEditor
+        title={title}
+        value={values[version]}
+        defaults={defaults[version]}
+        onChange={(next) => onChange(version, next)}
+      />
     </div>
   );
 }

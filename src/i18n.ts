@@ -3274,6 +3274,8 @@ const DESKTOP_EXTRA_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "convert.costDesc":
       "转换不消耗 NovelAI Anlas；只会调用“转换 API”中配置的文本模型。",
     "convert.input": "描述输入",
+    "convert.templateVersionTitle": "转换模板版本",
+    "convert.templateVersionHint": "选择本次转换遵循 V4.5 或最新 V5 规则；不会改变生成页选择的模型。",
     "convert.placeholder":
       "例如：\n一个短发蓝眼睛的女孩，穿白色连衣裙，站在樱花树下，阳光照射，动漫风格",
     "convert.knownCharacter": "这是网络/游戏/动漫角色，生成角色名版和特征版",
@@ -3428,6 +3430,8 @@ const DESKTOP_EXTRA_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "convert.costDesc":
       "轉換不消耗 NovelAI Anlas；只會呼叫「轉換 API」中配置的文字模型。",
     "convert.input": "描述輸入",
+    "convert.templateVersionTitle": "轉換範本版本",
+    "convert.templateVersionHint": "選擇本次轉換遵循 V4.5 或最新 V5 規則；不會改變生成頁選擇的模型。",
     "convert.placeholder":
       "例如：\n一個短髮藍眼睛的女孩，穿白色連衣裙，站在櫻花樹下，陽光照射，動漫風格",
     "convert.knownCharacter": "這是網路/遊戲/動漫角色，生成角色名版和特徵版",
@@ -3590,6 +3594,8 @@ const DESKTOP_EXTRA_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "convert.costDesc":
       "Conversion does not spend NovelAI Anlas; it only calls the text model configured under “Conversion API”.",
     "convert.input": "Description input",
+    "convert.templateVersionTitle": "Conversion template version",
+    "convert.templateVersionHint": "Choose whether this conversion follows V4.5 or the latest V5 rules; the Generate model is unchanged.",
     "convert.placeholder":
       "Example:\nA short-haired blue-eyed girl in a white dress, standing under cherry blossoms, sunlight, anime style",
     "convert.knownCharacter":
@@ -3753,6 +3759,8 @@ const DESKTOP_EXTRA_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "convert.costDesc":
       "変換は NovelAI Anlas を消費しません。「変換 API」で設定したテキストモデルのみ呼び出します。",
     "convert.input": "説明入力",
+    "convert.templateVersionTitle": "変換テンプレート版",
+    "convert.templateVersionHint": "今回の変換で V4.5 または最新 V5 の規則を選びます。生成モデルは変更しません。",
     "convert.placeholder":
       "例：\n短髪で青い目の少女、白いワンピース、桜の木の下、日差し、アニメ風",
     "convert.knownCharacter":
@@ -3914,6 +3922,8 @@ const DESKTOP_EXTRA_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "convert.costDesc":
       "변환은 NovelAI Anlas를 쓰지 않습니다. “Conversion API”에 설정된 텍스트 모델만 호출합니다.",
     "convert.input": "설명 입력",
+    "convert.templateVersionTitle": "변환 템플릿 버전",
+    "convert.templateVersionHint": "이번 변환에 V4.5 또는 최신 V5 규칙을 선택합니다. 생성 모델은 바뀌지 않습니다.",
     "convert.placeholder":
       "예:\n짧은 머리와 파란 눈의 소녀, 흰 원피스, 벚꽃나무 아래, 햇살, 애니메이션 스타일",
     "convert.knownCharacter":

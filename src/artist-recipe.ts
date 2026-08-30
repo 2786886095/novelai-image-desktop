@@ -264,22 +264,39 @@ export function formatArtistString(
 export function formatArtistCardTags(
   recipe: Pick<GeneratedArtistRecipe, "prompt">,
 ): string {
-  const value = recipe.prompt.trim().replace(/,+$/, "");
-  return value ? `${value},` : "";
+  return ensureTrailingPromptComma(recipe.prompt);
+}
+
+/** Normalize copied/displayed prompt text to exactly one trailing comma. */
+export function ensureTrailingPromptComma(value: string): string {
+  const normalized = value.trim().replace(/[，,]+\s*$/, "");
+  return normalized ? `${normalized},` : "";
 }
 
 export function formatArtistFullPrompt(
-  recipe: Pick<GeneratedArtistRecipe, "artists" | "mutations" | "auxiliary"> & Partial<Pick<GeneratedArtistRecipe, "franchiseStyles">>,
+  recipe: Pick<GeneratedArtistRecipe, "artists" | "mutations" | "auxiliary"> & Partial<Pick<GeneratedArtistRecipe, "franchiseStyles" | "prompt">>,
   basePrompt: string,
 ): string {
+  // Prefer the exact card prompt when available. Besides preserving the
+  // original tag order, this keeps repair/draw candidates identical between
+  // what users see and what the copy button places on the clipboard.
+  if (recipe.prompt?.trim()) {
+    return ensureTrailingPromptComma(
+      [recipe.prompt.trim().replace(/[，,]+\s*$/, ""), basePrompt.trim()]
+        .filter(Boolean)
+        .join(", "),
+    );
+  }
   const artistText = formatArtistString(recipe.artists);
   const franchiseText = (recipe.franchiseStyles ?? []).map(formatToken).join(", ");
   const mutationText = recipe.mutations.map(formatToken).join(", ");
   const auxiliaryText = recipe.auxiliary.map(formatToken).join(", ");
-  return [artistText.replace(/,$/, ""), franchiseText, mutationText, auxiliaryText, basePrompt.trim()]
-    .filter(Boolean)
-    .join(", ")
-    .trim();
+  return ensureTrailingPromptComma(
+    [artistText.replace(/,$/, ""), franchiseText, mutationText, auxiliaryText, basePrompt.trim()]
+      .filter(Boolean)
+      .join(", ")
+      .trim(),
+  );
 }
 
 export function randomizeArtistRecipeWeights(

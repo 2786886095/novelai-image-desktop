@@ -282,12 +282,13 @@ export function buildConvertUserText(
   mode: ReversePromptMode,
   hintText = "",
   knownCharacter = false,
+  templateVersion: ReversePromptTemplateVersion = "v5",
 ) {
   const parts = [
     "User description:",
     input.trim(),
     "",
-    modeUserInstruction(mode, "convert", knownCharacter),
+    modeUserInstruction(mode, "convert", knownCharacter, templateVersion),
   ];
   if (hintText.trim()) parts.push("", hintText.trim());
   return parts.join("\n");
@@ -464,7 +465,7 @@ export function modeRepairSystemPrompt(
       "You rewrite failed NovelAI prompts into Danbooru / NovelAI tag prompt format.",
       "Return exactly one English prompt line, no explanation.",
       "Use comma-separated tags. Do not output pure prose sentences.",
-      "For two or more characters, use V5 pipe format: base tags | character tags 1 | character tags 2.",
+      `For two or more characters, use NovelAI ${versionLabel} pipe format: base tags | character tags 1 | character tags 2.`,
       "Use tag-style character segments such as: boy, short black hair, white shirt, sitting, drawing.",
       "Match this style:",
       "2boys, classroom, desks, chairs, sketchbook, colored balls, full body, from front | boy, short black hair, white shirt, sitting, drawing, holding pencil | boy, blue hair, dark blue hoodie, standing, juggling balls",
@@ -475,7 +476,7 @@ export function modeRepairSystemPrompt(
     "Return exactly one English prompt line, no explanation.",
     "Use approximately 75–85% Danbooru tag units and 15–25% concise English natural-language relation phrases; both are mandatory.",
     "Do not output pure prose or a pure tag list, and do not invent or repeat facts merely to pad the ratio.",
-    "For two or more characters, use V5 pipe format: base tags and short scene clause | character tags 1 | character tags 2.",
+    `For two or more characters, use NovelAI ${versionLabel} pipe format: base tags and short scene clause | character tags 1 | character tags 2.`,
     "Match this style:",
     "2boys, classroom, desks, chairs, sketchbook, colored balls, full body, from front, the black-haired boy sits on the left while the blue-haired boy stands on the right | boy, short black hair, white shirt, sitting, drawing, holding pencil | boy, blue hair, dark blue hoodie, standing, juggling balls",
   ].join("\n");

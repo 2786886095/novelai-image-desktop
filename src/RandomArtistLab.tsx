@@ -33,6 +33,9 @@ import {
   snapNAIDimensionWithinArea,
 } from "./nai-dimensions";
 import {
+  addArtistFavorite,
+  loadArtistFavorites,
+  removeArtistFavorite,
   RANDOM_ARTIST_SESSION_STORAGE_KEY,
 } from "./artist-favorite-library";
 
@@ -423,10 +426,12 @@ function restore(inherited: GenerateParams): RandomSession {
       weightVariation: Math.max(0, Math.min(100, Number(raw?.weightVariation) || 20)),
       generationParams: normalizeGenerationParams(raw?.generationParams, DEFAULT_PARAMS),
       results: Array.isArray(raw?.results) ? raw.results : [],
-      favorites: Array.isArray(raw?.favorites) ? raw.favorites : [],
+      // Dedicated storage restores favorites from any historical v2-v6
+      // session once, then remains authoritative for future removals.
+      favorites: loadArtistFavorites("random"),
     };
   } catch {
-    sessionCache = { basePrompt: inherited.positivePrompt, auxiliaryPrompt: "", count: 8, ...RANDOM_V5_DEFAULTS, includeFranchiseStyles: false, poolSize: 1000, seedMode: "fixed", seed: 246813579, drawSeed: freshSeed(), mutateAuxiliary: false, biasFavorites: false, weightTuneInput: "", weightTuneCount: 8, weightVariation: 20, generationParams: normalizeGenerationParams(undefined, DEFAULT_PARAMS), results: [], favorites: [] };
+    sessionCache = { basePrompt: inherited.positivePrompt, auxiliaryPrompt: "", count: 8, ...RANDOM_V5_DEFAULTS, includeFranchiseStyles: false, poolSize: 1000, seedMode: "fixed", seed: 246813579, drawSeed: freshSeed(), mutateAuxiliary: false, biasFavorites: false, weightTuneInput: "", weightTuneCount: 8, weightVariation: 20, generationParams: normalizeGenerationParams(undefined, DEFAULT_PARAMS), results: [], favorites: loadArtistFavorites("random") };
   }
   return sessionCache;
 }
@@ -733,8 +738,9 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
     setSession((current) => ({ ...current, results: current.results.map((item) => item.id === result.id ? { ...item, saving: true } : item) }));
     try {
       const image = await window.naiDesktop.artistLabPromoteFavorite(result.image);
+      const saved = { ...result, image, liked: true, saving: false };
+      addArtistFavorite("random", saved);
       setSession((current) => {
-        const saved = { ...result, image, liked: true, saving: false };
         return {
           ...current,
           results: current.results.map((item) => item.id === result.id ? saved : item),
@@ -757,9 +763,12 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
       favorites: current.favorites.filter((item) => item.id !== result.id),
       results: current.results.filter((item) => item.id !== result.id),
     }));
+    removeArtistFavorite("random", result.id);
     const deleted = await deleteHistory(result.image.id);
     if (deleted) setMessage(text.removed);
     else {
+      const previous = previousFavorites.find((item) => item.id === result.id);
+      if (previous) addArtistFavorite("random", previous);
       setSession((current) => ({ ...current, favorites: previousFavorites, results: previousResults }));
     }
   };
@@ -805,7 +814,7 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
       width: result.image?.width || session.generationParams.width,
       height: result.image?.height || session.generationParams.height,
     };
-    return <article key={result.id} className={`artist-candidate ${result.status} artist-variant-${variant}`}><header className="artist-candidate-header"><div><b>#{String(result.sequence).padStart(2, "0")} · {variant === "mutated" ? text.variantMutated : text.variantPlain}</b><small>{modelLabel(resultModel(result))} · {dimensions.width}×{dimensions.height}</small></div><span>{favorite || result.liked ? text.saved : text[result.status]}</span></header><div className="artist-candidate-media" style={{ aspectRatio: `${dimensions.width} / ${dimensions.height}` }}>{result.image ? <><img src={result.image.fileUrl} loading="lazy" decoding="async" title={text.previewImage} onDoubleClick={() => setPreviewResult(result)} alt={`${variant === "mutated" ? text.variantMutated : text.variantPlain}: ${result.prompt}`} /><button type="button" className="artist-candidate-preview-button" aria-label={text.previewImage} title={text.previewImage} onClick={() => setPreviewResult(result)}><Icon name="search" /></button></> : <div className="artist-candidate-placeholder">{text[result.status]}</div>}</div>{renderFranchiseTerms(result)}{renderMutationTerms(result)}<div className="artist-string-block"><div className="artist-copy-actions"><button type="button" className={copiedAction === artistCopyKey ? "copied" : ""} onClick={() => { void copyResult(artistString(result), artistCopyKey, text.copiedArtists); }}>{copiedAction === artistCopyKey ? tuneText.copied : text.copyArtists}</button><button type="button" className={copiedAction === fullCopyKey ? "copied" : ""} onClick={() => { void copyResult(fullPrompt(result), fullCopyKey, text.copiedFull); }}>{copiedAction === fullCopyKey ? tuneText.copied : text.copyFull}</button></div><code>{result.prompt}</code></div><small className={`artist-error ${result.error ? "" : "empty"}`} title={result.error}>{result.error ?? "\u00a0"}</small><div className="artist-candidate-actions">{favorite ? <Button variant="ghost" onClick={() => void removeFavorite(result)}>{text.remove}</Button> : result.status === "failed" ? <Button variant="ghost" disabled={running} onClick={() => void retry(result)}>{text.retry}</Button> : <Button variant="ghost" disabled={result.status !== "done" || result.liked || result.saving} onClick={() => void saveFavorite(result)}>{result.saving ? text.saving : result.liked ? text.saved : text.like}</Button>}<Button variant="primary" disabled={result.status !== "done"} onClick={() => { applyParams({ ...session.generationParams, model: applicableResultModel(result), positivePrompt: session.basePrompt.trim(), stylePrompt: result.prompt, seed: result.generationSeed ?? session.seed, seedMode: "fixed" }); setMessage(text.applied); }}>{text.apply}</Button></div></article>;
+    return <article key={result.id} className={`artist-candidate ${result.status} artist-variant-${variant}`}><header className="artist-candidate-header"><div><b>#{String(result.sequence).padStart(2, "0")} · {variant === "mutated" ? text.variantMutated : text.variantPlain}</b><small>{modelLabel(resultModel(result))} · {dimensions.width}×{dimensions.height}</small></div><span>{favorite || result.liked ? text.saved : text[result.status]}</span></header><div className="artist-candidate-media" style={{ aspectRatio: `${dimensions.width} / ${dimensions.height}` }}>{result.image ? <><img src={result.image.fileUrl} loading="lazy" decoding="async" title={text.previewImage} onDoubleClick={() => setPreviewResult(result)} alt={`${variant === "mutated" ? text.variantMutated : text.variantPlain}: ${result.prompt}`} /><button type="button" className="artist-candidate-preview-button" aria-label={text.previewImage} title={text.previewImage} onClick={() => setPreviewResult(result)}><Icon name="search" /></button></> : <div className="artist-candidate-placeholder">{text[result.status]}</div>}</div>{renderFranchiseTerms(result)}{renderMutationTerms(result)}<div className="artist-string-block"><div className="artist-copy-actions"><button type="button" className={copiedAction === artistCopyKey ? "copied" : ""} onClick={() => { void copyResult(artistString(result), artistCopyKey, text.copiedArtists); }}>{copiedAction === artistCopyKey ? tuneText.copied : text.copyArtists}</button><button type="button" className={copiedAction === fullCopyKey ? "copied" : ""} onClick={() => { void copyResult(fullPrompt(result), fullCopyKey, text.copiedFull); }}>{copiedAction === fullCopyKey ? tuneText.copied : text.copyFull}</button></div><code>{artistString(result)}</code></div><small className={`artist-error ${result.error ? "" : "empty"}`} title={result.error}>{result.error ?? "\u00a0"}</small><div className="artist-candidate-actions">{favorite ? <Button variant="ghost" onClick={() => void removeFavorite(result)}>{text.remove}</Button> : result.status === "failed" ? <Button variant="ghost" disabled={running} onClick={() => void retry(result)}>{text.retry}</Button> : <Button variant="ghost" disabled={result.status !== "done" || result.liked || result.saving} onClick={() => void saveFavorite(result)}>{result.saving ? text.saving : result.liked ? text.saved : text.like}</Button>}<Button variant="primary" disabled={result.status !== "done"} onClick={() => { applyParams({ ...session.generationParams, model: applicableResultModel(result), positivePrompt: session.basePrompt.trim(), stylePrompt: result.prompt, seed: result.generationSeed ?? session.seed, seedMode: "fixed" }); setMessage(text.applied); }}>{text.apply}</Button></div></article>;
   };
 
   return <>
@@ -906,7 +915,7 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
         <Button className="artist-weight-tuner-submit" variant="primary" disabled={running || !session.weightTuneInput.trim()} onClick={() => void runWeightTuning()}>{tuneText.generate}</Button>
       </div>
     </details>
-    <section className="artist-lab-panel artist-queue-panel"><div className="artist-section-heading"><div><h3>{text.preview}</h3><small>{text.previewHint}</small></div><div className="artist-preview-actions"><b>{interpolate(text.pairSummary, { pairs: planned.length, images: plannedComparisons.length })}</b></div></div>{planned.length === 0 ? <div className="artist-queue-empty">{text.empty}</div> : <ol className="artist-combination-queue">{planned.map((recipe, index) => <li key={recipe.id}><span>#{String(index + 1).padStart(2, "0")}</span><div><b className="artist-ab-label">{text.variantPlain}</b><code>{recipe.basePrompt}</code>{renderFranchiseTerms(recipe)}{session.mutateAuxiliary && <><b className="artist-ab-label">{text.variantMutated}</b><code>{recipe.prompt}</code>{renderMutationTerms(recipe)}</>}</div></li>)}</ol>}</section>
+    <section className="artist-lab-panel artist-queue-panel"><div className="artist-section-heading"><div><h3>{text.preview}</h3><small>{text.previewHint}</small></div><div className="artist-preview-actions"><b>{interpolate(text.pairSummary, { pairs: planned.length, images: plannedComparisons.length })}</b></div></div>{planned.length === 0 ? <div className="artist-queue-empty">{text.empty}</div> : <ol className="artist-combination-queue">{planned.map((recipe, index) => <li key={recipe.id}><span>#{String(index + 1).padStart(2, "0")}</span><div><b className="artist-ab-label">{text.variantPlain}</b><code>{formatArtistCardTags({ prompt: recipe.basePrompt })}</code>{renderFranchiseTerms(recipe)}{session.mutateAuxiliary && <><b className="artist-ab-label">{text.variantMutated}</b><code>{formatArtistCardTags(recipe)}</code>{renderMutationTerms(recipe)}</>}</div></li>)}</ol>}</section>
     <section className="artist-result-toolbar">
       <div className="artist-result-actions"><Button onClick={() => void draw(false)} disabled={running || pool.length === 0}><Icon name="dice" />{text.draw}</Button>{running ? <Button variant="danger" onClick={() => { cancelRef.current = true; void window.naiDesktop.cancel(); }}>{text.stop}</Button> : <Button variant="primary" onClick={() => void run(false)}>{text.generate}</Button>}<Button disabled={running || likedArtists.length === 0} onClick={() => void draw(true)}>{text.refine}</Button><span>{running ? interpolate(text.running, { done: batchDone, total: session.results.length }) : message}</span></div>
       <nav className="artist-result-tabs" aria-label={`${text.preview} / ${favoriteFolderLabel}`}>

@@ -32,7 +32,12 @@ import {
   type ArtistFavoriteCollection,
   type SharedArtistFavorite,
 } from "./artist-favorite-library";
-import type { GeneratedArtistRecipe } from "./artist-recipe";
+import {
+  ensureTrailingPromptComma,
+  formatArtistCardTags,
+  formatArtistFullPrompt,
+  type GeneratedArtistRecipe,
+} from "./artist-recipe";
 import {
   DEFAULT_V5_ARTIST_DRAW_MAX,
   DEFAULT_V5_ARTIST_DRAW_MIN,
@@ -167,22 +172,30 @@ const TEXT = {
   "zh-CN": {
     title: "V4.5 画师串修复器", subtitle: "自动识别画师、质量词和其他 Tag；整串每个有效 Tag 都独立压到原权重的 1/3–1/2，并统一为规范 V5 数值格式。", back: "返回工具首页",
     strategy: "社区迁移策略", input: "V4.5 完整 Tag 串", inputHint: "支持 xiaoluo_xl、(artist:foo:1.2)、{artist:foo}、[artist:foo] 和 1.2::artist:foo ::", output: "首组规范 V5 Tag 串", run: "随机生成修复候选", copy: "复制首组结果", copied: "已复制", reset: "恢复默认", empty: "请先粘贴画师串。", none: "没有识别到有效 Tag；请检查输入和分隔符。", adjusted: "已生成 {candidates} 组候选；每组修复 {count} 个 Tag（画师 {artists}、质量词 {quality}、其他 {other}）。", noteTitle: "用户实测结论与限制", note: "NovelAI 官方只确认数值权重语法，没有公布 V4.5→V5 的换算公式。社区的 1/3–1/2 建议主要来自旧画师权重迁移；按本工具设定，质量词、风格词和其他有效 Tag 也会分别套用同一范围，以便整串统一迁移。结果仅是试验起点，不是官方标准。", safe: "显式 artist: 标签和已确认的无前缀画师名会识别为画师并规范化；质量词、风格词、年份、负面词和内容词不会被加上 artist:。重复逗号、中文分隔符和孤立 :: 会自动清理，未知裸 Tag 保留为普通 Tag。", repairBatchHint: "候选组数决定一次独立随机修复多少套完整 Tag 串；随后可固定同一 Seed 批量对照生图，并收藏喜欢的结果。", repairNoResults: "粘贴 V4.5 Tag 串后，可一次随机生成多组修复候选。",
-    drawPageTitle: "输入画师串抽卡", drawPageSubtitle: "沿用修复器的识别与规范流程：每个 Tag 先按旧权重的 1/3～1/2 独立迁移，再限制在自定义权重区间内。", drawTitle: "抽卡设置", drawHint: "每个有效 Tag 都按修复器规则参与权重抽卡，不会随机删除或替换；最低/最高权重作为最终安全范围。每组保留输入中的全部有效 Tag。", drawInput: "完整 Tag 串", drawInputHint: "例如：xiaoluo_xl, 1.2::artist:pottsness ::, artist:nonco", drawEmpty: "请先粘贴画师串。", drawNone: "没有识别到有效 Tag；请检查输入和分隔符。", weightMin: "最低权重", weightMax: "最高权重", candidateCount: "候选组数", basePrompt: "正面提示词（固定内容）", seedMode: "对照 Seed", fixedSeed: "全批固定", randomSeed: "每张随机", seed: "Seed", randomizeSeed: "随机 Seed", draw: "重新抽权重", generate: "生成这一批", stop: "停止", needDraw: "请先抽取候选。", needPrompt: "请填写正面提示词。", generating: "正在生成 {done}/{total}", complete: "生成完成；可收藏喜欢的结果。", allTags: "已识别 {count} 个有效 Tag（画师 {artists}、质量词 {quality}、其他 {other}）；每组完整保留。",
+    drawPageTitle: "输入画师串抽卡", drawPageSubtitle: "沿用修复器的识别与规范流程；保留全部有效 Tag，并让每个 Tag 的最终权重在自定义区间内独立随机。", drawTitle: "抽卡设置", drawHint: "每个有效 Tag 都会完整保留，并在最低/最高权重之间独立随机；旧权重只用于识别与规范，不限制最终抽卡范围。", drawInput: "完整 Tag 串", drawInputHint: "例如：xiaoluo_xl, 1.2::artist:pottsness ::, artist:nonco", drawEmpty: "请先粘贴画师串。", drawNone: "没有识别到有效 Tag；请检查输入和分隔符。", weightMin: "最低权重", weightMax: "最高权重", candidateCount: "候选组数", basePrompt: "正面提示词（固定内容）", seedMode: "对照 Seed", fixedSeed: "全批固定", randomSeed: "每张随机", seed: "Seed", randomizeSeed: "随机 Seed", draw: "重新抽权重", generate: "生成这一批", stop: "停止", needDraw: "请先抽取候选。", needPrompt: "请填写正面提示词。", generating: "正在生成 {done}/{total}", complete: "生成完成；可收藏喜欢的结果。", allTags: "已识别 {count} 个有效 Tag（画师 {artists}、质量词 {quality}、其他 {other}）；每组完整保留。",
     results: "本批候选", favorites: "收藏夹", sharedFavorites: "本工具收藏独立保存，不与另外两种画师工具共用", pending: "等待", generatingOne: "生成中", done: "完成", failed: "失败", favorite: "收藏", saved: "已收藏", saving: "保存中", remove: "移除收藏", apply: "应用到生成", retry: "重试", preview: "双击预览大图", noResults: "输入画师串后即可抽取权重候选。", noFavorites: "本工具收藏库暂无内容。", applied: "已应用到生成页。", removed: "已移除收藏和本地图片。",
   },
   "zh-TW": {
-    title: "V4.5 畫師串修復器", subtitle: "自動識別畫師、品質詞與其他 Tag；整串每個有效 Tag 都獨立壓到原權重的 1/3–1/2，並統一為規範 V5 數值格式。", back: "返回工具首頁", strategy: "社群遷移策略", input: "V4.5 完整 Tag 串", inputHint: "支援無前綴畫師名、括號及數值權重", output: "首組規範 V5 Tag 串", run: "隨機產生修復候選", copy: "複製首組結果", copied: "已複製", reset: "恢復預設", empty: "請先貼上畫師串。", none: "未識別到有效 Tag；請檢查輸入與分隔符。", adjusted: "已產生 {candidates} 組候選；每組修復 {count} 個 Tag（畫師 {artists}、品質詞 {quality}、其他 {other}）。", noteTitle: "使用者實測與限制", note: "NovelAI 官方沒有公布 V4.5→V5 換算公式。社群的 1/3–1/2 建議主要來自舊畫師權重遷移；依本工具設定，品質詞、風格詞與其他有效 Tag 也會套用相同範圍。結果只是試驗起點，不是官方標準。", safe: "明確的 artist: 標籤與已確認的無前綴畫師名會辨識為畫師；品質、風格、年份、負面與內容 Tag 不會被加上 artist:。重複逗號、中文分隔符與孤立 :: 會自動清理。", repairBatchHint: "可一次獨立隨機修復多組完整 Tag 串，再固定 Seed 批次生圖與收藏。", repairNoResults: "貼上 V4.5 Tag 串後，可一次產生多組修復候選。", drawPageTitle: "輸入畫師串抽卡", drawPageSubtitle: "沿用修復器的辨識與規範流程，先按舊權重的 1/3～1/2 遷移，再限制於自訂範圍。", drawTitle: "抽卡設定", drawHint: "每個有效 Tag 都依修復器規則參與抽卡且不會被刪除；最低／最高權重是最終安全範圍。", drawInput: "完整 Tag 串", drawInputHint: "例如：xiaoluo_xl, 1.2::artist:pottsness ::", drawEmpty: "請先貼上畫師串。", drawNone: "未識別到有效 Tag；請檢查輸入與分隔符。", weightMin: "最低權重", weightMax: "最高權重", candidateCount: "候選組數", basePrompt: "固定內容提示詞", currentParams: "沿用生成頁目前參數", currentParamsHint: "{model} · {width}×{height} · {steps} 步；非 V5 會改用 V5 Full。", seedMode: "對照 Seed", fixedSeed: "全批固定", randomSeed: "每張隨機", seed: "Seed", randomizeSeed: "隨機 Seed", draw: "重新抽權重", generate: "生成這一批", stop: "停止", needDraw: "請先抽取候選。", needPrompt: "請填寫固定內容提示詞。", generating: "生成中 {done}/{total}", complete: "生成完成，可收藏喜歡結果。", allTags: "已識別 {count} 個有效 Tag（畫師 {artists}、品質詞 {quality}、其他 {other}）；每組完整保留。", results: "本批候選", favorites: "收藏夾", sharedFavorites: "本工具收藏獨立保存，不與另外兩種畫師工具共用", pending: "等待", generatingOne: "生成中", done: "完成", failed: "失敗", favorite: "收藏", saved: "已收藏", saving: "儲存中", remove: "移除收藏", apply: "套用到生成", retry: "重試", preview: "雙擊預覽大圖", noResults: "輸入畫師串後即可抽取候選。", noFavorites: "本工具收藏庫暫無內容。", applied: "已套用到生成頁。", removed: "已移除收藏和本機圖片。",
+    title: "V4.5 畫師串修復器", subtitle: "自動識別畫師、品質詞與其他 Tag；整串每個有效 Tag 都獨立壓到原權重的 1/3–1/2，並統一為規範 V5 數值格式。", back: "返回工具首頁", strategy: "社群遷移策略", input: "V4.5 完整 Tag 串", inputHint: "支援無前綴畫師名、括號及數值權重", output: "首組規範 V5 Tag 串", run: "隨機產生修復候選", copy: "複製首組結果", copied: "已複製", reset: "恢復預設", empty: "請先貼上畫師串。", none: "未識別到有效 Tag；請檢查輸入與分隔符。", adjusted: "已產生 {candidates} 組候選；每組修復 {count} 個 Tag（畫師 {artists}、品質詞 {quality}、其他 {other}）。", noteTitle: "使用者實測與限制", note: "NovelAI 官方沒有公布 V4.5→V5 換算公式。社群的 1/3–1/2 建議主要來自舊畫師權重遷移；依本工具設定，品質詞、風格詞與其他有效 Tag 也會套用相同範圍。結果只是試驗起點，不是官方標準。", safe: "明確的 artist: 標籤與已確認的無前綴畫師名會辨識為畫師；品質、風格、年份、負面與內容 Tag 不會被加上 artist:。重複逗號、中文分隔符與孤立 :: 會自動清理。", repairBatchHint: "可一次獨立隨機修復多組完整 Tag 串，再固定 Seed 批次生圖與收藏。", repairNoResults: "貼上 V4.5 Tag 串後，可一次產生多組修復候選。", drawPageTitle: "輸入畫師串抽卡", drawPageSubtitle: "沿用修復器的辨識與規範流程；保留全部有效 Tag，並讓每個 Tag 的最終權重在自訂區間內獨立隨機。", drawTitle: "抽卡設定", drawHint: "每個有效 Tag 都會完整保留，並在最低／最高權重之間獨立隨機；舊權重不會限制最終抽卡範圍。", drawInput: "完整 Tag 串", drawInputHint: "例如：xiaoluo_xl, 1.2::artist:pottsness ::", drawEmpty: "請先貼上畫師串。", drawNone: "未識別到有效 Tag；請檢查輸入與分隔符。", weightMin: "最低權重", weightMax: "最高權重", candidateCount: "候選組數", basePrompt: "固定內容提示詞", currentParams: "沿用生成頁目前參數", currentParamsHint: "{model} · {width}×{height} · {steps} 步；非 V5 會改用 V5 Full。", seedMode: "對照 Seed", fixedSeed: "全批固定", randomSeed: "每張隨機", seed: "Seed", randomizeSeed: "隨機 Seed", draw: "重新抽權重", generate: "生成這一批", stop: "停止", needDraw: "請先抽取候選。", needPrompt: "請填寫固定內容提示詞。", generating: "生成中 {done}/{total}", complete: "生成完成，可收藏喜歡結果。", allTags: "已識別 {count} 個有效 Tag（畫師 {artists}、品質詞 {quality}、其他 {other}）；每組完整保留。", results: "本批候選", favorites: "收藏夾", sharedFavorites: "本工具收藏獨立保存，不與另外兩種畫師工具共用", pending: "等待", generatingOne: "生成中", done: "完成", failed: "失敗", favorite: "收藏", saved: "已收藏", saving: "儲存中", remove: "移除收藏", apply: "套用到生成", retry: "重試", preview: "雙擊預覽大圖", noResults: "輸入畫師串後即可抽取候選。", noFavorites: "本工具收藏庫暫無內容。", applied: "已套用到生成頁。", removed: "已移除收藏和本機圖片。",
   },
   "en-US": {
-    title: "V4.5 Artist-string Repair", subtitle: "Auto-detect artist, quality, and other tags; independently scale every valid tag to one third–one half of its old weight and normalize V5 syntax.", back: "Back to Tools", strategy: "Community migration heuristic", input: "Complete V4.5 tag string", inputHint: "Supports known bare artist names, (), {}, [], and numeric scopes", output: "First normalized V5 string", run: "Create repair candidates", copy: "Copy first result", copied: "Copied", reset: "Restore defaults", empty: "Paste an artist string first.", none: "No valid tags were detected. Check the input and separators.", adjusted: "Created {candidates} candidates; each repairs {count} tags ({artists} artist, {quality} quality, {other} other).", noteTitle: "Community evidence and limits", note: "NovelAI publishes no V4.5→V5 conversion formula. The community one-third-to-one-half heuristic mainly concerns legacy artist weights; this tool deliberately applies the same range to quality, style, and other valid tags for whole-string migration. It is an experimental starting point, not an official standard.", safe: "Explicit artist: tags and reviewed bare artist names are classified as artists. Quality, style, year, negative, and content tags never gain artist:. Repeated separators and orphan :: markers are cleaned automatically.", repairBatchHint: "Create several independently repaired complete strings, batch-generate them with a comparison seed, and save favorites.", repairNoResults: "Paste a V4.5 string to create several repair candidates.", drawPageTitle: "Artist-string Weight Draw", drawPageSubtitle: "Uses the repair parser and one-third-to-one-half migration before applying the custom final bounds.", drawTitle: "Draw settings", drawHint: "Every valid tag uses the repair rule and none are removed; minimum and maximum are the final safety bounds.", drawInput: "Complete tag string", drawInputHint: "Example: xiaoluo_xl, 1.2::artist:pottsness ::", drawEmpty: "Paste an artist string first.", drawNone: "No valid tags were detected. Check the input and separators.", weightMin: "Minimum weight", weightMax: "Maximum weight", candidateCount: "Candidate sets", basePrompt: "Fixed content prompt", currentParams: "Uses current Generate settings", currentParamsHint: "{model} · {width}×{height} · {steps} steps; non-V5 models switch to V5 Full.", seedMode: "Comparison seed", fixedSeed: "Fixed for batch", randomSeed: "Random per image", seed: "Seed", randomizeSeed: "Random seed", draw: "Reroll weights", generate: "Generate batch", stop: "Stop", needDraw: "Draw candidates first.", needPrompt: "Enter a fixed content prompt.", generating: "Generating {done}/{total}", complete: "Generation complete. Save the results you like.", allTags: "{count} valid tags detected ({artists} artist, {quality} quality, {other} other); every set retains all of them.", results: "Candidates", favorites: "Favorites", sharedFavorites: "This tool has its own favorites; the other two artist tools are separate", pending: "Pending", generatingOne: "Generating", done: "Done", failed: "Failed", favorite: "Favorite", saved: "Saved", saving: "Saving", remove: "Remove", apply: "Apply to Generate", retry: "Retry", preview: "Double-click to preview", noResults: "Paste an artist string, then draw weight candidates.", noFavorites: "No favorites in this tool yet.", applied: "Applied to Generate.", removed: "Favorite and local image removed.",
+    title: "V4.5 Artist-string Repair", subtitle: "Auto-detect artist, quality, and other tags; independently scale every valid tag to one third–one half of its old weight and normalize V5 syntax.", back: "Back to Tools", strategy: "Community migration heuristic", input: "Complete V4.5 tag string", inputHint: "Supports known bare artist names, (), {}, [], and numeric scopes", output: "First normalized V5 string", run: "Create repair candidates", copy: "Copy first result", copied: "Copied", reset: "Restore defaults", empty: "Paste an artist string first.", none: "No valid tags were detected. Check the input and separators.", adjusted: "Created {candidates} candidates; each repairs {count} tags ({artists} artist, {quality} quality, {other} other).", noteTitle: "Community evidence and limits", note: "NovelAI publishes no V4.5→V5 conversion formula. The community one-third-to-one-half heuristic mainly concerns legacy artist weights; this tool deliberately applies the same range to quality, style, and other valid tags for whole-string migration. It is an experimental starting point, not an official standard.", safe: "Explicit artist: tags and reviewed bare artist names are classified as artists. Quality, style, year, negative, and content tags never gain artist:. Repeated separators and orphan :: markers are cleaned automatically.", repairBatchHint: "Create several independently repaired complete strings, batch-generate them with a comparison seed, and save favorites.", repairNoResults: "Paste a V4.5 string to create several repair candidates.", drawPageTitle: "Artist-string Weight Draw", drawPageSubtitle: "Uses the repair parser and normalization while independently drawing every retained tag across the custom final range.", drawTitle: "Draw settings", drawHint: "Every valid tag is retained and independently draws a final weight between the selected minimum and maximum; legacy weights do not narrow the range.", drawInput: "Complete tag string", drawInputHint: "Example: xiaoluo_xl, 1.2::artist:pottsness ::", drawEmpty: "Paste an artist string first.", drawNone: "No valid tags were detected. Check the input and separators.", weightMin: "Minimum weight", weightMax: "Maximum weight", candidateCount: "Candidate sets", basePrompt: "Fixed content prompt", currentParams: "Uses current Generate settings", currentParamsHint: "{model} · {width}×{height} · {steps} steps; non-V5 models switch to V5 Full.", seedMode: "Comparison seed", fixedSeed: "Fixed for batch", randomSeed: "Random per image", seed: "Seed", randomizeSeed: "Random seed", draw: "Reroll weights", generate: "Generate batch", stop: "Stop", needDraw: "Draw candidates first.", needPrompt: "Enter a fixed content prompt.", generating: "Generating {done}/{total}", complete: "Generation complete. Save the results you like.", allTags: "{count} valid tags detected ({artists} artist, {quality} quality, {other} other); every set retains all of them.", results: "Candidates", favorites: "Favorites", sharedFavorites: "This tool has its own favorites; the other two artist tools are separate", pending: "Pending", generatingOne: "Generating", done: "Done", failed: "Failed", favorite: "Favorite", saved: "Saved", saving: "Saving", remove: "Remove", apply: "Apply to Generate", retry: "Retry", preview: "Double-click to preview", noResults: "Paste an artist string, then draw weight candidates.", noFavorites: "No favorites in this tool yet.", applied: "Applied to Generate.", removed: "Favorite and local image removed.",
   },
   "ja-JP": {
-    title: "V4.5 画家列修復", subtitle: "画家・品質・その他の Tag を自動判定し、すべての有効 Tag を旧値の 1/3～1/2 に個別調整して V5 数値形式へ統一します。", back: "ツールへ戻る", strategy: "コミュニティ移行ヒューリスティック", input: "V4.5 完全 Tag 列", inputHint: "既知の接頭辞なし画家名、括弧、数値形式に対応", output: "正規化 V5 Tag 列", run: "ランダム修復・正規化", copy: "コピー", copied: "コピー済み", reset: "初期値に戻す", empty: "画家列を貼り付けてください。", none: "有効な Tag を認識できませんでした。入力と区切りを確認してください。", adjusted: "{count} 個の Tag（画家 {artists}、品質 {quality}、その他 {other}）を個別に修復しました。", noteTitle: "ユーザー検証と制限", note: "NovelAI は V4.5→V5 の換算式を公開していません。コミュニティの 1/3～1/2 という目安は主に旧画家ウェイト向けです。本ツールでは文字列全体を移行するため、品質・スタイル・その他の有効 Tag にも同じ範囲を適用します。公式標準ではありません。", safe: "明示的な artist: と確認済みの画家名だけを画家として分類します。品質・スタイル・年・ネガティブ・内容 Tag に artist: は追加しません。重複区切りと孤立した :: は自動整理します。", repairBatchHint: "複数の完全な修復候補を作成し、同じ Seed で一括生成・保存できます。", repairNoResults: "V4.5 Tag 列から複数の修復候補を作成できます。", drawPageTitle: "画家列ウェイト抽選", drawPageSubtitle: "修復器と同じ判定・正規化を使い、旧ウェイトを 1/3～1/2 に移行してから指定範囲内に収めます。", drawTitle: "抽選設定", drawHint: "すべての有効 Tag が抽選に参加し、削除されません。候補セット数は完全な Tag 組合せ／画像を何組作るかを表し、各組に全 Tag を保持します。", drawInput: "完全な Tag 列", drawInputHint: "例：xiaoluo_xl, 1.2::artist:pottsness ::", drawEmpty: "画家列を貼り付けてください。", drawNone: "有効な Tag を認識できませんでした。入力と区切りを確認してください。", weightMin: "最小", weightMax: "最大", candidateCount: "候補セット数", basePrompt: "固定内容", currentParams: "生成画面の現在設定を使用", currentParamsHint: "{model} · {width}×{height} · {steps} steps", seedMode: "比較 Seed", fixedSeed: "全候補固定", randomSeed: "画像ごとランダム", seed: "Seed", randomizeSeed: "Seed を抽選", draw: "ウェイト再抽選", generate: "一括生成", stop: "停止", needDraw: "先に候補を抽選してください。", needPrompt: "固定内容を入力してください。", generating: "生成中 {done}/{total}", complete: "生成完了。好きな結果を保存できます。", allTags: "{count} 個の有効 Tag（画家 {artists}、品質 {quality}、その他 {other}）を各組に保持します。", results: "候補", favorites: "お気に入り", sharedFavorites: "このツール専用のお気に入りです。他の2つとは共有しません", pending: "待機", generatingOne: "生成中", done: "完了", failed: "失敗", favorite: "保存", saved: "保存済み", saving: "保存中", remove: "削除", apply: "生成へ適用", retry: "再試行", preview: "ダブルクリックで拡大", noResults: "画家列を入力してウェイト候補を抽選できます。", noFavorites: "お気に入りはありません。", applied: "生成へ適用しました。", removed: "お気に入りと画像を削除しました。",
+    title: "V4.5 画家列修復", subtitle: "画家・品質・その他の Tag を自動判定し、すべての有効 Tag を旧値の 1/3～1/2 に個別調整して V5 数値形式へ統一します。", back: "ツールへ戻る", strategy: "コミュニティ移行ヒューリスティック", input: "V4.5 完全 Tag 列", inputHint: "既知の接頭辞なし画家名、括弧、数値形式に対応", output: "正規化 V5 Tag 列", run: "ランダム修復・正規化", copy: "コピー", copied: "コピー済み", reset: "初期値に戻す", empty: "画家列を貼り付けてください。", none: "有効な Tag を認識できませんでした。入力と区切りを確認してください。", adjusted: "{count} 個の Tag（画家 {artists}、品質 {quality}、その他 {other}）を個別に修復しました。", noteTitle: "ユーザー検証と制限", note: "NovelAI は V4.5→V5 の換算式を公開していません。コミュニティの 1/3～1/2 という目安は主に旧画家ウェイト向けです。本ツールでは文字列全体を移行するため、品質・スタイル・その他の有効 Tag にも同じ範囲を適用します。公式標準ではありません。", safe: "明示的な artist: と確認済みの画家名だけを画家として分類します。品質・スタイル・年・ネガティブ・内容 Tag に artist: は追加しません。重複区切りと孤立した :: は自動整理します。", repairBatchHint: "複数の完全な修復候補を作成し、同じ Seed で一括生成・保存できます。", repairNoResults: "V4.5 Tag 列から複数の修復候補を作成できます。", drawPageTitle: "画家列ウェイト抽選", drawPageSubtitle: "修復器と同じ判定・正規化を使い、すべての有効 Tag の最終ウェイトを指定範囲全体から個別に抽選します。", drawTitle: "抽選設定", drawHint: "すべての有効 Tag を保持し、最小／最大の範囲全体から個別に最終ウェイトを抽選します。旧ウェイトは抽選範囲を制限しません。", drawInput: "完全な Tag 列", drawInputHint: "例：xiaoluo_xl, 1.2::artist:pottsness ::", drawEmpty: "画家列を貼り付けてください。", drawNone: "有効な Tag を認識できませんでした。入力と区切りを確認してください。", weightMin: "最小", weightMax: "最大", candidateCount: "候補セット数", basePrompt: "固定内容", currentParams: "生成画面の現在設定を使用", currentParamsHint: "{model} · {width}×{height} · {steps} steps", seedMode: "比較 Seed", fixedSeed: "全候補固定", randomSeed: "画像ごとランダム", seed: "Seed", randomizeSeed: "Seed を抽選", draw: "ウェイト再抽選", generate: "一括生成", stop: "停止", needDraw: "先に候補を抽選してください。", needPrompt: "固定内容を入力してください。", generating: "生成中 {done}/{total}", complete: "生成完了。好きな結果を保存できます。", allTags: "{count} 個の有効 Tag（画家 {artists}、品質 {quality}、その他 {other}）を各組に保持します。", results: "候補", favorites: "お気に入り", sharedFavorites: "このツール専用のお気に入りです。他の2つとは共有しません", pending: "待機", generatingOne: "生成中", done: "完了", failed: "失敗", favorite: "保存", saved: "保存済み", saving: "保存中", remove: "削除", apply: "生成へ適用", retry: "再試行", preview: "ダブルクリックで拡大", noResults: "画家列を入力してウェイト候補を抽選できます。", noFavorites: "お気に入りはありません。", applied: "生成へ適用しました。", removed: "お気に入りと画像を削除しました。",
   },
   "ko-KR": {
-    title: "V4.5 작가 문자열 복구", subtitle: "작가·품질·기타 Tag를 자동 구분하고 모든 유효 Tag를 기존 가중치의 1/3~1/2로 개별 조정해 V5 숫자 형식으로 통일합니다.", back: "도구로 돌아가기", strategy: "커뮤니티 마이그레이션 휴리스틱", input: "V4.5 전체 Tag 문자열", inputHint: "확인된 접두사 없는 작가명, 괄호, 숫자 형식 지원", output: "정규화 V5 Tag 문자열", run: "무작위 복구 및 정규화", copy: "복사", copied: "복사됨", reset: "기본값 복원", empty: "작가 문자열을 붙여넣으세요.", none: "유효한 Tag를 찾지 못했습니다. 입력과 구분자를 확인하세요.", adjusted: "Tag {count}개(작가 {artists}, 품질 {quality}, 기타 {other})를 개별 복구했습니다.", noteTitle: "사용자 검증과 한계", note: "NovelAI는 V4.5→V5 환산식을 공개하지 않았습니다. 커뮤니티의 1/3~1/2 기준은 주로 기존 작가 가중치에 관한 것이며, 이 도구는 전체 문자열 이전을 위해 품질·스타일·기타 유효 Tag에도 같은 범위를 적용합니다. 공식 표준은 아닙니다.", safe: "명시적 artist:와 검토된 작가명만 작가로 분류합니다. 품질·스타일·연도·네거티브·내용 Tag에는 artist:를 붙이지 않습니다. 중복 구분자와 고립된 ::는 자동 정리합니다.", repairBatchHint: "여러 완전한 복구 후보를 만들고 같은 Seed로 일괄 생성·저장할 수 있습니다.", repairNoResults: "V4.5 Tag 문자열에서 여러 복구 후보를 만들 수 있습니다.", drawPageTitle: "작가 문자열 가중치 뽑기", drawPageSubtitle: "복구 도구와 같은 판별·정규화 후 기존 가중치를 1/3~1/2로 이전하고 지정 범위로 제한합니다.", drawTitle: "추첨 설정", drawHint: "모든 유효 Tag가 추첨에 참여하며 삭제되지 않습니다. 후보 세트 수는 완전한 Tag 조합/이미지를 몇 개 만들지 뜻하며 각 세트에 모든 Tag를 유지합니다.", drawInput: "전체 Tag 문자열", drawInputHint: "예: xiaoluo_xl, 1.2::artist:pottsness ::", drawEmpty: "작가 문자열을 붙여넣으세요.", drawNone: "유효한 Tag를 찾지 못했습니다. 입력과 구분자를 확인하세요.", weightMin: "최저", weightMax: "최고", candidateCount: "후보 세트 수", basePrompt: "고정 내용 프롬프트", currentParams: "생성 화면 현재 설정 사용", currentParamsHint: "{model} · {width}×{height} · {steps} steps", seedMode: "비교 Seed", fixedSeed: "전체 고정", randomSeed: "이미지별 무작위", seed: "Seed", randomizeSeed: "Seed 무작위", draw: "가중치 다시 뽑기", generate: "일괄 생성", stop: "중지", needDraw: "먼저 후보를 뽑으세요.", needPrompt: "고정 내용을 입력하세요.", generating: "생성 중 {done}/{total}", complete: "생성 완료. 마음에 드는 결과를 저장하세요.", allTags: "유효 Tag {count}개(작가 {artists}, 품질 {quality}, 기타 {other})를 모든 세트에 유지합니다.", results: "후보", favorites: "즐겨찾기", sharedFavorites: "이 도구 전용 즐겨찾기이며 다른 두 도구와 공유하지 않습니다", pending: "대기", generatingOne: "생성 중", done: "완료", failed: "실패", favorite: "저장", saved: "저장됨", saving: "저장 중", remove: "삭제", apply: "생성에 적용", retry: "재시도", preview: "더블 클릭하여 확대", noResults: "작가 문자열을 입력한 뒤 후보를 뽑을 수 있습니다.", noFavorites: "즐겨찾기가 없습니다.", applied: "생성에 적용했습니다.", removed: "즐겨찾기와 이미지를 삭제했습니다.",
+    title: "V4.5 작가 문자열 복구", subtitle: "작가·품질·기타 Tag를 자동 구분하고 모든 유효 Tag를 기존 가중치의 1/3~1/2로 개별 조정해 V5 숫자 형식으로 통일합니다.", back: "도구로 돌아가기", strategy: "커뮤니티 마이그레이션 휴리스틱", input: "V4.5 전체 Tag 문자열", inputHint: "확인된 접두사 없는 작가명, 괄호, 숫자 형식 지원", output: "정규화 V5 Tag 문자열", run: "무작위 복구 및 정규화", copy: "복사", copied: "복사됨", reset: "기본값 복원", empty: "작가 문자열을 붙여넣으세요.", none: "유효한 Tag를 찾지 못했습니다. 입력과 구분자를 확인하세요.", adjusted: "Tag {count}개(작가 {artists}, 품질 {quality}, 기타 {other})를 개별 복구했습니다.", noteTitle: "사용자 검증과 한계", note: "NovelAI는 V4.5→V5 환산식을 공개하지 않았습니다. 커뮤니티의 1/3~1/2 기준은 주로 기존 작가 가중치에 관한 것이며, 이 도구는 전체 문자열 이전을 위해 품질·스타일·기타 유효 Tag에도 같은 범위를 적용합니다. 공식 표준은 아닙니다.", safe: "명시적 artist:와 검토된 작가명만 작가로 분류합니다. 품질·스타일·연도·네거티브·내용 Tag에는 artist:를 붙이지 않습니다. 중복 구분자와 고립된 ::는 자동 정리합니다.", repairBatchHint: "여러 완전한 복구 후보를 만들고 같은 Seed로 일괄 생성·저장할 수 있습니다.", repairNoResults: "V4.5 Tag 문자열에서 여러 복구 후보를 만들 수 있습니다.", drawPageTitle: "작가 문자열 가중치 뽑기", drawPageSubtitle: "복구 도구와 같은 판별·정규화를 사용하되 모든 유효 Tag의 최종 가중치를 지정 범위 전체에서 각각 추첨합니다.", drawTitle: "추첨 설정", drawHint: "모든 유효 Tag를 유지하고 최저/최고 범위 전체에서 각각 최종 가중치를 추첨합니다. 기존 가중치는 최종 추첨 범위를 제한하지 않습니다.", drawInput: "전체 Tag 문자열", drawInputHint: "예: xiaoluo_xl, 1.2::artist:pottsness ::", drawEmpty: "작가 문자열을 붙여넣으세요.", drawNone: "유효한 Tag를 찾지 못했습니다. 입력과 구분자를 확인하세요.", weightMin: "최저", weightMax: "최고", candidateCount: "후보 세트 수", basePrompt: "고정 내용 프롬프트", currentParams: "생성 화면 현재 설정 사용", currentParamsHint: "{model} · {width}×{height} · {steps} steps", seedMode: "비교 Seed", fixedSeed: "전체 고정", randomSeed: "이미지별 무작위", seed: "Seed", randomizeSeed: "Seed 무작위", draw: "가중치 다시 뽑기", generate: "일괄 생성", stop: "중지", needDraw: "먼저 후보를 뽑으세요.", needPrompt: "고정 내용을 입력하세요.", generating: "생성 중 {done}/{total}", complete: "생성 완료. 마음에 드는 결과를 저장하세요.", allTags: "유효 Tag {count}개(작가 {artists}, 품질 {quality}, 기타 {other})를 모든 세트에 유지합니다.", results: "후보", favorites: "즐겨찾기", sharedFavorites: "이 도구 전용 즐겨찾기이며 다른 두 도구와 공유하지 않습니다", pending: "대기", generatingOne: "생성 중", done: "완료", failed: "실패", favorite: "저장", saved: "저장됨", saving: "저장 중", remove: "삭제", apply: "생성에 적용", retry: "재시도", preview: "더블 클릭하여 확대", noResults: "작가 문자열을 입력한 뒤 후보를 뽑을 수 있습니다.", noFavorites: "즐겨찾기가 없습니다.", applied: "생성에 적용했습니다.", removed: "즐겨찾기와 이미지를 삭제했습니다.",
   },
 } satisfies Record<AppLanguage, Record<string, string>>;
+
+const COPY_TEXT = {
+  "zh-CN": { artists: "复制画师串", full: "复制完整提示词", copied: "已复制" },
+  "zh-TW": { artists: "複製畫師串", full: "複製完整提示詞", copied: "已複製" },
+  "en-US": { artists: "Copy artist string", full: "Copy full prompt", copied: "Copied" },
+  "ja-JP": { artists: "画家列をコピー", full: "完全プロンプトをコピー", copied: "コピー済み" },
+  "ko-KR": { artists: "작가 문자열 복사", full: "전체 프롬프트 복사", copied: "복사됨" },
+} satisfies Record<AppLanguage, { artists: string; full: string; copied: string }>;
 
 function freshSeed() {
   return Math.max(1, Math.floor(Math.random() * 2_147_483_647));
@@ -308,6 +321,7 @@ export default function V5ArtistWeightRepair({
     ? "artist-string-draw"
     : "v5-repair";
   const text = TEXT[language];
+  const copyText = COPY_TEXT[language];
   const paramText = DRAW_PARAM_TEXT[language];
   const sizeLabels = paramText.sizeValues.split("|");
   const ucLabels = paramText.ucValues.split("|");
@@ -316,7 +330,7 @@ export default function V5ArtistWeightRepair({
   const [drawInput, setDrawInput] = useState("");
   const [minWeight, setMinWeight] = useState(DEFAULT_V5_ARTIST_DRAW_MIN);
   const [maxWeight, setMaxWeight] = useState(DEFAULT_V5_ARTIST_DRAW_MAX);
-  const [candidateCount, setCandidateCount] = useState(8);
+  const [candidateCount, setCandidateCount] = useState(10);
   const [basePrompt, setBasePrompt] = useState(params.positivePrompt);
   const [generationParams, setGenerationParams] = useState(() =>
     normalizeDrawGenerationParams(params),
@@ -331,7 +345,8 @@ export default function V5ArtistWeightRepair({
   const [running, setRunning] = useState(false);
   const cancelRef = useRef(false);
   const [message, setMessage] = useState("");
-  const [copied, setCopied] = useState(false);
+  const [copiedAction, setCopiedAction] = useState("");
+  const copiedTimerRef = useRef<number | null>(null);
   const [previewCandidate, setPreviewCandidate] = useState<SharedArtistFavorite | null>(null);
   const tagSummary = useMemo(
     () => normalizeV45ArtistSyntax(drawMode ? drawInput : input),
@@ -346,6 +361,10 @@ export default function V5ArtistWeightRepair({
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [previewCandidate]);
+
+  useEffect(() => () => {
+    if (copiedTimerRef.current !== null) window.clearTimeout(copiedTimerRef.current);
+  }, []);
 
   const patchGeneration = <K extends keyof GenerateParams>(
     key: K,
@@ -395,7 +414,7 @@ export default function V5ArtistWeightRepair({
     const normalized = normalizeV45ArtistSyntax(input);
     const recipes = repairV45ArtistCandidatesForV5(
       input,
-      clampNumber(candidateCount, 8, 1, 100),
+      clampNumber(candidateCount, 10, 1, 100),
     );
     if (recipes.length === 0) {
       setOutput("");
@@ -403,7 +422,7 @@ export default function V5ArtistWeightRepair({
       return null;
     }
     installCandidates(recipes);
-    setOutput(recipes[0].prompt);
+    setOutput(formatArtistCardTags(recipes[0]));
     setMessage(interpolate(text.adjusted, {
       candidates: recipes.length,
       count: normalized.totalAdjusted,
@@ -411,7 +430,7 @@ export default function V5ArtistWeightRepair({
       quality: normalized.qualityTagCount,
       other: normalized.otherTagCount,
     }));
-    setCopied(false);
+    setCopiedAction("");
     return recipes;
   };
 
@@ -420,7 +439,7 @@ export default function V5ArtistWeightRepair({
     const normalized = normalizeV45ArtistSyntax(drawInput);
     const recipes = drawAllV5ArtistWeights(
       normalized.output,
-      clampNumber(candidateCount, 8, 1, 100),
+      clampNumber(candidateCount, 10, 1, 100),
       clampNumber(minWeight, DEFAULT_V5_ARTIST_DRAW_MIN, 0.05, 10),
       clampNumber(maxWeight, DEFAULT_V5_ARTIST_DRAW_MAX, 0.05, 10),
     );
@@ -519,7 +538,7 @@ export default function V5ArtistWeightRepair({
   const restoreDefaults = () => {
     setMinWeight(DEFAULT_V5_ARTIST_DRAW_MIN);
     setMaxWeight(DEFAULT_V5_ARTIST_DRAW_MAX);
-    setCandidateCount(8);
+    setCandidateCount(10);
     setSeedMode("fixed");
     setSeed(246813579);
     if (!drawMode) {
@@ -542,16 +561,34 @@ export default function V5ArtistWeightRepair({
     width: candidate.image?.width || generationParams.width,
     height: candidate.image?.height || generationParams.height,
   });
+  const copyCandidate = async (value: string, key: string) => {
+    // Both artist-string tools share the same clipboard contract: result tags
+    // and full prompts always end in exactly one ASCII comma.
+    await navigator.clipboard.writeText(ensureTrailingPromptComma(value));
+    setCopiedAction(key);
+    if (copiedTimerRef.current !== null) window.clearTimeout(copiedTimerRef.current);
+    copiedTimerRef.current = window.setTimeout(() => {
+      setCopiedAction((current) => current === key ? "" : current);
+    }, 1800);
+  };
   const renderCandidate = (candidate: SharedArtistFavorite, favorite = false) => {
     const dimensions = candidateDimensions(candidate);
     const candidateModel = candidate.image?.model || candidate.generationModel || generationParams.model;
+    const artistCopyKey = `${candidate.id}:artists`;
+    const fullCopyKey = `${candidate.id}:full`;
     return (
     <article key={candidate.id} className={`artist-candidate v5-draw-card ${candidate.status}`}>
       <header className="artist-candidate-header"><div><b>#{String(candidate.sequence).padStart(2, "0")}</b><small>{modelLabel(candidateModel)} · {dimensions.width}×{dimensions.height}</small></div><span>{favorite || candidate.liked ? text.saved : text[candidate.status === "generating" ? "generatingOne" : candidate.status]}</span></header>
       <div className="artist-candidate-media v5-draw-image" style={{ aspectRatio: `${dimensions.width} / ${dimensions.height}` }}>
         {candidate.image ? <><img src={candidate.image.fileUrl} alt={candidate.prompt} loading="lazy" decoding="async" title={text.preview} onDoubleClick={() => setPreviewCandidate(candidate)} /><button type="button" className="artist-candidate-preview-button" aria-label={text.preview} title={text.preview} onClick={() => setPreviewCandidate(candidate)}><Icon name="search" /></button></> : <div className="artist-candidate-placeholder"><Icon name={candidate.status === "generating" ? "loader" : "image"} /></div>}
       </div>
-      <div className="artist-string-block"><code>{candidate.prompt}</code></div>
+      <div className="artist-string-block">
+        <div className="artist-copy-actions">
+          <button type="button" className={copiedAction === artistCopyKey ? "copied" : ""} onClick={() => void copyCandidate(formatArtistCardTags(candidate), artistCopyKey)}>{copiedAction === artistCopyKey ? copyText.copied : copyText.artists}</button>
+          <button type="button" className={copiedAction === fullCopyKey ? "copied" : ""} onClick={() => void copyCandidate(formatArtistFullPrompt(candidate, basePrompt), fullCopyKey)}>{copiedAction === fullCopyKey ? copyText.copied : copyText.full}</button>
+        </div>
+        <code>{formatArtistCardTags(candidate)}</code>
+      </div>
       <small className={`artist-error ${candidate.error ? "" : "empty"}`} title={candidate.error}>{candidate.error ?? "\u00a0"}</small>
       <footer className="artist-candidate-actions">
         {favorite ? <Button variant="ghost" onClick={() => void removeFavorite(candidate)}><Icon name="trash" />{text.remove}</Button>
@@ -664,7 +701,7 @@ export default function V5ArtistWeightRepair({
         <div className="artist-result-actions">
           {drawMode ? <Button onClick={draw} disabled={running}><Icon name="dice" />{text.draw}</Button> : <Button onClick={repair} disabled={running}><Icon name="dice" />{text.run}</Button>}
           {running ? <Button variant="danger" onClick={() => { cancelRef.current = true; void window.naiDesktop.cancel(); }}>{text.stop}</Button> : <Button variant="primary" onClick={() => void generateBatch()} disabled={results.length === 0}>{text.generate}</Button>}
-          {!drawMode && <Button disabled={!output} onClick={() => void navigator.clipboard.writeText(output).then(() => setCopied(true))}>{copied ? text.copied : text.copy}</Button>}
+          {!drawMode && <Button disabled={!output} onClick={() => void copyCandidate(output, "first-output")}>{copiedAction === "first-output" ? text.copied : text.copy}</Button>}
           <span className={message === text.drawNone || message === text.none ? "warning" : ""}>{running ? interpolate(text.generating, { done: completed, total: results.length }) : message}</span>
         </div>
         <nav className="artist-result-tabs artist-string-result-tabs" aria-label={`${text.results} / ${text.favorites}`}><button type="button" className={!showFavorites ? "active" : ""} onClick={() => setShowFavorites(false)}><span>{text.results}</span><b>{results.length}</b></button><button type="button" className={showFavorites ? "active" : ""} onClick={() => { setFavorites(loadArtistFavorites(favoriteCollection)); setShowFavorites(true); }}><span>{text.favorites}</span><b>{favorites.length}</b></button></nav>

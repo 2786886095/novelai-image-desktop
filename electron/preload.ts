@@ -147,8 +147,8 @@ contextBridge.exposeInMainWorld("naiDesktop", {
       knownCharacter,
       templateVersion,
     ),
-  convertPrompt: (text: string, mode: string, knownCharacter?: boolean) =>
-    ipcRenderer.invoke("nai:convertPrompt", text, mode, knownCharacter),
+  convertPrompt: (text: string, mode: string, knownCharacter?: boolean, templateVersion?: string) =>
+    ipcRenderer.invoke("nai:convertPrompt", text, mode, knownCharacter, templateVersion),
   comicAnalyzeScript: (request: ComicAnalyzeRequest) =>
     ipcRenderer.invoke("comic:analyzeScript", request),
   comicConvertPanels: (request: ComicConvertRequest) =>

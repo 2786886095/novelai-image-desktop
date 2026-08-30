@@ -88,7 +88,7 @@ describe("repairV45ArtistWeightsForV5", () => {
 });
 
 describe("drawAllV5ArtistWeights", () => {
-  it("uses the repair migration rule, constrains it to the draw range, and retains every tag", () => {
+  it("draws every tag independently across the complete selected range", () => {
     const values = [0, 0.5, 1, 0.25];
     let cursor = 0;
     const recipes = drawAllV5ArtistWeights(
@@ -100,9 +100,9 @@ describe("drawAllV5ArtistWeights", () => {
     );
     expect(recipes).toHaveLength(1);
     expect(recipes[0].prompt).toBe(
-      "0.33::artist:foo ::, 0.46::best quality ::, 0.5::impasto ::, 0.38::no halo ::",
+      "0.2::artist:foo ::, 0.7::best quality ::, 1.2::impasto ::, 0.45::no halo ::",
     );
-    expect(recipes[0].artists).toEqual([{ name: "foo", weight: 0.33 }]);
+    expect(recipes[0].artists).toEqual([{ name: "foo", weight: 0.2 }]);
     expect(recipes[0].auxiliary.map((tag) => tag.kind)).toEqual([
       "quality",
       "style",
@@ -123,20 +123,22 @@ describe("drawAllV5ArtistWeights", () => {
     expect(recipes[0].artists).toEqual([]);
     expect(recipes[0].auxiliary).toHaveLength(3);
     expect(recipes[0].prompt).toBe(
-      "0.37::best quality ::, 0.33::illustration ::, 0.33::1girl ::",
+      "0.2::best quality ::, 0.2::illustration ::, 0.2::1girl ::",
     );
   });
 
-  it("preserves legacy relative weight before applying the final bounds", () => {
+  it("ignores legacy relative weight and uses only the selected final bounds", () => {
+    const values = [0, 0.5, 1];
+    let cursor = 0;
     const recipes = drawAllV5ArtistWeights(
       "2::artist:foo ::, 0.1::best quality ::, 10::impasto ::",
       1,
       0.2,
       1.2,
-      () => 0,
+      () => values[cursor++] ?? 0,
     );
     expect(recipes[0].prompt).toBe(
-      "0.67::artist:foo ::, 0.2::best quality ::, 1.2::impasto ::",
+      "0.2::artist:foo ::, 0.7::best quality ::, 1.2::impasto ::",
     );
   });
 

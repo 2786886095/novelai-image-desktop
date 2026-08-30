@@ -356,6 +356,32 @@ function createWindow() {
               "document.documentElement.classList.add('theme-dark')",
             );
           }
+          if (normalizedUiCapturePath.includes("settings-") && normalizedUiCapturePath.includes("-bottom")) {
+            const scrollSettingsBottom = () => mainWindow?.webContents.executeJavaScript(`new Promise((resolve) => {
+              const startedAt = Date.now();
+              const scrollSettings = () => {
+                const content = document.querySelector('.settings-content');
+                if (content) {
+                  const target = content.querySelector('.settings-form')?.lastElementChild;
+                  target?.scrollIntoView({ block: 'end', inline: 'nearest', behavior: 'instant' });
+                  content.scrollTop = content.scrollHeight;
+                  content.getBoundingClientRect();
+                  resolve(true);
+                  return;
+                }
+                if (Date.now() - startedAt > 2500) {
+                  resolve(false);
+                  return;
+                }
+                setTimeout(scrollSettings, 80);
+              };
+              scrollSettings();
+            })`);
+            await scrollSettingsBottom();
+            await new Promise((resolve) => setTimeout(resolve, 450));
+            await scrollSettingsBottom();
+            await new Promise((resolve) => setTimeout(resolve, 250));
+          }
           if (normalizedUiCapturePath.includes("random-artist-params")) {
             const revealRandomParameters = () => mainWindow?.webContents.executeJavaScript(`(() => {
               const target = document.querySelector('.random-generation-settings');
@@ -466,7 +492,9 @@ function createWindow() {
                 const rect = element.getBoundingClientRect();
                 return { ...describe(element), open: Boolean(element.open), scrollHeight: element.scrollHeight, clientHeight: element.clientHeight, rect: { top: rect.top, bottom: rect.bottom, height: rect.height }, display: style.display, height: style.height, maxHeight: style.maxHeight, overflow: style.overflow };
               });
-            return { viewport: { width: innerWidth, height: innerHeight }, viewportOverflow, contentOverflow, iconOverflow, iconMisalignment, textMisalignment, duplicateArrowRisk, openSelectMenus, randomArtistDetails };
+            const settingsScroll = [...document.querySelectorAll('.settings-content')]
+              .map((element) => ({ scrollTop: element.scrollTop, scrollHeight: element.scrollHeight, clientHeight: element.clientHeight }));
+            return { viewport: { width: innerWidth, height: innerHeight }, viewportOverflow, contentOverflow, iconOverflow, iconMisalignment, textMisalignment, duplicateArrowRisk, openSelectMenus, randomArtistDetails, settingsScroll };
           })()`);
           const image = await mainWindow?.webContents.capturePage();
           if (image) {
@@ -508,6 +536,8 @@ function createWindow() {
     ].find(([needle]) => normalizedUiCapturePath.includes(needle))?.[1];
     const captureSurface = normalizedUiCapturePath.includes("v5-artist-repair")
       ? "v5ArtistRepair"
+      : normalizedUiCapturePath.includes("artist-string-draw")
+      ? "artistStringDraw"
       : normalizedUiCapturePath.includes("random-artist")
       ? "randomArtist"
       : normalizedUiCapturePath.includes("opus-inline")
@@ -519,6 +549,18 @@ function createWindow() {
       : normalizedUiCapturePath.includes("settings")
         ? "settings"
         : captureTab ?? "referencePresets";
+    const captureSettingsSection = [
+      "api",
+      "storage",
+      "ai-reverse",
+      "convert-api",
+      "templates",
+      "prompt",
+      "language",
+      "appearance",
+      "performance",
+      "about",
+    ].find((section) => normalizedUiCapturePath.includes(`settings-${section}`));
     const captureCatalogState = normalizedUiCapturePath.includes("series-confirm")
       ? "confirm"
       : normalizedUiCapturePath.includes("series-progress")
@@ -536,7 +578,7 @@ function createWindow() {
     void mainWindow.loadFile(
       path.join(__dirname, "../../dist/index.html"),
       uiCapturePath
-        ? { query: { uiCapture: captureSurface, uiTheme: captureTheme, uiCatalogState: captureCatalogState, uiPresetSection: capturePresetSection, uiSelectOpen: normalizedUiCapturePath.includes("select-open") ? "1" : "0", uiPresetPicker: normalizedUiCapturePath.includes("preset-picker") ? "1" : "0", uiPresetCreate: normalizedUiCapturePath.includes("preset-create") ? "1" : "0", uiStylePresetOpen: normalizedUiCapturePath.includes("style-preset-menu") || normalizedUiCapturePath.includes("style-preset-images") ? "1" : "0", uiStylePresetActions: normalizedUiCapturePath.includes("style-preset-actions") ? "1" : "0", uiStylePresetImages: normalizedUiCapturePath.includes("style-preset-images") ? "1" : "0" } }
+        ? { query: { uiCapture: captureSurface, uiTheme: captureTheme, uiSettingsSection: captureSettingsSection ?? "", uiCatalogState: captureCatalogState, uiPresetSection: capturePresetSection, uiSelectOpen: normalizedUiCapturePath.includes("select-open") ? "1" : "0", uiPresetPicker: normalizedUiCapturePath.includes("preset-picker") ? "1" : "0", uiPresetCreate: normalizedUiCapturePath.includes("preset-create") ? "1" : "0", uiStylePresetOpen: normalizedUiCapturePath.includes("style-preset-menu") || normalizedUiCapturePath.includes("style-preset-images") ? "1" : "0", uiStylePresetActions: normalizedUiCapturePath.includes("style-preset-actions") ? "1" : "0", uiStylePresetImages: normalizedUiCapturePath.includes("style-preset-images") ? "1" : "0" } }
         : undefined,
     );
   }
@@ -678,11 +720,12 @@ function registerIpc() {
   );
   ipcMain.handle(
     "nai:convertPrompt",
-    (_event, text: string, mode: string, knownCharacter?: boolean) =>
+    (_event, text: string, mode: string, knownCharacter?: boolean, templateVersion?: string) =>
       convertPromptText(
         text,
         (mode as "tags" | "natural" | "mixed") ?? "tags",
         knownCharacter,
+        templateVersion === "v4.5" ? "v4.5" : "v5",
       ),
   );
   ipcMain.handle(

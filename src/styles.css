@@ -6539,6 +6539,9 @@ button.prompt-chip-head {
 }
 .tpl-state.custom { background: rgba(245, 158, 11, 0.18); color: #b45309; }
 .tpl-actions { display: flex; gap: 8px; margin-top: 6px; }
+.versioned-template-editor { display: grid; gap: 8px; }
+.versioned-template-editor + .versioned-template-editor { padding-top: 14px; border-top: 1px solid var(--border); }
+.template-version-selector { margin-bottom: 0; }
 .theme-dark .tpl-state.custom { color: #fbbf24; }
 
 /* ── Proxy settings card ─────────────────────────────────────────────────────── */
@@ -8468,6 +8471,10 @@ button.prompt-chip-head {
   border: 1px solid rgba(124, 58, 237, 0.14);
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.58);
+}
+.theme-dark .reverse-scope-card {
+  background: rgba(18, 16, 34, 0.74);
+  border-color: rgba(196, 181, 253, 0.16);
 }
 .mode-selector.compact { gap: 6px; }
 .mode-selector.compact .mode-btn { padding: 7px 10px; font-size: 12px; }

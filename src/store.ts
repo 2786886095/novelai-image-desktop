@@ -1643,6 +1643,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   // Concurrent, same reasoning as runReversePrompt.
   async runConvertPrompt() {
     const { convertInput, convertMode, convertKnownCharacter } = get();
+    const templateVersion = get().settings?.convertPromptTemplateVersion ?? "v5";
     if (!convertInput.trim()) {
       set({ toast: storeText(get().settings, "toast.needConvertInput") });
       return;
@@ -1656,7 +1657,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       addedAt: Date.now(),
     };
     set({ convertJobs: [job, ...get().convertJobs], convertResultVariants: null, convertCodexMatches: [] });
-    const result = await window.naiDesktop.convertPrompt(convertInput, convertMode, convertKnownCharacter);
+    const result = await window.naiDesktop.convertPrompt(
+      convertInput,
+      convertMode,
+      convertKnownCharacter,
+      templateVersion,
+    );
     // See runReversePrompt: a removed job is treated as cancelled.
     if (!get().convertJobs.some((j) => j.id === job.id)) return;
     if (result.ok && result.result) {

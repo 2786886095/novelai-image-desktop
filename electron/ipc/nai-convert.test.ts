@@ -198,6 +198,41 @@ describe("prompt codex enhancement", () => {
     };
   });
 
+  it("selects independent V4.5 and V5 conversion templates", async () => {
+    settingsRef.current.promptCodexEnhanceEnabled = false;
+    settingsRef.current.convertPromptTemplatesV45 = {
+      tags: "V45 CONVERSION TEMPLATE {{input}}",
+      natural: "",
+      mixed: "",
+    };
+    settingsRef.current.convertPromptTemplates = {
+      tags: "V5 CONVERSION TEMPLATE {{input}}",
+      natural: "",
+      mixed: "",
+    };
+    axiosMock.post.mockResolvedValue({
+      data: {
+        choices: [{ message: { content: "1girl, solo" }, finish_reason: "stop" }],
+      },
+    });
+    const { convertPromptText } = await import("./nai");
+
+    await convertPromptText("一个女孩", "tags", false, "v4.5");
+    await convertPromptText("一个女孩", "tags", false, "v5");
+
+    const first = axiosMock.post.mock.calls[0]?.[1] as {
+      messages?: Array<{ role: string; content: string }>;
+    };
+    const second = axiosMock.post.mock.calls[1]?.[1] as {
+      messages?: Array<{ role: string; content: string }>;
+    };
+    expect(first.messages?.[0]?.content).toContain("V45 CONVERSION TEMPLATE");
+    expect(first.messages?.[0]?.content).not.toContain("V5 CONVERSION TEMPLATE");
+    expect(first.messages?.[1]?.content).toContain("NovelAI V4.5");
+    expect(second.messages?.[0]?.content).toContain("V5 CONVERSION TEMPLATE");
+    expect(second.messages?.[1]?.content).toContain("NovelAI V5");
+  });
+
   it("injects locally retrieved codex context into conversion", async () => {
     axiosMock.post.mockResolvedValue({
       data: {

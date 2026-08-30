@@ -94,6 +94,7 @@ import {
   SCOPED_REVERSE_SYSTEM_PROMPTS,
 } from "../../src/data/prompt-templates";
 import {
+  V45_CONVERT_SYSTEM_PROMPTS,
   V45_REVERSE_SYSTEM_PROMPTS,
   V45_SCOPED_REVERSE_SYSTEM_PROMPTS,
 } from "../../src/data/prompt-templates-v45";
@@ -2840,7 +2841,7 @@ export async function reversePromptImage(
       mode,
       safeTemplateVersion === "v5"
         ? settings.reversePromptTemplates
-        : undefined,
+        : settings.reversePromptTemplatesV45,
       settings.visionSystemPrompt,
       builtInTemplates,
     )
@@ -4258,6 +4259,7 @@ export async function convertPromptText(
   chineseText: string,
   mode: "tags" | "natural" | "mixed" = "tags",
   knownCharacter = false,
+  templateVersion: "v4.5" | "v5" = "v5",
 ): Promise<{
   ok: boolean;
   result?: string;
@@ -4266,6 +4268,7 @@ export async function convertPromptText(
   message: string;
 }> {
   const settings = getSettings();
+  const safeTemplateVersion = templateVersion === "v4.5" ? "v4.5" : "v5";
   const matureTags =
     mode !== "natural" &&
     (settings.promptCodexEnhanceEnabled ||
@@ -4289,16 +4292,25 @@ export async function convertPromptText(
     : { matches: [] as PromptCodexMatch[], context: "" };
   const baseSystemPrompt = resolveModePrompt(
     mode,
-    settings.convertPromptTemplates,
+    safeTemplateVersion === "v5"
+      ? settings.convertPromptTemplates
+      : settings.convertPromptTemplatesV45,
     settings.convertSystemPrompt,
-    CONVERT_SYSTEM_PROMPTS,
+    safeTemplateVersion === "v5"
+      ? CONVERT_SYSTEM_PROMPTS
+      : V45_CONVERT_SYSTEM_PROMPTS,
   ).replace(/\{\{input\}\}/g, "<provided in the user message>");
   const systemPrompt = [
     baseSystemPrompt,
     enhancement.context,
     // Keep the dual-output contract last so it cannot be weakened by a base
     // template's ordinary "one prompt line" wording or by retrieved codex text.
-    knownCharacterRuntimeInstruction(mode, "convert", knownCharacter),
+    knownCharacterRuntimeInstruction(
+      mode,
+      "convert",
+      knownCharacter,
+      safeTemplateVersion,
+    ),
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -4317,6 +4329,7 @@ export async function convertPromptText(
     mode,
     knownCharacter ? "" : hintText,
     knownCharacter,
+    safeTemplateVersion,
   );
   const result = await callConvertApi(
     systemPrompt,
@@ -4400,10 +4413,15 @@ export async function convertPromptText(
       ].filter((issue, index, all) => all.indexOf(issue) === index);
       if (violations.length > 0) {
         const repairSystem = [
-          promptRuleRepairSystemPrompt(mode, knownCharacter),
+          promptRuleRepairSystemPrompt(mode, knownCharacter, safeTemplateVersion),
           enhancement.context,
           knownCharacter
-            ? knownCharacterRuntimeInstruction(mode, "convert", true)
+            ? knownCharacterRuntimeInstruction(
+                mode,
+                "convert",
+                true,
+                safeTemplateVersion,
+              )
             : "",
         ]
           .filter(Boolean)
@@ -4471,7 +4489,7 @@ export async function convertPromptText(
       modeNeedsRepair(mode, content)
     ) {
       const repaired = await callConvertApi(
-        modeRepairSystemPrompt(mode),
+        modeRepairSystemPrompt(mode, safeTemplateVersion),
         buildModeRepairUserText(mode, chineseText, content),
         900,
         `提示词转换修复 · ${mode}`,

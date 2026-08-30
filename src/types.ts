@@ -1349,8 +1349,9 @@ export interface AppSettings {
   reversePromptMode: ReversePromptMode;
   /** Built-in reverse template generation selected on the reverse page. */
   reversePromptTemplateVersion: ReversePromptTemplateVersion;
-  // Per-mode reverse-prompt system templates (empty string = use built-in default).
+  // Per-version reverse-prompt system templates (empty = built-in default).
   reversePromptTemplates: ModePromptTemplates;
+  reversePromptTemplatesV45: ModePromptTemplates;
   // Legacy per-mode comic storyboard templates. Kept for migration only.
   comicAnalyzePromptTemplates: ModePromptTemplates;
   // Current single storyboard analysis template used by the comic generator.
@@ -1362,7 +1363,9 @@ export interface AppSettings {
   convertSystemPrompt: string;
   // Convert output type + per-mode conversion system templates.
   convertMode: ReversePromptMode;
+  convertPromptTemplateVersion: ReversePromptTemplateVersion;
   convertPromptTemplates: ModePromptTemplates;
+  convertPromptTemplatesV45: ModePromptTemplates;
   // Local NovelAI prompt-codex retrieval. Enabled by default. Classified
   // entries are eligible only when the input itself is semantically relevant.
   promptCodexEnhanceEnabled: boolean;
@@ -1683,6 +1686,7 @@ export interface NaiDesktopApi {
     text: string,
     mode: ReversePromptMode,
     knownCharacter?: boolean,
+    templateVersion?: ReversePromptTemplateVersion,
   ) => Promise<{
     ok: boolean;
     result?: string;

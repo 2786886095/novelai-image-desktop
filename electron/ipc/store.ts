@@ -273,6 +273,7 @@ export function defaultSettings(): AppSettings {
     reversePromptMode: "tags" as const,
     reversePromptTemplateVersion: "v5" as const,
     reversePromptTemplates: emptyModeTemplates(),
+    reversePromptTemplatesV45: emptyModeTemplates(),
     comicAnalyzePromptTemplates: { tags: "", natural: "", mixed: "" },
     comicAnalyzePromptTemplate: COMIC_ANALYZE_SYSTEM_PROMPT,
     convertApiUrl: "https://api.openai.com/v1",
@@ -280,7 +281,9 @@ export function defaultSettings(): AppSettings {
     convertApiModel: "gpt-4o-mini",
     convertSystemPrompt: "",
     convertMode: "tags" as const,
+    convertPromptTemplateVersion: "v5" as const,
     convertPromptTemplates: { tags: "", natural: "", mixed: "" },
+    convertPromptTemplatesV45: { tags: "", natural: "", mixed: "" },
     promptCodexEnhanceEnabled: true,
     promptCodexAdultEnabled: true,
     promptRuleAutoRepairEnabled: false,
@@ -322,6 +325,8 @@ function normalize(raw: Partial<PersistedData> | null): PersistedData {
   const rawSettings = (raw?.settings ?? {}) as Partial<AppSettings>;
   const settings = { ...defaults, ...rawSettings };
   settings.language = normalizeLanguage(settings.language);
+  settings.reversePromptTemplateVersion = settings.reversePromptTemplateVersion === "v4.5" ? "v4.5" : "v5";
+  settings.convertPromptTemplateVersion = settings.convertPromptTemplateVersion === "v4.5" ? "v4.5" : "v5";
   settings.updateSource = settings.updateSource === "gitee" ? "gitee" : "github";
   settings.stylePromptPresetGroups = Array.from(
     new Set(

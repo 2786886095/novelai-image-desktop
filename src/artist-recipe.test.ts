@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   FRANCHISE_STYLE_LIBRARY,
   canonicalArtistTagName,
+  ensureTrailingPromptComma,
   expandArtistRecipeComparisons,
   formatArtistCardTags,
   formatArtistFullPrompt,
@@ -234,10 +235,9 @@ describe("artist recipe grammar", () => {
     const full = formatArtistFullPrompt(recipe, "1girl, smile");
     expect(artistString.endsWith(",")).toBe(true);
     expect(full.startsWith(artistString)).toBe(true);
-    expect(full.indexOf(recipe.mutations[0].value)).toBeLessThan(
-      full.indexOf("year 2025"),
-    );
-    expect(full.endsWith("1girl, smile")).toBe(true);
+    expect(full.startsWith(`${recipe.prompt},`)).toBe(true);
+    expect(full.endsWith("1girl, smile,")).toBe(true);
+    expect(full).not.toMatch(/,,+$/);
   });
 
   it("copies every weighted tag displayed on the result card", () => {
@@ -253,6 +253,20 @@ describe("artist recipe grammar", () => {
     expect(copied).toContain("zenless_zone_zero");
     expect(copied).toContain("arknights");
     expect(copied).toContain("cinematic lighting");
+    expect(formatArtistCardTags({ prompt: `${prompt},,` })).toBe(`${prompt},`);
+  });
+
+  it("normalizes both artist-string and full-prompt copies to one trailing comma", () => {
+    const recipe = {
+      artists: [{ name: "foo", weight: 0.4 }],
+      auxiliary: [],
+      mutations: [],
+      franchiseStyles: [],
+      prompt: "0.4::artist:foo ::,,",
+    };
+    expect(formatArtistCardTags(recipe)).toBe("0.4::artist:foo ::,");
+    expect(formatArtistFullPrompt(recipe, "1girl,,")).toBe("0.4::artist:foo ::, 1girl,");
+    expect(ensureTrailingPromptComma("0.4::artist:foo ::，，")).toBe("0.4::artist:foo ::,");
   });
 
   it("keeps artist order while randomizing only weights around the originals", () => {

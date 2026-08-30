@@ -56,7 +56,10 @@ export function buildInpaintMaskPreview(
     preview[index + 2] = selected ? blue : 0;
     // The preview is laid over the source image. Preserved pixels must stay
     // transparent so previewing the exact mask never hides the original.
-    preview[index + 3] = selected ? 230 : 0;
+    // Opacity is controlled once by the canvas CSS layer. Keeping pixel alpha
+    // at 255 makes the UI's 100% setting genuinely opaque instead of silently
+    // multiplying it by an additional 230/255 factor.
+    preview[index + 3] = selected ? 255 : 0;
   }
   return preview;
 }

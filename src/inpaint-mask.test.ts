@@ -48,7 +48,7 @@ describe("buildInpaintMaskPreview", () => {
     ]);
     expect([...buildInpaintMaskPreview(binary, 2, 1, "#7c3aed")]).toEqual([
       0, 0, 0, 0,
-      124, 58, 237, 230,
+      124, 58, 237, 255,
     ]);
   });
 

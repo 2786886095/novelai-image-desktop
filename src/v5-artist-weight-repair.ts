@@ -261,6 +261,23 @@ function migratePromptTags(
   });
 }
 
+function drawPromptTagWeights(
+  tags: readonly PromptTag[],
+  random: () => number,
+  bounds: readonly [number, number],
+) {
+  const [min, max] = bounds;
+  return tags.map((tag) => ({
+    ...tag,
+    // Input-draw mode intentionally does not preserve the legacy weight.
+    // Parsing/classification is shared with the repair tool, while every
+    // retained tag receives an independent final weight over the full range.
+    weight: Math.round(
+      (min + normalizedRandomSample(random) * (max - min)) * 100,
+    ) / 100,
+  }));
+}
+
 function generatedRecipeFromTags(
   tags: readonly PromptTag[],
   index: number,
@@ -347,12 +364,10 @@ export function countV5PromptTags(input: string) {
 }
 
 /**
- * Migrate every valid tag with the same independent one-third-to-one-half rule
- * as the repair tool, then constrain the result to the user-selected draw
- * bounds. The original weight therefore remains meaningful (for example a
- * legacy weight of 2 becomes roughly 0.67-1.0), while the bounds provide a
- * final safety floor/ceiling. This is a complete-string weight draw, not a
- * subset draw.
+ * Parse and normalize with the repair tool's exact rules, then independently
+ * draw every retained tag across the complete user-selected final range. The
+ * legacy weight is deliberately ignored in this mode; repair mode remains the
+ * dedicated one-third-to-one-half migration workflow.
  */
 export function drawAllV5ArtistWeights(
   input: string,
@@ -367,7 +382,7 @@ export function drawAllV5ArtistWeights(
   const [min, max] = normalizedDrawBounds(minWeight, maxWeight);
   const total = Math.max(1, Math.floor(Number.isFinite(count) ? count : 1));
   return Array.from({ length: total }, (_, index) => {
-    const tags = migratePromptTags(sourceTags, random, [min, max]);
+    const tags = drawPromptTagWeights(sourceTags, random, [min, max]);
     return generatedRecipeFromTags(tags, index, "v5-weight-draw");
   });
 }
