@@ -11,7 +11,7 @@ class NaiOption {
 }
 
 const appName = 'Langbai NovelAI Studio';
-const appVersion = '2.0.2';
+const appVersion = '2.0.5';
 
 const naiModels = <NaiOption>[
   NaiOption(
@@ -797,6 +797,9 @@ class AppSettings {
   // Custom base folder for saved originals. Empty = app documents/images.
   // Images are organised as <base>/<date>/<group>/ like the desktop client.
   String imageOutputDir;
+  // Custom folder for automatic and import-rescue backups. Empty = app
+  // documents/backups. This device path is never replaced by an import.
+  String backupDir;
   String activeHistoryGroupId;
   String generationGroupId;
   bool lockStylePrompt;
@@ -837,9 +840,8 @@ class AppSettings {
   bool persistInpaintParams;
   bool persistUpscaleParams;
   bool persistDirectorParams;
-  // Cross-device archive and local safety-copy policy. Mobile keeps backup
-  // files in its application documents directory and uses the system share
-  // sheet for manual export.
+  // Cross-device archive and local safety-copy policy. Manual exports use the
+  // native Save As flow; automatic copies use backupDir or the app default.
   bool autoBackupEnabled;
   int autoBackupIntervalHours;
   int autoBackupRetentionCount;
@@ -880,6 +882,7 @@ class AppSettings {
     this.saveToGallery = true,
     this.streamPreviewEnabled = true,
     this.imageOutputDir = '',
+    this.backupDir = '',
     this.activeHistoryGroupId = '',
     this.generationGroupId = '',
     this.lockStylePrompt = false,
@@ -960,6 +963,7 @@ class AppSettings {
         'saveToGallery': saveToGallery,
         'streamPreviewEnabled': streamPreviewEnabled,
         'imageOutputDir': imageOutputDir,
+        'backupDir': backupDir,
         'activeHistoryGroupId': activeHistoryGroupId,
         'generationGroupId': generationGroupId,
         'lockStylePrompt': lockStylePrompt,
@@ -1037,6 +1041,7 @@ class AppSettings {
         saveToGallery: j['saveToGallery'] ?? true,
         streamPreviewEnabled: j['streamPreviewEnabled'] ?? true,
         imageOutputDir: j['imageOutputDir'] ?? '',
+        backupDir: j['backupDir'] ?? '',
         activeHistoryGroupId: j['activeHistoryGroupId'] ?? '',
         generationGroupId: j['generationGroupId'] ?? '',
         lockStylePrompt: j['lockStylePrompt'] ?? false,

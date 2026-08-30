@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../i18n/app_locales.dart';
 import '../services/data_backup_service.dart';
+import '../services/storage_permission.dart';
 import '../state/app_state.dart';
 
 Map<String, String> _backupText(Object? language) {
@@ -39,6 +40,14 @@ Map<String, String> _backupText(Object? language) {
       'latest': '最近备份',
       'none': '尚无自动备份',
       'folder': '备份目录',
+      'chooseFolder': '选择备份目录',
+      'resetFolder': '恢复默认目录',
+      'defaultFolder': '应用默认备份目录',
+      'folderSaved': '备份目录已更新。',
+      'fileSaved': '备份文件已保存。',
+      'folderFallback': '所选目录当前不可写，已暂时使用默认目录，备份不会中断。',
+      'accessContent':
+          '自定义备份目录在 Android 11 及以上需要“所有文件访问权限”。授权后返回应用即可；未授权时备份仍会安全保存到应用默认目录。',
       'count': '{count} 个 · {size}',
       'configuration': '应用配置',
       'apiCredentials': 'API 与敏感数据',
@@ -78,6 +87,14 @@ Map<String, String> _backupText(Object? language) {
       'latest': '最近備份',
       'none': '尚無自動備份',
       'folder': '備份目錄',
+      'chooseFolder': '選擇備份目錄',
+      'resetFolder': '恢復預設備份目錄',
+      'defaultFolder': '應用程式預設備份目錄',
+      'folderSaved': '備份目錄已更新。',
+      'fileSaved': '備份檔案已儲存。',
+      'folderFallback': '所選目錄目前無法寫入，已暫時使用預設目錄，備份不會中斷。',
+      'accessContent':
+          'Android 11 以上的自訂備份目錄需要「所有檔案存取權限」。授權後返回應用即可；未授權時仍會安全備份至預設目錄。',
       'count': '{count} 個 · {size}',
       'configuration': '應用設定',
       'apiCredentials': 'API 與敏感資料',
@@ -122,6 +139,15 @@ Map<String, String> _backupText(Object? language) {
       'latest': 'Latest backup',
       'none': 'No automatic backup yet',
       'folder': 'Backup directory',
+      'chooseFolder': 'Choose backup directory',
+      'resetFolder': 'Restore default directory',
+      'defaultFolder': 'App default backup directory',
+      'folderSaved': 'Backup directory updated.',
+      'fileSaved': 'Backup file saved.',
+      'folderFallback':
+          'The selected directory is not writable. The default directory is being used so backups continue.',
+      'accessContent':
+          'Custom backup directories require “All files access” on Android 11+. Return after authorizing; without it, backups continue safely in the app default directory.',
       'count': '{count} files · {size}',
       'configuration': 'Application configuration',
       'apiCredentials': 'APIs and sensitive data',
@@ -162,6 +188,14 @@ Map<String, String> _backupText(Object? language) {
       'latest': '最新',
       'none': 'バックアップなし',
       'folder': '保存先',
+      'chooseFolder': '保存先を選択',
+      'resetFolder': '既定の保存先に戻す',
+      'defaultFolder': 'アプリの既定保存先',
+      'folderSaved': '保存先を更新しました。',
+      'fileSaved': 'バックアップを保存しました。',
+      'folderFallback': '選択した保存先に書き込めないため、バックアップを継続できるよう既定の保存先を使用しています。',
+      'accessContent':
+          'Android 11 以降で任意のバックアップ先を使うには「すべてのファイルへのアクセス」が必要です。未許可でも既定の保存先へ安全にバックアップします。',
       'count': '{count} 件 · {size}',
       'configuration': 'アプリ設定',
       'apiCredentials': 'API と機密データ',
@@ -202,6 +236,14 @@ Map<String, String> _backupText(Object? language) {
       'latest': '최근 백업',
       'none': '백업 없음',
       'folder': '백업 폴더',
+      'chooseFolder': '백업 폴더 선택',
+      'resetFolder': '기본 폴더로 복원',
+      'defaultFolder': '앱 기본 백업 폴더',
+      'folderSaved': '백업 폴더를 변경했습니다.',
+      'fileSaved': '백업 파일을 저장했습니다.',
+      'folderFallback': '선택한 폴더에 쓸 수 없어 백업이 중단되지 않도록 기본 폴더를 사용 중입니다.',
+      'accessContent':
+          'Android 11 이상에서 사용자 지정 백업 폴더를 쓰려면 “모든 파일 접근” 권한이 필요합니다. 권한이 없어도 기본 폴더에 안전하게 백업합니다.',
       'count': '{count}개 · {size}',
       'configuration': '앱 설정',
       'apiCredentials': 'API 및 민감 데이터',
@@ -233,7 +275,8 @@ class DataBackupSettingsPanel extends StatefulWidget {
       _DataBackupSettingsPanelState();
 }
 
-class _DataBackupSettingsPanelState extends State<DataBackupSettingsPanel> {
+class _DataBackupSettingsPanelState extends State<DataBackupSettingsPanel>
+    with WidgetsBindingObserver {
   Set<DataBackupCategory> exportSelection = DataBackupCategory.values.toSet();
   Set<DataBackupCategory> importSelection = {};
   DataBackupInspection? inspection;
@@ -246,7 +289,19 @@ class _DataBackupSettingsPanelState extends State<DataBackupSettingsPanel> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) => _refreshStatus());
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _refreshStatus();
   }
 
   Future<void> _refreshStatus() async {
@@ -294,12 +349,70 @@ class _DataBackupSettingsPanelState extends State<DataBackupSettingsPanel> {
         false;
   }
 
-  Future<void> _export() async {
+  Future<void> _export(Map<String, String> text) async {
     if (exportSelection.isEmpty) return;
     setState(() => busy = true);
     try {
       final file = await service.createBackup(exportSelection);
-      await service.shareBackup(file);
+      final path = await service.saveBackupFile(
+        file,
+        dialogTitle: text['export'],
+      );
+      if (path != null) _message(text['fileSaved']!);
+    } catch (error) {
+      _message(error.toString());
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> _chooseBackupDirectory(Map<String, String> text) async {
+    final app = context.read<AppState>();
+    setState(() => busy = true);
+    try {
+      final selected = await service.chooseBackupDirectory(
+        dialogTitle: text['chooseFolder'],
+      );
+      if (selected == null) return;
+      await app.setSettings((settings) => settings.backupDir = selected);
+      if (!await StoragePermission.hasAllFilesAccess() && mounted) {
+        final detail = settingsDetailTextFor(app.settings.language);
+        final authorize = await showDialog<bool>(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: Text(detail.fileAccessTitle),
+                content: Text(text['accessContent']!),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: Text(detail.later),
+                  ),
+                  FilledButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    child: Text(detail.authorize),
+                  ),
+                ],
+              ),
+            ) ??
+            false;
+        if (authorize) await StoragePermission.requestAllFilesAccess();
+      }
+      await _refreshStatus();
+      _message(text['folderSaved']!);
+    } catch (error) {
+      _message(error.toString());
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> _resetBackupDirectory(Map<String, String> text) async {
+    final app = context.read<AppState>();
+    setState(() => busy = true);
+    try {
+      await app.setSettings((settings) => settings.backupDir = '');
+      await _refreshStatus();
+      _message(text['folderSaved']!);
     } catch (error) {
       _message(error.toString());
     } finally {
@@ -494,7 +607,8 @@ class _DataBackupSettingsPanelState extends State<DataBackupSettingsPanel> {
           const SizedBox(height: 10),
           Wrap(spacing: 8, runSpacing: 8, children: [
             FilledButton.icon(
-              onPressed: busy || exportSelection.isEmpty ? null : _export,
+              onPressed:
+                  busy || exportSelection.isEmpty ? null : () => _export(text),
               icon: const Icon(Icons.archive_rounded),
               label: Text(busy ? text['busy']! : text['export']!),
             ),
@@ -536,6 +650,62 @@ class _DataBackupSettingsPanelState extends State<DataBackupSettingsPanel> {
             leading: const Icon(Icons.backup_rounded),
             title: Text(text['autoTitle']!),
             subtitle: Text(text['autoDesc']!),
+          ),
+          Card(
+            elevation: 0,
+            color: Theme.of(context).colorScheme.surfaceContainerLow,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.folder_copy_rounded),
+                    title: Text(text['folder']!),
+                    subtitle: Text(
+                      status?.directory ??
+                          (app.settings.backupDir.trim().isEmpty
+                              ? text['defaultFolder']!
+                              : app.settings.backupDir),
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed:
+                              busy ? null : () => _chooseBackupDirectory(text),
+                          icon: const Icon(Icons.folder_open_rounded),
+                          label: Text(text['chooseFolder']!),
+                        ),
+                        TextButton.icon(
+                          onPressed: busy || app.settings.backupDir.isEmpty
+                              ? null
+                              : () => _resetBackupDirectory(text),
+                          icon: const Icon(Icons.restart_alt_rounded),
+                          label: Text(text['resetFolder']!),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (status?.usingFallbackDirectory == true)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                      child: Text(
+                        text['folderFallback']!,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
           ),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
@@ -600,9 +770,8 @@ class _DataBackupSettingsPanelState extends State<DataBackupSettingsPanel> {
                 text['count']!
                     .replaceAll('{count}', '${status?.count ?? 0}')
                     .replaceAll('{size}', _bytes(status?.totalBytes ?? 0)),
-                if (status != null) '${text['folder']}: ${status.directory}',
               ].join('\n')),
-              isThreeLine: true,
+              isThreeLine: false,
               trailing: IconButton(
                 tooltip: text['backupNow']!,
                 onPressed: busy ? null : _backupNow,

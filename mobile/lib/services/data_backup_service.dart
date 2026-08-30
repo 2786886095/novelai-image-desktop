@@ -87,6 +87,7 @@ class DataBackupImportReport {
 
 class DataBackupStatus {
   final String directory;
+  final bool usingFallbackDirectory;
   final int count;
   final int totalBytes;
   final DateTime? latest;
@@ -94,6 +95,7 @@ class DataBackupStatus {
 
   const DataBackupStatus({
     required this.directory,
+    required this.usingFallbackDirectory,
     required this.count,
     required this.totalBytes,
     required this.latest,
@@ -170,12 +172,41 @@ class DataBackupService {
   String _id() =>
       '${DateTime.now().microsecondsSinceEpoch}-${_random.nextInt(1 << 30)}';
 
-  Future<Directory> backupDirectory() async {
+  Future<Directory> _defaultBackupDirectory() async {
     final documents = await getApplicationDocumentsDirectory();
     final directory =
         Directory('${documents.path}${Platform.pathSeparator}backups');
-    if (!directory.existsSync()) directory.createSync(recursive: true);
-    return directory;
+    if (!await directory.exists()) await directory.create(recursive: true);
+    return directory.absolute;
+  }
+
+  Future<Directory> backupDirectory({AppSettings? settings}) async {
+    final current = settings ?? await storage.getSettings();
+    final configured = current.backupDir.trim();
+    if (configured.isNotEmpty) {
+      try {
+        final directory = Directory(configured);
+        if (!await directory.exists()) await directory.create(recursive: true);
+        return directory.absolute;
+      } catch (_) {
+        // Never lose an automatic or import-rescue backup merely because a
+        // removable/custom folder is temporarily unavailable.
+      }
+    }
+    return _defaultBackupDirectory();
+  }
+
+  Future<String?> chooseBackupDirectory({String? dialogTitle}) async {
+    final settings = await storage.getSettings();
+    final configured = settings.backupDir.trim();
+    final selected = await FilePicker.platform.getDirectoryPath(
+      dialogTitle: dialogTitle,
+      initialDirectory: Platform.isAndroid || Platform.isIOS
+          ? null
+          : (configured.isEmpty ? null : configured),
+    );
+    if (selected == null) return null;
+    return Directory(selected.trim()).absolute.path;
   }
 
   String _stamp() =>
@@ -623,8 +654,9 @@ class DataBackupService {
     _addJson(archive, 'manifest.json', manifest);
     final encoded = ZipEncoder().encode(archive);
     if (encoded == null) throw StateError('Unable to encode backup archive.');
-    final directory =
-        internal ? await backupDirectory() : await getTemporaryDirectory();
+    final directory = internal
+        ? await backupDirectory(settings: settings)
+        : await getTemporaryDirectory();
     final file = File(
         '${directory.path}${Platform.pathSeparator}$prefix-${_stamp()}.naisbackup');
     final temporary = File('${file.path}.tmp');
@@ -638,6 +670,29 @@ class DataBackupService {
         [XFile(file.path)],
         text: 'Langbai NovelAI Studio data backup',
       );
+
+  /// Opens the native Save As flow. Mobile file pickers write [bytes]
+  /// directly to the selected document URI; desktop pickers only return a
+  /// path, so the service completes the write atomically there.
+  Future<String?> saveBackupFile(File file, {String? dialogTitle}) async {
+    final bytes = await file.readAsBytes();
+    final selected = await FilePicker.platform.saveFile(
+      dialogTitle: dialogTitle,
+      fileName: _basename(file.path),
+      type: FileType.custom,
+      allowedExtensions: const ['naisbackup'],
+      bytes: Platform.isAndroid || Platform.isIOS ? bytes : null,
+    );
+    if (selected == null) return null;
+    if (Platform.isAndroid || Platform.isIOS) return selected;
+
+    final target = File(selected);
+    final temporary = File('$selected.tmp');
+    await temporary.writeAsBytes(bytes, flush: true);
+    if (await target.exists()) await target.delete();
+    await temporary.rename(target.path);
+    return target.path;
+  }
 
   Future<String?> pickBackupFile() async {
     final result = await FilePicker.platform.pickFiles(
@@ -1307,6 +1362,7 @@ class DataBackupService {
       // Configuration is the only overwrite category, but device-specific
       // output paths, API values, and merge-only preset libraries stay intact.
       incoming['imageOutputDir'] = current['imageOutputDir'];
+      incoming['backupDir'] = current['backupDir'];
       for (final key in _apiSettingKeys) {
         incoming[key] = current[key];
       }
@@ -1484,8 +1540,8 @@ class DataBackupService {
     );
   }
 
-  Future<List<File>> _automaticFiles() async {
-    final directory = await backupDirectory();
+  Future<List<File>> _automaticFiles([Directory? root]) async {
+    final directory = root ?? await backupDirectory();
     final files = <File>[];
     await for (final entity in directory.list()) {
       if (entity is File &&
@@ -1501,8 +1557,11 @@ class DataBackupService {
 
   Future<DataBackupStatus> status() async {
     final settings = await storage.getSettings();
-    final directory = await backupDirectory();
-    final files = await _automaticFiles();
+    final directory = await backupDirectory(settings: settings);
+    final files = await _automaticFiles(directory);
+    final configured = settings.backupDir.trim();
+    final usingFallbackDirectory = configured.isNotEmpty &&
+        Directory(configured).absolute.path != directory.absolute.path;
     final latest = files.isEmpty ? null : files.first.lastModifiedSync();
     final due = latest == null ||
         DateTime.now().difference(latest).inMinutes >=
@@ -1515,6 +1574,7 @@ class DataBackupService {
     }
     return DataBackupStatus(
       directory: directory.path,
+      usingFallbackDirectory: usingFallbackDirectory,
       count: files.length,
       totalBytes: bytes,
       latest: latest,
