@@ -516,8 +516,12 @@ class OnlineGalleryService {
             .hasMatch(pointerName)) {
       throw const FormatException('Invalid QuickTagCloud data source');
     }
-    final pointerUrl =
-        _trustedQuickUri(Uri.parse(baseUrl).resolve(pointerName));
+    // `baseUrl` currently ends in `/data` without a trailing slash. Resolving
+    // `current.json` against it directly treats `data` as a file and produces
+    // `/current.json`, which is a real 404 on the QuickTagCloud bucket. Always
+    // normalize the bootstrap URL as a directory before resolving its pointer.
+    final root = baseUrl.endsWith('/') ? baseUrl : '$baseUrl/';
+    final pointerUrl = _trustedQuickUri(Uri.parse(root).resolve(pointerName));
     final pointer =
         _map(await _getJson(pointerUrl, OnlineGallerySource.quicktag.siteUrl));
     final release = _safeCollectionId(pointer['release']);
@@ -527,7 +531,6 @@ class OnlineGalleryService {
             .hasMatch(manifestPath)) {
       throw const FormatException('Invalid QuickTagCloud release pointer');
     }
-    final root = baseUrl.endsWith('/') ? baseUrl : '$baseUrl/';
     final releaseBase =
         Uri.parse(root).resolve('releases/$release/').toString();
     final manifest = _map(await _getJson(

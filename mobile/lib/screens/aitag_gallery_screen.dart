@@ -721,6 +721,7 @@ class _CachedAitagImage extends StatelessWidget {
         if (snapshot.hasError) {
           return Image.network(url,
               fit: fit,
+              headers: aitagImageHeaders,
               errorBuilder: (_, __, ___) =>
                   const Center(child: Icon(Icons.broken_image_outlined)));
         }

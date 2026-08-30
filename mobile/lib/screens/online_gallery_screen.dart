@@ -292,6 +292,34 @@ String _sourceLabel(OnlineGallerySource source, Object? language) {
   };
 }
 
+String _friendlyGalleryError(
+  Object exception,
+  OnlineGallerySource source,
+  Object? language,
+) {
+  final sourceName = _sourceLabel(source, language);
+  final raw = exception.toString();
+  final status =
+      RegExp(r'HTTP\s+(\d{3})', caseSensitive: false).firstMatch(raw)?.group(1);
+  return switch (normalizeAppLocaleCode(language)) {
+    'zh-TW' => status == null
+        ? '暫時無法載入 $sourceName。請檢查網路後重試，或開啟來源網站確認服務狀態。'
+        : '$sourceName 暫時無法使用（HTTP $status）。請稍後重試，或開啟來源網站確認服務狀態。',
+    'en-US' => status == null
+        ? 'Could not load $sourceName. Check your connection and retry, or open the source website to verify its status.'
+        : '$sourceName is temporarily unavailable (HTTP $status). Retry later or open the source website to verify its status.',
+    'ja-JP' => status == null
+        ? '$sourceName を読み込めません。通信を確認して再試行するか、配布元サイトの状態を確認してください。'
+        : '$sourceName は一時的に利用できません（HTTP $status）。しばらくしてから再試行してください。',
+    'ko-KR' => status == null
+        ? '$sourceName을(를) 불러올 수 없습니다. 네트워크를 확인한 뒤 다시 시도하거나 원본 사이트 상태를 확인하세요.'
+        : '$sourceName을(를) 일시적으로 사용할 수 없습니다(HTTP $status). 잠시 후 다시 시도하세요.',
+    _ => status == null
+        ? '暂时无法加载 $sourceName。请检查网络后重试，或打开来源网站确认服务状态。'
+        : '$sourceName 暂时不可用（HTTP $status）。请稍后重试，或打开来源网站确认服务状态。',
+  };
+}
+
 class OnlineGalleryScreen extends StatefulWidget {
   const OnlineGalleryScreen({super.key});
 
@@ -355,8 +383,9 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
       });
     } catch (exception) {
       if (mounted) {
+        final language = context.read<AppState>().settings.language;
         setState(
-            () => error = exception.toString().replaceFirst('Exception: ', ''));
+            () => error = _friendlyGalleryError(exception, source, language));
       }
     } finally {
       if (mounted) setState(() => loading = false);
@@ -786,7 +815,10 @@ class _OnlineGalleryDetailScreenState
       await Share.shareXFiles([XFile(file.path)], text: widget.item.title);
     } catch (error) {
       if (mounted) {
-        messenger.showSnackBar(SnackBar(content: Text(error.toString())));
+        final language = context.read<AppState>().settings.language;
+        messenger.showSnackBar(SnackBar(
+            content: Text(
+                _friendlyGalleryError(error, widget.item.source, language))));
       }
     } finally {
       if (mounted) setState(() => sharing = false);
@@ -844,7 +876,11 @@ class _OnlineGalleryDetailScreenState
             return Center(
               child: Padding(
                 padding: const EdgeInsets.all(24),
-                child: Text(snapshot.error?.toString() ?? text.empty,
+                child: Text(
+                    snapshot.error == null
+                        ? text.empty
+                        : _friendlyGalleryError(
+                            snapshot.error!, widget.item.source, language),
                     textAlign: TextAlign.center),
               ),
             );

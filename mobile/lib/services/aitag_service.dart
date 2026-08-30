@@ -9,6 +9,10 @@ import 'package:path_provider/path_provider.dart';
 const aitagSiteUrl = 'https://aitag.win';
 const aitagPageSize = 60;
 const _maxCachedImageBytes = 64 * 1024 * 1024;
+const aitagImageHeaders = <String, String>{
+  'Referer': '$aitagSiteUrl/',
+  'User-Agent': 'Langbai-NovelAI-Studio-Mobile/AITag-Image-Client',
+};
 
 String _string(Object? value) => value == null ? '' : value.toString();
 int _integer(Object? value) => int.tryParse(_string(value)) ?? 0;
@@ -295,7 +299,12 @@ class AitagImageCache {
       await file.setLastModified(DateTime.now());
       return file;
     }
-    final response = await client.get(uri).timeout(const Duration(seconds: 30));
+    // The AITag image CDN rejects hotlinked requests without an AITag referer
+    // (HTTP 403). Keep these headers on both cache downloads and the UI's
+    // direct-network fallback so thumbnails and detail images behave alike.
+    final response = await client
+        .get(uri, headers: aitagImageHeaders)
+        .timeout(const Duration(seconds: 30));
     if (response.statusCode < 200 ||
         response.statusCode >= 300 ||
         response.bodyBytes.isEmpty) {
