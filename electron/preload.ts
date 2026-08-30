@@ -100,6 +100,12 @@ contextBridge.exposeInMainWorld("naiDesktop", {
   ) => ipcRenderer.invoke("nai:generateArtistLab", params, extras, mode),
   artistLabPromoteFavorite: (item: HistoryItem) =>
     ipcRenderer.invoke("artistLab:promoteFavorite", item),
+  artistLabListPromotedFavorites: () =>
+    ipcRenderer.invoke("artistLab:listPromotedFavorites"),
+  artistLabLoadFavoriteLibrary: () =>
+    ipcRenderer.invoke("artistLab:loadFavoriteLibrary"),
+  artistLabSaveFavoriteCollection: (collection: string, favorites: unknown[]) =>
+    ipcRenderer.invoke("artistLab:saveFavoriteCollection", collection, favorites),
   artistLabDeleteTemporary: (filePath: string) =>
     ipcRenderer.invoke("artistLab:deleteTemporary", filePath),
   artistLabClearTemporary: () => ipcRenderer.invoke("artistLab:clearTemporary"),

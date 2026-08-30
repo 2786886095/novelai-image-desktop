@@ -27,6 +27,7 @@ import {
 } from "./nai-dimensions";
 import {
   addArtistFavorite,
+  ARTIST_FAVORITES_CHANGED_EVENT,
   loadArtistFavorites,
   removeArtistFavorite,
   type ArtistFavoriteCollection,
@@ -361,6 +362,18 @@ export default function V5ArtistWeightRepair({
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [previewCandidate]);
+
+  useEffect(() => {
+    const syncFavorites = (event: Event) => {
+      const collection = (event as CustomEvent<{ collection?: string }>).detail?.collection;
+      if (collection === favoriteCollection) {
+        setFavorites(loadArtistFavorites(favoriteCollection));
+      }
+    };
+    setFavorites(loadArtistFavorites(favoriteCollection));
+    window.addEventListener(ARTIST_FAVORITES_CHANGED_EVENT, syncFavorites);
+    return () => window.removeEventListener(ARTIST_FAVORITES_CHANGED_EVENT, syncFavorites);
+  }, [favoriteCollection]);
 
   useEffect(() => () => {
     if (copiedTimerRef.current !== null) window.clearTimeout(copiedTimerRef.current);

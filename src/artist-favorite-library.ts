@@ -1,5 +1,10 @@
-import type { ArtistRecipeComparison } from "./artist-recipe";
-import type { HistoryItem } from "./types";
+import {
+  canonicalArtistTagName,
+  ensureTrailingPromptComma,
+  parseArtistRecipe,
+  type ArtistRecipeComparison,
+} from "./artist-recipe";
+import type { HistoryItem, NaiDesktopApi } from "./types";
 
 export const RANDOM_ARTIST_SESSION_STORAGE_KEY = "langbai.artist-lab.random.v6";
 export const ARTIST_FAVORITES_CHANGED_EVENT = "langbai:artist-favorites-changed";
@@ -31,13 +36,101 @@ export type SharedArtistFavorite = ArtistRecipeComparison & {
   generationSeed?: number;
 };
 
+function normalizeFavoriteArray(value: unknown): SharedArtistFavorite[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is SharedArtistFavorite => (
+      item !== null
+      && typeof item === "object"
+      && typeof (item as { id?: unknown }).id === "string"
+    ))
+    : [];
+}
+
 function parseFavoriteArray(value: string | null): SharedArtistFavorite[] {
   try {
-    const parsed = JSON.parse(value ?? "[]");
-    return Array.isArray(parsed) ? parsed as SharedArtistFavorite[] : [];
+    return normalizeFavoriteArray(JSON.parse(value ?? "[]"));
   } catch {
     return [];
   }
+}
+
+function desktopApi(): Partial<NaiDesktopApi> | undefined {
+  return (window as Window & { naiDesktop?: Partial<NaiDesktopApi> }).naiDesktop;
+}
+
+function favoriteIdentity(item: SharedArtistFavorite) {
+  return item.image?.id ? `image:${item.image.id}` : `recipe:${item.id}`;
+}
+
+export function mergeArtistFavorites(
+  ...sources: ReadonlyArray<readonly SharedArtistFavorite[]>
+): SharedArtistFavorite[] {
+  const merged: SharedArtistFavorite[] = [];
+  const ids = new Set<string>();
+  const identities = new Set<string>();
+  for (const source of sources) {
+    for (const item of source) {
+      if (!item || typeof item.id !== "string") continue;
+      const identity = favoriteIdentity(item);
+      if (ids.has(item.id) || identities.has(identity)) continue;
+      ids.add(item.id);
+      identities.add(identity);
+      merged.push(item);
+    }
+  }
+  return merged;
+}
+
+/**
+ * Every random-gacha favorite is promoted into durable image history before it
+ * is added to localStorage. Rebuild a usable favorite card from that canonical
+ * history record when a Chromium profile rename made localStorage look empty.
+ */
+export function recoverRandomArtistFavoritesFromHistory(
+  history: readonly HistoryItem[],
+  existing: readonly SharedArtistFavorite[] = [],
+): SharedArtistFavorite[] {
+  const recovered: SharedArtistFavorite[] = [];
+  for (const image of history) {
+    if (image.feature !== "artist-lab") continue;
+    const prompt = image.params?.stylePrompt?.trim();
+    if (!prompt) continue;
+    let tokens: ReturnType<typeof parseArtistRecipe>;
+    try {
+      tokens = parseArtistRecipe(prompt);
+    } catch {
+      // One damaged legacy history item must not block every other favorite
+      // from being restored and mirrored.
+      continue;
+    }
+    const artists = tokens
+      .filter((token) => token.kind === "artist" && token.weight > 0)
+      .map((token) => ({
+        name: canonicalArtistTagName(token.value.replace(/^artist\s*:/i, "")),
+        weight: token.weight,
+      }))
+      .filter((artist) => artist.name);
+    if (!artists.length) continue;
+    const id = `history-${image.id}`;
+    recovered.push({
+      id,
+      pairId: id,
+      variant: "plain",
+      sequence: existing.length + recovered.length + 1,
+      status: "done",
+      artists,
+      auxiliary: tokens.filter((token) => token.kind !== "artist"),
+      mutations: [],
+      franchiseStyles: [],
+      basePrompt: ensureTrailingPromptComma(prompt),
+      prompt: ensureTrailingPromptComma(prompt),
+      image,
+      liked: true,
+      generationModel: image.model,
+      generationSeed: image.actualSeed,
+    });
+  }
+  return mergeArtistFavorites(existing, recovered);
 }
 
 function migrateRandomFavorites(): SharedArtistFavorite[] {
@@ -87,10 +180,53 @@ export function replaceArtistFavorites(
   collection: ArtistFavoriteCollection,
   favorites: SharedArtistFavorite[],
 ) {
-  localStorage.setItem(FAVORITE_STORAGE_KEYS[collection], JSON.stringify(favorites));
+  const normalized = normalizeFavoriteArray(favorites);
+  localStorage.setItem(FAVORITE_STORAGE_KEYS[collection], JSON.stringify(normalized));
+  const save = desktopApi()?.artistLabSaveFavoriteCollection;
+  if (typeof save === "function") {
+    void save(collection, normalized).catch(() => undefined);
+  }
   window.dispatchEvent(new CustomEvent(ARTIST_FAVORITES_CHANGED_EVENT, {
     detail: { collection },
   }));
+}
+
+/** Merge the current Chromium profile, the filesystem backup, and promoted
+ * random-gacha history. No source is deleted or overwritten before the union
+ * has been written back to both storage layers. */
+export async function hydrateArtistFavoriteLibrary(): Promise<void> {
+  const desktop = desktopApi();
+  if (
+    typeof desktop?.artistLabLoadFavoriteLibrary !== "function"
+    || typeof desktop.artistLabListPromotedFavorites !== "function"
+  ) return;
+
+  const [diskResult, historyResult] = await Promise.allSettled([
+    desktop.artistLabLoadFavoriteLibrary(),
+    desktop.artistLabListPromotedFavorites(),
+  ]);
+  const disk = diskResult.status === "fulfilled" ? diskResult.value?.collections : undefined;
+  const promoted = historyResult.status === "fulfilled" ? historyResult.value : [];
+
+  const random = recoverRandomArtistFavoritesFromHistory(
+    promoted,
+    mergeArtistFavorites(
+      loadArtistFavorites("random"),
+      normalizeFavoriteArray(disk?.random),
+    ),
+  );
+  const repair = mergeArtistFavorites(
+    loadArtistFavorites("v5-repair"),
+    normalizeFavoriteArray(disk?.["v5-repair"]),
+  );
+  const draw = mergeArtistFavorites(
+    loadArtistFavorites("artist-string-draw"),
+    normalizeFavoriteArray(disk?.["artist-string-draw"]),
+  );
+
+  replaceArtistFavorites("random", random);
+  replaceArtistFavorites("v5-repair", repair);
+  replaceArtistFavorites("artist-string-draw", draw);
 }
 
 export function addArtistFavorite(

@@ -1608,6 +1608,19 @@ export interface NaiDesktopApi {
     mode: "target" | "random",
   ) => Promise<GenerateResult>;
   artistLabPromoteFavorite: (item: HistoryItem) => Promise<HistoryItem>;
+  artistLabListPromotedFavorites: () => Promise<HistoryItem[]>;
+  artistLabLoadFavoriteLibrary: () => Promise<{
+    version: 1;
+    updatedAt: string;
+    collections: Record<
+      "random" | "v5-repair" | "artist-string-draw",
+      unknown[]
+    >;
+  }>;
+  artistLabSaveFavoriteCollection: (
+    collection: "random" | "v5-repair" | "artist-string-draw",
+    favorites: unknown[],
+  ) => Promise<{ ok: boolean }>;
   artistLabDeleteTemporary: (filePath: string) => Promise<{ ok: boolean }>;
   artistLabClearTemporary: () => Promise<{ ok: boolean }>;
   generateI2I: (

@@ -14,6 +14,7 @@ import { inspectImageMetadata, parseImageMeta } from "./png-meta";
 import { INPAINT_BRUSH_SLIDER_MAX, INPAINT_BRUSH_SLIDER_MIN } from "./inpaint-brush";
 import { droppedImagePath, droppedImagePaths, hasDraggedFiles } from "./drag-drop";
 import { compactRemoteErrorText } from "./error-message";
+import { hydrateArtistFavoriteLibrary } from "./artist-favorite-library";
 import { splitPromptTags, parseWeightedTag, formatMultiplier, setTagLevelInPrompt } from "./prompt-weight";
 import {
   normalizePrompt,
@@ -6694,6 +6695,10 @@ export default function App() {
   useEffect(() => {
     void load();
     void checkUpdate();
+    // Favorites are mirrored to a filesystem sidecar and random-gacha history.
+    // Merge every available source at boot before a profile rename can make a
+    // still-existing collection appear empty.
+    void hydrateArtistFavoriteLibrary();
     // A release may appear while the app is already open, and a transient
     // network/proxy failure at boot should not suppress updates for the whole
     // session. Retry once shortly after launch, then poll at a low frequency.

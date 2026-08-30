@@ -38,6 +38,19 @@ describe("buildBinaryInpaintMask", () => {
     const result = buildBinaryInpaintMask(rgba, 2, 1);
     expect([...result.rgba]).toEqual([255, 255, 255, 255, 0, 0, 0, 0]);
   });
+
+  it("treats opaque black as selected and transparent color as preserved", () => {
+    const rgba = new Uint8ClampedArray([
+      0, 0, 0, 255,
+      255, 0, 0, 0,
+    ]);
+    const result = buildBinaryInpaintMask(rgba, 2, 1);
+    expect([...result.rgba]).toEqual([
+      255, 255, 255, 255,
+      0, 0, 0, 0,
+    ]);
+    expect(result.any).toBe(true);
+  });
 });
 
 describe("buildInpaintMaskPreview", () => {
@@ -50,6 +63,14 @@ describe("buildInpaintMaskPreview", () => {
       0, 0, 0, 0,
       124, 58, 237, 255,
     ]);
+  });
+
+  it("keeps pure black and red exact at full preview opacity", () => {
+    const binary = new Uint8ClampedArray([255, 255, 255, 255]);
+    expect([...buildInpaintMaskPreview(binary, 1, 1, "#000000")])
+      .toEqual([0, 0, 0, 255]);
+    expect([...buildInpaintMaskPreview(binary, 1, 1, "#ef4444")])
+      .toEqual([239, 68, 68, 255]);
   });
 
   it("rejects incomplete buffers", () => {

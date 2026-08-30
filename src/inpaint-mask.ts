@@ -10,8 +10,10 @@ export function buildBinaryInpaintMask(
   let any = false;
 
   for (let index = 0; index < binary.length; index += 4) {
-    const selected =
-      rgba[index + 3] > 0 && rgba[index] + rgba[index + 1] + rgba[index + 2] > 32;
+    // Selection is stored in alpha, not in a magic RGB value. This keeps all
+    // display colors valid mask colors too (especially pure black), while a
+    // transparent pixel remains the single unambiguous "preserve" state.
+    const selected = rgba[index + 3] > 0;
     const value = selected ? 255 : 0;
     binary[index] = value;
     binary[index + 1] = value;

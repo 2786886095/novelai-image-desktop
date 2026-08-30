@@ -1398,8 +1398,10 @@ button { user-select: none; }
   border-radius: var(--radius-md);
   cursor: none;
   touch-action: none;
-  mix-blend-mode: screen;
-  opacity: 0.62;
+  /* The opacity slider is the only transparency control. A blend mode here
+     made black invisible and shifted every other selected color. */
+  mix-blend-mode: normal;
+  opacity: 1;
   transform-origin: top left;
   transition: transform 0.12s var(--ease-out);
   image-rendering: pixelated;

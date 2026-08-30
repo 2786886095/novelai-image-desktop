@@ -83,6 +83,12 @@ import {
   searchArtistTags,
 } from "./ipc/artist-lab";
 import {
+  ARTIST_FAVORITE_COLLECTIONS,
+  loadArtistFavoriteLibrary,
+  saveArtistFavoriteCollection,
+  type ArtistFavoriteCollectionName,
+} from "./ipc/artist-favorites";
+import {
   loadPromptCodexCache,
   updatePromptCodex,
 } from "./ipc/prompt-codex";
@@ -654,6 +660,29 @@ function registerIpc() {
   );
   ipcMain.handle("artistLab:promoteFavorite", (_event, item) =>
     promoteArtistLabFavorite(item),
+  );
+  ipcMain.handle("artistLab:listPromotedFavorites", () =>
+    listHistory().filter((item) => (
+      item.feature === "artist-lab"
+      && typeof item.filePath === "string"
+      && path.basename(item.filePath).toLowerCase().startsWith("artist-lab-random")
+    )),
+  );
+  ipcMain.handle("artistLab:loadFavoriteLibrary", () =>
+    loadArtistFavoriteLibrary(app.getPath("userData")),
+  );
+  ipcMain.handle(
+    "artistLab:saveFavoriteCollection",
+    (_event, collection: unknown, favorites: unknown) => {
+      if (!ARTIST_FAVORITE_COLLECTIONS.some((value) => value === collection)) {
+        throw new TypeError("Unknown artist favorite collection.");
+      }
+      return saveArtistFavoriteCollection(
+        app.getPath("userData"),
+        collection as ArtistFavoriteCollectionName,
+        favorites,
+      ).then(() => ({ ok: true }));
+    },
   );
   ipcMain.handle("artistLab:deleteTemporary", (_event, filePath) =>
     deleteArtistLabTemporary(filePath),

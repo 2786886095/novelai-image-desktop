@@ -33,7 +33,7 @@ function recolorMaskCanvas(
   const blue = packed & 255;
   const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
   for (let index = 0; index < image.data.length; index += 4) {
-    if (image.data[index] + image.data[index + 1] + image.data[index + 2] <= 32) continue;
+    if (image.data[index + 3] === 0) continue;
     image.data[index] = red;
     image.data[index + 1] = green;
     image.data[index + 2] = blue;
@@ -97,8 +97,7 @@ export function InpaintCanvas() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     ctx.globalCompositeOperation = "source-over";
-    ctx.fillStyle = "black";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     historyRef.current = [];
     redoRef.current = [];
     setHistoryCount(0);
@@ -205,11 +204,11 @@ export function InpaintCanvas() {
       if (!ctx) return;
 
       setShowExportPreview(false);
-      ctx.globalCompositeOperation = "source-over";
-      ctx.fillStyle = brushMode === "paint" ? brushColor : "black";
+      ctx.globalCompositeOperation = brushMode === "paint" ? "source-over" : "destination-out";
+      ctx.fillStyle = brushMode === "paint" ? brushColor : "#ffffff";
       ctx.imageSmoothingEnabled = false;
       const exactSize = brushSize * INPAINT_MASK_GRID_SIZE;
-      const stampColor = brushMode === "paint" ? brushColor : "black";
+      const stampColor = brushMode === "paint" ? brushColor : "#ffffff";
       const roundStamp = () => {
         const radius = Math.round(brushSize / 2);
         const diameter = radius * 2 + 1;

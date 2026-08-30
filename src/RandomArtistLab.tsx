@@ -34,6 +34,7 @@ import {
 } from "./nai-dimensions";
 import {
   addArtistFavorite,
+  ARTIST_FAVORITES_CHANGED_EVENT,
   loadArtistFavorites,
   removeArtistFavorite,
   RANDOM_ARTIST_SESSION_STORAGE_KEY,
@@ -534,6 +535,18 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
       showFavorites ? "favorites" : "results",
     );
   }, [showFavorites]);
+  useEffect(() => {
+    const syncFavorites = (event: Event) => {
+      const collection = (event as CustomEvent<{ collection?: string }>).detail?.collection;
+      if (collection !== "random") return;
+      setSession((current) => ({
+        ...current,
+        favorites: loadArtistFavorites("random"),
+      }));
+    };
+    window.addEventListener(ARTIST_FAVORITES_CHANGED_EVENT, syncFavorites);
+    return () => window.removeEventListener(ARTIST_FAVORITES_CHANGED_EVENT, syncFavorites);
+  }, []);
   useEffect(() => {
     if (!previewResult) return;
     const closeOnEscape = (event: KeyboardEvent) => {
