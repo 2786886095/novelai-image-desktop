@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 
@@ -16,11 +17,13 @@ import '../prompts/prompt_templates.dart';
 import '../prompts/prompt_tools.dart';
 import '../references/reference_presets.dart';
 import '../services/nai_api.dart';
+import '../services/nai_stream.dart';
 import '../services/proxy_http_client.dart';
 import '../services/storage.dart';
 import '../services/update_service.dart';
 import '../services/background_queue_service.dart';
 import '../services/data_backup_service.dart';
+import '../services/resource_database_service.dart';
 import '../tags/offline_tag_store.dart';
 
 // A finished convert/reverse job is already reflected in the result box and
@@ -74,6 +77,10 @@ class AppState extends ChangeNotifier {
   bool booted = false;
   bool needsNetworkOnboarding = false;
   bool busy = false;
+  Uint8List? generationPreview;
+  double generationPreviewProgress = 0;
+  int generationPreviewStep = 0;
+  int generationPreviewTotalSteps = 0;
   String status = runtimeTextFor('zh-CN', 'common.ready');
   int batchCount = 1;
   String selectedGroupId = '';
@@ -1490,6 +1497,7 @@ class AppState extends ChangeNotifier {
     final initialExtras = extras.copy();
     final initialSeed = initialParams.seed;
     final initialHistoryGroupId = generationGroupId;
+    _clearGenerationPreview(notify: false);
     busy = true;
     status = _rt('status.readingCharge');
     notifyListeners();
@@ -1619,8 +1627,15 @@ class AppState extends ChangeNotifier {
           }),
         ));
         try {
-          final (images, seed) =
-              await api.generate(token, settings, taskParams, taskExtras);
+          _clearGenerationPreview(notify: false);
+          final (images, seed) = await api.generate(
+            token,
+            settings,
+            taskParams,
+            taskExtras,
+            onPreview:
+                settings.streamPreviewEnabled ? _handleGenerationPreview : null,
+          );
           if (images.isEmpty) throw Exception(_rt('error.apiNoImages'));
           final items = <HistoryItem>[];
           for (final bytes in images) {
@@ -1633,6 +1648,7 @@ class AppState extends ChangeNotifier {
             ));
           }
           _prependHistory(items);
+          _clearGenerationPreview(notify: false);
           completed += items.length;
           // The images are already saved at this point — a balance-refresh
           // hiccup here must not flip an already-successful item to failed.
@@ -1699,6 +1715,7 @@ class AppState extends ChangeNotifier {
     } catch (error) {
       status = error.toString().replaceFirst('Exception: ', '');
     } finally {
+      _clearGenerationPreview(notify: false);
       busy = false;
       generationQueueRunning = false;
       queuePaused = false;
@@ -1856,6 +1873,23 @@ class AppState extends ChangeNotifier {
     api.cancelActiveGeneration();
     status = _rt('status.cancellingQueue');
     notifyListeners();
+  }
+
+  void _handleGenerationPreview(NaiGenerationPreview preview) {
+    if (!generationQueueRunning || _cancelGenerationRequested) return;
+    generationPreview = preview.image;
+    generationPreviewProgress = preview.progress.clamp(0, 1).toDouble();
+    generationPreviewStep = preview.currentStep;
+    generationPreviewTotalSteps = preview.totalSteps;
+    notifyListeners();
+  }
+
+  void _clearGenerationPreview({bool notify = true}) {
+    generationPreview = null;
+    generationPreviewProgress = 0;
+    generationPreviewStep = 0;
+    generationPreviewTotalSteps = 0;
+    if (notify) notifyListeners();
   }
 
   Future<void> generateI2I() async {
@@ -2386,25 +2420,53 @@ class AppState extends ChangeNotifier {
       merge(await api.searchTags(settings, raw, 12,
           apiKey: key, fallbackLocal: false));
     }
-    // 1) Downloaded Danbooru library (richest: post counts + Chinese aliases).
+    // 1) Full SQLite catalog shared with the desktop app. It becomes the local
+    //    primary source only after the user explicitly installs it.
+    merge(
+        (await ResourceDatabaseService.shared.searchTagCatalog(raw, limit: 12))
+            .map((item) => TagSuggestion(
+                  tag: item.tag,
+                  count: item.count,
+                  description: item.description,
+                )));
+    // 2) Legacy Chinese-alias CSV remains a compatible secondary source.
     merge(
         (await offlineTags.search(raw, limit: 12)).map((item) => TagSuggestion(
               tag: item.tag,
               count: item.postCount,
               description: item.chinese.join(' '),
             )));
-    // 2) Bundled capsule taxonomy — always available, so autocomplete works even
+    // 3) Bundled capsule taxonomy — always available, so autocomplete works even
     //    before any download, for both Chinese and English input.
     if (results.length < 12) {
       merge((await searchCapsuleTags(raw, limit: 12)).map((tag) =>
           TagSuggestion(
               tag: tag.tag.replaceAll('_', ' '), description: tag.label)));
     }
-    // 3) Tiny built-in fallback only if nothing matched anywhere.
+    // 4) Tiny built-in fallback only if nothing matched anywhere.
     if (results.isEmpty) {
       merge(await api.searchTags(settings, raw, 12, apiKey: key));
     }
     return results;
+  }
+
+  Future<List<RelatedPromptTag>> suggestRelatedPromptTags(String prompt,
+      {int limit = 8}) async {
+    final present = splitPromptTags(prompt);
+    if (present.isEmpty) return const [];
+    final installed = await ResourceDatabaseService.shared.relatedTags(
+      present,
+      limit: limit,
+    );
+    if (installed.isNotEmpty) {
+      return installed
+          .map((item) => RelatedPromptTag(
+                item.tag.replaceAll('_', ' '),
+                item.count > 0 ? '${item.count}' : item.description,
+              ))
+          .toList();
+    }
+    return relatedPromptTags(prompt, limit: limit);
   }
 
   Future<String> testTagService() async {

@@ -30,6 +30,42 @@ bool _isRoomyPhoneLandscape(BuildContext context) {
       size.width >= 700;
 }
 
+({String title, String subtitle, String progress}) _streamPreviewText(
+    Object? language) {
+  switch (normalizeAppLocaleCode(language)) {
+    case 'zh-TW':
+      return (
+        title: '生成時串流預覽',
+        subtitle: '預設開啟；生成過程會逐步顯示中間圖。',
+        progress: '正在生成'
+      );
+    case 'en-US':
+      return (
+        title: 'Streaming generation preview',
+        subtitle: 'On by default; shows intermediate images while generating.',
+        progress: 'Generating'
+      );
+    case 'ja-JP':
+      return (
+        title: '生成中のストリーミングプレビュー',
+        subtitle: '初期状態で有効。生成途中の画像を順次表示します。',
+        progress: '生成中'
+      );
+    case 'ko-KR':
+      return (
+        title: '생성 스트리밍 미리보기',
+        subtitle: '기본으로 켜져 있으며 생성 중간 이미지를 순서대로 표시합니다.',
+        progress: '생성 중'
+      );
+    default:
+      return (
+        title: '生成时流式预览',
+        subtitle: '默认开启；生成过程中逐步显示中间图。',
+        progress: '正在生成'
+      );
+  }
+}
+
 Map<String, String> _opusUsageText(String language) {
   switch (language) {
     case 'zh-TW':
@@ -754,7 +790,10 @@ class PromptEditorState extends State<PromptEditor> {
     FocusManager.instance.primaryFocus?.unfocus();
     final language = context.read<AppState>().settings.language;
     String t(String key) => mobileUiTextFor(language, key);
-    final tags = relatedPromptTags(controller.text);
+    final tags = await context
+        .read<AppState>()
+        .suggestRelatedPromptTags(controller.text);
+    if (!mounted) return;
     if (tags.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(t('generate.relatedTagUnavailable'))),
@@ -1833,9 +1872,11 @@ class _PreviewCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final text = generateScreenTextFor(state.settings.language);
+    final streamText = _streamPreviewText(state.settings.language);
     final current = state.current;
     final work = state.workbenchImage;
     final path = work?.filePath ?? current?.filePath;
+    final livePreview = state.generationPreview;
     return AspectRatio(
       aspectRatio: 1,
       child: Card(
@@ -1843,34 +1884,88 @@ class _PreviewCard extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            if (path != null && File(path).existsSync())
+            if (livePreview != null)
+              Image.memory(
+                livePreview,
+                fit: BoxFit.contain,
+                gaplessPlayback: true,
+                filterQuality: FilterQuality.medium,
+              )
+            else if (path != null && File(path).existsSync())
               ZoomableImage(
                 image: Image.file(File(path), fit: BoxFit.contain),
               )
             else
               Center(child: Text(text.previewEmpty)),
-            if (state.busy)
+            if (state.busy && livePreview == null)
               Container(
                   color: Colors.black38,
                   child: const Center(child: CircularProgressIndicator())),
-            Positioned(
-              right: 8,
-              bottom: 8,
-              child: Wrap(
-                spacing: 8,
-                children: [
-                  FilledButton.tonalIcon(
-                      onPressed: onPick,
-                      icon: const Icon(Icons.image),
-                      label: Text(text.loadImage)),
-                  if (work != null)
-                    FilledButton.tonalIcon(
-                        onPressed: state.clearWorkbench,
-                        icon: const Icon(Icons.close),
-                        label: Text(text.switchToTextToImage)),
-                ],
+            if (state.busy && livePreview != null)
+              PositionedDirectional(
+                start: 10,
+                end: 10,
+                bottom: 10,
+                child: Card(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .surfaceContainerHighest
+                      .withOpacity(.92),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 9, 12, 10),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                streamText.progress,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.labelLarge,
+                              ),
+                            ),
+                            if (state.generationPreviewTotalSteps > 0)
+                              Text(
+                                '${state.generationPreviewStep}/${state.generationPreviewTotalSteps}',
+                                style: Theme.of(context).textTheme.labelMedium,
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 7),
+                        LinearProgressIndicator(
+                          value: state.generationPreviewProgress > 0
+                              ? state.generationPreviewProgress
+                              : null,
+                          minHeight: 5,
+                          borderRadius: BorderRadius.circular(99),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
-            ),
+            if (!state.busy)
+              PositionedDirectional(
+                end: 8,
+                bottom: 8,
+                child: Wrap(
+                  spacing: 8,
+                  children: [
+                    FilledButton.tonalIcon(
+                        onPressed: onPick,
+                        icon: const Icon(Icons.image),
+                        label: Text(text.loadImage)),
+                    if (work != null)
+                      FilledButton.tonalIcon(
+                          onPressed: state.clearWorkbench,
+                          icon: const Icon(Icons.close),
+                          label: Text(text.switchToTextToImage)),
+                  ],
+                ),
+              ),
           ],
         ),
       ),
@@ -2588,6 +2683,7 @@ class _OutputControls extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final text = generateScreenTextFor(state.settings.language);
+    final streamText = _streamPreviewText(state.settings.language);
     final selectedExists = state.generationGroupId.isEmpty ||
         state.groups.any((group) => group.id == state.generationGroupId);
     final selected = selectedExists ? state.generationGroupId : '';
@@ -2600,6 +2696,19 @@ class _OutputControls extends StatelessWidget {
             Text(text.output,
                 style: const TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 10),
+            SwitchListTile.adaptive(
+              contentPadding: EdgeInsets.zero,
+              secondary: const Icon(Icons.live_tv_outlined),
+              title: Text(streamText.title),
+              subtitle: Text(streamText.subtitle),
+              value: state.settings.streamPreviewEnabled,
+              onChanged: state.busy
+                  ? null
+                  : (value) => state.setSettings(
+                        (settings) => settings.streamPreviewEnabled = value,
+                      ),
+            ),
+            const SizedBox(height: 4),
             TextFormField(
               initialValue: state.params.fileNamePrefix,
               decoration: InputDecoration(

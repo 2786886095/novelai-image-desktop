@@ -793,6 +793,7 @@ class AppSettings {
   int aitagCacheRetentionDays;
   bool keepImageMetadata;
   bool saveToGallery;
+  bool streamPreviewEnabled;
   // Custom base folder for saved originals. Empty = app documents/images.
   // Images are organised as <base>/<date>/<group>/ like the desktop client.
   String imageOutputDir;
@@ -877,6 +878,7 @@ class AppSettings {
     this.aitagCacheRetentionDays = 30,
     this.keepImageMetadata = true,
     this.saveToGallery = true,
+    this.streamPreviewEnabled = true,
     this.imageOutputDir = '',
     this.activeHistoryGroupId = '',
     this.generationGroupId = '',
@@ -956,6 +958,7 @@ class AppSettings {
         'aitagCacheRetentionDays': aitagCacheRetentionDays,
         'keepImageMetadata': keepImageMetadata,
         'saveToGallery': saveToGallery,
+        'streamPreviewEnabled': streamPreviewEnabled,
         'imageOutputDir': imageOutputDir,
         'activeHistoryGroupId': activeHistoryGroupId,
         'generationGroupId': generationGroupId,
@@ -1032,6 +1035,7 @@ class AppSettings {
         aitagCacheRetentionDays: j['aitagCacheRetentionDays'] ?? 30,
         keepImageMetadata: j['keepImageMetadata'] ?? true,
         saveToGallery: j['saveToGallery'] ?? true,
+        streamPreviewEnabled: j['streamPreviewEnabled'] ?? true,
         imageOutputDir: j['imageOutputDir'] ?? '',
         activeHistoryGroupId: j['activeHistoryGroupId'] ?? '',
         generationGroupId: j['generationGroupId'] ?? '',

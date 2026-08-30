@@ -13,6 +13,7 @@ import '../models/nai_models.dart';
 import '../prompts/prompt_mode.dart';
 import '../tags/offline_tag_store.dart';
 import 'mcp_tag_client.dart';
+import 'nai_stream.dart';
 import 'prompt_codex_retrieval.dart';
 import 'proxy_http_client.dart';
 
@@ -427,16 +428,26 @@ class NaiApi {
     String token,
     AppSettings settings,
     GenerateParams params,
-    GenerateExtras extras,
-  ) async {
+    GenerateExtras extras, {
+    void Function(NaiGenerationPreview preview)? onPreview,
+  }) async {
     params = params.normalized();
     final seed = params.seedMode != 'random' && params.seed > 0
         ? params.seed
         : randomSeed();
     var payload = await buildPayload(token, settings, params, seed, extras);
-    Uint8List bytes;
+    List<Uint8List>? streamed;
+    Uint8List? bytes;
     try {
-      bytes = await _postGenerate(token, settings, payload);
+      streamed = await _postGenerateStream(
+        token,
+        settings,
+        payload,
+        onPreview,
+      );
+      if (streamed == null) {
+        bytes = await _postGenerate(token, settings, payload);
+      }
     } on NaiHttpException catch (error) {
       if (!_shouldRetryCharactersAsPipe(error, params, extras)) rethrow;
       payload = await buildPayload(
@@ -447,9 +458,17 @@ class NaiApi {
         extras,
         structuredCharacters: false,
       );
-      bytes = await _postGenerate(token, settings, payload);
+      streamed = await _postGenerateStream(
+        token,
+        settings,
+        payload,
+        onPreview,
+      );
+      if (streamed == null) {
+        bytes = await _postGenerate(token, settings, payload);
+      }
     }
-    return (_extractImages(bytes), seed);
+    return (streamed ?? _extractImages(bytes!), seed);
   }
 
   Future<(List<Uint8List>, int)> img2img(
@@ -1668,6 +1687,111 @@ class NaiApi {
     }
     final streamed = await client.send(request);
     return http.Response.fromStream(streamed);
+  }
+
+  bool _supportsSafeStreamTransport(Map<String, dynamic> payload) {
+    final parameters = payload['parameters'] is Map
+        ? Map<String, dynamic>.from(payload['parameters'] as Map)
+        : <String, dynamic>{};
+    bool populatedList(String key) =>
+        parameters[key] is List && (parameters[key] as List).isNotEmpty;
+    return payload['action'] == 'generate' &&
+        parameters['image'] == null &&
+        parameters['mask'] == null &&
+        parameters['reference_image'] == null &&
+        !populatedList('reference_image_multiple') &&
+        !populatedList('director_reference_images') &&
+        !populatedList('director_reference_images_cached');
+  }
+
+  bool _streamingUnavailable(Object? value) {
+    final text = value?.toString().toLowerCase() ?? '';
+    return text.contains('streaming is not allowed') ||
+        text.contains('streaming not allowed') ||
+        text.contains('stream is not allowed') ||
+        text.contains('stream not allowed');
+  }
+
+  Future<List<Uint8List>?> _postGenerateStream(
+    String token,
+    AppSettings settings,
+    Map<String, dynamic> payload,
+    void Function(NaiGenerationPreview preview)? onPreview,
+  ) async {
+    if (onPreview == null ||
+        !settings.streamPreviewEnabled ||
+        !_supportsSafeStreamTransport(payload)) {
+      return null;
+    }
+    final client = createProxyHttpClient(settings, scope: ProxyScope.nai);
+    _activeGenerationClients.add(client);
+    bool cancelled() => !_activeGenerationClients.contains(client);
+    final uri = Uri.parse(
+      '${_naiBase(settings.imageBaseUrl, 'https://image.novelai.net', settings)}/ai/generate-image-stream',
+    );
+    try {
+      for (var attempt = 0; attempt <= 3; attempt++) {
+        if (cancelled()) throw const GenerationCancelledException();
+        final request = http.MultipartRequest('POST', uri)
+          ..headers['Authorization'] = 'Bearer $token'
+          ..headers['Accept'] =
+              'application/x-msgpack, text/event-stream, application/zip'
+          ..headers['x-correlation-id'] =
+              List.generate(6, (_) => _rng.nextInt(36).toRadixString(36)).join()
+          ..headers['x-initiated-at'] = DateTime.now().toUtc().toIso8601String()
+          ..files.add(http.MultipartFile.fromString(
+            'request',
+            jsonEncode(payload),
+            filename: 'blob',
+            contentType: MediaType('application', 'json'),
+          ));
+        http.StreamedResponse response;
+        try {
+          response =
+              await client.send(request).timeout(const Duration(seconds: 180));
+        } catch (_) {
+          if (cancelled()) throw const GenerationCancelledException();
+          rethrow;
+        }
+        if (response.statusCode == 200 || response.statusCode == 201) {
+          final decoded = await consumeNaiGenerationStream(
+            response.stream,
+            totalSteps: max(1, _integer(payload['parameters'], 'steps')),
+            contentType: response.headers['content-type'] ?? '',
+            onPreview: onPreview,
+          );
+          if (decoded.archive != null) return _extractImages(decoded.archive!);
+          return decoded.images;
+        }
+        final errorBytes = await response.stream.toBytes();
+        final message = utf8.decode(errorBytes, allowMalformed: true);
+        if ({404, 405, 415, 501}.contains(response.statusCode) ||
+            _streamingUnavailable(message)) {
+          return null;
+        }
+        if (response.statusCode != 429 || attempt >= 3) {
+          throw NaiHttpException(
+            response.statusCode,
+            message.isEmpty ? 'HTTP ${response.statusCode}' : message,
+          );
+        }
+        final retryAfter = int.tryParse(response.headers['retry-after'] ?? '');
+        final waitMs = retryAfter != null && retryAfter > 0
+            ? retryAfter * 1000
+            : 2000 * (1 << attempt);
+        await Future.delayed(Duration(milliseconds: min(waitMs, 30000)));
+      }
+      return null;
+    } finally {
+      _activeGenerationClients.remove(client);
+      client.close();
+    }
+  }
+
+  int _integer(Object? parent, String key) {
+    if (parent is! Map) return 0;
+    final value = parent[key];
+    return value is num ? value.round() : int.tryParse('$value') ?? 0;
   }
 
   Future<Uint8List> _postGenerate(

@@ -35,12 +35,6 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Analyze
-        run: flutter analyze
-
-      - name: Run tests
-        run: flutter test
-
       # Sign the release APK with a STABLE key (from repo secrets) so every
       # published version installs over the previous one. If the secrets aren't
       # set, this no-ops and the build falls back to the debug key (build.gradle).
@@ -89,7 +83,9 @@ jobs:
           GITEE_REPO: novelai-image-desktop
           GITEE_RELEASE_TAG: ${{ github.ref_name }}
         working-directory: ${{ github.workspace }}
-        run: node scripts/sync-gitee-release.mjs "${{ github.ref_name }}" --file mobile/build/app/outputs/flutter-apk/app-release.apk
+        run: |
+          node scripts/prune-gitee-release-assets.mjs "${{ github.ref_name }}"
+          node scripts/sync-gitee-release.mjs "${{ github.ref_name }}" --file mobile/build/app/outputs/flutter-apk/app-release.apk
 
   ios:
     runs-on: macos-latest

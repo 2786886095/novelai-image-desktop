@@ -441,15 +441,22 @@ class _DataBackupSettingsPanelState extends State<DataBackupSettingsPanel> {
       margin: const EdgeInsets.only(top: 12),
       clipBehavior: Clip.antiAlias,
       child: ExpansionTile(
-        leading: const Icon(Icons.storage_rounded),
         title: Text(text['title']!,
             style: Theme.of(context).textTheme.titleMedium),
-        subtitle:
-            Text(text['desc']!, maxLines: 2, overflow: TextOverflow.ellipsis),
         shape: const Border(),
         collapsedShape: const Border(),
         childrenPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
         children: [
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: Text(
+              text['desc']!,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
+          ),
+          const SizedBox(height: 12),
           DecoratedBox(
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.errorContainer,

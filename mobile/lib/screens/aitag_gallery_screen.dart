@@ -367,9 +367,15 @@ String _f(String value, String key, Object replacement) =>
     value.replaceAll('{$key}', '$replacement');
 
 class AitagGalleryScreen extends StatefulWidget {
-  final VoidCallback onBack;
+  final VoidCallback? onBack;
   final AitagService? service;
-  const AitagGalleryScreen({super.key, required this.onBack, this.service});
+  final bool showAppBar;
+  const AitagGalleryScreen({
+    super.key,
+    this.onBack,
+    this.service,
+    this.showAppBar = true,
+  });
 
   @override
   State<AitagGalleryScreen> createState() => _AitagGalleryScreenState();
@@ -480,24 +486,29 @@ class _AitagGalleryScreenState extends State<AitagGalleryScreen> {
       timeOptions.add((value: 'older', label: text.older));
     }
     return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-            tooltip: text.back,
-            onPressed: widget.onBack,
-            icon: const Icon(Icons.arrow_back)),
-        title: Text(text.title),
-        actions: [
-          IconButton(
-              tooltip: text.refresh,
-              onPressed: loading ? null : _refresh,
-              icon: const Icon(Icons.refresh)),
-          IconButton(
-              tooltip: text.source,
-              onPressed: () => launchUrl(Uri.parse(aitagSiteUrl),
-                  mode: LaunchMode.externalApplication),
-              icon: const Icon(Icons.open_in_new))
-        ],
-      ),
+      appBar: widget.showAppBar
+          ? AppBar(
+              automaticallyImplyLeading: widget.onBack != null,
+              leading: widget.onBack == null
+                  ? null
+                  : IconButton(
+                      tooltip: text.back,
+                      onPressed: widget.onBack,
+                      icon: const Icon(Icons.arrow_back)),
+              title: Text(text.title),
+              actions: [
+                IconButton(
+                    tooltip: text.refresh,
+                    onPressed: loading ? null : _refresh,
+                    icon: const Icon(Icons.refresh)),
+                IconButton(
+                    tooltip: text.source,
+                    onPressed: () => launchUrl(Uri.parse(aitagSiteUrl),
+                        mode: LaunchMode.externalApplication),
+                    icon: const Icon(Icons.open_in_new))
+              ],
+            )
+          : null,
       body: LayoutBuilder(builder: (context, constraints) {
         final columns = constraints.maxWidth >= 1100
             ? 5

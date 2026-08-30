@@ -12,10 +12,29 @@ import '../services/aitag_service.dart';
 import '../state/app_state.dart';
 import '../ui/studio_shell.dart';
 import 'data_backup_settings.dart';
+import 'resource_database_settings.dart';
 
 const _projectGithubUrl = 'https://github.com/2786886095/novelai-image-desktop';
 const _wechatRewardAsset = 'assets/about/wechat-reward.jpg';
 const _alipayRewardAsset = 'assets/about/alipay-reward.jpg';
+
+(String, String) _streamPreviewSettingText(Object? language) {
+  switch (normalizeAppLocaleCode(language)) {
+    case 'zh-TW':
+      return ('生成時串流預覽', '預設開啟；生成期間逐步顯示中間圖。');
+    case 'en-US':
+      return (
+        'Streaming generation preview',
+        'On by default; shows intermediate images while generating.'
+      );
+    case 'ja-JP':
+      return ('生成中のストリーミングプレビュー', '初期状態で有効。生成途中の画像を順次表示します。');
+    case 'ko-KR':
+      return ('생성 스트리밍 미리보기', '기본으로 켜져 있으며 생성 중간 이미지를 순서대로 표시합니다.');
+    default:
+      return ('生成时流式预览', '默认开启；生成过程中逐步显示中间图。');
+  }
+}
 
 String _formatBytes(int bytes) => bytes < 1024 * 1024
     ? '${(bytes / 1024).toStringAsFixed(1)} KB'
@@ -163,6 +182,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final persistText = settingsPersistTextFor(s.language);
     final aboutText = settingsAboutTextFor(s.language);
     final cacheText = _cacheText(s.language);
+    final streamPreviewText = _streamPreviewSettingText(s.language);
     final account = state.account;
     return Scaffold(
       appBar: AppBar(title: Text(settingsText.title)),
@@ -577,6 +597,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onChanged: (value) =>
                   state.setSettings((x) => x.keepImageMetadata = value),
             ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              secondary: const Icon(Icons.live_tv_outlined),
+              title: Text(streamPreviewText.$1),
+              subtitle: Text(streamPreviewText.$2),
+              value: s.streamPreviewEnabled,
+              onChanged: (value) =>
+                  state.setSettings((x) => x.streamPreviewEnabled = value),
+            ),
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(12),
@@ -644,6 +673,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     state.setSettings((x) => x.imageOutputDir = value),
               ),
           ]),
+          const ResourceDatabaseSettingsPanel(),
           const DataBackupSettingsPanel(),
           _Section(title: persistText.sectionTitle, children: [
             Text(persistText.sectionDesc),

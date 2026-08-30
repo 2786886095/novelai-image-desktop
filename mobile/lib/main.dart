@@ -13,6 +13,7 @@ import 'screens/ai_log_screen.dart';
 import 'screens/generate_screen.dart';
 import 'screens/inspect_screen.dart';
 import 'screens/metadata_inspector_screen.dart';
+import 'screens/online_gallery_screen.dart';
 import 'screens/tools_hub_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/tools_screen.dart';
@@ -94,6 +95,7 @@ class _HomeShellState extends State<HomeShell> {
       icon: Icons.collections_bookmark_outlined,
       selectedIcon: Icons.collections_bookmark
     ),
+    (icon: Icons.public_outlined, selectedIcon: Icons.public),
     (icon: Icons.photo_library_outlined, selectedIcon: Icons.photo_library),
     (icon: Icons.receipt_long_outlined, selectedIcon: Icons.receipt_long),
     (icon: Icons.settings_outlined, selectedIcon: Icons.settings),
@@ -126,6 +128,7 @@ class _HomeShellState extends State<HomeShell> {
           ),
         ),
       ),
+      const OnlineGalleryScreen(),
       GalleryScreen(
         onOpenMetadata: () {
           if (mounted) setState(() => _index = 6);
@@ -191,7 +194,7 @@ class _HomeShellState extends State<HomeShell> {
     );
     if (!mounted) return;
     await context.read<AppState>().dismissNetworkOnboarding();
-    if (openSettings == true && mounted) setState(() => _index = 11);
+    if (openSettings == true && mounted) setState(() => _index = 12);
   }
 
   Future<void> _showV5MigrationNotice() async {
