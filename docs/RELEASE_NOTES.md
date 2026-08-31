@@ -4,18 +4,19 @@
 
 | 系统 | 安装包 | 安装说明 |
 | --- | --- | --- |
-| 🪟 **Windows**（便携版，x64） | `Langbai-NovelAI-Studio-2.0.5.exe` | 双击即用，无需安装 |
-| 🪟 **Windows**（安装版，x64） | `Langbai-NovelAI-Studio-Setup-2.0.5.exe` | 安装向导可自选路径、创建快捷方式；支持软件内一键更新 |
-| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-2.0.5-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
-| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-2.0.5.zip` | 解压后即为 `.app`，同样需右键「打开」 |
-| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-2.0.5.AppImage` | `chmod +x` 后直接运行 |
+| 🪟 **Windows**（便携版，x64） | `Langbai-NovelAI-Studio-2.0.6.exe` | 双击即用，无需安装 |
+| 🪟 **Windows**（安装版，x64） | `Langbai-NovelAI-Studio-Setup-2.0.6.exe` | 安装向导可自选路径、创建快捷方式；支持软件内一键更新 |
+| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-2.0.6-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
+| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-2.0.6.zip` | 解压后即为 `.app`，同样需右键「打开」 |
+| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-2.0.6.AppImage` | `chmod +x` 后直接运行 |
 | 🤖 **Android** | `app-release.apk` | 直接安装；需允许「未知来源」 |
 | 📱 **iOS** | `novelai-mobile-unsigned.ipa` | **未签名**，需使用 AltStore / Sideloadly 等工具自行侧载 |
 
 > 桌面端与移动端均为 **API-only** 客户端，需要自备 NovelAI Persistent API Token。
 
-### v2.0.5 更新内容
-- 移动端手动导出备份改为系统“另存为”，每次都可以自行选择 `.naisbackup` 的文件名与保存位置。
-- 自动备份、导入前安全备份支持选择并持久化自定义目录，也可一键恢复应用默认目录；配置导入不会改掉当前设备的备份路径。
-- 自定义目录临时失效、权限不足或外置存储离线时，会自动回退到应用默认目录继续备份，并在设置中明确提示，避免备份中断或数据丢失。
-- 修复移动端“法典图鉴”请求错误 `/current.json` 的 HTTP 404，以及 AI TAG 图片 CDN 缺少来源请求头导致作品图空白的问题。
+### v2.0.6 更新内容
+- 桌面、Android 与 iOS 的随机画师串抽卡新增“自定义 Tag（权重随机）”：输入的每一个 Tag 都必定加入每一个画师串，不再随机遗漏，仅分别随机权重。
+- 自定义 Tag 支持逗号或换行分隔、自动去重、忽略输入中原有权重，并可自行设置 0.1～10 的随机权重区间；输入和区间会跨次启动保存。
+- 新增按 3D/渲染、光影/画面、质量词、氛围/环境渲染分类的 Tag 快选库；点击即可加入或移除，仍遵循“每串必带、仅权重随机”。
+- 修复移动端“已有画师串权重微调”折叠状态被错误记忆、重新进入仍展开的问题；该面板改为默认折叠、紧凑输入并移到组合预览之前，消除突兀的大块灰色区域。
+- 保留 v2.0.5 的可选备份路径、移动端画廊请求与图片加载修复。

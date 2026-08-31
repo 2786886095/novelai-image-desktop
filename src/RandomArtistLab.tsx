@@ -7,7 +7,10 @@ import {
   formatArtistCardTags,
   formatArtistFullPrompt,
   generatePopularArtistRecipes,
+  parseCustomTagPoolValues,
   randomizeArtistRecipeWeights,
+  RANDOM_CUSTOM_TAG_LIBRARY,
+  toggleCustomTagInPool,
   type ArtistRecipeComparison,
   type ArtistRecipeVariant,
   type GeneratedArtistRecipe,
@@ -63,6 +66,9 @@ type RandomSession = {
   artistMaxCount: number;
   artistWeightMin: number;
   artistWeightMax: number;
+  customTagPool: string;
+  customTagWeightMin: number;
+  customTagWeightMax: number;
   includeFranchiseStyles: boolean;
   franchiseMinCount: number;
   franchiseMaxCount: number;
@@ -92,6 +98,8 @@ const RANDOM_V5_DEFAULTS = {
   artistMaxCount: 7,
   artistWeightMin: 0.2,
   artistWeightMax: 1.2,
+  customTagWeightMin: 0.2,
+  customTagWeightMax: 1.2,
   franchiseMinCount: 0,
   franchiseMaxCount: 2,
   franchiseWeightMin: 0.15,
@@ -99,12 +107,80 @@ const RANDOM_V5_DEFAULTS = {
 } as const;
 let sessionCache: RandomSession | null = null;
 
+const CUSTOM_TAG_TEXT = {
+  "zh-CN": {
+    title: "自定义 Tag（权重随机）",
+    hint: "使用逗号或换行分隔。所有 Tag 都会加入每个画师串，只分别随机权重。",
+    placeholder: "例如：year 2024, 0.7::blue theme ::, dynamic angle",
+    range: "自定义 Tag 权重区间",
+    library: "Tag 快选库",
+    libraryHint: "从常用分类中选择；已选 Tag 同样会加入每个画师串。",
+    selected: "已选 {count} 个",
+    render3d: "3D / 渲染",
+    lighting: "光影 / 画面",
+    quality: "质量词",
+    atmosphere: "氛围 / 环境渲染",
+  },
+  "zh-TW": {
+    title: "自訂 Tag（權重隨機）",
+    hint: "使用逗號或換行分隔。所有 Tag 都會加入每個畫師串，只分別隨機權重。",
+    placeholder: "例如：year 2024, 0.7::blue theme ::, dynamic angle",
+    range: "自訂 Tag 權重區間",
+    library: "Tag 快選庫",
+    libraryHint: "從常用分類中選擇；已選 Tag 同樣會加入每個畫師串。",
+    selected: "已選 {count} 個",
+    render3d: "3D / 渲染",
+    lighting: "光影 / 畫面",
+    quality: "品質詞",
+    atmosphere: "氛圍 / 環境渲染",
+  },
+  "en-US": {
+    title: "Custom Tags (random weights)",
+    hint: "Separate entries with commas or new lines. Every Tag is added to every artist string; only each weight is randomized.",
+    placeholder: "Example: year 2024, 0.7::blue theme ::, dynamic angle",
+    range: "Custom Tag weight range",
+    library: "Tag quick-pick library",
+    libraryHint: "Choose common tags by category. Selected tags are also added to every artist string.",
+    selected: "{count} selected",
+    render3d: "3D / rendering",
+    lighting: "Lighting / image",
+    quality: "Quality tags",
+    atmosphere: "Atmosphere / environment",
+  },
+  "ja-JP": {
+    title: "カスタム Tag（ウェイトのみ抽選）",
+    hint: "カンマまたは改行で区切ります。すべての Tag を各画家列に追加し、ウェイトだけ個別に抽選します。",
+    placeholder: "例：year 2024, 0.7::blue theme ::, dynamic angle",
+    range: "カスタム Tag のウェイト範囲",
+    library: "Tag クイック選択",
+    libraryHint: "カテゴリから選択します。選択した Tag もすべての画家列に追加されます。",
+    selected: "{count} 個選択中",
+    render3d: "3D / レンダリング",
+    lighting: "光・画面",
+    quality: "品質 Tag",
+    atmosphere: "雰囲気 / 環境",
+  },
+  "ko-KR": {
+    title: "사용자 지정 Tag (가중치만 무작위)",
+    hint: "쉼표나 줄바꿈으로 구분합니다. 모든 Tag를 각 작가 문자열에 넣고 가중치만 각각 무작위로 정합니다.",
+    placeholder: "예: year 2024, 0.7::blue theme ::, dynamic angle",
+    range: "사용자 지정 Tag 가중치 범위",
+    library: "Tag 빠른 선택",
+    libraryHint: "카테고리에서 선택합니다. 선택한 Tag도 모든 작가 문자열에 추가됩니다.",
+    selected: "{count}개 선택",
+    render3d: "3D / 렌더링",
+    lighting: "조명 / 화면",
+    quality: "품질 Tag",
+    atmosphere: "분위기 / 환경",
+  },
+} satisfies Record<AppLanguage, Record<string, string>>;
+
 const RANDOM_RESET_TEXT = {
-  "zh-CN": { label: "恢复抽卡默认", hint: "V5 默认：画师 0.2～1.2；系列风格 0.15～0.8。", done: "已恢复 V5 抽卡默认；提示词、收藏与生成参数未清除。" },
-  "zh-TW": { label: "恢復抽卡預設", hint: "V5 預設：畫師 0.2～1.2；系列風格 0.15～0.8。", done: "已恢復 V5 抽卡預設；提示詞、收藏與生成參數未清除。" },
-  "en-US": { label: "Restore draw defaults", hint: "V5 defaults: artists 0.2–1.2; franchises 0.15–0.8.", done: "V5 draw defaults restored; prompts, favorites, and generation settings were kept." },
-  "ja-JP": { label: "抽選設定を初期化", hint: "V5 初期値：画家 0.2～1.2、作品風格 0.15～0.8。", done: "V5 初期値へ戻しました。プロンプト・お気に入り・生成設定は維持されます。" },
-  "ko-KR": { label: "뽑기 기본값 복원", hint: "V5 기본값: 작가 0.2～1.2, 작품 화풍 0.15～0.8.", done: "V5 기본값을 복원했습니다. 프롬프트·즐겨찾기·생성 설정은 유지됩니다." },
+  "zh-CN": { label: "恢复抽卡默认", hint: "V5 默认：画师与自定义 Tag 0.2～1.2；系列风格 0.15～0.8。", done: "已恢复 V5 抽卡默认；提示词、收藏与生成参数未清除。" },
+  "zh-TW": { label: "恢復抽卡預設", hint: "V5 預設：畫師與自訂 Tag 0.2～1.2；系列風格 0.15～0.8。", done: "已恢復 V5 抽卡預設；提示詞、收藏與生成參數未清除。" },
+  "en-US": { label: "Restore draw defaults", hint: "V5 defaults: artists and custom Tags 0.2–1.2; franchises 0.15–0.8.", done: "V5 draw defaults restored; prompts, favorites, and generation settings were kept." },
+  "ja-JP": { label: "抽選設定を初期化", hint: "V5 初期値：画家とカスタム Tag 0.2～1.2、作品風格 0.15～0.8。", done: "V5 初期値へ戻しました。プロンプト・お気に入り・生成設定は維持されます。" },
+  "ko-KR": { label: "뽑기 기본값 복원", hint: "V5 기본값: 작가와 사용자 Tag 0.2～1.2, 작품 화풍 0.15～0.8.", done: "V5 기본값을 복원했습니다. 프롬프트·즐겨찾기·생성 설정은 유지됩니다." },
 } satisfies Record<AppLanguage, { label: string; hint: string; done: string }>;
 
 const RANDOM_SIZE_PRESETS = [
@@ -411,6 +487,9 @@ function restore(inherited: GenerateParams): RandomSession {
       artistMaxCount: clampRecipeCount(raw?.artistMaxCount, raw?.artistCount == null ? 7 : legacyArtistCount, 1),
       artistWeightMin: clampRecipeWeight(migratingToV5Weights ? undefined : raw?.artistWeightMin, RANDOM_V5_DEFAULTS.artistWeightMin),
       artistWeightMax: clampRecipeWeight(migratingToV5Weights ? undefined : raw?.artistWeightMax, RANDOM_V5_DEFAULTS.artistWeightMax),
+      customTagPool: typeof raw?.customTagPool === "string" ? raw.customTagPool : "",
+      customTagWeightMin: clampRecipeWeight(raw?.customTagWeightMin, RANDOM_V5_DEFAULTS.customTagWeightMin),
+      customTagWeightMax: clampRecipeWeight(raw?.customTagWeightMax, RANDOM_V5_DEFAULTS.customTagWeightMax),
       includeFranchiseStyles: raw?.includeFranchiseStyles === true,
       franchiseMinCount: clampRecipeCount(raw?.franchiseMinCount, 0),
       franchiseMaxCount: clampRecipeCount(raw?.franchiseMaxCount, 2),
@@ -432,7 +511,7 @@ function restore(inherited: GenerateParams): RandomSession {
       favorites: loadArtistFavorites("random"),
     };
   } catch {
-    sessionCache = { basePrompt: inherited.positivePrompt, auxiliaryPrompt: "", count: 8, ...RANDOM_V5_DEFAULTS, includeFranchiseStyles: false, poolSize: 1000, seedMode: "fixed", seed: 246813579, drawSeed: freshSeed(), mutateAuxiliary: false, biasFavorites: false, weightTuneInput: "", weightTuneCount: 8, weightVariation: 20, generationParams: normalizeGenerationParams(undefined, DEFAULT_PARAMS), results: [], favorites: loadArtistFavorites("random") };
+    sessionCache = { basePrompt: inherited.positivePrompt, auxiliaryPrompt: "", customTagPool: "", count: 8, ...RANDOM_V5_DEFAULTS, includeFranchiseStyles: false, poolSize: 1000, seedMode: "fixed", seed: 246813579, drawSeed: freshSeed(), mutateAuxiliary: false, biasFavorites: false, weightTuneInput: "", weightTuneCount: 8, weightVariation: 20, generationParams: normalizeGenerationParams(undefined, DEFAULT_PARAMS), results: [], favorites: loadArtistFavorites("random") };
   }
   return sessionCache;
 }
@@ -445,6 +524,7 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
   const refreshHistory = useAppStore((state) => state.refreshHistory);
   const deleteHistory = useAppStore((state) => state.deleteHistory);
   const text = TEXT[language];
+  const customTagText = CUSTOM_TAG_TEXT[language];
   const paramText = PARAM_TEXT[language];
   const tuneText = TUNE_TEXT[language];
   const resetText = RANDOM_RESET_TEXT[language];
@@ -458,6 +538,10 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
     "ko-KR": "즐겨찾기",
   }[language];
   const [session, setSession] = useState(() => restore(params));
+  const selectedCustomTags = useMemo(
+    () => new Set(parseCustomTagPoolValues(session.customTagPool).map((tag) => tag.toLocaleLowerCase())),
+    [session.customTagPool],
+  );
   const [pool, setPool] = useState<ArtistTagRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [running, setRunning] = useState(false);
@@ -601,6 +685,9 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
     artistWeightMin: session.artistWeightMin,
     artistWeightMax: session.artistWeightMax,
     auxiliaryPrompt: session.auxiliaryPrompt,
+    customTagPool: session.customTagPool,
+    customTagWeightMin: session.customTagWeightMin,
+    customTagWeightMax: session.customTagWeightMax,
     mutateAuxiliary: session.mutateAuxiliary,
     includeFranchiseStyles: session.includeFranchiseStyles,
     minFranchiseStyles: session.franchiseMinCount,
@@ -610,7 +697,7 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
     favoriteArtists: session.biasFavorites ? likedArtists : undefined,
     favoriteMutations: session.mutateAuxiliary && session.biasFavorites ? likedMutations : undefined,
     random: createArtistLabRandom(session.drawSeed),
-  }), [poolKey, session.count, session.artistMinCount, session.artistMaxCount, session.artistWeightMin, session.artistWeightMax, session.auxiliaryPrompt, session.mutateAuxiliary, session.includeFranchiseStyles, session.franchiseMinCount, session.franchiseMaxCount, session.franchiseWeightMin, session.franchiseWeightMax, session.biasFavorites, likedArtists.join("|"), likedMutations.map((item) => `${item.category}:${item.value}:${item.weight}`).join("|"), session.drawSeed]);
+  }), [poolKey, session.count, session.artistMinCount, session.artistMaxCount, session.artistWeightMin, session.artistWeightMax, session.auxiliaryPrompt, session.customTagPool, session.customTagWeightMin, session.customTagWeightMax, session.mutateAuxiliary, session.includeFranchiseStyles, session.franchiseMinCount, session.franchiseMaxCount, session.franchiseWeightMin, session.franchiseWeightMax, session.biasFavorites, likedArtists.join("|"), likedMutations.map((item) => `${item.category}:${item.value}:${item.weight}`).join("|"), session.drawSeed]);
   const plannedComparisons = useMemo(
     () => expandArtistRecipeComparisons(planned, session.mutateAuxiliary),
     [planned, session.mutateAuxiliary],
@@ -710,6 +797,9 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
       artistWeightMin: session.artistWeightMin,
       artistWeightMax: session.artistWeightMax,
       auxiliaryPrompt: session.auxiliaryPrompt,
+      customTagPool: session.customTagPool,
+      customTagWeightMin: session.customTagWeightMin,
+      customTagWeightMax: session.customTagWeightMax,
       mutateAuxiliary: session.mutateAuxiliary,
       includeFranchiseStyles: session.includeFranchiseStyles,
       minFranchiseStyles: session.franchiseMinCount,
@@ -838,6 +928,17 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
       <div className="random-settings-reset wide"><small>{resetText.hint}</small><Button type="button" variant="ghost" onClick={restoreDrawDefaults}><Icon name="refresh" />{resetText.label}</Button></div>
       <label className="wide"><span>{text.base}</span><textarea value={session.basePrompt} onChange={(event) => patch({ basePrompt: event.target.value })} /></label>
       <label className="wide"><span>{text.auxiliary}</span><textarea value={session.auxiliaryPrompt} onChange={(event) => patch({ auxiliaryPrompt: event.target.value })} /></label>
+      <label className="wide"><span>{customTagText.title}</span><textarea value={session.customTagPool} placeholder={customTagText.placeholder} onChange={(event) => patch({ customTagPool: event.target.value })} /><small>{customTagText.hint}</small></label>
+      <details className="random-custom-tag-library wide">
+        <summary><span><b>{customTagText.library}</b><small>{customTagText.libraryHint}</small></span><em>{interpolate(customTagText.selected, { count: selectedCustomTags.size })}</em></summary>
+        <div className="random-custom-tag-groups">
+          {RANDOM_CUSTOM_TAG_LIBRARY.map((group) => <section key={group.id}><h4>{customTagText[group.id]}</h4><div>{group.tags.map((tag) => {
+            const selected = selectedCustomTags.has(tag.toLocaleLowerCase());
+            return <button key={tag} type="button" className={selected ? "selected" : ""} aria-pressed={selected} onClick={() => patch({ customTagPool: toggleCustomTagInPool(session.customTagPool, tag), drawSeed: freshSeed() })}>{selected ? "✓ " : "+ "}{tag}</button>;
+          })}</div></section>)}
+        </div>
+      </details>
+      {session.customTagPool.trim() && <fieldset className="random-range-fields"><legend>{customTagText.range}</legend><label><span>{text.min}</span><NumericDraftInput min={0.1} max={10} step={0.05} value={session.customTagWeightMin} normalize={(value) => clampRecipeWeight(value, RANDOM_V5_DEFAULTS.customTagWeightMin)} onCommit={(customTagWeightMin) => patch({ customTagWeightMin, drawSeed: freshSeed() })} /></label><label><span>{text.max}</span><NumericDraftInput min={0.1} max={10} step={0.05} value={session.customTagWeightMax} normalize={(value) => clampRecipeWeight(value, RANDOM_V5_DEFAULTS.customTagWeightMax)} onCommit={(customTagWeightMax) => patch({ customTagWeightMax, drawSeed: freshSeed() })} /></label></fieldset>}
       <label className="random-check wide"><input type="checkbox" checked={session.mutateAuxiliary} onChange={(event) => patch({ mutateAuxiliary: event.target.checked })} /><span><b>{text.mutate}</b><small>{text.mutateHint}</small></span></label>
       <label className="random-check wide"><input type="checkbox" checked={session.includeFranchiseStyles} onChange={(event) => patch({ includeFranchiseStyles: event.target.checked, drawSeed: freshSeed() })} /><span><b>{text.franchise}</b><small>{text.franchiseHint}</small></span></label>
       <label><span>{text.count}</span><NumericDraftInput min={1} step={1} value={session.count} normalize={(value) => positiveInteger(value, 1)} onCommit={(count) => patch({ count })} /><small>{text.unlimited}</small></label>

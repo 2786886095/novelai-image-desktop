@@ -77,17 +77,22 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
   static const _prefsPrefix = 'artist_lab_random_v1_';
   static const _artistWeightMinDefault = .2;
   static const _artistWeightMaxDefault = 1.2;
+  static const _customTagWeightMinDefault = .2;
+  static const _customTagWeightMaxDefault = 1.2;
   static const _franchiseWeightMinDefault = .15;
   static const _franchiseWeightMaxDefault = .8;
   late final ArtistTagService _service =
       widget.artistService ?? ArtistTagService();
   final _base = TextEditingController();
   final _auxiliary = TextEditingController();
+  final _customTags = TextEditingController();
   final _count = TextEditingController(text: '8');
   final _minArtists = TextEditingController(text: '3');
   final _maxArtists = TextEditingController(text: '7');
   final _minArtistWeight = TextEditingController(text: '0.2');
   final _maxArtistWeight = TextEditingController(text: '1.2');
+  final _minCustomTagWeight = TextEditingController(text: '0.2');
+  final _maxCustomTagWeight = TextEditingController(text: '1.2');
   final _minFranchiseStyles = TextEditingController(text: '0');
   final _maxFranchiseStyles = TextEditingController(text: '2');
   final _minFranchiseWeight = TextEditingController(text: '0.15');
@@ -147,6 +152,17 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           'refresh': '更新排行',
           'base': '固定內容提示詞',
           'aux': '固定附加詞（每次保留）',
+          'customTags': '自訂 Tag（權重隨機）',
+          'customTagsHint': '使用逗號或換行分隔；所有 Tag 都會加入每個畫師串，只分別隨機權重。',
+          'customTagWeightMin': '自訂 Tag 最低權重（0.1～10）',
+          'customTagWeightMax': '自訂 Tag 最高權重（0.1～10）',
+          'customTagLibrary': 'Tag 快選庫',
+          'customTagLibraryHint': '從常用分類中選擇；已選 Tag 同樣會加入每個畫師串。',
+          'customTagSelected': '已選 {count} 個',
+          'render3d': '3D / 渲染',
+          'lighting': '光影 / 畫面',
+          'quality': '品質詞',
+          'atmosphere': '氛圍 / 環境渲染',
           'mutate': '抽卡時額外加入隨機風格詞',
           'mutateHint':
               '開啟後以相同畫師串、提示詞、Seed 與參數生成 A/B：A 不加風格詞，B 加入 2～6 個帶 0.3～1.5 權重的風格詞。',
@@ -207,6 +223,19 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           'refresh': 'Refresh',
           'base': 'Fixed content prompt',
           'aux': 'Fixed extra terms (always kept)',
+          'customTags': 'Custom Tags (random weights)',
+          'customTagsHint':
+              'Separate with commas or new lines. Every Tag is added to every artist string; only each weight is randomized.',
+          'customTagWeightMin': 'Minimum custom Tag weight (0.1–10)',
+          'customTagWeightMax': 'Maximum custom Tag weight (0.1–10)',
+          'customTagLibrary': 'Tag quick-pick library',
+          'customTagLibraryHint':
+              'Choose common tags by category. Selected tags are added to every artist string.',
+          'customTagSelected': '{count} selected',
+          'render3d': '3D / rendering',
+          'lighting': 'Lighting / image',
+          'quality': 'Quality tags',
+          'atmosphere': 'Atmosphere / environment',
           'mutate': 'Add random style terms during the draw',
           'mutateHint':
               'Create a fair A/B pair with the same artist string, prompt, seed, and settings: A has no random styles; B adds 2–6 terms weighted 0.3–1.5.',
@@ -270,6 +299,17 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           'refresh': '更新',
           'base': '固定内容プロンプト',
           'aux': '固定追加語（常に保持）',
+          'customTags': 'カスタム Tag（ウェイトのみ抽選）',
+          'customTagsHint': 'カンマまたは改行で区切ります。すべての Tag を各画家列に追加し、ウェイトだけ個別に抽選します。',
+          'customTagWeightMin': 'カスタム Tag の最小ウェイト（0.1～10）',
+          'customTagWeightMax': 'カスタム Tag の最大ウェイト（0.1～10）',
+          'customTagLibrary': 'Tag クイック選択',
+          'customTagLibraryHint': 'カテゴリから選択します。選択した Tag もすべての画家列に追加されます。',
+          'customTagSelected': '{count} 個選択中',
+          'render3d': '3D / レンダリング',
+          'lighting': '光・画面',
+          'quality': '品質 Tag',
+          'atmosphere': '雰囲気 / 環境',
           'mutate': '抽選時に画風語を追加',
           'mutateHint':
               '同じ画家列・プロンプト・Seed・設定で A/B を生成します。A は画風語なし、B は 0.3～1.5 重みの画風語を 2～6 個追加します。',
@@ -331,6 +371,18 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           'refresh': '새로고침',
           'base': '고정 내용 프롬프트',
           'aux': '고정 추가 용어 (항상 유지)',
+          'customTags': '사용자 지정 Tag (가중치만 무작위)',
+          'customTagsHint':
+              '쉼표나 줄바꿈으로 구분합니다. 모든 Tag를 각 작가 문자열에 넣고 가중치만 각각 무작위로 정합니다.',
+          'customTagWeightMin': '사용자 Tag 최소 가중치 (0.1～10)',
+          'customTagWeightMax': '사용자 Tag 최대 가중치 (0.1～10)',
+          'customTagLibrary': 'Tag 빠른 선택',
+          'customTagLibraryHint': '카테고리에서 선택합니다. 선택한 Tag도 모든 작가 문자열에 추가됩니다.',
+          'customTagSelected': '{count}개 선택',
+          'render3d': '3D / 렌더링',
+          'lighting': '조명 / 화면',
+          'quality': '품질 Tag',
+          'atmosphere': '분위기 / 환경',
           'mutate': '뽑을 때 무작위 화풍 용어 추가',
           'mutateHint':
               '같은 작가 문자열·프롬프트·Seed·설정으로 A/B를 생성합니다. A는 화풍 용어가 없고 B는 0.3～1.5 가중치의 용어 2～6개를 추가합니다.',
@@ -393,6 +445,17 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           'refresh': '刷新排行',
           'base': '固定内容提示词',
           'aux': '固定附加词（每次保留）',
+          'customTags': '自定义 Tag（权重随机）',
+          'customTagsHint': '使用逗号或换行分隔；所有 Tag 都会加入每个画师串，只分别随机权重。',
+          'customTagWeightMin': '自定义 Tag 最低权重（0.1～10）',
+          'customTagWeightMax': '自定义 Tag 最高权重（0.1～10）',
+          'customTagLibrary': 'Tag 快选库',
+          'customTagLibraryHint': '从常用分类中选择；已选 Tag 同样会加入每个画师串。',
+          'customTagSelected': '已选 {count} 个',
+          'render3d': '3D / 渲染',
+          'lighting': '光影 / 画面',
+          'quality': '质量词',
+          'atmosphere': '氛围 / 环境渲染',
           'mutate': '抽卡时额外加入随机风格词',
           'mutateHint':
               '开启后以相同画师串、提示词、Seed 和参数生成 A/B：A 不加风格词，B 加入 2～6 个带 0.3～1.5 权重的风格词。',
@@ -645,11 +708,12 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
       };
 
   String _resetDrawHint(String language) => switch (language) {
-        'zh-TW' => 'V5 預設：畫師 0.2～1.2；系列風格 0.15～0.8。',
-        'en-US' => 'V5 defaults: artists 0.2–1.2; franchises 0.15–0.8.',
-        'ja-JP' => 'V5 初期値：画家 0.2～1.2、作品風格 0.15～0.8。',
-        'ko-KR' => 'V5 기본값: 작가 0.2～1.2, 작품 화풍 0.15～0.8.',
-        _ => 'V5 默认：画师 0.2～1.2；系列风格 0.15～0.8。',
+        'zh-TW' => 'V5 預設：畫師與自訂 Tag 0.2～1.2；系列風格 0.15～0.8。',
+        'en-US' =>
+          'V5 defaults: artists and custom Tags 0.2–1.2; franchises 0.15–0.8.',
+        'ja-JP' => 'V5 初期値：画家とカスタム Tag 0.2～1.2、作品風格 0.15～0.8。',
+        'ko-KR' => 'V5 기본값: 작가와 사용자 Tag 0.2～1.2, 작품 화풍 0.15～0.8.',
+        _ => 'V5 默认：画师与自定义 Tag 0.2～1.2；系列风格 0.15～0.8。',
       };
 
   Future<void> _restoreDrawDefaults(String language) async {
@@ -659,6 +723,8 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
       _maxArtists.text = '7';
       _minArtistWeight.text = '0.2';
       _maxArtistWeight.text = '1.2';
+      _minCustomTagWeight.text = '0.2';
+      _maxCustomTagWeight.text = '1.2';
       _minFranchiseStyles.text = '0';
       _maxFranchiseStyles.text = '2';
       _minFranchiseWeight.text = '0.15';
@@ -672,6 +738,14 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
       _message = _resetDrawHint(language);
     });
     await _save();
+  }
+
+  void _commitCustomTags() {
+    setState(() {
+      _drawSeed = Random.secure().nextInt(0x7fffffff);
+      _planned = _buildPlan();
+    });
+    _save();
   }
 
   void _commitDimension(TextEditingController controller, bool width) {
@@ -705,6 +779,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     _base.text =
         prefs.getString('${_prefsPrefix}base') ?? app.params.positivePrompt;
     _auxiliary.text = prefs.getString('${_prefsPrefix}aux') ?? '';
+    _customTags.text = prefs.getString('${_prefsPrefix}customTags') ?? '';
     _count.text = '${prefs.getInt('${_prefsPrefix}count') ?? 8}';
     final oldArtistCount = prefs.getInt('${_prefsPrefix}artistCount');
     _minArtists.text =
@@ -719,6 +794,10 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     _maxArtistWeight.text = migrateV5Weights
         ? '1.2'
         : '${prefs.getDouble('${_prefsPrefix}maxArtistWeight') ?? _artistWeightMaxDefault}';
+    _minCustomTagWeight.text =
+        '${prefs.getDouble('${_prefsPrefix}minCustomTagWeight') ?? _customTagWeightMinDefault}';
+    _maxCustomTagWeight.text =
+        '${prefs.getDouble('${_prefsPrefix}maxCustomTagWeight') ?? _customTagWeightMaxDefault}';
     _minFranchiseStyles.text =
         '${prefs.getInt('${_prefsPrefix}minFranchiseStyles') ?? 0}';
     _maxFranchiseStyles.text =
@@ -782,6 +861,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('${_prefsPrefix}base', _base.text);
     await prefs.setString('${_prefsPrefix}aux', _auxiliary.text);
+    await prefs.setString('${_prefsPrefix}customTags', _customTags.text);
     await prefs.setInt('${_prefsPrefix}count', _positive(_count, 8));
     await prefs.setInt('${_prefsPrefix}minArtists',
         _positive(_minArtists, 3).clamp(1, 20).toInt());
@@ -795,6 +875,16 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     await prefs.setDouble(
         '${_prefsPrefix}maxArtistWeight',
         _decimal(_maxArtistWeight, _artistWeightMaxDefault)
+            .clamp(.1, 10)
+            .toDouble());
+    await prefs.setDouble(
+        '${_prefsPrefix}minCustomTagWeight',
+        _decimal(_minCustomTagWeight, _customTagWeightMinDefault)
+            .clamp(.1, 10)
+            .toDouble());
+    await prefs.setDouble(
+        '${_prefsPrefix}maxCustomTagWeight',
+        _decimal(_maxCustomTagWeight, _customTagWeightMaxDefault)
             .clamp(.1, 10)
             .toDouble());
     await prefs.setInt('${_prefsPrefix}minFranchiseStyles',
@@ -859,6 +949,11 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
         minArtistWeight: _decimal(_minArtistWeight, _artistWeightMinDefault),
         maxArtistWeight: _decimal(_maxArtistWeight, _artistWeightMaxDefault),
         auxiliary: _auxiliary.text,
+        customTagPool: _customTags.text,
+        minCustomTagWeight:
+            _decimal(_minCustomTagWeight, _customTagWeightMinDefault),
+        maxCustomTagWeight:
+            _decimal(_maxCustomTagWeight, _customTagWeightMaxDefault),
         mutateAuxiliary: _mutateAuxiliary,
         includeFranchiseStyles: _includeFranchiseStyles,
         minFranchiseStyles:
@@ -1187,11 +1282,14 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
   void dispose() {
     _base.dispose();
     _auxiliary.dispose();
+    _customTags.dispose();
     _count.dispose();
     _minArtists.dispose();
     _maxArtists.dispose();
     _minArtistWeight.dispose();
     _maxArtistWeight.dispose();
+    _minCustomTagWeight.dispose();
+    _maxCustomTagWeight.dispose();
     _minFranchiseStyles.dispose();
     _maxFranchiseStyles.dispose();
     _minFranchiseWeight.dispose();
@@ -1492,6 +1590,173 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           },
         );
       });
+
+  Widget _customTagLibraryCard(Map<String, String> text) {
+    final selected = parseCustomTagPoolValues(_customTags.text)
+        .map((tag) => tag.toLowerCase())
+        .toSet();
+    final selectedLabel =
+        text['customTagSelected']!.replaceAll('{count}', '${selected.length}');
+    final colors = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border.all(color: colors.outlineVariant),
+        borderRadius: BorderRadius.circular(14),
+        color: colors.surfaceContainerLow,
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: ExpansionTile(
+          initiallyExpanded: false,
+          title: Row(
+            children: [
+              Expanded(child: Text(text['customTagLibrary']!)),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                decoration: BoxDecoration(
+                  color: colors.primaryContainer,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  selectedLabel,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: colors.onPrimaryContainer,
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+              ),
+            ],
+          ),
+          subtitle: Text(
+            text['customTagLibraryHint']!,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: randomCustomTagLibrary.entries.map((group) {
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          text[group.key]!,
+                          style: Theme.of(context).textTheme.labelLarge,
+                        ),
+                        const SizedBox(height: 7),
+                        Wrap(
+                          spacing: 7,
+                          runSpacing: 7,
+                          children: group.value.map((tag) {
+                            final isSelected =
+                                selected.contains(tag.toLowerCase());
+                            return FilterChip(
+                              label: Text(tag),
+                              selected: isSelected,
+                              visualDensity: VisualDensity.compact,
+                              onSelected: (_) {
+                                setState(() {
+                                  _customTags.text = toggleCustomTagInPool(
+                                      _customTags.text, tag);
+                                  _drawSeed =
+                                      Random.secure().nextInt(0x7fffffff);
+                                  _planned = _buildPlan();
+                                });
+                                _save();
+                              },
+                            );
+                          }).toList(),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _weightTunerCard(Map<String, String> tuneText) => Card(
+        clipBehavior: Clip.antiAlias,
+        child: ExpansionTile(
+          initiallyExpanded: false,
+          title: Text(tuneText['title']!),
+          subtitle: Text(
+            tuneText['hint']!,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+              child: LayoutBuilder(builder: (context, constraints) {
+                final fieldWidth = constraints.maxWidth >= 700
+                    ? (constraints.maxWidth - 12) / 2
+                    : constraints.maxWidth;
+                return Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  crossAxisAlignment: WrapCrossAlignment.end,
+                  children: [
+                    SizedBox(
+                      width: constraints.maxWidth,
+                      child: TextField(
+                        controller: _weightTuneInput,
+                        minLines: 2,
+                        maxLines: 4,
+                        decoration: InputDecoration(
+                          labelText: tuneText['input'],
+                          hintText: '1::artist:foo ::, 0.8::artist:bar ::,',
+                          filled: false,
+                        ),
+                        onChanged: (_) => _save(),
+                      ),
+                    ),
+                    SizedBox(
+                      width: fieldWidth,
+                      child: TextField(
+                        controller: _weightTuneCount,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly
+                        ],
+                        decoration:
+                            InputDecoration(labelText: tuneText['count']),
+                        onChanged: (_) => _save(),
+                      ),
+                    ),
+                    SizedBox(
+                      width: fieldWidth,
+                      child: TextField(
+                        controller: _weightVariation,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly
+                        ],
+                        decoration:
+                            InputDecoration(labelText: tuneText['variation']),
+                        onChanged: (_) => _save(),
+                      ),
+                    ),
+                    FilledButton.icon(
+                      onPressed: _running ? null : _generateWeightTuning,
+                      icon: const Icon(Icons.tune),
+                      label: Text(tuneText['generate']!),
+                    ),
+                  ],
+                );
+              }),
+            ),
+          ],
+        ),
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -2055,6 +2320,46 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                     ),
                     SizedBox(
                       width: constraints.maxWidth,
+                      child: TextField(
+                        controller: _customTags,
+                        minLines: 2,
+                        maxLines: 4,
+                        decoration: InputDecoration(
+                          labelText: text['customTags'],
+                          hintText:
+                              'year 2024, 0.7::blue theme ::, dynamic angle',
+                          helperText: text['customTagsHint'],
+                          helperMaxLines: 3,
+                          filled: false,
+                        ),
+                        onEditingComplete: _commitCustomTags,
+                        onTapOutside: (_) {
+                          FocusManager.instance.primaryFocus?.unfocus();
+                          _commitCustomTags();
+                        },
+                        onChanged: (_) {
+                          setState(() => _planned = _buildPlan());
+                        },
+                      ),
+                    ),
+                    SizedBox(
+                      width: constraints.maxWidth,
+                      child: _customTagLibraryCard(text),
+                    ),
+                    if (_customTags.text.trim().isNotEmpty) ...[
+                      decimalField(
+                        _minCustomTagWeight,
+                        text['customTagWeightMin']!,
+                        commit: _commitCustomTags,
+                      ),
+                      decimalField(
+                        _maxCustomTagWeight,
+                        text['customTagWeightMax']!,
+                        commit: _commitCustomTags,
+                      ),
+                    ],
+                    SizedBox(
+                      width: constraints.maxWidth,
                       child: SwitchListTile(
                         contentPadding: EdgeInsets.zero,
                         title: Text(text['mutate']!),
@@ -2184,6 +2489,8 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
               }),
             ),
           ),
+          const SizedBox(height: 10),
+          _weightTunerCard(tuneText),
           const SizedBox(height: 10),
           Card(
             child: Padding(
@@ -2407,75 +2714,6 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
               ),
             ),
           ],
-          const SizedBox(height: 12),
-          Card(
-            clipBehavior: Clip.antiAlias,
-            child: ExpansionTile(
-              key: const PageStorageKey<String>('artist-weight-tuner'),
-              initiallyExpanded: false,
-              title: Text(tuneText['title']!),
-              subtitle: Text(tuneText['hint']!),
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-                  child: LayoutBuilder(builder: (context, constraints) {
-                    final fieldWidth = constraints.maxWidth >= 700
-                        ? (constraints.maxWidth - 12) / 2
-                        : constraints.maxWidth;
-                    return Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
-                      crossAxisAlignment: WrapCrossAlignment.end,
-                      children: [
-                        SizedBox(
-                          width: constraints.maxWidth,
-                          child: TextField(
-                            controller: _weightTuneInput,
-                            minLines: 3,
-                            maxLines: 7,
-                            decoration:
-                                InputDecoration(labelText: tuneText['input']),
-                            onChanged: (_) => _save(),
-                          ),
-                        ),
-                        SizedBox(
-                          width: fieldWidth,
-                          child: TextField(
-                            controller: _weightTuneCount,
-                            keyboardType: TextInputType.number,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.digitsOnly
-                            ],
-                            decoration:
-                                InputDecoration(labelText: tuneText['count']),
-                            onChanged: (_) => _save(),
-                          ),
-                        ),
-                        SizedBox(
-                          width: fieldWidth,
-                          child: TextField(
-                            controller: _weightVariation,
-                            keyboardType: TextInputType.number,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.digitsOnly
-                            ],
-                            decoration: InputDecoration(
-                                labelText: tuneText['variation']),
-                            onChanged: (_) => _save(),
-                          ),
-                        ),
-                        FilledButton.icon(
-                          onPressed: _running ? null : _generateWeightTuning,
-                          icon: const Icon(Icons.tune),
-                          label: Text(tuneText['generate']!),
-                        ),
-                      ],
-                    );
-                  }),
-                ),
-              ],
-            ),
-          ),
         ],
       ),
     );

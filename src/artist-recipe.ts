@@ -17,6 +17,9 @@ export interface RandomArtistRecipeOptions {
   artistWeightMin?: number;
   artistWeightMax?: number;
   auxiliaryPrompt?: string;
+  customTagPool?: string;
+  customTagWeightMin?: number;
+  customTagWeightMax?: number;
   mutateAuxiliary: boolean;
   includeFranchiseStyles?: boolean;
   minFranchiseStyles?: number;
@@ -110,6 +113,27 @@ export const FRANCHISE_STYLE_LIBRARY = [
   "girls'_frontline", "girls_und_panzer", "gundam", "danganronpa_(series)", "precure",
   "kemono_friends", "bang_dream!", "wuthering_waves", "jojo_no_kimyou_na_bouken",
   "one_piece", "honkai_impact_3rd",
+] as const;
+
+/** Curated quick-pick tags for the custom random-weight field. Every selected
+ * tag is still included in every recipe; this library only reduces typing. */
+export const RANDOM_CUSTOM_TAG_LIBRARY = [
+  {
+    id: "render3d",
+    tags: ["3d", "3d render", "cgi", "octane render", "unreal engine", "ray tracing"],
+  },
+  {
+    id: "lighting",
+    tags: ["cinematic lighting", "volumetric lighting", "rim lighting", "dramatic lighting", "depth of field", "high contrast"],
+  },
+  {
+    id: "quality",
+    tags: ["masterpiece", "best quality", "amazing quality", "very aesthetic", "absurdres", "highres"],
+  },
+  {
+    id: "atmosphere",
+    tags: ["atmospheric perspective", "dramatic atmosphere", "moody atmosphere", "fog", "glowing particles", "light rays"],
+  },
 ] as const;
 
 const QUALITY_PATTERN = /^(masterpiece|best quality|amazing quality|very aesthetic|extremely detailed(?: cg)?|ultra[- ]?detailed|high quality)$/i;
@@ -390,6 +414,44 @@ function drawStyleMutations(
   return output;
 }
 
+function parseCustomTagPool(input: string): ParsedRecipeToken[] {
+  const seen = new Set<string>();
+  return parseArtistRecipe(input.replace(/[\r\n]+/g, ","))
+    .filter((token) => {
+      const key = token.value.trim().toLocaleLowerCase();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+export function parseCustomTagPoolValues(input: string): string[] {
+  return parseCustomTagPool(input).map((token) => token.value);
+}
+
+export function toggleCustomTagInPool(input: string, tag: string): string {
+  const values = parseCustomTagPoolValues(input);
+  const target = tag.trim().toLocaleLowerCase();
+  const selected = values.some((value) => value.toLocaleLowerCase() === target);
+  return (selected
+    ? values.filter((value) => value.toLocaleLowerCase() !== target)
+    : [...values, tag.trim()]
+  ).join(", ");
+}
+
+function drawCustomTags(
+  random: () => number,
+  pool: ParsedRecipeToken[],
+  minWeight: number,
+  maxWeight: number,
+): ParsedRecipeToken[] {
+  const [lower, upper] = normalizedWeightBounds(minWeight, maxWeight, [0.2, 1.2]);
+  return pool.map((token) => ({
+    ...token,
+    weight: roundWeight(lower + random() * (upper - lower)),
+  }));
+}
+
 export function generatePopularArtistRecipes(
   pool: ArtistTagRecord[],
   options: RandomArtistRecipeOptions,
@@ -405,6 +467,7 @@ export function generatePopularArtistRecipes(
   const favorites = new Set((options.favoriteArtists ?? []).map(canonicalArtistTagName).filter(Boolean));
   const baseAuxiliary = parseArtistRecipe(options.auxiliaryPrompt ?? "")
     .filter((token) => token.kind !== "artist");
+  const customTagPool = parseCustomTagPool(options.customTagPool ?? "");
   const output: GeneratedArtistRecipe[] = [];
   const seen = new Set<string>();
   let attempts = 0;
@@ -432,7 +495,13 @@ export function generatePopularArtistRecipes(
           franchiseWeightMax,
         )
       : [];
-    const auxiliary = baseAuxiliary;
+    const customTags = drawCustomTags(
+      random,
+      customTagPool,
+      options.customTagWeightMin ?? 0.2,
+      options.customTagWeightMax ?? 1.2,
+    );
+    const auxiliary = [...customTags, ...baseAuxiliary];
     const mutations = options.mutateAuxiliary
       ? drawStyleMutations(random, options.favoriteMutations)
       : [];

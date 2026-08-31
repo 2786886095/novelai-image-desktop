@@ -291,6 +291,41 @@ const franchiseStyleTagLibrary = <String>[
   'honkai_impact_3rd',
 ];
 
+const randomCustomTagLibrary = <String, List<String>>{
+  'render3d': [
+    '3d',
+    '3d render',
+    'cgi',
+    'octane render',
+    'unreal engine',
+    'ray tracing',
+  ],
+  'lighting': [
+    'cinematic lighting',
+    'volumetric lighting',
+    'rim lighting',
+    'dramatic lighting',
+    'depth of field',
+    'high contrast',
+  ],
+  'quality': [
+    'masterpiece',
+    'best quality',
+    'amazing quality',
+    'very aesthetic',
+    'absurdres',
+    'highres',
+  ],
+  'atmosphere': [
+    'atmospheric perspective',
+    'dramatic atmosphere',
+    'moody atmosphere',
+    'fog',
+    'glowing particles',
+    'light rays',
+  ],
+};
+
 int _weightedIndex(
     List<ArtistTagRecord> pool, Random random, Set<String> favorites) {
   final weights = pool
@@ -385,6 +420,40 @@ String fullArtistRecipePrompt(ArtistRecipe recipe, String basePrompt) {
   return [artists, franchiseStyles, mutations, auxiliary, basePrompt.trim()]
       .where((item) => item.isNotEmpty)
       .join(', ');
+}
+
+List<String> parseCustomTagPoolValues(String input) {
+  final seen = <String>{};
+  return input
+      .replaceAll(RegExp(r'[\r\n；;、，]+'), ',')
+      .split(',')
+      .map((item) {
+        var value = item.trim();
+        final numeric = RegExp(
+          r'^[+-]?(?:\d+(?:\.\d*)?|\.\d+)\s*::\s*([\s\S]*?)\s*::\s*$',
+        ).firstMatch(value);
+        if (numeric != null) value = numeric.group(1)!.trim();
+        while (value.startsWith('::')) {
+          value = value.substring(2).trimLeft();
+        }
+        while (value.endsWith('::')) {
+          value = value.substring(0, value.length - 2).trimRight();
+        }
+        return value;
+      })
+      .where((item) => item.isNotEmpty)
+      .where((item) => seen.add(item.toLowerCase()))
+      .toList();
+}
+
+String toggleCustomTagInPool(String input, String tag) {
+  final values = parseCustomTagPoolValues(input);
+  final target = tag.trim().toLowerCase();
+  final selected = values.any((value) => value.toLowerCase() == target);
+  final next = selected
+      ? values.where((value) => value.toLowerCase() != target).toList()
+      : [...values, tag.trim()];
+  return next.join(', ');
 }
 
 List<int> artistGenerationSeeds({
@@ -498,6 +567,9 @@ List<ArtistRecipe> drawArtistRecipes({
   double minArtistWeight = .2,
   double maxArtistWeight = 1.2,
   String auxiliary = '',
+  String customTagPool = '',
+  double minCustomTagWeight = .2,
+  double maxCustomTagWeight = 1.2,
   bool mutateAuxiliary = false,
   bool includeFranchiseStyles = false,
   int minFranchiseStyles = 0,
@@ -522,6 +594,9 @@ List<ArtistRecipe> drawArtistRecipes({
   final franchiseUpper = max(firstFranchiseCount, secondFranchiseCount);
   final franchiseWeightBounds =
       _normalizedWeightBounds(minFranchiseWeight, maxFranchiseWeight);
+  final availableCustomTags = parseCustomTagPoolValues(customTagPool);
+  final customTagWeightBounds =
+      _normalizedWeightBounds(minCustomTagWeight, maxCustomTagWeight);
   final output = <ArtistRecipe>[];
   final seen = <String>{};
   var attempts = 0;
@@ -554,6 +629,10 @@ List<ArtistRecipe> drawArtistRecipes({
       }
       tokens.addAll(franchiseStyles
           .map((item) => '${_number(item.weight)}::${item.value} ::'));
+    }
+    if (availableCustomTags.isNotEmpty) {
+      tokens.addAll(availableCustomTags.map((value) =>
+          '${_number(_randomWeight(random, customTagWeightBounds))}::$value ::'));
     }
     final auxiliaryTokens = auxiliary
         .split(RegExp(r'[,，]'))
