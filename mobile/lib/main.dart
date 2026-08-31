@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -10,6 +11,7 @@ import 'i18n/app_locales.dart';
 import 'models/nai_models.dart';
 import 'screens/gallery_screen.dart';
 import 'screens/ai_log_screen.dart';
+import 'screens/data_backup_settings.dart';
 import 'screens/generate_screen.dart';
 import 'screens/inspect_screen.dart';
 import 'screens/metadata_inspector_screen.dart';
@@ -32,6 +34,15 @@ void main() {
   runApp(ChangeNotifierProvider(
       create: (_) => AppState()..load(), child: const NovelAIApp()));
 }
+
+String _incomingBackupLoadingText(Object? language) =>
+    switch (normalizeAppLocaleCode(language)) {
+      'zh-TW' => '正在讀取分享的備份檔…',
+      'en-US' => 'Reading the shared backup…',
+      'ja-JP' => '共有されたバックアップを読み込み中…',
+      'ko-KR' => '공유된 백업을 읽는 중…',
+      _ => '正在读取分享的备份文件…',
+    };
 
 class NovelAIApp extends StatelessWidget {
   const NovelAIApp({super.key});
@@ -77,9 +88,17 @@ class HomeShell extends StatefulWidget {
 }
 
 class _HomeShellState extends State<HomeShell> {
+  static const _incomingBackupChannel =
+      MethodChannel('langbai.novelai/incoming_backup');
+  static const _incomingBackupPending = '__incoming_backup_pending__';
+
   int _index = 0;
   bool _onboardingScheduled = false;
   bool _v5NoticeScheduled = false;
+  bool _incomingBackupInitialChecked = !Platform.isAndroid && !Platform.isIOS;
+  bool _incomingBackupRouteScheduled = false;
+  final List<String> _pendingIncomingBackups = [];
+  final Set<String> _handledIncomingBackups = {};
   late final List<Widget> _pages;
 
   static const _destinationIcons = [
@@ -137,6 +156,88 @@ class _HomeShellState extends State<HomeShell> {
       const AiLogScreen(),
       const SettingsScreen(),
     ];
+    _initializeIncomingBackupChannel();
+  }
+
+  @override
+  void dispose() {
+    _incomingBackupChannel.setMethodCallHandler(null);
+    super.dispose();
+  }
+
+  Future<void> _initializeIncomingBackupChannel() async {
+    if (!Platform.isAndroid && !Platform.isIOS) return;
+    _incomingBackupChannel.setMethodCallHandler((call) async {
+      if (call.method == 'backupReceived') {
+        if (mounted && !_incomingBackupInitialChecked) {
+          setState(() => _incomingBackupInitialChecked = true);
+        }
+        _queueIncomingBackup(call.arguments);
+      } else if (call.method == 'backupReceiveFinished' && mounted) {
+        setState(() => _incomingBackupInitialChecked = true);
+      }
+    });
+    var waitingForNativeCopy = false;
+    try {
+      final initial = await _incomingBackupChannel
+          .invokeMethod<Object?>('takeInitialBackup');
+      waitingForNativeCopy = initial?.toString() == _incomingBackupPending;
+      if (!waitingForNativeCopy) _queueIncomingBackup(initial);
+    } on MissingPluginException {
+      // Native file association is unavailable on unsupported build targets.
+    } on PlatformException {
+      // The normal in-app file picker remains available if native delivery
+      // fails on a vendor-specific Android/iOS build.
+    } finally {
+      if (mounted && !waitingForNativeCopy) {
+        setState(() => _incomingBackupInitialChecked = true);
+        _scheduleIncomingBackupRoute();
+      }
+    }
+  }
+
+  void _queueIncomingBackup(Object? rawPath) {
+    final path = rawPath?.toString().trim() ?? '';
+    if (!mounted || path.isEmpty || _handledIncomingBackups.contains(path)) {
+      return;
+    }
+    if (!_pendingIncomingBackups.contains(path)) {
+      setState(() => _pendingIncomingBackups.add(path));
+    }
+    _scheduleIncomingBackupRoute();
+  }
+
+  void _scheduleIncomingBackupRoute() {
+    if (!mounted ||
+        _incomingBackupRouteScheduled ||
+        _pendingIncomingBackups.isEmpty) {
+      return;
+    }
+    if (!context.read<AppState>().booted) return;
+    _incomingBackupRouteScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || _pendingIncomingBackups.isEmpty) {
+        _incomingBackupRouteScheduled = false;
+        return;
+      }
+      final path = _pendingIncomingBackups.removeAt(0);
+      _handledIncomingBackups.add(path);
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => IncomingBackupImportScreen(filePath: path),
+        ),
+      );
+      try {
+        final cachedCopy = File(path);
+        if (await cachedCopy.exists()) await cachedCopy.delete();
+      } catch (_) {
+        // Cache cleanup is best-effort and never affects an already completed
+        // import or the original document owned by the sharing application.
+      }
+      if (!mounted) return;
+      setState(() => _incomingBackupRouteScheduled = false);
+      _scheduleIncomingBackupRoute();
+    });
   }
 
   @override
@@ -145,8 +246,25 @@ class _HomeShellState extends State<HomeShell> {
     if (!booted) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
+    _scheduleIncomingBackupRoute();
     final language =
         context.select<AppState, String>((s) => s.settings.language);
+    if (!_incomingBackupInitialChecked) {
+      return Scaffold(
+        body: SafeArea(
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const CircularProgressIndicator(),
+                const SizedBox(height: 16),
+                Text(_incomingBackupLoadingText(language)),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     final labels = mainDestinationLabelsFor(language);
     final shellText = shellTextFor(language);
     final destinations = [
@@ -159,7 +277,10 @@ class _HomeShellState extends State<HomeShell> {
     ];
     final needsOnboarding =
         context.select<AppState, bool>((s) => s.needsNetworkOnboarding);
-    if (needsOnboarding && !_onboardingScheduled) {
+    final handlingIncomingBackup = !_incomingBackupInitialChecked ||
+        _incomingBackupRouteScheduled ||
+        _pendingIncomingBackups.isNotEmpty;
+    if (!handlingIncomingBackup && needsOnboarding && !_onboardingScheduled) {
       _onboardingScheduled = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _showNetworkOnboarding();
@@ -167,7 +288,10 @@ class _HomeShellState extends State<HomeShell> {
     }
     final currentModelIsV5 =
         context.select<AppState, bool>((s) => s.params.isV5);
-    if (!needsOnboarding && !currentModelIsV5 && !_v5NoticeScheduled) {
+    if (!handlingIncomingBackup &&
+        !needsOnboarding &&
+        !currentModelIsV5 &&
+        !_v5NoticeScheduled) {
       _v5NoticeScheduled = true;
       WidgetsBinding.instance
           .addPostFrameCallback((_) => _showV5MigrationNotice());

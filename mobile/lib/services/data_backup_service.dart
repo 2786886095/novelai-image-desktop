@@ -667,7 +667,13 @@ class DataBackupService {
   }
 
   Future<void> shareBackup(File file) => Share.shareXFiles(
-        [XFile(file.path)],
+        [
+          XFile(
+            file.path,
+            mimeType: 'application/x-naisbackup',
+            name: _basename(file.path),
+          )
+        ],
         text: 'Langbai NovelAI Studio data backup',
       );
 
@@ -695,10 +701,15 @@ class DataBackupService {
   }
 
   Future<String?> pickBackupFile() async {
+    // Several Android document providers hide unknown custom extensions when a
+    // MIME-constrained picker is used. Let mobile users select any document and
+    // validate its manifest in [_loadArchive] instead; desktop keeps the useful
+    // extension filter.
+    final mobile = Platform.isAndroid || Platform.isIOS;
     final result = await FilePicker.platform.pickFiles(
       allowMultiple: false,
-      type: FileType.custom,
-      allowedExtensions: const ['naisbackup', 'zip'],
+      type: mobile ? FileType.any : FileType.custom,
+      allowedExtensions: mobile ? null : const ['naisbackup', 'zip'],
     );
     return result?.files.single.path;
   }

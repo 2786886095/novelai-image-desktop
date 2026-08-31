@@ -24,15 +24,30 @@ describe("normalizePrompt", () => {
   });
 
   it("removes quality / artist boosters", () => {
-    expect(normalizePrompt("masterpiece, best quality, 1girl, artist:foo", opts())).toBe("1girl");
+    expect(
+      normalizePrompt(
+        "masterpiece, best quality, 1girl, artist:foo",
+        opts({ stripQualityPrefix: true }),
+      ),
+    ).toBe("1girl");
   });
 
   it("removes non-ASCII (leftover Chinese) characters", () => {
-    expect(normalizePrompt("1girl, 蓝眼睛blue eyes, 城市", opts())).toBe("1girl, blue eyes");
+    expect(
+      normalizePrompt(
+        "1girl, 蓝眼睛blue eyes, 城市",
+        opts({ stripNonAscii: true }),
+      ),
+    ).toBe("1girl, blue eyes");
   });
 
   it("dedupes case-insensitively, keeping the first", () => {
-    expect(normalizePrompt("1girl, Solo, solo, 1GIRL", opts())).toBe("1girl, solo");
+    expect(
+      normalizePrompt(
+        "1girl, Solo, solo, 1GIRL",
+        opts({ dedupe: true }),
+      ),
+    ).toBe("1girl, solo");
   });
 
   it("preserves wildcard groups verbatim", () => {

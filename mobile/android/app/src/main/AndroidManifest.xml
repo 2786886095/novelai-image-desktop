@@ -35,6 +35,55 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- Allow a .naisbackup shared from Files, a chat app, cloud
+                 storage, or another Langbai Studio installation to open the
+                 import confirmation flow directly. Some Android providers
+                 report the custom extension as octet-stream or ZIP. Runtime
+                 manifest validation still rejects non-backup archives. -->
+            <intent-filter android:label="导入 Langbai Studio 备份">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="content"/>
+                <data android:scheme="file"/>
+                <data android:mimeType="application/x-naisbackup"/>
+                <data android:mimeType="application/octet-stream"/>
+                <data android:mimeType="application/zip"/>
+                <data android:mimeType="application/x-zip-compressed"/>
+            </intent-filter>
+            <intent-filter android:label="导入 Langbai Studio 备份">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data
+                    android:scheme="content"
+                    android:mimeType="*/*"
+                    android:pathPattern=".*\\.naisbackup"/>
+                <data
+                    android:scheme="file"
+                    android:mimeType="*/*"
+                    android:pathPattern=".*\\.naisbackup"/>
+            </intent-filter>
+            <intent-filter android:label="导入 Langbai Studio 备份">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data
+                    android:scheme="content"
+                    android:pathPattern=".*\\.naisbackup"/>
+                <data
+                    android:scheme="file"
+                    android:pathPattern=".*\\.naisbackup"/>
+            </intent-filter>
+            <intent-filter android:label="导入 Langbai Studio 备份">
+                <action android:name="android.intent.action.SEND"/>
+                <action android:name="android.intent.action.SEND_MULTIPLE"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="application/x-naisbackup"/>
+                <data android:mimeType="application/octet-stream"/>
+                <data android:mimeType="application/zip"/>
+                <data android:mimeType="application/x-zip-compressed"/>
+            </intent-filter>
         </activity>
         <service
             android:name="com.pravera.flutter_foreground_task.service.ForegroundService"

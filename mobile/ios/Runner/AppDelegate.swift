@@ -4,6 +4,12 @@ import CFNetwork
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
+  private static let incomingBackupPending = "__incoming_backup_pending__"
+  private var incomingBackupChannel: FlutterMethodChannel?
+  private var pendingIncomingBackupPaths: [String] = []
+  private var incomingBackupCopiesInProgress = 0
+  private var handledIncomingBackupSources: Set<String> = []
+
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
@@ -75,9 +81,130 @@ import CFNetwork
         }
         result("")
       }
+
+      let backupChannel = FlutterMethodChannel(
+        name: "langbai.novelai/incoming_backup",
+        binaryMessenger: controller.binaryMessenger
+      )
+      incomingBackupChannel = backupChannel
+      backupChannel.setMethodCallHandler { [weak self] call, result in
+        guard call.method == "takeInitialBackup" else {
+          result(FlutterMethodNotImplemented)
+          return
+        }
+        guard let self = self else {
+          result(nil)
+          return
+        }
+        if !self.pendingIncomingBackupPaths.isEmpty {
+          result(self.pendingIncomingBackupPaths.removeFirst())
+        } else if self.incomingBackupCopiesInProgress > 0 {
+          result(Self.incomingBackupPending)
+        } else {
+          result(nil)
+        }
+      }
+
+      if let initialURL = launchOptions?[.url] as? URL {
+        _ = receiveIncomingBackup(initialURL)
+      }
     }
 
     GeneratedPluginRegistrant.register(with: self)
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+
+  override func application(
+    _ app: UIApplication,
+    open url: URL,
+    options: [UIApplication.OpenURLOptionsKey: Any] = [:]
+  ) -> Bool {
+    if receiveIncomingBackup(url) {
+      return true
+    }
+    return super.application(app, open: url, options: options)
+  }
+
+  private func receiveIncomingBackup(_ sourceURL: URL) -> Bool {
+    let fileExtension = sourceURL.pathExtension.lowercased()
+    guard fileExtension == "naisbackup" || fileExtension == "zip" else {
+      return false
+    }
+    let sourceKey = sourceURL.standardizedFileURL.absoluteString
+    if handledIncomingBackupSources.contains(sourceKey) {
+      return true
+    }
+    handledIncomingBackupSources.insert(sourceKey)
+
+    let hasScopedAccess = sourceURL.startAccessingSecurityScopedResource()
+    incomingBackupCopiesInProgress += 1
+    DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+      guard let self = self else {
+        if hasScopedAccess {
+          sourceURL.stopAccessingSecurityScopedResource()
+        }
+        return
+      }
+      let copiedPath: String?
+      do {
+        let fileManager = FileManager.default
+        if let cacheRoot = fileManager.urls(
+          for: .cachesDirectory,
+          in: .userDomainMask
+        ).first {
+          let incomingDirectory = cacheRoot.appendingPathComponent(
+            "incoming-backups",
+            isDirectory: true
+          )
+          try fileManager.createDirectory(
+            at: incomingDirectory,
+            withIntermediateDirectories: true
+          )
+
+          let rawStem = sourceURL.deletingPathExtension().lastPathComponent
+          let safeStem = rawStem
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: ":", with: "_")
+            .prefix(80)
+          let normalizedExtension = fileExtension == "zip" ? "zip" : "naisbackup"
+          let targetURL = incomingDirectory.appendingPathComponent(
+            "\(safeStem.isEmpty ? "shared-backup" : String(safeStem))-\(UUID().uuidString).\(normalizedExtension)"
+          )
+          try fileManager.copyItem(at: sourceURL, to: targetURL)
+          copiedPath = targetURL.path
+        } else {
+          copiedPath = nil
+        }
+      } catch {
+        copiedPath = nil
+      }
+
+      if hasScopedAccess {
+        sourceURL.stopAccessingSecurityScopedResource()
+      }
+      DispatchQueue.main.async {
+        self.incomingBackupCopiesInProgress = max(
+          0,
+          self.incomingBackupCopiesInProgress - 1
+        )
+        guard let path = copiedPath else {
+          self.handledIncomingBackupSources.remove(sourceKey)
+          self.incomingBackupChannel?.invokeMethod(
+            "backupReceiveFinished",
+            arguments: nil
+          )
+          return
+        }
+        self.pendingIncomingBackupPaths.append(path)
+        self.incomingBackupChannel?.invokeMethod(
+          "backupReceived",
+          arguments: path,
+          result: { [weak self] _ in
+            self?.pendingIncomingBackupPaths.removeAll { $0 == path }
+          }
+        )
+      }
+    }
+    return true
   }
 }

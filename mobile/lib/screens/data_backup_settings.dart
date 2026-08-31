@@ -268,7 +268,16 @@ String _bytes(int value) {
 }
 
 class DataBackupSettingsPanel extends StatefulWidget {
-  const DataBackupSettingsPanel({super.key});
+  final String? initialBackupPath;
+  final bool initiallyExpanded;
+  final bool importOnly;
+
+  const DataBackupSettingsPanel({
+    super.key,
+    this.initialBackupPath,
+    this.initiallyExpanded = false,
+    this.importOnly = false,
+  });
 
   @override
   State<DataBackupSettingsPanel> createState() =>
@@ -281,6 +290,7 @@ class _DataBackupSettingsPanelState extends State<DataBackupSettingsPanel>
   Set<DataBackupCategory> importSelection = {};
   DataBackupInspection? inspection;
   DataBackupStatus? backupStatus;
+  String? inspectionError;
   bool busy = false;
 
   DataBackupService get service =>
@@ -290,7 +300,22 @@ class _DataBackupSettingsPanelState extends State<DataBackupSettingsPanel>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _refreshStatus());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _refreshStatus();
+      final path = widget.initialBackupPath?.trim();
+      if (path != null && path.isNotEmpty) _inspectPath(path);
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant DataBackupSettingsPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final path = widget.initialBackupPath?.trim();
+    if (path != null &&
+        path.isNotEmpty &&
+        path != oldWidget.initialBackupPath?.trim()) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _inspectPath(path));
+    }
   }
 
   @override
@@ -425,6 +450,28 @@ class _DataBackupSettingsPanelState extends State<DataBackupSettingsPanel>
     try {
       final path = await service.pickBackupFile();
       if (path == null) return;
+      await _inspectPath(path, managesBusyState: false);
+    } catch (error) {
+      if (mounted) setState(() => inspectionError = error.toString());
+      _message(error.toString());
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> _inspectPath(
+    String path, {
+    bool managesBusyState = true,
+  }) async {
+    if (managesBusyState && mounted) setState(() => busy = true);
+    if (mounted) {
+      setState(() {
+        inspectionError = null;
+        inspection = null;
+        importSelection = {};
+      });
+    }
+    try {
       final value = await service.inspect(path);
       if (!mounted) return;
       setState(() {
@@ -433,9 +480,11 @@ class _DataBackupSettingsPanelState extends State<DataBackupSettingsPanel>
             value.categories.map((summary) => summary.category).toSet();
       });
     } catch (error) {
+      if (!mounted) return;
+      setState(() => inspectionError = error.toString());
       _message(error.toString());
     } finally {
-      if (mounted) setState(() => busy = false);
+      if (managesBusyState && mounted) setState(() => busy = false);
     }
   }
 
@@ -554,6 +603,7 @@ class _DataBackupSettingsPanelState extends State<DataBackupSettingsPanel>
       margin: const EdgeInsets.only(top: 12),
       clipBehavior: Clip.antiAlias,
       child: ExpansionTile(
+        initiallyExpanded: widget.initiallyExpanded || widget.importOnly,
         title: Text(text['title']!,
             style: Theme.of(context).textTheme.titleMedium),
         shape: const Border(),
@@ -587,37 +637,73 @@ class _DataBackupSettingsPanelState extends State<DataBackupSettingsPanel>
               ]),
             ),
           ),
-          const SizedBox(height: 8),
-          Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-            TextButton(
-              onPressed: busy
-                  ? null
-                  : () => setState(() =>
-                      exportSelection = DataBackupCategory.values.toSet()),
-              child: Text(text['selectAll']!),
+          if (!widget.importOnly) ...[
+            const SizedBox(height: 8),
+            Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+              TextButton(
+                onPressed: busy
+                    ? null
+                    : () => setState(() =>
+                        exportSelection = DataBackupCategory.values.toSet()),
+                child: Text(text['selectAll']!),
+              ),
+              TextButton(
+                onPressed:
+                    busy ? null : () => setState(() => exportSelection = {}),
+                child: Text(text['clear']!),
+              ),
+            ]),
+            _categoryList(text, exportSelection,
+                (value) => setState(() => exportSelection = value)),
+            const SizedBox(height: 10),
+            Wrap(spacing: 8, runSpacing: 8, children: [
+              FilledButton.icon(
+                onPressed: busy || exportSelection.isEmpty
+                    ? null
+                    : () => _export(text),
+                icon: const Icon(Icons.archive_rounded),
+                label: Text(busy ? text['busy']! : text['export']!),
+              ),
+              OutlinedButton.icon(
+                onPressed: busy ? null : _choose,
+                icon: const Icon(Icons.upload_file_rounded),
+                label: Text(text['choose']!),
+              ),
+            ]),
+          ],
+          if (widget.importOnly && busy && inspection == null) ...[
+            const SizedBox(height: 16),
+            const LinearProgressIndicator(),
+            const SizedBox(height: 8),
+            Text(text['busy']!, textAlign: TextAlign.center),
+          ],
+          if (inspectionError != null) ...[
+            const SizedBox(height: 16),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.errorContainer,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.error_outline_rounded,
+                        color: Theme.of(context).colorScheme.onErrorContainer),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(inspectionError!)),
+                  ],
+                ),
+              ),
             ),
-            TextButton(
-              onPressed:
-                  busy ? null : () => setState(() => exportSelection = {}),
-              child: Text(text['clear']!),
-            ),
-          ]),
-          _categoryList(text, exportSelection,
-              (value) => setState(() => exportSelection = value)),
-          const SizedBox(height: 10),
-          Wrap(spacing: 8, runSpacing: 8, children: [
-            FilledButton.icon(
-              onPressed:
-                  busy || exportSelection.isEmpty ? null : () => _export(text),
-              icon: const Icon(Icons.archive_rounded),
-              label: Text(busy ? text['busy']! : text['export']!),
-            ),
+            const SizedBox(height: 8),
             OutlinedButton.icon(
               onPressed: busy ? null : _choose,
-              icon: const Icon(Icons.upload_file_rounded),
+              icon: const Icon(Icons.folder_open_rounded),
               label: Text(text['choose']!),
             ),
-          ]),
+          ],
           if (inspection != null) ...[
             const Divider(height: 28),
             ListTile(
@@ -644,144 +730,183 @@ class _DataBackupSettingsPanelState extends State<DataBackupSettingsPanel>
               label: Text(text['import']!),
             ),
           ],
-          const Divider(height: 32),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.backup_rounded),
-            title: Text(text['autoTitle']!),
-            subtitle: Text(text['autoDesc']!),
-          ),
-          Card(
-            elevation: 0,
-            color: Theme.of(context).colorScheme.surfaceContainerLow,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  ListTile(
-                    leading: const Icon(Icons.folder_copy_rounded),
-                    title: Text(text['folder']!),
-                    subtitle: Text(
-                      status?.directory ??
-                          (app.settings.backupDir.trim().isEmpty
-                              ? text['defaultFolder']!
-                              : app.settings.backupDir),
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        OutlinedButton.icon(
-                          onPressed:
-                              busy ? null : () => _chooseBackupDirectory(text),
-                          icon: const Icon(Icons.folder_open_rounded),
-                          label: Text(text['chooseFolder']!),
-                        ),
-                        TextButton.icon(
-                          onPressed: busy || app.settings.backupDir.isEmpty
-                              ? null
-                              : () => _resetBackupDirectory(text),
-                          icon: const Icon(Icons.restart_alt_rounded),
-                          label: Text(text['resetFolder']!),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (status?.usingFallbackDirectory == true)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-                      child: Text(
-                        text['folderFallback']!,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Theme.of(context).colorScheme.error,
-                            ),
+          if (!widget.importOnly) ...[
+            const Divider(height: 32),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.backup_rounded),
+              title: Text(text['autoTitle']!),
+              subtitle: Text(text['autoDesc']!),
+            ),
+            Card(
+              elevation: 0,
+              color: Theme.of(context).colorScheme.surfaceContainerLow,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    ListTile(
+                      leading: const Icon(Icons.folder_copy_rounded),
+                      title: Text(text['folder']!),
+                      subtitle: Text(
+                        status?.directory ??
+                            (app.settings.backupDir.trim().isEmpty
+                                ? text['defaultFolder']!
+                                : app.settings.backupDir),
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                ],
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed: busy
+                                ? null
+                                : () => _chooseBackupDirectory(text),
+                            icon: const Icon(Icons.folder_open_rounded),
+                            label: Text(text['chooseFolder']!),
+                          ),
+                          TextButton.icon(
+                            onPressed: busy || app.settings.backupDir.isEmpty
+                                ? null
+                                : () => _resetBackupDirectory(text),
+                            icon: const Icon(Icons.restart_alt_rounded),
+                            label: Text(text['resetFolder']!),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (status?.usingFallbackDirectory == true)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                        child: Text(
+                          text['folderFallback']!,
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: Theme.of(context).colorScheme.error,
+                                  ),
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
-          ),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            value: app.settings.autoBackupEnabled,
-            title: Text(text['auto']!),
-            onChanged: (value) => app
-                .setSettings((settings) => settings.autoBackupEnabled = value),
-          ),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            value: app.settings.autoBackupIncludeImages,
-            title: Text(text['images']!),
-            onChanged: (value) => app.setSettings(
-                (settings) => settings.autoBackupIncludeImages = value),
-          ),
-          Row(children: [
-            Expanded(
-              child: DropdownButtonFormField<int>(
-                value: app.settings.autoBackupIntervalHours,
-                isExpanded: true,
-                decoration: InputDecoration(
-                    labelText: text['interval']!,
-                    border: const OutlineInputBorder()),
-                items: intervalOptions
-                    .map((value) =>
-                        DropdownMenuItem(value: value, child: Text('$value')))
-                    .toList(),
-                onChanged: (value) => value == null
-                    ? null
-                    : app.setSettings(
-                        (settings) => settings.autoBackupIntervalHours = value),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              value: app.settings.autoBackupEnabled,
+              title: Text(text['auto']!),
+              onChanged: (value) => app.setSettings(
+                  (settings) => settings.autoBackupEnabled = value),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              value: app.settings.autoBackupIncludeImages,
+              title: Text(text['images']!),
+              onChanged: (value) => app.setSettings(
+                  (settings) => settings.autoBackupIncludeImages = value),
+            ),
+            Row(children: [
+              Expanded(
+                child: DropdownButtonFormField<int>(
+                  value: app.settings.autoBackupIntervalHours,
+                  isExpanded: true,
+                  decoration: InputDecoration(
+                      labelText: text['interval']!,
+                      border: const OutlineInputBorder()),
+                  items: intervalOptions
+                      .map((value) =>
+                          DropdownMenuItem(value: value, child: Text('$value')))
+                      .toList(),
+                  onChanged: (value) => value == null
+                      ? null
+                      : app.setSettings((settings) =>
+                          settings.autoBackupIntervalHours = value),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: DropdownButtonFormField<int>(
+                  value: app.settings.autoBackupRetentionCount,
+                  isExpanded: true,
+                  decoration: InputDecoration(
+                      labelText: text['retention']!,
+                      border: const OutlineInputBorder()),
+                  items: retentionOptions
+                      .map((value) =>
+                          DropdownMenuItem(value: value, child: Text('$value')))
+                      .toList(),
+                  onChanged: (value) => value == null
+                      ? null
+                      : app.setSettings((settings) =>
+                          settings.autoBackupRetentionCount = value),
+                ),
+              ),
+            ]),
+            const SizedBox(height: 12),
+            Card(
+              elevation: 0,
+              color: Theme.of(context).colorScheme.surfaceContainerLow,
+              child: ListTile(
+                leading: const Icon(Icons.history_rounded),
+                title: Text(text['latest']!),
+                subtitle: Text([
+                  status?.latest?.toLocal().toString() ?? text['none']!,
+                  text['count']!
+                      .replaceAll('{count}', '${status?.count ?? 0}')
+                      .replaceAll('{size}', _bytes(status?.totalBytes ?? 0)),
+                ].join('\n')),
+                isThreeLine: false,
+                trailing: IconButton(
+                  tooltip: text['backupNow']!,
+                  onPressed: busy ? null : _backupNow,
+                  icon: const Icon(Icons.backup_rounded),
+                ),
               ),
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: DropdownButtonFormField<int>(
-                value: app.settings.autoBackupRetentionCount,
-                isExpanded: true,
-                decoration: InputDecoration(
-                    labelText: text['retention']!,
-                    border: const OutlineInputBorder()),
-                items: retentionOptions
-                    .map((value) =>
-                        DropdownMenuItem(value: value, child: Text('$value')))
-                    .toList(),
-                onChanged: (value) => value == null
-                    ? null
-                    : app.setSettings((settings) =>
-                        settings.autoBackupRetentionCount = value),
-              ),
-            ),
-          ]),
-          const SizedBox(height: 12),
-          Card(
-            elevation: 0,
-            color: Theme.of(context).colorScheme.surfaceContainerLow,
-            child: ListTile(
-              leading: const Icon(Icons.history_rounded),
-              title: Text(text['latest']!),
-              subtitle: Text([
-                status?.latest?.toLocal().toString() ?? text['none']!,
-                text['count']!
-                    .replaceAll('{count}', '${status?.count ?? 0}')
-                    .replaceAll('{size}', _bytes(status?.totalBytes ?? 0)),
-              ].join('\n')),
-              isThreeLine: false,
-              trailing: IconButton(
-                tooltip: text['backupNow']!,
-                onPressed: busy ? null : _backupNow,
-                icon: const Icon(Icons.backup_rounded),
-              ),
-            ),
-          ),
-          if (Platform.isIOS || Platform.isAndroid)
-            Text(text['desc']!, style: Theme.of(context).textTheme.bodySmall),
+            if (Platform.isIOS || Platform.isAndroid)
+              Text(text['desc']!, style: Theme.of(context).textTheme.bodySmall),
+          ],
         ],
+      ),
+    );
+  }
+}
+
+/// Dedicated destination for a backup opened from the operating-system share
+/// sheet or "Open with" menu. It reuses the exact same inspection, category
+/// selection, merge, rescue-backup, and overwrite-confirmation flow as Settings.
+class IncomingBackupImportScreen extends StatelessWidget {
+  final String filePath;
+
+  const IncomingBackupImportScreen({
+    super.key,
+    required this.filePath,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final language = context.select<AppState, String>(
+      (state) => state.settings.language,
+    );
+    final text = _backupText(language);
+    return Scaffold(
+      appBar: AppBar(title: Text(text['archive']!)),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(12, 4, 12, 24),
+          children: [
+            DataBackupSettingsPanel(
+              initialBackupPath: filePath,
+              initiallyExpanded: true,
+              importOnly: true,
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -4,14 +4,23 @@ import 'package:novelai_mobile/prompts/prompt_tools.dart';
 void main() {
   test('normalizes punctuation, duplicates and quality prefixes', () {
     expect(
-      normalizePrompt('Masterpiece，Blue_Eyes, blue eyes\n【solo】'),
+      normalizePrompt(
+        'Masterpiece，Blue_Eyes, blue eyes\n【solo】',
+        options: const PromptNormalizeOptions(
+          dedupe: true,
+          stripQualityPrefix: true,
+        ),
+      ),
       'blue eyes, solo',
     );
   });
 
   test('normalization preserves wildcard groups', () {
     expect(
-      normalizePrompt('masterpiece, {red_hair|blue_hair}, 1GIRL'),
+      normalizePrompt(
+        'masterpiece, {red_hair|blue_hair}, 1GIRL',
+        options: const PromptNormalizeOptions(stripQualityPrefix: true),
+      ),
       '{red_hair|blue_hair}, 1girl',
     );
   });

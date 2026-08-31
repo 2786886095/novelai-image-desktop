@@ -31,9 +31,11 @@ export const DEFAULT_NORMALIZE_OPTIONS: NormalizeOptions = {
   stripDecorative: true,
   underscoreToSpace: true,
   newlineToComma: true,
-  dedupe: true,
-  stripQualityPrefix: true,
-  stripNonAscii: true,
+  // These transforms can change the intended prompt rather than merely tidy
+  // its formatting, so they remain explicit opt-ins.
+  dedupe: false,
+  stripQualityPrefix: false,
+  stripNonAscii: false,
   keepWildcards: true,
 };
 

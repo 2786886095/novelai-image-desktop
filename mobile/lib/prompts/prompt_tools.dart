@@ -31,9 +31,9 @@ class PromptNormalizeOptions {
     this.stripDecorative = true,
     this.underscoreToSpace = true,
     this.newlineToComma = true,
-    this.dedupe = true,
-    this.stripQualityPrefix = true,
-    this.stripNonAscii = true,
+    this.dedupe = false,
+    this.stripQualityPrefix = false,
+    this.stripNonAscii = false,
     this.keepWildcards = true,
   });
 
