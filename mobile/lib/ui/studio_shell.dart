@@ -96,6 +96,49 @@ class StudioAdaptiveShell extends StatelessWidget {
   }
 }
 
+/// Builds a destination only after its first visit and pauses animations while
+/// it is hidden. A regular IndexedStack eagerly mounted all thirteen screens;
+/// as gallery/tag/tool pages became richer this kept avoidable image caches,
+/// controllers and tickers alive from the first frame.
+class _LazyIndexedStack extends StatefulWidget {
+  final int index;
+  final List<Widget> children;
+
+  const _LazyIndexedStack({required this.index, required this.children});
+
+  @override
+  State<_LazyIndexedStack> createState() => _LazyIndexedStackState();
+}
+
+class _LazyIndexedStackState extends State<_LazyIndexedStack> {
+  final Set<int> _mountedIndexes = <int>{};
+
+  @override
+  void initState() {
+    super.initState();
+    _mountedIndexes.add(widget.index);
+  }
+
+  @override
+  void didUpdateWidget(covariant _LazyIndexedStack oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _mountedIndexes.removeWhere((index) => index >= widget.children.length);
+    _mountedIndexes.add(widget.index);
+  }
+
+  @override
+  Widget build(BuildContext context) => IndexedStack(
+        index: widget.index,
+        children: List<Widget>.generate(widget.children.length, (index) {
+          final mounted = _mountedIndexes.contains(index);
+          return TickerMode(
+            enabled: index == widget.index,
+            child: mounted ? widget.children[index] : const SizedBox.shrink(),
+          );
+        }, growable: false),
+      );
+}
+
 class _PhoneShell extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onDestinationSelected;
@@ -122,7 +165,7 @@ class _PhoneShell extends StatelessWidget {
     return Scaffold(
       key: const ValueKey('studio-phone-shell'),
       resizeToAvoidBottomInset: false,
-      body: IndexedStack(index: selectedIndex, children: pages),
+      body: _LazyIndexedStack(index: selectedIndex, children: pages),
       bottomNavigationBar: NavigationBar(
         key: const ValueKey('studio-phone-navigation'),
         height: landscape ? 66 : null,
@@ -304,7 +347,8 @@ class _TabletShell extends StatelessWidget {
             ),
             const VerticalDivider(width: 1),
             Expanded(
-                child: IndexedStack(index: selectedIndex, children: pages)),
+                child:
+                    _LazyIndexedStack(index: selectedIndex, children: pages)),
           ],
         ),
       ),

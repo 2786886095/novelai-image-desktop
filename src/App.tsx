@@ -1,9 +1,9 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import clsx from "clsx";
 import { format } from "date-fns";
-// Keep Tools in deferred chunks, but resolve every one behind the splash. The
-// custom preloader in ToolsHub retains each resolved component, so card clicks
-// do not encounter a second parse step or a visible Suspense frame.
+// Keep Tools in deferred chunks. The hub itself is warmed with the other
+// top-level screens; its larger children are evaluated progressively during
+// idle time instead of all competing with first paint.
 const loadToolsHub = () => import("./ToolsHub");
 const ToolsHub = lazy(loadToolsHub);
 const loadOnlineGalleryPage = () => import("./features/online-gallery/OnlineGalleryPage");
@@ -6546,6 +6546,28 @@ function WorkspaceResizer({ edge }: { edge: "left" | "right" }) {
   );
 }
 
+function PersistentTabView({
+  active,
+  children,
+}: {
+  active: boolean;
+  children: React.ReactNode;
+}) {
+  const [hasMounted, setHasMounted] = useState(active);
+  useEffect(() => {
+    if (active) setHasMounted(true);
+  }, [active]);
+  if (!hasMounted && !active) return null;
+  return (
+    <div
+      className={clsx("persistent-tools-view", !active && "is-hidden")}
+      aria-hidden={!active}
+    >
+      {children}
+    </div>
+  );
+}
+
 function MainPage() {
   const showSettings = useAppStore((state) => state.showSettings);
   const setShowSettings = useAppStore((state) => state.setShowSettings);
@@ -6650,24 +6672,24 @@ function MainPage() {
             <HistoryPanel />
           </>
         )}
-        <div className={clsx("persistent-tools-view", activeTab !== "tools" && "is-hidden")} aria-hidden={activeTab !== "tools"}>
+        <PersistentTabView active={activeTab === "tools"}>
           <Suspense fallback={<div className="lazy-tool-loading">{t("tool.loadingTools")}</div>}>
             <ToolsHub />
           </Suspense>
-        </div>
-        <div className={clsx("persistent-tools-view", activeTab !== "metadata" && "is-hidden")} aria-hidden={activeTab !== "metadata"}>
+        </PersistentTabView>
+        <PersistentTabView active={activeTab === "metadata"}>
           <Suspense fallback={<div className="lazy-tool-loading">{t("tool.loadingTools")}</div>}>
             <MetadataInspector onBack={() => useAppStore.getState().setActiveTab("generate")} />
           </Suspense>
-        </div>
-        <div className={clsx("persistent-tools-view", activeTab !== "onlineGallery" && "is-hidden")} aria-hidden={activeTab !== "onlineGallery"}>
+        </PersistentTabView>
+        <PersistentTabView active={activeTab === "onlineGallery"}>
           <Suspense fallback={<div className="lazy-tool-loading">{t("tool.loadingTools")}</div>}>
             <OnlineGalleryPage />
           </Suspense>
-        </div>
-        <div className={clsx("persistent-tools-view", activeTab !== "referencePresets" && "is-hidden")} aria-hidden={activeTab !== "referencePresets"}>
+        </PersistentTabView>
+        <PersistentTabView active={activeTab === "referencePresets"}>
           <ReferencePresetManager onBack={() => useAppStore.getState().setActiveTab("tools")} />
-        </div>
+        </PersistentTabView>
       </div>
       <footer className="status-bar">
         <span className="status-bar-message" title={displayStatusText}>{displayStatusText}</span>
@@ -6699,12 +6721,11 @@ export default function App() {
 
   useEffect(() => {
     let cancelled = false;
-    // Keep code splitting for a fast renderer parse, but evaluate every screen
-    // while the deliberate splash is visible. Once the workbench appears,
-    // Metadata, Gallery, Inpaint and every Tools card can open without exposing
-    // a one-frame Suspense loader or a large first-click parse hitch.
+    // Warm top-level routes behind the splash. Individual large tool screens
+    // are intentionally excluded from this critical path and warmed one by one
+    // once the renderer has idle time.
     const warmScreens = Promise.allSettled([
-      loadToolsHub().then((module) => module.preloadToolScreens()),
+      loadToolsHub(),
       loadOnlineGalleryPage(),
       loadInpaintCanvas(),
       loadMetadataInspector(),
@@ -6715,20 +6736,47 @@ export default function App() {
     void Promise.all([warmScreens, minimumSplash]).then(() => {
       if (!cancelled) setSplash(false);
     });
+    const deferredToolWarmTimer = window.setTimeout(() => {
+      void loadToolsHub().then((module) => module.preloadToolScreens());
+    }, 1_500);
     void load();
     void checkUpdate();
     // Favorites are mirrored to a filesystem sidecar and random-gacha history.
     // Merge every available source at boot before a profile rename can make a
     // still-existing collection appear empty.
     void hydrateArtistFavoriteLibrary();
-    // Automatic archives are intentionally delayed until after the interactive
-    // workbench is ready. Compression runs in the main process, so it never
-    // becomes part of the Tools/Metadata first-click path.
-    const automaticBackupTimer = window.setTimeout(() => {
+    // Full archive work must not compete with scrolling, generation or initial
+    // route setup. Track real interaction and wait for a quiet window; the
+    // service performs the due check and defaults migrated users to metadata-
+    // only automatic archives.
+    const BACKUP_IDLE_MS = 45_000;
+    let lastInteractionAt = Date.now();
+    let automaticBackupTimer: number | undefined;
+    let automaticBackupStarted = false;
+    const markInteraction = () => { lastInteractionAt = Date.now(); };
+    const attemptAutomaticBackup = () => {
+      if (cancelled || automaticBackupStarted) return;
+      const idleFor = Date.now() - lastInteractionAt;
+      const activelyGenerating = useAppStore.getState().isGenerating;
+      if (
+        activelyGenerating ||
+        (document.visibilityState === "visible" && idleFor < BACKUP_IDLE_MS)
+      ) {
+        automaticBackupTimer = window.setTimeout(
+          attemptAutomaticBackup,
+          activelyGenerating ? 30_000 : Math.max(10_000, BACKUP_IDLE_MS - idleFor),
+        );
+        return;
+      }
+      automaticBackupStarted = true;
       void flushArtistFavoritePersistence().then(() => (
         window.naiDesktop.runAutomaticBackup(collectPortableWorkspaceData())
       ));
-    }, 20_000);
+    };
+    window.addEventListener("pointerdown", markInteraction, { passive: true });
+    window.addEventListener("keydown", markInteraction);
+    window.addEventListener("wheel", markInteraction, { passive: true });
+    automaticBackupTimer = window.setTimeout(attemptAutomaticBackup, 60_000);
     // A release may appear while the app is already open, and a transient
     // network/proxy failure at boot should not suppress updates for the whole
     // session. Retry once shortly after launch, then poll at a low frequency.
@@ -6739,7 +6787,11 @@ export default function App() {
     // the app feeling responsive while making the transition intentional.
     return () => {
       cancelled = true;
-      window.clearTimeout(automaticBackupTimer);
+      window.clearTimeout(deferredToolWarmTimer);
+      if (automaticBackupTimer !== undefined) window.clearTimeout(automaticBackupTimer);
+      window.removeEventListener("pointerdown", markInteraction);
+      window.removeEventListener("keydown", markInteraction);
+      window.removeEventListener("wheel", markInteraction);
       window.clearTimeout(updateRetryTimer);
       window.clearInterval(updatePollTimer);
     };

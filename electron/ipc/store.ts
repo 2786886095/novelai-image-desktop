@@ -270,7 +270,8 @@ export function defaultSettings(): AppSettings {
     autoBackupEnabled: true,
     autoBackupIntervalHours: 24,
     autoBackupRetentionCount: 7,
-    autoBackupIncludeImages: true,
+    autoBackupIncludeImages: false,
+    autoBackupAssetPolicyVersion: 1,
     backupDir: "",
     visionApiUrl: "https://api.openai.com/v1",
     visionApiKey: "",
@@ -330,6 +331,15 @@ function normalize(raw: Partial<PersistedData> | null): PersistedData {
   const defaults = defaultSettings();
   const rawSettings = (raw?.settings ?? {}) as Partial<AppSettings>;
   const settings = { ...defaults, ...rawSettings };
+  // v2.0.2 enabled full-library image archives for every installation. On a
+  // large gallery that can consume hundreds of MB and starve both Electron
+  // and Flutter shortly after launch. Existing installations are migrated
+  // once to the lightweight policy; manually exporting still includes every
+  // selected asset, and toggling image auto-backup on persists version 1.
+  if (Number(rawSettings.autoBackupAssetPolicyVersion ?? 0) < 1) {
+    settings.autoBackupIncludeImages = false;
+    settings.autoBackupAssetPolicyVersion = 1;
+  }
   settings.language = normalizeLanguage(settings.language);
   settings.reversePromptTemplateVersion = settings.reversePromptTemplateVersion === "v4.5" ? "v4.5" : "v5";
   settings.convertPromptTemplateVersion = settings.convertPromptTemplateVersion === "v4.5" ? "v4.5" : "v5";

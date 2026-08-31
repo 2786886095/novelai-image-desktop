@@ -139,7 +139,7 @@ class AppState extends ChangeNotifier {
   bool _cancelGenerationRequested = false;
   int _activeTaskQuote = 0;
   int? _pendingAuthorizedBalance;
-  bool _automaticBackupScheduled = false;
+  Timer? _automaticBackupTimer;
 
   String _rt(String key) => runtimeTextFor(settings.language, key);
   String _rf(String key, Map<String, Object?> values) =>
@@ -293,20 +293,29 @@ class AppState extends ChangeNotifier {
       _scheduleGenerationQuote();
       unawaited(checkUpdate());
       unawaited(_refreshAccountAtBoot());
-      if (!_automaticBackupScheduled) {
-        _automaticBackupScheduled = true;
-        // Compression stays off the first-frame path. The service performs a
-        // due check and only rotates files named auto-*.naisbackup.
-        unawaited(Future<void>.delayed(const Duration(seconds: 20), () async {
-          try {
-            await DataBackupService(storage).runAutomaticBackup();
-          } catch (_) {
-            // Automatic backup is best-effort; manual export and import remain
-            // available even when the platform file system is temporarily busy.
-          }
-        }));
-      }
+      _scheduleAutomaticBackup();
     }
+  }
+
+  void _scheduleAutomaticBackup({
+    Duration delay = const Duration(minutes: 2),
+  }) {
+    if (_automaticBackupTimer?.isActive ?? false) return;
+    _automaticBackupTimer = Timer(delay, () async {
+      _automaticBackupTimer = null;
+      // Never compete with generation/queue work. If the user is actively
+      // producing images, wait for another quiet window instead.
+      if (busy || generationQueueRunning || queueAdding) {
+        _scheduleAutomaticBackup(delay: const Duration(minutes: 1));
+        return;
+      }
+      try {
+        await DataBackupService(storage).runAutomaticBackup();
+      } catch (_) {
+        // Automatic backup is best-effort; manual export and import remain
+        // available even when the platform file system is temporarily busy.
+      }
+    });
   }
 
   // Fetch the account after boot so a slow or blocked network never delays the
@@ -3022,6 +3031,7 @@ class AppState extends ChangeNotifier {
     _toolPersistTimer?.cancel();
     _opusUsageTimer?.cancel();
     _proxyRefreshTimer?.cancel();
+    _automaticBackupTimer?.cancel();
     BackgroundQueueService.removeCancelHandler(cancelGeneration);
     api.cancelActiveGeneration();
     super.dispose();

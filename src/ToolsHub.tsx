@@ -64,9 +64,36 @@ const TOOL_LOADERS: Partial<Record<ToolId, () => Promise<void>>> = {
   artistStringDraw: artistStringDrawTool.preload,
 };
 
-/** Evaluate every independent tool chunk behind the application splash. */
-export function preloadToolScreens() {
-  return Promise.allSettled(Object.values(TOOL_LOADERS).map((loader) => loader?.()));
+function waitForToolWarmSlot() {
+  return new Promise<void>((resolve) => {
+    // The supported Electron runtime exposes requestIdleCallback. Its timeout
+    // guarantees progress even when the renderer never becomes fully idle.
+    window.requestIdleCallback(() => resolve(), { timeout: 1_500 });
+  });
+}
+
+/** Warm independent tool chunks one at a time after the workbench is visible.
+ * A previous Promise.all burst evaluated every large tool during splash and
+ * caused CPU/memory spikes on lower-end machines. Card hover/focus/down still
+ * performs an immediate targeted preload. */
+export async function preloadToolScreens() {
+  const results: PromiseSettledResult<void>[] = [];
+  for (const [tool, loader] of Object.entries(TOOL_LOADERS)) {
+    if (!loader) continue;
+    // PromptCodex currently carries the full offline codex corpus in an
+    // ~8.4 MB chunk. Evaluating it for users who never open that card defeats
+    // code splitting and creates a noticeable memory/parse spike. Its existing
+    // pointer/focus/down handlers still warm it immediately on intent.
+    if (tool === "promptCodex") continue;
+    await waitForToolWarmSlot();
+    try {
+      await loader();
+      results.push({ status: "fulfilled", value: undefined });
+    } catch (reason) {
+      results.push({ status: "rejected", reason });
+    }
+  }
+  return results;
 }
 
 function promptCodexCardText(language: unknown) {

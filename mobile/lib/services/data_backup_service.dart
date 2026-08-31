@@ -1,11 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
-import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -14,6 +14,12 @@ import '../models/nai_models.dart';
 import '../prompts/prompt_mode.dart';
 import '../references/reference_presets.dart';
 import 'storage.dart';
+
+// ZipEncoder is synchronous. Running it on Flutter's UI isolate made a due
+// backup freeze scrolling and touch input for large libraries. Keep the
+// callback top-level so compute() can run it in a background isolate.
+List<int>? _encodeBackupArchive(Archive archive) =>
+    ZipEncoder().encode(archive);
 
 /// Canonical categories shared with the Electron archive implementation.
 enum DataBackupCategory {
@@ -283,7 +289,11 @@ class DataBackupService {
       'bytes': bytes.length,
       'originalName': _safeName(file.path),
     };
-    archive.addFile(ArchiveFile(assetPath, bytes.length, bytes));
+    final archiveFile = ArchiveFile(assetPath, bytes.length, bytes)
+      // Generated images are already PNG/JPEG/WebP-compressed. Re-deflating
+      // them is expensive and normally saves almost nothing.
+      ..compress = false;
+    archive.addFile(archiveFile);
     assets[digest] = reference;
     return Map<String, dynamic>.from(reference);
   }
@@ -652,7 +662,11 @@ class DataBackupService {
       'categories': summaries.map((summary) => summary.toJson()).toList(),
     };
     _addJson(archive, 'manifest.json', manifest);
-    final encoded = ZipEncoder().encode(archive);
+    final encoded = await compute(
+      _encodeBackupArchive,
+      archive,
+      debugLabel: 'data-backup-zip',
+    );
     if (encoded == null) throw StateError('Unable to encode backup archive.');
     final directory = internal
         ? await backupDirectory(settings: settings)

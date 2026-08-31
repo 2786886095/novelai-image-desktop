@@ -75,6 +75,21 @@ void main() {
     if (root.existsSync()) root.deleteSync(recursive: true);
   });
 
+  test('migrates the old implicit image backup default to lightweight mode',
+      () {
+    final migrated = AppSettings.fromJson({
+      'autoBackupIncludeImages': true,
+    });
+    final explicitlyEnabled = AppSettings.fromJson({
+      'autoBackupIncludeImages': true,
+      'autoBackupAssetPolicyVersion': 1,
+    });
+
+    expect(migrated.autoBackupIncludeImages, isFalse);
+    expect(migrated.autoBackupAssetPolicyVersion, 1);
+    expect(explicitlyEnabled.autoBackupIncludeImages, isTrue);
+  });
+
   test('creates and inspects the shared versioned archive', () async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('batch_redraw_project_v1', jsonEncode({'name': 'A'}));

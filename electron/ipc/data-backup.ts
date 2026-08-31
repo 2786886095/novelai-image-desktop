@@ -223,8 +223,9 @@ async function addAsset(
   zip: JSZip,
   filePath: string | undefined,
   assetByHash: Map<string, AssetReference>,
+  includeAssets: boolean,
 ): Promise<AssetReference | undefined> {
-  if (!filePath) return undefined;
+  if (!includeAssets || !filePath) return undefined;
   let bytes: Buffer;
   try {
     const stat = await fs.stat(filePath);
@@ -244,7 +245,9 @@ async function addAsset(
     bytes: bytes.length,
     originalName: safeFileName(path.basename(filePath)),
   };
-  zip.file(reference.asset, bytes, { binary: true });
+  // PNG/JPEG/WebP payloads are already compressed. Asking DEFLATE to process
+  // hundreds of them again wastes CPU without a meaningful size reduction.
+  zip.file(reference.asset, bytes, { binary: true, compression: "STORE" });
   assetByHash.set(digest, reference);
   return reference;
 }
@@ -253,12 +256,13 @@ async function portableHistory(
   item: HistoryItem,
   zip: JSZip,
   assetByHash: Map<string, AssetReference>,
+  includeAssets: boolean,
 ): Promise<PortableHistoryItem> {
   const { fileUrl: _fileUrl, ...stored } = cloneJson(item);
   return {
     ...stored,
     filePath: "",
-    asset: await addAsset(zip, item.filePath, assetByHash),
+    asset: await addAsset(zip, item.filePath, assetByHash, includeAssets),
   };
 }
 
@@ -266,10 +270,11 @@ async function portableFavorite(
   favorite: unknown,
   zip: JSZip,
   assetByHash: Map<string, AssetReference>,
+  includeAssets: boolean,
 ) {
   const cloned = cloneJson(favorite) as Record<string, unknown>;
   const image = cloned?.image as HistoryItem | undefined;
-  if (image?.filePath) cloned.image = await portableHistory(image, zip, assetByHash);
+  if (image?.filePath) cloned.image = await portableHistory(image, zip, assetByHash, includeAssets);
   return cloned;
 }
 
@@ -355,11 +360,13 @@ function summary(category: DataBackupCategory, items = 0, bytes = 0): DataBackup
 async function buildArchive(
   requestedCategories: DataBackupCategory[],
   workspaceData?: Record<string, string>,
+  options: { includeAssets?: boolean } = {},
 ): Promise<BuiltArchive> {
   const categories = sanitizeCategories(requestedCategories);
   const selected = new Set(categories);
   const zip = new JSZip();
   const data = readStore();
+  const includeAssets = options.includeAssets !== false;
   const assetByHash = new Map<string, AssetReference>();
   const summaries: DataBackupCategorySummary[] = [];
 
@@ -386,7 +393,9 @@ async function buildArchive(
 
   if (selected.has("imageHistory")) {
     const items: PortableHistoryItem[] = [];
-    for (const item of data.history) items.push(await portableHistory(item, zip, assetByHash));
+    for (const item of data.history) {
+      items.push(await portableHistory(item, zip, assetByHash, includeAssets));
+    }
     zip.file("data/image-history.json", JSON.stringify({ groups: data.historyGroups, items }));
     summaries.push(summary(
       "imageHistory",
@@ -401,7 +410,7 @@ async function buildArchive(
       reverse.push({
         ...cloneJson(item),
         sourceImagePath: item.sourceImagePath ? "" : undefined,
-        sourceAsset: await addAsset(zip, item.sourceImagePath, assetByHash),
+        sourceAsset: await addAsset(zip, item.sourceImagePath, assetByHash, includeAssets),
       });
     }
     const payload = { convert: data.convertHistory, reverse };
@@ -415,7 +424,7 @@ async function buildArchive(
     for (const collection of ARTIST_FAVORITE_COLLECTIONS) {
       collections[collection] = [];
       for (const favorite of library.collections[collection]) {
-        collections[collection].push(await portableFavorite(favorite, zip, assetByHash));
+        collections[collection].push(await portableFavorite(favorite, zip, assetByHash, includeAssets));
       }
     }
     zip.file("data/artist-library.json", JSON.stringify({ ...library, collections }));
@@ -432,7 +441,7 @@ async function buildArchive(
       const { filePath: _filePath, fileUrl: _fileUrl, ...stored } = cloneJson(preset);
       presets.push({
         ...stored,
-        asset: await addAsset(zip, preset.filePath, assetByHash),
+        asset: await addAsset(zip, preset.filePath, assetByHash, includeAssets),
       });
     }
     zip.file("data/reference-presets.json", JSON.stringify({ groups: library.groups, presets }));
@@ -451,7 +460,7 @@ async function buildArchive(
         const { filePath: _filePath, fileUrl: _fileUrl, ...stored } = cloneJson(preview);
         previewImages.push({
           ...stored,
-          asset: await addAsset(zip, preview.filePath, assetByHash),
+          asset: await addAsset(zip, preview.filePath, assetByHash, includeAssets),
         });
       }
       const { previewImages: _previews, ...storedPreset } = cloneJson(preset);
@@ -490,7 +499,9 @@ async function buildArchive(
     bytes: await zip.generateAsync({
       type: "nodebuffer",
       compression: "DEFLATE",
-      compressionOptions: { level: 6 },
+      // Level 1 is enough for JSON and avoids a prolonged main-process CPU
+      // spike. Image entries above are stored as-is.
+      compressionOptions: { level: 1 },
       platform: "UNIX",
     }),
     categories: summaries,
@@ -520,10 +531,11 @@ async function createInternalBackup(
   prefix: "auto" | "before-import" | "manual",
   workspaceData?: Record<string, string>,
   categories = ALL_CATEGORIES,
+  options: { includeAssets?: boolean } = {},
 ) {
   const directory = configuredBackupDirectory();
   await fs.mkdir(directory, { recursive: true });
-  const built = await buildArchive(categories, workspaceData);
+  const built = await buildArchive(categories, workspaceData, options);
   return saveBuiltArchive(
     path.join(directory, `${prefix}-${stampForFile()}.naisbackup`),
     built,
@@ -1258,10 +1270,12 @@ export async function runAutomaticBackup(
   const status = await getDataBackupStatus();
   if (!settings.autoBackupEnabled) return { ok: true, message: "自动备份已关闭。" };
   if (!status.due) return { ok: true, message: "自动备份尚未到期。", path: status.latestPath };
-  const categories = settings.autoBackupIncludeImages === false
-    ? ALL_CATEGORIES.filter((category) => category !== "imageHistory" && category !== "referencePresets")
-    : ALL_CATEGORIES;
-  const result = await createInternalBackup("auto", workspaceData, categories);
+  // Metadata and grouping remain protected in lightweight mode; only the
+  // large binary payloads are omitted. Manual export continues to include all
+  // checked assets by default.
+  const result = await createInternalBackup("auto", workspaceData, ALL_CATEGORIES, {
+    includeAssets: settings.autoBackupIncludeImages === true,
+  });
   const files = await automaticBackupFiles(configuredBackupDirectory(settings));
   const retention = Math.max(1, Math.min(100, Math.trunc(Number(settings.autoBackupRetentionCount) || 7)));
   for (const obsolete of files.slice(retention)) {

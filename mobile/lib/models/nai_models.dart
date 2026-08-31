@@ -11,7 +11,7 @@ class NaiOption {
 }
 
 const appName = 'Langbai NovelAI Studio';
-const appVersion = '2.0.8';
+const appVersion = '2.0.9';
 
 const naiModels = <NaiOption>[
   NaiOption(
@@ -846,6 +846,7 @@ class AppSettings {
   int autoBackupIntervalHours;
   int autoBackupRetentionCount;
   bool autoBackupIncludeImages;
+  int autoBackupAssetPolicyVersion;
 
   AppSettings({
     this.apiBaseUrl = 'https://api.novelai.net',
@@ -919,7 +920,8 @@ class AppSettings {
     this.autoBackupEnabled = true,
     this.autoBackupIntervalHours = 24,
     this.autoBackupRetentionCount = 7,
-    this.autoBackupIncludeImages = true,
+    this.autoBackupIncludeImages = false,
+    this.autoBackupAssetPolicyVersion = 1,
   })  : reversePromptTemplates = reversePromptTemplates ?? {},
         convertPromptTemplates = convertPromptTemplates ?? {},
         promptShortcuts = promptShortcuts ?? [],
@@ -1003,6 +1005,7 @@ class AppSettings {
         'autoBackupIntervalHours': autoBackupIntervalHours,
         'autoBackupRetentionCount': autoBackupRetentionCount,
         'autoBackupIncludeImages': autoBackupIncludeImages,
+        'autoBackupAssetPolicyVersion': autoBackupAssetPolicyVersion,
       };
 
   factory AppSettings.fromJson(Map<String, dynamic> j) => AppSettings(
@@ -1102,7 +1105,14 @@ class AppSettings {
             _intValue(j['autoBackupIntervalHours'], 24).clamp(1, 720).toInt(),
         autoBackupRetentionCount:
             _intValue(j['autoBackupRetentionCount'], 7).clamp(1, 100).toInt(),
-        autoBackupIncludeImages: j['autoBackupIncludeImages'] ?? true,
+        // Builds before policy v1 silently opted every user into compressing
+        // the whole image library 20 seconds after launch. Migrate that old
+        // default to metadata-only once; a later explicit toggle is retained.
+        autoBackupIncludeImages:
+            _intValue(j['autoBackupAssetPolicyVersion'], 0) >= 1
+                ? (j['autoBackupIncludeImages'] ?? false)
+                : false,
+        autoBackupAssetPolicyVersion: 1,
       );
 }
 

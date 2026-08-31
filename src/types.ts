@@ -1531,12 +1531,16 @@ export interface AppSettings {
    * PNG) on disk. Default on. Turn off to save clean images with the embedded
    * info stripped — useful before sharing. */
   keepImageMetadata: boolean;
-  /** Local portable archive schedule. All user data, including images, is
-   * included by default; retention only removes old automatic archives. */
+  /** Local portable archive schedule. Manual exports still select every
+   * category by default. Automatic archives stay metadata-only unless the
+   * user explicitly opts into copying the potentially very large image set. */
   autoBackupEnabled: boolean;
   autoBackupIntervalHours: number;
   autoBackupRetentionCount: number;
   autoBackupIncludeImages: boolean;
+  /** Internal one-time migration marker for the lightweight auto-backup
+   * policy. Optional so archives/settings from older clients remain valid. */
+  autoBackupAssetPolicyVersion?: number;
   /** Empty = <userData>/backups. */
   backupDir: string;
   // Vision / Reverse-prompt
