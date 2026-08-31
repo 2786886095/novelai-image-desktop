@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -8,10 +9,12 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../artist/artist_recipe.dart';
+import '../artist/random_custom_tag_library.dart';
 import '../i18n/app_locales.dart';
 import '../models/nai_models.dart';
 import '../services/artist_tag_service.dart';
 import '../state/app_state.dart';
+import '../tags/offline_tag_store.dart';
 import '../ui/quality_preset_control.dart';
 
 class _Result {
@@ -86,6 +89,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
   final _base = TextEditingController();
   final _auxiliary = TextEditingController();
   final _customTags = TextEditingController();
+  final _customTagSearch = TextEditingController();
   final _count = TextEditingController(text: '8');
   final _minArtists = TextEditingController(text: '3');
   final _maxArtists = TextEditingController(text: '7');
@@ -93,6 +97,8 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
   final _maxArtistWeight = TextEditingController(text: '1.2');
   final _minCustomTagWeight = TextEditingController(text: '0.2');
   final _maxCustomTagWeight = TextEditingController(text: '1.2');
+  final _minRandomCustomTags = TextEditingController(text: '1');
+  final _maxRandomCustomTags = TextEditingController(text: '3');
   final _minFranchiseStyles = TextEditingController(text: '0');
   final _maxFranchiseStyles = TextEditingController(text: '2');
   final _minFranchiseWeight = TextEditingController(text: '0.15');
@@ -118,6 +124,13 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
   bool _running = false;
   bool _cancelled = false;
   bool _showFavorites = false;
+  String _customTagCategory = 'quality';
+  final Map<String, String> _customTagModes = {};
+  List<OfflineTagHit> _customTagCatalogItems = const [];
+  int _customTagCatalogTotal = 0;
+  int _customTagCatalogLimit = 120;
+  bool _customTagCatalogLoading = false;
+  Timer? _customTagSearchTimer;
   String _favoriteModelFilter = 'all';
   String _message = '';
   String _copiedAction = '';
@@ -157,12 +170,13 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           'customTagWeightMin': '自訂 Tag 最低權重（0.1～10）',
           'customTagWeightMax': '自訂 Tag 最高權重（0.1～10）',
           'customTagLibrary': 'Tag 快選庫',
-          'customTagLibraryHint': '從常用分類中選擇；已選 Tag 同樣會加入每個畫師串。',
+          'customTagLibraryHint': '依分類瀏覽或搜尋；每個 Tag 都標示目前介面語言的意思。',
           'customTagSelected': '已選 {count} 個',
-          'render3d': '3D / 渲染',
-          'lighting': '光影 / 畫面',
-          'quality': '品質詞',
-          'atmosphere': '氛圍 / 環境渲染',
+          'customTagAvailable': '共 {count} 個可選 Tag',
+          'customTagSearch': '搜尋英文 Tag 或中文意思',
+          'customTagAll': '全部分類',
+          'customTagClear': '清除庫內選擇',
+          'customTagNoResults': '沒有符合項目，請縮短關鍵字或切換到全部分類。',
           'mutate': '抽卡時額外加入隨機風格詞',
           'mutateHint':
               '開啟後以相同畫師串、提示詞、Seed 與參數生成 A/B：A 不加風格詞，B 加入 2～6 個帶 0.3～1.5 權重的風格詞。',
@@ -202,7 +216,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           'favoritesHint': 'A、B 可分別收藏；收藏 B 後，偏好抽卡也會參考其風格詞與權重。',
           'remove': '移除收藏',
           'mutation': '本次風格/光影變異詞',
-          'categories': '藝術風格|媒介/筆觸|色彩|光照|氛圍',
+          'categories': '藝術風格|媒介/筆觸|色彩|光照',
           'running': '生成中',
           'hint': '畫師 Tag 來源：Danbooru',
           'variantPlain': 'A｜僅畫師串',
@@ -225,17 +239,19 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           'aux': 'Fixed extra terms (always kept)',
           'customTags': 'Custom Tags (random weights)',
           'customTagsHint':
-              'Separate with commas or new lines. Every Tag is added to every artist string; only each weight is randomized.',
+              'Separate with commas or new lines. Set each Tag to Always or Random below; weights are rerolled either way.',
           'customTagWeightMin': 'Minimum custom Tag weight (0.1–10)',
           'customTagWeightMax': 'Maximum custom Tag weight (0.1–10)',
           'customTagLibrary': 'Tag quick-pick library',
           'customTagLibraryHint':
-              'Choose common tags by category. Selected tags are added to every artist string.',
+              'Browse by category or search. Every Tag includes a meaning in the current UI language.',
           'customTagSelected': '{count} selected',
-          'render3d': '3D / rendering',
-          'lighting': 'Lighting / image',
-          'quality': 'Quality tags',
-          'atmosphere': 'Atmosphere / environment',
+          'customTagAvailable': '{count} Tags available',
+          'customTagSearch': 'Search English Tags or meanings',
+          'customTagAll': 'All categories',
+          'customTagClear': 'Clear library choices',
+          'customTagNoResults':
+              'No matches. Try a shorter query or switch to all categories.',
           'mutate': 'Add random style terms during the draw',
           'mutateHint':
               'Create a fair A/B pair with the same artist string, prompt, seed, and settings: A has no random styles; B adds 2–6 terms weighted 0.3–1.5.',
@@ -278,7 +294,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           'remove': 'Remove favorite',
           'mutation': 'Style / lighting terms in this draw',
           'categories':
-              'Art style|Medium / brushwork|Color|Lighting|Atmosphere',
+              'Art style|Medium / brushwork|Color|Lighting',
           'running': 'Generating',
           'hint': 'Artist tag source: Danbooru',
           'variantPlain': 'A | Artist string only',
@@ -300,16 +316,17 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           'base': '固定内容プロンプト',
           'aux': '固定追加語（常に保持）',
           'customTags': 'カスタム Tag（ウェイトのみ抽選）',
-          'customTagsHint': 'カンマまたは改行で区切ります。すべての Tag を各画家列に追加し、ウェイトだけ個別に抽選します。',
+          'customTagsHint': 'カンマまたは改行で区切り、各 Tag を下で「毎回」または「ランダム」に設定します。ウェイトはいずれも抽選されます。',
           'customTagWeightMin': 'カスタム Tag の最小ウェイト（0.1～10）',
           'customTagWeightMax': 'カスタム Tag の最大ウェイト（0.1～10）',
           'customTagLibrary': 'Tag クイック選択',
-          'customTagLibraryHint': 'カテゴリから選択します。選択した Tag もすべての画家列に追加されます。',
+          'customTagLibraryHint': 'カテゴリ別に閲覧・検索できます。各 Tag に現在のUI言語で意味を表示します。',
           'customTagSelected': '{count} 個選択中',
-          'render3d': '3D / レンダリング',
-          'lighting': '光・画面',
-          'quality': '品質 Tag',
-          'atmosphere': '雰囲気 / 環境',
+          'customTagAvailable': '全 {count} Tag',
+          'customTagSearch': '英語 Tag または意味を検索',
+          'customTagAll': 'すべてのカテゴリ',
+          'customTagClear': 'ライブラリ選択を解除',
+          'customTagNoResults': '一致する項目がありません。短い語句か全カテゴリで検索してください。',
           'mutate': '抽選時に画風語を追加',
           'mutateHint':
               '同じ画家列・プロンプト・Seed・設定で A/B を生成します。A は画風語なし、B は 0.3～1.5 重みの画風語を 2～6 個追加します。',
@@ -350,7 +367,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           'favoritesHint': 'A/B は個別保存できます。B の画風語と重みは次の画風語抽選にも反映できます。',
           'remove': 'お気に入り削除',
           'mutation': '今回の画風・光変異語',
-          'categories': '画風|画材・筆致|色彩|光|雰囲気',
+          'categories': '画風|画材・筆致|色彩|光',
           'running': '生成中',
           'hint': '画家 Tag の出典：Danbooru',
           'variantPlain': 'A｜画家列のみ',
@@ -373,16 +390,18 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           'aux': '고정 추가 용어 (항상 유지)',
           'customTags': '사용자 지정 Tag (가중치만 무작위)',
           'customTagsHint':
-              '쉼표나 줄바꿈으로 구분합니다. 모든 Tag를 각 작가 문자열에 넣고 가중치만 각각 무작위로 정합니다.',
+              '쉼표나 줄바꿈으로 구분하고 각 Tag를 아래에서 매번 또는 무작위로 설정합니다. 가중치는 모두 다시 뽑습니다.',
           'customTagWeightMin': '사용자 Tag 최소 가중치 (0.1～10)',
           'customTagWeightMax': '사용자 Tag 최대 가중치 (0.1～10)',
           'customTagLibrary': 'Tag 빠른 선택',
-          'customTagLibraryHint': '카테고리에서 선택합니다. 선택한 Tag도 모든 작가 문자열에 추가됩니다.',
+          'customTagLibraryHint':
+              '카테고리별로 탐색하거나 검색합니다. 각 Tag의 뜻을 현재 UI 언어로 표시합니다.',
           'customTagSelected': '{count}개 선택',
-          'render3d': '3D / 렌더링',
-          'lighting': '조명 / 화면',
-          'quality': '품질 Tag',
-          'atmosphere': '분위기 / 환경',
+          'customTagAvailable': '총 {count}개 Tag',
+          'customTagSearch': '영문 Tag 또는 뜻 검색',
+          'customTagAll': '모든 카테고리',
+          'customTagClear': '라이브러리 선택 해제',
+          'customTagNoResults': '일치하는 항목이 없습니다. 더 짧게 검색하거나 전체 카테고리를 선택하세요.',
           'mutate': '뽑을 때 무작위 화풍 용어 추가',
           'mutateHint':
               '같은 작가 문자열·프롬프트·Seed·설정으로 A/B를 생성합니다. A는 화풍 용어가 없고 B는 0.3～1.5 가중치의 용어 2～6개를 추가합니다.',
@@ -424,7 +443,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
               'A/B를 각각 저장할 수 있습니다. B의 화풍 용어와 가중치는 이후 화풍 추첨에도 반영됩니다.',
           'remove': '즐겨찾기 제거',
           'mutation': '이번 화풍/조명 변이 용어',
-          'categories': '화풍|매체/붓질|색상|조명|분위기',
+          'categories': '화풍|매체/붓질|색상|조명',
           'running': '생성 중',
           'hint': '작가 Tag 출처: Danbooru',
           'variantPlain': 'A｜작가 문자열만',
@@ -446,16 +465,17 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           'base': '固定内容提示词',
           'aux': '固定附加词（每次保留）',
           'customTags': '自定义 Tag（权重随机）',
-          'customTagsHint': '使用逗号或换行分隔；所有 Tag 都会加入每个画师串，只分别随机权重。',
+          'customTagsHint': '使用逗号或换行分隔；每个 Tag 可在下方设为“每串必加”或“随机加入”，权重都会随机。',
           'customTagWeightMin': '自定义 Tag 最低权重（0.1～10）',
           'customTagWeightMax': '自定义 Tag 最高权重（0.1～10）',
           'customTagLibrary': 'Tag 快选库',
-          'customTagLibraryHint': '从常用分类中选择；已选 Tag 同样会加入每个画师串。',
+          'customTagLibraryHint': '按分类浏览或搜索；每个 Tag 都标注当前界面语言的含义。',
           'customTagSelected': '已选 {count} 个',
-          'render3d': '3D / 渲染',
-          'lighting': '光影 / 画面',
-          'quality': '质量词',
-          'atmosphere': '氛围 / 环境渲染',
+          'customTagAvailable': '共 {count} 个可选 Tag',
+          'customTagSearch': '搜索英文 Tag 或中文含义',
+          'customTagAll': '全部分类',
+          'customTagClear': '清除库内选择',
+          'customTagNoResults': '没有匹配项，请尝试更短的关键词或切换到全部分类。',
           'mutate': '抽卡时额外加入随机风格词',
           'mutateHint':
               '开启后以相同画师串、提示词、Seed 和参数生成 A/B：A 不加风格词，B 加入 2～6 个带 0.3～1.5 权重的风格词。',
@@ -495,7 +515,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           'favoritesHint': 'A、B 可分别收藏；收藏 B 后，偏好抽卡也会参考其风格词与权重。',
           'remove': '移除收藏',
           'mutation': '本次风格/光影变异词',
-          'categories': '艺术风格|媒介/笔触|色彩|光照|氛围',
+          'categories': '艺术风格|媒介/笔触|色彩|光照',
           'running': '生成中',
           'hint': '画师 Tag 来源：Danbooru',
           'variantPlain': 'A｜仅画师串',
@@ -725,6 +745,8 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
       _maxArtistWeight.text = '1.2';
       _minCustomTagWeight.text = '0.2';
       _maxCustomTagWeight.text = '1.2';
+      _minRandomCustomTags.text = '1';
+      _maxRandomCustomTags.text = '3';
       _minFranchiseStyles.text = '0';
       _maxFranchiseStyles.text = '2';
       _minFranchiseWeight.text = '0.15';
@@ -780,6 +802,23 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
         prefs.getString('${_prefsPrefix}base') ?? app.params.positivePrompt;
     _auxiliary.text = prefs.getString('${_prefsPrefix}aux') ?? '';
     _customTags.text = prefs.getString('${_prefsPrefix}customTags') ?? '';
+    try {
+      final savedModes = jsonDecode(
+        prefs.getString('${_prefsPrefix}customTagModes') ?? '{}',
+      );
+      if (savedModes is Map) {
+        _customTagModes
+          ..clear()
+          ..addAll(savedModes.map((key, value) => MapEntry(
+                key.toString().toLowerCase(),
+                value.toString() == 'random' ? 'random' : 'always',
+              )));
+      }
+    } catch (_) {}
+    _minRandomCustomTags.text =
+        '${prefs.getInt('${_prefsPrefix}minRandomCustomTags') ?? 1}';
+    _maxRandomCustomTags.text =
+        '${prefs.getInt('${_prefsPrefix}maxRandomCustomTags') ?? 3}';
     _count.text = '${prefs.getInt('${_prefsPrefix}count') ?? 8}';
     final oldArtistCount = prefs.getInt('${_prefsPrefix}artistCount');
     _minArtists.text =
@@ -862,6 +901,12 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     await prefs.setString('${_prefsPrefix}base', _base.text);
     await prefs.setString('${_prefsPrefix}aux', _auxiliary.text);
     await prefs.setString('${_prefsPrefix}customTags', _customTags.text);
+    await prefs.setString(
+        '${_prefsPrefix}customTagModes', jsonEncode(_customTagModes));
+    await prefs.setInt('${_prefsPrefix}minRandomCustomTags',
+        _nonNegative(_minRandomCustomTags, 1));
+    await prefs.setInt('${_prefsPrefix}maxRandomCustomTags',
+        _nonNegative(_maxRandomCustomTags, 3));
     await prefs.setInt('${_prefsPrefix}count', _positive(_count, 8));
     await prefs.setInt('${_prefsPrefix}minArtists',
         _positive(_minArtists, 3).clamp(1, 20).toInt());
@@ -950,20 +995,14 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
         maxArtistWeight: _decimal(_maxArtistWeight, _artistWeightMaxDefault),
         auxiliary: _auxiliary.text,
         customTagPool: _customTags.text,
+        customTagModes: _customTagModes,
+        minRandomCustomTags: _nonNegative(_minRandomCustomTags, 1),
+        maxRandomCustomTags: _nonNegative(_maxRandomCustomTags, 3),
         minCustomTagWeight:
             _decimal(_minCustomTagWeight, _customTagWeightMinDefault),
         maxCustomTagWeight:
             _decimal(_maxCustomTagWeight, _customTagWeightMaxDefault),
         mutateAuxiliary: _mutateAuxiliary,
-        includeFranchiseStyles: _includeFranchiseStyles,
-        minFranchiseStyles:
-            _nonNegative(_minFranchiseStyles).clamp(0, 20).toInt(),
-        maxFranchiseStyles:
-            _nonNegative(_maxFranchiseStyles, 2).clamp(0, 20).toInt(),
-        minFranchiseWeight:
-            _decimal(_minFranchiseWeight, _franchiseWeightMinDefault),
-        maxFranchiseWeight:
-            _decimal(_maxFranchiseWeight, _franchiseWeightMaxDefault),
         favorites: favorites,
         favoriteMutations: _mutateAuxiliary ? favoriteMutations : const [],
       );
@@ -1283,6 +1322,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     _base.dispose();
     _auxiliary.dispose();
     _customTags.dispose();
+    _customTagSearch.dispose();
     _count.dispose();
     _minArtists.dispose();
     _maxArtists.dispose();
@@ -1290,6 +1330,8 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     _maxArtistWeight.dispose();
     _minCustomTagWeight.dispose();
     _maxCustomTagWeight.dispose();
+    _minRandomCustomTags.dispose();
+    _maxRandomCustomTags.dispose();
     _minFranchiseStyles.dispose();
     _maxFranchiseStyles.dispose();
     _minFranchiseWeight.dispose();
@@ -1302,6 +1344,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     _weightTuneInput.dispose();
     _weightTuneCount.dispose();
     _weightVariation.dispose();
+    _customTagSearchTimer?.cancel();
     _scrollController.dispose();
     super.dispose();
   }
@@ -1313,7 +1356,6 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
       'medium',
       'color',
       'lighting',
-      'atmosphere'
     ];
     final categoryValues = text['categories']!.split('|');
     final categoryLabels = <String, String>{
@@ -1591,98 +1633,559 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
         );
       });
 
-  Widget _customTagLibraryCard(Map<String, String> text) {
-    final selected = parseCustomTagPoolValues(_customTags.text)
-        .map((tag) => tag.toLowerCase())
-        .toSet();
-    final selectedLabel =
-        text['customTagSelected']!.replaceAll('{count}', '${selected.length}');
-    final colors = Theme.of(context).colorScheme;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        border: Border.all(color: colors.outlineVariant),
-        borderRadius: BorderRadius.circular(14),
-        color: colors.surfaceContainerLow,
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(14),
-        child: ExpansionTile(
-          initiallyExpanded: false,
-          title: Row(
-            children: [
-              Expanded(child: Text(text['customTagLibrary']!)),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                decoration: BoxDecoration(
-                  color: colors.primaryContainer,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  selectedLabel,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: colors.onPrimaryContainer,
-                        fontWeight: FontWeight.w700,
-                      ),
-                ),
-              ),
-            ],
-          ),
-          subtitle: Text(
-            text['customTagLibraryHint']!,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: randomCustomTagLibrary.entries.map((group) {
-                  return Padding(
-                    padding: const EdgeInsets.only(top: 10),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          text[group.key]!,
-                          style: Theme.of(context).textTheme.labelLarge,
-                        ),
-                        const SizedBox(height: 7),
-                        Wrap(
-                          spacing: 7,
-                          runSpacing: 7,
-                          children: group.value.map((tag) {
-                            final isSelected =
-                                selected.contains(tag.toLowerCase());
-                            return FilterChip(
-                              label: Text(tag),
-                              selected: isSelected,
-                              visualDensity: VisualDensity.compact,
-                              onSelected: (_) {
-                                setState(() {
-                                  _customTags.text = toggleCustomTagInPool(
-                                      _customTags.text, tag);
-                                  _drawSeed =
-                                      Random.secure().nextInt(0x7fffffff);
-                                  _planned = _buildPlan();
-                                });
-                                _save();
-                              },
-                            );
-                          }).toList(),
-                        ),
-                      ],
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
-          ],
-        ),
-      ),
+  Map<String, String> _customTagUiText(String language) =>
+      switch (normalizeAppLocaleCode(language)) {
+        'zh-TW' => {
+            'title': '畫風 Tag 庫',
+            'hint': '僅收錄畫風、媒材、渲染、光色與品質。動作、背景、特效、情緒不混入畫師串；預設收合。',
+            'selected': '已選 {count} 個',
+            'available': '本機按需載入',
+            'search': '搜尋 Tag、中文意思或作品名',
+            'all': '精選畫風',
+            'styles': 'Danbooru 畫風模仿',
+            'copyright': '動畫／遊戲／漫畫作品',
+            'always': '每串必加',
+            'random': '隨機加入',
+            'randomRange': '每串隨機抽取數量',
+            'min': '最少',
+            'max': '最多',
+            'clear': '全部清除',
+            'noResults': '找不到結果；完整資料需先在設定下載 Danbooru 中英標籤庫。',
+            'loading': '正在讀取本機 Tag 庫…',
+            'loadMore': '載入更多',
+          },
+        'en-US' => {
+            'title': 'Visual-style Tag library',
+            'hint': 'Only visual style, medium, rendering, lighting/color, and quality are included—never action, background, effects, or emotion. Collapsed by default.',
+            'selected': '{count} selected',
+            'available': 'Loaded locally on demand',
+            'search': 'Search Tags, meanings, anime, or games',
+            'all': 'Curated styles',
+            'styles': 'Danbooru style parodies',
+            'copyright': 'Anime / game / manga sources',
+            'always': 'Always',
+            'random': 'Random',
+            'randomRange': 'Random Tags per string',
+            'min': 'Minimum',
+            'max': 'Maximum',
+            'clear': 'Clear all',
+            'noResults': 'No matches. Download the Danbooru bilingual Tag data in Settings for the full catalog.',
+            'loading': 'Reading the local Tag catalog…',
+            'loadMore': 'Load more',
+          },
+        'ja-JP' => {
+            'title': '画風 Tag ライブラリ',
+            'hint': '画風・画材・レンダリング・光色・品質のみ収録し、動作・背景・効果・感情は混在させません。初期状態は折りたたみです。',
+            'selected': '{count} 個選択',
+            'available': 'ローカルから必要時に読込',
+            'search': 'Tag・意味・作品名を検索',
+            'all': '厳選画風',
+            'styles': 'Danbooru 画風模倣',
+            'copyright': 'アニメ／ゲーム／漫画作品',
+            'always': '毎回追加',
+            'random': 'ランダム',
+            'randomRange': '1列ごとのランダム数',
+            'min': '最小',
+            'max': '最大',
+            'clear': 'すべて解除',
+            'noResults': '一致なし。完全な一覧には設定で Danbooru 日中 Tag データをダウンロードしてください。',
+            'loading': 'ローカル Tag を読込中…',
+            'loadMore': 'さらに読込',
+          },
+        'ko-KR' => {
+            'title': '화풍 Tag 라이브러리',
+            'hint': '화풍·매체·렌더링·빛/색·품질만 포함하며 동작·배경·효과·감정은 작가 문자열에 섞지 않습니다. 기본은 접힘입니다.',
+            'selected': '{count}개 선택',
+            'available': '로컬에서 필요할 때 로드',
+            'search': 'Tag, 뜻, 작품명 검색',
+            'all': '엄선 화풍',
+            'styles': 'Danbooru 화풍 모방',
+            'copyright': '애니／게임／만화 작품',
+            'always': '매번 추가',
+            'random': '무작위',
+            'randomRange': '문자열당 무작위 수',
+            'min': '최소',
+            'max': '최대',
+            'clear': '모두 지우기',
+            'noResults': '검색 결과가 없습니다. 전체 목록은 설정에서 Danbooru 중영 Tag 데이터를 내려받으세요.',
+            'loading': '로컬 Tag 목록 읽는 중…',
+            'loadMore': '더 불러오기',
+          },
+        _ => {
+            'title': '画风 Tag 库',
+            'hint': '仅收录画风、媒介、渲染、光色与质量；动作、背景、特效、情绪不混入画师串。面板默认折叠。',
+            'selected': '已选 {count} 个',
+            'available': '本地按需载入',
+            'search': '搜索 Tag、中文含义或作品名',
+            'all': '精选画风',
+            'styles': 'Danbooru 画风模仿',
+            'copyright': '动漫／游戏／漫画作品',
+            'always': '每串必加',
+            'random': '随机加入',
+            'randomRange': '每串随机抽取数量',
+            'min': '最少',
+            'max': '最多',
+            'clear': '清空全部',
+            'noResults': '没有匹配项；完整库需要先在设置中下载 Danbooru 中英标签数据。',
+            'loading': '正在读取本地 Tag 库…',
+            'loadMore': '载入更多',
+          },
+      };
+
+  bool get _isDynamicCustomTagCategory =>
+      _customTagCategory == 'danbooru-style' ||
+      _customTagCategory == 'copyright';
+
+  Future<void> _loadCustomTagCatalog({bool reset = false}) async {
+    if (!_isDynamicCustomTagCategory) return;
+    if (reset) _customTagCatalogLimit = 120;
+    final scope = _customTagCategory == 'copyright' ? 'copyright' : 'style';
+    final requestCategory = _customTagCategory;
+    final requestQuery = _customTagSearch.text;
+    setState(() => _customTagCatalogLoading = true);
+    try {
+      final result = await context.read<AppState>().offlineTags
+          .browseArtistStyleCatalog(
+        scope: scope,
+        query: requestQuery,
+        limit: _customTagCatalogLimit,
+      );
+      if (!mounted || requestCategory != _customTagCategory ||
+          requestQuery != _customTagSearch.text) return;
+      setState(() {
+        _customTagCatalogItems = result.items;
+        _customTagCatalogTotal = result.total;
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _customTagCatalogItems = const [];
+          _customTagCatalogTotal = 0;
+        });
+      }
+    } finally {
+      if (mounted && requestCategory == _customTagCategory) {
+        setState(() => _customTagCatalogLoading = false);
+      }
+    }
+  }
+
+  void _scheduleCustomTagCatalogSearch() {
+    _customTagSearchTimer?.cancel();
+    if (!_isDynamicCustomTagCategory) return;
+    _customTagSearchTimer = Timer(
+      const Duration(milliseconds: 220),
+      () => _loadCustomTagCatalog(reset: true),
     );
   }
 
+  void _replaceCustomTagValues(List<String> values) {
+    final value = values.join(', ');
+    _customTags.value = TextEditingValue(
+      text: value,
+      selection: TextSelection.collapsed(offset: value.length),
+    );
+    _drawSeed = Random.secure().nextInt(0x7fffffff);
+    _planned = _buildPlan();
+  }
+
+  void _toggleCustomTag(String tag) {
+    final key = tag.trim().toLowerCase();
+    setState(() {
+      final values = parseCustomTagPoolValues(_customTags.text);
+      final exists = values.any((value) => value.toLowerCase() == key);
+      if (exists) {
+        values.removeWhere((value) => value.toLowerCase() == key);
+        _customTagModes.remove(key);
+      } else {
+        values.add(tag.trim());
+        _customTagModes[key] = _customTagModes[key] ?? 'always';
+      }
+      _replaceCustomTagValues(values);
+    });
+    _save();
+  }
+
+  void _setCustomTagMode(String tag, String mode) {
+    setState(() {
+      _customTagModes[tag.trim().toLowerCase()] =
+          mode == 'random' ? 'random' : 'always';
+      _drawSeed = Random.secure().nextInt(0x7fffffff);
+      _planned = _buildPlan();
+    });
+    _save();
+  }
+
+  String _offlineCatalogMeaning(OfflineTagHit hit, String language) {
+    if (normalizeAppLocaleCode(language).startsWith('zh') &&
+        hit.chinese.isNotEmpty) {
+      return hit.chinese.join('／');
+    }
+    final value = hit.tag
+        .replaceFirst(RegExp(r'_\(style\)$', caseSensitive: false), '')
+        .replaceAll('_', ' ');
+    return value.isEmpty
+        ? hit.tag
+        : '${value[0].toUpperCase()}${value.substring(1)}';
+  }
+
+  Widget _customTagLibraryCard(Map<String, String> _, String language) {
+    final ui = _customTagUiText(language);
+    final colors = Theme.of(context).colorScheme;
+    final selectedValues = parseCustomTagPoolValues(_customTags.text);
+    final selected = selectedValues.map((tag) => tag.toLowerCase()).toSet();
+    final selectedRandomCount = selectedValues
+        .where((tag) => _customTagModes[tag.toLowerCase()] == 'random')
+        .length;
+    final query = _customTagSearch.text;
+    final staticCategories = _customTagCategory == 'all'
+        ? randomCustomTagLibrary
+        : randomCustomTagLibrary
+            .where((category) => category.id == _customTagCategory)
+            .toList();
+    final staticEntries = <({RandomCustomTagEntry entry, String category})>[];
+    if (!_isDynamicCustomTagCategory) {
+      for (final category in staticCategories) {
+        for (final entry in category.tags) {
+          if (matchesRandomCustomTagSearch(
+              category, entry, language, query)) {
+            staticEntries.add((
+              entry: entry,
+              category: category.label(language),
+            ));
+          }
+        }
+      }
+    }
+
+    Widget modeControl(String tag) {
+      final mode = _customTagModes[tag.toLowerCase()] ?? 'always';
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ChoiceChip(
+            visualDensity: VisualDensity.compact,
+            label: Text(ui['always']!, style: const TextStyle(fontSize: 11)),
+            selected: mode == 'always',
+            onSelected: (_) => _setCustomTagMode(tag, 'always'),
+          ),
+          const SizedBox(width: 4),
+          ChoiceChip(
+            visualDensity: VisualDensity.compact,
+            label: Text(ui['random']!, style: const TextStyle(fontSize: 11)),
+            selected: mode == 'random',
+            onSelected: (_) => _setCustomTagMode(tag, 'random'),
+          ),
+        ],
+      );
+    }
+
+    Widget tagTile(String tag, String meaning, [int? count]) {
+      final isSelected = selected.contains(tag.toLowerCase());
+      return Material(
+        color: isSelected
+            ? colors.primaryContainer.withAlpha(140)
+            : colors.surfaceContainerLowest,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(
+            color: isSelected ? colors.primary : colors.outlineVariant,
+          ),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => _toggleCustomTag(tag),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      isSelected
+                          ? Icons.check_circle_rounded
+                          : Icons.add_circle_outline_rounded,
+                      size: 21,
+                      color: isSelected ? colors.primary : colors.outline,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(tag,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontWeight: FontWeight.w700)),
+                          Text(meaning,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.bodySmall),
+                        ],
+                      ),
+                    ),
+                    if (count != null)
+                      Text('$count', style: Theme.of(context).textTheme.labelSmall),
+                  ],
+                ),
+                if (isSelected) ...[
+                  const SizedBox(height: 6),
+                  Align(alignment: Alignment.centerRight, child: modeControl(tag)),
+                ],
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    Widget categoryButton(String id, String label, String count) =>
+        Padding(
+          padding: const EdgeInsets.only(right: 7),
+          child: FilterChip(
+            selected: _customTagCategory == id,
+            label: Text('$label  $count'),
+            onSelected: (_) {
+              setState(() {
+                _customTagCategory = id;
+                _customTagCatalogLimit = 120;
+              });
+              if (_isDynamicCustomTagCategory) {
+                _loadCustomTagCatalog(reset: true);
+              }
+            },
+          ),
+        );
+
+    final visibleCount = _isDynamicCustomTagCategory
+        ? _customTagCatalogItems.length
+        : staticEntries.length;
+    final totalCount = _isDynamicCustomTagCategory
+        ? _customTagCatalogTotal
+        : randomCustomTagCount;
+
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: ExpansionTile(
+        initiallyExpanded: false,
+        onExpansionChanged: (expanded) {
+          if (expanded && _isDynamicCustomTagCategory) {
+            _loadCustomTagCatalog(reset: true);
+          }
+        },
+        leading: const Icon(Icons.style_outlined),
+        title: Text(ui['title']!, style: const TextStyle(fontWeight: FontWeight.w800)),
+        subtitle: Text(
+          '${ui['selected']!.replaceAll('{count}', '${selectedValues.length}')} · ${ui['available']}',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(ui['hint']!, style: Theme.of(context).textTheme.bodySmall),
+                if (selectedValues.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          ui['selected']!.replaceAll(
+                              '{count}', '${selectedValues.length}'),
+                          style: Theme.of(context).textTheme.labelLarge,
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          setState(() {
+                            _customTagModes.clear();
+                            _replaceCustomTagValues(const []);
+                          });
+                          _save();
+                        },
+                        child: Text(ui['clear']!),
+                      ),
+                    ],
+                  ),
+                  Wrap(
+                    spacing: 7,
+                    runSpacing: 7,
+                    children: selectedValues
+                        .map((tag) => InputChip(
+                              label: Text(tag),
+                              avatar: Icon(
+                                _customTagModes[tag.toLowerCase()] == 'random'
+                                    ? Icons.casino_outlined
+                                    : Icons.push_pin_outlined,
+                                size: 17,
+                              ),
+                              onPressed: () => _setCustomTagMode(
+                                tag,
+                                _customTagModes[tag.toLowerCase()] == 'random'
+                                    ? 'always'
+                                    : 'random',
+                              ),
+                              onDeleted: () => _toggleCustomTag(tag),
+                            ))
+                        .toList(),
+                  ),
+                ],
+                if (selectedRandomCount > 0) ...[
+                  const SizedBox(height: 10),
+                  Text(ui['randomRange']!,
+                      style: Theme.of(context).textTheme.labelLarge),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _minRandomCustomTags,
+                          keyboardType: TextInputType.number,
+                          decoration: InputDecoration(labelText: ui['min']),
+                          onEditingComplete: _commitCustomTags,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          controller: _maxRandomCustomTags,
+                          keyboardType: TextInputType.number,
+                          decoration: InputDecoration(labelText: ui['max']),
+                          onEditingComplete: _commitCustomTags,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _customTagSearch,
+                  decoration: InputDecoration(
+                    hintText: ui['search'],
+                    prefixIcon: const Icon(Icons.search_rounded),
+                    suffixIcon: query.isEmpty
+                        ? null
+                        : IconButton(
+                            onPressed: () {
+                              setState(() => _customTagSearch.clear());
+                              _scheduleCustomTagCatalogSearch();
+                            },
+                            icon: const Icon(Icons.close_rounded),
+                          ),
+                  ),
+                  onChanged: (_) {
+                    setState(() {});
+                    _scheduleCustomTagCatalogSearch();
+                  },
+                ),
+                const SizedBox(height: 9),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      categoryButton('all', ui['all']!, '$randomCustomTagCount'),
+                      ...randomCustomTagLibrary.map((category) => categoryButton(
+                            category.id,
+                            category.label(language),
+                            '${category.tags.length}',
+                          )),
+                      categoryButton('danbooru-style', ui['styles']!, 'ALL'),
+                      categoryButton('copyright', ui['copyright']!, 'ALL'),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 7),
+                Text('$visibleCount / $totalCount',
+                    textAlign: TextAlign.end,
+                    style: Theme.of(context).textTheme.labelSmall),
+                const SizedBox(height: 7),
+                if (_customTagCatalogLoading && _isDynamicCustomTagCategory)
+                  Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      children: [
+                        const CircularProgressIndicator(),
+                        const SizedBox(height: 10),
+                        Text(ui['loading']!),
+                      ],
+                    ),
+                  )
+                else if ((_isDynamicCustomTagCategory
+                        ? _customTagCatalogItems.isEmpty
+                        : staticEntries.isEmpty))
+                  Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(ui['noResults']!, textAlign: TextAlign.center),
+                  )
+                else
+                  LayoutBuilder(builder: (context, constraints) {
+                    final columns = constraints.maxWidth >= 760
+                        ? 3
+                        : constraints.maxWidth >= 430
+                            ? 2
+                            : 1;
+                    final length = _isDynamicCustomTagCategory
+                        ? _customTagCatalogItems.length
+                        : staticEntries.length;
+                    final rows = (length / columns).ceil();
+                    return SizedBox(
+                      height: min(520.0, max(112.0, rows * 120.0)),
+                      child: GridView.builder(
+                        primary: false,
+                        itemCount: length,
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: columns,
+                          crossAxisSpacing: 8,
+                          mainAxisSpacing: 8,
+                          mainAxisExtent: 112,
+                        ),
+                        itemBuilder: (context, index) {
+                          if (_isDynamicCustomTagCategory) {
+                            final hit = _customTagCatalogItems[index];
+                            return tagTile(
+                              hit.tag,
+                              _offlineCatalogMeaning(hit, language),
+                              hit.postCount,
+                            );
+                          }
+                          final item = staticEntries[index];
+                          return tagTile(
+                            item.entry.tag,
+                            '${item.entry.label(language)} · ${item.category}',
+                          );
+                        },
+                      ),
+                    );
+                  }),
+                if (_isDynamicCustomTagCategory &&
+                    _customTagCatalogItems.length < _customTagCatalogTotal &&
+                    !_customTagCatalogLoading)
+                  Align(
+                    alignment: Alignment.center,
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        _customTagCatalogLimit = min(
+                          _customTagCatalogTotal,
+                          _customTagCatalogLimit + 120,
+                        );
+                        _loadCustomTagCatalog();
+                      },
+                      icon: const Icon(Icons.expand_more_rounded),
+                      label: Text(ui['loadMore']!),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
   Widget _weightTunerCard(Map<String, String> tuneText) => Card(
         clipBehavior: Clip.antiAlias,
         child: ExpansionTile(
@@ -2344,7 +2847,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                     ),
                     SizedBox(
                       width: constraints.maxWidth,
-                      child: _customTagLibraryCard(text),
+                      child: _customTagLibraryCard(text, app.settings.language),
                     ),
                     if (_customTags.text.trim().isNotEmpty) ...[
                       decimalField(
@@ -2397,47 +2900,6 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                       setState(() => _planned = _buildPlan());
                       _save();
                     }),
-                    SizedBox(
-                      width: constraints.maxWidth,
-                      child: SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: Text(text['franchise']!),
-                        subtitle: Text(text['franchiseHint']!),
-                        value: _includeFranchiseStyles,
-                        onChanged: (value) {
-                          setState(() {
-                            _includeFranchiseStyles = value;
-                            _drawSeed = Random.secure().nextInt(0x7fffffff);
-                            _planned = _buildPlan();
-                          });
-                          _save();
-                        },
-                      ),
-                    ),
-                    if (_includeFranchiseStyles) ...[
-                      numberField(_minFranchiseStyles, text['franchiseMin']!,
-                          commit: () {
-                        setState(() => _planned = _buildPlan());
-                        _save();
-                      }),
-                      numberField(_maxFranchiseStyles, text['franchiseMax']!,
-                          commit: () {
-                        setState(() => _planned = _buildPlan());
-                        _save();
-                      }),
-                      decimalField(
-                          _minFranchiseWeight, text['franchiseWeightMin']!,
-                          commit: () {
-                        setState(() => _planned = _buildPlan());
-                        _save();
-                      }),
-                      decimalField(
-                          _maxFranchiseWeight, text['franchiseWeightMax']!,
-                          commit: () {
-                        setState(() => _planned = _buildPlan());
-                        _save();
-                      }),
-                    ],
                     SizedBox(
                       width: constraints.maxWidth,
                       child: Text(text['seedMode']!,

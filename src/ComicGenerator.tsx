@@ -43,6 +43,7 @@ import {
 } from "./types";
 import {
   adaptiveNAIImageSize,
+  isNAIImageSize,
   maxNAIDimensionFor,
   NAI_DIMENSION_STEP,
   NAI_MIN_DIMENSION,
@@ -167,6 +168,12 @@ function normalizeBatchItem(
     base64: String(raw.base64 ?? ""),
     width: Number.isFinite(Number(raw.width)) ? Math.max(1, Number(raw.width)) : 0,
     height: Number.isFinite(Number(raw.height)) ? Math.max(1, Number(raw.height)) : 0,
+    outputWidth: Number.isFinite(Number(raw.outputWidth))
+      ? Math.max(NAI_MIN_DIMENSION, Number(raw.outputWidth))
+      : undefined,
+    outputHeight: Number.isFinite(Number(raw.outputHeight))
+      ? Math.max(NAI_MIN_DIMENSION, Number(raw.outputHeight))
+      : undefined,
     prompt: String(raw.prompt ?? ""),
     strength: raw.strength == null ? null : Number(raw.strength),
     overrideParams: Boolean(raw.overrideParams),
@@ -197,7 +204,10 @@ function normalizeBatchProject(
           : {}
       ),
     }),
-    sizeMode: p.sizeMode === "custom" ? "custom" : "adaptive",
+    sizeMode: p.sizeMode === "custom" || p.sizeMode === "perImage"
+      ? p.sizeMode
+      : "adaptive",
+    sizeBulk: typeof p.sizeBulk === "string" ? p.sizeBulk : "",
     items: Array.isArray(p.items)
       ? p.items
           .map((it, i) => normalizeBatchItem(it, i))
@@ -233,9 +243,51 @@ function selectedBatchOutputSize(
   const params = item.overrideParams
     ? { ...project.globalParams, ...item.params }
     : project.globalParams;
-  return project.sizeMode === "adaptive"
-    ? adaptiveNAIImageSize(item.width, item.height, params)
+  if (project.sizeMode === "adaptive") {
+    return adaptiveNAIImageSize(item.width, item.height, params);
+  }
+  const explicitSize = {
+    width: item.outputWidth ?? 0,
+    height: item.outputHeight ?? 0,
+  };
+  return project.sizeMode === "perImage" && isNAIImageSize(explicitSize)
+    ? explicitSize
     : { width: params.width, height: params.height };
+}
+
+type BatchSizeImportErrorCode = "empty" | "count" | "blank" | "format" | "unsupported";
+
+class BatchSizeImportError extends Error {
+  constructor(
+    readonly code: BatchSizeImportErrorCode,
+    readonly line?: number,
+    readonly expected?: number,
+    readonly actual?: number,
+  ) {
+    super(code);
+  }
+}
+
+function parseBatchSizeImport(text: string, expectedCount: number) {
+  const source = text.replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n");
+  if (!source.trim()) throw new BatchSizeImportError("empty");
+  // A trailing Enter is harmless, but leading/internal empty lines must remain
+  // visible so line N can never silently shift onto image N-1.
+  const lines = source.trimEnd().split("\n");
+  if (lines.length !== expectedCount) {
+    throw new BatchSizeImportError("count", undefined, expectedCount, lines.length);
+  }
+  return lines.map((raw, index) => {
+    const line = raw.trim();
+    if (!line) throw new BatchSizeImportError("blank", index + 1);
+    const match = line.match(/^(\d+)\s*[x×*]\s*(\d+)$/i);
+    if (!match) throw new BatchSizeImportError("format", index + 1);
+    const size = { width: Number(match[1]), height: Number(match[2]) };
+    if (!isNAIImageSize(size)) {
+      throw new BatchSizeImportError("unsupported", index + 1);
+    }
+    return size;
+  });
 }
 
 // Reusable parameter editor — drives both the global params and per-image overrides.
@@ -799,6 +851,70 @@ export function BatchRedraw({ onBack }: { onBack?: () => void }) {
       items: prev.items.map((it) => (it.id === id ? { ...it, ...p } : it)),
     }));
   }
+  function formatSizeImportError(error: unknown) {
+    if (!(error instanceof BatchSizeImportError)) {
+      return error instanceof Error ? error.message : String(error);
+    }
+    if (error.code === "count") {
+      return f("batch.sizeMode.perImageCount", {
+        expected: error.expected ?? items.length,
+        actual: error.actual ?? 0,
+      });
+    }
+    if (error.code === "blank") {
+      return f("batch.sizeMode.perImageBlank", { line: error.line ?? 0 });
+    }
+    if (error.code === "format") {
+      return f("batch.sizeMode.perImageFormat", { line: error.line ?? 0 });
+    }
+    if (error.code === "unsupported") {
+      return f("batch.sizeMode.perImageUnsupported", { line: error.line ?? 0 });
+    }
+    return t("batch.sizeMode.perImageEmpty");
+  }
+  function createPerImageSizeTemplate() {
+    if (items.length === 0) {
+      setToast(t("batch.toast.needImages"));
+      return;
+    }
+    const sizeBulk = items.map((item) => {
+      const explicit = {
+        width: item.outputWidth ?? 0,
+        height: item.outputHeight ?? 0,
+      };
+      const paramsForItem = item.overrideParams
+        ? { ...project.globalParams, ...item.params }
+        : project.globalParams;
+      const size = isNAIImageSize(explicit)
+        ? explicit
+        : adaptiveNAIImageSize(item.width, item.height, paramsForItem);
+      return `${size.width}×${size.height}`;
+    }).join("\n");
+    patch({ sizeMode: "perImage", sizeBulk });
+  }
+  function applyPerImageSizes(): boolean {
+    if (items.length === 0) {
+      setToast(t("batch.toast.needImages"));
+      return false;
+    }
+    try {
+      const sizes = parseBatchSizeImport(project.sizeBulk ?? "", items.length);
+      setBatchRedraw((prev) => ({
+        ...prev,
+        sizeMode: "perImage",
+        items: prev.items.map((item, index) => ({
+          ...item,
+          outputWidth: sizes[index].width,
+          outputHeight: sizes[index].height,
+        })),
+      }));
+      setToast(f("batch.sizeMode.perImageApplied", { count: sizes.length }));
+      return true;
+    } catch (error) {
+      setToast(formatSizeImportError(error));
+      return false;
+    }
+  }
   function syncFromMain() {
     patch({
       globalParams: { ...params, fileNamePrefix: "" },
@@ -943,11 +1059,30 @@ export function BatchRedraw({ onBack }: { onBack?: () => void }) {
     // cancel each other → every panel "fails". The store flag is set
     // synchronously below before the first await, so this guard is race-free.
     if (useAppStore.getState().batchRunning) return;
-    const proj = useAppStore.getState().batchRedraw;
+    let proj = useAppStore.getState().batchRedraw;
     if (!proj.groupName.trim()) {
       setToast(t("batch.toast.needGroup"));
       setStep("import");
       return;
+    }
+    if (proj.sizeMode === "perImage") {
+      try {
+        const sizes = parseBatchSizeImport(proj.sizeBulk ?? "", proj.items.length);
+        proj = {
+          ...proj,
+          items: proj.items.map((item, index) => ({
+            ...item,
+            outputWidth: sizes[index].width,
+            outputHeight: sizes[index].height,
+          })),
+        };
+        const snapshot = proj;
+        setBatchRedraw(() => snapshot);
+      } catch (error) {
+        setToast(formatSizeImportError(error));
+        setStep("params");
+        return;
+      }
     }
     const runGroupName = localizedBatchGroupName(proj.groupName, t);
     // Targets may come from a prior render. Resolve IDs against the current
@@ -1429,12 +1564,44 @@ export function BatchRedraw({ onBack }: { onBack?: () => void }) {
               >
                 {t("batch.sizeMode.custom")}
               </button>
+              <button
+                type="button"
+                className={clsx(project.sizeMode === "perImage" && "active")}
+                onClick={() => {
+                  if (project.sizeBulk?.trim()) patch({ sizeMode: "perImage" });
+                  else createPerImageSizeTemplate();
+                }}
+              >
+                {t("batch.sizeMode.perImage")}
+              </button>
             </div>
             <small>
               {project.sizeMode === "adaptive"
                 ? t("batch.sizeMode.adaptiveDesc")
-                : f("batch.sizeMode.customDesc", { size: `${globalParams.width}×${globalParams.height}` })}
+                : project.sizeMode === "custom"
+                  ? f("batch.sizeMode.customDesc", { size: `${globalParams.width}×${globalParams.height}` })
+                  : t("batch.sizeMode.perImageDesc")}
             </small>
+            {project.sizeMode === "perImage" && <div className="batch-per-image-size-editor">
+              <label className="field">
+                <span>{t("batch.sizeMode.perImageInput")}</span>
+                <textarea
+                  value={project.sizeBulk ?? ""}
+                  rows={Math.min(10, Math.max(4, items.length))}
+                  placeholder={t("batch.sizeMode.perImagePlaceholder")}
+                  spellCheck={false}
+                  onChange={(event) => patch({ sizeBulk: event.target.value })}
+                />
+              </label>
+              <div>
+                <Button type="button" variant="ghost" onClick={createPerImageSizeTemplate}>
+                  <Icon name="template" />{t("batch.sizeMode.perImageTemplate")}
+                </Button>
+                <Button type="button" variant="secondary" onClick={applyPerImageSizes}>
+                  <Icon name="check" />{t("batch.sizeMode.perImageApply")}
+                </Button>
+              </div>
+            </div>}
           </div>
           <BatchParamFields
             value={globalParams}
@@ -1458,7 +1625,11 @@ export function BatchRedraw({ onBack }: { onBack?: () => void }) {
               </Button>
               <Button
                 variant="primary"
-                onClick={() => setStep("prompts")}
+                onClick={() => {
+                  if (project.sizeMode !== "perImage" || applyPerImageSizes()) {
+                    setStep("prompts");
+                  }
+                }}
                 disabled={items.length === 0}
               >
                 {t("batch.next.prompts")}

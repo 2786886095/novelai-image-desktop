@@ -11,6 +11,7 @@ import type {
   ArtistLabModelStatus,
   ArtistTagRecord,
 } from "../../src/artist-lab";
+import type { ArtistStylePreviewResult } from "../../src/types";
 import { ARTIST_TAG_ALIASES, CURATED_ARTIST_TAGS } from "../../src/curated-artists";
 import { proxyConfig } from "./proxy";
 
@@ -38,6 +39,10 @@ function popularArtistCacheFile() {
 
 function referenceCacheDir() {
   return path.join(app.getPath("userData"), "artist-lab-reference-cache");
+}
+
+function stylePreviewCacheDir() {
+  return path.join(app.getPath("userData"), "artist-style-preview-cache");
 }
 
 function directoryStats(root: string): { bytes: number; files: number } {
@@ -308,6 +313,131 @@ async function representativeImage(artist: ArtistTagRecord): Promise<string | nu
   }
   fs.writeFileSync(manifestFile, JSON.stringify({ file, sourceUrl, savedAt: Date.now() }), "utf8");
   return file;
+}
+
+type StylePreviewManifest = ArtistStylePreviewResult & { filePath: string; savedAt: number };
+const pendingStylePreviews = new Map<string, Promise<ArtistStylePreviewResult | null>>();
+
+function safeStylePreviewTag(value: unknown): string {
+  if (typeof value !== "string") return "";
+  const tag = value.normalize("NFKC").trim().toLocaleLowerCase().replace(/\s+/g, "_");
+  // Reject Danbooru metatags (rating:, order:, -tag, etc.). The picker only
+  // sends canonical tag names, and the renderer never gets to change the safe
+  // rating/order constraints appended below.
+  return /^[a-z0-9][a-z0-9_()!'.+\-]{0,159}$/.test(tag) ? tag : "";
+}
+
+function stylePreviewFiles(tag: string, sourceUrl?: string) {
+  const key = crypto.createHash("sha1").update(tag).digest("hex").slice(0, 20);
+  const manifestFile = path.join(stylePreviewCacheDir(), `${key}.json`);
+  if (!sourceUrl) return { manifestFile, imageFile: "" };
+  const extension = (() => {
+    try {
+      const ext = path.extname(new URL(sourceUrl).pathname).toLocaleLowerCase();
+      return [".png", ".jpg", ".jpeg", ".webp"].includes(ext) ? ext : ".jpg";
+    } catch {
+      return ".jpg";
+    }
+  })();
+  return { manifestFile, imageFile: path.join(stylePreviewCacheDir(), `${key}${extension}`) };
+}
+
+async function loadArtistStylePreview(tag: string): Promise<ArtistStylePreviewResult | null> {
+  const { manifestFile } = stylePreviewFiles(tag);
+  try {
+    const manifest = JSON.parse(fs.readFileSync(manifestFile, "utf8")) as StylePreviewManifest;
+    if (manifest.tag === tag && path.isAbsolute(manifest.filePath) && fs.existsSync(manifest.filePath)) {
+      return {
+        tag,
+        imageUrl: toLocalMediaUrl(manifest.filePath),
+        sourceUrl: manifest.sourceUrl,
+        postUrl: manifest.postUrl,
+        width: manifest.width,
+        height: manifest.height,
+      };
+    }
+  } catch {
+    // Missing or stale cache: resolve one safe-rated representative below.
+  }
+
+  type PreviewPost = Record<string, unknown>;
+  const posts: PreviewPost[] = [];
+  const seenPosts = new Set<number>();
+  const baseTag = tag.replace(/_\(style\)$/i, "");
+  const queries = [`${tag} order:score`, tag];
+  if (baseTag && baseTag !== tag) queries.push(`${baseTag} order:score`);
+  for (const tags of queries) {
+    try {
+      const response = await axios.get(DANBOORU_POSTS_URL, {
+        timeout: 30_000,
+        headers: { Accept: "application/json", "User-Agent": "Langbai-NovelAI-Studio/Style-Preview" },
+        params: { limit: 40, tags },
+        ...proxyConfig("update"),
+      });
+      for (const candidate of Array.isArray(response.data) ? response.data : []) {
+        const id = Number(candidate?.id);
+        if (!Number.isFinite(id) || seenPosts.has(id)) continue;
+        seenPosts.add(id);
+        posts.push(candidate as PreviewPost);
+      }
+      if (posts.length > 0) break;
+    } catch {
+      // Try the next, less restrictive form. Some Danbooru deployments reject
+      // ranking metatags for anonymous requests even though plain tag lookup works.
+    }
+  }
+  const ratingPriority: Record<string, number> = { g: 0, s: 1, q: 2, e: 3 };
+  posts.sort((left, right) =>
+    (ratingPriority[String(left.rating)] ?? 4) - (ratingPriority[String(right.rating)] ?? 4));
+
+  fs.mkdirSync(stylePreviewCacheDir(), { recursive: true });
+  for (const post of posts.slice(0, 16)) {
+    const urls = [post.preview_file_url, post.large_file_url, post.file_url]
+      .filter((value): value is string => typeof value === "string" && /^https:\/\//i.test(value));
+    for (const sourceUrl of [...new Set(urls)]) {
+      try {
+        const { imageFile } = stylePreviewFiles(tag, sourceUrl);
+        if (!fs.existsSync(imageFile)) {
+          const image = await axios.get<ArrayBuffer>(sourceUrl, {
+            responseType: "arraybuffer",
+            timeout: 45_000,
+            maxContentLength: 12 * 1024 * 1024,
+            headers: { Accept: "image/*", "User-Agent": "Langbai-NovelAI-Studio/Style-Preview" },
+            ...proxyConfig("update"),
+          });
+          const bytes = Buffer.from(image.data);
+          if (bytes.length < 128 || bytes.length > 12 * 1024 * 1024) continue;
+          fs.writeFileSync(imageFile, bytes);
+        }
+        const result: ArtistStylePreviewResult = {
+          tag,
+          imageUrl: toLocalMediaUrl(imageFile),
+          sourceUrl,
+          postUrl: Number.isFinite(Number(post.id)) ? `https://danbooru.donmai.us/posts/${Number(post.id)}` : "https://danbooru.donmai.us/",
+          width: Math.max(0, Number(post.image_width) || 0),
+          height: Math.max(0, Number(post.image_height) || 0),
+        };
+        const manifest: StylePreviewManifest = { ...result, imageUrl: "", filePath: imageFile, savedAt: Date.now() };
+        fs.writeFileSync(manifestFile, JSON.stringify(manifest), "utf8");
+        return result;
+      } catch {
+        // A removed CDN object should not make the entire style unavailable;
+        // continue through the other post/URL candidates.
+      }
+    }
+  }
+  return null;
+}
+
+/** Fetch one Danbooru example lazily, preferring general/sensitive ratings. */
+export async function artistStylePreview(rawTag: unknown): Promise<ArtistStylePreviewResult | null> {
+  const tag = safeStylePreviewTag(rawTag);
+  if (!tag) return null;
+  const pending = pendingStylePreviews.get(tag);
+  if (pending) return pending;
+  const request = loadArtistStylePreview(tag).finally(() => pendingStylePreviews.delete(tag));
+  pendingStylePreviews.set(tag, request);
+  return request;
 }
 
 async function mapLimit<T, R>(items: T[], limit: number, task: (item: T) => Promise<R>): Promise<R[]> {

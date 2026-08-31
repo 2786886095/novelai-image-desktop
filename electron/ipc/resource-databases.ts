@@ -8,6 +8,7 @@ import { createGunzip } from "node:zlib";
 import { DatabaseSync } from "node:sqlite";
 import { app, BrowserWindow, shell } from "electron";
 import type {
+  ArtistStyleCatalogScope,
   ResourceCacheStats,
   ResourceDatabaseDownloadResult,
   ResourceDatabaseId,
@@ -17,6 +18,7 @@ import type {
   TagSuggestion,
 } from "../../src/types";
 import { proxyConfig } from "./proxy";
+import { artistStyleExactNames } from "./artist-style-taxonomy";
 
 type ResourceDefinition = {
   id: ResourceDatabaseId;
@@ -545,6 +547,55 @@ export function browseResourceTagCatalog(category: number, offset: number, limit
     }));
   });
   return result ?? [];
+}
+
+/** Query the visual taxonomy and source-work namespace without loading the
+ * complete Danbooru database into renderer memory. `_` is literal in SQLite
+ * GLOB, so `*_(style)` follows Danbooru's qualified style-tag convention. */
+export function browseResourceArtistStyleCatalog(
+  scope: ArtistStyleCatalogScope,
+  query: string,
+  offset: number,
+  limit: number,
+): { items: TagSuggestion[]; total: number } | null {
+  const safeOffset = Math.max(0, Math.trunc(offset));
+  const safeLimit = Math.max(1, Math.min(500, Math.trunc(limit)));
+  const needle = query.trim().toLocaleLowerCase().replaceAll(" ", "_").slice(0, 160);
+  return withDatabase("tagCatalog", (db) => {
+    const exactNames = artistStyleExactNames(scope);
+    const exactClause = exactNames.length > 0
+      ? `name IN (${exactNames.map(() => "?").join(", ")})`
+      : "0";
+    const visualClause = scope === "style"
+      ? "name GLOB '*_(style)'"
+      : scope === "stylization" || scope === "all"
+        ? `(name GLOB '*_(style)' OR ${exactClause})`
+        : exactClause;
+    const where = scope === "copyright"
+      ? "category = 3"
+      : scope === "all"
+        ? `(category = 3 OR (category = 0 AND ${visualClause}))`
+        : `category = 0 AND ${visualClause}`;
+    const baseParams = exactNames;
+    const queryWhere = needle ? " AND LOWER(name) LIKE ? ESCAPE '\\'" : "";
+    const escaped = `%${needle.replace(/[\\%_]/g, (value) => `\\${value}`)}%`;
+    const queryParams = needle ? [...baseParams, escaped] : baseParams;
+    const totalRow = needle
+      ? db.prepare(`SELECT COUNT(*) AS count FROM tags WHERE ${where}${queryWhere}`).get(...queryParams)
+      : db.prepare(`SELECT COUNT(*) AS count FROM tags WHERE ${where}`).get(...baseParams);
+    const rows = needle
+      ? db.prepare(`SELECT name, category, post_count FROM tags WHERE ${where}${queryWhere} ORDER BY post_count DESC, name ASC LIMIT ? OFFSET ?`).all(...queryParams, safeLimit, safeOffset)
+      : db.prepare(`SELECT name, category, post_count FROM tags WHERE ${where} ORDER BY post_count DESC, name ASC LIMIT ? OFFSET ?`).all(...baseParams, safeLimit, safeOffset);
+    return {
+      total: Number((totalRow as { count?: number | bigint } | undefined)?.count ?? 0),
+      items: (rows as Array<Record<string, unknown>>).map((row) => ({
+        tag: String(row.name),
+        category: Number(row.category),
+        count: Number(row.post_count),
+        description: "",
+      })),
+    };
+  });
 }
 
 export function relatedResourceTags(tags: string[], limit = 8): TagSuggestion[] {

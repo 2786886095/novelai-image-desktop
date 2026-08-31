@@ -1,0 +1,789 @@
+{
+  "version": 3,
+  "categories": [
+    {
+      "id": "quality",
+      "labels": {
+        "zh-CN": "质量与精度",
+        "zh-TW": "品質與精度",
+        "en-US": "Quality & detail",
+        "ja-JP": "品質・精細さ",
+        "ko-KR": "품질·정밀도"
+      },
+      "tags": [
+        {
+          "tag": "masterpiece",
+          "labels": {
+            "zh-CN": "杰作级",
+            "zh-TW": "傑作級",
+            "en-US": "Masterpiece-grade",
+            "ja-JP": "傑作級",
+            "ko-KR": "걸작급"
+          }
+        },
+        {
+          "tag": "best quality",
+          "labels": {
+            "zh-CN": "最高质量",
+            "zh-TW": "最高品質",
+            "en-US": "Best quality",
+            "ja-JP": "最高品質",
+            "ko-KR": "최고 품질"
+          }
+        },
+        {
+          "tag": "amazing quality",
+          "labels": {
+            "zh-CN": "惊艳质量",
+            "zh-TW": "驚豔品質",
+            "en-US": "Exceptional quality",
+            "ja-JP": "驚異的な品質",
+            "ko-KR": "놀라운 품질"
+          }
+        },
+        {
+          "tag": "very aesthetic",
+          "labels": {
+            "zh-CN": "高美感",
+            "zh-TW": "高美感",
+            "en-US": "Highly aesthetic",
+            "ja-JP": "高い美的完成度",
+            "ko-KR": "높은 미감"
+          }
+        },
+        {
+          "tag": "high quality",
+          "labels": {
+            "zh-CN": "高质量",
+            "zh-TW": "高品質",
+            "en-US": "High quality",
+            "ja-JP": "高品質",
+            "ko-KR": "고품질"
+          }
+        },
+        {
+          "tag": "ultra detailed",
+          "labels": {
+            "zh-CN": "超精细",
+            "zh-TW": "超精細",
+            "en-US": "Ultra-detailed",
+            "ja-JP": "超精細",
+            "ko-KR": "초정밀"
+          }
+        },
+        {
+          "tag": "extremely detailed",
+          "labels": {
+            "zh-CN": "极致细节",
+            "zh-TW": "極致細節",
+            "en-US": "Extremely detailed",
+            "ja-JP": "極めて詳細",
+            "ko-KR": "극도로 세밀함"
+          }
+        },
+        {
+          "tag": "absurdres",
+          "labels": {
+            "zh-CN": "超高分辨率",
+            "zh-TW": "超高解析度",
+            "en-US": "Extremely high resolution",
+            "ja-JP": "超高解像度",
+            "ko-KR": "초고해상도"
+          }
+        },
+        {
+          "tag": "highres",
+          "labels": {
+            "zh-CN": "高分辨率",
+            "zh-TW": "高解析度",
+            "en-US": "High resolution",
+            "ja-JP": "高解像度",
+            "ko-KR": "고해상도"
+          }
+        },
+        {
+          "tag": "intricate details",
+          "labels": {
+            "zh-CN": "繁复细节",
+            "zh-TW": "繁複細節",
+            "en-US": "Intricate details",
+            "ja-JP": "緻密なディテール",
+            "ko-KR": "정교한 디테일"
+          }
+        }
+      ]
+    },
+    {
+      "id": "render3d",
+      "labels": {
+        "zh-CN": "3D 与渲染",
+        "zh-TW": "3D 與渲染",
+        "en-US": "3D & rendering",
+        "ja-JP": "3D・レンダリング",
+        "ko-KR": "3D·렌더링"
+      },
+      "tags": [
+        {
+          "tag": "3d",
+          "labels": {
+            "zh-CN": "3D 立体",
+            "zh-TW": "3D 立體",
+            "en-US": "3D imagery",
+            "ja-JP": "3D表現",
+            "ko-KR": "3D 표현"
+          }
+        },
+        {
+          "tag": "3d render",
+          "labels": {
+            "zh-CN": "3D 渲染",
+            "zh-TW": "3D 渲染",
+            "en-US": "3D render",
+            "ja-JP": "3Dレンダー",
+            "ko-KR": "3D 렌더"
+          }
+        },
+        {
+          "tag": "cgi",
+          "labels": {
+            "zh-CN": "计算机图形",
+            "zh-TW": "電腦圖形",
+            "en-US": "Computer-generated imagery",
+            "ja-JP": "CG映像",
+            "ko-KR": "컴퓨터 그래픽"
+          }
+        },
+        {
+          "tag": "photorealistic",
+          "labels": {
+            "zh-CN": "照片级写实",
+            "zh-TW": "照片級寫實",
+            "en-US": "Photorealistic",
+            "ja-JP": "写真級リアル",
+            "ko-KR": "사진급 사실감"
+          }
+        },
+        {
+          "tag": "octane render",
+          "labels": {
+            "zh-CN": "Octane 渲染质感",
+            "zh-TW": "Octane 渲染質感",
+            "en-US": "Octane-rendered look",
+            "ja-JP": "Octaneレンダー質感",
+            "ko-KR": "Octane 렌더 질감"
+          }
+        },
+        {
+          "tag": "unreal engine",
+          "labels": {
+            "zh-CN": "虚幻引擎质感",
+            "zh-TW": "虛幻引擎質感",
+            "en-US": "Unreal Engine look",
+            "ja-JP": "Unreal Engine質感",
+            "ko-KR": "언리얼 엔진 질감"
+          }
+        },
+        {
+          "tag": "blender",
+          "labels": {
+            "zh-CN": "Blender 渲染",
+            "zh-TW": "Blender 渲染",
+            "en-US": "Blender render",
+            "ja-JP": "Blenderレンダー",
+            "ko-KR": "Blender 렌더"
+          }
+        },
+        {
+          "tag": "ray tracing",
+          "labels": {
+            "zh-CN": "光线追踪",
+            "zh-TW": "光線追蹤",
+            "en-US": "Ray tracing",
+            "ja-JP": "レイトレーシング",
+            "ko-KR": "레이 트레이싱"
+          }
+        },
+        {
+          "tag": "physically based rendering",
+          "labels": {
+            "zh-CN": "基于物理的渲染",
+            "zh-TW": "基於物理的渲染",
+            "en-US": "Physically based rendering",
+            "ja-JP": "物理ベースレンダリング",
+            "ko-KR": "물리 기반 렌더링"
+          }
+        },
+        {
+          "tag": "subsurface scattering",
+          "labels": {
+            "zh-CN": "次表面散射",
+            "zh-TW": "次表面散射",
+            "en-US": "Subsurface scattering",
+            "ja-JP": "表面下散乱",
+            "ko-KR": "서브서피스 스캐터링"
+          }
+        }
+      ]
+    },
+    {
+      "id": "medium",
+      "labels": {
+        "zh-CN": "媒介与画法",
+        "zh-TW": "媒介與畫法",
+        "en-US": "Medium & technique",
+        "ja-JP": "画材・技法",
+        "ko-KR": "매체·기법"
+      },
+      "tags": [
+        {
+          "tag": "illustration",
+          "labels": {
+            "zh-CN": "插画",
+            "zh-TW": "插畫",
+            "en-US": "Illustration",
+            "ja-JP": "イラスト",
+            "ko-KR": "일러스트"
+          }
+        },
+        {
+          "tag": "digital painting",
+          "labels": {
+            "zh-CN": "数字绘画",
+            "zh-TW": "數位繪畫",
+            "en-US": "Digital painting",
+            "ja-JP": "デジタルペイント",
+            "ko-KR": "디지털 페인팅"
+          }
+        },
+        {
+          "tag": "concept art",
+          "labels": {
+            "zh-CN": "概念设计",
+            "zh-TW": "概念設計",
+            "en-US": "Concept art",
+            "ja-JP": "コンセプトアート",
+            "ko-KR": "컨셉 아트"
+          }
+        },
+        {
+          "tag": "anime coloring",
+          "labels": {
+            "zh-CN": "动画式上色",
+            "zh-TW": "動畫式上色",
+            "en-US": "Anime coloring",
+            "ja-JP": "アニメ塗り",
+            "ko-KR": "애니메이션 채색"
+          }
+        },
+        {
+          "tag": "painterly",
+          "labels": {
+            "zh-CN": "绘画笔触感",
+            "zh-TW": "繪畫筆觸感",
+            "en-US": "Painterly",
+            "ja-JP": "絵画的な筆致",
+            "ko-KR": "회화적 붓터치"
+          }
+        },
+        {
+          "tag": "watercolor",
+          "labels": {
+            "zh-CN": "水彩",
+            "zh-TW": "水彩",
+            "en-US": "Watercolor",
+            "ja-JP": "水彩",
+            "ko-KR": "수채화"
+          }
+        },
+        {
+          "tag": "oil painting",
+          "labels": {
+            "zh-CN": "油画",
+            "zh-TW": "油畫",
+            "en-US": "Oil painting",
+            "ja-JP": "油彩",
+            "ko-KR": "유화"
+          }
+        },
+        {
+          "tag": "gouache",
+          "labels": {
+            "zh-CN": "水粉",
+            "zh-TW": "廣告顏料",
+            "en-US": "Gouache",
+            "ja-JP": "ガッシュ",
+            "ko-KR": "과슈"
+          }
+        },
+        {
+          "tag": "cel shading",
+          "labels": {
+            "zh-CN": "赛璐璐上色",
+            "zh-TW": "賽璐璐上色",
+            "en-US": "Cel shading",
+            "ja-JP": "セルシェーディング",
+            "ko-KR": "셀 셰이딩"
+          }
+        },
+        {
+          "tag": "lineart",
+          "labels": {
+            "zh-CN": "线稿",
+            "zh-TW": "線稿",
+            "en-US": "Line art",
+            "ja-JP": "線画",
+            "ko-KR": "선화"
+          }
+        }
+      ]
+    },
+    {
+      "id": "lighting",
+      "labels": {
+        "zh-CN": "光影与照明",
+        "zh-TW": "光影與照明",
+        "en-US": "Lighting",
+        "ja-JP": "光・照明",
+        "ko-KR": "빛·조명"
+      },
+      "tags": [
+        {
+          "tag": "cinematic lighting",
+          "labels": {
+            "zh-CN": "电影光影",
+            "zh-TW": "電影光影",
+            "en-US": "Cinematic lighting",
+            "ja-JP": "映画的ライティング",
+            "ko-KR": "시네마틱 조명"
+          }
+        },
+        {
+          "tag": "volumetric lighting",
+          "labels": {
+            "zh-CN": "体积光",
+            "zh-TW": "體積光",
+            "en-US": "Volumetric lighting",
+            "ja-JP": "ボリュームライト",
+            "ko-KR": "볼류메트릭 라이트"
+          }
+        },
+        {
+          "tag": "rim lighting",
+          "labels": {
+            "zh-CN": "轮廓光",
+            "zh-TW": "輪廓光",
+            "en-US": "Rim lighting",
+            "ja-JP": "リムライト",
+            "ko-KR": "림 라이트"
+          }
+        },
+        {
+          "tag": "backlighting",
+          "labels": {
+            "zh-CN": "逆光",
+            "zh-TW": "逆光",
+            "en-US": "Backlighting",
+            "ja-JP": "逆光",
+            "ko-KR": "역광"
+          }
+        },
+        {
+          "tag": "side lighting",
+          "labels": {
+            "zh-CN": "侧光",
+            "zh-TW": "側光",
+            "en-US": "Side lighting",
+            "ja-JP": "サイドライト",
+            "ko-KR": "측면 조명"
+          }
+        },
+        {
+          "tag": "soft lighting",
+          "labels": {
+            "zh-CN": "柔和光线",
+            "zh-TW": "柔和光線",
+            "en-US": "Soft lighting",
+            "ja-JP": "柔らかな光",
+            "ko-KR": "부드러운 조명"
+          }
+        },
+        {
+          "tag": "hard lighting",
+          "labels": {
+            "zh-CN": "硬朗光线",
+            "zh-TW": "強烈硬光",
+            "en-US": "Hard lighting",
+            "ja-JP": "硬い光",
+            "ko-KR": "강한 하드 라이트"
+          }
+        },
+        {
+          "tag": "dramatic lighting",
+          "labels": {
+            "zh-CN": "戏剧性光影",
+            "zh-TW": "戲劇性光影",
+            "en-US": "Dramatic lighting",
+            "ja-JP": "ドラマチックな光",
+            "ko-KR": "극적인 조명"
+          }
+        },
+        {
+          "tag": "studio lighting",
+          "labels": {
+            "zh-CN": "摄影棚灯光",
+            "zh-TW": "攝影棚燈光",
+            "en-US": "Studio lighting",
+            "ja-JP": "スタジオ照明",
+            "ko-KR": "스튜디오 조명"
+          }
+        },
+        {
+          "tag": "neon lighting",
+          "labels": {
+            "zh-CN": "霓虹灯光",
+            "zh-TW": "霓虹燈光",
+            "en-US": "Neon lighting",
+            "ja-JP": "ネオン照明",
+            "ko-KR": "네온 조명"
+          }
+        }
+      ]
+    },
+    {
+      "id": "color",
+      "labels": {
+        "zh-CN": "色彩与调色",
+        "zh-TW": "色彩與調色",
+        "en-US": "Color & grading",
+        "ja-JP": "色彩・カラー",
+        "ko-KR": "색채·컬러"
+      },
+      "tags": [
+        {
+          "tag": "vibrant colors",
+          "labels": {
+            "zh-CN": "鲜艳色彩",
+            "zh-TW": "鮮豔色彩",
+            "en-US": "Vibrant colors",
+            "ja-JP": "鮮やかな色",
+            "ko-KR": "선명한 색상"
+          }
+        },
+        {
+          "tag": "pastel colors",
+          "labels": {
+            "zh-CN": "粉彩色调",
+            "zh-TW": "粉彩色調",
+            "en-US": "Pastel colors",
+            "ja-JP": "パステルカラー",
+            "ko-KR": "파스텔 색상"
+          }
+        },
+        {
+          "tag": "muted colors",
+          "labels": {
+            "zh-CN": "低饱和色彩",
+            "zh-TW": "低飽和色彩",
+            "en-US": "Muted colors",
+            "ja-JP": "落ち着いた色",
+            "ko-KR": "차분한 저채도 색"
+          }
+        },
+        {
+          "tag": "monochrome",
+          "labels": {
+            "zh-CN": "单色画面",
+            "zh-TW": "單色畫面",
+            "en-US": "Monochrome",
+            "ja-JP": "モノクロ",
+            "ko-KR": "단색"
+          }
+        },
+        {
+          "tag": "limited palette",
+          "labels": {
+            "zh-CN": "限制色板",
+            "zh-TW": "限制色盤",
+            "en-US": "Limited palette",
+            "ja-JP": "限定カラーパレット",
+            "ko-KR": "제한된 팔레트"
+          }
+        },
+        {
+          "tag": "complementary colors",
+          "labels": {
+            "zh-CN": "互补色",
+            "zh-TW": "互補色",
+            "en-US": "Complementary colors",
+            "ja-JP": "補色配色",
+            "ko-KR": "보색"
+          }
+        },
+        {
+          "tag": "warm colors",
+          "labels": {
+            "zh-CN": "暖色调",
+            "zh-TW": "暖色調",
+            "en-US": "Warm colors",
+            "ja-JP": "暖色",
+            "ko-KR": "따뜻한 색조"
+          }
+        },
+        {
+          "tag": "cool colors",
+          "labels": {
+            "zh-CN": "冷色调",
+            "zh-TW": "冷色調",
+            "en-US": "Cool colors",
+            "ja-JP": "寒色",
+            "ko-KR": "차가운 색조"
+          }
+        },
+        {
+          "tag": "color contrast",
+          "labels": {
+            "zh-CN": "色彩对比",
+            "zh-TW": "色彩對比",
+            "en-US": "Color contrast",
+            "ja-JP": "色彩コントラスト",
+            "ko-KR": "색상 대비"
+          }
+        },
+        {
+          "tag": "iridescent colors",
+          "labels": {
+            "zh-CN": "虹彩色泽",
+            "zh-TW": "虹彩色澤",
+            "en-US": "Iridescent colors",
+            "ja-JP": "玉虫色",
+            "ko-KR": "오팔빛 색상"
+          }
+        }
+      ]
+    },
+    {
+      "id": "texture",
+      "labels": {
+        "zh-CN": "材质与纹理",
+        "zh-TW": "材質與紋理",
+        "en-US": "Material & texture",
+        "ja-JP": "素材・質感",
+        "ko-KR": "재질·텍스처"
+      },
+      "tags": [
+        {
+          "tag": "detailed skin",
+          "labels": {
+            "zh-CN": "皮肤细节",
+            "zh-TW": "皮膚細節",
+            "en-US": "Detailed skin",
+            "ja-JP": "肌のディテール",
+            "ko-KR": "피부 디테일"
+          }
+        },
+        {
+          "tag": "detailed eyes",
+          "labels": {
+            "zh-CN": "眼睛细节",
+            "zh-TW": "眼睛細節",
+            "en-US": "Detailed eyes",
+            "ja-JP": "瞳のディテール",
+            "ko-KR": "눈 디테일"
+          }
+        },
+        {
+          "tag": "detailed hair",
+          "labels": {
+            "zh-CN": "发丝细节",
+            "zh-TW": "髮絲細節",
+            "en-US": "Detailed hair",
+            "ja-JP": "髪のディテール",
+            "ko-KR": "머리카락 디테일"
+          }
+        },
+        {
+          "tag": "fabric texture",
+          "labels": {
+            "zh-CN": "布料纹理",
+            "zh-TW": "布料紋理",
+            "en-US": "Fabric texture",
+            "ja-JP": "布の質感",
+            "ko-KR": "직물 질감"
+          }
+        },
+        {
+          "tag": "metallic texture",
+          "labels": {
+            "zh-CN": "金属质感",
+            "zh-TW": "金屬質感",
+            "en-US": "Metallic texture",
+            "ja-JP": "金属質感",
+            "ko-KR": "금속 질감"
+          }
+        },
+        {
+          "tag": "glass texture",
+          "labels": {
+            "zh-CN": "玻璃质感",
+            "zh-TW": "玻璃質感",
+            "en-US": "Glass texture",
+            "ja-JP": "ガラス質感",
+            "ko-KR": "유리 질감"
+          }
+        },
+        {
+          "tag": "wet surface",
+          "labels": {
+            "zh-CN": "湿润表面",
+            "zh-TW": "濕潤表面",
+            "en-US": "Wet surface",
+            "ja-JP": "濡れた表面",
+            "ko-KR": "젖은 표면"
+          }
+        },
+        {
+          "tag": "reflections",
+          "labels": {
+            "zh-CN": "反射质感",
+            "zh-TW": "反射質感",
+            "en-US": "Reflections",
+            "ja-JP": "反射",
+            "ko-KR": "반사"
+          }
+        },
+        {
+          "tag": "glossy",
+          "labels": {
+            "zh-CN": "高光泽",
+            "zh-TW": "高光澤",
+            "en-US": "Glossy",
+            "ja-JP": "光沢感",
+            "ko-KR": "광택"
+          }
+        },
+        {
+          "tag": "matte",
+          "labels": {
+            "zh-CN": "哑光质感",
+            "zh-TW": "霧面質感",
+            "en-US": "Matte",
+            "ja-JP": "マット質感",
+            "ko-KR": "무광 질감"
+          }
+        }
+      ]
+    },
+    {
+      "id": "stylization",
+      "labels": {
+        "zh-CN": "风格化方向",
+        "zh-TW": "風格化方向",
+        "en-US": "Stylization",
+        "ja-JP": "スタイル方向",
+        "ko-KR": "스타일화"
+      },
+      "tags": [
+        {
+          "tag": "realistic",
+          "labels": {
+            "zh-CN": "写实",
+            "zh-TW": "寫實",
+            "en-US": "Realistic",
+            "ja-JP": "リアル",
+            "ko-KR": "사실적"
+          }
+        },
+        {
+          "tag": "semi-realistic",
+          "labels": {
+            "zh-CN": "半写实",
+            "zh-TW": "半寫實",
+            "en-US": "Semi-realistic",
+            "ja-JP": "セミリアル",
+            "ko-KR": "반실사"
+          }
+        },
+        {
+          "tag": "stylized",
+          "labels": {
+            "zh-CN": "强风格化",
+            "zh-TW": "強風格化",
+            "en-US": "Stylized",
+            "ja-JP": "スタイライズ",
+            "ko-KR": "스타일화"
+          }
+        },
+        {
+          "tag": "anime style",
+          "labels": {
+            "zh-CN": "动漫风格",
+            "zh-TW": "動漫風格",
+            "en-US": "Anime style",
+            "ja-JP": "アニメ風",
+            "ko-KR": "애니메이션 스타일"
+          }
+        },
+        {
+          "tag": "manga style",
+          "labels": {
+            "zh-CN": "漫画风格",
+            "zh-TW": "漫畫風格",
+            "en-US": "Manga style",
+            "ja-JP": "漫画風",
+            "ko-KR": "만화 스타일"
+          }
+        },
+        {
+          "tag": "chibi",
+          "labels": {
+            "zh-CN": "Q 版比例",
+            "zh-TW": "Q 版比例",
+            "en-US": "Chibi",
+            "ja-JP": "ちびキャラ",
+            "ko-KR": "치비"
+          }
+        },
+        {
+          "tag": "minimalist",
+          "labels": {
+            "zh-CN": "极简主义",
+            "zh-TW": "極簡主義",
+            "en-US": "Minimalist",
+            "ja-JP": "ミニマリスト",
+            "ko-KR": "미니멀리즘"
+          }
+        },
+        {
+          "tag": "maximalist",
+          "labels": {
+            "zh-CN": "极繁主义",
+            "zh-TW": "極繁主義",
+            "en-US": "Maximalist",
+            "ja-JP": "マキシマリスト",
+            "ko-KR": "맥시멀리즘"
+          }
+        },
+        {
+          "tag": "art nouveau",
+          "labels": {
+            "zh-CN": "新艺术风格",
+            "zh-TW": "新藝術風格",
+            "en-US": "Art Nouveau",
+            "ja-JP": "アール・ヌーヴォー",
+            "ko-KR": "아르 누보"
+          }
+        },
+        {
+          "tag": "futuristic",
+          "labels": {
+            "zh-CN": "未来主义",
+            "zh-TW": "未來主義",
+            "en-US": "Futuristic",
+            "ja-JP": "未来的",
+            "ko-KR": "미래적"
+          }
+        }
+      ]
+    }
+  ]
+}

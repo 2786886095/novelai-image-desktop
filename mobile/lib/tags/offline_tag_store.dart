@@ -40,6 +40,16 @@ class OfflineTagStatus {
   });
 }
 
+class OfflineArtistStyleCatalog {
+  final List<OfflineTagHit> items;
+  final int total;
+
+  const OfflineArtistStyleCatalog({
+    required this.items,
+    required this.total,
+  });
+}
+
 class OfflineTagStore {
   static const _channel = MethodChannel('langbai.novelai/native_text');
   List<OfflineTagHit>? _index;
@@ -152,6 +162,38 @@ class OfflineTagStore {
           : right.hit.postCount.compareTo(left.hit.postCount);
     });
     return scored.take(limit).map((item) => item.hit).toList();
+  }
+
+  /// Lazily browses the two namespaces used by the artist-string style picker.
+  /// Danbooru has no general "style" category: explicit `_(style)` tags are
+  /// the precise parody/style set, while category 3 contains source works
+  /// (anime, manga, games and novels).
+  Future<OfflineArtistStyleCatalog> browseArtistStyleCatalog({
+    required String scope,
+    String query = '',
+    int offset = 0,
+    int limit = 120,
+  }) async {
+    final index = await _load();
+    final needle = query.trim().toLowerCase().replaceAll('_', ' ');
+    final isChinese = RegExp(r'[\u3400-\u9fff]').hasMatch(needle);
+    final filtered = index.where((hit) {
+      final inScope = scope == 'copyright'
+          ? hit.category == 3
+          : hit.category == 0 && hit.tag.toLowerCase().endsWith('_(style)');
+      if (!inScope) return false;
+      if (needle.isEmpty) return true;
+      final name = hit.tag.toLowerCase().replaceAll('_', ' ');
+      if (name.contains(needle)) return true;
+      return isChinese && hit.chinese.any((alias) =>
+          alias.toLowerCase().replaceAll('_', ' ').contains(needle));
+    }).toList();
+    final safeOffset = offset.clamp(0, filtered.length).toInt();
+    final safeLimit = limit.clamp(1, 500).toInt();
+    return OfflineArtistStyleCatalog(
+      items: filtered.skip(safeOffset).take(safeLimit).toList(),
+      total: filtered.length,
+    );
   }
 
   /// Finds complete mature tags inside a longer description or generated

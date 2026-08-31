@@ -20,13 +20,19 @@ import axios from "axios";
 import fs from "fs/promises";
 import path from "path";
 import { app } from "electron";
-import type { TagSuggestion } from "../../src/types";
+import type {
+  ArtistStyleCatalogResult,
+  ArtistStyleCatalogScope,
+  TagSuggestion,
+} from "../../src/types";
 import { proxyConfig } from "./proxy";
 import {
+  browseResourceArtistStyleCatalog,
   browseResourceTagCatalog,
   getResourceDatabaseOverview,
   searchResourceTagCatalog,
 } from "./resource-databases";
+import { matchesArtistStyleScope } from "./artist-style-taxonomy";
 
 // Pinned to a specific commit (NOT the mutable `main` branch) so the downloaded
 // data can't silently change shape underneath us.
@@ -304,6 +310,70 @@ export async function searchDanbooru(query: string, limit = 12): Promise<TagSugg
     category: t.category,
     description: t.cn.join(" "),
   }));
+}
+
+/** Full, lazy artist-style source for the gacha picker. Visual groups use the
+ * explicit local taxonomy in artist-style-taxonomy.ts; source/work tags remain
+ * Danbooru category 3. This keeps action/background/emotion tags out without
+ * reducing the picker to the handful of built-in examples. */
+export async function artistStyleCatalog(
+  scope: ArtistStyleCatalogScope,
+  query = "",
+  offset = 0,
+  limit = 120,
+): Promise<ArtistStyleCatalogResult> {
+  const allowedScopes = new Set<ArtistStyleCatalogScope>([
+    "all",
+    "quality",
+    "render3d",
+    "medium",
+    "lighting",
+    "color",
+    "texture",
+    "stylization",
+    "style",
+    "copyright",
+  ]);
+  const safeScope: ArtistStyleCatalogScope = allowedScopes.has(scope) ? scope : "all";
+  const safeOffset = Math.max(0, Math.trunc(offset));
+  const safeLimit = Math.max(1, Math.min(500, Math.trunc(limit)));
+  const catalog = browseResourceArtistStyleCatalog(
+    safeScope,
+    query,
+    safeOffset,
+    safeLimit,
+  );
+  if (catalog && catalog.total > 0) {
+    return { ...catalog, source: "catalog" };
+  }
+
+  let idx: DanbooruTag[];
+  try {
+    idx = await loadDanbooruIndex();
+  } catch {
+    return { items: [], total: 0, source: "none" };
+  }
+  const raw = query.trim();
+  const cjk = /[\u3400-\u9fff]/.test(raw);
+  const needle = raw.toLocaleLowerCase().replaceAll("_", " ");
+  const filtered = idx.filter((tag) => {
+    const inScope = matchesArtistStyleScope(tag.name, tag.category, safeScope);
+    if (!inScope || !raw) return inScope;
+    if (cjk) {
+      return tag.cn.some((alias) => alias.toLocaleLowerCase().includes(needle));
+    }
+    return tag.name.toLocaleLowerCase().replaceAll("_", " ").includes(needle);
+  });
+  return {
+    total: filtered.length,
+    source: filtered.length > 0 ? "bilingual" : "none",
+    items: filtered.slice(safeOffset, safeOffset + safeLimit).map((tag) => ({
+      tag: tag.name,
+      category: tag.category,
+      count: tag.post,
+      description: tag.cn.join(" "),
+    })),
+  };
 }
 
 /**

@@ -14,6 +14,8 @@ class BatchRedrawItem {
   String sourcePath;
   int width;
   int height;
+  int? outputWidth;
+  int? outputHeight;
   String prompt;
   double? strength;
   bool overrideParams;
@@ -30,6 +32,8 @@ class BatchRedrawItem {
     this.sourcePath = '',
     this.width = 0,
     this.height = 0,
+    this.outputWidth,
+    this.outputHeight,
     this.prompt = '',
     this.strength,
     this.overrideParams = false,
@@ -46,6 +50,8 @@ class BatchRedrawItem {
         'base64': base64,
         'width': width,
         'height': height,
+        'outputWidth': outputWidth,
+        'outputHeight': outputHeight,
         'prompt': prompt,
         'strength': strength,
         'overrideParams': overrideParams,
@@ -65,6 +71,8 @@ class BatchRedrawItem {
         base64: json['base64']?.toString() ?? '',
         width: (json['width'] as num?)?.toInt() ?? 0,
         height: (json['height'] as num?)?.toInt() ?? 0,
+        outputWidth: (json['outputWidth'] as num?)?.toInt(),
+        outputHeight: (json['outputHeight'] as num?)?.toInt(),
         prompt: json['prompt']?.toString() ?? '',
         strength: (json['strength'] as num?)?.toDouble(),
         overrideParams: json['overrideParams'] == true,
@@ -87,6 +95,7 @@ class BatchRedrawProject {
   String globalNegative;
   GenerateParams globalParams;
   String sizeMode;
+  String sizeBulk;
   ReversePromptMode aiMode;
   String promptBulk;
   bool reuseMainReferences;
@@ -102,6 +111,7 @@ class BatchRedrawProject {
     this.globalNegative = '',
     GenerateParams? globalParams,
     this.sizeMode = 'adaptive',
+    this.sizeBulk = '',
     this.aiMode = ReversePromptMode.tags,
     this.promptBulk = '',
     this.reuseMainReferences = false,
@@ -128,6 +138,7 @@ class BatchRedrawProject {
         'globalNegative': globalNegative,
         'globalParams': globalParams.toJson(),
         'sizeMode': sizeMode,
+        'sizeBulk': sizeBulk,
         'aiMode': aiMode.value,
         'promptBulk': promptBulk,
         'reuseMainReferences': reuseMainReferences,
@@ -152,8 +163,11 @@ class BatchRedrawProject {
       globalStyle: json['globalStyle']?.toString() ?? '',
       globalNegative: json['globalNegative']?.toString() ?? '',
       globalParams: global,
-      sizeMode:
-          json['sizeMode']?.toString() == 'custom' ? 'custom' : 'adaptive',
+      sizeMode: const {'adaptive', 'custom', 'perImage'}
+              .contains(json['sizeMode']?.toString())
+          ? json['sizeMode'].toString()
+          : 'adaptive',
+      sizeBulk: json['sizeBulk']?.toString() ?? '',
       aiMode: ReversePromptMode.values.firstWhere(
         (value) => value.value == json['aiMode']?.toString(),
         orElse: () => ReversePromptMode.tags,
@@ -184,6 +198,64 @@ class BatchRedrawProject {
           .toList(),
     );
   }
+}
+
+class BatchSizeImportException implements Exception {
+  final String code;
+  final int? line;
+  final int? expected;
+  final int? actual;
+
+  const BatchSizeImportException(
+    this.code, {
+    this.line,
+    this.expected,
+    this.actual,
+  });
+}
+
+bool isValidBatchNaiSize(int width, int height) =>
+    width >= naiMinDimension &&
+    height >= naiMinDimension &&
+    width <= naiMaxDimension &&
+    height <= naiMaxDimension &&
+    width % naiDimensionStep == 0 &&
+    height % naiDimensionStep == 0 &&
+    width * height <= naiMaxPixelArea;
+
+List<(int, int)> parseBatchSizeImport(String text, int expectedCount) {
+  final source = text
+      .replaceFirst('\uFEFF', '')
+      .replaceAll('\r\n', '\n')
+      .replaceAll('\r', '\n');
+  if (source.trim().isEmpty) throw const BatchSizeImportException('empty');
+  // Allow a trailing Enter, but preserve leading/internal blank lines so the
+  // Nth line can never be silently reassigned to the wrong image.
+  final lines = source.trimRight().split('\n');
+  if (lines.length != expectedCount) {
+    throw BatchSizeImportException(
+      'count',
+      expected: expectedCount,
+      actual: lines.length,
+    );
+  }
+  return lines.asMap().entries.map((entry) {
+    final line = entry.value.trim();
+    if (line.isEmpty) {
+      throw BatchSizeImportException('blank', line: entry.key + 1);
+    }
+    final match = RegExp(r'^(\d+)\s*[x×*]\s*(\d+)$', caseSensitive: false)
+        .firstMatch(line);
+    if (match == null) {
+      throw BatchSizeImportException('format', line: entry.key + 1);
+    }
+    final width = int.parse(match.group(1)!);
+    final height = int.parse(match.group(2)!);
+    if (!isValidBatchNaiSize(width, height)) {
+      throw BatchSizeImportException('unsupported', line: entry.key + 1);
+    }
+    return (width, height);
+  }).toList();
 }
 
 var _counter = 0;

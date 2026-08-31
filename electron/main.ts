@@ -60,6 +60,7 @@ import {
 
 registerLocalMediaScheme();
 import {
+  artistStyleCatalog,
   danbooruStatus,
   downloadDanbooruTags,
   browseDanbooru,
@@ -92,6 +93,7 @@ import {
 import { clearOnlineGalleryDataCache, getOnlineGalleryDetail, searchOnlineGallery } from "./ipc/online-gallery";
 import {
   artistLabModelStatus,
+  artistStylePreview,
   discoverSimilarArtists,
   clearArtistLabModels,
   loadPopularArtistTags,
@@ -626,6 +628,9 @@ function registerIpc() {
       discoverSimilarArtists(mode, targetPath, offset, scanCount, shortlist, force),
   );
   ipcMain.handle("artistLab:clearModels", () => clearArtistLabModels());
+  ipcMain.handle("artistLab:stylePreview", (_event, tag: unknown) =>
+    artistStylePreview(tag),
+  );
   ipcMain.handle("aitag:config", () => getAitagConfig());
   ipcMain.handle("aitag:search", (_event, request: unknown) =>
     searchAitag(request),
@@ -898,6 +903,11 @@ function registerIpc() {
   );
   ipcMain.handle("nai:danbooruSearch", (_event, query: string, limit: number) =>
     searchDanbooru(query, limit),
+  );
+  ipcMain.handle(
+    "nai:artistStyleCatalog",
+    (_event, scope: import("../src/types").ArtistStyleCatalogScope, query: string, offset: number, limit: number) =>
+      artistStyleCatalog(scope, query, offset, limit),
   );
   ipcMain.handle("resource-database:overview", () => getResourceDatabaseOverview());
   ipcMain.handle("resource-database:download", (_event, id: ResourceDatabaseId, confirmReplace?: boolean) =>

@@ -2,6 +2,9 @@ import { contextBridge, ipcRenderer, webUtils } from "electron";
 import type {
   AnlasQuoteRequest,
   AppSettings,
+  ArtistStyleCatalogResult,
+  ArtistStyleCatalogScope,
+  ArtistStylePreviewResult,
   AugmentOptions,
   BatchExportFile,
   BatchRedrawRequest,
@@ -115,6 +118,8 @@ contextBridge.exposeInMainWorld("naiDesktop", {
     force?: boolean,
   ) => ipcRenderer.invoke("artistLab:discoverSimilar", mode, targetPath, offset, scanCount, shortlist, force),
   artistLabClearModels: () => ipcRenderer.invoke("artistLab:clearModels"),
+  artistLabStylePreview: (tag: string) =>
+    ipcRenderer.invoke("artistLab:stylePreview", tag) as Promise<ArtistStylePreviewResult | null>,
   aitagConfig: () => ipcRenderer.invoke("aitag:config"),
   aitagSearch: (request: AitagSearchRequest) =>
     ipcRenderer.invoke("aitag:search", request),
@@ -300,6 +305,18 @@ contextBridge.exposeInMainWorld("naiDesktop", {
     ipcRenderer.invoke("nai:danbooruSearch", query, limit) as Promise<
       TagSuggestion[]
     >,
+  artistStyleCatalog: (
+    scope: ArtistStyleCatalogScope,
+    query: string,
+    offset: number,
+    limit: number,
+  ) => ipcRenderer.invoke(
+    "nai:artistStyleCatalog",
+    scope,
+    query,
+    offset,
+    limit,
+  ) as Promise<ArtistStyleCatalogResult>,
   translate: (text: string, target?: string) =>
     ipcRenderer.invoke("nai:translate", text, target),
   loadImage: () => ipcRenderer.invoke("nai:loadImage"),

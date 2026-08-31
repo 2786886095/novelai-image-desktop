@@ -224,38 +224,6 @@ const styleMutationLibrary = <String, List<String>>{
     'volumetric lighting',
     'window light',
   ],
-  'atmosphere': [
-    'atmospheric perspective',
-    'cinematic atmosphere',
-    'cozy atmosphere',
-    'dreamy',
-    'dust particles',
-    'ethereal',
-    'floating particles',
-    'foggy',
-    'hazy',
-    'magical atmosphere',
-    'melancholic',
-    'misty',
-    'moody',
-    'mysterious',
-    'nostalgic',
-    'ominous atmosphere',
-    'peaceful',
-    'romantic atmosphere',
-    'serene',
-    'soft focus',
-    'sparkles',
-    'surreal atmosphere',
-    'tranquil',
-    'vignette',
-    'whimsical',
-    'windy atmosphere',
-    'glowing dust',
-    'humid atmosphere',
-    'smoky atmosphere',
-    'rainy atmosphere',
-  ],
 };
 
 const franchiseStyleTagLibrary = <String>[
@@ -290,41 +258,6 @@ const franchiseStyleTagLibrary = <String>[
   'one_piece',
   'honkai_impact_3rd',
 ];
-
-const randomCustomTagLibrary = <String, List<String>>{
-  'render3d': [
-    '3d',
-    '3d render',
-    'cgi',
-    'octane render',
-    'unreal engine',
-    'ray tracing',
-  ],
-  'lighting': [
-    'cinematic lighting',
-    'volumetric lighting',
-    'rim lighting',
-    'dramatic lighting',
-    'depth of field',
-    'high contrast',
-  ],
-  'quality': [
-    'masterpiece',
-    'best quality',
-    'amazing quality',
-    'very aesthetic',
-    'absurdres',
-    'highres',
-  ],
-  'atmosphere': [
-    'atmospheric perspective',
-    'dramatic atmosphere',
-    'moody atmosphere',
-    'fog',
-    'glowing particles',
-    'light rays',
-  ],
-};
 
 int _weightedIndex(
     List<ArtistTagRecord> pool, Random random, Set<String> favorites) {
@@ -568,6 +501,9 @@ List<ArtistRecipe> drawArtistRecipes({
   double maxArtistWeight = 1.2,
   String auxiliary = '',
   String customTagPool = '',
+  Map<String, String> customTagModes = const {},
+  int minRandomCustomTags = 1,
+  int maxRandomCustomTags = 3,
   double minCustomTagWeight = .2,
   double maxCustomTagWeight = 1.2,
   bool mutateAuxiliary = false,
@@ -595,6 +531,20 @@ List<ArtistRecipe> drawArtistRecipes({
   final franchiseWeightBounds =
       _normalizedWeightBounds(minFranchiseWeight, maxFranchiseWeight);
   final availableCustomTags = parseCustomTagPoolValues(customTagPool);
+  final alwaysCustomTags = availableCustomTags
+      .where((value) =>
+          customTagModes[value.toLowerCase()]?.toLowerCase() != 'random')
+      .toList();
+  final randomCustomTags = availableCustomTags
+      .where((value) =>
+          customTagModes[value.toLowerCase()]?.toLowerCase() == 'random')
+      .toList();
+  final firstRandomCount =
+      minRandomCustomTags.clamp(0, randomCustomTags.length).toInt();
+  final secondRandomCount =
+      maxRandomCustomTags.clamp(0, randomCustomTags.length).toInt();
+  final randomTagLower = min(firstRandomCount, secondRandomCount);
+  final randomTagUpper = max(firstRandomCount, secondRandomCount);
   final customTagWeightBounds =
       _normalizedWeightBounds(minCustomTagWeight, maxCustomTagWeight);
   final output = <ArtistRecipe>[];
@@ -630,8 +580,15 @@ List<ArtistRecipe> drawArtistRecipes({
       tokens.addAll(franchiseStyles
           .map((item) => '${_number(item.weight)}::${item.value} ::'));
     }
-    if (availableCustomTags.isNotEmpty) {
-      tokens.addAll(availableCustomTags.map((value) =>
+    final selectedCustomTags = <String>[...alwaysCustomTags];
+    if (randomCustomTags.isNotEmpty && randomTagUpper > 0) {
+      final shuffled = [...randomCustomTags]..shuffle(random);
+      final randomCount = randomTagLower +
+          random.nextInt(randomTagUpper - randomTagLower + 1);
+      selectedCustomTags.addAll(shuffled.take(randomCount));
+    }
+    if (selectedCustomTags.isNotEmpty) {
+      tokens.addAll(selectedCustomTags.map((value) =>
           '${_number(_randomWeight(random, customTagWeightBounds))}::$value ::'));
     }
     final auxiliaryTokens = auxiliary

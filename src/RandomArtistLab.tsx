@@ -1,4 +1,12 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type InputHTMLAttributes } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type InputHTMLAttributes,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import { AppPortal, Button, SelectMenu } from "./components/ui";
 import { Icon } from "./components/icons";
 import { QualityPresetControl } from "./components/QualityPresetControl";
@@ -9,13 +17,18 @@ import {
   generatePopularArtistRecipes,
   parseCustomTagPoolValues,
   randomizeArtistRecipeWeights,
-  RANDOM_CUSTOM_TAG_LIBRARY,
-  toggleCustomTagInPool,
   type ArtistRecipeComparison,
   type ArtistRecipeVariant,
+  type CustomTagMode,
   type GeneratedArtistRecipe,
   type StyleMutationCategory,
 } from "./artist-recipe";
+import {
+  customTagCategoryLabel,
+  customTagMeaning,
+  matchesCustomTagSearch,
+  RANDOM_CUSTOM_TAG_LIBRARY,
+} from "./random-custom-tag-library";
 import { createArtistLabRandom, type ArtistTagRecord } from "./artist-lab";
 import { useAppStore } from "./store";
 import {
@@ -27,8 +40,11 @@ import {
   supportsNAINoiseScheduleControl,
   supportsNAIVariety,
   type AppLanguage,
+  type ArtistStyleCatalogScope,
+  type ArtistStylePreviewResult,
   type GenerateParams,
   type HistoryItem,
+  type TagSuggestion,
 } from "./types";
 import {
   fitNAIImageSize,
@@ -67,6 +83,9 @@ type RandomSession = {
   artistWeightMin: number;
   artistWeightMax: number;
   customTagPool: string;
+  customTagModes: Record<string, CustomTagMode>;
+  randomCustomTagMinCount: number;
+  randomCustomTagMaxCount: number;
   customTagWeightMin: number;
   customTagWeightMax: number;
   includeFranchiseStyles: boolean;
@@ -100,87 +119,78 @@ const RANDOM_V5_DEFAULTS = {
   artistWeightMax: 1.2,
   customTagWeightMin: 0.2,
   customTagWeightMax: 1.2,
+  randomCustomTagMinCount: 1,
+  randomCustomTagMaxCount: 3,
   franchiseMinCount: 0,
   franchiseMaxCount: 2,
   franchiseWeightMin: 0.15,
   franchiseWeightMax: 0.8,
 } as const;
+const ARTIST_STYLE_CATALOG_PAGE_SIZE = 120;
+const ARTIST_STYLE_SCOPE_BY_CATEGORY: Record<string, ArtistStyleCatalogScope> = {
+  all: "all",
+  quality: "quality",
+  render3d: "render3d",
+  medium: "medium",
+  lighting: "lighting",
+  color: "color",
+  texture: "texture",
+  stylization: "stylization",
+  "danbooru-style": "style",
+  copyright: "copyright",
+};
+
+type ArtistStylePreviewPopover = {
+  tag: string;
+  meaning: string;
+  left: number;
+  top: number;
+  status: "loading" | "ready" | "empty";
+  result?: ArtistStylePreviewResult;
+};
 let sessionCache: RandomSession | null = null;
 
 const CUSTOM_TAG_TEXT = {
   "zh-CN": {
-    title: "自定义 Tag（权重随机）",
-    hint: "使用逗号或换行分隔。所有 Tag 都会加入每个画师串，只分别随机权重。",
-    placeholder: "例如：year 2024, 0.7::blue theme ::, dynamic angle",
-    range: "自定义 Tag 权重区间",
-    library: "Tag 快选库",
-    libraryHint: "从常用分类中选择；已选 Tag 同样会加入每个画师串。",
-    selected: "已选 {count} 个",
-    render3d: "3D / 渲染",
-    lighting: "光影 / 画面",
-    quality: "质量词",
-    atmosphere: "氛围 / 环境渲染",
+    title: "手动 Tag",
+    hint: "逗号或换行分隔。下方可为每个 Tag 单独选择“每串必加”或“随机抽取”，权重都会重新随机。",
+    placeholder: "例如：anime coloring, watercolor (medium), official style",
+    range: "Tag 权重区间", library: "画风 Tag 库", libraryHint: "仅保留画风、媒介、渲染、光色与画质；动作、背景、特效、情绪不混入画师串。面板默认折叠。",
+    selected: "已选 {count} 个", available: "本地按需载入", search: "搜索 Tag、中文含义或作品名", all: "全部画风 / 动漫游戏", clear: "清空全部",
+    noResults: "没有匹配项；完整库需要先在设置中安装 Danbooru 标签数据。", styleTags: "Danbooru 画风模仿", copyright: "动漫 / 游戏 / 漫画作品", always: "每串必加", random: "随机加入", selectedTitle: "已选 Tag 与加入方式", randomRange: "每串随机抽取数量", loadMore: "载入更多", loading: "正在读取本地 Tag 库…", sourceCatalog: "完整本地数据库", sourceBilingual: "中英离线库", sourceNone: "未安装本地数据库", collapse: "折叠画风 Tag 库",
   },
   "zh-TW": {
-    title: "自訂 Tag（權重隨機）",
-    hint: "使用逗號或換行分隔。所有 Tag 都會加入每個畫師串，只分別隨機權重。",
-    placeholder: "例如：year 2024, 0.7::blue theme ::, dynamic angle",
-    range: "自訂 Tag 權重區間",
-    library: "Tag 快選庫",
-    libraryHint: "從常用分類中選擇；已選 Tag 同樣會加入每個畫師串。",
-    selected: "已選 {count} 個",
-    render3d: "3D / 渲染",
-    lighting: "光影 / 畫面",
-    quality: "品質詞",
-    atmosphere: "氛圍 / 環境渲染",
+    title: "手動 Tag", hint: "以逗號或換行分隔。每個 Tag 可選擇「每串必加」或「隨機抽取」，權重皆會重新抽選。", placeholder: "例如：anime coloring, watercolor (medium), official style",
+    range: "Tag 權重範圍", library: "畫風 Tag 庫", libraryHint: "只保留畫風、媒材、渲染、光色與畫質；不混入動作、背景、特效或情緒。面板預設收合。", selected: "已選 {count} 個", available: "本機按需載入", search: "搜尋 Tag、中文意思或作品名", all: "全部畫風 / 動漫遊戲", clear: "全部清除", noResults: "找不到結果；完整資料庫需先在設定安裝 Danbooru 標籤資料。", styleTags: "Danbooru 畫風模仿", copyright: "動畫／遊戲／漫畫作品", always: "每串必加", random: "隨機加入", selectedTitle: "已選 Tag 與加入方式", randomRange: "每串隨機抽取數量", loadMore: "載入更多", loading: "正在讀取本機 Tag 庫…", sourceCatalog: "完整本機資料庫", sourceBilingual: "中英離線庫", sourceNone: "未安裝本機資料庫", collapse: "收合畫風 Tag 庫",
   },
   "en-US": {
-    title: "Custom Tags (random weights)",
-    hint: "Separate entries with commas or new lines. Every Tag is added to every artist string; only each weight is randomized.",
-    placeholder: "Example: year 2024, 0.7::blue theme ::, dynamic angle",
-    range: "Custom Tag weight range",
-    library: "Tag quick-pick library",
-    libraryHint: "Choose common tags by category. Selected tags are also added to every artist string.",
-    selected: "{count} selected",
-    render3d: "3D / rendering",
-    lighting: "Lighting / image",
-    quality: "Quality tags",
-    atmosphere: "Atmosphere / environment",
+    title: "Manual Tags", hint: "Separate with commas or new lines. Choose Always or Random for every Tag; weights are rerolled either way.", placeholder: "Example: anime coloring, watercolor (medium), official style",
+    range: "Tag weight range", library: "Visual-style Tag library", libraryHint: "Only visual style, medium, rendering, lighting/color, and quality are included—never action, background, effects, or emotion. Collapsed by default.", selected: "{count} selected", available: "Loaded locally on demand", search: "Search Tags, meanings, anime, or games", all: "All styles / franchises", clear: "Clear all", noResults: "No matches. Install the Danbooru tag data in Settings for the complete catalog.", styleTags: "Danbooru style parodies", copyright: "Anime / game / manga sources", always: "Always", random: "Random", selectedTitle: "Selected Tags and inclusion mode", randomRange: "Random Tags per string", loadMore: "Load more", loading: "Reading the local Tag catalog…", sourceCatalog: "Full local database", sourceBilingual: "Bilingual offline catalog", sourceNone: "Local catalog not installed", collapse: "Collapse style Tag library",
   },
   "ja-JP": {
-    title: "カスタム Tag（ウェイトのみ抽選）",
-    hint: "カンマまたは改行で区切ります。すべての Tag を各画家列に追加し、ウェイトだけ個別に抽選します。",
-    placeholder: "例：year 2024, 0.7::blue theme ::, dynamic angle",
-    range: "カスタム Tag のウェイト範囲",
-    library: "Tag クイック選択",
-    libraryHint: "カテゴリから選択します。選択した Tag もすべての画家列に追加されます。",
-    selected: "{count} 個選択中",
-    render3d: "3D / レンダリング",
-    lighting: "光・画面",
-    quality: "品質 Tag",
-    atmosphere: "雰囲気 / 環境",
+    title: "手動 Tag", hint: "カンマまたは改行で区切ります。各 Tag を「毎回追加」または「ランダム」に設定でき、ウェイトは毎回再抽選します。", placeholder: "例：anime coloring, watercolor (medium), official style",
+    range: "Tag ウェイト範囲", library: "画風 Tag ライブラリ", libraryHint: "画風・画材・レンダリング・光色・品質のみ。動作、背景、効果、感情は混在させません。初期状態は折りたたみです。", selected: "{count} 個選択", available: "ローカルから必要時に読込", search: "Tag・意味・作品名を検索", all: "全画風 / アニメ・ゲーム", clear: "すべて解除", noResults: "一致なし。完全な一覧は設定から Danbooru Tag データを導入してください。", styleTags: "Danbooru 画風模倣", copyright: "アニメ／ゲーム作品", always: "毎回追加", random: "ランダム", selectedTitle: "選択 Tag と追加方式", randomRange: "各画家列のランダム数", loadMore: "さらに読込", loading: "ローカル Tag を読込中…", sourceCatalog: "完全ローカルDB", sourceBilingual: "日中オフラインDB", sourceNone: "ローカルDB未導入", collapse: "画風 Tag を折りたたむ",
   },
   "ko-KR": {
-    title: "사용자 지정 Tag (가중치만 무작위)",
-    hint: "쉼표나 줄바꿈으로 구분합니다. 모든 Tag를 각 작가 문자열에 넣고 가중치만 각각 무작위로 정합니다.",
-    placeholder: "예: year 2024, 0.7::blue theme ::, dynamic angle",
-    range: "사용자 지정 Tag 가중치 범위",
-    library: "Tag 빠른 선택",
-    libraryHint: "카테고리에서 선택합니다. 선택한 Tag도 모든 작가 문자열에 추가됩니다.",
-    selected: "{count}개 선택",
-    render3d: "3D / 렌더링",
-    lighting: "조명 / 화면",
-    quality: "품질 Tag",
-    atmosphere: "분위기 / 환경",
+    title: "수동 Tag", hint: "쉼표나 줄바꿈으로 구분합니다. 각 Tag를 항상 추가 또는 무작위로 정하고 가중치는 매번 다시 뽑습니다.", placeholder: "예: anime coloring, watercolor (medium), official style",
+    range: "Tag 가중치 범위", library: "화풍 Tag 라이브러리", libraryHint: "화풍·매체·렌더링·빛/색·품질만 포함하며 동작, 배경, 효과, 감정은 섞지 않습니다. 기본은 접힌 상태입니다.", selected: "{count}개 선택", available: "로컬에서 필요할 때 불러오기", search: "Tag, 의미, 작품명 검색", all: "전체 화풍 / 애니·게임", clear: "모두 지우기", noResults: "검색 결과가 없습니다. 설정에서 Danbooru Tag 데이터를 설치하면 전체 목록을 사용할 수 있습니다.", styleTags: "Danbooru 화풍 모방", copyright: "애니 / 게임 작품", always: "항상", random: "무작위", selectedTitle: "선택 Tag 및 추가 방식", randomRange: "문자열당 무작위 Tag 수", loadMore: "더 불러오기", loading: "로컬 Tag 목록을 읽는 중…", sourceCatalog: "전체 로컬 DB", sourceBilingual: "중영 오프라인 DB", sourceNone: "로컬 DB 미설치", collapse: "화풍 Tag 접기",
   },
 } satisfies Record<AppLanguage, Record<string, string>>;
 
+const STYLE_PREVIEW_TEXT = {
+  "zh-CN": { title: "Danbooru 参考图", loading: "正在载入参考图…", empty: "这个画风 Tag 暂无可用参考图" },
+  "zh-TW": { title: "Danbooru 參考圖", loading: "正在載入參考圖…", empty: "這個畫風 Tag 暫無可用參考圖" },
+  "en-US": { title: "Danbooru reference", loading: "Loading a reference image…", empty: "No reference image is available for this style Tag" },
+  "ja-JP": { title: "Danbooru 参考画像", loading: "参考画像を読込中…", empty: "この画風 Tag の参考画像はありません" },
+  "ko-KR": { title: "Danbooru 참고 이미지", loading: "참고 이미지를 불러오는 중…", empty: "이 화풍 Tag에 사용할 참고 이미지가 없습니다" },
+} satisfies Record<AppLanguage, { title: string; loading: string; empty: string }>;
+
 const RANDOM_RESET_TEXT = {
-  "zh-CN": { label: "恢复抽卡默认", hint: "V5 默认：画师与自定义 Tag 0.2～1.2；系列风格 0.15～0.8。", done: "已恢复 V5 抽卡默认；提示词、收藏与生成参数未清除。" },
-  "zh-TW": { label: "恢復抽卡預設", hint: "V5 預設：畫師與自訂 Tag 0.2～1.2；系列風格 0.15～0.8。", done: "已恢復 V5 抽卡預設；提示詞、收藏與生成參數未清除。" },
-  "en-US": { label: "Restore draw defaults", hint: "V5 defaults: artists and custom Tags 0.2–1.2; franchises 0.15–0.8.", done: "V5 draw defaults restored; prompts, favorites, and generation settings were kept." },
-  "ja-JP": { label: "抽選設定を初期化", hint: "V5 初期値：画家とカスタム Tag 0.2～1.2、作品風格 0.15～0.8。", done: "V5 初期値へ戻しました。プロンプト・お気に入り・生成設定は維持されます。" },
-  "ko-KR": { label: "뽑기 기본값 복원", hint: "V5 기본값: 작가와 사용자 Tag 0.2～1.2, 작품 화풍 0.15～0.8.", done: "V5 기본값을 복원했습니다. 프롬프트·즐겨찾기·생성 설정은 유지됩니다." },
+  "zh-CN": { label: "恢复抽卡默认", hint: "V5 默认：画师与画风 Tag 权重 0.2～1.2；随机 Tag 每串 1～3 个。", done: "已恢复 V5 抽卡默认；提示词、收藏与生成参数未清除。" },
+  "zh-TW": { label: "恢復抽卡預設", hint: "V5 預設：畫師與畫風 Tag 權重 0.2～1.2；每串隨機 1～3 個。", done: "已恢復 V5 抽卡預設；提示詞、收藏與生成參數未清除。" },
+  "en-US": { label: "Restore draw defaults", hint: "V5 defaults: artist/style weights 0.2–1.2 and 1–3 random Tags per string.", done: "V5 draw defaults restored; prompts, favorites, and generation settings were kept." },
+  "ja-JP": { label: "抽選設定を初期化", hint: "V5 初期値：画家／画風 Tag 0.2～1.2、ランダム Tag は各列 1～3 個。", done: "V5 初期値へ戻しました。プロンプト・お気に入り・生成設定は維持されます。" },
+  "ko-KR": { label: "뽑기 기본값 복원", hint: "V5 기본값: 작가/화풍 Tag 0.2～1.2, 문자열당 무작위 Tag 1～3개.", done: "V5 기본값을 복원했습니다. 프롬프트·즐겨찾기·생성 설정은 유지됩니다." },
 } satisfies Record<AppLanguage, { label: string; hint: string; done: string }>;
 
 const RANDOM_SIZE_PRESETS = [
@@ -193,11 +203,11 @@ const RANDOM_SIZE_PRESETS = [
 ] as const;
 
 const TEXT = {
-  "zh-CN": { title: "随机画师串抽卡", subtitle: "每次抽卡重新组合画师、权重和可选风格词；内容与生成参数保持不变，Seed 可按组随机或全批固定。", back: "返回画风实验室", pool: "热门画师候选库", poolSize: "按热度载入前 N 名", load: "载入", ready: "当前候选库共 {count} 名画师", loading: "正在读取热门画师…", refresh: "刷新排行", hint: "画师 Tag 来源：Danbooru", base: "固定内容提示词", auxiliary: "固定附加词（每次都保留）", mutate: "抽卡时额外加入随机风格词", mutateHint: "开启后，每组使用同一画师串、提示词、Seed 和参数生成 A/B 两张：A 不加风格词，B 从画风、媒介/笔触、色彩、光影、氛围中抽取 2～6 个带 0.3～1.5 权重的词。", count: "本批画师串数量", range: "每串画师数量（最多 20 名）", min: "最少", max: "最多", seed: "固定 NovelAI Seed", draw: "重新抽卡", preview: "本批抽卡预览", previewHint: "开启随机风格词时，每组生成 A/B 两张对照图；重新抽卡会清除上一批未收藏的临时图片。", generate: "生成这一批", stop: "停止任务", refine: "根据喜欢项再抽卡", needPool: "画师池尚未载入。", needPrompt: "请填写固定内容提示词。", needLikes: "请先收藏至少一个喜欢项。", running: "正在生成 {done}/{total}", complete: "本批已完成；未收藏图片会在下一次抽卡时自动清理。", pending: "等待", generating: "生成中", done: "已完成", failed: "失败", like: "收藏到喜欢", saved: "已收藏", saving: "保存中…", retry: "重试", apply: "应用到生成", copy: "复制", copied: "已复制画师串。", applied: "已应用到生成页。", empty: "画师池加载后即可抽卡。", unlimited: "输入画师串组数；开启随机风格词时，实际图片数为两倍。", mutation: "本次风格/光影变异词", favorites: "喜欢的画风", favoritesHint: "A、B 可分别收藏；收藏 B 后，开启风格词的偏好抽卡也会参考其风格词与权重。", remove: "移除收藏", removed: "已移除收藏和本地图片。", categories: "艺术风格|媒介/笔触|色彩|光影|氛围", variantPlain: "A｜仅画师串", variantMutated: "B｜画师串＋随机风格词", copyArtists: "复制画师串", copyFull: "复制完整提示词", copiedArtists: "已复制画师串。", copiedFull: "已复制完整提示词。", pairSummary: "{pairs} 组 · {images} 张", artistWeight: "画师权重区间", franchise: "加入游戏 / 动漫系列风格 Tag", franchiseHint: "从当前热门的 Danbooru 作品系列标签中随机抽取；它可能影响角色或题材，不只是画风。", franchiseRange: "系列风格 Tag 数量", franchiseWeight: "系列风格 Tag 权重", seedMode: "NovelAI Seed 模式", seedRandom: "每组随机", seedFixed: "固定 Seed", randomFixedSeed: "随机一个固定 Seed", franchiseTerms: "本次游戏 / 动漫系列 Tag", allModels: "全部模型", modelGroup: "生成模型", previewImage: "双击预览大图" },
-  "zh-TW": { title: "隨機畫師串抽卡", subtitle: "每次抽卡重新組合畫師、權重與可選風格詞；內容與生成參數保持不變，Seed 可按組隨機或全批固定。", back: "返回畫風實驗室", pool: "熱門畫師候選庫", poolSize: "依熱度載入前 N 名", load: "載入", ready: "目前候選庫共 {count} 名畫師", loading: "正在讀取熱門畫師…", refresh: "更新排行", hint: "畫師 Tag 來源：Danbooru", base: "固定內容提示詞", auxiliary: "固定附加詞（每次保留）", mutate: "抽卡時額外加入隨機風格詞", mutateHint: "開啟後，每組以相同畫師串、提示詞、Seed 與參數生成 A/B 兩張：A 不加風格詞，B 抽取 2～6 個帶 0.3～1.5 權重的畫風詞。", count: "本批畫師串組數", range: "每串畫師數量（最多 20 名）", min: "最少", max: "最多", seed: "固定 NovelAI Seed", draw: "重新抽卡", preview: "本批抽卡預覽", previewHint: "開啟隨機風格詞時每組生成 A/B 兩張；重新抽卡會清除未收藏暫存圖。", generate: "生成這一批", stop: "停止任務", refine: "依喜歡項再抽卡", needPool: "畫師池尚未載入。", needPrompt: "請填寫固定內容提示詞。", needLikes: "請先收藏至少一項。", running: "正在生成 {done}/{total}", complete: "本批已完成；未收藏圖片會於下次抽卡清理。", pending: "等待", generating: "生成中", done: "已完成", failed: "失敗", like: "收藏到喜歡", saved: "已收藏", saving: "儲存中…", retry: "重試", apply: "套用到生成", copy: "複製", copied: "已複製畫師串。", applied: "已套用到生成頁。", empty: "畫師池載入後即可抽卡。", unlimited: "輸入畫師串組數；開啟隨機風格詞時實際圖片數為兩倍。", mutation: "本次風格/光影變異詞", favorites: "喜歡的畫風", favoritesHint: "A、B 可分別收藏；收藏 B 後，偏好抽卡也會參考其風格詞與權重。", remove: "移除收藏", removed: "已移除收藏與本機圖片。", categories: "藝術風格|媒介/筆觸|色彩|光影|氛圍", variantPlain: "A｜僅畫師串", variantMutated: "B｜畫師串＋隨機風格詞", copyArtists: "複製畫師串", copyFull: "複製完整提示詞", copiedArtists: "已複製畫師串。", copiedFull: "已複製完整提示詞。", pairSummary: "{pairs} 組 · {images} 張", artistWeight: "畫師權重區間", franchise: "加入遊戲 / 動漫系列風格 Tag", franchiseHint: "從目前熱門的 Danbooru 作品系列標籤隨機抽取；可能影響角色或題材，不只影響畫風。", franchiseRange: "系列風格 Tag 數量", franchiseWeight: "系列風格 Tag 權重", seedMode: "NovelAI Seed 模式", seedRandom: "每組隨機", seedFixed: "固定 Seed", randomFixedSeed: "隨機一個固定 Seed", franchiseTerms: "本次遊戲 / 動漫系列 Tag", allModels: "全部模型", modelGroup: "生成模型", previewImage: "雙擊預覽大圖" },
-  "en-US": { title: "Random Artist-string Gacha", subtitle: "Every draw rerolls artists, weights, and optional style terms while content and generation settings stay fixed; the seed can be random per group or fixed for the whole batch.", back: "Back to Artist Lab", pool: "Popular artist pool", poolSize: "Load top N by popularity", load: "Load", ready: "{count} artists in the current pool", loading: "Loading popular artists…", refresh: "Refresh ranking", hint: "Artist tag source: Danbooru", base: "Fixed content prompt", auxiliary: "Fixed extra terms (always kept)", mutate: "Add random style terms during the draw", mutateHint: "When enabled, each group creates a fair A/B pair with the same artist string, prompt, seed, and settings: A has no random style terms; B adds 2–6 terms weighted 0.3–1.5.", count: "Artist-string groups in this batch", range: "Artists per string (maximum 20)", min: "Minimum", max: "Maximum", seed: "Fixed NovelAI seed", draw: "Draw again", preview: "Current draw", previewHint: "Style mode creates two A/B images per group. Starting a new draw clears unliked temporary images.", generate: "Generate this batch", stop: "Stop", refine: "Draw from favorites", needPool: "The artist pool is not ready.", needPrompt: "Enter a fixed content prompt.", needLikes: "Save at least one favorite first.", running: "Generating {done}/{total}", complete: "Batch complete. Unliked images will be cleared by the next draw.", pending: "Pending", generating: "Generating", done: "Complete", failed: "Failed", like: "Save favorite", saved: "Saved", saving: "Saving…", retry: "Retry", apply: "Apply to Generate", copy: "Copy", copied: "Artist string copied.", applied: "Applied to Generate.", empty: "Draws appear after the pool loads.", unlimited: "Enter the number of artist-string groups. Style mode generates twice as many images.", mutation: "Style / lighting terms in this draw", favorites: "Favorite styles", favoritesHint: "A and B can be saved independently. Favorite B terms and weights can guide later style-enabled draws.", remove: "Remove favorite", removed: "Favorite and local image removed.", categories: "Art style|Medium / brushwork|Color|Lighting|Atmosphere", variantPlain: "A | Artist string only", variantMutated: "B | Artist string + random styles", copyArtists: "Copy artist string", copyFull: "Copy full prompt", copiedArtists: "Artist string copied.", copiedFull: "Full prompt copied.", pairSummary: "{pairs} groups · {images} images", artistWeight: "Artist weight range", franchise: "Add game / anime franchise style tags", franchiseHint: "Draws from current high-volume Danbooru copyright tags. These can affect characters or subject matter as well as style.", franchiseRange: "Franchise tag count", franchiseWeight: "Franchise tag weight", seedMode: "NovelAI Seed mode", seedRandom: "Random per group", seedFixed: "Fixed Seed", randomFixedSeed: "Randomize a fixed Seed", franchiseTerms: "Game / anime franchise tags in this draw", allModels: "All models", modelGroup: "Generation model", previewImage: "Double-click to preview" },
-  "ja-JP": { title: "ランダム画家タグ抽選", subtitle: "抽選ごとに画家・重み・任意の画風語を再構成し、内容と生成設定は維持します。Seed は組ごとのランダムまたはバッチ全体の固定を選べます。", back: "画風ラボへ戻る", pool: "人気画家候補", poolSize: "人気順の上位 N 名", load: "読込", ready: "現在の候補は全 {count} 名", loading: "人気画家を読込中…", refresh: "順位を更新", hint: "画家 Tag の出典：Danbooru", base: "固定内容プロンプト", auxiliary: "固定追加語（常に保持）", mutate: "抽選時に画風語を追加", mutateHint: "有効時は同じ画家列・プロンプト・Seed・設定で A/B を生成します。A は画風語なし、B は 0.3～1.5 重みの画風語を 2～6 個追加します。", count: "このバッチの画家列グループ数", range: "1組の画家数（最大20名）", min: "最小", max: "最大", seed: "固定 NovelAI Seed", draw: "再抽選", preview: "現在の抽選", previewHint: "画風語を有効にすると1組につき A/B の2枚を生成します。再抽選時に未保存画像を消去します。", generate: "このバッチを生成", stop: "停止", refine: "お気に入りから抽選", needPool: "画家候補が未準備です。", needPrompt: "固定内容を入力してください。", needLikes: "先に1件以上保存してください。", running: "生成中 {done}/{total}", complete: "完了。未保存画像は次回抽選時に消去されます。", pending: "待機", generating: "生成中", done: "完了", failed: "失敗", like: "お気に入り保存", saved: "保存済み", saving: "保存中…", retry: "再試行", apply: "生成へ適用", copy: "コピー", copied: "コピーしました。", applied: "生成へ適用しました。", empty: "候補読込後に抽選できます。", unlimited: "画家列の組数を入力します。画風語モードでは画像数が2倍になります。", mutation: "今回の画風・光変異語", favorites: "お気に入り画風", favoritesHint: "A/B は個別保存できます。B の画風語と重みは次の画風語抽選にも反映できます。", remove: "お気に入り削除", removed: "お気に入りと画像を削除しました。", categories: "画風|画材・筆致|色彩|光|雰囲気", variantPlain: "A｜画家列のみ", variantMutated: "B｜画家列＋ランダム画風語", copyArtists: "画家列をコピー", copyFull: "完全プロンプトをコピー", copiedArtists: "画家列をコピーしました。", copiedFull: "完全プロンプトをコピーしました。", pairSummary: "{pairs} 組 · {images} 枚", artistWeight: "画家の重み範囲", franchise: "ゲーム / アニメ作品の画風 Tag を追加", franchiseHint: "人気の Danbooru 作品タグから抽選します。画風だけでなくキャラクターや題材にも影響する場合があります。", franchiseRange: "作品 Tag 数", franchiseWeight: "作品 Tag の重み", seedMode: "NovelAI Seed モード", seedRandom: "グループごとにランダム", seedFixed: "Seed 固定", randomFixedSeed: "固定 Seed をランダム生成", franchiseTerms: "今回のゲーム / アニメ作品 Tag", allModels: "すべてのモデル", modelGroup: "生成モデル", previewImage: "ダブルクリックで拡大" },
-  "ko-KR": { title: "무작위 작가 조합 뽑기", subtitle: "매번 작가·가중치·선택적 화풍 용어를 다시 뽑고 내용과 생성 설정은 유지합니다. Seed는 그룹별 무작위 또는 전체 배치 고정을 선택할 수 있습니다.", back: "화풍 실험실로", pool: "인기 작가 후보", poolSize: "인기순 상위 N명", load: "불러오기", ready: "현재 후보 풀 총 {count}명", loading: "인기 작가 로딩 중…", refresh: "순위 새로고침", hint: "작가 Tag 출처: Danbooru", base: "고정 내용 프롬프트", auxiliary: "고정 추가 용어 (항상 유지)", mutate: "뽑을 때 무작위 화풍 용어 추가", mutateHint: "켜면 동일한 작가 문자열·프롬프트·Seed·설정으로 A/B를 생성합니다. A는 화풍 용어가 없고 B는 0.3～1.5 가중치의 용어 2～6개를 추가합니다.", count: "이번 배치 작가 문자열 그룹 수", range: "조합당 작가 수 (최대 20명)", min: "최소", max: "최대", seed: "고정 NovelAI Seed", draw: "다시 뽑기", preview: "현재 뽑기", previewHint: "화풍 용어를 켜면 그룹마다 A/B 두 장을 생성합니다. 다시 뽑으면 저장하지 않은 임시 이미지를 삭제합니다.", generate: "이 배치 생성", stop: "중지", refine: "즐겨찾기 기반 뽑기", needPool: "작가 풀이 준비되지 않았습니다.", needPrompt: "고정 프롬프트를 입력하세요.", needLikes: "먼저 하나 이상 저장하세요.", running: "생성 중 {done}/{total}", complete: "완료. 저장하지 않은 이미지는 다음 뽑기 때 삭제됩니다.", pending: "대기", generating: "생성 중", done: "완료", failed: "실패", like: "즐겨찾기 저장", saved: "저장됨", saving: "저장 중…", retry: "재시도", apply: "생성에 적용", copy: "복사", copied: "복사했습니다.", applied: "생성 화면에 적용했습니다.", empty: "풀 로드 후 뽑을 수 있습니다.", unlimited: "작가 문자열 그룹 수를 입력합니다. 화풍 용어 모드에서는 이미지 수가 두 배입니다.", mutation: "이번 화풍/조명 변이 용어", favorites: "좋아하는 화풍", favoritesHint: "A/B를 각각 저장할 수 있습니다. B의 화풍 용어와 가중치는 이후 화풍 추첨에도 반영됩니다.", remove: "즐겨찾기 제거", removed: "즐겨찾기와 로컬 이미지를 삭제했습니다.", categories: "화풍|매체/붓질|색상|조명|분위기", variantPlain: "A｜작가 문자열만", variantMutated: "B｜작가 문자열＋무작위 화풍", copyArtists: "작가 문자열 복사", copyFull: "전체 프롬프트 복사", copiedArtists: "작가 문자열을 복사했습니다.", copiedFull: "전체 프롬프트를 복사했습니다.", pairSummary: "{pairs} 그룹 · {images}장", artistWeight: "작가 가중치 범위", franchise: "게임 / 애니메이션 작품 화풍 Tag 추가", franchiseHint: "인기 Danbooru 작품 태그에서 추첨합니다. 화풍뿐 아니라 캐릭터나 소재에도 영향을 줄 수 있습니다.", franchiseRange: "작품 Tag 수", franchiseWeight: "작품 Tag 가중치", seedMode: "NovelAI Seed 모드", seedRandom: "그룹별 무작위", seedFixed: "Seed 고정", randomFixedSeed: "고정 Seed 무작위 생성", franchiseTerms: "이번 게임 / 애니메이션 작품 Tag", allModels: "모든 모델", modelGroup: "생성 모델", previewImage: "더블 클릭하여 미리보기" },
+  "zh-CN": { title: "随机画师串抽卡", subtitle: "每次抽卡重新组合画师、权重和可选风格词；内容与生成参数保持不变，Seed 可按组随机或全批固定。", back: "返回画风实验室", pool: "热门画师候选库", poolSize: "按热度载入前 N 名", load: "载入", ready: "当前候选库共 {count} 名画师", loading: "正在读取热门画师…", refresh: "刷新排行", hint: "画师 Tag 来源：Danbooru", base: "固定内容提示词", auxiliary: "固定附加词（每次都保留）", mutate: "抽卡时额外加入随机风格词", mutateHint: "开启后，每组使用同一画师串、提示词、Seed 和参数生成 A/B 两张：A 不加风格词，B 从画风、媒介/笔触、色彩与光影中抽取 2～6 个带 0.3～1.5 权重的词。", count: "本批画师串数量", range: "每串画师数量（最多 20 名）", min: "最少", max: "最多", seed: "固定 NovelAI Seed", draw: "重新抽卡", preview: "本批抽卡预览", previewHint: "开启随机风格词时，每组生成 A/B 两张对照图；重新抽卡会清除上一批未收藏的临时图片。", generate: "生成这一批", stop: "停止任务", refine: "根据喜欢项再抽卡", needPool: "画师池尚未载入。", needPrompt: "请填写固定内容提示词。", needLikes: "请先收藏至少一个喜欢项。", running: "正在生成 {done}/{total}", complete: "本批已完成；未收藏图片会在下一次抽卡时自动清理。", pending: "等待", generating: "生成中", done: "已完成", failed: "失败", like: "收藏到喜欢", saved: "已收藏", saving: "保存中…", retry: "重试", apply: "应用到生成", copy: "复制", copied: "已复制画师串。", applied: "已应用到生成页。", empty: "画师池加载后即可抽卡。", unlimited: "输入画师串组数；开启随机风格词时，实际图片数为两倍。", mutation: "本次风格/光影变异词", favorites: "喜欢的画风", favoritesHint: "A、B 可分别收藏；收藏 B 后，开启风格词的偏好抽卡也会参考其风格词与权重。", remove: "移除收藏", removed: "已移除收藏和本地图片。", categories: "艺术风格|媒介/笔触|色彩|光影", variantPlain: "A｜仅画师串", variantMutated: "B｜画师串＋随机风格词", copyArtists: "复制画师串", copyFull: "复制完整提示词", copiedArtists: "已复制画师串。", copiedFull: "已复制完整提示词。", pairSummary: "{pairs} 组 · {images} 张", artistWeight: "画师权重区间", franchise: "加入游戏 / 动漫系列风格 Tag", franchiseHint: "从当前热门的 Danbooru 作品系列标签中随机抽取；它可能影响角色或题材，不只是画风。", franchiseRange: "系列风格 Tag 数量", franchiseWeight: "系列风格 Tag 权重", seedMode: "NovelAI Seed 模式", seedRandom: "每组随机", seedFixed: "固定 Seed", randomFixedSeed: "随机一个固定 Seed", franchiseTerms: "本次游戏 / 动漫系列 Tag", allModels: "全部模型", modelGroup: "生成模型", previewImage: "双击预览大图" },
+  "zh-TW": { title: "隨機畫師串抽卡", subtitle: "每次抽卡重新組合畫師、權重與可選風格詞；內容與生成參數保持不變，Seed 可按組隨機或全批固定。", back: "返回畫風實驗室", pool: "熱門畫師候選庫", poolSize: "依熱度載入前 N 名", load: "載入", ready: "目前候選庫共 {count} 名畫師", loading: "正在讀取熱門畫師…", refresh: "更新排行", hint: "畫師 Tag 來源：Danbooru", base: "固定內容提示詞", auxiliary: "固定附加詞（每次保留）", mutate: "抽卡時額外加入隨機風格詞", mutateHint: "開啟後，每組以相同畫師串、提示詞、Seed 與參數生成 A/B 兩張：A 不加風格詞，B 抽取 2～6 個帶 0.3～1.5 權重的畫風詞。", count: "本批畫師串組數", range: "每串畫師數量（最多 20 名）", min: "最少", max: "最多", seed: "固定 NovelAI Seed", draw: "重新抽卡", preview: "本批抽卡預覽", previewHint: "開啟隨機風格詞時每組生成 A/B 兩張；重新抽卡會清除未收藏暫存圖。", generate: "生成這一批", stop: "停止任務", refine: "依喜歡項再抽卡", needPool: "畫師池尚未載入。", needPrompt: "請填寫固定內容提示詞。", needLikes: "請先收藏至少一項。", running: "正在生成 {done}/{total}", complete: "本批已完成；未收藏圖片會於下次抽卡清理。", pending: "等待", generating: "生成中", done: "已完成", failed: "失敗", like: "收藏到喜歡", saved: "已收藏", saving: "儲存中…", retry: "重試", apply: "套用到生成", copy: "複製", copied: "已複製畫師串。", applied: "已套用到生成頁。", empty: "畫師池載入後即可抽卡。", unlimited: "輸入畫師串組數；開啟隨機風格詞時實際圖片數為兩倍。", mutation: "本次風格/光影變異詞", favorites: "喜歡的畫風", favoritesHint: "A、B 可分別收藏；收藏 B 後，偏好抽卡也會參考其風格詞與權重。", remove: "移除收藏", removed: "已移除收藏與本機圖片。", categories: "藝術風格|媒介/筆觸|色彩|光影", variantPlain: "A｜僅畫師串", variantMutated: "B｜畫師串＋隨機風格詞", copyArtists: "複製畫師串", copyFull: "複製完整提示詞", copiedArtists: "已複製畫師串。", copiedFull: "已複製完整提示詞。", pairSummary: "{pairs} 組 · {images} 張", artistWeight: "畫師權重區間", franchise: "加入遊戲 / 動漫系列風格 Tag", franchiseHint: "從目前熱門的 Danbooru 作品系列標籤隨機抽取；可能影響角色或題材，不只影響畫風。", franchiseRange: "系列風格 Tag 數量", franchiseWeight: "系列風格 Tag 權重", seedMode: "NovelAI Seed 模式", seedRandom: "每組隨機", seedFixed: "固定 Seed", randomFixedSeed: "隨機一個固定 Seed", franchiseTerms: "本次遊戲 / 動漫系列 Tag", allModels: "全部模型", modelGroup: "生成模型", previewImage: "雙擊預覽大圖" },
+  "en-US": { title: "Random Artist-string Gacha", subtitle: "Every draw rerolls artists, weights, and optional style terms while content and generation settings stay fixed; the seed can be random per group or fixed for the whole batch.", back: "Back to Artist Lab", pool: "Popular artist pool", poolSize: "Load top N by popularity", load: "Load", ready: "{count} artists in the current pool", loading: "Loading popular artists…", refresh: "Refresh ranking", hint: "Artist tag source: Danbooru", base: "Fixed content prompt", auxiliary: "Fixed extra terms (always kept)", mutate: "Add random style terms during the draw", mutateHint: "When enabled, each group creates a fair A/B pair with the same artist string, prompt, seed, and settings: A has no random style terms; B adds 2–6 terms weighted 0.3–1.5.", count: "Artist-string groups in this batch", range: "Artists per string (maximum 20)", min: "Minimum", max: "Maximum", seed: "Fixed NovelAI seed", draw: "Draw again", preview: "Current draw", previewHint: "Style mode creates two A/B images per group. Starting a new draw clears unliked temporary images.", generate: "Generate this batch", stop: "Stop", refine: "Draw from favorites", needPool: "The artist pool is not ready.", needPrompt: "Enter a fixed content prompt.", needLikes: "Save at least one favorite first.", running: "Generating {done}/{total}", complete: "Batch complete. Unliked images will be cleared by the next draw.", pending: "Pending", generating: "Generating", done: "Complete", failed: "Failed", like: "Save favorite", saved: "Saved", saving: "Saving…", retry: "Retry", apply: "Apply to Generate", copy: "Copy", copied: "Artist string copied.", applied: "Applied to Generate.", empty: "Draws appear after the pool loads.", unlimited: "Enter the number of artist-string groups. Style mode generates twice as many images.", mutation: "Style / lighting terms in this draw", favorites: "Favorite styles", favoritesHint: "A and B can be saved independently. Favorite B terms and weights can guide later style-enabled draws.", remove: "Remove favorite", removed: "Favorite and local image removed.", categories: "Art style|Medium / brushwork|Color|Lighting", variantPlain: "A | Artist string only", variantMutated: "B | Artist string + random styles", copyArtists: "Copy artist string", copyFull: "Copy full prompt", copiedArtists: "Artist string copied.", copiedFull: "Full prompt copied.", pairSummary: "{pairs} groups · {images} images", artistWeight: "Artist weight range", franchise: "Add game / anime franchise style tags", franchiseHint: "Draws from current high-volume Danbooru copyright tags. These can affect characters or subject matter as well as style.", franchiseRange: "Franchise tag count", franchiseWeight: "Franchise tag weight", seedMode: "NovelAI Seed mode", seedRandom: "Random per group", seedFixed: "Fixed Seed", randomFixedSeed: "Randomize a fixed Seed", franchiseTerms: "Game / anime franchise tags in this draw", allModels: "All models", modelGroup: "Generation model", previewImage: "Double-click to preview" },
+  "ja-JP": { title: "ランダム画家タグ抽選", subtitle: "抽選ごとに画家・重み・任意の画風語を再構成し、内容と生成設定は維持します。Seed は組ごとのランダムまたはバッチ全体の固定を選べます。", back: "画風ラボへ戻る", pool: "人気画家候補", poolSize: "人気順の上位 N 名", load: "読込", ready: "現在の候補は全 {count} 名", loading: "人気画家を読込中…", refresh: "順位を更新", hint: "画家 Tag の出典：Danbooru", base: "固定内容プロンプト", auxiliary: "固定追加語（常に保持）", mutate: "抽選時に画風語を追加", mutateHint: "有効時は同じ画家列・プロンプト・Seed・設定で A/B を生成します。A は画風語なし、B は 0.3～1.5 重みの画風語を 2～6 個追加します。", count: "このバッチの画家列グループ数", range: "1組の画家数（最大20名）", min: "最小", max: "最大", seed: "固定 NovelAI Seed", draw: "再抽選", preview: "現在の抽選", previewHint: "画風語を有効にすると1組につき A/B の2枚を生成します。再抽選時に未保存画像を消去します。", generate: "このバッチを生成", stop: "停止", refine: "お気に入りから抽選", needPool: "画家候補が未準備です。", needPrompt: "固定内容を入力してください。", needLikes: "先に1件以上保存してください。", running: "生成中 {done}/{total}", complete: "完了。未保存画像は次回抽選時に消去されます。", pending: "待機", generating: "生成中", done: "完了", failed: "失敗", like: "お気に入り保存", saved: "保存済み", saving: "保存中…", retry: "再試行", apply: "生成へ適用", copy: "コピー", copied: "コピーしました。", applied: "生成へ適用しました。", empty: "候補読込後に抽選できます。", unlimited: "画家列の組数を入力します。画風語モードでは画像数が2倍になります。", mutation: "今回の画風・光変異語", favorites: "お気に入り画風", favoritesHint: "A/B は個別保存できます。B の画風語と重みは次の画風語抽選にも反映できます。", remove: "お気に入り削除", removed: "お気に入りと画像を削除しました。", categories: "画風|画材・筆致|色彩|光", variantPlain: "A｜画家列のみ", variantMutated: "B｜画家列＋ランダム画風語", copyArtists: "画家列をコピー", copyFull: "完全プロンプトをコピー", copiedArtists: "画家列をコピーしました。", copiedFull: "完全プロンプトをコピーしました。", pairSummary: "{pairs} 組 · {images} 枚", artistWeight: "画家の重み範囲", franchise: "ゲーム / アニメ作品の画風 Tag を追加", franchiseHint: "人気の Danbooru 作品タグから抽選します。画風だけでなくキャラクターや題材にも影響する場合があります。", franchiseRange: "作品 Tag 数", franchiseWeight: "作品 Tag の重み", seedMode: "NovelAI Seed モード", seedRandom: "グループごとにランダム", seedFixed: "Seed 固定", randomFixedSeed: "固定 Seed をランダム生成", franchiseTerms: "今回のゲーム / アニメ作品 Tag", allModels: "すべてのモデル", modelGroup: "生成モデル", previewImage: "ダブルクリックで拡大" },
+  "ko-KR": { title: "무작위 작가 조합 뽑기", subtitle: "매번 작가·가중치·선택적 화풍 용어를 다시 뽑고 내용과 생성 설정은 유지합니다. Seed는 그룹별 무작위 또는 전체 배치 고정을 선택할 수 있습니다.", back: "화풍 실험실로", pool: "인기 작가 후보", poolSize: "인기순 상위 N명", load: "불러오기", ready: "현재 후보 풀 총 {count}명", loading: "인기 작가 로딩 중…", refresh: "순위 새로고침", hint: "작가 Tag 출처: Danbooru", base: "고정 내용 프롬프트", auxiliary: "고정 추가 용어 (항상 유지)", mutate: "뽑을 때 무작위 화풍 용어 추가", mutateHint: "켜면 동일한 작가 문자열·프롬프트·Seed·설정으로 A/B를 생성합니다. A는 화풍 용어가 없고 B는 0.3～1.5 가중치의 용어 2～6개를 추가합니다.", count: "이번 배치 작가 문자열 그룹 수", range: "조합당 작가 수 (최대 20명)", min: "최소", max: "최대", seed: "고정 NovelAI Seed", draw: "다시 뽑기", preview: "현재 뽑기", previewHint: "화풍 용어를 켜면 그룹마다 A/B 두 장을 생성합니다. 다시 뽑으면 저장하지 않은 임시 이미지를 삭제합니다.", generate: "이 배치 생성", stop: "중지", refine: "즐겨찾기 기반 뽑기", needPool: "작가 풀이 준비되지 않았습니다.", needPrompt: "고정 프롬프트를 입력하세요.", needLikes: "먼저 하나 이상 저장하세요.", running: "생성 중 {done}/{total}", complete: "완료. 저장하지 않은 이미지는 다음 뽑기 때 삭제됩니다.", pending: "대기", generating: "생성 중", done: "완료", failed: "실패", like: "즐겨찾기 저장", saved: "저장됨", saving: "저장 중…", retry: "재시도", apply: "생성에 적용", copy: "복사", copied: "복사했습니다.", applied: "생성 화면에 적용했습니다.", empty: "풀 로드 후 뽑을 수 있습니다.", unlimited: "작가 문자열 그룹 수를 입력합니다. 화풍 용어 모드에서는 이미지 수가 두 배입니다.", mutation: "이번 화풍/조명 변이 용어", favorites: "좋아하는 화풍", favoritesHint: "A/B를 각각 저장할 수 있습니다. B의 화풍 용어와 가중치는 이후 화풍 추첨에도 반영됩니다.", remove: "즐겨찾기 제거", removed: "즐겨찾기와 로컬 이미지를 삭제했습니다.", categories: "화풍|매체/붓질|색상|조명", variantPlain: "A｜작가 문자열만", variantMutated: "B｜작가 문자열＋무작위 화풍", copyArtists: "작가 문자열 복사", copyFull: "전체 프롬프트 복사", copiedArtists: "작가 문자열을 복사했습니다.", copiedFull: "전체 프롬프트를 복사했습니다.", pairSummary: "{pairs} 그룹 · {images}장", artistWeight: "작가 가중치 범위", franchise: "게임 / 애니메이션 작품 화풍 Tag 추가", franchiseHint: "인기 Danbooru 작품 태그에서 추첨합니다. 화풍뿐 아니라 캐릭터나 소재에도 영향을 줄 수 있습니다.", franchiseRange: "작품 Tag 수", franchiseWeight: "작품 Tag 가중치", seedMode: "NovelAI Seed 모드", seedRandom: "그룹별 무작위", seedFixed: "Seed 고정", randomFixedSeed: "고정 Seed 무작위 생성", franchiseTerms: "이번 게임 / 애니메이션 작품 Tag", allModels: "모든 모델", modelGroup: "생성 모델", previewImage: "더블 클릭하여 미리보기" },
 } satisfies Record<AppLanguage, Record<string, string>>;
 
 const PARAM_TEXT = {
@@ -488,6 +498,11 @@ function restore(inherited: GenerateParams): RandomSession {
       artistWeightMin: clampRecipeWeight(migratingToV5Weights ? undefined : raw?.artistWeightMin, RANDOM_V5_DEFAULTS.artistWeightMin),
       artistWeightMax: clampRecipeWeight(migratingToV5Weights ? undefined : raw?.artistWeightMax, RANDOM_V5_DEFAULTS.artistWeightMax),
       customTagPool: typeof raw?.customTagPool === "string" ? raw.customTagPool : "",
+      customTagModes: raw?.customTagModes && typeof raw.customTagModes === "object"
+        ? Object.fromEntries(Object.entries(raw.customTagModes).filter((entry): entry is [string, CustomTagMode] => entry[1] === "always" || entry[1] === "random"))
+        : {},
+      randomCustomTagMinCount: clampRecipeCount(raw?.randomCustomTagMinCount, 1, 0),
+      randomCustomTagMaxCount: clampRecipeCount(raw?.randomCustomTagMaxCount, 3, 0),
       customTagWeightMin: clampRecipeWeight(raw?.customTagWeightMin, RANDOM_V5_DEFAULTS.customTagWeightMin),
       customTagWeightMax: clampRecipeWeight(raw?.customTagWeightMax, RANDOM_V5_DEFAULTS.customTagWeightMax),
       includeFranchiseStyles: raw?.includeFranchiseStyles === true,
@@ -511,7 +526,7 @@ function restore(inherited: GenerateParams): RandomSession {
       favorites: loadArtistFavorites("random"),
     };
   } catch {
-    sessionCache = { basePrompt: inherited.positivePrompt, auxiliaryPrompt: "", customTagPool: "", count: 8, ...RANDOM_V5_DEFAULTS, includeFranchiseStyles: false, poolSize: 1000, seedMode: "fixed", seed: 246813579, drawSeed: freshSeed(), mutateAuxiliary: false, biasFavorites: false, weightTuneInput: "", weightTuneCount: 8, weightVariation: 20, generationParams: normalizeGenerationParams(undefined, DEFAULT_PARAMS), results: [], favorites: loadArtistFavorites("random") };
+    sessionCache = { basePrompt: inherited.positivePrompt, auxiliaryPrompt: "", customTagPool: "", customTagModes: {}, count: 8, ...RANDOM_V5_DEFAULTS, includeFranchiseStyles: false, poolSize: 1000, seedMode: "fixed", seed: 246813579, drawSeed: freshSeed(), mutateAuxiliary: false, biasFavorites: false, weightTuneInput: "", weightTuneCount: 8, weightVariation: 20, generationParams: normalizeGenerationParams(undefined, DEFAULT_PARAMS), results: [], favorites: loadArtistFavorites("random") };
   }
   return sessionCache;
 }
@@ -538,10 +553,52 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
     "ko-KR": "즐겨찾기",
   }[language];
   const [session, setSession] = useState(() => restore(params));
-  const selectedCustomTags = useMemo(
-    () => new Set(parseCustomTagPoolValues(session.customTagPool).map((tag) => tag.toLocaleLowerCase())),
+  const [customTagQuery, setCustomTagQuery] = useState("");
+  const [customTagCategory, setCustomTagCategory] = useState("all");
+  const [customTagLibraryOpen, setCustomTagLibraryOpen] = useState(false);
+  const [catalogItems, setCatalogItems] = useState<TagSuggestion[]>([]);
+  const [catalogTotal, setCatalogTotal] = useState(0);
+  const [catalogSource, setCatalogSource] = useState<"catalog" | "bilingual" | "none">("none");
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [catalogLoadingMore, setCatalogLoadingMore] = useState(false);
+  const [stylePreview, setStylePreview] = useState<ArtistStylePreviewPopover | null>(null);
+  const stylePreviewText = STYLE_PREVIEW_TEXT[language];
+  const selectedCustomTagValues = useMemo(
+    () => parseCustomTagPoolValues(session.customTagPool),
     [session.customTagPool],
   );
+  const selectedCustomTags = useMemo(
+    () => new Set(selectedCustomTagValues.map((tag) => tag.toLocaleLowerCase())),
+    [selectedCustomTagValues],
+  );
+  const dynamicCatalogScope = ARTIST_STYLE_SCOPE_BY_CATEGORY[customTagCategory] ?? "all";
+  const staticCatalogSupplements = useMemo<TagSuggestion[]>(() => {
+    const categories = customTagCategory === "all"
+      ? RANDOM_CUSTOM_TAG_LIBRARY
+      : RANDOM_CUSTOM_TAG_LIBRARY.filter((category) => category.id === customTagCategory);
+    return categories
+      .flatMap((category) => category.tags
+        .filter((entry) => matchesCustomTagSearch(category, entry, language, customTagQuery))
+        .map((entry) => ({
+          tag: entry.tag,
+          category: 0,
+          count: 0,
+          description: customTagMeaning(entry, language),
+        })));
+  }, [customTagCategory, customTagQuery, language]);
+  const visibleCatalogItems = useMemo(() => {
+    const seen = new Set<string>();
+    return [...catalogItems, ...staticCatalogSupplements].filter((entry) => {
+      const key = entry.tag.trim().toLocaleLowerCase().replaceAll(" ", "_");
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [catalogItems, staticCatalogSupplements]);
+  const visibleCustomTagCount = visibleCatalogItems.length;
+  const selectedRandomTagCount = selectedCustomTagValues.filter(
+    (tag) => session.customTagModes[tag.toLocaleLowerCase()] === "random",
+  ).length;
   const [pool, setPool] = useState<ArtistTagRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [running, setRunning] = useState(false);
@@ -551,6 +608,10 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
   const [favoriteModelFilter, setFavoriteModelFilter] = useState("all");
   const copiedTimerRef = useRef<number | null>(null);
   const persistenceTimerRef = useRef<number | null>(null);
+  const catalogRequestRef = useRef(0);
+  const catalogResultsRef = useRef<HTMLDivElement>(null);
+  const stylePreviewTimerRef = useRef<number | null>(null);
+  const stylePreviewCacheRef = useRef(new Map<string, ArtistStylePreviewResult | null>());
   const sessionRef = useRef(session);
   const [showFavorites, setShowFavorites] = useState(
     () => localStorage.getItem("langbai.artist-lab.random.view.v1") === "favorites",
@@ -559,6 +620,115 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
   const scrollRef = useRef<HTMLElement>(null);
   const scrollTopToRestoreRef = useRef<number | null>(null);
   const patch = (next: Partial<RandomSession>) => setSession((current) => ({ ...current, ...next }));
+  const customTagMode = (tag: string): CustomTagMode =>
+    session.customTagModes[tag.trim().toLocaleLowerCase()] ?? "always";
+  const setCustomTagMode = (tag: string, mode: CustomTagMode) => {
+    const key = tag.trim().toLocaleLowerCase();
+    setSession((current) => ({
+      ...current,
+      customTagModes: { ...current.customTagModes, [key]: mode },
+      drawSeed: freshSeed(),
+    }));
+  };
+  const toggleLibraryTag = (tag: string) => {
+    const key = tag.trim().toLocaleLowerCase();
+    setSession((current) => {
+      const values = parseCustomTagPoolValues(current.customTagPool);
+      const selected = values.some((value) => value.toLocaleLowerCase() === key);
+      const nextValues = selected
+        ? values.filter((value) => value.toLocaleLowerCase() !== key)
+        : [...values, tag.trim()];
+      const customTagModes = { ...current.customTagModes };
+      if (selected) delete customTagModes[key];
+      else customTagModes[key] = customTagModes[key] ?? "always";
+      return {
+        ...current,
+        customTagPool: nextValues.join(", "),
+        customTagModes,
+        drawSeed: freshSeed(),
+      };
+    });
+  };
+  const loadMoreCatalog = async () => {
+    if (catalogLoading || catalogLoadingMore || catalogItems.length >= catalogTotal) return;
+    const requestId = catalogRequestRef.current;
+    const previousScrollTop = catalogResultsRef.current?.scrollTop ?? 0;
+    setCatalogLoadingMore(true);
+    try {
+      const result = await window.naiDesktop.artistStyleCatalog(
+        dynamicCatalogScope,
+        customTagQuery,
+        catalogItems.length,
+        ARTIST_STYLE_CATALOG_PAGE_SIZE,
+      );
+      if (requestId !== catalogRequestRef.current) return;
+      setCatalogItems((current) => {
+        const seen = new Set(current.map((entry) => entry.tag.toLocaleLowerCase()));
+        return [...current, ...result.items.filter((entry) => {
+          const key = entry.tag.toLocaleLowerCase();
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        })];
+      });
+      setCatalogTotal(result.total);
+      setCatalogSource(result.source);
+      window.requestAnimationFrame(() => {
+        if (requestId === catalogRequestRef.current && catalogResultsRef.current) {
+          catalogResultsRef.current.scrollTop = previousScrollTop;
+        }
+      });
+    } catch {
+      // Keep the already visible page intact when an additional page fails.
+    } finally {
+      if (requestId === catalogRequestRef.current) setCatalogLoadingMore(false);
+    }
+  };
+  const hideStylePreview = () => {
+    if (stylePreviewTimerRef.current !== null) {
+      window.clearTimeout(stylePreviewTimerRef.current);
+      stylePreviewTimerRef.current = null;
+    }
+    setStylePreview(null);
+  };
+  const showStylePreview = (
+    entry: TagSuggestion,
+    meaning: string,
+    event: ReactPointerEvent<HTMLElement>,
+  ) => {
+    if (!/_\(style\)$/i.test(entry.tag)) return;
+    if (stylePreviewTimerRef.current !== null) window.clearTimeout(stylePreviewTimerRef.current);
+    const rect = event.currentTarget.getBoundingClientRect();
+    const popoverWidth = 292;
+    const popoverHeight = 356;
+    const gap = 12;
+    let left = rect.right + gap;
+    if (left + popoverWidth > window.innerWidth - gap) left = rect.left - popoverWidth - gap;
+    left = Math.max(gap, Math.min(left, window.innerWidth - popoverWidth - gap));
+    const top = Math.max(gap, Math.min(rect.top, window.innerHeight - popoverHeight - gap));
+    stylePreviewTimerRef.current = window.setTimeout(() => {
+      stylePreviewTimerRef.current = null;
+      if (stylePreviewCacheRef.current.has(entry.tag)) {
+        const result = stylePreviewCacheRef.current.get(entry.tag) ?? undefined;
+        setStylePreview({ tag: entry.tag, meaning, left, top, status: result ? "ready" : "empty", result });
+        return;
+      }
+      setStylePreview({ tag: entry.tag, meaning, left, top, status: "loading" });
+      void window.naiDesktop.artistLabStylePreview(entry.tag)
+        .then((result) => {
+          stylePreviewCacheRef.current.set(entry.tag, result);
+          setStylePreview((current) => current?.tag === entry.tag
+            ? { ...current, status: result ? "ready" : "empty", result: result ?? undefined }
+            : current);
+        })
+        .catch(() => {
+          stylePreviewCacheRef.current.set(entry.tag, null);
+          setStylePreview((current) => current?.tag === entry.tag
+            ? { ...current, status: "empty", result: undefined }
+            : current);
+        });
+    }, 180);
+  };
   const restoreDrawDefaults = () => {
     setSession((current) => ({
       ...current,
@@ -614,6 +784,47 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
     }, 300);
   }, [session]);
   useEffect(() => {
+    if (!customTagLibraryOpen) return;
+    let cancelled = false;
+    const requestId = ++catalogRequestRef.current;
+    setCatalogItems([]);
+    setCatalogTotal(0);
+    setCatalogLoadingMore(false);
+    setCatalogLoading(true);
+    if (catalogResultsRef.current) catalogResultsRef.current.scrollTop = 0;
+    const timer = window.setTimeout(() => {
+      void window.naiDesktop
+        .artistStyleCatalog(
+          dynamicCatalogScope,
+          customTagQuery,
+          0,
+          ARTIST_STYLE_CATALOG_PAGE_SIZE,
+        )
+        .then((result) => {
+          if (cancelled || requestId !== catalogRequestRef.current) return;
+          setCatalogItems(result.items);
+          setCatalogTotal(result.total);
+          setCatalogSource(result.source);
+        })
+        .catch(() => {
+          if (cancelled || requestId !== catalogRequestRef.current) return;
+          setCatalogItems([]);
+          setCatalogTotal(0);
+          setCatalogSource("none");
+        })
+        .finally(() => {
+          if (!cancelled && requestId === catalogRequestRef.current) setCatalogLoading(false);
+        });
+    }, 180);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [customTagLibraryOpen, customTagQuery, dynamicCatalogScope]);
+  useEffect(() => () => {
+    if (stylePreviewTimerRef.current !== null) window.clearTimeout(stylePreviewTimerRef.current);
+  }, []);
+  useEffect(() => {
     localStorage.setItem(
       "langbai.artist-lab.random.view.v1",
       showFavorites ? "favorites" : "results",
@@ -650,7 +861,7 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
   const interpolate = (value: string, values: Record<string, unknown>) => Object.entries(values).reduce((out, [key, replacement]) => out.replaceAll(`{${key}}`, String(replacement)), value);
   const categoryLabels = useMemo(() => {
     const values = text.categories.split("|");
-    return Object.fromEntries((["artStyle", "medium", "color", "lighting", "atmosphere"] as StyleMutationCategory[]).map((key, index) => [key, values[index] ?? key])) as Record<StyleMutationCategory, string>;
+    return Object.fromEntries((["artStyle", "medium", "color", "lighting"] as StyleMutationCategory[]).map((key, index) => [key, values[index] ?? key])) as Record<StyleMutationCategory, string>;
   }, [text.categories]);
 
   const loadPool = async (force = false) => {
@@ -686,18 +897,16 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
     artistWeightMax: session.artistWeightMax,
     auxiliaryPrompt: session.auxiliaryPrompt,
     customTagPool: session.customTagPool,
+    customTagModes: session.customTagModes,
+    minRandomCustomTags: session.randomCustomTagMinCount,
+    maxRandomCustomTags: session.randomCustomTagMaxCount,
     customTagWeightMin: session.customTagWeightMin,
     customTagWeightMax: session.customTagWeightMax,
     mutateAuxiliary: session.mutateAuxiliary,
-    includeFranchiseStyles: session.includeFranchiseStyles,
-    minFranchiseStyles: session.franchiseMinCount,
-    maxFranchiseStyles: session.franchiseMaxCount,
-    franchiseWeightMin: session.franchiseWeightMin,
-    franchiseWeightMax: session.franchiseWeightMax,
     favoriteArtists: session.biasFavorites ? likedArtists : undefined,
     favoriteMutations: session.mutateAuxiliary && session.biasFavorites ? likedMutations : undefined,
     random: createArtistLabRandom(session.drawSeed),
-  }), [poolKey, session.count, session.artistMinCount, session.artistMaxCount, session.artistWeightMin, session.artistWeightMax, session.auxiliaryPrompt, session.customTagPool, session.customTagWeightMin, session.customTagWeightMax, session.mutateAuxiliary, session.includeFranchiseStyles, session.franchiseMinCount, session.franchiseMaxCount, session.franchiseWeightMin, session.franchiseWeightMax, session.biasFavorites, likedArtists.join("|"), likedMutations.map((item) => `${item.category}:${item.value}:${item.weight}`).join("|"), session.drawSeed]);
+  }), [poolKey, session.count, session.artistMinCount, session.artistMaxCount, session.artistWeightMin, session.artistWeightMax, session.auxiliaryPrompt, session.customTagPool, JSON.stringify(session.customTagModes), session.randomCustomTagMinCount, session.randomCustomTagMaxCount, session.customTagWeightMin, session.customTagWeightMax, session.mutateAuxiliary, session.biasFavorites, likedArtists.join("|"), likedMutations.map((item) => `${item.category}:${item.value}:${item.weight}`).join("|"), session.drawSeed]);
   const plannedComparisons = useMemo(
     () => expandArtistRecipeComparisons(planned, session.mutateAuxiliary),
     [planned, session.mutateAuxiliary],
@@ -798,14 +1007,12 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
       artistWeightMax: session.artistWeightMax,
       auxiliaryPrompt: session.auxiliaryPrompt,
       customTagPool: session.customTagPool,
+      customTagModes: session.customTagModes,
+      minRandomCustomTags: session.randomCustomTagMinCount,
+      maxRandomCustomTags: session.randomCustomTagMaxCount,
       customTagWeightMin: session.customTagWeightMin,
       customTagWeightMax: session.customTagWeightMax,
       mutateAuxiliary: session.mutateAuxiliary,
-      includeFranchiseStyles: session.includeFranchiseStyles,
-      minFranchiseStyles: session.franchiseMinCount,
-      maxFranchiseStyles: session.franchiseMaxCount,
-      franchiseWeightMin: session.franchiseWeightMin,
-      franchiseWeightMax: session.franchiseWeightMax,
       favoriteArtists: likedArtists,
       favoriteMutations: session.mutateAuxiliary ? likedMutations : undefined,
       random: createArtistLabRandom(freshSeed()),
@@ -909,6 +1116,21 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
   };
   const renderMutationTerms = (result: GeneratedArtistRecipe) => result.mutations.length > 0 && <div className="artist-mutation-block"><b>{text.mutation}</b><div>{result.mutations.map((token, index) => <span key={`${token.value}-${index}`}><small>{categoryLabels[token.category]}</small>{token.weight}::{token.value}</span>)}</div></div>;
   const renderFranchiseTerms = (result: GeneratedArtistRecipe) => (result.franchiseStyles?.length ?? 0) > 0 && <div className="artist-mutation-block artist-franchise-block"><b>{text.franchiseTerms}</b><div>{result.franchiseStyles.map((token, index) => <span key={`${token.value}-${index}`}><small>Danbooru</small>{token.weight}::{token.value}</span>)}</div></div>;
+  const catalogMeaning = (entry: TagSuggestion) => {
+    if ((language.startsWith("zh") || entry.count === 0) && entry.description?.trim()) {
+      return entry.description.trim();
+    }
+    const readable = entry.tag
+      .replace(/_\(style\)$/i, "")
+      .replaceAll("_", " ")
+      .replace(/\b\w/g, (letter) => letter.toLocaleUpperCase());
+    return `${readable} · ${entry.category === 3 ? customTagText.copyright : customTagText.styleTags}`;
+  };
+  const catalogSourceLabel = catalogSource === "catalog"
+    ? customTagText.sourceCatalog
+    : catalogSource === "bilingual"
+      ? customTagText.sourceBilingual
+      : customTagText.sourceNone;
   const renderCard = (result: RandomResult, favorite = false) => {
     const variant = variantOf(result);
     const artistCopyKey = `${result.id}:artists`;
@@ -926,25 +1148,137 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
     <section className="artist-lab-panel random-pool-summary"><div><h3>{text.pool}</h3><strong>{loading ? text.loading : interpolate(text.ready, { count: pool.length })}</strong><small>{text.hint}</small></div><div className="artist-pool-actions"><label><span>{text.poolSize}</span><NumericDraftInput min={100} max={5000} step={100} value={session.poolSize} normalize={clampPoolSize} onCommit={(poolSize) => patch({ poolSize })} /></label><Button onClick={() => void loadPool(false)} disabled={loading}>{text.load}</Button><Button onClick={() => void loadPool(true)} disabled={loading}>{text.refresh}</Button></div></section>
     <section className="artist-lab-panel random-artist-settings">
       <div className="random-settings-reset wide"><small>{resetText.hint}</small><Button type="button" variant="ghost" onClick={restoreDrawDefaults}><Icon name="refresh" />{resetText.label}</Button></div>
-      <label className="wide"><span>{text.base}</span><textarea value={session.basePrompt} onChange={(event) => patch({ basePrompt: event.target.value })} /></label>
-      <label className="wide"><span>{text.auxiliary}</span><textarea value={session.auxiliaryPrompt} onChange={(event) => patch({ auxiliaryPrompt: event.target.value })} /></label>
-      <label className="wide"><span>{customTagText.title}</span><textarea value={session.customTagPool} placeholder={customTagText.placeholder} onChange={(event) => patch({ customTagPool: event.target.value })} /><small>{customTagText.hint}</small></label>
-      <details className="random-custom-tag-library wide">
-        <summary><span><b>{customTagText.library}</b><small>{customTagText.libraryHint}</small></span><em>{interpolate(customTagText.selected, { count: selectedCustomTags.size })}</em></summary>
-        <div className="random-custom-tag-groups">
-          {RANDOM_CUSTOM_TAG_LIBRARY.map((group) => <section key={group.id}><h4>{customTagText[group.id]}</h4><div>{group.tags.map((tag) => {
-            const selected = selectedCustomTags.has(tag.toLocaleLowerCase());
-            return <button key={tag} type="button" className={selected ? "selected" : ""} aria-pressed={selected} onClick={() => patch({ customTagPool: toggleCustomTagInPool(session.customTagPool, tag), drawSeed: freshSeed() })}>{selected ? "✓ " : "+ "}{tag}</button>;
-          })}</div></section>)}
+      <div className="random-fixed-prompt-grid wide">
+        <label className="random-fixed-prompt-card"><span>{text.base}</span><textarea value={session.basePrompt} onChange={(event) => patch({ basePrompt: event.target.value })} /></label>
+        <label className="random-fixed-prompt-card"><span>{text.auxiliary}</span><textarea value={session.auxiliaryPrompt} onChange={(event) => patch({ auxiliaryPrompt: event.target.value })} /></label>
+      </div>
+      <details
+        className="random-custom-tag-workbench wide"
+        open={customTagLibraryOpen}
+        onToggle={(event) => {
+          setCustomTagLibraryOpen(event.currentTarget.open);
+          if (!event.currentTarget.open) hideStylePreview();
+        }}
+      >
+        <summary className="random-custom-tag-header" title={customTagText.collapse}>
+          <span className="random-custom-tag-icon" aria-hidden="true"><Icon name="template" /></span>
+          <div>
+            <h3 id="random-custom-tag-title">{customTagText.library}</h3>
+            <p>{customTagText.libraryHint}</p>
+          </div>
+          <div className="random-custom-tag-stats">
+            <b>{interpolate(customTagText.selected, { count: selectedCustomTagValues.length })}</b>
+            <small>{customTagText.available}</small>
+          </div>
+          <span className="random-custom-tag-disclosure" aria-hidden="true"><Icon name="chevronDown" /></span>
+        </summary>
+        <div className="random-custom-tag-body">
+          <div className="random-custom-tag-editor">
+            <label>
+              <span>{customTagText.title}</span>
+              <textarea
+                value={session.customTagPool}
+                placeholder={customTagText.placeholder}
+                onChange={(event) => patch({ customTagPool: event.target.value, drawSeed: freshSeed() })}
+              />
+              <small>{customTagText.hint}</small>
+            </label>
+            <fieldset className="random-custom-tag-weight-range">
+              <legend>{customTagText.range}</legend>
+              <label><span>{text.min}</span><NumericDraftInput min={0.1} max={10} step={0.05} value={session.customTagWeightMin} normalize={(value) => clampRecipeWeight(value, RANDOM_V5_DEFAULTS.customTagWeightMin)} onCommit={(customTagWeightMin) => patch({ customTagWeightMin, drawSeed: freshSeed() })} /></label>
+              <label><span>{text.max}</span><NumericDraftInput min={0.1} max={10} step={0.05} value={session.customTagWeightMax} normalize={(value) => clampRecipeWeight(value, RANDOM_V5_DEFAULTS.customTagWeightMax)} onCommit={(customTagWeightMax) => patch({ customTagWeightMax, drawSeed: freshSeed() })} /></label>
+            </fieldset>
+          </div>
+
+          {selectedCustomTagValues.length > 0 && <section className="random-custom-tag-selected" aria-label={customTagText.selectedTitle}>
+            <header>
+              <b>{customTagText.selectedTitle}</b>
+              <button type="button" onClick={() => patch({ customTagPool: "", customTagModes: {}, drawSeed: freshSeed() })}>{customTagText.clear}</button>
+            </header>
+            <div>
+              {selectedCustomTagValues.map((tag) => {
+                const mode = customTagMode(tag);
+                return <article key={tag.toLocaleLowerCase()}>
+                  <b title={tag}>{tag}</b>
+                  <span role="group" aria-label={`${tag}: ${customTagText.selectedTitle}`}>
+                    <button type="button" className={mode === "always" ? "active" : ""} onClick={() => setCustomTagMode(tag, "always")}>{customTagText.always}</button>
+                    <button type="button" className={mode === "random" ? "active" : ""} onClick={() => setCustomTagMode(tag, "random")}>{customTagText.random}</button>
+                  </span>
+                  <button type="button" className="remove" aria-label={`${customTagText.clear}: ${tag}`} onClick={() => toggleLibraryTag(tag)}><Icon name="close" /></button>
+                </article>;
+              })}
+            </div>
+          </section>}
+
+          {selectedRandomTagCount > 0 && <fieldset className="random-custom-tag-random-range">
+            <legend>{customTagText.randomRange}</legend>
+            <label><span>{text.min}</span><NumericDraftInput min={0} max={selectedRandomTagCount} step={1} value={session.randomCustomTagMinCount} normalize={(value) => clampRecipeCount(value, 1, 0)} onCommit={(randomCustomTagMinCount) => patch({ randomCustomTagMinCount, drawSeed: freshSeed() })} /></label>
+            <label><span>{text.max}</span><NumericDraftInput min={0} max={selectedRandomTagCount} step={1} value={session.randomCustomTagMaxCount} normalize={(value) => clampRecipeCount(value, 3, 0)} onCommit={(randomCustomTagMaxCount) => patch({ randomCustomTagMaxCount, drawSeed: freshSeed() })} /></label>
+          </fieldset>}
+
+          <div className="random-custom-tag-toolbar">
+            <label className="random-custom-tag-search">
+              <Icon name="search" />
+              <input
+                type="search"
+                value={customTagQuery}
+                placeholder={customTagText.search}
+                onChange={(event) => setCustomTagQuery(event.target.value)}
+              />
+              {customTagQuery && <button type="button" aria-label={customTagText.clear} onClick={() => setCustomTagQuery("")}><Icon name="clear" /></button>}
+            </label>
+            <div className="random-custom-tag-toolbar-status" aria-live="polite">
+              <span>{`${visibleCustomTagCount} / ${Math.max(catalogTotal, visibleCustomTagCount)}`}</span>
+              <small>{catalogSourceLabel}</small>
+            </div>
+          </div>
+          <div className="random-custom-tag-categories" role="tablist" aria-label={customTagText.library}>
+            <button type="button" role="tab" aria-selected={customTagCategory === "all"} className={customTagCategory === "all" ? "active" : ""} onClick={() => setCustomTagCategory("all")}><span>{customTagText.all}</span><em>{customTagCategory === "all" && !catalogLoading ? catalogTotal : "DB"}</em></button>
+            {RANDOM_CUSTOM_TAG_LIBRARY.map((category) => <button key={category.id} type="button" role="tab" aria-selected={customTagCategory === category.id} className={customTagCategory === category.id ? "active" : ""} onClick={() => setCustomTagCategory(category.id)}><span>{customTagCategoryLabel(category, language)}</span><em>{customTagCategory === category.id && !catalogLoading ? catalogTotal : "DB"}</em></button>)}
+            <button type="button" role="tab" aria-selected={customTagCategory === "danbooru-style"} className={customTagCategory === "danbooru-style" ? "active" : ""} onClick={() => setCustomTagCategory("danbooru-style")}><span>{customTagText.styleTags}</span><em>{customTagCategory === "danbooru-style" && !catalogLoading ? catalogTotal : "DB"}</em></button>
+            <button type="button" role="tab" aria-selected={customTagCategory === "copyright"} className={customTagCategory === "copyright" ? "active" : ""} onClick={() => setCustomTagCategory("copyright")}><span>{customTagText.copyright}</span><em>{customTagCategory === "copyright" && !catalogLoading ? catalogTotal : "DB"}</em></button>
+          </div>
+          <div className="random-custom-tag-results" ref={catalogResultsRef}>
+            {catalogLoading
+              ? <div className="random-custom-tag-empty"><span className="spinner" /><span>{customTagText.loading}</span></div>
+              : visibleCatalogItems.length === 0
+                ? <div className="random-custom-tag-empty"><Icon name="search" /><span>{customTagText.noResults}</span></div>
+                : <section aria-label={dynamicCatalogScope === "copyright" ? customTagText.copyright : customTagText.library}>
+                  <div className="random-custom-tag-grid">{visibleCatalogItems.map((entry) => {
+                    const selected = selectedCustomTags.has(entry.tag.toLocaleLowerCase());
+                    const mode = customTagMode(entry.tag);
+                    const meaning = catalogMeaning(entry);
+                    const canPreview = /_\(style\)$/i.test(entry.tag);
+                    return <article
+                      key={entry.tag}
+                      className={`${selected ? "selected" : ""}${canPreview ? " has-preview" : ""}`}
+                      onPointerEnter={canPreview ? (event) => showStylePreview(entry, meaning, event) : undefined}
+                      onPointerLeave={canPreview ? hideStylePreview : undefined}
+                    >
+                      <button type="button" className="random-custom-tag-select" aria-pressed={selected} aria-label={`${entry.tag}: ${meaning}`} onClick={() => toggleLibraryTag(entry.tag)}>
+                        <span className="random-custom-tag-check"><Icon name={selected ? "check" : "plus"} /></span>
+                        <span><b>{entry.tag}</b><small>{meaning}</small></span>
+                        <em>{canPreview ? <Icon name="image" /> : entry.count > 0 ? entry.count.toLocaleString() : ""}</em>
+                      </button>
+                      {selected && <span className="random-custom-tag-card-modes">
+                        <button type="button" className={mode === "always" ? "active" : ""} onClick={() => setCustomTagMode(entry.tag, "always")}>{customTagText.always}</button>
+                        <button type="button" className={mode === "random" ? "active" : ""} onClick={() => setCustomTagMode(entry.tag, "random")}>{customTagText.random}</button>
+                      </span>}
+                    </article>;
+                  })}</div>
+                  {catalogItems.length < catalogTotal && <div className="random-custom-tag-load-more">
+                    <Button type="button" variant="ghost" disabled={catalogLoadingMore} onClick={() => void loadMoreCatalog()}>
+                      {catalogLoadingMore && <span className="spinner" />}{customTagText.loadMore}
+                    </Button>
+                  </div>}
+                </section>}
+          </div>
         </div>
       </details>
-      {session.customTagPool.trim() && <fieldset className="random-range-fields"><legend>{customTagText.range}</legend><label><span>{text.min}</span><NumericDraftInput min={0.1} max={10} step={0.05} value={session.customTagWeightMin} normalize={(value) => clampRecipeWeight(value, RANDOM_V5_DEFAULTS.customTagWeightMin)} onCommit={(customTagWeightMin) => patch({ customTagWeightMin, drawSeed: freshSeed() })} /></label><label><span>{text.max}</span><NumericDraftInput min={0.1} max={10} step={0.05} value={session.customTagWeightMax} normalize={(value) => clampRecipeWeight(value, RANDOM_V5_DEFAULTS.customTagWeightMax)} onCommit={(customTagWeightMax) => patch({ customTagWeightMax, drawSeed: freshSeed() })} /></label></fieldset>}
       <label className="random-check wide"><input type="checkbox" checked={session.mutateAuxiliary} onChange={(event) => patch({ mutateAuxiliary: event.target.checked })} /><span><b>{text.mutate}</b><small>{text.mutateHint}</small></span></label>
-      <label className="random-check wide"><input type="checkbox" checked={session.includeFranchiseStyles} onChange={(event) => patch({ includeFranchiseStyles: event.target.checked, drawSeed: freshSeed() })} /><span><b>{text.franchise}</b><small>{text.franchiseHint}</small></span></label>
       <label><span>{text.count}</span><NumericDraftInput min={1} step={1} value={session.count} normalize={(value) => positiveInteger(value, 1)} onCommit={(count) => patch({ count })} /><small>{text.unlimited}</small></label>
       <fieldset className="random-range-fields"><legend>{text.range}</legend><label><span>{text.min}</span><NumericDraftInput min={1} max={20} step={1} value={session.artistMinCount} normalize={(value) => clampRecipeCount(value, 3, 1)} onCommit={(artistMinCount) => patch({ artistMinCount, drawSeed: freshSeed() })} /></label><label><span>{text.max}</span><NumericDraftInput min={1} max={20} step={1} value={session.artistMaxCount} normalize={(value) => clampRecipeCount(value, 7, 1)} onCommit={(artistMaxCount) => patch({ artistMaxCount, drawSeed: freshSeed() })} /></label></fieldset>
       <fieldset className="random-range-fields"><legend>{text.artistWeight}</legend><label><span>{text.min}</span><NumericDraftInput min={0.1} max={10} step={0.05} value={session.artistWeightMin} normalize={(value) => clampRecipeWeight(value, RANDOM_V5_DEFAULTS.artistWeightMin)} onCommit={(artistWeightMin) => patch({ artistWeightMin, drawSeed: freshSeed() })} /></label><label><span>{text.max}</span><NumericDraftInput min={0.1} max={10} step={0.05} value={session.artistWeightMax} normalize={(value) => clampRecipeWeight(value, RANDOM_V5_DEFAULTS.artistWeightMax)} onCommit={(artistWeightMax) => patch({ artistWeightMax, drawSeed: freshSeed() })} /></label></fieldset>
-      {session.includeFranchiseStyles && <><fieldset className="random-range-fields"><legend>{text.franchiseRange}</legend><label><span>{text.min}</span><NumericDraftInput min={0} max={20} step={1} value={session.franchiseMinCount} normalize={(value) => clampRecipeCount(value, 0)} onCommit={(franchiseMinCount) => patch({ franchiseMinCount, drawSeed: freshSeed() })} /></label><label><span>{text.max}</span><NumericDraftInput min={0} max={20} step={1} value={session.franchiseMaxCount} normalize={(value) => clampRecipeCount(value, 2)} onCommit={(franchiseMaxCount) => patch({ franchiseMaxCount, drawSeed: freshSeed() })} /></label></fieldset><fieldset className="random-range-fields"><legend>{text.franchiseWeight}</legend><label><span>{text.min}</span><NumericDraftInput min={0.1} max={10} step={0.05} value={session.franchiseWeightMin} normalize={(value) => clampRecipeWeight(value, RANDOM_V5_DEFAULTS.franchiseWeightMin)} onCommit={(franchiseWeightMin) => patch({ franchiseWeightMin, drawSeed: freshSeed() })} /></label><label><span>{text.max}</span><NumericDraftInput min={0.1} max={10} step={0.05} value={session.franchiseWeightMax} normalize={(value) => clampRecipeWeight(value, RANDOM_V5_DEFAULTS.franchiseWeightMax)} onCommit={(franchiseWeightMax) => patch({ franchiseWeightMax, drawSeed: freshSeed() })} /></label></fieldset></>}
       <fieldset className="random-seed-fields wide"><legend>{text.seedMode}</legend><div className="random-seed-modes"><label><input type="radio" name="artist-seed-mode" checked={session.seedMode === "random"} onChange={() => patch({ seedMode: "random" })} /><span>{text.seedRandom}</span></label><label><input type="radio" name="artist-seed-mode" checked={session.seedMode === "fixed"} onChange={() => patch({ seedMode: "fixed" })} /><span>{text.seedFixed}</span></label></div>{session.seedMode === "fixed" && <div className="random-fixed-seed"><NumericDraftInput aria-label={text.seed} min={1} max={2147483647} step={1} value={session.seed} normalize={(value) => Math.min(2_147_483_647, Math.max(1, Math.floor(value)))} onCommit={(seed) => patch({ seed })} /><Button type="button" variant="ghost" onClick={() => patch({ seedMode: "fixed", seed: freshNaiSeed() })}>{text.randomFixedSeed}</Button></div>}</fieldset>
     </section>
     <details className="artist-lab-panel random-generation-settings" open>
@@ -1057,6 +1391,22 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
       </section>)}
     </section>}
   </main>
+  {stylePreview && <AppPortal><aside
+    className={`artist-style-reference-popover ${stylePreview.status}`}
+    style={{ left: stylePreview.left, top: stylePreview.top }}
+    role="status"
+    aria-live="polite"
+  >
+    <header><span><Icon name="image" />{stylePreviewText.title}</span><b>{stylePreview.tag}</b></header>
+    <div className="artist-style-reference-media">
+      {stylePreview.status === "loading"
+        ? <span className="artist-style-reference-message"><span className="spinner" />{stylePreviewText.loading}</span>
+        : stylePreview.result
+          ? <img src={stylePreview.result.imageUrl} alt={`${stylePreviewText.title}: ${stylePreview.tag}`} />
+          : <span className="artist-style-reference-message"><Icon name="image" />{stylePreviewText.empty}</span>}
+    </div>
+    <footer><span>{stylePreview.meaning}</span>{stylePreview.result && <small>{stylePreview.result.width}×{stylePreview.result.height}</small>}</footer>
+  </aside></AppPortal>}
   {previewResult?.image && <AppPortal><div className="modal-backdrop artist-result-preview-backdrop" role="dialog" aria-modal="true" aria-label={text.previewImage} onMouseDown={() => setPreviewResult(null)}><div className="artist-result-preview" onMouseDown={(event) => event.stopPropagation()}><button type="button" className="artist-result-preview-close" aria-label={text.back} onClick={() => setPreviewResult(null)}><Icon name="close" /></button><img src={previewResult.image.fileUrl} alt={previewResult.prompt} /><footer><b>{modelLabel(resultModel(previewResult))}</b><span>{variantOf(previewResult) === "mutated" ? text.variantMutated : text.variantPlain} · {previewResult.image.width}×{previewResult.image.height}</span></footer></div></div></AppPortal>}
   </>;
 }

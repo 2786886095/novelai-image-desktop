@@ -393,6 +393,7 @@ export interface GenerateExtras {
 // ── Batch img2img (批量图生图) project — persisted in the store so switching
 // tools/tabs never loses work; serialised verbatim by 导出/导入项目. ───────────
 export type BatchRedrawStep = "import" | "params" | "prompts" | "generate";
+export type BatchRedrawSizeMode = ImageToImageSizeMode | "perImage";
 export type BatchRedrawItemStatus =
   "pending" | "generating" | "done" | "failed";
 
@@ -403,6 +404,9 @@ export interface BatchRedrawItem {
   /** Source dimensions captured at import for adaptive img2img sizing. */
   width: number;
   height: number;
+  /** Explicit output size used by the per-image line-matching mode. */
+  outputWidth?: number;
+  outputHeight?: number;
   prompt: string;
   /** null → use the global change strength */
   strength: number | null;
@@ -427,7 +431,9 @@ export interface BatchRedrawProject {
   /** Full editable params for ALL models — defaults to the main screen params. */
   globalParams: GenerateParams;
   /** Adaptive uses each source image's nearest 64-multiple size. */
-  sizeMode: ImageToImageSizeMode;
+  sizeMode: BatchRedrawSizeMode;
+  /** Editable one-size-per-line source, persisted with project exports. */
+  sizeBulk: string;
   preciseReferences: PreciseReferenceItem[];
   vibeImages: VibeTransferItem[];
   aiMode: ReversePromptMode;
@@ -454,6 +460,7 @@ export function createDefaultBatchRedraw(
     globalNegative: "",
     globalParams: { ...params, fileNamePrefix: "" },
     sizeMode: "adaptive",
+    sizeBulk: "",
     preciseReferences: [],
     vibeImages: [],
     aiMode: "tags",
@@ -1445,6 +1452,37 @@ export interface TagSuggestion {
   description?: string;
 }
 
+/** Lazy catalogs used by the random artist-string style picker. Danbooru has
+ * no dedicated visual-style category, so the visual scopes are an explicit,
+ * conservative taxonomy over general tags. `style` means canonical
+ * `_(style)` tags and `copyright` means every category-3 source tag. */
+export type ArtistStyleCatalogScope =
+  | "all"
+  | "quality"
+  | "render3d"
+  | "medium"
+  | "lighting"
+  | "color"
+  | "texture"
+  | "stylization"
+  | "style"
+  | "copyright";
+
+export interface ArtistStyleCatalogResult {
+  items: TagSuggestion[];
+  total: number;
+  source: "catalog" | "bilingual" | "none";
+}
+
+export interface ArtistStylePreviewResult {
+  tag: string;
+  imageUrl: string;
+  sourceUrl: string;
+  postUrl: string;
+  width: number;
+  height: number;
+}
+
 export type AppLanguage = "zh-CN" | "zh-TW" | "en-US" | "ja-JP" | "ko-KR";
 
 export interface AppSettings {
@@ -1751,6 +1789,7 @@ export interface NaiDesktopApi {
   artistLabClearModels: () => Promise<
     import("./artist-lab").ArtistLabModelStatus
   >;
+  artistLabStylePreview: (tag: string) => Promise<ArtistStylePreviewResult | null>;
   /** Native read-only access to AITag's public gallery data (renderer-safe IPC proxy). */
   aitagConfig: () => Promise<unknown>;
   aitagSearch: (
@@ -1995,6 +2034,12 @@ export interface NaiDesktopApi {
     limit: number,
   ) => Promise<TagSuggestion[]>;
   danbooruSearch: (query: string, limit: number) => Promise<TagSuggestion[]>;
+  artistStyleCatalog: (
+    scope: ArtistStyleCatalogScope,
+    query: string,
+    offset: number,
+    limit: number,
+  ) => Promise<ArtistStyleCatalogResult>;
   translate: (
     text: string,
     target?: string,

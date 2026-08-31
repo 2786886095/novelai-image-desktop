@@ -136,6 +136,76 @@ class BatchRedrawController extends ChangeNotifier {
     return null;
   }
 
+  String createPerImageSizeTemplate() {
+    final lines = project.items.map((item) {
+      if (item.outputWidth != null &&
+          item.outputHeight != null &&
+          isValidBatchNaiSize(item.outputWidth!, item.outputHeight!)) {
+        return '${item.outputWidth}×${item.outputHeight}';
+      }
+      final params = item.overrideParams ? item.params : project.globalParams;
+      final output = adaptiveNaiImageSize(
+        item.width,
+        item.height,
+        fallbackWidth: params.width,
+        fallbackHeight: params.height,
+      );
+      return '${output.$1}×${output.$2}';
+    }).join('\n');
+    project
+      ..sizeMode = 'perImage'
+      ..sizeBulk = lines;
+    changed();
+    return lines;
+  }
+
+  String _sizeImportMessage(BatchSizeImportException error) {
+    return switch (error.code) {
+      'count' => _rf('batch.sizeMode.perImageCount', {
+          'expected': error.expected ?? project.items.length,
+          'actual': error.actual ?? 0,
+        }),
+      'blank' => _rf('batch.sizeMode.perImageBlank', {
+          'line': error.line ?? 0,
+        }),
+      'format' => _rf('batch.sizeMode.perImageFormat', {
+          'line': error.line ?? 0,
+        }),
+      'unsupported' => _rf('batch.sizeMode.perImageUnsupported', {
+          'line': error.line ?? 0,
+        }),
+      _ => _rt('batch.sizeMode.perImageEmpty'),
+    };
+  }
+
+  bool applyPerImageSizes({bool announce = true}) {
+    if (project.items.isEmpty) {
+      status = _rt('batch.noValidImages');
+      notifyListeners();
+      return false;
+    }
+    try {
+      final sizes = parseBatchSizeImport(
+        project.sizeBulk,
+        project.items.length,
+      );
+      for (var index = 0; index < project.items.length; index++) {
+        project.items[index]
+          ..outputWidth = sizes[index].$1
+          ..outputHeight = sizes[index].$2;
+      }
+      project.sizeMode = 'perImage';
+      changed(announce
+          ? _rf('batch.sizeMode.perImageApplied', {'count': sizes.length})
+          : null);
+      return true;
+    } on BatchSizeImportException catch (error) {
+      status = _sizeImportMessage(error);
+      notifyListeners();
+      return false;
+    }
+  }
+
   void syncCurrentParams() {
     project
       ..globalParams = (app.params.copy()..positivePrompt = '')
@@ -337,6 +407,15 @@ class BatchRedrawController extends ChangeNotifier {
     final globalStyle = project.globalStyle;
     final globalNegative = project.globalNegative;
     final globalStrength = project.globalStrength;
+    List<(int, int)>? currentPerImageSizes;
+    if (project.sizeMode == 'perImage') {
+      try {
+        currentPerImageSizes =
+            parseBatchSizeImport(project.sizeBulk, project.items.length);
+      } on BatchSizeImportException {
+        currentPerImageSizes = null;
+      }
+    }
     return targets.map((item) {
       final sourceParams =
           item.overrideParams ? item.params : project.globalParams;
@@ -353,6 +432,22 @@ class BatchRedrawController extends ChangeNotifier {
         params
           ..width = outputSize.$1
           ..height = outputSize.$2;
+      } else if (project.sizeMode == 'perImage') {
+        final itemIndex = project.items.indexWhere((entry) => entry.id == item.id);
+        final imported = itemIndex >= 0 &&
+                currentPerImageSizes != null &&
+                itemIndex < currentPerImageSizes.length
+            ? currentPerImageSizes[itemIndex]
+            : null;
+        final width = imported?.$1 ?? item.outputWidth;
+        final height = imported?.$2 ?? item.outputHeight;
+        if (width != null &&
+            height != null &&
+            isValidBatchNaiSize(width, height)) {
+          params
+            ..width = width
+            ..height = height;
+        }
       }
       return _BatchRedrawQueueJob(
         item: item,
@@ -388,6 +483,10 @@ class BatchRedrawController extends ChangeNotifier {
 
   Future<void> startQueue(List<BatchRedrawItem> targets) async {
     if (targets.isEmpty || queueRunning) return;
+    if (project.sizeMode == 'perImage' &&
+        !applyPerImageSizes(announce: false)) {
+      return;
+    }
     // Build this before awaiting or changing any item state.  Every item in
     // the current run then receives the same confirmed global values, while a
     // later clear/retry call starts from the latest editor values.

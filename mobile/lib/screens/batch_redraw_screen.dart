@@ -20,14 +20,21 @@ import 'generate_screen.dart';
   BatchRedrawItem item,
 ) {
   final params = item.overrideParams ? item.params : project.globalParams;
-  return project.sizeMode == 'adaptive'
-      ? adaptiveNaiImageSize(
-          item.width,
-          item.height,
-          fallbackWidth: params.width,
-          fallbackHeight: params.height,
-        )
-      : (params.width, params.height);
+  if (project.sizeMode == 'adaptive') {
+    return adaptiveNaiImageSize(
+      item.width,
+      item.height,
+      fallbackWidth: params.width,
+      fallbackHeight: params.height,
+    );
+  }
+  if (project.sizeMode == 'perImage' &&
+      item.outputWidth != null &&
+      item.outputHeight != null &&
+      isValidBatchNaiSize(item.outputWidth!, item.outputHeight!)) {
+    return (item.outputWidth!, item.outputHeight!);
+  }
+  return (params.width, params.height);
 }
 
 String _batchSizePath(BatchRedrawProject project, BatchRedrawItem item) {
@@ -387,35 +394,60 @@ class _ParamsStep extends StatelessWidget {
                     style: Theme.of(context).textTheme.titleSmall,
                   ),
                   const SizedBox(height: 8),
-                  SegmentedButton<String>(
-                    showSelectedIcon: false,
-                    segments: [
-                      ButtonSegment(
-                        value: 'adaptive',
+                  Wrap(
+                    spacing: 7,
+                    runSpacing: 7,
+                    children: [
+                      ChoiceChip(
                         label: Text(t('batch.sizeMode.adaptive')),
+                        selected: project.sizeMode == 'adaptive',
+                        onSelected: (_) {
+                          project.sizeMode = 'adaptive';
+                          controller.changed();
+                        },
                       ),
-                      ButtonSegment(
-                        value: 'custom',
+                      ChoiceChip(
                         label: Text(t('batch.sizeMode.custom')),
+                        selected: project.sizeMode == 'custom',
+                        onSelected: (_) {
+                          project.sizeMode = 'custom';
+                          controller.changed();
+                        },
+                      ),
+                      ChoiceChip(
+                        label: Text(t('batch.sizeMode.perImage')),
+                        selected: project.sizeMode == 'perImage',
+                        onSelected: (_) {
+                          if (project.sizeBulk.trim().isEmpty) {
+                            controller.createPerImageSizeTemplate();
+                          } else {
+                            project.sizeMode = 'perImage';
+                            controller.changed();
+                          }
+                        },
                       ),
                     ],
-                    selected: {project.sizeMode},
-                    onSelectionChanged: (selection) {
-                      project.sizeMode = selection.first;
-                      controller.changed();
-                    },
                   ),
                   const SizedBox(height: 7),
                   Text(
                     project.sizeMode == 'adaptive'
                         ? t('batch.sizeMode.adaptiveDesc')
-                        : mobileUiFormatFor(
-                            language,
-                            'batch.sizeMode.customDesc',
-                            {'size': '${params.width}×${params.height}'},
-                          ),
+                        : project.sizeMode == 'custom'
+                            ? mobileUiFormatFor(
+                                language,
+                                'batch.sizeMode.customDesc',
+                                {'size': '${params.width}×${params.height}'},
+                              )
+                            : t('batch.sizeMode.perImageDesc'),
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
+                  if (project.sizeMode == 'perImage') ...[
+                    const SizedBox(height: 10),
+                    _PerImageSizeEditor(
+                      controller: controller,
+                      language: language,
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -492,7 +524,13 @@ class _ParamsStep extends StatelessWidget {
           FilledButton.tonal(
             onPressed: project.items.isEmpty
                 ? null
-                : () => controller.setStep(BatchRedrawStep.prompts),
+                : () {
+                    if (project.sizeMode == 'perImage' &&
+                        !controller.applyPerImageSizes()) {
+                      return;
+                    }
+                    controller.setStep(BatchRedrawStep.prompts);
+                  },
             child: Text(t('batch.nextPrompts')),
           ),
         ],
@@ -734,6 +772,103 @@ class _BatchPreciseRow extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _PerImageSizeEditor extends StatefulWidget {
+  final BatchRedrawController controller;
+  final String language;
+
+  const _PerImageSizeEditor({
+    required this.controller,
+    required this.language,
+  });
+
+  @override
+  State<_PerImageSizeEditor> createState() => _PerImageSizeEditorState();
+}
+
+class _PerImageSizeEditorState extends State<_PerImageSizeEditor> {
+  late final TextEditingController _text;
+  final _focus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _text = TextEditingController(text: widget.controller.project.sizeBulk);
+  }
+
+  @override
+  void didUpdateWidget(covariant _PerImageSizeEditor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final value = widget.controller.project.sizeBulk;
+    if (!_focus.hasFocus && _text.text != value) {
+      _text.value = TextEditingValue(
+        text: value,
+        selection: TextSelection.collapsed(offset: value.length),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _focus.dispose();
+    _text.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    String t(String key) => mobileUiTextFor(widget.language, key);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextField(
+          controller: _text,
+          focusNode: _focus,
+          minLines: 4,
+          maxLines: 10,
+          keyboardType: TextInputType.multiline,
+          decoration: InputDecoration(
+            labelText: t('batch.sizeMode.perImageInput'),
+            hintText: t('batch.sizeMode.perImagePlaceholder'),
+            alignLabelWithHint: true,
+            border: const OutlineInputBorder(),
+          ),
+          onChanged: (value) {
+            widget.controller.project.sizeBulk = value;
+            widget.controller.changed();
+          },
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          alignment: WrapAlignment.end,
+          children: [
+            OutlinedButton.icon(
+              onPressed: () {
+                final value = widget.controller.createPerImageSizeTemplate();
+                _text.value = TextEditingValue(
+                  text: value,
+                  selection: TextSelection.collapsed(offset: value.length),
+                );
+              },
+              icon: const Icon(Icons.view_list_outlined),
+              label: Text(t('batch.sizeMode.perImageTemplate')),
+            ),
+            FilledButton.tonalIcon(
+              onPressed: () {
+                FocusManager.instance.primaryFocus?.unfocus();
+                widget.controller.applyPerImageSizes();
+              },
+              icon: const Icon(Icons.done_all_rounded),
+              label: Text(t('batch.sizeMode.perImageApply')),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

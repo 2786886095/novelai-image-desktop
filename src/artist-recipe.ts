@@ -18,6 +18,11 @@ export interface RandomArtistRecipeOptions {
   artistWeightMax?: number;
   auxiliaryPrompt?: string;
   customTagPool?: string;
+  /** Per-tag inclusion policy. Missing entries remain backward-compatible and
+   * are included in every recipe. Keys are normalized lowercase tag values. */
+  customTagModes?: Record<string, CustomTagMode>;
+  minRandomCustomTags?: number;
+  maxRandomCustomTags?: number;
   customTagWeightMin?: number;
   customTagWeightMax?: number;
   mutateAuxiliary: boolean;
@@ -31,6 +36,8 @@ export interface RandomArtistRecipeOptions {
   random?: () => number;
 }
 
+export type CustomTagMode = "always" | "random";
+
 export interface GeneratedArtistRecipe {
   id: string;
   artists: ArtistWeightedTag[];
@@ -41,7 +48,7 @@ export interface GeneratedArtistRecipe {
   prompt: string;
 }
 
-export type StyleMutationCategory = "artStyle" | "medium" | "color" | "lighting" | "atmosphere";
+export type StyleMutationCategory = "artStyle" | "medium" | "color" | "lighting";
 
 export interface StyleMutationToken extends ParsedRecipeToken {
   category: StyleMutationCategory;
@@ -91,13 +98,6 @@ export const STYLE_MUTATION_LIBRARY: Record<StyleMutationCategory, readonly stri
     "lens flare", "moonlight", "neon lighting", "overcast lighting", "rim lighting", "soft lighting",
     "spotlight", "studio lighting", "sunlight", "underlighting", "volumetric lighting", "window light",
   ],
-  atmosphere: [
-    "atmospheric perspective", "cinematic atmosphere", "cozy atmosphere", "dreamy", "dust particles",
-    "ethereal", "floating particles", "foggy", "hazy", "magical atmosphere", "melancholic", "misty",
-    "moody", "mysterious", "nostalgic", "ominous atmosphere", "peaceful", "romantic atmosphere", "serene",
-    "soft focus", "sparkles", "surreal atmosphere", "tranquil", "vignette", "whimsical", "windy atmosphere",
-    "glowing dust", "humid atmosphere", "smoky atmosphere", "rainy atmosphere",
-  ],
 };
 
 /**
@@ -113,27 +113,6 @@ export const FRANCHISE_STYLE_LIBRARY = [
   "girls'_frontline", "girls_und_panzer", "gundam", "danganronpa_(series)", "precure",
   "kemono_friends", "bang_dream!", "wuthering_waves", "jojo_no_kimyou_na_bouken",
   "one_piece", "honkai_impact_3rd",
-] as const;
-
-/** Curated quick-pick tags for the custom random-weight field. Every selected
- * tag is still included in every recipe; this library only reduces typing. */
-export const RANDOM_CUSTOM_TAG_LIBRARY = [
-  {
-    id: "render3d",
-    tags: ["3d", "3d render", "cgi", "octane render", "unreal engine", "ray tracing"],
-  },
-  {
-    id: "lighting",
-    tags: ["cinematic lighting", "volumetric lighting", "rim lighting", "dramatic lighting", "depth of field", "high contrast"],
-  },
-  {
-    id: "quality",
-    tags: ["masterpiece", "best quality", "amazing quality", "very aesthetic", "absurdres", "highres"],
-  },
-  {
-    id: "atmosphere",
-    tags: ["atmospheric perspective", "dramatic atmosphere", "moody atmosphere", "fog", "glowing particles", "light rays"],
-  },
 ] as const;
 
 const QUALITY_PATTERN = /^(masterpiece|best quality|amazing quality|very aesthetic|extremely detailed(?: cg)?|ultra[- ]?detailed|high quality)$/i;
@@ -452,6 +431,34 @@ function drawCustomTags(
   }));
 }
 
+function selectCustomTagPool(
+  random: () => number,
+  pool: ParsedRecipeToken[],
+  modes: Record<string, CustomTagMode> | undefined,
+  minRandom: number | undefined,
+  maxRandom: number | undefined,
+): ParsedRecipeToken[] {
+  const always: ParsedRecipeToken[] = [];
+  const randomPool: ParsedRecipeToken[] = [];
+  for (const token of pool) {
+    const mode = modes?.[token.value.trim().toLocaleLowerCase()] ?? "always";
+    (mode === "random" ? randomPool : always).push(token);
+  }
+  if (randomPool.length === 0) return always;
+  const requestedMin = Number.isFinite(minRandom) ? Math.floor(Number(minRandom)) : 1;
+  const requestedMax = Number.isFinite(maxRandom) ? Math.floor(Number(maxRandom)) : 3;
+  const lower = Math.max(0, Math.min(randomPool.length, Math.min(requestedMin, requestedMax)));
+  const upper = Math.max(lower, Math.min(randomPool.length, Math.max(requestedMin, requestedMax)));
+  const count = lower + Math.floor(random() * (upper - lower + 1));
+  const available = [...randomPool];
+  const selected: ParsedRecipeToken[] = [];
+  while (selected.length < count && available.length > 0) {
+    const index = Math.min(available.length - 1, Math.floor(random() * available.length));
+    selected.push(available.splice(index, 1)[0]);
+  }
+  return [...always, ...selected];
+}
+
 export function generatePopularArtistRecipes(
   pool: ArtistTagRecord[],
   options: RandomArtistRecipeOptions,
@@ -495,9 +502,16 @@ export function generatePopularArtistRecipes(
           franchiseWeightMax,
         )
       : [];
-    const customTags = drawCustomTags(
+    const selectedCustomTagPool = selectCustomTagPool(
       random,
       customTagPool,
+      options.customTagModes,
+      options.minRandomCustomTags,
+      options.maxRandomCustomTags,
+    );
+    const customTags = drawCustomTags(
+      random,
+      selectedCustomTagPool,
       options.customTagWeightMin ?? 0.2,
       options.customTagWeightMax ?? 1.2,
     );

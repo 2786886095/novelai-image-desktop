@@ -126,6 +126,14 @@ const _runtimeText = <String, Map<String, String>>{
     'batch.resultsClearFailed': '清空生成结果失败：{error}',
     'batch.noValidImages': '没有读到有效的 PNG、JPG 或 WebP 图片',
     'batch.imagesImported': '已导入 {count} 张图片',
+    'batch.sizeMode.perImageApplied': '已为 {count} 张图片匹配尺寸。',
+    'batch.sizeMode.perImageEmpty': '请先填写逐图尺寸。',
+    'batch.sizeMode.perImageCount':
+        '尺寸数量不一致：需要 {expected} 行，实际 {actual} 行。',
+    'batch.sizeMode.perImageBlank': '尺寸第 {line} 行为空。',
+    'batch.sizeMode.perImageFormat': '尺寸第 {line} 行格式错误，请使用“宽×高”。',
+    'batch.sizeMode.perImageUnsupported':
+        '尺寸第 {line} 行不是软件支持的 NovelAI 合法尺寸。',
     'batch.syncedParams': '已同步当前生图参数',
     'batch.copiedReferences': '已复制生图页当前参考图到批量项目',
     'batch.addedPrecise': '已添加精准参考图',
@@ -342,6 +350,14 @@ const _runtimeText = <String, Map<String, String>>{
     'batch.resultsClearFailed': '清空生成結果失敗：{error}',
     'batch.noValidImages': '沒有讀到有效的 PNG、JPG 或 WebP 圖片',
     'batch.imagesImported': '已匯入 {count} 張圖片',
+    'batch.sizeMode.perImageApplied': '已為 {count} 張圖片配對尺寸。',
+    'batch.sizeMode.perImageEmpty': '請先填寫逐圖尺寸。',
+    'batch.sizeMode.perImageCount':
+        '尺寸數量不一致：需要 {expected} 行，實際 {actual} 行。',
+    'batch.sizeMode.perImageBlank': '尺寸第 {line} 行為空。',
+    'batch.sizeMode.perImageFormat': '尺寸第 {line} 行格式錯誤，請使用「寬×高」。',
+    'batch.sizeMode.perImageUnsupported':
+        '尺寸第 {line} 行不是軟體支援的 NovelAI 合法尺寸。',
     'batch.syncedParams': '已同步目前生圖參數',
     'batch.copiedReferences': '已複製生圖頁目前參考圖到批量專案',
     'batch.addedPrecise': '已新增精準參考圖',
@@ -593,6 +609,15 @@ const _runtimeText = <String, Map<String, String>>{
     'batch.resultsClearFailed': 'Could not clear generated results: {error}',
     'batch.noValidImages': 'No valid PNG, JPG, or WebP images were read',
     'batch.imagesImported': 'Imported {count} images',
+    'batch.sizeMode.perImageApplied': 'Matched sizes to {count} images.',
+    'batch.sizeMode.perImageEmpty': 'Enter one output size per image first.',
+    'batch.sizeMode.perImageCount':
+        'Size count mismatch: expected {expected} lines, got {actual}.',
+    'batch.sizeMode.perImageBlank': 'Size line {line} is blank.',
+    'batch.sizeMode.perImageFormat':
+        'Size line {line} is invalid. Use width×height.',
+    'batch.sizeMode.perImageUnsupported':
+        'Size line {line} is not a supported NovelAI image size.',
     'batch.syncedParams': 'Current generation parameters synced',
     'batch.copiedReferences':
         'Copied current Generate references into the batch project',
@@ -840,6 +865,15 @@ const _runtimeText = <String, Map<String, String>>{
     'batch.resultsClearFailed': '生成結果を消去できませんでした：{error}',
     'batch.noValidImages': '有効な PNG、JPG、WebP 画像を読み込めませんでした',
     'batch.imagesImported': '{count} 枚の画像をインポートしました',
+    'batch.sizeMode.perImageApplied': '{count} 枚の画像にサイズを対応付けました。',
+    'batch.sizeMode.perImageEmpty': '画像ごとのサイズを先に入力してください。',
+    'batch.sizeMode.perImageCount':
+        'サイズ数が一致しません：{expected} 行必要ですが、{actual} 行です。',
+    'batch.sizeMode.perImageBlank': 'サイズの {line} 行目が空です。',
+    'batch.sizeMode.perImageFormat':
+        'サイズの {line} 行目が不正です。「幅×高さ」で入力してください。',
+    'batch.sizeMode.perImageUnsupported':
+        'サイズの {line} 行目は NovelAI でサポートされていません。',
     'batch.syncedParams': '現在の生成パラメータを同期しました',
     'batch.copiedReferences': '生成ページの現在の参照を一括プロジェクトへコピーしました',
     'batch.addedPrecise': '精密参照を追加しました',
@@ -1069,6 +1103,15 @@ const _runtimeText = <String, Map<String, String>>{
     'batch.resultsClearFailed': '생성 결과를 지우지 못했습니다: {error}',
     'batch.noValidImages': '유효한 PNG, JPG 또는 WebP 이미지를 읽지 못했습니다',
     'batch.imagesImported': '이미지 {count}장을 가져왔습니다',
+    'batch.sizeMode.perImageApplied': '이미지 {count}장에 크기를 연결했습니다.',
+    'batch.sizeMode.perImageEmpty': '이미지별 크기를 먼저 입력하세요.',
+    'batch.sizeMode.perImageCount':
+        '크기 수가 일치하지 않습니다. {expected}줄이 필요하지만 {actual}줄입니다.',
+    'batch.sizeMode.perImageBlank': '크기 {line}번째 줄이 비어 있습니다.',
+    'batch.sizeMode.perImageFormat':
+        '크기 {line}번째 줄 형식이 잘못되었습니다. 너비×높이를 사용하세요.',
+    'batch.sizeMode.perImageUnsupported':
+        '크기 {line}번째 줄은 지원되는 NovelAI 이미지 크기가 아닙니다.',
     'batch.syncedParams': '현재 생성 매개변수를 동기화했습니다',
     'batch.copiedReferences': '생성 페이지의 현재 참조를 일괄 프로젝트로 복사했습니다',
     'batch.addedPrecise': '정밀 참조를 추가했습니다',
