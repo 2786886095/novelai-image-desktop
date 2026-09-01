@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novelai_mobile/main.dart';
 import 'package:novelai_mobile/models/nai_models.dart';
+import 'package:novelai_mobile/references/reference_presets.dart';
 import 'package:novelai_mobile/screens/gallery_screen.dart';
 import 'package:novelai_mobile/screens/generate_screen.dart';
 import 'package:novelai_mobile/screens/inspect_screen.dart';
@@ -339,6 +340,64 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('新建参考图预设'), findsOneWidget);
     expect(find.text('导入'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'large reference preset library starts folded with a fixed apply action',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(320, 640);
+    addTearDown(tester.view.reset);
+    final state = AppState()
+      ..referencePresetGroups = ['大图库']
+      ..referencePresets = List.generate(
+        672,
+        (index) => ReferencePreset(
+          id: 'large-$index',
+          name: '预设 $index',
+          group: '大图库',
+          kind: ReferencePresetKind.precise,
+          filePath: 'asset:assets/icon/app_icon.png',
+          createdAt:
+              '2026-09-01T00:00:${(index % 60).toString().padLeft(2, '0')}.000Z',
+          preciseType: 'character',
+          width: 832,
+          height: 1216,
+        ),
+      );
+    addTearDown(state.dispose);
+
+    await _pumpScreen(
+      tester,
+      state,
+      const Scaffold(
+        body: SafeArea(
+          child: ReferencePresetLibraryPanel(showClose: false),
+        ),
+      ),
+      'large reference preset library',
+    );
+
+    final applyButton =
+        find.byKey(const ValueKey('reference-preset-apply-fixed'));
+    expect(find.text('展开图片列表'), findsOneWidget);
+    expect(applyButton, findsOneWidget);
+    expect(tester.getBottomRight(applyButton).dy, lessThanOrEqualTo(640));
+    expect(
+        find.byKey(const ValueKey('reference-preset-load-more')), findsNothing);
+    expect(find.byType(Image), findsNothing);
+
+    final expandButton =
+        find.byKey(const ValueKey('reference-preset-list-expand'));
+    await tester.ensureVisible(expandButton);
+    await tester.pumpAndSettle();
+    await tester.tap(expandButton);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('reference-preset-load-more')),
+        findsOneWidget);
+    expect(find.byType(Image).evaluate().length, lessThanOrEqualTo(24));
     expect(tester.takeException(), isNull);
   });
 

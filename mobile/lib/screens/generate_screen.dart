@@ -3553,16 +3553,36 @@ class _ReferencePresetLibraryPanelState
     extends State<ReferencePresetLibraryPanel> {
   static const _allGroups = '__all__';
   static const _ungrouped = '__ungrouped__';
+  static const _presetPageSize = 24;
+  static const _autoCollapseThreshold = 80;
   String _group = _allGroups;
   ReferencePresetKind? _kind;
   bool _busy = false;
   String _query = '';
   int _section = 0;
+  int _visiblePresetLimit = _presetPageSize;
+  bool? _listExpandedOverride;
   final Set<String> _selectedIds = <String>{};
 
   Widget _presetImage(String path) => path.startsWith('asset:')
-      ? Image.asset(path.substring(6), fit: BoxFit.contain)
-      : Image.file(File(path), fit: BoxFit.contain);
+      ? Image.asset(
+          path.substring(6),
+          fit: BoxFit.contain,
+          cacheWidth: 384,
+          filterQuality: FilterQuality.low,
+        )
+      : Image.file(
+          File(path),
+          fit: BoxFit.contain,
+          cacheWidth: 384,
+          filterQuality: FilterQuality.low,
+          gaplessPlayback: true,
+        );
+
+  void _resetVisiblePresets() {
+    _visiblePresetLimit = _presetPageSize;
+    _listExpandedOverride = null;
+  }
 
   @override
   void initState() {
@@ -4010,6 +4030,70 @@ class _ReferencePresetLibraryPanelState
     if (applied > 0 && context.mounted) Navigator.maybePop(context);
   }
 
+  Widget _selectionFooter(BuildContext context) {
+    final language = context.read<AppState>().settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
+    return Material(
+      elevation: 12,
+      color: Theme.of(context).colorScheme.surface,
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxWidth < 460;
+              final applyButton = FilledButton.icon(
+                key: const ValueKey('reference-preset-apply-fixed'),
+                onPressed: _selectedIds.isEmpty || _busy
+                    ? null
+                    : () => _applySelected(context),
+                icon: const Icon(Icons.done_all),
+                label: Text(t('referencePresets.applySelected')),
+              );
+              return Row(
+                children: [
+                  if (compact)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 4),
+                      child: Text(
+                        '${_selectedIds.length}',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                    )
+                  else
+                    Expanded(
+                      child: Text(
+                        '${t('referencePresets.selected')} ${_selectedIds.length}',
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                    ),
+                  if (compact)
+                    IconButton(
+                      tooltip: t('referencePresets.clearSelection'),
+                      onPressed: _selectedIds.isEmpty
+                          ? null
+                          : () => setState(_selectedIds.clear),
+                      icon: const Icon(Icons.clear_all),
+                    )
+                  else
+                    TextButton(
+                      onPressed: _selectedIds.isEmpty
+                          ? null
+                          : () => setState(_selectedIds.clear),
+                      child: Text(t('referencePresets.clearSelection')),
+                    ),
+                  const SizedBox(width: 8),
+                  if (compact) Expanded(child: applyButton) else applyButton,
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
@@ -4036,6 +4120,9 @@ class _ReferencePresetLibraryPanelState
           matchesQuery;
     }).toList()
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    final listExpanded =
+        _listExpandedOverride ?? presets.length <= _autoCollapseThreshold;
+    final visiblePresets = presets.take(_visiblePresetLimit).toList();
 
     Widget presetCard(ReferencePreset preset) {
       final detail = preset.kind == ReferencePresetKind.vibe
@@ -4171,7 +4258,7 @@ class _ReferencePresetLibraryPanelState
               : _group == _ungrouped
                   ? t('referencePresets.ungrouped')
                   : groupName(_group);
-          return SingleChildScrollView(
+          final content = SingleChildScrollView(
             child: Column(
               children: [
                 Padding(
@@ -4284,13 +4371,17 @@ class _ReferencePresetLibraryPanelState
                                 suffixIcon: _query.isEmpty
                                     ? null
                                     : IconButton(
-                                        onPressed: () =>
-                                            setState(() => _query = ''),
+                                        onPressed: () => setState(() {
+                                          _query = '';
+                                          _resetVisiblePresets();
+                                        }),
                                         icon: const Icon(Icons.close),
                                       ),
                               ),
-                              onChanged: (value) =>
-                                  setState(() => _query = value),
+                              onChanged: (value) => setState(() {
+                                _query = value;
+                                _resetVisiblePresets();
+                              }),
                             ),
                             const SizedBox(height: 10),
                             Row(
@@ -4324,8 +4415,10 @@ class _ReferencePresetLibraryPanelState
                                           child: Text(groupName(group)),
                                         ),
                                     ],
-                                    onChanged: (value) => setState(
-                                        () => _group = value ?? _allGroups),
+                                    onChanged: (value) => setState(() {
+                                      _group = value ?? _allGroups;
+                                      _resetVisiblePresets();
+                                    }),
                                   ),
                                 ),
                                 const SizedBox(width: 8),
@@ -4368,21 +4461,27 @@ class _ReferencePresetLibraryPanelState
                                     label:
                                         Text(t('referencePresets.filterAll')),
                                     selected: _kind == null,
-                                    onSelected: (_) =>
-                                        setState(() => _kind = null),
+                                    onSelected: (_) => setState(() {
+                                      _kind = null;
+                                      _resetVisiblePresets();
+                                    }),
                                   ),
                                   ChoiceChip(
                                     label: Text(t('referencePresets.vibe')),
                                     selected: _kind == ReferencePresetKind.vibe,
-                                    onSelected: (_) => setState(
-                                        () => _kind = ReferencePresetKind.vibe),
+                                    onSelected: (_) => setState(() {
+                                      _kind = ReferencePresetKind.vibe;
+                                      _resetVisiblePresets();
+                                    }),
                                   ),
                                   ChoiceChip(
                                     label: Text(t('referencePresets.precise')),
                                     selected:
                                         _kind == ReferencePresetKind.precise,
-                                    onSelected: (_) => setState(() =>
-                                        _kind = ReferencePresetKind.precise),
+                                    onSelected: (_) => setState(() {
+                                      _kind = ReferencePresetKind.precise;
+                                      _resetVisiblePresets();
+                                    }),
                                   ),
                                 ],
                               ),
@@ -4458,82 +4557,138 @@ class _ReferencePresetLibraryPanelState
                         ),
                         Text(countText(
                             'referencePresets.presetCount', presets.length)),
+                        const SizedBox(width: 4),
+                        IconButton(
+                          key: const ValueKey(
+                              'reference-preset-list-toggle'),
+                          tooltip: t(listExpanded
+                              ? 'referencePresets.collapseList'
+                              : 'referencePresets.expandList'),
+                          onPressed: presets.isEmpty
+                              ? null
+                              : () => setState(() {
+                                    _listExpandedOverride = !listExpanded;
+                                    if (!listExpanded) {
+                                      _visiblePresetLimit = _presetPageSize;
+                                    }
+                                  }),
+                          icon: Icon(listExpanded
+                              ? Icons.expand_less
+                              : Icons.expand_more),
+                        ),
                       ],
                     ),
                   ),
-                  presets.isEmpty
-                      ? SizedBox(
-                          height: 220,
-                          child: Center(
-                            child: Padding(
-                              padding: const EdgeInsets.all(24),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
+                  if (presets.isEmpty)
+                    SizedBox(
+                      height: 220,
+                      child: Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.collections_bookmark_outlined,
+                                  size: 48,
+                                  color:
+                                      Theme.of(context).colorScheme.outline),
+                              const SizedBox(height: 10),
+                              Text(t('referencePresets.empty')),
+                              const SizedBox(height: 12),
+                            ],
+                          ),
+                        ),
+                      ),
+                    )
+                  else if (!listExpanded)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      child: Card(
+                        margin: EdgeInsets.zero,
+                        color:
+                            Theme.of(context).colorScheme.surfaceContainerLow,
+                        child: Padding(
+                          padding: const EdgeInsets.all(14),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Icon(Icons.collections_bookmark_outlined,
-                                      size: 48,
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .outline),
-                                  const SizedBox(height: 10),
-                                  Text(t('referencePresets.empty')),
-                                  const SizedBox(height: 12),
+                                  const Icon(Icons.photo_library_outlined),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      t('referencePresets.largeLibraryHint')
+                                          .replaceAll(
+                                              '{count}', '${presets.length}'),
+                                    ),
+                                  ),
                                 ],
                               ),
+                              const SizedBox(height: 12),
+                              FilledButton.tonalIcon(
+                                key: const ValueKey(
+                                    'reference-preset-list-expand'),
+                                onPressed: () => setState(() {
+                                  _listExpandedOverride = true;
+                                  _visiblePresetLimit = _presetPageSize;
+                                }),
+                                icon: const Icon(Icons.expand_more),
+                                label: Text(t('referencePresets.expandList')),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    )
+                  else ...[
+                    GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      padding: EdgeInsets.fromLTRB(
+                          16, 0, 16, widget.standalone ? 24 : 12),
+                      gridDelegate:
+                          SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: columns,
+                        crossAxisSpacing: 10,
+                        mainAxisSpacing: 10,
+                        mainAxisExtent: wide ? 300 : 270,
+                      ),
+                      itemCount: visiblePresets.length,
+                      itemBuilder: (_, index) =>
+                          presetCard(visiblePresets[index]),
+                    ),
+                    if (visiblePresets.length < presets.length)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            key: const ValueKey('reference-preset-load-more'),
+                            onPressed: () => setState(() {
+                              _visiblePresetLimit += _presetPageSize;
+                            }),
+                            icon: const Icon(Icons.expand_more),
+                            label: Text(
+                              '${t('referencePresets.loadMore')} · ${visiblePresets.length}/${presets.length}',
                             ),
                           ),
-                        )
-                      : GridView.builder(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          padding: EdgeInsets.fromLTRB(
-                              16, 0, 16, widget.standalone ? 24 : 92),
-                          gridDelegate:
-                              SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: columns,
-                            crossAxisSpacing: 10,
-                            mainAxisSpacing: 10,
-                            mainAxisExtent: wide ? 300 : 270,
-                          ),
-                          itemCount: presets.length,
-                          itemBuilder: (_, index) => presetCard(presets[index]),
                         ),
+                      ),
+                  ],
                 ],
                 if (widget.standalone && _section == 0)
                   const ReferenceCatalogPanel(autoLoad: true),
-                if (!widget.standalone)
-                  SafeArea(
-                    top: false,
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              '${t('referencePresets.selected')} ${_selectedIds.length}',
-                              style: Theme.of(context).textTheme.titleSmall,
-                            ),
-                          ),
-                          TextButton(
-                            onPressed: _selectedIds.isEmpty
-                                ? null
-                                : () => setState(_selectedIds.clear),
-                            child: Text(t('referencePresets.clearSelection')),
-                          ),
-                          const SizedBox(width: 8),
-                          FilledButton.icon(
-                            onPressed: _selectedIds.isEmpty || _busy
-                                ? null
-                                : () => _applySelected(context),
-                            icon: const Icon(Icons.done_all),
-                            label: Text(t('referencePresets.applySelected')),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
               ],
             ),
+          );
+          if (widget.standalone) return content;
+          return Column(
+            children: [
+              Expanded(child: content),
+              _selectionFooter(context),
+            ],
           );
         },
       ),
