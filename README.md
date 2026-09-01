@@ -16,7 +16,7 @@
 
 ## 下载
 
-- **v2.1.1 中国大陆线路**：[Gitee Releases](https://gitee.com/langbai666/novelai-image-desktop/releases/tag/v2.1.1)
+- **v2.1.1 中国大陆线路**：[Gitee Releases](https://gitee.com/langbai666/novelai-image-desktop/releases#release-v2.1.1)
 - **v2.1.1 全球线路**：[GitHub Releases](https://github.com/2786886095/novelai-image-desktop/releases/tag/v2.1.1)
 - **持续构建产物**：[GitHub Actions](https://github.com/2786886095/novelai-image-desktop/actions)
 
