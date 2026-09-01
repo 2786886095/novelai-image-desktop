@@ -10,6 +10,7 @@ import {
 import { AppPortal, Button, SelectMenu } from "./components/ui";
 import { Icon } from "./components/icons";
 import { QualityPresetControl } from "./components/QualityPresetControl";
+import { PositivePromptPresetControl } from "./PositivePromptPresets";
 import {
   expandArtistRecipeComparisons,
   formatArtistCardTags,
@@ -1149,8 +1150,14 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
     <section className="artist-lab-panel random-artist-settings">
       <div className="random-settings-reset wide"><small>{resetText.hint}</small><Button type="button" variant="ghost" onClick={restoreDrawDefaults}><Icon name="refresh" />{resetText.label}</Button></div>
       <div className="random-fixed-prompt-grid wide">
-        <label className="random-fixed-prompt-card"><span>{text.base}</span><textarea value={session.basePrompt} onChange={(event) => patch({ basePrompt: event.target.value })} /></label>
-        <label className="random-fixed-prompt-card"><span>{text.auxiliary}</span><textarea value={session.auxiliaryPrompt} onChange={(event) => patch({ auxiliaryPrompt: event.target.value })} /></label>
+        <div className="random-fixed-prompt-card">
+          <div className="random-fixed-prompt-card-header"><span>{text.base}</span><PositivePromptPresetControl value={session.basePrompt} onApply={(basePrompt) => patch({ basePrompt })} variant="field" /></div>
+          <textarea aria-label={text.base} value={session.basePrompt} onChange={(event) => patch({ basePrompt: event.target.value })} />
+        </div>
+        <div className="random-fixed-prompt-card">
+          <div className="random-fixed-prompt-card-header"><span>{text.auxiliary}</span></div>
+          <textarea aria-label={text.auxiliary} value={session.auxiliaryPrompt} onChange={(event) => patch({ auxiliaryPrompt: event.target.value })} />
+        </div>
       </div>
       <details
         className="random-custom-tag-workbench wide"

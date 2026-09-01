@@ -4,7 +4,11 @@ import { Button, IconText, SelectMenu } from "./components/ui";
 import { Icon } from "./components/icons";
 import { normalizeAppLanguage } from "./i18n";
 import { inspectImageMetadata, parseImageMeta, type ImageMetadataReport } from "./png-meta";
-import { loadMetadataSnapshot, saveMetadataSnapshot } from "./metadata-snapshot";
+import {
+  loadMetadataSnapshot,
+  metadataSnapshotToFile,
+  saveMetadataSnapshot,
+} from "./metadata-snapshot";
 import { useAppStore } from "./store";
 import type { AppLanguage, HistoryGroup, HistoryItem, ImportedParams } from "./types";
 
@@ -483,6 +487,7 @@ function sourceLabel(report: ImageMetadataReport, text: MetadataText) {
 
 export default function MetadataInspector({ onBack }: { onBack: () => void }) {
   const language = normalizeAppLanguage(useAppStore((state) => state.settings?.language));
+  const activeTab = useAppStore((state) => state.activeTab);
   const restoreImportedMetadata = useAppStore((state) => state.restoreImportedMetadata);
   const setActiveTab = useAppStore((state) => state.setActiveTab);
   const setToast = useAppStore((state) => state.setToast);
@@ -501,6 +506,10 @@ export default function MetadataInspector({ onBack }: { onBack: () => void }) {
   const [selectedHistoryId, setSelectedHistoryId] = useState("");
   const [historyDisplayLimit, setHistoryDisplayLimit] = useState(60);
   const inputRef = useRef<HTMLInputElement>(null);
+  const readRevisionRef = useRef(0);
+  const historyLoadRevisionRef = useRef(0);
+  const historyReadRevisionRef = useRef(0);
+  const historyReadInFlightRef = useRef(0);
 
   useEffect(() => () => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -526,10 +535,16 @@ export default function MetadataInspector({ onBack }: { onBack: () => void }) {
 
   useEffect(() => setHistoryDisplayLimit(60), [historyGroupId]);
 
-  const readFile = useCallback(async (file: File, persist = true) => {
+  const readFile = useCallback(async (
+    file: File,
+    persist = true,
+    requestedRevision?: number,
+  ): Promise<boolean> => {
+    const revision = requestedRevision ?? ++readRevisionRef.current;
     try {
       const buffer = await file.arrayBuffer();
       const next = inspectImageMetadata(parseImageMeta(buffer));
+      if (revision !== readRevisionRef.current) return false;
       setReport(next);
       setFileName(file.name);
       setPreviewUrl((old) => {
@@ -537,46 +552,92 @@ export default function MetadataInspector({ onBack }: { onBack: () => void }) {
         return URL.createObjectURL(file);
       });
       if (persist) void saveMetadataSnapshot(file).catch(() => undefined);
+      return true;
     } catch {
-      setToast(text.readFailed);
+      if (revision === readRevisionRef.current) setToast(text.readFailed);
+      return false;
     }
   }, [setToast, text.readFailed]);
 
+  // MetadataInspector stays mounted while hidden. Reload the latest hand-off
+  // every time this tab becomes active instead of relying on a mount-only
+  // effect, otherwise the history eye button can navigate to a blank page.
   useEffect(() => {
-    if (!historyOpen || historyLoaded) return;
+    if (activeTab !== "metadata") {
+      readRevisionRef.current += 1;
+      return;
+    }
+    const revision = ++readRevisionRef.current;
     let cancelled = false;
+    void loadMetadataSnapshot().then((file) => {
+      if (cancelled || revision !== readRevisionRef.current || !file) return;
+      return readFile(file, false, revision);
+    }).catch(() => {
+      if (!cancelled && revision === readRevisionRef.current) setToast(text.readFailed);
+    });
+    return () => {
+      cancelled = true;
+      if (revision === readRevisionRef.current) readRevisionRef.current += 1;
+    };
+  }, [activeTab, readFile, setToast, text.readFailed]);
+
+  // The history picker is also persistent. Invalidate its cache on every
+  // metadata-page entry so reopening the picker retries a failed/stale load
+  // without requiring a full application restart.
+  useEffect(() => {
+    if (activeTab === "metadata") {
+      setHistoryLoaded(false);
+      return;
+    }
+    historyLoadRevisionRef.current += 1;
+    historyReadRevisionRef.current += 1;
+    historyReadInFlightRef.current = 0;
+    setHistoryLoading(false);
+    setHistoryReadingId("");
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab !== "metadata" || !historyOpen || historyLoaded) return;
+    const revision = ++historyLoadRevisionRef.current;
     setHistoryLoading(true);
     void Promise.all([
       window.naiDesktop.getHistory(),
       window.naiDesktop.getHistoryGroups(),
     ]).then(([items, groups]) => {
-      if (cancelled) return;
+      if (revision !== historyLoadRevisionRef.current) return;
       setHistoryItems(items);
       setHistoryGroups(groups);
       setHistoryLoaded(true);
     }).catch(() => {
-      if (!cancelled) setToast(text.historyFailed);
+      if (revision === historyLoadRevisionRef.current) setToast(text.historyFailed);
     }).finally(() => {
-      if (!cancelled) setHistoryLoading(false);
+      if (revision === historyLoadRevisionRef.current) setHistoryLoading(false);
     });
-    return () => { cancelled = true; };
-  }, [historyLoaded, historyOpen, setToast, text.historyFailed]);
+    return () => {
+      if (revision === historyLoadRevisionRef.current) historyLoadRevisionRef.current += 1;
+    };
+  }, [activeTab, historyLoaded, historyOpen, setToast, text.historyFailed]);
 
   async function readHistoryItem(item: HistoryItem) {
-    if (historyReadingId) return;
+    if (historyReadInFlightRef.current) return;
+    const historyRevision = ++historyReadRevisionRef.current;
+    historyReadInFlightRef.current = historyRevision;
+    const readRevision = ++readRevisionRef.current;
     setHistoryReadingId(item.id);
     try {
-      const saved = await window.naiDesktop.saveMetadataSnapshotFromPath(item.filePath);
-      if (!saved.ok) throw new Error(saved.message);
-      const file = await loadMetadataSnapshot();
-      if (!file) throw new Error(text.readFailed);
-      await readFile(file, false);
+      const loaded = await window.naiDesktop.readMetadataSnapshotFromPath(item.filePath);
+      if (!loaded.ok || !loaded.snapshot) throw new Error(loaded.message || text.readFailed);
+      if (historyRevision !== historyReadRevisionRef.current) return;
+      const file = metadataSnapshotToFile(loaded.snapshot);
+      const applied = await readFile(file, false, readRevision);
+      if (!applied || historyRevision !== historyReadRevisionRef.current) return;
       setSelectedHistoryId(item.id);
       setToast(text.historySelected);
     } catch {
-      setToast(text.readFailed);
+      if (historyRevision === historyReadRevisionRef.current) setToast(text.readFailed);
     } finally {
-      setHistoryReadingId("");
+      if (historyReadInFlightRef.current === historyRevision) historyReadInFlightRef.current = 0;
+      if (historyRevision === historyReadRevisionRef.current) setHistoryReadingId("");
     }
   }
 

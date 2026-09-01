@@ -9,6 +9,7 @@ import 'package:novelai_mobile/comic/comic_controller.dart';
 import 'package:novelai_mobile/comic/comic_models.dart';
 import 'package:novelai_mobile/models/nai_models.dart';
 import 'package:novelai_mobile/services/nai_api.dart';
+import 'package:novelai_mobile/services/nai_stream.dart';
 import 'package:novelai_mobile/services/storage.dart';
 import 'package:novelai_mobile/state/app_state.dart';
 
@@ -412,8 +413,9 @@ class _SlowApi extends NaiApi {
     String token,
     AppSettings settings,
     GenerateParams params,
-    GenerateExtras extras,
-  ) async {
+    GenerateExtras extras, {
+    void Function(NaiGenerationPreview preview)? onPreview,
+  }) async {
     calls += 1;
     return pending.future;
   }
@@ -441,8 +443,9 @@ class _CapturingSlowApi extends NaiApi {
     String token,
     AppSettings settings,
     GenerateParams value,
-    GenerateExtras extras,
-  ) {
+    GenerateExtras extras, {
+    void Function(NaiGenerationPreview preview)? onPreview,
+  }) {
     params.add(value.copy());
     final pending = Completer<(List<Uint8List>, int)>();
     _pending.add(pending);

@@ -265,10 +265,12 @@ _ResourceText _resourceText(Object? language) {
 }
 
 String _bytes(int value) {
-  if (value >= 1024 * 1024 * 1024)
+  if (value >= 1024 * 1024 * 1024) {
     return '${(value / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
-  if (value >= 1024 * 1024)
+  }
+  if (value >= 1024 * 1024) {
     return '${(value / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
   if (value >= 1024) return '${(value / 1024).toStringAsFixed(1)} KB';
   return '$value B';
 }

@@ -45,6 +45,7 @@ import { AppMenuBar, AppTitleBar } from "./app/AppChrome";
 import AppTabBar from "./app/AppTabBar";
 import { isActiveTab, WIDE_WORKSPACE_TABS } from "./app/navigation";
 import { QualityPresetControl } from "./components/QualityPresetControl";
+import { PositivePromptPresetControl } from "./PositivePromptPresets";
 import ReferencePresetManager, {
   ReferencePresetQuickSaveDialog,
   referencePresetTextFor,
@@ -2212,6 +2213,12 @@ function PromptAndParams({
         placeholder={promptTab === "positive" ? generateText.prompt.positivePlaceholder : generateText.prompt.negativePlaceholder}
       />
       <div className="prompt-toolbar-row">
+        {promptTab === "positive" && (
+          <PositivePromptPresetControl
+            value={effectivePositivePrompt}
+            onApply={(value) => setLockedAwareParam("positivePrompt", value)}
+          />
+        )}
         <button type="button" className="prompt-tool-btn weight-tool-btn" onClick={() => setShowWeights((v) => !v)} disabled={weightTags.length === 0}>
           <Icon name="sliders" />
           <span>{generateText.prompt.weightAdjust}{weightTags.length ? ` (${weightTags.length})` : ""}</span>
@@ -3121,12 +3128,10 @@ function AccountAndRunButton({
   const cancel = useAppStore((state) => state.cancel);
   const togglePause = useAppStore((state) => state.togglePause);
   const queuePaused = useAppStore((state) => state.queuePaused);
-  const isGenerateQueueRunning = useAppStore((state) => state.isGenerateQueueRunning);
   const generationQueueLength = useAppStore((state) => state.generationQueue.length);
   const queueAdding = useAppStore((state) => state.queueAdding);
   const enqueueGeneration = useAppStore((state) => state.enqueueGeneration);
   const currentAnlasSpent = useAppStore((state) => state.currentAnlasSpent);
-  const lastAnlasSpent = useAppStore((state) => state.lastAnlasSpent);
   const refreshAccount = useAppStore((state) => state.refreshAccount);
   const [refreshingAccount, setRefreshingAccount] = useState(false);
   const [showOpusUsage, setShowOpusUsage] = useState(
@@ -3221,47 +3226,57 @@ function AccountAndRunButton({
         <Button variant="primary" className="full" onClick={openSettings}>
           <IconText icon={<Icon name="key" />}>{t("account.setupFirst")}</IconText>
         </Button>
-      ) : isGenerating ? (
-        <>
-          {isGenerateQueueRunning && <QueuePanel />}
-          <div className="anlas-spent">
-            {currentAnlasSpent != null ? f("account.currentSpent", { amount: currentAnlasSpent }) : t("account.currentReading")}
-          </div>
-          {allowQueue && isGenerateQueueRunning ? (
-            <Button
-              variant="primary"
-              className="full queue-add-button"
-              onClick={() => void enqueueGeneration()}
-              disabled={queueAdding}
-            >
-              {queueAdding
-                ? t("account.addingQueueCost")
-                : generationQueueLength > 0
-                  ? f("account.addQueueWaiting", { count: generationQueueLength })
-                  : t("account.addQueue")}
-            </Button>
-          ) : null}
-          <div className={clsx("run-button-row", !isGenerateQueueRunning && "single-action")}>
-            {isGenerateQueueRunning ? (
-              <Button variant="secondary" className="run-row-btn" onClick={togglePause}>
-                {queuePaused ? t("account.resume") : t("account.pause")}
-              </Button>
-            ) : null}
-            <Button variant="danger" className="run-row-btn" onClick={() => void cancel()}>
-              {t("account.stop")}
-            </Button>
-          </div>
-        </>
       ) : (
-        <>
-          {lastAnlasSpent != null && (
-            <div className="anlas-spent">{f("account.lastSpent", { amount: lastAnlasSpent })}</div>
-          )}
-          {disabled && disabledReason ? <div className="run-disabled-reason">{disabledReason}</div> : null}
-          <Button variant="primary" className="full" onClick={onRun} disabled={disabled}>
-            <IconText icon="▶">{label}</IconText>
-          </Button>
-        </>
+        <div className="run-state-swap">
+          <div
+            className={clsx("run-state-pane", isGenerating && "active")}
+            aria-hidden={!isGenerating}
+            inert={!isGenerating}
+          >
+            <div className="run-state-pane-inner">
+              {allowQueue && <QueuePanel />}
+              <div className="anlas-spent">
+                {currentAnlasSpent != null ? f("account.currentSpent", { amount: currentAnlasSpent }) : t("account.currentReading")}
+              </div>
+              {allowQueue ? (
+                <Button
+                  variant="primary"
+                  className="full queue-add-button"
+                  onClick={() => void enqueueGeneration()}
+                  disabled={queueAdding}
+                >
+                  {queueAdding
+                    ? t("account.addingQueueCost")
+                    : generationQueueLength > 0
+                      ? f("account.addQueueWaiting", { count: generationQueueLength })
+                      : t("account.addQueue")}
+                </Button>
+              ) : null}
+              <div className={clsx("run-button-row", !allowQueue && "single-action")}>
+                {allowQueue ? (
+                  <Button variant="secondary" className="run-row-btn" onClick={togglePause}>
+                    {queuePaused ? t("account.resume") : t("account.pause")}
+                  </Button>
+                ) : null}
+                <Button variant="danger" className="run-row-btn" onClick={() => void cancel()}>
+                  {t("account.stop")}
+                </Button>
+              </div>
+            </div>
+          </div>
+          <div
+            className={clsx("run-state-pane", !isGenerating && "active")}
+            aria-hidden={isGenerating}
+            inert={isGenerating}
+          >
+            <div className="run-state-pane-inner">
+              {disabled && disabledReason ? <div className="run-disabled-reason">{disabledReason}</div> : null}
+              <Button variant="primary" className="full" onClick={onRun} disabled={disabled}>
+                <IconText icon="▶">{label}</IconText>
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
       {showV5Allowance && showOpusUsage && <OpusUsageDialog onClose={() => setShowOpusUsage(false)} />}
     </div>
@@ -3895,12 +3910,18 @@ function ReversePanel() {
   const applyParams = useAppStore((state) => state.applyParams);
   const setActiveTab = useAppStore((state) => state.setActiveTab);
   const [dragging, setDragging] = useState(false);
+  const fileReadRevision = useRef(0);
   const hasImage = Boolean(inspectImageUrl);
   const reverseTemplateVersion = settings?.reversePromptTemplateVersion ?? "v5";
   const reverseBusy = reverseJobs.some((job) => job.status === "processing");
   useEffect(() => {
     void loadReverseHistory();
   }, [loadReverseHistory]);
+  useEffect(() => () => {
+    // Any FileReader that finishes after this panel unmounts must discard and
+    // revoke its not-yet-stored object URL instead of reviving stale state.
+    fileReadRevision.current += 1;
+  }, []);
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
 
@@ -3938,12 +3959,17 @@ function ReversePanel() {
   ];
 
   function handleFile(file: File) {
+    const revision = ++fileReadRevision.current;
     const url = URL.createObjectURL(file);
     // Real filesystem path, when resolvable — used only so a reverse history
     // record can later be dropped once this source image is gone.
     const path = (file as File & { path?: string }).path || window.naiDesktop.getPathForFile(file);
     const reader = new FileReader();
     reader.onload = (ev) => {
+      if (revision !== fileReadRevision.current) {
+        URL.revokeObjectURL(url);
+        return;
+      }
       const buf = ev.target?.result as ArrayBuffer;
       // Store base64 for vision API; also read PNG meta as bonus
       const b64 = btoa(
@@ -3952,7 +3978,14 @@ function ReversePanel() {
       const meta = parseImageMeta(buf);
       setInspectImage(url, meta, b64, path);
     };
-    reader.readAsArrayBuffer(file);
+    reader.onerror = () => URL.revokeObjectURL(url);
+    reader.onabort = () => URL.revokeObjectURL(url);
+    try {
+      reader.readAsArrayBuffer(file);
+    } catch (error) {
+      URL.revokeObjectURL(url);
+      throw error;
+    }
   }
 
   function applyToPanel() {
@@ -4771,6 +4804,7 @@ function ImageCanvas() {
   const comparisonBeforeImage = useAppStore((state) => state.comparisonBeforeImage);
   const isGenerating = useAppStore((state) => state.isGenerating);
   const generationPreview = useAppStore((state) => state.generationPreview);
+  const generationPhase = useAppStore((state) => state.generationPhase);
   const activeTab = useAppStore((state) => state.activeTab);
   const generate = useAppStore((state) => state.generate);
   const settings = useAppStore((state) => state.settings);
@@ -4778,10 +4812,61 @@ function ImageCanvas() {
   const inspectImageUrl = useAppStore((state) => state.inspectImageUrl);
   const loadWorkbenchFromPath = useAppStore((state) => state.loadWorkbenchFromPath);
   const [dropOver, setDropOver] = useState(false);
+  const [handoffPreview, setHandoffPreview] = useState<typeof generationPreview>(null);
+  const [handoffLeaving, setHandoffLeaving] = useState(false);
   const superDrop = settings?.superDrop ?? false;
   const dropEnabled = superDrop || activeTab === "generate" || activeTab === "upscale" || activeTab === "postprocess";
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
+  const streamPreviewComplete = generationPhase === "saving" || (generationPreview?.progress ?? 0) >= 1;
+  const visibleGenerationPreview = isGenerating ? generationPreview : handoffPreview;
+  const previewComplete = !isGenerating || streamPreviewComplete;
+  const waitingCopy = generationPhase === "preparing"
+    ? { title: t("canvas.preparingTitle"), hint: t("canvas.preparingHint") }
+    : generationPhase === "requesting"
+      ? { title: t("canvas.requestingTitle"), hint: t("canvas.requestingHint") }
+      : generationPhase === "saving"
+        ? { title: t("canvas.savingTitle"), hint: t("canvas.savingHint") }
+        : { title: t("canvas.generatingTitle"), hint: t("canvas.generatingHint") };
+
+  useEffect(() => {
+    if (isGenerating) {
+      if (generationPreview?.imageDataUrl && streamPreviewComplete) {
+        setHandoffPreview(generationPreview);
+        setHandoffLeaving(false);
+      } else if (generationPhase === "preparing" || generationPhase === "requesting") {
+        setHandoffPreview(null);
+        setHandoffLeaving(false);
+      }
+      return;
+    }
+    if (!handoffPreview?.imageDataUrl) return;
+    // A successful store handoff uses the exact final stream frame while the
+    // durable local URL decodes. If it does not match, the request failed or was
+    // cancelled and no completion cross-fade should be shown.
+    if (currentImage?.fileUrl !== handoffPreview.imageDataUrl) {
+      setHandoffPreview(null);
+      setHandoffLeaving(false);
+      return;
+    }
+    let firstFrame = 0;
+    let secondFrame = 0;
+    let finishTimer = 0;
+    firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        setHandoffLeaving(true);
+        finishTimer = window.setTimeout(() => {
+          setHandoffPreview(null);
+          setHandoffLeaving(false);
+        }, 180);
+      });
+    });
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      window.cancelAnimationFrame(secondFrame);
+      window.clearTimeout(finishTimer);
+    };
+  }, [generationPhase, generationPreview, handoffPreview, isGenerating, streamPreviewComplete]);
 
   function handleDragOver(e: React.DragEvent) {
     if (!dropEnabled || !hasDraggedFiles(e.dataTransfer)) return;
@@ -4839,33 +4924,46 @@ function ImageCanvas() {
           <span>{t("canvas.dropToLoad")}</span>
         </div>
       )}
-      {isGenerating && (
-        <div className={clsx("generating-overlay", generationPreview?.imageDataUrl && "has-stream-preview")}>
-          {generationPreview?.imageDataUrl ? (
+      {(isGenerating || handoffPreview) && (
+        <div
+          className={clsx(
+            "generating-overlay",
+            visibleGenerationPreview?.imageDataUrl ? "has-stream-preview" : "is-waiting",
+            !isGenerating && "is-completing",
+            handoffLeaving && "is-leaving",
+          )}
+          aria-live="polite"
+        >
+          {visibleGenerationPreview?.imageDataUrl ? (
             <>
               <div className="generation-stream-frame">
-                <img src={generationPreview.imageDataUrl} alt={t("canvas.streamingTitle")} />
+                <img src={visibleGenerationPreview.imageDataUrl} alt={t("canvas.streamingTitle")} />
               </div>
               <div className="generation-stream-status">
-                <strong>{t("canvas.streamingTitle")}</strong>
+                <strong>{previewComplete ? t("canvas.savingTitle") : t("canvas.streamingTitle")}</strong>
                 <small>
-                  {f("canvas.streamingProgress", {
-                    current: generationPreview.currentStep ?? 0,
-                    total: generationPreview.totalSteps ?? 0,
-                    percent: Math.round(generationPreview.progress * 100),
-                  })}
+                  {previewComplete
+                    ? t("canvas.savingHint")
+                    : f("canvas.streamingProgress", {
+                        current: visibleGenerationPreview.currentStep ?? 0,
+                        total: visibleGenerationPreview.totalSteps ?? 0,
+                        percent: Math.round(visibleGenerationPreview.progress * 100),
+                      })}
                 </small>
                 <span aria-hidden="true">
-                  <i style={{ width: `${Math.round(generationPreview.progress * 100)}%` }} />
+                  <i style={{ width: `${Math.round(visibleGenerationPreview.progress * 100)}%` }} />
                 </span>
               </div>
             </>
           ) : (
-            <>
+            <div className="generation-wait-card">
               <div className="spinner" />
-              <strong>{t("canvas.generatingTitle")}</strong>
-              <small>{t("canvas.generatingHint")}</small>
-            </>
+              <div className="generation-wait-copy">
+                <strong>{waitingCopy.title}</strong>
+                <small>{waitingCopy.hint}</small>
+              </div>
+              <span className="generation-wait-track" aria-hidden="true"><i /></span>
+            </div>
           )}
         </div>
       )}
@@ -5066,6 +5164,8 @@ function TokenGuideModal({ onClose }: { onClose: () => void }) {
 // ── History panel ─────────────────────────────────────────────────────────────
 function HistoryPanel() {
   const history = useAppStore((state) => state.history);
+  const isGenerating = useAppStore((state) => state.isGenerating);
+  const generationPhase = useAppStore((state) => state.generationPhase);
   const dates = useAppStore((state) => state.historyDates);
   const groups = useAppStore((state) => state.historyGroups);
   const selectedDate = useAppStore((state) => state.selectedDate);
@@ -5085,6 +5185,7 @@ function HistoryPanel() {
   const language = useAppStore((state) => state.settings?.language);
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
+  const pendingHistoryLabel = generationPhase === "saving" ? t("canvas.savingTitle") : t("canvas.generatingTitle");
   const [newGroupName, setNewGroupName] = useState("");
   // window.prompt() is unsupported in Electron, so use an in-app input modal.
   const [renameTarget, setRenameTarget] = useState<
@@ -5190,7 +5291,17 @@ function HistoryPanel() {
         </div>
       </div>
       <div className="history-grid">
-        {history.length === 0 && (
+        {isGenerating && (
+          <div className="history-item history-item-pending" aria-label={pendingHistoryLabel}>
+            <div className="history-thumb-frame history-thumb-pending" aria-hidden="true">
+              <span><Icon name="sparkles" /></span>
+            </div>
+            <div className="history-item-footer">
+              <span className="history-meta">{pendingHistoryLabel}</span>
+            </div>
+          </div>
+        )}
+        {history.length === 0 && !isGenerating && (
           <div className="history-empty">
             <span><Icon name="image" /></span>
             <strong>{t("history.emptyTitle")}</strong>

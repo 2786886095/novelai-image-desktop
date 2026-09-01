@@ -11,7 +11,7 @@ class NaiOption {
 }
 
 const appName = 'Langbai NovelAI Studio';
-const appVersion = '2.0.9';
+const appVersion = '2.1.0';
 
 const naiModels = <NaiOption>[
   NaiOption(
@@ -810,6 +810,7 @@ class AppSettings {
   List<PromptShortcutTemplate> promptShortcuts;
   List<StylePromptPreset> stylePromptPresets;
   List<String> stylePromptPresetGroups;
+  List<PositivePromptPreset> positivePromptPresets;
   Map<String, String> reversePromptTemplates;
   Map<String, String> convertPromptTemplates;
   bool promptCodexEnhanceEnabled;
@@ -894,6 +895,7 @@ class AppSettings {
     List<PromptShortcutTemplate>? promptShortcuts,
     List<StylePromptPreset>? stylePromptPresets,
     List<String>? stylePromptPresetGroups,
+    List<PositivePromptPreset>? positivePromptPresets,
     Map<String, String>? reversePromptTemplates,
     Map<String, String>? convertPromptTemplates,
     this.promptCodexEnhanceEnabled = true,
@@ -926,7 +928,8 @@ class AppSettings {
         convertPromptTemplates = convertPromptTemplates ?? {},
         promptShortcuts = promptShortcuts ?? [],
         stylePromptPresets = stylePromptPresets ?? [],
-        stylePromptPresetGroups = stylePromptPresetGroups ?? ['Default'];
+        stylePromptPresetGroups = stylePromptPresetGroups ?? ['Default'],
+        positivePromptPresets = positivePromptPresets ?? [];
 
   bool get darkMode => theme == 'dark';
 
@@ -978,6 +981,8 @@ class AppSettings {
         'stylePromptPresets':
             stylePromptPresets.map((item) => item.toJson()).toList(),
         'stylePromptPresetGroups': stylePromptPresetGroups,
+        'positivePromptPresets':
+            positivePromptPresets.map((item) => item.toJson()).toList(),
         'reversePromptTemplates': reversePromptTemplates,
         'convertPromptTemplates': convertPromptTemplates,
         'promptCodexEnhanceEnabled': promptCodexEnhanceEnabled,
@@ -1070,6 +1075,14 @@ class AppSettings {
               .map((item) => item.toString().trim())
               .where((item) => item.isNotEmpty),
         }.toList(),
+        positivePromptPresets: (j['positivePromptPresets'] as List?)
+                ?.whereType<Map>()
+                .map((item) => PositivePromptPreset.fromJson(
+                    Map<String, dynamic>.from(item)))
+                .where((item) =>
+                    item.id.isNotEmpty && item.prompt.trim().isNotEmpty)
+                .toList() ??
+            [],
         reversePromptTemplates: _stringMap(j['reversePromptTemplates']),
         convertPromptTemplates: _stringMap(j['convertPromptTemplates']),
         promptCodexEnhanceEnabled: j['promptCodexEnhanceEnabled'] ?? true,
@@ -1194,6 +1207,45 @@ class StylePromptPreset {
         group: json['group']?.toString().trim().isNotEmpty == true
             ? json['group'].toString().trim()
             : 'Default',
+        createdAt: json['createdAt']?.toString() ?? '',
+        previewImages: (json['previewImages'] as List?)
+                ?.whereType<Map>()
+                .map((item) => StylePromptPreviewImage.fromJson(
+                    Map<String, dynamic>.from(item)))
+                .take(3)
+                .toList() ??
+            [],
+      );
+}
+
+class PositivePromptPreset {
+  final String id;
+  String name;
+  String prompt;
+  String createdAt;
+  List<StylePromptPreviewImage> previewImages;
+
+  PositivePromptPreset({
+    required this.id,
+    required this.name,
+    required this.prompt,
+    required this.createdAt,
+    List<StylePromptPreviewImage>? previewImages,
+  }) : previewImages = previewImages ?? [];
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'prompt': prompt,
+        'createdAt': createdAt,
+        'previewImages': previewImages.map((item) => item.toJson()).toList(),
+      };
+
+  factory PositivePromptPreset.fromJson(Map<String, dynamic> json) =>
+      PositivePromptPreset(
+        id: json['id']?.toString() ?? '',
+        name: json['name']?.toString() ?? '',
+        prompt: json['prompt']?.toString() ?? '',
         createdAt: json['createdAt']?.toString() ?? '',
         previewImages: (json['previewImages'] as List?)
                 ?.whereType<Map>()

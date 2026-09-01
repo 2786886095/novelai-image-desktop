@@ -11,6 +11,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/nai_models.dart';
+import '../prompts/positive_prompt_presets.dart';
 import '../prompts/prompt_mode.dart';
 import '../references/reference_presets.dart';
 import 'storage.dart';
@@ -168,6 +169,7 @@ class DataBackupService {
     'promptShortcuts',
     'stylePromptPresets',
     'stylePromptPresetGroups',
+    'positivePromptPresets',
   };
 
   final Storage storage;
@@ -585,6 +587,7 @@ class DataBackupService {
 
     if (requested.contains(DataBackupCategory.promptPresets)) {
       final styles = <Map<String, dynamic>>[];
+      final positivePrompts = <Map<String, dynamic>>[];
       var assetBytes = 0;
       for (final preset in settings.stylePromptPresets) {
         final json = Map<String, dynamic>.from(preset.toJson());
@@ -605,6 +608,25 @@ class DataBackupService {
         json['previewImages'] = previews;
         styles.add(json);
       }
+      for (final preset in settings.positivePromptPresets) {
+        final json = Map<String, dynamic>.from(preset.toJson());
+        final previews = <Map<String, dynamic>>[];
+        for (final preview in preset.previewImages) {
+          final previewJson = Map<String, dynamic>.from(preview.toJson());
+          previewJson['filePath'] = '';
+          previewJson['asset'] = await _addAsset(
+            archive,
+            assets,
+            preview.filePath,
+            includeAssets: includeAssets,
+          );
+          assetBytes +=
+              ((previewJson['asset'] as Map?)?['bytes'] as num?)?.toInt() ?? 0;
+          previews.add(previewJson);
+        }
+        json['previewImages'] = previews;
+        positivePrompts.add(json);
+      }
       final payload = {
         // Desktop calls the same record PromptTemplate.
         'promptTemplates': settings.promptShortcuts
@@ -612,11 +634,14 @@ class DataBackupService {
             .toList(),
         'stylePromptPresetGroups': settings.stylePromptPresetGroups,
         'stylePromptPresets': styles,
+        'positivePromptPresets': positivePrompts,
       };
       final bytes = _addJson(archive, 'data/prompt-presets.json', payload);
       summaries.add(DataBackupCategorySummary(
         category: DataBackupCategory.promptPresets,
-        items: settings.promptShortcuts.length + styles.length,
+        items: settings.promptShortcuts.length +
+            styles.length +
+            positivePrompts.length,
         bytes: bytes + assetBytes,
       ));
     }
@@ -1127,7 +1152,18 @@ class DataBackupService {
       final raw = Map<String, dynamic>.from(value);
       final identity =
           '${raw['name']}\u241f${raw['prefix']}\u241f${raw['suffix']}\u241f${raw['negativePrompt']}';
-      if (!promptIdentity.add(identity)) {
+      final sourceId = raw['id']?.toString() ?? '';
+      final existingBySourceId = sourceId.isEmpty
+          ? null
+          : prompts
+              .where((item) =>
+                  item.id == sourceId &&
+                  item.prefix == (raw['prefix']?.toString() ?? '') &&
+                  item.suffix == (raw['suffix']?.toString() ?? '') &&
+                  item.negativePrompt ==
+                      (raw['negativePrompt']?.toString() ?? ''))
+              .firstOrNull;
+      if (!promptIdentity.add(identity) || existingBySourceId != null) {
         counters.skipped++;
         continue;
       }
@@ -1149,9 +1185,13 @@ class DataBackupService {
       final raw = Map<String, dynamic>.from(value);
       final name = raw['name']?.toString() ?? '';
       final prompt = raw['prompt']?.toString() ?? '';
+      final incomingPreviews = raw['previewImages'] as List? ?? const [];
       if (name.isEmpty || prompt.isEmpty) continue;
-      var index = styles
-          .indexWhere((item) => item.name == name && item.prompt == prompt);
+      var index = styles.indexWhere((item) =>
+          item.prompt == prompt &&
+          (item.name == name ||
+              ((raw['id']?.toString() ?? '').isNotEmpty &&
+                  item.id == raw['id']?.toString())));
       if (index < 0) {
         raw['name'] = _uniqueLabel(styleNames, name, counters);
         if ((raw['id']?.toString() ?? '').isEmpty ||
@@ -1168,7 +1208,7 @@ class DataBackupService {
         bundle,
         styles[index].id,
         styles[index].previewImages,
-        raw['previewImages'] as List? ?? const [],
+        incomingPreviews,
         counters,
       );
     }
@@ -1182,6 +1222,45 @@ class DataBackupService {
           .where((value) => value.isNotEmpty),
       ...styles.map((style) => style.group),
     }.toList();
+
+    final positivePrompts =
+        List<PositivePromptPreset>.from(settings.positivePromptPresets);
+    final positiveIds = positivePrompts.map((item) => item.id).toSet();
+    final positiveNames =
+        positivePrompts.map((item) => item.name.toLowerCase()).toSet();
+    for (final value in payload['positivePromptPresets'] as List? ?? const []) {
+      if (value is! Map) continue;
+      final raw = Map<String, dynamic>.from(value);
+      final name = raw['name']?.toString() ?? '';
+      final prompt = raw['prompt']?.toString() ?? '';
+      final incomingPreviews = raw['previewImages'] as List? ?? const [];
+      if (name.isEmpty || prompt.trim().isEmpty) continue;
+      var index = positivePrompts.indexWhere((item) =>
+          item.prompt == prompt &&
+          (item.name == name ||
+              ((raw['id']?.toString() ?? '').isNotEmpty &&
+                  item.id == raw['id']?.toString())));
+      if (index < 0) {
+        raw['name'] = _uniqueLabel(positiveNames, name, counters);
+        if ((raw['id']?.toString() ?? '').isEmpty ||
+            positiveIds.contains(raw['id'])) {
+          raw['id'] = _id();
+        }
+        positiveIds.add(raw['id'].toString());
+        raw['previewImages'] = const [];
+        positivePrompts.add(PositivePromptPreset.fromJson(raw));
+        index = positivePrompts.length - 1;
+        counters.imported++;
+      }
+      positivePrompts[index].previewImages = await _restoreStylePreviews(
+        bundle,
+        positivePromptPresetStorageId(positivePrompts[index].id),
+        positivePrompts[index].previewImages,
+        incomingPreviews,
+        counters,
+      );
+    }
+    settings.positivePromptPresets = positivePrompts;
     return settings;
   }
 

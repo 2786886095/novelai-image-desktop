@@ -318,6 +318,7 @@ export function defaultSettings(): AppSettings {
     promptTemplates: [],
     stylePromptPresets: [],
     stylePromptPresetGroups: ["Default"],
+    positivePromptPresets: [],
     lastGenerationState: null,
     persistGenerateParams: true,
     persistI2IParams: true,
@@ -400,6 +401,45 @@ function normalize(raw: Partial<PersistedData> | null): PersistedData {
           };
         })
         .filter((preset) => preset.id && preset.name)
+    : [];
+  settings.positivePromptPresets = Array.isArray(settings.positivePromptPresets)
+    ? settings.positivePromptPresets
+        .filter((preset) => preset && typeof preset === "object")
+        .map((preset) => {
+          const previewImages = Array.isArray(preset.previewImages)
+            ? preset.previewImages
+                .filter(
+                  (image) =>
+                    image &&
+                    typeof image.id === "string" &&
+                    typeof image.name === "string" &&
+                    typeof image.filePath === "string" &&
+                    fs.existsSync(image.filePath),
+                )
+                .slice(0, 3)
+                .map((image) => ({
+                  id: image.id,
+                  name: image.name,
+                  filePath: image.filePath,
+                  fileUrl: toLocalMediaUrl(image.filePath),
+                  createdAt:
+                    typeof image.createdAt === "string"
+                      ? image.createdAt
+                      : new Date(0).toISOString(),
+                }))
+            : [];
+          return {
+            id: typeof preset.id === "string" ? preset.id : "",
+            name: typeof preset.name === "string" ? preset.name.trim() : "",
+            prompt: typeof preset.prompt === "string" ? preset.prompt : "",
+            createdAt:
+              typeof preset.createdAt === "string"
+                ? preset.createdAt
+                : new Date(0).toISOString(),
+            previewImages,
+          };
+        })
+        .filter((preset) => preset.id && preset.name && preset.prompt.trim())
     : [];
   for (const preset of settings.stylePromptPresets) {
     if (!settings.stylePromptPresetGroups.includes(preset.group)) {

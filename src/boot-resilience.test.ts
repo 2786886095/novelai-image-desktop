@@ -3,7 +3,8 @@ import { useAppStore } from "./store";
 
 function baseNaiDesktop() {
   return {
-    onUpdateEvent: vi.fn(),
+    onGenerationPreview: vi.fn(() => vi.fn()),
+    onUpdateEvent: vi.fn(() => vi.fn()),
     getSettings: vi.fn().mockResolvedValue({
       language: "zh-CN",
       persistGenerateParams: true,
@@ -80,6 +81,22 @@ describe("boot resilience (P1-07)", () => {
     await useAppStore.getState().load();
     expect(useAppStore.getState().bootDone).toBe(true);
     expect(useAppStore.getState().bootError).toBeNull();
+    expect(naiDesktop.onGenerationPreview).toHaveBeenCalledTimes(1);
+    expect(naiDesktop.onUpdateEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it("releases managed inspect object URLs when replacing or clearing them", () => {
+    const revoke = vi
+      .spyOn(URL, "revokeObjectURL")
+      .mockImplementation(() => undefined);
+
+    useAppStore.getState().setInspectImage("blob:first", {}, "", "");
+    useAppStore.getState().setInspectImage("blob:second", {}, "", "");
+    expect(revoke).toHaveBeenCalledWith("blob:first");
+
+    useAppStore.getState().clearInspect();
+    expect(revoke).toHaveBeenCalledWith("blob:second");
+    revoke.mockRestore();
   });
 
   it("repairs stale persisted tool parameters instead of replaying invalid API fields", async () => {

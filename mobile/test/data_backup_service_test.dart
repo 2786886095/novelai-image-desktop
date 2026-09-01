@@ -258,4 +258,66 @@ void main() {
     expect(recipe['artistPrompt'], '0.75::artist:desktop_artist ::');
     expect(favorite['seed'], 456);
   });
+
+  test(
+      'merges positive prompt presets, restores view-only images, and reuses source ids',
+      () async {
+    final sourceImage = File('${root.path}/prompt-reference.png')
+      ..writeAsBytesSync([7, 8, 9]);
+    await storage.setSettings(AppSettings(
+      positivePromptPresets: [
+        PositivePromptPreset(
+          id: 'portable-positive',
+          name: '夜景',
+          prompt: '1girl, night city, cinematic lighting',
+          createdAt: '2026-08-30T12:00:00.000Z',
+          previewImages: [
+            StylePromptPreviewImage(
+              id: 'source-preview',
+              name: 'prompt-reference.png',
+              filePath: sourceImage.path,
+              createdAt: '2026-08-30T12:00:00.000Z',
+            ),
+          ],
+        ),
+      ],
+    ));
+    final archive =
+        await service.createBackup({DataBackupCategory.promptPresets});
+
+    await storage.setSettings(AppSettings(
+      positivePromptPresets: [
+        PositivePromptPreset(
+          id: 'existing-positive',
+          name: '夜景',
+          prompt: 'different prompt',
+          createdAt: '2026-08-31T12:00:00.000Z',
+        ),
+      ],
+    ));
+    final first = await service.importBackup(
+      archive.path,
+      {DataBackupCategory.promptPresets},
+      confirmConfigurationOverwrite: false,
+    );
+    final afterFirst = await storage.getSettings();
+    final imported = afterFirst.positivePromptPresets
+        .where((preset) => preset.id == 'portable-positive')
+        .single;
+
+    expect(first.renamed, greaterThanOrEqualTo(1));
+    expect(imported.name, '夜景 (1)');
+    expect(imported.previewImages, hasLength(1));
+    expect(File(imported.previewImages.single.filePath).readAsBytesSync(),
+        [7, 8, 9]);
+
+    final second = await service.importBackup(
+      archive.path,
+      {DataBackupCategory.promptPresets},
+      confirmConfigurationOverwrite: false,
+    );
+    final afterSecond = await storage.getSettings();
+    expect(afterSecond.positivePromptPresets, hasLength(2));
+    expect(second.skipped, greaterThanOrEqualTo(1));
+  });
 }

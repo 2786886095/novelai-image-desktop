@@ -60,10 +60,22 @@ const WS_RIGHT_MAX = 480;
 // the workbench, deleting its selected history item, or starting generation
 // invalidates older responses so stale metadata cannot overwrite live prompts.
 let workbenchLoadRevision = 0;
-let generationPreviewListenerAttached = false;
 // Invalidates a slow post-generation balance refresh as soon as a newer run or
 // cancellation starts, so stale bookkeeping can never overwrite newer UI.
 let generationSettlementRevision = 0;
+const storeIpcListenerOwner = {};
+const storeIpcListenerRegistryKey = "__langbaiNovelAiStoreIpcListeners";
+
+type StoreIpcListenerRegistry = {
+  owner: object;
+  removeGenerationPreview?: () => void;
+  removeUpdateEvent?: () => void;
+};
+
+function revokeInspectObjectUrl(url: string) {
+  if (!url.startsWith("blob:") || typeof URL?.revokeObjectURL !== "function") return;
+  URL.revokeObjectURL(url);
+}
 function readWsWidth(key: string, fallback: number): number {
   try {
     const v = Number(localStorage.getItem(key));
@@ -294,6 +306,8 @@ export interface QueuedGenerationJob {
   label: string;
 }
 
+export type GenerationPhase = "idle" | "preparing" | "requesting" | "streaming" | "saving";
+
 interface AppState {
   bootDone: boolean;
   // Set only when a critical boot read (settings) fails outright — lets the
@@ -385,6 +399,9 @@ interface AppState {
   isGenerateQueueRunning: boolean;
   activeGenerationRunId: string | null;
   generationPreview: GenerationPreviewEvent | null;
+  /** Explicit UI phase. Keeping this separate from localized status text avoids
+   * rendering the balance/quote preflight as if image sampling had started. */
+  generationPhase: GenerationPhase;
   queueAdding: boolean;
   generationQueue: QueuedGenerationJob[];
   queueCollapsed: boolean;
@@ -530,12 +547,69 @@ function requireToken(set: (state: Partial<AppState>) => void, hasToken: boolean
   return false;
 }
 
+type CompletedImageBridge = {
+  previewUrl: string;
+  sourceUrl: string;
+};
+
+// The stream already decoded the final pixels, while the freshly-saved local
+// URL still needs one disk read/decode. Keep those decoded pixels in both the
+// canvas and the first history card until Chromium has the durable URL ready;
+// otherwise <img> visibly falls back to the previous picture for a few frames.
+const completedImageBridges = new Map<string, CompletedImageBridge>();
+
+function withCompletedImageBridge(item: HistoryItem): HistoryItem {
+  const bridge = completedImageBridges.get(item.id);
+  return bridge ? { ...item, fileUrl: bridge.previewUrl } : item;
+}
+
+function preloadCompletedImage(sourceUrl: string): Promise<void> {
+  if (!sourceUrl || typeof globalThis.Image !== "function") return Promise.resolve();
+  return new Promise((resolve) => {
+    const image = new globalThis.Image();
+    let settled = false;
+    let timeoutId: ReturnType<typeof globalThis.setTimeout> | undefined;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      if (timeoutId !== undefined) globalThis.clearTimeout(timeoutId);
+      image.onload = null;
+      image.onerror = null;
+      resolve();
+    };
+    image.onload = () => {
+      if (typeof image.decode === "function") {
+        void image.decode().then(finish, finish);
+      } else {
+        finish();
+      }
+    };
+    image.onerror = finish;
+    image.src = sourceUrl;
+    timeoutId = globalThis.setTimeout(finish, 4_000);
+  });
+}
+
 function showCompletedImage(
   set: (state: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void,
   get: () => AppState,
   item: HistoryItem,
   options: { compareBefore?: WorkingImage | null; loadWorkbench?: boolean } = {},
 ) {
+  const preview = get().generationPreview;
+  const canBridge = Boolean(
+    preview?.imageDataUrl
+      && preview.progress >= 1
+      && item.fileUrl
+      && preview.imageDataUrl !== item.fileUrl,
+  );
+  if (canBridge && preview) {
+    completedImageBridges.set(item.id, {
+      previewUrl: preview.imageDataUrl,
+      sourceUrl: item.fileUrl,
+    });
+  }
+  const visibleItem = withCompletedImageBridge(item);
   set((state) => {
     const selectedGroup = state.selectedGroupId;
     const matchesGroup = !selectedGroup
@@ -547,15 +621,30 @@ function showCompletedImage(
       return candidate.groupId === selectedGroup;
     });
     return {
-      currentImage: item,
+      currentImage: visibleItem,
       comparisonBeforeImage: options.compareBefore ?? null,
       selectedDate: item.date,
       historyDates: [item.date, ...state.historyDates.filter((date) => date !== item.date)].sort((a, b) => b.localeCompare(a)),
       history: matchesGroup
-        ? [item, ...sameDateVisible.filter((candidate) => candidate.id !== item.id)]
+        ? [visibleItem, ...sameDateVisible.filter((candidate) => candidate.id !== item.id)]
         : sameDateVisible,
     };
   });
+  if (canBridge) {
+    void preloadCompletedImage(item.fileUrl).then(() => {
+      const bridge = completedImageBridges.get(item.id);
+      if (!bridge || bridge.sourceUrl !== item.fileUrl) return;
+      completedImageBridges.delete(item.id);
+      set((state) => ({
+        currentImage: state.currentImage?.id === item.id
+          ? { ...state.currentImage, filePath: item.filePath, fileUrl: item.fileUrl }
+          : state.currentImage,
+        history: state.history.map((candidate) => candidate.id === item.id
+          ? { ...candidate, filePath: item.filePath, fileUrl: item.fileUrl }
+          : candidate),
+      }));
+    });
+  }
 }
 
 async function runAfterImageRefresh(
@@ -692,6 +781,7 @@ async function preparePaidRun(
     const message = compactStoreError(settings, error);
     set({
       isGenerating: false,
+      generationPhase: "idle",
       currentAnlasSpent: null,
       statusText: message,
       toast: message,
@@ -707,20 +797,30 @@ async function refreshAfterImage(
   item: HistoryItem,
   options: { compareBefore?: WorkingImage | null; loadWorkbench?: boolean } = {},
 ) {
+  if (!get().generationPreview?.imageDataUrl && item.fileUrl) {
+    set({ generationPhase: "saving" });
+    await preloadCompletedImage(item.fileUrl);
+  }
   showCompletedImage(set, get, item, options);
   await runAfterImageRefresh(get, item, options);
 }
 
-function refreshAfterImageInBackground(
+async function refreshAfterImageInBackground(
   set: (state: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void,
   get: () => AppState,
   item: HistoryItem,
   options: { compareBefore?: WorkingImage | null; loadWorkbench?: boolean } = {},
 ) {
+  if (!get().generationPreview?.imageDataUrl && item.fileUrl) {
+    // With streaming disabled there is no decoded final frame to bridge the
+    // canvas. Keep the saving overlay mounted until the durable local image is
+    // decoded, then reveal canvas/history/idle controls in one paint.
+    set({ generationPhase: "saving" });
+    await preloadCompletedImage(item.fileUrl);
+  }
   showCompletedImage(set, get, item, options);
-  // A completed queue item must be painted and counted immediately. Disk
-  // reconciliation can finish later, and account balance is fetched only once
-  // after the whole run rather than once per image.
+  // Disk reconciliation can finish later, and account balance is fetched only
+  // once after the whole run rather than once per image.
   void get().refreshHistory(item.date).catch(() => undefined);
   if (options.loadWorkbench) {
     void get().loadWorkbenchFromPath(item.filePath, { silent: true }).catch(() => undefined);
@@ -754,6 +854,7 @@ async function invokePaidRequest<T>(
     );
     set({
       isGenerating: false,
+      generationPhase: "idle",
       currentAnlasSpent: null,
       lastAnlasSpent: spent,
       lastError: message,
@@ -933,6 +1034,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   isGenerateQueueRunning: false,
   activeGenerationRunId: null,
   generationPreview: null,
+  generationPhase: "idle",
   queueAdding: false,
   generationQueue: [],
   queueCollapsed: false,
@@ -951,19 +1053,30 @@ export const useAppStore = create<AppState>((set, get) => ({
   updateProgress: null,
 
   async load() {
-    if (!generationPreviewListenerAttached) {
-      generationPreviewListenerAttached = true;
-      window.naiDesktop.onGenerationPreview((event) => {
+    const listenerHost = window as typeof window & Record<string, unknown>;
+    const listenerRegistry = listenerHost[storeIpcListenerRegistryKey] as StoreIpcListenerRegistry | undefined;
+    if (listenerRegistry?.owner !== storeIpcListenerOwner) {
+      listenerRegistry?.removeGenerationPreview?.();
+      listenerRegistry?.removeUpdateEvent?.();
+      const removeGenerationPreview = window.naiDesktop.onGenerationPreview((event) => {
         const state = get();
         if (
           state.isGenerating &&
           state.activeGenerationRunId === event.requestId
         ) {
-          set({ generationPreview: event });
+          set({
+            generationPreview: event,
+            generationPhase: event.progress >= 1 ? "saving" : "streaming",
+          });
         }
       });
+      const removeUpdateEvent = window.naiDesktop.onUpdateEvent((event) => set({ updateProgress: event }));
+      listenerHost[storeIpcListenerRegistryKey] = {
+        owner: storeIpcListenerOwner,
+        removeGenerationPreview: typeof removeGenerationPreview === "function" ? removeGenerationPreview : undefined,
+        removeUpdateEvent: typeof removeUpdateEvent === "function" ? removeUpdateEvent : undefined,
+      } satisfies StoreIpcListenerRegistry;
     }
-    window.naiDesktop.onUpdateEvent((event) => set({ updateProgress: event }));
 
     // Settings drive almost everything below (language, persisted params, lock
     // state) — there's no safe fallback to fake, so a failure here surfaces a
@@ -1287,7 +1400,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     ]);
     const selectedDate = date ?? get().selectedDate ?? dates[0] ?? "";
     const selectedGroupId = get().selectedGroupId;
-    const history = await window.naiDesktop.getHistory(selectedDate || undefined, selectedGroupId || undefined);
+    const history = (await window.naiDesktop.getHistory(selectedDate || undefined, selectedGroupId || undefined))
+      .map(withCompletedImageBridge);
     set({ historyDates: dates, historyGroups: groups, selectedDate, history });
   },
 
@@ -1574,6 +1688,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   setInspectImage(url, meta, base64 = "", path = "") {
+    const previousUrl = get().inspectImageUrl;
+    if (previousUrl && previousUrl !== url) revokeInspectObjectUrl(previousUrl);
     set({
       inspectImageUrl: url,
       inspectMeta: meta,
@@ -1586,6 +1702,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   clearInspect() {
+    revokeInspectObjectUrl(get().inspectImageUrl);
     set({
       inspectImageUrl: "",
       inspectMeta: null,
@@ -2002,6 +2119,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       isGenerateQueueRunning: true,
       activeGenerationRunId: runId,
       generationPreview: null,
+      generationPhase: "preparing",
       statusText: storeText(state.settings, "status.preparing"),
     });
     let freshAccount: AccountSummary;
@@ -2030,6 +2148,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           isGenerating: false,
           isGenerateQueueRunning: false,
           activeGenerationRunId: null,
+          generationPhase: "idle",
           statusText: message,
           toast: message,
           lastError: message,
@@ -2039,7 +2158,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
     if (!quote || get().activeGenerationRunId !== runId) {
       if (get().activeGenerationRunId === runId) {
-        set({ isGenerating: false, isGenerateQueueRunning: false, activeGenerationRunId: null });
+        set({
+          isGenerating: false,
+          isGenerateQueueRunning: false,
+          activeGenerationRunId: null,
+          generationPhase: "idle",
+        });
       }
       return;
     }
@@ -2140,7 +2264,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       // main-process retry). The main process now retries only pre-charge 429s.
       let result: GenerateResult;
       try {
-        set({ generationPreview: null });
+        set({ generationPreview: null, generationPhase: "requesting" });
         result = await window.naiDesktop.generate(currentParams, extras, runId);
       } catch (error) {
         // ipcRenderer.invoke can reject before the main handler returns its
@@ -2160,7 +2284,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         completed++;
         const current = result.items[0];
         set({ params: { ...get().params, seed: result.actualSeed ?? current.actualSeed } });
-        refreshAfterImageInBackground(set, get, current);
+        await refreshAfterImageInBackground(set, get, current);
       } else {
         // Keep transient failures isolated; deterministic auth/validation
         // failures below stop only the requests known to share that cause.
@@ -2205,6 +2329,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       isGenerateQueueRunning: false,
       activeGenerationRunId: null,
       generationPreview: null,
+      generationPhase: "idle",
       queueAdding: false,
       generationQueue: [],
       queuePaused: false,
@@ -2246,6 +2371,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     workbenchLoadRevision += 1;
     set({
       isGenerating: true,
+      generationPhase: "preparing",
       currentAnlasSpent: null,
       lastAnlasSpent: null,
       lastError: "",
@@ -2273,13 +2399,14 @@ export const useAppStore = create<AppState>((set, get) => ({
       state.settings,
     );
     if (!prepared || !get().isGenerating) {
-      if (get().isGenerating) set({ isGenerating: false });
+      if (get().isGenerating) set({ isGenerating: false, generationPhase: "idle" });
       return;
     }
     const { account: freshAccount, quote } = prepared;
     const anlasBefore = freshAccount.anlasBalance;
     set({
       isGenerating: true,
+      generationPhase: "requesting",
       currentAnlasSpent: null,
       lastAnlasSpent: null,
       lastError: "",
@@ -2302,12 +2429,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       await refreshAfterImage(set, get, current, { compareBefore: state.workbenchImage });
       const spent = anlasSpent(anlasBefore, get().account.anlasBalance);
       const message = withAnlasSpent(get().settings, result.message, spent);
-      set({ isGenerating: false, currentAnlasSpent: null, lastAnlasSpent: spent, statusText: message, toast: message });
+      set({ isGenerating: false, generationPhase: "idle", currentAnlasSpent: null, lastAnlasSpent: spent, statusText: message, toast: message });
     } else {
       const finalAccount = await refreshAccountBestEffort(get);
       const spent = anlasSpent(anlasBefore, finalAccount.anlasBalance);
       const message = withAnlasSpent(get().settings, result.message, spent);
-      set({ isGenerating: false, currentAnlasSpent: null, lastAnlasSpent: spent, lastError: message, statusText: storeText(get().settings, "status.i2iFailed"), toast: message });
+      set({ isGenerating: false, generationPhase: "idle", currentAnlasSpent: null, lastAnlasSpent: spent, lastError: message, statusText: storeText(get().settings, "status.i2iFailed"), toast: message });
     }
   },
 
@@ -2337,6 +2464,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     workbenchLoadRevision += 1;
     set({
       isGenerating: true,
+      generationPhase: "preparing",
       currentAnlasSpent: null,
       lastAnlasSpent: null,
       lastError: "",
@@ -2359,13 +2487,14 @@ export const useAppStore = create<AppState>((set, get) => ({
       state.settings,
     );
     if (!prepared || !get().isGenerating) {
-      if (get().isGenerating) set({ isGenerating: false });
+      if (get().isGenerating) set({ isGenerating: false, generationPhase: "idle" });
       return;
     }
     const { account: freshAccount, quote } = prepared;
     const anlasBefore = freshAccount.anlasBalance;
     set({
       isGenerating: true,
+      generationPhase: "requesting",
       currentAnlasSpent: null,
       lastAnlasSpent: null,
       lastError: "",
@@ -2390,12 +2519,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       await refreshAfterImage(set, get, current, { compareBefore: state.workbenchImage, loadWorkbench: true });
       const spent = anlasSpent(anlasBefore, get().account.anlasBalance);
       const message = withAnlasSpent(get().settings, result.message, spent);
-      set({ isGenerating: false, currentAnlasSpent: null, lastAnlasSpent: spent, statusText: message, toast: message });
+      set({ isGenerating: false, generationPhase: "idle", currentAnlasSpent: null, lastAnlasSpent: spent, statusText: message, toast: message });
     } else {
       const finalAccount = await refreshAccountBestEffort(get);
       const spent = anlasSpent(anlasBefore, finalAccount.anlasBalance);
       const message = withAnlasSpent(get().settings, result.message, spent);
-      set({ isGenerating: false, currentAnlasSpent: null, lastAnlasSpent: spent, lastError: message, statusText: storeText(get().settings, "status.inpaintFailed"), toast: message });
+      set({ isGenerating: false, generationPhase: "idle", currentAnlasSpent: null, lastAnlasSpent: spent, lastError: message, statusText: storeText(get().settings, "status.inpaintFailed"), toast: message });
     }
   },
 
@@ -2412,6 +2541,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     workbenchLoadRevision += 1;
     set({
       isGenerating: true,
+      generationPhase: "preparing",
       currentAnlasSpent: null,
       lastAnlasSpent: null,
       lastError: "",
@@ -2430,13 +2560,14 @@ export const useAppStore = create<AppState>((set, get) => ({
       state.settings,
     );
     if (!prepared || !get().isGenerating) {
-      if (get().isGenerating) set({ isGenerating: false });
+      if (get().isGenerating) set({ isGenerating: false, generationPhase: "idle" });
       return;
     }
     const { account: freshAccount, quote } = prepared;
     const anlasBefore = freshAccount.anlasBalance;
     set({
       isGenerating: true,
+      generationPhase: "requesting",
       currentAnlasSpent: null,
       lastAnlasSpent: null,
       lastError: "",
@@ -2454,12 +2585,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       await refreshAfterImage(set, get, result.item, { compareBefore: state.workbenchImage });
       const spent = anlasSpent(anlasBefore, get().account.anlasBalance);
       const message = withAnlasSpent(get().settings, result.message, spent);
-      set({ isGenerating: false, currentAnlasSpent: null, lastAnlasSpent: spent, statusText: message, toast: message });
+      set({ isGenerating: false, generationPhase: "idle", currentAnlasSpent: null, lastAnlasSpent: spent, statusText: message, toast: message });
     } else {
       const finalAccount = await refreshAccountBestEffort(get);
       const spent = anlasSpent(anlasBefore, finalAccount.anlasBalance);
       const message = withAnlasSpent(get().settings, result.message, spent);
-      set({ isGenerating: false, currentAnlasSpent: null, lastAnlasSpent: spent, lastError: message, statusText: storeText(get().settings, "status.upscaleFailed"), toast: message });
+      set({ isGenerating: false, generationPhase: "idle", currentAnlasSpent: null, lastAnlasSpent: spent, lastError: message, statusText: storeText(get().settings, "status.upscaleFailed"), toast: message });
     }
   },
 
@@ -2476,6 +2607,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     workbenchLoadRevision += 1;
     set({
       isGenerating: true,
+      generationPhase: "preparing",
       currentAnlasSpent: null,
       lastAnlasSpent: null,
       lastError: "",
@@ -2494,13 +2626,14 @@ export const useAppStore = create<AppState>((set, get) => ({
       state.settings,
     );
     if (!prepared || !get().isGenerating) {
-      if (get().isGenerating) set({ isGenerating: false });
+      if (get().isGenerating) set({ isGenerating: false, generationPhase: "idle" });
       return;
     }
     const { account: freshAccount, quote } = prepared;
     const anlasBefore = freshAccount.anlasBalance;
     set({
       isGenerating: true,
+      generationPhase: "requesting",
       currentAnlasSpent: null,
       lastAnlasSpent: null,
       lastError: "",
@@ -2519,12 +2652,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       await refreshAfterImage(set, get, current, { compareBefore: state.workbenchImage });
       const spent = anlasSpent(anlasBefore, get().account.anlasBalance);
       const message = withAnlasSpent(get().settings, result.message, spent);
-      set({ isGenerating: false, currentAnlasSpent: null, lastAnlasSpent: spent, statusText: message, toast: message });
+      set({ isGenerating: false, generationPhase: "idle", currentAnlasSpent: null, lastAnlasSpent: spent, statusText: message, toast: message });
     } else {
       const finalAccount = await refreshAccountBestEffort(get);
       const spent = anlasSpent(anlasBefore, finalAccount.anlasBalance);
       const message = withAnlasSpent(get().settings, result.message, spent);
-      set({ isGenerating: false, currentAnlasSpent: null, lastAnlasSpent: spent, lastError: message, statusText: storeText(get().settings, "status.postFailed"), toast: message });
+      set({ isGenerating: false, generationPhase: "idle", currentAnlasSpent: null, lastAnlasSpent: spent, lastError: message, statusText: storeText(get().settings, "status.postFailed"), toast: message });
     }
   },
 
@@ -2536,6 +2669,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       isGenerateQueueRunning: false,
       activeGenerationRunId: null,
       generationPreview: null,
+      generationPhase: "idle",
       queueAdding: false,
       generationQueue: [],
       queueVersion: current.queueVersion + 1, // invalidate any in-flight enqueue quote

@@ -113,6 +113,7 @@ import {
 } from "./ipc/prompt-codex";
 import {
   loadMetadataSnapshotFile,
+  readMetadataSnapshotFromPath,
   saveMetadataSnapshotFile,
   saveMetadataSnapshotFromPath,
 } from "./ipc/metadata-snapshot";
@@ -751,6 +752,9 @@ function registerIpc() {
   );
   ipcMain.handle("metadata:saveSnapshotFromPath", (_event, filePath: string) =>
     saveMetadataSnapshotFromPath(app.getPath("userData"), filePath),
+  );
+  ipcMain.handle("metadata:readSnapshotFromPath", (_event, filePath: string) =>
+    readMetadataSnapshotFromPath(app.getPath("userData"), filePath),
   );
   ipcMain.handle("metadata:loadSnapshot", () =>
     loadMetadataSnapshotFile(app.getPath("userData")),

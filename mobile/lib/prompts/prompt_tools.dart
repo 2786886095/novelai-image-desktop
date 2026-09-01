@@ -149,7 +149,7 @@ String normalizePrompt(
     if (options.stripNonAscii) {
       tag = tag.replaceAll(RegExp(r'[^\x20-\x7e]'), '').trim();
     }
-    tag = tag.replaceAll(RegExp(r'\s+'), ' ');
+    tag = tag.replaceAll(RegExp(r'\s+'), ' ').trim();
     if (tag.isEmpty) continue;
     if (options.stripQualityPrefix) {
       final qualityKey = tag.toLowerCase();

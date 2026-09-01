@@ -1365,6 +1365,17 @@ export interface StylePromptPreset {
   previewImages?: StylePromptPreviewImage[];
 }
 
+/** A reusable positive-prompt preset. Reference images are visual notes only:
+ * applying the preset replaces the positive prompt text and never injects an
+ * image into generation, i2i, vibe transfer, or precise reference inputs. */
+export interface PositivePromptPreset {
+  id: string;
+  name: string;
+  prompt: string;
+  createdAt: string;
+  previewImages?: StylePromptPreviewImage[];
+}
+
 export type ReferencePresetKind = "vibe" | "precise";
 
 /** Durable, named reference image stored under the app's userData directory.
@@ -1617,6 +1628,9 @@ export interface AppSettings {
   stylePromptPresets: StylePromptPreset[];
   // Stored separately so empty user-created groups survive restarts.
   stylePromptPresetGroups: string[];
+  // Positive-only reusable prompt presets shared by Generate and compatible
+  // artist-string tools. Optional images are view-only notes (maximum three).
+  positivePromptPresets: PositivePromptPreset[];
   lastGenerationState: LastGenerationState | null;
   // Per-tool opt-out for restoring lastGenerationState across restarts.
   // All default true (today's behavior); turning one off means that tool
@@ -1881,6 +1895,7 @@ export interface NaiDesktopApi {
   loadImageFromPath: (filePath: string) => Promise<LoadImageResult>;
   saveMetadataSnapshot: (payload: MetadataSnapshotPayload) => Promise<MetadataSnapshotResult>;
   saveMetadataSnapshotFromPath: (filePath: string) => Promise<MetadataSnapshotResult>;
+  readMetadataSnapshotFromPath: (filePath: string) => Promise<MetadataSnapshotResult>;
   loadMetadataSnapshot: () => Promise<MetadataSnapshotResult>;
   getPathForFile: (file: File) => string;
   clearWorkbenchImage: () => Promise<{ ok: boolean }>;

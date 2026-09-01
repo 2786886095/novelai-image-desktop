@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useAppStore } from "./store";
 
 function deferred<T>() {
@@ -28,6 +28,180 @@ function generationResult(id: string, seed: number) {
 describe("main generation queue", () => {
   beforeEach(() => {
     useAppStore.setState(useAppStore.getInitialState(), true);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("exposes preparation, request, and idle phases without treating preflight as sampling", async () => {
+    const account = deferred<{ hasToken: boolean; anlasBalance: number; tierName: string }>();
+    const image = deferred<ReturnType<typeof generationResult>>();
+    const generate = vi.fn().mockReturnValue(image.promise);
+    const naiDesktop = {
+      hasToken: vi
+        .fn()
+        .mockImplementationOnce(() => account.promise)
+        .mockResolvedValue({ hasToken: true, anlasBalance: 100, tierName: "Opus" }),
+      quoteAnlas: vi.fn().mockResolvedValue({ ok: true, amount: 0, balance: 100 }),
+      generate,
+      getHistoryDates: vi.fn().mockResolvedValue(["2026-06-21"]),
+      getHistoryGroups: vi.fn().mockResolvedValue([]),
+      getHistory: vi.fn().mockResolvedValue([]),
+      cancel: vi.fn().mockResolvedValue(undefined),
+    };
+    vi.stubGlobal("window", { naiDesktop });
+    useAppStore.setState((state) => ({
+      account: { hasToken: true, anlasBalance: 100, tierName: "Opus" },
+      params: { ...state.params, positivePrompt: "1girl" },
+      batchCount: 1,
+    }));
+
+    const running = useAppStore.getState().generate();
+    expect(useAppStore.getState().generationPhase).toBe("preparing");
+
+    account.resolve({ hasToken: true, anlasBalance: 100, tierName: "Opus" });
+    await vi.waitFor(() => expect(generate).toHaveBeenCalledTimes(1));
+    expect(useAppStore.getState().generationPhase).toBe("requesting");
+
+    image.resolve(generationResult("phase-test", 33));
+    await running;
+    expect(useAppStore.getState().generationPhase).toBe("idle");
+    expect(useAppStore.getState().isGenerating).toBe(false);
+  });
+
+  it("keeps the decoded final stream frame visible until the saved image is decoded", async () => {
+    const imageResult = deferred<any>();
+    const decoded = deferred<void>();
+    const item = {
+      id: "stream-handoff",
+      date: "2026-09-01",
+      createdAt: "2026-09-01T17:48:55.000Z",
+      filePath: "stream-handoff.png",
+      fileUrl: "local-media://stream-handoff.png",
+      params: { ...useAppStore.getState().params, positivePrompt: "1girl" },
+      actualSeed: 77,
+      model: "nai-diffusion-5-full",
+      width: 832,
+      height: 1216,
+    };
+    class MockImage {
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      src = "";
+      decode = vi.fn(() => decoded.promise);
+      constructor() {
+        preloaders.push(this);
+      }
+    }
+    const preloaders: MockImage[] = [];
+    const naiDesktop = {
+      hasToken: vi.fn().mockResolvedValue({ hasToken: true, anlasBalance: 100, tierName: "Opus" }),
+      quoteAnlas: vi.fn().mockResolvedValue({ ok: true, amount: 0, balance: 100 }),
+      generate: vi.fn().mockReturnValue(imageResult.promise),
+      getHistoryDates: vi.fn().mockResolvedValue([item.date]),
+      getHistoryGroups: vi.fn().mockResolvedValue([]),
+      getHistory: vi.fn().mockResolvedValue([item]),
+      cancel: vi.fn().mockResolvedValue(undefined),
+    };
+    vi.stubGlobal("window", { naiDesktop });
+    vi.stubGlobal("Image", MockImage);
+    useAppStore.setState((state) => ({
+      account: { hasToken: true, anlasBalance: 100, tierName: "Opus" },
+      params: { ...state.params, positivePrompt: "1girl" },
+      batchCount: 1,
+    }));
+
+    const running = useAppStore.getState().generate();
+    await vi.waitFor(() => expect(naiDesktop.generate).toHaveBeenCalledTimes(1));
+    const previewUrl = "data:image/png;base64,final-stream-frame";
+    useAppStore.setState({
+      generationPreview: {
+        requestId: useAppStore.getState().activeGenerationRunId ?? "stream-handoff",
+        progress: 1,
+        currentStep: 28,
+        totalSteps: 28,
+        sampleIndex: 0,
+        imageDataUrl: previewUrl,
+      },
+      generationPhase: "saving",
+    });
+    imageResult.resolve({ ok: true, message: "ok", actualSeed: 77, items: [item] });
+    await running;
+
+    expect(useAppStore.getState().currentImage?.fileUrl).toBe(previewUrl);
+    await vi.waitFor(() => expect(useAppStore.getState().history[0]?.fileUrl).toBe(previewUrl));
+    const preloader = preloaders[0];
+    expect(preloader?.src).toBe(item.fileUrl);
+
+    preloader?.onload?.();
+    decoded.resolve();
+    await vi.waitFor(() => expect(useAppStore.getState().currentImage?.fileUrl).toBe(item.fileUrl));
+    expect(useAppStore.getState().history[0]?.fileUrl).toBe(item.fileUrl);
+  });
+
+  it("keeps non-stream generation in the saving phase until the local image is decoded", async () => {
+    const imageResult = deferred<any>();
+    const decoded = deferred<void>();
+    const item = {
+      id: "nonstream-handoff",
+      date: "2026-09-01",
+      createdAt: "2026-09-01T18:12:21.000Z",
+      filePath: "nonstream-handoff.png",
+      fileUrl: "local-media://nonstream-handoff.png",
+      params: { ...useAppStore.getState().params, positivePrompt: "1girl" },
+      actualSeed: 88,
+      model: "nai-diffusion-5-full",
+      width: 832,
+      height: 1216,
+    };
+    const previous = { ...item, id: "previous", filePath: "previous.png", fileUrl: "local-media://previous.png" };
+    class MockImage {
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      src = "";
+      decode = vi.fn(() => decoded.promise);
+      constructor() {
+        preloaders.push(this);
+      }
+    }
+    const preloaders: MockImage[] = [];
+    const naiDesktop = {
+      hasToken: vi.fn().mockResolvedValue({ hasToken: true, anlasBalance: 100, tierName: "Opus" }),
+      quoteAnlas: vi.fn().mockResolvedValue({ ok: true, amount: 0, balance: 100 }),
+      generate: vi.fn().mockReturnValue(imageResult.promise),
+      getHistoryDates: vi.fn().mockResolvedValue([item.date]),
+      getHistoryGroups: vi.fn().mockResolvedValue([]),
+      getHistory: vi.fn().mockResolvedValue([item, previous]),
+      cancel: vi.fn().mockResolvedValue(undefined),
+    };
+    vi.stubGlobal("window", { naiDesktop });
+    vi.stubGlobal("Image", MockImage);
+    useAppStore.setState((state) => ({
+      account: { hasToken: true, anlasBalance: 100, tierName: "Opus" },
+      params: { ...state.params, positivePrompt: "1girl" },
+      currentImage: previous,
+      history: [previous],
+      batchCount: 1,
+    }));
+
+    const running = useAppStore.getState().generate();
+    await vi.waitFor(() => expect(naiDesktop.generate).toHaveBeenCalledTimes(1));
+    imageResult.resolve({ ok: true, message: "ok", actualSeed: 88, items: [item] });
+    await vi.waitFor(() => expect(preloaders).toHaveLength(1));
+
+    expect(useAppStore.getState().generationPhase).toBe("saving");
+    expect(useAppStore.getState().isGenerating).toBe(true);
+    expect(useAppStore.getState().currentImage?.id).toBe(previous.id);
+
+    preloaders[0].onload?.();
+    decoded.resolve();
+    await running;
+
+    expect(useAppStore.getState().generationPhase).toBe("idle");
+    expect(useAppStore.getState().isGenerating).toBe(false);
+    expect(useAppStore.getState().currentImage?.id).toBe(item.id);
+    expect(useAppStore.getState().currentImage?.fileUrl).toBe(item.fileUrl);
   });
 
   it("snapshots a queued prompt and runs it after the active image", async () => {

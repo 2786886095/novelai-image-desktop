@@ -8,6 +8,7 @@ import {
 import { AppPortal, Button } from "./components/ui";
 import { Icon } from "./components/icons";
 import { QualityPresetControl } from "./components/QualityPresetControl";
+import { PositivePromptPresetControl } from "./PositivePromptPresets";
 import { useAppStore } from "./store";
 import {
   DEFAULT_PARAMS,
@@ -641,7 +642,10 @@ export default function V5ArtistWeightRepair({
             <p className="v5-repair-batch-hint">{text.repairBatchHint}</p>
             <div className="v5-weight-draw-controls v5-repair-batch-controls">
               <label><span>{text.candidateCount}</span><NumericDraftInput min={1} max={100} step={1} value={candidateCount} normalize={(value) => Math.floor(value)} onCommit={setCandidateCount} /></label>
-              <label className="wide"><span>{text.basePrompt}</span><textarea value={basePrompt} onChange={(event) => setBasePrompt(event.target.value)} /></label>
+              <div className="positive-prompt-preset-field wide">
+                <div><span>{text.basePrompt}</span><PositivePromptPresetControl value={basePrompt} onApply={setBasePrompt} variant="field" /></div>
+                <textarea aria-label={text.basePrompt} value={basePrompt} onChange={(event) => setBasePrompt(event.target.value)} />
+              </div>
               <fieldset className="v5-seed-control wide"><legend>{text.seedMode}</legend><label><input type="radio" checked={seedMode === "fixed"} onChange={() => setSeedMode("fixed")} />{text.fixedSeed}</label><label><input type="radio" checked={seedMode === "random"} onChange={() => setSeedMode("random")} />{text.randomSeed}</label>{seedMode === "fixed" && <div><NumericDraftInput aria-label={text.seed} min={1} max={2147483647} step={1} value={seed} normalize={(value) => Math.floor(value)} onCommit={setSeed} /><Button variant="ghost" onClick={() => setSeed(freshSeed())}>{text.randomizeSeed}</Button></div>}</fieldset>
             </div>
           </section>
@@ -668,7 +672,10 @@ export default function V5ArtistWeightRepair({
               <label><span>{text.weightMin}</span><NumericDraftInput min={0.05} max={10} step={0.05} value={minWeight} normalize={(value) => Math.round(value * 100) / 100} onCommit={setMinWeight} /></label>
               <label><span>{text.weightMax}</span><NumericDraftInput min={0.05} max={10} step={0.05} value={maxWeight} normalize={(value) => Math.round(value * 100) / 100} onCommit={setMaxWeight} /></label>
               <label><span>{text.candidateCount}</span><NumericDraftInput min={1} max={100} step={1} value={candidateCount} normalize={(value) => Math.floor(value)} onCommit={setCandidateCount} /></label>
-              <label className="wide"><span>{text.basePrompt}</span><textarea value={basePrompt} onChange={(event) => setBasePrompt(event.target.value)} /></label>
+              <div className="positive-prompt-preset-field wide">
+                <div><span>{text.basePrompt}</span><PositivePromptPresetControl value={basePrompt} onApply={setBasePrompt} variant="field" /></div>
+                <textarea aria-label={text.basePrompt} value={basePrompt} onChange={(event) => setBasePrompt(event.target.value)} />
+              </div>
               <fieldset className="v5-seed-control wide"><legend>{text.seedMode}</legend><label><input type="radio" checked={seedMode === "fixed"} onChange={() => setSeedMode("fixed")} />{text.fixedSeed}</label><label><input type="radio" checked={seedMode === "random"} onChange={() => setSeedMode("random")} />{text.randomSeed}</label>{seedMode === "fixed" && <div><NumericDraftInput aria-label={text.seed} min={1} max={2147483647} step={1} value={seed} normalize={(value) => Math.floor(value)} onCommit={setSeed} /><Button variant="ghost" onClick={() => setSeed(freshSeed())}>{text.randomizeSeed}</Button></div>}</fieldset>
             </div>
           </section>

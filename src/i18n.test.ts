@@ -52,6 +52,26 @@ describe("desktop i18n resources", () => {
     }
   });
 
+  it("localizes every generation phase shown on the canvas", () => {
+    const keys = [
+      "canvas.preparingTitle",
+      "canvas.preparingHint",
+      "canvas.requestingTitle",
+      "canvas.requestingHint",
+      "canvas.streamingTitle",
+      "canvas.streamingProgress",
+      "canvas.savingTitle",
+      "canvas.savingHint",
+    ];
+    for (const language of SUPPORTED_APP_LANGUAGES) {
+      for (const key of keys) {
+        const value = desktopUiText(language.code, key);
+        expect(value.trim()).not.toBe("");
+        expect(value).not.toBe(key);
+      }
+    }
+  });
+
   it("has complete localized labels for every main tab in every locale", () => {
     const baseValues = TAB_ITEMS.map((item) => item.value);
     expect(baseValues.indexOf("referencePresets")).toBe(

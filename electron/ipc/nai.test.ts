@@ -1,5 +1,6 @@
 import FormData from "form-data";
 import fs from "node:fs";
+import { encode } from "@msgpack/msgpack";
 import { PNG } from "pngjs";
 import { describe, expect, it } from "vitest";
 import {
@@ -7,6 +8,7 @@ import {
   buildPayload,
   buildGenerateImageHttpBody,
   compositeInpaintBuffers,
+  consumeGenerateImageStream,
   extractEmbeddedGenerationMetadata,
   isOfficialNaiHost,
   isPreflightNetworkFailure,
@@ -16,6 +18,7 @@ import {
   prepareImageBufferForSave,
   stripPngMetadata,
 } from "./nai";
+import { frameNaiStreamMessage } from "./nai-stream";
 import {
   DEFAULT_PARAMS,
   normalizeGenerateParams,
@@ -77,6 +80,56 @@ function pngWithGenerationMetadata() {
     pngChunk("IEND"),
   ]);
 }
+
+describe("streaming final image recovery", () => {
+  it("keeps a completed final frame when the transport reports aborted afterwards", async () => {
+    const finalImage = Buffer.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
+    const finalFrame = frameNaiStreamMessage(encode({
+      event_type: "final",
+      samp_ix: 0,
+      step_ix: 27,
+      image: Uint8Array.from(finalImage),
+    }));
+    async function* interruptedAfterFinal() {
+      yield finalFrame;
+      const error = Object.assign(new Error("aborted"), { code: "ECONNRESET" });
+      throw error;
+    }
+    const previews: number[] = [];
+
+    const images = await consumeGenerateImageStream(
+      interruptedAfterFinal(),
+      28,
+      (event) => previews.push(event.progress),
+      "application/x-msgpack",
+    );
+
+    expect(images).toEqual([finalImage]);
+    expect(previews).toContain(1);
+  });
+
+  it("does not hide an explicit server error that follows a final frame", async () => {
+    const finalFrame = frameNaiStreamMessage(encode({
+      event_type: "final",
+      samp_ix: 0,
+      image: Uint8Array.from([1, 2, 3]),
+    }));
+    const errorFrame = frameNaiStreamMessage(encode({
+      event_type: "error",
+      message: "aborted",
+    }));
+    async function* serverErrorStream() {
+      yield Buffer.concat([finalFrame, errorFrame]);
+    }
+
+    await expect(consumeGenerateImageStream(
+      serverErrorStream(),
+      28,
+      () => undefined,
+      "application/x-msgpack",
+    )).rejects.toThrow("aborted");
+  });
+});
 
 describe("persisted generation parameter migration", () => {
   it("repairs legacy enums, invalid numbers, dimensions, and dependent flags", () => {

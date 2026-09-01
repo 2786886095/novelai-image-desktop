@@ -2,12 +2,12 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 
 import '../billing/anlas.dart';
 import '../i18n/runtime_text.dart';
+import '../images/file_image_preloader.dart';
 import '../images/image_processing.dart';
 import '../images/png_metadata.dart';
 import '../models/nai_models.dart';
@@ -15,6 +15,7 @@ import '../prompts/capsule_data.dart';
 import '../prompts/prompt_mode.dart';
 import '../prompts/prompt_templates.dart';
 import '../prompts/prompt_tools.dart';
+import '../prompts/positive_prompt_presets.dart';
 import '../references/reference_presets.dart';
 import '../services/nai_api.dart';
 import '../services/nai_stream.dart';
@@ -45,11 +46,18 @@ class AppState extends ChangeNotifier {
   final NaiApi api;
   final Storage storage;
   final OfflineTagStore offlineTags;
+  final CompletedImagePreloader _preloadCompletedImage;
 
-  AppState({NaiApi? api, Storage? storage, OfflineTagStore? offlineTags})
-      : api = api ?? NaiApi(),
+  AppState({
+    NaiApi? api,
+    Storage? storage,
+    OfflineTagStore? offlineTags,
+    CompletedImagePreloader? preloadCompletedImage,
+  })  : api = api ?? NaiApi(),
         storage = storage ?? Storage(),
-        offlineTags = offlineTags ?? OfflineTagStore() {
+        offlineTags = offlineTags ?? OfflineTagStore(),
+        _preloadCompletedImage =
+            preloadCompletedImage ?? preloadCompletedFileImage {
     BackgroundQueueService.addCancelHandler(cancelGeneration);
   }
 
@@ -743,6 +751,97 @@ class AppState extends ChangeNotifier {
     required StylePromptPreviewImage image,
   }) async {
     await storage.deleteStylePromptPreviewImage(preset.id, image);
+    preset.previewImages.removeWhere((item) => item.id == image.id);
+    await storage.setSettings(settings);
+    notifyListeners();
+  }
+
+  Future<PositivePromptPreset> savePositivePromptPreset({
+    String? id,
+    required String name,
+    required String prompt,
+  }) async {
+    final cleanPrompt = prompt;
+    if (cleanPrompt.trim().isEmpty) {
+      throw ArgumentError('Positive prompt is required.');
+    }
+    final existingId = id ?? '';
+    final requestedName = name.trim().isEmpty
+        ? defaultPositivePromptPresetName(
+            cleanPrompt, settings.positivePromptPresets.length + 1)
+        : name.trim();
+    final cleanName = uniquePositivePromptPresetName(
+      settings.positivePromptPresets,
+      requestedName,
+      excludeId: existingId,
+    );
+    if (existingId.isNotEmpty) {
+      final index = settings.positivePromptPresets
+          .indexWhere((preset) => preset.id == existingId);
+      if (index >= 0) {
+        final preset = settings.positivePromptPresets[index]
+          ..name = cleanName
+          ..prompt = cleanPrompt;
+        await storage.setSettings(settings);
+        notifyListeners();
+        return preset;
+      }
+    }
+    final preset = PositivePromptPreset(
+      id: '${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(1 << 20)}',
+      name: cleanName,
+      prompt: cleanPrompt,
+      createdAt: DateTime.now().toIso8601String(),
+    );
+    settings.positivePromptPresets.insert(0, preset);
+    await storage.setSettings(settings);
+    notifyListeners();
+    return preset;
+  }
+
+  Future<void> removePositivePromptPreset(String id) async {
+    await storage
+        .deleteStylePromptPreviewImages(positivePromptPresetStorageId(id));
+    settings.positivePromptPresets.removeWhere((preset) => preset.id == id);
+    await storage.setSettings(settings);
+    notifyListeners();
+  }
+
+  Future<List<StylePromptPreviewImage>> importPositivePromptPresetImages({
+    required PositivePromptPreset preset,
+    required List<({String path, String name})> sources,
+  }) async {
+    final available = max(
+      0,
+      positivePromptPresetImageLimit - preset.previewImages.length,
+    );
+    if (available == 0) return const [];
+    final imported = <StylePromptPreviewImage>[];
+    for (final source in sources.take(available)) {
+      final image = await storage.copyStylePromptPreviewImage(
+        presetId: positivePromptPresetStorageId(preset.id),
+        sourcePath: source.path,
+        sourceName: source.name,
+      );
+      if (image != null) imported.add(image);
+    }
+    if (imported.isEmpty) return const [];
+    preset.previewImages = [...preset.previewImages, ...imported]
+        .take(positivePromptPresetImageLimit)
+        .toList();
+    await storage.setSettings(settings);
+    notifyListeners();
+    return imported;
+  }
+
+  Future<void> removePositivePromptPresetImage({
+    required PositivePromptPreset preset,
+    required StylePromptPreviewImage image,
+  }) async {
+    await storage.deleteStylePromptPreviewImage(
+      positivePromptPresetStorageId(preset.id),
+      image,
+    );
     preset.previewImages.removeWhere((item) => item.id == image.id);
     await storage.setSettings(settings);
     notifyListeners();
@@ -1656,7 +1755,9 @@ class AppState extends ChangeNotifier {
               groupId: taskHistoryGroupId.ifEmptyNull,
             ));
           }
-          _prependHistory(items);
+          status = _rt('status.savingImage');
+          notifyListeners();
+          await _commitCompletedHistory(items);
           _clearGenerationPreview(notify: false);
           completed += items.length;
           // The images are already saved at this point — a balance-refresh
@@ -1951,7 +2052,7 @@ class AppState extends ChangeNotifier {
         items.add(await storage.saveImage(bytes, taskParams, seed,
             feature: 'i2i', groupId: generationGroupId.ifEmptyNull));
       }
-      _prependHistory(items, useAsWorkbench: true);
+      await _commitCompletedHistory(items, useAsWorkbench: true);
       status = _rf(
           'status.i2iDone', {'spent': await _finishQuotedRun(token, before)});
     });
@@ -2014,7 +2115,7 @@ class AppState extends ChangeNotifier {
         width: targetWidth,
         height: targetHeight,
       );
-      _prependHistory(items, useAsWorkbench: true);
+      await _commitCompletedHistory(items, useAsWorkbench: true);
       final fallbackNote = usedModel == inpaintModel
           ? ''
           : _rf('status.inpaintFallback', {'model': usedModel});
@@ -2055,7 +2156,7 @@ class AppState extends ChangeNotifier {
           width: prepared.width * upscaleScale,
           height: prepared.height * upscaleScale,
           groupId: generationGroupId.ifEmptyNull);
-      _prependHistory([item], useAsWorkbench: true);
+      await _commitCompletedHistory([item], useAsWorkbench: true);
       status = _rf('status.upscaleDone',
           {'spent': await _finishQuotedRun(token, before)});
     });
@@ -2109,7 +2210,7 @@ class AppState extends ChangeNotifier {
             height: prepared.originalHeight,
             groupId: generationGroupId.ifEmptyNull));
       }
-      _prependHistory(items, useAsWorkbench: true);
+      await _commitCompletedHistory(items, useAsWorkbench: true);
       final resizeNote = prepared.resized
           ? _rf('status.directorRestoreNote', {
               'width': prepared.originalWidth,
@@ -2681,7 +2782,7 @@ class AppState extends ChangeNotifier {
       feature: 'comic',
       groupId: groupId,
     );
-    _prependHistory([item]);
+    await _commitCompletedHistory([item]);
     // The panel image is already saved at this point — a balance-refresh hiccup
     // here must not make the caller (comic_controller's generateOne) report an
     // already-successful panel as failed.
@@ -2712,6 +2813,7 @@ class AppState extends ChangeNotifier {
     if (images.isEmpty) throw Exception(_rt('error.noImagesReturned'));
     final item = await storage.saveArtistLabTemporaryImage(
         images.first, taskParams, seed);
+    await _preloadCompletedItems([item]);
     try {
       account = await _fetchAccountPreservingLast(token);
       final after = account.anlasBalance;
@@ -2737,7 +2839,7 @@ class AppState extends ChangeNotifier {
       groupId: groupId,
     );
     await storage.deleteArtistLabTemporaryImage(temporary.filePath);
-    _prependHistory([item]);
+    await _commitCompletedHistory([item]);
     return item;
   }
 
@@ -2813,7 +2915,7 @@ class AppState extends ChangeNotifier {
       feature: 'batch-redraw',
       groupId: groupId,
     );
-    _prependHistory([item]);
+    await _commitCompletedHistory([item]);
     // The redrawn image is already saved at this point — a balance-refresh
     // hiccup here must not make the caller report an already-successful item
     // as failed.
@@ -3019,6 +3121,24 @@ class AppState extends ChangeNotifier {
       }
     }
     notifyListeners();
+  }
+
+  Future<void> _preloadCompletedItems(List<HistoryItem> items) async {
+    if (items.isEmpty) return;
+    try {
+      await _preloadCompletedImage(items.first.filePath);
+    } catch (_) {
+      // Generation and persistence already succeeded. A display-cache failure
+      // must not discard the result or report the paid request as failed.
+    }
+  }
+
+  Future<void> _commitCompletedHistory(
+    List<HistoryItem> items, {
+    bool useAsWorkbench = false,
+  }) async {
+    await _preloadCompletedItems(items);
+    _prependHistory(items, useAsWorkbench: useAsWorkbench);
   }
 
   static (int, int) readImageDimensions(Uint8List b) {

@@ -23,7 +23,7 @@ void main() {
 
   test('provides complete navigation labels for every locale', () {
     for (final locale in supportedAppLocales) {
-      expect(mainDestinationLabelsFor(locale.code), hasLength(12));
+      expect(mainDestinationLabelsFor(locale.code), hasLength(13));
       for (final label in mainDestinationLabelsFor(locale.code)) {
         expect(label.trim(), isNotEmpty);
       }

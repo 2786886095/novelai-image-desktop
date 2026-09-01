@@ -13,6 +13,7 @@ import '../models/nai_models.dart';
 import '../prompts/v5_artist_weight_repair.dart';
 import '../state/app_state.dart';
 import '../ui/quality_preset_control.dart';
+import 'positive_prompt_preset_sheet.dart';
 
 class _RepairDrawResult {
   final ArtistRecipe recipe;
@@ -1628,6 +1629,23 @@ class _V5ArtistWeightRepairScreenState
                 ),
                 onChanged: (_) => _saveDrawState(),
               ),
+              const SizedBox(height: 6),
+              Align(
+                alignment: Alignment.centerRight,
+                child: AnimatedBuilder(
+                  animation: _basePrompt,
+                  builder: (context, _) => PositivePromptPresetButton(
+                    currentPrompt: _basePrompt.text,
+                    compact: true,
+                    onApply: (value) {
+                      _basePrompt.text = value;
+                      _basePrompt.selection = TextSelection.collapsed(
+                          offset: _basePrompt.text.length);
+                      _saveDrawState();
+                    },
+                  ),
+                ),
+              ),
               const SizedBox(height: 10),
               SegmentedButton<bool>(
                 segments: [
@@ -1904,6 +1922,23 @@ class _V5ArtistWeightRepairScreenState
                     decoration: InputDecoration(
                       labelText: drawText['base'],
                       border: const OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: AnimatedBuilder(
+                      animation: _basePrompt,
+                      builder: (context, _) => PositivePromptPresetButton(
+                        currentPrompt: _basePrompt.text,
+                        compact: true,
+                        onApply: (value) {
+                          _basePrompt.text = value;
+                          _basePrompt.selection = TextSelection.collapsed(
+                              offset: _basePrompt.text.length);
+                          _saveDrawState();
+                        },
+                      ),
                     ),
                   ),
                   const SizedBox(height: 10),

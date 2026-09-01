@@ -194,16 +194,34 @@ describe("desktop UI consistency guards", () => {
     expect(source).toContain('!accountDetailsCollapsed && (');
   });
 
+  it("keeps generation completion stable across the canvas and both side rails", () => {
+    const source = fs.readFileSync(path.join(projectRoot, "src", "App.tsx"), "utf8");
+    const store = fs.readFileSync(path.join(projectRoot, "src", "store.ts"), "utf8");
+    const styles = fs.readFileSync(path.join(projectRoot, "src", "styles.css"), "utf8");
+    expect(source).toContain("handoffPreview");
+    expect(source).toContain('className="run-state-swap"');
+    expect(source).toContain('className="history-item history-item-pending"');
+    expect(source).not.toContain('f("account.lastSpent", { amount: lastAnlasSpent })');
+    expect(store).toContain("completedImageBridges");
+    expect(store).toContain("preloadCompletedImage(item.fileUrl)");
+    expect(styles).toContain(".generating-overlay.is-completing.is-leaving");
+    expect(styles).toContain("grid-template-rows: 0fr");
+    expect(styles).toContain(".history-item-pending");
+  });
+
   it("lets metadata restoration read images directly from history groups", () => {
     const source = fs.readFileSync(path.join(projectRoot, "src", "MetadataInspector.tsx"), "utf8");
     const styles = fs.readFileSync(path.join(projectRoot, "src", "styles.css"), "utf8");
     expect(source).toContain('window.naiDesktop.getHistory()');
     expect(source).toContain('window.naiDesktop.getHistoryGroups()');
-    expect(source).toContain('saveMetadataSnapshotFromPath(item.filePath)');
+    expect(source).toContain('readMetadataSnapshotFromPath(item.filePath)');
+    expect(source).toContain('activeTab !== "metadata"');
+    expect(source).toContain('loadMetadataSnapshot().then((file) =>');
     expect(source).toContain('className="metadata-history-grid"');
     expect(source).not.toContain('setHistoryOpen(false)');
     expect(styles).toContain('.metadata-history-picker');
     expect(styles).toContain('min-height: 72px;');
+    expect(styles).toContain('flex: 0 0 auto;');
     expect(styles).toContain('grid-template-columns: repeat(2, minmax(0, 1fr));');
   });
 
@@ -235,5 +253,23 @@ describe("desktop UI consistency guards", () => {
     expect(mainSource).toContain('normalizedUiCapturePath.includes("opus-usage")');
     expect(appSource).toContain('captureSurface === "opusUsage"');
     expect(appSource).toContain('percent: 73.4');
+  });
+
+  it("shares positive-only presets across generation and artist-string tools without batch coupling", () => {
+    const appSource = fs.readFileSync(path.join(projectRoot, "src", "App.tsx"), "utf8");
+    const repairSource = fs.readFileSync(path.join(projectRoot, "src", "V5ArtistWeightRepair.tsx"), "utf8");
+    const randomArtistSource = fs.readFileSync(path.join(projectRoot, "src", "RandomArtistLab.tsx"), "utf8");
+    const presetSource = fs.readFileSync(path.join(projectRoot, "src", "PositivePromptPresets.tsx"), "utf8");
+    const backupSource = fs.readFileSync(path.join(projectRoot, "electron", "ipc", "data-backup.ts"), "utf8");
+    const batchSource = fs.readFileSync(path.join(projectRoot, "src", "ComicGenerator.tsx"), "utf8");
+    expect(appSource).toContain("<PositivePromptPresetControl");
+    expect(repairSource.match(/<PositivePromptPresetControl/g)).toHaveLength(2);
+    expect(randomArtistSource).toContain("<PositivePromptPresetControl");
+    expect(presetSource).toContain("onApply(preset.prompt)");
+    expect(presetSource).toContain("POSITIVE_PROMPT_PRESET_IMAGE_LIMIT");
+    expect(presetSource).toContain('"positive-preset-large-preview"');
+    expect(backupSource).toContain("positivePromptPresets: positivePrompts");
+    expect(backupSource).toContain("positivePromptPresetStorageId(target.id)");
+    expect(batchSource).not.toContain("PositivePromptPresetControl");
   });
 });

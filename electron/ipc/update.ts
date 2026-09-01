@@ -92,7 +92,10 @@ export async function latestGiteeRelease(options: { includeAttachments?: boolean
     attachments = normalizeAssets(attachRes.data);
   }
 
-  const assets = [...normalizeAssets(res.data?.assets), ...attachments];
+  // Gitee exposes the same files in both `assets` and `attach_files`, but the
+  // lightweight release list often omits byte sizes. Prefer the attachment
+  // records so update diagnostics and integrity preflight retain full metadata.
+  const assets = [...attachments, ...normalizeAssets(res.data?.assets)];
   const uniqueAssets = assets.filter(
     (asset, index) => assets.findIndex((candidate) => candidate.name === asset.name) === index,
   );

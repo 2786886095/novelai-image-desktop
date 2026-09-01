@@ -326,6 +326,8 @@ contextBridge.exposeInMainWorld("naiDesktop", {
     ipcRenderer.invoke("metadata:saveSnapshot", payload),
   saveMetadataSnapshotFromPath: (filePath: string) =>
     ipcRenderer.invoke("metadata:saveSnapshotFromPath", filePath),
+  readMetadataSnapshotFromPath: (filePath: string) =>
+    ipcRenderer.invoke("metadata:readSnapshotFromPath", filePath),
   loadMetadataSnapshot: () => ipcRenderer.invoke("metadata:loadSnapshot"),
   getPathForFile: (file: File) => webUtils.getPathForFile(file),
   clearWorkbenchImage: () => ipcRenderer.invoke("nai:clearWorkbenchImage"),

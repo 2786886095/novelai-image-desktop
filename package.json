@@ -1,6 +1,6 @@
 {
   "name": "langbai-novelai-studio",
-  "version": "2.0.9",
+  "version": "2.1.0",
   "private": true,
   "description": "Langbai NovelAI Studio: API-only NovelAI image generation desktop client with Chinese UI.",
   "author": "Langbai",
@@ -65,6 +65,12 @@
     "vite": "^8.0.16",
     "vitest": "^4.1.9",
     "wait-on": "^9.0.10"
+  },
+  "overrides": {
+    "ip-address": "10.7.0",
+    "js-yaml": "4.3.2",
+    "sharp": "0.35.4",
+    "tar": "7.5.22"
   },
   "build": {
     "appId": "com.langbai.novelai-studio",
@@ -151,5 +157,12 @@
     "dmg": {
       "artifactName": "Langbai-NovelAI-Studio-${version}-${arch}.${ext}"
     }
+  },
+  "allowScripts": {
+    "electron@42.11.0": true,
+    "electron-winstaller@5.4.0": true,
+    "onnxruntime-node@1.21.0": true,
+    "protobufjs@7.6.5": true,
+    "msedge-tts": false
   }
 }

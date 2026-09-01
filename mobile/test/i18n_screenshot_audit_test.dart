@@ -14,6 +14,7 @@ import 'package:novelai_mobile/screens/generate_screen.dart';
 import 'package:novelai_mobile/screens/settings_screen.dart';
 import 'package:novelai_mobile/state/app_state.dart';
 import 'package:novelai_mobile/ui/studio_theme.dart';
+import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:provider/provider.dart';
 
 const _locales = ['zh-CN', 'zh-TW', 'en-US', 'ja-JP', 'ko-KR'];
@@ -22,6 +23,21 @@ const _fontEn = 'AuditEn';
 const _fontJa = 'AuditJa';
 const _fontKo = 'AuditKo';
 const _fontMaterialIcons = 'MaterialIcons';
+
+class _AuditPathProvider extends PathProviderPlatform {
+  final String root;
+
+  _AuditPathProvider(this.root);
+
+  @override
+  Future<String?> getApplicationSupportPath() async => root;
+
+  @override
+  Future<String?> getApplicationDocumentsPath() async => root;
+
+  @override
+  Future<String?> getTemporaryPath() async => root;
+}
 
 const _captures = <({
   String name,
@@ -170,7 +186,16 @@ Future<void> _savePng(GlobalKey boundaryKey, File output) async {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  setUpAll(_loadAuditFonts);
+  late Directory auditRoot;
+
+  setUpAll(() async {
+    auditRoot = Directory.systemTemp.createTempSync('nai-i18n-audit-');
+    PathProviderPlatform.instance = _AuditPathProvider(auditRoot.path);
+    await _loadAuditFonts();
+  });
+  tearDownAll(() {
+    if (auditRoot.existsSync()) auditRoot.deleteSync(recursive: true);
+  });
 
   for (final locale in _locales) {
     for (final capture in _captures) {

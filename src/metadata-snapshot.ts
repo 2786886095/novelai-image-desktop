@@ -1,4 +1,16 @@
+import type { MetadataSnapshotPayload } from "./types";
+
 let browserSnapshot: File | null = null;
+
+export function metadataSnapshotToFile(snapshot: MetadataSnapshotPayload): File {
+  const binary = atob(snapshot.base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return new File([bytes], snapshot.name || "metadata-image.png", {
+    type: snapshot.type,
+    lastModified: snapshot.lastModified,
+  });
+}
 
 export async function saveMetadataSnapshot(file: File): Promise<void> {
   if (typeof window !== "undefined" && window.naiDesktop?.saveMetadataSnapshot) {
@@ -26,13 +38,7 @@ export async function loadMetadataSnapshot(): Promise<File | null> {
   if (typeof window !== "undefined" && window.naiDesktop?.loadMetadataSnapshot) {
     const result = await window.naiDesktop.loadMetadataSnapshot();
     if (result.ok && result.snapshot) {
-      const binary = atob(result.snapshot.base64);
-      const bytes = new Uint8Array(binary.length);
-      for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
-      return new File([bytes], result.snapshot.name || "metadata-image.png", {
-        type: result.snapshot.type,
-        lastModified: result.snapshot.lastModified,
-      });
+      return metadataSnapshotToFile(result.snapshot);
     }
   }
   return browserSnapshot

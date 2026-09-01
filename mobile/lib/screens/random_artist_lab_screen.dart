@@ -16,6 +16,7 @@ import '../services/artist_tag_service.dart';
 import '../state/app_state.dart';
 import '../tags/offline_tag_store.dart';
 import '../ui/quality_preset_control.dart';
+import 'positive_prompt_preset_sheet.dart';
 
 class _Result {
   final ArtistRecipe recipe;
@@ -293,8 +294,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
               'A and B can be saved independently. Favorite B terms and weights can guide later style-enabled draws.',
           'remove': 'Remove favorite',
           'mutation': 'Style / lighting terms in this draw',
-          'categories':
-              'Art style|Medium / brushwork|Color|Lighting',
+          'categories': 'Art style|Medium / brushwork|Color|Lighting',
           'running': 'Generating',
           'hint': 'Artist tag source: Danbooru',
           'variantPlain': 'A | Artist string only',
@@ -316,7 +316,8 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           'base': '固定内容プロンプト',
           'aux': '固定追加語（常に保持）',
           'customTags': 'カスタム Tag（ウェイトのみ抽選）',
-          'customTagsHint': 'カンマまたは改行で区切り、各 Tag を下で「毎回」または「ランダム」に設定します。ウェイトはいずれも抽選されます。',
+          'customTagsHint':
+              'カンマまたは改行で区切り、各 Tag を下で「毎回」または「ランダム」に設定します。ウェイトはいずれも抽選されます。',
           'customTagWeightMin': 'カスタム Tag の最小ウェイト（0.1～10）',
           'customTagWeightMax': 'カスタム Tag の最大ウェイト（0.1～10）',
           'customTagLibrary': 'Tag クイック選択',
@@ -1656,7 +1657,8 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           },
         'en-US' => {
             'title': 'Visual-style Tag library',
-            'hint': 'Only visual style, medium, rendering, lighting/color, and quality are included—never action, background, effects, or emotion. Collapsed by default.',
+            'hint':
+                'Only visual style, medium, rendering, lighting/color, and quality are included—never action, background, effects, or emotion. Collapsed by default.',
             'selected': '{count} selected',
             'available': 'Loaded locally on demand',
             'search': 'Search Tags, meanings, anime, or games',
@@ -1669,7 +1671,8 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
             'min': 'Minimum',
             'max': 'Maximum',
             'clear': 'Clear all',
-            'noResults': 'No matches. Download the Danbooru bilingual Tag data in Settings for the full catalog.',
+            'noResults':
+                'No matches. Download the Danbooru bilingual Tag data in Settings for the full catalog.',
             'loading': 'Reading the local Tag catalog…',
             'loadMore': 'Load more',
           },
@@ -1694,7 +1697,8 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           },
         'ko-KR' => {
             'title': '화풍 Tag 라이브러리',
-            'hint': '화풍·매체·렌더링·빛/색·품질만 포함하며 동작·배경·효과·감정은 작가 문자열에 섞지 않습니다. 기본은 접힘입니다.',
+            'hint':
+                '화풍·매체·렌더링·빛/색·품질만 포함하며 동작·배경·효과·감정은 작가 문자열에 섞지 않습니다. 기본은 접힘입니다.',
             'selected': '{count}개 선택',
             'available': '로컬에서 필요할 때 로드',
             'search': 'Tag, 뜻, 작품명 검색',
@@ -1707,7 +1711,8 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
             'min': '최소',
             'max': '최대',
             'clear': '모두 지우기',
-            'noResults': '검색 결과가 없습니다. 전체 목록은 설정에서 Danbooru 중영 Tag 데이터를 내려받으세요.',
+            'noResults':
+                '검색 결과가 없습니다. 전체 목록은 설정에서 Danbooru 중영 Tag 데이터를 내려받으세요.',
             'loading': '로컬 Tag 목록 읽는 중…',
             'loadMore': '더 불러오기',
           },
@@ -1744,13 +1749,14 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     final requestQuery = _customTagSearch.text;
     setState(() => _customTagCatalogLoading = true);
     try {
-      final result = await context.read<AppState>().offlineTags
-          .browseArtistStyleCatalog(
-        scope: scope,
-        query: requestQuery,
-        limit: _customTagCatalogLimit,
-      );
-      if (!mounted || requestCategory != _customTagCategory ||
+      final result =
+          await context.read<AppState>().offlineTags.browseArtistStyleCatalog(
+                scope: scope,
+                query: requestQuery,
+                limit: _customTagCatalogLimit,
+              );
+      if (!mounted ||
+          requestCategory != _customTagCategory ||
           requestQuery != _customTagSearch.text) return;
       setState(() {
         _customTagCatalogItems = result.items;
@@ -1847,8 +1853,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     if (!_isDynamicCustomTagCategory) {
       for (final category in staticCategories) {
         for (final entry in category.tags) {
-          if (matchesRandomCustomTagSearch(
-              category, entry, language, query)) {
+          if (matchesRandomCustomTagSearch(category, entry, language, query)) {
             staticEntries.add((
               entry: entry,
               category: category.label(language),
@@ -1918,7 +1923,8 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                           Text(tag,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontWeight: FontWeight.w700)),
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w700)),
                           Text(meaning,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -1927,12 +1933,15 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                       ),
                     ),
                     if (count != null)
-                      Text('$count', style: Theme.of(context).textTheme.labelSmall),
+                      Text('$count',
+                          style: Theme.of(context).textTheme.labelSmall),
                   ],
                 ),
                 if (isSelected) ...[
                   const SizedBox(height: 6),
-                  Align(alignment: Alignment.centerRight, child: modeControl(tag)),
+                  Align(
+                      alignment: Alignment.centerRight,
+                      child: modeControl(tag)),
                 ],
               ],
             ),
@@ -1941,8 +1950,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
       );
     }
 
-    Widget categoryButton(String id, String label, String count) =>
-        Padding(
+    Widget categoryButton(String id, String label, String count) => Padding(
           padding: const EdgeInsets.only(right: 7),
           child: FilterChip(
             selected: _customTagCategory == id,
@@ -1969,6 +1977,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     return Card(
       clipBehavior: Clip.antiAlias,
       child: ExpansionTile(
+        key: const PageStorageKey<String>('random-artist-style-tag-library'),
         initiallyExpanded: false,
         onExpansionChanged: (expanded) {
           if (expanded && _isDynamicCustomTagCategory) {
@@ -1976,7 +1985,8 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           }
         },
         leading: const Icon(Icons.style_outlined),
-        title: Text(ui['title']!, style: const TextStyle(fontWeight: FontWeight.w800)),
+        title: Text(ui['title']!,
+            style: const TextStyle(fontWeight: FontWeight.w800)),
         subtitle: Text(
           '${ui['selected']!.replaceAll('{count}', '${selectedValues.length}')} · ${ui['available']}',
           maxLines: 1,
@@ -2088,12 +2098,14 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                   scrollDirection: Axis.horizontal,
                   child: Row(
                     children: [
-                      categoryButton('all', ui['all']!, '$randomCustomTagCount'),
-                      ...randomCustomTagLibrary.map((category) => categoryButton(
-                            category.id,
-                            category.label(language),
-                            '${category.tags.length}',
-                          )),
+                      categoryButton(
+                          'all', ui['all']!, '$randomCustomTagCount'),
+                      ...randomCustomTagLibrary
+                          .map((category) => categoryButton(
+                                category.id,
+                                category.label(language),
+                                '${category.tags.length}',
+                              )),
                       categoryButton('danbooru-style', ui['styles']!, 'ALL'),
                       categoryButton('copyright', ui['copyright']!, 'ALL'),
                     ],
@@ -2116,8 +2128,8 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                     ),
                   )
                 else if ((_isDynamicCustomTagCategory
-                        ? _customTagCatalogItems.isEmpty
-                        : staticEntries.isEmpty))
+                    ? _customTagCatalogItems.isEmpty
+                    : staticEntries.isEmpty))
                   Padding(
                     padding: const EdgeInsets.all(24),
                     child: Text(ui['noResults']!, textAlign: TextAlign.center),
@@ -2186,9 +2198,11 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
       ),
     );
   }
+
   Widget _weightTunerCard(Map<String, String> tuneText) => Card(
         clipBehavior: Clip.antiAlias,
         child: ExpansionTile(
+          key: const PageStorageKey<String>('random-artist-weight-tuner'),
           initiallyExpanded: false,
           title: Text(tuneText['title']!),
           subtitle: Text(
@@ -2810,6 +2824,27 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                         minLines: 2,
                         maxLines: 5,
                         decoration: InputDecoration(labelText: text['base']),
+                      ),
+                    ),
+                    SizedBox(
+                      width: constraints.maxWidth,
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: AnimatedBuilder(
+                          animation: _base,
+                          builder: (context, _) => PositivePromptPresetButton(
+                            currentPrompt: _base.text,
+                            compact: true,
+                            onApply: (value) {
+                              _base.text = value;
+                              _base.selection = TextSelection.collapsed(
+                                offset: _base.text.length,
+                              );
+                              setState(() {});
+                              unawaited(_save());
+                            },
+                          ),
+                        ),
                       ),
                     ),
                     SizedBox(

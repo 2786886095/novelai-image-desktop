@@ -14,7 +14,7 @@ vi.mock("./proxy", () => ({
   proxyConfig: () => ({}),
 }));
 
-import { checkUpdate, compareVersions, parseLatestYamlVersion, updateSourceOrder } from "./update";
+import { checkUpdate, compareVersions, latestGiteeRelease, parseLatestYamlVersion, updateSourceOrder } from "./update";
 
 describe("desktop update checking", () => {
   beforeEach(() => {
@@ -59,6 +59,30 @@ describe("desktop update checking", () => {
       releaseUrl: expect.stringContaining("gitee.com"),
     });
     expect(axiosGet.mock.calls[0][0]).toContain("gitee.com/api/v5");
+  });
+
+  it("prefers Gitee attachment metadata when the release list omits sizes", async () => {
+    axiosGet
+      .mockResolvedValueOnce({
+        data: {
+          id: 1765,
+          tag_name: "v1.6.5",
+          assets: [{ name: "part-001", browser_download_url: "https://gitee.com/part-001" }],
+        },
+      })
+      .mockResolvedValueOnce({
+        data: [{
+          id: 9,
+          name: "part-001",
+          size: 8_388_608,
+          browser_download_url: "https://gitee.com/part-001",
+        }],
+      });
+
+    const release = await latestGiteeRelease({ includeAttachments: true });
+    expect(release.assets).toEqual([
+      expect.objectContaining({ name: "part-001", size: 8_388_608 }),
+    ]);
   });
 
   it("falls back to Gitee when GitHub is unavailable", async () => {

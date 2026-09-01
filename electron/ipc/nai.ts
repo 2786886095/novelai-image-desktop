@@ -2237,7 +2237,36 @@ async function readStreamErrorText(error: any): Promise<string> {
   return Buffer.concat(chunks).toString("utf8");
 }
 
-async function consumeGenerateImageStream(
+function orderedFinalImages(finals: Map<number, Buffer>): Buffer[] {
+  return Array.from(finals.entries())
+    .sort(([left], [right]) => left - right)
+    .map(([, image]) => image);
+}
+
+function isRecoverableCompletedStreamClose(error: any): boolean {
+  if (
+    error?.naiStreamFrameError ||
+    axios.isCancel(error) ||
+    error?.code === "ERR_CANCELED" ||
+    error?.code === "ABORT_ERR" ||
+    error?.name === "AbortError"
+  ) {
+    return false;
+  }
+  const code = String(error?.code ?? "").toUpperCase();
+  if (code === "ECONNRESET" || code === "ERR_STREAM_PREMATURE_CLOSE") return true;
+  const message = String(error?.message ?? error ?? "").trim().toLowerCase();
+  return (
+    message === "aborted" ||
+    message.includes("premature close") ||
+    message.includes("socket hang up") ||
+    message.includes("connection reset") ||
+    message.includes("stream closed") ||
+    message === "terminated"
+  );
+}
+
+export async function consumeGenerateImageStream(
   responseStream: AsyncIterable<Uint8Array>,
   totalSteps: number,
   onPreview: GenerationPreviewCallback,
@@ -2256,7 +2285,11 @@ async function consumeGenerateImageStream(
 
   const consumeFrames = (frames: NaiStreamFrame[]) => {
     for (const frame of frames) {
-      if (frame.error) throw new Error(frame.error);
+      if (frame.error) {
+        const frameError: Error & { naiStreamFrameError?: boolean } = new Error(frame.error);
+        frameError.naiStreamFrameError = true;
+        throw frameError;
+      }
       if (!frame.image?.length) continue;
       previewStarted = true;
       const currentStep = (frame.stepIndex ?? 0) + 1;
@@ -2320,10 +2353,37 @@ async function consumeGenerateImageStream(
     if (finals.size === 0) {
       throw new Error("流式生成结束，但没有收到最终图片。为避免重复扣费，未自动重发请求。");
     }
-    return Array.from(finals.entries())
-      .sort(([left], [right]) => left - right)
-      .map(([, image]) => image);
+    return orderedFinalImages(finals);
   } catch (error: any) {
+    if (isRecoverableCompletedStreamClose(error)) {
+      // Some Node/Axios transports emit `aborted`/ECONNRESET after the server's
+      // complete final frame has already been decoded. The generation is paid
+      // and valid at this point: preserve it instead of turning 100% into a
+      // failure and discarding the image.
+      if (mode === "sse") {
+        try {
+          consumeFrames(sseDecoder.finish());
+        } catch (frameError: any) {
+          if (previewStarted) frameError.streamPreviewStarted = true;
+          throw frameError;
+        }
+      }
+      if (mode === "zip" && zipChunks.length > 0) {
+        try {
+          const images = await extractImages(Buffer.concat(zipChunks));
+          if (images.length > 0) {
+            logInfo(`stream transport closed after complete ZIP; recovered ${images.length} image(s)`);
+            return images;
+          }
+        } catch {
+          // An incomplete archive is not recoverable; keep the original error.
+        }
+      }
+      if (finals.size > 0) {
+        logInfo(`stream transport closed after final frame; recovered ${finals.size} image(s)`);
+        return orderedFinalImages(finals);
+      }
+    }
     if (previewStarted) error.streamPreviewStarted = true;
     throw error;
   }

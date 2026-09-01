@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novelai_mobile/models/nai_models.dart';
 import 'package:novelai_mobile/services/nai_api.dart';
+import 'package:novelai_mobile/services/nai_stream.dart';
 import 'package:novelai_mobile/services/storage.dart';
 import 'package:novelai_mobile/state/app_state.dart';
 
@@ -79,6 +80,53 @@ void main() {
     ));
     await run;
   });
+
+  test('keeps the live frame until the completed file is display-ready',
+      () async {
+    final api = _QueueApi()..emitPreview = true;
+    final preload = Completer<void>();
+    final preloadPaths = <String>[];
+    final state = AppState(
+      api: api,
+      storage: _MemoryStorage(),
+      preloadCompletedImage: (path) {
+        preloadPaths.add(path);
+        return preload.future;
+      },
+    )
+      ..account = const AccountSummary(
+        hasToken: true,
+        tierLevel: 1,
+        anlasBalance: 100,
+        hasActiveSubscription: true,
+      )
+      ..params.positivePrompt = 'preview transition';
+
+    final run = state.generate();
+    await _waitUntil(() => api.prompts.length == 1);
+    expect(state.generationPreview, isNotNull);
+
+    api.firstRequest.complete((
+      [
+        Uint8List.fromList([1, 2, 3])
+      ],
+      11,
+    ));
+    await _waitUntil(() => preloadPaths.isNotEmpty);
+
+    expect(preloadPaths, ['memory-1.png']);
+    expect(state.busy, isTrue);
+    expect(state.current, isNull);
+    expect(state.generationPreview, isNotNull);
+    expect(state.status, contains('保存'));
+
+    preload.complete();
+    await run;
+
+    expect(state.current?.filePath, 'memory-1.png');
+    expect(state.generationPreview, isNull);
+    expect(state.busy, isFalse);
+  });
 }
 
 Future<void> _waitUntil(bool Function() condition) async {
@@ -93,6 +141,7 @@ class _QueueApi extends NaiApi {
   final prompts = <String>[];
   Completer<int?>? queuedQuote;
   int quoteRequests = 0;
+  bool emitPreview = false;
 
   @override
   Future<AccountSummary> fetchAccount(
@@ -124,9 +173,20 @@ class _QueueApi extends NaiApi {
     String token,
     AppSettings settings,
     GenerateParams params,
-    GenerateExtras extras,
-  ) async {
+    GenerateExtras extras, {
+    void Function(NaiGenerationPreview preview)? onPreview,
+  }) async {
     prompts.add(params.positivePrompt);
+    if (emitPreview) {
+      onPreview?.call(NaiGenerationPreview(
+        image: Uint8List.fromList([9, 8, 7]),
+        progress: 1,
+        currentStep: 28,
+        totalSteps: 28,
+        sampleIndex: 0,
+        finalImage: true,
+      ));
+    }
     if (prompts.length == 1) return firstRequest.future;
     return (
       [

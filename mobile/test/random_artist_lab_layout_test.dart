@@ -39,6 +39,26 @@ class _FakeGenerationAppState extends AppState {
   }
 }
 
+Future<void> _scrollUntilBuilt(
+  WidgetTester tester,
+  Finder scrollable,
+  Finder target,
+) async {
+  final state = tester.state<ScrollableState>(scrollable);
+  for (var attempt = 0; attempt < 100 && target.evaluate().isEmpty; attempt++) {
+    final position = state.position;
+    final next = (position.pixels + 420)
+        .clamp(position.minScrollExtent, position.maxScrollExtent)
+        .toDouble();
+    if (next == position.pixels) break;
+    position.jumpTo(next);
+    await tester.pumpAndSettle();
+  }
+  expect(target, findsWidgets);
+  await tester.ensureVisible(target.first);
+  await tester.pumpAndSettle();
+}
+
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
@@ -152,12 +172,10 @@ void main() {
     await tester.pumpAndSettle();
     final bodyList =
         find.byKey(const PageStorageKey<String>('random-artist-lab-scroll'));
-    await tester.scrollUntilVisible(
+    await _scrollUntilBuilt(
+      tester,
+      find.descendant(of: bodyList, matching: find.byType(Scrollable)).first,
       find.byTooltip('重试'),
-      500,
-      scrollable: find
-          .descendant(of: bodyList, matching: find.byType(Scrollable))
-          .first,
     );
     expect(find.byTooltip('重试'), findsOneWidget);
   });
@@ -188,10 +206,10 @@ void main() {
         find.byKey(const PageStorageKey<String>('random-artist-lab-scroll'));
     final scrollable =
         find.descendant(of: bodyList, matching: find.byType(Scrollable)).first;
-    await tester.scrollUntilVisible(
+    await _scrollUntilBuilt(
+      tester,
+      scrollable,
       find.textContaining('8 组 · 16 张'),
-      500,
-      scrollable: scrollable,
     );
     await tester.pumpAndSettle();
     expect(find.text('A｜仅画师串'), findsWidgets);
@@ -312,11 +330,7 @@ void main() {
     final bodyScrollable =
         find.descendant(of: bodyList, matching: find.byType(Scrollable)).first;
     final favoritesTab = find.textContaining('收藏夹 (10)');
-    await tester.scrollUntilVisible(
-      favoritesTab,
-      500,
-      scrollable: bodyScrollable,
-    );
+    await _scrollUntilBuilt(tester, bodyScrollable, favoritesTab);
     final scrollable = tester.state<ScrollableState>(bodyScrollable);
     expect(scrollable.position.pixels, greaterThan(0));
     final before = scrollable.position.pixels;
@@ -377,12 +391,10 @@ void main() {
 
     final bodyList =
         find.byKey(const PageStorageKey<String>('random-artist-lab-scroll'));
-    await tester.scrollUntilVisible(
+    await _scrollUntilBuilt(
+      tester,
+      find.descendant(of: bodyList, matching: find.byType(Scrollable)).first,
       find.textContaining('收藏夹 (2)'),
-      500,
-      scrollable: find
-          .descendant(of: bodyList, matching: find.byType(Scrollable))
-          .first,
     );
     await tester.tap(find.textContaining('收藏夹 (2)'));
     await tester.pumpAndSettle();
@@ -430,12 +442,10 @@ void main() {
     await tester.pumpAndSettle();
     final bodyList =
         find.byKey(const PageStorageKey<String>('random-artist-lab-scroll'));
-    await tester.scrollUntilVisible(
+    await _scrollUntilBuilt(
+      tester,
+      find.descendant(of: bodyList, matching: find.byType(Scrollable)).first,
       find.byTooltip('重试'),
-      500,
-      scrollable: find
-          .descendant(of: bodyList, matching: find.byType(Scrollable))
-          .first,
     );
     await tester.tap(find.byTooltip('重试').hitTestable());
     await tester.pump();
@@ -498,12 +508,10 @@ void main() {
     await tester.pumpAndSettle();
     final bodyList =
         find.byKey(const PageStorageKey<String>('random-artist-lab-scroll'));
-    await tester.scrollUntilVisible(
+    await _scrollUntilBuilt(
+      tester,
+      find.descendant(of: bodyList, matching: find.byType(Scrollable)).first,
       find.byTooltip('应用到生成'),
-      500,
-      scrollable: find
-          .descendant(of: bodyList, matching: find.byType(Scrollable))
-          .first,
     );
     await tester.tap(find.byTooltip('应用到生成').hitTestable());
     await tester.pump();

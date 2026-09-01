@@ -22,6 +22,7 @@ import '../ui/quality_preset_control.dart';
 import '../ui/studio_shell.dart';
 import '../ui/zoomable_image.dart';
 import 'reference_catalog_panel.dart';
+import 'positive_prompt_preset_sheet.dart';
 
 bool _isRoomyPhoneLandscape(BuildContext context) {
   final size = MediaQuery.sizeOf(context);
@@ -298,6 +299,16 @@ class GenerateScreen extends StatelessWidget {
         showTextTools: true,
         onChanged: (value) =>
             state.setParam((params) => params.positivePrompt = value),
+      ),
+      const SizedBox(height: 6),
+      Align(
+        alignment: Alignment.centerRight,
+        child: PositivePromptPresetButton(
+          currentPrompt: p.positivePrompt,
+          compact: true,
+          onApply: (value) =>
+              state.setParam((params) => params.positivePrompt = value),
+        ),
       ),
       const SizedBox(height: 12),
       PromptEditor(

@@ -4,6 +4,7 @@ import path from "path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   loadMetadataSnapshotFile,
+  readMetadataSnapshotFromPath,
   saveMetadataSnapshotFile,
   saveMetadataSnapshotFromPath,
 } from "./metadata-snapshot";
@@ -48,5 +49,18 @@ describe("metadata snapshot persistence", () => {
     expect(loaded.snapshot?.name).toBe("history.webp");
     expect(loaded.snapshot?.type).toBe("image/webp");
     expect(Buffer.from(loaded.snapshot!.base64, "base64").toString()).toBe("history image bytes");
+  });
+
+  it("returns the exact history snapshot in the same atomic read operation", async () => {
+    const root = tempRoot();
+    const source = path.join(root, "selected.png");
+    const bytes = Buffer.from("selected history image");
+    fs.writeFileSync(source, bytes);
+
+    const result = await readMetadataSnapshotFromPath(root, source);
+    expect(result.ok).toBe(true);
+    expect(result.snapshot?.name).toBe("selected.png");
+    expect(result.snapshot?.type).toBe("image/png");
+    expect(Buffer.from(result.snapshot!.base64, "base64")).toEqual(bytes);
   });
 });

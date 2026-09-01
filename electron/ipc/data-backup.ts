@@ -15,6 +15,7 @@ import type {
   DataBackupStatus,
   HistoryGroup,
   HistoryItem,
+  PositivePromptPreset,
   ReferencePreset,
   StylePromptPreset,
   StylePromptPreviewImage,
@@ -41,6 +42,7 @@ import {
   stylePromptPreviewDirectory,
 } from "./style-preset-images";
 import { toLocalMediaUrl } from "./local-media-protocol";
+import { positivePromptPresetStorageId } from "../../src/positive-prompt-presets";
 
 const FORMAT = "langbai-novelai-studio-backup";
 const FORMAT_VERSION = 1;
@@ -87,6 +89,7 @@ const PRESET_SETTING_KEYS: Array<keyof AppSettings> = [
   "promptTemplates",
   "stylePromptPresets",
   "stylePromptPresetGroups",
+  "positivePromptPresets",
 ];
 const DEVICE_PATH_KEYS: Array<keyof AppSettings> = ["outputDir", "logDir", "backupDir"];
 
@@ -116,6 +119,10 @@ type PortableStylePreview = Omit<StylePromptPreviewImage, "filePath" | "fileUrl"
 };
 
 type PortableStylePreset = Omit<StylePromptPreset, "previewImages"> & {
+  previewImages: PortableStylePreview[];
+};
+
+type PortablePositivePromptPreset = Omit<PositivePromptPreset, "previewImages"> & {
   previewImages: PortableStylePreview[];
 };
 
@@ -466,13 +473,30 @@ async function buildArchive(
       const { previewImages: _previews, ...storedPreset } = cloneJson(preset);
       styles.push({ ...storedPreset, previewImages });
     }
+    const positivePrompts: PortablePositivePromptPreset[] = [];
+    for (const preset of data.settings.positivePromptPresets ?? []) {
+      const previewImages: PortableStylePreview[] = [];
+      for (const preview of preset.previewImages ?? []) {
+        const { filePath: _filePath, fileUrl: _fileUrl, ...stored } = cloneJson(preview);
+        previewImages.push({
+          ...stored,
+          asset: await addAsset(zip, preview.filePath, assetByHash, includeAssets),
+        });
+      }
+      const { previewImages: _previews, ...storedPreset } = cloneJson(preset);
+      positivePrompts.push({ ...storedPreset, previewImages });
+    }
     const payload = {
       promptTemplates: data.settings.promptTemplates ?? [],
       stylePromptPresetGroups: data.settings.stylePromptPresetGroups ?? [],
       stylePromptPresets: styles,
+      positivePromptPresets: positivePrompts,
     };
     zip.file("data/prompt-presets.json", JSON.stringify(payload));
-    summaries.push(summary("promptPresets", payload.promptTemplates.length + styles.length));
+    summaries.push(summary(
+      "promptPresets",
+      payload.promptTemplates.length + styles.length + positivePrompts.length,
+    ));
   }
 
   if (selected.has("workspaceData")) {
@@ -942,6 +966,7 @@ async function restorePromptPresets(
     promptTemplates?: AppSettings["promptTemplates"];
     stylePromptPresetGroups?: string[];
     stylePromptPresets?: PortableStylePreset[];
+    positivePromptPresets?: PortablePositivePromptPreset[];
   },
   store: PersistedData,
   counters: { count: number; skipped: number; renamed: number },
@@ -953,7 +978,14 @@ async function restorePromptPresets(
   const promptIds = new Set(promptTemplates.map((item) => item.id));
   for (const raw of payload.promptTemplates ?? []) {
     const identity = [raw.name, raw.prefix, raw.suffix, raw.negativePrompt].join("\u241f");
-    if (promptIdentity.has(identity)) {
+    const existingBySourceId = raw.id
+      ? promptTemplates.find((item) =>
+          item.id === raw.id
+          && item.prefix === raw.prefix
+          && item.suffix === raw.suffix
+          && item.negativePrompt === raw.negativePrompt)
+      : undefined;
+    if (promptIdentity.has(identity) || existingBySourceId) {
       counters.skipped += 1;
       continue;
     }
@@ -971,7 +1003,9 @@ async function restorePromptPresets(
   const styleIds = new Set(styles.map((item) => item.id));
   for (const raw of payload.stylePromptPresets ?? []) {
     if (!raw || typeof raw.name !== "string" || typeof raw.prompt !== "string") continue;
-    let target = styles.find((item) => item.name === raw.name && item.prompt === raw.prompt);
+    let target = styles.find((item) =>
+      item.prompt === raw.prompt
+      && (item.name === raw.name || (Boolean(raw.id) && item.id === raw.id)));
     if (!target) {
       const name = uniqueLabel(styleNames, raw.name);
       if (name.renamed) counters.renamed += 1;
@@ -1004,6 +1038,41 @@ async function restorePromptPresets(
     ...(payload.stylePromptPresetGroups ?? []).filter((value) => typeof value === "string" && value.trim()),
     ...styles.map((item) => item.group).filter(Boolean),
   ]));
+
+  const positivePrompts = [...(store.settings.positivePromptPresets ?? [])];
+  const positiveNames = new Set(positivePrompts.map((item) => item.name.toLocaleLowerCase()));
+  const positiveIds = new Set(positivePrompts.map((item) => item.id));
+  for (const raw of payload.positivePromptPresets ?? []) {
+    if (!raw || typeof raw.name !== "string" || typeof raw.prompt !== "string" || !raw.prompt.trim()) {
+      continue;
+    }
+    let target = positivePrompts.find((item) =>
+      item.prompt === raw.prompt
+      && (item.name === raw.name || (Boolean(raw.id) && item.id === raw.id)));
+    if (!target) {
+      const name = uniqueLabel(positiveNames, raw.name);
+      if (name.renamed) counters.renamed += 1;
+      const id = raw.id && !positiveIds.has(raw.id) ? raw.id : randomUUID();
+      positiveIds.add(id);
+      target = {
+        id,
+        name: name.value,
+        prompt: raw.prompt,
+        createdAt: typeof raw.createdAt === "string" ? raw.createdAt : new Date().toISOString(),
+        previewImages: [],
+      };
+      positivePrompts.push(target);
+      counters.count += 1;
+    }
+    target.previewImages = await restoreStylePreviews(
+      zip,
+      positivePromptPresetStorageId(target.id),
+      target.previewImages ?? [],
+      Array.isArray(raw.previewImages) ? raw.previewImages : [],
+      counters,
+    );
+  }
+  store.settings.positivePromptPresets = positivePrompts;
 }
 
 export async function importDataBackup(
@@ -1112,6 +1181,7 @@ export async function importDataBackup(
         promptTemplates?: AppSettings["promptTemplates"];
         stylePromptPresetGroups?: string[];
         stylePromptPresets?: PortableStylePreset[];
+        positivePromptPresets?: PortablePositivePromptPreset[];
       }>(archive.zip, "data/prompt-presets.json", {});
       await restorePromptPresets(archive.zip, payload, next, counters);
     }

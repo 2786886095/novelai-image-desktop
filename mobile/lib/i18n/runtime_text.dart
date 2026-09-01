@@ -54,6 +54,7 @@ const _runtimeText = <String, Map<String, String>>{
     'status.queuePaused': '队列已暂停（{done}/{total}）',
     'status.waitingQueueQuote': '当前图片已完成，正在等待队列任务报价...',
     'status.generatingImage': '正在生成 {current}/{total}，等待 {queued} 张...',
+    'status.savingImage': '正在保存图片并准备显示...',
     'status.actualSpentUnknown': '实扣读取失败，请刷新积分确认',
     'status.actualSpent': '实扣 {amount} Anlas',
     'status.generationCancelled': '已取消生成，队列已清空；{spent}。',
@@ -128,12 +129,10 @@ const _runtimeText = <String, Map<String, String>>{
     'batch.imagesImported': '已导入 {count} 张图片',
     'batch.sizeMode.perImageApplied': '已为 {count} 张图片匹配尺寸。',
     'batch.sizeMode.perImageEmpty': '请先填写逐图尺寸。',
-    'batch.sizeMode.perImageCount':
-        '尺寸数量不一致：需要 {expected} 行，实际 {actual} 行。',
+    'batch.sizeMode.perImageCount': '尺寸数量不一致：需要 {expected} 行，实际 {actual} 行。',
     'batch.sizeMode.perImageBlank': '尺寸第 {line} 行为空。',
     'batch.sizeMode.perImageFormat': '尺寸第 {line} 行格式错误，请使用“宽×高”。',
-    'batch.sizeMode.perImageUnsupported':
-        '尺寸第 {line} 行不是软件支持的 NovelAI 合法尺寸。',
+    'batch.sizeMode.perImageUnsupported': '尺寸第 {line} 行不是软件支持的 NovelAI 合法尺寸。',
     'batch.syncedParams': '已同步当前生图参数',
     'batch.copiedReferences': '已复制生图页当前参考图到批量项目',
     'batch.addedPrecise': '已添加精准参考图',
@@ -278,6 +277,7 @@ const _runtimeText = <String, Map<String, String>>{
     'status.queuePaused': '佇列已暫停（{done}/{total}）',
     'status.waitingQueueQuote': '目前圖片已完成，正在等待佇列任務報價...',
     'status.generatingImage': '正在生成 {current}/{total}，等待 {queued} 張...',
+    'status.savingImage': '正在儲存圖片並準備顯示...',
     'status.actualSpentUnknown': '實扣讀取失敗，請重新整理積分確認',
     'status.actualSpent': '實扣 {amount} Anlas',
     'status.generationCancelled': '已取消生成，佇列已清空；{spent}。',
@@ -352,12 +352,10 @@ const _runtimeText = <String, Map<String, String>>{
     'batch.imagesImported': '已匯入 {count} 張圖片',
     'batch.sizeMode.perImageApplied': '已為 {count} 張圖片配對尺寸。',
     'batch.sizeMode.perImageEmpty': '請先填寫逐圖尺寸。',
-    'batch.sizeMode.perImageCount':
-        '尺寸數量不一致：需要 {expected} 行，實際 {actual} 行。',
+    'batch.sizeMode.perImageCount': '尺寸數量不一致：需要 {expected} 行，實際 {actual} 行。',
     'batch.sizeMode.perImageBlank': '尺寸第 {line} 行為空。',
     'batch.sizeMode.perImageFormat': '尺寸第 {line} 行格式錯誤，請使用「寬×高」。',
-    'batch.sizeMode.perImageUnsupported':
-        '尺寸第 {line} 行不是軟體支援的 NovelAI 合法尺寸。',
+    'batch.sizeMode.perImageUnsupported': '尺寸第 {line} 行不是軟體支援的 NovelAI 合法尺寸。',
     'batch.syncedParams': '已同步目前生圖參數',
     'batch.copiedReferences': '已複製生圖頁目前參考圖到批量專案',
     'batch.addedPrecise': '已新增精準參考圖',
@@ -516,6 +514,7 @@ const _runtimeText = <String, Map<String, String>>{
         'Current image finished; waiting for the queued job quote...',
     'status.generatingImage':
         'Generating {current}/{total}, {queued} waiting...',
+    'status.savingImage': 'Saving image and preparing preview...',
     'status.actualSpentUnknown':
         'Could not read actual cost. Refresh Anlas to confirm',
     'status.actualSpent': 'Actual cost {amount} Anlas',
@@ -787,6 +786,7 @@ const _runtimeText = <String, Map<String, String>>{
     'status.queuePaused': 'キューを一時停止しました ({done}/{total})',
     'status.waitingQueueQuote': '現在の画像が完了しました。キュー内タスクの見積もり待ちです...',
     'status.generatingImage': '{current}/{total} を生成中、待機 {queued} 件...',
+    'status.savingImage': '画像を保存して表示を準備しています...',
     'status.actualSpentUnknown': '実コストを読み取れませんでした。Anlas を更新して確認してください',
     'status.actualSpent': '実コスト {amount} Anlas',
     'status.generationCancelled': '生成をキャンセルし、キューをクリアしました。{spent}。',
@@ -870,8 +870,7 @@ const _runtimeText = <String, Map<String, String>>{
     'batch.sizeMode.perImageCount':
         'サイズ数が一致しません：{expected} 行必要ですが、{actual} 行です。',
     'batch.sizeMode.perImageBlank': 'サイズの {line} 行目が空です。',
-    'batch.sizeMode.perImageFormat':
-        'サイズの {line} 行目が不正です。「幅×高さ」で入力してください。',
+    'batch.sizeMode.perImageFormat': 'サイズの {line} 行目が不正です。「幅×高さ」で入力してください。',
     'batch.sizeMode.perImageUnsupported':
         'サイズの {line} 行目は NovelAI でサポートされていません。',
     'batch.syncedParams': '現在の生成パラメータを同期しました',
@@ -1025,6 +1024,7 @@ const _runtimeText = <String, Map<String, String>>{
     'status.queuePaused': '대기열 일시 중지됨 ({done}/{total})',
     'status.waitingQueueQuote': '현재 이미지가 완료되었습니다. 대기 중인 작업 견적을 기다리는 중...',
     'status.generatingImage': '{current}/{total} 생성 중, {queued}개 대기...',
+    'status.savingImage': '이미지를 저장하고 표시를 준비하는 중...',
     'status.actualSpentUnknown': '실제 비용을 읽을 수 없습니다. Anlas를 새로고침해 확인하세요',
     'status.actualSpent': '실제 비용 {amount} Anlas',
     'status.generationCancelled': '생성을 취소하고 대기열을 비웠습니다. {spent}.',
@@ -1108,8 +1108,7 @@ const _runtimeText = <String, Map<String, String>>{
     'batch.sizeMode.perImageCount':
         '크기 수가 일치하지 않습니다. {expected}줄이 필요하지만 {actual}줄입니다.',
     'batch.sizeMode.perImageBlank': '크기 {line}번째 줄이 비어 있습니다.',
-    'batch.sizeMode.perImageFormat':
-        '크기 {line}번째 줄 형식이 잘못되었습니다. 너비×높이를 사용하세요.',
+    'batch.sizeMode.perImageFormat': '크기 {line}번째 줄 형식이 잘못되었습니다. 너비×높이를 사용하세요.',
     'batch.sizeMode.perImageUnsupported':
         '크기 {line}번째 줄은 지원되는 NovelAI 이미지 크기가 아닙니다.',
     'batch.syncedParams': '현재 생성 매개변수를 동기화했습니다',

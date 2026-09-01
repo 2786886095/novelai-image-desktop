@@ -511,8 +511,9 @@ class ResourceDatabaseService {
 
   Future<String> install(ResourceDatabaseId id) async {
     final definition = resourceDatabaseDefinitions[id]!;
-    if (_activeClients.containsKey(id))
+    if (_activeClients.containsKey(id)) {
       throw StateError('Download already running');
+    }
     try {
       final archive = await _downloadToPartial(definition);
       _emit(definition, ResourceDownloadPhase.verifying,
@@ -577,8 +578,9 @@ class ResourceDatabaseService {
   Future<String> restorePrevious(ResourceDatabaseId id) async {
     final definition = resourceDatabaseDefinitions[id]!;
     final previous = await _previous(definition);
-    if (!previous.existsSync())
+    if (!previous.existsSync()) {
       throw StateError('No previous database is available');
+    }
     final staged = await _staged(definition);
     if (staged.existsSync()) await staged.delete();
     await previous.copy(staged.path);
@@ -698,8 +700,9 @@ class ResourceDatabaseService {
         ''', [tag]);
         for (final row in rows) {
           final related = row['related_tag']?.toString() ?? '';
-          if (related.isEmpty || normalized.contains(related.toLowerCase()))
+          if (related.isEmpty || normalized.contains(related.toLowerCase())) {
             continue;
+          }
           aggregate[related] = (aggregate[related] ?? 0) + _asInt(row['count']);
         }
       }
