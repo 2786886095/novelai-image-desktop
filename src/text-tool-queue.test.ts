@@ -75,6 +75,23 @@ describe("convert/反推 job tracker (concurrent, not a serial queue)", () => {
     expect(useAppStore.getState().convertHistory).toHaveLength(0);
   });
 
+  it("marks rejected convert and reverse requests as failed instead of leaving them processing", async () => {
+    stubNaiDesktop({
+      convertPrompt: vi.fn().mockRejectedValue(new Error("convert offline")),
+      reversePrompt: vi.fn().mockRejectedValue(new Error("reverse offline")),
+    });
+    useAppStore.setState({
+      convertInput: "会被拒绝的转换",
+      inspectImageBase64: "base64data",
+    });
+
+    await useAppStore.getState().runConvertPrompt();
+    await useAppStore.getState().runReversePrompt();
+
+    expect(useAppStore.getState().convertJobs[0]).toMatchObject({ status: "failed", message: "convert offline" });
+    expect(useAppStore.getState().reverseJobs[0]).toMatchObject({ status: "failed", message: "reverse offline" });
+  });
+
   it("persists a reverse history item with the source image path for later prune checks", async () => {
     const reversePrompt = vi.fn().mockResolvedValue({
       ok: true,

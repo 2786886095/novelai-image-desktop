@@ -277,17 +277,15 @@ export function NumberInput({
   onChange: (value: number) => void;
 }) {
   return (
-    <label className="field">
-      <span>{label}</span>
-      <input
-        type="number"
-        value={value}
-        min={min}
-        max={max}
-        step={step}
-        onChange={(event) => onChange(Number(event.target.value))}
-      />
-    </label>
+    <CommittedNumberInput
+      label={label}
+      value={value}
+      min={min}
+      max={max}
+      step={step}
+      normalize={(next) => Math.min(max ?? next, Math.max(min ?? next, next))}
+      onCommit={onChange}
+    />
   );
 }
 

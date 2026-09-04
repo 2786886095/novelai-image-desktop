@@ -11,6 +11,8 @@ import { AppPortal, Button, SelectMenu } from "./components/ui";
 import { Icon } from "./components/icons";
 import { QualityPresetControl } from "./components/QualityPresetControl";
 import { PositivePromptPresetControl } from "./PositivePromptPresets";
+import { WeightDistributionControls } from "./components/WeightDistributionControls";
+import { DEFAULT_WEIGHT_DISTRIBUTION, type WeightControlMode } from "./weight-distribution";
 import {
   expandArtistRecipeComparisons,
   formatArtistCardTags,
@@ -83,6 +85,11 @@ type RandomSession = {
   artistMaxCount: number;
   artistWeightMin: number;
   artistWeightMax: number;
+  weightControlMode: WeightControlMode;
+  artistWeightMode: number;
+  artistWeightLeftDispersion: number;
+  artistWeightRightDispersion: number;
+  artistWeightSoftBalance: number;
   customTagPool: string;
   customTagModes: Record<string, CustomTagMode>;
   randomCustomTagMinCount: number;
@@ -118,6 +125,11 @@ const RANDOM_V5_DEFAULTS = {
   artistMaxCount: 7,
   artistWeightMin: 0.2,
   artistWeightMax: 1.2,
+  weightControlMode: "novice" as WeightControlMode,
+  artistWeightMode: DEFAULT_WEIGHT_DISTRIBUTION.mode,
+  artistWeightLeftDispersion: DEFAULT_WEIGHT_DISTRIBUTION.leftDispersion,
+  artistWeightRightDispersion: DEFAULT_WEIGHT_DISTRIBUTION.rightDispersion,
+  artistWeightSoftBalance: DEFAULT_WEIGHT_DISTRIBUTION.softBalance,
   customTagWeightMin: 0.2,
   customTagWeightMax: 1.2,
   randomCustomTagMinCount: 1,
@@ -402,6 +414,11 @@ function clampRecipeWeight(value: unknown, fallback: number): number {
   return Math.round(Math.max(0.1, Math.min(10, Number.isFinite(numeric) ? numeric : fallback)) * 100) / 100;
 }
 
+function clampDispersion(value: unknown, fallback = 0.4): number {
+  const numeric = Number(value);
+  return Math.round(Math.max(0, Math.min(1, Number.isFinite(numeric) ? numeric : fallback)) * 100) / 100;
+}
+
 function clampRecipeCount(value: unknown, fallback: number, minimum = 0): number {
   const numeric = Number(value);
   return Math.max(minimum, Math.min(20, Math.floor(Number.isFinite(numeric) ? numeric : fallback)));
@@ -498,6 +515,11 @@ function restore(inherited: GenerateParams): RandomSession {
       artistMaxCount: clampRecipeCount(raw?.artistMaxCount, raw?.artistCount == null ? 7 : legacyArtistCount, 1),
       artistWeightMin: clampRecipeWeight(migratingToV5Weights ? undefined : raw?.artistWeightMin, RANDOM_V5_DEFAULTS.artistWeightMin),
       artistWeightMax: clampRecipeWeight(migratingToV5Weights ? undefined : raw?.artistWeightMax, RANDOM_V5_DEFAULTS.artistWeightMax),
+      weightControlMode: raw?.weightControlMode === "advanced" ? "advanced" : "novice",
+      artistWeightMode: clampRecipeWeight(raw?.artistWeightMode, DEFAULT_WEIGHT_DISTRIBUTION.mode),
+      artistWeightLeftDispersion: clampDispersion(raw?.artistWeightLeftDispersion, DEFAULT_WEIGHT_DISTRIBUTION.leftDispersion),
+      artistWeightRightDispersion: clampDispersion(raw?.artistWeightRightDispersion, DEFAULT_WEIGHT_DISTRIBUTION.rightDispersion),
+      artistWeightSoftBalance: clampDispersion(raw?.artistWeightSoftBalance, DEFAULT_WEIGHT_DISTRIBUTION.softBalance),
       customTagPool: typeof raw?.customTagPool === "string" ? raw.customTagPool : "",
       customTagModes: raw?.customTagModes && typeof raw.customTagModes === "object"
         ? Object.fromEntries(Object.entries(raw.customTagModes).filter((entry): entry is [string, CustomTagMode] => entry[1] === "always" || entry[1] === "random"))
@@ -556,6 +578,8 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
   const [session, setSession] = useState(() => restore(params));
   const [customTagQuery, setCustomTagQuery] = useState("");
   const [customTagCategory, setCustomTagCategory] = useState("all");
+  const [weightTuneTagQuery, setWeightTuneTagQuery] = useState("");
+  const [weightTuneTagCategory, setWeightTuneTagCategory] = useState("quality");
   const [customTagLibraryOpen, setCustomTagLibraryOpen] = useState(false);
   const [catalogItems, setCatalogItems] = useState<TagSuggestion[]>([]);
   const [catalogTotal, setCatalogTotal] = useState(0);
@@ -597,6 +621,16 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
     });
   }, [catalogItems, staticCatalogSupplements]);
   const visibleCustomTagCount = visibleCatalogItems.length;
+  const weightTuneLibraryItems = useMemo(() => {
+    const category = RANDOM_CUSTOM_TAG_LIBRARY.find((item) => item.id === weightTuneTagCategory)
+      ?? RANDOM_CUSTOM_TAG_LIBRARY[0];
+    return category.tags.filter((entry) => matchesCustomTagSearch(
+      category,
+      entry,
+      language,
+      weightTuneTagQuery,
+    ));
+  }, [language, weightTuneTagCategory, weightTuneTagQuery]);
   const selectedRandomTagCount = selectedCustomTagValues.filter(
     (tag) => session.customTagModes[tag.toLocaleLowerCase()] === "random",
   ).length;
@@ -896,6 +930,14 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
     maxArtists: session.artistMaxCount,
     artistWeightMin: session.artistWeightMin,
     artistWeightMax: session.artistWeightMax,
+    artistWeightDistribution: session.weightControlMode === "advanced" ? {
+      min: session.artistWeightMin,
+      max: session.artistWeightMax,
+      mode: session.artistWeightMode,
+      leftDispersion: session.artistWeightLeftDispersion,
+      rightDispersion: session.artistWeightRightDispersion,
+      softBalance: session.artistWeightSoftBalance,
+    } : undefined,
     auxiliaryPrompt: session.auxiliaryPrompt,
     customTagPool: session.customTagPool,
     customTagModes: session.customTagModes,
@@ -907,7 +949,7 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
     favoriteArtists: session.biasFavorites ? likedArtists : undefined,
     favoriteMutations: session.mutateAuxiliary && session.biasFavorites ? likedMutations : undefined,
     random: createArtistLabRandom(session.drawSeed),
-  }), [poolKey, session.count, session.artistMinCount, session.artistMaxCount, session.artistWeightMin, session.artistWeightMax, session.auxiliaryPrompt, session.customTagPool, JSON.stringify(session.customTagModes), session.randomCustomTagMinCount, session.randomCustomTagMaxCount, session.customTagWeightMin, session.customTagWeightMax, session.mutateAuxiliary, session.biasFavorites, likedArtists.join("|"), likedMutations.map((item) => `${item.category}:${item.value}:${item.weight}`).join("|"), session.drawSeed]);
+  }), [poolKey, session.count, session.artistMinCount, session.artistMaxCount, session.artistWeightMin, session.artistWeightMax, session.weightControlMode, session.artistWeightMode, session.artistWeightLeftDispersion, session.artistWeightRightDispersion, session.artistWeightSoftBalance, session.auxiliaryPrompt, session.customTagPool, JSON.stringify(session.customTagModes), session.randomCustomTagMinCount, session.randomCustomTagMaxCount, session.customTagWeightMin, session.customTagWeightMax, session.mutateAuxiliary, session.biasFavorites, likedArtists.join("|"), likedMutations.map((item) => `${item.category}:${item.value}:${item.weight}`).join("|"), session.drawSeed]);
   const plannedComparisons = useMemo(
     () => expandArtistRecipeComparisons(planned, session.mutateAuxiliary),
     [planned, session.mutateAuxiliary],
@@ -1006,6 +1048,14 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
       maxArtists: session.artistMaxCount,
       artistWeightMin: session.artistWeightMin,
       artistWeightMax: session.artistWeightMax,
+      artistWeightDistribution: session.weightControlMode === "advanced" ? {
+        min: session.artistWeightMin,
+        max: session.artistWeightMax,
+        mode: session.artistWeightMode,
+        leftDispersion: session.artistWeightLeftDispersion,
+        rightDispersion: session.artistWeightRightDispersion,
+        softBalance: session.artistWeightSoftBalance,
+      } : undefined,
       auxiliaryPrompt: session.auxiliaryPrompt,
       customTagPool: session.customTagPool,
       customTagModes: session.customTagModes,
@@ -1028,6 +1078,14 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
       session.weightTuneCount,
       session.weightVariation,
       createArtistLabRandom(freshSeed()),
+      {
+        customTagPool: session.customTagPool,
+        customTagModes: session.customTagModes,
+        minRandomCustomTags: session.randomCustomTagMinCount,
+        maxRandomCustomTags: session.randomCustomTagMaxCount,
+        customTagWeightMin: session.customTagWeightMin,
+        customTagWeightMax: session.customTagWeightMax,
+      },
     );
     if (!recipes.length) return setMessage(tuneText.noArtists);
     await runRecipes(recipes, false);
@@ -1286,6 +1344,24 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
       <label><span>{text.count}</span><NumericDraftInput min={1} step={1} value={session.count} normalize={(value) => positiveInteger(value, 1)} onCommit={(count) => patch({ count })} /><small>{text.unlimited}</small></label>
       <fieldset className="random-range-fields"><legend>{text.range}</legend><label><span>{text.min}</span><NumericDraftInput min={1} max={20} step={1} value={session.artistMinCount} normalize={(value) => clampRecipeCount(value, 3, 1)} onCommit={(artistMinCount) => patch({ artistMinCount, drawSeed: freshSeed() })} /></label><label><span>{text.max}</span><NumericDraftInput min={1} max={20} step={1} value={session.artistMaxCount} normalize={(value) => clampRecipeCount(value, 7, 1)} onCommit={(artistMaxCount) => patch({ artistMaxCount, drawSeed: freshSeed() })} /></label></fieldset>
       <fieldset className="random-range-fields"><legend>{text.artistWeight}</legend><label><span>{text.min}</span><NumericDraftInput min={0.1} max={10} step={0.05} value={session.artistWeightMin} normalize={(value) => clampRecipeWeight(value, RANDOM_V5_DEFAULTS.artistWeightMin)} onCommit={(artistWeightMin) => patch({ artistWeightMin, drawSeed: freshSeed() })} /></label><label><span>{text.max}</span><NumericDraftInput min={0.1} max={10} step={0.05} value={session.artistWeightMax} normalize={(value) => clampRecipeWeight(value, RANDOM_V5_DEFAULTS.artistWeightMax)} onCommit={(artistWeightMax) => patch({ artistWeightMax, drawSeed: freshSeed() })} /></label></fieldset>
+      <WeightDistributionControls
+        language={language}
+        controlMode={session.weightControlMode}
+        min={session.artistWeightMin}
+        max={session.artistWeightMax}
+        mode={session.artistWeightMode}
+        leftDispersion={session.artistWeightLeftDispersion}
+        rightDispersion={session.artistWeightRightDispersion}
+        softBalance={session.artistWeightSoftBalance}
+        onModeChange={(weightControlMode) => patch({ weightControlMode, drawSeed: freshSeed() })}
+        onChange={(value) => patch({
+          ...(value.mode == null ? {} : { artistWeightMode: value.mode }),
+          ...(value.leftDispersion == null ? {} : { artistWeightLeftDispersion: value.leftDispersion }),
+          ...(value.rightDispersion == null ? {} : { artistWeightRightDispersion: value.rightDispersion }),
+          ...(value.softBalance == null ? {} : { artistWeightSoftBalance: value.softBalance }),
+          drawSeed: freshSeed(),
+        })}
+      />
       <fieldset className="random-seed-fields wide"><legend>{text.seedMode}</legend><div className="random-seed-modes"><label><input type="radio" name="artist-seed-mode" checked={session.seedMode === "random"} onChange={() => patch({ seedMode: "random" })} /><span>{text.seedRandom}</span></label><label><input type="radio" name="artist-seed-mode" checked={session.seedMode === "fixed"} onChange={() => patch({ seedMode: "fixed" })} /><span>{text.seedFixed}</span></label></div>{session.seedMode === "fixed" && <div className="random-fixed-seed"><NumericDraftInput aria-label={text.seed} min={1} max={2147483647} step={1} value={session.seed} normalize={(value) => Math.min(2_147_483_647, Math.max(1, Math.floor(value)))} onCommit={(seed) => patch({ seed })} /><Button type="button" variant="ghost" onClick={() => patch({ seedMode: "fixed", seed: freshNaiSeed() })}>{text.randomFixedSeed}</Button></div>}</fieldset>
     </section>
     <details className="artist-lab-panel random-generation-settings" open>
@@ -1365,6 +1441,38 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
       <summary><span><b>{tuneText.title}</b><small>{tuneText.hint}</small></span></summary>
       <div className="artist-weight-tuner-grid">
         <label className="wide"><span>{tuneText.input}</span><textarea value={session.weightTuneInput} placeholder="1::artist:foo ::, 0.8::artist:bar ::," onChange={(event) => patch({ weightTuneInput: event.target.value })} /></label>
+        <details className="random-custom-tag-workbench artist-weight-tuner-inline-library wide">
+          <summary>
+            <span><b>{customTagText.library}</b><small>{interpolate(customTagText.selected, { count: selectedCustomTagValues.length })} · {customTagText.hint}</small></span>
+            <Icon name="chevronDown" />
+          </summary>
+          <div className="random-custom-tag-body">
+            <label className="random-custom-tag-search">
+              <Icon name="search" />
+              <input type="search" value={weightTuneTagQuery} placeholder={customTagText.search} onChange={(event) => setWeightTuneTagQuery(event.target.value)} />
+              {weightTuneTagQuery && <button type="button" aria-label={customTagText.clear} onClick={() => setWeightTuneTagQuery("")}><Icon name="clear" /></button>}
+            </label>
+            <div className="random-custom-tag-categories" role="tablist" aria-label={customTagText.library}>
+              {RANDOM_CUSTOM_TAG_LIBRARY.map((category) => <button key={category.id} type="button" role="tab" aria-selected={weightTuneTagCategory === category.id} className={weightTuneTagCategory === category.id ? "active" : ""} onClick={() => setWeightTuneTagCategory(category.id)}><span>{customTagCategoryLabel(category, language)}</span><em>{category.tags.length}</em></button>)}
+            </div>
+            <div className="random-custom-tag-results">
+              <div className="random-custom-tag-grid">{weightTuneLibraryItems.map((entry) => {
+                const selected = selectedCustomTags.has(entry.tag.toLocaleLowerCase());
+                const mode = customTagMode(entry.tag);
+                return <article key={entry.tag} className={selected ? "selected" : ""}>
+                  <button type="button" className="random-custom-tag-select" aria-pressed={selected} onClick={() => toggleLibraryTag(entry.tag)}>
+                    <span className="random-custom-tag-check"><Icon name={selected ? "check" : "plus"} /></span>
+                    <span><b>{entry.tag}</b><small>{customTagMeaning(entry, language)}</small></span>
+                  </button>
+                  {selected && <span className="random-custom-tag-card-modes">
+                    <button type="button" className={mode === "always" ? "active" : ""} onClick={() => setCustomTagMode(entry.tag, "always")}>{customTagText.always}</button>
+                    <button type="button" className={mode === "random" ? "active" : ""} onClick={() => setCustomTagMode(entry.tag, "random")}>{customTagText.random}</button>
+                  </span>}
+                </article>;
+              })}</div>
+            </div>
+          </div>
+        </details>
         <label><span>{tuneText.count}</span><NumericDraftInput min={1} step={1} value={session.weightTuneCount} normalize={(value) => positiveInteger(value, 1)} onCommit={(weightTuneCount) => patch({ weightTuneCount })} /></label>
         <label><span>{tuneText.variation}</span><NumericDraftInput min={0} max={100} step={1} value={session.weightVariation} onCommit={(weightVariation) => patch({ weightVariation })} /></label>
         <Button className="artist-weight-tuner-submit" variant="primary" disabled={running || !session.weightTuneInput.trim()} onClick={() => void runWeightTuning()}>{tuneText.generate}</Button>

@@ -1,5 +1,4 @@
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
-import bundledSnapshot from "./data/prompt-codex.json";
 import { Button } from "./components/ui";
 import { Icon } from "./components/icons";
 import { useAppStore } from "./store";
@@ -11,10 +10,18 @@ import {
   dedupePromptCodexEntries,
   extractPromptCodexIntroduction,
   isPromptCodexIntroductionEntry,
+  PROMPT_CODEX_BOOKS,
 } from "./prompt-codex";
 import type { AppLanguage } from "./types";
 
-const BUNDLED = bundledSnapshot as PromptCodexSnapshot;
+const EMPTY_SNAPSHOT: PromptCodexSnapshot = {
+  schemaVersion: 1,
+  generatedAt: new Date(0).toISOString(),
+  sourceSite: "https://nai4.top/",
+  permissionNote: "",
+  books: PROMPT_CODEX_BOOKS,
+  entries: [],
+};
 const PAGE_SIZE = 120;
 
 const TEXT = {
@@ -213,7 +220,7 @@ export default function PromptCodex({ onBack }: { onBack: () => void }) {
     useAppStore((state) => state.settings?.language),
   );
   const text = TEXT[language];
-  const [snapshot, setSnapshot] = useState<PromptCodexSnapshot>(BUNDLED);
+  const [snapshot, setSnapshot] = useState<PromptCodexSnapshot>(EMPTY_SNAPSHOT);
   const [bookId, setBookId] = useState("regular");
   const [category, setCategory] = useState("all");
   const [section, setSection] = useState("all");
@@ -246,9 +253,17 @@ export default function PromptCodex({ onBack }: { onBack: () => void }) {
   );
 
   useEffect(() => {
-    void window.naiDesktop.promptCodexCache().then((cached) => {
-      if (cached) setSnapshot(cached);
-    });
+    let active = true;
+    void (async () => {
+      try {
+        const cached = await window.naiDesktop.promptCodexCache();
+        const next = cached ?? await window.naiDesktop.promptCodexBundled();
+        if (active) setSnapshot(next);
+      } catch (error) {
+        if (active) setMessage(error instanceof Error ? error.message : String(error));
+      }
+    })();
+    return () => { active = false; };
   }, []);
 
   useEffect(() => {

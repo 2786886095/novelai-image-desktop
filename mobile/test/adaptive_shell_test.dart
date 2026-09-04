@@ -8,9 +8,7 @@ const _destinations = [
   StudioDestination(
       label: '重绘', icon: Icons.brush_outlined, selectedIcon: Icons.brush),
   StudioDestination(
-      label: '超分', icon: Icons.zoom_out_map, selectedIcon: Icons.zoom_out_map),
-  StudioDestination(
-      label: '后期', icon: Icons.tune_outlined, selectedIcon: Icons.tune),
+      label: '图像后期', icon: Icons.tune_outlined, selectedIcon: Icons.tune),
   StudioDestination(
       label: '反推',
       icon: Icons.visibility_outlined,
@@ -30,7 +28,15 @@ const _destinations = [
       icon: Icons.collections_bookmark_outlined,
       selectedIcon: Icons.collections_bookmark),
   StudioDestination(
-      label: '图库', icon: Icons.photo_outlined, selectedIcon: Icons.photo),
+      label: '在线画廊', icon: Icons.public_outlined, selectedIcon: Icons.public),
+  StudioDestination(
+      label: '酒馆AI生图',
+      icon: Icons.local_fire_department_outlined,
+      selectedIcon: Icons.local_fire_department_rounded),
+  StudioDestination(
+      label: '图库',
+      icon: Icons.photo_library_outlined,
+      selectedIcon: Icons.photo_library),
   StudioDestination(
       label: '记录', icon: Icons.receipt_outlined, selectedIcon: Icons.receipt),
   StudioDestination(

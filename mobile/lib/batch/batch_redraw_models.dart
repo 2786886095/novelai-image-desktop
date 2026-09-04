@@ -7,6 +7,49 @@ enum BatchRedrawStep { import, params, prompts, generate }
 
 enum BatchItemStatus { pending, generating, done, failed }
 
+const maxBatchRedrawCandidates = 8;
+
+int normalizeBatchRedrawCandidateCount(Object? value) {
+  final parsed = value is num ? value.toInt() : int.tryParse('$value');
+  if (parsed == null || parsed < 1) return 1;
+  if (parsed > maxBatchRedrawCandidates) return maxBatchRedrawCandidates;
+  return parsed;
+}
+
+class BatchRedrawCandidate {
+  String id;
+  String historyItemId;
+  String outputPath;
+  String createdAt;
+  int? actualSeed;
+
+  BatchRedrawCandidate({
+    required this.id,
+    required this.historyItemId,
+    required this.outputPath,
+    required this.createdAt,
+    this.actualSeed,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'historyItemId': historyItemId,
+        'outputPath': outputPath,
+        'createdAt': createdAt,
+        'actualSeed': actualSeed,
+      };
+
+  factory BatchRedrawCandidate.fromJson(Map<String, dynamic> json) =>
+      BatchRedrawCandidate(
+        id: json['id']?.toString() ?? _id(),
+        historyItemId: json['historyItemId']?.toString() ?? '',
+        outputPath: json['outputPath']?.toString() ?? '',
+        createdAt:
+            json['createdAt']?.toString() ?? DateTime.now().toIso8601String(),
+        actualSeed: (json['actualSeed'] as num?)?.toInt(),
+      );
+}
+
 class BatchRedrawItem {
   String id;
   String name;
@@ -21,6 +64,9 @@ class BatchRedrawItem {
   bool overrideParams;
   GenerateParams params;
   BatchItemStatus status;
+  List<BatchRedrawCandidate> candidates;
+  String? selectedCandidateId;
+  // Compatibility alias for builds that stored only one output.
   String outputPath;
   String error;
   bool selected;
@@ -39,10 +85,54 @@ class BatchRedrawItem {
     this.overrideParams = false,
     GenerateParams? params,
     this.status = BatchItemStatus.pending,
+    List<BatchRedrawCandidate>? candidates,
+    this.selectedCandidateId,
     this.outputPath = '',
     this.error = '',
     this.selected = false,
-  }) : params = params ?? GenerateParams();
+  })  : params = params ?? GenerateParams(),
+        candidates = candidates ?? [] {
+    if (this.candidates.isNotEmpty) {
+      syncSelectedCandidate();
+    } else {
+      selectedCandidateId = null;
+    }
+  }
+
+  BatchRedrawCandidate? get selectedCandidate {
+    if (candidates.isEmpty) return null;
+    for (final candidate in candidates) {
+      if (candidate.id == selectedCandidateId) return candidate;
+    }
+    return candidates.first;
+  }
+
+  void syncSelectedCandidate() {
+    final selected = selectedCandidate;
+    selectedCandidateId = selected?.id;
+    outputPath = selected?.outputPath ?? '';
+  }
+
+  void addCandidate(BatchRedrawCandidate candidate) {
+    if (!candidates.any((item) => item.id == candidate.id)) {
+      candidates.add(candidate);
+    }
+    selectedCandidateId ??= candidate.id;
+    syncSelectedCandidate();
+  }
+
+  bool selectCandidate(String candidateId) {
+    if (!candidates.any((item) => item.id == candidateId)) return false;
+    selectedCandidateId = candidateId;
+    syncSelectedCandidate();
+    return true;
+  }
+
+  void clearCandidates() {
+    candidates.clear();
+    selectedCandidateId = null;
+    outputPath = '';
+  }
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -57,6 +147,8 @@ class BatchRedrawItem {
         'overrideParams': overrideParams,
         'params': params.toJson(),
         'status': status.name,
+        'candidates': candidates.map((item) => item.toJson()).toList(),
+        'selectedCandidateId': selectedCandidateId,
         'outputPath': outputPath,
       };
 
@@ -64,27 +156,55 @@ class BatchRedrawItem {
     Map<String, dynamic> json,
     GenerateParams fallback, {
     bool trustOutputs = false,
-  }) =>
-      BatchRedrawItem(
-        id: json['id']?.toString() ?? _id(),
-        name: json['name']?.toString() ?? 'image',
-        base64: json['base64']?.toString() ?? '',
-        width: (json['width'] as num?)?.toInt() ?? 0,
-        height: (json['height'] as num?)?.toInt() ?? 0,
-        outputWidth: (json['outputWidth'] as num?)?.toInt(),
-        outputHeight: (json['outputHeight'] as num?)?.toInt(),
-        prompt: json['prompt']?.toString() ?? '',
-        strength: (json['strength'] as num?)?.toDouble(),
-        overrideParams: json['overrideParams'] == true,
-        params: json['params'] is Map
-            ? GenerateParams.fromJson(Map<String, dynamic>.from(json['params']))
-            : fallback.copy(),
-        status: BatchItemStatus.values.firstWhere(
-          (value) => value.name == json['status']?.toString(),
-          orElse: () => BatchItemStatus.pending,
-        ),
-        outputPath: trustOutputs ? json['outputPath']?.toString() ?? '' : '',
-      );
+  }) {
+    final candidates = trustOutputs
+        ? (json['candidates'] as List? ?? const [])
+            .whereType<Map>()
+            .map((item) => BatchRedrawCandidate.fromJson(
+                  Map<String, dynamic>.from(item),
+                ))
+            .where((item) => item.outputPath.isNotEmpty)
+            .toList()
+        : <BatchRedrawCandidate>[];
+    final legacyOutput =
+        trustOutputs ? json['outputPath']?.toString() ?? '' : '';
+    if (candidates.isEmpty && legacyOutput.isNotEmpty) {
+      candidates.add(BatchRedrawCandidate(
+        id: json['historyItemId']?.toString() ?? _id(),
+        historyItemId: json['historyItemId']?.toString() ?? '',
+        outputPath: legacyOutput,
+        createdAt:
+            json['createdAt']?.toString() ?? DateTime.now().toIso8601String(),
+      ));
+    }
+    final selected = json['selectedCandidateId']?.toString();
+    final selectedExists = candidates.any((item) => item.id == selected);
+    return BatchRedrawItem(
+      id: json['id']?.toString() ?? _id(),
+      name: json['name']?.toString() ?? 'image',
+      base64: json['base64']?.toString() ?? '',
+      width: (json['width'] as num?)?.toInt() ?? 0,
+      height: (json['height'] as num?)?.toInt() ?? 0,
+      outputWidth: (json['outputWidth'] as num?)?.toInt(),
+      outputHeight: (json['outputHeight'] as num?)?.toInt(),
+      prompt: json['prompt']?.toString() ?? '',
+      strength: (json['strength'] as num?)?.toDouble(),
+      overrideParams: json['overrideParams'] == true,
+      params: json['params'] is Map
+          ? GenerateParams.fromJson(Map<String, dynamic>.from(json['params']))
+          : fallback.copy(),
+      status: candidates.isNotEmpty
+          ? BatchItemStatus.done
+          : BatchItemStatus.values.firstWhere(
+              (value) => value.name == json['status']?.toString(),
+              orElse: () => BatchItemStatus.pending,
+            ),
+      candidates: candidates,
+      selectedCandidateId: selectedExists
+          ? selected
+          : (candidates.isEmpty ? null : candidates.first.id),
+    );
+  }
 }
 
 class BatchRedrawProject {
@@ -94,6 +214,7 @@ class BatchRedrawProject {
   String globalStyle;
   String globalNegative;
   GenerateParams globalParams;
+  int candidateCount;
   String sizeMode;
   String sizeBulk;
   ReversePromptMode aiMode;
@@ -110,6 +231,7 @@ class BatchRedrawProject {
     this.globalStyle = '',
     this.globalNegative = '',
     GenerateParams? globalParams,
+    this.candidateCount = 1,
     this.sizeMode = 'adaptive',
     this.sizeBulk = '',
     this.aiMode = ReversePromptMode.tags,
@@ -130,13 +252,14 @@ class BatchRedrawProject {
       );
 
   Map<String, dynamic> toJson() => {
-        'schemaVersion': 1,
+        'schemaVersion': 2,
         'groupName': groupName,
         'items': items.map((item) => item.toJson()).toList(),
         'globalStrength': globalStrength,
         'globalStyle': globalStyle,
         'globalNegative': globalNegative,
         'globalParams': globalParams.toJson(),
+        'candidateCount': normalizeBatchRedrawCandidateCount(candidateCount),
         'sizeMode': sizeMode,
         'sizeBulk': sizeBulk,
         'aiMode': aiMode.value,
@@ -163,6 +286,8 @@ class BatchRedrawProject {
       globalStyle: json['globalStyle']?.toString() ?? '',
       globalNegative: json['globalNegative']?.toString() ?? '',
       globalParams: global,
+      candidateCount:
+          normalizeBatchRedrawCandidateCount(json['candidateCount']),
       sizeMode: const {'adaptive', 'custom', 'perImage'}
               .contains(json['sizeMode']?.toString())
           ? json['sizeMode'].toString()

@@ -6,6 +6,16 @@ import { toLocalMediaUrl } from "./local-media-protocol";
 import type { AccountSummary, AppSettings, HistoryGroup, HistoryItem, SettingKey, TextToolHistoryItem } from "../../src/types";
 import { COMIC_ANALYZE_SYSTEM_PROMPT, SCOPED_REVERSE_SYSTEM_PROMPTS } from "../../src/data/prompt-templates";
 import { installedAppDir } from "./app-mode";
+import {
+  adaptiveAgentCompactThreshold,
+  clampContextWindow,
+  DEFAULT_AGENT_COMPACT_THRESHOLD,
+} from "../../src/agent/context";
+import {
+  DEFAULT_AGENT_PROVIDER_PRESET,
+  normalizeAgentApiBaseUrl,
+  normalizeAgentProviderProtocol,
+} from "../../src/agent/provider-catalog";
 
 export interface PersistedData {
   token?: string;
@@ -32,6 +42,7 @@ const ENC_PREFIX = "enc:v1:";
 const SENSITIVE_SETTING_KEYS: SettingKey[] = [
   "visionApiKey",
   "convertApiKey",
+  "agentApiKey",
   "tagServerApiKey",
   "baiduSecret",
 ];
@@ -281,19 +292,28 @@ export function defaultSettings(): AppSettings {
     reversePromptTemplateVersion: "v5" as const,
     reversePromptTemplates: emptyModeTemplates(),
     reversePromptTemplatesV45: emptyModeTemplates(),
+    reverseConvertDshEnabled: true,
+    reverseConvertDshMode: "focused" as const,
     comicAnalyzePromptTemplates: { tags: "", natural: "", mixed: "" },
     comicAnalyzePromptTemplate: COMIC_ANALYZE_SYSTEM_PROMPT,
     convertApiUrl: "https://api.openai.com/v1",
     convertApiKey: "",
     convertApiModel: "gpt-4o-mini",
     convertSystemPrompt: "",
+    agentApiProtocol: DEFAULT_AGENT_PROVIDER_PRESET.protocol,
+    agentApiBaseUrl: DEFAULT_AGENT_PROVIDER_PRESET.baseUrl,
+    agentApiKey: "",
+    agentApiModel: DEFAULT_AGENT_PROVIDER_PRESET.model,
+    agentProviderName: DEFAULT_AGENT_PROVIDER_PRESET.providerName,
+    agentContextWindow: DEFAULT_AGENT_PROVIDER_PRESET.contextWindow,
+    agentMaxOutputTokens: DEFAULT_AGENT_PROVIDER_PRESET.maxOutputTokens,
+    agentAutoCompact: true,
+    agentAutoCompactThreshold: DEFAULT_AGENT_COMPACT_THRESHOLD,
+    agentVisionEnabled: true,
     convertMode: "tags" as const,
     convertPromptTemplateVersion: "v5" as const,
     convertPromptTemplates: { tags: "", natural: "", mixed: "" },
     convertPromptTemplatesV45: { tags: "", natural: "", mixed: "" },
-    promptCodexEnhanceEnabled: true,
-    promptCodexAdultEnabled: true,
-    promptRuleAutoRepairEnabled: false,
     tagServerEnabled: false,
     tagServerUrl: "",
     tagServerApiKey: "",
@@ -319,6 +339,7 @@ export function defaultSettings(): AppSettings {
     stylePromptPresets: [],
     stylePromptPresetGroups: ["Default"],
     positivePromptPresets: [],
+    promptChunks: [],
     lastGenerationState: null,
     persistGenerateParams: true,
     persistI2IParams: true,
@@ -332,6 +353,29 @@ function normalize(raw: Partial<PersistedData> | null): PersistedData {
   const defaults = defaultSettings();
   const rawSettings = (raw?.settings ?? {}) as Partial<AppSettings>;
   const settings = { ...defaults, ...rawSettings };
+  settings.agentApiProtocol = normalizeAgentProviderProtocol(settings.agentApiProtocol);
+  settings.agentApiBaseUrl = typeof settings.agentApiBaseUrl === "string"
+    ? normalizeAgentApiBaseUrl(settings.agentApiBaseUrl)
+    : defaults.agentApiBaseUrl;
+  settings.agentApiModel = typeof settings.agentApiModel === "string"
+    ? settings.agentApiModel.trim()
+    : defaults.agentApiModel;
+  settings.agentProviderName = typeof settings.agentProviderName === "string" && settings.agentProviderName.trim()
+    ? settings.agentProviderName.trim().slice(0, 80)
+    : defaults.agentProviderName;
+  settings.agentContextWindow = clampContextWindow(settings.agentContextWindow);
+  settings.agentMaxOutputTokens = Math.max(512, Math.min(
+    settings.agentContextWindow,
+    Math.trunc(Number(settings.agentMaxOutputTokens) || defaults.agentMaxOutputTokens),
+  ));
+  settings.agentAutoCompact = settings.agentAutoCompact !== false;
+  // The threshold is an implementation detail, not a user preference. Always
+  // derive it from the effective model limits, including after backup import.
+  settings.agentAutoCompactThreshold = adaptiveAgentCompactThreshold(
+    settings.agentContextWindow,
+    settings.agentMaxOutputTokens,
+  );
+  settings.agentVisionEnabled = settings.agentVisionEnabled !== false;
   // v2.0.2 enabled full-library image archives for every installation. On a
   // large gallery that can consume hundreds of MB and starve both Electron
   // and Flutter shortly after launch. Existing installations are migrated
@@ -440,6 +484,18 @@ function normalize(raw: Partial<PersistedData> | null): PersistedData {
           };
         })
         .filter((preset) => preset.id && preset.name && preset.prompt.trim())
+    : [];
+  settings.promptChunks = Array.isArray(settings.promptChunks)
+    ? settings.promptChunks
+        .filter((chunk) => chunk && typeof chunk === "object")
+        .map((chunk) => ({
+          id: typeof chunk.id === "string" ? chunk.id : "",
+          name: typeof chunk.name === "string" ? chunk.name.trim() : "",
+          content: typeof chunk.content === "string" ? chunk.content.trim() : "",
+          createdAt: typeof chunk.createdAt === "string" ? chunk.createdAt : new Date(0).toISOString(),
+          updatedAt: typeof chunk.updatedAt === "string" ? chunk.updatedAt : new Date(0).toISOString(),
+        }))
+        .filter((chunk) => chunk.id && chunk.name && chunk.content)
     : [];
   for (const preset of settings.stylePromptPresets) {
     if (!settings.stylePromptPresetGroups.includes(preset.group)) {

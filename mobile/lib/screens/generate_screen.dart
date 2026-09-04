@@ -19,6 +19,7 @@ import '../references/reference_presets.dart';
 import '../services/nai_api.dart';
 import '../state/app_state.dart';
 import '../ui/quality_preset_control.dart';
+import '../ui/before_after_compare.dart';
 import '../ui/studio_shell.dart';
 import '../ui/zoomable_image.dart';
 import 'reference_catalog_panel.dart';
@@ -2526,6 +2527,15 @@ class _ParamControls extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 10),
+        _SyncedNumberField(
+          label: text.batchInterval,
+          value: state.batchIntervalSeconds,
+          onChanged: state.setBatchIntervalSeconds,
+          commitOnly: true,
+          normalize: (value) => value.clamp(0, 3600),
+          helperText: text.batchIntervalHint,
+        ),
+        const SizedBox(height: 10),
         QualityPresetControl(
           language: language,
           model: p.model,
@@ -2628,6 +2638,45 @@ class _I2IControls extends StatelessWidget {
                 ),
               ),
             ],
+            const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text('生成后下次重绘使用',
+                  style: Theme.of(context).textTheme.labelLarge),
+            ),
+            const SizedBox(height: 6),
+            SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(
+                    value: 'original',
+                    icon: Icon(Icons.push_pin_outlined),
+                    label: Text('始终使用原图')),
+                ButtonSegment(
+                    value: 'latest',
+                    icon: Icon(Icons.update),
+                    label: Text('使用最新结果')),
+              ],
+              selected: {s.i2iSourceMode},
+              onSelectionChanged: (selection) =>
+                  s.setI2ISourceMode(selection.first),
+            ),
+            const SizedBox(height: 4),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text('每次完成后自动打开原图/结果对比。',
+                  style: Theme.of(context).textTheme.bodySmall),
+            ),
+            if (s.comparisonBefore case final before?)
+              if (s.comparisonAfter case final after?) ...[
+                const SizedBox(height: 10),
+                SizedBox(
+                  height: 320,
+                  child: BeforeAfterCompare(
+                    beforePath: before.filePath,
+                    afterPath: after.filePath,
+                  ),
+                ),
+              ],
             _Slider(
                 label: text.strength,
                 value: s.i2i.strength,
@@ -2770,6 +2819,7 @@ class _SyncedNumberField extends StatefulWidget {
   final ValueChanged<int> onChanged;
   final bool commitOnly;
   final int Function(int value)? normalize;
+  final String? helperText;
 
   const _SyncedNumberField({
     required this.label,
@@ -2777,6 +2827,7 @@ class _SyncedNumberField extends StatefulWidget {
     required this.onChanged,
     this.commitOnly = false,
     this.normalize,
+    this.helperText,
   });
 
   @override
@@ -2834,6 +2885,7 @@ class _SyncedNumberFieldState extends State<_SyncedNumberField> {
         keyboardType: TextInputType.number,
         decoration: InputDecoration(
           labelText: widget.label,
+          helperText: widget.helperText,
           border: const OutlineInputBorder(),
         ),
         onChanged: (raw) {
@@ -4559,8 +4611,7 @@ class _ReferencePresetLibraryPanelState
                             'referencePresets.presetCount', presets.length)),
                         const SizedBox(width: 4),
                         IconButton(
-                          key: const ValueKey(
-                              'reference-preset-list-toggle'),
+                          key: const ValueKey('reference-preset-list-toggle'),
                           tooltip: t(listExpanded
                               ? 'referencePresets.collapseList'
                               : 'referencePresets.expandList'),
@@ -4590,8 +4641,7 @@ class _ReferencePresetLibraryPanelState
                             children: [
                               Icon(Icons.collections_bookmark_outlined,
                                   size: 48,
-                                  color:
-                                      Theme.of(context).colorScheme.outline),
+                                  color: Theme.of(context).colorScheme.outline),
                               const SizedBox(height: 10),
                               Text(t('referencePresets.empty')),
                               const SizedBox(height: 12),
@@ -4648,8 +4698,7 @@ class _ReferencePresetLibraryPanelState
                       physics: const NeverScrollableScrollPhysics(),
                       padding: EdgeInsets.fromLTRB(
                           16, 0, 16, widget.standalone ? 24 : 12),
-                      gridDelegate:
-                          SliverGridDelegateWithFixedCrossAxisCount(
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: columns,
                         crossAxisSpacing: 10,
                         mainAxisSpacing: 10,
@@ -4926,24 +4975,28 @@ class _RunBar extends StatelessWidget {
               const SizedBox(height: 6),
               Row(
                 children: [
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed:
-                          state.queueAdding ? null : state.enqueueGeneration,
-                      icon: state.queueAdding
-                          ? const SizedBox.square(
-                              dimension: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.add_to_photos_outlined),
-                      label: Text(
-                        state.queueAdding
-                            ? text.quoting
-                            : '${text.addToQueue}（${text.waiting} ${state.generationQueue.length}）',
+                  if (state.workbenchImage == null) ...[
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed:
+                            state.queueAdding ? null : state.enqueueGeneration,
+                        icon: state.queueAdding
+                            ? const SizedBox.square(
+                                dimension: 16,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.add_to_photos_outlined),
+                        label: Text(
+                          state.queueAdding
+                              ? text.quoting
+                              : '${text.addToQueue}（${text.waiting} ${state.generationQueue.length}）',
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 6),
+                    const SizedBox(width: 6),
+                  ] else
+                    const Spacer(),
                   IconButton.filledTonal(
                     tooltip: state.queuePaused ? text.resume : text.pause,
                     onPressed: state.toggleQueuePause,
@@ -4999,7 +5052,9 @@ class _PrimaryRunButton extends StatelessWidget {
             ? (state.batchCount > 1
                 ? '${text.generateCountPrefix}${state.batchCount}${text.generateCountSuffix}'
                 : text.generateImage)
-            : text.useCurrentImage,
+            : (state.batchCount > 1
+                ? '${text.useCurrentImage} ×${state.batchCount}'
+                : text.useCurrentImage),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),

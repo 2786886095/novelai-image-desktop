@@ -178,7 +178,7 @@ export function createTagComicProject(
     globalNegativePrompt: params.negativePrompt,
     sizeMode: "uniform",
     initialGenerationCount: 1,
-    globalParams: { ...params, positivePrompt: "" },
+    globalParams: { ...params, positivePrompt: "", stylePrompt: "" },
     preciseReferences: [],
     panels: [],
   };
@@ -534,9 +534,14 @@ export function mergeTagComicParams(
   project: TagComicProject,
   panel: TagComicPanel,
 ): GenerateParams {
-  const base = { ...project.globalParams, positivePrompt: "" };
+  const base = { ...project.globalParams, positivePrompt: "", stylePrompt: "" };
   const merged = panel.paramsOverride.enabled
-    ? { ...base, ...panel.paramsOverride.params, positivePrompt: "" }
+    ? {
+        ...base,
+        ...panel.paramsOverride.params,
+        positivePrompt: "",
+        stylePrompt: "",
+      }
     : base;
   return project.sizeMode === "perPanel" && panel.imageSize
     ? {
@@ -577,4 +582,18 @@ export function buildTagComicGenerateRequest(
     globalNegativePrompt: project.globalNegativePrompt,
     preciseReferences,
   };
+}
+
+/** Builds a fresh full regeneration queue, including panels that already have candidates. */
+export function buildTagComicRegenerationTasks(
+  panels: Pick<TagComicPanel, "id">[],
+  candidateCount: number,
+): Array<{ panelId: string; ordinal: number }> {
+  const count = Math.max(1, Math.min(10, Math.round(candidateCount)));
+  return panels.flatMap((panel) =>
+    Array.from({ length: count }, (_, ordinal) => ({
+      panelId: panel.id,
+      ordinal,
+    })),
+  );
 }

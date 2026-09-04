@@ -7,9 +7,11 @@ import { format } from "date-fns";
 const loadToolsHub = () => import("./ToolsHub");
 const ToolsHub = lazy(loadToolsHub);
 const loadOnlineGalleryPage = () => import("./features/online-gallery/OnlineGalleryPage");
+const loadAgentPage = () => import("./AgentPage");
 const loadInpaintCanvas = () => import("./InpaintCanvas").then((m) => ({ default: m.InpaintCanvas }));
 const loadMetadataInspector = () => import("./MetadataInspector");
 const OnlineGalleryPage = lazy(loadOnlineGalleryPage);
+const AgentPage = lazy(loadAgentPage);
 const InpaintCanvas = lazy(loadInpaintCanvas);
 const MetadataInspector = lazy(loadMetadataInspector);
 import { useAppStore } from "./store";
@@ -40,12 +42,15 @@ import {
   V45_SCOPED_REVERSE_SYSTEM_PROMPTS,
 } from "./data/prompt-templates-v45";
 import { Button, IconText, AppPortal, Toggle, NumberInput, CommittedNumberInput, SliderInput, SecretInput, SelectMenu } from "./components/ui";
+import { AppErrorBoundary } from "./components/AppErrorBoundary";
+import { confirmAction } from "./components/confirm";
 import { Icon, type IconName } from "./components/icons";
 import { AppMenuBar, AppTitleBar } from "./app/AppChrome";
 import AppTabBar from "./app/AppTabBar";
 import { isActiveTab, WIDE_WORKSPACE_TABS } from "./app/navigation";
 import { QualityPresetControl } from "./components/QualityPresetControl";
 import { PositivePromptPresetControl } from "./PositivePromptPresets";
+import { PromptChunkControl } from "./PromptChunks";
 import ReferencePresetManager, {
   ReferencePresetQuickSaveDialog,
   referencePresetTextFor,
@@ -97,7 +102,6 @@ import {
   type StylePromptPreset,
   type StylePromptPreviewImage,
   type PreciseReferenceType,
-  type PromptCodexMatch,
   type PromptVariants,
   type ReversePromptMode,
   type ReversePromptScope,
@@ -1027,8 +1031,11 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
 // ── Character Captions modal ──────────────────────────────────────────────────
 function CharCaptionsModal({ onClose }: { onClose: () => void }) {
   const language = useAppStore((state) => state.settings?.language);
+  const settings = useAppStore((state) => state.settings);
   const charCaptions = useAppStore((state) => state.charCaptions);
   const params = useAppStore((state) => state.params);
+  const refreshSettings = useAppStore((state) => state.refreshSettings);
+  const setToast = useAppStore((state) => state.setToast);
   const addCharCaption = useAppStore((state) => state.addCharCaption);
   const removeCharCaption = useAppStore((state) => state.removeCharCaption);
   const updateCharCaption = useAppStore((state) => state.updateCharCaption);
@@ -1037,8 +1044,15 @@ function CharCaptionsModal({ onClose }: { onClose: () => void }) {
   const maxCharacters = maxNAICharacterPrompts(params.model);
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
+  const generateText = useMemo(() => getGeneratePanelText(language), [language]);
   const customPositions = charCaptions.some((caption) => caption.useCoords);
   const [collapsedCharacters, setCollapsedCharacters] = useState<Set<string>>(() => new Set());
+  const toggleCharacterAutoComplete = useCallback(async () => {
+    const next = !(settings?.autoComplete ?? true);
+    await window.naiDesktop.setSetting("autoComplete", next);
+    await refreshSettings();
+    setToast(next ? t("prompt.autocompleteOnToast") : t("prompt.autocompleteOffToast"));
+  }, [refreshSettings, setToast, settings?.autoComplete, t]);
 
   const toggleCharacterCollapsed = useCallback((id: string) => {
     setCollapsedCharacters((current) => {
@@ -1191,19 +1205,46 @@ function CharCaptionsModal({ onClose }: { onClose: () => void }) {
               </div>
               {!collapsed && (
               <div className="char-row-content" id={contentId}>
-                <textarea
-                  className="prompt-box char-prompt"
+                <div
+                  className="char-prompt-tools"
+                  role="group"
+                  aria-label={t("character.title")}
+                >
+                  <button
+                    type="button"
+                    className={clsx("prompt-tool-btn", (settings?.autoComplete ?? true) && "tool-on")}
+                    title={generateText.prompt.autocompleteTitle}
+                    onClick={() => void toggleCharacterAutoComplete()}
+                  >
+                    <Icon name="bulb" />
+                    <span>{(settings?.autoComplete ?? true) ? generateText.prompt.autocompleteOn : generateText.prompt.autocompleteOff}</span>
+                  </button>
+                  <PromptChunkControl
+                    value={cc.prompt}
+                    onApply={(prompt) => updateCharCaption(cc.id, { prompt })}
+                  />
+                  <PositivePromptPresetControl
+                    value={cc.prompt}
+                    onApply={(prompt) => updateCharCaption(cc.id, { prompt })}
+                  />
+                </div>
+                <PromptTextarea
                   value={cc.prompt}
+                  model={params.model}
+                  enabled={settings?.autoComplete ?? true}
                   placeholder={t("character.placeholder")}
-                  onChange={(e) => updateCharCaption(cc.id, { prompt: e.target.value })}
+                  className="char-prompt"
+                  onChange={(prompt) => updateCharCaption(cc.id, { prompt })}
                 />
                 <label className="field">
                   <span>{t("character.negative")}</span>
-                  <textarea
-                    className="prompt-box char-prompt"
+                  <PromptTextarea
                     value={cc.negativePrompt ?? ""}
+                    model={params.model}
+                    enabled={settings?.autoComplete ?? true}
                     placeholder={t("character.negativePlaceholder")}
-                    onChange={(e) => updateCharCaption(cc.id, { negativePrompt: e.target.value })}
+                    className="char-prompt"
+                    onChange={(negativePrompt) => updateCharCaption(cc.id, { negativePrompt })}
                   />
                 </label>
                 {cc.useCoords && (
@@ -1713,7 +1754,7 @@ function PromptAndParams({
   async function deleteStylePromptGroup(groupOverride?: string) {
     const group = groupOverride ?? selectedStylePresetGroup;
     if (group === "all" || group === "Default") return;
-    if (!window.confirm(f("prompt.styleGroupDeleteConfirm", { name: group }))) return;
+    if (!(await confirmAction(f("prompt.styleGroupDeleteConfirm", { name: group })))) return;
     await window.naiDesktop.setSetting(
       "stylePromptPresets",
       stylePromptPresets.map((preset) => preset.group === group ? { ...preset, group: "Default" } : preset),
@@ -1730,7 +1771,7 @@ function PromptAndParams({
   async function deleteStylePromptPreset(presetId = selectedStylePresetId) {
     const preset = stylePromptPresets.find((item) => item.id === presetId);
     if (!preset) return;
-    if (!window.confirm(f("prompt.stylePresetDeleteConfirm", { name: preset.name }))) return;
+    if (!(await confirmAction(f("prompt.stylePresetDeleteConfirm", { name: preset.name })))) return;
     await window.naiDesktop.deleteStylePromptPresetImages(preset.id);
     await window.naiDesktop.setSetting(
       "stylePromptPresets",
@@ -2235,14 +2276,32 @@ function PromptAndParams({
         <button type="button" className="prompt-tool-btn" onClick={() => setShowNormalize(true)} disabled={!promptValue.trim()}>
           <Icon name="sparkles" /> {generateText.prompt.normalize}
         </button>
-        <button
-          type="button"
-          className={clsx("prompt-tool-btn", (settings?.autoComplete ?? true) && "tool-on")}
-          title={generateText.prompt.autocompleteTitle}
-          onClick={() => void toggleAutoComplete()}
-        >
-          <Icon name="bulb" /> {(settings?.autoComplete ?? true) ? generateText.prompt.autocompleteOn : generateText.prompt.autocompleteOff}
-        </button>
+        {promptTab === "positive" ? (
+          <div className="prompt-inline-tool-pair">
+            <button
+              type="button"
+              className={clsx("prompt-tool-btn", (settings?.autoComplete ?? true) && "tool-on")}
+              title={generateText.prompt.autocompleteTitle}
+              onClick={() => void toggleAutoComplete()}
+            >
+              <Icon name="bulb" /> {(settings?.autoComplete ?? true) ? generateText.prompt.autocompleteOn : generateText.prompt.autocompleteOff}
+            </button>
+            <PromptChunkControl
+              value={effectivePositivePrompt}
+              onApply={(value) => setLockedAwareParam("positivePrompt", value)}
+              placement="top-right"
+            />
+          </div>
+        ) : (
+          <button
+            type="button"
+            className={clsx("prompt-tool-btn", (settings?.autoComplete ?? true) && "tool-on")}
+            title={generateText.prompt.autocompleteTitle}
+            onClick={() => void toggleAutoComplete()}
+          >
+            <Icon name="bulb" /> {(settings?.autoComplete ?? true) ? generateText.prompt.autocompleteOn : generateText.prompt.autocompleteOff}
+          </button>
+        )}
       </div>
       {showWeights && weightTags.length > 0 && (
         <div className="weight-editor">
@@ -2931,8 +2990,8 @@ function TextToolHistoryPanel({
           <button
             type="button"
             className="queue-mini-btn"
-            onClick={() => {
-              if (window.confirm(t("textTool.historyClearConfirm"))) onClear();
+            onClick={async () => {
+              if (await confirmAction(t("textTool.historyClearConfirm"))) onClear();
             }}
           >
             {t("textTool.historyClear")}
@@ -3289,6 +3348,8 @@ function GeneratePanel({ openSettings }: { openSettings: () => void }) {
   const generate = useAppStore((state) => state.generate);
   const batchCount = useAppStore((state) => state.batchCount);
   const setBatchCount = useAppStore((state) => state.setBatchCount);
+  const batchIntervalSeconds = useAppStore((state) => state.batchIntervalSeconds);
+  const setBatchIntervalSeconds = useAppStore((state) => state.setBatchIntervalSeconds);
   const fileNamePrefix = useAppStore((state) => state.params.fileNamePrefix);
   const model = useAppStore((state) => state.params.model);
   const setParam = useAppStore((state) => state.setParam);
@@ -3304,16 +3365,16 @@ function GeneratePanel({ openSettings }: { openSettings: () => void }) {
     <>
       <div className="panel-scroll">
         <PromptAndParams />
-        <label className="field batch-count-field">
-          <span>{t("generate.batchCount")}</span>
-          <input
-            type="number"
-            value={batchCount}
-            min={1}
-            max={999}
-            onChange={(e) => setBatchCount(Number(e.target.value))}
-          />
-        </label>
+        <CommittedNumberInput label={t("generate.batchCount")} value={batchCount} min={1} max={999} normalize={(value) => Math.max(1, Math.min(999, Math.round(value)))} onCommit={setBatchCount} />
+        <CommittedNumberInput
+          label={t("generate.batchInterval")}
+          value={batchIntervalSeconds}
+          min={0}
+          max={3600}
+          normalize={(value) => Math.max(0, Math.min(3600, Math.round(value)))}
+          onCommit={setBatchIntervalSeconds}
+        />
+        <small className="field-hint">{t("generate.batchIntervalHint")}</small>
         <label className="field">
           <span>{t("generate.fileNamePrefix")}</span>
           <input
@@ -3381,21 +3442,51 @@ function GeneratePanel({ openSettings }: { openSettings: () => void }) {
 function I2IPanel({ openSettings }: { openSettings: () => void }) {
   const language = useAppStore((state) => state.settings?.language);
   const i2iParams = useAppStore((state) => state.i2iParams);
+  const batchCount = useAppStore((state) => state.batchCount);
   const model = useAppStore((state) => state.params.model);
   const setI2IParam = useAppStore((state) => state.setI2IParam);
+  const i2iSourceMode = useAppStore((state) => state.i2iSourceMode);
+  const setI2ISourceMode = useAppStore((state) => state.setI2ISourceMode);
+  const setBatchCount = useAppStore((state) => state.setBatchCount);
+  const batchIntervalSeconds = useAppStore((state) => state.batchIntervalSeconds);
+  const setBatchIntervalSeconds = useAppStore((state) => state.setBatchIntervalSeconds);
   const generateI2I = useAppStore((state) => state.generateI2I);
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
+  const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
   return (
     <>
       <div className="panel-scroll">
         <WorkbenchImageUpload />
+        <div className="field">
+          <span>生成后下次重绘使用</span>
+          <div className="mode-buttons i2i-source-policy" role="group" aria-label="下次重绘来源">
+            <Button variant={i2iSourceMode === "original" ? "primary" : "secondary"} onClick={() => setI2ISourceMode("original")}>始终使用原图</Button>
+            <Button variant={i2iSourceMode === "latest" ? "primary" : "secondary"} onClick={() => setI2ISourceMode("latest")}>使用最新结果</Button>
+          </div>
+          <small className="field-hint">生成后自动打开原图/结果对比；选择原图可连续尝试而无需重复加载。</small>
+        </div>
         <SliderInput label={t("i2i.strength")} value={i2iParams.strength} min={0} max={1} step={0.01} onChange={(v) => setI2IParam("strength", v)} />
         <NumberInput label={t("i2i.extraNoiseSeed")} value={i2iParams.extraNoiseSeed} min={0} onChange={(v) => setI2IParam("extraNoiseSeed", v)} />
         <div className="panel-divider" />
         <PromptAndParams imageToImage />
+        <CommittedNumberInput label={t("generate.batchCount")} value={batchCount} min={1} max={999} normalize={(value) => Math.max(1, Math.min(999, Math.round(value)))} onCommit={setBatchCount} />
+        <CommittedNumberInput
+          label={t("generate.batchInterval")}
+          value={batchIntervalSeconds}
+          min={0}
+          max={3600}
+          normalize={(value) => Math.max(0, Math.min(3600, Math.round(value)))}
+          onCommit={setBatchIntervalSeconds}
+        />
+        <small className="field-hint">{t("generate.batchIntervalHint")}</small>
         <FeatureCostCard label={t("cost.beforeRun")} feature="i2i" />
       </div>
-      <AccountAndRunButton label={t("i2i.run")} onRun={() => void generateI2I()} openSettings={openSettings} model={model} />
+      <AccountAndRunButton
+        label={batchCount > 1 ? f("generate.batchRun", { count: batchCount }) : t("i2i.run")}
+        onRun={() => void generateI2I()}
+        openSettings={openSettings}
+        model={model}
+      />
     </>
   );
 }
@@ -3403,6 +3494,8 @@ function I2IPanel({ openSettings }: { openSettings: () => void }) {
 // ── Inpaint panel ─────────────────────────────────────────────────────────────
 function InpaintPanel({ openSettings }: { openSettings: () => void }) {
   const language = useAppStore((state) => state.settings?.language);
+  const inpaintSourceMode = useAppStore((state) => state.inpaintSourceMode);
+  const setInpaintSourceMode = useAppStore((state) => state.setInpaintSourceMode);
   const inpaintPositivePrompt = useAppStore((state) => state.inpaintPositivePrompt);
   const setInpaintPositivePrompt = useAppStore((state) => state.setInpaintPositivePrompt);
   const inpaintModel = useAppStore((state) => state.inpaintModel);
@@ -3426,6 +3519,14 @@ function InpaintPanel({ openSettings }: { openSettings: () => void }) {
     <>
       <div className="panel-scroll">
         <WorkbenchImageUpload />
+        <div className="field">
+          <span>生成后下次重绘使用</span>
+          <div className="mode-buttons i2i-source-policy" role="group" aria-label="下次局部重绘来源">
+            <Button variant={inpaintSourceMode === "original" ? "primary" : "secondary"} onClick={() => void setInpaintSourceMode("original")}>始终使用原图</Button>
+            <Button variant={inpaintSourceMode === "latest" ? "primary" : "secondary"} onClick={() => void setInpaintSourceMode("latest")}>使用最新结果</Button>
+          </div>
+          <small className="field-hint">默认保留最初加载的图片连续重绘；切换来源时会清空旧蒙版，完成后自动打开前后对比。</small>
+        </div>
         <label className="field">
           <span>{t("inpaint.model")}</span>
           <select value={inpaintModel} onChange={(e) => setInpaintModel(e.target.value as typeof inpaintModel)}>
@@ -3526,6 +3627,7 @@ function UpscalePanel({ openSettings }: { openSettings: () => void }) {
     <>
       <div className="panel-scroll">
         <WorkbenchImageUpload />
+        <small className="field-hint">超分只负责扩大输出并补足清晰度，不进行第二次创意扩散；画面变化通常小于“增强”。2×/4×会直接改变分辨率。</small>
         <div className="scale-buttons">
           <Button variant={scale === 2 ? "primary" : "secondary"} onClick={() => setScale(2)}>2×</Button>
           <Button variant={scale === 4 ? "primary" : "secondary"} onClick={() => setScale(4)}>4×</Button>
@@ -3546,6 +3648,61 @@ function UpscalePanel({ openSettings }: { openSettings: () => void }) {
         <FeatureCostCard label={t("cost.beforeRun")} feature="upscale" />
       </div>
       <AccountAndRunButton label={f("upscale.run", { scale })} onRun={() => void upscale()} openSettings={openSettings} />
+    </>
+  );
+}
+
+function EnhancePanel({ openSettings }: { openSettings: () => void }) {
+  const workbenchImage = useAppStore((state) => state.workbenchImage);
+  const params = useAppStore((state) => state.params);
+  const i2iParams = useAppStore((state) => state.i2iParams);
+  const i2iSizeMode = useAppStore((state) => state.i2iSizeMode);
+  const applyParams = useAppStore((state) => state.applyParams);
+  const setI2IParam = useAppStore((state) => state.setI2IParam);
+  const setI2ISizeMode = useAppStore((state) => state.setI2ISizeMode);
+  const generateI2I = useAppStore((state) => state.generateI2I);
+  const [magnitude, setMagnitude] = useState(3);
+  const [enhanceScale, setEnhanceScale] = useState<1 | 2>(1);
+
+  async function runEnhance() {
+    if (!workbenchImage) return;
+    const previous = { width: params.width, height: params.height, strength: i2iParams.strength, noise: i2iParams.noise, sizeMode: i2iSizeMode };
+    const target = adaptiveNAIImageSize(workbenchImage.width * enhanceScale, workbenchImage.height * enhanceScale, params);
+    setI2ISizeMode("custom");
+    applyParams({ width: target.width, height: target.height });
+    // Official Enhance is prompt-aware, but conservative defaults must keep the
+    // source pose/composition. The old 0.50/0.225 midpoint behaved like a
+    // redraw and routinely replaced limbs, expressions and framing.
+    setI2IParam("strength", Math.min(0.48, 0.10 + magnitude * 0.034));
+    setI2IParam("noise", Math.min(0.22, 0.018 + magnitude * 0.014));
+    try {
+      await generateI2I();
+    } finally {
+      applyParams({ width: previous.width, height: previous.height });
+      setI2IParam("strength", previous.strength);
+      setI2IParam("noise", previous.noise);
+      setI2ISizeMode(previous.sizeMode);
+    }
+  }
+
+  const target = workbenchImage ? adaptiveNAIImageSize(workbenchImage.width * enhanceScale, workbenchImage.height * enhanceScale, params) : null;
+  return (
+    <>
+      <div className="panel-scroll">
+        <WorkbenchImageUpload />
+        <SliderInput label={`增强幅度 ${magnitude}`} value={magnitude} min={1} max={10} step={1} onChange={setMagnitude} />
+        <small className="field-hint">增强会使用当前正面、风格与负面提示词。默认采用保守强度以保留姿势和构图；提高幅度仍可能改变局部结构。</small>
+        <div className="field">
+          <span>输出倍率</span>
+          <div className="scale-buttons">
+            <Button variant={enhanceScale === 1 ? "primary" : "secondary"} onClick={() => setEnhanceScale(1)}>1× 保持分辨率</Button>
+            <Button variant={enhanceScale === 2 ? "primary" : "secondary"} onClick={() => setEnhanceScale(2)}>2× 同时放大</Button>
+          </div>
+        </div>
+        {workbenchImage && target ? <div className="info-card"><strong>输出尺寸</strong><span>{workbenchImage.width}×{workbenchImage.height} → {target.width}×{target.height}</span><small>1×只做二次扩散增强；2×会改变分辨率。尺寸会按 NovelAI 支持范围自动对齐。</small></div> : null}
+        <FeatureCostCard label="生成前扣费" feature="i2i" />
+      </div>
+      <AccountAndRunButton label={`增强图像 ${enhanceScale}×`} onRun={() => void runEnhance()} openSettings={openSettings} />
     </>
   );
 }
@@ -3610,6 +3767,25 @@ function DirectorPanel({ openSettings }: { openSettings: () => void }) {
         <FeatureCostCard label={t("cost.beforeRun")} feature="director" />
       </div>
       <AccountAndRunButton label={t("director.run")} onRun={() => void run()} openSettings={openSettings} />
+    </>
+  );
+}
+
+function PostprocessPanel({ openSettings }: { openSettings: () => void }) {
+  const [mode, setMode] = useState<"upscale" | "director">("upscale");
+  const setActiveCanvasSurface = useAppStore((state) => state.setActiveCanvasSurface);
+  useEffect(() => {
+    setActiveCanvasSurface(mode === "upscale" ? "postprocess:upscale" : "postprocess:director");
+  }, [mode, setActiveCanvasSurface]);
+  return (
+    <>
+      <div className="postprocess-mode-switcher" role="tablist" aria-label="后期工具">
+        <button className={clsx(mode === "upscale" && "active")} onClick={() => setMode("upscale")}>超分</button>
+        <button className={clsx(mode === "director" && "active")} onClick={() => setMode("director")}>导演工具</button>
+      </div>
+      {mode === "upscale"
+        ? <UpscalePanel openSettings={openSettings} />
+        : <DirectorPanel openSettings={openSettings} />}
     </>
   );
 }
@@ -3762,120 +3938,6 @@ function PromptVariantCards({
   );
 }
 
-function PromptCodexEnhancementCard({
-  kind,
-  matches,
-}: {
-  kind: "reverse" | "convert";
-  matches: PromptCodexMatch[];
-}) {
-  const settings = useAppStore((state) => state.settings);
-  const refreshSettings = useAppStore((state) => state.refreshSettings);
-  const language = settings?.language;
-  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
-  const [saving, setSaving] = useState(false);
-  const enabled = settings?.promptCodexEnhanceEnabled ?? true;
-  const adultEnabled = settings?.promptCodexAdultEnabled ?? true;
-  const autoRepairEnabled = settings?.promptRuleAutoRepairEnabled ?? false;
-
-  async function updateSetting(
-    key:
-      | "promptCodexEnhanceEnabled"
-      | "promptCodexAdultEnabled"
-      | "promptRuleAutoRepairEnabled",
-    value: boolean,
-  ) {
-    if (saving) return;
-    setSaving(true);
-    try {
-      await window.naiDesktop.setSetting(key, value);
-      await refreshSettings();
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div className="prompt-codex-enhance-card">
-      <label className="checkbox-line">
-        <input
-          type="checkbox"
-          checked={enabled}
-          disabled={saving}
-          onChange={(event) =>
-            void updateSetting("promptCodexEnhanceEnabled", event.target.checked)
-          }
-        />
-        <strong>{t("promptCodex.enabled")}</strong>
-      </label>
-      <small>
-        {t(
-          kind === "reverse"
-            ? "promptCodex.reverseHint"
-            : "promptCodex.convertHint",
-        )}
-      </small>
-      <label className="checkbox-line prompt-codex-auto-repair-toggle">
-        <input
-          type="checkbox"
-          checked={autoRepairEnabled}
-          disabled={saving}
-          onChange={(event) =>
-            void updateSetting(
-              "promptRuleAutoRepairEnabled",
-              event.target.checked,
-            )
-          }
-        />
-        <strong>{t("promptCodex.autoRepair")}</strong>
-      </label>
-      <small>{t("promptCodex.autoRepairHint")}</small>
-      {enabled && (
-        <>
-          <label className="checkbox-line prompt-codex-adult-toggle">
-            <input
-              type="checkbox"
-              checked={adultEnabled}
-              disabled={saving}
-              onChange={(event) =>
-                void updateSetting("promptCodexAdultEnabled", event.target.checked)
-              }
-            />
-            <span>{t("promptCodex.adult")}</span>
-          </label>
-          <small>{t("promptCodex.adultHint")}</small>
-          <details className="prompt-codex-matches" open={matches.length > 0}>
-            <summary>
-              {t("promptCodex.matches")}
-              <span>{matches.length}</span>
-            </summary>
-            {matches.length === 0 ? (
-              <p>{t("promptCodex.noMatches")}</p>
-            ) : (
-              <div className="prompt-codex-match-list">
-                {matches.map((match) => (
-                  <article key={match.id}>
-                    <div>
-                      <strong>{match.title}</strong>
-                      {match.adult && (
-                        <span className="prompt-codex-classified">
-                          {t("promptCodex.classified")}
-                        </span>
-                      )}
-                    </div>
-                    <small>{match.section} · {match.source}</small>
-                    <p>{match.excerpt}</p>
-                  </article>
-                ))}
-              </div>
-            )}
-          </details>
-        </>
-      )}
-    </div>
-  );
-}
-
 function ReversePanel() {
   const setInspectImage = useAppStore((state) => state.setInspectImage);
   const clearInspect = useAppStore((state) => state.clearInspect);
@@ -3886,7 +3948,6 @@ function ReversePanel() {
   const reversePromptHint = useAppStore((state) => state.reversePromptHint);
   const reverseKnownCharacter = useAppStore((state) => state.reverseKnownCharacter);
   const reversePromptVariants = useAppStore((state) => state.reversePromptVariants);
-  const reverseCodexMatches = useAppStore((state) => state.reverseCodexMatches);
   const setReversePromptMode = useAppStore((state) => state.setReversePromptMode);
   const setReversePromptScope = useAppStore((state) => state.setReversePromptScope);
   const setReversePromptHint = useAppStore((state) => state.setReversePromptHint);
@@ -3972,9 +4033,12 @@ function ReversePanel() {
       }
       const buf = ev.target?.result as ArrayBuffer;
       // Store base64 for vision API; also read PNG meta as bonus
-      const b64 = btoa(
-        new Uint8Array(buf).reduce((acc, byte) => acc + String.fromCharCode(byte), ""),
-      );
+      const bytes = new Uint8Array(buf);
+      const chunks: string[] = [];
+      for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+        chunks.push(String.fromCharCode(...bytes.subarray(offset, offset + 0x8000)));
+      }
+      const b64 = btoa(chunks.join(""));
       const meta = parseImageMeta(buf);
       setInspectImage(url, meta, b64, path);
     };
@@ -4042,11 +4106,6 @@ function ReversePanel() {
               }}
             />
           </label>
-        </div>
-
-        <div className="info-card">
-          <strong>{t("inspect.costTitle")}</strong>
-          <span>{t("inspect.costDesc")}</span>
         </div>
 
         {hasImage && (
@@ -4122,11 +4181,6 @@ function ReversePanel() {
             <span>{t("inspect.knownCharacter")}</span>
           </label>
         </div>
-
-        <PromptCodexEnhancementCard
-          kind="reverse"
-          matches={reverseCodexMatches}
-        />
 
         {hasImage && (
           <Button
@@ -4213,10 +4267,28 @@ function ReversePanel() {
 function LeftPanel({ openSettings }: { openSettings: () => void }) {
   const activeTab = useAppStore((state) => state.activeTab);
   const language = useAppStore((state) => state.settings?.language);
-  const [generateMode, setGenerateMode] = useState<"t2i" | "i2i">("t2i");
+  const [generateMode, setGenerateMode] = useState<"t2i" | "i2i" | "enhance">("t2i");
+  const setActiveCanvasSurface = useAppStore((state) => state.setActiveCanvasSurface);
+  const currentImage = useAppStore((state) => state.currentImage);
+  const workbenchImage = useAppStore((state) => state.workbenchImage);
+  const loadWorkbenchFromPath = useAppStore((state) => state.loadWorkbenchFromPath);
   const tabItems = useMemo(() => getLocalizedTabItems(language), [language]);
   const generateText = useMemo(() => getGeneratePanelText(language), [language]);
   const meta = tabItems.find((item) => item.value === activeTab) ?? tabItems[0];
+  useEffect(() => {
+    if (activeTab === "generate") setActiveCanvasSurface(`generate:${generateMode}`);
+    if (activeTab === "inpaint") setActiveCanvasSurface("inpaint");
+  }, [activeTab, generateMode, setActiveCanvasSurface]);
+  useEffect(() => {
+    if (
+      activeTab === "generate" &&
+      generateMode === "enhance" &&
+      !workbenchImage &&
+      currentImage?.filePath
+    ) {
+      void loadWorkbenchFromPath(currentImage.filePath, { silent: true });
+    }
+  }, [activeTab, currentImage?.filePath, generateMode, loadWorkbenchFromPath, workbenchImage]);
   return (
     <aside className="left-panel">
       <div className="panel-head">
@@ -4241,15 +4313,22 @@ function LeftPanel({ openSettings }: { openSettings: () => void }) {
             >
               {generateText.modeSwitch.imageToImage}
             </button>
+            <button
+              className={clsx(generateMode === "enhance" && "active")}
+              onClick={() => setGenerateMode("enhance")}
+            >
+              增强
+            </button>
           </div>
           {generateMode === "t2i"
             ? <GeneratePanel openSettings={openSettings} />
-            : <I2IPanel openSettings={openSettings} />}
+            : generateMode === "i2i"
+              ? <I2IPanel openSettings={openSettings} />
+              : <EnhancePanel openSettings={openSettings} />}
         </>
       )}
       {activeTab === "inpaint" && <InpaintPanel openSettings={openSettings} />}
-      {activeTab === "upscale" && <UpscalePanel openSettings={openSettings} />}
-      {activeTab === "postprocess" && <DirectorPanel openSettings={openSettings} />}
+      {activeTab === "postprocess" && <PostprocessPanel openSettings={openSettings} />}
       {activeTab === "inspect" && <ReversePanel />}
       {activeTab === "convert" && <PromptConverterPanel />}
     </aside>
@@ -4265,7 +4344,6 @@ function PromptConverterPanel() {
   const convertMode = useAppStore((state) => state.convertMode);
   const convertKnownCharacter = useAppStore((state) => state.convertKnownCharacter);
   const convertResultVariants = useAppStore((state) => state.convertResultVariants);
-  const convertCodexMatches = useAppStore((state) => state.convertCodexMatches);
   const setConvertMode = useAppStore((state) => state.setConvertMode);
   const setConvertKnownCharacter = useAppStore((state) => state.setConvertKnownCharacter);
   const runConvertPrompt = useAppStore((state) => state.runConvertPrompt);
@@ -4317,11 +4395,6 @@ function PromptConverterPanel() {
           <strong>{t("convert.title")}</strong>
           <small>{t("convert.subtitle")}</small>
         </div>
-        <div className="info-card">
-          <strong>{t("convert.costTitle")}</strong>
-          <span>{t("convert.costDesc")}</span>
-        </div>
-
         <label className="field">
           <span>{t("convert.input")}</span>
           <textarea
@@ -4377,11 +4450,6 @@ function PromptConverterPanel() {
         <small className="prompt-character-hint">
           {t("convert.knownCharacterHint")}
         </small>
-
-        <PromptCodexEnhancementCard
-          kind="convert"
-          matches={convertCodexMatches}
-        />
 
         <Button
           variant="primary"
@@ -4581,23 +4649,28 @@ function ZoomableImageStage({
 }) {
   const shellRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
+  const compareClipRef = useRef<HTMLDivElement>(null);
+  const compareDividerRef = useRef<HTMLButtonElement>(null);
+  const compareDragRef = useRef(false);
+  const compareRectRef = useRef<DOMRect | null>(null);
+  const comparePositionRef = useRef(50);
+  const pendingComparePositionRef = useRef(50);
+  const compareAnimationFrameRef = useRef<number | null>(null);
   const panStartRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [shellSize, setShellSize] = useState({ width: 0, height: 0 });
+  const [intrinsicSize, setIntrinsicSize] = useState({ width: 0, height: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [compareEnabled, setCompareEnabled] = useState(Boolean(compareBeforeImage));
-  const [compareX, setCompareX] = useState(50);
-  const [isCompareDragging, setIsCompareDragging] = useState(false);
   const language = useAppStore((state) => state.settings?.language);
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const canCompare = Boolean(compareBeforeImage?.fileUrl);
-  const compareClip = `inset(0 0 0 ${compareX}%)`;
   const frameSize = useMemo(() => {
     const shellWidth = shellSize.width;
     const shellHeight = shellSize.height;
-    const imageWidth = Math.max(1, image.width || 1);
-    const imageHeight = Math.max(1, image.height || 1);
+    const imageWidth = Math.max(1, intrinsicSize.width || image.width || 1);
+    const imageHeight = Math.max(1, intrinsicSize.height || image.height || 1);
     if (shellWidth <= 0 || shellHeight <= 0) return undefined;
     const aspect = imageWidth / imageHeight;
     let width = shellWidth;
@@ -4607,13 +4680,21 @@ function ZoomableImageStage({
       width = height * aspect;
     }
     return { width, height };
-  }, [image.height, image.width, shellSize.height, shellSize.width]);
+  }, [image.height, image.width, intrinsicSize.height, intrinsicSize.width, shellSize.height, shellSize.width]);
 
   useEffect(() => {
     setZoom(1);
     setPan({ x: 0, y: 0 });
-    setCompareX(50);
+    comparePositionRef.current = 50;
+    pendingComparePositionRef.current = 50;
+    if (compareAnimationFrameRef.current !== null) {
+      cancelAnimationFrame(compareAnimationFrameRef.current);
+      compareAnimationFrameRef.current = null;
+    }
+    if (compareClipRef.current) compareClipRef.current.style.clipPath = "inset(0 0 0 50%)";
+    if (compareDividerRef.current) compareDividerRef.current.style.left = "50%";
     setCompareEnabled(Boolean(compareBeforeImage));
+    setIntrinsicSize({ width: 0, height: 0 });
   }, [image.fileUrl, compareBeforeImage?.fileUrl]);
 
   useEffect(() => {
@@ -4629,17 +4710,11 @@ function ZoomableImageStage({
     return () => observer.disconnect();
   }, []);
 
-  useEffect(() => {
-    if (!isCompareDragging) return;
-    const move = (event: PointerEvent) => updateComparePosition(event.clientX);
-    const up = () => setIsCompareDragging(false);
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
-    return () => {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
-    };
-  }, [isCompareDragging]);
+  useEffect(() => () => {
+    if (compareAnimationFrameRef.current !== null) {
+      cancelAnimationFrame(compareAnimationFrameRef.current);
+    }
+  }, []);
 
   function resetView() {
     setZoom(1);
@@ -4665,10 +4740,43 @@ function ZoomableImageStage({
   }
 
   function updateComparePosition(clientX: number) {
-    const rect = frameRef.current?.getBoundingClientRect();
+    const rect = compareRectRef.current ?? frameRef.current?.getBoundingClientRect();
     if (!rect) return;
     const next = ((clientX - rect.left) / Math.max(1, rect.width)) * 100;
-    setCompareX(clampNumber(next, 0, 100));
+    pendingComparePositionRef.current = clampNumber(next, 0, 100);
+    if (compareAnimationFrameRef.current !== null) return;
+    compareAnimationFrameRef.current = requestAnimationFrame(() => {
+      const position = pendingComparePositionRef.current;
+      comparePositionRef.current = position;
+      if (compareClipRef.current) {
+        compareClipRef.current.style.clipPath = `inset(0 0 0 ${position}%)`;
+      }
+      if (compareDividerRef.current) {
+        compareDividerRef.current.style.left = `${position}%`;
+      }
+      compareAnimationFrameRef.current = null;
+    });
+  }
+
+  function beginCompareDragging(event: React.PointerEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    compareDragRef.current = true;
+    compareRectRef.current = frameRef.current?.getBoundingClientRect() ?? null;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    updateComparePosition(event.clientX);
+  }
+
+  function moveCompareDivider(event: React.PointerEvent<HTMLButtonElement>) {
+    if (compareDragRef.current) updateComparePosition(event.clientX);
+  }
+
+  function stopCompareDragging(event: React.PointerEvent<HTMLButtonElement>) {
+    compareDragRef.current = false;
+    compareRectRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
   }
 
   function handleWheel(event: React.WheelEvent<HTMLDivElement>) {
@@ -4750,49 +4858,62 @@ function ZoomableImageStage({
       >
         <div
           ref={frameRef}
-          className="zoom-frame"
+          className={clsx("zoom-frame", compareEnabled && canCompare && "is-comparing")}
           style={{ ...frameSize, transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}
         >
-          <img
-            className={clsx("zoom-image", compareEnabled && canCompare && "zoom-image-measure")}
-            src={image.fileUrl}
-            alt={alt}
-            // Draggable only when not zoomed; while zoomed the pointer drives panning.
-            draggable={zoom === 1}
-            title={t("viewer.dragTitle")}
-            onDragStart={(e) => {
-              e.preventDefault();
-              window.naiDesktop.startImageDrag(image.fileUrl);
-            }}
-            // The previewed file was deleted on disk → drop it from the library
-            // (clears this preview too); main re-checks before removing.
-            onError={() => {
-              if (image.id) void useAppStore.getState().dropMissingImage(image.id);
-            }}
-          />
           {compareEnabled && canCompare ? (
             <>
-              <img className="zoom-image zoom-image-absolute" src={compareBeforeImage!.fileUrl} alt={t("viewer.beforeAlt")} draggable={false} />
-              <div className="compare-after-clip" style={{ clipPath: compareClip }}>
-                <img className="zoom-image zoom-image-absolute" src={image.fileUrl} alt={t("viewer.afterAlt")} draggable={false} />
+              <img className="zoom-image" src={compareBeforeImage!.fileUrl} alt={t("viewer.beforeAlt")} draggable={false} />
+              <div ref={compareClipRef} className="compare-after-clip" style={{ clipPath: "inset(0 0 0 50%)" }}>
+                <img
+                  className="zoom-image zoom-image-absolute"
+                  src={image.fileUrl}
+                  alt={t("viewer.afterAlt")}
+                  draggable={false}
+                  onLoad={(event) => {
+                    const { naturalWidth, naturalHeight } = event.currentTarget;
+                    if (naturalWidth > 0 && naturalHeight > 0) setIntrinsicSize({ width: naturalWidth, height: naturalHeight });
+                  }}
+                  onError={() => {
+                    if (image.id) void useAppStore.getState().dropMissingImage(image.id);
+                  }}
+                />
               </div>
               <button
+                ref={compareDividerRef}
                 type="button"
                 className="compare-divider"
-                style={{ left: `${compareX}%` }}
-                onPointerDown={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  setIsCompareDragging(true);
-                  updateComparePosition(event.clientX);
-                }}
+                style={{ left: "50%" }}
+                onPointerDown={beginCompareDragging}
+                onPointerMove={moveCompareDivider}
+                onPointerUp={stopCompareDragging}
+                onPointerCancel={stopCompareDragging}
                 aria-label={t("viewer.compareDividerLabel")}
                 title={t("viewer.compareDividerLabel")}
               >
                 <span />
               </button>
             </>
-          ) : null}
+          ) : (
+            <img
+              className="zoom-image"
+              src={image.fileUrl}
+              alt={alt}
+              draggable={zoom === 1}
+              title={t("viewer.dragTitle")}
+              onLoad={(event) => {
+                const { naturalWidth, naturalHeight } = event.currentTarget;
+                if (naturalWidth > 0 && naturalHeight > 0) setIntrinsicSize({ width: naturalWidth, height: naturalHeight });
+              }}
+              onDragStart={(event) => {
+                event.preventDefault();
+                window.naiDesktop.startImageDrag(image.fileUrl);
+              }}
+              onError={() => {
+                if (image.id) void useAppStore.getState().dropMissingImage(image.id);
+              }}
+            />
+          )}
         </div>
       </div>
     </div>
@@ -4802,6 +4923,8 @@ function ZoomableImageStage({
 function ImageCanvas() {
   const currentImage = useAppStore((state) => state.currentImage);
   const comparisonBeforeImage = useAppStore((state) => state.comparisonBeforeImage);
+  const comparisonSurface = useAppStore((state) => state.comparisonSurface);
+  const activeCanvasSurface = useAppStore((state) => state.activeCanvasSurface);
   const isGenerating = useAppStore((state) => state.isGenerating);
   const generationPreview = useAppStore((state) => state.generationPreview);
   const generationPhase = useAppStore((state) => state.generationPhase);
@@ -4815,7 +4938,7 @@ function ImageCanvas() {
   const [handoffPreview, setHandoffPreview] = useState<typeof generationPreview>(null);
   const [handoffLeaving, setHandoffLeaving] = useState(false);
   const superDrop = settings?.superDrop ?? false;
-  const dropEnabled = superDrop || activeTab === "generate" || activeTab === "upscale" || activeTab === "postprocess";
+  const dropEnabled = superDrop || activeTab === "generate" || activeTab === "postprocess";
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
   const streamPreviewComplete = generationPhase === "saving" || (generationPreview?.progress ?? 0) >= 1;
@@ -4828,6 +4951,10 @@ function ImageCanvas() {
       : generationPhase === "saving"
         ? { title: t("canvas.savingTitle"), hint: t("canvas.savingHint") }
         : { title: t("canvas.generatingTitle"), hint: t("canvas.generatingHint") };
+  const comparisonBelongsToActiveTab =
+    (activeTab === "generate" && comparisonSurface?.startsWith("generate:")) ||
+    (activeTab === "inpaint" && comparisonSurface === "inpaint") ||
+    (activeTab === "postprocess" && comparisonSurface?.startsWith("postprocess:"));
 
   useEffect(() => {
     if (isGenerating) {
@@ -4912,6 +5039,28 @@ function ImageCanvas() {
     );
   }
 
+  if (activeTab === "postprocess" && !currentImage && !isGenerating) {
+    return (
+      <main
+        className="canvas-area"
+        onDragOver={handleDragOver}
+        onDragLeave={() => setDropOver(false)}
+        onDrop={handleDrop}
+      >
+        {dropOver && (
+          <div className="superdrop-overlay">
+            <span>{t("canvas.dropToLoad")}</span>
+          </div>
+        )}
+        <div className="coming-soon">
+          <div className="coming-soon-icon"><Icon name="wand" /></div>
+          <h2>{t("postprocess.emptyTitle")}</h2>
+          <p>{t("postprocess.emptyHint")}</p>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main
       className="canvas-area"
@@ -4983,7 +5132,11 @@ function ImageCanvas() {
           </span>
         </button>
       )}
-      {currentImage && <ZoomableImageStage image={currentImage} compareBeforeImage={comparisonBeforeImage} alt={t("canvas.resultAlt")} />}
+      {currentImage && <ZoomableImageStage
+        image={currentImage}
+        compareBeforeImage={comparisonBelongsToActiveTab && comparisonSurface === activeCanvasSurface ? comparisonBeforeImage : null}
+        alt={t("canvas.resultAlt")}
+      />}
     </main>
   );
 }
@@ -5221,9 +5374,9 @@ function HistoryPanel() {
     else void renameHistoryGroup(target.id, name);
   }
 
-  function deleteActiveGroup() {
+  async function deleteActiveGroup() {
     if (!activeGroup) return;
-    if (window.confirm(f("history.deleteGroupConfirm", { name: activeGroup.name }))) {
+    if (await confirmAction(f("history.deleteGroupConfirm", { name: activeGroup.name }))) {
       void deleteHistoryGroup(activeGroup.id);
     }
   }
@@ -5406,8 +5559,10 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
   const [tagTesting, setTagTesting] = useState(false);
   const [aitagCacheStats, setAitagCacheStats] = useState({ bytes: 0, files: 0 });
   const [aitagCacheBusy, setAitagCacheBusy] = useState(false);
-  const [aitagCacheRetentionDays, setAitagCacheRetentionDays] = useState(() =>
-    Number(localStorage.getItem("langbai.aitag.cache-retention-days.v1") ?? "30"));
+  const [aitagCacheRetentionDays, setAitagCacheRetentionDays] = useState(() => {
+    const days = Number(localStorage.getItem("langbai.aitag.cache-retention-days.v1") ?? "30");
+    return Number.isFinite(days) ? days : 30;
+  });
   const language = settings?.language;
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
@@ -6426,7 +6581,6 @@ function UpdateBanner() {
   const dismissUpdate = useAppStore((state) => state.dismissUpdate);
   const updateProgress = useAppStore((state) => state.updateProgress);
   const downloadUpdate = useAppStore((state) => state.downloadUpdate);
-  const installUpdate = useAppStore((state) => state.installUpdate);
   const language = useAppStore((state) => state.settings?.language);
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
@@ -6456,8 +6610,8 @@ function UpdateBanner() {
             {t("update.download")}
           </button>
         ) : downloaded ? (
-          <button className="btn btn-primary" onClick={installUpdate}>
-            {t("update.installRestart")}
+          <button className="btn btn-primary" disabled>
+            {t("update.autoRestarting")}
           </button>
         ) : (
           <button className="btn btn-primary" disabled={busy} onClick={() => void downloadUpdate()}>
@@ -6468,9 +6622,7 @@ function UpdateBanner() {
                 : t("update.downloadInApp")}
           </button>
         )}
-        <button className="btn btn-ghost" onClick={dismissUpdate}>
-          {t("update.later")}
-        </button>
+        {!busy && !downloaded ? <button className="btn btn-ghost" onClick={dismissUpdate}>{t("update.later")}</button> : null}
       </div>
     </div>
   );
@@ -6660,9 +6812,11 @@ function WorkspaceResizer({ edge }: { edge: "left" | "right" }) {
 function PersistentTabView({
   active,
   children,
+  scope,
 }: {
   active: boolean;
   children: React.ReactNode;
+  scope: string;
 }) {
   const [hasMounted, setHasMounted] = useState(active);
   useEffect(() => {
@@ -6674,7 +6828,9 @@ function PersistentTabView({
       className={clsx("persistent-tools-view", !active && "is-hidden")}
       aria-hidden={!active}
     >
-      {children}
+      <AppErrorBoundary scope={scope} resetKey={active}>
+        {children}
+      </AppErrorBoundary>
     </div>
   );
 }
@@ -6766,39 +6922,46 @@ function MainPage() {
         className={clsx("workspace", WIDE_WORKSPACE_TABS.has(activeTab) && "workspace-tools")}
         style={{ "--ws-left": `${wsLeftWidth}px`, "--ws-right": `${wsRightWidth}px` } as CSSProperties}
       >
-        {activeTab === "metadata" || activeTab === "tools" || activeTab === "referencePresets" || activeTab === "onlineGallery" ? null : activeTab === "records" ? (
-          <AiLogPanel />
-        ) : (
-          <>
-            <LeftPanel openSettings={() => setShowSettings(true)} />
-            <WorkspaceResizer edge="left" />
-            {activeTab === "inpaint" ? (
-              <Suspense fallback={<div className="lazy-tool-loading">{t("tool.loadingInpaint")}</div>}>
-                <InpaintCanvas />
-              </Suspense>
-            ) : (
-              <ImageCanvas />
-            )}
-            <WorkspaceResizer edge="right" />
-            <HistoryPanel />
-          </>
-        )}
-        <PersistentTabView active={activeTab === "tools"}>
+        <AppErrorBoundary key={activeTab} scope={`tab:${activeTab}`}>
+          {activeTab === "metadata" || activeTab === "tools" || activeTab === "referencePresets" || activeTab === "onlineGallery" || activeTab === "agent" ? null : activeTab === "records" ? (
+            <AiLogPanel />
+          ) : (
+            <>
+              <LeftPanel openSettings={() => setShowSettings(true)} />
+              <WorkspaceResizer edge="left" />
+              {activeTab === "inpaint" ? (
+                <Suspense fallback={<div className="lazy-tool-loading">{t("tool.loadingInpaint")}</div>}>
+                  <InpaintCanvas />
+                </Suspense>
+              ) : (
+                <ImageCanvas />
+              )}
+              <WorkspaceResizer edge="right" />
+              <HistoryPanel />
+            </>
+          )}
+        </AppErrorBoundary>
+        <PersistentTabView active={activeTab === "tools"} scope="tab:tools">
           <Suspense fallback={<div className="lazy-tool-loading">{t("tool.loadingTools")}</div>}>
             <ToolsHub />
           </Suspense>
         </PersistentTabView>
-        <PersistentTabView active={activeTab === "metadata"}>
+        <PersistentTabView active={activeTab === "metadata"} scope="tab:metadata">
           <Suspense fallback={<div className="lazy-tool-loading">{t("tool.loadingTools")}</div>}>
             <MetadataInspector onBack={() => useAppStore.getState().setActiveTab("generate")} />
           </Suspense>
         </PersistentTabView>
-        <PersistentTabView active={activeTab === "onlineGallery"}>
+        <PersistentTabView active={activeTab === "onlineGallery"} scope="tab:onlineGallery">
           <Suspense fallback={<div className="lazy-tool-loading">{t("tool.loadingTools")}</div>}>
             <OnlineGalleryPage />
           </Suspense>
         </PersistentTabView>
-        <PersistentTabView active={activeTab === "referencePresets"}>
+        <PersistentTabView active={activeTab === "agent"} scope="tab:agent">
+          <Suspense fallback={<div className="lazy-tool-loading">{t("tool.loadingTools")}</div>}>
+            <AgentPage />
+          </Suspense>
+        </PersistentTabView>
+        <PersistentTabView active={activeTab === "referencePresets"} scope="tab:referencePresets">
           <ReferencePresetManager onBack={() => useAppStore.getState().setActiveTab("tools")} />
         </PersistentTabView>
       </div>
@@ -6838,6 +7001,7 @@ export default function App() {
     const warmScreens = Promise.allSettled([
       loadToolsHub(),
       loadOnlineGalleryPage(),
+      loadAgentPage(),
       loadInpaintCanvas(),
       loadMetadataInspector(),
     ]);

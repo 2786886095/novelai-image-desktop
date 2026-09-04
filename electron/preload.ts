@@ -32,11 +32,6 @@ import type {
   SettingKey,
   TextToolHistoryItem,
   UpscaleScale,
-  TuiwenExportJianYingRequest,
-  TuiwenImportFileRequest,
-  TuiwenProject,
-  TuiwenSaveImportedAudioRequest,
-  TuiwenTtsRequest,
   UpdateProgressEvent,
   StylePromptPreviewImage,
   ReferencePresetExportRequest,
@@ -51,6 +46,16 @@ import type {
 } from "../src/types";
 import type { AitagSearchRequest } from "../src/aitag";
 import type { PromptCodexSnapshot } from "../src/prompt-codex";
+import type {
+  AgentEvent,
+  AgentMemory,
+  AgentProviderProbe,
+  AgentSendRequest,
+  AgentSkill,
+  AgentWorkspaceData,
+  TavernCardExportRequest,
+  TavernImageRequest,
+} from "../src/agent/types";
 
 contextBridge.exposeInMainWorld("naiDesktop", {
   platform: process.platform,
@@ -87,8 +92,42 @@ contextBridge.exposeInMainWorld("naiDesktop", {
     ipcRenderer.invoke("dataBackup:selectDirectory"),
   openBackupDirectory: (): Promise<{ ok: boolean; message?: string }> =>
     ipcRenderer.invoke("dataBackup:openDirectory"),
+  getAgentWorkspace: () => ipcRenderer.invoke("agent:getWorkspace"),
+  saveTavernWorkspace: (workspace: AgentWorkspaceData) => ipcRenderer.invoke("agent:saveWorkspace", workspace),
+  createAgentConversation: (title?: string) => ipcRenderer.invoke("agent:createConversation", title),
+  selectAgentConversation: (conversationId: string) => ipcRenderer.invoke("agent:selectConversation", conversationId),
+  renameAgentConversation: (conversationId: string, title: string) => ipcRenderer.invoke("agent:renameConversation", conversationId, title),
+  deleteAgentConversation: (conversationId: string) => ipcRenderer.invoke("agent:deleteConversation", conversationId),
+  importAgentFiles: (conversationId: string, sourcePaths?: string[]) => ipcRenderer.invoke("agent:importFiles", conversationId, sourcePaths),
+  deleteAgentAttachment: (conversationId: string, attachmentId: string) => ipcRenderer.invoke("agent:deleteAttachment", conversationId, attachmentId),
+  exportAgentAttachment: (conversationId: string, messageId: string, attachmentId: string) => ipcRenderer.invoke("agent:exportAttachment", conversationId, messageId, attachmentId),
+  sendAgentMessage: (request: AgentSendRequest) => ipcRenderer.invoke("agent:send", request),
+  generateTavernImage: (request: TavernImageRequest) => ipcRenderer.invoke("agent:generateImage", request),
+  importTavernCards: (sourcePaths?: string[]) => ipcRenderer.invoke("agent:importCards", sourcePaths),
+  exportTavernCard: (request: TavernCardExportRequest) => ipcRenderer.invoke("agent:exportCard", request),
+  importTavernVisualAsset: (kind: "avatar" | "background") => ipcRenderer.invoke("agent:importVisual", kind),
+  abortAgentMessage: (conversationId: string) => ipcRenderer.invoke("agent:abort", conversationId),
+  compactAgentConversation: (conversationId: string) => ipcRenderer.invoke("agent:compact", conversationId),
+  respondAgentPermission: (permissionId: string, response: "once" | "always" | "reject") => ipcRenderer.invoke("agent:respondPermission", permissionId, response),
+  upsertAgentSkill: (skill: Partial<AgentSkill> & Pick<AgentSkill, "name" | "instructions">) => ipcRenderer.invoke("agent:upsertSkill", skill),
+  deleteAgentSkill: (skillId: string) => ipcRenderer.invoke("agent:deleteSkill", skillId),
+  upsertAgentMemory: (memory: Partial<AgentMemory> & Pick<AgentMemory, "title" | "content" | "scope">) => ipcRenderer.invoke("agent:upsertMemory", memory),
+  deleteAgentMemory: (memoryId: string) => ipcRenderer.invoke("agent:deleteMemory", memoryId),
+  getAgentRuntimeStatus: () => ipcRenderer.invoke("agent:runtimeStatus"),
+  getAgentPendingPermissions: () => ipcRenderer.invoke("agent:pendingPermissions"),
+  restartAgentRuntime: () => ipcRenderer.invoke("agent:restartRuntime"),
+  discoverAgentModels: (probe: AgentProviderProbe) => ipcRenderer.invoke("agent:discoverModels", probe),
+  getAgentWorkspaceLocation: () => ipcRenderer.invoke("agent:workspaceLocation"),
+  openAgentWorkspaceDirectory: () => ipcRenderer.invoke("agent:openWorkspace"),
+  onAgentEvent: (callback: (event: AgentEvent) => void) => {
+    const listener = (_event: unknown, payload: AgentEvent) => callback(payload);
+    ipcRenderer.on("agent:event", listener);
+    return () => ipcRenderer.removeListener("agent:event", listener);
+  },
   promptCodexCache: (): Promise<PromptCodexSnapshot | null> =>
     ipcRenderer.invoke("promptCodex:cache"),
+  promptCodexBundled: (): Promise<PromptCodexSnapshot> =>
+    ipcRenderer.invoke("promptCodex:bundled"),
   promptCodexUpdate: (): Promise<PromptCodexSnapshot> =>
     ipcRenderer.invoke("promptCodex:update"),
   artistLabPickTarget: () => ipcRenderer.invoke("artistLab:pickTarget"),
@@ -96,6 +135,8 @@ contextBridge.exposeInMainWorld("naiDesktop", {
     ipcRenderer.invoke("artistLab:searchArtists", query, limit),
   artistLabPopularArtists: (limit?: number, force?: boolean) =>
     ipcRenderer.invoke("artistLab:popularArtists", limit, force),
+  artistLabArtistRanking: (limit?: number, force?: boolean) =>
+    ipcRenderer.invoke("artistLab:artistRanking", limit, force),
   artistLabScoreImages: (
     mode: "high" | "light",
     targetPath: string,
@@ -199,8 +240,8 @@ contextBridge.exposeInMainWorld("naiDesktop", {
       strength,
       noise,
     ),
-  upscaleImage: (scale: UpscaleScale) =>
-    ipcRenderer.invoke("nai:upscale", scale),
+  upscaleImage: (scale: UpscaleScale, model: string) =>
+    ipcRenderer.invoke("nai:upscale", scale, model),
   augmentImage: (tool: DirectorTool, options: AugmentOptions) =>
     ipcRenderer.invoke("nai:augment", tool, options),
   cancel: () => ipcRenderer.invoke("nai:cancel"),
@@ -254,19 +295,6 @@ contextBridge.exposeInMainWorld("naiDesktop", {
     ipcRenderer.invoke("tagComic:deleteReference", projectId, referenceId),
   tagComicExportSelectedZip: (request: TagComicExportZipRequest) =>
     ipcRenderer.invoke("tagComic:exportSelectedZip", request),
-  tuiwenImportFile: (request: TuiwenImportFileRequest) =>
-    ipcRenderer.invoke("tuiwen:importFile", request),
-  tuiwenTtsProviders: () => ipcRenderer.invoke("tuiwen:ttsProviders"),
-  tuiwenTts: (request: TuiwenTtsRequest) =>
-    ipcRenderer.invoke("tuiwen:tts", request),
-  tuiwenSaveImportedAudio: (request: TuiwenSaveImportedAudioRequest) =>
-    ipcRenderer.invoke("tuiwen:saveImportedAudio", request),
-  tuiwenExportJianYing: (request: TuiwenExportJianYingRequest) =>
-    ipcRenderer.invoke("tuiwen:exportJianYing", request),
-  tuiwenSaveProjectSnapshot: (project: TuiwenProject) =>
-    ipcRenderer.invoke("tuiwen:saveProjectSnapshot", project),
-  tuiwenLoadProjectSnapshot: () =>
-    ipcRenderer.invoke("tuiwen:loadProjectSnapshot"),
   getAiCallLog: () => ipcRenderer.invoke("ai:getLog"),
   clearAiCallLog: () => ipcRenderer.invoke("ai:clearLog"),
   getReverseTemplateDefaults: () =>

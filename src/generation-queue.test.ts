@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useAppStore } from "./store";
+import { normalizeBatchIntervalSeconds, useAppStore, waitForBatchInterval } from "./store";
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -31,7 +31,71 @@ describe("main generation queue", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
+  });
+
+  it("normalizes and waits for the configured batch interval without delaying zero", async () => {
+    expect(normalizeBatchIntervalSeconds(-2)).toBe(0);
+    expect(normalizeBatchIntervalSeconds(2.6)).toBe(3);
+    expect(normalizeBatchIntervalSeconds(99999)).toBe(3600);
+
+    const waits: number[] = [];
+    await expect(waitForBatchInterval(1, () => true, async (milliseconds) => {
+      waits.push(milliseconds);
+    })).resolves.toBe(true);
+    expect(waits).toEqual([250, 250, 250, 250]);
+
+    waits.length = 0;
+    await expect(waitForBatchInterval(0, () => true, async (milliseconds) => {
+      waits.push(milliseconds);
+    })).resolves.toBe(true);
+    expect(waits).toEqual([]);
+  });
+
+  it("makes the batch interval cancellable between timer slices", async () => {
+    let active = true;
+    const waits: number[] = [];
+    const completed = await waitForBatchInterval(2, () => active, async (milliseconds) => {
+      waits.push(milliseconds);
+      active = false;
+    });
+
+    expect(completed).toBe(false);
+    expect(waits).toEqual([250]);
+  });
+
+  it("waits only between images in a multi-image generation run", async () => {
+    vi.useFakeTimers();
+    const generate = vi
+      .fn()
+      .mockResolvedValueOnce(generationResult("interval-first", 11))
+      .mockResolvedValueOnce(generationResult("interval-second", 12));
+    const naiDesktop = {
+      hasToken: vi.fn().mockResolvedValue({ hasToken: true, anlasBalance: 100, tierName: "Opus" }),
+      quoteAnlas: vi.fn().mockResolvedValue({ ok: true, amount: 0, balance: 100 }),
+      generate,
+      getHistoryDates: vi.fn().mockResolvedValue(["2026-06-21"]),
+      getHistoryGroups: vi.fn().mockResolvedValue([]),
+      getHistory: vi.fn().mockResolvedValue([]),
+      cancel: vi.fn().mockResolvedValue(undefined),
+    };
+    vi.stubGlobal("window", { naiDesktop });
+    useAppStore.setState((state) => ({
+      account: { hasToken: true, anlasBalance: 100, tierName: "Opus" },
+      params: { ...state.params, positivePrompt: "1girl" },
+      batchCount: 2,
+      batchIntervalSeconds: 1,
+    }));
+
+    const running = useAppStore.getState().generate();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(generate).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(999);
+    expect(generate).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    await running;
+    expect(generate).toHaveBeenCalledTimes(2);
   });
 
   it("exposes preparation, request, and idle phases without treating preflight as sampling", async () => {

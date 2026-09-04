@@ -6,7 +6,7 @@ import { homedir } from "node:os";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repoSkill = join(root, "skills", "novelai-prompt-codex");
 const guidance = join(repoSkill, "references", "guidance.json");
-const fullCodex = join(root, "src", "data", "prompt-codex.json");
+const fullCodex = join(root, "mobile", "assets", "prompt_codex.json");
 const mobileGuidance = join(
   root,
   "mobile",

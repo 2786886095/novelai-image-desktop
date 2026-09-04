@@ -216,6 +216,7 @@ AnlasQuote calculateInpaintAnlas({
 AnlasQuote calculateUpscaleAnlas({
   required WorkingImage? image,
   required AccountSummary account,
+  int scale = 2,
   Object? language,
 }) {
   if (image == null || image.width <= 0 || image.height <= 0) {
@@ -267,6 +268,11 @@ AnlasQuote calculateUpscaleAnlas({
       message: _at(language, 'anlas.upscaleTooLarge'),
       details: details,
     );
+  }
+  final passCount = scale == 4 ? 2 : 1;
+  amount *= passCount;
+  if (passCount > 1) {
+    details.add('4x runs two fixed 2x upscale requests.');
   }
   final balance = account.anlasBalance;
   return AnlasQuote(

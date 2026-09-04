@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import { Button, CommittedNumberInput, NumberInput, Toggle } from "../components/ui";
 import { Icon } from "../components/icons";
+import { confirmAction } from "../components/confirm";
 import { QualityPresetControl } from "../components/QualityPresetControl";
 import { useAppStore } from "../store";
 import ReferencePresetManager, {
@@ -28,6 +29,7 @@ import {
   TagComicPanelRangeError,
   TagComicSizeImportError,
   buildTagComicGenerateRequest,
+  buildTagComicRegenerationTasks,
   createTagComicPanel,
   createTagComicProject,
   mergeTagComicParams,
@@ -878,16 +880,16 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
     }));
   }
 
-  function replacePanels(items: Array<{ title: string; prompt: string }>) {
+  async function replacePanels(items: Array<{ title: string; prompt: string }>) {
     if (!items.length) {
       setToast(text(language, "noTags"));
       return;
     }
     if (
       panels.length &&
-      !window.confirm(
+      !(await confirmAction(
         format(language, "confirmReplace", { count: panels.length }),
-      )
+      ))
     )
       return;
     const defaultSize = {
@@ -913,9 +915,9 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
     setStep("global");
   }
 
-  function importText() {
+  async function importText() {
     try {
-      replacePanels(parseTagComicImport(bulkText));
+      await replacePanels(parseTagComicImport(bulkText));
       setBulkText("");
     } catch (error) {
       setToast(
@@ -983,8 +985,8 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
     URL.revokeObjectURL(url);
   }
 
-  function newProject() {
-    if (!window.confirm(text(language, "confirmNew"))) return;
+  async function newProject() {
+    if (!(await confirmAction(text(language, "confirmNew")))) return;
     const next = createTagComicProject(currentParams);
     projectRef.current = next;
     setProject(next);
@@ -1506,7 +1508,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
       return;
     }
     const quote = await quoteTasks(prepared);
-    const confirmed = window.confirm(
+    const confirmed = await confirmAction(
       quote == null
         ? text(language, "quoteFailed")
         : format(language, "confirmGenerate", {
@@ -1517,20 +1519,27 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
     if (!confirmed) return;
     queueRef.current = { running: true, cancelled: false };
     setQueue({ total: prepared.length, done: 0 });
-    let historyGroupId = projectSnapshot.historyGroupId;
-    for (let index = 0; index < prepared.length; index += 1) {
-      if (queueRef.current.cancelled) break;
-      const generatedGroupId = await generateCandidate(
-        prepared[index],
-        historyGroupId,
-      );
-      historyGroupId = generatedGroupId ?? historyGroupId;
-      if (!mountedRef.current) return;
-      if (queueRef.current.cancelled) break;
-      setQueue({ total: prepared.length, done: index + 1 });
+    try {
+      let historyGroupId = projectSnapshot.historyGroupId;
+      for (let index = 0; index < prepared.length; index += 1) {
+        if (queueRef.current.cancelled) break;
+        const generatedGroupId = await generateCandidate(
+          prepared[index],
+          historyGroupId,
+        );
+        historyGroupId = generatedGroupId ?? historyGroupId;
+        if (!mountedRef.current) return;
+        if (queueRef.current.cancelled) break;
+        setQueue({ total: prepared.length, done: index + 1 });
+      }
+    } catch (error) {
+      if (mountedRef.current) {
+        setToast(error instanceof Error ? error.message : String(error));
+      }
+    } finally {
+      queueRef.current.running = false;
+      if (mountedRef.current) setQueue(null);
     }
-    queueRef.current.running = false;
-    if (mountedRef.current) setQueue(null);
   }
 
   function initialTasks() {
@@ -1546,6 +1555,10 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
     });
   }
 
+  function regenerateAllTasks() {
+    return buildTagComicRegenerationTasks(panels, project.initialGenerationCount);
+  }
+
   function stopQueue() {
     queueRef.current.cancelled = true;
     void window.naiDesktop.cancel();
@@ -1553,12 +1566,16 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
   }
 
   async function exportZip() {
-    const result = await window.naiDesktop.tagComicExportSelectedZip({
-      project,
-    });
-    setToast(result.message);
-    if (result.ok && result.path) {
-      setToast(format(language, "exportDone", { path: result.path }));
+    try {
+      const result = await window.naiDesktop.tagComicExportSelectedZip({
+        project,
+      });
+      setToast(result.message);
+      if (result.ok && result.path) {
+        setToast(format(language, "exportDone", { path: result.path }));
+      }
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : String(error));
     }
   }
 
@@ -1667,23 +1684,17 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                 }
               />
             </label>
-            <label>
+            <div className="field">
               <span>{text(language, "initialCount")}</span>
-              <input
-                type="number"
+              <CommittedNumberInput
+                label=""
+                value={project.initialGenerationCount}
                 min={1}
                 max={10}
-                value={project.initialGenerationCount}
-                onChange={(event) =>
-                  patchProject({
-                    initialGenerationCount: Math.max(
-                      1,
-                      Math.min(10, Math.round(Number(event.target.value) || 1)),
-                    ),
-                  })
-                }
+                normalize={(value) => Math.max(1, Math.min(10, Math.round(value)))}
+                onCommit={(value) => patchProject({ initialGenerationCount: value })}
               />
-            </label>
+            </div>
             <label className="wide">
               <span>{text(language, "globalStyle")}</span>
               <textarea
@@ -2191,6 +2202,13 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
               onClick={() => void startQueue(initialTasks())}
             >
               {text(language, "generateInitial")}
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={Boolean(queue) || !panels.length}
+              onClick={() => void startQueue(regenerateAllTasks())}
+            >
+              全部重新生成 × {project.initialGenerationCount}
             </Button>
             <Button
               variant="secondary"

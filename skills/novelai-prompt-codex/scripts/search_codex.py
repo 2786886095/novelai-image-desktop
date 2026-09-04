@@ -12,7 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 GUIDANCE = ROOT / "references" / "guidance.json"
 LOCAL_FULL_CODEX = ROOT / "references" / "prompt-codex.json"
-REPO_FULL_CODEX = ROOT.parents[1] / "src" / "data" / "prompt-codex.json"
+REPO_FULL_CODEX = ROOT.parents[1] / "mobile" / "assets" / "prompt_codex.json"
 FULL_CODEX = LOCAL_FULL_CODEX if LOCAL_FULL_CODEX.exists() else REPO_FULL_CODEX
 ADULT_TRIGGERS = {
     "成人", "性爱", "性交", "裸体", "裸露", "内裤", "内衣", "丝袜", "连裤袜",

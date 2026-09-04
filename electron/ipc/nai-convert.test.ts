@@ -131,11 +131,9 @@ describe("convertComicPanels fallback path", () => {
     expect(result.panels[0].enPrompt).not.toContain("Sorry");
   });
 
-  it("repairs a tag-rule violation with one extra request and one visible log", async () => {
+  it("keeps conversion interactive by avoiding a serial rule-repair request", async () => {
     settingsRef.current.convertApiUrl = "https://example.test/v1";
     settingsRef.current.convertApiKey = "sk-test";
-    settingsRef.current.promptCodexEnhanceEnabled = false;
-    settingsRef.current.promptRuleAutoRepairEnabled = true;
     axiosMock.post
       .mockResolvedValueOnce({
         data: {
@@ -165,12 +163,11 @@ describe("convertComicPanels fallback path", () => {
     const result = await convertPromptText("一个女孩土下座", "tags", false);
 
     expect(result.ok).toBe(true);
-    expect(result.result).toBe("1girl, dogeza");
-    expect(axiosMock.post).toHaveBeenCalledTimes(2);
+    expect(result.result).toBe("1girl, dogeza, dogeza, bowing");
+    expect(axiosMock.post).toHaveBeenCalledTimes(1);
     const logs = getAiCallLog();
     expect(logs).toHaveLength(1);
-    expect(logs[0].label).toContain("规则校验");
-    expect(logs[0].response).toContain("已自动修复");
+    expect(logs[0].label).not.toContain("规则校验");
   });
 });
 
@@ -189,8 +186,6 @@ describe("prompt codex enhancement", () => {
       convertApiModel: "text-test",
       convertSystemPrompt: "",
       convertPromptTemplates: { tags: "", natural: "", mixed: "" },
-      promptCodexEnhanceEnabled: true,
-      promptCodexAdultEnabled: true,
       mcpForReverse: false,
       mcpForConvert: false,
       proxyUrl: "",
@@ -199,7 +194,6 @@ describe("prompt codex enhancement", () => {
   });
 
   it("selects independent V4.5 and V5 conversion templates", async () => {
-    settingsRef.current.promptCodexEnhanceEnabled = false;
     settingsRef.current.convertPromptTemplatesV45 = {
       tags: "V45 CONVERSION TEMPLATE {{input}}",
       natural: "",
@@ -233,7 +227,7 @@ describe("prompt codex enhancement", () => {
     expect(second.messages?.[1]?.content).toContain("NovelAI V5");
   });
 
-  it("injects locally retrieved codex context into conversion", async () => {
+  it("does not synchronously load the large local codex during conversion", async () => {
     axiosMock.post.mockResolvedValue({
       data: {
         choices: [
@@ -256,15 +250,10 @@ describe("prompt codex enhancement", () => {
     );
 
     expect(result.ok).toBe(true);
-    expect(result.codexMatches?.some((item) =>
-      item.id === "guidance:interaction-direction",
-    )).toBe(true);
     const request = axiosMock.post.mock.calls[0]?.[1] as {
       messages?: Array<{ role: string; content: string }>;
     };
-    expect(request.messages?.[0]?.content).toContain(
-      "本地 NovelAI 提示词法典",
-    );
+    expect(request.messages?.[0]?.content).not.toContain("本地 NovelAI 提示词法典");
   });
 
   it("applies known-character codex rules to both conversion variants", async () => {
@@ -296,14 +285,11 @@ describe("prompt codex enhancement", () => {
     expect(result.ok).toBe(true);
     expect(result.variants?.namePrompt).toContain("furina_(genshin_impact)");
     expect(result.variants?.featurePrompt).not.toContain("furina");
-    expect(result.codexMatches?.some((item) =>
-      item.id === "guidance:known-character",
-    )).toBe(true);
     const request = axiosMock.post.mock.calls[0]?.[1] as {
       messages?: Array<{ role: string; content: string }>;
     };
     expect(request.messages?.[0]?.content).toContain(
-      "特征版必须删除角色名与作品名",
+      "featurePrompt：删除全部角色名、作品名和版权 Tag",
     );
     expect(request.messages?.[0]?.content).toContain(
       "两个字段必须描述同一完整画面",
@@ -311,7 +297,7 @@ describe("prompt codex enhancement", () => {
     expect(request.messages?.[0]?.content).not.toContain("{{input}}");
   });
 
-  it("retries once when a known-character conversion omits one variant", async () => {
+  it("recovers a missing known-character variant locally without a second network round trip", async () => {
     axiosMock.post
       .mockResolvedValueOnce({
         data: {
@@ -352,22 +338,13 @@ describe("prompt codex enhancement", () => {
     );
 
     expect(result.ok).toBe(true);
-    expect(axiosMock.post).toHaveBeenCalledTimes(2);
+    expect(axiosMock.post).toHaveBeenCalledTimes(1);
     expect(result.variants?.namePrompt).toContain("furina_(genshin_impact)");
-    expect(result.variants?.featurePrompt).toContain("white hair");
-    const recoveryRequest = axiosMock.post.mock.calls[1]?.[1] as {
-      messages?: Array<{ role: string; content: string }>;
-    };
-    expect(recoveryRequest.messages?.[0]?.content).toContain(
-      "个人法典规则",
-    );
-    expect(recoveryRequest.messages?.[1]?.content).toContain(
-      '"namePrompt":"...","featurePrompt":"..."',
-    );
+    expect(result.variants?.featurePrompt).toBeTruthy();
+    expect(result.variants?.featurePrompt).not.toContain("furina_(genshin_impact)");
   });
 
-  it("keeps a complete known-character pair when rule repair returns only one variant", async () => {
-    settingsRef.current.promptRuleAutoRepairEnabled = true;
+  it("keeps a complete known-character pair without a serial rule-repair call", async () => {
     axiosMock.post
       .mockResolvedValueOnce({
         data: {
@@ -412,18 +389,10 @@ describe("prompt codex enhancement", () => {
     expect(result.ok).toBe(true);
     expect(result.variants?.namePrompt).toContain("furina_(genshin_impact)");
     expect(result.variants?.featurePrompt).toContain("white hair");
-    const repairRequest = axiosMock.post.mock.calls[1]?.[1] as {
-      messages?: Array<{ role: string; content: string }>;
-    };
-    expect(repairRequest.messages?.[0]?.content).toContain(
-      "特征版必须删除角色名与作品名",
-    );
-    expect(repairRequest.messages?.[0]?.content).toContain(
-      "本地 NovelAI 提示词法典",
-    );
+    expect(axiosMock.post).toHaveBeenCalledTimes(1);
   });
 
-  it("merges two-stage reverse into one visible call-log record", async () => {
+  it("uses one vision request for reverse and records the reconstruction prompt", async () => {
     axiosMock.post
       .mockResolvedValueOnce({
         data: {
@@ -465,12 +434,14 @@ describe("prompt codex enhancement", () => {
     );
 
     expect(result.ok).toBe(true);
-    expect(axiosMock.post).toHaveBeenCalledTimes(2);
-    expect(result.prompt).toContain("source#hug");
-    expect(result.codexMatches?.length).toBeGreaterThan(0);
+    expect(axiosMock.post).toHaveBeenCalledTimes(1);
+    expect(result.prompt).toContain("hugging");
     const logs = getAiCallLog();
     expect(logs).toHaveLength(1);
-    expect(logs[0].label).toContain("法典增强两阶段");
-    expect(logs[0].userText).toContain("阶段一草稿");
+    expect(logs[0].label).not.toContain("法典增强两阶段");
+    const request = axiosMock.post.mock.calls[0]?.[1] as {
+      messages?: Array<{ role: string; content: unknown }>;
+    };
+    expect(String(request.messages?.[0]?.content)).toContain("可复现画面");
   });
 });

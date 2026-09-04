@@ -32,6 +32,30 @@ import '../tags/offline_tag_store.dart';
 const _textToolDoneAutoDismiss = Duration(milliseconds: 1500);
 
 @visibleForTesting
+int normalizeBatchIntervalSeconds(Object? value) {
+  final parsed = value is num ? value.toDouble() : double.tryParse('$value');
+  if (parsed == null || !parsed.isFinite) return 0;
+  return parsed.round().clamp(0, 3600).toInt();
+}
+
+@visibleForTesting
+Future<bool> waitForBatchInterval(
+  int seconds,
+  bool Function() shouldContinue, {
+  Future<void> Function(Duration duration)? delay,
+}) async {
+  var remaining = normalizeBatchIntervalSeconds(seconds) * 1000;
+  final wait = delay ?? Future<void>.delayed;
+  while (remaining > 0) {
+    final slice = min(250, remaining);
+    await wait(Duration(milliseconds: slice));
+    if (!shouldContinue()) return false;
+    remaining -= slice;
+  }
+  return shouldContinue();
+}
+
+@visibleForTesting
 bool looksLikeReferenceGenerationError(Object error) {
   final message = error.toString().toLowerCase();
   return message.contains('reference') ||
@@ -76,6 +100,9 @@ class AppState extends ChangeNotifier {
   List<ReferencePreset> referencePresets = [];
   HistoryItem? current;
   WorkingImage? workbenchImage;
+  WorkingImage? i2iOriginalImage;
+  String i2iSourceMode = 'original';
+  String inpaintSourceMode = 'original';
   ImportedGenerateParams? workbenchImportedParams;
   List<CharCaptionItem> workbenchCharacterCaptions = const [];
   Set<String> aitagCompatibleParams = {...importedGenerateParamKeys};
@@ -91,6 +118,7 @@ class AppState extends ChangeNotifier {
   int generationPreviewTotalSteps = 0;
   String status = runtimeTextFor('zh-CN', 'common.ready');
   int batchCount = 1;
+  int batchIntervalSeconds = 0;
   String selectedGroupId = '';
   String generationGroupId = '';
   String inpaintModel = 'nai-diffusion-5-full-inpainting';
@@ -100,6 +128,8 @@ class AppState extends ChangeNotifier {
   // main generate/i2i prompt automatically.
   String inpaintPositivePrompt = '';
   int upscaleScale = 2;
+  int enhanceMagnitude = 5;
+  int enhanceScale = 1;
   String directorTool = 'bg-removal';
   ReversePromptMode reverseMode = ReversePromptMode.tags;
   ReversePromptMode convertMode = ReversePromptMode.natural;
@@ -181,6 +211,8 @@ class AppState extends ChangeNotifier {
       // its hardcoded defaults instead of restoring the last-used values.
       if (settings.persistGenerateParams) {
         params = await storage.getParams();
+        batchIntervalSeconds =
+            normalizeBatchIntervalSeconds(settings.batchIntervalSeconds);
       }
       final repairedApiBase = resolveNovelAiBaseUrl(
           settings.apiBaseUrl, 'https://api.novelai.net', settings);
@@ -412,6 +444,23 @@ class AppState extends ChangeNotifier {
     _scheduleGenerationQuote();
   }
 
+  void setI2ISourceMode(String value) {
+    i2iSourceMode = value == 'latest' ? 'latest' : 'original';
+    notifyListeners();
+  }
+
+  void setInpaintSourceMode(String value) {
+    final next = value == 'latest' ? 'latest' : 'original';
+    final target = next == 'latest'
+        ? (comparisonAfter ?? workbenchImage)
+        : (i2iOriginalImage ?? workbenchImage);
+    inpaintSourceMode = next;
+    if (target != null && target.filePath != workbenchImage?.filePath) {
+      workbenchImage = target;
+    }
+    notifyListeners();
+  }
+
   (int, int) get i2iOutputSize {
     final image = workbenchImage;
     if (image == null || i2iSizeMode == 'custom') {
@@ -429,6 +478,13 @@ class AppState extends ChangeNotifier {
     batchCount = n.clamp(1, 999);
     notifyListeners();
     _scheduleGenerationQuote();
+  }
+
+  void setBatchIntervalSeconds(int seconds) {
+    batchIntervalSeconds = normalizeBatchIntervalSeconds(seconds);
+    settings.batchIntervalSeconds = batchIntervalSeconds;
+    notifyListeners();
+    unawaited(storage.setSettings(settings));
   }
 
   Future<String?> setToken(String token) async {
@@ -859,6 +915,7 @@ class AppState extends ChangeNotifier {
     workbenchCharacterCaptions = report.characterCaptions;
     workbenchImage =
         WorkingImage(filePath: filePath, width: dims.$1, height: dims.$2);
+    i2iOriginalImage = workbenchImage;
     if (applyMetadata && !imported.isEmpty) {
       applyImportedMetadata(
         imported,
@@ -880,6 +937,7 @@ class AppState extends ChangeNotifier {
 
   void clearWorkbench() {
     workbenchImage = null;
+    i2iOriginalImage = null;
     workbenchImportedParams = null;
     workbenchCharacterCaptions = const [];
     status = _rt('status.workbenchCleared');
@@ -1449,6 +1507,7 @@ class AppState extends ChangeNotifier {
   AnlasQuote get upscaleAnlasQuote => calculateUpscaleAnlas(
         image: workbenchImage,
         account: account,
+        scale: upscaleScale,
         language: settings.language,
       );
 
@@ -1549,7 +1608,7 @@ class AppState extends ChangeNotifier {
         ..width = size.$1
         ..height = size.$2;
     }
-    final count = imageToImage ? 1 : batchCount.clamp(1, 999);
+    final count = batchCount.clamp(1, 999);
     generationQuote = calculateImageGenerationAnlas(
       params: quoteParams,
       account: account,
@@ -1601,6 +1660,9 @@ class AppState extends ChangeNotifier {
     }
 
     final initialTotal = batchCount.clamp(1, 999);
+    final initialBatchIntervalSeconds = initialTotal > 1
+        ? normalizeBatchIntervalSeconds(batchIntervalSeconds)
+        : 0;
     final initialParams = params.copy();
     final initialExtras = extras.copy();
     final initialSeed = initialParams.seed;
@@ -1679,6 +1741,31 @@ class AppState extends ChangeNotifier {
           await Future<void>.delayed(const Duration(milliseconds: 250));
         }
         if (_cancelGenerationRequested) break;
+        if (!skipInitial &&
+            initialIndex > 0 &&
+            initialIndex < initialTotal &&
+            initialBatchIntervalSeconds > 0) {
+          status = _rf('status.batchInterval', {
+            'seconds': initialBatchIntervalSeconds,
+            'current': initialIndex + 1,
+            'total': initialTotal,
+          });
+          notifyListeners();
+          final shouldContinue = await waitForBatchInterval(
+            initialBatchIntervalSeconds,
+            () => !_cancelGenerationRequested,
+          );
+          if (!shouldContinue) break;
+          while (queuePaused && !_cancelGenerationRequested) {
+            status = _rf('status.queuePaused', {
+              'done': completed + failed,
+              'total': queueProgress?.total ?? initialTotal,
+            });
+            notifyListeners();
+            await Future<void>.delayed(const Duration(milliseconds: 250));
+          }
+          if (_cancelGenerationRequested) break;
+        }
 
         GenerateParams taskParams;
         GenerateExtras taskExtras;
@@ -2003,66 +2090,252 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> generateI2I() async {
+    if (busy) return;
     await _withTokenRun((token) async {
       if (params.positivePrompt.trim().isEmpty) {
         throw Exception(_rt('error.positiveRequired'));
       }
       final referenceError = _referenceValidationError();
       if (referenceError != null) throw Exception(referenceError);
-      final image = await _workbenchBytes();
-      final taskParams = params.copy()
-        ..positivePrompt = expandPromptWildcards(params.positivePrompt)
-        ..negativePrompt = expandPromptWildcards(params.negativePrompt);
+      final source = i2iSourceMode == 'original'
+          ? (i2iOriginalImage ?? workbenchImage)
+          : workbenchImage;
+      if (source == null) throw Exception(_rt('error.workbenchRequired'));
+      final image = await File(source.filePath).readAsBytes();
+      final total = batchCount.clamp(1, 999);
+      final initialBatchIntervalSeconds =
+          total > 1 ? normalizeBatchIntervalSeconds(batchIntervalSeconds) : 0;
+      final initialParams = params.copy();
+      final initialExtras = extras.copy();
+      final initialSeed = initialParams.seed;
       if (i2iSizeMode == 'adaptive') {
         final size = i2iOutputSize;
-        taskParams
+        initialParams
           ..width = size.$1
           ..height = size.$2;
       }
       final before = await _authorizeQuotedRun(
         token,
         (fresh) => calculateImageGenerationAnlas(
-          params: taskParams,
+          params: initialParams,
           account: fresh,
-          extras: extras,
+          extras: initialExtras,
+          batchCount: total,
           imageToImage: true,
           strength: i2i.strength,
-          alreadyEncodedVibes: api.countCachedVibes(taskParams.model, extras),
-          preciseReferenceCount: extras.preciseReferences.length,
+          alreadyEncodedVibes:
+              api.countCachedVibes(initialParams.model, initialExtras),
+          preciseReferenceCount: initialExtras.preciseReferences.length,
           language: settings.language,
         ),
       );
       final quote = calculateImageGenerationAnlas(
-        params: taskParams,
+        params: initialParams,
         account: account,
-        extras: extras,
+        extras: initialExtras,
+        batchCount: total,
         imageToImage: true,
         strength: i2i.strength,
-        alreadyEncodedVibes: api.countCachedVibes(taskParams.model, extras),
-        preciseReferenceCount: extras.preciseReferences.length,
+        alreadyEncodedVibes:
+            api.countCachedVibes(initialParams.model, initialExtras),
+        preciseReferenceCount: initialExtras.preciseReferences.length,
         language: settings.language,
       );
+      generationQueueRunning = true;
+      queuePaused = false;
+      queueAdding = false;
+      clearQueueRequested = false;
+      _cancelGenerationRequested = false;
+      generationQueue = [];
+      queueProgress = GenerationQueueProgress(total: total);
+      queueReservedAnlas = quote.amount ?? 0;
       status = _rf('status.i2iRunning', {'amount': quote.amount});
       notifyListeners();
-      final (images, seed) = await api.img2img(
-          token, settings, taskParams, extras.copy(), image, i2i);
-      if (images.isEmpty) throw Exception(_rt('error.i2iNoImages'));
-      final items = <HistoryItem>[];
-      for (final bytes in images) {
-        items.add(await storage.saveImage(bytes, taskParams, seed,
-            feature: 'i2i', groupId: generationGroupId.ifEmptyNull));
+      try {
+        await BackgroundQueueService.start(
+          'i2i-generation',
+          title: _rt('notification.imageQueueTitle'),
+          text: _rf('notification.prepare', {'total': total}),
+        );
+      } catch (_) {
+        // Notification permission or OEM restrictions must not block generation.
       }
-      await _commitCompletedHistory(items, useAsWorkbench: true);
-      status = _rf(
-          'status.i2iDone', {'spent': await _finishQuotedRun(token, before)});
+
+      var completed = 0;
+      var failed = 0;
+      var lastError = '';
+      try {
+        for (var index = 0;
+            index < total && !_cancelGenerationRequested;
+            index++) {
+          while (queuePaused && !_cancelGenerationRequested) {
+            status = _rf('status.queuePaused', {
+              'done': completed + failed,
+              'total': total,
+            });
+            notifyListeners();
+            await Future<void>.delayed(const Duration(milliseconds: 250));
+          }
+          if (_cancelGenerationRequested) break;
+          if (index > 0 && initialBatchIntervalSeconds > 0) {
+            status = _rf('status.batchInterval', {
+              'seconds': initialBatchIntervalSeconds,
+              'current': index + 1,
+              'total': total,
+            });
+            notifyListeners();
+            final shouldContinue = await waitForBatchInterval(
+              initialBatchIntervalSeconds,
+              () => !_cancelGenerationRequested,
+            );
+            if (!shouldContinue) break;
+            while (queuePaused && !_cancelGenerationRequested) {
+              status = _rf('status.queuePaused', {
+                'done': completed + failed,
+                'total': total,
+              });
+              notifyListeners();
+              await Future<void>.delayed(const Duration(milliseconds: 250));
+            }
+            if (_cancelGenerationRequested) break;
+          }
+
+          final taskParams = initialParams.copy();
+          if (initialParams.seedMode != 'random' && initialSeed > 0) {
+            taskParams.seed = ((initialSeed - 1 + index) % 4294967295) + 1;
+          }
+          taskParams
+            ..positivePrompt =
+                expandPromptWildcards(initialParams.positivePrompt)
+            ..negativePrompt =
+                expandPromptWildcards(initialParams.negativePrompt);
+          final currentNumber = completed + failed + 1;
+          status = _rf('status.generatingImage', {
+            'current': currentNumber,
+            'total': total,
+            'queued': max(0, total - currentNumber),
+          });
+          notifyListeners();
+          unawaited(BackgroundQueueService.update(
+            title: _rt('notification.imageQueueTitle'),
+            text: _rf('notification.generating', {
+              'current': currentNumber,
+              'total': total,
+            }),
+          ));
+          try {
+            final (images, seed) = await api.img2img(
+                token, settings, taskParams, initialExtras.copy(), image, i2i);
+            if (images.isEmpty) throw Exception(_rt('error.i2iNoImages'));
+            final items = <HistoryItem>[];
+            for (final bytes in images) {
+              items.add(await storage.saveImage(bytes, taskParams, seed,
+                  feature: 'i2i', groupId: generationGroupId.ifEmptyNull));
+            }
+            comparisonBefore = source;
+            comparisonAfter = WorkingImage(
+              filePath: items.first.filePath,
+              width: items.first.width,
+              height: items.first.height,
+            );
+            await _commitCompletedHistory(items,
+                useAsWorkbench: i2iSourceMode == 'latest');
+            completed += items.length;
+          } on GenerationCancelledException {
+            _cancelGenerationRequested = true;
+          } catch (error) {
+            failed++;
+            lastError = error.toString().replaceFirst('Exception: ', '');
+            final statusCode =
+                error is NaiHttpException ? error.statusCode : null;
+            if (statusCode == 400 ||
+                statusCode == 401 ||
+                statusCode == 403 ||
+                statusCode == 422) {
+              _cancelGenerationRequested = true;
+            }
+          } finally {
+            queueProgress =
+                (queueProgress ?? GenerationQueueProgress(total: total))
+                    .copyWith(done: completed, failed: failed);
+            notifyListeners();
+          }
+        }
+
+        final spent = await _finishQuotedRun(token, before);
+        if (_cancelGenerationRequested && failed == 0) {
+          status = _rf('status.generationCancelled', {'spent': spent});
+        } else if (failed > 0) {
+          status = _rf('status.generationFailedSome', {
+            'completed': completed,
+            'failed': failed,
+            'spent': spent,
+            'error': lastError,
+          });
+        } else {
+          status = _rf('status.generationDone', {
+            'completed': completed,
+            'spent': spent,
+          });
+        }
+      } finally {
+        generationQueueRunning = false;
+        queuePaused = false;
+        queueAdding = false;
+        clearQueueRequested = false;
+        generationQueue = [];
+        queueReservedAnlas = 0;
+        notifyListeners();
+        await BackgroundQueueService.stop('i2i-generation');
+      }
     });
+  }
+
+  Future<void> enhance() async {
+    if (busy || workbenchImage == null) return;
+    final source = workbenchImage!;
+    final previousWidth = params.width;
+    final previousHeight = params.height;
+    final previousStrength = i2i.strength;
+    final previousNoise = i2i.noise;
+    final previousSizeMode = i2iSizeMode;
+    final target = adaptiveNaiImageSize(
+      source.width * enhanceScale.clamp(1, 2),
+      source.height * enhanceScale.clamp(1, 2),
+      fallbackWidth: source.width,
+      fallbackHeight: source.height,
+    );
+    params
+      ..width = target.$1
+      ..height = target.$2;
+    i2iSizeMode = 'custom';
+    i2i
+      ..strength = min(0.82, 0.18 + enhanceMagnitude.clamp(1, 10) * 0.064)
+      ..noise = min(0.5, enhanceMagnitude.clamp(1, 10) * 0.045);
+    notifyListeners();
+    try {
+      await generateI2I();
+    } finally {
+      params
+        ..width = previousWidth
+        ..height = previousHeight;
+      i2i
+        ..strength = previousStrength
+        ..noise = previousNoise;
+      i2iSizeMode = previousSizeMode;
+      notifyListeners();
+      _scheduleGenerationQuote();
+    }
   }
 
   Future<void> inpaint(Uint8List maskBytes) async {
     await _withTokenRun((token) async {
-      final image = await _workbenchBytes();
-      final dims = workbenchImage;
-      if (dims == null) throw Exception(_rt('error.originalImageRequired'));
+      final source = inpaintSourceMode == 'original'
+          ? (i2iOriginalImage ?? workbenchImage)
+          : workbenchImage;
+      if (source == null) throw Exception(_rt('error.originalImageRequired'));
+      final image = await File(source.filePath).readAsBytes();
+      final dims = source;
       final targetWidth = max(64, (dims.width / 64).ceil() * 64);
       final targetHeight = max(64, (dims.height / 64).ceil() * 64);
       // Inpaint keeps its own independent positive prompt
@@ -2109,13 +2382,14 @@ class AppState extends ChangeNotifier {
             height: targetHeight,
             groupId: generationGroupId.ifEmptyNull));
       }
-      comparisonBefore = dims;
+      comparisonBefore = source;
       comparisonAfter = WorkingImage(
         filePath: items.first.filePath,
         width: targetWidth,
         height: targetHeight,
       );
-      await _commitCompletedHistory(items, useAsWorkbench: true);
+      await _commitCompletedHistory(items,
+          useAsWorkbench: inpaintSourceMode == 'latest');
       final fallbackNote = usedModel == inpaintModel
           ? ''
           : _rf('status.inpaintFallback', {'model': usedModel});
@@ -2136,6 +2410,7 @@ class AppState extends ChangeNotifier {
         (fresh) => calculateUpscaleAnlas(
           image: dims,
           account: fresh,
+          scale: upscaleScale,
           language: settings.language,
         ),
       );
@@ -2148,8 +2423,8 @@ class AppState extends ChangeNotifier {
             })
           : _rf('status.upscaleRunning', {'scale': upscaleScale});
       notifyListeners();
-      final bytes = await api.upscale(token, settings, prepared.bytes,
-          prepared.width, prepared.height, upscaleScale);
+      final bytes = await api.upscale(
+          token, settings, prepared.bytes, upscaleScale, params.model);
       final item = await storage.saveImage(bytes, params, 0,
           feature: 'upscale',
           model: 'upscale',

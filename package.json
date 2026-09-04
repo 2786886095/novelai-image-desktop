@@ -1,6 +1,6 @@
 {
   "name": "langbai-novelai-studio",
-  "version": "2.1.1",
+  "version": "2.2.0",
   "private": true,
   "description": "Langbai NovelAI Studio: API-only NovelAI image generation desktop client with Chinese UI.",
   "author": "Langbai",
@@ -23,7 +23,6 @@
     "typecheck": "tsc --noEmit && tsc -p tsconfig.electron.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "validate:jianying-draft": "npm run build:electron && node scripts/create-tuiwen-jianying-validation.mjs",
     "start": "npm run build && electron .",
     "pack": "node scripts/cleanup-portable-release.mjs && npm run build && electron-builder --win portable nsis && node scripts/copy-ascii-release.mjs && node scripts/cleanup-portable-release.mjs",
     "pack:portable": "node scripts/cleanup-portable-release.mjs && npm run build && electron-builder --win portable && node scripts/copy-ascii-release.mjs && node scripts/cleanup-portable-release.mjs",
@@ -34,6 +33,7 @@
   "dependencies": {
     "@huggingface/transformers": "^3.8.1",
     "@msgpack/msgpack": "^3.1.3",
+    "@tanstack/react-virtual": "^3.14.10",
     "axios": "^1.13.2",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
@@ -47,6 +47,9 @@
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-icons": "^5.7.0",
+    "react-markdown": "^10.1.0",
+    "rehype-sanitize": "^6.0.0",
+    "remark-gfm": "^4.0.1",
     "socks-proxy-agent": "^7.0.0",
     "weui": "^2.6.26",
     "zustand": "^5.0.9"
@@ -92,6 +95,7 @@
     "files": [
       "dist/**",
       "dist-electron/**",
+      "THIRD_PARTY_NOTICES.md",
       "!**/*.map",
       "!node_modules/onnxruntime-web/**",
       "!node_modules/onnxruntime-node/bin/napi-v3/darwin/**",
@@ -114,6 +118,7 @@
       "include": "build/installer.nsh",
       "artifactName": "Langbai-NovelAI-Studio-Setup-${version}.${ext}",
       "oneClick": false,
+      "perMachine": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,

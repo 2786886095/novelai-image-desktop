@@ -10,12 +10,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../artist/artist_recipe.dart';
 import '../artist/random_custom_tag_library.dart';
+import '../artist/weight_distribution.dart';
 import '../i18n/app_locales.dart';
 import '../models/nai_models.dart';
 import '../services/artist_tag_service.dart';
 import '../state/app_state.dart';
 import '../tags/offline_tag_store.dart';
 import '../ui/quality_preset_control.dart';
+import '../ui/weight_distribution_controls.dart';
 import 'positive_prompt_preset_sheet.dart';
 
 class _Result {
@@ -118,9 +120,15 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
   List<ArtistRecipe> _planned = const [];
   final List<_Result> _results = [];
   final List<_Result> _favorites = [];
+  static const int _resultPageSize = 24;
+  int _visibleResults = _resultPageSize;
+  int _visibleFavorites = _resultPageSize;
   bool _mutateAuxiliary = false;
   bool _includeFranchiseStyles = false;
   String _seedMode = 'fixed';
+  WeightControlMode _weightControlMode = WeightControlMode.novice;
+  WeightDistributionConfig _weightDistribution =
+      const WeightDistributionConfig();
   bool _loading = true;
   bool _running = false;
   bool _cancelled = false;
@@ -755,6 +763,8 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
       _includeFranchiseStyles = false;
       _mutateAuxiliary = false;
       _seedMode = 'fixed';
+      _weightControlMode = WeightControlMode.novice;
+      _weightDistribution = const WeightDistributionConfig();
       _seed.text = '246813579';
       _drawSeed = Random.secure().nextInt(0x7fffffff);
       _planned = _buildPlan();
@@ -878,6 +888,18 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     _seedMode = prefs.getString('${_prefsPrefix}seedMode') == 'random'
         ? 'random'
         : 'fixed';
+    _weightControlMode =
+        prefs.getString('${_prefsPrefix}weightControlMode') == 'advanced'
+            ? WeightControlMode.advanced
+            : WeightControlMode.novice;
+    _weightDistribution = WeightDistributionConfig(
+      mode: prefs.getDouble('${_prefsPrefix}weightMode') ?? .8,
+      leftDispersion:
+          prefs.getDouble('${_prefsPrefix}weightLeftDispersion') ?? .4,
+      rightDispersion:
+          prefs.getDouble('${_prefsPrefix}weightRightDispersion') ?? .4,
+      softBalance: prefs.getDouble('${_prefsPrefix}weightSoftBalance') ?? 0,
+    );
     _showFavorites = prefs.getBool('${_prefsPrefix}showFavorites') ?? false;
     for (final entry in <(String, List<_Result>)>[
       ('results', _results),
@@ -887,11 +909,22 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
         final rows =
             jsonDecode(prefs.getString('$_prefsPrefix${entry.$1}') ?? '[]')
                 as List;
-        entry.$2.addAll(rows
+        final seen = <String>{};
+        final restored = rows
             .whereType<Map>()
             .map((item) => _Result.fromJson(Map<String, dynamic>.from(item)))
-            .where((item) =>
-                item.image == null || File(item.image!.filePath).existsSync()));
+            .where((item) {
+          final imageId = item.image?.id ?? '';
+          final imagePath = item.image?.filePath ?? '';
+          if (imagePath.isNotEmpty && !File(imagePath).existsSync()) {
+            item.image = null;
+            if (item.status == 'done') item.status = 'failed';
+          }
+          return seen.add('$imageId|${item.recipe.id}|$imagePath');
+        });
+        entry.$2
+          ..clear()
+          ..addAll(restored);
       } catch (_) {}
     }
     await _loadPool(false);
@@ -973,6 +1006,19 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     await prefs.setBool(
         '${_prefsPrefix}includeFranchiseStyles', _includeFranchiseStyles);
     await prefs.setString('${_prefsPrefix}seedMode', _seedMode);
+    await prefs.setString(
+        '${_prefsPrefix}weightControlMode',
+        _weightControlMode == WeightControlMode.advanced
+            ? 'advanced'
+            : 'novice');
+    await prefs.setDouble(
+        '${_prefsPrefix}weightMode', _weightDistribution.mode);
+    await prefs.setDouble('${_prefsPrefix}weightLeftDispersion',
+        _weightDistribution.leftDispersion);
+    await prefs.setDouble('${_prefsPrefix}weightRightDispersion',
+        _weightDistribution.rightDispersion);
+    await prefs.setDouble(
+        '${_prefsPrefix}weightSoftBalance', _weightDistribution.softBalance);
     await prefs.setBool('${_prefsPrefix}showFavorites', _showFavorites);
     await prefs.setString('${_prefsPrefix}results',
         jsonEncode(_results.map((item) => item.toJson()).toList()));
@@ -994,6 +1040,10 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
         drawSeed: _drawSeed,
         minArtistWeight: _decimal(_minArtistWeight, _artistWeightMinDefault),
         maxArtistWeight: _decimal(_maxArtistWeight, _artistWeightMaxDefault),
+        artistWeightDistribution:
+            _weightControlMode == WeightControlMode.advanced
+                ? _weightDistribution
+                : null,
         auxiliary: _auxiliary.text,
         customTagPool: _customTags.text,
         customTagModes: _customTagModes,
@@ -1119,6 +1169,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
       _results
         ..clear()
         ..addAll(batch);
+      _visibleResults = _resultPageSize;
       _running = true;
       _cancelled = false;
       _message = '';
@@ -1146,6 +1197,16 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
       count: _positive(_weightTuneCount, 8).clamp(1, 1000).toInt(),
       variationPercent: _weightVariationValue().toDouble(),
       drawSeed: Random.secure().nextInt(0x7fffffff),
+      customTagPool: _customTags.text,
+      customTagModes: _customTagModes,
+      minRandomCustomTags:
+          _positive(_minRandomCustomTags, 1).clamp(0, 20).toInt(),
+      maxRandomCustomTags:
+          _positive(_maxRandomCustomTags, 3).clamp(0, 20).toInt(),
+      minCustomTagWeight:
+          _decimal(_minCustomTagWeight, _customTagWeightMinDefault),
+      maxCustomTagWeight:
+          _decimal(_maxCustomTagWeight, _customTagWeightMaxDefault),
     );
     if (recipes.isEmpty) {
       setState(() => _message =
@@ -1174,6 +1235,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
       _results
         ..clear()
         ..addAll(batch);
+      _visibleResults = _resultPageSize;
       _running = true;
       _cancelled = false;
       _message = '';
@@ -1444,190 +1506,198 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
             final tuneText = _tuneText(app.settings.language);
             final artistsAction = 'artists:${result.recipe.id}';
             final fullAction = 'full:${result.recipe.id}';
-            return Card(
-              key: ValueKey(result.recipe.id),
-              clipBehavior: Clip.antiAlias,
-              child: Column(
-                children: [
-                  Container(
-                    width: double.infinity,
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    color: result.recipe.variant == 'mutated'
-                        ? Theme.of(context)
-                            .colorScheme
-                            .primaryContainer
-                            .withAlpha(166)
-                        : Theme.of(context)
-                            .colorScheme
-                            .surfaceContainerHighest
-                            .withAlpha(184),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '#${result.sequence.toString().padLeft(2, '0')} · '
-                          '${result.recipe.variant == 'mutated' ? text['variantMutated']! : text['variantPlain']!}',
-                          style: const TextStyle(fontWeight: FontWeight.w700),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '${text['modelGroup']} · ${_modelLabel(result, app)}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.labelSmall,
-                        ),
-                      ],
+            return RepaintBoundary(
+              key: ValueKey(
+                  '${favorites ? 'favorite' : 'result'}:${result.image?.id ?? result.recipe.id}:$index'),
+              child: Card(
+                clipBehavior: Clip.antiAlias,
+                child: Column(
+                  children: [
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 8),
+                      color: result.recipe.variant == 'mutated'
+                          ? Theme.of(context)
+                              .colorScheme
+                              .primaryContainer
+                              .withAlpha(166)
+                          : Theme.of(context)
+                              .colorScheme
+                              .surfaceContainerHighest
+                              .withAlpha(184),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '#${result.sequence.toString().padLeft(2, '0')} · '
+                            '${result.recipe.variant == 'mutated' ? text['variantMutated']! : text['variantPlain']!}',
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${text['modelGroup']} · ${_modelLabel(result, app)}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.labelSmall,
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  Expanded(
-                    child: result.image == null
-                        ? Center(
-                            child: Text(text[result.status] ?? result.status))
-                        : GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onDoubleTap: () =>
-                                _previewResult(result, text, app),
-                            child: Tooltip(
-                              message: text['previewImage']!,
-                              child: Image.file(
-                                File(result.image!.filePath),
-                                width: double.infinity,
-                                fit: BoxFit.contain,
-                                cacheWidth: 720,
-                                filterQuality: FilterQuality.medium,
-                                errorBuilder: (_, __, ___) =>
-                                    const Icon(Icons.broken_image_outlined),
+                    Expanded(
+                      child: result.image == null
+                          ? Center(
+                              child: Text(text[result.status] ?? result.status))
+                          : GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onDoubleTap: () =>
+                                  _previewResult(result, text, app),
+                              child: Tooltip(
+                                message: text['previewImage']!,
+                                child: Image.file(
+                                  File(result.image!.filePath),
+                                  width: double.infinity,
+                                  fit: BoxFit.contain,
+                                  cacheWidth: columns == 1 ? 540 : 420,
+                                  filterQuality: FilterQuality.low,
+                                  gaplessPlayback: true,
+                                  errorBuilder: (_, __, ___) =>
+                                      const Icon(Icons.broken_image_outlined),
+                                ),
                               ),
                             ),
+                    ),
+                    _franchiseTerms(result.recipe, text),
+                    _mutationTerms(result.recipe, text),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(8, 8, 8, 2),
+                      child: Text(result.recipe.prompt,
+                          maxLines: 3, overflow: TextOverflow.ellipsis),
+                    ),
+                    if (result.error != null)
+                      Padding(
+                        padding: const EdgeInsets.all(6),
+                        child: Text(result.error!,
+                            maxLines: 2,
+                            style: TextStyle(
+                                color: Theme.of(context).colorScheme.error,
+                                fontSize: 11)),
+                      ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(6, 6, 6, 0),
+                      child: Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed: () => _copyResult(
+                              artistsAction,
+                              artistRecipeCardTagsWithTrailingComma(
+                                  result.recipe),
+                              tuneText['copiedArtists']!,
+                            ),
+                            icon:
+                                const Icon(Icons.people_alt_outlined, size: 16),
+                            label: Text(_copiedAction == artistsAction
+                                ? tuneText['copied']!
+                                : text['copyArtists']!),
                           ),
-                  ),
-                  _franchiseTerms(result.recipe, text),
-                  _mutationTerms(result.recipe, text),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 8, 8, 2),
-                    child: Text(result.recipe.prompt,
-                        maxLines: 3, overflow: TextOverflow.ellipsis),
-                  ),
-                  if (result.error != null)
+                          OutlinedButton.icon(
+                            onPressed: () => _copyResult(
+                              fullAction,
+                              fullArtistRecipePrompt(result.recipe, _base.text),
+                              tuneText['copiedFull']!,
+                            ),
+                            icon: const Icon(Icons.content_copy_outlined,
+                                size: 16),
+                            label: Text(_copiedAction == fullAction
+                                ? tuneText['copied']!
+                                : text['copyFull']!),
+                          ),
+                        ],
+                      ),
+                    ),
                     Padding(
                       padding: const EdgeInsets.all(6),
-                      child: Text(result.error!,
-                          maxLines: 2,
-                          style: TextStyle(
-                              color: Theme.of(context).colorScheme.error,
-                              fontSize: 11)),
-                    ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(6, 6, 6, 0),
-                    child: Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: [
-                        OutlinedButton.icon(
-                          onPressed: () => _copyResult(
-                            artistsAction,
-                            artistRecipeCardTagsWithTrailingComma(
-                                result.recipe),
-                            tuneText['copiedArtists']!,
-                          ),
-                          icon: const Icon(Icons.people_alt_outlined, size: 16),
-                          label: Text(_copiedAction == artistsAction
-                              ? tuneText['copied']!
-                              : text['copyArtists']!),
-                        ),
-                        OutlinedButton.icon(
-                          onPressed: () => _copyResult(
-                            fullAction,
-                            fullArtistRecipePrompt(result.recipe, _base.text),
-                            tuneText['copiedFull']!,
-                          ),
-                          icon:
-                              const Icon(Icons.content_copy_outlined, size: 16),
-                          label: Text(_copiedAction == fullAction
-                              ? tuneText['copied']!
-                              : text['copyFull']!),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.all(6),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        if (favorites)
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          if (favorites)
+                            IconButton(
+                              tooltip: text['remove'],
+                              onPressed: () => _removeFavorite(result),
+                              icon: const Icon(Icons.delete_outline),
+                            )
+                          else if (result.status == 'failed')
+                            IconButton(
+                              tooltip: text['retry'],
+                              onPressed: _running ? null : () => _retry(result),
+                              icon: const Icon(Icons.refresh),
+                            )
+                          else
+                            IconButton(
+                              tooltip: result.liked
+                                  ? text['saved']
+                                  : result.saving
+                                      ? text['saving']
+                                      : text['like'],
+                              onPressed: result.status == 'done' &&
+                                      !result.liked &&
+                                      !result.saving
+                                  ? () => _saveFavorite(result)
+                                  : null,
+                              icon: Icon(result.liked
+                                  ? Icons.favorite
+                                  : Icons.favorite_border),
+                            ),
                           IconButton(
-                            tooltip: text['remove'],
-                            onPressed: () => _removeFavorite(result),
-                            icon: const Icon(Icons.delete_outline),
-                          )
-                        else if (result.status == 'failed')
-                          IconButton(
-                            tooltip: text['retry'],
-                            onPressed: _running ? null : () => _retry(result),
-                            icon: const Icon(Icons.refresh),
-                          )
-                        else
-                          IconButton(
-                            tooltip: result.liked
-                                ? text['saved']
-                                : result.saving
-                                    ? text['saving']
-                                    : text['like'],
-                            onPressed: result.status == 'done' &&
-                                    !result.liked &&
-                                    !result.saving
-                                ? () => _saveFavorite(result)
+                            tooltip: text['apply'],
+                            onPressed: result.status == 'done'
+                                ? () => app.setParam((params) {
+                                      final selected = _generationParams.copy()
+                                        ..model = _resultModel(result)
+                                        ..positivePrompt = _base.text.trim()
+                                        ..stylePrompt = result.recipe.prompt
+                                        ..seed = result.seed ?? _seedValue()
+                                        ..seedMode = 'fixed';
+                                      final value = selected.toJson();
+                                      final applied =
+                                          GenerateParams.fromJson(value);
+                                      params
+                                        ..model = applied.model
+                                        ..stylePrompt = applied.stylePrompt
+                                        ..positivePrompt =
+                                            applied.positivePrompt
+                                        ..negativePrompt =
+                                            applied.negativePrompt
+                                        ..width = applied.width
+                                        ..height = applied.height
+                                        ..steps = applied.steps
+                                        ..cfgScale = applied.cfgScale
+                                        ..cfgRescale = applied.cfgRescale
+                                        ..sampler = applied.sampler
+                                        ..noiseSchedule = applied.noiseSchedule
+                                        ..seed = applied.seed
+                                        ..seedMode = applied.seedMode
+                                        ..ucPreset = applied.ucPreset
+                                        ..qualityPreset = applied.qualityPreset
+                                        ..qualityToggle = applied.qualityToggle
+                                        ..transparentBackground =
+                                            applied.transparentBackground
+                                        ..smea = applied.smea
+                                        ..smeaDyn = applied.smeaDyn
+                                        ..variety = applied.variety
+                                        ..fileNamePrefix =
+                                            applied.fileNamePrefix;
+                                    })
                                 : null,
-                            icon: Icon(result.liked
-                                ? Icons.favorite
-                                : Icons.favorite_border),
+                            icon: const Icon(Icons.call_made),
                           ),
-                        IconButton(
-                          tooltip: text['apply'],
-                          onPressed: result.status == 'done'
-                              ? () => app.setParam((params) {
-                                    final selected = _generationParams.copy()
-                                      ..model = _resultModel(result)
-                                      ..positivePrompt = _base.text.trim()
-                                      ..stylePrompt = result.recipe.prompt
-                                      ..seed = result.seed ?? _seedValue()
-                                      ..seedMode = 'fixed';
-                                    final value = selected.toJson();
-                                    final applied =
-                                        GenerateParams.fromJson(value);
-                                    params
-                                      ..model = applied.model
-                                      ..stylePrompt = applied.stylePrompt
-                                      ..positivePrompt = applied.positivePrompt
-                                      ..negativePrompt = applied.negativePrompt
-                                      ..width = applied.width
-                                      ..height = applied.height
-                                      ..steps = applied.steps
-                                      ..cfgScale = applied.cfgScale
-                                      ..cfgRescale = applied.cfgRescale
-                                      ..sampler = applied.sampler
-                                      ..noiseSchedule = applied.noiseSchedule
-                                      ..seed = applied.seed
-                                      ..seedMode = applied.seedMode
-                                      ..ucPreset = applied.ucPreset
-                                      ..qualityPreset = applied.qualityPreset
-                                      ..qualityToggle = applied.qualityToggle
-                                      ..transparentBackground =
-                                          applied.transparentBackground
-                                      ..smea = applied.smea
-                                      ..smeaDyn = applied.smeaDyn
-                                      ..variety = applied.variety
-                                      ..fileNamePrefix = applied.fileNamePrefix;
-                                  })
-                              : null,
-                          icon: const Icon(Icons.call_made),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             );
           },
@@ -1835,7 +1905,8 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
         : '${value[0].toUpperCase()}${value.substring(1)}';
   }
 
-  Widget _customTagLibraryCard(Map<String, String> _, String language) {
+  Widget _customTagLibraryCard(Map<String, String> _, String language,
+      [String storageKey = 'draw']) {
     final ui = _customTagUiText(language);
     final colors = Theme.of(context).colorScheme;
     final selectedValues = parseCustomTagPoolValues(_customTags.text);
@@ -1977,7 +2048,8 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     return Card(
       clipBehavior: Clip.antiAlias,
       child: ExpansionTile(
-        key: const PageStorageKey<String>('random-artist-style-tag-library'),
+        key: PageStorageKey<String>(
+            'random-artist-style-tag-library-$storageKey'),
         initiallyExpanded: false,
         onExpansionChanged: (expanded) {
           if (expanded && _isDynamicCustomTagCategory) {
@@ -2237,6 +2309,14 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                       ),
                     ),
                     SizedBox(
+                      width: constraints.maxWidth,
+                      child: _customTagLibraryCard(
+                        _text(context.read<AppState>().settings.language),
+                        context.read<AppState>().settings.language,
+                        'weight-tuner',
+                      ),
+                    ),
+                    SizedBox(
                       width: fieldWidth,
                       child: TextField(
                         controller: _weightTuneCount,
@@ -2301,14 +2381,14 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
             favoriteModels.contains(_favoriteModelFilter)
         ? _favoriteModelFilter
         : 'all';
-    final favoriteGroups = <String, List<_Result>>{};
-    for (final result in _favorites) {
+    final filteredFavorites = _favorites.where((result) {
       final model = _resultModel(result);
-      if (selectedFavoriteModel != 'all' && model != selectedFavoriteModel) {
-        continue;
-      }
-      favoriteGroups.putIfAbsent(model, () => []).add(result);
-    }
+      return selectedFavoriteModel == 'all' || model == selectedFavoriteModel;
+    }).toList(growable: false);
+    final visibleFavorites =
+        filteredFavorites.take(_visibleFavorites).toList(growable: false);
+    final visibleResults =
+        _results.take(_visibleResults).toList(growable: false);
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -2321,7 +2401,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
         controller: _scrollController,
         key: const PageStorageKey<String>('random-artist-lab-scroll'),
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 32),
+        padding: const EdgeInsets.fromLTRB(12, 16, 12, 96),
         children: [
           Card(
             child: Padding(
@@ -2937,6 +3017,33 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                     }),
                     SizedBox(
                       width: constraints.maxWidth,
+                      child: WeightDistributionControls(
+                        mode: _weightControlMode,
+                        lower:
+                            _decimal(_minArtistWeight, _artistWeightMinDefault),
+                        upper:
+                            _decimal(_maxArtistWeight, _artistWeightMaxDefault),
+                        config: _weightDistribution,
+                        onModeChanged: (value) {
+                          setState(() {
+                            _weightControlMode = value;
+                            _drawSeed = Random.secure().nextInt(0x7fffffff);
+                            _planned = _buildPlan();
+                          });
+                          _save();
+                        },
+                        onChanged: (value) {
+                          setState(() {
+                            _weightDistribution = value;
+                            _drawSeed = Random.secure().nextInt(0x7fffffff);
+                            _planned = _buildPlan();
+                          });
+                          _save();
+                        },
+                      ),
+                    ),
+                    SizedBox(
+                      width: constraints.maxWidth,
                       child: Text(text['seedMode']!,
                           style: Theme.of(context).textTheme.labelLarge),
                     ),
@@ -3105,13 +3212,31 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
             ],
             selected: {_showFavorites},
             onSelectionChanged: (value) {
-              setState(() => _showFavorites = value.first);
+              setState(() {
+                _showFavorites = value.first;
+                if (_showFavorites) {
+                  _visibleFavorites = _resultPageSize;
+                } else {
+                  _visibleResults = _resultPageSize;
+                }
+              });
               _save();
             },
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 20),
           if (!_showFavorites && _results.isNotEmpty)
-            _resultGrid(_results, text, app),
+            _resultGrid(visibleResults, text, app),
+          if (!_showFavorites && visibleResults.length < _results.length)
+            Padding(
+              padding: const EdgeInsets.only(top: 16),
+              child: OutlinedButton.icon(
+                onPressed: () => setState(() => _visibleResults =
+                    min(_visibleResults + _resultPageSize, _results.length)),
+                icon: const Icon(Icons.expand_more),
+                label:
+                    Text('加载更多（${visibleResults.length}/${_results.length}）'),
+              ),
+            ),
           if (_showFavorites) ...[
             Card(
               child: Padding(
@@ -3165,7 +3290,10 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                               ],
                               onChanged: (value) {
                                 if (value == null) return;
-                                setState(() => _favoriteModelFilter = value);
+                                setState(() {
+                                  _favoriteModelFilter = value;
+                                  _visibleFavorites = _resultPageSize;
+                                });
                               },
                             ),
                           ),
@@ -3175,6 +3303,28 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                     const SizedBox(height: 4),
                     Text(text['favoritesHint']!,
                         style: Theme.of(context).textTheme.bodySmall),
+                    if (favoriteModels.isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 7,
+                        runSpacing: 7,
+                        children: favoriteModels.map((model) {
+                          final sample = _favorites.firstWhere(
+                              (item) => _resultModel(item) == model);
+                          return FilterChip(
+                            selected: selectedFavoriteModel == model,
+                            label: Text(_modelLabel(sample, app)),
+                            onSelected: (_) => setState(() {
+                              _favoriteModelFilter =
+                                  selectedFavoriteModel == model
+                                      ? 'all'
+                                      : model;
+                              _visibleFavorites = _resultPageSize;
+                            }),
+                          );
+                        }).toList(growable: false),
+                      ),
+                    ],
                     const SizedBox(height: 12),
                     if (_favorites.isEmpty)
                       Padding(
@@ -3182,30 +3332,19 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                         child: Center(child: Text(text['needLikes']!)),
                       )
                     else
-                      ...favoriteGroups.entries.expand((entry) => [
-                            Padding(
-                              padding:
-                                  const EdgeInsets.only(top: 12, bottom: 8),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.auto_awesome_mosaic_outlined,
-                                      size: 18),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      _modelLabel(entry.value.first, app),
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleSmall,
-                                    ),
-                                  ),
-                                  Text('${entry.value.length}'),
-                                ],
-                              ),
-                            ),
-                            _resultGrid(entry.value, text, app,
-                                favorites: true),
-                          ]),
+                      _resultGrid(visibleFavorites, text, app, favorites: true),
+                    if (visibleFavorites.length < filteredFavorites.length)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 20),
+                        child: OutlinedButton.icon(
+                          onPressed: () => setState(() => _visibleFavorites =
+                              min(_visibleFavorites + _resultPageSize,
+                                  filteredFavorites.length)),
+                          icon: const Icon(Icons.expand_more),
+                          label: Text(
+                              '加载更多（${visibleFavorites.length}/${filteredFavorites.length}）'),
+                        ),
+                      ),
                   ],
                 ),
               ),

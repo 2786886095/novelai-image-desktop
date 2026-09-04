@@ -626,6 +626,16 @@ class ComicController extends ChangeNotifier {
     await _runQueue(tasks);
   }
 
+  Future<void> regenerateAll() async {
+    final tasks = <ComicPanel>[];
+    for (final panel in project.panels) {
+      for (var index = 0; index < project.initialGenerationCount; index++) {
+        tasks.add(panel);
+      }
+    }
+    await _runQueue(tasks);
+  }
+
   Future<void> addOneToAll() =>
       _runQueue(List<ComicPanel>.from(project.panels));
   Future<void> addOne(ComicPanel panel) => _runQueue([panel]);

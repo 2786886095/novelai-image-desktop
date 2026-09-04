@@ -202,7 +202,9 @@ export function calculateUpscaleAnlas({
       details,
     };
   }
-  return finalizeQuote("upscale", amount, account, details, "estimate-formula");
+  const passCount = scale === 4 ? 2 : 1;
+  if (passCount > 1) details.push("4x runs two fixed 2x upscale requests.");
+  return finalizeQuote("upscale", amount * passCount, account, details, "estimate-formula");
 }
 
 export function calculateDirectorAnlas({

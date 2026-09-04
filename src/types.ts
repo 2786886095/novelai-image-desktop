@@ -283,6 +283,7 @@ export function normalizeGenerateParams(value?: Partial<GenerateParams> | null):
 export interface LastGenerationState {
   params: GenerateParams;
   batchCount: number;
+  batchIntervalSeconds?: number;
   i2iParams: I2IParams;
   inpaintModel: NAIInpaintModel;
   inpaintStrength: number;
@@ -397,6 +398,16 @@ export type BatchRedrawSizeMode = ImageToImageSizeMode | "perImage";
 export type BatchRedrawItemStatus =
   "pending" | "generating" | "done" | "failed";
 
+export interface BatchRedrawCandidate {
+  /** Stable UI identifier. Generated outputs use their history item ID. */
+  id: string;
+  historyItemId: string;
+  resultUrl: string;
+  resultPath: string;
+  createdAt?: string;
+  actualSeed?: number;
+}
+
 export interface BatchRedrawItem {
   id: string;
   name: string;
@@ -414,9 +425,13 @@ export interface BatchRedrawItem {
   overrideParams: boolean;
   params: Partial<GenerateParams>;
   status: BatchRedrawItemStatus;
+  /** Every successful output is retained; one candidate is chosen for ZIP export. */
+  candidates: BatchRedrawCandidate[];
+  selectedCandidateId?: string;
+  /** Legacy selected-output aliases kept for older UI/project compatibility. */
   resultUrl?: string; // file:// url of the latest img2img output (for display)
   resultPath?: string;
-  historyItemId?: string; // so 重试 can delete the previous output
+  historyItemId?: string;
   error?: string;
 }
 
@@ -430,6 +445,8 @@ export interface BatchRedrawProject {
   globalNegative: string;
   /** Full editable params for ALL models — defaults to the main screen params. */
   globalParams: GenerateParams;
+  /** One shared number of candidates generated for every source image. */
+  candidateCount: number;
   /** Adaptive uses each source image's nearest 64-multiple size. */
   sizeMode: BatchRedrawSizeMode;
   /** Editable one-size-per-line source, persisted with project exports. */
@@ -459,6 +476,7 @@ export function createDefaultBatchRedraw(
     globalStyle: "",
     globalNegative: "",
     globalParams: { ...params, fileNamePrefix: "" },
+    candidateCount: 1,
     sizeMode: "adaptive",
     sizeBulk: "",
     preciseReferences: [],
@@ -475,16 +493,6 @@ export interface PromptVariants {
   featurePrompt: string;
 }
 
-export interface PromptCodexMatch {
-  id: string;
-  title: string;
-  section: string;
-  source: string;
-  excerpt: string;
-  adult: boolean;
-  score: number;
-}
-
 /** In-flight/just-finished convert or reverse requests. Concurrent, not a
  * serial queue: each job fires its API call immediately on creation and is
  * updated in place when that call resolves. Not persisted across restarts. */
@@ -498,7 +506,6 @@ export interface TextToolJob {
   status: TextToolJobStatus;
   result?: string;
   variants?: PromptVariants;
-  codexMatches?: PromptCodexMatch[];
   message?: string;
   addedAt: number;
 }
@@ -514,7 +521,6 @@ export interface TextToolHistoryItem {
   sourceImagePath?: string;
   result: string;
   variants?: PromptVariants;
-  codexMatches?: PromptCodexMatch[];
   createdAt: string;
 }
 
@@ -580,213 +586,6 @@ export interface ComicProject {
   globalParams: GenerateParams;
   references: ComicReferenceAsset[];
   panels: ComicPanel[];
-}
-
-export type TuiwenSourceType = "novel" | "subtitle";
-export type TuiwenSubtitleFormat = "srt" | "ass" | "lrc";
-export type TuiwenAspectRatio = "9:16" | "16:9" | "1:1" | "4:3" | "3:4";
-export type TuiwenKeyframePreset =
-  | "none"
-  | "zoomIn"
-  | "zoomOut"
-  | "panLeft"
-  | "panRight"
-  | "panUp"
-  | "panDown"
-  | "kenBurns"
-  | "custom";
-
-export interface TuiwenAudio {
-  filePath: string;
-  fileUrl: string;
-  durationMs: number;
-  source: "import" | "tts";
-  ttsVoice?: string;
-}
-
-export type TuiwenTtsProviderId = "edge" | "cloud";
-
-export interface TuiwenTtsProviderInfo {
-  id: TuiwenTtsProviderId;
-  label: string;
-  available: boolean;
-  requiresApiKey: boolean;
-  description: string;
-}
-
-export interface TuiwenTtsVoice {
-  id: string;
-  label: string;
-  locale: string;
-  gender: "female" | "male";
-}
-
-export interface TuiwenTtsRequest {
-  projectId: string;
-  projectTitle: string;
-  provider: TuiwenTtsProviderId;
-  voice: string;
-  ratePercent: number;
-  volumePercent: number;
-  shots: Array<{ shotId: string; index: number; narration: string }>;
-}
-
-export interface TuiwenTtsItemResult {
-  shotId: string;
-  index: number;
-  ok: boolean;
-  audio?: TuiwenAudio;
-  error?: string;
-  warning?: string;
-}
-
-export interface TuiwenTtsResult {
-  ok: boolean;
-  provider: TuiwenTtsProviderId;
-  message: string;
-  items: TuiwenTtsItemResult[];
-  warnings?: string[];
-}
-
-export interface TuiwenSaveImportedAudioRequest {
-  projectId: string;
-  projectTitle: string;
-  shotId: string;
-  index: number;
-  durationMs: number;
-  sourceName: string;
-  wavData: ArrayBuffer;
-}
-
-export interface TuiwenSaveImportedAudioResult {
-  ok: boolean;
-  message: string;
-  audio?: TuiwenAudio;
-}
-
-export interface TuiwenSubtitle {
-  text: string;
-  enabled: boolean;
-  style?: {
-    fontSize?: number;
-    color?: string;
-    strokeColor?: string;
-    position?: "bottom" | "top" | "center";
-  };
-}
-
-export interface TuiwenKeyframeConfig {
-  preset: TuiwenKeyframePreset;
-  keys: Array<{
-    timeRatio: number;
-    scale: number;
-    x: number;
-    y: number;
-    alpha: number;
-    rotation: number;
-  }>;
-}
-
-export interface TuiwenTransition {
-  preset: "none" | "fade" | "slideLeft" | "slideRight" | "zoom" | "wipe";
-  durationMs: number;
-}
-
-export interface TuiwenShot extends ComicPanel {
-  narration: string;
-  startMs?: number;
-  durationMs: number;
-  audio?: TuiwenAudio;
-  subtitle: TuiwenSubtitle;
-  keyframe: TuiwenKeyframeConfig;
-  transition?: TuiwenTransition;
-}
-
-export interface TuiwenExportSettings {
-  aspectRatio: TuiwenAspectRatio;
-  width: number;
-  height: number;
-  fps: number;
-  defaultShotDurationMs: number;
-  subtitleDefault: TuiwenSubtitle["style"];
-  bgm?: { filePath: string; volume: number; loop: boolean; fadeMs: number };
-  intro?: { text: string; durationMs: number };
-  outro?: { text: string; durationMs: number };
-  jianyingDraftDir?: string;
-}
-
-export interface TuiwenPreflightState {
-  preciseReferenceVerified: boolean;
-  jianyingGoldenSampleReady: boolean;
-  jianyingMediaBundleVerified: boolean;
-  desktopOnlyAcknowledged: boolean;
-}
-
-export interface TuiwenProject extends Omit<ComicProject, "panels"> {
-  source: {
-    type: TuiwenSourceType;
-    fileName: string;
-    subtitleFormat?: TuiwenSubtitleFormat;
-  };
-  panels: TuiwenShot[];
-  exportSettings: TuiwenExportSettings;
-  preflight: TuiwenPreflightState;
-}
-
-export interface TuiwenImportFileRequest {
-  filePath: string;
-  fileName?: string;
-  defaultShotDurationMs?: number;
-}
-
-export interface TuiwenImportFileResult {
-  ok: boolean;
-  message: string;
-  source?: TuiwenProject["source"];
-  rawScript?: string;
-  shots?: TuiwenShot[];
-}
-
-export interface TuiwenExportJianYingRequest {
-  project: TuiwenProject;
-  outDir?: string;
-}
-
-export type TuiwenDraftValidationStatus = "pass" | "warning" | "error";
-
-export interface TuiwenDraftValidationCheck {
-  id: string;
-  label: string;
-  status: TuiwenDraftValidationStatus;
-  detail: string;
-}
-
-export interface TuiwenDraftValidationResult {
-  ok: boolean;
-  targetVersion: string;
-  checkedAt: number;
-  errorCount: number;
-  warningCount: number;
-  checks: TuiwenDraftValidationCheck[];
-}
-
-export interface TuiwenExportJianYingResult {
-  ok: boolean;
-  message: string;
-  draftPath?: string;
-  contentPath?: string;
-  metaPath?: string;
-  mediaCount?: number;
-  warnings?: string[];
-  validation?: TuiwenDraftValidationResult;
-}
-
-export interface TuiwenProjectSnapshotResult {
-  ok: boolean;
-  message: string;
-  project?: TuiwenProject;
-  savedAt?: number;
-  path?: string;
 }
 
 export interface ComicAnalyzeRequest {
@@ -1210,6 +1009,7 @@ export interface MetadataSnapshotResult {
 export type DataBackupCategory =
   | "configuration"
   | "apiCredentials"
+  | "agentWorkspace"
   | "artistLibrary"
   | "textHistory"
   | "referencePresets"
@@ -1374,6 +1174,17 @@ export interface PositivePromptPreset {
   prompt: string;
   createdAt: string;
   previewImages?: StylePromptPreviewImage[];
+}
+
+/** A reusable text fragment inserted into the prompt being edited. Unlike a
+ * positive prompt preset it never replaces the complete positive prompt and
+ * carries no preview images or generation state. */
+export interface PromptChunk {
+  id: string;
+  name: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export type ReferencePresetKind = "vibe" | "precise";
@@ -1565,6 +1376,9 @@ export interface AppSettings {
   // Per-version reverse-prompt system templates (empty = built-in default).
   reversePromptTemplates: ModePromptTemplates;
   reversePromptTemplatesV45: ModePromptTemplates;
+  /** Built-in DSH Infinite Gen 3 adapter, scoped to Tavern image, reverse, and convert only. */
+  reverseConvertDshEnabled: boolean;
+  reverseConvertDshMode: "focused" | "strict";
   // Legacy per-mode comic storyboard templates. Kept for migration only.
   comicAnalyzePromptTemplates: ModePromptTemplates;
   // Current single storyboard analysis template used by the comic generator.
@@ -1574,18 +1388,23 @@ export interface AppSettings {
   convertApiKey: string;
   convertApiModel: string;
   convertSystemPrompt: string;
+  // Character Tavern model provider. Desktop and mobile both connect directly
+  // to the selected provider using the protocol below.
+  agentApiProtocol: import("./agent/types").AgentProviderProtocol;
+  agentApiBaseUrl: string;
+  agentApiKey: string;
+  agentApiModel: string;
+  agentProviderName: string;
+  agentContextWindow: number;
+  agentMaxOutputTokens: number;
+  agentAutoCompact: boolean;
+  agentAutoCompactThreshold: number;
+  agentVisionEnabled: boolean;
   // Convert output type + per-mode conversion system templates.
   convertMode: ReversePromptMode;
   convertPromptTemplateVersion: ReversePromptTemplateVersion;
   convertPromptTemplates: ModePromptTemplates;
   convertPromptTemplatesV45: ModePromptTemplates;
-  // Local NovelAI prompt-codex retrieval. Enabled by default. Classified
-  // entries are eligible only when the input itself is semantically relevant.
-  promptCodexEnhanceEnabled: boolean;
-  promptCodexAdultEnabled: boolean;
-  // Optional post-generation rule validator/repair for tags and mixed modes.
-  // Disabled by default because a failed validation may add one external AI call.
-  promptRuleAutoRepairEnabled: boolean;
   // Optional Danbooru / MCP-compatible tag search service.
   tagServerEnabled: boolean;
   tagServerUrl: string;
@@ -1631,6 +1450,9 @@ export interface AppSettings {
   // Positive-only reusable prompt presets shared by Generate and compatible
   // artist-string tools. Optional images are view-only notes (maximum three).
   positivePromptPresets: PositivePromptPreset[];
+  // Small reusable phrases inserted into any positive/character prompt. These
+  // are intentionally stored separately from whole-prompt presets.
+  promptChunks: PromptChunk[];
   lastGenerationState: LastGenerationState | null;
   // Per-tool opt-out for restoring lastGenerationState across restarts.
   // All default true (today's behavior); turning one off means that tool
@@ -1715,8 +1537,42 @@ export interface NaiDesktopApi {
   runAutomaticBackup: (workspaceData?: Record<string, string>) => Promise<DataBackupOperationResult>;
   selectBackupDirectory: () => Promise<string | null>;
   openBackupDirectory: () => Promise<{ ok: boolean; message?: string }>;
+  getAgentWorkspace: () => Promise<import("./agent/types").AgentWorkspaceData>;
+  saveTavernWorkspace: (workspace: import("./agent/types").AgentWorkspaceData) => Promise<import("./agent/types").AgentWorkspaceMutationResult>;
+  createAgentConversation: (title?: string) => Promise<import("./agent/types").AgentWorkspaceMutationResult>;
+  selectAgentConversation: (conversationId: string) => Promise<import("./agent/types").AgentWorkspaceMutationResult>;
+  renameAgentConversation: (conversationId: string, title: string) => Promise<import("./agent/types").AgentWorkspaceMutationResult>;
+  deleteAgentConversation: (conversationId: string) => Promise<import("./agent/types").AgentWorkspaceMutationResult>;
+  importAgentFiles: (conversationId: string, sourcePaths?: string[]) => Promise<import("./agent/types").AgentImportFilesResult>;
+  deleteAgentAttachment: (conversationId: string, attachmentId: string) => Promise<import("./agent/types").AgentWorkspaceMutationResult>;
+  exportAgentAttachment: (conversationId: string, messageId: string, attachmentId: string) => Promise<{ ok: boolean; cancelled?: boolean; message: string; filePath?: string }>;
+  sendAgentMessage: (request: import("./agent/types").AgentSendRequest) => Promise<{ ok: boolean; message?: string }>;
+  generateTavernImage: (request: import("./agent/types").TavernImageRequest) => Promise<{ ok: boolean; message?: string }>;
+  importTavernCards: (sourcePaths?: string[]) => Promise<import("./agent/types").TavernCardImportResult>;
+  exportTavernCard: (request: import("./agent/types").TavernCardExportRequest) => Promise<{ ok: boolean; cancelled?: boolean; message: string; filePath?: string }>;
+  importTavernVisualAsset: (kind: "avatar" | "background") => Promise<{ ok: boolean; cancelled?: boolean; message?: string; dataUrl?: string; fileName?: string }>;
+  abortAgentMessage: (conversationId: string) => Promise<{ ok: boolean; message?: string }>;
+  compactAgentConversation: (conversationId: string) => Promise<{ ok: boolean; message?: string }>;
+  respondAgentPermission: (
+    permissionId: string,
+    response: "once" | "always" | "reject",
+  ) => Promise<{ ok: boolean; message?: string }>;
+  upsertAgentSkill: (skill: Partial<import("./agent/types").AgentSkill> & Pick<import("./agent/types").AgentSkill, "name" | "instructions">) => Promise<import("./agent/types").AgentWorkspaceMutationResult>;
+  deleteAgentSkill: (skillId: string) => Promise<import("./agent/types").AgentWorkspaceMutationResult>;
+  upsertAgentMemory: (memory: Partial<import("./agent/types").AgentMemory> & Pick<import("./agent/types").AgentMemory, "title" | "content" | "scope">) => Promise<import("./agent/types").AgentWorkspaceMutationResult>;
+  deleteAgentMemory: (memoryId: string) => Promise<import("./agent/types").AgentWorkspaceMutationResult>;
+  getAgentRuntimeStatus: () => Promise<import("./agent/types").AgentRuntimeStatus>;
+  getAgentPendingPermissions: () => Promise<import("./agent/types").AgentPermissionRequest[]>;
+  restartAgentRuntime: () => Promise<import("./agent/types").AgentRuntimeStatus>;
+  discoverAgentModels: (probe: import("./agent/types").AgentProviderProbe) => Promise<import("./agent/types").AgentModelDiscoveryResult>;
+  getAgentWorkspaceLocation: () => Promise<import("./agent/types").AgentWorkspaceLocation>;
+  openAgentWorkspaceDirectory: () => Promise<{ ok: boolean; message?: string }>;
+  onAgentEvent: (callback: (event: import("./agent/types").AgentEvent) => void) => () => void;
   promptCodexCache: () => Promise<
     import("./prompt-codex").PromptCodexSnapshot | null
+  >;
+  promptCodexBundled: () => Promise<
+    import("./prompt-codex").PromptCodexSnapshot
   >;
   promptCodexUpdate: () => Promise<
     import("./prompt-codex").PromptCodexSnapshot
@@ -1779,6 +1635,8 @@ export interface NaiDesktopApi {
     filePath: string;
     fileUrl: string;
     name: string;
+    width: number;
+    height: number;
   } | null>;
   artistLabSearchArtists: (
     query?: string,
@@ -1788,6 +1646,10 @@ export interface NaiDesktopApi {
     limit?: number,
     force?: boolean,
   ) => Promise<import("./artist-lab").ArtistTagRecord[]>;
+  artistLabArtistRanking: (
+    limit?: number,
+    force?: boolean,
+  ) => Promise<import("./artist-lab").ArtistRankingSnapshot>;
   artistLabScoreImages: (
     mode: import("./artist-lab").ArtistLabModelMode,
     targetPath: string,
@@ -1885,7 +1747,7 @@ export interface NaiDesktopApi {
     strength: number,
     noise: number,
   ) => Promise<GenerateResult>;
-  upscaleImage: (scale: UpscaleScale) => Promise<SingleImageResult>;
+  upscaleImage: (scale: UpscaleScale, model: string) => Promise<SingleImageResult>;
   augmentImage: (
     tool: DirectorTool,
     options: AugmentOptions,
@@ -1942,8 +1804,7 @@ export interface NaiDesktopApi {
     ok: boolean;
     prompt?: string;
     variants?: PromptVariants;
-    codexMatches?: PromptCodexMatch[];
-    message: string;
+      message: string;
   }>;
   convertPrompt: (
     text: string,
@@ -1954,8 +1815,7 @@ export interface NaiDesktopApi {
     ok: boolean;
     result?: string;
     variants?: PromptVariants;
-    codexMatches?: PromptCodexMatch[];
-    message: string;
+      message: string;
   }>;
   getConvertHistory: () => Promise<TextToolHistoryItem[]>;
   addConvertHistoryItem: (
@@ -2007,24 +1867,6 @@ export interface NaiDesktopApi {
   tagComicExportSelectedZip: (
     request: TagComicExportZipRequest,
   ) => Promise<ComicExportZipResult>;
-  tuiwenImportFile: (
-    request: TuiwenImportFileRequest,
-  ) => Promise<TuiwenImportFileResult>;
-  tuiwenTtsProviders: () => Promise<{
-    providers: TuiwenTtsProviderInfo[];
-    voices: TuiwenTtsVoice[];
-  }>;
-  tuiwenTts: (request: TuiwenTtsRequest) => Promise<TuiwenTtsResult>;
-  tuiwenSaveImportedAudio: (
-    request: TuiwenSaveImportedAudioRequest,
-  ) => Promise<TuiwenSaveImportedAudioResult>;
-  tuiwenExportJianYing: (
-    request: TuiwenExportJianYingRequest,
-  ) => Promise<TuiwenExportJianYingResult>;
-  tuiwenSaveProjectSnapshot: (
-    project: TuiwenProject,
-  ) => Promise<TuiwenProjectSnapshotResult>;
-  tuiwenLoadProjectSnapshot: () => Promise<TuiwenProjectSnapshotResult>;
   getAiCallLog: () => Promise<AiCallLogEntry[]>;
   clearAiCallLog: () => Promise<{ ok: boolean }>;
   getReverseTemplateDefaults: () => Promise<ModePromptTemplates>;

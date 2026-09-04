@@ -74,11 +74,10 @@ const MAIN_TAB_LOCALES: Record<AppLanguage, MainTabLocale> = {
       title: "局部重绘",
       desc: "涂抹蒙版后重绘指定区域",
     },
-    upscale: { label: "超分", title: "云端放大", desc: "2× / 4× 云端超分" },
     postprocess: {
       label: "后期",
-      title: "导演工具",
-      desc: "移除背景、线稿、上色、表情",
+      title: "图像后期",
+      desc: "增强、超分、移除背景、线稿、上色、表情",
     },
     inspect: {
       label: "反推",
@@ -106,6 +105,11 @@ const MAIN_TAB_LOCALES: Record<AppLanguage, MainTabLocale> = {
       title: "在线画廊",
       desc: "浏览公开作品并提取提示词与原参数",
     },
+    agent: {
+      label: "酒馆AI生图",
+      title: "酒馆 AI 生图",
+      desc: "自然对话整理提示词、搜索 Tag、分析画风并调用 NovelAI 生图",
+    },
     records: {
       label: "记录",
       title: "AI 调用记录",
@@ -123,11 +127,10 @@ const MAIN_TAB_LOCALES: Record<AppLanguage, MainTabLocale> = {
       title: "局部重繪",
       desc: "塗抹蒙版後重繪指定區域",
     },
-    upscale: { label: "超分", title: "雲端放大", desc: "2× / 4× 雲端超分" },
     postprocess: {
       label: "後期",
-      title: "導演工具",
-      desc: "移除背景、線稿、上色、表情",
+      title: "圖片後期",
+      desc: "增強、超分、移除背景、線稿、上色、表情",
     },
     inspect: {
       label: "反推",
@@ -155,6 +158,11 @@ const MAIN_TAB_LOCALES: Record<AppLanguage, MainTabLocale> = {
       title: "線上畫廊",
       desc: "瀏覽公開作品並擷取提示詞與原始參數",
     },
+    agent: {
+      label: "酒館 AI 生圖",
+      title: "酒館 AI 生圖",
+      desc: "以自然對話整理提示詞、搜尋 Tag、分析畫風並呼叫 NovelAI 生圖",
+    },
     records: {
       label: "記錄",
       title: "AI 呼叫記錄",
@@ -172,15 +180,10 @@ const MAIN_TAB_LOCALES: Record<AppLanguage, MainTabLocale> = {
       title: "Local Inpainting",
       desc: "Paint a mask and redraw the selected area",
     },
-    upscale: {
-      label: "Upscale",
-      title: "Cloud Upscale",
-      desc: "2× / 4× NovelAI cloud upscaling",
-    },
     postprocess: {
-      label: "Director",
-      title: "Director Tools",
-      desc: "Background removal, lineart, colorize, emotions",
+      label: "Post",
+      title: "Image Post-processing",
+      desc: "Enhance, upscale, background removal, lineart, colorize, and emotions",
     },
     inspect: {
       label: "Inspect",
@@ -212,6 +215,11 @@ const MAIN_TAB_LOCALES: Record<AppLanguage, MainTabLocale> = {
       title: "Online Gallery",
       desc: "Browse public works and reuse prompts and original parameters",
     },
+    agent: {
+      label: "Tavern AI",
+      title: "Tavern AI Image",
+      desc: "Conversational prompting, tag search, style analysis, and NovelAI image generation",
+    },
     records: {
       label: "Logs",
       title: "AI Call Logs",
@@ -229,15 +237,10 @@ const MAIN_TAB_LOCALES: Record<AppLanguage, MainTabLocale> = {
       title: "部分再描画",
       desc: "マスクを塗って指定範囲を再生成",
     },
-    upscale: {
-      label: "高解像",
-      title: "クラウド拡大",
-      desc: "2× / 4× クラウドアップスケール",
-    },
     postprocess: {
       label: "後処理",
-      title: "Director ツール",
-      desc: "背景除去、線画化、彩色、表情変更",
+      title: "画像の後処理",
+      desc: "強化、拡大、背景除去、線画化、彩色、表情変更",
     },
     inspect: {
       label: "解析",
@@ -269,6 +272,11 @@ const MAIN_TAB_LOCALES: Record<AppLanguage, MainTabLocale> = {
       title: "オンラインギャラリー",
       desc: "公開作品を閲覧し、プロンプトと元パラメータを利用",
     },
+    agent: {
+      label: "Tavern AI",
+      title: "Tavern AI 画像生成",
+      desc: "会話でプロンプト整理、Tag 検索、画風分析、NovelAI 画像生成",
+    },
     records: {
       label: "履歴",
       title: "AI 呼び出し履歴",
@@ -286,15 +294,10 @@ const MAIN_TAB_LOCALES: Record<AppLanguage, MainTabLocale> = {
       title: "부분 리드로우",
       desc: "마스크를 칠한 영역만 다시 생성",
     },
-    upscale: {
-      label: "업스케일",
-      title: "클라우드 업스케일",
-      desc: "2× / 4× NovelAI 클라우드 확대",
-    },
     postprocess: {
       label: "후처리",
-      title: "Director 도구",
-      desc: "배경 제거, 선화, 채색, 표정 변경",
+      title: "이미지 후처리",
+      desc: "향상, 업스케일, 배경 제거, 선화, 채색, 표정 변경",
     },
     inspect: {
       label: "분석",
@@ -325,6 +328,11 @@ const MAIN_TAB_LOCALES: Record<AppLanguage, MainTabLocale> = {
       label: "갤러리",
       title: "온라인 갤러리",
       desc: "공개 작품을 탐색하고 프롬프트와 원본 설정을 활용",
+    },
+    agent: {
+      label: "Tavern AI 이미지",
+      title: "Tavern AI 이미지",
+      desc: "대화형 프롬프트 정리, Tag 검색, 화풍 분석과 NovelAI 이미지 생성",
     },
     records: {
       label: "기록",
@@ -371,9 +379,6 @@ const TOOLS_HUB_TEXT = {
     batchTitle: "批量图生图",
     batchDesc:
       "导入图片 + 对应提示词，按改图强度逐张图生图，存入分组并打包 ZIP。",
-    tuiwenTitle: "小说推文",
-    tuiwenDesc:
-      "桌面专属：小说/字幕转分镜旁白，叠加全局精准参考，最终导出剪映草稿。",
     metadataTitle: "恢复图片原数据",
     metadataDesc:
       "读取 NovelAI、Stable Diffusion WebUI / Forge 与 ComfyUI 图片的完整内嵌参数，并可一键套用兼容项。",
@@ -398,9 +403,6 @@ const TOOLS_HUB_TEXT = {
     batchTitle: "批次圖生圖",
     batchDesc:
       "匯入圖片與對應提示詞，依改圖強度逐張圖生圖，存入分組並打包 ZIP。",
-    tuiwenTitle: "小說推文",
-    tuiwenDesc:
-      "桌面專屬：小說/字幕轉分鏡旁白，疊加全域精準參考，最後匯出剪映草稿。",
     metadataTitle: "恢復圖片原始資料",
     metadataDesc:
       "讀取 NovelAI、Stable Diffusion WebUI / Forge 與 ComfyUI 圖片的完整內嵌參數，並可一鍵套用相容項目。",
@@ -426,9 +428,6 @@ const TOOLS_HUB_TEXT = {
     batchTitle: "Batch Img2Img",
     batchDesc:
       "Import images with matching prompts, redraw them one by one, group results, and export a ZIP.",
-    tuiwenTitle: "Novel Shorts",
-    tuiwenDesc:
-      "Desktop-only: turn novels/subtitles into narrated shots, keep global precise references, and export Jianying drafts.",
     metadataTitle: "Restore Image Metadata",
     metadataDesc:
       "Read complete NovelAI, Stable Diffusion WebUI / Forge, and ComfyUI metadata and reuse compatible values.",
@@ -455,9 +454,6 @@ const TOOLS_HUB_TEXT = {
     batchTitle: "一括 Img2Img",
     batchDesc:
       "画像と対応プロンプトを読み込み、強度に応じて一枚ずつ再生成し ZIP 化します。",
-    tuiwenTitle: "小説ショート",
-    tuiwenDesc:
-      "デスクトップ専用：小説/字幕をナレーション付きカットに変換し、精密参照を重ねて剪映ドラフトへ書き出します。",
     metadataTitle: "画像の元データを復元",
     metadataDesc:
       "NovelAI、Stable Diffusion WebUI / Forge、ComfyUI の全埋め込み設定を読み取り、互換項目を再利用します。",
@@ -484,9 +480,6 @@ const TOOLS_HUB_TEXT = {
     batchTitle: "배치 Img2Img",
     batchDesc:
       "이미지와 프롬프트를 가져와 강도에 따라 한 장씩 다시 생성하고 ZIP으로 묶습니다.",
-    tuiwenTitle: "소설 숏폼",
-    tuiwenDesc:
-      "데스크톱 전용: 소설/자막을 내레이션 컷으로 바꾸고 전역 정밀 참조를 더해 Jianying 초안으로 내보냅니다.",
     metadataTitle: "이미지 원본 데이터 복원",
     metadataDesc:
       "NovelAI, Stable Diffusion WebUI / Forge, ComfyUI의 전체 내장 설정을 읽고 호환 값을 재사용합니다.",
@@ -513,8 +506,6 @@ const TOOLS_HUB_TEXT = {
     | "comicDesc"
     | "batchTitle"
     | "batchDesc"
-    | "tuiwenTitle"
-    | "tuiwenDesc"
     | "metadataTitle"
     | "metadataDesc"
     | "aitagTitle"
@@ -1150,321 +1141,6 @@ export function getGeneratePanelText(language: unknown) {
   return GENERATE_PANEL_TEXT[normalizeAppLanguage(language)];
 }
 
-export type TuiwenStudioStepKey =
-  | "import"
-  | "storyboard"
-  | "references"
-  | "generate"
-  | "audio"
-  | "motion"
-  | "export";
-
-type TuiwenStudioText = {
-  page: {
-    eyebrow: string;
-    defaultTitle: string;
-    subtitle: string;
-    shotsMetric: string;
-    backToTools: string;
-    exportProjectJson: string;
-    importProjectJson: string;
-    importNovelSubtitle: string;
-    flowHint: string;
-  };
-  steps: Record<TuiwenStudioStepKey, { label: string; hint: string }>;
-  importStage: {
-    projectTitle: string;
-    sourceType: string;
-    sourceNovel: string;
-    sourceSubtitle: string;
-    aspectRatio: string;
-    aspectLabels: Record<"9:16" | "16:9" | "1:1" | "4:3" | "3:4", string>;
-    defaultShotDuration: string;
-    canvas: string;
-    kenBurnsSuggestion: string;
-    opusFreeOk: string;
-    opusFreeExceeded: string;
-    stepsUnit: string;
-    scriptLabel: string;
-    scriptPlaceholder: string;
-    footerHint: string;
-    createDraft: string;
-    llmAnalyze: string;
-    llmAnalyzing: string;
-  };
-};
-
-const TUIWEN_STUDIO_TEXT = {
-  "zh-CN": {
-    page: {
-      eyebrow: "工具 / 小说推文",
-      defaultTitle: "未命名小说推文",
-      subtitle: "桌面专属 · 小说/字幕 → 分镜旁白 → 生图/配音 → 剪映草稿",
-      shotsMetric: "分镜",
-      backToTools: "返回工具首页",
-      exportProjectJson: "导出项目 JSON",
-      importProjectJson: "导入项目 JSON",
-      importNovelSubtitle: "导入小说/字幕",
-      flowHint:
-        "当前可导入文本/字幕、复用漫画 LLM 管线，并直接进入生图、配音与剪映导出流程。",
-    },
-    steps: {
-      import: { label: "导入", hint: "小说 / 字幕 / 画幅" },
-      storyboard: { label: "分镜旁白", hint: "旁白 · 画面 · 提示词" },
-      references: { label: "角色参考", hint: "精准参考 · 角色库" },
-      generate: { label: "生图", hint: "续跑 · 成本 · 重试" },
-      audio: { label: "配音", hint: "导入 · TTS · 时长" },
-      motion: { label: "运镜转场", hint: "Ken Burns · 转场" },
-      export: { label: "剪映导出", hint: "BGM · 首尾卡 · 草稿" },
-    },
-    importStage: {
-      projectTitle: "项目标题",
-      sourceType: "源类型",
-      sourceNovel: "小说 / 推文文案",
-      sourceSubtitle: "字幕（SRT / ASS / LRC）",
-      aspectRatio: "视频画幅",
-      aspectLabels: {
-        "9:16": "竖屏 9:16",
-        "16:9": "横屏 16:9",
-        "1:1": "方屏 1:1",
-        "4:3": "横版 4:3",
-        "3:4": "竖版 3:4",
-      },
-      defaultShotDuration: "默认镜头时长(ms)",
-      canvas: "画布",
-      kenBurnsSuggestion: "Ken Burns 建议",
-      opusFreeOk: "当前默认尺寸/步数未越过 Opus 免费线。",
-      opusFreeExceeded: "当前尺寸/步数会越过 Opus 免费线",
-      stepsUnit: "步",
-      scriptLabel:
-        "粘贴小说 / 字幕文本（可本地快速拆段，也可交给 LLM 智能分镜）",
-      scriptPlaceholder: "把小说正文、推文文案或字幕文本粘贴到这里。",
-      footerHint:
-        "本地草稿适合快速拆段；LLM 分镜会复用漫画分析接口，额外生成全局设定与连续性信息。",
-      createDraft: "创建旁白分镜草稿",
-      llmAnalyze: "LLM 智能分镜",
-      llmAnalyzing: "LLM 分镜中...",
-    },
-  },
-  "zh-TW": {
-    page: {
-      eyebrow: "工具 / 小說推文",
-      defaultTitle: "未命名小說推文",
-      subtitle: "桌面專屬 · 小說/字幕 → 分鏡旁白 → 生圖/配音 → 剪映草稿",
-      shotsMetric: "分鏡",
-      backToTools: "返回工具首頁",
-      exportProjectJson: "匯出專案 JSON",
-      importProjectJson: "匯入專案 JSON",
-      importNovelSubtitle: "匯入小說/字幕",
-      flowHint:
-        "目前可匯入文本/字幕、複用漫畫 LLM 管線，並直接進入生圖、配音與剪映匯出流程。",
-    },
-    steps: {
-      import: { label: "匯入", hint: "小說 / 字幕 / 畫幅" },
-      storyboard: { label: "分鏡旁白", hint: "旁白 · 畫面 · 提示詞" },
-      references: { label: "角色參考", hint: "精準參考 · 角色庫" },
-      generate: { label: "生圖", hint: "續跑 · 成本 · 重試" },
-      audio: { label: "配音", hint: "匯入 · TTS · 時長" },
-      motion: { label: "運鏡轉場", hint: "Ken Burns · 轉場" },
-      export: { label: "剪映匯出", hint: "BGM · 首尾卡 · 草稿" },
-    },
-    importStage: {
-      projectTitle: "專案標題",
-      sourceType: "來源類型",
-      sourceNovel: "小說 / 推文文案",
-      sourceSubtitle: "字幕（SRT / ASS / LRC）",
-      aspectRatio: "影片畫幅",
-      aspectLabels: {
-        "9:16": "直式 9:16",
-        "16:9": "橫式 16:9",
-        "1:1": "方形 1:1",
-        "4:3": "橫式 4:3",
-        "3:4": "直式 3:4",
-      },
-      defaultShotDuration: "預設鏡頭時長(ms)",
-      canvas: "畫布",
-      kenBurnsSuggestion: "Ken Burns 建議",
-      opusFreeOk: "目前預設尺寸/步數未超過 Opus 免費線。",
-      opusFreeExceeded: "目前尺寸/步數會超過 Opus 免費線",
-      stepsUnit: "步",
-      scriptLabel:
-        "貼上小說 / 字幕文本（可本地快速拆段，也可交給 LLM 智慧分鏡）",
-      scriptPlaceholder: "把小說正文、推文文案或字幕文本貼到這裡。",
-      footerHint:
-        "本地草稿適合快速拆段；LLM 分鏡會複用漫畫分析介面，額外產生全域設定與連續性資訊。",
-      createDraft: "建立旁白分鏡草稿",
-      llmAnalyze: "LLM 智慧分鏡",
-      llmAnalyzing: "LLM 分鏡中...",
-    },
-  },
-  "en-US": {
-    page: {
-      eyebrow: "Tools / Novel Shorts",
-      defaultTitle: "Untitled novel short",
-      subtitle:
-        "Desktop only · Novel/subtitles → narrated shots → image/voice → Jianying draft",
-      shotsMetric: "shots",
-      backToTools: "Back to Tools",
-      exportProjectJson: "Export Project JSON",
-      importProjectJson: "Import Project JSON",
-      importNovelSubtitle: "Import Novel/Subtitles",
-      flowHint:
-        "Import text or subtitles, reuse the comic LLM pipeline, then continue into image generation, voice, and Jianying export.",
-    },
-    steps: {
-      import: { label: "Import", hint: "Novel / Subtitles / Canvas" },
-      storyboard: { label: "Storyboard", hint: "Narration · Scene · Prompt" },
-      references: { label: "Character Ref", hint: "Precise ref · Library" },
-      generate: { label: "Generate", hint: "Resume · Cost · Retry" },
-      audio: { label: "Voice", hint: "Import · TTS · Timing" },
-      motion: { label: "Motion", hint: "Ken Burns · Transition" },
-      export: { label: "Export", hint: "BGM · Cards · Draft" },
-    },
-    importStage: {
-      projectTitle: "Project title",
-      sourceType: "Source type",
-      sourceNovel: "Novel / short-form copy",
-      sourceSubtitle: "Subtitles (SRT / ASS / LRC)",
-      aspectRatio: "Video aspect",
-      aspectLabels: {
-        "9:16": "Portrait 9:16",
-        "16:9": "Landscape 16:9",
-        "1:1": "Square 1:1",
-        "4:3": "Landscape 4:3",
-        "3:4": "Portrait 3:4",
-      },
-      defaultShotDuration: "Default shot duration (ms)",
-      canvas: "Canvas",
-      kenBurnsSuggestion: "Ken Burns suggestion",
-      opusFreeOk:
-        "The current default size/steps stay within the Opus free tier.",
-      opusFreeExceeded: "The current size/steps exceed the Opus free tier",
-      stepsUnit: "steps",
-      scriptLabel:
-        "Paste novel / subtitle text (split locally, or let the LLM storyboard it)",
-      scriptPlaceholder:
-        "Paste the novel, short-form copy, or subtitle text here.",
-      footerHint:
-        "Local drafts are best for quick splitting; LLM storyboarding reuses the comic analysis API and adds global setup plus continuity notes.",
-      createDraft: "Create narration draft",
-      llmAnalyze: "LLM storyboard",
-      llmAnalyzing: "Storyboarding...",
-    },
-  },
-  "ja-JP": {
-    page: {
-      eyebrow: "ツール / 小説ショート",
-      defaultTitle: "無題の小説ショート",
-      subtitle:
-        "デスクトップ専用 · 小説/字幕 → ナレーションカット → 画像/音声 → 剪映ドラフト",
-      shotsMetric: "カット",
-      backToTools: "ツール一覧へ戻る",
-      exportProjectJson: "プロジェクト JSON を書き出し",
-      importProjectJson: "プロジェクト JSON を読み込み",
-      importNovelSubtitle: "小説/字幕を読み込み",
-      flowHint:
-        "テキスト/字幕を読み込み、漫画用 LLM パイプラインを再利用して、画像生成・音声・剪映書き出しへ進みます。",
-    },
-    steps: {
-      import: { label: "読込", hint: "小説 / 字幕 / 画角" },
-      storyboard: {
-        label: "絵コンテ",
-        hint: "ナレーション · 画面 · プロンプト",
-      },
-      references: { label: "キャラ参照", hint: "精密参照 · ライブラリ" },
-      generate: { label: "生成", hint: "再開 · コスト · 再試行" },
-      audio: { label: "音声", hint: "読み込み · TTS · 長さ" },
-      motion: { label: "カメラ", hint: "Ken Burns · トランジション" },
-      export: { label: "書き出し", hint: "BGM · 前後カード · 草稿" },
-    },
-    importStage: {
-      projectTitle: "プロジェクト名",
-      sourceType: "ソース種別",
-      sourceNovel: "小説 / ショート文案",
-      sourceSubtitle: "字幕（SRT / ASS / LRC）",
-      aspectRatio: "動画の画角",
-      aspectLabels: {
-        "9:16": "縦長 9:16",
-        "16:9": "横長 16:9",
-        "1:1": "正方形 1:1",
-        "4:3": "横長 4:3",
-        "3:4": "縦長 3:4",
-      },
-      defaultShotDuration: "既定カット長(ms)",
-      canvas: "キャンバス",
-      kenBurnsSuggestion: "Ken Burns 推奨",
-      opusFreeOk: "現在の既定サイズ/ステップ数は Opus 無料枠内です。",
-      opusFreeExceeded: "現在のサイズ/ステップ数は Opus 無料枠を超えます",
-      stepsUnit: "ステップ",
-      scriptLabel:
-        "小説 / 字幕テキストを貼り付け（ローカル分割または LLM 絵コンテ）",
-      scriptPlaceholder:
-        "小説本文、ショート文案、字幕テキストをここに貼り付けます。",
-      footerHint:
-        "ローカル草稿は素早い分割向きです。LLM 絵コンテは漫画分析 API を再利用し、全体設定と連続性メモも生成します。",
-      createDraft: "ナレーション草稿を作成",
-      llmAnalyze: "LLM 絵コンテ",
-      llmAnalyzing: "絵コンテ生成中...",
-    },
-  },
-  "ko-KR": {
-    page: {
-      eyebrow: "도구 / 소설 숏폼",
-      defaultTitle: "제목 없는 소설 숏폼",
-      subtitle:
-        "데스크톱 전용 · 소설/자막 → 내레이션 컷 → 이미지/음성 → Jianying 초안",
-      shotsMetric: "컷",
-      backToTools: "도구 홈으로",
-      exportProjectJson: "프로젝트 JSON 내보내기",
-      importProjectJson: "프로젝트 JSON 가져오기",
-      importNovelSubtitle: "소설/자막 가져오기",
-      flowHint:
-        "텍스트나 자막을 가져오고 만화 LLM 파이프라인을 재사용한 뒤 이미지 생성, 음성, Jianying 내보내기로 이어집니다.",
-    },
-    steps: {
-      import: { label: "가져오기", hint: "소설 / 자막 / 화면비" },
-      storyboard: { label: "스토리보드", hint: "내레이션 · 장면 · 프롬프트" },
-      references: { label: "캐릭터 참조", hint: "정밀 참조 · 라이브러리" },
-      generate: { label: "생성", hint: "이어하기 · 비용 · 재시도" },
-      audio: { label: "음성", hint: "가져오기 · TTS · 길이" },
-      motion: { label: "모션", hint: "Ken Burns · 전환" },
-      export: { label: "내보내기", hint: "BGM · 카드 · 초안" },
-    },
-    importStage: {
-      projectTitle: "프로젝트 제목",
-      sourceType: "소스 유형",
-      sourceNovel: "소설 / 숏폼 문안",
-      sourceSubtitle: "자막(SRT / ASS / LRC)",
-      aspectRatio: "영상 화면비",
-      aspectLabels: {
-        "9:16": "세로 9:16",
-        "16:9": "가로 16:9",
-        "1:1": "정사각 1:1",
-        "4:3": "가로 4:3",
-        "3:4": "세로 3:4",
-      },
-      defaultShotDuration: "기본 컷 길이(ms)",
-      canvas: "캔버스",
-      kenBurnsSuggestion: "Ken Burns 권장",
-      opusFreeOk: "현재 기본 크기/스텝은 Opus 무료 기준 안에 있습니다.",
-      opusFreeExceeded: "현재 크기/스텝은 Opus 무료 기준을 초과합니다",
-      stepsUnit: "스텝",
-      scriptLabel: "소설 / 자막 텍스트 붙여넣기(로컬 분할 또는 LLM 스토리보드)",
-      scriptPlaceholder:
-        "소설 본문, 숏폼 문안, 자막 텍스트를 여기에 붙여넣으세요.",
-      footerHint:
-        "로컬 초안은 빠른 분할에 좋습니다. LLM 스토리보드는 만화 분석 API를 재사용하고 전역 설정과 연속성 메모도 만듭니다.",
-      createDraft: "내레이션 초안 만들기",
-      llmAnalyze: "LLM 스토리보드",
-      llmAnalyzing: "스토리보드 생성 중...",
-    },
-  },
-} satisfies Record<AppLanguage, TuiwenStudioText>;
-
-export function getTuiwenStudioText(language: unknown) {
-  return TUIWEN_STUDIO_TEXT[normalizeAppLanguage(language)];
-}
-
 const SETTINGS_SHELL_TEXT = {
   "zh-CN": {
     title: "设置",
@@ -2017,6 +1693,8 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "account.stop": "✕ 停止",
     "account.lastSpent": "上次实扣 {amount} Anlas",
     "generate.batchCount": "批量生成数量",
+    "generate.batchInterval": "每张图片生成间隔（秒）",
+    "generate.batchIntervalHint": "数量为 1 时可预先设置但不生效；0 秒表示无间隔。",
     "generate.fileNamePrefix": "图片命名（文件名前缀，可留空）",
     "generate.fileNamePlaceholder": "例如：我的角色 → 我的角色_20260617_01.png",
     "generate.historyGroup": "生成到分组",
@@ -2306,6 +1984,8 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "account.stop": "✕ 停止",
     "account.lastSpent": "上次實扣 {amount} Anlas",
     "generate.batchCount": "批次生成數量",
+    "generate.batchInterval": "每張圖片生成間隔（秒）",
+    "generate.batchIntervalHint": "數量為 1 時可預先設定但不生效；0 秒表示無間隔。",
     "generate.fileNamePrefix": "圖片命名（檔名前綴，可留空）",
     "generate.fileNamePlaceholder": "例如：我的角色 → 我的角色_20260617_01.png",
     "generate.historyGroup": "生成到分組",
@@ -2607,6 +2287,8 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "account.stop": "✕ Stop",
     "account.lastSpent": "Last actual spend: {amount} Anlas",
     "generate.batchCount": "Batch count",
+    "generate.batchInterval": "Interval between images (seconds)",
+    "generate.batchIntervalHint": "Editable at a batch count of 1 but applied only above 1; 0 means no interval.",
     "generate.fileNamePrefix": "Image naming (file prefix, optional)",
     "generate.fileNamePlaceholder":
       "e.g. My Character → My Character_20260617_01.png",
@@ -2911,6 +2593,8 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "account.stop": "✕ 停止",
     "account.lastSpent": "前回の実課金 {amount} Anlas",
     "generate.batchCount": "一括生成枚数",
+    "generate.batchInterval": "画像ごとの生成間隔（秒）",
+    "generate.batchIntervalHint": "枚数が 1 でも設定でき、2 以上の場合のみ有効です。0 秒は間隔なしです。",
     "generate.fileNamePrefix": "画像名（ファイル名プレフィックス、省略可）",
     "generate.fileNamePlaceholder":
       "例：My Character → My Character_20260617_01.png",
@@ -3216,6 +2900,8 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "account.stop": "✕ 중지",
     "account.lastSpent": "지난 실제 차감 {amount} Anlas",
     "generate.batchCount": "배치 생성 수",
+    "generate.batchInterval": "이미지 생성 간격(초)",
+    "generate.batchIntervalHint": "1개일 때도 설정할 수 있으며 2개 이상에서만 적용됩니다. 0초는 간격 없음입니다.",
     "generate.fileNamePrefix": "이미지 이름(파일 접두사, 선택)",
     "generate.fileNamePlaceholder":
       "예: My Character → My Character_20260617_01.png",
@@ -3439,6 +3125,8 @@ const DESKTOP_EXTRA_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "canvas.emptyTitle": "准备开始创作",
     "canvas.emptyHint":
       "在左侧输入英文 tag 或自然提示词，点击下方生成按钮；结果会自动保存并进入右侧历史。",
+    "postprocess.emptyTitle": "加载图片开始后期处理",
+    "postprocess.emptyHint": "从左侧加载或拖入图片，再选择增强、超分或导演工具。处理结果会自动保存到历史。",
     "canvas.shortcutAutocomplete": "Tag 自动补全",
     "canvas.shortcutDrop": "支持拖入图片到工作台",
     "canvas.shortcutApiOnly": "API-only 生成",
@@ -3603,6 +3291,8 @@ const DESKTOP_EXTRA_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "canvas.emptyTitle": "準備開始創作",
     "canvas.emptyHint":
       "在左側輸入英文 tag 或自然提示詞，點擊下方生成按鈕；結果會自動保存並進入右側歷史。",
+    "postprocess.emptyTitle": "載入圖片開始後期處理",
+    "postprocess.emptyHint": "從左側載入或拖入圖片，再選擇增強、超分或導演工具。結果會自動保存到歷史。",
     "canvas.shortcutAutocomplete": "Tag 自動補全",
     "canvas.shortcutDrop": "支援拖入圖片到工作台",
     "canvas.shortcutApiOnly": "API-only 生成",
@@ -3778,6 +3468,8 @@ const DESKTOP_EXTRA_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "canvas.emptyTitle": "Ready to create",
     "canvas.emptyHint":
       "Enter English tags or a natural prompt on the left, then click Generate. Results are saved and added to history automatically.",
+    "postprocess.emptyTitle": "Load an image to start post-processing",
+    "postprocess.emptyHint": "Load or drop an image on the left, then choose Enhance, Upscale, or a Director tool. Results are saved to history automatically.",
     "canvas.shortcutAutocomplete": "Tag autocomplete",
     "canvas.shortcutDrop": "Drop images into the workbench",
     "canvas.shortcutApiOnly": "API-only generation",
@@ -3952,6 +3644,8 @@ const DESKTOP_EXTRA_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "canvas.emptyTitle": "創作を始めましょう",
     "canvas.emptyHint":
       "左側で英語タグまたは自然文プロンプトを入力し、生成ボタンを押してください。結果は自動保存され履歴へ入ります。",
+    "postprocess.emptyTitle": "画像を読み込んで後処理を開始",
+    "postprocess.emptyHint": "左側から画像を読み込むかドロップし、強化・拡大・Director ツールを選択してください。結果は履歴へ自動保存されます。",
     "canvas.shortcutAutocomplete": "Tag 自動補完",
     "canvas.shortcutDrop": "画像をワークベンチへドロップ可能",
     "canvas.shortcutApiOnly": "API-only 生成",
@@ -4122,6 +3816,8 @@ const DESKTOP_EXTRA_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "canvas.emptyTitle": "창작 준비 완료",
     "canvas.emptyHint":
       "왼쪽에 영어 tag 또는 자연어 프롬프트를 입력하고 생성 버튼을 누르세요. 결과는 자동 저장되고 오른쪽 기록에 추가됩니다.",
+    "postprocess.emptyTitle": "이미지를 불러와 후처리 시작",
+    "postprocess.emptyHint": "왼쪽에서 이미지를 불러오거나 드롭한 뒤 향상, 업스케일 또는 Director 도구를 선택하세요. 결과는 기록에 자동 저장됩니다.",
     "canvas.shortcutAutocomplete": "Tag 자동완성",
     "canvas.shortcutDrop": "작업대에 이미지 드롭 지원",
     "canvas.shortcutApiOnly": "API-only 생성",
@@ -4222,6 +3918,10 @@ const DESKTOP_BATCH_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "batch.params.title": "全局参数 · 默认取自主界面“生成”，可自行修改",
     "batch.params.sync": "同步主界面参数",
     "batch.params.strength": "全局改图强度：{value}（越低越保留原图）",
+    "batch.params.candidateCount": "每张原图候选数",
+    "batch.params.candidateCountHint":
+      "统一应用到所有原图；候选全部保留在项目与历史中，导出时每张原图只取你选中的一张。",
+    "batch.params.candidateCountUnit": "张 / 原图",
     "batch.params.style": "全局风格提示词（拼在每张图提示词前）",
     "batch.params.stylePlaceholder": "如 masterpiece, best quality, anime",
     "batch.params.negative": "全局负面提示词（留空用模型默认负面词）",
@@ -4247,7 +3947,7 @@ const DESKTOP_BATCH_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "batch.prompts.dragOutput": "可拖出到桌面 / 其他程序",
     "batch.prompts.currentOutput": "当前成图",
     "batch.prompts.sourceImage": "待重绘原图",
-    "batch.prompts.outputHint": "重新生成会替换本图当前成图。",
+    "batch.prompts.outputHint": "再次生成会新增候选，不会覆盖已有成图。",
     "batch.prompts.sourceHint": "双击放大查看；生成后这里显示成图。",
     "batch.prompts.itemPrompt": "该图片的提示词（导入 / AI 反推 / 手动编辑）",
     "batch.prompts.itemPromptPlaceholder": "该图片的提示词",
@@ -4266,6 +3966,12 @@ const DESKTOP_BATCH_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "batch.results.running": "生成中",
     "batch.results.failed": "失败",
     "batch.results.pending": "待处理",
+    "batch.results.perSourceCandidates": "每张候选",
+    "batch.results.candidates": "候选图",
+    "batch.results.selectedCandidate": "已选 {current}/{total}",
+    "batch.results.chooseCandidate": "选择候选 {index} 作为导出图；双击放大",
+    "batch.results.candidateAlt": "候选图 {index}",
+    "batch.results.candidateBadge": "{count} 张候选",
     "batch.results.stop": "✕ 停止任务",
     "batch.results.start": "▶ 开始批量（{count}）",
     "batch.results.continue": "继续未完成（{count}）",
@@ -4301,6 +4007,7 @@ const DESKTOP_BATCH_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "batch.toast.aiFailed": "AI 填充失败：{message}",
     "batch.toast.needGroup": "请先填写分组名称",
     "batch.toast.noReady": "没有可生成的图片（每张需要提示词）",
+    "batch.toast.unknownFailure": "生成未返回图片",
     "batch.toast.stopped": "已停止（完成 {done} 张）",
     "batch.toast.failed": "完成 {done} 张，失败 {failed} 张：{message}",
     "batch.toast.allDone": "全部完成，共 {done} 张，已存入分组“{name}”",
@@ -4396,6 +4103,10 @@ const DESKTOP_BATCH_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "batch.params.title": "全域參數 · 預設取自主介面「生成」，可自行修改",
     "batch.params.sync": "同步主介面參數",
     "batch.params.strength": "全域改圖強度：{value}（越低越保留原圖）",
+    "batch.params.candidateCount": "每張原圖候選數",
+    "batch.params.candidateCountHint":
+      "統一套用至所有原圖；候選全部保留在專案與歷史中，匯出時每張原圖只取所選的一張。",
+    "batch.params.candidateCountUnit": "張 / 原圖",
     "batch.params.style": "全域風格提示詞（拼在每張圖提示詞前）",
     "batch.params.stylePlaceholder": "如 masterpiece, best quality, anime",
     "batch.params.negative": "全域負面提示詞（留空用模型預設負面詞）",
@@ -4421,7 +4132,7 @@ const DESKTOP_BATCH_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "batch.prompts.dragOutput": "可拖出到桌面 / 其他程式",
     "batch.prompts.currentOutput": "目前成圖",
     "batch.prompts.sourceImage": "待重繪原圖",
-    "batch.prompts.outputHint": "重新生成會替換本圖目前成圖。",
+    "batch.prompts.outputHint": "再次生成會新增候選，不會覆蓋既有成圖。",
     "batch.prompts.sourceHint": "雙擊放大查看；生成後這裡顯示成圖。",
     "batch.prompts.itemPrompt": "該圖片的提示詞（匯入 / AI 反推 / 手動編輯）",
     "batch.prompts.itemPromptPlaceholder": "該圖片的提示詞",
@@ -4440,6 +4151,12 @@ const DESKTOP_BATCH_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "batch.results.running": "生成中",
     "batch.results.failed": "失敗",
     "batch.results.pending": "待處理",
+    "batch.results.perSourceCandidates": "每張候選",
+    "batch.results.candidates": "候選圖",
+    "batch.results.selectedCandidate": "已選 {current}/{total}",
+    "batch.results.chooseCandidate": "選擇候選 {index} 作為匯出圖；雙擊放大",
+    "batch.results.candidateAlt": "候選圖 {index}",
+    "batch.results.candidateBadge": "{count} 張候選",
     "batch.results.stop": "✕ 停止任務",
     "batch.results.start": "▶ 開始批次（{count}）",
     "batch.results.continue": "繼續未完成（{count}）",
@@ -4475,6 +4192,7 @@ const DESKTOP_BATCH_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "batch.toast.aiFailed": "AI 填補失敗：{message}",
     "batch.toast.needGroup": "請先填寫分組名稱",
     "batch.toast.noReady": "沒有可生成的圖片（每張需要提示詞）",
+    "batch.toast.unknownFailure": "生成未回傳圖片",
     "batch.toast.stopped": "已停止（完成 {done} 張）",
     "batch.toast.failed": "完成 {done} 張，失敗 {failed} 張：{message}",
     "batch.toast.allDone": "全部完成，共 {done} 張，已存入分組「{name}」",
@@ -4580,6 +4298,10 @@ const DESKTOP_BATCH_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "batch.params.sync": "Sync main params",
     "batch.params.strength":
       "Global img2img strength: {value} (lower keeps more of the source)",
+    "batch.params.candidateCount": "Candidates per source",
+    "batch.params.candidateCountHint":
+      "One shared count for every source. All candidates stay in the project and History; ZIP export takes only the selected one per source.",
+    "batch.params.candidateCountUnit": "per source",
     "batch.params.style":
       "Global style prompt (prepended to every image prompt)",
     "batch.params.stylePlaceholder": "e.g. masterpiece, best quality, anime",
@@ -4609,7 +4331,7 @@ const DESKTOP_BATCH_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "batch.prompts.currentOutput": "Current output",
     "batch.prompts.sourceImage": "Source image",
     "batch.prompts.outputHint":
-      "Regenerating replaces this image’s current output.",
+      "Generating again adds candidates without replacing existing outputs.",
     "batch.prompts.sourceHint":
       "Double-click to zoom; output appears here after generation.",
     "batch.prompts.itemPrompt":
@@ -4631,6 +4353,12 @@ const DESKTOP_BATCH_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "batch.results.running": "Running",
     "batch.results.failed": "Failed",
     "batch.results.pending": "Pending",
+    "batch.results.perSourceCandidates": "Candidates each",
+    "batch.results.candidates": "Candidates",
+    "batch.results.selectedCandidate": "Selected {current}/{total}",
+    "batch.results.chooseCandidate": "Select candidate {index} for export; double-click to zoom",
+    "batch.results.candidateAlt": "Candidate {index}",
+    "batch.results.candidateBadge": "{count} candidates",
     "batch.results.stop": "✕ Stop task",
     "batch.results.start": "▶ Start batch ({count})",
     "batch.results.continue": "Continue unfinished ({count})",
@@ -4669,6 +4397,7 @@ const DESKTOP_BATCH_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "batch.toast.needGroup": "Enter a group name first",
     "batch.toast.noReady":
       "No images can be generated; each image needs a prompt",
+    "batch.toast.unknownFailure": "Generation returned no image",
     "batch.toast.stopped": "Stopped ({done} completed)",
     "batch.toast.failed": "{done} completed, {failed} failed: {message}",
     "batch.toast.allDone": "All done: {done} images saved to “{name}”",
@@ -4775,6 +4504,10 @@ const DESKTOP_BATCH_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "batch.params.sync": "メイン設定を同期",
     "batch.params.strength":
       "全体 Img2Img 強度：{value}（低いほど元画像を保持）",
+    "batch.params.candidateCount": "元画像ごとの候補数",
+    "batch.params.candidateCountHint":
+      "すべての元画像に同じ数を適用します。候補はプロジェクトと履歴に残り、ZIP には各元画像で選択した 1 枚だけを書き出します。",
+    "batch.params.candidateCountUnit": "枚 / 元画像",
     "batch.params.style": "全体スタイルプロンプト（各画像の前に付加）",
     "batch.params.stylePlaceholder": "例 masterpiece, best quality, anime",
     "batch.params.negative": "全体ネガティブプロンプト（空ならモデル既定）",
@@ -4802,7 +4535,7 @@ const DESKTOP_BATCH_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "batch.prompts.dragOutput": "デスクトップ / 他アプリへドラッグ可能",
     "batch.prompts.currentOutput": "現在の出力",
     "batch.prompts.sourceImage": "元画像",
-    "batch.prompts.outputHint": "再生成すると現在の出力を置き換えます。",
+    "batch.prompts.outputHint": "再生成すると既存画像を残したまま候補を追加します。",
     "batch.prompts.sourceHint":
       "ダブルクリックで拡大。生成後ここに出力が表示されます。",
     "batch.prompts.itemPrompt":
@@ -4824,6 +4557,12 @@ const DESKTOP_BATCH_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "batch.results.running": "生成中",
     "batch.results.failed": "失敗",
     "batch.results.pending": "待機",
+    "batch.results.perSourceCandidates": "各画像の候補",
+    "batch.results.candidates": "候補画像",
+    "batch.results.selectedCandidate": "選択中 {current}/{total}",
+    "batch.results.chooseCandidate": "候補 {index} を書き出し対象に選択。ダブルクリックで拡大",
+    "batch.results.candidateAlt": "候補画像 {index}",
+    "batch.results.candidateBadge": "候補 {count} 枚",
     "batch.results.stop": "✕ 停止",
     "batch.results.start": "▶ 一括開始（{count}）",
     "batch.results.continue": "未完了を続行（{count}）",
@@ -4865,6 +4604,7 @@ const DESKTOP_BATCH_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "batch.toast.needGroup": "先にグループ名を入力してください",
     "batch.toast.noReady":
       "生成できる画像がありません（各画像にプロンプトが必要です）",
+    "batch.toast.unknownFailure": "生成画像が返されませんでした",
     "batch.toast.stopped": "停止しました（完了 {done} 枚）",
     "batch.toast.failed": "完了 {done} 枚、失敗 {failed} 枚：{message}",
     "batch.toast.allDone": "すべて完了：{done} 枚を「{name}」へ保存しました",
@@ -4970,6 +4710,10 @@ const DESKTOP_BATCH_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
       "전역 매개변수 · 기본은 메인 생성 화면에서 가져오며 수정 가능",
     "batch.params.sync": "메인 매개변수 동기화",
     "batch.params.strength": "전역 Img2Img 강도: {value}(낮을수록 원본 유지)",
+    "batch.params.candidateCount": "원본당 후보 수",
+    "batch.params.candidateCountHint":
+      "모든 원본에 같은 수를 적용합니다. 후보는 프로젝트와 기록에 모두 남고 ZIP에는 원본마다 선택한 한 장만 포함됩니다.",
+    "batch.params.candidateCountUnit": "장 / 원본",
     "batch.params.style": "전역 스타일 프롬프트(각 이미지 프롬프트 앞에 추가)",
     "batch.params.stylePlaceholder": "예: masterpiece, best quality, anime",
     "batch.params.negative": "전역 네거티브 프롬프트(비우면 모델 기본값)",
@@ -4998,7 +4742,7 @@ const DESKTOP_BATCH_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "batch.prompts.currentOutput": "현재 결과",
     "batch.prompts.sourceImage": "원본 이미지",
     "batch.prompts.outputHint":
-      "다시 생성하면 이 이미지의 현재 결과를 대체합니다.",
+      "다시 생성하면 기존 결과를 유지한 채 후보가 추가됩니다.",
     "batch.prompts.sourceHint":
       "더블클릭해 확대; 생성 후 결과가 여기에 표시됩니다.",
     "batch.prompts.itemPrompt":
@@ -5020,6 +4764,12 @@ const DESKTOP_BATCH_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "batch.results.running": "생성 중",
     "batch.results.failed": "실패",
     "batch.results.pending": "대기",
+    "batch.results.perSourceCandidates": "원본당 후보",
+    "batch.results.candidates": "후보 이미지",
+    "batch.results.selectedCandidate": "선택 {current}/{total}",
+    "batch.results.chooseCandidate": "후보 {index}을 내보낼 이미지로 선택; 더블클릭해 확대",
+    "batch.results.candidateAlt": "후보 이미지 {index}",
+    "batch.results.candidateBadge": "후보 {count}장",
     "batch.results.stop": "✕ 작업 중지",
     "batch.results.start": "▶ 배치 시작({count})",
     "batch.results.continue": "미완료 계속({count})",
@@ -5060,6 +4810,7 @@ const DESKTOP_BATCH_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "batch.toast.needGroup": "먼저 그룹 이름을 입력하세요",
     "batch.toast.noReady":
       "생성 가능한 이미지가 없습니다(각 이미지에 프롬프트 필요)",
+    "batch.toast.unknownFailure": "생성 이미지가 반환되지 않았습니다",
     "batch.toast.stopped": "중지됨({done}장 완료)",
     "batch.toast.failed": "{done}장 완료, {failed}장 실패: {message}",
     "batch.toast.allDone": "모두 완료: {done}장을 “{name}”에 저장했습니다",
@@ -5504,6 +5255,7 @@ const DESKTOP_ONBOARDING_UI_TEXT: Record<
     "update.checking": "正在检查…",
     "update.downloading": "下载中 {percent}%",
     "update.installRestart": "重启并安装",
+    "update.autoRestarting": "正在自动重启安装…",
     "update.later": "稍后",
     "workspace.resizeTitle": "拖动调整宽度 · 双击恢复默认",
     "workspace.resetTitle": "恢复默认布局宽度",
@@ -5586,6 +5338,7 @@ const DESKTOP_ONBOARDING_UI_TEXT: Record<
     "update.checking": "正在檢查…",
     "update.downloading": "下載中 {percent}%",
     "update.installRestart": "重啟並安裝",
+    "update.autoRestarting": "正在自動重新啟動安裝…",
     "update.later": "稍後",
     "workspace.resizeTitle": "拖曳調整寬度 · 雙擊恢復預設",
     "workspace.resetTitle": "恢復預設版面寬度",
@@ -5672,6 +5425,7 @@ const DESKTOP_ONBOARDING_UI_TEXT: Record<
     "update.checking": "Checking…",
     "update.downloading": "Downloading {percent}%",
     "update.installRestart": "Restart and install",
+    "update.autoRestarting": "Restarting to install…",
     "update.later": "Later",
     "workspace.resizeTitle": "Drag to resize · double-click to reset",
     "workspace.resetTitle": "Reset workspace column width",
@@ -5757,6 +5511,7 @@ const DESKTOP_ONBOARDING_UI_TEXT: Record<
     "update.checking": "確認中…",
     "update.downloading": "ダウンロード中 {percent}%",
     "update.installRestart": "再起動してインストール",
+    "update.autoRestarting": "自動的に再起動してインストール中…",
     "update.later": "後で",
     "workspace.resizeTitle": "ドラッグで幅調整 · ダブルクリックでリセット",
     "workspace.resetTitle": "ワークスペース列幅をリセット",
@@ -5840,6 +5595,7 @@ const DESKTOP_ONBOARDING_UI_TEXT: Record<
     "update.checking": "확인 중…",
     "update.downloading": "다운로드 중 {percent}%",
     "update.installRestart": "재시작 후 설치",
+    "update.autoRestarting": "자동으로 다시 시작해 설치하는 중…",
     "update.later": "나중에",
     "workspace.resizeTitle": "드래그로 너비 조정 · 더블 클릭으로 초기화",
     "workspace.resetTitle": "작업 공간 열 너비 초기화",

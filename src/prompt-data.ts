@@ -721,14 +721,14 @@ export const TAG_ZH: Record<string, string> = {
 export const TAB_ITEMS = [
   { value: "generate", label: "生成", icon: "sparkles", title: "文生图 / 图生图", desc: "提示词、参考图、批量生成" },
   { value: "inpaint", label: "重绘", icon: "brush", title: "局部重绘", desc: "涂抹蒙版后重绘指定区域" },
-  { value: "upscale", label: "超分", icon: "upgrade", title: "云端放大", desc: "2× / 4× 云端超分" },
-  { value: "postprocess", label: "后期", icon: "wand", title: "导演工具", desc: "移除背景、线稿、上色、表情" },
+  { value: "postprocess", label: "后期", icon: "wand", title: "图像后期", desc: "增强、超分、移除背景、线稿、上色、表情" },
   { value: "inspect", label: "反推", icon: "scan", title: "AI 反推提示词", desc: "图片分析与提示词反推" },
   { value: "convert", label: "转换", icon: "swap", title: "中文描述转标签", desc: "自然语言转 Danbooru 标签" },
   { value: "metadata", label: "原数据", icon: "fileSearch", title: "恢复图片原数据", desc: "查看并套用 NAI / SD / ComfyUI 图片参数" },
   { value: "tools", label: "工具", icon: "toolbox", title: "工具板块", desc: "漫画生成器、批量工作流" },
   { value: "referencePresets", label: "参考预设", icon: "images", title: "参考图预设", desc: "管理氛围迁移与精准参考图片预设" },
   { value: "onlineGallery", label: "在线画廊", icon: "globe", title: "在线画廊", desc: "浏览公开作品并提取提示词与参数" },
+  { value: "agent", label: "酒馆AI生图", icon: "smartToy", title: "酒馆 AI 生图", desc: "通过自然对话整理提示词、搜索 Tag、分析画风并调用 NovelAI 生图" },
   { value: "records", label: "记录", icon: "history", title: "AI 调用记录", desc: "查看反推/转换/拆分镜每次发送与返回" },
 ] as const;
 

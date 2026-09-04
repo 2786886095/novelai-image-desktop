@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
+import { gunzipSync } from "node:zlib";
 import {
   buildPromptCodexSnapshot,
   dedupePromptCodexEntries,
@@ -16,6 +19,15 @@ const book: PromptCodexBook = {
 };
 
 describe("prompt codex parser", () => {
+  it("ships the complete desktop corpus as a compressed lazy resource", () => {
+    const compressed = fs.readFileSync(path.join(process.cwd(), "public", "prompt-codex.json.gz"));
+    const snapshot = JSON.parse(gunzipSync(compressed).toString("utf8"));
+    expect(snapshot.schemaVersion).toBe(1);
+    expect(snapshot.books).toHaveLength(3);
+    expect(snapshot.entries.length).toBeGreaterThan(10_000);
+    expect(compressed.byteLength).toBeLessThan(2_000_000);
+    expect(fs.existsSync(path.join(process.cwd(), "src", "data", "prompt-codex.json"))).toBe(false);
+  });
   it("preserves section hierarchy and prompt text while stripping markup", () => {
     const html = `
       <div class="sl-markdown-content">
@@ -46,6 +58,12 @@ describe("prompt codex parser", () => {
     expect(entries).toHaveLength(1);
     expect(entries[0].prompt).toContain("artist:first");
     expect(entries[0].category).toBe("artist");
+  });
+
+  it("keeps out-of-range numeric entities instead of aborting the import", () => {
+    const html = '<div class="sl-markdown-content"><h2>画风</h2><h3>异常实体</h3><p>tag, &#99999999;, &#x110000;</p></div>';
+    expect(() => parsePromptCodexHtml(html, book)).not.toThrow();
+    expect(parsePromptCodexHtml(html, book)[0].prompt).toContain("&#99999999;");
   });
 
   it("rejects an incomplete online update", () => {

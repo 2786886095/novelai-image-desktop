@@ -16,6 +16,8 @@ import {
   prepareExtras,
   prepareInpaintAssets,
   prepareImageBufferForSave,
+  resolveUpscaleBaseUrl,
+  resolveUpscaleModel,
   stripPngMetadata,
 } from "./nai";
 import { frameNaiStreamMessage } from "./nai-stream";
@@ -697,5 +699,34 @@ describe("isOfficialNaiHost (P1-14)", () => {
 
   it("returns false for an unparseable URL", () => {
     expect(isOfficialNaiHost("not a url")).toBe(false);
+  });
+});
+
+describe("resolveUpscaleBaseUrl", () => {
+  it("routes the dedicated upscaler through the NovelAI image host", () => {
+    expect(resolveUpscaleBaseUrl("https://image.novelai.net")).toBe(
+      "https://image.novelai.net",
+    );
+    expect(resolveUpscaleBaseUrl("https://api.novelai.net")).toBe(
+      "https://image.novelai.net",
+    );
+  });
+
+  it("keeps an explicitly configured loopback endpoint", () => {
+    expect(resolveUpscaleBaseUrl("http://127.0.0.1:9000/")).toBe(
+      "http://127.0.0.1:9000",
+    );
+  });
+});
+
+describe("resolveUpscaleModel", () => {
+  it("uses supported generation models and strips renderer-only aliases", () => {
+    expect(resolveUpscaleModel("nai-diffusion-5-full")).toBe("nai-diffusion-5-full");
+    expect(resolveUpscaleModel("nai-diffusion-5-full-inpainting")).toBe("nai-diffusion-5-full");
+    expect(resolveUpscaleModel("nai-diffusion-furry-3")).toBe("nai-diffusion-3-furry");
+  });
+
+  it("falls back to the current SDK default for unknown models", () => {
+    expect(resolveUpscaleModel("retired-model")).toBe("nai-diffusion-5-curated");
   });
 });

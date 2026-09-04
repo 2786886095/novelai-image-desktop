@@ -53,6 +53,7 @@ const _runtimeText = <String, Map<String, String>>{
     'status.readingCharge': '正在读取生成前扣费...',
     'status.queuePaused': '队列已暂停（{done}/{total}）',
     'status.waitingQueueQuote': '当前图片已完成，正在等待队列任务报价...',
+    'status.batchInterval': '等待 {seconds} 秒后生成第 {current}/{total} 张…',
     'status.generatingImage': '正在生成 {current}/{total}，等待 {queued} 张...',
     'status.savingImage': '正在保存图片并准备显示...',
     'status.actualSpentUnknown': '实扣读取失败，请刷新积分确认',
@@ -276,6 +277,7 @@ const _runtimeText = <String, Map<String, String>>{
     'status.readingCharge': '正在讀取生成前扣費...',
     'status.queuePaused': '佇列已暫停（{done}/{total}）',
     'status.waitingQueueQuote': '目前圖片已完成，正在等待佇列任務報價...',
+    'status.batchInterval': '等待 {seconds} 秒後生成第 {current}/{total} 張…',
     'status.generatingImage': '正在生成 {current}/{total}，等待 {queued} 張...',
     'status.savingImage': '正在儲存圖片並準備顯示...',
     'status.actualSpentUnknown': '實扣讀取失敗，請重新整理積分確認',
@@ -512,6 +514,8 @@ const _runtimeText = <String, Map<String, String>>{
     'status.queuePaused': 'Queue paused ({done}/{total})',
     'status.waitingQueueQuote':
         'Current image finished; waiting for the queued job quote...',
+    'status.batchInterval':
+        'Waiting {seconds}s before image {current}/{total}…',
     'status.generatingImage':
         'Generating {current}/{total}, {queued} waiting...',
     'status.savingImage': 'Saving image and preparing preview...',
@@ -785,6 +789,7 @@ const _runtimeText = <String, Map<String, String>>{
     'status.readingCharge': '生成前の消費を読み取り中...',
     'status.queuePaused': 'キューを一時停止しました ({done}/{total})',
     'status.waitingQueueQuote': '現在の画像が完了しました。キュー内タスクの見積もり待ちです...',
+    'status.batchInterval': '{seconds} 秒待ってから {current}/{total} 枚目を生成します…',
     'status.generatingImage': '{current}/{total} を生成中、待機 {queued} 件...',
     'status.savingImage': '画像を保存して表示を準備しています...',
     'status.actualSpentUnknown': '実コストを読み取れませんでした。Anlas を更新して確認してください',
@@ -1023,6 +1028,7 @@ const _runtimeText = <String, Map<String, String>>{
     'status.readingCharge': '생성 전 비용을 읽는 중...',
     'status.queuePaused': '대기열 일시 중지됨 ({done}/{total})',
     'status.waitingQueueQuote': '현재 이미지가 완료되었습니다. 대기 중인 작업 견적을 기다리는 중...',
+    'status.batchInterval': '{seconds}초 후 {current}/{total}번째 이미지를 생성합니다…',
     'status.generatingImage': '{current}/{total} 생성 중, {queued}개 대기...',
     'status.savingImage': '이미지를 저장하고 표시를 준비하는 중...',
     'status.actualSpentUnknown': '실제 비용을 읽을 수 없습니다. Anlas를 새로고침해 확인하세요',

@@ -1,9 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
+  appendBatchRedrawCandidates,
+  batchRedrawCandidates,
   buildBatchRedrawRequest,
   clearBatchRedrawItemResult,
+  normalizeBatchRedrawCandidateCount,
+  retainBatchRedrawCandidates,
   resetBatchRedrawItemForParameterRevision,
   resetInterruptedBatchItem,
+  selectBatchRedrawCandidate,
+  selectedBatchRedrawCandidate,
   shouldStopBatchRedraw,
 } from "./batch-redraw-queue";
 import { createDefaultBatchRedraw, DEFAULT_PARAMS, type BatchRedrawItem } from "./types";
@@ -20,6 +26,7 @@ function item(status: BatchRedrawItem["status"]): BatchRedrawItem {
     overrideParams: false,
     params: {},
     status,
+    candidates: [],
     error: status === "generating" ? "Operation cancelled" : undefined,
   };
 }
@@ -54,6 +61,47 @@ describe("batch redraw cancellation", () => {
     });
   });
 
+  it("clamps the one shared candidate count", () => {
+    expect(normalizeBatchRedrawCandidateCount(undefined)).toBe(1);
+    expect(normalizeBatchRedrawCandidateCount(0)).toBe(1);
+    expect(normalizeBatchRedrawCandidateCount(3.9)).toBe(3);
+    expect(normalizeBatchRedrawCandidateCount(99)).toBe(8);
+  });
+
+  it("retains all candidates while changing only the selected export", () => {
+    const first = {
+      id: "history-1",
+      historyItemId: "history-1",
+      resultUrl: "file:///one.png",
+      resultPath: "C:/output/one.png",
+    };
+    const second = {
+      id: "history-2",
+      historyItemId: "history-2",
+      resultUrl: "file:///two.png",
+      resultPath: "C:/output/two.png",
+    };
+    const withBoth = appendBatchRedrawCandidates(
+      appendBatchRedrawCandidates(item("done"), [first]),
+      [second],
+    );
+    expect(batchRedrawCandidates(withBoth)).toHaveLength(2);
+    expect(selectedBatchRedrawCandidate(withBoth)?.id).toBe("history-1");
+
+    const selected = selectBatchRedrawCandidate(withBoth, "history-2");
+    expect(selected.candidates).toHaveLength(2);
+    expect(selected.resultPath).toBe("C:/output/two.png");
+    expect(selected.historyItemId).toBe("history-2");
+
+    const retained = retainBatchRedrawCandidates(
+      selected,
+      new Set(["history-2"]),
+    );
+    expect(retained.candidates.map((candidate) => candidate.id)).toEqual([
+      "history-2",
+    ]);
+  });
+
   it("snapshots the parameters and references visible when the queue starts", () => {
     const project = createDefaultBatchRedraw({ ...DEFAULT_PARAMS, steps: 28 });
     project.globalStyle = "global style";
@@ -84,6 +132,7 @@ describe("batch redraw cancellation", () => {
         seed: 123,
         seedMode: "fixed",
         positivePrompt: "global style, subject",
+        stylePrompt: "",
         negativePrompt: "new negative",
       },
       extras: {
@@ -93,6 +142,7 @@ describe("batch redraw cancellation", () => {
         ],
       },
     });
+    expect(request.params.positivePrompt.match(/global style/g)).toHaveLength(1);
   });
 
   it("uses the selected custom size for every batch item", () => {
@@ -115,6 +165,15 @@ describe("batch redraw cancellation", () => {
       resultUrl: "file:///result.png",
       resultPath: "C:/output/result.png",
       historyItemId: "history-1",
+      candidates: [
+        {
+          id: "history-1",
+          historyItemId: "history-1",
+          resultUrl: "file:///result.png",
+          resultPath: "C:/output/result.png",
+        },
+      ],
+      selectedCandidateId: "history-1",
     };
     expect(clearBatchRedrawItemResult(source)).toMatchObject({
       prompt: "keep this prompt",
@@ -123,6 +182,8 @@ describe("batch redraw cancellation", () => {
       resultUrl: undefined,
       resultPath: undefined,
       historyItemId: undefined,
+      candidates: [],
+      selectedCandidateId: undefined,
     });
   });
 

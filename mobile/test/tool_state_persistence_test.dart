@@ -26,6 +26,7 @@ void main() {
           augmentColorizePrompt: 'soft lighting',
           augmentEmotion: 'angry',
           augmentEmotionLevel: 3,
+          batchIntervalSeconds: 7,
         ),
       );
       final state = _TestState(
@@ -49,6 +50,7 @@ void main() {
       expect(state.augmentOptions.colorizePrompt, 'soft lighting');
       expect(state.augmentOptions.emotion, 'angry');
       expect(state.augmentOptions.emotionLevel, closeTo(3, 1e-9));
+      expect(state.batchIntervalSeconds, 7);
     });
 
     test('persistToolState writes the current selections back to settings',
@@ -68,6 +70,7 @@ void main() {
         ..upscaleScale = 4
         ..directorTool = 'declutter'
         ..augmentOptions.emotion = 'sad';
+      state.setBatchIntervalSeconds(9);
       await state.setSettings(
           (settings) => settings.reversePromptTemplateVersion = 'v4.5');
       await state.persistToolState();
@@ -80,6 +83,7 @@ void main() {
       expect(saved.upscaleScale, 4);
       expect(saved.directorTool, 'declutter');
       expect(saved.augmentEmotion, 'sad');
+      expect(saved.batchIntervalSeconds, 9);
 
       // A fresh boot from the same storage rehydrates the saved selections.
       final reopened = _TestState(
@@ -92,6 +96,31 @@ void main() {
       expect(reopened.settings.reversePromptTemplateVersion, 'v4.5');
       expect(reopened.directorTool, 'declutter');
       expect(reopened.upscaleScale, 4);
+      expect(reopened.batchIntervalSeconds, 9);
+    });
+  });
+
+  group('batch generation interval', () {
+    test(
+        'defaults to zero, clamps to one hour, and waits in cancellable slices',
+        () async {
+      expect(normalizeBatchIntervalSeconds(null), 0);
+      expect(normalizeBatchIntervalSeconds(-2), 0);
+      expect(normalizeBatchIntervalSeconds(2.6), 3);
+      expect(normalizeBatchIntervalSeconds(99999), 3600);
+
+      final waits = <Duration>[];
+      var active = true;
+      final completed = await waitForBatchInterval(
+        2,
+        () => active,
+        delay: (duration) async {
+          waits.add(duration);
+          active = false;
+        },
+      );
+      expect(completed, isFalse);
+      expect(waits, [const Duration(milliseconds: 250)]);
     });
   });
 }

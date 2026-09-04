@@ -71,7 +71,7 @@ class StudioAdaptiveShell extends StatelessWidget {
   // Reference presets are a first-class workflow on phones as well. Keep the
   // bottom bar to five destinations total (four primary pages + More) so labels
   // and hit targets remain usable on compact portrait and landscape devices.
-  static const _phonePrimaryIndexes = [0, 1, 6, 8];
+  static const _phonePrimaryIndexes = [0, 1, 5, 7];
 
   @override
   Widget build(BuildContext context) {

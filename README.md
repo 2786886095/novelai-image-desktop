@@ -3,7 +3,7 @@
 [![Build](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build.yml/badge.svg)](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build.yml)
 [![Build Mobile](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build-mobile.yml/badge.svg)](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build-mobile.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
-[![Release](https://img.shields.io/badge/release-v2.1.1-7c5cfa.svg)](https://github.com/2786886095/novelai-image-desktop/releases/tag/v2.1.1)
+[![Release](https://img.shields.io/badge/release-v2.2.0-7c5cfa.svg)](https://github.com/2786886095/novelai-image-desktop/releases/tag/v2.2.0)
 [![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android%20%7C%20iOS-20b7d8.svg)](#下载)
 
 <img width="1672" height="941" alt="ChatGPT Image 2026年6月17日 11_27_47" src="https://github.com/user-attachments/assets/66a6caef-3007-479b-9006-1c6f50570655" />
@@ -16,16 +16,16 @@
 
 ## 下载
 
-- **v2.1.1 中国大陆线路**：[Gitee Releases](https://gitee.com/langbai666/novelai-image-desktop/releases#release-v2.1.1)
-- **v2.1.1 全球线路**：[GitHub Releases](https://github.com/2786886095/novelai-image-desktop/releases/tag/v2.1.1)
+- **v2.2.0 中国大陆线路**：[Gitee Releases](https://gitee.com/langbai666/novelai-image-desktop/releases#release-v2.2.0)
+- **v2.2.0 全球线路**：[GitHub Releases](https://github.com/2786886095/novelai-image-desktop/releases/tag/v2.2.0)
 - **持续构建产物**：[GitHub Actions](https://github.com/2786886095/novelai-image-desktop/actions)
 
 Release 目标产物：
 
 | 平台 | 文件 |
 | --- | --- |
-| Windows（便携版） | `Langbai-NovelAI-Studio-2.1.1.exe` |
-| Windows（安装版） | `Langbai-NovelAI-Studio-Setup-2.1.1.exe` |
+| Windows（便携版） | `Langbai-NovelAI-Studio-2.2.0.exe` |
+| Windows（安装版） | `Langbai-NovelAI-Studio-Setup-2.2.0.exe` |
 | macOS | universal `.dmg` + `.zip` |
 | Linux | `.AppImage` |
 | Android | `app-release.apk` |
@@ -71,7 +71,6 @@ Release 目标产物：
 - **历史与素材分组**：按日期和分组筛选，新建 / 重命名 / 删除分组，给图片分组，一键 ZIP 导出。
 - **角色参考预设库**：桌面端与移动端均可管理氛围迁移/精准参考预设，并从 Gitee 优先的在线目录按游戏、分类和角色形态下载最佳尺寸精准参考图；支持按游戏整系列下载、下载前查看数量与总大小、聚合进度、五语言显示与跨语言搜索、双击预览、分组、导入导出及离线复用。
 - **生成队列**：批量任务可暂停 / 继续，失败后重试并跳过，记录实扣 Anlas。
-- **小说推文（桌面端）**：导入小说/字幕 → LLM 分镜旁白（无 API/拒答时本地模板兜底）→ 全局精准参考/角色库 → 批量生图续跑 → TTS/逐镜配音/按字幕切分长音频 → 运镜转场预览 → 写入剪映 10.9 草稿；项目会写磁盘快照，长队列中断后可恢复。
 - **漫画生成器**：直接导入逐行 Tag，或导入带分镜标题的 JSON/CSV；全局统一风格、负面词和生成参数，每个分镜可独立覆盖参数。一次生成 1～10 张候选图，可继续追加、预览并选定主图；最终 ZIP 只打包每个分镜当前选中的主图。
 - **锁种变体**：复用历史图参数并锁定 seed，适合微调单个 tag。
 - **图片命名**：生成面板可填写文件名前缀；历史面板每张图片可单独重命名（同步重命名本地文件）。
@@ -108,8 +107,8 @@ npm run pack
 `npm run pack` 现在会同时产出便携版和安装版：
 
 ```text
-release\Langbai-NovelAI-Studio-2.1.1.exe          # 便携版
-release\Langbai-NovelAI-Studio-Setup-2.1.1.exe    # 安装版（NSIS 向导）
+release\Langbai-NovelAI-Studio-2.2.0.exe          # 便携版
+release\Langbai-NovelAI-Studio-Setup-2.2.0.exe    # 安装版（NSIS 向导）
 release\Langbai-NovelAI-Studio.exe                # 便携版稳定别名
 release\latest.yml                                # 安装版应用内更新用的元数据
 ```
@@ -133,9 +132,9 @@ release\NovelAI-Image-Desktop.exe
 推送 `v*` tag 会触发桌面端与移动端两个 workflow，并把所有平台产物汇总到同一个 Release：
 
 ```powershell
-git tag v2.1.1
+git tag v2.2.0
 git push origin main
-git push origin v2.1.1
+git push origin v2.2.0
 ```
 
 如果 Release 上传时报 403，请在仓库 `Settings -> Actions -> General -> Workflow permissions` 中启用 `Read and write permissions`。
@@ -152,16 +151,11 @@ git push origin v2.1.1
 
 - `electron/main.ts`：Electron 窗口与 IPC 注册。
 - `electron/ipc/nai.ts`：NovelAI API、AI 反推、提示词转换、模型检测。
-- `electron/ipc/tuiwen-audio.ts`：小说推文 TTS Provider、Edge Read Aloud 合成与音频落盘。
-- `electron/ipc/tuiwen-import.ts`：桌面端小说/字幕文件导入、编码识别与分镜初始化。
-- `electron/ipc/tuiwen-jianying.ts`：小说推文剪映 10.9.0.14196 草稿导出（draft version 400000 / 164.0.0）。
 - `electron/ipc/store.ts`：设置、Token 摘要、历史索引、素材分组。
 - `electron/ipc/storage.ts`：历史删除、目录选择、分组操作。
 - `electron/preload.ts`：安全暴露 `window.naiDesktop`。
 - `src/App.tsx`：主 UI、设置、历史、反推、转换。
 - `src/components/ui.tsx`：共享 UI 基础组件。
-- `src/tuiwen/`：小说推文画幅映射、导入解析、旁白节奏、项目模型与主界面。
-- `docs/TUIWEN_VALIDATION_STATUS.md`：小说推文自动化证据、真实环境硬前置与追版状态。
 - `src/prompt-data.ts`：标签分类、中文含义、灵感胶囊词条。
 - `src/InpaintCanvas.tsx`：局部重绘蒙版画布。
 - `src/store.ts`：Zustand 前端状态。

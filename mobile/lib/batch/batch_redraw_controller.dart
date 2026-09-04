@@ -28,12 +28,14 @@ class _BatchRedrawQueueJob {
   final GenerateParams params;
   final GenerateExtras extras;
   final double strength;
+  final int candidateCount;
 
   const _BatchRedrawQueueJob({
     required this.item,
     required this.params,
     required this.extras,
     required this.strength,
+    required this.candidateCount,
   });
 }
 
@@ -433,7 +435,8 @@ class BatchRedrawController extends ChangeNotifier {
           ..width = outputSize.$1
           ..height = outputSize.$2;
       } else if (project.sizeMode == 'perImage') {
-        final itemIndex = project.items.indexWhere((entry) => entry.id == item.id);
+        final itemIndex =
+            project.items.indexWhere((entry) => entry.id == item.id);
         final imported = itemIndex >= 0 &&
                 currentPerImageSizes != null &&
                 itemIndex < currentPerImageSizes.length
@@ -454,6 +457,8 @@ class BatchRedrawController extends ChangeNotifier {
         params: params,
         extras: referencesFor(sourceParams),
         strength: item.strength ?? globalStrength,
+        candidateCount:
+            normalizeBatchRedrawCandidateCount(project.candidateCount),
       );
     }).toList(growable: false);
   }
@@ -461,24 +466,31 @@ class BatchRedrawController extends ChangeNotifier {
   int _quoteJobs(List<_BatchRedrawQueueJob> jobs) {
     var total = 0;
     for (final job in jobs) {
-      total += calculateImageGenerationAnlas(
-            params: job.params,
-            account: app.account,
-            extras: job.extras,
-            imageToImage: true,
-            strength: job.strength,
-            alreadyEncodedVibes:
-                app.api.countCachedVibes(job.params.model, job.extras),
-            preciseReferenceCount: job.extras.preciseReferences.length,
-            language: app.settings.language,
-          ).amount ??
-          0;
+      total += (calculateImageGenerationAnlas(
+                params: job.params,
+                account: app.account,
+                extras: job.extras,
+                imageToImage: true,
+                strength: job.strength,
+                alreadyEncodedVibes:
+                    app.api.countCachedVibes(job.params.model, job.extras),
+                preciseReferenceCount: job.extras.preciseReferences.length,
+                language: app.settings.language,
+              ).amount ??
+              0) *
+          job.candidateCount;
     }
     return total;
   }
 
   int quote(List<BatchRedrawItem> targets) {
     return _quoteJobs(_snapshotQueue(targets));
+  }
+
+  void selectCandidate(BatchRedrawItem item, String candidateId) {
+    if (item.selectCandidate(candidateId)) {
+      changed();
+    }
   }
 
   Future<void> startQueue(List<BatchRedrawItem> targets) async {
@@ -519,7 +531,10 @@ class BatchRedrawController extends ChangeNotifier {
     queuePaused = false;
     queueCancelled = false;
     queueDone = 0;
-    queueTotal = jobs.length;
+    queueTotal = jobs.fold(
+      0,
+      (total, job) => total + job.candidateCount,
+    );
     final queueGroupName = _projectName();
     var queueHistoryGroupId = project.historyGroupId;
     if (BackgroundQueueService.shouldWarnNoBackgroundSupport()) {
@@ -536,70 +551,92 @@ class BatchRedrawController extends ChangeNotifier {
     for (final job in jobs) {
       final item = job.item;
       if (queueCancelled) break;
-      while (queuePaused && !queueCancelled) {
-        await Future<void>.delayed(const Duration(milliseconds: 220));
-      }
-      if (queueCancelled) break;
       item
         ..status = BatchItemStatus.generating
         ..error = '';
-      changed(_rf('batch.generatingItem', {'name': item.name}));
-      unawaited(BackgroundQueueService.update(
-        title: _rt('notification.batchTitle'),
-        text: _rf('notification.generating', {
-          'current': queueDone + 1,
-          'total': queueTotal,
-        }),
-      ));
-      try {
-        final history = await app.generateBatchRedrawItem(
-          sourceBytes: base64Decode(item.base64),
-          itemParams: job.params,
-          itemExtras: job.extras,
-          strength: job.strength,
-          groupName: queueGroupName,
-          historyGroupId: queueHistoryGroupId,
-          cancelled: () => queueCancelled,
-        );
-        if (queueCancelled) {
-          item
-            ..status = BatchItemStatus.pending
-            ..error = '';
-          changed();
-          break;
+      var lastItemError = '';
+      for (var candidateIndex = 0;
+          candidateIndex < job.candidateCount;
+          candidateIndex++) {
+        while (queuePaused && !queueCancelled) {
+          await Future<void>.delayed(const Duration(milliseconds: 220));
         }
-        queueHistoryGroupId = history.groupId;
-        project.historyGroupId = queueHistoryGroupId;
-        item
-          ..status = BatchItemStatus.done
-          ..outputPath = history.filePath;
-      } catch (error) {
-        if (queueCancelled || error is GenerationCancelledException) {
-          queueCancelled = true;
-          item
-            ..status = BatchItemStatus.pending
-            ..error = '';
+        if (queueCancelled) break;
+        changed(_rf('batch.generatingItem', {
+          'name': '${item.name} ${candidateIndex + 1}/${job.candidateCount}',
+        }));
+        unawaited(BackgroundQueueService.update(
+          title: _rt('notification.batchTitle'),
+          text: _rf('notification.generating', {
+            'current': queueDone + 1,
+            'total': queueTotal,
+          }),
+        ));
+        try {
+          final history = await app.generateBatchRedrawItem(
+            sourceBytes: base64Decode(item.base64),
+            itemParams: job.params,
+            itemExtras: job.extras,
+            strength: job.strength,
+            groupName: queueGroupName,
+            historyGroupId: queueHistoryGroupId,
+            cancelled: () => queueCancelled,
+          );
+          if (queueCancelled) break;
+          queueHistoryGroupId = history.groupId;
+          project.historyGroupId = queueHistoryGroupId;
+          item.addCandidate(BatchRedrawCandidate(
+            id: history.id,
+            historyItemId: history.id,
+            outputPath: history.filePath,
+            createdAt: history.createdAt,
+            actualSeed: history.seed,
+          ));
+          queueDone++;
           changed();
-          break;
-        }
-        item
-          ..status = BatchItemStatus.failed
-          ..error = error.toString().replaceFirst('Exception: ', '');
-        final lower = item.error.toLowerCase();
-        if (lower.contains('401') || lower.contains('unauthorized')) {
-          queueCancelled = true;
-          status = _rt('batch.authStopped');
+        } catch (error) {
+          if (queueCancelled || error is GenerationCancelledException) {
+            queueCancelled = true;
+            break;
+          }
+          lastItemError = error.toString().replaceFirst('Exception: ', '');
+          queueDone++;
+          final lower = lastItemError.toLowerCase();
+          if (lower.contains('401') || lower.contains('unauthorized')) {
+            queueCancelled = true;
+            status = _rt('batch.authStopped');
+          }
+          changed();
+          if (queueCancelled) break;
         }
       }
-      queueDone++;
+      if (item.candidates.isNotEmpty) {
+        item
+          ..status = BatchItemStatus.done
+          ..error = '';
+        item.syncSelectedCandidate();
+      } else if (queueCancelled) {
+        item
+          ..status = BatchItemStatus.pending
+          ..error = '';
+      } else {
+        item
+          ..status = BatchItemStatus.failed
+          ..error = lastItemError.isEmpty
+              ? _rt('error.noImagesReturned')
+              : lastItemError;
+      }
       changed();
+      if (queueCancelled) break;
     }
     queueRunning = false;
     queuePaused = false;
     for (final item in project.items) {
       if (item.status == BatchItemStatus.generating) {
         item
-          ..status = BatchItemStatus.pending
+          ..status = item.candidates.isEmpty
+              ? BatchItemStatus.pending
+              : BatchItemStatus.done
           ..error = '';
       }
     }
@@ -630,7 +667,9 @@ class BatchRedrawController extends ChangeNotifier {
     for (final item in project.items) {
       if (item.status == BatchItemStatus.generating) {
         item
-          ..status = BatchItemStatus.pending
+          ..status = item.candidates.isEmpty
+              ? BatchItemStatus.pending
+              : BatchItemStatus.done
           ..error = '';
       }
     }
@@ -645,7 +684,10 @@ class BatchRedrawController extends ChangeNotifier {
   Future<bool> clearGeneratedResults() async {
     if (queueRunning || busy) return false;
     final paths = project.items
-        .map((item) => item.outputPath)
+        .expand((item) => <String>[
+              ...item.candidates.map((candidate) => candidate.outputPath),
+              if (item.candidates.isEmpty) item.outputPath,
+            ])
         .where((path) => path.isNotEmpty)
         .toSet();
     if (paths.isEmpty &&
@@ -659,13 +701,13 @@ class BatchRedrawController extends ChangeNotifier {
       for (final item in project.items) {
         item
           ..status = BatchItemStatus.pending
-          ..outputPath = ''
           ..error = ''
           // A cleared run starts a fresh global-parameter revision. Keeping a
           // full per-image snapshot here made later global edits appear to do
           // nothing because the invisible old snapshot still took priority.
           ..overrideParams = false
           ..params = project.globalParams.copy();
+        item.clearCandidates();
       }
       queueDone = 0;
       queueTotal = 0;
@@ -732,8 +774,10 @@ class BatchRedrawController extends ChangeNotifier {
     for (var index = 0; index < project.items.length; index++) {
       final item = project.items[index];
       prompts.writeln('${index + 1}. ${item.name}\n${item.prompt}\n');
-      if (item.outputPath.isNotEmpty && File(item.outputPath).existsSync()) {
-        final bytes = await File(item.outputPath).readAsBytes();
+      final selected = item.selectedCandidate;
+      final outputPath = selected?.outputPath ?? item.outputPath;
+      if (outputPath.isNotEmpty && File(outputPath).existsSync()) {
+        final bytes = await File(outputPath).readAsBytes();
         archive.addFile(ArchiveFile(
           'images/${(index + 1).toString().padLeft(3, '0')}.png',
           bytes.length,

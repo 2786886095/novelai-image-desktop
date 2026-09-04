@@ -114,6 +114,35 @@ void main() {
     );
   });
 
+  test('upscale endpoint resolves from the image host setting', () {
+    final settings = AppSettings(allowCustomEndpoint: false);
+    expect(
+      resolveNovelAiBaseUrl(
+        settings.imageBaseUrl,
+        'https://image.novelai.net',
+        settings,
+      ),
+      'https://image.novelai.net',
+    );
+    expect(
+      resolveNovelAiBaseUrl(
+        'https://api.novelai.net',
+        'https://image.novelai.net',
+        settings,
+      ),
+      'https://image.novelai.net',
+    );
+  });
+
+  test('upscale model follows the current image API contract', () {
+    expect(resolveUpscaleModel('nai-diffusion-5-full'), 'nai-diffusion-5-full');
+    expect(resolveUpscaleModel('nai-diffusion-5-full-inpainting'),
+        'nai-diffusion-5-full');
+    expect(
+        resolveUpscaleModel('nai-diffusion-furry-3'), 'nai-diffusion-3-furry');
+    expect(resolveUpscaleModel('retired-model'), 'nai-diffusion-5-curated');
+  });
+
   test('restored generation params repair stale and out-of-range values', () {
     final params = GenerateParams.fromJson({
       'model': 'retired-model',

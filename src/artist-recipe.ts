@@ -1,5 +1,6 @@
 import type { ArtistTagRecord, ArtistWeightedTag } from "./artist-lab";
 import { ARTIST_TAG_ALIASES } from "./curated-artists";
+import { sampleControlledWeight, softBalanceWeights, type WeightDistributionConfig } from "./weight-distribution";
 
 export type RecipeTokenKind = "artist" | "year" | "quality" | "negative" | "style" | "other";
 
@@ -16,6 +17,7 @@ export interface RandomArtistRecipeOptions {
   maxArtists: number;
   artistWeightMin?: number;
   artistWeightMax?: number;
+  artistWeightDistribution?: WeightDistributionConfig;
   auxiliaryPrompt?: string;
   customTagPool?: string;
   /** Per-tag inclusion policy. Missing entries remain backward-compatible and
@@ -36,6 +38,25 @@ export interface RandomArtistRecipeOptions {
   random?: () => number;
 }
 
+export type ArtistWeightTuneTagOptions = Pick<
+  RandomArtistRecipeOptions,
+  | "customTagPool"
+  | "customTagModes"
+  | "minRandomCustomTags"
+  | "maxRandomCustomTags"
+  | "customTagWeightMin"
+  | "customTagWeightMax"
+>;
+
+export interface ArtistMatchRecipeOptions {
+  count: number;
+  round: number;
+  eliteArtists?: readonly (readonly ArtistWeightedTag[])[];
+  seenPrompts?: ReadonlySet<string>;
+  maxArtists?: number;
+  random?: () => number;
+}
+
 export type CustomTagMode = "always" | "random";
 
 export interface GeneratedArtistRecipe {
@@ -46,6 +67,8 @@ export interface GeneratedArtistRecipe {
   franchiseStyles: FranchiseStyleToken[];
   basePrompt: string;
   prompt: string;
+  /** Search action used by target-style matching. */
+  move?: "probe" | "weight" | "ablate" | "expand" | "cross";
 }
 
 export type StyleMutationCategory = "artStyle" | "medium" | "color" | "lighting";
@@ -307,6 +330,7 @@ export function randomizeArtistRecipeWeights(
   count: number,
   variationPercent = 20,
   random: () => number = Math.random,
+  tagOptions: ArtistWeightTuneTagOptions = {},
 ): GeneratedArtistRecipe[] {
   const source = parseArtistRecipe(input)
     .filter((token) => token.kind === "artist" && token.weight > 0)
@@ -318,6 +342,7 @@ export function randomizeArtistRecipeWeights(
   if (!source.length) return [];
   const total = Math.max(1, Math.floor(Number.isFinite(count) ? count : 1));
   const ratio = Math.max(0, Math.min(100, variationPercent)) / 100;
+  const customTagPool = parseCustomTagPool(tagOptions.customTagPool ?? "");
   return Array.from({ length: total }, (_, index) => {
     const artists = source.map((artist) => ({
       name: artist.name,
@@ -329,14 +354,29 @@ export function randomizeArtistRecipeWeights(
       ),
     }));
     const artistText = formatArtistString(artists).replace(/,$/, "");
+    const selectedCustomTagPool = selectCustomTagPool(
+      random,
+      customTagPool,
+      tagOptions.customTagModes,
+      tagOptions.minRandomCustomTags,
+      tagOptions.maxRandomCustomTags,
+    );
+    const auxiliary = drawCustomTags(
+      random,
+      selectedCustomTagPool,
+      tagOptions.customTagWeightMin ?? 0.2,
+      tagOptions.customTagWeightMax ?? 1.2,
+    );
+    const auxiliaryText = auxiliary.map(formatToken).join(", ");
+    const prompt = [artistText, auxiliaryText].filter(Boolean).join(", ");
     return {
-      id: `weight-tune-${index + 1}-${artists.map((artist) => `${artist.name}@${artist.weight}`).join("+")}`,
+      id: `weight-tune-${index + 1}-${artists.map((artist) => `${artist.name}@${artist.weight}`).join("+")}-${auxiliary.map((tag) => `${tag.value}@${tag.weight}`).join("+")}`,
       artists,
-      auxiliary: [],
+      auxiliary,
       mutations: [],
       franchiseStyles: [],
-      basePrompt: artistText,
-      prompt: artistText,
+      basePrompt: prompt,
+      prompt,
     };
   });
 }
@@ -489,10 +529,22 @@ export function generatePopularArtistRecipes(
     if (selected.length === 0) break;
     const leadCount = selected.length >= 8 && random() < 0.35 ? 2 : 1;
     const accentCount = selected.length >= 5 ? Math.max(1, Math.round(selected.length * 0.25)) : 0;
-    const artists = selected.map((artist, index): ArtistWeightedTag => {
+    let artists = selected.map((artist, index): ArtistWeightedTag => {
       const role = index < leadCount ? "lead" : index >= selected.length - accentCount ? "accent" : "support";
-      return { name: artist.name, weight: chooseWeight(role, artistWeightMin, artistWeightMax, random) };
+      return {
+        name: artist.name,
+        weight: options.artistWeightDistribution
+          ? sampleControlledWeight(options.artistWeightDistribution, random)
+          : chooseWeight(role, artistWeightMin, artistWeightMax, random),
+      };
     });
+    if (options.artistWeightDistribution) {
+      const balanced = softBalanceWeights(
+        artists.map((artist) => artist.weight),
+        options.artistWeightDistribution,
+      );
+      artists = artists.map((artist, index) => ({ ...artist, weight: balanced[index] }));
+    }
     const franchiseStyles = options.includeFranchiseStyles
       ? drawFranchiseStyles(
           random,
@@ -536,6 +588,119 @@ export function generatePopularArtistRecipes(
       basePrompt,
       prompt,
     });
+  }
+  return output;
+}
+
+/**
+ * Coarse-to-fine beam search for target-style matching.
+ *
+ * Round one measures single artists so the scorer learns which tags actually
+ * move the fixed scene toward the target. Later rounds preserve the strongest
+ * combinations, jitter their weights, add one new ranked artist, remove weak
+ * accents, and cross the best beams. This avoids the old behaviour where every
+ * round discarded what it learned and sampled unrelated 2–10 artist strings.
+ */
+export function generateArtistMatchRecipes(
+  pool: ArtistTagRecord[],
+  options: ArtistMatchRecipeOptions,
+): GeneratedArtistRecipe[] {
+  const random = options.random ?? Math.random;
+  const count = Math.max(1, Math.min(40, Math.floor(options.count || 1)));
+  const ranked = Array.from(new Map(
+    pool.map((artist) => [canonicalArtistTagName(artist.name), {
+      ...artist,
+      name: canonicalArtistTagName(artist.name),
+    }]),
+  ).values()).filter((artist) => artist.name);
+  const maxArtists = Math.max(1, Math.min(6, Math.floor(options.maxArtists ?? 4)));
+  const signature = (artists: readonly ArtistWeightedTag[]) => artists
+    .map((artist) => `${canonicalArtistTagName(artist.name)}@${Math.round(artist.weight * 4) / 4}`)
+    .sort()
+    .join("+");
+  const seen = new Set<string>();
+  for (const prompt of options.seenPrompts ?? []) {
+    const parsed = parseArtistRecipe(prompt)
+      .filter((token) => token.kind === "artist")
+      .map((token) => ({ name: token.value.replace(/^artist\s*:/i, ""), weight: token.weight }));
+    if (parsed.length) seen.add(signature(parsed));
+  }
+  const output: GeneratedArtistRecipe[] = [];
+
+  const add = (rawArtists: readonly ArtistWeightedTag[], move: GeneratedArtistRecipe["move"]) => {
+    const unique = Array.from(new Map(rawArtists
+      .map((artist) => ({
+        name: canonicalArtistTagName(artist.name),
+        weight: roundWeight(Math.max(.2, Math.min(1.8, artist.weight))),
+      }))
+      .filter((artist) => artist.name)
+      .map((artist) => [artist.name, artist])).values()).slice(0, maxArtists);
+    if (unique.length === 0) return;
+    const prompt = formatArtistString(unique).replace(/,$/, "");
+    const key = signature(unique);
+    if (!prompt || seen.has(key)) return;
+    seen.add(key);
+    output.push({
+      id: `match-${options.round}-${output.length + 1}-${unique.map((artist) => `${artist.name}@${artist.weight}`).join("+")}`,
+      artists: unique,
+      auxiliary: [],
+      mutations: [],
+      franchiseStyles: [],
+      basePrompt: prompt,
+      prompt,
+      move,
+    });
+  };
+
+  const elites = (options.eliteArtists ?? [])
+    .map((artists) => artists.map((artist) => ({ ...artist })))
+    .filter((artists) => artists.length > 0)
+    .slice(0, Math.max(2, Math.ceil(count / 3)));
+
+  // Always spend part of every round on unseen single-artist probes. This
+  // prevents an early mediocre elite from monopolising the whole image budget.
+  const probeBudget = elites.length ? Math.max(1, Math.ceil(count * .25)) : count;
+  for (const artist of ranked) {
+    add([{ name: artist.name, weight: 1 }], "probe");
+    if (output.length >= probeBudget) break;
+  }
+  if (!elites.length || output.length >= count) return output.slice(0, count);
+
+  // Round-robin actions give every elite a fair chance: coarse multiplicative
+  // weight moves are visually measurable, then ablation and one-tag expansion.
+  const actions: Array<() => void> = [];
+  for (const elite of elites) {
+    for (let index = 0; index < elite.length; index += 1) {
+      actions.push(() => add(elite.map((artist, artistIndex) => artistIndex === index
+        ? { ...artist, weight: artist.weight * .7 }
+        : artist), "weight"));
+      actions.push(() => add(elite.map((artist, artistIndex) => artistIndex === index
+        ? { ...artist, weight: artist.weight * 1.4 }
+        : artist), "weight"));
+    }
+    if (elite.length > 1) {
+      const weakest = elite.reduce((best, artist, index) => artist.weight < elite[best].weight ? index : best, 0);
+      actions.push(() => add(elite.filter((_, index) => index !== weakest), "ablate"));
+    }
+    for (const candidate of ranked) {
+      if (elite.length >= maxArtists || elite.some((artist) => artist.name === candidate.name)) continue;
+      actions.push(() => add([...elite, { name: candidate.name, weight: .5 + random() * .5 }], "expand"));
+      break;
+    }
+  }
+  for (let index = 0; index < actions.length && output.length < count; index += 1) actions[index]();
+
+  for (let left = 0; left < elites.length && output.length < count; left += 1) {
+    for (let right = left + 1; right < elites.length && output.length < count; right += 1) {
+      add([...elites[left], ...elites[right]], "cross");
+    }
+  }
+
+  let attempts = 0;
+  while (output.length < count && ranked.length && attempts++ < count * 80) {
+    const base = elites[Math.floor(random() * elites.length)];
+    const candidate = ranked[Math.floor(random() * ranked.length)];
+    add([...base, { name: candidate.name, weight: .5 + random() * .5 }], "expand");
   }
   return output;
 }

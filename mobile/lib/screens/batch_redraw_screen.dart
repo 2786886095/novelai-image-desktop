@@ -42,6 +42,38 @@ String _batchSizePath(BatchRedrawProject project, BatchRedrawItem item) {
   return '${item.width}×${item.height} → ${output.$1}×${output.$2}';
 }
 
+Future<void> _previewBatchImage(BuildContext context, String path) async {
+  if (path.isEmpty || !File(path).existsSync()) return;
+  await showDialog<void>(
+    context: context,
+    builder: (dialogContext) => Dialog.fullscreen(
+      backgroundColor: Colors.black,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          InteractiveViewer(
+            minScale: 0.5,
+            maxScale: 6,
+            child: Center(
+              child: Image.file(File(path), fit: BoxFit.contain),
+            ),
+          ),
+          Positioned(
+            top: 12,
+            right: 12,
+            child: SafeArea(
+              child: IconButton.filled(
+                onPressed: () => Navigator.pop(dialogContext),
+                icon: const Icon(Icons.close),
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
 class BatchRedrawScreen extends StatelessWidget {
   final VoidCallback? onBack;
   final BatchRedrawController? controller;
@@ -449,6 +481,79 @@ class _ParamsStep extends StatelessWidget {
                     ),
                   ],
                 ],
+              ),
+            ),
+          ),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final selector = DropdownButton<int>(
+                    value: normalizeBatchRedrawCandidateCount(
+                        project.candidateCount),
+                    isExpanded: constraints.maxWidth < 430,
+                    onChanged: controller.queueRunning
+                        ? null
+                        : (value) {
+                            if (value == null) return;
+                            project.candidateCount = value;
+                            controller.changed();
+                          },
+                    items: [
+                      for (var count = 1;
+                          count <= maxBatchRedrawCandidates;
+                          count++)
+                        DropdownMenuItem(
+                          value: count,
+                          child: Text('$count ${t('batch.candidateUnit')}'),
+                        ),
+                    ],
+                  );
+                  final description = Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.filter_none_rounded,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              t('batch.candidateCount'),
+                              style: Theme.of(context).textTheme.titleSmall,
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              t('batch.candidateCountHint'),
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  );
+                  if (constraints.maxWidth < 430) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        description,
+                        const SizedBox(height: 10),
+                        DropdownButtonHideUnderline(child: selector),
+                      ],
+                    );
+                  }
+                  return Row(
+                    children: [
+                      Expanded(child: description),
+                      const SizedBox(width: 12),
+                      selector,
+                    ],
+                  );
+                },
               ),
             ),
           ),
@@ -1043,8 +1148,9 @@ class _BatchGenerateStep extends StatelessWidget {
     final controller = context.watch<BatchRedrawController>();
     final project = controller.project;
     final selected = controller.selected;
-    final pending =
-        project.items.where((item) => item.outputPath.isEmpty).toList();
+    final pending = project.items
+        .where((item) => item.candidates.isEmpty && item.outputPath.isEmpty)
+        .toList();
     final quoteTargets = selected.isNotEmpty ? selected : pending;
     final width = MediaQuery.sizeOf(context).width;
     final columns = width >= 1180
@@ -1087,13 +1193,23 @@ class _BatchGenerateStep extends StatelessWidget {
           progress: progress,
           pendingCount: pending.length,
           selectedCount: selected.length,
+          candidateCount:
+              normalizeBatchRedrawCandidateCount(project.candidateCount),
+          onCandidateCountChanged: controller.queueRunning
+              ? null
+              : (value) {
+                  project.candidateCount = value;
+                  controller.changed();
+                },
           onStartPending: controller.queueRunning || pending.isEmpty
               ? null
               : () => controller.startQueue(pending),
           onRetrySelected: controller.queueRunning || selected.isEmpty
               ? null
               : () => controller.startQueue(selected),
-          onExportZip: project.items.any((item) => item.outputPath.isNotEmpty)
+          onExportZip: project.items.any((item) =>
+                  item.selectedCandidate?.outputPath.isNotEmpty == true ||
+                  item.outputPath.isNotEmpty)
               ? () async {
                   final messenger = ScaffoldMessenger.of(context);
                   try {
@@ -1108,6 +1224,7 @@ class _BatchGenerateStep extends StatelessWidget {
           onClearGenerated: controller.queueRunning ||
                   !project.items.any((item) =>
                       item.outputPath.isNotEmpty ||
+                      item.candidates.isNotEmpty ||
                       item.status == BatchItemStatus.failed)
               ? null
               : () async {
@@ -1152,7 +1269,7 @@ class _BatchGenerateStep extends StatelessWidget {
             crossAxisCount: columns,
             mainAxisSpacing: 10,
             crossAxisSpacing: 10,
-            childAspectRatio: 0.72,
+            mainAxisExtent: width < 560 ? 360 : 390,
           ),
           itemCount: project.items.length,
           itemBuilder: (context, index) {
@@ -1192,6 +1309,8 @@ class _BatchGenerateConsole extends StatelessWidget {
   final double? progress;
   final int pendingCount;
   final int selectedCount;
+  final int candidateCount;
+  final ValueChanged<int>? onCandidateCountChanged;
   final VoidCallback? onStartPending;
   final VoidCallback? onRetrySelected;
   final VoidCallback? onExportZip;
@@ -1214,6 +1333,8 @@ class _BatchGenerateConsole extends StatelessWidget {
     required this.progress,
     required this.pendingCount,
     required this.selectedCount,
+    required this.candidateCount,
+    required this.onCandidateCountChanged,
     required this.onStartPending,
     required this.onRetrySelected,
     required this.onExportZip,
@@ -1284,6 +1405,53 @@ class _BatchGenerateConsole extends StatelessWidget {
               spacing: 8,
               runSpacing: 8,
               children: [
+                Container(
+                  constraints: const BoxConstraints(
+                    minHeight: 40,
+                    maxWidth: 220,
+                  ),
+                  padding: const EdgeInsets.only(left: 12, right: 8),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: colors.outlineVariant),
+                    borderRadius: BorderRadius.circular(20),
+                    color: colors.surface,
+                  ),
+                  child: Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          t('batch.candidatesEachCompact'),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.labelMedium,
+                        ),
+                      ),
+                      const SizedBox(width: 7),
+                      DropdownButtonHideUnderline(
+                        child: DropdownButton<int>(
+                          value: candidateCount,
+                          isDense: true,
+                          onChanged: onCandidateCountChanged == null
+                              ? null
+                              : (value) {
+                                  if (value != null) {
+                                    onCandidateCountChanged!(value);
+                                  }
+                                },
+                          items: [
+                            for (var count = 1;
+                                count <= maxBatchRedrawCandidates;
+                                count++)
+                              DropdownMenuItem(
+                                value: count,
+                                child: Text('$count'),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
                 FilledButton.icon(
                   onPressed: onStartPending,
                   icon: const Icon(Icons.playlist_play),
@@ -1394,6 +1562,12 @@ class _BatchResultTile extends StatelessWidget {
           ? t('batch.statusPendingPrompt')
           : t('batch.statusPending'),
     };
+    final selectedCandidate = item.selectedCandidate;
+    final selectedCandidateIndex = selectedCandidate == null
+        ? 0
+        : item.candidates.indexWhere(
+                (candidate) => candidate.id == selectedCandidate.id) +
+            1;
     return Card(
       clipBehavior: Clip.antiAlias,
       margin: EdgeInsets.zero,
@@ -1435,6 +1609,27 @@ class _BatchResultTile extends StatelessWidget {
                       ),
                     ),
                   ),
+                  if (item.candidates.length > 1)
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: colors.primaryContainer.withOpacity(0.94),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          '$selectedCandidateIndex/${item.candidates.length}',
+                          style: TextStyle(
+                            color: colors.onPrimaryContainer,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ),
                   Positioned(
                     right: 8,
                     bottom: 8,
@@ -1458,6 +1653,81 @@ class _BatchResultTile extends StatelessWidget {
                 ],
               ),
             ),
+            if (item.candidates.length > 1)
+              Container(
+                height: 66,
+                padding: const EdgeInsets.fromLTRB(8, 7, 8, 7),
+                decoration: BoxDecoration(
+                  color: colors.surfaceContainerLow,
+                  border: Border(
+                    top: BorderSide(color: colors.outlineVariant),
+                  ),
+                ),
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: item.candidates.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 7),
+                  itemBuilder: (context, candidateIndex) {
+                    final candidate = item.candidates[candidateIndex];
+                    final active = candidate.id == selectedCandidate?.id;
+                    return Tooltip(
+                      message: mobileUiFormatFor(
+                        language,
+                        'batch.chooseCandidate',
+                        {'index': candidateIndex + 1},
+                      ),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(9),
+                        onTap: () => context
+                            .read<BatchRedrawController>()
+                            .selectCandidate(item, candidate.id),
+                        onLongPress: () =>
+                            _previewBatchImage(context, candidate.outputPath),
+                        child: Container(
+                          width: 54,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(9),
+                            border: Border.all(
+                              color: active
+                                  ? colors.primary
+                                  : colors.outlineVariant,
+                              width: active ? 2.5 : 1,
+                            ),
+                          ),
+                          clipBehavior: Clip.antiAlias,
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              Image.file(
+                                File(candidate.outputPath),
+                                fit: BoxFit.cover,
+                                cacheWidth: 160,
+                                filterQuality: FilterQuality.low,
+                                errorBuilder: (_, __, ___) =>
+                                    const Icon(Icons.broken_image_outlined),
+                              ),
+                              if (active)
+                                Align(
+                                  alignment: Alignment.topRight,
+                                  child: Container(
+                                    margin: const EdgeInsets.all(3),
+                                    padding: const EdgeInsets.all(2),
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: colors.primary,
+                                    ),
+                                    child: Icon(Icons.check,
+                                        size: 11, color: colors.onPrimary),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
             Padding(
               padding: const EdgeInsets.fromLTRB(8, 7, 8, 8),
               child: Column(
@@ -1481,7 +1751,11 @@ class _BatchResultTile extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    _batchSizePath(project, item),
+                    item.candidates.isEmpty
+                        ? _batchSizePath(project, item)
+                        : '${_batchSizePath(project, item)} · ${mobileUiFormatFor(language, 'batch.candidateBadge', {
+                                'count': item.candidates.length
+                              })}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodySmall,
@@ -1503,7 +1777,9 @@ class _BatchImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final path = output ? item.outputPath : item.sourcePath;
+    final path = output
+        ? (item.selectedCandidate?.outputPath ?? item.outputPath)
+        : item.sourcePath;
     if (path.isNotEmpty && File(path).existsSync()) {
       return Image.file(
         File(path),
@@ -1512,7 +1788,7 @@ class _BatchImage extends StatelessWidget {
         filterQuality: FilterQuality.low,
       );
     }
-    if (!output || item.outputPath.isEmpty) {
+    if (!output || path.isEmpty) {
       return Image.memory(
         base64Decode(item.base64),
         fit: BoxFit.contain,

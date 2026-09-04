@@ -10,11 +10,19 @@ const _pageSize = 60;
 const _quickTagSource = 'https://novelai.quicktagcloud.com/data-source.json';
 const _userAgent = 'Langbai-NovelAI-Studio-Mobile/Online-Gallery-Client';
 
-enum OnlineGallerySource { aitag, safebooru, danbooru, gelbooru, quicktag }
+enum OnlineGallerySource {
+  aitag,
+  artistRanking,
+  safebooru,
+  danbooru,
+  gelbooru,
+  quicktag,
+}
 
 extension OnlineGallerySourceInfo on OnlineGallerySource {
   String get id => switch (this) {
         OnlineGallerySource.aitag => 'aitag',
+        OnlineGallerySource.artistRanking => 'artist-ranking',
         OnlineGallerySource.safebooru => 'safebooru',
         OnlineGallerySource.danbooru => 'danbooru',
         OnlineGallerySource.gelbooru => 'gelbooru',
@@ -23,6 +31,7 @@ extension OnlineGallerySourceInfo on OnlineGallerySource {
 
   String get label => switch (this) {
         OnlineGallerySource.aitag => 'AI TAG',
+        OnlineGallerySource.artistRanking => '画师排行榜',
         OnlineGallerySource.safebooru => 'Safebooru',
         OnlineGallerySource.danbooru => 'Danbooru',
         OnlineGallerySource.gelbooru => 'Gelbooru',
@@ -31,6 +40,8 @@ extension OnlineGallerySourceInfo on OnlineGallerySource {
 
   String get siteUrl => switch (this) {
         OnlineGallerySource.aitag => 'https://aitag.win',
+        OnlineGallerySource.artistRanking =>
+          'https://danbooru.donmai.us/artists',
         OnlineGallerySource.safebooru => 'https://safebooru.donmai.us',
         OnlineGallerySource.danbooru => 'https://danbooru.donmai.us',
         OnlineGallerySource.gelbooru => 'https://gelbooru.com',
@@ -355,6 +366,8 @@ class OnlineGalleryService {
         _searchQuickTag(targetPage, safeQuery, collectionId, safeOnly),
       OnlineGallerySource.aitag => Future.error(
           ArgumentError('AITag is handled by its dedicated data service')),
+      OnlineGallerySource.artistRanking => Future.error(
+          ArgumentError('Artist ranking is handled by ArtistTagService')),
     };
   }
 
@@ -801,6 +814,8 @@ class OnlineGalleryService {
           OnlineGallerySource.quicktag => _quickDetail(item),
           OnlineGallerySource.aitag =>
             Future.error(ArgumentError('AITag uses its own detail service')),
+          OnlineGallerySource.artistRanking =>
+            Future.error(ArgumentError('Artist ranking has no gallery detail')),
         };
       } catch (_) {
         _detailCache.remove(key);

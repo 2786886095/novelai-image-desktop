@@ -5,6 +5,7 @@ import {
   type RecipeTokenKind,
 } from "./artist-recipe";
 import { CURATED_ARTIST_TAGS } from "./curated-artists";
+import { sampleControlledWeight, softBalanceWeights, type WeightDistributionConfig } from "./weight-distribution";
 
 /**
  * Community migration reports for early NAI Diffusion V5 commonly suggest
@@ -265,17 +266,21 @@ function drawPromptTagWeights(
   tags: readonly PromptTag[],
   random: () => number,
   bounds: readonly [number, number],
+  distribution?: WeightDistributionConfig,
 ) {
   const [min, max] = bounds;
-  return tags.map((tag) => ({
+  const drawn = tags.map((tag) => ({
     ...tag,
     // Input-draw mode intentionally does not preserve the legacy weight.
     // Parsing/classification is shared with the repair tool, while every
     // retained tag receives an independent final weight over the full range.
-    weight: Math.round(
-      (min + normalizedRandomSample(random) * (max - min)) * 100,
-    ) / 100,
+    weight: distribution
+      ? sampleControlledWeight(distribution, random)
+      : Math.round((min + normalizedRandomSample(random) * (max - min)) * 100) / 100,
   }));
+  if (!distribution) return drawn;
+  const balanced = softBalanceWeights(drawn.map((tag) => tag.weight), distribution);
+  return drawn.map((tag, index) => ({ ...tag, weight: balanced[index] }));
 }
 
 function generatedRecipeFromTags(
@@ -339,12 +344,15 @@ export function repairV45ArtistCandidatesForV5(
   input: string,
   count: number,
   random: () => number = Math.random,
+  distribution?: WeightDistributionConfig,
 ): GeneratedArtistRecipe[] {
   const sourceTags = parsePromptTags(input);
   if (sourceTags.length === 0 || count < 1) return [];
   const total = Math.max(1, Math.floor(Number.isFinite(count) ? count : 1));
   return Array.from({ length: total }, (_, index) => generatedRecipeFromTags(
-    migratePromptTags(sourceTags, random),
+    distribution
+      ? drawPromptTagWeights(sourceTags, random, [distribution.min, distribution.max], distribution)
+      : migratePromptTags(sourceTags, random),
     index,
     "v5-repair",
   ));
@@ -375,6 +383,7 @@ export function drawAllV5ArtistWeights(
   minWeight = DEFAULT_V5_ARTIST_DRAW_MIN,
   maxWeight = DEFAULT_V5_ARTIST_DRAW_MAX,
   random: () => number = Math.random,
+  distribution?: WeightDistributionConfig,
 ): GeneratedArtistRecipe[] {
   const sourceTags = parsePromptTags(input);
   if (sourceTags.length === 0 || count < 1) return [];
@@ -382,7 +391,7 @@ export function drawAllV5ArtistWeights(
   const [min, max] = normalizedDrawBounds(minWeight, maxWeight);
   const total = Math.max(1, Math.floor(Number.isFinite(count) ? count : 1));
   return Array.from({ length: total }, (_, index) => {
-    const tags = drawPromptTagWeights(sourceTags, random, [min, max]);
+    const tags = drawPromptTagWeights(sourceTags, random, [min, max], distribution);
     return generatedRecipeFromTags(tags, index, "v5-weight-draw");
   });
 }

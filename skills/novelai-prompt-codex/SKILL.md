@@ -45,4 +45,4 @@ description: 将中文画面描述、小说片段或参考图分析结果转换�
 - 分级映射：`references/classified-mappings.md`
 - 检索索引：`references/guidance.json`
 - 来源与质量说明：`references/source-notes.md`
-- 完整个人法典：仓库中位于 `src/data/prompt-codex.json`；同步到个人技能后位于 `references/prompt-codex.json`
+- 完整个人法典：桌面内置资源位于 `public/prompt-codex.json.gz`，移动端源位于 `mobile/assets/prompt_codex.json`；同步到个人技能后位于 `references/prompt-codex.json`

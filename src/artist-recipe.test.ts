@@ -7,11 +7,13 @@ import {
   formatArtistCardTags,
   formatArtistFullPrompt,
   formatArtistString,
+  generateArtistMatchRecipes,
   generatePopularArtistRecipes,
   parseArtistRecipe,
   randomizeArtistRecipeWeights,
 } from "./artist-recipe";
 import type { ArtistTagRecord } from "./artist-lab";
+import { RANDOM_CUSTOM_TAG_LIBRARY } from "./random-custom-tag-library";
 
 const pool: ArtistTagRecord[] = Array.from({ length: 30 }, (_, index) => ({
   id: index + 1,
@@ -26,6 +28,19 @@ function seeded() {
 }
 
 describe("artist recipe grammar", () => {
+  it("keeps the complete general-quality group first in the shared visual-style library", () => {
+    const quality = RANDOM_CUSTOM_TAG_LIBRARY[0];
+    expect(quality.id).toBe("quality");
+    expect(quality.tags.map((entry) => entry.tag)).toEqual(expect.arrayContaining([
+      "masterpiece",
+      "top aesthetic",
+      "best quality",
+      "great quality",
+      "high complexity",
+      "year 2026",
+      "year 1980",
+    ]));
+  });
   it("parses full-width punctuation, bracket emphasis, and numerical emphasis", () => {
     const tokens = parseArtistRecipe("{{artist:foo，bar}}, 0.4::impasto ::，-2::no halo ::");
     expect(tokens.map((token) => token.value)).toEqual(["artist:foo", "bar", "impasto", "no halo"]);
@@ -59,6 +74,31 @@ describe("artist recipe grammar", () => {
     expect(recipes.some((recipe) => recipe.artists.some((artist) => artist.weight < 0.65))).toBe(true);
     expect(recipes.some((recipe) => recipe.artists.some((artist) => artist.weight > 1))).toBe(true);
     expect(recipes.every((recipe) => recipe.artists.every((artist) => artist.weight <= 1.2))).toBe(true);
+  });
+
+  it("searches target styles from single artists into bounded elite mutations", () => {
+    const first = generateArtistMatchRecipes(pool, {
+      count: 6,
+      round: 1,
+      random: seeded(),
+    });
+    expect(first).toHaveLength(6);
+    expect(first.every((recipe) => recipe.artists.length === 1)).toBe(true);
+
+    const second = generateArtistMatchRecipes(pool, {
+      count: 8,
+      round: 2,
+      eliteArtists: [first[0].artists, first[1].artists],
+      seenPrompts: new Set(first.map((recipe) => recipe.prompt)),
+      random: seeded(),
+    });
+    expect(second).toHaveLength(8);
+    expect(second.every((recipe) => recipe.artists.length <= 4)).toBe(true);
+    expect(second.filter((recipe) => recipe.move === "probe")).toHaveLength(2);
+    expect(second.some((recipe) => recipe.move === "weight")).toBe(true);
+    expect(second.some((recipe) => recipe.move === "expand")).toBe(true);
+    expect(second.some((recipe) => recipe.artists.length > 1)).toBe(true);
+    expect(second.every((recipe) => !first.some((item) => item.prompt === recipe.prompt))).toBe(true);
   });
 
   it("normalizes qualified Danbooru names and prefixes every generated artist tag", () => {
@@ -283,6 +323,28 @@ describe("artist recipe grammar", () => {
     expect(recipes[0].artists.map((artist) => artist.weight)).toEqual([0.8, 2.4]);
     expect(recipes[1].artists.map((artist) => artist.weight)).toEqual([0.9, 2.2]);
     expect(randomizeArtistRecipeWeights("masterpiece, 1girl", 3)).toEqual([]);
+  });
+
+  it("adds selected quality and style tags to every tuned artist string with fresh weights", () => {
+    const recipes = randomizeArtistRecipeWeights(
+      "1::artist:foo ::, 2::artist:bar ::,",
+      2,
+      0,
+      () => 0.5,
+      {
+        customTagPool: "masterpiece, year 2026, cinematic lighting",
+        customTagModes: { "cinematic lighting": "random" },
+        minRandomCustomTags: 1,
+        maxRandomCustomTags: 1,
+        customTagWeightMin: 0.4,
+        customTagWeightMax: 0.8,
+      },
+    );
+    expect(recipes).toHaveLength(2);
+    expect(recipes.every((recipe) => recipe.prompt.includes("0.6::masterpiece ::"))).toBe(true);
+    expect(recipes.every((recipe) => recipe.prompt.includes("0.6::year 2026 ::"))).toBe(true);
+    expect(recipes.every((recipe) => recipe.prompt.includes("0.6::cinematic lighting ::"))).toBe(true);
+    expect(recipes.every((recipe) => recipe.auxiliary.length === 3)).toBe(true);
   });
 
   it("normalizes known artist aliases before copying or tuning weights", () => {

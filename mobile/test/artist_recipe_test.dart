@@ -1,7 +1,27 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novelai_mobile/artist/artist_recipe.dart';
+import 'package:novelai_mobile/artist/random_custom_tag_library.dart';
 
 void main() {
+  test('shared visual-style library starts with complete general quality tags',
+      () {
+    final quality = randomCustomTagLibrary.first;
+    final tags = quality.tags.map((entry) => entry.tag).toSet();
+    expect(quality.id, 'quality');
+    expect(
+      tags,
+      containsAll(<String>[
+        'masterpiece',
+        'top aesthetic',
+        'best quality',
+        'great quality',
+        'high complexity',
+        'year 2026',
+        'year 1980',
+      ]),
+    );
+  });
+
   test('draws more than one hundred unique weighted strings', () {
     final pool = List.generate(
       80,
@@ -289,5 +309,27 @@ void main() {
       ),
       isEmpty,
     );
+  });
+
+  test('weight tuning adds selected quality and style tags to every string',
+      () {
+    final recipes = randomizeArtistWeights(
+      artistPrompt: '1::artist:foo ::, 2::artist:bar ::,',
+      count: 3,
+      variationPercent: 0,
+      drawSeed: 42,
+      customTagPool: 'masterpiece, year 2026, cinematic lighting',
+      customTagModes: const {'cinematic lighting': 'random'},
+      minRandomCustomTags: 1,
+      maxRandomCustomTags: 1,
+      minCustomTagWeight: .4,
+      maxCustomTagWeight: .8,
+    );
+    expect(recipes, hasLength(3));
+    expect(
+        recipes.every((item) => item.prompt.contains('masterpiece')), isTrue);
+    expect(recipes.every((item) => item.prompt.contains('year 2026')), isTrue);
+    expect(recipes.every((item) => item.prompt.contains('cinematic lighting')),
+        isTrue);
   });
 }

@@ -4,11 +4,14 @@ import {
   useRef,
   useState,
   type InputHTMLAttributes,
+  type PointerEvent as ReactPointerEvent,
 } from "react";
 import { AppPortal, Button } from "./components/ui";
 import { Icon } from "./components/icons";
 import { QualityPresetControl } from "./components/QualityPresetControl";
 import { PositivePromptPresetControl } from "./PositivePromptPresets";
+import { WeightDistributionControls } from "./components/WeightDistributionControls";
+import { DEFAULT_WEIGHT_DISTRIBUTION, type WeightControlMode } from "./weight-distribution";
 import { useAppStore } from "./store";
 import {
   DEFAULT_PARAMS,
@@ -19,7 +22,10 @@ import {
   supportsNAINoiseScheduleControl,
   supportsNAIVariety,
   type AppLanguage,
+  type ArtistStyleCatalogScope,
+  type ArtistStylePreviewResult,
   type GenerateParams,
+  type TagSuggestion,
 } from "./types";
 import {
   fitNAIImageSize,
@@ -47,6 +53,12 @@ import {
   normalizeV45ArtistSyntax,
   repairV45ArtistCandidatesForV5,
 } from "./v5-artist-weight-repair";
+import {
+  RANDOM_CUSTOM_TAG_LIBRARY,
+  customTagCategoryLabel,
+  customTagMeaning,
+  matchesCustomTagSearch,
+} from "./random-custom-tag-library";
 
 const DRAW_SIZE_PRESETS = [
   { width: 832, height: 1216 },
@@ -56,6 +68,29 @@ const DRAW_SIZE_PRESETS = [
   { width: 1536, height: 1024 },
   { width: 1472, height: 1472 },
 ] as const;
+
+const DRAW_STYLE_CATALOG_PAGE_SIZE = 120;
+const DRAW_STYLE_SCOPE_BY_CATEGORY: Record<string, ArtistStyleCatalogScope> = {
+  all: "all",
+  quality: "quality",
+  render3d: "render3d",
+  medium: "medium",
+  lighting: "lighting",
+  color: "color",
+  texture: "texture",
+  stylization: "stylization",
+  "danbooru-style": "style",
+  copyright: "copyright",
+};
+
+type DrawStylePreviewPopover = {
+  tag: string;
+  meaning: string;
+  left: number;
+  top: number;
+  status: "loading" | "ready" | "empty";
+  result?: ArtistStylePreviewResult;
+};
 
 const DRAW_PARAM_TEXT = {
   "zh-CN": {
@@ -330,8 +365,26 @@ export default function V5ArtistWeightRepair({
   const [input, setInput] = useState("");
   const [output, setOutput] = useState("");
   const [drawInput, setDrawInput] = useState("");
+  const [drawStyleTags, setDrawStyleTags] = useState<Set<string>>(() => new Set());
+  const [drawTagQuery, setDrawTagQuery] = useState("");
+  const [drawTagCategory, setDrawTagCategory] = useState("all");
+  const [drawTagLibraryOpen, setDrawTagLibraryOpen] = useState(false);
+  const [drawCatalogItems, setDrawCatalogItems] = useState<TagSuggestion[]>([]);
+  const [drawCatalogTotal, setDrawCatalogTotal] = useState(0);
+  const [drawCatalogLoading, setDrawCatalogLoading] = useState(false);
+  const [drawCatalogLoadingMore, setDrawCatalogLoadingMore] = useState(false);
+  const [drawStylePreview, setDrawStylePreview] = useState<DrawStylePreviewPopover | null>(null);
+  const drawCatalogRequestRef = useRef(0);
+  const drawCatalogResultsRef = useRef<HTMLDivElement>(null);
+  const drawStylePreviewTimerRef = useRef<number | null>(null);
+  const drawStylePreviewCacheRef = useRef(new Map<string, ArtistStylePreviewResult | null>());
   const [minWeight, setMinWeight] = useState(DEFAULT_V5_ARTIST_DRAW_MIN);
   const [maxWeight, setMaxWeight] = useState(DEFAULT_V5_ARTIST_DRAW_MAX);
+  const [weightControlMode, setWeightControlMode] = useState<WeightControlMode>("novice");
+  const [weightMode, setWeightMode] = useState<number>(DEFAULT_WEIGHT_DISTRIBUTION.mode);
+  const [leftDispersion, setLeftDispersion] = useState<number>(DEFAULT_WEIGHT_DISTRIBUTION.leftDispersion);
+  const [rightDispersion, setRightDispersion] = useState<number>(DEFAULT_WEIGHT_DISTRIBUTION.rightDispersion);
+  const [softBalance, setSoftBalance] = useState<number>(DEFAULT_WEIGHT_DISTRIBUTION.softBalance);
   const [candidateCount, setCandidateCount] = useState(10);
   const [basePrompt, setBasePrompt] = useState(params.positivePrompt);
   const [generationParams, setGenerationParams] = useState(() =>
@@ -350,10 +403,160 @@ export default function V5ArtistWeightRepair({
   const [copiedAction, setCopiedAction] = useState("");
   const copiedTimerRef = useRef<number | null>(null);
   const [previewCandidate, setPreviewCandidate] = useState<SharedArtistFavorite | null>(null);
-  const tagSummary = useMemo(
-    () => normalizeV45ArtistSyntax(drawMode ? drawInput : input),
-    [drawInput, drawMode, input],
+  const drawSource = useMemo(
+    () => [drawInput.trim(), ...drawStyleTags].filter(Boolean).join(", "),
+    [drawInput, drawStyleTags],
   );
+  const tagSummary = useMemo(
+    () => normalizeV45ArtistSyntax(drawMode ? drawSource : input),
+    [drawMode, drawSource, input],
+  );
+  const drawCatalogScope = DRAW_STYLE_SCOPE_BY_CATEGORY[drawTagCategory] ?? "all";
+  const drawStaticSupplements = useMemo<TagSuggestion[]>(() => {
+    const categories = drawTagCategory === "all"
+      ? RANDOM_CUSTOM_TAG_LIBRARY
+      : RANDOM_CUSTOM_TAG_LIBRARY.filter((category) => category.id === drawTagCategory);
+    return categories.flatMap((category) => category.tags
+      .filter((entry) => matchesCustomTagSearch(category, entry, language, drawTagQuery))
+      .map((entry) => ({
+        tag: entry.tag,
+        category: 0,
+        count: 0,
+        description: customTagMeaning(entry, language),
+      })));
+  }, [drawTagCategory, drawTagQuery, language]);
+  const drawLibraryItems = useMemo(() => {
+    const seen = new Set<string>();
+    return [...drawCatalogItems, ...drawStaticSupplements].filter((entry) => {
+      const key = entry.tag.trim().toLocaleLowerCase().replaceAll(" ", "_");
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [drawCatalogItems, drawStaticSupplements]);
+
+  const toggleDrawStyleTag = (tag: string) => {
+    setDrawStyleTags((current) => {
+      const next = new Set(current);
+      if (next.has(tag)) next.delete(tag); else next.add(tag);
+      return next;
+    });
+    setMessage("");
+  };
+
+  const drawCatalogMeaning = (entry: TagSuggestion) => entry.description?.trim() || entry.tag.replaceAll("_", " ");
+  const loadMoreDrawCatalog = async () => {
+    if (drawCatalogLoading || drawCatalogLoadingMore || drawCatalogItems.length >= drawCatalogTotal) return;
+    const requestId = drawCatalogRequestRef.current;
+    const previousScrollTop = drawCatalogResultsRef.current?.scrollTop ?? 0;
+    setDrawCatalogLoadingMore(true);
+    try {
+      const result = await window.naiDesktop.artistStyleCatalog(
+        drawCatalogScope,
+        drawTagQuery,
+        drawCatalogItems.length,
+        DRAW_STYLE_CATALOG_PAGE_SIZE,
+      );
+      if (requestId !== drawCatalogRequestRef.current) return;
+      setDrawCatalogItems((current) => {
+        const seen = new Set(current.map((entry) => entry.tag.toLocaleLowerCase()));
+        return [...current, ...result.items.filter((entry) => {
+          const key = entry.tag.toLocaleLowerCase();
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        })];
+      });
+      setDrawCatalogTotal(result.total);
+      window.requestAnimationFrame(() => {
+        if (requestId === drawCatalogRequestRef.current && drawCatalogResultsRef.current) {
+          drawCatalogResultsRef.current.scrollTop = previousScrollTop;
+        }
+      });
+    } finally {
+      if (requestId === drawCatalogRequestRef.current) setDrawCatalogLoadingMore(false);
+    }
+  };
+  const hideDrawStylePreview = () => {
+    if (drawStylePreviewTimerRef.current !== null) {
+      window.clearTimeout(drawStylePreviewTimerRef.current);
+      drawStylePreviewTimerRef.current = null;
+    }
+    setDrawStylePreview(null);
+  };
+  const showDrawStylePreview = (
+    entry: TagSuggestion,
+    meaning: string,
+    event: ReactPointerEvent<HTMLElement>,
+  ) => {
+    if (!/_\(style\)$/i.test(entry.tag)) return;
+    if (drawStylePreviewTimerRef.current !== null) window.clearTimeout(drawStylePreviewTimerRef.current);
+    const rect = event.currentTarget.getBoundingClientRect();
+    const width = 292;
+    const height = 356;
+    const gap = 12;
+    let left = rect.right + gap;
+    if (left + width > window.innerWidth - gap) left = rect.left - width - gap;
+    left = Math.max(gap, Math.min(left, window.innerWidth - width - gap));
+    const top = Math.max(gap, Math.min(rect.top, window.innerHeight - height - gap));
+    drawStylePreviewTimerRef.current = window.setTimeout(() => {
+      drawStylePreviewTimerRef.current = null;
+      if (drawStylePreviewCacheRef.current.has(entry.tag)) {
+        const result = drawStylePreviewCacheRef.current.get(entry.tag) ?? undefined;
+        setDrawStylePreview({ tag: entry.tag, meaning, left, top, status: result ? "ready" : "empty", result });
+        return;
+      }
+      setDrawStylePreview({ tag: entry.tag, meaning, left, top, status: "loading" });
+      void window.naiDesktop.artistLabStylePreview(entry.tag).then((result) => {
+        drawStylePreviewCacheRef.current.set(entry.tag, result);
+        setDrawStylePreview((current) => current?.tag === entry.tag
+          ? { ...current, status: result ? "ready" : "empty", result: result ?? undefined }
+          : current);
+      }).catch(() => {
+        drawStylePreviewCacheRef.current.set(entry.tag, null);
+        setDrawStylePreview((current) => current?.tag === entry.tag
+          ? { ...current, status: "empty", result: undefined }
+          : current);
+      });
+    }, 180);
+  };
+
+  useEffect(() => {
+    if (!drawMode || !drawTagLibraryOpen) return;
+    let cancelled = false;
+    const requestId = ++drawCatalogRequestRef.current;
+    setDrawCatalogItems([]);
+    setDrawCatalogTotal(0);
+    setDrawCatalogLoadingMore(false);
+    setDrawCatalogLoading(true);
+    if (drawCatalogResultsRef.current) drawCatalogResultsRef.current.scrollTop = 0;
+    const timer = window.setTimeout(() => {
+      void window.naiDesktop.artistStyleCatalog(
+        drawCatalogScope,
+        drawTagQuery,
+        0,
+        DRAW_STYLE_CATALOG_PAGE_SIZE,
+      ).then((result) => {
+        if (cancelled || requestId !== drawCatalogRequestRef.current) return;
+        setDrawCatalogItems(result.items);
+        setDrawCatalogTotal(result.total);
+      }).catch(() => {
+        if (cancelled || requestId !== drawCatalogRequestRef.current) return;
+        setDrawCatalogItems([]);
+        setDrawCatalogTotal(0);
+      }).finally(() => {
+        if (!cancelled && requestId === drawCatalogRequestRef.current) setDrawCatalogLoading(false);
+      });
+    }, 180);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [drawCatalogScope, drawMode, drawTagLibraryOpen, drawTagQuery]);
+
+  useEffect(() => () => {
+    if (drawStylePreviewTimerRef.current !== null) window.clearTimeout(drawStylePreviewTimerRef.current);
+  }, []);
 
   useEffect(() => {
     if (!previewCandidate) return;
@@ -429,6 +632,15 @@ export default function V5ArtistWeightRepair({
     const recipes = repairV45ArtistCandidatesForV5(
       input,
       clampNumber(candidateCount, 10, 1, 100),
+      Math.random,
+      weightControlMode === "advanced" ? {
+        min: minWeight,
+        max: maxWeight,
+        mode: weightMode,
+        leftDispersion,
+        rightDispersion,
+        softBalance,
+      } : undefined,
     );
     if (recipes.length === 0) {
       setOutput("");
@@ -449,16 +661,24 @@ export default function V5ArtistWeightRepair({
   };
 
   const draw = () => {
-    if (!drawInput.trim()) return setMessage(text.drawEmpty);
-    const normalized = normalizeV45ArtistSyntax(drawInput);
+    if (!drawSource.trim()) return setMessage(text.drawEmpty);
+    const normalized = normalizeV45ArtistSyntax(drawSource);
     const recipes = drawAllV5ArtistWeights(
       normalized.output,
       clampNumber(candidateCount, 10, 1, 100),
       clampNumber(minWeight, DEFAULT_V5_ARTIST_DRAW_MIN, 0.05, 10),
       clampNumber(maxWeight, DEFAULT_V5_ARTIST_DRAW_MAX, 0.05, 10),
+      Math.random,
+      weightControlMode === "advanced" ? {
+        min: minWeight,
+        max: maxWeight,
+        mode: weightMode,
+        leftDispersion,
+        rightDispersion,
+        softBalance,
+      } : undefined,
     );
     if (recipes.length === 0) return setMessage(text.drawNone);
-    setDrawInput(normalized.output);
     installCandidates(recipes);
     setMessage(interpolate(text.allTags, {
       count: normalized.totalAdjusted,
@@ -552,6 +772,10 @@ export default function V5ArtistWeightRepair({
   const restoreDefaults = () => {
     setMinWeight(DEFAULT_V5_ARTIST_DRAW_MIN);
     setMaxWeight(DEFAULT_V5_ARTIST_DRAW_MAX);
+    setWeightControlMode("novice");
+    setWeightMode(DEFAULT_WEIGHT_DISTRIBUTION.mode);
+    setLeftDispersion(DEFAULT_WEIGHT_DISTRIBUTION.leftDispersion);
+    setRightDispersion(DEFAULT_WEIGHT_DISTRIBUTION.rightDispersion);
     setCandidateCount(10);
     setSeedMode("fixed");
     setSeed(246813579);
@@ -641,6 +865,11 @@ export default function V5ArtistWeightRepair({
             </div>
             <p className="v5-repair-batch-hint">{text.repairBatchHint}</p>
             <div className="v5-weight-draw-controls v5-repair-batch-controls">
+              {weightControlMode === "advanced" && <>
+                <label><span>{text.weightMin}</span><NumericDraftInput min={0.05} max={10} step={0.05} value={minWeight} normalize={(value) => Math.round(value * 100) / 100} onCommit={setMinWeight} /></label>
+                <label><span>{text.weightMax}</span><NumericDraftInput min={0.05} max={10} step={0.05} value={maxWeight} normalize={(value) => Math.round(value * 100) / 100} onCommit={setMaxWeight} /></label>
+              </>}
+              <WeightDistributionControls language={language} controlMode={weightControlMode} min={minWeight} max={maxWeight} mode={weightMode} leftDispersion={leftDispersion} rightDispersion={rightDispersion} softBalance={softBalance} onModeChange={setWeightControlMode} onChange={(value) => { if (value.mode != null) setWeightMode(value.mode); if (value.leftDispersion != null) setLeftDispersion(value.leftDispersion); if (value.rightDispersion != null) setRightDispersion(value.rightDispersion); if (value.softBalance != null) setSoftBalance(value.softBalance); }} />
               <label><span>{text.candidateCount}</span><NumericDraftInput min={1} max={100} step={1} value={candidateCount} normalize={(value) => Math.floor(value)} onCommit={setCandidateCount} /></label>
               <div className="positive-prompt-preset-field wide">
                 <div><span>{text.basePrompt}</span><PositivePromptPresetControl value={basePrompt} onApply={setBasePrompt} variant="field" /></div>
@@ -668,10 +897,52 @@ export default function V5ArtistWeightRepair({
                 other: tagSummary.otherTagCount,
               })}</small>}
             </label>
+            <details className="random-custom-tag-workbench v5-draw-tag-library" onToggle={(event) => setDrawTagLibraryOpen(event.currentTarget.open)}>
+              <summary>
+                <span><b>{language === "zh-CN" ? "画风 Tag 库" : language === "zh-TW" ? "畫風 Tag 庫" : "Style Tag library"}</b><small>{language === "zh-CN" ? `已选 ${drawStyleTags.size} 个；完整复用随机画师抽卡的本地 Danbooru 画风库，每个所选 Tag 都加入每一组并随机赋权。` : `Selected ${drawStyleTags.size}; the full local Danbooru style catalog is shared with Random Artist Draw.`}</small></span>
+                <Icon name="chevronDown" />
+              </summary>
+              <div className="random-custom-tag-body">
+                <div className="random-custom-tag-toolbar">
+                  <label className="random-custom-tag-search">
+                    <Icon name="search" />
+                    <input type="search" value={drawTagQuery} placeholder={language === "zh-CN" ? "搜索 Tag、中文含义或作品名" : "Search Tag, meaning, anime, or game"} onChange={(event) => setDrawTagQuery(event.target.value)} />
+                    {drawTagQuery && <button type="button" aria-label="clear" onClick={() => setDrawTagQuery("")}><Icon name="clear" /></button>}
+                  </label>
+                  <div className="random-custom-tag-toolbar-status" aria-live="polite"><span>{`${drawLibraryItems.length} / ${Math.max(drawCatalogTotal, drawLibraryItems.length)}`}</span><small>{drawCatalogTotal > 0 ? "本地 Danbooru 数据库" : "内置离线库"}</small></div>
+                </div>
+                <div className="random-custom-tag-categories" role="tablist">
+                  <button type="button" role="tab" aria-selected={drawTagCategory === "all"} className={drawTagCategory === "all" ? "active" : ""} onClick={() => setDrawTagCategory("all")}><span>{language === "zh-CN" ? "全部画风 / 动漫游戏" : "All styles / franchises"}</span><em>{drawTagCategory === "all" && !drawCatalogLoading ? drawCatalogTotal : "DB"}</em></button>
+                  {RANDOM_CUSTOM_TAG_LIBRARY.map((category) => <button key={category.id} type="button" role="tab" aria-selected={drawTagCategory === category.id} className={drawTagCategory === category.id ? "active" : ""} onClick={() => setDrawTagCategory(category.id)}><span>{customTagCategoryLabel(category, language)}</span><em>{drawTagCategory === category.id && !drawCatalogLoading ? drawCatalogTotal : "DB"}</em></button>)}
+                  <button type="button" role="tab" aria-selected={drawTagCategory === "danbooru-style"} className={drawTagCategory === "danbooru-style" ? "active" : ""} onClick={() => setDrawTagCategory("danbooru-style")}><span>{language === "zh-CN" ? "Danbooru 画风模仿" : "Danbooru style parodies"}</span><em>{drawTagCategory === "danbooru-style" && !drawCatalogLoading ? drawCatalogTotal : "DB"}</em></button>
+                  <button type="button" role="tab" aria-selected={drawTagCategory === "copyright"} className={drawTagCategory === "copyright" ? "active" : ""} onClick={() => setDrawTagCategory("copyright")}><span>{language === "zh-CN" ? "动漫 / 游戏 / 漫画作品" : "Anime / game / manga"}</span><em>{drawTagCategory === "copyright" && !drawCatalogLoading ? drawCatalogTotal : "DB"}</em></button>
+                </div>
+                <div className="random-custom-tag-results" ref={drawCatalogResultsRef}>
+                  {drawCatalogLoading
+                    ? <div className="random-custom-tag-empty"><span className="spinner" /><span>{language === "zh-CN" ? "正在读取本地 Tag 库…" : "Loading local Tag catalog…"}</span></div>
+                    : drawLibraryItems.length === 0
+                      ? <div className="random-custom-tag-empty"><Icon name="search" /><span>{language === "zh-CN" ? "没有匹配项；可在设置中安装完整 Danbooru 标签数据。" : "No matches; install the full Danbooru catalog in Settings."}</span></div>
+                      : <section><div className="random-custom-tag-grid">
+                        {drawLibraryItems.map((entry) => {
+                          const selected = drawStyleTags.has(entry.tag);
+                          const meaning = drawCatalogMeaning(entry);
+                          const canPreview = /_\(style\)$/i.test(entry.tag);
+                          return <article
+                            key={entry.tag}
+                            className={`${selected ? "selected" : ""}${canPreview ? " has-preview" : ""}`}
+                            onPointerEnter={canPreview ? (event) => showDrawStylePreview(entry, meaning, event) : undefined}
+                            onPointerLeave={canPreview ? hideDrawStylePreview : undefined}
+                          ><button type="button" className="random-custom-tag-select" aria-pressed={selected} onClick={() => toggleDrawStyleTag(entry.tag)}><span className="random-custom-tag-check"><Icon name={selected ? "check" : "plus"} /></span><span><b>{entry.tag}</b><small>{meaning}</small></span><em>{canPreview ? <Icon name="image" /> : entry.count > 0 ? entry.count.toLocaleString() : ""}</em></button></article>;
+                        })}
+                      </div>{drawCatalogItems.length < drawCatalogTotal && <div className="random-custom-tag-load-more"><Button type="button" variant="ghost" disabled={drawCatalogLoadingMore} onClick={() => void loadMoreDrawCatalog()}>{drawCatalogLoadingMore && <span className="spinner" />}{language === "zh-CN" ? "载入更多" : "Load more"}</Button></div>}</section>}
+                </div>
+              </div>
+            </details>
             <div className="v5-weight-draw-controls">
               <label><span>{text.weightMin}</span><NumericDraftInput min={0.05} max={10} step={0.05} value={minWeight} normalize={(value) => Math.round(value * 100) / 100} onCommit={setMinWeight} /></label>
               <label><span>{text.weightMax}</span><NumericDraftInput min={0.05} max={10} step={0.05} value={maxWeight} normalize={(value) => Math.round(value * 100) / 100} onCommit={setMaxWeight} /></label>
               <label><span>{text.candidateCount}</span><NumericDraftInput min={1} max={100} step={1} value={candidateCount} normalize={(value) => Math.floor(value)} onCommit={setCandidateCount} /></label>
+              <WeightDistributionControls language={language} controlMode={weightControlMode} min={minWeight} max={maxWeight} mode={weightMode} leftDispersion={leftDispersion} rightDispersion={rightDispersion} softBalance={softBalance} onModeChange={setWeightControlMode} onChange={(value) => { if (value.mode != null) setWeightMode(value.mode); if (value.leftDispersion != null) setLeftDispersion(value.leftDispersion); if (value.rightDispersion != null) setRightDispersion(value.rightDispersion); if (value.softBalance != null) setSoftBalance(value.softBalance); }} />
               <div className="positive-prompt-preset-field wide">
                 <div><span>{text.basePrompt}</span><PositivePromptPresetControl value={basePrompt} onApply={setBasePrompt} variant="field" /></div>
                 <textarea aria-label={text.basePrompt} value={basePrompt} onChange={(event) => setBasePrompt(event.target.value)} />
@@ -730,6 +1001,22 @@ export default function V5ArtistWeightRepair({
       {!showFavorites && (results.length > 0 ? <section className="artist-candidate-grid v5-draw-grid">{results.map((item) => renderCandidate(item))}</section> : <div className="artist-queue-empty v5-draw-empty">{drawMode ? text.noResults : text.repairNoResults}</div>)}
       {showFavorites && (favorites.length > 0 ? <section className="artist-candidate-grid v5-draw-grid">{favorites.map((item) => renderCandidate(item, true))}</section> : <div className="artist-queue-empty v5-draw-empty">{text.noFavorites}</div>)}
     </main>
+    {drawStylePreview && <AppPortal><aside
+      className={`artist-style-reference-popover ${drawStylePreview.status}`}
+      style={{ left: drawStylePreview.left, top: drawStylePreview.top }}
+      role="status"
+      aria-live="polite"
+    >
+      <header><span><Icon name="image" />画风参考</span><b>{drawStylePreview.tag}</b></header>
+      <div className="artist-style-reference-media">
+        {drawStylePreview.status === "loading"
+          ? <span className="artist-style-reference-message"><span className="spinner" />正在读取参考图…</span>
+          : drawStylePreview.result
+            ? <img src={drawStylePreview.result.imageUrl} alt={`画风参考：${drawStylePreview.tag}`} />
+            : <span className="artist-style-reference-message"><Icon name="image" />暂无可用参考图</span>}
+      </div>
+      <footer><span>{drawStylePreview.meaning}</span>{drawStylePreview.result && <small>{drawStylePreview.result.width}×{drawStylePreview.result.height}</small>}</footer>
+    </aside></AppPortal>}
     {previewCandidate?.image && <AppPortal><div className="modal-backdrop artist-result-preview-backdrop" role="dialog" aria-modal="true" aria-label={text.preview} onMouseDown={() => setPreviewCandidate(null)}><div className="artist-result-preview" onMouseDown={(event) => event.stopPropagation()}><button type="button" className="artist-result-preview-close" aria-label={text.back} onClick={() => setPreviewCandidate(null)}><Icon name="close" /></button><img src={previewCandidate.image.fileUrl} alt={previewCandidate.prompt} /><footer><b>{modelLabel(previewCandidate.image.model || previewCandidate.generationModel || generationParams.model)}</b><span>{previewCandidate.image.width}×{previewCandidate.image.height}</span></footer></div></div></AppPortal>}
   </>;
 }

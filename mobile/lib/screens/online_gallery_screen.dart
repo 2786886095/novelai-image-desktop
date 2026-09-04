@@ -9,6 +9,8 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../i18n/app_locales.dart';
+import '../artist/artist_recipe.dart';
+import '../services/artist_tag_service.dart';
 import '../services/online_gallery_service.dart';
 import '../state/app_state.dart';
 import 'aitag_gallery_screen.dart';
@@ -282,6 +284,15 @@ String _format(String value, String key, Object replacement) =>
     value.replaceAll('{$key}', '$replacement');
 
 String _sourceLabel(OnlineGallerySource source, Object? language) {
+  if (source == OnlineGallerySource.artistRanking) {
+    return switch (normalizeAppLocaleCode(language)) {
+      'zh-TW' => '畫師排行榜',
+      'en-US' => 'Artist ranking',
+      'ja-JP' => '画家ランキング',
+      'ko-KR' => '작가 순위',
+      _ => '画师排行榜',
+    };
+  }
   if (source != OnlineGallerySource.quicktag) return source.label;
   return switch (normalizeAppLocaleCode(language)) {
     'zh-TW' => '法典圖鑑',
@@ -329,6 +340,7 @@ class OnlineGalleryScreen extends StatefulWidget {
 
 class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
   final service = OnlineGalleryService();
+  final artistService = ArtistTagService();
   final query = TextEditingController();
   final scrollController = ScrollController();
   OnlineGallerySource source = OnlineGallerySource.aitag;
@@ -338,6 +350,10 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
   String error = '';
   String collectionId = '';
   int aitagEpoch = 0;
+  List<ArtistTagRecord> artistRanking = const [];
+  DateTime? artistRankingUpdatedAt;
+  int expandedArtistId = 0;
+  final Map<int, List<String>> artistPreviews = {};
 
   @override
   void dispose() {
@@ -356,10 +372,41 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
       collectionId = '';
       query.clear();
     });
-    if (value != OnlineGallerySource.aitag) await _search(1);
+    if (value == OnlineGallerySource.artistRanking) {
+      await _loadArtistRanking();
+    } else if (value != OnlineGallerySource.aitag) {
+      await _search(1);
+    }
+  }
+
+  Future<void> _loadArtistRanking({bool force = false}) async {
+    setState(() {
+      loading = true;
+      error = '';
+    });
+    try {
+      final settings = context.read<AppState>().settings;
+      final items = await artistService.popular(settings,
+          limit: 1000, force: force, includeCurated: false);
+      final updatedAt = await artistService.lastUpdatedAt();
+      if (!mounted) return;
+      items.sort((a, b) => b.postCount.compareTo(a.postCount));
+      setState(() {
+        artistRanking = items;
+        artistRankingUpdatedAt = updatedAt;
+      });
+    } catch (exception) {
+      if (mounted) setState(() => error = exception.toString());
+    } finally {
+      if (mounted) setState(() => loading = false);
+    }
   }
 
   Future<void> _search(int page) async {
+    if (source == OnlineGallerySource.artistRanking) {
+      await _loadArtistRanking(force: true);
+      return;
+    }
     if (source == OnlineGallerySource.aitag) {
       setState(() => aitagEpoch++);
       return;
@@ -475,18 +522,162 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
       body: Column(
         children: [
           _sourceToolbar(context, text, language),
-          const Divider(height: 1),
           Expanded(
             child: source == OnlineGallerySource.aitag
                 ? AitagGalleryScreen(
                     key: ValueKey('aitag-gallery-$aitagEpoch'),
                     showAppBar: false,
                   )
-                : _buildExternal(context, text),
+                : source == OnlineGallerySource.artistRanking
+                    ? _buildArtistRanking(context, text, language)
+                    : _buildExternal(context, text),
           ),
         ],
       ),
     );
+  }
+
+  Widget _buildArtistRanking(
+      BuildContext context, _GalleryText text, String language) {
+    final needle = query.text.trim().toLowerCase().replaceAll(' ', '_');
+    final rows = needle.isEmpty
+        ? artistRanking
+        : artistRanking
+            .where((item) => item.name.toLowerCase().contains(needle))
+            .toList();
+    if (loading && artistRanking.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (error.isNotEmpty && artistRanking.isEmpty) {
+      return Center(
+          child: OutlinedButton.icon(
+        onPressed: () => _loadArtistRanking(),
+        icon: const Icon(Icons.refresh),
+        label: Text(text.retry),
+      ));
+    }
+    return Column(children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+        child: Column(children: [
+          TextField(
+            controller: query,
+            onChanged: (_) => setState(() {}),
+            decoration: const InputDecoration(
+              prefixIcon: Icon(Icons.search),
+              hintText: '搜索画师 Tag',
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(children: [
+            Expanded(
+                child: Text(
+              '按 Danbooru 收录作品数排序 · ${rows.length} 位\n更新时间：${artistRankingUpdatedAt?.toLocal().toString().replaceFirst(RegExp(r'\.\d+$'), '') ?? '—'}',
+              style: Theme.of(context).textTheme.bodySmall,
+            )),
+            OutlinedButton.icon(
+              onPressed: loading ? null : () => _loadArtistRanking(force: true),
+              icon: loading
+                  ? const SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.refresh, size: 18),
+              label: const Text('手动更新'),
+            ),
+          ]),
+        ]),
+      ),
+      Expanded(
+          child: ListView.builder(
+        key: const PageStorageKey('artist-ranking-list'),
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        itemCount: rows.length,
+        itemExtent: expandedArtistId == 0 ? 76 : null,
+        itemBuilder: (context, index) {
+          final artist = rows[index];
+          final rank =
+              artistRanking.indexWhere((item) => item.id == artist.id) + 1;
+          final expanded = expandedArtistId == artist.id;
+          final previews = artistPreviews[artist.id];
+          return RepaintBoundary(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+            ListTile(
+              minVerticalPadding: 6,
+              leading: SizedBox(
+                  width: 42,
+                  child: Text('#$rank',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w800))),
+              title: Text(artist.name.replaceAll('_', ' '),
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
+              subtitle: Text('artist:${artist.name} · ${artist.postCount} 作品',
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
+              trailing: Wrap(spacing: 2, children: [
+                IconButton(
+                    tooltip: '复制 Tag',
+                    onPressed: () => Clipboard.setData(
+                        ClipboardData(text: 'artist:${artist.name}')),
+                    icon: const Icon(Icons.copy, size: 20)),
+                IconButton(
+                    tooltip: '打开作品库',
+                    onPressed: () => launchUrl(
+                        Uri.parse(
+                            'https://danbooru.donmai.us/posts?tags=${Uri.encodeQueryComponent(artist.name)}'),
+                        mode: LaunchMode.externalApplication),
+                    icon: const Icon(Icons.open_in_new, size: 20)),
+                IconButton(
+                    tooltip: '预览画风',
+                    onPressed: () async {
+                      setState(
+                          () => expandedArtistId = expanded ? 0 : artist.id);
+                      if (!expanded && !artistPreviews.containsKey(artist.id)) {
+                        final loaded = await artistService
+                            .previews(
+                                context.read<AppState>().settings, artist.name,
+                                limit: 3)
+                            .catchError((_) => <String>[]);
+                        if (mounted) {
+                          setState(() => artistPreviews[artist.id] = loaded);
+                        }
+                      }
+                    },
+                    icon:
+                        Icon(expanded ? Icons.expand_less : Icons.expand_more)),
+              ]),
+            ),
+            if (expanded)
+              SizedBox(
+                  height: 148,
+                  child: previews == null
+                      ? const Center(child: CircularProgressIndicator())
+                      : previews.isEmpty
+                          ? const Center(child: Text('暂无可用参考图'))
+                          : ListView.separated(
+                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                              scrollDirection: Axis.horizontal,
+                              itemCount: previews.length,
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(width: 8),
+                              itemBuilder: (_, previewIndex) => ClipRRect(
+                                borderRadius: BorderRadius.circular(10),
+                                child: Image.network(previews[previewIndex],
+                                    width: 132,
+                                    fit: BoxFit.cover,
+                                    cacheWidth: 264,
+                                    errorBuilder: (_, __, ___) =>
+                                        const SizedBox(
+                                            width: 132,
+                                            child: Icon(
+                                                Icons.broken_image_outlined))),
+                              ),
+                            )),
+          ]));
+        },
+      )),
+    ]);
   }
 
   Widget _buildExternal(BuildContext context, _GalleryText text) {

@@ -55,15 +55,22 @@ export const PROMPT_CODEX_BOOKS: PromptCodexBook[] = [
   },
 ];
 
+function decodeCodePointEntity(entity: string, code: string, radix: 10 | 16) {
+  const value = Number.parseInt(code, radix);
+  return Number.isInteger(value) && value >= 0 && value <= 0x10ffff
+    ? String.fromCodePoint(value)
+    : entity;
+}
+
 function decodeHtml(value: string) {
   return value
     .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<[^>]+>/g, "")
-    .replace(/&#(\d+);/g, (_, code: string) =>
-      String.fromCodePoint(Number(code)),
+    .replace(/&#(\d+);/g, (entity: string, code: string) =>
+      decodeCodePointEntity(entity, code, 10),
     )
-    .replace(/&#x([\da-f]+);/gi, (_, code: string) =>
-      String.fromCodePoint(Number.parseInt(code, 16)),
+    .replace(/&#x([\da-f]+);/gi, (entity: string, code: string) =>
+      decodeCodePointEntity(entity, code, 16),
     )
     .replace(/&nbsp;/gi, " ")
     .replace(/&amp;/gi, "&")

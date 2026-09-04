@@ -8,6 +8,11 @@ export interface ArtistTagRecord {
   deprecated: boolean;
 }
 
+export interface ArtistRankingSnapshot {
+  items: ArtistTagRecord[];
+  savedAt: number;
+}
+
 export interface ArtistWeightedTag {
   name: string;
   weight: number;

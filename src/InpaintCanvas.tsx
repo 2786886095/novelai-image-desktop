@@ -44,7 +44,9 @@ function recolorMaskCanvas(
 export function InpaintCanvas() {
   const language = useAppStore((state) => state.settings?.language);
   const workbenchImage = useAppStore((state) => state.workbenchImage);
+  const currentImage = useAppStore((state) => state.currentImage);
   const comparisonBeforeImage = useAppStore((state) => state.comparisonBeforeImage);
+  const comparisonSurface = useAppStore((state) => state.comparisonSurface);
   const brushSize = useAppStore((state) => state.brushSize);
   const setBrushSize = useAppStore((state) => state.setBrushSize);
   const brushOpacity = useAppStore((state) => state.brushOpacity);
@@ -58,6 +60,12 @@ export function InpaintCanvas() {
   const loadWorkbenchFromPath = useAppStore((state) => state.loadWorkbenchFromPath);
   const stageRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const compareClipRef = useRef<HTMLDivElement>(null);
+  const compareDividerRef = useRef<HTMLButtonElement>(null);
+  const compareDraggingRef = useRef(false);
+  const compareRectRef = useRef<DOMRect | null>(null);
+  const pendingComparePositionRef = useRef(50);
+  const compareAnimationFrameRef = useRef<number | null>(null);
   const drawingRef = useRef(false);
   const drawingPointerRef = useRef<number | null>(null);
   const lastPointRef = useRef<{ x: number; y: number } | null>(null);
@@ -78,16 +86,21 @@ export function InpaintCanvas() {
   const [spaceHeld, setSpaceHeld] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
   const [compareEnabled, setCompareEnabled] = useState(Boolean(comparisonBeforeImage));
-  const [compareX, setCompareX] = useState(50);
-  const [compareDragging, setCompareDragging] = useState(false);
   const [dropOver, setDropOver] = useState(false);
+  const [brushSizeDraft, setBrushSizeDraft] = useState(String(brushSize));
   const brushFootprintCells = brushShape === "round"
     ? 2 * Math.round(brushSize / 2) + 1
     : brushSize;
   const brushPixelSize = brushFootprintCells * INPAINT_MASK_GRID_SIZE;
   const sliderBrushSize = inpaintBrushSliderValue(brushSize);
-  const canCompare = Boolean(comparisonBeforeImage?.fileUrl && workbenchImage?.fileUrl);
+  const canCompare = Boolean(
+    comparisonSurface === "inpaint" &&
+    comparisonBeforeImage?.fileUrl &&
+    currentImage?.fileUrl,
+  );
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
+
+  useEffect(() => setBrushSizeDraft(String(brushSize)), [brushSize]);
 
   useEffect(() => {
     if (!canvasRef.current || !workbenchImage) return;
@@ -113,21 +126,21 @@ export function InpaintCanvas() {
   }, [workbenchImage?.fileUrl]);
 
   useEffect(() => {
-    setCompareX(50);
-    setCompareEnabled(Boolean(comparisonBeforeImage?.fileUrl && workbenchImage?.fileUrl));
-  }, [comparisonBeforeImage?.fileUrl, workbenchImage?.fileUrl]);
+    pendingComparePositionRef.current = 50;
+    if (compareAnimationFrameRef.current !== null) {
+      cancelAnimationFrame(compareAnimationFrameRef.current);
+      compareAnimationFrameRef.current = null;
+    }
+    if (compareClipRef.current) compareClipRef.current.style.clipPath = "inset(0 0 0 50%)";
+    if (compareDividerRef.current) compareDividerRef.current.style.left = "50%";
+    setCompareEnabled(canCompare);
+  }, [canCompare, comparisonBeforeImage?.fileUrl, currentImage?.fileUrl]);
 
-  useEffect(() => {
-    if (!compareDragging) return;
-    const move = (event: PointerEvent) => updateComparePosition(event.clientX);
-    const up = () => setCompareDragging(false);
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
-    return () => {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
-    };
-  }, [compareDragging]);
+  useEffect(() => () => {
+    if (compareAnimationFrameRef.current !== null) {
+      cancelAnimationFrame(compareAnimationFrameRef.current);
+    }
+  }, []);
 
   const exportMask = useCallback(() => {
     const canvas = canvasRef.current;
@@ -408,8 +421,6 @@ export function InpaintCanvas() {
   const canvasZoomStyle = {
     transform: `translate(-50%, -50%) translate(${stagePan.x}px, ${stagePan.y}px) scale(${stageZoom})`,
   };
-  const compareClip = `inset(0 0 0 ${compareX}%)`;
-
   function handleStageWheel(event: React.WheelEvent<HTMLDivElement>) {
     event.preventDefault();
     const rect = canvasRef.current?.getBoundingClientRect();
@@ -431,10 +442,42 @@ export function InpaintCanvas() {
   }
 
   function updateComparePosition(clientX: number) {
-    const rect = canvasRef.current?.getBoundingClientRect() ?? stageRef.current?.getBoundingClientRect();
+    const rect = compareRectRef.current ?? canvasRef.current?.getBoundingClientRect() ?? stageRef.current?.getBoundingClientRect();
     if (!rect) return;
     const next = ((clientX - rect.left) / Math.max(1, rect.width)) * 100;
-    setCompareX(Math.min(100, Math.max(0, next)));
+    pendingComparePositionRef.current = Math.min(100, Math.max(0, next));
+    if (compareAnimationFrameRef.current !== null) return;
+    compareAnimationFrameRef.current = requestAnimationFrame(() => {
+      const position = pendingComparePositionRef.current;
+      if (compareClipRef.current) {
+        compareClipRef.current.style.clipPath = `inset(0 0 0 ${position}%)`;
+      }
+      if (compareDividerRef.current) {
+        compareDividerRef.current.style.left = `${position}%`;
+      }
+      compareAnimationFrameRef.current = null;
+    });
+  }
+
+  function beginCompareDragging(event: React.PointerEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    compareDraggingRef.current = true;
+    compareRectRef.current = canvasRef.current?.getBoundingClientRect() ?? stageRef.current?.getBoundingClientRect() ?? null;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    updateComparePosition(event.clientX);
+  }
+
+  function moveCompareDivider(event: React.PointerEvent<HTMLButtonElement>) {
+    if (compareDraggingRef.current) updateComparePosition(event.clientX);
+  }
+
+  function stopCompareDragging(event: React.PointerEvent<HTMLButtonElement>) {
+    compareDraggingRef.current = false;
+    compareRectRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
   }
 
   function handleImageDragOver(event: React.DragEvent<HTMLElement>) {
@@ -508,10 +551,25 @@ export function InpaintCanvas() {
             min={brushShape === "round" ? 2 : 1}
             max={INPAINT_BRUSH_DIRECT_MAX}
             step={1}
-            value={brushSize}
+            value={brushSizeDraft}
             aria-label={t("inpaint.brushSize")}
-            onChange={(event) => {
-              if (event.currentTarget.value !== "") setBrushSize(Number(event.currentTarget.value));
+            onChange={(event) => setBrushSizeDraft(event.currentTarget.value)}
+            onBlur={() => {
+              const fallback = brushSize;
+              const parsed = Number(brushSizeDraft);
+              const minimum = brushShape === "round" ? 2 : 1;
+              const next = Number.isFinite(parsed)
+                ? Math.max(minimum, Math.min(INPAINT_BRUSH_DIRECT_MAX, Math.round(parsed)))
+                : fallback;
+              setBrushSizeDraft(String(next));
+              setBrushSize(next);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") event.currentTarget.blur();
+              if (event.key === "Escape") {
+                setBrushSizeDraft(String(brushSize));
+                event.currentTarget.blur();
+              }
             }}
           />
           <span>{t("inpaint.gridUnit")}</span>
@@ -609,39 +667,31 @@ export function InpaintCanvas() {
       <div className="inpaint-stage" ref={stageRef} onWheel={handleStageWheel}>
         <img
           className="inpaint-base-img"
-          src={workbenchImage.fileUrl}
-          alt={t("inpaint.baseAlt")}
+          src={compareEnabled && canCompare ? comparisonBeforeImage!.fileUrl : workbenchImage.fileUrl}
+          alt={compareEnabled && canCompare ? t("inpaint.beforeAlt") : t("inpaint.baseAlt")}
           draggable={false}
-          style={{ ...imageZoomStyle, opacity: compareEnabled && canCompare ? 0 : 1 }}
+          style={imageZoomStyle}
         />
         {compareEnabled && canCompare ? (
           <>
-            <img
-              className="inpaint-compare-img inpaint-compare-before"
-              src={comparisonBeforeImage!.fileUrl}
-              alt={t("inpaint.beforeAlt")}
-              draggable={false}
-              style={imageZoomStyle}
-            />
-            <div className="inpaint-compare-after-clip" style={{ clipPath: compareClip }}>
+            <div ref={compareClipRef} className="inpaint-compare-after-clip" style={{ clipPath: "inset(0 0 0 50%)" }}>
               <img
                 className="inpaint-compare-img"
-                src={workbenchImage.fileUrl}
+                src={currentImage!.fileUrl}
                 alt={t("inpaint.afterAlt")}
                 draggable={false}
                 style={imageZoomStyle}
               />
             </div>
             <button
+              ref={compareDividerRef}
               type="button"
               className="compare-divider inpaint-compare-divider"
-              style={{ left: `${compareX}%` }}
-              onPointerDown={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                setCompareDragging(true);
-                updateComparePosition(event.clientX);
-              }}
+              style={{ left: "50%" }}
+              onPointerDown={beginCompareDragging}
+              onPointerMove={moveCompareDivider}
+              onPointerUp={stopCompareDragging}
+              onPointerCancel={stopCompareDragging}
               aria-label={t("inpaint.dividerLabel")}
               title={t("inpaint.dividerLabel")}
             >

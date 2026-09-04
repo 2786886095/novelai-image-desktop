@@ -136,7 +136,8 @@ describe("official Anlas pricing", () => {
       account: opusAccount,
       scale: 4,
     });
-    expect(quote.amount).toBe(7);
+    expect(quote.amount).toBe(14);
+    expect(quote.details?.join("\n")).toContain("two fixed 2x");
   });
 
   it("returns a stable reason code when an upscale image is missing", () => {

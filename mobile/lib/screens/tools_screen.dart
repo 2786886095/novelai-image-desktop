@@ -60,7 +60,7 @@ class ToolsScreen extends StatelessWidget {
             if (kind == ToolPageKind.inpaint)
               _InpaintPanel(key: ValueKey(state.workbenchImage?.filePath)),
             if (kind == ToolPageKind.upscale) const _UpscalePanel(),
-            if (kind == ToolPageKind.postprocess) const _PostPanel(),
+            if (kind == ToolPageKind.postprocess) const _PostprocessPanel(),
             const SizedBox(height: 12),
             Text(state.status),
           ],
@@ -451,6 +451,39 @@ class _InpaintPanelState extends State<_InpaintPanel> {
               onChanged: (v) => state.setParam((p) => p.negativePrompt = v),
             ),
             const SizedBox(height: 16),
+            Text(
+              language.startsWith('zh') ? '生成后下次重绘使用' : 'Next redraw source',
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: SegmentedButton<String>(
+                segments: [
+                  ButtonSegment(
+                    value: 'original',
+                    icon: const Icon(Icons.photo_outlined),
+                    label: Text(language.startsWith('zh') ? '始终使用原图' : 'Original'),
+                  ),
+                  ButtonSegment(
+                    value: 'latest',
+                    icon: const Icon(Icons.auto_awesome_outlined),
+                    label: Text(language.startsWith('zh') ? '使用最新结果' : 'Latest result'),
+                  ),
+                ],
+                selected: {state.inpaintSourceMode},
+                onSelectionChanged: (selection) =>
+                    state.setInpaintSourceMode(selection.first),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              language.startsWith('zh')
+                  ? '默认保留最初加载的图片连续重绘；切换来源会清空旧蒙版，完成后自动打开前后对比。'
+                  : 'Keeps the original by default. Changing source clears the old mask and opens comparison after redraw.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 16),
             DropdownButtonFormField<String>(
               value: state.inpaintModel,
               isExpanded: true,
@@ -774,6 +807,9 @@ class _UpscalePanel extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(children: [
+          Text('超分只扩大输出并补足清晰度，不进行第二次创意扩散；画面变化通常小于“增强”。2×/4×会改变分辨率。',
+              style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 12),
           SegmentedButton<int>(
             segments: const [
               ButtonSegment(value: 2, label: Text('2x')),
@@ -802,8 +838,103 @@ class _UpscalePanel extends StatelessWidget {
   }
 }
 
-class _PostPanel extends StatelessWidget {
-  const _PostPanel();
+class _PostprocessPanel extends StatefulWidget {
+  const _PostprocessPanel();
+  @override
+  State<_PostprocessPanel> createState() => _PostprocessPanelState();
+}
+
+class _PostprocessPanelState extends State<_PostprocessPanel> {
+  String mode = 'enhance';
+  @override
+  Widget build(BuildContext context) => Column(children: [
+        SegmentedButton<String>(
+          segments: const [
+            ButtonSegment(
+                value: 'enhance',
+                icon: Icon(Icons.auto_awesome),
+                label: Text('增强')),
+            ButtonSegment(
+                value: 'upscale',
+                icon: Icon(Icons.open_in_full),
+                label: Text('超分')),
+            ButtonSegment(
+                value: 'director', icon: Icon(Icons.tune), label: Text('导演工具')),
+          ],
+          selected: {mode},
+          onSelectionChanged: (value) => setState(() => mode = value.first),
+        ),
+        const SizedBox(height: 12),
+        if (mode == 'enhance') const _EnhancePanel(),
+        if (mode == 'upscale') const _UpscalePanel(),
+        if (mode == 'director') const _DirectorPanel(),
+      ]);
+}
+
+class _EnhancePanel extends StatelessWidget {
+  const _EnhancePanel();
+  @override
+  Widget build(BuildContext context) {
+    final s = context.watch<AppState>();
+    final source = s.workbenchImage;
+    final target = source == null
+        ? null
+        : adaptiveNaiImageSize(
+            source.width * s.enhanceScale,
+            source.height * s.enhanceScale,
+            fallbackWidth: source.width,
+            fallbackHeight: source.height,
+          );
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child:
+            Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Text('增强是第二次扩散处理，会补充细节；幅度越高，越可能改变线条、质感和局部结构。',
+              style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 12),
+          _ParamSlider(
+            label: '增强幅度',
+            value: s.enhanceMagnitude.toDouble(),
+            min: 1,
+            max: 10,
+            divisions: 9,
+            display: '${s.enhanceMagnitude}',
+            onChanged: (value) {
+              s.enhanceMagnitude = value.round();
+              s.markChanged();
+            },
+          ),
+          SegmentedButton<int>(
+            segments: const [
+              ButtonSegment(value: 1, label: Text('1× 保持分辨率')),
+              ButtonSegment(value: 2, label: Text('2× 同时放大')),
+            ],
+            selected: {s.enhanceScale},
+            onSelectionChanged: (value) {
+              s.enhanceScale = value.first;
+              s.markChanged();
+            },
+          ),
+          if (source != null && target != null) ...[
+            const SizedBox(height: 8),
+            Text('${source.width}×${source.height} → ${target.$1}×${target.$2}',
+                style: Theme.of(context).textTheme.bodySmall),
+          ],
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: s.busy || source == null ? null : s.enhance,
+            icon: const Icon(Icons.auto_awesome),
+            label: Text('增强图像 ${s.enhanceScale}×'),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+class _DirectorPanel extends StatelessWidget {
+  const _DirectorPanel();
   @override
   Widget build(BuildContext context) {
     final s = context.watch<AppState>();

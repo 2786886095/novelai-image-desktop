@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 import { Button, CommittedNumberInput, NumberInput, Toggle } from "./components/ui";
+import { confirmAction } from "./components/confirm";
 import { Icon } from "./components/icons";
 import { QualityPresetControl } from "./components/QualityPresetControl";
 import {
@@ -10,9 +11,15 @@ import {
 } from "./i18n";
 import { useAppStore } from "./store";
 import {
+  appendBatchRedrawCandidates,
+  batchRedrawCandidates,
   buildBatchRedrawRequest,
+  normalizeBatchRedrawCandidateCount,
+  retainBatchRedrawCandidates,
   resetBatchRedrawItemForParameterRevision,
   resetInterruptedBatchItem,
+  selectBatchRedrawCandidate,
+  selectedBatchRedrawCandidate,
   shouldStopBatchRedraw,
 } from "./batch-redraw-queue";
 import ReferencePresetManager, {
@@ -179,6 +186,8 @@ function normalizeBatchItem(
     overrideParams: Boolean(raw.overrideParams),
     params: migratedParams,
     status: "pending",
+    candidates: [],
+    selectedCandidateId: undefined,
     resultUrl: undefined,
     resultPath: undefined,
     historyItemId: undefined,
@@ -208,6 +217,7 @@ function normalizeBatchProject(
       ? p.sizeMode
       : "adaptive",
     sizeBulk: typeof p.sizeBulk === "string" ? p.sizeBulk : "",
+    candidateCount: normalizeBatchRedrawCandidateCount(p.candidateCount),
     items: Array.isArray(p.items)
       ? p.items
           .map((it, i) => normalizeBatchItem(it, i))
@@ -234,6 +244,60 @@ function BatchStatusBadge({ status }: { status: BatchRedrawItem["status"] }) {
       <span className="redraw-badge fail">{t("batch.status.failed")}</span>
     );
   return null;
+}
+
+function BatchCandidateStrip({
+  item,
+  onSelect,
+  onPreview,
+}: {
+  item: BatchRedrawItem;
+  onSelect: (candidateId: string) => void;
+  onPreview: (url: string) => void;
+}) {
+  const { t, f } = useBatchLocale();
+  const candidates = batchRedrawCandidates(item);
+  const selected = selectedBatchRedrawCandidate(item);
+  if (candidates.length < 2) return null;
+  return (
+    <div className="redraw-candidate-strip">
+      <div className="redraw-candidate-strip-head">
+        <strong>{t("batch.results.candidates")}</strong>
+        <span>
+          {f("batch.results.selectedCandidate", {
+            current: Math.max(
+              1,
+              candidates.findIndex((candidate) => candidate.id === selected?.id) +
+                1,
+            ),
+            total: candidates.length,
+          })}
+        </span>
+      </div>
+      <div className="redraw-candidate-track">
+        {candidates.map((candidate, index) => (
+          <button
+            type="button"
+            key={candidate.id}
+            className={clsx(candidate.id === selected?.id && "active")}
+            aria-pressed={candidate.id === selected?.id}
+            title={f("batch.results.chooseCandidate", { index: index + 1 })}
+            onClick={() => onSelect(candidate.id)}
+            onDoubleClick={() => onPreview(candidate.resultUrl)}
+          >
+            <img
+              src={candidate.resultUrl}
+              alt={f("batch.results.candidateAlt", { index: index + 1 })}
+              loading="lazy"
+              decoding="async"
+            />
+            <b>{index + 1}</b>
+            {candidate.id === selected?.id ? <Icon name="check" /> : null}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function selectedBatchOutputSize(
@@ -574,44 +638,8 @@ function BatchPrecisePicker({
                   {t("batch.ref.characterStyle")}
                 </option>
               </select>
-              <label>
-                {t("batch.ref.strength")}
-                <input
-                  type="number"
-                  min={0}
-                  max={1}
-                  step={0.05}
-                  value={r.strength}
-                  onChange={(e) =>
-                    onChange(
-                      refs.map((x, j) =>
-                        j === i
-                          ? { ...x, strength: Number(e.target.value) }
-                          : x,
-                      ),
-                    )
-                  }
-                />
-              </label>
-              <label>
-                {t("batch.ref.fidelity")}
-                <input
-                  type="number"
-                  min={0}
-                  max={1}
-                  step={0.05}
-                  value={r.fidelity}
-                  onChange={(e) =>
-                    onChange(
-                      refs.map((x, j) =>
-                        j === i
-                          ? { ...x, fidelity: Number(e.target.value) }
-                          : x,
-                      ),
-                    )
-                  }
-                />
-              </label>
+              <CommittedNumberInput label={t("batch.ref.strength")} value={r.strength} min={0} max={1} step={0.05} normalize={(value) => Math.max(0, Math.min(1, value))} onCommit={(value) => onChange(refs.map((x, j) => j === i ? { ...x, strength: value } : x))} />
+              <CommittedNumberInput label={t("batch.ref.fidelity")} value={r.fidelity} min={0} max={1} step={0.05} normalize={(value) => Math.max(0, Math.min(1, value))} onCommit={(value) => onChange(refs.map((x, j) => j === i ? { ...x, fidelity: value } : x))} />
               <button
                 className="vibe-remove"
                 onClick={() => onChange(refs.filter((_, j) => j !== i))}
@@ -677,44 +705,8 @@ function BatchVibePicker({
           {vibes.map((v, i) => (
             <div className="batch-ref-row" key={i}>
               <img src={dataUrlFromBase64(v.base64)} alt={`vibe-${i}`} />
-              <label>
-                {t("batch.ref.info")}
-                <input
-                  type="number"
-                  min={0}
-                  max={1}
-                  step={0.05}
-                  value={v.infoExtracted}
-                  onChange={(e) =>
-                    onChange(
-                      vibes.map((x, j) =>
-                        j === i
-                          ? { ...x, infoExtracted: Number(e.target.value) }
-                          : x,
-                      ),
-                    )
-                  }
-                />
-              </label>
-              <label>
-                {t("batch.ref.strength")}
-                <input
-                  type="number"
-                  min={0}
-                  max={1}
-                  step={0.05}
-                  value={v.strength}
-                  onChange={(e) =>
-                    onChange(
-                      vibes.map((x, j) =>
-                        j === i
-                          ? { ...x, strength: Number(e.target.value) }
-                          : x,
-                      ),
-                    )
-                  }
-                />
-              </label>
+              <CommittedNumberInput label={t("batch.ref.info")} value={v.infoExtracted} min={0} max={1} step={0.05} normalize={(value) => Math.max(0, Math.min(1, value))} onCommit={(value) => onChange(vibes.map((x, j) => j === i ? { ...x, infoExtracted: value } : x))} />
+              <CommittedNumberInput label={t("batch.ref.strength")} value={v.strength} min={0} max={1} step={0.05} normalize={(value) => Math.max(0, Math.min(1, value))} onCommit={(value) => onChange(vibes.map((x, j) => j === i ? { ...x, strength: value } : x))} />
               <button
                 className="vibe-remove"
                 onClick={() => onChange(vibes.filter((_, j) => j !== i))}
@@ -770,9 +762,15 @@ export function BatchRedraw({ onBack }: { onBack?: () => void }) {
   }, [requestBatchCancel]);
 
   const { items, globalStrength, step } = project;
+  const candidateCount = normalizeBatchRedrawCandidateCount(
+    project.candidateCount,
+  );
   const globalParams = project.globalParams;
   const readyCount = items.filter((it) => it.prompt.trim()).length;
   const doneCount = items.filter((it) => it.status === "done").length;
+  const exportableCount = items.filter(
+    (it) => Boolean(selectedBatchRedrawCandidate(it)?.resultPath),
+  ).length;
   const failedCount = items.filter((it) => it.status === "failed").length;
   const failedReady = items.filter(
     (it) => it.status === "failed" && it.prompt.trim(),
@@ -814,6 +812,9 @@ export function BatchRedraw({ onBack }: { onBack?: () => void }) {
   const activeItemIndex = activeItem
     ? items.findIndex((it) => it.id === activeItem.id)
     : -1;
+  const activeCandidate = activeItem
+    ? selectedBatchRedrawCandidate(activeItem)
+    : undefined;
   const batchStatusLabel = (it: BatchRedrawItem) =>
     it.status === "done"
       ? t("batch.status.done")
@@ -824,6 +825,27 @@ export function BatchRedraw({ onBack }: { onBack?: () => void }) {
           : it.prompt.trim()
             ? t("batch.status.prompted")
             : t("batch.status.pending");
+
+  // Migrate an already-open pre-candidate project in place. Imported JSON is
+  // normalized separately and never trusts local output paths.
+  useEffect(() => {
+    setBatchRedraw((prev) => ({
+      ...prev,
+      candidateCount: normalizeBatchRedrawCandidateCount(prev.candidateCount),
+      items: prev.items.map((item) => {
+        const candidates = batchRedrawCandidates(item);
+        const selected = selectedBatchRedrawCandidate(item);
+        return {
+          ...item,
+          candidates,
+          selectedCandidateId: selected?.id,
+          resultUrl: selected?.resultUrl,
+          resultPath: selected?.resultPath,
+          historyItemId: selected?.historyItemId,
+        };
+      }),
+    }));
+  }, [setBatchRedraw]);
 
   // Seed global style / negative / params from the main 生成 screen the first time
   // the tool is opened with an empty project ("默认为生成中锁定的，可自行修改").
@@ -849,6 +871,16 @@ export function BatchRedraw({ onBack }: { onBack?: () => void }) {
     setBatchRedraw((prev) => ({
       ...prev,
       items: prev.items.map((it) => (it.id === id ? { ...it, ...p } : it)),
+    }));
+  }
+  function chooseCandidate(itemId: string, candidateId: string) {
+    setBatchRedraw((prev) => ({
+      ...prev,
+      items: prev.items.map((item) =>
+        item.id === itemId
+          ? selectBatchRedrawCandidate(item, candidateId)
+          : item,
+      ),
     }));
   }
   function formatSizeImportError(error: unknown) {
@@ -976,6 +1008,7 @@ export function BatchRedraw({ onBack }: { onBack?: () => void }) {
         overrideParams: false,
         params: {},
         status: "pending",
+        candidates: [],
       });
     }
     setBatchRedraw((prev) => ({ ...prev, items: [...prev.items, ...next] }));
@@ -1094,15 +1127,23 @@ export function BatchRedraw({ onBack }: { onBack?: () => void }) {
       .map((item) => ({
         id: item.id,
         request: buildBatchRedrawRequest(proj, item, runGroupName),
+        candidateCount: normalizeBatchRedrawCandidateCount(
+          proj.candidateCount,
+        ),
       }));
     if (ready.length === 0) {
       setToast(t("batch.toast.noReady"));
       return;
     }
-    setBatchRunning(true, { done: 0, total: ready.length });
+    const requestTotal = ready.reduce(
+      (total, target) => total + target.candidateCount,
+      0,
+    );
+    setBatchRunning(true, { done: 0, total: requestTotal });
 
     let done = 0;
     let failed = 0;
+    let attempted = 0;
     let lastError = "";
     // Everything below runs inside try/finally: a throw anywhere (IPC, network,
     // history/account refresh) must never leave the UI stuck in "running" with
@@ -1123,39 +1164,90 @@ export function BatchRedraw({ onBack }: { onBack?: () => void }) {
           status: "generating",
           error: undefined,
         });
-        const res = await window.naiDesktop.redrawImage(target.request);
-        // Cancellation controls the whole queue; it is not a failed image.
-        // Return the interrupted card to pending and never start another one.
-        if (shouldStopBatchRedraw(cancelRefCurrent(), res.failureKind)) {
+        let generatedForItem = 0;
+        let failedForItem = 0;
+        for (
+          let candidateIndex = 0;
+          candidateIndex < target.candidateCount;
+          candidateIndex += 1
+        ) {
+          if (cancelRefCurrent()) break;
+          try {
+            const res = await window.naiDesktop.redrawImage(target.request);
+            // Cancellation controls the whole queue; it is not a failed image.
+            if (shouldStopBatchRedraw(cancelRefCurrent(), res.failureKind)) {
+              break;
+            }
+            attempted += 1;
+            const out = res.ok ? res.items[0] : undefined;
+            if (res.ok && out) {
+              setBatchRedraw((prev) => ({
+                ...prev,
+                items: prev.items.map((item) => {
+                  if (item.id !== target.id) return item;
+                  return {
+                    ...appendBatchRedrawCandidates(item, [
+                      {
+                        id: out.id,
+                        historyItemId: out.id,
+                        resultUrl: out.fileUrl,
+                        resultPath: out.filePath,
+                        createdAt: out.createdAt,
+                        actualSeed: out.actualSeed,
+                      },
+                    ]),
+                    status: "generating",
+                    error: undefined,
+                  };
+                }),
+              }));
+              generatedForItem += 1;
+              done += 1;
+            } else {
+              failedForItem += 1;
+              failed += 1;
+              lastError = res.message;
+            }
+          } catch (error) {
+            if (cancelRefCurrent()) break;
+            attempted += 1;
+            failedForItem += 1;
+            failed += 1;
+            lastError = error instanceof Error ? error.message : String(error);
+          }
+          setBatchRunning(true, { done: attempted, total: requestTotal });
+        }
+        const latest = useAppStore
+          .getState()
+          .batchRedraw.items.find((item) => item.id === target.id);
+        const hasCandidate = latest
+          ? batchRedrawCandidates(latest).length > 0
+          : generatedForItem > 0;
+        if (cancelRefCurrent()) {
           setBatchRedraw((prev) => ({
             ...prev,
             items: prev.items.map((item) =>
-              item.id === target.id ? resetInterruptedBatchItem(item) : item,
+              item.id !== target.id
+                ? item
+                : hasCandidate
+                  ? { ...item, status: "done", error: undefined }
+                  : resetInterruptedBatchItem(item),
             ),
           }));
           break;
         }
-        const out = res.ok ? res.items[0] : undefined;
-        if (res.ok && out) {
-          patchItem(target.id, {
-            status: "done",
-            resultUrl: out.fileUrl,
-            resultPath: out.filePath,
-            historyItemId: out.id,
-            error: undefined,
-          });
-          done += 1;
-        } else {
-          patchItem(target.id, { status: "failed", error: res.message });
-          failed += 1;
-          lastError = res.message;
-        }
-        setBatchRunning(true, { done: done + failed, total: ready.length });
+        patchItem(target.id, {
+          status: hasCandidate ? "done" : "failed",
+          error: hasCandidate
+            ? undefined
+            : lastError ||
+              (failedForItem > 0 ? t("batch.toast.unknownFailure") : undefined),
+        });
       }
     } catch (error) {
       if (!cancelRefCurrent()) {
         lastError = error instanceof Error ? error.message : String(error);
-        failed = Math.max(failed, ready.length - done);
+        failed = Math.max(failed, requestTotal - done);
       }
     } finally {
       if (cancelRefCurrent()) {
@@ -1199,14 +1291,17 @@ export function BatchRedraw({ onBack }: { onBack?: () => void }) {
     const snapshot = useAppStore.getState().batchRedraw.items;
     const generated = snapshot.filter(
       (item) =>
-        item.historyItemId || item.resultPath || item.status === "failed",
+        batchRedrawCandidates(item).length > 0 || item.status === "failed",
     );
     if (generated.length === 0) return;
-    if (!window.confirm(t("batch.results.clearConfirm"))) return;
+    if (!(await confirmAction(t("batch.results.clearConfirm")))) return;
 
     const failedIds = new Set<string>();
     for (const historyId of new Set(
-      generated.map((item) => item.historyItemId).filter(Boolean) as string[],
+      generated
+        .flatMap((item) => batchRedrawCandidates(item))
+        .map((candidate) => candidate.historyItemId)
+        .filter(Boolean),
     )) {
       try {
         await window.naiDesktop.deleteHistory(historyId);
@@ -1218,11 +1313,12 @@ export function BatchRedraw({ onBack }: { onBack?: () => void }) {
     setBatchRedraw((prev) => ({
       ...prev,
       step: failedIds.size === 0 ? "params" : prev.step,
-      items: prev.items.map((item) =>
-        item.historyItemId && failedIds.has(item.historyItemId)
-          ? item
-          : resetBatchRedrawItemForParameterRevision(item),
-      ),
+      items: prev.items.map((item) => {
+        const retained = retainBatchRedrawCandidates(item, failedIds);
+        return batchRedrawCandidates(retained).length > 0
+          ? { ...retained, status: "done", error: undefined }
+          : resetBatchRedrawItemForParameterRevision(item);
+      }),
     }));
     setResultFilter("all");
     setLightbox(null);
@@ -1242,10 +1338,18 @@ export function BatchRedraw({ onBack }: { onBack?: () => void }) {
     }
     const doneFiles: BatchExportFile[] = useAppStore
       .getState()
-      .batchRedraw.items.filter((it) => it.status === "done" && it.resultPath)
-      .map((it, index) => ({
-        filePath: it.resultPath!,
-        name: `${String(index + 1).padStart(3, "0")}_${it.name}`,
+      .batchRedraw.items.map((item, index) => ({
+        item,
+        index,
+        selected: selectedBatchRedrawCandidate(item),
+      }))
+      .filter(
+        (entry): entry is typeof entry & { selected: NonNullable<typeof entry.selected> } =>
+          Boolean(entry.selected?.resultPath),
+      )
+      .map(({ item, index, selected }) => ({
+        filePath: selected.resultPath,
+        name: `${String(index + 1).padStart(3, "0")}_${item.name}`,
       }));
     if (doneFiles.length === 0) {
       setToast(t("batch.toast.needGenerated"));
@@ -1527,6 +1631,26 @@ export function BatchRedraw({ onBack }: { onBack?: () => void }) {
               }
             />
           </label>
+          <div className="redraw-candidate-count-card">
+            <div>
+              <strong>{t("batch.params.candidateCount")}</strong>
+              <small>{t("batch.params.candidateCountHint")}</small>
+            </div>
+            <CommittedNumberInput label={t("batch.params.candidateCountUnit")} value={candidateCount} min={1} max={8} step={1} disabled={running} normalize={(value) => normalizeBatchRedrawCandidateCount(value)} onCommit={(value) => patch({ candidateCount: value })} />
+            <div className="redraw-candidate-count-presets">
+              {[1, 2, 3, 4].map((count) => (
+                <button
+                  type="button"
+                  key={count}
+                  className={clsx(candidateCount === count && "active")}
+                  disabled={running}
+                  onClick={() => patch({ candidateCount: count })}
+                >
+                  {count}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="redraw-global-prompts">
             <label className="field">
               <span>{t("batch.params.style")}</span>
@@ -1752,29 +1876,29 @@ export function BatchRedraw({ onBack }: { onBack?: () => void }) {
                     title={t("batch.import.thumbTitle")}
                     onDoubleClick={() =>
                       setLightbox(
-                        activeItem.resultUrl ||
+                        activeCandidate?.resultUrl ||
                           dataUrlFromBase64(activeItem.base64),
                       )
                     }
                   >
                     <img
                       src={
-                        activeItem.resultUrl ||
+                        activeCandidate?.resultUrl ||
                         dataUrlFromBase64(activeItem.base64)
                       }
                       alt={activeItem.name}
                       loading="lazy"
                       decoding="async"
-                      draggable={Boolean(activeItem.resultUrl)}
+                      draggable={Boolean(activeCandidate?.resultUrl)}
                       title={
-                        activeItem.resultUrl
+                        activeCandidate?.resultUrl
                           ? t("batch.prompts.dragOutput")
                           : t("batch.import.thumbTitle")
                       }
                       onDragStart={(e) => {
-                        if (!activeItem.resultUrl) return;
+                        if (!activeCandidate?.resultUrl) return;
                         e.preventDefault();
-                        window.naiDesktop.startImageDrag(activeItem.resultUrl);
+                        window.naiDesktop.startImageDrag(activeCandidate.resultUrl);
                       }}
                       onError={(e) => {
                         (e.currentTarget as HTMLImageElement).src =
@@ -1783,17 +1907,26 @@ export function BatchRedraw({ onBack }: { onBack?: () => void }) {
                     />
                     <div>
                       <strong>
-                        {activeItem.resultUrl
+                        {activeCandidate?.resultUrl
                           ? t("batch.prompts.currentOutput")
                           : t("batch.prompts.sourceImage")}
                       </strong>
                       <span>
-                        {activeItem.resultUrl
+                        {activeCandidate?.resultUrl
                           ? t("batch.prompts.outputHint")
                           : t("batch.prompts.sourceHint")}
                       </span>
                     </div>
                   </div>
+                  {batchRedrawCandidates(activeItem).length > 1 ? (
+                    <BatchCandidateStrip
+                      item={activeItem}
+                      onSelect={(candidateId) =>
+                        chooseCandidate(activeItem.id, candidateId)
+                      }
+                      onPreview={setLightbox}
+                    />
+                  ) : null}
                   <label className="comic-field">
                     <span>{t("batch.prompts.itemPrompt")}</span>
                     <textarea
@@ -1806,29 +1939,7 @@ export function BatchRedraw({ onBack }: { onBack?: () => void }) {
                     />
                   </label>
                   <div className="comic-panel-negative-row">
-                    <label className="comic-field">
-                      <span>
-                        {f("batch.prompts.itemStrength", {
-                          value: globalStrength.toFixed(2),
-                        })}
-                      </span>
-                      <input
-                        type="number"
-                        min={0.1}
-                        max={0.99}
-                        step={0.01}
-                        value={activeItem.strength ?? ""}
-                        placeholder={globalStrength.toFixed(2)}
-                        onChange={(e) =>
-                          patchItem(activeItem.id, {
-                            strength:
-                              e.target.value === ""
-                                ? null
-                                : Number(e.target.value),
-                          })
-                        }
-                      />
-                    </label>
+                    <CommittedNumberInput label={f("batch.prompts.itemStrength", { value: globalStrength.toFixed(2) })} value={activeItem.strength ?? globalStrength} min={0.1} max={0.99} step={0.01} normalize={(value) => Math.max(0.1, Math.min(0.99, value))} onCommit={(value) => patchItem(activeItem.id, { strength: value })} />
                     <div className="comic-field">
                       <span>{t("batch.prompts.advanced")}</span>
                       <label className="redraw-override-toggle">
@@ -1936,9 +2047,34 @@ export function BatchRedraw({ onBack }: { onBack?: () => void }) {
                     )}
                   </b>
                 </span>
+                <span className="candidates">
+                  {t("batch.results.perSourceCandidates")} <b>{candidateCount}</b>
+                </span>
               </div>
             </div>
             <div className="redraw-results-actions">
+              <label className="redraw-results-count-control">
+                <span>{t("batch.params.candidateCount")}</span>
+                <select
+                  value={candidateCount}
+                  disabled={running}
+                  onChange={(event) =>
+                    patch({
+                      candidateCount: normalizeBatchRedrawCandidateCount(
+                        event.target.value,
+                      ),
+                    })
+                  }
+                >
+                  {Array.from({ length: 8 }, (_, index) => index + 1).map(
+                    (count) => (
+                      <option key={count} value={count}>
+                        {count}
+                      </option>
+                    ),
+                  )}
+                </select>
+              </label>
               {running ? (
                 <Button variant="danger" onClick={stop} disabled={cancelling}>
                   {t("batch.results.stop")}
@@ -2004,9 +2140,9 @@ export function BatchRedraw({ onBack }: { onBack?: () => void }) {
               <Button
                 variant="secondary"
                 onClick={() => void exportZip()}
-                disabled={running || doneCount === 0}
+                disabled={running || exportableCount === 0}
               >
-                {f("batch.results.zip", { count: doneCount })}
+                {f("batch.results.zip", { count: exportableCount })}
               </Button>
             </div>
           </header>
@@ -2095,11 +2231,25 @@ export function BatchRedraw({ onBack }: { onBack?: () => void }) {
                           ? t("batch.results.output")
                           : t("batch.results.source")}
                       </span>
+                      {batchRedrawCandidates(it).length > 1 ? (
+                        <span className="redraw-result-candidate-count">
+                          {f("batch.results.candidateBadge", {
+                            count: batchRedrawCandidates(it).length,
+                          })}
+                        </span>
+                      ) : null}
                       <BatchStatusBadge status={it.status} />
                       {it.status === "generating" && (
                         <i className="redraw-result-shimmer" />
                       )}
                     </button>
+                    <BatchCandidateStrip
+                      item={it}
+                      onSelect={(candidateId) =>
+                        chooseCandidate(it.id, candidateId)
+                      }
+                      onPreview={setLightbox}
+                    />
                     <div className="redraw-result-body">
                       <div className="redraw-result-name">
                         <strong title={it.name}>{it.name}</strong>

@@ -1,8 +1,11 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { gzip } from "node:zlib";
+import { promisify } from "node:util";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const gzipAsync = promisify(gzip);
 
 const BOOKS = [
   {
@@ -181,14 +184,12 @@ async function main() {
     entries: promptEntries,
   };
   const json = `${JSON.stringify(snapshot)}\n`;
-  const targets = [
-    path.join(ROOT, "src", "data", "prompt-codex.json"),
-    path.join(ROOT, "mobile", "assets", "prompt_codex.json"),
-  ];
-  for (const target of targets) {
-    await fs.mkdir(path.dirname(target), { recursive: true });
-    await fs.writeFile(target, json, "utf8");
-  }
+  const desktopTarget = path.join(ROOT, "public", "prompt-codex.json.gz");
+  const mobileTarget = path.join(ROOT, "mobile", "assets", "prompt_codex.json");
+  await fs.mkdir(path.dirname(desktopTarget), { recursive: true });
+  await fs.writeFile(desktopTarget, await gzipAsync(Buffer.from(json), { level: 9 }));
+  await fs.mkdir(path.dirname(mobileTarget), { recursive: true });
+  await fs.writeFile(mobileTarget, json, "utf8");
   process.stdout.write(
     `total: ${promptEntries.length}; intro: ${introduction.length}; bytes: ${Buffer.byteLength(json)}\n`,
   );

@@ -4,6 +4,7 @@ import {
   createTagComicPanel,
   createTagComicProject,
   buildTagComicGenerateRequest,
+  buildTagComicRegenerationTasks,
   mergeTagComicParams,
   normalizeTagComicProject,
   formatTagComicPanelRange,
@@ -88,6 +89,7 @@ describe("tag-only comic projects", () => {
     expect(mergeTagComicParams(project, panel)).toMatchObject({
       steps: 36,
       positivePrompt: "",
+      stylePrompt: "",
     });
     expect(project.globalNegativePrompt).toBe("lowres");
     expect(panel).not.toHaveProperty("localNegativePrompt");
@@ -109,11 +111,32 @@ describe("tag-only comic projects", () => {
     project.globalStylePrompt = "painting";
 
     expect(first.params.steps).toBe(28);
+    expect(first.params.stylePrompt).toBe("");
     expect(first.globalStylePrompt).toBe("illustration");
     expect(buildTagComicGenerateRequest(project, panel).params.steps).toBe(36);
     expect(buildTagComicGenerateRequest(project, panel).globalStylePrompt).toBe(
       "painting",
     );
+  });
+
+  it("rebuilds every requested candidate when regenerating all panels", () => {
+    const first = createTagComicPanel("first", 1);
+    const second = createTagComicPanel("second", 2);
+    first.candidates.push({
+      id: "old",
+      historyItemId: "old-history",
+      outputPath: "C:/old.png",
+      outputUrl: "file:///C:/old.png",
+      createdAt: "2026-09-03T00:00:00Z",
+    });
+    expect(buildTagComicRegenerationTasks([first, second], 3)).toEqual([
+      { panelId: first.id, ordinal: 0 },
+      { panelId: first.id, ordinal: 1 },
+      { panelId: first.id, ordinal: 2 },
+      { panelId: second.id, ordinal: 0 },
+      { panelId: second.id, ordinal: 1 },
+      { panelId: second.id, ordinal: 2 },
+    ]);
   });
 
   it("imports one supported size per panel and applies it over global dimensions", () => {

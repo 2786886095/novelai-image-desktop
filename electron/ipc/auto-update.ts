@@ -31,9 +31,13 @@ let getMainWindow: (() => BrowserWindow | null) | undefined;
 let downloadedInstallerPath = "";
 let downloadedVersion = "";
 let downloadInFlight: Promise<{ ok: boolean; message: string }> | null = null;
+let installLaunchInFlight = false;
+let automaticInstallTimer: NodeJS.Timeout | null = null;
 
 function send(payload: UpdateProgressEvent) {
-  getMainWindow?.()?.webContents.send("app:updateEvent", payload);
+  const mainWindow = getMainWindow?.();
+  if (!mainWindow || mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return;
+  mainWindow.webContents.send("app:updateEvent", payload);
 }
 
 /** Retains the existing startup wiring contract used by electron/main.ts. */
@@ -233,7 +237,8 @@ async function runDownload(preferredSource: UpdateSource): Promise<{ ok: boolean
       downloadedVersion = result.version;
       send({ kind: "progress", percent: 100 });
       send({ kind: "downloaded", version: result.version });
-      return { ok: true, message: "安装包下载完成" };
+      scheduleAutomaticInstall();
+      return { ok: true, message: "安装包下载完成，正在自动重启安装" };
     } catch (error: any) {
       errors.push(error?.message ?? String(error));
     }
@@ -254,18 +259,40 @@ export function downloadUpdate(preferredSource: UpdateSource = "github"): Promis
   return downloadInFlight;
 }
 
-/** Launches the verified Setup.exe and lets NSIS replace either build type. */
+/**
+ * Mirrors electron-updater's supported NSIS update arguments. `--updated`
+ * makes the installer reuse the registered installation mode/path, `/S`
+ * skips the assisted pages after the first install, and `--force-run`
+ * starts the newly installed build when the silent update completes.
+ */
+export function automaticInstallerArgs(): string[] {
+  return ["--updated", "/S", "--force-run"];
+}
+
+function scheduleAutomaticInstall() {
+  if (automaticInstallTimer) clearTimeout(automaticInstallTimer);
+  automaticInstallTimer = setTimeout(() => {
+    automaticInstallTimer = null;
+    installUpdate();
+  }, 850);
+}
+
+/** Launches the verified Setup.exe silently, then exits the current build. */
 export function installUpdate() {
-  if (process.platform !== "win32" || !downloadedInstallerPath) return;
-  const child = spawn(downloadedInstallerPath, [], {
+  if (process.platform !== "win32" || !downloadedInstallerPath || installLaunchInFlight) return;
+  installLaunchInFlight = true;
+  const child = spawn(downloadedInstallerPath, automaticInstallerArgs(), {
     detached: true,
     stdio: "ignore",
-    windowsHide: false,
+    windowsHide: true,
   });
-  child.once("error", (error) => send({ kind: "error", message: error.message }));
+  child.once("error", (error) => {
+    installLaunchInFlight = false;
+    send({ kind: "error", message: `自动安装启动失败：${error.message}` });
+  });
   child.once("spawn", () => {
-    console.info(`[update] launching verified installer for ${downloadedVersion}`);
-    setTimeout(() => app.quit(), 300);
+    console.info(`[update] launching verified silent installer for ${downloadedVersion}`);
+    setTimeout(() => app.quit(), 450);
   });
   child.unref();
 }

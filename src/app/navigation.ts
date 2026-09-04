@@ -1,7 +1,6 @@
 export const ACTIVE_TABS = [
   "generate",
   "inpaint",
-  "upscale",
   "postprocess",
   "inspect",
   "convert",
@@ -9,6 +8,7 @@ export const ACTIVE_TABS = [
   "tools",
   "referencePresets",
   "onlineGallery",
+  "agent",
   "records",
 ] as const;
 
@@ -25,6 +25,6 @@ export const WIDE_WORKSPACE_TABS = new Set<ActiveTab>([
   "tools",
   "referencePresets",
   "onlineGallery",
+  "agent",
   "records",
 ]);
-

@@ -8,7 +8,6 @@ import {
   getSettingsShellText,
   getTokenGuideText,
   getToolsHubText,
-  getTuiwenStudioText,
   normalizeAppLanguage,
   SUPPORTED_APP_LANGUAGES,
 } from "./i18n";
@@ -121,19 +120,6 @@ describe("desktop i18n resources", () => {
         for (const value of Object.values(group)) {
           expect(value.trim()).not.toBe("");
         }
-      }
-    }
-  });
-
-  it("has complete localized novel-shorts shell and import-stage text for every locale", () => {
-    const stepKeys = ["import", "storyboard", "references", "generate", "audio", "motion", "export"];
-    const aspectKeys = ["9:16", "16:9", "1:1", "4:3", "3:4"];
-    for (const language of SUPPORTED_APP_LANGUAGES) {
-      const text = getTuiwenStudioText(language.code);
-      expect(Object.keys(text.steps)).toEqual(stepKeys);
-      expect(Object.keys(text.importStage.aspectLabels)).toEqual(aspectKeys);
-      for (const value of collectStrings(text)) {
-        expect(value.trim()).not.toBe("");
       }
     }
   });

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import gsap from "gsap";
 import { AppPortal, Button, NumberInput, SelectMenu } from "./components/ui";
+import { confirmAction } from "./components/confirm";
 import { Icon } from "./components/icons";
 import ReferenceCatalogPanel from "./ReferenceCatalogPanel";
 import { catalogCategoryName, catalogGroupName, catalogGameName } from "./referenceCatalog";
@@ -360,7 +361,7 @@ export default function ReferencePresetManager({
   };
 
   const removePreset = async (preset: ReferencePreset) => {
-    if (!window.confirm(text.confirmDelete)) return;
+    if (!(await confirmAction(text.confirmDelete))) return;
     await runOperation(() => window.naiDesktop.deleteReferencePreset(preset.id), text.remove);
     setSelectedIds((current) => {
       const next = new Set(current);

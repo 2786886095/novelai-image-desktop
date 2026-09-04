@@ -2,6 +2,9 @@ library;
 
 import 'dart:math' as math;
 
+import '../agent/agent_models.dart';
+import '../agent/agent_context.dart';
+import '../agent/agent_provider_catalog.dart';
 import '../i18n/app_locales.dart';
 
 class NaiOption {
@@ -11,7 +14,7 @@ class NaiOption {
 }
 
 const appName = 'Langbai NovelAI Studio';
-const appVersion = '2.1.1';
+const appVersion = '2.2.0';
 
 const naiModels = <NaiOption>[
   NaiOption(
@@ -768,6 +771,17 @@ class AppSettings {
   String visionApiModel;
   String convertApiUrl;
   String convertApiModel;
+  // Character Tavern provider configuration. The secret key is kept in secure
+  // storage; desktop and mobile both call the selected provider directly.
+  String agentApiProtocol;
+  String agentApiBaseUrl;
+  String agentApiModel;
+  String agentProviderName;
+  int agentContextWindow;
+  int agentMaxOutputTokens;
+  bool agentAutoCompact;
+  double agentAutoCompactThreshold;
+  bool agentVisionEnabled;
   bool autoComplete;
   String tagServerUrl;
   String tagServerType;
@@ -816,6 +830,8 @@ class AppSettings {
   bool promptCodexEnhanceEnabled;
   bool promptCodexAdultEnabled;
   bool promptRuleAutoRepairEnabled;
+  bool reverseConvertDshEnabled;
+  String reverseConvertDshMode;
   String comicPromptTemplate;
   // Last-used tool selections, persisted so they survive an app restart
   // (mirrors the desktop "last generation state").
@@ -838,6 +854,7 @@ class AppSettings {
   // All default true (today's behavior); turning one off means that tool
   // falls back to hardcoded defaults on next launch.
   bool persistGenerateParams;
+  int batchIntervalSeconds;
   bool persistInpaintParams;
   bool persistUpscaleParams;
   bool persistDirectorParams;
@@ -857,6 +874,15 @@ class AppSettings {
     this.visionApiModel = 'gpt-4o',
     this.convertApiUrl = 'https://api.openai.com/v1',
     this.convertApiModel = 'gpt-4o-mini',
+    this.agentApiProtocol = 'openai-responses',
+    this.agentApiBaseUrl = 'https://api.deepseek.com',
+    this.agentApiModel = 'deepseek-v4-flash',
+    this.agentProviderName = 'DeepSeek',
+    this.agentContextWindow = defaultAgentContextWindow,
+    this.agentMaxOutputTokens = defaultAgentMaxOutputTokens,
+    this.agentAutoCompact = true,
+    this.agentAutoCompactThreshold = defaultAgentCompactThreshold,
+    this.agentVisionEnabled = true,
     this.autoComplete = true,
     this.tagServerUrl = '',
     this.tagServerType = 'rest',
@@ -901,6 +927,8 @@ class AppSettings {
     this.promptCodexEnhanceEnabled = true,
     this.promptCodexAdultEnabled = true,
     this.promptRuleAutoRepairEnabled = false,
+    this.reverseConvertDshEnabled = true,
+    this.reverseConvertDshMode = 'focused',
     this.comicPromptTemplate = '',
     this.reversePromptMode = 'tags',
     this.reversePromptTemplateVersion = 'v5',
@@ -916,6 +944,7 @@ class AppSettings {
     this.augmentEmotion = 'happy',
     this.augmentEmotionLevel = 0,
     this.persistGenerateParams = true,
+    this.batchIntervalSeconds = 0,
     this.persistInpaintParams = true,
     this.persistUpscaleParams = true,
     this.persistDirectorParams = true,
@@ -941,6 +970,15 @@ class AppSettings {
         'visionApiModel': visionApiModel,
         'convertApiUrl': convertApiUrl,
         'convertApiModel': convertApiModel,
+        'agentApiProtocol': agentApiProtocol,
+        'agentApiBaseUrl': agentApiBaseUrl,
+        'agentApiModel': agentApiModel,
+        'agentProviderName': agentProviderName,
+        'agentContextWindow': agentContextWindow,
+        'agentMaxOutputTokens': agentMaxOutputTokens,
+        'agentAutoCompact': agentAutoCompact,
+        'agentAutoCompactThreshold': agentAutoCompactThreshold,
+        'agentVisionEnabled': agentVisionEnabled,
         'autoComplete': autoComplete,
         'tagServerUrl': tagServerUrl,
         'tagServerType': tagServerType,
@@ -988,6 +1026,8 @@ class AppSettings {
         'promptCodexEnhanceEnabled': promptCodexEnhanceEnabled,
         'promptCodexAdultEnabled': promptCodexAdultEnabled,
         'promptRuleAutoRepairEnabled': promptRuleAutoRepairEnabled,
+        'reverseConvertDshEnabled': reverseConvertDshEnabled,
+        'reverseConvertDshMode': reverseConvertDshMode,
         'comicPromptTemplate': comicPromptTemplate,
         'reversePromptMode': reversePromptMode,
         'reversePromptTemplateVersion': reversePromptTemplateVersion,
@@ -1003,6 +1043,7 @@ class AppSettings {
         'augmentEmotion': augmentEmotion,
         'augmentEmotionLevel': augmentEmotionLevel,
         'persistGenerateParams': persistGenerateParams,
+        'batchIntervalSeconds': batchIntervalSeconds,
         'persistInpaintParams': persistInpaintParams,
         'persistUpscaleParams': persistUpscaleParams,
         'persistDirectorParams': persistDirectorParams,
@@ -1021,6 +1062,25 @@ class AppSettings {
         visionApiModel: j['visionApiModel'] ?? 'gpt-4o',
         convertApiUrl: j['convertApiUrl'] ?? 'https://api.openai.com/v1',
         convertApiModel: j['convertApiModel'] ?? 'gpt-4o-mini',
+        agentApiProtocol: normalizeAgentProtocol(j['agentApiProtocol']),
+        agentApiBaseUrl:
+            _stringValue(j['agentApiBaseUrl'], 'https://api.deepseek.com'),
+        agentApiModel: _stringValue(j['agentApiModel'], 'deepseek-v4-flash'),
+        agentProviderName: _stringValue(j['agentProviderName'], 'DeepSeek'),
+        agentContextWindow: _intValue(
+          j['agentContextWindow'],
+          defaultAgentContextWindow,
+        ).clamp(8192, 2000000).toInt(),
+        agentMaxOutputTokens: _intValue(
+          j['agentMaxOutputTokens'],
+          defaultAgentMaxOutputTokens,
+        ).clamp(256, 131072).toInt(),
+        agentAutoCompact: j['agentAutoCompact'] ?? true,
+        agentAutoCompactThreshold: adaptiveAgentCompactThreshold(
+          j['agentContextWindow'] ?? defaultAgentContextWindow,
+          j['agentMaxOutputTokens'] ?? defaultAgentMaxOutputTokens,
+        ),
+        agentVisionEnabled: j['agentVisionEnabled'] ?? true,
         autoComplete: j['autoComplete'] ?? true,
         tagServerUrl: j['tagServerUrl'] ?? '',
         tagServerType: j['tagServerType'] ?? 'rest',
@@ -1088,6 +1148,9 @@ class AppSettings {
         promptCodexEnhanceEnabled: j['promptCodexEnhanceEnabled'] ?? true,
         promptCodexAdultEnabled: j['promptCodexAdultEnabled'] ?? true,
         promptRuleAutoRepairEnabled: j['promptRuleAutoRepairEnabled'] ?? false,
+        reverseConvertDshEnabled: j['reverseConvertDshEnabled'] ?? true,
+        reverseConvertDshMode:
+            j['reverseConvertDshMode'] == 'strict' ? 'strict' : 'focused',
         comicPromptTemplate: j['comicPromptTemplate'] ?? '',
         reversePromptMode: j['reversePromptMode'] ?? 'tags',
         reversePromptTemplateVersion:
@@ -1110,6 +1173,8 @@ class AppSettings {
         augmentEmotionLevel:
             _finiteClamp(_doubleValue(j['augmentEmotionLevel'], 0), 0, 5, 0),
         persistGenerateParams: j['persistGenerateParams'] ?? true,
+        batchIntervalSeconds:
+            _intValue(j['batchIntervalSeconds'], 0).clamp(0, 3600).toInt(),
         persistInpaintParams: j['persistInpaintParams'] ?? true,
         persistUpscaleParams: j['persistUpscaleParams'] ?? true,
         persistDirectorParams: j['persistDirectorParams'] ?? true,

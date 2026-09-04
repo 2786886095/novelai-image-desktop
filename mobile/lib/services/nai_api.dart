@@ -10,6 +10,7 @@ import 'package:http_parser/http_parser.dart' show MediaType;
 import '../billing/anlas.dart';
 import '../images/image_processing.dart';
 import '../models/nai_models.dart';
+import '../prompts/dsh_image_ai.dart';
 import '../prompts/prompt_mode.dart';
 import '../tags/offline_tag_store.dart';
 import 'mcp_tag_client.dart';
@@ -77,11 +78,32 @@ String resolveNovelAiBaseUrl(
   final official = uri?.scheme == 'https' &&
       (host == 'novelai.net' || host.endsWith('.novelai.net'));
   final expectedHost = Uri.tryParse(fallback)?.host.toLowerCase() ?? '';
-  // Being under novelai.net is not enough: generation/user-data live on the
-  // image host while upscale uses the API host. Older saved settings could put
-  // api.novelai.net in the image slot and persist opaque HTTP 500 responses.
+  // Being under novelai.net is not enough: generation, user-data and the
+  // dedicated upscaler use the image host. Older saved settings could put
+  // api.novelai.net in the image slot and persist opaque HTTP failures.
   if (official) return host == expectedHost ? normalized : fallback;
   return settings.allowCustomEndpoint ? normalized : fallback;
+}
+
+const _upscaleModels = <String>{
+  'nai-diffusion-5-full',
+  'nai-diffusion-5-curated',
+  'nai-diffusion-4-5-full',
+  'nai-diffusion-4-5-curated',
+  'nai-diffusion-4-full',
+  'nai-diffusion-4-curated',
+  'nai-diffusion-3',
+  'nai-diffusion-3-furry',
+};
+
+String resolveUpscaleModel(String rawModel) {
+  var candidate = rawModel.trim().replaceFirst(RegExp(r'-inpainting$'), '');
+  if (candidate == 'nai-diffusion-furry-3') {
+    candidate = 'nai-diffusion-3-furry';
+  }
+  return _upscaleModels.contains(candidate)
+      ? candidate
+      : 'nai-diffusion-5-curated';
 }
 
 class NaiApi {
@@ -598,32 +620,36 @@ class NaiApi {
   }
 
   Future<Uint8List> upscale(String token, AppSettings settings,
-      Uint8List imageBytes, int width, int height, int scale) async {
-    final res = await _withClient(
-      settings,
-      (client) => _postWithRetry(
-        () => client
-            .post(
-              Uri.parse(
-                  '${_naiBase(settings.apiBaseUrl, 'https://api.novelai.net', settings)}/ai/upscale'),
-              headers: {
-                'Authorization': 'Bearer $token',
-                'Content-Type': 'application/json',
-                'Accept':
-                    'application/zip, application/octet-stream, image/png',
-              },
-              body: jsonEncode({
-                'image': base64Encode(imageBytes),
-                'width': width,
-                'height': height,
-                'scale': scale
-              }),
-            )
-            .timeout(const Duration(seconds: 180)),
-      ),
-    );
-    final images = _extractImages(res.bodyBytes);
-    return images.isNotEmpty ? images.first : res.bodyBytes;
+      Uint8List imageBytes, int scale, String model) async {
+    final upscaleModel = resolveUpscaleModel(model);
+    final passes = scale == 4 ? 2 : 1;
+    var passInput = imageBytes;
+    for (var pass = 0; pass < passes; pass += 1) {
+      final res = await _withClient(
+        settings,
+        (client) => _postWithRetry(
+          () => client
+              .post(
+                Uri.parse(
+                    '${_naiBase(settings.imageBaseUrl, 'https://image.novelai.net', settings)}/ai/upscale'),
+                headers: {
+                  'Authorization': 'Bearer $token',
+                  'Content-Type': 'application/json',
+                  'Accept':
+                      'application/zip, application/octet-stream, image/png',
+                },
+                body: jsonEncode({
+                  'image': base64Encode(passInput),
+                  'model': upscaleModel,
+                }),
+              )
+              .timeout(const Duration(seconds: 180)),
+        ),
+      );
+      final images = _extractImages(res.bodyBytes);
+      passInput = images.isNotEmpty ? images.first : res.bodyBytes;
+    }
+    return passInput;
   }
 
   Future<List<Uint8List>> augment(
@@ -983,7 +1009,7 @@ class NaiApi {
         message: 'Enter the AI inspect API Key first',
       );
     }
-    final system = [
+    final baseSystem = [
       systemTemplate.trim().isEmpty
           ? _modeSystemPrompt(mode, reverse: true)
           : systemTemplate
@@ -993,6 +1019,12 @@ class NaiApi {
       knownCharacterRuntimeInstruction(
           mode, 'reverse', knownCharacter, templateVersion),
     ].where((item) => item.trim().isNotEmpty).join('\n\n');
+    final system = injectDshImageAiSystemPrompt(
+      task: DshImageAiTask.reverse,
+      systemPrompt: baseSystem,
+      enabled: settings.reverseConvertDshEnabled,
+      mode: settings.reverseConvertDshMode,
+    );
     final scopeText = switch (scope) {
       ReversePromptScope.full => 'full image',
       ReversePromptScope.character => 'character only',
@@ -1312,7 +1344,7 @@ class NaiApi {
             matureTags: matureTags,
           )
         : const PromptCodexEnhancement(matches: [], context: '');
-    final system = [
+    final baseSystem = [
       systemTemplate.trim().isEmpty
           ? _modeSystemPrompt(mode, reverse: false)
           : systemTemplate
@@ -1323,6 +1355,12 @@ class NaiApi {
       // one-line instruction cannot override it.
       knownCharacterRuntimeInstruction(mode, 'convert', knownCharacter),
     ].where((item) => item.trim().isNotEmpty).join('\n\n');
+    final system = injectDshImageAiSystemPrompt(
+      task: DshImageAiTask.convert,
+      systemPrompt: baseSystem,
+      enabled: settings.reverseConvertDshEnabled,
+      mode: settings.reverseConvertDshMode,
+    );
     final ruleRepairEnabled = settings.promptRuleAutoRepairEnabled &&
         mode != ReversePromptMode.natural;
     final result = await _promptChat(

@@ -97,8 +97,9 @@ void main() {
       calculateUpscaleAnlas(
         image: const WorkingImage(filePath: '', width: 1024, height: 1024),
         account: opusAccount,
+        scale: 4,
       ).amount,
-      7,
+      14,
     );
     expect(
       calculateDirectorAnlas(tool: 'bg-removal', account: paidAccount).amount,

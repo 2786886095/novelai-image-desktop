@@ -11,6 +11,7 @@ import 'i18n/app_locales.dart';
 import 'models/nai_models.dart';
 import 'screens/gallery_screen.dart';
 import 'screens/ai_log_screen.dart';
+import 'screens/agent_screen.dart';
 import 'screens/data_backup_settings.dart';
 import 'screens/generate_screen.dart';
 import 'screens/inspect_screen.dart';
@@ -104,7 +105,6 @@ class _HomeShellState extends State<HomeShell> {
   static const _destinationIcons = [
     (icon: Icons.auto_awesome_outlined, selectedIcon: Icons.auto_awesome),
     (icon: Icons.brush_outlined, selectedIcon: Icons.brush),
-    (icon: Icons.open_in_full_outlined, selectedIcon: Icons.open_in_full),
     (icon: Icons.tune_outlined, selectedIcon: Icons.tune),
     (icon: Icons.visibility_outlined, selectedIcon: Icons.visibility),
     (icon: Icons.translate_outlined, selectedIcon: Icons.translate),
@@ -115,6 +115,10 @@ class _HomeShellState extends State<HomeShell> {
       selectedIcon: Icons.collections_bookmark
     ),
     (icon: Icons.public_outlined, selectedIcon: Icons.public),
+    (
+      icon: Icons.local_fire_department_outlined,
+      selectedIcon: Icons.local_fire_department_rounded
+    ),
     (icon: Icons.photo_library_outlined, selectedIcon: Icons.photo_library),
     (icon: Icons.receipt_long_outlined, selectedIcon: Icons.receipt_long),
     (icon: Icons.settings_outlined, selectedIcon: Icons.settings),
@@ -126,7 +130,6 @@ class _HomeShellState extends State<HomeShell> {
     _pages = [
       const GenerateScreen(),
       const ToolsScreen(kind: ToolPageKind.inpaint),
-      const ToolsScreen(kind: ToolPageKind.upscale),
       const ToolsScreen(kind: ToolPageKind.postprocess),
       const InspectScreen(kind: InspectPageKind.reverse),
       const InspectScreen(kind: InspectPageKind.convert),
@@ -148,9 +151,10 @@ class _HomeShellState extends State<HomeShell> {
         ),
       ),
       const OnlineGalleryScreen(),
+      const AgentScreen(),
       GalleryScreen(
         onOpenMetadata: () {
-          if (mounted) setState(() => _index = 6);
+          if (mounted) setState(() => _index = 5);
         },
       ),
       const AiLogScreen(),

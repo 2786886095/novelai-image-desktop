@@ -18,6 +18,7 @@ class _FakeArtistService extends ArtistTagService {
     AppSettings settings, {
     int limit = 1000,
     bool force = false,
+    bool includeCurated = true,
   }) async =>
       List.generate(
         60,

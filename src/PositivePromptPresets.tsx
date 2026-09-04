@@ -7,6 +7,7 @@ import {
 } from "react";
 import clsx from "clsx";
 import { AppPortal, Button } from "./components/ui";
+import { confirmAction } from "./components/confirm";
 import { Icon } from "./components/icons";
 import { droppedImagePaths, hasDraggedFiles } from "./drag-drop";
 import {
@@ -297,7 +298,7 @@ export function PositivePromptPresetControl({
   }
 
   async function deletePreset(preset: PositivePromptPreset) {
-    if (!window.confirm(formatText(text.deleteConfirm, { name: preset.name }))) return;
+    if (!(await confirmAction(formatText(text.deleteConfirm, { name: preset.name })))) return;
     setBusy(true);
     try {
       await window.naiDesktop.deleteStylePromptPresetImages(

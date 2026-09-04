@@ -1,14 +1,14 @@
 {
-  "version": 3,
+  "version": 4,
   "categories": [
     {
       "id": "quality",
       "labels": {
-        "zh-CN": "质量与精度",
-        "zh-TW": "品質與精度",
-        "en-US": "Quality & detail",
-        "ja-JP": "品質・精細さ",
-        "ko-KR": "품질·정밀도"
+        "zh-CN": "通用质量词",
+        "zh-TW": "通用品質詞",
+        "en-US": "General quality",
+        "ja-JP": "汎用品質タグ",
+        "ko-KR": "범용 품질 태그"
       },
       "tags": [
         {
@@ -19,6 +19,36 @@
             "en-US": "Masterpiece-grade",
             "ja-JP": "傑作級",
             "ko-KR": "걸작급"
+          }
+        },
+        {
+          "tag": "top aesthetic",
+          "labels": {
+            "zh-CN": "顶级美感（V4+）",
+            "zh-TW": "頂級美感（V4+）",
+            "en-US": "Top aesthetic (V4+)",
+            "ja-JP": "最高美感（V4+）",
+            "ko-KR": "최고 미감(V4+)"
+          }
+        },
+        {
+          "tag": "very aesthetic",
+          "labels": {
+            "zh-CN": "高美感",
+            "zh-TW": "高美感",
+            "en-US": "Very aesthetic",
+            "ja-JP": "非常に美的",
+            "ko-KR": "높은 미감"
+          }
+        },
+        {
+          "tag": "aesthetic",
+          "labels": {
+            "zh-CN": "美感",
+            "zh-TW": "美感",
+            "en-US": "Aesthetic",
+            "ja-JP": "美的",
+            "ko-KR": "미적"
           }
         },
         {
@@ -36,19 +66,19 @@
           "labels": {
             "zh-CN": "惊艳质量",
             "zh-TW": "驚豔品質",
-            "en-US": "Exceptional quality",
+            "en-US": "Amazing quality",
             "ja-JP": "驚異的な品質",
             "ko-KR": "놀라운 품질"
           }
         },
         {
-          "tag": "very aesthetic",
+          "tag": "great quality",
           "labels": {
-            "zh-CN": "高美感",
-            "zh-TW": "高美感",
-            "en-US": "Highly aesthetic",
-            "ja-JP": "高い美的完成度",
-            "ko-KR": "높은 미감"
+            "zh-CN": "优秀质量",
+            "zh-TW": "優秀品質",
+            "en-US": "Great quality",
+            "ja-JP": "高品質",
+            "ko-KR": "우수한 품질"
           }
         },
         {
@@ -62,23 +92,33 @@
           }
         },
         {
-          "tag": "ultra detailed",
+          "tag": "normal quality",
           "labels": {
-            "zh-CN": "超精细",
-            "zh-TW": "超精細",
-            "en-US": "Ultra-detailed",
-            "ja-JP": "超精細",
-            "ko-KR": "초정밀"
+            "zh-CN": "普通质量",
+            "zh-TW": "一般品質",
+            "en-US": "Normal quality",
+            "ja-JP": "通常品質",
+            "ko-KR": "보통 품질"
           }
         },
         {
-          "tag": "extremely detailed",
+          "tag": "bad quality",
           "labels": {
-            "zh-CN": "极致细节",
-            "zh-TW": "極致細節",
-            "en-US": "Extremely detailed",
-            "ja-JP": "極めて詳細",
-            "ko-KR": "극도로 세밀함"
+            "zh-CN": "低质量（实验）",
+            "zh-TW": "低品質（實驗）",
+            "en-US": "Bad quality (experimental)",
+            "ja-JP": "低品質（実験）",
+            "ko-KR": "낮은 품질(실험)"
+          }
+        },
+        {
+          "tag": "worst quality",
+          "labels": {
+            "zh-CN": "最差质量（实验）",
+            "zh-TW": "最差品質（實驗）",
+            "en-US": "Worst quality (experimental)",
+            "ja-JP": "最低品質（実験）",
+            "ko-KR": "최저 품질(실험)"
           }
         },
         {
@@ -102,6 +142,26 @@
           }
         },
         {
+          "tag": "ultra detailed",
+          "labels": {
+            "zh-CN": "超精细",
+            "zh-TW": "超精細",
+            "en-US": "Ultra-detailed",
+            "ja-JP": "超精細",
+            "ko-KR": "초정밀"
+          }
+        },
+        {
+          "tag": "extremely detailed",
+          "labels": {
+            "zh-CN": "极致细节",
+            "zh-TW": "極致細節",
+            "en-US": "Extremely detailed",
+            "ja-JP": "極めて詳細",
+            "ko-KR": "극도로 세밀함"
+          }
+        },
+        {
           "tag": "intricate details",
           "labels": {
             "zh-CN": "繁复细节",
@@ -109,6 +169,526 @@
             "en-US": "Intricate details",
             "ja-JP": "緻密なディテール",
             "ko-KR": "정교한 디테일"
+          }
+        },
+        {
+          "tag": "no text",
+          "labels": {
+            "zh-CN": "无文字",
+            "zh-TW": "無文字",
+            "en-US": "No text",
+            "ja-JP": "文字なし",
+            "ko-KR": "텍스트 없음"
+          }
+        },
+        {
+          "tag": "low complexity",
+          "labels": {
+            "zh-CN": "低复杂度（V5）",
+            "zh-TW": "低複雜度（V5）",
+            "en-US": "Low complexity (V5)",
+            "ja-JP": "低複雑度（V5）",
+            "ko-KR": "낮은 복잡도(V5)"
+          }
+        },
+        {
+          "tag": "medium complexity",
+          "labels": {
+            "zh-CN": "中等复杂度（V5）",
+            "zh-TW": "中等複雜度（V5）",
+            "en-US": "Medium complexity (V5)",
+            "ja-JP": "中複雑度（V5）",
+            "ko-KR": "중간 복잡도(V5)"
+          }
+        },
+        {
+          "tag": "high complexity",
+          "labels": {
+            "zh-CN": "高复杂度（V5）",
+            "zh-TW": "高複雜度（V5）",
+            "en-US": "High complexity (V5)",
+            "ja-JP": "高複雑度（V5）",
+            "ko-KR": "높은 복잡도(V5)"
+          }
+        },
+        {
+          "tag": "ultra complexity",
+          "labels": {
+            "zh-CN": "超高复杂度（V5）",
+            "zh-TW": "超高複雜度（V5）",
+            "en-US": "Ultra complexity (V5)",
+            "ja-JP": "超高複雑度（V5）",
+            "ko-KR": "초고 복잡도(V5)"
+          }
+        },
+        {
+          "tag": "year 2026",
+          "labels": {
+            "zh-CN": "2026 年画风",
+            "zh-TW": "2026 年畫風",
+            "en-US": "2026 art era",
+            "ja-JP": "2026 年の画風",
+            "ko-KR": "2026년 화풍"
+          }
+        },
+        {
+          "tag": "year 2025",
+          "labels": {
+            "zh-CN": "2025 年画风",
+            "zh-TW": "2025 年畫風",
+            "en-US": "2025 art era",
+            "ja-JP": "2025 年の画風",
+            "ko-KR": "2025년 화풍"
+          }
+        },
+        {
+          "tag": "year 2024",
+          "labels": {
+            "zh-CN": "2024 年画风",
+            "zh-TW": "2024 年畫風",
+            "en-US": "2024 art era",
+            "ja-JP": "2024 年の画風",
+            "ko-KR": "2024년 화풍"
+          }
+        },
+        {
+          "tag": "year 2023",
+          "labels": {
+            "zh-CN": "2023 年画风",
+            "zh-TW": "2023 年畫風",
+            "en-US": "2023 art era",
+            "ja-JP": "2023 年の画風",
+            "ko-KR": "2023년 화풍"
+          }
+        },
+        {
+          "tag": "year 2022",
+          "labels": {
+            "zh-CN": "2022 年画风",
+            "zh-TW": "2022 年畫風",
+            "en-US": "2022 art era",
+            "ja-JP": "2022 年の画風",
+            "ko-KR": "2022년 화풍"
+          }
+        },
+        {
+          "tag": "year 2021",
+          "labels": {
+            "zh-CN": "2021 年画风",
+            "zh-TW": "2021 年畫風",
+            "en-US": "2021 art era",
+            "ja-JP": "2021 年の画風",
+            "ko-KR": "2021년 화풍"
+          }
+        },
+        {
+          "tag": "year 2020",
+          "labels": {
+            "zh-CN": "2020 年画风",
+            "zh-TW": "2020 年畫風",
+            "en-US": "2020 art era",
+            "ja-JP": "2020 年の画風",
+            "ko-KR": "2020년 화풍"
+          }
+        },
+        {
+          "tag": "year 2019",
+          "labels": {
+            "zh-CN": "2019 年画风",
+            "zh-TW": "2019 年畫風",
+            "en-US": "2019 art era",
+            "ja-JP": "2019 年の画風",
+            "ko-KR": "2019년 화풍"
+          }
+        },
+        {
+          "tag": "year 2018",
+          "labels": {
+            "zh-CN": "2018 年画风",
+            "zh-TW": "2018 年畫風",
+            "en-US": "2018 art era",
+            "ja-JP": "2018 年の画風",
+            "ko-KR": "2018년 화풍"
+          }
+        },
+        {
+          "tag": "year 2017",
+          "labels": {
+            "zh-CN": "2017 年画风",
+            "zh-TW": "2017 年畫風",
+            "en-US": "2017 art era",
+            "ja-JP": "2017 年の画風",
+            "ko-KR": "2017년 화풍"
+          }
+        },
+        {
+          "tag": "year 2016",
+          "labels": {
+            "zh-CN": "2016 年画风",
+            "zh-TW": "2016 年畫風",
+            "en-US": "2016 art era",
+            "ja-JP": "2016 年の画風",
+            "ko-KR": "2016년 화풍"
+          }
+        },
+        {
+          "tag": "year 2015",
+          "labels": {
+            "zh-CN": "2015 年画风",
+            "zh-TW": "2015 年畫風",
+            "en-US": "2015 art era",
+            "ja-JP": "2015 年の画風",
+            "ko-KR": "2015년 화풍"
+          }
+        },
+        {
+          "tag": "year 2014",
+          "labels": {
+            "zh-CN": "2014 年画风",
+            "zh-TW": "2014 年畫風",
+            "en-US": "2014 art era",
+            "ja-JP": "2014 年の画風",
+            "ko-KR": "2014년 화풍"
+          }
+        },
+        {
+          "tag": "year 2013",
+          "labels": {
+            "zh-CN": "2013 年画风",
+            "zh-TW": "2013 年畫風",
+            "en-US": "2013 art era",
+            "ja-JP": "2013 年の画風",
+            "ko-KR": "2013년 화풍"
+          }
+        },
+        {
+          "tag": "year 2012",
+          "labels": {
+            "zh-CN": "2012 年画风",
+            "zh-TW": "2012 年畫風",
+            "en-US": "2012 art era",
+            "ja-JP": "2012 年の画風",
+            "ko-KR": "2012년 화풍"
+          }
+        },
+        {
+          "tag": "year 2011",
+          "labels": {
+            "zh-CN": "2011 年画风",
+            "zh-TW": "2011 年畫風",
+            "en-US": "2011 art era",
+            "ja-JP": "2011 年の画風",
+            "ko-KR": "2011년 화풍"
+          }
+        },
+        {
+          "tag": "year 2010",
+          "labels": {
+            "zh-CN": "2010 年画风",
+            "zh-TW": "2010 年畫風",
+            "en-US": "2010 art era",
+            "ja-JP": "2010 年の画風",
+            "ko-KR": "2010년 화풍"
+          }
+        },
+        {
+          "tag": "year 2009",
+          "labels": {
+            "zh-CN": "2009 年画风",
+            "zh-TW": "2009 年畫風",
+            "en-US": "2009 art era",
+            "ja-JP": "2009 年の画風",
+            "ko-KR": "2009년 화풍"
+          }
+        },
+        {
+          "tag": "year 2008",
+          "labels": {
+            "zh-CN": "2008 年画风",
+            "zh-TW": "2008 年畫風",
+            "en-US": "2008 art era",
+            "ja-JP": "2008 年の画風",
+            "ko-KR": "2008년 화풍"
+          }
+        },
+        {
+          "tag": "year 2007",
+          "labels": {
+            "zh-CN": "2007 年画风",
+            "zh-TW": "2007 年畫風",
+            "en-US": "2007 art era",
+            "ja-JP": "2007 年の画風",
+            "ko-KR": "2007년 화풍"
+          }
+        },
+        {
+          "tag": "year 2006",
+          "labels": {
+            "zh-CN": "2006 年画风",
+            "zh-TW": "2006 年畫風",
+            "en-US": "2006 art era",
+            "ja-JP": "2006 年の画風",
+            "ko-KR": "2006년 화풍"
+          }
+        },
+        {
+          "tag": "year 2005",
+          "labels": {
+            "zh-CN": "2005 年画风",
+            "zh-TW": "2005 年畫風",
+            "en-US": "2005 art era",
+            "ja-JP": "2005 年の画風",
+            "ko-KR": "2005년 화풍"
+          }
+        },
+        {
+          "tag": "year 2004",
+          "labels": {
+            "zh-CN": "2004 年画风",
+            "zh-TW": "2004 年畫風",
+            "en-US": "2004 art era",
+            "ja-JP": "2004 年の画風",
+            "ko-KR": "2004년 화풍"
+          }
+        },
+        {
+          "tag": "year 2003",
+          "labels": {
+            "zh-CN": "2003 年画风",
+            "zh-TW": "2003 年畫風",
+            "en-US": "2003 art era",
+            "ja-JP": "2003 年の画風",
+            "ko-KR": "2003년 화풍"
+          }
+        },
+        {
+          "tag": "year 2002",
+          "labels": {
+            "zh-CN": "2002 年画风",
+            "zh-TW": "2002 年畫風",
+            "en-US": "2002 art era",
+            "ja-JP": "2002 年の画風",
+            "ko-KR": "2002년 화풍"
+          }
+        },
+        {
+          "tag": "year 2001",
+          "labels": {
+            "zh-CN": "2001 年画风",
+            "zh-TW": "2001 年畫風",
+            "en-US": "2001 art era",
+            "ja-JP": "2001 年の画風",
+            "ko-KR": "2001년 화풍"
+          }
+        },
+        {
+          "tag": "year 2000",
+          "labels": {
+            "zh-CN": "2000 年画风",
+            "zh-TW": "2000 年畫風",
+            "en-US": "2000 art era",
+            "ja-JP": "2000 年の画風",
+            "ko-KR": "2000년 화풍"
+          }
+        },
+        {
+          "tag": "year 1999",
+          "labels": {
+            "zh-CN": "1999 年画风",
+            "zh-TW": "1999 年畫風",
+            "en-US": "1999 art era",
+            "ja-JP": "1999 年の画風",
+            "ko-KR": "1999년 화풍"
+          }
+        },
+        {
+          "tag": "year 1998",
+          "labels": {
+            "zh-CN": "1998 年画风",
+            "zh-TW": "1998 年畫風",
+            "en-US": "1998 art era",
+            "ja-JP": "1998 年の画風",
+            "ko-KR": "1998년 화풍"
+          }
+        },
+        {
+          "tag": "year 1997",
+          "labels": {
+            "zh-CN": "1997 年画风",
+            "zh-TW": "1997 年畫風",
+            "en-US": "1997 art era",
+            "ja-JP": "1997 年の画風",
+            "ko-KR": "1997년 화풍"
+          }
+        },
+        {
+          "tag": "year 1996",
+          "labels": {
+            "zh-CN": "1996 年画风",
+            "zh-TW": "1996 年畫風",
+            "en-US": "1996 art era",
+            "ja-JP": "1996 年の画風",
+            "ko-KR": "1996년 화풍"
+          }
+        },
+        {
+          "tag": "year 1995",
+          "labels": {
+            "zh-CN": "1995 年画风",
+            "zh-TW": "1995 年畫風",
+            "en-US": "1995 art era",
+            "ja-JP": "1995 年の画風",
+            "ko-KR": "1995년 화풍"
+          }
+        },
+        {
+          "tag": "year 1994",
+          "labels": {
+            "zh-CN": "1994 年画风",
+            "zh-TW": "1994 年畫風",
+            "en-US": "1994 art era",
+            "ja-JP": "1994 年の画風",
+            "ko-KR": "1994년 화풍"
+          }
+        },
+        {
+          "tag": "year 1993",
+          "labels": {
+            "zh-CN": "1993 年画风",
+            "zh-TW": "1993 年畫風",
+            "en-US": "1993 art era",
+            "ja-JP": "1993 年の画風",
+            "ko-KR": "1993년 화풍"
+          }
+        },
+        {
+          "tag": "year 1992",
+          "labels": {
+            "zh-CN": "1992 年画风",
+            "zh-TW": "1992 年畫風",
+            "en-US": "1992 art era",
+            "ja-JP": "1992 年の画風",
+            "ko-KR": "1992년 화풍"
+          }
+        },
+        {
+          "tag": "year 1991",
+          "labels": {
+            "zh-CN": "1991 年画风",
+            "zh-TW": "1991 年畫風",
+            "en-US": "1991 art era",
+            "ja-JP": "1991 年の画風",
+            "ko-KR": "1991년 화풍"
+          }
+        },
+        {
+          "tag": "year 1990",
+          "labels": {
+            "zh-CN": "1990 年画风",
+            "zh-TW": "1990 年畫風",
+            "en-US": "1990 art era",
+            "ja-JP": "1990 年の画風",
+            "ko-KR": "1990년 화풍"
+          }
+        },
+        {
+          "tag": "year 1989",
+          "labels": {
+            "zh-CN": "1989 年画风",
+            "zh-TW": "1989 年畫風",
+            "en-US": "1989 art era",
+            "ja-JP": "1989 年の画風",
+            "ko-KR": "1989년 화풍"
+          }
+        },
+        {
+          "tag": "year 1988",
+          "labels": {
+            "zh-CN": "1988 年画风",
+            "zh-TW": "1988 年畫風",
+            "en-US": "1988 art era",
+            "ja-JP": "1988 年の画風",
+            "ko-KR": "1988년 화풍"
+          }
+        },
+        {
+          "tag": "year 1987",
+          "labels": {
+            "zh-CN": "1987 年画风",
+            "zh-TW": "1987 年畫風",
+            "en-US": "1987 art era",
+            "ja-JP": "1987 年の画風",
+            "ko-KR": "1987년 화풍"
+          }
+        },
+        {
+          "tag": "year 1986",
+          "labels": {
+            "zh-CN": "1986 年画风",
+            "zh-TW": "1986 年畫風",
+            "en-US": "1986 art era",
+            "ja-JP": "1986 年の画風",
+            "ko-KR": "1986년 화풍"
+          }
+        },
+        {
+          "tag": "year 1985",
+          "labels": {
+            "zh-CN": "1985 年画风",
+            "zh-TW": "1985 年畫風",
+            "en-US": "1985 art era",
+            "ja-JP": "1985 年の画風",
+            "ko-KR": "1985년 화풍"
+          }
+        },
+        {
+          "tag": "year 1984",
+          "labels": {
+            "zh-CN": "1984 年画风",
+            "zh-TW": "1984 年畫風",
+            "en-US": "1984 art era",
+            "ja-JP": "1984 年の画風",
+            "ko-KR": "1984년 화풍"
+          }
+        },
+        {
+          "tag": "year 1983",
+          "labels": {
+            "zh-CN": "1983 年画风",
+            "zh-TW": "1983 年畫風",
+            "en-US": "1983 art era",
+            "ja-JP": "1983 年の画風",
+            "ko-KR": "1983년 화풍"
+          }
+        },
+        {
+          "tag": "year 1982",
+          "labels": {
+            "zh-CN": "1982 年画风",
+            "zh-TW": "1982 年畫風",
+            "en-US": "1982 art era",
+            "ja-JP": "1982 年の画風",
+            "ko-KR": "1982년 화풍"
+          }
+        },
+        {
+          "tag": "year 1981",
+          "labels": {
+            "zh-CN": "1981 年画风",
+            "zh-TW": "1981 年畫風",
+            "en-US": "1981 art era",
+            "ja-JP": "1981 年の画風",
+            "ko-KR": "1981년 화풍"
+          }
+        },
+        {
+          "tag": "year 1980",
+          "labels": {
+            "zh-CN": "1980 年画风",
+            "zh-TW": "1980 年畫風",
+            "en-US": "1980 art era",
+            "ja-JP": "1980 年の画風",
+            "ko-KR": "1980년 화풍"
           }
         }
       ]

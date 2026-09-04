@@ -1,4 +1,4 @@
-import { app, dialog } from "electron";
+import { app, dialog, nativeImage } from "electron";
 import axios from "axios";
 import fs from "fs";
 import path from "path";
@@ -10,6 +10,7 @@ import type {
   ArtistLabModelMode,
   ArtistLabModelStatus,
   ArtistTagRecord,
+  ArtistRankingSnapshot,
 } from "../../src/artist-lab";
 import type { ArtistStylePreviewResult } from "../../src/types";
 import { ARTIST_TAG_ALIASES, CURATED_ARTIST_TAGS } from "../../src/curated-artists";
@@ -78,7 +79,14 @@ export async function pickArtistLabTarget() {
   });
   if (result.canceled || !result.filePaths[0]) return null;
   const filePath = result.filePaths[0];
-  return { filePath, fileUrl: toLocalMediaUrl(filePath), name: path.basename(filePath) };
+  const size = nativeImage.createFromPath(filePath).getSize();
+  return {
+    filePath,
+    fileUrl: toLocalMediaUrl(filePath),
+    name: path.basename(filePath),
+    width: size.width,
+    height: size.height,
+  };
 }
 
 function safeArtistQuery(value: unknown): string {
@@ -206,6 +214,21 @@ export async function loadPopularArtistTags(
   return appendCuratedArtistTags(output.slice(0, limit), includeCurated);
 }
 
+/** Live/cache-backed Danbooru ranking without curated rows whose synthetic
+ * post counts would corrupt the order. */
+export async function loadPopularArtistRanking(
+  rawLimit: unknown,
+  rawForce: unknown,
+): Promise<ArtistRankingSnapshot> {
+  const items = await loadPopularArtistTags(rawLimit, rawForce, false);
+  let savedAt = Date.now();
+  try {
+    const cached = JSON.parse(fs.readFileSync(popularArtistCacheFile(), "utf8")) as { savedAt?: number };
+    if (Number.isFinite(cached.savedAt)) savedAt = Number(cached.savedAt);
+  } catch { /* use the successful read time */ }
+  return { items, savedAt };
+}
+
 async function scorer(mode: ArtistLabModelMode) {
   const existing = pipelines.get(mode);
   if (existing) return existing;
@@ -245,10 +268,19 @@ function cosine(left: Float32Array | number[], right: Float32Array | number[]): 
   return a > 0 && b > 0 ? dot / Math.sqrt(a * b) : 0;
 }
 
+function normalized(values: Float32Array): Float32Array {
+  let magnitude = 0;
+  for (const value of values) magnitude += value * value;
+  const scale = magnitude > 0 ? 1 / Math.sqrt(magnitude) : 1;
+  const output = new Float32Array(values.length);
+  for (let index = 0; index < values.length; index += 1) output[index] = values[index] * scale;
+  return output;
+}
+
 async function embedding(pipe: any, filePath: string): Promise<Float32Array> {
   if (!path.isAbsolute(filePath) || !fs.existsSync(filePath)) throw new Error("Image file is unavailable");
   const stat = fs.statSync(filePath);
-  const key = `${filePath}:${stat.size}:${stat.mtimeMs}`;
+  const key = `style-v3:${filePath}:${stat.size}:${stat.mtimeMs}`;
   const cached = embeddingCache.get(key);
   if (cached) return cached;
   const output = await pipe(filePath);
@@ -256,12 +288,41 @@ async function embedding(pipe: any, filePath: string): Promise<Float32Array> {
   if (!data || typeof data.length !== "number") throw new Error("The scoring model returned no image features");
   const values = data instanceof Float32Array ? data : Float32Array.from(data);
   const dims = Array.isArray(output?.dims) ? output.dims.map(Number) : [];
-  // DINOv2 returns [batch, CLS + patch tokens, hidden size]. The CLS token is
-  // its global image representation. Comparing the entire flattened patch map
-  // would over-weight identical composition and punish the same style in a
-  // different pose, which is the opposite of this tool's purpose.
+  // DINOv2 returns [batch, CLS + patch tokens, hidden size]. A CLS-only score
+  // over-weights subject/composition, while flattening all patches over-weights
+  // exact spatial alignment. Blend a normalized global token with the mean
+  // local-patch token so linework, rendering and texture influence the score
+  // without requiring the candidate to copy the target pose pixel-for-pixel.
   if (dims.length === 3 && dims[0] === 1 && dims[2] > 0 && values.length >= dims[2]) {
-    const vector = values.slice(0, dims[2]);
+    const hidden = dims[2];
+    const tokenCount = Math.max(1, Math.min(dims[1], Math.floor(values.length / hidden)));
+    const global = normalized(values.slice(0, hidden));
+    const local = new Float32Array(hidden);
+    const localVariance = new Float32Array(hidden);
+    const patchCount = Math.max(1, tokenCount - 1);
+    for (let token = 1; token < tokenCount; token += 1) {
+      const offset = token * hidden;
+      for (let index = 0; index < hidden; index += 1) local[index] += values[offset + index] / patchCount;
+    }
+    for (let token = 1; token < tokenCount; token += 1) {
+      const offset = token * hidden;
+      for (let index = 0; index < hidden; index += 1) {
+        const delta = values[offset + index] - local[index];
+        localVariance[index] += (delta * delta) / patchCount;
+      }
+    }
+    for (let index = 0; index < hidden; index += 1) localVariance[index] = Math.sqrt(localVariance[index]);
+    const normalizedLocal = normalized(local);
+    const normalizedVariance = normalized(localVariance);
+    const vector = new Float32Array(hidden * 3);
+    const globalScale = Math.sqrt(.28);
+    const localScale = Math.sqrt(.48);
+    const varianceScale = Math.sqrt(.24);
+    for (let index = 0; index < hidden; index += 1) {
+      vector[index] = global[index] * globalScale;
+      vector[hidden + index] = normalizedLocal[index] * localScale;
+      vector[hidden * 2 + index] = normalizedVariance[index] * varianceScale;
+    }
     embeddingCache.set(key, vector);
     return vector;
   }
@@ -281,38 +342,71 @@ function referenceFile(artist: ArtistTagRecord, sourceUrl: string): string {
   return path.join(referenceCacheDir(), `${artist.id}-${safe}-${hash}${extension}`);
 }
 
-async function representativeImage(artist: ArtistTagRecord): Promise<string | null> {
+function absoluteDanbooruMediaUrl(value: unknown): string {
+  if (typeof value !== "string") return "";
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  if (trimmed.startsWith("//")) return `https:${trimmed}`;
+  if (trimmed.startsWith("/")) return `https://danbooru.donmai.us${trimmed}`;
+  if (/^http:\/\//i.test(trimmed)) return trimmed.replace(/^http:\/\//i, "https://");
+  return /^https:\/\//i.test(trimmed) ? trimmed : "";
+}
+
+const danbooruImageHeaders = {
+  Accept: "image/*",
+  Referer: "https://danbooru.donmai.us/",
+  "User-Agent": "Langbai-NovelAI-Studio/Artist-Preview",
+};
+
+async function representativeImages(artist: ArtistTagRecord, limit = 3): Promise<string[]> {
   const manifestFile = path.join(referenceCacheDir(), `${artist.id}.json`);
+  const cachedFiles: string[] = [];
   try {
-    const manifest = JSON.parse(fs.readFileSync(manifestFile, "utf8")) as { file?: string };
-    if (manifest.file && fs.existsSync(manifest.file)) return manifest.file;
+    const manifest = JSON.parse(fs.readFileSync(manifestFile, "utf8")) as { file?: string; files?: string[] };
+    for (const file of manifest.files ?? (manifest.file ? [manifest.file] : [])) {
+      if (typeof file === "string" && fs.existsSync(file) && !cachedFiles.includes(file)) cachedFiles.push(file);
+    }
+    if (cachedFiles.length >= limit) return cachedFiles.slice(0, limit);
   } catch { /* live lookup */ }
   const response = await axios.get(DANBOORU_POSTS_URL, {
     timeout: 30_000,
     headers: { Accept: "application/json", "User-Agent": "Langbai-NovelAI-Studio/Artist-Lab" },
-    params: { limit: 1, tags: `${artist.name} rating:g order:rank` },
+    params: { limit: 12, tags: `${artist.name} rating:g order:rank` },
     ...proxyConfig("update"),
   });
-  const post = Array.isArray(response.data) ? response.data[0] : null;
-  const sourceUrl = [post?.preview_file_url, post?.large_file_url, post?.file_url]
-    .find((value) => typeof value === "string" && /^https:\/\//i.test(value));
-  if (!sourceUrl) return null;
-  const file = referenceFile(artist, sourceUrl);
   fs.mkdirSync(referenceCacheDir(), { recursive: true });
-  if (!fs.existsSync(file)) {
-    const image = await axios.get<ArrayBuffer>(sourceUrl, {
-      responseType: "arraybuffer",
-      timeout: 45_000,
-      maxContentLength: 12 * 1024 * 1024,
-      headers: { Accept: "image/*", "User-Agent": "Langbai-NovelAI-Studio/Artist-Lab" },
-      ...proxyConfig("update"),
-    });
-    const bytes = Buffer.from(image.data);
-    if (bytes.length < 128 || bytes.length > 12 * 1024 * 1024) return null;
-    fs.writeFileSync(file, bytes);
+  const files = [...cachedFiles];
+  const sourceUrls: string[] = [];
+  for (const post of Array.isArray(response.data) ? response.data : []) {
+    if (files.length >= limit) break;
+    const sourceUrl = [post?.large_file_url, post?.file_url, post?.preview_file_url]
+      .map(absoluteDanbooruMediaUrl)
+      .find(Boolean);
+    if (!sourceUrl || sourceUrls.includes(sourceUrl)) continue;
+    sourceUrls.push(sourceUrl);
+    const file = referenceFile(artist, sourceUrl);
+    try {
+      if (!fs.existsSync(file)) {
+        const image = await axios.get<ArrayBuffer>(sourceUrl, {
+          responseType: "arraybuffer",
+          timeout: 45_000,
+          maxContentLength: 12 * 1024 * 1024,
+          headers: danbooruImageHeaders,
+          ...proxyConfig("update"),
+        });
+        const bytes = Buffer.from(image.data);
+        if (bytes.length < 128 || bytes.length > 12 * 1024 * 1024) continue;
+        fs.writeFileSync(file, bytes);
+      }
+      if (!files.includes(file)) files.push(file);
+    } catch {
+      // A single stale CDN object must not discard the artist candidate.
+    }
   }
-  fs.writeFileSync(manifestFile, JSON.stringify({ file, sourceUrl, savedAt: Date.now() }), "utf8");
-  return file;
+  if (files.length > 0) {
+    fs.writeFileSync(manifestFile, JSON.stringify({ file: files[0], files, sourceUrls, savedAt: Date.now() }), "utf8");
+  }
+  return files.slice(0, limit);
 }
 
 type StylePreviewManifest = ArtistStylePreviewResult & { filePath: string; savedAt: number };
@@ -364,8 +458,13 @@ async function loadArtistStylePreview(tag: string): Promise<ArtistStylePreviewRe
   const posts: PreviewPost[] = [];
   const seenPosts = new Set<number>();
   const baseTag = tag.replace(/_\(style\)$/i, "");
-  const queries = [`${tag} order:score`, tag];
-  if (baseTag && baseTag !== tag) queries.push(`${baseTag} order:score`);
+  const queries = [
+    `${tag} rating:g order:score`,
+    `${tag} rating:s order:score`,
+    `${tag} order:score`,
+    tag,
+  ];
+  if (baseTag && baseTag !== tag) queries.push(`${baseTag} rating:g order:score`, `${baseTag} order:score`, baseTag);
   for (const tags of queries) {
     try {
       const response = await axios.get(DANBOORU_POSTS_URL, {
@@ -393,7 +492,8 @@ async function loadArtistStylePreview(tag: string): Promise<ArtistStylePreviewRe
   fs.mkdirSync(stylePreviewCacheDir(), { recursive: true });
   for (const post of posts.slice(0, 16)) {
     const urls = [post.preview_file_url, post.large_file_url, post.file_url]
-      .filter((value): value is string => typeof value === "string" && /^https:\/\//i.test(value));
+      .map(absoluteDanbooruMediaUrl)
+      .filter(Boolean);
     for (const sourceUrl of [...new Set(urls)]) {
       try {
         const { imageFile } = stylePreviewFiles(tag, sourceUrl);
@@ -402,7 +502,7 @@ async function loadArtistStylePreview(tag: string): Promise<ArtistStylePreviewRe
             responseType: "arraybuffer",
             timeout: 45_000,
             maxContentLength: 12 * 1024 * 1024,
-            headers: { Accept: "image/*", "User-Agent": "Langbai-NovelAI-Studio/Style-Preview" },
+            headers: danbooruImageHeaders,
             ...proxyConfig("update"),
           });
           const bytes = Buffer.from(image.data);
@@ -473,14 +573,18 @@ export async function discoverSimilarArtists(
   const target = await embedding(pipe, rawTargetPath);
   const matches = (await mapLimit(candidates, 5, async (artist) => {
     try {
-      const filePath = await representativeImage(artist);
-      if (!filePath) return null;
-      const vector = await embedding(pipe, filePath);
+      const filePaths = await representativeImages(artist, 3);
+      if (filePaths.length === 0) return null;
+      const vectors = await Promise.all(filePaths.map((filePath) => embedding(pipe, filePath)));
+      const similarities = vectors
+        .map((vector) => Math.max(0, Math.min(1, cosine(target, vector))))
+        .sort((left, right) => right - left);
+      const similarity = similarities.reduce((sum, value) => sum + value, 0) / similarities.length;
       return {
         artist,
-        similarity: Math.max(0, Math.min(1, cosine(target, vector))),
-        referencePath: filePath,
-        referenceUrl: toLocalMediaUrl(filePath),
+        similarity,
+        referencePath: filePaths[0],
+        referenceUrl: toLocalMediaUrl(filePaths[0]),
       };
     } catch { return null; }
   }))

@@ -1184,6 +1184,22 @@ class _GenerateStep extends StatelessWidget {
                               : () => _confirmAndRun(
                                     context,
                                     controller,
+                                    controller.regenerateAll,
+                                    () => controller.quoteTasks(
+                                      panels,
+                                      each: controller
+                                          .project.initialGenerationCount,
+                                    ),
+                                  ),
+                          icon: const Icon(Icons.refresh),
+                          label: Text(t('comic.regenerateAll')),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: controller.queueRunning || panels.isEmpty
+                              ? null
+                              : () => _confirmAndRun(
+                                    context,
+                                    controller,
                                     controller.addOneToAll,
                                     () => controller.quoteTasks(panels),
                                   ),

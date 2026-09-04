@@ -1,48 +1,41 @@
-# Third-Party Notices
+# Third-party notices
 
-This project is independently implemented. The following open-source project
-and public data services were reviewed for interoperability and product-design
-research:
+Langbai NovelAI Studio uses the following actively maintained open-source
+libraries in the Character Tavern interface. Their upstream license texts are
+distributed with the corresponding packages in `node_modules`.
 
-## Aaalice NAI Launcher
+## react-markdown / remark-gfm / rehype-sanitize
 
-- Project: https://github.com/Aaalice233/Aaalice_NAI_Launcher
+- Projects: https://github.com/remarkjs/react-markdown,
+  https://github.com/remarkjs/remark-gfm,
+  https://github.com/rehypejs/rehype-sanitize
+- Copyright: their respective contributors
 - License: MIT
-- Copyright: its respective contributors
+- Use: safe Markdown rendering, GitHub-flavoured Markdown, and HTML schema
+  sanitisation for roleplay messages.
 
-No Flutter/Dart source file from that project is bundled in this application.
-Its source-neutral gallery adapter boundaries and backup workflow were studied
-as architectural references.
+## TanStack Virtual
 
-The application may also download two immutable, checksum-pinned database
-assets published through that project's GitHub Releases. They are not bundled
-with this application and are installed only after the user confirms local
-database replacement:
+- Project: https://github.com/TanStack/virtual
+- Copyright: Tanner Linsley and contributors
+- License: MIT
+- Use: virtualised chat rendering for long conversations.
 
-- `tag_catalog.db`, derived from the ComfyUI-Lora-Manager tag catalog snapshot
-  (upstream project: https://github.com/willmiao/ComfyUI-Lora-Manager;
-  Unlicense / public-domain upstream data).
-- `cooccurrence-v2.db.gz`, derived from
-  https://huggingface.co/datasets/newtextdoc1111/danbooru-tag-csv (MIT).
+## flutter_markdown_plus
 
-Before activation, downloads are checked by byte length, SHA-256, SQLite
-schema, metadata, record count, and SQLite integrity check. Replacing either
-database does not replace or delete user images, reference presets, favorites,
-or history.
+- Project: https://pub.dev/packages/flutter_markdown_plus
+- Copyright: the project contributors
+- License: BSD-3-Clause
+- Use: selectable Markdown and code-block rendering in the Android/iOS
+  Character Tavern interface.
 
-## NovelAI QuickTagCloud
+## dsh-infinite-gen-3
 
-- Site: https://novelai.quicktagcloud.com/
-- Public data bootstrap: https://novelai.quicktagcloud.com/data-source.json
+- Project: https://github.com/Minglink/dsh-infinite-gen-3
+- Version: 0.5.0 (`d0c43196079849d4501afb3d1a8e195cf808024a`)
+- Copyright: Minglink and contributors
+- License: MIT
+- Use: a task-scoped adaptation of the execution-first prompt contract for
+  the built-in Tavern image, AI reverse-prompt, and prompt-conversion routes.
 
-Gallery entries, images, prompts, credits, and attribution remain owned by
-their respective authors and providers. This application acts only as a
-read-only client and preserves source attribution in the gallery UI.
-
-## Booru APIs
-
-- Danbooru / Safebooru public Posts API
-- Gelbooru public DAPI
-
-Availability, content rules, rate limits, and rights are controlled by each
-service. Users must comply with the selected source's terms and local law.
+These projects are not affiliated with or endorsed by Langbai NovelAI Studio.

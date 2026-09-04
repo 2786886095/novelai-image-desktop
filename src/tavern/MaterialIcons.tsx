@@ -1,0 +1,55 @@
+/**
+ * Character Tavern icon vocabulary.
+ *
+ * Desktop uses the Material icon paths exposed by react-icons so its visual
+ * language matches Flutter's built-in `Icons.*` set without bundling another
+ * component framework. Business components import semantic names from this
+ * module instead of mixing icon libraries directly.
+ */
+export {
+  MdMenuBook as BookIcon,
+  MdOutlineSmartToy as BotIcon,
+  MdCheck as CheckIcon,
+  MdKeyboardArrowDown as ChevronDownIcon,
+  MdChevronLeft as ChevronLeftIcon,
+  MdChevronRight as ChevronRightIcon,
+  MdContentCopy as CopyIcon,
+  MdOutlineImage as ImageIcon,
+  MdImageSearch as ReverseImageIcon,
+  MdManageSearch as TagSearchIcon,
+  MdPalette as PaletteIcon,
+  MdCasino as DiceIcon,
+  MdAutoAwesomeMosaic as SoftwareImageIcon,
+  MdFileDownload as ImportIcon,
+  MdFolderOpen as FolderOpenIcon,
+  MdSaveAlt as SaveIcon,
+  MdMenu as MenuIcon,
+  MdChatBubbleOutline as MessageIcon,
+  MdKeyboardDoubleArrowLeft as LeftPanelCloseIcon,
+  MdKeyboardDoubleArrowRight as LeftPanelOpenIcon,
+  MdOutlineKeyboardDoubleArrowRight as RightPanelCloseIcon,
+  MdOutlineKeyboardDoubleArrowLeft as RightPanelOpenIcon,
+  MdAttachFile as AttachmentIcon,
+  MdOutlineEdit as EditIcon,
+  MdAdd as AddIcon,
+  MdRefresh as RefreshIcon,
+  MdSearch as SearchIcon,
+  MdSend as SendIcon,
+  MdSettings as SettingsIcon,
+  MdTune as TuneIcon,
+  MdOutlineAutoAwesome as SparklesIcon,
+  MdStop as StopIcon,
+  MdOutlineDelete as DeleteIcon,
+  MdPersonOutline as PersonIcon,
+  MdGroups as UsersIcon,
+  MdAutoFixHigh as MagicIcon,
+  MdClose as CloseIcon,
+  MdLockOutline as LockIcon,
+  MdFavorite as FavoriteIcon,
+  MdCheckCircleOutline as ConfirmIcon,
+  MdOutlineVerifiedUser as ProtectedIcon,
+  MdBolt as BoltIcon,
+  MdPsychology as ReasoningIcon,
+  MdDataUsage as ContextIcon,
+  MdHelpOutline as HelpIcon,
+} from "react-icons/md";

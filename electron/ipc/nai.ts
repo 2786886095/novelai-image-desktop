@@ -6,6 +6,7 @@ import { PNG } from "pngjs";
 import crypto from "crypto";
 import fs from "fs/promises";
 import path from "path";
+import sharp from "sharp";
 import { toLocalMediaUrl } from "./local-media-protocol";
 import {
   DEFAULT_PARAMS,
@@ -51,7 +52,6 @@ import {
   type NAIInpaintModel,
   type PreciseReferenceItem,
   type PreciseReferenceType,
-  type PromptCodexMatch,
   type ReversePromptScope,
   type VibeTransferItem,
   type SingleImageResult,
@@ -61,16 +61,9 @@ import {
   type WorkingImage,
 } from "../../src/types";
 import { inspectImageMetadata, parseImageMeta } from "../../src/png-meta";
-import {
-  buildPromptCodexEnhancement,
-  type MatureTagCandidate,
-} from "../../src/prompt-codex-retrieval";
 import { calculateFeatureAnlasQuote } from "../../src/anlas";
 import { compactRemoteErrorText } from "../../src/error-message";
-import {
-  buildTuiwenLocalPrompt,
-  isTuiwenPromptRefusal,
-} from "../../src/tuiwen/prompt-fallback";
+import { buildComicLocalPrompt, isComicPromptRefusal } from "../../src/comic/prompt-fallback";
 import {
   addHistory,
   ensureHistoryGroup,
@@ -84,10 +77,11 @@ import {
 } from "./store";
 import { TAG_DICTIONARY } from "../data/tag-dictionary";
 import { mcpSearch } from "./mcp-client";
-import { searchDanbooru, searchDanbooruConcepts } from "./danbooru-tags";
+import { searchDanbooru } from "./danbooru-tags";
 import { logError, logInfo, appendLog } from "./logger";
 import { zhForTag } from "../../src/prompt-data";
 import { proxyConfig } from "./proxy";
+import { injectDshImageAiSystemPrompt } from "./dsh-reverse-convert";
 import {
   COMIC_ANALYZE_SYSTEM_PROMPT,
   CONVERT_SYSTEM_PROMPTS,
@@ -102,14 +96,11 @@ import {
 import {
   buildConvertUserText,
   buildModeRepairUserText,
-  buildPromptRuleRepairUserText,
   cleanPromptOutput,
   knownCharacterRuntimeInstruction,
   modeNeedsRepair,
   modeUserInstruction,
   modeRepairSystemPrompt,
-  promptRuleRepairSystemPrompt,
-  promptRuleViolations,
   parsePromptVariantResponse,
   resolveModePrompt,
 } from "../../src/prompt-mode";
@@ -170,6 +161,43 @@ function tokenSafeBaseUrl(rawUrl: string, fallback: string): string {
     `[security] refusing to send token to non-official endpoint ${resolved}; using ${fallback}.`,
   );
   return fallback;
+}
+
+/** Resolve the dedicated upscaler endpoint.
+ *
+ * NovelAI currently serves POST /ai/upscale from image.novelai.net.  Keeping
+ * this separate from the account API endpoint prevents the deterministic
+ * `Cannot POST /ai/upscale` response returned by api.novelai.net.
+ */
+export function resolveUpscaleBaseUrl(rawImageBaseUrl: string): string {
+  return tokenSafeBaseUrl(rawImageBaseUrl, "https://image.novelai.net");
+}
+
+const UPSCALE_MODELS = new Set([
+  "nai-diffusion-5-full",
+  "nai-diffusion-5-curated",
+  "nai-diffusion-4-5-full",
+  "nai-diffusion-4-5-curated",
+  "nai-diffusion-4-full",
+  "nai-diffusion-4-curated",
+  "nai-diffusion-3",
+  "nai-diffusion-3-furry",
+]);
+
+/** Normalize the current generation model for the dedicated upscale API.
+ *
+ * The current contract requires exactly `image` + `model`; width, height and
+ * scale are no longer request fields. Inpainting suffixes and the legacy furry
+ * spelling are renderer-side aliases and must not reach the API.
+ */
+export function resolveUpscaleModel(rawModel: string): string {
+  const normalized = normalizeModel(String(rawModel || "").trim());
+  const candidate = normalized === "nai-diffusion-furry-3"
+    ? "nai-diffusion-3-furry"
+    : normalized;
+  return UPSCALE_MODELS.has(candidate)
+    ? candidate
+    : "nai-diffusion-5-curated";
 }
 
 function tierName(tier?: number) {
@@ -1961,15 +1989,15 @@ async function saveBuffers(
 function sleep(ms: number, signal?: AbortSignal) {
   return new Promise<void>((resolve, reject) => {
     if (signal?.aborted) return reject(new Error("已取消"));
-    const timer = setTimeout(resolve, ms);
-    signal?.addEventListener(
-      "abort",
-      () => {
-        clearTimeout(timer);
-        reject(new Error("已取消"));
-      },
-      { once: true },
-    );
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new Error("已取消"));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener("abort", onAbort, { once: true });
   });
 }
 
@@ -2687,6 +2715,30 @@ async function callVisionApi(
   }
 }
 
+/** Keep vision requests responsive without throwing away pose/composition.
+ * Large phone/ComfyUI PNGs otherwise become multi-megabyte JSON payloads and
+ * make compatible vision endpoints spend most of their time uploading and
+ * preprocessing pixels the tagger cannot use. */
+async function prepareVisionImage(imageBase64: string): Promise<{ mime: string; base64: string }> {
+  try {
+    const input = Buffer.from(imageBase64.replace(/^data:image\/[^;]+;base64,/, ""), "base64");
+    const metadata = await sharp(input).metadata();
+    const longest = Math.max(metadata.width ?? 0, metadata.height ?? 0);
+    if (longest <= 1280 && input.length <= 1_500_000) {
+      return { mime: metadata.format === "jpeg" ? "image/jpeg" : "image/png", base64: input.toString("base64") };
+    }
+    const output = await sharp(input)
+      .rotate()
+      .resize({ width: 1280, height: 1280, fit: "inside", withoutEnlargement: true })
+      .flatten({ background: "#ffffff" })
+      .jpeg({ quality: 86, chromaSubsampling: "4:2:0" })
+      .toBuffer();
+    return { mime: "image/jpeg", base64: output.toString("base64") };
+  } catch {
+    return { mime: "image/png", base64: imageBase64.replace(/^data:image\/[^;]+;base64,/, "") };
+  }
+}
+
 async function callConvertApi(
   systemPrompt: string,
   userText: string,
@@ -3020,63 +3072,6 @@ function mergeTagHints(prompt: string, hints: TagSuggestion[]) {
   return hintTags ? mergePrompt(prompt, hintTags) : prompt;
 }
 
-function builtInMatureTagCandidates(
-  query: string,
-  limit = 12,
-): MatureTagCandidate[] {
-  const raw = query.normalize("NFKC").trim();
-  const normalized = raw.toLowerCase().replace(/_/g, " ");
-  if (!normalized) return [];
-  return TAG_DICTIONARY.map((entry) => {
-    const fields = [entry.tag, entry.zh, ...(entry.keywords ?? []), ...(entry.aliases ?? [])]
-      .map((value) => value.normalize("NFKC").trim())
-      .filter((value) => value.length >= 2);
-    const matched = fields
-      .filter((value) =>
-        /[\u3400-\u9fff]/.test(value)
-          ? raw.includes(value)
-          : normalized.includes(value.toLowerCase().replace(/_/g, " ")),
-      )
-      .sort((left, right) => right.length - left.length)[0];
-    return { entry, matched, score: matched ? matched.length : 0 };
-  })
-    .filter((item) => item.score > 0 && item.entry.category !== 1)
-    .sort(
-      (left, right) =>
-        right.score - left.score || right.entry.count - left.entry.count,
-    )
-    .slice(0, limit)
-    .map(({ entry }) => ({
-      tag: entry.tag,
-      description: entry.zh,
-      count: entry.count,
-      source: "内置 Danbooru 标签词典",
-    }));
-}
-
-async function collectMatureTagCandidates(
-  query: string,
-  limit = 12,
-): Promise<MatureTagCandidate[]> {
-  if (!query.trim()) return [];
-  const downloaded = await searchDanbooruConcepts(query, limit);
-  const combined: MatureTagCandidate[] = [
-    ...downloaded.map((item) => ({
-      tag: item.tag,
-      description: item.description,
-      count: item.count,
-      source: "本地 Danbooru 标签库",
-    })),
-    ...builtInMatureTagCandidates(query, limit),
-  ];
-  const seen = new Set<string>();
-  return combined
-    .filter((item) => {
-      const key = item.tag.toLowerCase().replace(/_/g, " ").trim();
-      return Boolean(key) && !seen.has(key) && Boolean(seen.add(key));
-    })
-    .slice(0, limit);
-}
 
 export async function testTagServer(
   query: string,
@@ -3135,6 +3130,18 @@ export async function testTagServer(
       };
 }
 
+function stripIdentityTagsForFeaturePrompt(prompt: string): string {
+  return prompt
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .filter((part) => {
+      const core = part.replace(/^[-+]?\d+(?:\.\d+)?::/, "").replace(/::$/, "").trim();
+      return !/^(?:character|copyright)\s*:/i.test(core) && !/^[a-z0-9_.'-]+_\([^)]+\)$/i.test(core);
+    })
+    .join(", ");
+}
+
 export async function reversePromptImage(
   imageBase64: string,
   mode: "tags" | "natural" | "mixed" = "tags",
@@ -3146,7 +3153,6 @@ export async function reversePromptImage(
   ok: boolean;
   prompt?: string;
   variants?: { namePrompt: string; featurePrompt: string };
-  codexMatches?: PromptCodexMatch[];
   message: string;
 }> {
   const settings = getSettings();
@@ -3177,7 +3183,12 @@ export async function reversePromptImage(
       : safeScope === "full"
         ? REVERSE_SYSTEM_PROMPTS
         : SCOPED_REVERSE_SYSTEM_PROMPTS;
-  const systemPrompt = [
+  const reconstructionInstruction = `\n反推必须以“可复现画面”为目标，而不是只做粗略识别。输出前逐项核对：主体数量与身份、背景颜色/复杂度、全身或半身取景、视角、人物在画面中的大小与位置、双腿姿势、左右手臂各自的方向/弯曲/指向、手势、头部朝向、注视和表情。\nTag 模式按“人数与构图 → 身份 → 外貌服装 → 姿势动作 → 背景”排序。优先输出图中能直接观察到、能稳定复现构图的成熟 Danbooru Tag，不要用“电影感”“精美光影”等主观修饰替代白色背景、全身、站立、分腿、伸臂、指向等事实。单人全身图不得只写 pointing：若可见，必须同时保留 1girl、solo、white background/simple background、full body、standing、spread legs/legs apart、outstretched arm、pointing、looking at viewer、smile 等互不冲突的成熟 Tag；已知角色必须保留准确的 Danbooru 身份 Tag。左右关系没有可靠 Tag 时可用最短英文短语补足。不要把 standing wide stance 误写成坐姿语义，也不要臆造图中不存在的背景、动作或光照。`;
+  const systemPrompt = injectDshImageAiSystemPrompt({
+    task: "reverse",
+    enabled: settings.reverseConvertDshEnabled,
+    mode: settings.reverseConvertDshMode,
+    systemPrompt: [
     resolveModePrompt(
       mode,
       safeTemplateVersion === "v5"
@@ -3194,16 +3205,16 @@ export async function reversePromptImage(
       knownCharacter,
       safeTemplateVersion,
     ),
-  ].join("\n\n");
+    reconstructionInstruction,
+    ].join("\n\n"),
+  });
 
-  const codexEnabled = settings.promptCodexEnhanceEnabled;
-  const ruleRepairEnabled =
-    settings.promptRuleAutoRepairEnabled && mode !== "natural";
+  const preparedVisionImage = await prepareVisionImage(imageBase64);
   const firstUserContent = [
     {
       type: "image_url",
       image_url: {
-        url: `data:image/png;base64,${imageBase64}`,
+        url: `data:${preparedVisionImage.mime};base64,${preparedVisionImage.base64}`,
         detail: "high",
       },
     },
@@ -3227,331 +3238,31 @@ export async function reversePromptImage(
   const result = await callVisionApi(
     systemPrompt,
     firstUserContent,
-    2000,
+    knownCharacter ? 1100 : 760,
     `AI 反推 · ${safeTemplateVersion} · ${mode} · ${scopeLabel}`,
-    !codexEnabled && !ruleRepairEnabled,
+    true,
   );
+  if (!result.ok) return { ok: false, message: `反推失败：${result.message}` };
 
-  if (result.ok) {
-    const parsed = parsePromptVariantResponse(
-      result.content ?? "",
-      knownCharacter,
-    );
-    let content = parsed.primary;
-    let variants = parsed.variants;
-    let codexMatches: PromptCodexMatch[] = [];
-    let codexContext = "";
-    let matureTagNames: string[] = [];
-    let mergedSystemPrompt = systemPrompt;
-    let mergedUserText = summarizeUserContent(firstUserContent);
-    let refinementNote = "";
-    let repairNote = "";
-
-    const retrievalQuery = [
-      hint,
-      content,
-      parsed.variants?.namePrompt,
-      parsed.variants?.featurePrompt,
-      knownCharacter
-        ? "已知角色 角色名版 特征版 动漫角色 游戏角色 角色 Tag"
-        : "",
-    ]
-      .filter(Boolean)
-      .join("\n");
-    const matureTags =
-      mode !== "natural" && (codexEnabled || ruleRepairEnabled)
-        ? await collectMatureTagCandidates(retrievalQuery, 12)
-        : [];
-    matureTagNames = matureTags.map((item) => item.tag);
-
-    if (codexEnabled) {
-      const enhancement = buildPromptCodexEnhancement(
-        retrievalQuery,
-        "reverse",
-        settings.promptCodexAdultEnabled,
-        matureTags,
-      );
-      codexMatches = enhancement.matches;
-      codexContext = enhancement.context;
-      const refineSystem = [
-        systemPrompt,
-        enhancement.context,
-        "这是法典增强的第二阶段。请以初步反推结果为事实边界，只校正结构、Tag、角色归属、互动方向、权重和冲突。不要新增图中未确认的主体、服装、动作或分级内容。",
-        knownCharacterRuntimeInstruction(
-          mode,
-          "reverse",
-          knownCharacter,
-          safeTemplateVersion,
-        ),
-      ]
-        .filter(Boolean)
-        .join("\n\n");
-      const refineUserText = [
-        "初步反推结果：",
-        result.content ?? "",
-        "",
-        modeUserInstruction(
-          mode,
-          "reverse",
-          knownCharacter,
-          safeTemplateVersion,
-        ),
-        "请只输出精修后的最终结果。",
-      ].join("\n");
-      const refined = await callVisionApi(
-        refineSystem,
-        [{ type: "text", text: refineUserText }],
-        knownCharacter ? 2400 : 2000,
-        `AI 反推 · 法典增强 · ${mode} · ${scopeLabel}`,
-        false,
-      );
-
-      if (refined.ok && refined.content) {
-        const refinedParsed = parsePromptVariantResponse(
-          refined.content,
-          knownCharacter,
-        );
-        content = refinedParsed.primary;
-        variants = refinedParsed.variants;
-      } else {
-        refinementNote = `[第二阶段精修失败，已回退初步结果：${refined.message}]\n`;
-      }
-      mergedSystemPrompt = refineSystem;
-      mergedUserText = [
-        summarizeUserContent(firstUserContent),
-        "",
-        "[阶段一草稿]",
-        result.content ?? "",
-        "",
-        `[本地法典/成熟 Tag 命中 ${codexMatches.length} 条]`,
-        ...codexMatches.map((match) => `${match.title}｜${match.source}`),
-      ].join("\n");
-    }
-
-    if (ruleRepairEnabled) {
-      const violations = [
-        ...promptRuleViolations(mode, content, matureTagNames),
-        ...(variants
-          ? [
-              ...promptRuleViolations(
-                mode,
-                variants.namePrompt,
-                matureTagNames,
-              ),
-              ...promptRuleViolations(
-                mode,
-                variants.featurePrompt,
-                matureTagNames,
-              ),
-            ]
-          : []),
-      ].filter((issue, index, all) => all.indexOf(issue) === index);
-      if (violations.length > 0) {
-        const draft = variants ? JSON.stringify(variants) : content;
-        const repairSystem = [
-          promptRuleRepairSystemPrompt(
-            mode,
-            knownCharacter,
-            safeTemplateVersion,
-          ),
-          codexContext,
-          knownCharacter
-            ? knownCharacterRuntimeInstruction(
-                mode,
-                "reverse",
-                true,
-                safeTemplateVersion,
-              )
-            : "",
-        ]
-          .filter(Boolean)
-          .join("\n\n");
-        const repairUser = buildPromptRuleRepairUserText({
-          mode,
-          originalInput: userScopeText,
-          draft,
-          violations,
-          matureTags: matureTagNames,
-        });
-        const repaired = await callVisionApi(
-          repairSystem,
-          [
-            {
-              type: "image_url",
-              image_url: {
-                url: `data:image/png;base64,${imageBase64}`,
-                detail: "high",
-              },
-            },
-            { type: "text", text: repairUser },
-          ],
-          knownCharacter ? 2400 : 1200,
-          `AI 反推 · 规则修复 · ${mode}`,
-          false,
-        );
-        if (repaired.ok && repaired.content) {
-          const repairedParsed = parsePromptVariantResponse(
-            repaired.content,
-            knownCharacter,
-          );
-          if (
-            !knownCharacter ||
-            (repairedParsed.variants?.namePrompt.trim() &&
-              repairedParsed.variants.featurePrompt.trim())
-          ) {
-            content = repairedParsed.primary;
-            variants = repairedParsed.variants ?? variants;
-            repairNote = `[规则检查发现 ${violations.length} 项并已自动修复]\n`;
-          } else {
-            repairNote = `[规则检查修复结果缺少角色名版或特征版，已保留修复前的完整双版本]\n`;
-          }
-        } else {
-          repairNote = `[规则检查发现 ${violations.length} 项，但自动修复失败：${repaired.message}]\n`;
-        }
-        mergedSystemPrompt = [mergedSystemPrompt, repairSystem].join("\n\n");
-        mergedUserText = [mergedUserText, "", "[规则检查]", repairUser].join(
-          "\n",
-        );
-      } else {
-        repairNote = "[规则检查通过，无需额外调用 AI 修复]\n";
-      }
-    }
-    // The generic natural-mode fallback only handles a single prompt. Paired
-    // known-character JSON is validated and recovered separately below.
-    if (
-      !codexEnabled &&
-      !knownCharacter &&
-      mode === "natural" &&
-      modeNeedsRepair(mode, content)
-    ) {
-      const repaired = await callVisionApi(
-        modeRepairSystemPrompt(mode, safeTemplateVersion),
-        [
-          {
-            type: "image_url",
-            image_url: {
-              url: `data:image/png;base64,${imageBase64}`,
-              detail: "high",
-            },
-          },
-          {
-            type: "text",
-            text: buildModeRepairUserText(
-              mode,
-              userScopeText || "Image reverse-prompt request",
-              content,
-            ),
-          },
-        ],
-        900,
-        `AI 反推修复 · ${mode}`,
-      );
-      // Best-effort: adopt the repaired output when available, but never hard-fail
-      // on a heuristic mismatch — modeNeedsRepair can false-positive and we must
-      // not discard an otherwise-usable result.
-      if (repaired.ok && repaired.content)
-        content = cleanPromptOutput(repaired.content);
-    }
-    if (
-      knownCharacter &&
-      (!variants?.namePrompt.trim() || !variants.featurePrompt.trim())
-    ) {
-      const recoverySystem = [
-        mergedSystemPrompt,
-        "上一条回复没有同时提供完整的角色名版与特征版。现在只补全双版本与 JSON 格式；仍然只能依据图片可见证据，不得新增不可见的角色设定。",
-      ].join("\n\n");
-      const recoveryUser = [
-        ...firstUserContent,
-        {
-          type: "text" as const,
-          text: [
-            "未完成的回复：",
-            variants ? JSON.stringify(variants) : content,
-            "",
-            "只返回严格 JSON：{\"namePrompt\":\"...\",\"featurePrompt\":\"...\"}。namePrompt 只用可靠确认的规范角色 Tag；featurePrompt 删除全部角色名/作品名，并逐人改用图片中实际可见的外貌、服装与配饰。两个版本的其他内容及个人法典规则必须完全一致。",
-          ].join("\n"),
-        },
-      ];
-      const recovered = await callVisionApi(
-        recoverySystem,
-        recoveryUser,
-        2400,
-        `AI 反推 · 已知角色双版本修复 · ${mode}`,
-        false,
-      );
-      if (recovered.ok && recovered.content) {
-        const parsedRecovery = parsePromptVariantResponse(
-          recovered.content,
-          true,
-        );
-        if (
-          parsedRecovery.variants?.namePrompt.trim() &&
-          parsedRecovery.variants.featurePrompt.trim()
-        ) {
-          variants = parsedRecovery.variants;
-          content = parsedRecovery.primary;
-        }
-      }
-    }
-    if (
-      knownCharacter &&
-      (!variants?.namePrompt.trim() || !variants.featurePrompt.trim())
-    ) {
-      return {
-        ok: false,
-        codexMatches,
-        message:
-          "AI 未能同时返回完整的角色名版与特征版。已自动重试一次，请补充角色提示，或改用识图能力更强的反推模型后重试。",
-      };
-    }
-
-    if (codexEnabled || ruleRepairEnabled) {
-      recordAiCall({
-        label: [
-          "AI 反推",
-          codexEnabled ? "法典增强两阶段" : "",
-          ruleRepairEnabled ? "规则校验" : "",
-          mode,
-          scopeLabel,
-        ]
-          .filter(Boolean)
-          .join(" · "),
-        api: "vision",
-        model: settings.visionApiModel || "gpt-4o",
-        systemPrompt: mergedSystemPrompt,
-        userText: mergedUserText,
-        ok: true,
-        response: `${refinementNote}${repairNote}${content}`,
-      });
-    }
-
-    const hints =
-      knownCharacter || mode === "natural" || !settings.mcpForReverse
-        ? []
-        : await queryTagServer(content, 16);
-    return {
-      ok: true,
-      prompt:
-        mode === "natural" || knownCharacter
-          ? content
-          : mergeTagHints(content, hints),
-      variants,
-      codexMatches,
-      message: codexEnabled ? "反推成功（个人法典增强）" : "反推成功",
-    };
+  const parsed = parsePromptVariantResponse(result.content ?? "", knownCharacter);
+  let content = parsed.primary;
+  let variants = parsed.variants;
+  if (
+    knownCharacter &&
+    (!variants?.namePrompt.trim() || !variants.featurePrompt.trim())
+  ) {
+    const fallback = content.trim();
+    const namePrompt =
+      variants?.namePrompt.trim() || fallback || variants?.featurePrompt.trim() || "";
+    const featurePrompt =
+      variants?.featurePrompt.trim() ||
+      stripIdentityTagsForFeaturePrompt(fallback) ||
+      fallback ||
+      namePrompt;
+    variants = { namePrompt, featurePrompt };
+    content = namePrompt;
   }
-  if (codexEnabled || ruleRepairEnabled) {
-    recordAiCall({
-      label: `AI 反推 · 法典增强两阶段 · ${mode} · ${scopeLabel}`,
-      api: "vision",
-      model: settings.visionApiModel || "gpt-4o",
-      systemPrompt,
-      userText: summarizeUserContent(firstUserContent),
-      ok: false,
-      response: result.message,
-    });
-  }
-  return { ok: false, message: `反推失败：${result.message}` };
+  return { ok: true, prompt: content, variants, message: "反推成功" };
 }
 
 const CJK_RE = /[一-鿿぀-ゟ゠-ヿ]/;
@@ -3836,7 +3547,7 @@ export async function convertComicPanels(
       message: `未配置转换 API，已使用本地模板兜底生成 ${request.panels.length} 镜英文提示词；建议配置宽松的转换模型以获得更精确的剧情画面。`,
       panels: request.panels.map((panel) => ({
         panelId: panel.panelId,
-        enPrompt: buildTuiwenLocalPrompt(request, panel),
+        enPrompt: buildComicLocalPrompt(request, panel),
       })),
     };
   }
@@ -3905,7 +3616,7 @@ export async function convertComicPanels(
       fallbackCount += 1;
       out.push({
         panelId: panel.panelId,
-        enPrompt: buildTuiwenLocalPrompt(request, panel),
+        enPrompt: buildComicLocalPrompt(request, panel),
         error: undefined,
       });
       continue;
@@ -3921,9 +3632,9 @@ export async function convertComicPanels(
       if (repaired.ok && repaired.content)
         content = cleanPromptOutput(repaired.content);
     }
-    if (!content.trim() || isTuiwenPromptRefusal(content)) {
+    if (!content.trim() || isComicPromptRefusal(content)) {
       fallbackCount += 1;
-      content = buildTuiwenLocalPrompt(request, panel);
+      content = buildComicLocalPrompt(request, panel);
     }
     out.push({
       panelId: panel.panelId,
@@ -4203,6 +3914,7 @@ export async function generateComicPanel(
     fileNamePrefix:
       request.params.fileNamePrefix || `comic-${request.panelIndex}`,
     positivePrompt: mergePrompt(request.globalStylePrompt, request.panelPrompt),
+    stylePrompt: "",
     negativePrompt:
       request.negativeMode === "override"
         ? request.localNegativePrompt
@@ -4255,6 +3967,7 @@ export async function generateTagComicCandidate(
     fileNamePrefix:
       request.params.fileNamePrefix || `comic-${request.panelIndex}`,
     positivePrompt: mergePrompt(request.globalStylePrompt, request.panelPrompt),
+    stylePrompt: "",
     negativePrompt: request.globalNegativePrompt,
   };
   const historyGroup = ensureHistoryGroup(
@@ -4605,32 +4318,10 @@ export async function convertPromptText(
   ok: boolean;
   result?: string;
   variants?: { namePrompt: string; featurePrompt: string };
-  codexMatches?: PromptCodexMatch[];
   message: string;
 }> {
   const settings = getSettings();
   const safeTemplateVersion = templateVersion === "v4.5" ? "v4.5" : "v5";
-  const matureTags =
-    mode !== "natural" &&
-    (settings.promptCodexEnhanceEnabled ||
-      settings.promptRuleAutoRepairEnabled)
-      ? await collectMatureTagCandidates(chineseText, 12)
-      : [];
-  const matureTagNames = matureTags.map((item) => item.tag);
-  const codexQuery = knownCharacter
-    ? [
-        chineseText,
-        "已知角色 角色名版 特征版 动漫角色 游戏角色 角色 Tag",
-      ].join("\n")
-    : chineseText;
-  const enhancement = settings.promptCodexEnhanceEnabled
-    ? buildPromptCodexEnhancement(
-        codexQuery,
-        "convert",
-        settings.promptCodexAdultEnabled,
-        matureTags,
-      )
-    : { matches: [] as PromptCodexMatch[], context: "" };
   const baseSystemPrompt = resolveModePrompt(
     mode,
     safeTemplateVersion === "v5"
@@ -4641,231 +4332,57 @@ export async function convertPromptText(
       ? CONVERT_SYSTEM_PROMPTS
       : V45_CONVERT_SYSTEM_PROMPTS,
   ).replace(/\{\{input\}\}/g, "<provided in the user message>");
-  const systemPrompt = [
-    baseSystemPrompt,
-    enhancement.context,
-    // Keep the dual-output contract last so it cannot be weakened by a base
-    // template's ordinary "one prompt line" wording or by retrieved codex text.
-    knownCharacterRuntimeInstruction(
-      mode,
-      "convert",
-      knownCharacter,
-      safeTemplateVersion,
-    ),
-  ]
-    .filter(Boolean)
-    .join("\n\n");
-
-  // Tag-server hints only make sense for tag-style output, and only when the
-  // user opted convert into using the MCP/tag service.
-  const tagHints =
-    knownCharacter || mode === "natural" || !settings.mcpForConvert
-      ? []
-      : await queryTagServer(chineseText, 24);
-  const hintText = tagHints.length
-    ? `\n\nCandidate Danbooru tags from the configured tag server:\n${tagHints.map((tag) => tag.tag).join(", ")}`
-    : "";
+  const systemPrompt = injectDshImageAiSystemPrompt({
+    task: "convert",
+    enabled: settings.reverseConvertDshEnabled,
+    mode: settings.reverseConvertDshMode,
+    systemPrompt: [
+      baseSystemPrompt,
+      knownCharacterRuntimeInstruction(
+        mode,
+        "convert",
+        knownCharacter,
+        safeTemplateVersion,
+      ),
+    ]
+      .filter(Boolean)
+      .join("\n\n"),
+  });
   const userText = buildConvertUserText(
     chineseText,
     mode,
-    knownCharacter ? "" : hintText,
+    "",
     knownCharacter,
     safeTemplateVersion,
   );
   const result = await callConvertApi(
     systemPrompt,
     userText,
-    knownCharacter ? 2400 : 2000,
+    knownCharacter ? 1100 : 700,
     `提示词转换 · ${mode}`,
-    !(settings.promptRuleAutoRepairEnabled && mode !== "natural"),
+    true,
   );
+  if (!result.ok) return { ok: false, message: `转换失败：${result.message}` };
 
-  if (result.ok) {
-    const parsed = parsePromptVariantResponse(
-      result.content ?? "",
-      knownCharacter,
-    );
-    let content = parsed.primary;
-    let variants = parsed.variants;
-    if (
-      knownCharacter &&
-      (!variants?.namePrompt.trim() || !variants.featurePrompt.trim())
-    ) {
-      const recovery = await callConvertApi(
-        [
-          systemPrompt,
-          "上一条回复没有同时提供完整的角色名版与特征版。现在只做格式修复，不改变用户描述，也不新增内容。",
-        ].join("\n\n"),
-        [
-          "原始用户描述：",
-          chineseText,
-          "",
-          "未完成的回复：",
-          result.content ?? "",
-          "",
-          "只返回严格 JSON：{\"namePrompt\":\"...\",\"featurePrompt\":\"...\"}。两个字段都必须非空并描述同一完整画面。namePrompt 使用已确认的规范角色 Tag；featurePrompt 删除全部角色名/作品名，并逐人改用高置信度标志性外貌、服装和配饰。用户指定的换装或外观变化优先，两个版本的其他内容及个人法典规则必须完全一致。",
-        ].join("\n"),
-        2400,
-        `提示词转换 · 已知角色双版本修复 · ${mode}`,
-        false,
-      );
-      if (recovery.ok && recovery.content) {
-        const recovered = parsePromptVariantResponse(recovery.content, true);
-        if (
-          recovered.variants?.namePrompt.trim() &&
-          recovered.variants.featurePrompt.trim()
-        ) {
-          variants = recovered.variants;
-          content = recovered.primary;
-        }
-      }
-    }
-    if (
-      knownCharacter &&
-      (!variants?.namePrompt.trim() || !variants.featurePrompt.trim())
-    ) {
-      return {
-        ok: false,
-        codexMatches: enhancement.matches,
-        message:
-          "AI 未能同时返回完整的角色名版与特征版。已自动重试一次，请检查角色名称/作品是否明确，或改用识别能力更强的转换模型后重试。",
-      };
-    }
-    let repairNote = "";
-    const ruleRepairEnabled =
-      settings.promptRuleAutoRepairEnabled && mode !== "natural";
-    if (ruleRepairEnabled) {
-      const violations = [
-        ...promptRuleViolations(mode, content, matureTagNames),
-        ...(variants
-          ? [
-              ...promptRuleViolations(
-                mode,
-                variants.namePrompt,
-                matureTagNames,
-              ),
-              ...promptRuleViolations(
-                mode,
-                variants.featurePrompt,
-                matureTagNames,
-              ),
-            ]
-          : []),
-      ].filter((issue, index, all) => all.indexOf(issue) === index);
-      if (violations.length > 0) {
-        const repairSystem = [
-          promptRuleRepairSystemPrompt(mode, knownCharacter, safeTemplateVersion),
-          enhancement.context,
-          knownCharacter
-            ? knownCharacterRuntimeInstruction(
-                mode,
-                "convert",
-                true,
-                safeTemplateVersion,
-              )
-            : "",
-        ]
-          .filter(Boolean)
-          .join("\n\n");
-        const repairUser = buildPromptRuleRepairUserText({
-          mode,
-          originalInput: chineseText,
-          draft: variants ? JSON.stringify(variants) : content,
-          violations,
-          matureTags: matureTagNames,
-        });
-        const repaired = await callConvertApi(
-          repairSystem,
-          repairUser,
-          knownCharacter ? 2400 : 1200,
-          `提示词转换 · 规则修复 · ${mode}`,
-          false,
-        );
-        if (repaired.ok && repaired.content) {
-          const repairedParsed = parsePromptVariantResponse(
-            repaired.content,
-            knownCharacter,
-          );
-          if (
-            !knownCharacter ||
-            (repairedParsed.variants?.namePrompt.trim() &&
-              repairedParsed.variants.featurePrompt.trim())
-          ) {
-            content = repairedParsed.primary;
-            variants = repairedParsed.variants ?? variants;
-            repairNote = `[规则检查发现 ${violations.length} 项并已自动修复]\n`;
-          } else {
-            repairNote = `[规则检查修复结果缺少角色名版或特征版，已保留修复前的完整双版本]\n`;
-          }
-        } else {
-          repairNote = `[规则检查发现 ${violations.length} 项，但自动修复失败：${repaired.message}]\n`;
-        }
-        recordAiCall({
-          label: `提示词转换 · 规则校验 · ${mode}`,
-          api: "convert",
-          model: settings.convertApiModel.trim() || "gpt-4o-mini",
-          systemPrompt: [systemPrompt, repairSystem].join("\n\n"),
-          userText: [userText, "", "[规则检查]", repairUser].join("\n"),
-          ok: true,
-          response: `${repairNote}${content}`,
-        });
-      } else {
-        repairNote = "[规则检查通过，无需额外调用 AI 修复]\n";
-        recordAiCall({
-          label: `提示词转换 · 规则校验 · ${mode}`,
-          api: "convert",
-          model: settings.convertApiModel.trim() || "gpt-4o-mini",
-          systemPrompt,
-          userText,
-          ok: true,
-          response: `${repairNote}${content}`,
-        });
-      }
-    }
-    // The generic natural-mode fallback only handles a single prompt. Known-
-    // character JSON is validated and recovered above as a paired result.
-    if (
-      !knownCharacter &&
-      mode === "natural" &&
-      modeNeedsRepair(mode, content)
-    ) {
-      const repaired = await callConvertApi(
-        modeRepairSystemPrompt(mode, safeTemplateVersion),
-        buildModeRepairUserText(mode, chineseText, content),
-        900,
-        `提示词转换修复 · ${mode}`,
-      );
-      // Best-effort: adopt the repaired output when available, but never hard-fail
-      // on a heuristic mismatch — modeNeedsRepair can false-positive and we must
-      // not discard an otherwise-usable result.
-      if (repaired.ok && repaired.content)
-        content = cleanPromptOutput(repaired.content);
-    }
-    return {
-      ok: true,
-      result:
-        mode === "natural" || knownCharacter
-          ? content
-          : mergeTagHints(content, tagHints),
-      variants,
-      codexMatches: enhancement.matches,
-      message: settings.promptCodexEnhanceEnabled
-        ? "转换成功（个人法典增强）"
-        : "转换成功",
-    };
+  const parsed = parsePromptVariantResponse(result.content ?? "", knownCharacter);
+  let content = parsed.primary;
+  let variants = parsed.variants;
+  if (
+    knownCharacter &&
+    (!variants?.namePrompt.trim() || !variants.featurePrompt.trim())
+  ) {
+    const fallback = content.trim();
+    const namePrompt =
+      variants?.namePrompt.trim() || fallback || variants?.featurePrompt.trim() || "";
+    const featurePrompt =
+      variants?.featurePrompt.trim() ||
+      stripIdentityTagsForFeaturePrompt(fallback) ||
+      fallback ||
+      namePrompt;
+    variants = { namePrompt, featurePrompt };
+    content = namePrompt;
   }
-  if (settings.promptRuleAutoRepairEnabled && mode !== "natural") {
-    recordAiCall({
-      label: `提示词转换 · 规则校验 · ${mode}`,
-      api: "convert",
-      model: settings.convertApiModel.trim() || "gpt-4o-mini",
-      systemPrompt,
-      userText,
-      ok: false,
-      response: result.message,
-    });
-  }
-  return { ok: false, message: `转换失败：${result.message}` };
+  return { ok: true, result: content, variants, message: "转换成功" };
 }
 
 export async function loadImageFromPath(
@@ -5288,6 +4805,7 @@ export async function inpaintImage(
 
 export async function upscaleImg(
   scale: UpscaleScale,
+  model: string,
 ): Promise<SingleImageResult> {
   const token = getToken();
   if (!token) return { ok: false, message: "请先配置 API Token。" };
@@ -5307,45 +4825,47 @@ export async function upscaleImg(
       MAX_NAI_UPSCALE_INPUT_PIXELS,
     );
     const settings = getSettings();
-    // Upscale lives on the API host (api.novelai.net), NOT the image host, and
-    // returns a ZIP archive (same as generate-image), not a raw PNG.
-    const apiBaseUrl = tokenSafeBaseUrl(
-      settings.apiBaseUrl,
-      "https://api.novelai.net",
-    );
-    const res = await requestWithRetry(
-      () =>
-        axios.post(
-          `${apiBaseUrl}/ai/upscale`,
-          {
-            image: preparedImage.base64,
-            width: preparedImage.width,
-            height: preparedImage.height,
-            scale,
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-              Accept: "application/zip, application/octet-stream, image/png",
+    // The dedicated upscaler is served by image.novelai.net and returns a ZIP
+    // archive (same as generate-image), not a raw PNG.
+    const imageBaseUrl = resolveUpscaleBaseUrl(settings.imageBaseUrl);
+    const upscaleModel = resolveUpscaleModel(model);
+    const passes = scale === 4 ? 2 : 1;
+    let passInput = Buffer.from(preparedImage.base64, "base64");
+    let outBuffer = passInput;
+    for (let pass = 0; pass < passes; pass += 1) {
+      const res = await requestWithRetry(
+        () =>
+          axios.post(
+            `${imageBaseUrl}/ai/upscale`,
+            {
+              image: passInput.toString("base64"),
+              model: upscaleModel,
             },
-            responseType: "arraybuffer",
-            timeout: 180_000,
-            signal: abort.signal,
-            ...proxyConfig("nai"),
-          },
-        ),
-      // Paid upscale POST — only retry pre-charge 429s, never 5xx.
-      { signal: abort.signal, retryStatuses: [429] },
-    );
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+                Accept: "application/zip, application/octet-stream, image/png",
+              },
+              responseType: "arraybuffer",
+              timeout: 180_000,
+              signal: abort.signal,
+              ...proxyConfig("nai"),
+            },
+          ),
+        // Paid upscale POST — only retry pre-charge 429s, never 5xx.
+        { signal: abort.signal, retryStatuses: [429] },
+      );
 
-    // Response is usually a ZIP containing the upscaled PNG; fall back to raw bytes.
-    let outBuffer: Buffer;
-    try {
-      const images = await extractImages(res.data);
-      outBuffer = images.length > 0 ? images[0] : Buffer.from(res.data);
-    } catch {
-      outBuffer = Buffer.from(res.data); // not a zip — treat as raw image bytes
+      // Response is usually a ZIP containing the upscaled PNG; fall back to raw bytes.
+      try {
+        const images = await extractImages(res.data);
+        outBuffer = images.length > 0 ? images[0] : Buffer.from(res.data);
+      } catch {
+        outBuffer = Buffer.from(res.data); // not a zip — treat as raw image bytes
+      }
+      if (outBuffer.length === 0) break;
+      passInput = outBuffer;
     }
     if (outBuffer.length === 0) {
       return { ok: false, message: "超分返回了空数据。" };

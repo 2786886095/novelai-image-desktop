@@ -8,11 +8,14 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../artist/artist_recipe.dart';
+import '../artist/random_custom_tag_library.dart';
+import '../artist/weight_distribution.dart';
 import '../i18n/app_locales.dart';
 import '../models/nai_models.dart';
 import '../prompts/v5_artist_weight_repair.dart';
 import '../state/app_state.dart';
 import '../ui/quality_preset_control.dart';
+import '../ui/weight_distribution_controls.dart';
 import 'positive_prompt_preset_sheet.dart';
 
 class _RepairDrawResult {
@@ -540,6 +543,7 @@ class _V5ArtistWeightRepairScreenState
   final _input = TextEditingController();
   final _output = TextEditingController();
   final _drawInput = TextEditingController();
+  final _drawTagSearch = TextEditingController();
   final _basePrompt = TextEditingController();
   final _minWeight = TextEditingController(text: '0.2');
   final _maxWeight = TextEditingController(text: '1.2');
@@ -554,8 +558,13 @@ class _V5ArtistWeightRepairScreenState
   bool _running = false;
   bool _cancelled = false;
   bool _showFavorites = false;
+  WeightControlMode _weightControlMode = WeightControlMode.novice;
+  WeightDistributionConfig _weightDistribution =
+      const WeightDistributionConfig();
   final List<_RepairDrawResult> _results = [];
   final List<_RepairDrawResult> _favorites = [];
+  final Set<String> _drawStyleTags = <String>{};
+  String _drawTagCategory = 'quality';
 
   String get _prefsPrefix => widget.mode == V5ArtistToolMode.draw
       ? _drawPrefsPrefix
@@ -588,6 +597,19 @@ class _V5ArtistWeightRepairScreenState
     _candidateCount.text = '${prefs.getInt('${prefix}candidateCount') ?? 8}';
     _seed.text = '${prefs.getInt('${prefix}seed') ?? 246813579}';
     _fixedSeed = prefs.getBool('${prefix}fixedSeed') ?? true;
+    _weightControlMode =
+        prefs.getString('${prefix}weightControlMode') == 'advanced'
+            ? WeightControlMode.advanced
+            : WeightControlMode.novice;
+    _weightDistribution = WeightDistributionConfig(
+      mode: prefs.getDouble('${prefix}weightMode') ?? .8,
+      leftDispersion: prefs.getDouble('${prefix}weightLeftDispersion') ?? .4,
+      rightDispersion: prefs.getDouble('${prefix}weightRightDispersion') ?? .4,
+      softBalance: prefs.getDouble('${prefix}weightSoftBalance') ?? 0,
+    );
+    _drawStyleTags
+      ..clear()
+      ..addAll(prefs.getStringList('${prefix}styleTags') ?? const <String>[]);
     try {
       final raw = prefs.getString('${prefix}generationParams');
       _generationParams = raw == null
@@ -650,6 +672,20 @@ class _V5ArtistWeightRepairScreenState
     await prefs.setInt('${prefix}seed',
         (int.tryParse(_seed.text) ?? 246813579).clamp(1, 0x7fffffff).toInt());
     await prefs.setBool('${prefix}fixedSeed', _fixedSeed);
+    await prefs.setString(
+        '${prefix}weightControlMode',
+        _weightControlMode == WeightControlMode.advanced
+            ? 'advanced'
+            : 'novice');
+    await prefs.setDouble('${prefix}weightMode', _weightDistribution.mode);
+    await prefs.setDouble(
+        '${prefix}weightLeftDispersion', _weightDistribution.leftDispersion);
+    await prefs.setDouble(
+        '${prefix}weightRightDispersion', _weightDistribution.rightDispersion);
+    await prefs.setDouble(
+        '${prefix}weightSoftBalance', _weightDistribution.softBalance);
+    await prefs.setStringList(
+        '${prefix}styleTags', _drawStyleTags.toList(growable: false));
     _generationParams.negativePrompt = _negativePrompt.text;
     await prefs.setString(
         '${prefix}generationParams', jsonEncode(_generationParams.toJson()));
@@ -687,6 +723,7 @@ class _V5ArtistWeightRepairScreenState
     _input.dispose();
     _output.dispose();
     _drawInput.dispose();
+    _drawTagSearch.dispose();
     _basePrompt.dispose();
     _minWeight.dispose();
     _maxWeight.dispose();
@@ -711,6 +748,9 @@ class _V5ArtistWeightRepairScreenState
       input: _input.text,
       count: (int.tryParse(_candidateCount.text) ?? 8).clamp(1, 100),
       drawSeed: _freshSeed(),
+      weightDistribution: _weightControlMode == WeightControlMode.advanced
+          ? _weightDistribution
+          : null,
     );
     if (recipes.isEmpty) {
       setState(() {
@@ -740,6 +780,8 @@ class _V5ArtistWeightRepairScreenState
       _candidateCount.text = '8';
       _seed.text = '246813579';
       _fixedSeed = true;
+      _weightControlMode = WeightControlMode.novice;
+      _weightDistribution = const WeightDistributionConfig();
       _message = '';
     });
     _saveDrawState();
@@ -784,13 +826,20 @@ class _V5ArtistWeightRepairScreenState
       setState(() => _message = text['inputEmpty']!);
       return;
     }
-    final normalized = normalizeV45ArtistSyntax(_drawInput.text);
+    final source = <String>[
+      _drawInput.text.trim(),
+      ..._drawStyleTags,
+    ].where((value) => value.isNotEmpty).join(', ');
+    final normalized = normalizeV45ArtistSyntax(source);
     final recipes = drawAllV5ArtistWeights(
       input: normalized.output,
       count: (int.tryParse(_candidateCount.text) ?? 8).clamp(1, 100),
       minWeight: double.tryParse(_minWeight.text) ?? .2,
       maxWeight: double.tryParse(_maxWeight.text) ?? 1.2,
       drawSeed: _freshSeed(),
+      weightDistribution: _weightControlMode == WeightControlMode.advanced
+          ? _weightDistribution
+          : null,
     );
     if (recipes.isEmpty) {
       setState(() => _message = text['none']!);
@@ -799,7 +848,6 @@ class _V5ArtistWeightRepairScreenState
     await _installRecipes(recipes);
     if (!mounted) return;
     setState(() {
-      _drawInput.text = normalized.output;
       _message = text['all']!
           .replaceAll('{count}', normalized.totalAdjusted.toString())
           .replaceAll('{artists}', normalized.artistTagCount.toString())
@@ -807,6 +855,107 @@ class _V5ArtistWeightRepairScreenState
           .replaceAll('{other}', normalized.otherTagCount.toString());
     });
     _saveDrawState();
+  }
+
+  Widget _drawStyleTagLibrary(AppState app) {
+    final language = normalizeAppLocaleCode(app.settings.language);
+    final category = randomCustomTagLibrary.firstWhere(
+      (item) => item.id == _drawTagCategory,
+      orElse: () => randomCustomTagLibrary.first,
+    );
+    final query = _drawTagSearch.text.trim().toLowerCase();
+    final entries = category.tags.where((entry) {
+      if (query.isEmpty) return true;
+      return entry.tag.toLowerCase().contains(query) ||
+          entry.labels.values
+              .any((label) => label.toLowerCase().contains(query));
+    }).toList(growable: false);
+    final chinese = language == 'zh-CN' || language == 'zh-TW';
+    return Card(
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      child: ExpansionTile(
+        initiallyExpanded: false,
+        leading: const Icon(Icons.style_outlined),
+        title: Text(chinese ? '画风 Tag 库' : 'Style Tag library'),
+        subtitle: Text(chinese
+            ? '已选 ${_drawStyleTags.length} 个；每个候选都会加入并随机赋权'
+            : '${_drawStyleTags.length} selected; added to every draw with random weights'),
+        childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        children: [
+          TextField(
+            controller: _drawTagSearch,
+            onChanged: (_) => setState(() {}),
+            decoration: InputDecoration(
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: query.isEmpty
+                  ? null
+                  : IconButton(
+                      onPressed: () {
+                        _drawTagSearch.clear();
+                        setState(() {});
+                      },
+                      icon: const Icon(Icons.clear),
+                    ),
+              hintText: chinese ? '搜索 Tag 或含义' : 'Search Tag or meaning',
+              border: const OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            height: 42,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: randomCustomTagLibrary.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              itemBuilder: (context, index) {
+                final item = randomCustomTagLibrary[index];
+                return ChoiceChip(
+                  selected: item.id == _drawTagCategory,
+                  label: Text('${item.label(language)} ${item.tags.length}'),
+                  onSelected: (_) => setState(() => _drawTagCategory = item.id),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 280,
+            child: entries.isEmpty
+                ? Center(
+                    child: Text(chinese ? '没有匹配的 Tag' : 'No matching tags'))
+                : ListView.builder(
+                    primary: false,
+                    itemCount: entries.length,
+                    itemExtent: 54,
+                    itemBuilder: (context, index) {
+                      final entry = entries[index];
+                      final selected = _drawStyleTags.contains(entry.tag);
+                      return CheckboxListTile(
+                        dense: true,
+                        value: selected,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        title: Text(entry.tag,
+                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                        subtitle: Text(entry.label(language),
+                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                        onChanged: (_) {
+                          setState(() {
+                            if (selected) {
+                              _drawStyleTags.remove(entry.tag);
+                            } else {
+                              _drawStyleTags.add(entry.tag);
+                            }
+                          });
+                          _saveDrawState();
+                        },
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _generateOne(_RepairDrawResult result) async {
@@ -1595,6 +1744,8 @@ class _V5ArtistWeightRepairScreenState
                 ),
               ),
               const SizedBox(height: 14),
+              _drawStyleTagLibrary(app),
+              const SizedBox(height: 14),
               LayoutBuilder(
                 builder: (context, constraints) {
                   final columns = constraints.maxWidth >= 700
@@ -1616,6 +1767,21 @@ class _V5ArtistWeightRepairScreenState
                           width: fieldWidth),
                     ],
                   );
+                },
+              ),
+              const SizedBox(height: 12),
+              WeightDistributionControls(
+                mode: _weightControlMode,
+                lower: double.tryParse(_minWeight.text) ?? .2,
+                upper: double.tryParse(_maxWeight.text) ?? 1.2,
+                config: _weightDistribution,
+                onModeChanged: (value) {
+                  setState(() => _weightControlMode = value);
+                  _saveDrawState();
+                },
+                onChanged: (value) {
+                  setState(() => _weightDistribution = value);
+                  _saveDrawState();
                 },
               ),
               const SizedBox(height: 12),
@@ -1912,6 +2078,21 @@ class _V5ArtistWeightRepairScreenState
                     _candidateCount,
                     drawText['count']!,
                     width: double.infinity,
+                  ),
+                  const SizedBox(height: 12),
+                  WeightDistributionControls(
+                    mode: _weightControlMode,
+                    lower: minV5ArtistRepairMultiplier,
+                    upper: maxV5ArtistRepairMultiplier,
+                    config: _weightDistribution,
+                    onModeChanged: (value) {
+                      setState(() => _weightControlMode = value);
+                      _saveDrawState();
+                    },
+                    onChanged: (value) {
+                      setState(() => _weightDistribution = value);
+                      _saveDrawState();
+                    },
                   ),
                   const SizedBox(height: 12),
                   TextField(

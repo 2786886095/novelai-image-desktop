@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:novelai_mobile/agent/agent_models.dart';
 import 'package:novelai_mobile/models/nai_models.dart';
 import 'package:novelai_mobile/services/data_backup_service.dart';
 import 'package:novelai_mobile/services/storage.dart';
@@ -28,6 +29,8 @@ class _BackupStorage extends Storage {
   @override
   Future<String?> getConvertKey() async => '';
   @override
+  Future<String?> getAgentApiKey() async => '';
+  @override
   Future<String?> getTagKey() async => '';
   @override
   Future<String?> getBaiduSecret() async => '';
@@ -38,6 +41,8 @@ class _BackupStorage extends Storage {
   Future<void> setVisionKey(String value) async {}
   @override
   Future<void> setConvertKey(String value) async {}
+  @override
+  Future<void> setAgentApiKey(String value) async {}
   @override
   Future<void> setTagKey(String value) async {}
   @override
@@ -111,6 +116,78 @@ void main() {
         DataBackupCategory.workspaceData,
       ]),
     );
+  });
+
+  test('agent conversations and attachments merge idempotently', () async {
+    final attachmentFile = File('${root.path}/agent-reference.png')
+      ..writeAsBytesSync([137, 80, 78, 71, 1, 2, 3, 4]);
+    final attachment = AgentAttachment(
+      id: 'attachment-source',
+      name: 'agent-reference.png',
+      mime: 'image/png',
+      size: attachmentFile.lengthSync(),
+      kind: 'image',
+      filePath: attachmentFile.path,
+      width: 1,
+      height: 1,
+    );
+    await storage.setAgentWorkspace(AgentWorkspace(
+      selectedConversationId: 'agent-chat',
+      conversations: [
+        AgentConversation(
+          id: 'agent-chat',
+          title: '角色设计',
+          messages: [
+            AgentMessage(
+              id: 'agent-message',
+              role: 'user',
+              content: '保持角色服装',
+              attachments: [attachment],
+            ),
+          ],
+        ),
+      ],
+      memories: [
+        AgentMemory(
+          id: 'agent-memory',
+          title: '服装',
+          content: '保持蓝色外套',
+          scope: 'conversation',
+          conversationId: 'agent-chat',
+        ),
+      ],
+    ));
+
+    final archive = await service.createBackup(
+      {DataBackupCategory.agentWorkspace},
+      includeAssets: true,
+    );
+    await storage.setAgentWorkspace(AgentWorkspace());
+
+    final first = await service.importBackup(
+      archive.path,
+      {DataBackupCategory.agentWorkspace},
+      confirmConfigurationOverwrite: false,
+    );
+    final restored = await storage.getAgentWorkspace();
+    final restoredAttachment =
+        restored.conversations.single.messages.single.attachments.single;
+    expect(first.imported, greaterThanOrEqualTo(2));
+    expect(File(restoredAttachment.filePath).existsSync(), isTrue);
+    expect(File(restoredAttachment.filePath).readAsBytesSync(),
+        attachmentFile.readAsBytesSync());
+    expect(restored.memories.single.conversationId,
+        restored.conversations.single.id);
+
+    final second = await service.importBackup(
+      archive.path,
+      {DataBackupCategory.agentWorkspace},
+      confirmConfigurationOverwrite: false,
+    );
+    final afterSecond = await storage.getAgentWorkspace();
+    expect(afterSecond.conversations, hasLength(1));
+    expect(afterSecond.memories, hasLength(1));
+    expect(second.skipped, greaterThanOrEqualTo(2));
   });
 
   test('skips identical image bytes and suffixes same-name different bytes',

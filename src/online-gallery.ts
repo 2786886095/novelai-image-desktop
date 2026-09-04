@@ -1,5 +1,6 @@
 export type OnlineGallerySourceId =
   | "aitag"
+  | "artist-ranking"
   | "danbooru"
   | "safebooru"
   | "gelbooru"
@@ -22,6 +23,13 @@ export interface OnlineGallerySourceInfo {
 }
 
 export const ONLINE_GALLERY_SOURCES: readonly OnlineGallerySourceInfo[] = [
+  {
+    id: "artist-ranking",
+    label: "画师排行榜",
+    siteUrl: "https://danbooru.donmai.us/artists",
+    supportsPromptSearch: false,
+    supportsCollections: false,
+  },
   {
     id: "aitag",
     label: "AI TAG",
@@ -61,7 +69,7 @@ export const ONLINE_GALLERY_SOURCES: readonly OnlineGallerySourceInfo[] = [
 ] as const;
 
 export interface OnlineGallerySearchRequest {
-  source: Exclude<OnlineGallerySourceId, "aitag">;
+  source: Exclude<OnlineGallerySourceId, "aitag" | "artist-ranking">;
   page?: number;
   query?: string;
   collectionId?: string;
@@ -89,7 +97,7 @@ export interface OnlineGalleryTagGroups {
 }
 
 export interface OnlineGalleryItem {
-  source: Exclude<OnlineGallerySourceId, "aitag">;
+  source: Exclude<OnlineGallerySourceId, "aitag" | "artist-ranking">;
   id: string;
   kind: OnlineGalleryItemKind;
   collectionId?: string;
@@ -110,7 +118,7 @@ export interface OnlineGalleryItem {
 }
 
 export interface OnlineGalleryPage {
-  source: Exclude<OnlineGallerySourceId, "aitag">;
+  source: Exclude<OnlineGallerySourceId, "aitag" | "artist-ranking">;
   page: number;
   pageSize: number;
   total?: number;
@@ -131,7 +139,7 @@ export interface OnlineGalleryDetail {
 }
 
 export interface OnlineGalleryDetailRequest {
-  source: Exclude<OnlineGallerySourceId, "aitag">;
+  source: Exclude<OnlineGallerySourceId, "aitag" | "artist-ranking">;
   id: string;
   collectionId?: string;
   gelbooruApiKey?: string;

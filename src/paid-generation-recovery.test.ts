@@ -20,6 +20,12 @@ describe("paid image actions recover from rejected IPC", () => {
     const naiDesktop = {
       hasToken: vi.fn().mockResolvedValue({ hasToken: true, anlasBalance: 100, tierName: "Opus" }),
       quoteAnlas: vi.fn().mockResolvedValue({ ok: true, amount: 1, balance: 100 }),
+      loadImageFromPath: vi.fn().mockResolvedValue({
+        ok: true,
+        image: "source-image-base64",
+        width: 832,
+        height: 1216,
+      }),
       [ipcName]: rejectedRequest,
     };
     vi.stubGlobal("window", { naiDesktop });

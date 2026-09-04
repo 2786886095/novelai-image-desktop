@@ -2,6 +2,7 @@ import 'dart:math';
 
 import '../artist/artist_recipe.dart';
 import '../artist/curated_artists.dart';
+import '../artist/weight_distribution.dart';
 
 class V5ArtistWeightRepairResult {
   final String output;
@@ -349,6 +350,7 @@ List<ArtistRecipe> repairV45ArtistCandidatesForV5({
   required String input,
   required int count,
   int? drawSeed,
+  WeightDistributionConfig? weightDistribution,
 }) {
   final sourceTags = _parsePromptTags(input);
   if (sourceTags.isEmpty || count < 1) return const [];
@@ -356,7 +358,15 @@ List<ArtistRecipe> repairV45ArtistCandidatesForV5({
   return List.generate(
     count,
     (index) => _recipeFromTags(
-      _migratePromptTags(sourceTags, random.nextDouble),
+      weightDistribution == null
+          ? _migratePromptTags(sourceTags, random.nextDouble)
+          : _drawBalancedWeights(
+              sourceTags,
+              random,
+              minV5ArtistRepairMultiplier,
+              maxV5ArtistRepairMultiplier,
+              weightDistribution,
+            ),
       index,
       'v5-repair',
     ),
@@ -381,6 +391,7 @@ List<ArtistRecipe> drawAllV5ArtistWeights({
   double minWeight = defaultV5ArtistDrawMin,
   double maxWeight = defaultV5ArtistDrawMax,
   int? drawSeed,
+  WeightDistributionConfig? weightDistribution,
 }) {
   final sourceTags = _parsePromptTags(input);
   if (sourceTags.isEmpty || count < 1) return const [];
@@ -388,11 +399,43 @@ List<ArtistRecipe> drawAllV5ArtistWeights({
   final bounds = _drawBounds(minWeight, maxWeight);
   final random = Random(drawSeed);
   return List.generate(count, (index) {
-    final tags = _migratePromptTags(
-      sourceTags,
-      random.nextDouble,
-      bounds: bounds,
-    );
+    final tags = weightDistribution == null
+        ? _migratePromptTags(
+            sourceTags,
+            random.nextDouble,
+            bounds: bounds,
+          )
+        : _drawBalancedWeights(
+            sourceTags,
+            random,
+            bounds.min,
+            bounds.max,
+            weightDistribution,
+          );
     return _recipeFromTags(tags, index, 'v5-weight-${drawSeed ?? 0}');
   });
+}
+
+List<_PromptTag> _drawBalancedWeights(
+  List<_PromptTag> sourceTags,
+  Random random,
+  double minWeight,
+  double maxWeight,
+  WeightDistributionConfig distribution,
+) {
+  final sampled = sourceTags
+      .map((_) => sampleControlledWeight(
+            random,
+            minWeight,
+            maxWeight,
+            distribution,
+          ))
+      .toList(growable: false);
+  final balanced =
+      softBalanceWeights(sampled, minWeight, maxWeight, distribution);
+  return List<_PromptTag>.generate(
+    sourceTags.length,
+    (index) => sourceTags[index].copyWithWeight(balanced[index]),
+    growable: false,
+  );
 }

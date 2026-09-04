@@ -8,7 +8,10 @@ export default function AppTabBar() {
   const activeTab = useAppStore((state) => state.activeTab);
   const setActiveTab = useAppStore((state) => state.setActiveTab);
   const language = useAppStore((state) => state.settings?.language);
-  const tabItems = useMemo(() => getLocalizedTabItems(language), [language]);
+  const tabItems = useMemo(
+    () => getLocalizedTabItems(language),
+    [language],
+  );
 
   return (
     <div className="tab-bar">
@@ -26,4 +29,3 @@ export default function AppTabBar() {
     </div>
   );
 }
-

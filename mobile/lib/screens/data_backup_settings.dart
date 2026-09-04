@@ -56,6 +56,7 @@ Map<String, String> _backupText(Object? language) {
       'referencePresets': '参考预设与参考图',
       'imageHistory': '本机图片与生成记录',
       'promptPresets': '提示词、风格与预设图',
+      'agentWorkspace': '角色、对话、世界书、身份、预设与附件',
       'workspaceData': '工具项目与其它本机数据',
     },
     'zh-TW': {
@@ -103,6 +104,7 @@ Map<String, String> _backupText(Object? language) {
       'referencePresets': '參考預設與參考圖',
       'imageHistory': '本機圖片與生成記錄',
       'promptPresets': '提示詞、風格與預設圖',
+      'agentWorkspace': '角色、對話、世界書、身分、預設與附件',
       'workspaceData': '工具專案與其它本機資料',
     },
     'en-US': {
@@ -156,6 +158,7 @@ Map<String, String> _backupText(Object? language) {
       'referencePresets': 'Reference presets and images',
       'imageHistory': 'Local images and generation history',
       'promptPresets': 'Prompt/style presets and previews',
+      'agentWorkspace': 'Characters, chats, lorebooks, personas, presets, and attachments',
       'workspaceData': 'Tool projects and other local data',
     },
     'ja-JP': {
@@ -204,6 +207,7 @@ Map<String, String> _backupText(Object? language) {
       'referencePresets': '参照プリセットと画像',
       'imageHistory': 'ローカル画像と生成履歴',
       'promptPresets': 'プロンプト・スタイル・プレビュー',
+      'agentWorkspace': 'キャラクター・会話・世界情報・ペルソナ・プリセット・添付',
       'workspaceData': 'ツールプロジェクトとその他データ',
     },
     'ko-KR': {
@@ -252,6 +256,7 @@ Map<String, String> _backupText(Object? language) {
       'referencePresets': '참고 프리셋과 이미지',
       'imageHistory': '로컬 이미지와 생성 기록',
       'promptPresets': '프롬프트·스타일·미리보기',
+      'agentWorkspace': '캐릭터·대화·로어북·페르소나·프리셋·첨부',
       'workspaceData': '도구 프로젝트 및 기타 데이터',
     },
   };

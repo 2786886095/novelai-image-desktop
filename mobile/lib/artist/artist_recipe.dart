@@ -1,5 +1,7 @@
 import 'dart:math';
 
+import 'weight_distribution.dart';
+
 class ArtistTagRecord {
   final int id;
   final String name;
@@ -419,6 +421,12 @@ List<ArtistRecipe> randomizeArtistWeights({
   required int count,
   double variationPercent = 20,
   required int drawSeed,
+  String customTagPool = '',
+  Map<String, String> customTagModes = const {},
+  int minRandomCustomTags = 1,
+  int maxRandomCustomTags = 3,
+  double minCustomTagWeight = .2,
+  double maxCustomTagWeight = 1.2,
 }) {
   final pattern = RegExp(
     r'^\s*(?:(\d+(?:\.\d+)?)\s*::\s*)?artist\s*:\s*(.*?)\s*(?:::)?\s*$',
@@ -440,19 +448,53 @@ List<ArtistRecipe> randomizeArtistWeights({
   if (source.isEmpty || count < 1) return const [];
   final random = Random(drawSeed);
   final ratio = variationPercent.clamp(0, 100) / 100;
+  final availableCustomTags = parseCustomTagPoolValues(customTagPool);
+  final alwaysCustomTags = availableCustomTags
+      .where((value) =>
+          customTagModes[value.toLowerCase()]?.toLowerCase() != 'random')
+      .toList();
+  final randomCustomTags = availableCustomTags
+      .where((value) =>
+          customTagModes[value.toLowerCase()]?.toLowerCase() == 'random')
+      .toList();
+  final firstRandomCount =
+      minRandomCustomTags.clamp(0, randomCustomTags.length).toInt();
+  final secondRandomCount =
+      maxRandomCustomTags.clamp(0, randomCustomTags.length).toInt();
+  final randomTagLower = min(firstRandomCount, secondRandomCount);
+  final randomTagUpper = max(firstRandomCount, secondRandomCount);
+  final customTagWeightBounds =
+      _normalizedWeightBounds(minCustomTagWeight, maxCustomTagWeight);
   return List.generate(count, (index) {
     final tokens = source.map((entry) {
       final factor = 1 + (random.nextDouble() * 2 - 1) * ratio;
       final weight = (entry.$2 * factor).clamp(.1, 10).toDouble();
       return '${_number((weight * 100).round() / 100)}::artist:${entry.$1} ::';
     }).toList();
+    final artistPrompt = tokens.join(', ');
+    final selectedCustomTags = <String>[...alwaysCustomTags];
+    if (randomCustomTags.isNotEmpty && randomTagUpper > 0) {
+      final shuffled = [...randomCustomTags]..shuffle(random);
+      final randomCount =
+          randomTagLower + random.nextInt(randomTagUpper - randomTagLower + 1);
+      selectedCustomTags.addAll(shuffled.take(randomCount));
+    }
+    final auxiliary = selectedCustomTags
+        .map((value) => StyleMutationTerm(
+              'custom',
+              value,
+              _randomWeight(random, customTagWeightBounds),
+            ))
+        .toList();
+    tokens.addAll(
+        auxiliary.map((item) => '${_number(item.weight)}::${item.value} ::'));
     final prompt = tokens.join(', ');
     return ArtistRecipe(
       'weight-$drawSeed-$index',
       prompt,
       source.map((entry) => entry.$1).toList(),
       basePrompt: prompt,
-      artistPrompt: prompt,
+      artistPrompt: artistPrompt,
       pairId: 'weight-$drawSeed-$index',
       variant: 'plain',
     );
@@ -499,6 +541,7 @@ List<ArtistRecipe> drawArtistRecipes({
   required int drawSeed,
   double minArtistWeight = .2,
   double maxArtistWeight = 1.2,
+  WeightDistributionConfig? artistWeightDistribution,
   String auxiliary = '',
   String customTagPool = '',
   Map<String, String> customTagModes = const {},
@@ -558,10 +601,22 @@ List<ArtistRecipe> drawArtistRecipes({
       final index = _weightedIndex(available, random, favorites);
       selected.add(available.removeAt(index));
     }
+    final sampledArtistWeights = selected
+        .map((_) => artistWeightDistribution == null
+            ? _randomWeight(random, artistWeightBounds)
+            : sampleControlledWeight(random, artistWeightBounds.min,
+                artistWeightBounds.max, artistWeightDistribution))
+        .toList(growable: false);
+    final artistWeights = artistWeightDistribution == null
+        ? sampledArtistWeights
+        : softBalanceWeights(sampledArtistWeights, artistWeightBounds.min,
+            artistWeightBounds.max, artistWeightDistribution);
     final artistTokens = <String>[];
-    for (final artist in selected) {
+    for (var index = 0; index < selected.length; index++) {
+      final artist = selected[index];
+      final weight = artistWeights[index];
       artistTokens.add(
-          '${_number(_randomWeight(random, artistWeightBounds))}::artist:${canonicalArtistTagName(artist.name)} ::');
+          '${_number(weight)}::artist:${canonicalArtistTagName(artist.name)} ::');
     }
     final tokens = <String>[...artistTokens];
     final franchiseStyles = <StyleMutationTerm>[];
@@ -583,8 +638,8 @@ List<ArtistRecipe> drawArtistRecipes({
     final selectedCustomTags = <String>[...alwaysCustomTags];
     if (randomCustomTags.isNotEmpty && randomTagUpper > 0) {
       final shuffled = [...randomCustomTags]..shuffle(random);
-      final randomCount = randomTagLower +
-          random.nextInt(randomTagUpper - randomTagLower + 1);
+      final randomCount =
+          randomTagLower + random.nextInt(randomTagUpper - randomTagLower + 1);
       selectedCustomTags.addAll(shuffled.take(randomCount));
     }
     if (selectedCustomTags.isNotEmpty) {

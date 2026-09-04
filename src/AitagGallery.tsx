@@ -28,7 +28,8 @@ import {
   type OnlineGallerySourceId,
 } from "./online-gallery";
 import { useAppStore } from "./store";
-import type { ImportedParams } from "./types";
+import type { ArtistStylePreviewResult, ImportedParams } from "./types";
+import type { ArtistTagRecord } from "./artist-lab";
 import { SelectMenu } from "./components/ui";
 
 const COPY_RESET_MS = 1_500;
@@ -363,6 +364,132 @@ function GallerySourcePicker({
   );
 }
 
+function ArtistRankingGallery({
+  onSourceChange,
+  onBack,
+}: {
+  onSourceChange: (source: OnlineGallerySourceId) => void;
+  onBack?: () => void;
+}) {
+  const [artists, setArtists] = useState<ArtistTagRecord[]>([]);
+  const [query, setQuery] = useState("");
+  const [visible, setVisible] = useState(60);
+  const [expanded, setExpanded] = useState<number | null>(null);
+  const [previews, setPreviews] = useState<Record<number, ArtistStylePreviewResult | null>>({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [updatedAt, setUpdatedAt] = useState(0);
+
+  const load = useCallback(async (force = false) => {
+    setLoading(true);
+    setError("");
+    try {
+      const snapshot = await window.naiDesktop.artistLabArtistRanking(5000, force);
+      setArtists(snapshot.items.filter((item) => !item.deprecated).sort((a, b) => b.postCount - a.postCount || a.name.localeCompare(b.name)));
+      setUpdatedAt(snapshot.savedAt);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { void load(false); }, [load]);
+
+  const filtered = useMemo(() => {
+    const needle = query.trim().toLowerCase().replaceAll(" ", "_");
+    return needle ? artists.filter((artist) => artist.name.toLowerCase().includes(needle)) : artists;
+  }, [artists, query]);
+  const rows = filtered.slice(0, visible);
+  const rowSignature = rows.map((artist) => artist.id).join(",");
+  const ranks = useMemo(() => new Map(artists.map((artist, index) => [artist.id, index + 1])), [artists]);
+
+  // Populate visible rows progressively instead of waiting for every row to be
+  // expanded. Four workers avoid freezing the gallery with a request burst.
+  useEffect(() => {
+    let cancelled = false;
+    let cursor = 0;
+    const pending = rows.filter((artist) => !Object.prototype.hasOwnProperty.call(previews, artist.id));
+    if (pending.length === 0) return () => { cancelled = true; };
+    const workers = Array.from({ length: Math.min(4, pending.length) }, async () => {
+      while (!cancelled) {
+        const artist = pending[cursor++];
+        if (!artist) return;
+        const preview = await window.naiDesktop.artistLabStylePreview(artist.name).catch(() => null);
+        if (!cancelled) {
+          setPreviews((current) => Object.prototype.hasOwnProperty.call(current, artist.id)
+            ? current
+            : { ...current, [artist.id]: preview });
+        }
+      }
+    });
+    void Promise.all(workers);
+    return () => { cancelled = true; };
+    // rowSignature tracks pagination/search without restarting after each preview.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rowSignature]);
+  const togglePreview = async (artist: ArtistTagRecord) => {
+    if (expanded === artist.id) {
+      setExpanded(null);
+      return;
+    }
+    setExpanded(artist.id);
+    if (Object.prototype.hasOwnProperty.call(previews, artist.id)) return;
+    const preview = await window.naiDesktop.artistLabStylePreview(artist.name).catch(() => null);
+    setPreviews((current) => ({ ...current, [artist.id]: preview }));
+  };
+
+  return (
+    <main className="aitag-page artist-ranking-page">
+      <header className="aitag-header online-gallery-header">
+        <div>
+          {onBack ? <button type="button" className="btn secondary compact" onClick={onBack}>返回工具</button> : null}
+          <div className="online-gallery-title-line"><h2>画师排行榜</h2><GallerySourcePicker value="artist-ranking" onChange={onSourceChange} /></div>
+          <p>按 Danbooru 收录作品数排序；作品数代表收录量与热度，不代表画师质量。</p>
+        </div>
+        <div className="aitag-header-actions">
+          <span className="artist-ranking-updated">更新：{updatedAt ? new Date(updatedAt).toLocaleString() : "尚未更新"}</span>
+          <button type="button" className="btn secondary" disabled={loading} onClick={() => void load(true)}>手动更新</button>
+          <button type="button" className="btn secondary" onClick={() => void window.naiDesktop.openExternal("https://danbooru.donmai.us/artists")}>打开 Danbooru</button>
+        </div>
+      </header>
+      <section className="artist-ranking-toolbar">
+        <input value={query} onChange={(event) => { setQuery(event.target.value); setVisible(60); }} placeholder="搜索画师 Tag" />
+        <span>{filtered.length.toLocaleString()} 位画师</span>
+      </section>
+      {loading && artists.length === 0 ? <div className="aitag-state">正在读取画师排行…</div> : null}
+      {error ? <div className="aitag-state error"><span>{error}</span><button type="button" className="btn secondary" onClick={() => void load(false)}>重试</button></div> : null}
+      {!error && artists.length > 0 ? (
+        <section className="artist-ranking-list">
+          {rows.map((artist) => {
+            const rank = ranks.get(artist.id) ?? 0;
+            const preview = previews[artist.id];
+            const previewResolved = Object.prototype.hasOwnProperty.call(previews, artist.id);
+            return <article key={artist.id} className={expanded === artist.id ? "is-expanded" : ""}>
+              <button type="button" className="artist-ranking-main" onClick={() => void togglePreview(artist)}>
+                <b>#{rank}</b>
+                <span className="artist-ranking-thumb" aria-hidden="true">
+                  {preview ? <img src={preview.imageUrl} alt="" loading="lazy" /> : <i>{previewResolved ? "暂无" : "…"}</i>}
+                </span>
+                <span className="artist-ranking-copy"><strong>{artist.name.replaceAll("_", " ")}</strong><code>artist:{artist.name}</code></span>
+                <em>{artist.postCount.toLocaleString()} 作品</em>
+              </button>
+              <div className="artist-ranking-actions">
+                <button type="button" title="复制画师 Tag" onClick={() => void navigator.clipboard.writeText(`artist:${artist.name}`)}>复制 Tag</button>
+                <button type="button" title="打开该画师作品库" onClick={() => void window.naiDesktop.openExternal(`https://danbooru.donmai.us/posts?tags=${encodeURIComponent(artist.name)}`)}>作品库 ↗</button>
+              </div>
+              {expanded === artist.id ? <div className="artist-ranking-preview">
+                {preview ? <button type="button" onClick={() => void window.naiDesktop.openExternal(preview.postUrl)}><img src={preview.imageUrl} alt={`${artist.name} 参考作品`} /><span>查看代表作品</span></button> : <span>暂无可用参考图</span>}
+              </div> : null}
+            </article>;
+          })}
+          {rows.length < filtered.length ? <button type="button" className="btn secondary artist-ranking-more" onClick={() => setVisible((value) => Math.min(value + 60, filtered.length))}>加载更多（{rows.length}/{filtered.length}）</button> : null}
+        </section>
+      ) : null}
+    </main>
+  );
+}
+
 function OnlineCachedImage({
   source,
   src,
@@ -449,7 +576,7 @@ function ExternalGallery({
   onBack,
   text,
 }: {
-  source: Exclude<OnlineGallerySourceId, "aitag">;
+  source: Exclude<OnlineGallerySourceId, "aitag" | "artist-ranking">;
   onSourceChange: (source: OnlineGallerySourceId) => void;
   onBack?: () => void;
   text: GalleryText;
@@ -959,6 +1086,10 @@ export default function AitagGallery({ onBack }: { onBack?: () => void }) {
       { value: "older", label: text.older },
     ];
   }, [config.availableMonths, config.availableYears, sort, text]);
+
+  if (gallerySource === "artist-ranking") {
+    return <ArtistRankingGallery onSourceChange={setGallerySource} onBack={onBack} />;
+  }
 
   if (gallerySource !== "aitag") {
     return (

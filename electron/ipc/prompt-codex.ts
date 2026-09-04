@@ -1,6 +1,8 @@
 import { app } from "electron";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { gunzip } from "node:zlib";
+import { promisify } from "node:util";
 import {
   buildPromptCodexSnapshot,
   PROMPT_CODEX_BOOKS,
@@ -8,6 +10,9 @@ import {
 } from "../../src/prompt-codex";
 
 const CACHE_FILE = "prompt-codex-v1.json";
+const BUNDLED_FILE = "prompt-codex.json.gz";
+const gunzipAsync = promisify(gunzip);
+let bundledSnapshotPromise: Promise<PromptCodexSnapshot> | null = null;
 
 function cachePath() {
   return path.join(app.getPath("userData"), "cache", CACHE_FILE);
@@ -32,6 +37,38 @@ export async function loadPromptCodexCache() {
   } catch {
     return null;
   }
+}
+
+async function readBundledPromptCodex(): Promise<PromptCodexSnapshot> {
+  const appRoot = app.getAppPath();
+  const candidates = [
+    path.join(appRoot, "dist", BUNDLED_FILE),
+    path.join(appRoot, "public", BUNDLED_FILE),
+  ];
+  let lastError: unknown;
+  for (const file of candidates) {
+    try {
+      const compressed = await fs.readFile(file);
+      const value: unknown = JSON.parse(
+        (await gunzipAsync(compressed)).toString("utf8"),
+      );
+      if (!isSnapshot(value)) throw new Error("内置法典数据不完整");
+      return value;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("未找到内置法典资源");
+}
+
+export function loadBundledPromptCodex(): Promise<PromptCodexSnapshot> {
+  bundledSnapshotPromise ??= readBundledPromptCodex().catch((error) => {
+    bundledSnapshotPromise = null;
+    throw error;
+  });
+  return bundledSnapshotPromise;
 }
 
 export async function updatePromptCodex(): Promise<PromptCodexSnapshot> {

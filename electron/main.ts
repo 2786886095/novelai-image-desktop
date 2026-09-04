@@ -96,6 +96,7 @@ import {
   artistStylePreview,
   discoverSimilarArtists,
   clearArtistLabModels,
+  loadPopularArtistRanking,
   loadPopularArtistTags,
   pickArtistLabTarget,
   scoreArtistLabImages,
@@ -109,6 +110,7 @@ import {
 } from "./ipc/artist-favorites";
 import {
   loadPromptCodexCache,
+  loadBundledPromptCodex,
   updatePromptCodex,
 } from "./ipc/prompt-codex";
 import {
@@ -144,20 +146,6 @@ import {
   runAutomaticBackup,
   selectBackupDirectory,
 } from "./ipc/data-backup";
-import {
-  getTuiwenTtsCatalog,
-  saveTuiwenImportedAudio,
-  synthesizeTuiwenSpeech,
-} from "./ipc/tuiwen-audio";
-import { importTuiwenFile } from "./ipc/tuiwen-import";
-import {
-  detectJianYingDraftRoot,
-  exportTuiwenJianYingDraft,
-} from "./ipc/tuiwen-jianying";
-import {
-  loadTuiwenProjectSnapshot as loadTuiwenProjectSnapshotFile,
-  saveTuiwenProjectSnapshot as saveTuiwenProjectSnapshotFile,
-} from "./ipc/tuiwen-snapshot";
 import type {
   AnlasQuoteRequest,
   AugmentOptions,
@@ -180,11 +168,6 @@ import type {
   StylePromptPreviewImage,
   UpscaleScale,
   TextToolHistoryItem,
-  TuiwenExportJianYingRequest,
-  TuiwenImportFileRequest,
-  TuiwenProject,
-  TuiwenSaveImportedAudioRequest,
-  TuiwenTtsRequest,
   ResourceDatabaseId,
 } from "../src/types";
 import {
@@ -227,7 +210,6 @@ import {
 import { isPortableBuild } from "./ipc/app-mode";
 import {
   configureSystemProxyResolver,
-  proxyConfig,
   refreshSystemProxy,
 } from "./ipc/proxy";
 import {
@@ -238,6 +220,45 @@ import {
   openLogDir,
   readRecentLog,
 } from "./ipc/logger";
+import {
+  createAgentConversation,
+  deleteAgentAttachment,
+  deleteAgentConversation,
+  deleteAgentMemory,
+  deleteAgentSkill,
+  importAgentFiles,
+  exportAgentAttachment,
+  readAgentWorkspace,
+  renameAgentConversation,
+  saveTavernWorkspace,
+  selectAgentConversation,
+  upsertAgentMemory,
+  upsertAgentSkill,
+} from "./ipc/agent-store";
+import {
+  abortAgentMessage,
+  compactAgentConversation,
+  getAgentPendingPermissions,
+  getAgentRuntimeStatus,
+  respondAgentPermission,
+  restartAgentRuntime,
+  sendAgentMessage,
+  setAgentEventSink,
+  stopAgentRuntime,
+  generateTavernImage,
+} from "./ipc/agent-runtime";
+import { discoverAgentModels } from "./ipc/agent-model-discovery";
+import { getAgentWorkspaceLocation, openAgentWorkspaceDirectory } from "./ipc/agent-workspace-location";
+import { exportTavernCard, importTavernCards, importTavernVisualAsset } from "./ipc/tavern-card";
+import type {
+  AgentMemory,
+  AgentProviderProbe,
+  AgentSendRequest,
+  AgentSkill,
+  AgentWorkspaceData,
+  TavernCardExportRequest,
+  TavernImageRequest,
+} from "../src/agent/types";
 
 // Launching the app while it's already running should focus the existing
 // window, not spawn a second process fighting over the same userData store.
@@ -408,6 +429,26 @@ function createWindow() {
             await revealRandomParameters();
             await new Promise((resolve) => setTimeout(resolve, 250));
           }
+          if (normalizedUiCapturePath.includes("agent-reasoning")) {
+            await mainWindow?.webContents.executeJavaScript(`(() => {
+              const chips = [...document.querySelectorAll('.tavern-tool-chip')];
+              const trigger = chips.find((button) =>
+                (button.textContent || '').includes('推理强度')) || chips.find((button) =>
+                !button.classList.contains('is-command') && !button.classList.contains('is-secondary') &&
+                (button.textContent || '').includes('自动'));
+              window.__agentReasoningCapture = {
+                chipCount: chips.length,
+                found: Boolean(trigger),
+                disabled: Boolean(trigger?.disabled),
+                text: String(trigger?.textContent || '').trim(),
+              };
+              if (!trigger || trigger.disabled) return false;
+              trigger.focus();
+              trigger.click();
+              return true;
+            })()`);
+            await new Promise((resolve) => setTimeout(resolve, 500));
+          }
           const audit = await mainWindow?.webContents.executeJavaScript(`(() => {
             const visible = (element) => {
               const style = getComputedStyle(element);
@@ -470,6 +511,11 @@ function createWindow() {
               .filter(visible)
               .flatMap((element) => {
                 if (element.getBoundingClientRect().height > 58) return [];
+                const style = getComputedStyle(element);
+                // Inspector destinations deliberately stack icon and label.
+                // Their text is not expected to share the button's vertical
+                // midpoint like an inline action.
+                if (style.display === 'grid' || style.flexDirection === 'column') return [];
                 const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
                 const rects = [];
                 let node;
@@ -510,7 +556,36 @@ function createWindow() {
                   ? { hasImage: true, complete: image.complete, naturalWidth: image.naturalWidth, src: image.currentSrc || image.src }
                   : { hasImage: false, text: String(element.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 80) };
               });
-            return { viewport: { width: innerWidth, height: innerHeight }, viewportOverflow, contentOverflow, iconOverflow, iconMisalignment, textMisalignment, duplicateArrowRisk, openSelectMenus, randomArtistDetails, settingsScroll, galleryImageStates };
+            const composerPopovers = [...document.querySelectorAll('.tavern-composer-popover')]
+              .filter(visible)
+              .map((element) => {
+                const rect = element.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                const style = getComputedStyle(element);
+                const ancestors = [];
+                let parent = element.parentElement;
+                while (parent && ancestors.length < 8) {
+                  const parentStyle = getComputedStyle(parent);
+                  ancestors.push({
+                    ...describe(parent),
+                    overflow: parentStyle.overflow,
+                    overflowX: parentStyle.overflowX,
+                    overflowY: parentStyle.overflowY,
+                    position: parentStyle.position,
+                    zIndex: parentStyle.zIndex,
+                  });
+                  parent = parent.parentElement;
+                }
+                return {
+                  ...describe(element),
+                  rect: { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height },
+                  style: { display: style.display, visibility: style.visibility, opacity: style.opacity, position: style.position, zIndex: style.zIndex, backgroundColor: style.backgroundColor },
+                  topAtCenter: document.elementsFromPoint(centerX, centerY).slice(0, 8).map(describe),
+                  ancestors,
+                };
+              });
+            return { viewport: { width: innerWidth, height: innerHeight }, viewportOverflow, contentOverflow, iconOverflow, iconMisalignment, textMisalignment, duplicateArrowRisk, openSelectMenus, randomArtistDetails, settingsScroll, galleryImageStates, composerPopovers, agentReasoningCapture: window.__agentReasoningCapture ?? null };
           })()`);
           const image = await mainWindow?.webContents.capturePage();
           if (image) {
@@ -548,6 +623,8 @@ function createWindow() {
       ["08-tools", "tools"],
       ["09-reference-presets", "referencePresets"],
       ["10-online-gallery", "onlineGallery"],
+      ["11-agent", "agent"],
+      ["12-records", "records"],
       ["11-records", "records"],
       ["09-records", "records"],
       ["10-records", "records"],
@@ -603,7 +680,35 @@ function createWindow() {
 }
 
 function registerIpc() {
+  ipcMain.handle("agent:getWorkspace", () => readAgentWorkspace());
+  ipcMain.handle("agent:saveWorkspace", (_event, workspace: AgentWorkspaceData) => saveTavernWorkspace(workspace));
+  ipcMain.handle("agent:createConversation", (_event, title?: string) => createAgentConversation(title));
+  ipcMain.handle("agent:selectConversation", (_event, conversationId: string) => selectAgentConversation(conversationId));
+  ipcMain.handle("agent:renameConversation", (_event, conversationId: string, title: string) => renameAgentConversation(conversationId, title));
+  ipcMain.handle("agent:deleteConversation", (_event, conversationId: string) => deleteAgentConversation(conversationId));
+  ipcMain.handle("agent:importFiles", (_event, conversationId: string, sourcePaths?: string[]) => importAgentFiles(conversationId, sourcePaths));
+  ipcMain.handle("agent:deleteAttachment", (_event, conversationId: string, attachmentId: string) => deleteAgentAttachment(conversationId, attachmentId));
+  ipcMain.handle("agent:exportAttachment", (_event, conversationId: string, messageId: string, attachmentId: string) => exportAgentAttachment(conversationId, messageId, attachmentId));
+  ipcMain.handle("agent:send", (_event, request: AgentSendRequest) => sendAgentMessage(request));
+  ipcMain.handle("agent:generateImage", (_event, request: TavernImageRequest) => generateTavernImage(request));
+  ipcMain.handle("agent:importCards", (_event, sourcePaths?: string[]) => importTavernCards(sourcePaths));
+  ipcMain.handle("agent:exportCard", (_event, request: TavernCardExportRequest) => exportTavernCard(request));
+  ipcMain.handle("agent:importVisual", (_event, kind: "avatar" | "background") => importTavernVisualAsset(kind));
+  ipcMain.handle("agent:abort", (_event, conversationId: string) => abortAgentMessage(conversationId));
+  ipcMain.handle("agent:compact", (_event, conversationId: string) => compactAgentConversation(conversationId));
+  ipcMain.handle("agent:respondPermission", (_event, permissionId: string, response: "once" | "always" | "reject") => respondAgentPermission(permissionId, response));
+  ipcMain.handle("agent:upsertSkill", (_event, skill: Partial<AgentSkill> & Pick<AgentSkill, "name" | "instructions">) => upsertAgentSkill(skill));
+  ipcMain.handle("agent:deleteSkill", (_event, skillId: string) => deleteAgentSkill(skillId));
+  ipcMain.handle("agent:upsertMemory", (_event, memory: Partial<AgentMemory> & Pick<AgentMemory, "title" | "content" | "scope">) => upsertAgentMemory(memory));
+  ipcMain.handle("agent:deleteMemory", (_event, memoryId: string) => deleteAgentMemory(memoryId));
+  ipcMain.handle("agent:runtimeStatus", () => getAgentRuntimeStatus());
+  ipcMain.handle("agent:pendingPermissions", () => getAgentPendingPermissions());
+  ipcMain.handle("agent:restartRuntime", () => restartAgentRuntime());
+  ipcMain.handle("agent:discoverModels", (_event, probe: AgentProviderProbe) => discoverAgentModels(probe));
+  ipcMain.handle("agent:workspaceLocation", () => getAgentWorkspaceLocation());
+  ipcMain.handle("agent:openWorkspace", () => openAgentWorkspaceDirectory());
   ipcMain.handle("promptCodex:cache", () => loadPromptCodexCache());
+  ipcMain.handle("promptCodex:bundled", () => loadBundledPromptCodex());
   ipcMain.handle("promptCodex:update", () => updatePromptCodex());
   ipcMain.handle("artistLab:pickTarget", () => pickArtistLabTarget());
   ipcMain.handle(
@@ -614,6 +719,11 @@ function registerIpc() {
     "artistLab:popularArtists",
     (_event, limit: unknown, force: unknown) =>
       loadPopularArtistTags(limit, force, true),
+  );
+  ipcMain.handle(
+    "artistLab:artistRanking",
+    (_event, limit: unknown, force: unknown) =>
+      loadPopularArtistRanking(limit, force),
   );
   ipcMain.handle(
     "artistLab:scoreImages",
@@ -735,9 +845,9 @@ function registerIpc() {
       noise: number,
     ) => inpaintImage(params, inpaintModel, maskBase64, strength, noise),
   );
-  ipcMain.handle("nai:upscale", (_event, scale: UpscaleScale) =>
-    upscaleImg(scale),
-  );
+    ipcMain.handle("nai:upscale", (_event, scale: UpscaleScale, model: string) =>
+      upscaleImg(scale, model),
+    );
   ipcMain.handle(
     "nai:augment",
     (_event, tool: DirectorTool, options: AugmentOptions) =>
@@ -844,44 +954,6 @@ function registerIpc() {
     "tagComic:exportSelectedZip",
     (_event, request: TagComicExportZipRequest) =>
       exportTagComicSelectedZip(request),
-  );
-  ipcMain.handle(
-    "tuiwen:importFile",
-    (_event, request: TuiwenImportFileRequest) => importTuiwenFile(request),
-  );
-  ipcMain.handle("tuiwen:ttsProviders", () => getTuiwenTtsCatalog());
-  ipcMain.handle("tuiwen:tts", (_event, request: TuiwenTtsRequest) => {
-    const proxy = proxyConfig("ai");
-    return synthesizeTuiwenSpeech(request, {
-      outputRoot: getSetting("outputDir"),
-      agent: (proxy.httpsAgent ?? proxy.httpAgent) as
-        import("http").Agent | undefined,
-    });
-  });
-  ipcMain.handle(
-    "tuiwen:saveImportedAudio",
-    (_event, request: TuiwenSaveImportedAudioRequest) =>
-      saveTuiwenImportedAudio(request, getSetting("outputDir")),
-  );
-  ipcMain.handle(
-    "tuiwen:exportJianYing",
-    (_event, request: TuiwenExportJianYingRequest) => {
-      const outDir =
-        request.outDir?.trim() ||
-        request.project.exportSettings.jianyingDraftDir?.trim() ||
-        detectJianYingDraftRoot() ||
-        path.join(getSetting("outputDir"), "Jianying Drafts");
-      fs.mkdirSync(outDir, { recursive: true });
-      return exportTuiwenJianYingDraft(request.project, outDir);
-    },
-  );
-  ipcMain.handle(
-    "tuiwen:saveProjectSnapshot",
-    (_event, project: TuiwenProject) =>
-      saveTuiwenProjectSnapshotFile(project, app.getPath("userData")),
-  );
-  ipcMain.handle("tuiwen:loadProjectSnapshot", () =>
-    loadTuiwenProjectSnapshotFile(app.getPath("userData")),
   );
   ipcMain.handle("ai:getLog", () => getAiCallLog());
   ipcMain.handle("ai:clearLog", () => clearAiCallLog());
@@ -1017,20 +1089,34 @@ function registerIpc() {
 
   // Native drag-out: drag a generated/history image straight to the desktop,
   // Explorer, Photoshop, a chat window, etc. as a real PNG file. Uses the saved
-  // file on disk; the drag icon is a downscaled copy of the image itself.
+  // file on disk. Some Windows chat clients reject a drag source whose original
+  // file is still being indexed/written or whose path has non-shell-friendly
+  // segments, so expose a stable ASCII-named temp copy for the OLE drag session.
   ipcMain.on("image:startDrag", (event, filePathOrUrl: string) => {
     try {
       if (!filePathOrUrl) return;
-      const filePath = localMediaUrlToPath(filePathOrUrl)
+      const sourcePath = localMediaUrlToPath(filePathOrUrl)
         ?? (filePathOrUrl.startsWith("file://") ? fileURLToPath(filePathOrUrl) : filePathOrUrl);
-      const icon = nativeImage.createFromPath(filePath);
+      const resolvedSource = path.resolve(sourcePath);
+      if (!fs.existsSync(resolvedSource) || !fs.statSync(resolvedSource).isFile()) return;
+      const dragDirectory = path.join(app.getPath("temp"), "langbai-nai-drag");
+      fs.mkdirSync(dragDirectory, { recursive: true });
+      const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+      for (const name of fs.readdirSync(dragDirectory)) {
+        const candidate = path.join(dragDirectory, name);
+        try { if (fs.statSync(candidate).mtimeMs < cutoff) fs.rmSync(candidate, { force: true }); } catch { /* best effort */ }
+      }
+      const extension = path.extname(resolvedSource).toLowerCase() || ".png";
+      const dragPath = path.join(dragDirectory, `langbai-image-${Date.now()}-${Math.random().toString(36).slice(2, 8)}${extension}`);
+      fs.copyFileSync(resolvedSource, dragPath);
+      const icon = nativeImage.createFromPath(dragPath);
       if (icon.isEmpty()) return; // startDrag throws on an empty icon
       event.sender.startDrag({
-        file: filePath,
+        file: dragPath,
         icon: icon.resize({ height: 96 }),
       });
-    } catch {
-      /* ignore — a failed drag must never crash the main process */
+    } catch (error) {
+      console.warn("[image:startDrag] failed", error);
     }
   });
 
@@ -1053,6 +1139,7 @@ function registerIpc() {
     ].includes(String(key))) {
       await refreshSystemProxy();
     }
+    if (String(key).startsWith("agent")) await stopAgentRuntime();
     return saved;
   });
   ipcMain.handle("settings:getAll", () => getSettings());
@@ -1203,9 +1290,16 @@ app.whenReady().then(async () => {
   await installLocalMediaProtocol();
   if (!uiCaptureUserData) pinUserDataAndMigrate();
   readStore();
+  // Materialize/repair the built-in Character Tavern workspace before the
+  // renderer opens. This prevents an unreleased broken workspace from
+  // lingering until the user happens to visit the Tavern page.
+  readAgentWorkspace();
   installGlobalLogging();
   configureSystemProxyResolver((url) => session.defaultSession.resolveProxy(url));
   await refreshSystemProxy();
+  setAgentEventSink((event) => {
+    if (!mainWindow?.isDestroyed()) mainWindow?.webContents.send("agent:event", event);
+  });
   const proxyRefreshTimer = setInterval(() => {
     void refreshSystemProxy();
   }, 30_000);
@@ -1221,4 +1315,8 @@ app.whenReady().then(async () => {
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
+});
+
+app.on("before-quit", () => {
+  void stopAgentRuntime();
 });

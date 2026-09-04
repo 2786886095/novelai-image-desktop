@@ -10,6 +10,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../agent/agent_merge.dart';
+import '../agent/agent_models.dart';
 import '../models/nai_models.dart';
 import '../prompts/positive_prompt_presets.dart';
 import '../prompts/prompt_mode.dart';
@@ -31,6 +33,7 @@ enum DataBackupCategory {
   referencePresets('referencePresets'),
   imageHistory('imageHistory'),
   promptPresets('promptPresets'),
+  agentWorkspace('agentWorkspace'),
   workspaceData('workspaceData');
 
   final String id;
@@ -146,6 +149,8 @@ class DataBackupService {
     'texttool_convert_history_v1',
     'texttool_reverse_history_v1',
     'reference_preset_library_v1',
+    'agent_workspace_v1',
+    'agent_always_allowed_tools_v1',
   };
   static const _apiSettingKeys = <String>{
     'apiBaseUrl',
@@ -155,6 +160,15 @@ class DataBackupService {
     'visionApiModel',
     'convertApiUrl',
     'convertApiModel',
+    'agentApiProtocol',
+    'agentApiBaseUrl',
+    'agentApiModel',
+    'agentProviderName',
+    'agentContextWindow',
+    'agentMaxOutputTokens',
+    'agentAutoCompact',
+    'agentAutoCompactThreshold',
+    'agentVisionEnabled',
     'tagServerEnabled',
     'tagServerUrl',
     'tagServerType',
@@ -367,6 +381,111 @@ class DataBackupService {
     return cloned;
   }
 
+  Future<Map<String, dynamic>> _portableAgentAttachment(
+    AgentAttachment attachment,
+    Archive archive,
+    Map<String, Map<String, dynamic>> assets, {
+    required bool includeAssets,
+  }) async {
+    final json = Map<String, dynamic>.from(attachment.toJson());
+    json['filePath'] = '';
+    json.remove('fileUrl');
+    json['asset'] = await _addAsset(
+      archive,
+      assets,
+      attachment.filePath,
+      includeAssets: includeAssets,
+    );
+    return json;
+  }
+
+  Future<Map<String, dynamic>> _portableAgentWorkspace(
+    AgentWorkspace workspace,
+    Archive archive,
+    Map<String, Map<String, dynamic>> assets, {
+    required bool includeAssets,
+  }) async {
+    final json = Map<String, dynamic>.from(workspace.toJson());
+    final conversations = <Map<String, dynamic>>[];
+    for (final conversation in workspace.conversations) {
+      final portable = Map<String, dynamic>.from(conversation.toJson())
+        ..remove('runtimeSessionId')
+        ..['status'] = 'idle';
+      portable['draftAttachments'] = [
+        for (final attachment in conversation.draftAttachments)
+          await _portableAgentAttachment(
+            attachment,
+            archive,
+            assets,
+            includeAssets: includeAssets,
+          ),
+      ];
+      final messages = <Map<String, dynamic>>[];
+      for (final message in conversation.messages) {
+        final messageJson = Map<String, dynamic>.from(message.toJson())
+          ..remove('runtimeMessageId');
+        messageJson['attachments'] = [
+          for (final attachment in message.attachments)
+            await _portableAgentAttachment(
+              attachment,
+              archive,
+              assets,
+              includeAssets: includeAssets,
+            ),
+        ];
+        final toolJson = <Map<String, dynamic>>[];
+        for (final tool in message.tools) {
+          final value = Map<String, dynamic>.from(tool.toJson());
+          value['generatedImages'] = [
+            for (final attachment in tool.generatedImages)
+              await _portableAgentAttachment(
+                attachment,
+                archive,
+                assets,
+                includeAssets: includeAssets,
+              ),
+          ];
+          toolJson.add(value);
+        }
+        messageJson['tools'] = toolJson;
+        messages.add(messageJson);
+      }
+      portable['messages'] = messages;
+      conversations.add(portable);
+    }
+    json['conversations'] = conversations;
+    return json;
+  }
+
+  int _agentAssetBytes(Object? value) {
+    final hashes = <String>{};
+    var bytes = 0;
+    void visit(Object? node) {
+      if (node is List) {
+        for (final item in node) {
+          visit(item);
+        }
+        return;
+      }
+      if (node is! Map) return;
+      final map = Map<String, dynamic>.from(node);
+      final asset = map['asset'];
+      if (asset is Map) {
+        final reference = Map<String, dynamic>.from(asset);
+        final hash = reference['sha256']?.toString() ?? '';
+        if (hash.isNotEmpty && hashes.add(hash)) {
+          bytes += (reference['bytes'] as num?)?.round() ?? 0;
+        }
+      }
+      for (final child in map.values) {
+        visit(child);
+      }
+    }
+
+    visit(value);
+    return bytes;
+  }
+
   List<Map<String, dynamic>> _canonicalArtists(Map<String, dynamic> recipe) {
     final weights = <String, double>{};
     final artistPrompt = recipe['artistPrompt']?.toString() ??
@@ -448,6 +567,7 @@ class DataBackupService {
           if (settingsJson.containsKey(key)) key: settingsJson[key],
         'visionApiKey': await storage.getVisionKey() ?? '',
         'convertApiKey': await storage.getConvertKey() ?? '',
+        'agentApiKey': await storage.getAgentApiKey() ?? '',
         'tagServerApiKey': await storage.getTagKey() ?? '',
         'baiduSecret': await storage.getBaiduSecret() ?? '',
       };
@@ -643,6 +763,31 @@ class DataBackupService {
             styles.length +
             positivePrompts.length,
         bytes: bytes + assetBytes,
+      ));
+    }
+
+    if (requested.contains(DataBackupCategory.agentWorkspace)) {
+      final workspace = await storage.getAgentWorkspace();
+      final portable = await _portableAgentWorkspace(
+        workspace,
+        archive,
+        assets,
+        includeAssets: includeAssets,
+      );
+      final bytes = _addJson(archive, 'data/agent-workspace.json', portable);
+      final itemCount = workspace.conversations.length +
+          workspace.characters.length +
+          workspace.personas.length +
+          workspace.lorebooks.length +
+          workspace.samplerPresets.length +
+          workspace.conversations.fold<int>(
+            0,
+            (sum, item) => sum + item.messages.length,
+          );
+      summaries.add(DataBackupCategorySummary(
+        category: DataBackupCategory.agentWorkspace,
+        items: itemCount,
+        bytes: bytes + _agentAssetBytes(portable),
       ));
     }
 
@@ -1432,6 +1577,118 @@ class DataBackupService {
     }
   }
 
+  Future<Map<String, dynamic>?> _restoreAgentAttachment(
+    _ArchiveBundle bundle,
+    Map<String, dynamic> raw,
+    Directory directory,
+    Map<String, String> restored,
+  ) async {
+    final reference = _assetReference(raw['asset']);
+    final bytes = _assetBytes(bundle, reference);
+    if (reference == null || bytes == null) return null;
+    final hash = reference['sha256'].toString();
+    var filePath = restored[hash];
+    if (filePath == null) {
+      final requested = reference['originalName']?.toString() ??
+          raw['name']?.toString() ??
+          'attachment';
+      var extension = _extension(requested).toLowerCase();
+      if (!RegExp(r'^\.[a-z0-9]{1,8}$').hasMatch(extension)) extension = '.bin';
+      final file =
+          File('${directory.path}${Platform.pathSeparator}$hash$extension');
+      if (!file.existsSync()) await file.writeAsBytes(bytes, flush: true);
+      filePath = file.path;
+      restored[hash] = filePath;
+    }
+    final json = Map<String, dynamic>.from(raw)
+      ..remove('asset')
+      ..remove('fileUrl')
+      ..['filePath'] = filePath
+      ..['size'] = bytes.length;
+    return json;
+  }
+
+  Future<AgentMergeResult> _restoreAgentWorkspace(
+    _ArchiveBundle bundle,
+    Map<String, dynamic> payload,
+  ) async {
+    final directory = Directory(
+      '${(await storage.agentAttachmentsDirectory()).path}${Platform.pathSeparator}restored',
+    );
+    if (!directory.existsSync()) directory.createSync(recursive: true);
+    final restored = <String, String>{};
+    final conversations = <Map<String, dynamic>>[];
+    for (final value in payload['conversations'] as List? ?? const []) {
+      if (value is! Map) continue;
+      final conversation = Map<String, dynamic>.from(value)
+        ..remove('runtimeSessionId')
+        ..['status'] = 'idle';
+      final drafts = <Map<String, dynamic>>[];
+      for (final attachment
+          in conversation['draftAttachments'] as List? ?? const []) {
+        if (attachment is! Map) continue;
+        final item = await _restoreAgentAttachment(
+          bundle,
+          Map<String, dynamic>.from(attachment),
+          directory,
+          restored,
+        );
+        if (item != null) drafts.add(item);
+      }
+      conversation['draftAttachments'] = drafts;
+      final messages = <Map<String, dynamic>>[];
+      for (final messageValue
+          in conversation['messages'] as List? ?? const []) {
+        if (messageValue is! Map) continue;
+        final message = Map<String, dynamic>.from(messageValue)
+          ..remove('runtimeMessageId');
+        final attachments = <Map<String, dynamic>>[];
+        for (final attachment in message['attachments'] as List? ?? const []) {
+          if (attachment is! Map) continue;
+          final item = await _restoreAgentAttachment(
+            bundle,
+            Map<String, dynamic>.from(attachment),
+            directory,
+            restored,
+          );
+          if (item != null) attachments.add(item);
+        }
+        message['attachments'] = attachments;
+        final tools = <Map<String, dynamic>>[];
+        for (final toolValue in message['tools'] as List? ?? const []) {
+          if (toolValue is! Map) continue;
+          final tool = Map<String, dynamic>.from(toolValue);
+          final generated = <Map<String, dynamic>>[];
+          for (final attachment
+              in tool['generatedImages'] as List? ?? const []) {
+            if (attachment is! Map) continue;
+            final item = await _restoreAgentAttachment(
+              bundle,
+              Map<String, dynamic>.from(attachment),
+              directory,
+              restored,
+            );
+            if (item != null) generated.add(item);
+          }
+          tool['generatedImages'] = generated;
+          tools.add(tool);
+        }
+        message['tools'] = tools;
+        messages.add(message);
+      }
+      conversation['messages'] = messages;
+      conversations.add(conversation);
+    }
+    payload['conversations'] = conversations;
+    final incoming = AgentWorkspace.fromJson(payload);
+    final result = mergeAgentWorkspaces(
+      await storage.getAgentWorkspace(),
+      incoming,
+    );
+    await storage.setAgentWorkspace(result.workspace);
+    return result;
+  }
+
   Future<DataBackupImportReport> importBackup(
     String filePath,
     Set<DataBackupCategory> requested, {
@@ -1608,6 +1865,9 @@ class DataBackupService {
       if (api['convertApiKey'] is String) {
         await storage.setConvertKey(api['convertApiKey'] as String);
       }
+      if (api['agentApiKey'] is String) {
+        await storage.setAgentApiKey(api['agentApiKey'] as String);
+      }
       if (api['tagServerApiKey'] is String) {
         await storage.setTagKey(api['tagServerApiKey'] as String);
       }
@@ -1633,6 +1893,20 @@ class DataBackupService {
           await _restoreWorkspace(
               Map<String, dynamic>.from(renderer), counters);
         }
+      }
+    }
+
+    if (requested.contains(DataBackupCategory.agentWorkspace)) {
+      final payload = _readJson(bundle, 'data/agent-workspace.json');
+      if (payload is Map) {
+        final result = await _restoreAgentWorkspace(
+          bundle,
+          Map<String, dynamic>.from(payload),
+        );
+        counters
+          ..imported += result.imported
+          ..skipped += result.skipped
+          ..renamed += result.renamed;
       }
     }
 
