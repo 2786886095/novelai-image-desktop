@@ -82,6 +82,10 @@ const _runtimeText = <String, Map<String, String>>{
         '原图已安全缩小到 {width}x{height}，正在超分 {scale}x...',
     'status.upscaleRunning': '正在超分 {scale}x...',
     'status.upscaleDone': '超分完成；{spent}。',
+    'status.upscaleOutputTooLarge':
+        '超分后尺寸将达到 {width}x{height}，超过允许的最大尺寸 {max}x{max}，已取消请求。请改用 2x 或换用更小的原图。',
+    'status.enhanceOutputTooLarge':
+        '增强并放大后的目标尺寸 {width}x{height}（{pixels} 像素）超过 NovelAI 允许的 {max} 像素上限，未发送请求。请选择 1x 或换用更小的原图。',
     'status.directorPreparedRunning': '原图已安全缩至 {width}x{height}，正在后期处理...',
     'status.directorRunning': '正在后期处理，生成前报价 {amount} Anlas...',
     'status.directorRestoreNote': '；已恢复为 {width}x{height}',
@@ -306,6 +310,10 @@ const _runtimeText = <String, Map<String, String>>{
         '原圖已安全縮小到 {width}x{height}，正在超分 {scale}x...',
     'status.upscaleRunning': '正在超分 {scale}x...',
     'status.upscaleDone': '超分完成；{spent}。',
+    'status.upscaleOutputTooLarge':
+        '超分後尺寸將達到 {width}x{height}，超過允許的最大尺寸 {max}x{max}，已取消請求。請改用 2x 或換用較小的原圖。',
+    'status.enhanceOutputTooLarge':
+        '增強並放大後的目標尺寸 {width}x{height}（{pixels} 像素）超過 NovelAI 允許的 {max} 像素上限，未傳送請求。請選擇 1x 或較小的原圖。',
     'status.directorPreparedRunning': '原圖已安全縮至 {width}x{height}，正在後期處理...',
     'status.directorRunning': '正在後期處理，生成前報價 {amount} Anlas...',
     'status.directorRestoreNote': '；已恢復為 {width}x{height}',
@@ -554,6 +562,10 @@ const _runtimeText = <String, Map<String, String>>{
         'Original safely resized to {width}x{height}; upscaling {scale}x...',
     'status.upscaleRunning': 'Upscaling {scale}x...',
     'status.upscaleDone': 'Upscale complete; {spent}.',
+    'status.upscaleOutputTooLarge':
+        'The upscaled image would be {width}x{height}, exceeding the {max}x{max} limit. No request was sent. Use 2x or a smaller source image.',
+    'status.enhanceOutputTooLarge':
+        'Enhance 2x would produce {width}x{height} ({pixels} pixels), exceeding the NovelAI limit of {max} pixels. No request was sent. Use 1x or a smaller source image.',
     'status.directorPreparedRunning':
         'Original safely resized to {width}x{height}; postprocessing...',
     'status.directorRunning':
@@ -819,6 +831,10 @@ const _runtimeText = <String, Map<String, String>>{
         '元画像を安全に {width}x{height} へ縮小しました。{scale}x にアップスケール中...',
     'status.upscaleRunning': '{scale}x にアップスケール中...',
     'status.upscaleDone': 'アップスケール完了; {spent}。',
+    'status.upscaleOutputTooLarge':
+        'アップスケール後の {width}x{height} は上限 {max}x{max} を超えるため、リクエストを送信しませんでした。2x または小さい元画像を使用してください。',
+    'status.enhanceOutputTooLarge':
+        '2x 強化後の {width}x{height}（{pixels} ピクセル）は NovelAI の上限 {max} ピクセルを超えるため、リクエストを送信しませんでした。1x または小さい元画像を使用してください。',
     'status.directorPreparedRunning':
         '元画像を安全に {width}x{height} へ縮小しました。後処理中...',
     'status.directorRunning': '後処理中、生成前見積もり {amount} Anlas...',
@@ -1058,6 +1074,10 @@ const _runtimeText = <String, Map<String, String>>{
         '원본을 안전하게 {width}x{height}(으)로 축소했습니다. {scale}x 업스케일 중...',
     'status.upscaleRunning': '{scale}x 업스케일 중...',
     'status.upscaleDone': '업스케일 완료; {spent}.',
+    'status.upscaleOutputTooLarge':
+        '업스케일 후 크기 {width}x{height}가 허용 한도 {max}x{max}를 초과하여 요청을 보내지 않았습니다. 2x 또는 더 작은 원본 이미지를 사용하세요.',
+    'status.enhanceOutputTooLarge':
+        '2x 향상 결과 {width}x{height}({pixels}픽셀)가 NovelAI 한도 {max}픽셀을 초과하여 요청을 보내지 않았습니다. 1x 또는 더 작은 원본 이미지를 사용하세요.',
     'status.directorPreparedRunning':
         '원본을 안전하게 {width}x{height}(으)로 축소했습니다. 후처리 중...',
     'status.directorRunning': '후처리 중, 생성 전 견적 {amount} Anlas...',

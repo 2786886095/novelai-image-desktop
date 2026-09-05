@@ -18,6 +18,7 @@ import {
   prepareImageBufferForSave,
   resolveUpscaleBaseUrl,
   resolveUpscaleModel,
+  resolveUpscaleOutputSize,
   stripPngMetadata,
 } from "./nai";
 import { frameNaiStreamMessage } from "./nai-stream";
@@ -723,10 +724,31 @@ describe("resolveUpscaleModel", () => {
   it("uses supported generation models and strips renderer-only aliases", () => {
     expect(resolveUpscaleModel("nai-diffusion-5-full")).toBe("nai-diffusion-5-full");
     expect(resolveUpscaleModel("nai-diffusion-5-full-inpainting")).toBe("nai-diffusion-5-full");
+    expect(resolveUpscaleModel("nai-diffusion-4-5-full")).toBe("nai-diffusion-4-5-curated");
+    expect(resolveUpscaleModel("nai-diffusion-4-5-full-inpainting")).toBe("nai-diffusion-4-5-curated");
+    expect(resolveUpscaleModel("nai-diffusion-4-5-curated")).toBe("nai-diffusion-4-5-curated");
     expect(resolveUpscaleModel("nai-diffusion-furry-3")).toBe("nai-diffusion-3-furry");
   });
 
   it("falls back to the current SDK default for unknown models", () => {
     expect(resolveUpscaleModel("retired-model")).toBe("nai-diffusion-5-curated");
+  });
+});
+
+describe("resolveUpscaleOutputSize", () => {
+  it("allows output up to 4096px on either edge", () => {
+    expect(resolveUpscaleOutputSize(1024, 1024, 4)).toEqual({
+      width: 4096,
+      height: 4096,
+      exceedsLimit: false,
+    });
+  });
+
+  it("blocks an oversized result before the upscale request", () => {
+    expect(resolveUpscaleOutputSize(832, 1216, 4)).toEqual({
+      width: 3328,
+      height: 4864,
+      exceedsLimit: true,
+    });
   });
 });

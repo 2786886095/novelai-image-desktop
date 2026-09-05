@@ -5,6 +5,13 @@ import 'package:image/image.dart' as image_lib;
 import 'package:novelai_mobile/images/image_processing.dart';
 
 void main() {
+  test('blocks an upscale result above the 4096px edge limit', () {
+    expect(resolveUpscaleOutputSize(1024, 1024, 4),
+        (width: 4096, height: 4096, exceedsLimit: false));
+    expect(resolveUpscaleOutputSize(832, 1216, 4),
+        (width: 3328, height: 4864, exceedsLimit: true));
+  });
+
   test('decodes PNG and JPEG dimensions', () {
     final image = image_lib.Image(width: 13, height: 17);
     expect(

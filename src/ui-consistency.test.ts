@@ -623,4 +623,18 @@ describe("desktop UI consistency guards", () => {
     expect(css).toMatch(/\.compare-after-clip\s*\{[^}]*will-change:\s*clip-path/s);
     expect(css).toMatch(/\.inpaint-compare-after-clip\s*\{[^}]*contain:\s*paint/s);
   });
+
+  it("blocks oversized Enhance 2x targets before any generation request", () => {
+    const source = fs.readFileSync(path.join(projectRoot, "src", "App.tsx"), "utf8");
+    const panel = source.slice(
+      source.indexOf("function EnhancePanel"),
+      source.indexOf("function DirectorPanel"),
+    );
+    const guard = panel.indexOf("if (enhanceScale > 1 && requestedTarget.exceedsLimit) return;");
+    const request = panel.indexOf("await generateI2I()");
+    expect(guard).toBeGreaterThan(-1);
+    expect(request).toBeGreaterThan(guard);
+    expect(panel).toContain("disabled={outputTooLarge}");
+    expect(panel).toContain("disabledReason={outputLimitReason}");
+  });
 });

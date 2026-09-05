@@ -11,6 +11,10 @@ export interface NAIImageSize {
   height: number;
 }
 
+export interface NAIEnhanceOutputSize extends NAIImageSize {
+  exceedsLimit: boolean;
+}
+
 export function snapNAIDimension(value: unknown, fallback = 1024): number {
   const parsed = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(parsed)) return snapNAIDimension(fallback, 1024);
@@ -81,6 +85,30 @@ export function adaptiveNAIImageSize(
   fallback: NAIImageSize = { width: 832, height: 1216 },
 ): NAIImageSize {
   return fitNAIImageSize(width, height, fallback);
+}
+
+/**
+ * Resolve the requested Enhance output without silently shrinking it. This is
+ * used by the 2x Enhance path so an oversized request can be stopped locally.
+ */
+export function resolveNAIEnhanceOutputSize(
+  width: unknown,
+  height: unknown,
+  scale: unknown,
+  fallback: NAIImageSize = { width: 832, height: 1216 },
+): NAIEnhanceOutputSize {
+  const parsedScale = Number(scale);
+  const safeScale = Number.isFinite(parsedScale)
+    ? Math.max(1, parsedScale)
+    : 1;
+  const output = {
+    width: snapNAIDimension(Number(width) * safeScale, fallback.width),
+    height: snapNAIDimension(Number(height) * safeScale, fallback.height),
+  };
+  return {
+    ...output,
+    exceedsLimit: output.width * output.height > NAI_MAX_PIXEL_AREA,
+  };
 }
 
 export function isNAIDimension(value: unknown): boolean {

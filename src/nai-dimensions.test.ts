@@ -5,6 +5,7 @@ import {
   isNAIDimension,
   isNAIImageSize,
   NAI_MAX_PIXEL_AREA,
+  resolveNAIEnhanceOutputSize,
   snapNAIDimension,
   snapNAIDimensionWithinArea,
 } from "./nai-dimensions";
@@ -36,5 +37,22 @@ describe("NovelAI custom dimensions", () => {
     expect(fitted.width * fitted.height).toBeLessThanOrEqual(
       NAI_MAX_PIXEL_AREA,
     );
+  });
+
+  it("allows Enhance 2x exactly at the official pixel limit", () => {
+    expect(resolveNAIEnhanceOutputSize(1024, 768, 2)).toEqual({
+      width: 2048,
+      height: 1536,
+      exceedsLimit: false,
+    });
+    expect(2048 * 1536).toBe(NAI_MAX_PIXEL_AREA);
+  });
+
+  it("flags an oversized Enhance 2x target instead of silently shrinking it", () => {
+    expect(resolveNAIEnhanceOutputSize(832, 1216, 2)).toEqual({
+      width: 1664,
+      height: 2432,
+      exceedsLimit: true,
+    });
   });
 });

@@ -38,6 +38,15 @@ void main() {
     expect(oversized.$1 * oversized.$2, lessThanOrEqualTo(naiMaxPixelArea));
   });
 
+  test('Enhance 2x is blocked before exceeding the official pixel area', () {
+    final boundary = resolveNaiEnhanceOutputSize(1024, 768, 2);
+    expect(boundary, (width: 2048, height: 1536, exceedsLimit: false));
+    expect(boundary.width * boundary.height, naiMaxPixelArea);
+
+    final oversized = resolveNaiEnhanceOutputSize(832, 1216, 2);
+    expect(oversized, (width: 1664, height: 2432, exceedsLimit: true));
+  });
+
   test('Light and transparent background are normalized to V5 only', () {
     final legacy = GenerateParams(
       model: 'nai-diffusion-4-5-full',

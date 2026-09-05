@@ -21,6 +21,7 @@ import {
   supportsNAIVariety,
   MAX_NAI_DIRECTOR_INPUT_PIXELS,
   MAX_NAI_UPSCALE_INPUT_PIXELS,
+  MAX_NAI_UPSCALE_OUTPUT_DIMENSION,
   type AccountSummary,
   type AnlasQuoteRequest,
   type AnlasQuoteResult,
@@ -176,12 +177,17 @@ export function resolveUpscaleBaseUrl(rawImageBaseUrl: string): string {
 const UPSCALE_MODELS = new Set([
   "nai-diffusion-5-full",
   "nai-diffusion-5-curated",
-  "nai-diffusion-4-5-full",
   "nai-diffusion-4-5-curated",
   "nai-diffusion-4-full",
   "nai-diffusion-4-curated",
   "nai-diffusion-3",
   "nai-diffusion-3-furry",
+]);
+
+const UPSCALE_MODEL_ALIASES = new Map<string, string>([
+  // The standalone upscaler rejects V4.5 Full. The paired Curated model uses
+  // the same upscaler while keeping the request in the V4.5 model family.
+  ["nai-diffusion-4-5-full", "nai-diffusion-4-5-curated"],
 ]);
 
 /** Normalize the current generation model for the dedicated upscale API.
@@ -195,9 +201,26 @@ export function resolveUpscaleModel(rawModel: string): string {
   const candidate = normalized === "nai-diffusion-furry-3"
     ? "nai-diffusion-3-furry"
     : normalized;
-  return UPSCALE_MODELS.has(candidate)
-    ? candidate
+  const compatibleModel = UPSCALE_MODEL_ALIASES.get(candidate) ?? candidate;
+  return UPSCALE_MODELS.has(compatibleModel)
+    ? compatibleModel
     : "nai-diffusion-5-curated";
+}
+
+export function resolveUpscaleOutputSize(
+  width: number,
+  height: number,
+  scale: UpscaleScale,
+) {
+  const outputWidth = width * scale;
+  const outputHeight = height * scale;
+  return {
+    width: outputWidth,
+    height: outputHeight,
+    exceedsLimit:
+      outputWidth > MAX_NAI_UPSCALE_OUTPUT_DIMENSION ||
+      outputHeight > MAX_NAI_UPSCALE_OUTPUT_DIMENSION,
+  };
 }
 
 function tierName(tier?: number) {
@@ -4824,6 +4847,17 @@ export async function upscaleImg(
       buffer,
       MAX_NAI_UPSCALE_INPUT_PIXELS,
     );
+    const outputSize = resolveUpscaleOutputSize(
+      preparedImage.width,
+      preparedImage.height,
+      scale,
+    );
+    if (outputSize.exceedsLimit) {
+      return {
+        ok: false,
+        message: `超分后尺寸将达到 ${outputSize.width}×${outputSize.height}，超过允许的最大尺寸 ${MAX_NAI_UPSCALE_OUTPUT_DIMENSION}×${MAX_NAI_UPSCALE_OUTPUT_DIMENSION}，已取消请求。请改用 2× 或换用更小的原图。`,
+      };
+    }
     const settings = getSettings();
     // The dedicated upscaler is served by image.novelai.net and returns a ZIP
     // archive (same as generate-image), not a raw PNG.

@@ -138,6 +138,12 @@ void main() {
     expect(resolveUpscaleModel('nai-diffusion-5-full'), 'nai-diffusion-5-full');
     expect(resolveUpscaleModel('nai-diffusion-5-full-inpainting'),
         'nai-diffusion-5-full');
+    expect(resolveUpscaleModel('nai-diffusion-4-5-full'),
+        'nai-diffusion-4-5-curated');
+    expect(resolveUpscaleModel('nai-diffusion-4-5-full-inpainting'),
+        'nai-diffusion-4-5-curated');
+    expect(resolveUpscaleModel('nai-diffusion-4-5-curated'),
+        'nai-diffusion-4-5-curated');
     expect(
         resolveUpscaleModel('nai-diffusion-furry-3'), 'nai-diffusion-3-furry');
     expect(resolveUpscaleModel('retired-model'), 'nai-diffusion-5-curated');

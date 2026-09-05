@@ -76,6 +76,7 @@ import {
   MAX_NAI_DIRECTOR_INPUT_PIXELS,
   MAX_NAI_SEED,
   MAX_NAI_UPSCALE_INPUT_PIXELS,
+  MAX_NAI_UPSCALE_OUTPUT_DIMENSION,
   NAI_INPAINT_MODELS,
   NAI_MODELS,
   NAI_SAMPLERS,
@@ -116,6 +117,8 @@ import {
   maxNAIDimensionFor,
   NAI_MIN_DIMENSION,
   NAI_DIMENSION_STEP,
+  NAI_MAX_PIXEL_AREA,
+  resolveNAIEnhanceOutputSize,
   snapNAIDimensionWithinArea,
 } from "./nai-dimensions";
 
@@ -3621,6 +3624,17 @@ function UpscalePanel({ openSettings }: { openSettings: () => void }) {
   const preparedSize = workbenchImage
     ? fitSizeWithinPixels(workbenchImage.width, workbenchImage.height, MAX_NAI_UPSCALE_INPUT_PIXELS)
     : null;
+  const outputSize = preparedSize
+    ? { width: preparedSize.width * scale, height: preparedSize.height * scale }
+    : null;
+  const outputTooLarge = Boolean(
+    outputSize &&
+      (outputSize.width > MAX_NAI_UPSCALE_OUTPUT_DIMENSION ||
+        outputSize.height > MAX_NAI_UPSCALE_OUTPUT_DIMENSION),
+  );
+  const outputLimitReason = outputTooLarge && outputSize
+    ? `超分后尺寸将达到 ${outputSize.width}×${outputSize.height}，超过允许的最大尺寸 ${MAX_NAI_UPSCALE_OUTPUT_DIMENSION}×${MAX_NAI_UPSCALE_OUTPUT_DIMENSION}。请选择 2× 或换用更小的原图。`
+    : "";
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
   return (
@@ -3633,7 +3647,7 @@ function UpscalePanel({ openSettings }: { openSettings: () => void }) {
           <Button variant={scale === 4 ? "primary" : "secondary"} onClick={() => setScale(4)}>4×</Button>
         </div>
         {workbenchImage && (
-          <div className={clsx("info-card", preparedSize?.resized && "limit-card")}>
+          <div className={clsx("info-card", (preparedSize?.resized || outputTooLarge) && "limit-card")}>
             <strong>{t("upscale.sizeEstimate")}</strong>
             <span>
               {preparedSize?.resized
@@ -3643,11 +3657,18 @@ function UpscalePanel({ openSettings }: { openSettings: () => void }) {
             {preparedSize?.resized ? (
               <small>{t("upscale.resizeHint")}</small>
             ) : null}
+            {outputTooLarge ? <small>{outputLimitReason}</small> : null}
           </div>
         )}
         <FeatureCostCard label={t("cost.beforeRun")} feature="upscale" />
       </div>
-      <AccountAndRunButton label={f("upscale.run", { scale })} onRun={() => void upscale()} openSettings={openSettings} />
+      <AccountAndRunButton
+        label={f("upscale.run", { scale })}
+        onRun={() => void upscale()}
+        openSettings={openSettings}
+        disabled={outputTooLarge}
+        disabledReason={outputLimitReason}
+      />
     </>
   );
 }
@@ -3666,6 +3687,13 @@ function EnhancePanel({ openSettings }: { openSettings: () => void }) {
 
   async function runEnhance() {
     if (!workbenchImage) return;
+    const requestedTarget = resolveNAIEnhanceOutputSize(
+      workbenchImage.width,
+      workbenchImage.height,
+      enhanceScale,
+      params,
+    );
+    if (enhanceScale > 1 && requestedTarget.exceedsLimit) return;
     const previous = { width: params.width, height: params.height, strength: i2iParams.strength, noise: i2iParams.noise, sizeMode: i2iSizeMode };
     const target = adaptiveNAIImageSize(workbenchImage.width * enhanceScale, workbenchImage.height * enhanceScale, params);
     setI2ISizeMode("custom");
@@ -3685,7 +3713,18 @@ function EnhancePanel({ openSettings }: { openSettings: () => void }) {
     }
   }
 
-  const target = workbenchImage ? adaptiveNAIImageSize(workbenchImage.width * enhanceScale, workbenchImage.height * enhanceScale, params) : null;
+  const requestedTarget = workbenchImage
+    ? resolveNAIEnhanceOutputSize(workbenchImage.width, workbenchImage.height, enhanceScale, params)
+    : null;
+  const outputTooLarge = Boolean(enhanceScale > 1 && requestedTarget?.exceedsLimit);
+  const target = workbenchImage && requestedTarget
+    ? outputTooLarge
+      ? requestedTarget
+      : adaptiveNAIImageSize(workbenchImage.width * enhanceScale, workbenchImage.height * enhanceScale, params)
+    : null;
+  const outputLimitReason = outputTooLarge && target
+    ? `增强并放大后的目标尺寸 ${target.width}×${target.height}（${(target.width * target.height).toLocaleString()} 像素）超过 NovelAI 允许的 ${NAI_MAX_PIXEL_AREA.toLocaleString()} 像素上限。请选择 1× 或换用更小的原图；未发送请求。`
+    : "";
   return (
     <>
       <div className="panel-scroll">
@@ -3699,10 +3738,10 @@ function EnhancePanel({ openSettings }: { openSettings: () => void }) {
             <Button variant={enhanceScale === 2 ? "primary" : "secondary"} onClick={() => setEnhanceScale(2)}>2× 同时放大</Button>
           </div>
         </div>
-        {workbenchImage && target ? <div className="info-card"><strong>输出尺寸</strong><span>{workbenchImage.width}×{workbenchImage.height} → {target.width}×{target.height}</span><small>1×只做二次扩散增强；2×会改变分辨率。尺寸会按 NovelAI 支持范围自动对齐。</small></div> : null}
+        {workbenchImage && target ? <div className={clsx("info-card", outputTooLarge && "limit-card")}><strong>输出尺寸</strong><span>{workbenchImage.width}×{workbenchImage.height} → {target.width}×{target.height}</span><small>{outputTooLarge ? outputLimitReason : "1×只做二次扩散增强；2×会改变分辨率。尺寸会按 NovelAI 支持范围自动对齐。"}</small></div> : null}
         <FeatureCostCard label="生成前扣费" feature="i2i" />
       </div>
-      <AccountAndRunButton label={`增强图像 ${enhanceScale}×`} onRun={() => void runEnhance()} openSettings={openSettings} />
+      <AccountAndRunButton label={`增强图像 ${enhanceScale}×`} onRun={() => void runEnhance()} openSettings={openSettings} disabled={outputTooLarge} disabledReason={outputLimitReason} />
     </>
   );
 }

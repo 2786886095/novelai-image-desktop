@@ -88,7 +88,6 @@ String resolveNovelAiBaseUrl(
 const _upscaleModels = <String>{
   'nai-diffusion-5-full',
   'nai-diffusion-5-curated',
-  'nai-diffusion-4-5-full',
   'nai-diffusion-4-5-curated',
   'nai-diffusion-4-full',
   'nai-diffusion-4-curated',
@@ -96,13 +95,20 @@ const _upscaleModels = <String>{
   'nai-diffusion-3-furry',
 };
 
+const _upscaleModelAliases = <String, String>{
+  // The standalone upscaler rejects V4.5 Full. Its paired Curated model uses
+  // the same upscaler while keeping the request in the V4.5 model family.
+  'nai-diffusion-4-5-full': 'nai-diffusion-4-5-curated',
+};
+
 String resolveUpscaleModel(String rawModel) {
   var candidate = rawModel.trim().replaceFirst(RegExp(r'-inpainting$'), '');
   if (candidate == 'nai-diffusion-furry-3') {
     candidate = 'nai-diffusion-3-furry';
   }
-  return _upscaleModels.contains(candidate)
-      ? candidate
+  final compatibleModel = _upscaleModelAliases[candidate] ?? candidate;
+  return _upscaleModels.contains(compatibleModel)
+      ? compatibleModel
       : 'nai-diffusion-5-curated';
 }
 

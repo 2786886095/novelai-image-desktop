@@ -380,6 +380,23 @@ int snapNaiDimensionWithinArea(
       fallbackHeight: fallbackHeight,
     );
 
+({int width, int height, bool exceedsLimit}) resolveNaiEnhanceOutputSize(
+  int width,
+  int height,
+  int scale, {
+  int fallbackWidth = 832,
+  int fallbackHeight = 1216,
+}) {
+  final safeScale = math.max(1, scale);
+  final outputWidth = snapNaiDimension(width * safeScale, fallbackWidth);
+  final outputHeight = snapNaiDimension(height * safeScale, fallbackHeight);
+  return (
+    width: outputWidth,
+    height: outputHeight,
+    exceedsLimit: outputWidth * outputHeight > naiMaxPixelArea,
+  );
+}
+
 double _finiteClamp(
     double value, double minimum, double maximum, double fallback) {
   if (!value.isFinite) return fallback;

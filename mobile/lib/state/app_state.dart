@@ -2294,6 +2294,23 @@ class AppState extends ChangeNotifier {
   Future<void> enhance() async {
     if (busy || workbenchImage == null) return;
     final source = workbenchImage!;
+    final requestedTarget = resolveNaiEnhanceOutputSize(
+      source.width,
+      source.height,
+      enhanceScale.clamp(1, 2),
+      fallbackWidth: source.width,
+      fallbackHeight: source.height,
+    );
+    if (enhanceScale > 1 && requestedTarget.exceedsLimit) {
+      status = _rf('status.enhanceOutputTooLarge', {
+        'width': requestedTarget.width,
+        'height': requestedTarget.height,
+        'pixels': requestedTarget.width * requestedTarget.height,
+        'max': naiMaxPixelArea,
+      });
+      notifyListeners();
+      return;
+    }
     final previousWidth = params.width;
     final previousHeight = params.height;
     final previousStrength = i2i.strength;
@@ -2405,6 +2422,16 @@ class AppState extends ChangeNotifier {
       final image = await _workbenchBytes();
       final dims = workbenchImage;
       if (dims == null) throw Exception(_rt('error.imageRequired'));
+      final prepared = prepareImageWithinPixels(image);
+      final outputSize = resolveUpscaleOutputSize(
+          prepared.width, prepared.height, upscaleScale);
+      if (outputSize.exceedsLimit) {
+        throw Exception(_rf('status.upscaleOutputTooLarge', {
+          'width': outputSize.width,
+          'height': outputSize.height,
+          'max': maxNaiUpscaleOutputDimension,
+        }));
+      }
       final before = await _authorizeQuotedRun(
         token,
         (fresh) => calculateUpscaleAnlas(
@@ -2414,7 +2441,6 @@ class AppState extends ChangeNotifier {
           language: settings.language,
         ),
       );
-      final prepared = prepareImageWithinPixels(image);
       status = prepared.resized
           ? _rf('status.upscalePreparedRunning', {
               'width': prepared.width,

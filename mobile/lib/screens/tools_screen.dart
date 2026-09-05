@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import '../billing/anlas.dart';
 import '../i18n/app_locales.dart';
+import '../i18n/runtime_text.dart';
 import '../inpaint/inpaint_mask.dart';
 import '../models/nai_models.dart';
 import '../state/app_state.dart';
@@ -463,12 +464,14 @@ class _InpaintPanelState extends State<_InpaintPanel> {
                   ButtonSegment(
                     value: 'original',
                     icon: const Icon(Icons.photo_outlined),
-                    label: Text(language.startsWith('zh') ? '始终使用原图' : 'Original'),
+                    label:
+                        Text(language.startsWith('zh') ? '始终使用原图' : 'Original'),
                   ),
                   ButtonSegment(
                     value: 'latest',
                     icon: const Icon(Icons.auto_awesome_outlined),
-                    label: Text(language.startsWith('zh') ? '使用最新结果' : 'Latest result'),
+                    label: Text(
+                        language.startsWith('zh') ? '使用最新结果' : 'Latest result'),
                   ),
                 ],
                 selected: {state.inpaintSourceMode},
@@ -877,14 +880,36 @@ class _EnhancePanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = context.watch<AppState>();
     final source = s.workbenchImage;
-    final target = source == null
+    final requestedTarget = source == null
         ? null
-        : adaptiveNaiImageSize(
-            source.width * s.enhanceScale,
-            source.height * s.enhanceScale,
+        : resolveNaiEnhanceOutputSize(
+            source.width,
+            source.height,
+            s.enhanceScale,
             fallbackWidth: source.width,
             fallbackHeight: source.height,
           );
+    final outputTooLarge =
+        s.enhanceScale > 1 && (requestedTarget?.exceedsLimit ?? false);
+    final target = source == null || requestedTarget == null
+        ? null
+        : outputTooLarge
+            ? (requestedTarget.width, requestedTarget.height)
+            : adaptiveNaiImageSize(
+                source.width * s.enhanceScale,
+                source.height * s.enhanceScale,
+                fallbackWidth: source.width,
+                fallbackHeight: source.height,
+              );
+    final outputLimitReason = outputTooLarge && target != null
+        ? runtimeFormatFor(
+            s.settings.language, 'status.enhanceOutputTooLarge', {
+            'width': target.$1,
+            'height': target.$2,
+            'pixels': target.$1 * target.$2,
+            'max': naiMaxPixelArea,
+          })
+        : '';
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -920,10 +945,20 @@ class _EnhancePanel extends StatelessWidget {
             const SizedBox(height: 8),
             Text('${source.width}×${source.height} → ${target.$1}×${target.$2}',
                 style: Theme.of(context).textTheme.bodySmall),
+            if (outputTooLarge) ...[
+              const SizedBox(height: 6),
+              Text(
+                outputLimitReason,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+              ),
+            ],
           ],
           const SizedBox(height: 12),
           FilledButton.icon(
-            onPressed: s.busy || source == null ? null : s.enhance,
+            onPressed:
+                s.busy || source == null || outputTooLarge ? null : s.enhance,
             icon: const Icon(Icons.auto_awesome),
             label: Text('增强图像 ${s.enhanceScale}×'),
           ),

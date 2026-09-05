@@ -3,6 +3,23 @@ import 'dart:typed_data';
 
 import 'package:image/image.dart' as image_lib;
 
+const int maxNaiUpscaleOutputDimension = 4096;
+
+({int width, int height, bool exceedsLimit}) resolveUpscaleOutputSize(
+  int width,
+  int height,
+  int scale,
+) {
+  final outputWidth = width * scale;
+  final outputHeight = height * scale;
+  return (
+    width: outputWidth,
+    height: outputHeight,
+    exceedsLimit: outputWidth > maxNaiUpscaleOutputDimension ||
+        outputHeight > maxNaiUpscaleOutputDimension,
+  );
+}
+
 class PreparedImage {
   final Uint8List bytes;
   final int width;

@@ -819,6 +819,7 @@ export const NAI_INPAINT_MODELS = [
 export type NAIInpaintModel = (typeof NAI_INPAINT_MODELS)[number]["value"];
 export type UpscaleScale = 2 | 4;
 export const MAX_NAI_UPSCALE_INPUT_PIXELS = 1024 * 1024;
+export const MAX_NAI_UPSCALE_OUTPUT_DIMENSION = 4096;
 export const MAX_NAI_DIRECTOR_INPUT_PIXELS = 1024 * 1024;
 
 export const DIRECTOR_TOOLS = [
