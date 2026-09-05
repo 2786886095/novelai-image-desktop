@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
-import { Button, CommittedNumberInput, NumberInput, Toggle } from "./components/ui";
+import { Button, CommittedNumberInput, NumberInput, Toggle, SelectMenuCompat } from "./components/ui";
 import { confirmAction } from "./components/confirm";
 import { Icon } from "./components/icons";
 import { QualityPresetControl } from "./components/QualityPresetControl";
@@ -391,7 +391,7 @@ function BatchParamFields({
       <div className="comic-panel-param-controls">
         <label className="comic-field">
           <span>{t("batch.param.model")}</span>
-          <select
+          <SelectMenuCompat
             value={value.model}
             onChange={(e) => {
               const model = e.target.value as NAIModel;
@@ -411,11 +411,11 @@ function BatchParamFields({
                 {localizedDesktopOptionLabel(language, m.value, m.label)}
               </option>
             ))}
-          </select>
+          </SelectMenuCompat>
         </label>
         <label className="comic-field">
           <span>{t("batch.param.sampler")}</span>
-          <select
+          <SelectMenuCompat
             value={value.sampler}
             onChange={(e) => onPatch({ sampler: e.target.value as NAISampler })}
           >
@@ -424,7 +424,7 @@ function BatchParamFields({
                 {localizedDesktopOptionLabel(language, s.value, s.label)}
               </option>
             ))}
-          </select>
+          </SelectMenuCompat>
         </label>
         <CommittedNumberInput
           label={t("batch.param.width")}
@@ -473,7 +473,7 @@ function BatchParamFields({
         />
         {supportsNAINoiseScheduleControl(value.model) && <label className="comic-field">
           <span>{t("batch.param.noiseSchedule")}</span>
-          <select
+          <SelectMenuCompat
             value={value.noiseSchedule}
             onChange={(e) => onPatch({ noiseSchedule: e.target.value })}
           >
@@ -490,7 +490,7 @@ function BatchParamFields({
                 "Exponential",
               )}
             </option>
-          </select>
+          </SelectMenuCompat>
         </label>}
         <NumberInput
           label={t("batch.param.seed")}
@@ -503,7 +503,7 @@ function BatchParamFields({
         />
         <label className="comic-field">
           <span>{t("batch.param.ucPreset")}</span>
-          <select
+          <SelectMenuCompat
             value={value.ucPreset}
             onChange={(e) =>
               onPatch({ ucPreset: Number(e.target.value) as UcPreset })
@@ -514,7 +514,7 @@ function BatchParamFields({
                 {localizedDesktopOptionLabel(language, p.value, p.label)}
               </option>
             ))}
-          </select>
+          </SelectMenuCompat>
         </label>
       </div>
       <small className="dimension-input-hint">{t("size.commitHint")}</small>
@@ -614,7 +614,7 @@ function BatchPrecisePicker({
           {refs.map((r, i) => (
             <div className="batch-ref-row" key={i}>
               <img src={dataUrlFromBase64(r.base64)} alt={`precise-${i}`} />
-              <select
+              <SelectMenuCompat
                 value={r.type}
                 onChange={(e) =>
                   onChange(
@@ -637,7 +637,7 @@ function BatchPrecisePicker({
                 <option value="character&style">
                   {t("batch.ref.characterStyle")}
                 </option>
-              </select>
+              </SelectMenuCompat>
               <CommittedNumberInput label={t("batch.ref.strength")} value={r.strength} min={0} max={1} step={0.05} normalize={(value) => Math.max(0, Math.min(1, value))} onCommit={(value) => onChange(refs.map((x, j) => j === i ? { ...x, strength: value } : x))} />
               <CommittedNumberInput label={t("batch.ref.fidelity")} value={r.fidelity} min={0} max={1} step={0.05} normalize={(value) => Math.max(0, Math.min(1, value))} onCommit={(value) => onChange(refs.map((x, j) => j === i ? { ...x, fidelity: value } : x))} />
               <button
@@ -1796,7 +1796,7 @@ export function BatchRedraw({ onBack }: { onBack?: () => void }) {
             </label>
             <span className="redraw-ai-mode">
               {t("batch.prompts.reverseMode")}
-              <select
+              <SelectMenuCompat
                 value={project.aiMode}
                 onChange={(e) =>
                   patch({ aiMode: e.target.value as ReversePromptMode })
@@ -1805,7 +1805,7 @@ export function BatchRedraw({ onBack }: { onBack?: () => void }) {
                 <option value="tags">{t("mode.tags")}</option>
                 <option value="natural">{t("mode.natural")}</option>
                 <option value="mixed">{t("mode.mixed")}</option>
-              </select>
+              </SelectMenuCompat>
             </span>
             <Button
               variant="secondary"
@@ -2055,7 +2055,7 @@ export function BatchRedraw({ onBack }: { onBack?: () => void }) {
             <div className="redraw-results-actions">
               <label className="redraw-results-count-control">
                 <span>{t("batch.params.candidateCount")}</span>
-                <select
+                <SelectMenuCompat
                   value={candidateCount}
                   disabled={running}
                   onChange={(event) =>
@@ -2073,7 +2073,7 @@ export function BatchRedraw({ onBack }: { onBack?: () => void }) {
                       </option>
                     ),
                   )}
-                </select>
+                </SelectMenuCompat>
               </label>
               {running ? (
                 <Button variant="danger" onClick={stop} disabled={cancelling}>

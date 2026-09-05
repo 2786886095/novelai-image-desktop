@@ -71,6 +71,7 @@ export const ONLINE_GALLERY_SOURCES: readonly OnlineGallerySourceInfo[] = [
 export interface OnlineGallerySearchRequest {
   source: Exclude<OnlineGallerySourceId, "aitag" | "artist-ranking">;
   page?: number;
+  pageSize?: number;
   query?: string;
   collectionId?: string;
   safeOnly?: boolean;

@@ -13,6 +13,7 @@ import '../references/reference_presets.dart';
 import '../state/app_state.dart';
 import '../ui/quality_preset_control.dart';
 import '../ui/studio_shell.dart';
+import '../ui/studio_theme.dart';
 import 'generate_screen.dart';
 
 (int, int) _batchOutputSize(
@@ -1600,7 +1601,7 @@ class _BatchResultTile extends StatelessWidget {
                     child: DecoratedBox(
                       decoration: BoxDecoration(
                         color: colors.surface.withOpacity(0.88),
-                        borderRadius: BorderRadius.circular(999),
+                        borderRadius: BorderRadius.circular(StudioRadii.pill),
                       ),
                       child: Checkbox(
                         visualDensity: VisualDensity.compact,
@@ -1618,7 +1619,7 @@ class _BatchResultTile extends StatelessWidget {
                             horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
                           color: colors.primaryContainer.withOpacity(0.94),
-                          borderRadius: BorderRadius.circular(999),
+                          borderRadius: BorderRadius.circular(StudioRadii.pill),
                         ),
                         child: Text(
                           '$selectedCandidateIndex/${item.candidates.length}',
@@ -1638,7 +1639,7 @@ class _BatchResultTile extends StatelessWidget {
                           horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
                         color: statusColor.withOpacity(0.92),
-                        borderRadius: BorderRadius.circular(999),
+                        borderRadius: BorderRadius.circular(StudioRadii.pill),
                       ),
                       child: Text(
                         statusLabel,

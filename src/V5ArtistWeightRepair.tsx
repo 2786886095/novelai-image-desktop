@@ -6,7 +6,7 @@ import {
   type InputHTMLAttributes,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { AppPortal, Button } from "./components/ui";
+import { AppPortal, Button, SelectMenuCompat } from "./components/ui";
 import { Icon } from "./components/icons";
 import { QualityPresetControl } from "./components/QualityPresetControl";
 import { PositivePromptPresetControl } from "./PositivePromptPresets";
@@ -234,6 +234,22 @@ const COPY_TEXT = {
   "ko-KR": { artists: "작가 문자열 복사", full: "전체 프롬프트 복사", copied: "복사됨" },
 } satisfies Record<AppLanguage, { artists: string; full: string; copied: string }>;
 
+const STYLE_REFERENCE_TEXT = {
+  "zh-CN": { title: "画风参考", loading: "正在读取参考图…", empty: "暂无可用参考图" },
+  "zh-TW": { title: "畫風參考", loading: "正在讀取參考圖…", empty: "沒有可用參考圖" },
+  "en-US": { title: "Style reference", loading: "Loading reference image…", empty: "No reference image available" },
+  "ja-JP": { title: "画風リファレンス", loading: "参照画像を読み込み中…", empty: "利用できる参照画像がありません" },
+  "ko-KR": { title: "화풍 참조", loading: "참조 이미지 불러오는 중…", empty: "사용 가능한 참조 이미지 없음" },
+} satisfies Record<AppLanguage, { title: string; loading: string; empty: string }>;
+
+const DRAW_LIBRARY_TEXT = {
+  "zh-CN": { title: "画风 Tag 库", selected: "已选 {count} 个；完整复用随机画师抽卡的本地 Danbooru 画风库，每个所选 Tag 都加入每一组并随机赋权。", search: "搜索 Tag、中文含义或作品名", local: "本地 Danbooru 数据库", offline: "内置离线库", all: "全部画风 / 动漫游戏", styles: "Danbooru 画风模仿", works: "动漫 / 游戏 / 漫画作品", loading: "正在读取本地 Tag 库…", empty: "没有匹配项；可在设置中安装完整 Danbooru 标签数据。", more: "载入更多" },
+  "zh-TW": { title: "畫風 Tag 庫", selected: "已選 {count} 個；完整共用隨機畫師抽卡的本機 Danbooru 畫風庫，每個 Tag 都會加入各組並隨機加權。", search: "搜尋 Tag、中文含義或作品名", local: "本機 Danbooru 資料庫", offline: "內置離線庫", all: "全部畫風／動漫遊戲", styles: "Danbooru 畫風模仿", works: "動漫／遊戲／漫畫作品", loading: "正在讀取本機 Tag 庫…", empty: "沒有符合項目；可在設定中安裝完整 Danbooru 標籤資料。", more: "載入更多" },
+  "en-US": { title: "Style Tag library", selected: "{count} selected; the full local Danbooru style catalog is shared with Random Artist Draw and every selected tag is weighted in each set.", search: "Search tags, meanings, anime, or games", local: "Local Danbooru database", offline: "Built-in offline library", all: "All styles / franchises", styles: "Danbooru style parodies", works: "Anime / game / manga", loading: "Loading local Tag catalog…", empty: "No matches; install the full Danbooru catalog in Settings.", more: "Load more" },
+  "ja-JP": { title: "画風 Tag ライブラリ", selected: "{count} 件を選択。ローカル Danbooru 画風ライブラリを共有し、各 Tag を各候補へランダム加重します。", search: "Tag・意味・作品名を検索", local: "ローカル Danbooru DB", offline: "内蔵オフラインライブラリ", all: "すべての画風／作品", styles: "Danbooru 画風パロディ", works: "アニメ／ゲーム／漫画", loading: "ローカル Tag を読み込み中…", empty: "一致なし。設定から完全版 Danbooru データを導入できます。", more: "さらに読み込む" },
+  "ko-KR": { title: "화풍 Tag 라이브러리", selected: "{count}개 선택. 로컬 Danbooru 화풍 라이브러리를 공유하며 각 Tag를 모든 후보에 무작위 가중합니다.", search: "Tag, 의미, 작품명 검색", local: "로컬 Danbooru DB", offline: "내장 오프라인 라이브러리", all: "모든 화풍 / 작품", styles: "Danbooru 화풍 패러디", works: "애니 / 게임 / 만화", loading: "로컬 Tag 불러오는 중…", empty: "일치 항목 없음. 설정에서 전체 Danbooru 데이터를 설치할 수 있습니다.", more: "더 불러오기" },
+} satisfies Record<AppLanguage, Record<string, string>>;
+
 function freshSeed() {
   return Math.max(1, Math.floor(Math.random() * 2_147_483_647));
 }
@@ -358,6 +374,8 @@ export default function V5ArtistWeightRepair({
     ? "artist-string-draw"
     : "v5-repair";
   const text = TEXT[language];
+  const styleReferenceText = STYLE_REFERENCE_TEXT[language];
+  const drawLibraryText = DRAW_LIBRARY_TEXT[language];
   const copyText = COPY_TEXT[language];
   const paramText = DRAW_PARAM_TEXT[language];
   const sizeLabels = paramText.sizeValues.split("|");
@@ -899,29 +917,29 @@ export default function V5ArtistWeightRepair({
             </label>
             <details className="random-custom-tag-workbench v5-draw-tag-library" onToggle={(event) => setDrawTagLibraryOpen(event.currentTarget.open)}>
               <summary>
-                <span><b>{language === "zh-CN" ? "画风 Tag 库" : language === "zh-TW" ? "畫風 Tag 庫" : "Style Tag library"}</b><small>{language === "zh-CN" ? `已选 ${drawStyleTags.size} 个；完整复用随机画师抽卡的本地 Danbooru 画风库，每个所选 Tag 都加入每一组并随机赋权。` : `Selected ${drawStyleTags.size}; the full local Danbooru style catalog is shared with Random Artist Draw.`}</small></span>
+                <span><b>{drawLibraryText.title}</b><small>{interpolate(drawLibraryText.selected, { count: drawStyleTags.size })}</small></span>
                 <Icon name="chevronDown" />
               </summary>
               <div className="random-custom-tag-body">
                 <div className="random-custom-tag-toolbar">
                   <label className="random-custom-tag-search">
                     <Icon name="search" />
-                    <input type="search" value={drawTagQuery} placeholder={language === "zh-CN" ? "搜索 Tag、中文含义或作品名" : "Search Tag, meaning, anime, or game"} onChange={(event) => setDrawTagQuery(event.target.value)} />
+                    <input type="search" value={drawTagQuery} placeholder={drawLibraryText.search} onChange={(event) => setDrawTagQuery(event.target.value)} />
                     {drawTagQuery && <button type="button" aria-label="clear" onClick={() => setDrawTagQuery("")}><Icon name="clear" /></button>}
                   </label>
-                  <div className="random-custom-tag-toolbar-status" aria-live="polite"><span>{`${drawLibraryItems.length} / ${Math.max(drawCatalogTotal, drawLibraryItems.length)}`}</span><small>{drawCatalogTotal > 0 ? "本地 Danbooru 数据库" : "内置离线库"}</small></div>
+                  <div className="random-custom-tag-toolbar-status" aria-live="polite"><span>{`${drawLibraryItems.length} / ${Math.max(drawCatalogTotal, drawLibraryItems.length)}`}</span><small>{drawCatalogTotal > 0 ? drawLibraryText.local : drawLibraryText.offline}</small></div>
                 </div>
                 <div className="random-custom-tag-categories" role="tablist">
-                  <button type="button" role="tab" aria-selected={drawTagCategory === "all"} className={drawTagCategory === "all" ? "active" : ""} onClick={() => setDrawTagCategory("all")}><span>{language === "zh-CN" ? "全部画风 / 动漫游戏" : "All styles / franchises"}</span><em>{drawTagCategory === "all" && !drawCatalogLoading ? drawCatalogTotal : "DB"}</em></button>
+                  <button type="button" role="tab" aria-selected={drawTagCategory === "all"} className={drawTagCategory === "all" ? "active" : ""} onClick={() => setDrawTagCategory("all")}><span>{drawLibraryText.all}</span><em>{drawTagCategory === "all" && !drawCatalogLoading ? drawCatalogTotal : "DB"}</em></button>
                   {RANDOM_CUSTOM_TAG_LIBRARY.map((category) => <button key={category.id} type="button" role="tab" aria-selected={drawTagCategory === category.id} className={drawTagCategory === category.id ? "active" : ""} onClick={() => setDrawTagCategory(category.id)}><span>{customTagCategoryLabel(category, language)}</span><em>{drawTagCategory === category.id && !drawCatalogLoading ? drawCatalogTotal : "DB"}</em></button>)}
-                  <button type="button" role="tab" aria-selected={drawTagCategory === "danbooru-style"} className={drawTagCategory === "danbooru-style" ? "active" : ""} onClick={() => setDrawTagCategory("danbooru-style")}><span>{language === "zh-CN" ? "Danbooru 画风模仿" : "Danbooru style parodies"}</span><em>{drawTagCategory === "danbooru-style" && !drawCatalogLoading ? drawCatalogTotal : "DB"}</em></button>
-                  <button type="button" role="tab" aria-selected={drawTagCategory === "copyright"} className={drawTagCategory === "copyright" ? "active" : ""} onClick={() => setDrawTagCategory("copyright")}><span>{language === "zh-CN" ? "动漫 / 游戏 / 漫画作品" : "Anime / game / manga"}</span><em>{drawTagCategory === "copyright" && !drawCatalogLoading ? drawCatalogTotal : "DB"}</em></button>
+                  <button type="button" role="tab" aria-selected={drawTagCategory === "danbooru-style"} className={drawTagCategory === "danbooru-style" ? "active" : ""} onClick={() => setDrawTagCategory("danbooru-style")}><span>{drawLibraryText.styles}</span><em>{drawTagCategory === "danbooru-style" && !drawCatalogLoading ? drawCatalogTotal : "DB"}</em></button>
+                  <button type="button" role="tab" aria-selected={drawTagCategory === "copyright"} className={drawTagCategory === "copyright" ? "active" : ""} onClick={() => setDrawTagCategory("copyright")}><span>{drawLibraryText.works}</span><em>{drawTagCategory === "copyright" && !drawCatalogLoading ? drawCatalogTotal : "DB"}</em></button>
                 </div>
                 <div className="random-custom-tag-results" ref={drawCatalogResultsRef}>
                   {drawCatalogLoading
-                    ? <div className="random-custom-tag-empty"><span className="spinner" /><span>{language === "zh-CN" ? "正在读取本地 Tag 库…" : "Loading local Tag catalog…"}</span></div>
+                    ? <div className="random-custom-tag-empty"><span className="spinner" /><span>{drawLibraryText.loading}</span></div>
                     : drawLibraryItems.length === 0
-                      ? <div className="random-custom-tag-empty"><Icon name="search" /><span>{language === "zh-CN" ? "没有匹配项；可在设置中安装完整 Danbooru 标签数据。" : "No matches; install the full Danbooru catalog in Settings."}</span></div>
+                      ? <div className="random-custom-tag-empty"><Icon name="search" /><span>{drawLibraryText.empty}</span></div>
                       : <section><div className="random-custom-tag-grid">
                         {drawLibraryItems.map((entry) => {
                           const selected = drawStyleTags.has(entry.tag);
@@ -934,7 +952,7 @@ export default function V5ArtistWeightRepair({
                             onPointerLeave={canPreview ? hideDrawStylePreview : undefined}
                           ><button type="button" className="random-custom-tag-select" aria-pressed={selected} onClick={() => toggleDrawStyleTag(entry.tag)}><span className="random-custom-tag-check"><Icon name={selected ? "check" : "plus"} /></span><span><b>{entry.tag}</b><small>{meaning}</small></span><em>{canPreview ? <Icon name="image" /> : entry.count > 0 ? entry.count.toLocaleString() : ""}</em></button></article>;
                         })}
-                      </div>{drawCatalogItems.length < drawCatalogTotal && <div className="random-custom-tag-load-more"><Button type="button" variant="ghost" disabled={drawCatalogLoadingMore} onClick={() => void loadMoreDrawCatalog()}>{drawCatalogLoadingMore && <span className="spinner" />}{language === "zh-CN" ? "载入更多" : "Load more"}</Button></div>}</section>}
+                      </div>{drawCatalogItems.length < drawCatalogTotal && <div className="random-custom-tag-load-more"><Button type="button" variant="ghost" disabled={drawCatalogLoadingMore} onClick={() => void loadMoreDrawCatalog()}>{drawCatalogLoadingMore && <span className="spinner" />}{drawLibraryText.more}</Button></div>}</section>}
                 </div>
               </div>
             </details>
@@ -961,7 +979,7 @@ export default function V5ArtistWeightRepair({
               </span>
             </summary>
             <div className="random-generation-grid">
-              <label className="wide"><span>{paramText.model}</span><select value={generationParams.model} onChange={(event) => patchGeneration("model", event.target.value as GenerateParams["model"])}>{NAI_MODELS.map((model) => <option key={model.value} value={model.value}>{model.value}</option>)}</select></label>
+              <label className="wide"><span>{paramText.model}</span><SelectMenuCompat value={generationParams.model} onChange={(event) => patchGeneration("model", event.target.value as GenerateParams["model"])}>{NAI_MODELS.map((model) => <option key={model.value} value={model.value}>{model.value}</option>)}</SelectMenuCompat></label>
               <fieldset className="random-size-fields">
                 <legend>{paramText.size}</legend>
                 <div className="random-size-presets" role="group" aria-label={paramText.size}>
@@ -976,9 +994,9 @@ export default function V5ArtistWeightRepair({
               <label><span>{paramText.steps}</span><NumericDraftInput min={1} max={50} step={1} value={generationParams.steps} normalize={(value) => Math.floor(value)} onCommit={(value) => patchGeneration("steps", value)} /></label>
               <label><span>{paramText.cfg}</span><NumericDraftInput min={1} max={10} step={0.1} value={generationParams.cfgScale} onCommit={(value) => patchGeneration("cfgScale", value)} /></label>
               <label><span>{paramText.rescale}</span><NumericDraftInput min={0} max={1} step={0.01} value={generationParams.cfgRescale} onCommit={(value) => patchGeneration("cfgRescale", value)} /></label>
-              <label><span>{paramText.sampler}</span><select value={generationParams.sampler} onChange={(event) => patchGeneration("sampler", event.target.value as GenerateParams["sampler"])}>{NAI_SAMPLERS.map((sampler) => <option key={sampler.value} value={sampler.value}>{sampler.value}</option>)}</select></label>
-              {supportsNAINoiseScheduleControl(generationParams.model) ? <label><span>{paramText.noise}</span><select value={generationParams.noiseSchedule} onChange={(event) => patchGeneration("noiseSchedule", event.target.value)}><option value="native">native</option><option value="karras">karras</option><option value="exponential">exponential</option></select></label> : null}
-              <label><span>{paramText.uc}</span><select value={generationParams.ucPreset} onChange={(event) => patchGeneration("ucPreset", Number(event.target.value) as GenerateParams["ucPreset"])}>{NAI_UC_PRESETS.map((preset, index) => <option key={preset.value} value={preset.value}>{preset.value} · {ucLabels[index]}</option>)}</select></label>
+              <label><span>{paramText.sampler}</span><SelectMenuCompat value={generationParams.sampler} onChange={(event) => patchGeneration("sampler", event.target.value as GenerateParams["sampler"])}>{NAI_SAMPLERS.map((sampler) => <option key={sampler.value} value={sampler.value}>{sampler.value}</option>)}</SelectMenuCompat></label>
+              {supportsNAINoiseScheduleControl(generationParams.model) ? <label><span>{paramText.noise}</span><SelectMenuCompat value={generationParams.noiseSchedule} onChange={(event) => patchGeneration("noiseSchedule", event.target.value)}><option value="native">native</option><option value="karras">karras</option><option value="exponential">exponential</option></SelectMenuCompat></label> : null}
+              <label><span>{paramText.uc}</span><SelectMenuCompat value={generationParams.ucPreset} onChange={(event) => patchGeneration("ucPreset", Number(event.target.value) as GenerateParams["ucPreset"])}>{NAI_UC_PRESETS.map((preset, index) => <option key={preset.value} value={preset.value}>{preset.value} · {ucLabels[index]}</option>)}</SelectMenuCompat></label>
               <label className="wide"><span>{paramText.negative}</span><textarea value={generationParams.negativePrompt} onChange={(event) => patchGeneration("negativePrompt", event.target.value)} /></label>
               <QualityPresetControl className="wide" language={language} model={generationParams.model} value={generationParams.qualityPreset} transparentBackground={generationParams.transparentBackground} onChange={(value) => patchGeneration("qualityPreset", value)} onTransparentChange={(value) => patchGeneration("transparentBackground", value)} />
               <div className="random-generation-toggles wide">
@@ -1007,13 +1025,13 @@ export default function V5ArtistWeightRepair({
       role="status"
       aria-live="polite"
     >
-      <header><span><Icon name="image" />画风参考</span><b>{drawStylePreview.tag}</b></header>
+      <header><span><Icon name="image" />{styleReferenceText.title}</span><b>{drawStylePreview.tag}</b></header>
       <div className="artist-style-reference-media">
         {drawStylePreview.status === "loading"
-          ? <span className="artist-style-reference-message"><span className="spinner" />正在读取参考图…</span>
+          ? <span className="artist-style-reference-message"><span className="spinner" />{styleReferenceText.loading}</span>
           : drawStylePreview.result
-            ? <img src={drawStylePreview.result.imageUrl} alt={`画风参考：${drawStylePreview.tag}`} />
-            : <span className="artist-style-reference-message"><Icon name="image" />暂无可用参考图</span>}
+            ? <img src={drawStylePreview.result.imageUrl} alt={`${styleReferenceText.title}: ${drawStylePreview.tag}`} />
+            : <span className="artist-style-reference-message"><Icon name="image" />{styleReferenceText.empty}</span>}
       </div>
       <footer><span>{drawStylePreview.meaning}</span>{drawStylePreview.result && <small>{drawStylePreview.result.width}×{drawStylePreview.result.height}</small>}</footer>
     </aside></AppPortal>}

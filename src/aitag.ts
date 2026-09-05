@@ -1,10 +1,14 @@
 export const AITAG_SITE_URL = "https://aitag.win";
-export const AITAG_PAGE_SIZE = 60;
+// The desktop UI paginates in compact 12-item pages. The AITag API currently
+// requires requests of at least 60 items; the Electron adapter translates and
+// slices those API pages back into this client-facing page size.
+export const AITAG_PAGE_SIZE = 12;
 
 export type AitagSort = "new" | "monthly";
 
 export interface AitagSearchRequest {
   page?: number;
+  pageSize?: number;
   query?: string;
   prompt?: string;
   sort?: AitagSort;

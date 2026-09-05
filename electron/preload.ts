@@ -5,6 +5,7 @@ import type {
   ArtistStyleCatalogResult,
   ArtistStyleCatalogScope,
   ArtistStylePreviewResult,
+  ArtistStylePreviewPage,
   AugmentOptions,
   BatchExportFile,
   BatchRedrawRequest,
@@ -135,8 +136,8 @@ contextBridge.exposeInMainWorld("naiDesktop", {
     ipcRenderer.invoke("artistLab:searchArtists", query, limit),
   artistLabPopularArtists: (limit?: number, force?: boolean) =>
     ipcRenderer.invoke("artistLab:popularArtists", limit, force),
-  artistLabArtistRanking: (limit?: number, force?: boolean) =>
-    ipcRenderer.invoke("artistLab:artistRanking", limit, force),
+  artistLabArtistRanking: (page?: number, pageSize?: number, query?: string, force?: boolean) =>
+    ipcRenderer.invoke("artistLab:artistRanking", page, pageSize, query, force),
   artistLabScoreImages: (
     mode: "high" | "light",
     targetPath: string,
@@ -161,6 +162,8 @@ contextBridge.exposeInMainWorld("naiDesktop", {
   artistLabClearModels: () => ipcRenderer.invoke("artistLab:clearModels"),
   artistLabStylePreview: (tag: string) =>
     ipcRenderer.invoke("artistLab:stylePreview", tag) as Promise<ArtistStylePreviewResult | null>,
+  artistLabStylePreviewPage: (tag: string, page = 1, pageSize = 12) =>
+    ipcRenderer.invoke("artistLab:stylePreviewPage", tag, page, pageSize) as Promise<ArtistStylePreviewPage>,
   aitagConfig: () => ipcRenderer.invoke("aitag:config"),
   aitagSearch: (request: AitagSearchRequest) =>
     ipcRenderer.invoke("aitag:search", request),
@@ -188,6 +191,7 @@ contextBridge.exposeInMainWorld("naiDesktop", {
   ) => ipcRenderer.invoke("online-gallery:cache-image", source, url, retentionDays, force),
   hasToken: () => ipcRenderer.invoke("nai:hasToken"),
   accountCached: () => ipcRenderer.invoke("nai:accountCached"),
+  storedToken: () => ipcRenderer.invoke("nai:storedToken"),
   verifyToken: (token: string) => ipcRenderer.invoke("nai:verify", token),
   clearToken: () => ipcRenderer.invoke("nai:clearToken"),
   quoteAnlas: (request: AnlasQuoteRequest) =>
@@ -299,7 +303,7 @@ contextBridge.exposeInMainWorld("naiDesktop", {
   clearAiCallLog: () => ipcRenderer.invoke("ai:clearLog"),
   getReverseTemplateDefaults: () =>
     ipcRenderer.invoke("settings:getReverseDefaults"),
-  listAiModels: (kind: "reverse" | "convert") =>
+  listAiModels: (kind: "reverse" | "convert" | "translate") =>
     ipcRenderer.invoke("nai:listModels", kind),
   testTagServer: (query: string) =>
     ipcRenderer.invoke("nai:testTagServer", query),

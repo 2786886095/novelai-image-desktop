@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import { desktopUiText } from "../i18n";
 
 interface AppErrorBoundaryProps {
   children: ReactNode;
@@ -43,15 +44,16 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
 
   render() {
     if (!this.state.error) return this.props.children;
+    const t = (key: string) => desktopUiText(document.documentElement.lang, key);
     return (
       <section className={this.props.root ? "app-error-boundary is-root" : "app-error-boundary"} role="alert">
-        <strong>这个界面暂时出了问题</strong>
-        <p>{this.props.root ? "应用外壳已保留，请重试或重新载入。" : "其他页签仍可使用；切换页签或点击重试即可恢复。"}</p>
+        <strong>{t("errorBoundary.title")}</strong>
+        <p>{this.props.root ? t("errorBoundary.root") : t("errorBoundary.tab")}</p>
         <code>{this.state.error.message}</code>
         <div>
-          <button type="button" onClick={this.retry}>重试</button>
-          <button type="button" onClick={this.copyDetails}>复制错误</button>
-          {this.props.root && <button type="button" onClick={() => window.location.reload()}>重新载入</button>}
+          <button type="button" onClick={this.retry}>{t("errorBoundary.retry")}</button>
+          <button type="button" onClick={this.copyDetails}>{t("errorBoundary.copy")}</button>
+          {this.props.root && <button type="button" onClick={() => window.location.reload()}>{t("errorBoundary.reload")}</button>}
         </div>
       </section>
     );

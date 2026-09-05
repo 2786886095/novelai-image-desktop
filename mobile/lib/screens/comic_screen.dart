@@ -1311,14 +1311,11 @@ class _ResultCard extends StatelessWidget {
                           ? panel.error
                           : t('comic.noCandidate'),
                     )
-                  : Hero(
-                      tag: 'comic-${selected.id}',
-                      child: Image.file(
-                        File(selected.outputPath),
-                        fit: BoxFit.contain,
-                        errorBuilder: (_, __, ___) =>
-                            Center(child: Text(t('comic.imageMissing'))),
-                      ),
+                  : Image.file(
+                      File(selected.outputPath),
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) =>
+                          Center(child: Text(t('comic.imageMissing'))),
                     ),
             ),
           ),

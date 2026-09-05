@@ -82,6 +82,11 @@ function page(value: unknown): number {
   return parsed >= 1 && parsed <= 100_000 ? parsed : 1;
 }
 
+function pageSize(value: unknown): number {
+  const size = number(value);
+  return [12, 24, 48, 60].includes(size) ? size : PAGE_SIZE;
+}
+
 function query(value: unknown): string {
   return text(value).trim().slice(0, MAX_QUERY_LENGTH);
 }
@@ -241,24 +246,37 @@ async function fetchDonmai(request: OnlineGallerySearchRequest): Promise<OnlineG
   const source = request.source as "danbooru" | "safebooru";
   const base = source === "safebooru" ? "https://safebooru.donmai.us" : "https://danbooru.donmai.us";
   const targetPage = page(request.page);
+  const targetPageSize = pageSize(request.pageSize);
   const rawQuery = query(request.query);
   const safeOnly = request.safeOnly !== false;
   const tags = [rawQuery, safeOnly ? "rating:g" : ""].filter(Boolean).join(" ");
-  const key = `${source}:search:${targetPage}:${tags}`;
+  const key = `${source}:search:${targetPage}:${targetPageSize}:${tags}`;
   return cached(key, async () => {
-    const response = await axios.get(`${base}/posts.json`, {
-      params: { tags, limit: PAGE_SIZE, page: targetPage },
-      timeout: REQUEST_TIMEOUT,
-      headers: headers(base),
-      ...proxyConfig("update"),
-    });
+    const [response, countResponse] = await Promise.all([
+      axios.get(`${base}/posts.json`, {
+        params: { tags, limit: targetPageSize, page: targetPage },
+        timeout: REQUEST_TIMEOUT,
+        headers: headers(base),
+        ...proxyConfig("update"),
+      }),
+      axios.get(`${base}/counts/posts.json`, {
+        params: { tags },
+        timeout: REQUEST_TIMEOUT,
+        headers: headers(base),
+        ...proxyConfig("update"),
+      }).catch(() => null),
+    ]);
     const raw = Array.isArray(response.data) ? response.data : [];
     const items = raw.map((post) => parseDonmaiPost(post, source)).filter((item) => item.id && item.cover.previewUrl);
+    const total = number(record(record(countResponse?.data).counts).posts) || undefined;
     return {
       source,
       page: targetPage,
-      pageSize: PAGE_SIZE,
-      hasMore: raw.length > 0,
+      pageSize: targetPageSize,
+      total,
+      hasMore: total != null
+        ? targetPage * targetPageSize < total
+        : raw.length >= targetPageSize,
       items,
     };
   });
@@ -266,11 +284,12 @@ async function fetchDonmai(request: OnlineGallerySearchRequest): Promise<OnlineG
 
 async function fetchGelbooru(request: OnlineGallerySearchRequest): Promise<OnlineGalleryPage> {
   const targetPage = page(request.page);
+  const targetPageSize = pageSize(request.pageSize);
   const rawQuery = query(request.query);
   const safeOnly = request.safeOnly !== false;
   const tags = [rawQuery, safeOnly ? "rating:general" : ""].filter(Boolean).join(" ");
   const { apiKey, userId } = gelbooruCredentials(request);
-  const key = `gelbooru:search:${targetPage}:${tags}:${userId}:${createHash("sha256").update(apiKey).digest("hex")}`;
+  const key = `gelbooru:search:${targetPage}:${targetPageSize}:${tags}:${userId}:${createHash("sha256").update(apiKey).digest("hex")}`;
   return cached(key, async () => {
     const response = await axios.get("https://gelbooru.com/index.php", {
       params: {
@@ -278,7 +297,7 @@ async function fetchGelbooru(request: OnlineGallerySearchRequest): Promise<Onlin
         s: "post",
         q: "index",
         json: 1,
-        limit: PAGE_SIZE,
+        limit: targetPageSize,
         pid: targetPage - 1,
         tags,
         ...(apiKey && userId ? { api_key: apiKey, user_id: userId } : {}),
@@ -293,9 +312,9 @@ async function fetchGelbooru(request: OnlineGallerySearchRequest): Promise<Onlin
     return {
       source: "gelbooru",
       page: targetPage,
-      pageSize: PAGE_SIZE,
+      pageSize: targetPageSize,
       total,
-      hasMore: raw.length >= PAGE_SIZE,
+      hasMore: raw.length >= targetPageSize,
       items,
     };
   });
@@ -502,6 +521,7 @@ function quickEntryItem(catalog: QuickTagCatalog, codex: QuickTagCodex, entry: J
 async function fetchQuickTag(request: OnlineGallerySearchRequest): Promise<OnlineGalleryPage> {
   const catalog = await loadQuickCatalog();
   const targetPage = page(request.page);
+  const targetPageSize = pageSize(request.pageSize);
   const search = query(request.query).toLowerCase();
   const safeOnly = request.safeOnly !== false;
   const collectionId = safeCollectionId(request.collectionId);
@@ -509,30 +529,30 @@ async function fetchQuickTag(request: OnlineGallerySearchRequest): Promise<Onlin
     const filtered = catalog.codexes
       .filter((item) => !safeOnly || !item.nsfw)
       .filter((item) => !search || [item.title, item.author, item.id, text(item.source)].join(" ").toLowerCase().includes(search));
-    const offset = (targetPage - 1) * PAGE_SIZE;
+    const offset = (targetPage - 1) * targetPageSize;
     return {
       source: "quicktag",
       page: targetPage,
-      pageSize: PAGE_SIZE,
+      pageSize: targetPageSize,
       total: filtered.length,
-      hasMore: offset + PAGE_SIZE < filtered.length,
-      items: filtered.slice(offset, offset + PAGE_SIZE).map((item) => quickCollectionItem(catalog, item)),
+      hasMore: offset + targetPageSize < filtered.length,
+      items: filtered.slice(offset, offset + targetPageSize).map((item) => quickCollectionItem(catalog, item)),
     };
   }
   const codex = await loadQuickCodex(catalog, collectionId);
   if (safeOnly && codex.nsfw) throw new Error("This QuickTagCloud collection is hidden by the all-ages filter");
   const all = codex.entries.map((entry, index) => quickEntryItem(catalog, codex, entry, index));
   const filtered = all.filter((item) => !search || [item.title, item.author, item.description, item.prompt].join(" ").toLowerCase().includes(search));
-  const offset = (targetPage - 1) * PAGE_SIZE;
+  const offset = (targetPage - 1) * targetPageSize;
   return {
     source: "quicktag",
     page: targetPage,
-    pageSize: PAGE_SIZE,
+    pageSize: targetPageSize,
     total: filtered.length,
-    hasMore: offset + PAGE_SIZE < filtered.length,
+    hasMore: offset + targetPageSize < filtered.length,
     collectionId,
     collectionTitle: codex.title,
-    items: filtered.slice(offset, offset + PAGE_SIZE),
+    items: filtered.slice(offset, offset + targetPageSize),
   };
 }
 
@@ -541,6 +561,7 @@ export async function searchOnlineGallery(raw: unknown): Promise<OnlineGalleryPa
   const request: OnlineGallerySearchRequest = {
     source: safeSource(input.source),
     page: page(input.page),
+    pageSize: pageSize(input.pageSize),
     query: query(input.query),
     collectionId: safeCollectionId(input.collectionId),
     safeOnly: input.safeOnly !== false,

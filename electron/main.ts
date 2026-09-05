@@ -94,6 +94,7 @@ import { clearOnlineGalleryDataCache, getOnlineGalleryDetail, searchOnlineGaller
 import {
   artistLabModelStatus,
   artistStylePreview,
+  artistStylePreviewPage,
   discoverSimilarArtists,
   clearArtistLabModels,
   loadPopularArtistRanking,
@@ -179,6 +180,7 @@ import {
   getReversePromptTemplateDefaults,
   getSetting,
   getSettings,
+  getToken,
   getTextToolHistory,
   pruneMissingHistoryItem,
   pruneMissingReverseHistoryItem,
@@ -722,8 +724,8 @@ function registerIpc() {
   );
   ipcMain.handle(
     "artistLab:artistRanking",
-    (_event, limit: unknown, force: unknown) =>
-      loadPopularArtistRanking(limit, force),
+    (_event, page: unknown, pageSize: unknown, query: unknown, force: unknown) =>
+      loadPopularArtistRanking(page, pageSize, query, force),
   );
   ipcMain.handle(
     "artistLab:scoreImages",
@@ -741,6 +743,11 @@ function registerIpc() {
   ipcMain.handle("artistLab:clearModels", () => clearArtistLabModels());
   ipcMain.handle("artistLab:stylePreview", (_event, tag: unknown) =>
     artistStylePreview(tag),
+  );
+  ipcMain.handle(
+    "artistLab:stylePreviewPage",
+    (_event, tag: unknown, page: unknown, pageSize: unknown) =>
+      artistStylePreviewPage(tag, page, pageSize),
   );
   ipcMain.handle("aitag:config", () => getAitagConfig());
   ipcMain.handle("aitag:search", (_event, request: unknown) =>
@@ -775,6 +782,7 @@ function registerIpc() {
   // at boot so a slow/blocked NovelAI connection can't delay app startup; the
   // renderer refreshes the live balance via nai:hasToken after the first frame.
   ipcMain.handle("nai:accountCached", () => getAccountSummary());
+  ipcMain.handle("nai:storedToken", () => getToken());
   ipcMain.handle("nai:verify", (_event, token: string) => verifyToken(token));
   ipcMain.handle("nai:clearToken", () => {
     clearToken();
@@ -957,7 +965,7 @@ function registerIpc() {
   );
   ipcMain.handle("ai:getLog", () => getAiCallLog());
   ipcMain.handle("ai:clearLog", () => clearAiCallLog());
-  ipcMain.handle("nai:listModels", (_event, kind: "reverse" | "convert") =>
+  ipcMain.handle("nai:listModels", (_event, kind: "reverse" | "convert" | "translate") =>
     listAiModels(kind),
   );
   ipcMain.handle("nai:testTagServer", (_event, query: string) =>

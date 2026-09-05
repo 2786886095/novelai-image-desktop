@@ -11,6 +11,11 @@ export interface ArtistTagRecord {
 export interface ArtistRankingSnapshot {
   items: ArtistTagRecord[];
   savedAt: number;
+  page: number;
+  pageSize: number;
+  total: number;
+  hasMore: boolean;
+  query: string;
 }
 
 export interface ArtistWeightedTag {

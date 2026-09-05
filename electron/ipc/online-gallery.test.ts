@@ -32,10 +32,15 @@ describe("online gallery adapters", () => {
       score: 8,
       fav_count: 3,
     };
-    axiosGet.mockResolvedValue({ data: [post] });
+    axiosGet.mockImplementation(async (url: string) => url.includes("/counts/posts.json")
+      ? { data: { counts: { posts: 25 } } }
+      : { data: [post] });
 
-    const page = await searchOnlineGallery({ source: "safebooru", page: 1, query: "smile", safeOnly: true });
+    const page = await searchOnlineGallery({ source: "safebooru", page: 1, pageSize: 12, query: "smile", safeOnly: true });
     expect(page.items).toHaveLength(1);
+    expect(page.pageSize).toBe(12);
+    expect(page.total).toBe(25);
+    expect(page.hasMore).toBe(true);
     expect(page.items[0]).toMatchObject({
       source: "safebooru",
       id: "42",
@@ -44,7 +49,11 @@ describe("online gallery adapters", () => {
     });
     expect(axiosGet).toHaveBeenCalledWith(
       "https://safebooru.donmai.us/posts.json",
-      expect.objectContaining({ params: expect.objectContaining({ tags: "smile rating:g" }) }),
+      expect.objectContaining({ params: expect.objectContaining({ tags: "smile rating:g", limit: 12 }) }),
+    );
+    expect(axiosGet).toHaveBeenCalledWith(
+      "https://safebooru.donmai.us/counts/posts.json",
+      expect.objectContaining({ params: { tags: "smile rating:g" } }),
     );
 
     axiosGet.mockResolvedValueOnce({ data: post });

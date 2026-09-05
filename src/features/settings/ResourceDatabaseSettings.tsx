@@ -7,6 +7,7 @@ import type {
   ResourceDatabaseOverview,
   ResourceDatabaseProgressEvent,
 } from "../../types";
+import { resourceDefinitionText, resourcePhaseText, resourceText } from "./resource-ui-i18n";
 
 function formatBytes(bytes: number) {
   if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
@@ -20,17 +21,7 @@ function formatSpeed(bytes: number) {
   return bytes > 0 ? `${formatBytes(bytes)}/s` : "—";
 }
 
-const PHASE_LABEL: Record<ResourceDatabaseProgressEvent["phase"], string> = {
-  downloading: "正在下载",
-  paused: "已暂停",
-  verifying: "正在校验",
-  extracting: "正在解压",
-  installing: "正在安全替换",
-  complete: "安装完成",
-  error: "下载失败",
-};
-
-export default function ResourceDatabaseSettings({ language: _language }: { language: AppLanguage }) {
+export default function ResourceDatabaseSettings({ language }: { language: AppLanguage }) {
   const [overview, setOverview] = useState<ResourceDatabaseOverview | null>(null);
   const [progress, setProgress] = useState<Partial<Record<ResourceDatabaseId, ResourceDatabaseProgressEvent>>>({});
   const [busy, setBusy] = useState<ResourceDatabaseId | "">("");
@@ -87,7 +78,7 @@ export default function ResourceDatabaseSettings({ language: _language }: { lang
       window.naiDesktop.clearResourceQueryCache(),
       window.naiDesktop.aitagClearCache(),
     ]);
-    setMessage("内存查询缓存和在线画廊磁盘缓存已清理；资源数据库未删除。");
+    setMessage(resourceText(language, "cleared"));
     await refresh();
   };
 
@@ -96,79 +87,80 @@ export default function ResourceDatabaseSettings({ language: _language }: { lang
       <section className="settings-section-card resource-paths-card">
         <div className="settings-section-heading">
           <span className="settings-section-icon"><Icon name="database" /></span>
-          <div><strong>模型与资源库</strong><span>资源路径和可替换的本地补全数据库。不会把用户图片当作缓存删除。</span></div>
+          <div><strong>{resourceText(language, "title")}</strong><span>{resourceText(language, "subtitle")}</span></div>
         </div>
-        <div className="resource-path-row"><Icon name="smartToy" /><span><strong>本地 ONNX Tagger 模型</strong><small>未配置（当前版本尚未接入本地 ONNX Tagger）</small></span></div>
-        <div className="resource-path-row"><Icon name="database" /><span><strong>数据存储路径</strong><small title={overview?.dataDirectory}>{overview?.dataDirectory || "读取中…"}</small></span><Button variant="ghost" onClick={() => void window.naiDesktop.openResourceDatabaseDirectory()}><Icon name="folderOpen" /></Button></div>
+        <div className="resource-path-row"><Icon name="smartToy" /><span><strong>{resourceText(language, "localModel")}</strong><small>{resourceText(language, "unavailable")}</small></span></div>
+        <div className="resource-path-row"><Icon name="database" /><span><strong>{resourceText(language, "dataPath")}</strong><small title={overview?.dataDirectory}>{overview?.dataDirectory || resourceText(language, "loading")}</small></span><Button variant="ghost" onClick={() => void window.naiDesktop.openResourceDatabaseDirectory()}><Icon name="folderOpen" /></Button></div>
       </section>
 
       <section className="settings-section-card resource-database-card">
         <div className="settings-section-heading">
           <span className="settings-section-icon"><Icon name="download" /></span>
-          <div><strong>数据源与本地数据库</strong><span>数据库只能在你确认后替换；替换前会留下上一版回滚副本。</span></div>
+          <div><strong>{resourceText(language, "databases")}</strong><span>{resourceText(language, "databaseHint")}</span></div>
         </div>
-        <div className="resource-merge-notice"><Icon name="shield" /><span><strong>图片数据始终合并，不参与数据库覆盖。</strong>相同内容跳过；同名不同内容使用“(1)”递增；参考预设、日期分组和历史只合并。</span></div>
+        <div className="resource-merge-notice"><Icon name="shield" /><span><strong>{resourceText(language, "mergeTitle")}</strong>{resourceText(language, "mergeHint")}</span></div>
         <div className="resource-list">
           {(overview?.resources ?? []).map((resource) => {
             const event = progress[resource.id];
             const running = busy === resource.id || resource.downloading;
             const canPause = running && (!event || event.phase === "downloading");
             const percent = event?.percent ?? (resource.installed && resource.valid ? 100 : 0);
+            const localizedResource = resourceDefinitionText(language, resource.id);
             return (
               <article className="resource-item" key={resource.id}>
                 <div className="resource-item-main">
                   <span className="resource-item-icon"><Icon name={resource.id === "tagCatalog" ? "template" : "collections"} /></span>
                   <div>
-                    <strong>{resource.label}</strong>
-                    <p>{resource.description}</p>
+                    <strong>{localizedResource.label}</strong>
+                    <p>{localizedResource.description}</p>
                     <small>
                       {resource.installed
                         ? resource.valid
-                          ? `已安装 · ${resource.version} · ${formatBytes(resource.sizeBytes)}`
-                          : `数据库异常：${resource.message || "需要修复"}`
+                          ? resourceText(language, "installed", { version: resource.version, size: formatBytes(resource.sizeBytes) })
+                          : resourceText(language, "invalid", { message: resource.message || resourceText(language, "repair") })
                         : resource.resumableBytes > 0
-                          ? `已下载 ${formatBytes(resource.resumableBytes)}，可继续`
-                          : `未安装 · 下载 ${formatBytes(resource.downloadBytes)}`}
+                          ? resourceText(language, "downloaded", { size: formatBytes(resource.resumableBytes) })
+                          : resourceText(language, "notInstalled", { size: formatBytes(resource.downloadBytes) })}
                     </small>
-                    <small>来源：{resource.sourceName} · {resource.license}</small>
+                    <small>{resourceText(language, "sourceLine", { source: resource.sourceName, license: resource.license })}</small>
                   </div>
                 </div>
                 <div className="resource-item-actions">
-                  <Button variant="ghost" onClick={() => void window.naiDesktop.openExternal(resource.sourceUrl)}>来源</Button>
+                  <Button variant="ghost" onClick={() => void window.naiDesktop.openExternal(resource.sourceUrl)}>{resourceText(language, "source")}</Button>
                   {canPause ? (
-                    <Button onClick={() => void window.naiDesktop.pauseResourceDatabaseDownload(resource.id)}>暂停</Button>
+                    <Button onClick={() => void window.naiDesktop.pauseResourceDatabaseDownload(resource.id)}>{resourceText(language, "pause")}</Button>
                   ) : !running ? (
                     <Button variant="primary" onClick={() => setConfirm({ id: resource.id, mode: "install" })}>
-                      {resource.resumableBytes > 0 ? "继续下载" : resource.installed ? "更新 / 修复" : "下载并安装"}
+                      {resource.resumableBytes > 0 ? resourceText(language, "resume") : resource.installed ? resourceText(language, "update") : resourceText(language, "install")}
                     </Button>
                   ) : null}
-                  {resource.hasPrevious && !running ? <Button onClick={() => setConfirm({ id: resource.id, mode: "restore" })}>恢复上一版</Button> : null}
+                  {resource.hasPrevious && !running ? <Button onClick={() => setConfirm({ id: resource.id, mode: "restore" })}>{resourceText(language, "restore")}</Button> : null}
                 </div>
                 {(running || event) ? (
                   <div className={`resource-progress ${event?.phase ?? "downloading"}`}>
-                    <div><span>{event ? PHASE_LABEL[event.phase] : "正在准备"}</span><strong>{percent.toFixed(1)}%</strong></div>
+                    <div><span>{event ? resourcePhaseText(language, event.phase) : resourceText(language, "preparing")}</span><strong>{percent.toFixed(1)}%</strong></div>
                     <progress max={100} value={percent} />
-                    <small>{event ? `${formatBytes(event.receivedBytes)} / ${formatBytes(event.totalBytes)} · ${formatSpeed(event.speedBytesPerSecond)}` : "准备下载…"}</small>
+                    <small>{event ? `${formatBytes(event.receivedBytes)} / ${formatBytes(event.totalBytes)} · ${formatSpeed(event.speedBytesPerSecond)}` : resourceText(language, "prepareDownload")}</small>
                   </div>
                 ) : null}
               </article>
             );
           })}
-          {!overview ? <div className="resource-loading"><Icon name="loader" /> 正在读取资源状态…</div> : null}
+          {!overview ? <div className="resource-loading"><Icon name="loader" /> {resourceText(language, "reading")}</div> : null}
         </div>
       </section>
 
       <section className="settings-section-card cache-maintenance-card">
         <div className="settings-section-heading">
           <span className="settings-section-icon"><Icon name="speed" /></span>
-          <div><strong>缓存维护</strong><span>查看三级数据状态；清理只移除可再生成的缓存，不删除数据库或用户图片。</span></div>
+          <div><strong>{resourceText(language, "cacheTitle")}</strong><span>{resourceText(language, "cacheHint")}</span></div>
         </div>
         <div className="cache-level-list">
-          <div className="cache-level l1"><Icon name="smartToy" /><span><strong>L1 内存查询缓存</strong><small>{overview?.cache.memoryEntries ?? 0} 条 · 命中率 {((overview?.cache.memoryHitRate ?? 0) * 100).toFixed(1)}%</small></span></div>
-          <div className="cache-level l2"><Icon name="images" /><span><strong>L2 在线画廊磁盘缓存</strong><small>{galleryCache.files} 个文件 · {formatBytes(galleryCache.bytes)}</small></span></div>
-          <div className="cache-level l3"><Icon name="database" /><span><strong>L3 SQLite 资源数据库</strong><small>{overview?.resources.filter((item) => item.installed && item.valid).length ?? 0} 个数据库 · {formatBytes(installedBytes)}</small></span></div>
+          <div className="cache-level l1"><Icon name="smartToy" /><span><strong>{resourceText(language, "memory")}</strong><small>{resourceText(language, "entries", { count: overview?.cache.memoryEntries ?? 0, rate: ((overview?.cache.memoryHitRate ?? 0) * 100).toFixed(1) })}</small></span></div>
+          <div className="cache-level l2"><Icon name="images" /><span><strong>{resourceText(language, "gallery")}</strong><small>{resourceText(language, "files", { count: galleryCache.files, size: formatBytes(galleryCache.bytes) })}</small></span></div>
+          <div className="cache-level l3"><Icon name="database" /><span><strong>{resourceText(language, "sqlite")}</strong><small>{resourceText(language, "databaseCount", { count: overview?.resources.filter((item) => item.installed && item.valid).length ?? 0, size: formatBytes(installedBytes) })}</small></span></div>
         </div>
-        <div className="row-actions"><Button onClick={() => void refresh()}><IconText icon={<Icon name="refresh" />}>重新扫描</IconText></Button><Button onClick={() => void clearCaches()}><IconText icon={<Icon name="clear" />}>清理可再生成缓存</IconText></Button></div>
+        <div className="row-actions"><Button onClick={() => void refresh()}><IconText icon={<Icon name="refresh" />}>{resourceText(language, "rescan")}</IconText></Button><Button onClick={() => void clearCaches()}><IconText icon={<Icon name="clear" />}>{resourceText(language, "clear")}</IconText></Button></div>
       </section>
 
       {message ? <div className="status-box">{message}</div> : null}
@@ -178,10 +170,10 @@ export default function ResourceDatabaseSettings({ language: _language }: { lang
           <div className="data-confirm-card resource-confirm-card">
             <span className="data-confirm-icon"><Icon name="warning" /></span>
             <div>
-              <strong>{confirm.mode === "install" ? "确认替换本地资源数据库" : "确认恢复上一版数据库"}</strong>
-              <p>此操作只替换所选的本地标签/关联数据库，并保留可回滚副本。不会覆盖、重命名或删除任何生成图片、参考图、参考预设、收藏夹或历史记录。</p>
+              <strong>{confirm.mode === "install" ? resourceText(language, "confirmInstall") : resourceText(language, "confirmRestore")}</strong>
+              <p>{resourceText(language, "confirmBody")}</p>
             </div>
-            <div className="row-actions"><Button onClick={() => setConfirm(null)}>取消</Button><Button variant="danger" onClick={() => void runConfirmed()}>{confirm.mode === "install" ? "同意并开始" : "同意恢复"}</Button></div>
+            <div className="row-actions"><Button onClick={() => setConfirm(null)}>{resourceText(language, "cancel")}</Button><Button variant="danger" onClick={() => void runConfirmed()}>{confirm.mode === "install" ? resourceText(language, "agreeInstall") : resourceText(language, "agreeRestore")}</Button></div>
           </div>
         </div>
       ) : null}

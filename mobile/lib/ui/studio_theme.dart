@@ -8,13 +8,24 @@ abstract final class StudioSpacing {
   static const double xl = 24;
 }
 
+abstract final class AppMotion {
+  static const Duration fast = Duration(milliseconds: 120);
+  static const Duration standard = Duration(milliseconds: 180);
+  static const Duration slow = Duration(milliseconds: 240);
+  static const Curve easeOut = Curves.easeOutCubic;
+  static const Curve easeInOut = Curves.easeInOutCubic;
+}
+
 abstract final class StudioRadii {
   static const double control = 8;
-  static const double panel = 8;
+  static const double panel = 12;
+  static const double dialog = 16;
+  static const double sheet = 20;
+  static const double pill = 999;
 }
 
 abstract final class StudioTheme {
-  static const _brand = Color(0xFF7548F5);
+  static const _brand = Color(0xFF7047D8);
   static const _cyan = Color(0xFF08AFC7);
 
   static ThemeData light() => _build(Brightness.light);
@@ -62,19 +73,32 @@ abstract final class StudioTheme {
     // ThemeData.cardTheme changed from CardTheme to CardThemeData in newer
     // Flutter releases. Deriving it from ThemeData keeps this source compatible
     // with both the CI-pinned Flutter 3.24 SDK and newer local SDKs.
-    final cardTheme = ThemeData(
+    final foundation = ThemeData(
       useMaterial3: true,
       brightness: brightness,
       colorScheme: scheme,
-    ).cardTheme.copyWith(
-          elevation: 0,
-          margin: EdgeInsets.zero,
-          color: scheme.surface,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(StudioRadii.panel),
-            side: BorderSide(color: scheme.outlineVariant),
-          ),
-        );
+    );
+    final textTheme = foundation.textTheme.copyWith(
+      headlineSmall: foundation.textTheme.headlineSmall
+          ?.copyWith(fontWeight: FontWeight.w700),
+      titleLarge: foundation.textTheme.titleLarge
+          ?.copyWith(fontWeight: FontWeight.w700),
+      titleMedium: foundation.textTheme.titleMedium
+          ?.copyWith(fontWeight: FontWeight.w600),
+      bodyLarge: foundation.textTheme.bodyLarge?.copyWith(height: 1.35),
+      bodyMedium: foundation.textTheme.bodyMedium?.copyWith(height: 1.35),
+      labelLarge: foundation.textTheme.labelLarge
+          ?.copyWith(fontWeight: FontWeight.w700),
+    );
+    final cardTheme = foundation.cardTheme.copyWith(
+      elevation: 0,
+      margin: EdgeInsets.zero,
+      color: scheme.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(StudioRadii.panel),
+        side: BorderSide(color: scheme.outlineVariant),
+      ),
+    );
 
     return ThemeData(
       useMaterial3: true,
@@ -83,12 +107,24 @@ abstract final class StudioTheme {
       scaffoldBackgroundColor:
           dark ? const Color(0xFF090B16) : const Color(0xFFF8F6FC),
       visualDensity: VisualDensity.standard,
+      textTheme: textTheme,
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: _StudioPageTransitionsBuilder(),
+          TargetPlatform.iOS: _StudioPageTransitionsBuilder(),
+          TargetPlatform.windows: _StudioPageTransitionsBuilder(),
+          TargetPlatform.macOS: _StudioPageTransitionsBuilder(),
+          TargetPlatform.linux: _StudioPageTransitionsBuilder(),
+        },
+      ),
       cardTheme: cardTheme,
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: scheme.surface,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: StudioSpacing.lg,
+          vertical: StudioSpacing.lg,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(StudioRadii.control),
           borderSide: BorderSide(color: scheme.outlineVariant),
@@ -110,6 +146,20 @@ abstract final class StudioTheme {
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(shape: controlShape),
+      ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        elevation: 0,
+        backgroundColor: scheme.inverseSurface,
+        contentTextStyle:
+            textTheme.bodyMedium?.copyWith(color: scheme.onInverseSurface),
+        actionTextColor: dark ? const Color(0xFFCFC2FF) : scheme.primary,
+        insetPadding: const EdgeInsets.all(StudioSpacing.lg),
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(
+            Radius.circular(StudioRadii.control),
+          ),
+        ),
       ),
       navigationBarTheme: NavigationBarThemeData(
         height: 68,
@@ -133,6 +183,36 @@ abstract final class StudioTheme {
       ),
       dividerTheme:
           DividerThemeData(color: scheme.outlineVariant, thickness: 1),
+    );
+  }
+}
+
+class _StudioPageTransitionsBuilder extends PageTransitionsBuilder {
+  const _StudioPageTransitionsBuilder();
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    if (MediaQuery.disableAnimationsOf(context)) return child;
+    final curved = CurvedAnimation(
+      parent: animation,
+      curve: AppMotion.easeOut,
+      reverseCurve: AppMotion.easeInOut,
+    );
+    return FadeTransition(
+      opacity: curved,
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0.025, 0),
+          end: Offset.zero,
+        ).animate(curved),
+        child: child,
+      ),
     );
   }
 }

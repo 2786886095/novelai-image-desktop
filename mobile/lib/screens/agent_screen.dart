@@ -12,8 +12,10 @@ import '../agent/agent_provider_catalog.dart';
 import '../agent/tavern_builtins.dart';
 import '../agent/tavern_prompt.dart';
 import '../i18n/app_locales.dart';
+import '../i18n/tavern_ui_text.dart';
 import '../models/nai_models.dart';
 import '../state/app_state.dart';
+import '../ui/studio_theme.dart';
 
 enum _ComposerMenu { commands, mode, reasoning }
 
@@ -352,7 +354,7 @@ Map<String, String> _tavernText(Object? language) {
       'contextUsage': '컨텍스트',
     },
   };
-  return {...zh, ...?values[code]};
+  return {...zh, ...?values[code], ...tavernExtraText(code)};
 }
 
 class AgentScreen extends StatefulWidget {
@@ -921,33 +923,33 @@ class _AgentScreenState extends State<AgentScreen> {
     final starters = [
       (
         Icons.image_outlined,
-        '输入描述生成图片',
-        '把中文想法整理成可确认的生图方案',
-        '请把我接下来输入的中文画面描述整理为可确认的 NovelAI 生图方案。'
+        text['starterGenerateTitle']!,
+        text['starterGenerateDesc']!,
+        text['starterGeneratePrompt']!
       ),
       (
         Icons.image_search_rounded,
-        '反推图片提示词',
-        '需要接入支持视觉能力的对话模型',
-        '请读取我接下来通过回形针上传的图片，调用图片反推能力，输出可用于 NovelAI 的提示词；如果当前模型不支持视觉，请明确提醒我切换视觉模型。'
+        text['starterReverseTitle']!,
+        text['starterReverseDesc']!,
+        text['starterReversePrompt']!
       ),
       (
         Icons.manage_search_rounded,
-        '搜索 Tag',
-        '检索并解释 Danbooru 标签',
-        '请使用本地 Danbooru Tag 搜索能力，帮我查找并解释接下来输入的概念或关键词。'
+        text['starterTagTitle']!,
+        text['starterTagDesc']!,
+        text['starterTagPrompt']!
       ),
       (
         Icons.palette_outlined,
-        '识别画风并寻找画师串',
-        '分析目标图并迭代相近画师 Tag 组合',
-        '请读取我接下来上传的目标图，先分析画风特征，再检索相近 Danbooru 画师 Tag 组合，并按候选、生成、对比、收敛的方式迭代。'
+        text['starterStyleTitle']!,
+        text['starterStyleDesc']!,
+        text['starterStylePrompt']!
       ),
       (
         Icons.casino_outlined,
-        '随机抽取画师串生图',
-        '随机组合画师 Tag 与权重后生成',
-        '请从画师库随机抽取画师 Tag 与权重，组合成可直接用于 NovelAI 的画师串并生成图片。'
+        text['starterRandomTitle']!,
+        text['starterRandomDesc']!,
+        text['starterRandomPrompt']!
       ),
     ];
     return LayoutBuilder(
@@ -997,7 +999,7 @@ class _AgentScreenState extends State<AgentScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              '你想画什么？',
+                              text['emptyQuestion']!,
                               style: Theme.of(context)
                                   .textTheme
                                   .titleMedium
@@ -1005,7 +1007,7 @@ class _AgentScreenState extends State<AgentScreen> {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              '选择一种开始方式，或直接在下方输入画面描述',
+                              text['emptyStartHint']!,
                               style: Theme.of(context)
                                   .textTheme
                                   .bodySmall
@@ -1029,8 +1031,8 @@ class _AgentScreenState extends State<AgentScreen> {
                         ),
                         child: Text(
                           conversation?.generationMode == 'auto'
-                              ? '全自动'
-                              : '确认模式',
+                              ? text['modeAuto']!
+                              : text['modeConfirm']!,
                           style: Theme.of(context)
                               .textTheme
                               .labelMedium
@@ -1368,6 +1370,7 @@ class _AgentScreenState extends State<AgentScreen> {
   }
 
   Future<void> _openGeneratedImage(AgentAttachment item) async {
+    final text = _tavernText(context.read<AppState>().settings.language);
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => Dialog.fullscreen(
@@ -1389,7 +1392,7 @@ class _AgentScreenState extends State<AgentScreen> {
             right: 12,
             child: Row(children: [
               IconButton.filled(
-                tooltip: '保存或分享本地图片',
+                tooltip: text['saveShare']!,
                 onPressed: () => Share.shareXFiles(
                   [XFile(item.filePath)],
                   text: item.name,
@@ -1936,7 +1939,8 @@ class _AgentScreenState extends State<AgentScreen> {
                                 decoration: BoxDecoration(
                                   color: colorScheme.onSurfaceVariant
                                       .withOpacity(.28),
-                                  borderRadius: BorderRadius.circular(999),
+                                  borderRadius:
+                                      BorderRadius.circular(StudioRadii.pill),
                                 ),
                               ),
                             ),
@@ -2127,12 +2131,13 @@ class _AgentScreenState extends State<AgentScreen> {
   }
 
   Widget _groupSpeakerMenu(AgentController controller) {
+    final text = _tavernText(context.read<AppState>().settings.language);
     final conversation = controller.selectedConversation;
     if (conversation == null || controller.activeCharacters.length < 2) {
       return const SizedBox.shrink();
     }
     return PopupMenuButton<String>(
-      tooltip: '切换发言角色',
+      tooltip: text['switchSpeaker']!,
       onSelected: (id) {
         conversation.activeCharacterId = id;
         controller.saveWorkspace();
@@ -2147,8 +2152,9 @@ class _AgentScreenState extends State<AgentScreen> {
                 ]),
               ))
           .toList(),
-      child: const Chip(
-          avatar: Icon(Icons.groups_rounded, size: 17), label: Text('群聊')),
+      child: Chip(
+          avatar: const Icon(Icons.groups_rounded, size: 17),
+          label: Text(text['groupChat']!)),
     );
   }
 
@@ -2281,12 +2287,12 @@ class _AgentScreenState extends State<AgentScreen> {
               OutlinedButton.icon(
                 onPressed: () => controller.setCharacterAvatar(character),
                 icon: const Icon(Icons.account_circle_outlined, size: 17),
-                label: Text(text['avatar'] ?? '头像'),
+                label: Text(text['avatar']!),
               ),
               OutlinedButton.icon(
                 onPressed: () => controller.setCharacterBackground(character),
                 icon: const Icon(Icons.wallpaper_outlined, size: 17),
-                label: Text(text['background'] ?? '背景'),
+                label: Text(text['background']!),
               ),
             ]),
         ]),
@@ -2300,24 +2306,31 @@ class _AgentScreenState extends State<AgentScreen> {
               Icon(Icons.auto_fix_high_rounded,
                   color: Theme.of(context).colorScheme.primary),
               const SizedBox(width: 8),
-              const Expanded(
-                child: Text('内置 NovelAI 生图模板',
-                    style: TextStyle(fontWeight: FontWeight.w800)),
+              Expanded(
+                child: Text(text['builtInTemplate']!,
+                    style: const TextStyle(fontWeight: FontWeight.w800)),
               ),
-              const Chip(
-                avatar: Icon(Icons.check_circle_outline_rounded, size: 15),
-                label: Text('已启用'),
+              Chip(
+                avatar:
+                    const Icon(Icons.check_circle_outline_rounded, size: 15),
+                label: Text(text['enabled']!),
                 visualDensity: VisualDensity.compact,
               ),
             ]),
             const SizedBox(height: 8),
-            const Wrap(spacing: 6, runSpacing: 6, children: [
-              Chip(label: Text('中文意图整理'), visualDensity: VisualDensity.compact),
+            Wrap(spacing: 6, runSpacing: 6, children: [
               Chip(
+                  label: Text(text['intentChip']!),
+                  visualDensity: VisualDensity.compact),
+              const Chip(
                   label: Text('Danbooru Tag'),
                   visualDensity: VisualDensity.compact),
-              Chip(label: Text('构图与光影'), visualDensity: VisualDensity.compact),
-              Chip(label: Text('参数确认'), visualDensity: VisualDensity.compact),
+              Chip(
+                  label: Text(text['compositionChip']!),
+                  visualDensity: VisualDensity.compact),
+              Chip(
+                  label: Text(text['paramsChip']!),
+                  visualDensity: VisualDensity.compact),
             ]),
           ]),
         ),
@@ -2325,7 +2338,8 @@ class _AgentScreenState extends State<AgentScreen> {
         _sectionCard(
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('当前运行参数', style: TextStyle(fontWeight: FontWeight.w800)),
+            Text(text['currentParams']!,
+                style: const TextStyle(fontWeight: FontWeight.w800)),
             const SizedBox(height: 8),
             Wrap(spacing: 8, runSpacing: 8, children: [
               _runtimeChip(
@@ -2365,7 +2379,7 @@ class _AgentScreenState extends State<AgentScreen> {
       const SizedBox(height: 8),
       _sectionCard(
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(text['group'] ?? '群聊成员',
+          Text(text['group']!,
               style: const TextStyle(fontWeight: FontWeight.w800)),
           const SizedBox(height: 4),
           ...controller.workspace.characters.map((item) {
@@ -2410,11 +2424,11 @@ class _AgentScreenState extends State<AgentScreen> {
           await _editLorebook(controller, lorebook, text);
         },
         icon: const Icon(Icons.add_rounded),
-        label: Text(text['addLore'] ?? '新建世界书'),
+        label: Text(text['addLore']!),
       ),
       const SizedBox(height: 8),
       if (controller.workspace.lorebooks.isEmpty)
-        _sectionCard(child: const Text('暂无世界书。关键词命中后，条目会自动注入当前对话。')),
+        _sectionCard(child: Text(text['noLorebooks']!)),
       ...controller.workspace.lorebooks.map((book) {
         final enabled = conversation?.lorebookIds.contains(book.id) ?? false;
         final builtIn = book.id == softwareImageLorebookId;
@@ -2456,7 +2470,8 @@ class _AgentScreenState extends State<AgentScreen> {
                       },
               ),
             ]),
-            Text('${book.entries.length} 条 · ${book.tokenBudget} tokens'),
+            Text(formatTavernText(text['itemCount']!,
+                {'count': book.entries.length, 'tokens': book.tokenBudget})),
             if (book.description.trim().isNotEmpty)
               Padding(
                   padding: const EdgeInsets.only(top: 5),
@@ -2496,7 +2511,7 @@ class _AgentScreenState extends State<AgentScreen> {
           await _editPersona(controller, persona, text);
         },
         icon: const Icon(Icons.add_rounded),
-        label: Text(text['addPersona'] ?? '新建身份'),
+        label: Text(text['addPersona']!),
       ),
       const SizedBox(height: 8),
       ...controller.workspace.personas.map((persona) {
@@ -2570,7 +2585,7 @@ class _AgentScreenState extends State<AgentScreen> {
       const SizedBox(height: 8),
       _sectionCard(
         child: Text(
-          '模型名称与上下文支持从服务端检测；自动压缩危险线由软件根据上下文与最大输出自动计算。API Key 仅保存在系统安全存储中。',
+          text['modelSupportHint']!,
           style: Theme.of(context).textTheme.bodyMedium,
         ),
       ),
@@ -2615,8 +2630,7 @@ class _AgentScreenState extends State<AgentScreen> {
                 controller.setGenerationMode(value.first),
           ),
           const SizedBox(height: 10),
-          Text(
-              auto ? '模型提出场景图参数后会立即调用 NovelAI。' : '模型只提出参数；你确认或修改后才会消耗 Anlas。'),
+          Text(auto ? text['autoModeHint']! : text['confirmModeHint']!),
         ]),
       ),
       if (character != null) ...[
@@ -2630,11 +2644,11 @@ class _AgentScreenState extends State<AgentScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('本次创作参数',
-                          style: TextStyle(
+                      Text(text['sessionParams']!,
+                          style: const TextStyle(
                               fontWeight: FontWeight.w800, fontSize: 16)),
                       const SizedBox(height: 2),
-                      Text('手动修改后会作为后续对话与生图提案的默认值',
+                      Text(text['sessionParamsHint']!,
                           style: Theme.of(context).textTheme.bodySmall),
                     ],
                   ),
@@ -2650,16 +2664,16 @@ class _AgentScreenState extends State<AgentScreen> {
                     count: 1,
                   ),
                   icon: const Icon(Icons.sync_rounded, size: 17),
-                  label: const Text('同步默认'),
+                  label: Text(text['syncDefault']!),
                 ),
               ]),
               const SizedBox(height: 10),
               DropdownButtonFormField<String>(
                 value: model,
                 isExpanded: true,
-                decoration: const InputDecoration(
-                  labelText: 'NovelAI 模型',
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText: text['naiModel']!,
+                  border: const OutlineInputBorder(),
                 ),
                 items: modelOptions
                     .map((item) => DropdownMenuItem(
@@ -2691,19 +2705,28 @@ class _AgentScreenState extends State<AgentScreen> {
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('负面提示词与风格提示词',
-                          style: TextStyle(fontWeight: FontWeight.w800)),
+                      Text(text['promptOwnership']!,
+                          style: const TextStyle(fontWeight: FontWeight.w800)),
                       const SizedBox(height: 3),
-                      Text('AI 只生成正面提示词，这两项始终由你控制。',
+                      Text(text['promptOwnershipHint']!,
                           style: Theme.of(context).textTheme.bodySmall),
                       const SizedBox(height: 8),
                       Text(
-                          '风格提示词：${character.visual.stylePrompt.trim().isEmpty ? '未设置' : character.visual.stylePrompt}',
+                          formatTavernText(text['styleValue']!, {
+                            'value': character.visual.stylePrompt.trim().isEmpty
+                                ? text['unset']!
+                                : character.visual.stylePrompt
+                          }),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis),
                       const SizedBox(height: 3),
                       Text(
-                          '负面词：${character.visual.negativePrompt.trim().isEmpty ? defaultTavernNegativePrompt : character.visual.negativePrompt}',
+                          formatTavernText(text['negativeValue']!, {
+                            'value':
+                                character.visual.negativePrompt.trim().isEmpty
+                                    ? defaultTavernNegativePrompt
+                                    : character.visual.negativePrompt
+                          }),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis),
                       const SizedBox(height: 7),
@@ -2713,7 +2736,7 @@ class _AgentScreenState extends State<AgentScreen> {
                           onPressed: () =>
                               _configureUserImagePrompts(controller),
                           icon: const Icon(Icons.tune_rounded, size: 18),
-                          label: const Text('设置'),
+                          label: Text(text['configure']!),
                         ),
                       ),
                     ]),
@@ -2746,7 +2769,7 @@ class _AgentScreenState extends State<AgentScreen> {
                   SizedBox(
                     width: cellWidth,
                     child: _CommitNumberField(
-                      label: '宽度',
+                      label: text['width']!,
                       value: width,
                       min: 64,
                       max: 4096,
@@ -2758,7 +2781,7 @@ class _AgentScreenState extends State<AgentScreen> {
                   SizedBox(
                     width: cellWidth,
                     child: _CommitNumberField(
-                      label: '高度',
+                      label: text['height']!,
                       value: height,
                       min: 64,
                       max: 4096,
@@ -2770,7 +2793,7 @@ class _AgentScreenState extends State<AgentScreen> {
                   SizedBox(
                     width: cellWidth,
                     child: _CommitNumberField(
-                      label: '采样步数',
+                      label: text['generationSteps']!,
                       value: steps,
                       min: 1,
                       max: 50,
@@ -2793,7 +2816,7 @@ class _AgentScreenState extends State<AgentScreen> {
                   SizedBox(
                     width: cellWidth,
                     child: _CommitNumberField(
-                      label: '生成张数',
+                      label: text['generationCount']!,
                       value: count,
                       min: 1,
                       max: 8,
@@ -2808,9 +2831,9 @@ class _AgentScreenState extends State<AgentScreen> {
               DropdownButtonFormField<String>(
                 value: sampler,
                 isExpanded: true,
-                decoration: const InputDecoration(
-                  labelText: '采样器',
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText: text['sampler']!,
+                  border: const OutlineInputBorder(),
                 ),
                 items: samplerOptions
                     .map((item) => DropdownMenuItem(
@@ -2834,14 +2857,14 @@ class _AgentScreenState extends State<AgentScreen> {
                       .withOpacity(.34),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Row(
+                child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.chat_bubble_outline_rounded, size: 18),
-                    SizedBox(width: 8),
+                    const Icon(Icons.chat_bubble_outline_rounded, size: 18),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        '也可以直接对话调整，例如“改成 832×1216、30 步、生成 2 张”。AI 会沿用最近画面，只修改你点名的参数。',
+                        text['chatAdjustHint']!,
                       ),
                     ),
                   ],
@@ -2854,13 +2877,13 @@ class _AgentScreenState extends State<AgentScreen> {
         _sectionCard(
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(text['visualPrompt'] ?? 'NovelAI 角色视觉预设',
+            Text(text['visualPrompt']!,
                 style: const TextStyle(fontWeight: FontWeight.w800)),
             const SizedBox(height: 8),
             Text(character.visual.positivePrompt.trim().isEmpty
                 ? (character.id == softwareImageCharacterId
-                    ? '正在使用软件内置 NovelAI 生图模板。模板正文受保护，参数可在上方模式与生成提案中调整。'
-                    : '尚未填写角色外观提示词。')
+                    ? text['templateInUse']!
+                    : text['visualUnset']!)
                 : character.visual.positivePrompt),
             if (character.id == softwareImageCharacterId) ...[
               const SizedBox(height: 8),
@@ -2887,6 +2910,7 @@ class _AgentScreenState extends State<AgentScreen> {
   }
 
   Future<void> _configureUserImagePrompts(AgentController controller) async {
+    final text = _tavernText(context.read<AppState>().settings.language);
     final character = controller.activeCharacter;
     if (character == null) return;
     final negative = TextEditingController(
@@ -2899,7 +2923,7 @@ class _AgentScreenState extends State<AgentScreen> {
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('负面提示词与风格提示词'),
+          title: Text(text['promptOwnership']!),
           content: SizedBox(
             width: 640,
             child: SingleChildScrollView(
@@ -2907,9 +2931,9 @@ class _AgentScreenState extends State<AgentScreen> {
                 DropdownButtonFormField<String>(
                   value: null,
                   isExpanded: true,
-                  decoration: const InputDecoration(
-                    labelText: '从风格提示词列表选择',
-                    border: OutlineInputBorder(),
+                  decoration: InputDecoration(
+                    labelText: text['chooseStyle']!,
+                    border: const OutlineInputBorder(),
                   ),
                   items: controller.app.settings.stylePromptPresets
                       .map((preset) => DropdownMenuItem(
@@ -2928,7 +2952,7 @@ class _AgentScreenState extends State<AgentScreen> {
                   },
                 ),
                 const SizedBox(height: 10),
-                _field(style, '风格提示词', lines: 4),
+                _field(style, text['stylePrompt']!, lines: 4),
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton.icon(
@@ -2940,42 +2964,44 @@ class _AgentScreenState extends State<AgentScreen> {
                       final accepted = await showDialog<bool>(
                         context: dialogContext,
                         builder: (nameContext) => AlertDialog(
-                          title: const Text('加入风格提示词列表'),
+                          title: Text(text['addStyleTitle']!),
                           content: TextField(
                               controller: name,
                               decoration:
-                                  const InputDecoration(labelText: '名称')),
+                                  InputDecoration(labelText: text['name']!)),
                           actions: [
                             TextButton(
                                 onPressed: () =>
                                     Navigator.pop(nameContext, false),
-                                child: const Text('取消')),
+                                child: Text(text['cancel']!)),
                             FilledButton(
                                 onPressed: () =>
                                     Navigator.pop(nameContext, true),
-                                child: const Text('加入')),
+                                child: Text(text['add']!)),
                           ],
                         ),
                       );
                       if (accepted == true && name.text.trim().isNotEmpty) {
                         await controller.app.addStylePromptPreset(
-                            name: name.text, prompt: value, group: '酒馆 AI 生图');
-                        if (mounted) _snack('风格提示词已加入列表');
+                            name: name.text,
+                            prompt: value,
+                            group: text['tavernImageGroup']!);
+                        if (mounted) _snack(text['styleAdded']!);
                       }
                       name.dispose();
                     },
                     icon: const Icon(Icons.add_rounded),
-                    label: const Text('加入列表'),
+                    label: Text(text['addToList']!),
                   ),
                 ),
-                _field(negative, '负面提示词', lines: 7),
+                _field(negative, text['negativePrompt']!, lines: 7),
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton.icon(
                     onPressed: () => setDialogState(
                         () => negative.text = defaultTavernNegativePrompt),
                     icon: const Icon(Icons.restore_rounded),
-                    label: const Text('恢复默认'),
+                    label: Text(text['restoreDefault']!),
                   ),
                 ),
               ]),
@@ -2984,10 +3010,10 @@ class _AgentScreenState extends State<AgentScreen> {
           actions: [
             TextButton(
                 onPressed: () => Navigator.pop(dialogContext, false),
-                child: const Text('取消')),
+                child: Text(text['cancel']!)),
             FilledButton(
                 onPressed: () => Navigator.pop(dialogContext, true),
-                child: const Text('保存')),
+                child: Text(text['save']!)),
           ],
         ),
       ),
@@ -3046,7 +3072,7 @@ class _AgentScreenState extends State<AgentScreen> {
         actions: [
           FilledButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('知道了'),
+            child: Text(text['gotIt']!),
           ),
         ],
       ),
@@ -3126,26 +3152,30 @@ class _AgentScreenState extends State<AgentScreen> {
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  _field(fields['name']!, '名称'),
-                  _field(fields['description']!, '角色描述', lines: 5),
-                  _field(fields['personality']!, '性格与说话方式', lines: 4),
-                  _field(fields['scenario']!, '场景', lines: 4),
-                  _field(fields['first']!, '首条消息', lines: 4),
-                  _field(fields['examples']!, '示例对话', lines: 5),
-                  _field(fields['tags']!, '标签（逗号分隔）'),
+                  _field(fields['name']!, text['name']!),
+                  _field(fields['description']!, text['description']!,
+                      lines: 5),
+                  _field(fields['personality']!, text['personality']!,
+                      lines: 4),
+                  _field(fields['scenario']!, text['scenario']!, lines: 4),
+                  _field(fields['first']!, text['firstMessage']!, lines: 4),
+                  _field(fields['examples']!, text['examples']!, lines: 5),
+                  _field(fields['tags']!, text['tags']!),
                   const Divider(height: 28),
-                  Text(text['visualPrompt'] ?? 'NovelAI 角色视觉预设',
+                  Text(text['visualPrompt']!,
                       style: Theme.of(context)
                           .textTheme
                           .titleMedium
                           ?.copyWith(fontWeight: FontWeight.w800)),
                   const SizedBox(height: 10),
-                  _field(fields['positive']!, '角色正面提示词', lines: 5),
-                  _field(fields['negative']!, '角色负面提示词', lines: 4),
-                  _field(fields['style']!, '风格提示词', lines: 3),
+                  _field(fields['positive']!, text['positivePrompt']!,
+                      lines: 5),
+                  _field(fields['negative']!, text['characterNegative']!,
+                      lines: 4),
+                  _field(fields['style']!, text['stylePrompt']!, lines: 3),
                   const Divider(height: 28),
-                  _field(fields['system']!, '角色系统提示词', lines: 5),
-                  _field(fields['post']!, '历史后指令', lines: 4),
+                  _field(fields['system']!, text['systemPrompt']!, lines: 5),
+                  _field(fields['post']!, text['postHistory']!, lines: 4),
                 ],
               ),
             ),
@@ -3208,8 +3238,8 @@ class _AgentScreenState extends State<AgentScreen> {
         content: SizedBox(
           width: 520,
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            _field(name, '名称'),
-            _field(description, '身份、外观与叙事偏好', lines: 7),
+            _field(name, text['name']!),
+            _field(description, text['personaDescription']!, lines: 7),
           ]),
         ),
         actions: [
@@ -3282,11 +3312,14 @@ class _AgentScreenState extends State<AgentScreen> {
                               Expanded(child: Text(text['builtInHint']!)),
                             ]),
                       ),
-                    _field(name, '名称', readOnly: builtIn),
-                    _field(description, '说明', lines: 3, readOnly: builtIn),
+                    _field(name, text['name']!, readOnly: builtIn),
+                    _field(description, text['details']!,
+                        lines: 3, readOnly: builtIn),
                     Row(children: [
                       Expanded(
-                        child: Text('条目 ${draft.entries.length}',
+                        child: Text(
+                            formatTavernText(text['entryCount']!,
+                                {'count': draft.entries.length}),
                             style: Theme.of(context)
                                 .textTheme
                                 .titleMedium
@@ -3302,7 +3335,7 @@ class _AgentScreenState extends State<AgentScreen> {
                             }
                           },
                           icon: const Icon(Icons.add_rounded),
-                          label: const Text('添加条目'),
+                          label: Text(text['addEntry']!),
                         ),
                     ]),
                     const SizedBox(height: 8),
@@ -3312,7 +3345,7 @@ class _AgentScreenState extends State<AgentScreen> {
                             title: Text(entry.comment?.trim().isNotEmpty == true
                                 ? entry.comment!
                                 : (entry.keys.isEmpty
-                                    ? '常驻条目'
+                                    ? text['persistentEntry']!
                                     : entry.keys.join(', '))),
                             subtitle: Text(entry.content,
                                 maxLines: 2, overflow: TextOverflow.ellipsis),
@@ -3348,7 +3381,7 @@ class _AgentScreenState extends State<AgentScreen> {
                 child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
                   TextButton(
                       onPressed: () => Navigator.pop(dialogContext, false),
-                      child: Text(builtIn ? '关闭' : text['cancel']!)),
+                      child: Text(builtIn ? text['close']! : text['cancel']!)),
                   if (!builtIn) ...[
                     const SizedBox(width: 8),
                     FilledButton(
@@ -3379,6 +3412,7 @@ class _AgentScreenState extends State<AgentScreen> {
   }
 
   Future<bool> _editLoreEntry(TavernLorebookEntry entry) async {
+    final text = _tavernText(context.read<AppState>().settings.language);
     final comment = TextEditingController(text: entry.comment ?? '');
     final keys = TextEditingController(text: entry.keys.join(', '));
     final secondary =
@@ -3390,23 +3424,23 @@ class _AgentScreenState extends State<AgentScreen> {
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
-          title: const Text('世界书条目'),
+          title: Text(text['loreEntry']!),
           content: SizedBox(
             width: 560,
             child: SingleChildScrollView(
               child: Column(mainAxisSize: MainAxisSize.min, children: [
-                _field(comment, '标题'),
-                _field(keys, '主关键词（逗号分隔）'),
-                _field(secondary, '次关键词（可选）'),
-                _field(content, '注入内容', lines: 8),
+                _field(comment, text['entryTitle']!),
+                _field(keys, text['primaryKeys']!),
+                _field(secondary, text['secondaryKeys']!),
+                _field(content, text['injectionContent']!, lines: 8),
                 SwitchListTile(
                   value: constant,
-                  title: const Text('始终激活'),
+                  title: Text(text['alwaysActive']!),
                   onChanged: (value) => setState(() => constant = value),
                 ),
                 SwitchListTile(
                   value: selective,
-                  title: const Text('同时匹配次关键词'),
+                  title: Text(text['matchSecondary']!),
                   onChanged: (value) => setState(() => selective = value),
                 ),
               ]),
@@ -3415,10 +3449,10 @@ class _AgentScreenState extends State<AgentScreen> {
           actions: [
             TextButton(
                 onPressed: () => Navigator.pop(dialogContext, false),
-                child: const Text('取消')),
+                child: Text(text['cancel']!)),
             FilledButton(
                 onPressed: () => Navigator.pop(dialogContext, true),
-                child: const Text('保存')),
+                child: Text(text['save']!)),
           ],
         ),
       ),
@@ -3461,23 +3495,23 @@ class _AgentScreenState extends State<AgentScreen> {
           width: 620,
           child: SingleChildScrollView(
             child: Column(mainAxisSize: MainAxisSize.min, children: [
-              _field(positive, '正面提示词', lines: 8),
-              const Align(
+              _field(positive, text['proposalPositive']!, lines: 8),
+              Align(
                 alignment: Alignment.centerLeft,
-                child: Text('AI 仅生成正面提示词；负面提示词与风格提示词请在“生图”设置中调整。'),
+                child: Text(text['proposalHint']!),
               ),
               const SizedBox(height: 10),
               Row(children: [
-                Expanded(child: _field(width, '宽度', number: true)),
+                Expanded(child: _field(width, text['width']!, number: true)),
                 const SizedBox(width: 8),
-                Expanded(child: _field(height, '高度', number: true)),
+                Expanded(child: _field(height, text['height']!, number: true)),
               ]),
               Row(children: [
                 Expanded(child: _field(steps, 'Steps', number: true)),
                 const SizedBox(width: 8),
                 Expanded(child: _field(scale, 'CFG', number: true)),
                 const SizedBox(width: 8),
-                Expanded(child: _field(count, '数量', number: true)),
+                Expanded(child: _field(count, text['quantity']!, number: true)),
               ]),
             ]),
           ),
@@ -3557,8 +3591,9 @@ class _AgentScreenState extends State<AgentScreen> {
                   padding: const EdgeInsets.all(16),
                   children: [
                     DropdownButtonFormField<AgentProviderPreset>(
-                      decoration: const InputDecoration(
-                          labelText: '服务预设', border: OutlineInputBorder()),
+                      decoration: InputDecoration(
+                          labelText: text['providerPreset']!,
+                          border: const OutlineInputBorder()),
                       items: agentProviderPresets
                           .map((item) => DropdownMenuItem(
                               value: item, child: Text(item.label)))
@@ -3580,8 +3615,9 @@ class _AgentScreenState extends State<AgentScreen> {
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
                       value: protocol,
-                      decoration: const InputDecoration(
-                          labelText: '协议', border: OutlineInputBorder()),
+                      decoration: InputDecoration(
+                          labelText: text['protocol']!,
+                          border: const OutlineInputBorder()),
                       items: const [
                         DropdownMenuItem(
                             value: 'openai-responses',
@@ -3600,10 +3636,10 @@ class _AgentScreenState extends State<AgentScreen> {
                           setDialogState(() => protocol = value ?? protocol),
                     ),
                     const SizedBox(height: 12),
-                    _field(provider, '服务商名称'),
-                    _field(base, 'API 地址'),
+                    _field(provider, text['providerName']!),
+                    _field(base, text['apiAddress']!),
                     _field(apiKey, 'API Key', obscure: true),
-                    _field(model, '模型名称'),
+                    _field(model, text['modelName']!),
                     OutlinedButton.icon(
                       onPressed: detecting
                           ? null
@@ -3632,13 +3668,14 @@ class _AgentScreenState extends State<AgentScreen> {
                               height: 17,
                               child: CircularProgressIndicator(strokeWidth: 2))
                           : const Icon(Icons.manage_search_rounded),
-                      label: const Text('检测模型与上下文'),
+                      label: Text(text['detectModels']!),
                     ),
                     if (discovered.isNotEmpty) ...[
                       const SizedBox(height: 10),
                       DropdownButtonFormField<AgentDiscoveredModel>(
-                        decoration: const InputDecoration(
-                            labelText: '检测结果', border: OutlineInputBorder()),
+                        decoration: InputDecoration(
+                            labelText: text['detectionResult']!,
+                            border: const OutlineInputBorder()),
                         items: discovered
                             .map((item) => DropdownMenuItem(
                                 value: item, child: Text(item.displayName)))
@@ -3663,22 +3700,25 @@ class _AgentScreenState extends State<AgentScreen> {
                     const SizedBox(height: 12),
                     Row(children: [
                       Expanded(
-                          child: _field(contextWindow, '上下文长度', number: true)),
+                          child: _field(contextWindow, text['contextLength']!,
+                              number: true)),
                       const SizedBox(width: 8),
-                      Expanded(child: _field(maxOutput, '最大输出', number: true)),
+                      Expanded(
+                          child: _field(maxOutput, text['maxOutput']!,
+                              number: true)),
                     ]),
                     SwitchListTile(
                       value: autoCompact,
                       contentPadding: EdgeInsets.zero,
-                      title: const Text('自动压缩上下文'),
-                      subtitle: const Text('阈值由软件按上下文与最大输出自动计算'),
+                      title: Text(text['autoCompress']!),
+                      subtitle: Text(text['autoCompressHint']!),
                       onChanged: (value) =>
                           setDialogState(() => autoCompact = value),
                     ),
                     SwitchListTile(
                       value: vision,
                       contentPadding: EdgeInsets.zero,
-                      title: const Text('允许读取图片附件'),
+                      title: Text(text['allowImages']!),
                       onChanged: (value) =>
                           setDialogState(() => vision = value),
                     ),

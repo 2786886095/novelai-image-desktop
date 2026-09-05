@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useAppStore } from "./store";
-import { Button, CommittedNumberInput } from "./components/ui";
+import { Button, CommittedNumberInput, SelectMenuCompat } from "./components/ui";
 import { Icon } from "./components/icons";
 import {
   createArtistLabRandom,
@@ -274,7 +274,7 @@ function TargetArtistLab({ onBack }: { onBack: () => void }) {
     <section className="artist-lab-config-grid">
       <article className="artist-lab-panel target-panel"><h3>{text.target}</h3>{session.target ? <img src={session.target.fileUrl} alt={session.target.name} /> : <div className="artist-target-empty"><Icon name="scan" /></div>}<Button onClick={() => void chooseTarget()}>{session.target ? text.change : text.choose}</Button><small>{text.local}</small></article>
       <article className="artist-lab-panel artist-lab-controls">
-        <label><span>{text.model}</span><select value={session.modelMode} onChange={(event) => patch({ modelMode: event.target.value as ArtistLabModelMode })}><option value="high">{text.high}</option><option value="light">{text.light}</option></select></label>
+        <label><span>{text.model}</span><SelectMenuCompat value={session.modelMode} onChange={(event) => patch({ modelMode: event.target.value as ArtistLabModelMode })}><option value="high">{text.high}</option><option value="light">{text.light}</option></SelectMenuCompat></label>
         <div className="artist-model-cache"><span>{text.cache}: {modelStatus ? `${formatBytes(modelStatus.cachedBytes)} · ${modelStatus.cachedFiles}` : "—"}</span><Button variant="ghost" onClick={async () => setModelStatus(await window.naiDesktop.artistLabClearModels())}>{text.clear}</Button></div>
         <label><span>{text.prompt}</span><textarea value={session.basePrompt} onChange={(event) => patch({ basePrompt: event.target.value })} /></label><Button onClick={() => void reverseContent()} disabled={!session.target || reversing}>{reversing ? text.reversing : text.reverse}</Button>
         <label><span>{text.fixedStyle}</span><textarea value={session.sharedStylePrompt} onChange={(event) => patch({ sharedStylePrompt: event.target.value })} /></label>

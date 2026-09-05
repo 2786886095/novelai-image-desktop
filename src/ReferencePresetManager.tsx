@@ -18,14 +18,32 @@ import type {
 const EMPTY_LIBRARY: ReferencePresetLibrary = { groups: [], presets: [] };
 const ALL_REFERENCE_KINDS: ReferencePresetKind[] = ["vibe", "precise"];
 const LOCAL_GRID_COLUMNS_KEY = "langbai.reference-presets.columns.v1";
+const LOCAL_PAGE_SIZE_KEY = "langbai.reference-presets.page-size.v1";
+const LOCAL_PAGE_SIZE_OPTIONS = [12, 24, 48, 60] as const;
 
 const MANAGER_NAV_TEXT = {
-  "zh-CN": { online: "在线下载", local: "本机预设", cardsPerRow: "每排显示", deleteGroup: "删除分组", deleteGroupTitle: "删除这个分组？", deleteGroupHint: "分组内的预设图片不会被删除，将统一移到“未分组”。", deleteGroupDone: "分组已删除，原有预设已移到未分组。" },
-  "zh-TW": { online: "線上下載", local: "本機預設", cardsPerRow: "每列顯示", deleteGroup: "刪除分組", deleteGroupTitle: "刪除這個分組？", deleteGroupHint: "分組內的預設圖片不會刪除，將統一移到「未分組」。", deleteGroupDone: "分組已刪除，原有預設已移到未分組。" },
-  "en-US": { online: "Online downloads", local: "Local presets", cardsPerRow: "Cards per row", deleteGroup: "Delete group", deleteGroupTitle: "Delete this group?", deleteGroupHint: "Preset images will be kept and moved to Ungrouped.", deleteGroupDone: "Group deleted. Its presets were moved to Ungrouped." },
-  "ja-JP": { online: "オンライン", local: "ローカル", cardsPerRow: "1行の件数", deleteGroup: "グループ削除", deleteGroupTitle: "このグループを削除しますか？", deleteGroupHint: "画像は削除されず、「未分類」へ移動します。", deleteGroupDone: "グループを削除し、プリセットを未分類へ移動しました。" },
-  "ko-KR": { online: "온라인 다운로드", local: "로컬 프리셋", cardsPerRow: "행당 카드", deleteGroup: "그룹 삭제", deleteGroupTitle: "이 그룹을 삭제할까요?", deleteGroupHint: "프리셋 이미지는 삭제되지 않고 미분류로 이동합니다.", deleteGroupDone: "그룹을 삭제하고 프리셋을 미분류로 이동했습니다." },
+  "zh-CN": { online: "在线下载", local: "本机预设", cardsPerRow: "每排显示", itemsPerPage: "每页 {count} 个预设", choosePage: "选择页数", previous: "上一页", next: "下一页", page: "第 {page} / {pages} 页 · {start}–{end} / {total}", deleteGroup: "删除分组", deleteGroupTitle: "删除这个分组？", deleteGroupHint: "分组内的预设图片不会被删除，将统一移到“未分组”。", deleteGroupDone: "分组已删除，原有预设已移到未分组。" },
+  "zh-TW": { online: "線上下載", local: "本機預設", cardsPerRow: "每列顯示", itemsPerPage: "每頁 {count} 個預設", choosePage: "選擇頁數", previous: "上一頁", next: "下一頁", page: "第 {page} / {pages} 頁 · {start}–{end} / {total}", deleteGroup: "刪除分組", deleteGroupTitle: "刪除這個分組？", deleteGroupHint: "分組內的預設圖片不會刪除，將統一移到「未分組」。", deleteGroupDone: "分組已刪除，原有預設已移到未分組。" },
+  "en-US": { online: "Online downloads", local: "Local presets", cardsPerRow: "Cards per row", itemsPerPage: "{count} presets per page", choosePage: "Choose page", previous: "Previous", next: "Next", page: "Page {page} of {pages} · {start}–{end} / {total}", deleteGroup: "Delete group", deleteGroupTitle: "Delete this group?", deleteGroupHint: "Preset images will be kept and moved to Ungrouped.", deleteGroupDone: "Group deleted. Its presets were moved to Ungrouped." },
+  "ja-JP": { online: "オンライン", local: "ローカル", cardsPerRow: "1行の件数", itemsPerPage: "1ページ {count} 件", choosePage: "ページを選択", previous: "前のページ", next: "次のページ", page: "{page} / {pages} ページ · {start}–{end} / {total}", deleteGroup: "グループ削除", deleteGroupTitle: "このグループを削除しますか？", deleteGroupHint: "画像は削除されず、「未分類」へ移動します。", deleteGroupDone: "グループを削除し、プリセットを未分類へ移動しました。" },
+  "ko-KR": { online: "온라인 다운로드", local: "로컬 프리셋", cardsPerRow: "행당 카드", itemsPerPage: "페이지당 프리셋 {count}개", choosePage: "페이지 선택", previous: "이전", next: "다음", page: "{page} / {pages}페이지 · {start}–{end} / {total}", deleteGroup: "그룹 삭제", deleteGroupTitle: "이 그룹을 삭제할까요?", deleteGroupHint: "프리셋 이미지는 삭제되지 않고 미분류로 이동합니다.", deleteGroupDone: "그룹을 삭제하고 프리셋을 미분류로 이동했습니다." },
 } as const;
+
+function formatManagerText(template: string, values: Record<string, string | number>) {
+  return Object.entries(values).reduce((output, [key, value]) => output.replaceAll(`{${key}}`, String(value)), template);
+}
+
+function LocalPresetPageNumberInput({ page, pageCount, label, onChange }: { page: number; pageCount: number; label: string; onChange: (page: number) => void }) {
+  const [draft, setDraft] = useState(String(page));
+  useEffect(() => setDraft(String(page)), [page]);
+  const commit = () => {
+    const parsed = Math.floor(Number(draft));
+    const next = Number.isFinite(parsed) ? Math.max(1, Math.min(pageCount, parsed)) : page;
+    setDraft(String(next));
+    onChange(next);
+  };
+  return <span className="gallery-page-number-input"><input type="number" min={1} max={pageCount} value={draft} aria-label={label} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") commit(); }} /><button type="button" className="btn secondary" onClick={commit}>{label}</button></span>;
+}
 
 export interface ReferencePresetApplyPayload {
   base64: string;
@@ -257,6 +275,11 @@ export default function ReferencePresetManager({
     const stored = Number(globalThis.localStorage?.getItem(LOCAL_GRID_COLUMNS_KEY));
     return [2, 3, 4, 5].includes(stored) ? stored : 3;
   });
+  const [localPage, setLocalPage] = useState(1);
+  const [localPageSize, setLocalPageSize] = useState(() => {
+    const stored = Number(globalThis.localStorage?.getItem(LOCAL_PAGE_SIZE_KEY));
+    return LOCAL_PAGE_SIZE_OPTIONS.includes(stored as (typeof LOCAL_PAGE_SIZE_OPTIONS)[number]) ? stored : 12;
+  });
   const sectionRef = useRef<HTMLDivElement>(null);
   const navText = MANAGER_NAV_TEXT[language && language in MANAGER_NAV_TEXT ? language : "zh-CN"];
 
@@ -274,8 +297,9 @@ export default function ReferencePresetManager({
     return () => window.removeEventListener("langbai:reference-presets-changed", onImported);
   }, [refresh]);
   useEffect(() => { globalThis.localStorage?.setItem(LOCAL_GRID_COLUMNS_KEY, String(gridColumns)); }, [gridColumns]);
+  useEffect(() => { globalThis.localStorage?.setItem(LOCAL_PAGE_SIZE_KEY, String(localPageSize)); }, [localPageSize]);
   useLayoutEffect(() => {
-    if (!sectionRef.current || document.hidden || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    if (!sectionRef.current || document.hidden || document.documentElement.classList.contains("motion-reduced")) return;
     const animation = gsap.fromTo(sectionRef.current, { autoAlpha: 0, y: 10 }, { autoAlpha: 1, y: 0, duration: 0.24, ease: "power2.out", clearProps: "transform,opacity,visibility" });
     return () => { animation.kill(); };
   }, [section]);
@@ -298,6 +322,10 @@ export default function ReferencePresetManager({
       .filter((preset) => !normalizedQuery || [preset.name, preset.group, preset.sourceGameId, preset.sourceCategory, ...Object.values(preset.sourceNames ?? {}), ...Object.values(preset.sourceGameNames ?? {})].filter(Boolean).join("\n").toLocaleLowerCase().includes(normalizedQuery))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }, [allowedKinds, library, groupFilter, kindFilter, query]);
+  const localPageCount = Math.max(1, Math.ceil(presets.length / localPageSize));
+  const localPagePresets = presets.slice((localPage - 1) * localPageSize, localPage * localPageSize);
+  useEffect(() => setLocalPage(1), [groupFilter, kindFilter, localPageSize, query]);
+  useEffect(() => setLocalPage((current) => Math.min(current, localPageCount)), [localPageCount]);
 
   const save = async () => {
     if (!source || !name.trim()) return setToast(text.chooseRequired);
@@ -453,9 +481,9 @@ export default function ReferencePresetManager({
         {modal && onBack && <button className="reference-preset-close reference-preset-manager-close" type="button" onClick={onBack} aria-label={text.cancel}><Icon name="close" /></button>}
       </section>
 
-      {!modal && <nav className="weui-navbar reference-preset-primary-tabs" aria-label={text.title}>
-        <button type="button" className={`weui-navbar__item ${section === "online" ? "weui-bar__item_on" : ""}`} aria-current={section === "online" ? "page" : undefined} onClick={() => setSection("online")}>{navText.online}</button>
-        <button type="button" className={`weui-navbar__item ${section === "local" ? "weui-bar__item_on" : ""}`} aria-current={section === "local" ? "page" : undefined} onClick={() => setSection("local")}>{navText.local}<span className="reference-preset-tab-count">{library.presets.length}</span></button>
+      {!modal && <nav className="reference-ui-tabs reference-preset-primary-tabs" aria-label={text.title}>
+        <button type="button" className={`reference-ui-tab ${section === "online" ? "is-active" : ""}`} aria-current={section === "online" ? "page" : undefined} onClick={() => setSection("online")}>{navText.online}</button>
+        <button type="button" className={`reference-ui-tab ${section === "local" ? "is-active" : ""}`} aria-current={section === "local" ? "page" : undefined} onClick={() => setSection("local")}>{navText.local}<span className="reference-preset-tab-count">{library.presets.length}</span></button>
       </nav>}
 
       <div ref={sectionRef} className="reference-preset-section-content">
@@ -474,18 +502,22 @@ export default function ReferencePresetManager({
             <span>{navText.cardsPerRow}</span>
             <SelectMenu value={String(gridColumns)} ariaLabel={navText.cardsPerRow} options={[2, 3, 4, 5].map((item) => ({ value: String(item), label: String(item) }))} onChange={(next) => setGridColumns(Number(next))} />
           </div>
+          <div className="field reference-preset-page-size-control">
+            <span>{navText.itemsPerPage.replace("{count}", "")}</span>
+            <SelectMenu value={String(localPageSize)} ariaLabel={navText.itemsPerPage.replace("{count}", String(localPageSize))} options={LOCAL_PAGE_SIZE_OPTIONS.map((item) => ({ value: String(item), label: navText.itemsPerPage.replace("{count}", String(item)) }))} onChange={(next) => setLocalPageSize(Number(next))} />
+          </div>
         </div>
         {!modal && <div className="reference-preset-group-toolbar"><label className="field reference-preset-new-group"><span>{text.groupName}</span><input value={newGroupName} onChange={(event) => setNewGroupName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void createGroup(); }} /></label><Button disabled={busy || !newGroupName.trim()} onClick={() => void createGroup()}>{text.createGroup}</Button></div>}
         {!modal && groupFilter !== "__all__" && groupFilter !== "" && <div className="reference-preset-group-danger"><Button disabled={busy} onClick={() => setDeleteGroupTarget(groupFilter)}>{navText.deleteGroup}</Button><span>{navText.deleteGroupHint}</span></div>}
         {allowedKinds.length > 1 && <div className="reference-preset-kind-tabs reference-preset-filter-tabs" role="group" aria-label={text.kind}><button className={kindFilter === "all" ? "active" : ""} onClick={() => setKindFilter("all")}>{text.all}</button>{allowedKinds.includes("vibe") && <button className={kindFilter === "vibe" ? "active" : ""} onClick={() => setKindFilter("vibe")}>{text.vibe}</button>}{allowedKinds.includes("precise") && <button className={kindFilter === "precise" ? "active" : ""} onClick={() => setKindFilter("precise")}>{text.precise}</button>}</div>}
-        {presets.length === 0 ? <section className="reference-preset-empty"><strong>{text.empty}</strong><span>{text.createHint}</span></section> : <section className="reference-preset-grid" style={{ "--reference-preset-columns": gridColumns } as CSSProperties}>{presets.map((preset) => {
+        {presets.length === 0 ? <section className="reference-preset-empty"><strong>{text.empty}</strong><span>{text.createHint}</span></section> : <><section className="reference-preset-grid" style={{ "--reference-preset-columns": gridColumns } as CSSProperties}>{localPagePresets.map((preset) => {
           const selected = selectedIds.has(preset.id);
           return <article className={`reference-preset-card ${selected ? "is-selected" : ""}`} key={preset.id} onClick={modal ? () => toggleSelected(preset.id) : undefined} onDoubleClick={(event) => { event.stopPropagation(); setPreviewPreset(preset); }} onKeyDown={modal ? (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); toggleSelected(preset.id); } } : undefined} tabIndex={modal ? 0 : undefined} aria-selected={modal ? selected : undefined}>
             <div className="reference-preset-image-frame" title={text.preview}><img src={preset.fileUrl} alt={localizedPresetName(preset)} loading="lazy" /><span>{preset.kind === "vibe" ? text.vibe : text.precise}</span>{modal && <input type="checkbox" checked={selected} readOnly tabIndex={-1} aria-label={`${localizedPresetName(preset)} ${text.selected}`} />}</div>
             <div className="reference-preset-card-body"><h3>{localizedPresetName(preset)}</h3><p>{preset.group ? localizedPresetGroup(preset) : text.noGroup}</p><small>{preset.kind === "vibe" ? `${text.infoLabel} ${preset.infoExtracted.toFixed(2)} · ${text.strengthLabel} ${preset.strength.toFixed(2)}` : `${text.typeLabel} ${preset.preciseType} · ${text.preciseStrengthLabel} ${preset.strength.toFixed(2)} · ${text.fidelityLabel} ${preset.fidelity.toFixed(2)}`}</small>{!modal && <div className="reference-preset-card-move" onClick={(event) => event.stopPropagation()}><span>{text.moveGroup}</span><SelectMenu value={preset.group} disabled={busy} ariaLabel={text.moveGroup} options={[{ value: "", label: text.noGroup }, ...library.groups.map((item) => ({ value: item, label: catalogGroupName(item, language) }))]} onChange={(next) => void moveToGroup(preset.id, next)} /></div>}</div>
             {!modal && <div className="reference-preset-card-actions"><Button variant="primary" onClick={() => void apply(preset)}>{text.use}</Button><Button onClick={() => void removePreset(preset)}>{text.remove}</Button></div>}
           </article>;
-        })}</section>}
+        })}</section><nav className="aitag-pagination reference-preset-pagination" aria-label={navText.choosePage}><button type="button" className="btn secondary" disabled={localPage <= 1} onClick={() => setLocalPage((current) => Math.max(1, current - 1))}>{navText.previous}</button><LocalPresetPageNumberInput page={localPage} pageCount={localPageCount} label={navText.choosePage} onChange={setLocalPage} /><b aria-live="polite">{formatManagerText(navText.page, { page: localPage, pages: localPageCount, start: presets.length ? (localPage - 1) * localPageSize + 1 : 0, end: Math.min(localPage * localPageSize, presets.length), total: presets.length })}</b><button type="button" className="btn secondary" disabled={localPage >= localPageCount} onClick={() => setLocalPage((current) => Math.min(localPageCount, current + 1))}>{navText.next}</button></nav></>}
       </section>}
       {!modal && section === "online" && <ReferenceCatalogPanel library={library} onDownloaded={() => void refresh()} />}
       </div>
@@ -493,5 +525,5 @@ export default function ReferencePresetManager({
     </main>
   );
 
-  return <>{modal ? <AppPortal><div className="modal-backdrop reference-preset-manager-backdrop"><div className="reference-preset-manager-modal">{content}</div></div></AppPortal> : content}{showCreate && <AppPortal><div className="modal-backdrop reference-preset-create-backdrop"><div className="reference-preset-create-modal">{createPanel}</div></div></AppPortal>}{previewPreset && <AppPortal><div className="modal-backdrop reference-preset-preview-backdrop" onClick={() => setPreviewPreset(null)}><div className="reference-preset-preview" onClick={(event) => event.stopPropagation()}><button className="reference-preset-close" type="button" onClick={() => setPreviewPreset(null)} aria-label={text.cancel}><Icon name="close" /></button><img src={previewPreset.fileUrl} alt={localizedPresetName(previewPreset)} /><strong>{localizedPresetName(previewPreset)}</strong></div></div></AppPortal>}{deleteGroupTarget && <AppPortal><div className="weui-mask reference-preset-confirm-mask" onClick={() => setDeleteGroupTarget(null)}><section className="weui-dialog reference-preset-confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="reference-delete-group-title" onClick={(event) => event.stopPropagation()}><div className="weui-dialog__hd"><strong id="reference-delete-group-title" className="weui-dialog__title">{navText.deleteGroupTitle}</strong></div><div className="weui-dialog__bd"><b>{catalogGroupName(deleteGroupTarget, language)}</b><p>{navText.deleteGroupHint}</p></div><div className="weui-dialog__ft"><button type="button" className="weui-dialog__btn weui-dialog__btn_default" onClick={() => setDeleteGroupTarget(null)}>{text.cancel}</button><button type="button" className="weui-dialog__btn weui-dialog__btn_primary" disabled={busy} onClick={() => void deleteGroup()}>{navText.deleteGroup}</button></div></section></div></AppPortal>}</>;
+  return <>{modal ? <AppPortal><div className="modal-backdrop reference-preset-manager-backdrop"><div className="reference-preset-manager-modal">{content}</div></div></AppPortal> : content}{showCreate && <AppPortal><div className="modal-backdrop reference-preset-create-backdrop"><div className="reference-preset-create-modal">{createPanel}</div></div></AppPortal>}{previewPreset && <AppPortal><div className="modal-backdrop reference-preset-preview-backdrop" onClick={() => setPreviewPreset(null)}><div className="reference-preset-preview" onClick={(event) => event.stopPropagation()}><button className="reference-preset-close" type="button" onClick={() => setPreviewPreset(null)} aria-label={text.cancel}><Icon name="close" /></button><img src={previewPreset.fileUrl} alt={localizedPresetName(previewPreset)} /><strong>{localizedPresetName(previewPreset)}</strong></div></div></AppPortal>}{deleteGroupTarget && <AppPortal><div className="reference-ui-mask reference-preset-confirm-mask" onClick={() => setDeleteGroupTarget(null)}><section className="reference-ui-dialog reference-preset-confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="reference-delete-group-title" onClick={(event) => event.stopPropagation()}><div className="reference-ui-dialog-head"><strong id="reference-delete-group-title" className="reference-ui-dialog-title">{navText.deleteGroupTitle}</strong></div><div className="reference-ui-dialog-body"><b>{catalogGroupName(deleteGroupTarget, language)}</b><p>{navText.deleteGroupHint}</p></div><div className="reference-ui-dialog-actions"><button type="button" className="reference-ui-dialog-button reference-ui-dialog-button-default" onClick={() => setDeleteGroupTarget(null)}>{text.cancel}</button><button type="button" className="reference-ui-dialog-button reference-ui-dialog-button-primary" disabled={busy} onClick={() => void deleteGroup()}>{navText.deleteGroup}</button></div></section></div></AppPortal>}</>;
 }

@@ -3,21 +3,12 @@ import 'package:provider/provider.dart';
 
 import '../i18n/app_locales.dart';
 import '../state/app_state.dart';
+import '../ui/studio_theme.dart';
 import 'batch_redraw_screen.dart';
 import 'comic_screen.dart';
 import 'random_artist_lab_screen.dart';
 import 'prompt_codex_screen.dart';
 import 'v5_artist_weight_repair_screen.dart';
-
-enum _ActiveTool {
-  hub,
-  comic,
-  batchRedraw,
-  randomArtist,
-  promptCodex,
-  v5ArtistRepair,
-  artistStringDraw,
-}
 
 ({String title, String subtitle}) _promptCodexTileText(String language) {
   switch (language) {
@@ -50,44 +41,24 @@ enum _ActiveTool {
   }
 }
 
-class ToolsHubScreen extends StatefulWidget {
+class ToolsHubScreen extends StatelessWidget {
   const ToolsHubScreen({super.key});
 
-  @override
-  State<ToolsHubScreen> createState() => _ToolsHubScreenState();
-}
-
-class _ToolsHubScreenState extends State<ToolsHubScreen> {
-  _ActiveTool active = _ActiveTool.hub;
+  Future<void> _openTool(
+    BuildContext context,
+    Widget Function(VoidCallback onBack) buildTool,
+  ) {
+    return Navigator.of(context).push<void>(
+      _StudioToolRoute<void>(
+        builder: (routeContext) => buildTool(
+          () => Navigator.of(routeContext).pop(),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    if (active == _ActiveTool.comic) {
-      return ComicScreen(
-          onBack: () => setState(() => active = _ActiveTool.hub));
-    }
-    if (active == _ActiveTool.batchRedraw) {
-      return BatchRedrawScreen(
-          onBack: () => setState(() => active = _ActiveTool.hub));
-    }
-    if (active == _ActiveTool.randomArtist) {
-      return RandomArtistLabScreen(
-          onBack: () => setState(() => active = _ActiveTool.hub));
-    }
-    if (active == _ActiveTool.promptCodex) {
-      return PromptCodexScreen(
-          onBack: () => setState(() => active = _ActiveTool.hub));
-    }
-    if (active == _ActiveTool.v5ArtistRepair) {
-      return V5ArtistWeightRepairScreen(
-          onBack: () => setState(() => active = _ActiveTool.hub));
-    }
-    if (active == _ActiveTool.artistStringDraw) {
-      return V5ArtistWeightRepairScreen(
-        mode: V5ArtistToolMode.draw,
-        onBack: () => setState(() => active = _ActiveTool.hub),
-      );
-    }
     final language =
         context.select<AppState, String>((s) => s.settings.language);
     final text = mobileToolsHubTextFor(language);
@@ -96,29 +67,38 @@ class _ToolsHubScreenState extends State<ToolsHubScreen> {
       appBar: AppBar(title: Text(text.title)),
       body: ListView(
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(StudioSpacing.lg),
         children: [
           _ToolTile(
             icon: Icons.auto_stories_outlined,
             title: text.comicTitle,
             subtitle: text.comicSubtitle,
-            onTap: () => setState(() => active = _ActiveTool.comic),
+            onTap: () => _openTool(
+              context,
+              (onBack) => ComicScreen(onBack: onBack),
+            ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: StudioSpacing.md),
           _ToolTile(
             icon: Icons.collections_outlined,
             title: text.batchTitle,
             subtitle: text.batchSubtitle,
-            onTap: () => setState(() => active = _ActiveTool.batchRedraw),
+            onTap: () => _openTool(
+              context,
+              (onBack) => BatchRedrawScreen(onBack: onBack),
+            ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: StudioSpacing.md),
           _ToolTile(
             icon: Icons.casino_outlined,
             title: text.artistLabTitle,
             subtitle: text.artistLabSubtitle,
-            onTap: () => setState(() => active = _ActiveTool.randomArtist),
+            onTap: () => _openTool(
+              context,
+              (onBack) => RandomArtistLabScreen(onBack: onBack),
+            ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: StudioSpacing.md),
           _ToolTile(
             icon: Icons.auto_fix_high_outlined,
             title: switch (language) {
@@ -136,9 +116,12 @@ class _ToolsHubScreenState extends State<ToolsHubScreen> {
               'ko-KR' => '각 V4.5 작가 가중치를 1/3~1/2로 개별 추첨하고 V5 숫자 형식으로 정규화',
               _ => '把每个 V4.5 画师权重独立压到原值的 1/3～1/2，并规范为 V5 数值格式',
             },
-            onTap: () => setState(() => active = _ActiveTool.v5ArtistRepair),
+            onTap: () => _openTool(
+              context,
+              (onBack) => V5ArtistWeightRepairScreen(onBack: onBack),
+            ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: StudioSpacing.md),
           _ToolTile(
             icon: Icons.tune_outlined,
             title: switch (language) {
@@ -156,19 +139,38 @@ class _ToolsHubScreenState extends State<ToolsHubScreen> {
               'ko-KR' => '전체 문자열과 모든 Tag를 유지한 채 작가 가중치만 다시 뽑아 일괄 생성·저장',
               _ => '粘贴完整画师串，保留全部 Tag，只重抽画师权重，批量生图并收藏',
             },
-            onTap: () => setState(() => active = _ActiveTool.artistStringDraw),
+            onTap: () => _openTool(
+              context,
+              (onBack) => V5ArtistWeightRepairScreen(
+                mode: V5ArtistToolMode.draw,
+                onBack: onBack,
+              ),
+            ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: StudioSpacing.md),
           _ToolTile(
             icon: Icons.menu_book_outlined,
             title: promptCodexText.title,
             subtitle: promptCodexText.subtitle,
-            onTap: () => setState(() => active = _ActiveTool.promptCodex),
+            onTap: () => _openTool(
+              context,
+              (onBack) => PromptCodexScreen(onBack: onBack),
+            ),
           ),
         ],
       ),
     );
   }
+}
+
+class _StudioToolRoute<T> extends MaterialPageRoute<T> {
+  _StudioToolRoute({required super.builder});
+
+  @override
+  Duration get transitionDuration => AppMotion.standard;
+
+  @override
+  Duration get reverseTransitionDuration => AppMotion.fast;
 }
 
 class _ToolTile extends StatelessWidget {

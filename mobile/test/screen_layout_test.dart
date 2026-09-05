@@ -344,7 +344,7 @@ void main() {
   });
 
   testWidgets(
-      'large reference preset library starts folded with a fixed apply action',
+      'large reference preset library is paged with a fixed apply action',
       (tester) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(320, 640);
@@ -381,23 +381,12 @@ void main() {
 
     final applyButton =
         find.byKey(const ValueKey('reference-preset-apply-fixed'));
-    expect(find.text('展开图片列表'), findsOneWidget);
     expect(applyButton, findsOneWidget);
     expect(tester.getBottomRight(applyButton).dy, lessThanOrEqualTo(640));
     expect(
         find.byKey(const ValueKey('reference-preset-load-more')), findsNothing);
-    expect(find.byType(Image), findsNothing);
-
-    final expandButton =
-        find.byKey(const ValueKey('reference-preset-list-expand'));
-    await tester.ensureVisible(expandButton);
-    await tester.pumpAndSettle();
-    await tester.tap(expandButton);
-    await tester.pumpAndSettle();
-
-    expect(find.byKey(const ValueKey('reference-preset-load-more')),
-        findsOneWidget);
-    expect(find.byType(Image).evaluate().length, lessThanOrEqualTo(24));
+    expect(find.text('第 1 / 56 页'), findsOneWidget);
+    expect(find.byType(Image).evaluate().length, lessThanOrEqualTo(12));
     expect(tester.takeException(), isNull);
   });
 

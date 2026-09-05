@@ -13,7 +13,7 @@ export type ReversePromptMode = "tags" | "natural" | "mixed";
 export type ReversePromptTemplateVersion = "v4.5" | "v5";
 export type ReversePromptScope = "full" | "character" | "object" | "scene";
 export type TagServerType = "rest" | "http" | "sse" | "stdio";
-export type TranslateProvider = "google" | "baidu";
+export type TranslateProvider = "google" | "baidu" | "ai";
 
 /** Independent system-prompt templates keyed by output mode. Empty = built-in. */
 export interface ModePromptTemplates {
@@ -783,7 +783,7 @@ export interface AiCallLogEntry {
   id: string;
   time: number;
   label: string;
-  api: "vision" | "convert";
+  api: "vision" | "convert" | "translate";
   model: string;
   systemPrompt: string;
   userText: string;
@@ -1306,6 +1306,15 @@ export interface ArtistStylePreviewResult {
   height: number;
 }
 
+export interface ArtistStylePreviewPage {
+  tag: string;
+  page: number;
+  pageSize: number;
+  total: number;
+  hasMore: boolean;
+  items: ArtistStylePreviewResult[];
+}
+
 export type AppLanguage = "zh-CN" | "zh-TW" | "en-US" | "ja-JP" | "ko-KR";
 
 export interface AppSettings {
@@ -1338,6 +1347,10 @@ export interface AppSettings {
   /** Preferred app update/download mirror. The other source remains fallback. */
   updateSource: "github" | "gitee";
   theme: "light" | "dark" | "system";
+  /** Explicit accessibility preference. It is intentionally independent from
+   * Windows' generic animation-effects flag so performance tuning does not
+   * silently disable every product transition. */
+  reduceMotion: boolean;
   autoComplete: boolean;
   weightHighlight: boolean;
   promptRandomizer: boolean;
@@ -1428,6 +1441,9 @@ export interface AppSettings {
   translateProvider: TranslateProvider;
   baiduAppId: string;
   baiduSecret: string;
+  translateAiApiUrl: string;
+  translateAiApiKey: string;
+  translateAiModel: string;
   activeHistoryGroupId: string;
   // Persisted save destination for ordinary generation, independent from the
   // history panel's current filter (`activeHistoryGroupId`).
@@ -1648,7 +1664,9 @@ export interface NaiDesktopApi {
     force?: boolean,
   ) => Promise<import("./artist-lab").ArtistTagRecord[]>;
   artistLabArtistRanking: (
-    limit?: number,
+    page?: number,
+    pageSize?: number,
+    query?: string,
     force?: boolean,
   ) => Promise<import("./artist-lab").ArtistRankingSnapshot>;
   artistLabScoreImages: (
@@ -1671,6 +1689,11 @@ export interface NaiDesktopApi {
     import("./artist-lab").ArtistLabModelStatus
   >;
   artistLabStylePreview: (tag: string) => Promise<ArtistStylePreviewResult | null>;
+  artistLabStylePreviewPage: (
+    tag: string,
+    page?: number,
+    pageSize?: number,
+  ) => Promise<ArtistStylePreviewPage>;
   /** Native read-only access to AITag's public gallery data (renderer-safe IPC proxy). */
   aitagConfig: () => Promise<unknown>;
   aitagSearch: (
@@ -1703,6 +1726,7 @@ export interface NaiDesktopApi {
   ) => Promise<string>;
   hasToken: () => Promise<AccountSummary>;
   accountCached: () => Promise<AccountSummary>;
+  storedToken: () => Promise<string>;
   verifyToken: (token: string) => Promise<TokenStatus>;
   clearToken: () => Promise<{ ok: boolean }>;
   quoteAnlas: (request: AnlasQuoteRequest) => Promise<AnlasQuoteResult>;
@@ -1871,7 +1895,7 @@ export interface NaiDesktopApi {
   getAiCallLog: () => Promise<AiCallLogEntry[]>;
   clearAiCallLog: () => Promise<{ ok: boolean }>;
   getReverseTemplateDefaults: () => Promise<ModePromptTemplates>;
-  listAiModels: (kind: "reverse" | "convert") => Promise<AiModelListResult>;
+  listAiModels: (kind: "reverse" | "convert" | "translate") => Promise<AiModelListResult>;
   testTagServer: (
     query: string,
   ) => Promise<{ ok: boolean; message: string; tags: TagSuggestion[] }>;

@@ -2857,15 +2857,19 @@ async function callConvertApi(
 }
 
 export async function listAiModels(
-  kind: "reverse" | "convert",
+  kind: "reverse" | "convert" | "translate",
 ): Promise<AiModelListResult> {
   const settings = getSettings();
-  const apiUrl = (
-    kind === "reverse" ? settings.visionApiUrl : settings.convertApiUrl
-  ).trim();
-  const apiKey = (
-    kind === "reverse" ? settings.visionApiKey : settings.convertApiKey
-  ).trim();
+  const apiUrl = (kind === "reverse"
+    ? settings.visionApiUrl
+    : kind === "convert"
+      ? settings.convertApiUrl
+      : settings.translateAiApiUrl).trim();
+  const apiKey = (kind === "reverse"
+    ? settings.visionApiKey
+    : kind === "convert"
+      ? settings.convertApiKey
+      : settings.translateAiApiKey).trim();
   if (!apiUrl) return { ok: false, message: "请先填写 API 地址。", models: [] };
   if (!apiKey) return { ok: false, message: "请先填写 API Key。", models: [] };
 
@@ -5201,7 +5205,63 @@ export async function translateText(
       settings.baiduSecret.trim(),
     );
   }
+  if (settings.translateProvider === "ai") {
+    return aiTranslate(
+      trimmed,
+      target,
+      settings.translateAiApiUrl.trim(),
+      settings.translateAiApiKey.trim(),
+      settings.translateAiModel.trim(),
+    );
+  }
   return googleTranslate(trimmed, target);
+}
+
+async function aiTranslate(
+  text: string,
+  target: string,
+  apiUrl: string,
+  apiKey: string,
+  model: string,
+): Promise<{ ok: boolean; text?: string; error?: string }> {
+  if (!apiUrl || !apiKey || !model) {
+    return { ok: false, error: "请先在设置中填写 AI 翻译的 API 地址、API Key 和模型。" };
+  }
+  const targetLanguage = target === "en" ? "English" : target === "zh" || target === "zh-CN" ? "Simplified Chinese" : target;
+  const systemPrompt = [
+    "You are a precise translation engine for NovelAI prompts.",
+    `Translate the user's text into ${targetLanguage}.`,
+    "Preserve existing English Danbooru tags, weights, brackets, punctuation, and comma-separated structure.",
+    "Return only the translated text without explanations, quotes, or markdown fences.",
+  ].join(" ");
+  try {
+    const base = apiUrl.replace(/\/+$/, "");
+    const response = await axios.post(
+      `${base}/chat/completions`,
+      {
+        model,
+        max_tokens: 2000,
+        temperature: 0.1,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: text },
+        ],
+      },
+      {
+        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        timeout: 120_000,
+        ...proxyConfig("translate"),
+      },
+    );
+    const output = cleanPromptOutput(String(response.data?.choices?.[0]?.message?.content ?? "")).trim();
+    if (!output) return { ok: false, error: "AI 翻译结果为空，请检查模型是否支持 Chat Completions。" };
+    recordAiCall({ label: "AI 翻译", api: "translate", model, systemPrompt, userText: text, ok: true, response: output });
+    return { ok: true, text: output };
+  } catch (error: any) {
+    const message = error?.response?.data?.error?.message ?? error?.response?.data?.message ?? error?.message ?? "未知错误";
+    recordAiCall({ label: "AI 翻译", api: "translate", model, systemPrompt, userText: text, ok: false, response: String(message) });
+    return { ok: false, error: `AI 翻译失败：${message}` };
+  }
 }
 
 async function googleTranslate(

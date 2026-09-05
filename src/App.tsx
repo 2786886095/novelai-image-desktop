@@ -1,4 +1,5 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import clsx from "clsx";
 import { format } from "date-fns";
 // Keep Tools in deferred chunks. The hub itself is warmed with the other
@@ -41,13 +42,13 @@ import {
   V45_CONVERT_SYSTEM_PROMPTS,
   V45_SCOPED_REVERSE_SYSTEM_PROMPTS,
 } from "./data/prompt-templates-v45";
-import { Button, IconText, AppPortal, Toggle, NumberInput, CommittedNumberInput, SliderInput, SecretInput, SelectMenu } from "./components/ui";
+import { Button, IconText, AppPortal, Toggle, NumberInput, CommittedNumberInput, SliderInput, SecretInput, SelectMenu, SelectMenuCompat } from "./components/ui";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import { confirmAction } from "./components/confirm";
 import { Icon, type IconName } from "./components/icons";
 import { AppMenuBar, AppTitleBar } from "./app/AppChrome";
 import AppTabBar from "./app/AppTabBar";
-import { isActiveTab, WIDE_WORKSPACE_TABS } from "./app/navigation";
+import { isActiveTab } from "./app/navigation";
 import { QualityPresetControl } from "./components/QualityPresetControl";
 import { PositivePromptPresetControl } from "./PositivePromptPresets";
 import { PromptChunkControl } from "./PromptChunks";
@@ -688,29 +689,29 @@ function AdvancedParamsModal({ onClose }: { onClose: () => void }) {
           <NumberInput label={t("advanced.cfgRescale")} value={params.cfgRescale} min={0} max={1} step={0.01} onChange={(v) => setParam("cfgRescale", v)} />
           <label className="field">
             <span>{t("advanced.sampler")}</span>
-            <select value={params.sampler} onChange={(e) => setParam("sampler", e.target.value as GenerateParams["sampler"])}>
+            <SelectMenuCompat value={params.sampler} onChange={(e) => setParam("sampler", e.target.value as GenerateParams["sampler"])}>
               {NAI_SAMPLERS.map((s) => (
                 <option value={s.value} key={s.value}>{localizedDesktopOptionLabel(settings?.language, s.value, s.label)}</option>
               ))}
-            </select>
+            </SelectMenuCompat>
           </label>
           {supportsNAINoiseScheduleControl(params.model) && (
             <label className="field">
               <span>{t("advanced.noiseSchedule")}</span>
-              <select value={params.noiseSchedule} onChange={(e) => setParam("noiseSchedule", e.target.value)}>
+              <SelectMenuCompat value={params.noiseSchedule} onChange={(e) => setParam("noiseSchedule", e.target.value)}>
                 <option value="native">{localizedDesktopOptionLabel(settings?.language, "native", "Native")}</option>
                 <option value="karras">{localizedDesktopOptionLabel(settings?.language, "karras", "Karras")}</option>
                 <option value="exponential">{localizedDesktopOptionLabel(settings?.language, "exponential", "Exponential")}</option>
-              </select>
+              </SelectMenuCompat>
             </label>
           )}
           <label className="field">
             <span>{t("advanced.ucPreset")}</span>
-            <select value={params.ucPreset} onChange={(e) => setParam("ucPreset", Number(e.target.value) as GenerateParams["ucPreset"])}>
+            <SelectMenuCompat value={params.ucPreset} onChange={(e) => setParam("ucPreset", Number(e.target.value) as GenerateParams["ucPreset"])}>
               {NAI_UC_PRESETS.map((p) => (
                 <option value={p.value} key={p.value}>{localizedDesktopOptionLabel(settings?.language, p.value, p.label)}</option>
               ))}
-            </select>
+            </SelectMenuCompat>
           </label>
         </div>
         <div className="toggle-list compact">
@@ -918,14 +919,14 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
               <div className="vibe-row-sliders">
                 <label className="field">
                   <span>{t("reference.type")}</span>
-                  <select
+                  <SelectMenuCompat
                     value={ref.type}
                     onChange={(e) => updatePreciseReference(ref.id, { type: e.target.value as PreciseReferenceType })}
                   >
                     {(["character", "style", "character&style"] as PreciseReferenceType[]).map((type) => (
                       <option key={type} value={type}>{t(`reference.type.${type}`)}</option>
                     ))}
-                  </select>
+                  </SelectMenuCompat>
                   <small className="reference-control-help">{t("reference.typeHelp")}</small>
                 </label>
                 <div className="reference-control">
@@ -1966,6 +1967,18 @@ function PromptAndParams({
     setTranslating(true);
     const original = promptValue;
     try {
+      if (settings?.translateProvider === "ai") {
+        const result = await window.naiDesktop.translate(text, "en");
+        if (!result.ok || !result.text?.trim()) {
+          setToast(t("prompt.translateFailed"));
+          return;
+        }
+        const translated = result.text.trim();
+        setPromptValue(translated + (translated.endsWith(",") ? " " : ", "));
+        setTranslateBackup((backup) => ({ ...backup, [promptKey]: original }));
+        setToast(t("prompt.translateDone"));
+        return;
+      }
       // Translate comma-separated natural-language segments with provider-side
       // auto language detection. English Danbooru tags normally round-trip to the
       // same text, while Chinese/Japanese/Korean/other languages become English.
@@ -2033,11 +2046,11 @@ function PromptAndParams({
               <Icon name="paw" /> {generateText.prompt.furryMode}
             </button>
           </div>
-          <select value={params.model} onChange={(e) => setParam("model", e.target.value as GenerateParams["model"])}>
+          <SelectMenuCompat value={params.model} onChange={(e) => setParam("model", e.target.value as GenerateParams["model"])}>
             {NAI_MODELS.filter((m) => supportsNAIModelMode(m.value, modelMode)).map((m) => (
               <option value={m.value} key={m.value}>{localizedDesktopOptionLabel(settings?.language, m.value, m.label)}</option>
             ))}
-          </select>
+          </SelectMenuCompat>
         </label>
       )}
       <label className="field">
@@ -3461,12 +3474,12 @@ function I2IPanel({ openSettings }: { openSettings: () => void }) {
       <div className="panel-scroll">
         <WorkbenchImageUpload />
         <div className="field">
-          <span>生成后下次重绘使用</span>
-          <div className="mode-buttons i2i-source-policy" role="group" aria-label="下次重绘来源">
-            <Button variant={i2iSourceMode === "original" ? "primary" : "secondary"} onClick={() => setI2ISourceMode("original")}>始终使用原图</Button>
-            <Button variant={i2iSourceMode === "latest" ? "primary" : "secondary"} onClick={() => setI2ISourceMode("latest")}>使用最新结果</Button>
+          <span>{t("inpaint.nextSource")}</span>
+          <div className="mode-buttons i2i-source-policy" role="group" aria-label={t("inpaint.nextSourceLabel")}>
+            <Button variant={i2iSourceMode === "original" ? "primary" : "secondary"} onClick={() => setI2ISourceMode("original")}>{t("inpaint.sourceOriginal")}</Button>
+            <Button variant={i2iSourceMode === "latest" ? "primary" : "secondary"} onClick={() => setI2ISourceMode("latest")}>{t("inpaint.sourceLatest")}</Button>
           </div>
-          <small className="field-hint">生成后自动打开原图/结果对比；选择原图可连续尝试而无需重复加载。</small>
+          <small className="field-hint">{t("i2i.sourceHint")}</small>
         </div>
         <SliderInput label={t("i2i.strength")} value={i2iParams.strength} min={0} max={1} step={0.01} onChange={(v) => setI2IParam("strength", v)} />
         <NumberInput label={t("i2i.extraNoiseSeed")} value={i2iParams.extraNoiseSeed} min={0} onChange={(v) => setI2IParam("extraNoiseSeed", v)} />
@@ -3523,20 +3536,20 @@ function InpaintPanel({ openSettings }: { openSettings: () => void }) {
       <div className="panel-scroll">
         <WorkbenchImageUpload />
         <div className="field">
-          <span>生成后下次重绘使用</span>
-          <div className="mode-buttons i2i-source-policy" role="group" aria-label="下次局部重绘来源">
-            <Button variant={inpaintSourceMode === "original" ? "primary" : "secondary"} onClick={() => void setInpaintSourceMode("original")}>始终使用原图</Button>
-            <Button variant={inpaintSourceMode === "latest" ? "primary" : "secondary"} onClick={() => void setInpaintSourceMode("latest")}>使用最新结果</Button>
+          <span>{t("inpaint.nextSource")}</span>
+          <div className="mode-buttons i2i-source-policy" role="group" aria-label={t("inpaint.nextSourceLabel")}>
+            <Button variant={inpaintSourceMode === "original" ? "primary" : "secondary"} onClick={() => void setInpaintSourceMode("original")}>{t("inpaint.sourceOriginal")}</Button>
+            <Button variant={inpaintSourceMode === "latest" ? "primary" : "secondary"} onClick={() => void setInpaintSourceMode("latest")}>{t("inpaint.sourceLatest")}</Button>
           </div>
-          <small className="field-hint">默认保留最初加载的图片连续重绘；切换来源时会清空旧蒙版，完成后自动打开前后对比。</small>
+          <small className="field-hint">{t("inpaint.sourceHint")}</small>
         </div>
         <label className="field">
           <span>{t("inpaint.model")}</span>
-          <select value={inpaintModel} onChange={(e) => setInpaintModel(e.target.value as typeof inpaintModel)}>
+          <SelectMenuCompat value={inpaintModel} onChange={(e) => setInpaintModel(e.target.value as typeof inpaintModel)}>
             {NAI_INPAINT_MODELS.map((m) => (
               <option value={m.value} key={m.value}>{localizedDesktopOptionLabel(language, m.value, m.label)}</option>
             ))}
-          </select>
+          </SelectMenuCompat>
         </label>
         <Button
           className="full"
@@ -3632,16 +3645,16 @@ function UpscalePanel({ openSettings }: { openSettings: () => void }) {
       (outputSize.width > MAX_NAI_UPSCALE_OUTPUT_DIMENSION ||
         outputSize.height > MAX_NAI_UPSCALE_OUTPUT_DIMENSION),
   );
-  const outputLimitReason = outputTooLarge && outputSize
-    ? `超分后尺寸将达到 ${outputSize.width}×${outputSize.height}，超过允许的最大尺寸 ${MAX_NAI_UPSCALE_OUTPUT_DIMENSION}×${MAX_NAI_UPSCALE_OUTPUT_DIMENSION}。请选择 2× 或换用更小的原图。`
-    : "";
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
+  const outputLimitReason = outputTooLarge && outputSize
+    ? f("upscale.outputLimit", { output: `${outputSize.width}×${outputSize.height}`, limit: `${MAX_NAI_UPSCALE_OUTPUT_DIMENSION}×${MAX_NAI_UPSCALE_OUTPUT_DIMENSION}` })
+    : "";
   return (
     <>
       <div className="panel-scroll">
         <WorkbenchImageUpload />
-        <small className="field-hint">超分只负责扩大输出并补足清晰度，不进行第二次创意扩散；画面变化通常小于“增强”。2×/4×会直接改变分辨率。</small>
+        <small className="field-hint">{t("upscale.explain")}</small>
         <div className="scale-buttons">
           <Button variant={scale === 2 ? "primary" : "secondary"} onClick={() => setScale(2)}>2×</Button>
           <Button variant={scale === 4 ? "primary" : "secondary"} onClick={() => setScale(4)}>4×</Button>
@@ -3674,6 +3687,7 @@ function UpscalePanel({ openSettings }: { openSettings: () => void }) {
 }
 
 function EnhancePanel({ openSettings }: { openSettings: () => void }) {
+  const language = useAppStore((state) => state.settings?.language);
   const workbenchImage = useAppStore((state) => state.workbenchImage);
   const params = useAppStore((state) => state.params);
   const i2iParams = useAppStore((state) => state.i2iParams);
@@ -3684,6 +3698,8 @@ function EnhancePanel({ openSettings }: { openSettings: () => void }) {
   const generateI2I = useAppStore((state) => state.generateI2I);
   const [magnitude, setMagnitude] = useState(3);
   const [enhanceScale, setEnhanceScale] = useState<1 | 2>(1);
+  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
+  const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
 
   async function runEnhance() {
     if (!workbenchImage) return;
@@ -3723,25 +3739,25 @@ function EnhancePanel({ openSettings }: { openSettings: () => void }) {
       : adaptiveNAIImageSize(workbenchImage.width * enhanceScale, workbenchImage.height * enhanceScale, params)
     : null;
   const outputLimitReason = outputTooLarge && target
-    ? `增强并放大后的目标尺寸 ${target.width}×${target.height}（${(target.width * target.height).toLocaleString()} 像素）超过 NovelAI 允许的 ${NAI_MAX_PIXEL_AREA.toLocaleString()} 像素上限。请选择 1× 或换用更小的原图；未发送请求。`
+    ? f("enhance.outputLimit", { size: `${target.width}×${target.height}`, pixels: (target.width * target.height).toLocaleString(), limit: NAI_MAX_PIXEL_AREA.toLocaleString() })
     : "";
   return (
     <>
       <div className="panel-scroll">
         <WorkbenchImageUpload />
-        <SliderInput label={`增强幅度 ${magnitude}`} value={magnitude} min={1} max={10} step={1} onChange={setMagnitude} />
-        <small className="field-hint">增强会使用当前正面、风格与负面提示词。默认采用保守强度以保留姿势和构图；提高幅度仍可能改变局部结构。</small>
+        <SliderInput label={f("enhance.magnitude", { value: magnitude })} value={magnitude} min={1} max={10} step={1} onChange={setMagnitude} />
+        <small className="field-hint">{t("enhance.explain")}</small>
         <div className="field">
-          <span>输出倍率</span>
+          <span>{t("enhance.scale")}</span>
           <div className="scale-buttons">
-            <Button variant={enhanceScale === 1 ? "primary" : "secondary"} onClick={() => setEnhanceScale(1)}>1× 保持分辨率</Button>
-            <Button variant={enhanceScale === 2 ? "primary" : "secondary"} onClick={() => setEnhanceScale(2)}>2× 同时放大</Button>
+            <Button variant={enhanceScale === 1 ? "primary" : "secondary"} onClick={() => setEnhanceScale(1)}>{t("enhance.keepResolution")}</Button>
+            <Button variant={enhanceScale === 2 ? "primary" : "secondary"} onClick={() => setEnhanceScale(2)}>{t("enhance.doubleResolution")}</Button>
           </div>
         </div>
-        {workbenchImage && target ? <div className={clsx("info-card", outputTooLarge && "limit-card")}><strong>输出尺寸</strong><span>{workbenchImage.width}×{workbenchImage.height} → {target.width}×{target.height}</span><small>{outputTooLarge ? outputLimitReason : "1×只做二次扩散增强；2×会改变分辨率。尺寸会按 NovelAI 支持范围自动对齐。"}</small></div> : null}
-        <FeatureCostCard label="生成前扣费" feature="i2i" />
+        {workbenchImage && target ? <div className={clsx("info-card", outputTooLarge && "limit-card")}><strong>{t("enhance.outputSize")}</strong><span>{workbenchImage.width}×{workbenchImage.height} → {target.width}×{target.height}</span><small>{outputTooLarge ? outputLimitReason : t("enhance.outputHint")}</small></div> : null}
+        <FeatureCostCard label={t("cost.beforeRun")} feature="i2i" />
       </div>
-      <AccountAndRunButton label={`增强图像 ${enhanceScale}×`} onRun={() => void runEnhance()} openSettings={openSettings} disabled={outputTooLarge} disabledReason={outputLimitReason} />
+      <AccountAndRunButton label={f("enhance.run", { scale: enhanceScale })} onRun={() => void runEnhance()} openSettings={openSettings} disabled={outputTooLarge} disabledReason={outputLimitReason} />
     </>
   );
 }
@@ -3781,11 +3797,11 @@ function DirectorPanel({ openSettings }: { openSettings: () => void }) {
           <>
             <label className="field">
               <span>{t("director.emotion")}</span>
-              <select value={options.emotion} onChange={(e) => setOption("emotion", e.target.value as typeof options.emotion)}>
+              <SelectMenuCompat value={options.emotion} onChange={(e) => setOption("emotion", e.target.value as typeof options.emotion)}>
                 {EMOTION_OPTIONS.map((em) => (
                   <option value={em.value} key={em.value}>{localizedDesktopOptionLabel(language, em.value, em.label)}</option>
                 ))}
-              </select>
+              </SelectMenuCompat>
             </label>
             <SliderInput label={t("director.emotionLevel")} value={options.emotionLevel} min={0} max={5} step={1} onChange={(v) => setOption("emotionLevel", v)} />
           </>
@@ -3812,15 +3828,17 @@ function DirectorPanel({ openSettings }: { openSettings: () => void }) {
 
 function PostprocessPanel({ openSettings }: { openSettings: () => void }) {
   const [mode, setMode] = useState<"upscale" | "director">("upscale");
+  const language = useAppStore((state) => state.settings?.language);
+  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const setActiveCanvasSurface = useAppStore((state) => state.setActiveCanvasSurface);
   useEffect(() => {
     setActiveCanvasSurface(mode === "upscale" ? "postprocess:upscale" : "postprocess:director");
   }, [mode, setActiveCanvasSurface]);
   return (
     <>
-      <div className="postprocess-mode-switcher" role="tablist" aria-label="后期工具">
-        <button className={clsx(mode === "upscale" && "active")} onClick={() => setMode("upscale")}>超分</button>
-        <button className={clsx(mode === "director" && "active")} onClick={() => setMode("director")}>导演工具</button>
+      <div className="postprocess-mode-switcher" role="tablist" aria-label={t("postprocess.tools")}>
+        <button className={clsx(mode === "upscale" && "active")} onClick={() => setMode("upscale")}>{t("postprocess.upscale")}</button>
+        <button className={clsx(mode === "director" && "active")} onClick={() => setMode("director")}>{t("postprocess.director")}</button>
       </div>
       {mode === "upscale"
         ? <UpscalePanel openSettings={openSettings} />
@@ -4306,6 +4324,7 @@ function ReversePanel() {
 function LeftPanel({ openSettings }: { openSettings: () => void }) {
   const activeTab = useAppStore((state) => state.activeTab);
   const language = useAppStore((state) => state.settings?.language);
+  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const [generateMode, setGenerateMode] = useState<"t2i" | "i2i" | "enhance">("t2i");
   const setActiveCanvasSurface = useAppStore((state) => state.setActiveCanvasSurface);
   const currentImage = useAppStore((state) => state.currentImage);
@@ -4356,7 +4375,7 @@ function LeftPanel({ openSettings }: { openSettings: () => void }) {
               className={clsx(generateMode === "enhance" && "active")}
               onClick={() => setGenerateMode("enhance")}
             >
-              增强
+              {t("postprocess.enhance")}
             </button>
           </div>
           {generateMode === "t2i"
@@ -5269,13 +5288,13 @@ function ProxyPresetControl({ mode, value, onChange }: {
     <div className="proxy-preset-control">
       <label className="field">
         <span>{t("proxy.label")}</span>
-        <select value={preset} onChange={(event) => selectPreset(event.target.value as ProxyPreset)}>
+        <SelectMenuCompat value={preset} onChange={(event) => selectPreset(event.target.value as ProxyPreset)}>
           <option value="auto">{t("proxy.auto")}</option>
           <option value="http">{t("proxy.http")}</option>
           <option value="direct">{t("proxy.direct")}</option>
           <option value="socks">{t("proxy.socks")}</option>
           <option value="custom">{t("proxy.custom")}</option>
-        </select>
+        </SelectMenuCompat>
       </label>
       {preset === "custom" && (
         <label className="field">
@@ -5379,10 +5398,19 @@ function HistoryPanel() {
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
   const pendingHistoryLabel = generationPhase === "saving" ? t("canvas.savingTitle") : t("canvas.generatingTitle");
   const [newGroupName, setNewGroupName] = useState("");
-  // window.prompt() is unsupported in Electron, so use an in-app input modal.
+  // Renaming stays inside the app so it is themeable and non-blocking.
   const [renameTarget, setRenameTarget] = useState<
     { kind: "item" | "group"; id: string; initial: string; title: string; label: string } | null
   >(null);
+  const historyScrollRef = useRef<HTMLDivElement>(null);
+  const virtualizeHistory = history.length >= 80 && !isGenerating;
+  const historyRowVirtualizer = useVirtualizer({
+    count: virtualizeHistory ? Math.ceil(history.length / 2) : 0,
+    getScrollElement: () => historyScrollRef.current,
+    estimateSize: () => 236,
+    overscan: 4,
+    getItemKey: (index) => history[index * 2]?.id ?? index,
+  });
 
   function renameItem(item: HistoryItem) {
     const current = item.filePath.split(/[\\/]/).pop()?.replace(/\.[^.]+$/, "") ?? "";
@@ -5434,6 +5462,56 @@ function HistoryPanel() {
     setActiveTab("metadata");
   }
 
+  const renderHistoryItem = (item: HistoryItem) => (
+    <div className="history-item" key={item.id}>
+      <button onClick={() => selectImage(item)}>
+        <div className="history-thumb-frame">
+          <img
+            src={item.fileUrl}
+            alt={t("history.thumbAlt")}
+            draggable
+            loading="lazy"
+            decoding="async"
+            title={t("history.dragTitle")}
+            onDragStart={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              window.naiDesktop.startImageDrag(item.filePath);
+            }}
+            onError={() => void useAppStore.getState().dropMissingImage(item.id)}
+          />
+        </div>
+      </button>
+      <div className="history-item-footer">
+        <span className="history-meta">{item.model} · {item.width}×{item.height}</span>
+        <div className="history-item-group-row" onClick={(event) => event.stopPropagation()}>
+          <SelectMenu
+            className="history-item-group-trigger"
+            value={item.groupId ?? ""}
+            ariaLabel={t("history.itemGroupTitle")}
+            label={<Icon name="folder" />}
+            options={[
+              { value: "", label: t("history.ungrouped") },
+              ...groups.map((group) => ({ value: group.id, label: group.name })),
+            ]}
+            onChange={(value) => void setHistoryItemGroup(item.id, value || undefined)}
+          />
+        </div>
+      </div>
+      <div className="history-item-controls" onClick={(event) => event.stopPropagation()}>
+        <button className="history-metadata" title={t("history.metadataTitle")} aria-label={t("history.metadataTitle")} onClick={() => void inspectHistoryMetadata(item)}>
+          <Icon name="eye" />
+        </button>
+        <button className="history-rename" title={t("history.renameImageTitle")} aria-label={t("history.renameImageTitle")} onClick={() => renameItem(item)}>
+          <Icon name="brush" />
+        </button>
+        <button className="history-delete" title={t("history.deleteImageTitle")} aria-label={t("history.deleteImageTitle")} onClick={() => void deleteItem(item)}>
+          <Icon name="close" />
+        </button>
+      </div>
+    </div>
+  );
+
   return (
     <aside className="history-panel">
       <div className="history-title">
@@ -5482,7 +5560,7 @@ function HistoryPanel() {
           </button>
         </div>
       </div>
-      <div className="history-grid">
+      <div ref={historyScrollRef} className={clsx("history-grid", virtualizeHistory && "is-virtualized")}>
         {isGenerating && (
           <div className="history-item history-item-pending" aria-label={pendingHistoryLabel}>
             <div className="history-thumb-frame history-thumb-pending" aria-hidden="true">
@@ -5500,60 +5578,21 @@ function HistoryPanel() {
             <small>{t("history.emptyHint")}</small>
           </div>
         )}
-        {history.map((item) => (
-          <div className="history-item" key={item.id}>
-            <button onClick={() => selectImage(item)}>
-              <div className="history-thumb-frame">
-                <img
-                  src={item.fileUrl}
-                  alt={t("history.thumbAlt")}
-                  draggable
-                  // Decode only when scrolled into view and off the main thread —
-                  // otherwise a large library decodes every full-res PNG at once,
-                  // which freezes the UI and balloons memory.
-                  loading="lazy"
-                  decoding="async"
-                  title={t("history.dragTitle")}
-                  onDragStart={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    window.naiDesktop.startImageDrag(item.filePath);
-                  }}
-                  // File deleted/moved on disk → drop it from the library instead
-                  // of showing a broken thumbnail (main re-checks before removing).
-                  onError={() => void useAppStore.getState().dropMissingImage(item.id)}
-                />
+        {virtualizeHistory ? (
+          <div className="history-virtual-inner" style={{ height: historyRowVirtualizer.getTotalSize() }}>
+            {historyRowVirtualizer.getVirtualItems().map((row) => (
+              <div
+                key={row.key}
+                ref={historyRowVirtualizer.measureElement}
+                data-index={row.index}
+                className="history-virtual-row"
+                style={{ transform: `translateY(${row.start}px)` }}
+              >
+                {history.slice(row.index * 2, row.index * 2 + 2).map(renderHistoryItem)}
               </div>
-            </button>
-            <div className="history-item-footer">
-              <span className="history-meta">{item.model} · {item.width}×{item.height}</span>
-              <div className="history-item-group-row" onClick={(event) => event.stopPropagation()}>
-                <SelectMenu
-                  className="history-item-group-trigger"
-                  value={item.groupId ?? ""}
-                  ariaLabel={t("history.itemGroupTitle")}
-                  label={<Icon name="folder" />}
-                  options={[
-                    { value: "", label: t("history.ungrouped") },
-                    ...groups.map((group) => ({ value: group.id, label: group.name })),
-                  ]}
-                  onChange={(value) => void setHistoryItemGroup(item.id, value || undefined)}
-                />
-              </div>
-            </div>
-            <div className="history-item-controls" onClick={(event) => event.stopPropagation()}>
-              <button className="history-metadata" title={t("history.metadataTitle")} aria-label={t("history.metadataTitle")} onClick={() => void inspectHistoryMetadata(item)}>
-                <Icon name="eye" />
-              </button>
-              <button className="history-rename" title={t("history.renameImageTitle")} aria-label={t("history.renameImageTitle")} onClick={() => renameItem(item)}>
-                <Icon name="brush" />
-              </button>
-              <button className="history-delete" title={t("history.deleteImageTitle")} aria-label={t("history.deleteImageTitle")} onClick={() => void deleteItem(item)}>
-                <Icon name="close" />
-              </button>
-            </div>
+            ))}
           </div>
-        ))}
+        ) : history.map(renderHistoryItem)}
       </div>
       {renameTarget && (
         <InputModal
@@ -5568,6 +5607,8 @@ function HistoryPanel() {
     </aside>
   );
 }
+
+const MemoizedHistoryPanel = memo(HistoryPanel);
 
 // ── Settings modal ────────────────────────────────────────────────────────────
 function SettingsModal({ onClose }: { onClose: () => void }) {
@@ -5588,10 +5629,10 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
   const [newTplPrefix, setNewTplPrefix] = useState("");
   const [newTplSuffix, setNewTplSuffix] = useState("");
   const [newTplNeg, setNewTplNeg] = useState("");
-  const [modelCheckKind, setModelCheckKind] = useState<"reverse" | "convert" | "">("");
+  const [modelCheckKind, setModelCheckKind] = useState<"reverse" | "convert" | "translate" | "">("");
   const [modelCheckMessage, setModelCheckMessage] = useState("");
   const [detectedModels, setDetectedModels] = useState<string[]>([]);
-  const [detectedKind, setDetectedKind] = useState<"reverse" | "convert" | "">("");
+  const [detectedKind, setDetectedKind] = useState<"reverse" | "convert" | "translate" | "">("");
   const [tagTestQuery, setTagTestQuery] = useState("");
   const [tagTestMessage, setTagTestMessage] = useState("");
   const [tagTestTags, setTagTestTags] = useState<TagSuggestion[]>([]);
@@ -5615,6 +5656,10 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
         setReverseTemplateDefaults(defaults);
       }
     });
+  }, []);
+
+  useEffect(() => {
+    void window.naiDesktop.storedToken().then(setToken).catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -5678,16 +5723,15 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
     void update("promptTemplates", existing.filter((t) => t.id !== id));
   }
 
-  async function detectModels(kind: "reverse" | "convert") {
+  async function detectModels(kind: "reverse" | "convert" | "translate") {
     setModelCheckKind(kind);
     setModelCheckMessage(t("settings.detectModelsToast"));
     setDetectedModels([]);
-    setDetectedKind("");
+    setDetectedKind(kind);
     const result = await window.naiDesktop.listAiModels(kind);
     setModelCheckKind("");
     setModelCheckMessage(result.message);
     setDetectedModels(result.models.slice(0, 80));
-    if (result.models.length > 0) setDetectedKind(kind);
   }
 
   async function detectTagServer() {
@@ -5758,6 +5802,8 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                     variant="danger"
                     onClick={async () => {
                       await window.naiDesktop.clearToken();
+                      setToken("");
+                      setStatus(null);
                       await refreshAccount();
                     }}
                   >
@@ -5850,14 +5896,14 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                   <span>{f("settings.aitagCacheSize", { files: aitagCacheStats.files, size: cacheSize })}</span>
                   <label className="field">
                     <span>{t("settings.aitagCacheRetention")}</span>
-                    <select value={aitagCacheRetentionDays} onChange={(event) => {
+                    <SelectMenuCompat value={aitagCacheRetentionDays} onChange={(event) => {
                       const days = Number(event.target.value);
                       setAitagCacheRetentionDays(days);
                       localStorage.setItem("langbai.aitag.cache-retention-days.v1", String(days));
                     }}>
                       {[1, 7, 30, 90, 180].map((days) => <option key={days} value={days}>{f("settings.aitagCacheDays", { days })}</option>)}
                       <option value={0}>{t("settings.aitagCacheNever")}</option>
-                    </select>
+                    </SelectMenuCompat>
                   </label>
                   <div className="row-actions">
                     <Button onClick={() => void clearAitagCache()} disabled={aitagCacheBusy}>
@@ -5965,7 +6011,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                 </div>
                 <label className="field">
                   <span>{t("settings.updateSource")}</span>
-                  <select
+                  <SelectMenuCompat
                     value={settings.updateSource ?? "github"}
                     onChange={async (event) => {
                       await update("updateSource", event.target.value as AppSettings["updateSource"]);
@@ -5974,7 +6020,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                   >
                     <option value="github">{t("settings.updateSourceGithub")}</option>
                     <option value="gitee">{t("settings.updateSourceGitee")}</option>
-                  </select>
+                  </SelectMenuCompat>
                   <small className="settings-hint">{t("settings.updateSourceFallback")}</small>
                 </label>
                 <div className="about-block">
@@ -6026,12 +6072,18 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
               <div className="settings-form">
                 <label className="field">
                   <span>{settingsSectionText.appearance.theme}</span>
-                  <select value={settings.theme} onChange={(e) => void update("theme", e.target.value as AppSettings["theme"])}>
+                  <SelectMenuCompat value={settings.theme} onChange={(e) => void update("theme", e.target.value as AppSettings["theme"])}>
                     <option value="light">{settingsSectionText.appearance.themeLight}</option>
                     <option value="dark">{settingsSectionText.appearance.themeDark}</option>
                     <option value="system">{settingsSectionText.appearance.themeSystem}</option>
-                  </select>
+                  </SelectMenuCompat>
                 </label>
+                <Toggle
+                  checked={settings.reduceMotion}
+                  onChange={(value) => void update("reduceMotion", value)}
+                  label={settingsSectionText.appearance.reduceMotion}
+                  description={settingsSectionText.appearance.reduceMotionHint}
+                />
                 <div className="field">
                   <span>{settingsSectionText.appearance.workspaceLayout}</span>
                   <div className="row-actions">
@@ -6047,13 +6099,13 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
               <div className="settings-form">
                 <label className="field">
                   <span>{settingsSectionText.language.language}</span>
-                  <select value={settings.language} onChange={(e) => void update("language", e.target.value as AppSettings["language"])}>
+                  <SelectMenuCompat value={settings.language} onChange={(e) => void update("language", e.target.value as AppSettings["language"])}>
                     {SUPPORTED_APP_LANGUAGES.map((language) => (
                       <option value={language.code} key={language.code}>
                         {language.menuLabel}
                       </option>
                     ))}
-                  </select>
+                  </SelectMenuCompat>
                   <small className="settings-hint">{settingsSectionText.language.hint}</small>
                 </label>
               </div>
@@ -6094,7 +6146,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                 {detectedKind === "reverse" && detectedModels.length > 0 && (
                   <label className="field">
                     <span>{f("settings.detectedModelLabel", { count: detectedModels.length })}</span>
-                    <select
+                    <SelectMenuCompat
                       value={detectedModels.includes(settings.visionApiModel) ? settings.visionApiModel : ""}
                       onChange={(e) => e.target.value && void update("visionApiModel", e.target.value)}
                     >
@@ -6102,7 +6154,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                       {detectedModels.map((m) => (
                         <option value={m} key={m}>{m}</option>
                       ))}
-                    </select>
+                    </SelectMenuCompat>
                   </label>
                 )}
                 <div className="info-card">
@@ -6144,7 +6196,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                 {detectedKind === "convert" && detectedModels.length > 0 && (
                   <label className="field">
                     <span>{f("settings.detectedModelLabel", { count: detectedModels.length })}</span>
-                    <select
+                    <SelectMenuCompat
                       value={detectedModels.includes(settings.convertApiModel) ? settings.convertApiModel : ""}
                       onChange={(e) => e.target.value && void update("convertApiModel", e.target.value)}
                     >
@@ -6152,7 +6204,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                       {detectedModels.map((m) => (
                         <option value={m} key={m}>{m}</option>
                       ))}
-                    </select>
+                    </SelectMenuCompat>
                   </label>
                 )}
                 <div className="info-card">
@@ -6161,7 +6213,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                 </div>
               </div>
             )}
-            {modelCheckMessage && (section === "ai-reverse" || section === "convert-api") && (
+            {modelCheckMessage && ((section === "ai-reverse" && detectedKind === "reverse") || (section === "convert-api" && detectedKind === "convert")) && (
               <div className="status-box ok model-check-result">
                 <strong>{modelCheckMessage}</strong>
                 {detectedModels.length > 0 && <small>{detectedModels.join(", ")}</small>}
@@ -6221,12 +6273,12 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                 <div className="tag-server-card">
                   <label className="field">
                     <span>{t("settings.tagServerType")}</span>
-                    <select value={settings.tagServerType} onChange={(e) => void update("tagServerType", e.target.value as AppSettings["tagServerType"])}>
+                    <SelectMenuCompat value={settings.tagServerType} onChange={(e) => void update("tagServerType", e.target.value as AppSettings["tagServerType"])}>
                       <option value="rest">{t("settings.transportRest")}</option>
                       <option value="http">{t("settings.transportHttp")}</option>
                       <option value="sse">{t("settings.transportSse")}</option>
                       <option value="stdio">{t("settings.transportStdio")}</option>
-                    </select>
+                    </SelectMenuCompat>
                   </label>
                   {settings.tagServerType === "stdio" ? (
                     <>
@@ -6299,10 +6351,11 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                   <p className="settings-hint" style={{ margin: 0 }}>{t("settings.translateHint")}</p>
                   <label className="field">
                     <span>{t("settings.translateEngine")}</span>
-                    <select value={settings.translateProvider} onChange={(e) => void update("translateProvider", e.target.value as AppSettings["translateProvider"])}>
+                    <SelectMenuCompat value={settings.translateProvider} onChange={(e) => void update("translateProvider", e.target.value as AppSettings["translateProvider"])}>
                       <option value="google">{t("settings.googleTranslate")}</option>
                       <option value="baidu">{t("settings.baiduTranslate")}</option>
-                    </select>
+                      <option value="ai">{t("settings.aiTranslate")}</option>
+                    </SelectMenuCompat>
                   </label>
                   {settings.translateProvider === "baidu" && (
                     <>
@@ -6322,6 +6375,55 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                         showLabel={t("settings.showKey")}
                         hideLabel={t("settings.hideKey")}
                       />
+                    </>
+                  )}
+                  {settings.translateProvider === "ai" && (
+                    <>
+                      <label className="field">
+                        <span>{t("settings.apiUrl")}</span>
+                        <input
+                          value={settings.translateAiApiUrl}
+                          placeholder="https://api.openai.com/v1"
+                          onChange={(e) => void update("translateAiApiUrl", e.target.value)}
+                        />
+                      </label>
+                      <SecretInput
+                        label="API Key"
+                        value={settings.translateAiApiKey}
+                        placeholder="sk-..."
+                        onChange={(e) => void update("translateAiApiKey", e.target.value)}
+                        showLabel={t("settings.showKey")}
+                        hideLabel={t("settings.hideKey")}
+                      />
+                      <label className="field">
+                        <span>{t("settings.modelName")}</span>
+                        <input
+                          value={settings.translateAiModel}
+                          placeholder="gpt-4o-mini"
+                          onChange={(e) => void update("translateAiModel", e.target.value)}
+                        />
+                      </label>
+                      <Button onClick={() => void detectModels("translate")} disabled={modelCheckKind === "translate"}>
+                        <IconText icon="◎">{modelCheckKind === "translate" ? t("settings.detecting") : t("settings.detectTranslateModels")}</IconText>
+                      </Button>
+                      {detectedKind === "translate" && detectedModels.length > 0 && (
+                        <label className="field">
+                          <span>{f("settings.detectedModelLabel", { count: detectedModels.length })}</span>
+                          <SelectMenuCompat
+                            value={detectedModels.includes(settings.translateAiModel) ? settings.translateAiModel : ""}
+                            onChange={(e) => e.target.value && void update("translateAiModel", e.target.value)}
+                          >
+                            <option value="">{t("settings.chooseDetected")}</option>
+                            {detectedModels.map((model) => <option value={model} key={model}>{model}</option>)}
+                          </SelectMenuCompat>
+                        </label>
+                      )}
+                      {detectedKind === "translate" && modelCheckMessage && (
+                        <div className={clsx("status-box", detectedModels.length > 0 ? "ok" : "bad")}>
+                          <strong>{modelCheckMessage}</strong>
+                          {detectedModels.length > 0 && <small>{detectedModels.join(", ")}</small>}
+                        </div>
+                      )}
                     </>
                   )}
                 </div>
@@ -6468,13 +6570,13 @@ function OnboardingWizard() {
                 </div>
                 <label className="field wide">
                   <span>{t("onboarding.language")}</span>
-                  <select defaultValue={settings?.language ?? "zh-CN"} onChange={(e) => window.naiDesktop.setSetting("language", e.target.value as AppSettings["language"])}>
+                  <SelectMenuCompat defaultValue={settings?.language ?? "zh-CN"} onChange={(e) => window.naiDesktop.setSetting("language", e.target.value as AppSettings["language"])}>
                     {SUPPORTED_APP_LANGUAGES.map((language) => (
                       <option value={language.code} key={language.code}>
                         {language.menuLabel}
                       </option>
                     ))}
-                  </select>
+                  </SelectMenuCompat>
                 </label>
               </div>
             )}
@@ -6545,13 +6647,13 @@ function OnboardingWizard() {
                 />
                 <label className="field wide">
                   <span>{t("settings.translateEngine")}</span>
-                  <select
+                  <SelectMenuCompat
                     defaultValue={settings?.translateProvider ?? "google"}
                     onChange={(e) => void window.naiDesktop.setSetting("translateProvider", e.target.value as AppSettings["translateProvider"])}
                   >
                     <option value="google">{t("settings.googleTranslate")}</option>
                     <option value="baidu">{t("settings.baiduTranslate")}</option>
-                  </select>
+                  </SelectMenuCompat>
                 </label>
               </div>
             )}
@@ -6852,10 +6954,14 @@ function PersistentTabView({
   active,
   children,
   scope,
+  className,
+  resetKey = active,
 }: {
   active: boolean;
   children: React.ReactNode;
   scope: string;
+  className?: string;
+  resetKey?: unknown;
 }) {
   const [hasMounted, setHasMounted] = useState(active);
   useEffect(() => {
@@ -6864,12 +6970,31 @@ function PersistentTabView({
   if (!hasMounted && !active) return null;
   return (
     <div
-      className={clsx("persistent-tools-view", !active && "is-hidden")}
+      className={clsx("persistent-tools-view", className, active ? "is-active" : "is-hidden")}
       aria-hidden={!active}
     >
-      <AppErrorBoundary scope={scope} resetKey={active}>
+      <AppErrorBoundary scope={scope} resetKey={resetKey}>
         {children}
       </AppErrorBoundary>
+    </div>
+  );
+}
+
+function PersistentCanvasSurface({
+  active,
+  children,
+}: {
+  active: boolean;
+  children: React.ReactNode;
+}) {
+  const [hasMounted, setHasMounted] = useState(active);
+  useEffect(() => {
+    if (active) setHasMounted(true);
+  }, [active]);
+  if (!hasMounted && !active) return null;
+  return (
+    <div className={clsx("persistent-canvas-surface", active && "is-active")} aria-hidden={!active}>
+      {children}
     </div>
   );
 }
@@ -6900,6 +7025,11 @@ function MainPage() {
     () => toast ? compactRemoteErrorText(toast, { serviceLabel: "NovelAI API 源", maxLength: 360 }) : "",
     [toast],
   );
+  const workbenchActive = activeTab === "generate"
+    || activeTab === "inpaint"
+    || activeTab === "postprocess"
+    || activeTab === "inspect"
+    || activeTab === "convert";
 
   useEffect(() => {
     const captureSurface = uiCaptureParams.get("uiCapture");
@@ -6943,6 +7073,18 @@ function MainPage() {
     document.documentElement.classList.toggle("theme-dark", resolved === "dark");
   }, [settings?.theme, uiCaptureTheme]);
 
+  // Motion is an explicit in-app accessibility choice. Do not inherit Windows'
+  // broad "Animation effects" performance flag: on this machine it is off for
+  // performance reasons, not as a request to remove product feedback.
+  useEffect(() => {
+    document.documentElement.classList.toggle("motion-reduced", settings?.reduceMotion === true);
+    return () => document.documentElement.classList.remove("motion-reduced");
+  }, [settings?.reduceMotion]);
+
+  useEffect(() => {
+    document.documentElement.lang = settings?.language ?? "zh-CN";
+  }, [settings?.language]);
+
   // Auto-dismiss toast
   useEffect(() => {
     if (!toast) return;
@@ -6958,28 +7100,33 @@ function MainPage() {
       <AppMenuBar openSettings={() => setShowSettings(true)} />
       <AppTabBar />
       <div
-        className={clsx("workspace", WIDE_WORKSPACE_TABS.has(activeTab) && "workspace-tools")}
+        className="workspace"
         style={{ "--ws-left": `${wsLeftWidth}px`, "--ws-right": `${wsRightWidth}px` } as CSSProperties}
       >
-        <AppErrorBoundary key={activeTab} scope={`tab:${activeTab}`}>
-          {activeTab === "metadata" || activeTab === "tools" || activeTab === "referencePresets" || activeTab === "onlineGallery" || activeTab === "agent" ? null : activeTab === "records" ? (
-            <AiLogPanel />
-          ) : (
-            <>
-              <LeftPanel openSettings={() => setShowSettings(true)} />
-              <WorkspaceResizer edge="left" />
-              {activeTab === "inpaint" ? (
-                <Suspense fallback={<div className="lazy-tool-loading">{t("tool.loadingInpaint")}</div>}>
-                  <InpaintCanvas />
-                </Suspense>
-              ) : (
-                <ImageCanvas />
-              )}
-              <WorkspaceResizer edge="right" />
-              <HistoryPanel />
-            </>
-          )}
-        </AppErrorBoundary>
+        <PersistentTabView
+          active={workbenchActive}
+          scope={`tab:${activeTab}`}
+          resetKey={activeTab}
+          className="persistent-workbench-view"
+        >
+          <LeftPanel openSettings={() => setShowSettings(true)} />
+          <WorkspaceResizer edge="left" />
+          <div className="persistent-canvas-host">
+            <PersistentCanvasSurface active={activeTab !== "inpaint"}>
+              <ImageCanvas />
+            </PersistentCanvasSurface>
+            <PersistentCanvasSurface active={activeTab === "inpaint"}>
+              <Suspense fallback={<div className="lazy-tool-loading">{t("tool.loadingInpaint")}</div>}>
+                <InpaintCanvas />
+              </Suspense>
+            </PersistentCanvasSurface>
+          </div>
+          <WorkspaceResizer edge="right" />
+          <MemoizedHistoryPanel />
+        </PersistentTabView>
+        <PersistentTabView active={activeTab === "records"} scope="tab:records">
+          <AiLogPanel />
+        </PersistentTabView>
         <PersistentTabView active={activeTab === "tools"} scope="tab:tools">
           <Suspense fallback={<div className="lazy-tool-loading">{t("tool.loadingTools")}</div>}>
             <ToolsHub />
@@ -7026,7 +7173,7 @@ function MainPage() {
 
 // ── Root ──────────────────────────────────────────────────────────────────────
 export default function App() {
-  const SPLASH_MIN_VISIBLE_MS = 900;
+  const SPLASH_MIN_VISIBLE_MS = 300;
   const [splash, setSplash] = useState(true);
   const bootDone = useAppStore((state) => state.bootDone);
   const load = useAppStore((state) => state.load);
@@ -7034,25 +7181,40 @@ export default function App() {
 
   useEffect(() => {
     let cancelled = false;
-    // Warm top-level routes behind the splash. Individual large tool screens
-    // are intentionally excluded from this critical path and warmed one by one
-    // once the renderer has idle time.
-    const warmScreens = Promise.allSettled([
-      loadToolsHub(),
-      loadOnlineGalleryPage(),
-      loadAgentPage(),
-      loadInpaintCanvas(),
-      loadMetadataInspector(),
-    ]);
+    // Inpaint is the only lazy screen needed on the startup critical path.
+    // The other top-level routes warm after first paint so the splash never
+    // waits for screens the user may not open in this session.
+    const warmCriticalScreen = loadInpaintCanvas();
     const minimumSplash = new Promise<void>((resolve) => {
       window.setTimeout(resolve, SPLASH_MIN_VISIBLE_MS);
     });
-    void Promise.all([warmScreens, minimumSplash]).then(() => {
+    void Promise.allSettled([warmCriticalScreen, minimumSplash]).then(() => {
       if (!cancelled) setSplash(false);
     });
-    const deferredToolWarmTimer = window.setTimeout(() => {
-      void loadToolsHub().then((module) => module.preloadToolScreens());
-    }, 1_500);
+    const warmDeferredScreens = async () => {
+      if (cancelled) return;
+      const [tools] = await Promise.allSettled([
+        loadToolsHub(),
+        loadOnlineGalleryPage(),
+        loadAgentPage(),
+        loadMetadataInspector(),
+      ]);
+      if (!cancelled && tools.status === "fulfilled") tools.value.preloadToolScreens();
+    };
+    let deferredWarmTimer: number | undefined;
+    let deferredWarmIdleId: number | undefined;
+    const idleWindow = window as Window & {
+      requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number;
+      cancelIdleCallback?: (handle: number) => void;
+    };
+    if (typeof idleWindow.requestIdleCallback === "function") {
+      deferredWarmIdleId = idleWindow.requestIdleCallback(
+        () => void warmDeferredScreens(),
+        { timeout: 2_500 },
+      );
+    } else {
+      deferredWarmTimer = window.setTimeout(() => void warmDeferredScreens(), 600);
+    }
     void load();
     void checkUpdate();
     // Favorites are mirrored to a filesystem sidecar and random-gacha history.
@@ -7096,12 +7258,10 @@ export default function App() {
     // session. Retry once shortly after launch, then poll at a low frequency.
     const updateRetryTimer = window.setTimeout(() => void checkUpdate(), 30_000);
     const updatePollTimer = window.setInterval(() => void checkUpdate(), 30 * 60_000);
-    // Keep the real boot path fast, but let the entrance breathe. 300ms felt
-    // like a flash-cut from the splash artwork into the workbench; ~0.9s keeps
-    // the app feeling responsive while making the transition intentional.
     return () => {
       cancelled = true;
-      window.clearTimeout(deferredToolWarmTimer);
+      if (deferredWarmTimer !== undefined) window.clearTimeout(deferredWarmTimer);
+      if (deferredWarmIdleId !== undefined) idleWindow.cancelIdleCallback?.(deferredWarmIdleId);
       if (automaticBackupTimer !== undefined) window.clearTimeout(automaticBackupTimer);
       window.removeEventListener("pointerdown", markInteraction);
       window.removeEventListener("keydown", markInteraction);

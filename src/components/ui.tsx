@@ -1,5 +1,20 @@
 // Shared presentational primitives used across the app's panels.
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  Children,
+  Fragment,
+  isValidElement,
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type ReactElement,
+  type ReactNode,
+  type SelectHTMLAttributes,
+} from "react";
 import { createPortal } from "react-dom";
 import clsx from "clsx";
 import gsap from "gsap";
@@ -42,6 +57,54 @@ export function AppPortal({ children }: { children: ReactNode }) {
 
 export type SelectMenuOption = { value: string; label: string; disabled?: boolean };
 
+export function findTypeaheadOptionIndex(
+  options: SelectMenuOption[],
+  query: string,
+  startIndex: number,
+) {
+  const needle = query.trim().toLocaleLowerCase();
+  if (!needle || options.length === 0) return -1;
+  for (let offset = 1; offset <= options.length; offset += 1) {
+    const index = (Math.max(-1, startIndex) + offset) % options.length;
+    const option = options[index];
+    if (!option.disabled && option.label.trim().toLocaleLowerCase().startsWith(needle)) return index;
+  }
+  return -1;
+}
+
+function optionText(node: ReactNode): string {
+  if (node == null || typeof node === "boolean") return "";
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(optionText).join("");
+  if (isValidElement<{ children?: ReactNode }>(node)) return optionText(node.props.children);
+  return String(node);
+}
+
+function collectSelectOptions(children: ReactNode, inheritedDisabled = false): SelectMenuOption[] {
+  const options: SelectMenuOption[] = [];
+  Children.forEach(children, (child) => {
+    if (!isValidElement(child)) return;
+    if (child.type === Fragment) {
+      options.push(...collectSelectOptions((child.props as { children?: ReactNode }).children, inheritedDisabled));
+      return;
+    }
+    if (child.type === "optgroup") {
+      const props = child.props as { children?: ReactNode; disabled?: boolean };
+      options.push(...collectSelectOptions(props.children, inheritedDisabled || Boolean(props.disabled)));
+      return;
+    }
+    if (child.type !== "option") return;
+    const props = (child as ReactElement<{ value?: string | number; disabled?: boolean; children?: ReactNode }>).props;
+    const label = optionText(props.children).trim();
+    options.push({
+      value: String(props.value ?? label),
+      label,
+      disabled: inheritedDisabled || Boolean(props.disabled),
+    });
+  });
+  return options;
+}
+
 export function SelectMenu({
   value,
   options,
@@ -51,6 +114,7 @@ export function SelectMenu({
   className,
   disabled = false,
   defaultOpen = false,
+  id,
 }: {
   value: string;
   options: SelectMenuOption[];
@@ -59,16 +123,24 @@ export function SelectMenu({
   ariaLabel: string;
   className?: string;
   disabled?: boolean;
+  id?: string;
   /** Deterministic open state for visual-regression captures; normal product use leaves this false. */
   defaultOpen?: boolean;
 }) {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const generatedId = useId();
+  const menuId = `${id ?? `select-menu-${generatedId.replace(/:/g, "")}`}-listbox`;
   const [open, setOpen] = useState(defaultOpen);
+  const [renderMenu, setRenderMenu] = useState(defaultOpen);
   const [activeIndex, setActiveIndex] = useState(0);
   const [position, setPosition] = useState({ left: 0, top: 0, width: 220, maxHeight: 320 });
-  const selectedIndex = Math.max(0, options.findIndex((option) => option.value === value));
-  const selected = options[selectedIndex] ?? options[0];
+  const selectedIndex = options.findIndex((option) => option.value === value);
+  const selected = selectedIndex >= 0 ? options[selectedIndex] : undefined;
+  const firstEnabledIndex = options.findIndex((option) => !option.disabled);
+  const pendingActiveIndexRef = useRef<number | null>(null);
+  const typeaheadBufferRef = useRef("");
+  const typeaheadResetRef = useRef<number | null>(null);
 
   const updatePosition = useCallback(() => {
     const trigger = triggerRef.current;
@@ -88,39 +160,68 @@ export function SelectMenu({
   }, [options.length]);
 
   useEffect(() => {
-    if (!open) return;
-    updatePosition();
+    if (open) setRenderMenu(true);
+  }, [open]);
+
+  useLayoutEffect(() => {
+    if (open && renderMenu) updatePosition();
+  }, [open, renderMenu, updatePosition]);
+
+  useEffect(() => {
+    if (!open || !renderMenu) return;
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target as Node;
       if (!triggerRef.current?.contains(target) && !menuRef.current?.contains(target)) setOpen(false);
     };
+    const onFocusIn = (event: FocusEvent) => {
+      const target = event.target as Node;
+      if (triggerRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setOpen(false);
+      setRenderMenu(false);
+    };
     const onViewportChange = () => updatePosition();
     document.addEventListener("pointerdown", onPointerDown, true);
+    document.addEventListener("focusin", onFocusIn, true);
     window.addEventListener("resize", onViewportChange);
     window.addEventListener("scroll", onViewportChange, true);
     return () => {
       document.removeEventListener("pointerdown", onPointerDown, true);
+      document.removeEventListener("focusin", onFocusIn, true);
       window.removeEventListener("resize", onViewportChange);
       window.removeEventListener("scroll", onViewportChange, true);
     };
-  }, [open, updatePosition]);
+  }, [open, renderMenu, updatePosition]);
 
   useLayoutEffect(() => {
-    if (!open || !menuRef.current) return;
-    const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    if (reduced) return;
-    const animation = gsap.fromTo(menuRef.current, { autoAlpha: 0, y: -6, scale: 0.985 }, { autoAlpha: 1, y: 0, scale: 1, duration: 0.16, ease: "power2.out", clearProps: "transform,opacity,visibility" });
+    if (!renderMenu || !menuRef.current) return;
+    const reduced = document.documentElement.classList.contains("motion-reduced");
+    if (reduced) {
+      if (!open) setRenderMenu(false);
+      return;
+    }
+    const animation = open
+      ? gsap.fromTo(menuRef.current, { autoAlpha: 0, y: -6, scale: 0.985 }, { autoAlpha: 1, y: 0, scale: 1, duration: 0.16, ease: "power2.out", clearProps: "transform,opacity,visibility" })
+      : gsap.to(menuRef.current, { autoAlpha: 0, y: -4, scale: 0.99, duration: 0.12, ease: "power1.in", onComplete: () => setRenderMenu(false) });
     return () => { animation.kill(); };
-  }, [open]);
+  }, [open, renderMenu]);
 
   useEffect(() => {
-    if (!open) return;
-    setActiveIndex(selectedIndex);
+    if (!open || !renderMenu) return;
+    const nextIndex = pendingActiveIndexRef.current ?? (selectedIndex >= 0 ? selectedIndex : firstEnabledIndex);
+    pendingActiveIndexRef.current = null;
+    if (nextIndex < 0) return;
+    setActiveIndex(nextIndex);
     const frame = requestAnimationFrame(() => {
-      menuRef.current?.querySelectorAll<HTMLButtonElement>("[role=option]")[selectedIndex]?.focus();
+      const option = menuRef.current?.querySelectorAll<HTMLButtonElement>("[role=option]")[nextIndex];
+      option?.focus();
+      option?.scrollIntoView({ block: "nearest" });
     });
     return () => cancelAnimationFrame(frame);
-  }, [open, selectedIndex]);
+  }, [firstEnabledIndex, open, renderMenu, selectedIndex]);
+
+  useEffect(() => () => {
+    if (typeaheadResetRef.current != null) window.clearTimeout(typeaheadResetRef.current);
+  }, []);
 
   const enabledIndexes = useMemo(
     () => options.map((option, index) => option.disabled ? -1 : index).filter((index) => index >= 0),
@@ -139,22 +240,67 @@ export function SelectMenu({
     setOpen(false);
     requestAnimationFrame(() => triggerRef.current?.focus());
   };
+  const typeahead = (key: string, openAfterMatch: boolean) => {
+    const normalizedKey = key.toLocaleLowerCase();
+    const previous = typeaheadBufferRef.current;
+    const repeatedKey = previous.length > 0 && [...previous].every((character) => character === normalizedKey);
+    let query = repeatedKey ? normalizedKey : `${previous}${normalizedKey}`;
+    let nextIndex = findTypeaheadOptionIndex(options, query, activeIndex);
+    if (nextIndex < 0 && query.length > 1) {
+      query = normalizedKey;
+      nextIndex = findTypeaheadOptionIndex(options, query, activeIndex);
+    }
+    typeaheadBufferRef.current = query;
+    if (typeaheadResetRef.current != null) window.clearTimeout(typeaheadResetRef.current);
+    typeaheadResetRef.current = window.setTimeout(() => { typeaheadBufferRef.current = ""; }, 700);
+    if (nextIndex < 0) return;
+    setActiveIndex(nextIndex);
+    if (openAfterMatch && !open) {
+      updatePosition();
+      pendingActiveIndexRef.current = nextIndex;
+      setOpen(true);
+      return;
+    }
+    const option = menuRef.current?.querySelectorAll<HTMLButtonElement>("[role=option]")[nextIndex];
+    option?.focus();
+    option?.scrollIntoView({ block: "nearest" });
+  };
+  const accessibleLabel = selected?.label ? `${ariaLabel}: ${selected.label}` : ariaLabel;
 
   return (
     <>
       <button
         ref={triggerRef}
+        id={id}
         type="button"
         className={clsx("select-menu-trigger", className)}
-        aria-label={ariaLabel}
+        aria-label={accessibleLabel}
         aria-haspopup="listbox"
         aria-expanded={open}
+        aria-controls={menuId}
         disabled={disabled}
-        onClick={() => setOpen((current) => !current)}
+        onClick={() => {
+          if (open) {
+            setOpen(false);
+            requestAnimationFrame(() => triggerRef.current?.focus());
+          } else {
+            updatePosition();
+            setOpen(true);
+          }
+        }}
         onKeyDown={(event) => {
+          if (event.key === "Tab" && open) {
+            setOpen(false);
+            setRenderMenu(false);
+            return;
+          }
           if (event.key === "ArrowDown" || event.key === "ArrowUp") {
             event.preventDefault();
+            updatePosition();
             setOpen(true);
+          } else if (event.key.length === 1 && event.key !== " " && !event.altKey && !event.ctrlKey && !event.metaKey) {
+            event.preventDefault();
+            typeahead(event.key, true);
           }
         }}
       >
@@ -162,14 +308,19 @@ export function SelectMenu({
         <strong className="select-menu-value">{selected?.label ?? ""}</strong>
         <Icon name="chevronDown" className={clsx("select-menu-chevron", open && "open")} />
       </button>
-      {open && <AppPortal><div
+      {renderMenu && <AppPortal><div
         ref={menuRef}
+        id={menuId}
         className="select-menu-popover"
         role="listbox"
         aria-label={ariaLabel}
         style={{ left: position.left, top: position.top, width: position.width, maxHeight: position.maxHeight }}
         onKeyDown={(event) => {
-          if (event.key === "ArrowDown") { event.preventDefault(); move(1); }
+          if (event.key === "Tab") {
+            setOpen(false);
+            setRenderMenu(false);
+          }
+          else if (event.key === "ArrowDown") { event.preventDefault(); move(1); }
           else if (event.key === "ArrowUp") { event.preventDefault(); move(-1); }
           else if (event.key === "Home") {
             event.preventDefault();
@@ -184,6 +335,10 @@ export function SelectMenu({
             menuRef.current?.querySelectorAll<HTMLButtonElement>("[role=option]")[next]?.focus();
           }
           else if (event.key === "Escape") { event.preventDefault(); setOpen(false); triggerRef.current?.focus(); }
+          else if (event.key.length === 1 && event.key !== " " && !event.altKey && !event.ctrlKey && !event.metaKey) {
+            event.preventDefault();
+            typeahead(event.key, false);
+          }
         }}
       >
         {options.map((option, index) => <button
@@ -202,6 +357,63 @@ export function SelectMenu({
         </button>)}
       </div></AppPortal>}
     </>
+  );
+}
+
+/**
+ * Migration adapter for former native selects. It intentionally renders the
+ * shared SelectMenu and only preserves the familiar option/onChange authoring
+ * shape, so feature panels cannot silently fall back to browser-native UI.
+ */
+export function SelectMenuCompat({
+  value,
+  defaultValue,
+  children,
+  onChange,
+  disabled,
+  className,
+  name,
+  title,
+  "aria-label": ariaLabel,
+}: Omit<SelectHTMLAttributes<HTMLSelectElement>, "value" | "defaultValue" | "multiple" | "size"> & {
+  value?: string | number;
+  defaultValue?: string | number;
+}) {
+  const options = useMemo(() => collectSelectOptions(children), [children]);
+  const triggerId = useId();
+  const [inferredLabel, setInferredLabel] = useState("");
+  const [uncontrolledValue, setUncontrolledValue] = useState(
+    () => String(defaultValue ?? options[0]?.value ?? ""),
+  );
+  const selectedValue = value == null ? uncontrolledValue : String(value);
+  useLayoutEffect(() => {
+    if (ariaLabel || title || name || typeof document === "undefined") return;
+    const trigger = document.getElementById(triggerId);
+    const field = trigger?.closest("label");
+    const fieldLabel = field
+      ? Array.from(field.children).find((element) => element.tagName === "SPAN")?.textContent?.trim()
+      : "";
+    if (fieldLabel) setInferredLabel((current) => current === fieldLabel ? current : fieldLabel);
+  }, [ariaLabel, children, name, title, triggerId]);
+  const resolvedLabel = ariaLabel || title || name || inferredLabel || "Select option";
+
+  const commit = (nextValue: string) => {
+    if (value == null) setUncontrolledValue(nextValue);
+    if (!onChange) return;
+    const target = { value: nextValue } as EventTarget & HTMLSelectElement;
+    onChange({ target, currentTarget: target } as ChangeEvent<HTMLSelectElement>);
+  };
+
+  return (
+    <SelectMenu
+      value={selectedValue}
+      options={options}
+      onChange={commit}
+      ariaLabel={resolvedLabel}
+      id={triggerId}
+      className={clsx("select-menu-compat", className)}
+      disabled={disabled}
+    />
   );
 }
 

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
-import { Button, CommittedNumberInput, NumberInput, Toggle } from "../components/ui";
+import { Button, CommittedNumberInput, NumberInput, Toggle, SelectMenuCompat } from "../components/ui";
 import { Icon } from "../components/icons";
 import { confirmAction } from "../components/confirm";
 import { QualityPresetControl } from "../components/QualityPresetControl";
@@ -99,6 +99,7 @@ const COPY = {
     sizeUnsupported: "尺寸第 {line} 行不是软件支持的 NovelAI 尺寸。",
     sizesIncomplete: "部分分镜尚未指定合法尺寸，请重新导入完整尺寸列表。",
     panelSize: "本分镜尺寸",
+    useProjectSize: "使用项目全局尺寸",
     preciseHeading: "全局精准参考图",
     preciseHint: "参考图会复制到项目资源目录。最多 5 张，仅 NovelAI V4.5 可用。",
     preciseUpload: "添加精准参考图",
@@ -228,6 +229,7 @@ const COPY = {
     sizeUnsupported: "尺寸第 {line} 行不是軟體支援的 NovelAI 尺寸。",
     sizesIncomplete: "部分分鏡尚未指定合法尺寸，請重新匯入完整尺寸清單。",
     panelSize: "本分鏡尺寸",
+    useProjectSize: "使用專案全域尺寸",
     preciseHeading: "全域精準參考圖",
     preciseHint: "參考圖會複製到專案資源目錄。最多 5 張，僅 NovelAI V4.5 可用。",
     preciseUpload: "加入精準參考圖",
@@ -361,6 +363,7 @@ const COPY = {
     sizeUnsupported: "Size line {line} is not a supported NovelAI size.",
     sizesIncomplete: "Some panels do not have a supported size. Import a complete size list again.",
     panelSize: "Panel size",
+    useProjectSize: "Use project size",
     preciseHeading: "Global precise references",
     preciseHint: "References are copied into project resources. Up to 5; NovelAI V4.5 only.",
     preciseUpload: "Add precise references",
@@ -493,6 +496,7 @@ const COPY = {
     sizeUnsupported: "サイズの {line} 行目は対応している NovelAI サイズではありません。",
     sizesIncomplete: "サイズ未設定のコマがあります。完全なサイズ一覧を再読み込みしてください。",
     panelSize: "このコマのサイズ",
+    useProjectSize: "プロジェクト全体のサイズを使用",
     preciseHeading: "共通精密参照画像",
     preciseHint: "参照画像はプロジェクト資源へコピーされます。最大5枚、NovelAI V4.5 のみ対応です。",
     preciseUpload: "精密参照画像を追加",
@@ -626,6 +630,7 @@ const COPY = {
     sizeUnsupported: "크기 {line}번째 줄은 지원되는 NovelAI 크기가 아닙니다.",
     sizesIncomplete: "일부 컷에 지원 크기가 없습니다. 전체 크기 목록을 다시 가져오세요.",
     panelSize: "이 컷 크기",
+    useProjectSize: "프로젝트 전체 크기 사용",
     preciseHeading: "전체 정밀 참조 이미지",
     preciseHint: "참조 이미지는 프로젝트 리소스에 복사됩니다. 최대 5장, NovelAI V4.5만 지원합니다.",
     preciseUpload: "정밀 참조 추가",
@@ -721,6 +726,20 @@ function text(language: unknown, key: CopyKey) {
       ? (language as keyof typeof COPY)
       : "zh-CN";
   return COPY[code][key] ?? COPY["en-US"][key];
+}
+
+function regenerateAllText(language: unknown) {
+  const labels = {
+    "zh-CN": "全部重新生成",
+    "zh-TW": "全部重新產生",
+    "en-US": "Regenerate all",
+    "ja-JP": "すべて再生成",
+    "ko-KR": "전체 다시 생성",
+  } as const;
+  const code = typeof language === "string" && language in labels
+    ? language as keyof typeof labels
+    : "zh-CN";
+  return labels[code];
 }
 
 function format(
@@ -1821,7 +1840,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                     <img src={reference.fileUrl} alt={reference.name} />
                     <div>
                       <b title={reference.name}>{reference.name}</b>
-                      <select
+                      <SelectMenuCompat
                         value={reference.type}
                         onChange={(event) =>
                           patchPreciseReference(reference.id, {
@@ -1832,7 +1851,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                         <option value="character">{text(language, "preciseCharacter")}</option>
                         <option value="style">{text(language, "preciseStyle")}</option>
                         <option value="character&style">{text(language, "preciseBoth")}</option>
-                      </select>
+                      </SelectMenuCompat>
                       <label>
                         <span>{text(language, "preciseStrength")} · {reference.strength.toFixed(2)}</span>
                         <input type="range" min={0} max={1} step={0.01} value={reference.strength}
@@ -2040,13 +2059,20 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                 {project.sizeMode === "perPanel" && (
                   <label>
                     <span>{text(language, "panelSize")}</span>
-                    <select
+                    <SelectMenuCompat
                       value={
                         activePanel.imageSize
                           ? `${activePanel.imageSize.width}x${activePanel.imageSize.height}`
                           : ""
                       }
                       onChange={(event) => {
+                        if (event.target.value === "") {
+                          patchPanel(activePanel.id, (panel) => ({
+                            ...panel,
+                            imageSize: undefined,
+                          }));
+                          return;
+                        }
                         const size = TAG_COMIC_SIZE_PRESETS.find(
                           (item) => `${item.width}x${item.height}` === event.target.value,
                         );
@@ -2057,6 +2083,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                         }));
                       }}
                     >
+                      <option value="">{text(language, "useProjectSize")}</option>
                       {TAG_COMIC_SIZE_PRESETS.map((size) => (
                         <option
                           key={`${size.width}x${size.height}`}
@@ -2065,7 +2092,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                           {size.width}×{size.height}
                         </option>
                       ))}
-                    </select>
+                    </SelectMenuCompat>
                   </label>
                 )}
                 {project.preciseReferences.length > 0 && (
@@ -2112,7 +2139,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                           </label>
                           {selection && (
                             <div className="tag-comic-reference-tuning">
-                              <select
+                              <SelectMenuCompat
                                 value={selection.type}
                                 onChange={(event) =>
                                   patchPanelReference(activePanel.id, asset.id, {
@@ -2123,7 +2150,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                                 <option value="character">{text(language, "preciseCharacter")}</option>
                                 <option value="style">{text(language, "preciseStyle")}</option>
                                 <option value="character&style">{text(language, "preciseBoth")}</option>
-                              </select>
+                              </SelectMenuCompat>
                               <label>
                                 <span>{text(language, "preciseStrength")} · {selection.strength.toFixed(2)}</span>
                                 <input type="range" min={0} max={1} step={0.01} value={selection.strength}
@@ -2208,7 +2235,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
               disabled={Boolean(queue) || !panels.length}
               onClick={() => void startQueue(regenerateAllTasks())}
             >
-              全部重新生成 × {project.initialGenerationCount}
+              {regenerateAllText(language)} × {project.initialGenerationCount}
             </Button>
             <Button
               variant="secondary"
@@ -2429,7 +2456,7 @@ function GlobalParams({
         </label>
         <label>
           <span>{text(language, "model")}</span>
-          <select
+          <SelectMenuCompat
             value={params.model}
             onChange={(event) => {
               const model = event.target.value as GenerateParams["model"];
@@ -2448,7 +2475,7 @@ function GlobalParams({
                 {model.label}
               </option>
             ))}
-          </select>
+          </SelectMenuCompat>
         </label>
         <CommittedNumberInput
           label={text(language, "width")}
@@ -2524,7 +2551,7 @@ function PanelParams({
       {!compact && (
         <label>
           <span>{text(language, "model")}</span>
-          <select
+          <SelectMenuCompat
             value={params.model}
             onChange={(event) => {
               const model = event.target.value as GenerateParams["model"];
@@ -2543,12 +2570,12 @@ function PanelParams({
                 {model.label}
               </option>
             ))}
-          </select>
+          </SelectMenuCompat>
         </label>
       )}
       <label>
         <span>{text(language, "sampler")}</span>
-        <select
+        <SelectMenuCompat
           value={params.sampler}
           onChange={(event) =>
             patch("sampler", event.target.value as GenerateParams["sampler"])
@@ -2559,7 +2586,7 @@ function PanelParams({
               {sampler.label}
             </option>
           ))}
-        </select>
+        </SelectMenuCompat>
       </label>
       {!compact && (
         <CommittedNumberInput

@@ -1,5 +1,5 @@
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
-import { Button } from "./components/ui";
+import { Button, SelectMenuCompat } from "./components/ui";
 import { Icon } from "./components/icons";
 import { useAppStore } from "./store";
 import type {
@@ -392,7 +392,7 @@ export default function PromptCodex({ onBack }: { onBack: () => void }) {
         <div className="prompt-codex-filter-row">
           <label>
             <span>{text.category}</span>
-            <select
+            <SelectMenuCompat
               value={category}
               onChange={(event) => setCategory(event.target.value)}
             >
@@ -401,11 +401,11 @@ export default function PromptCodex({ onBack }: { onBack: () => void }) {
                   {label}
                 </option>
               ))}
-            </select>
+            </SelectMenuCompat>
           </label>
           <label>
             <span>{text.section}</span>
-            <select
+            <SelectMenuCompat
               value={section}
               onChange={(event) => {
                 setSection(event.target.value);
@@ -418,7 +418,7 @@ export default function PromptCodex({ onBack }: { onBack: () => void }) {
                   {value}
                 </option>
               ))}
-            </select>
+            </SelectMenuCompat>
           </label>
           <b>
             {filtered.length} {text.results}

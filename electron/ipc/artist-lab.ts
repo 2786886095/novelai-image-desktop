@@ -12,13 +12,15 @@ import type {
   ArtistTagRecord,
   ArtistRankingSnapshot,
 } from "../../src/artist-lab";
-import type { ArtistStylePreviewResult } from "../../src/types";
+import type { ArtistStylePreviewPage, ArtistStylePreviewResult } from "../../src/types";
 import { ARTIST_TAG_ALIASES, CURATED_ARTIST_TAGS } from "../../src/curated-artists";
 import { proxyConfig } from "./proxy";
 
 const DANBOORU_TAGS_URL = "https://danbooru.donmai.us/tags.json";
 const DANBOORU_POSTS_URL = "https://danbooru.donmai.us/posts.json";
 const POPULAR_ARTIST_CACHE_MAX_AGE = 7 * 24 * 60 * 60 * 1000;
+const DANBOORU_TAG_PAGE_SIZE = 1000;
+const DANBOORU_MAX_NUMBERED_PAGE = 1000;
 const MODEL_IDS: Record<ArtistLabModelMode, string> = {
   // Base/full precision is the default Windows scorer. It is materially more
   // accurate than the small quantized fallback without shipping model weights
@@ -36,6 +38,10 @@ function modelCacheDir() {
 
 function popularArtistCacheFile() {
   return path.join(app.getPath("userData"), "artist-lab-popular-artists.json");
+}
+
+function artistRankingCountCacheFile() {
+  return path.join(app.getPath("userData"), "artist-lab-ranking-counts.json");
 }
 
 function referenceCacheDir() {
@@ -120,6 +126,7 @@ async function fetchArtistTagsPage(query: string, limit: number, page: number): 
       page,
       "search[category]": 1,
       "search[order]": "count",
+      "search[is_deprecated]": "no",
       ...(query ? { "search[name_matches]": `*${query}*` } : {}),
     },
     ...proxyConfig("update"),
@@ -214,19 +221,98 @@ export async function loadPopularArtistTags(
   return appendCuratedArtistTags(output.slice(0, limit), includeCurated);
 }
 
-/** Live/cache-backed Danbooru ranking without curated rows whose synthetic
- * post counts would corrupt the order. */
+type ArtistRankingCountCache = Record<string, { total: number; savedAt: number }>;
+
+function readArtistRankingCountCache(): ArtistRankingCountCache {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(artistRankingCountCacheFile(), "utf8"));
+    return parsed && typeof parsed === "object" ? parsed as ArtistRankingCountCache : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeArtistRankingCountCache(cache: ArtistRankingCountCache) {
+  try {
+    const compact = Object.fromEntries(Object.entries(cache)
+      .sort((left, right) => right[1].savedAt - left[1].savedAt)
+      .slice(0, 100));
+    fs.writeFileSync(artistRankingCountCacheFile(), JSON.stringify(compact), "utf8");
+  } catch {
+    // A read-only profile still gets a working live ranking for this session.
+  }
+}
+
+async function countActiveArtistTags(query: string, force: boolean) {
+  const key = query || "__all__";
+  const cache = readArtistRankingCountCache();
+  const cached = cache[key];
+  if (!force && cached && Date.now() - cached.savedAt < POPULAR_ARTIST_CACHE_MAX_AGE) {
+    return cached;
+  }
+
+  // Danbooru doesn't expose a tag-count endpoint. Its numbered API permits up
+  // to 1,000 pages, so use the maximum 1,000 rows per page and binary-search
+  // the final non-empty page. This covers up to one million active artist tags
+  // without downloading the complete collection into renderer memory.
+  let low = 1;
+  let high = DANBOORU_MAX_NUMBERED_PAGE;
+  let lastPage = 0;
+  let lastItems: ArtistTagRecord[] = [];
+  while (low <= high) {
+    const page = Math.floor((low + high) / 2);
+    const items = await fetchArtistTagsPage(query, DANBOORU_TAG_PAGE_SIZE, page);
+    if (items.length > 0) {
+      lastPage = page;
+      lastItems = items;
+      low = page + 1;
+    } else {
+      high = page - 1;
+    }
+  }
+  if (lastPage > 0 && lastItems.length === DANBOORU_TAG_PAGE_SIZE) {
+    lastItems = await fetchArtistTagsPage(query, DANBOORU_TAG_PAGE_SIZE, lastPage);
+  }
+  const result = {
+    total: lastPage === 0 ? 0 : (lastPage - 1) * DANBOORU_TAG_PAGE_SIZE + lastItems.length,
+    savedAt: Date.now(),
+  };
+  cache[key] = result;
+  writeArtistRankingCountCache(cache);
+  return result;
+}
+
+/** A server-paged ranking over every active Danbooru artist tag. */
 export async function loadPopularArtistRanking(
-  rawLimit: unknown,
+  rawPage: unknown,
+  rawPageSize: unknown,
+  rawQuery: unknown,
   rawForce: unknown,
 ): Promise<ArtistRankingSnapshot> {
-  const items = await loadPopularArtistTags(rawLimit, rawForce, false);
-  let savedAt = Date.now();
-  try {
-    const cached = JSON.parse(fs.readFileSync(popularArtistCacheFile(), "utf8")) as { savedAt?: number };
-    if (Number.isFinite(cached.savedAt)) savedAt = Number(cached.savedAt);
-  } catch { /* use the successful read time */ }
-  return { items, savedAt };
+  const requestedPage = Math.max(1, Math.floor(Number(rawPage) || 1));
+  const pageSize = Math.max(1, Math.min(100, Math.floor(Number(rawPageSize) || 12)));
+  const query = safeArtistQuery(rawQuery);
+  const count = await countActiveArtistTags(query, rawForce === true);
+  const pageCount = Math.max(1, Math.ceil(count.total / pageSize));
+  const page = Math.min(requestedPage, pageCount);
+  const offset = (page - 1) * pageSize;
+  const apiPage = Math.floor(offset / DANBOORU_TAG_PAGE_SIZE) + 1;
+  const offsetInApiPage = offset % DANBOORU_TAG_PAGE_SIZE;
+  const first = await fetchArtistTagsPage(query, DANBOORU_TAG_PAGE_SIZE, apiPage);
+  let window = first;
+  if (offsetInApiPage + pageSize > first.length && apiPage < DANBOORU_MAX_NUMBERED_PAGE) {
+    window = [...first, ...await fetchArtistTagsPage(query, DANBOORU_TAG_PAGE_SIZE, apiPage + 1)];
+  }
+  const items = window.slice(offsetInApiPage, offsetInApiPage + pageSize);
+  return {
+    items,
+    savedAt: count.savedAt,
+    page,
+    pageSize,
+    total: count.total,
+    hasMore: offset + items.length < count.total,
+    query,
+  };
 }
 
 async function scorer(mode: ArtistLabModelMode) {
@@ -538,6 +624,109 @@ export async function artistStylePreview(rawTag: unknown): Promise<ArtistStylePr
   const request = loadArtistStylePreview(tag).finally(() => pendingStylePreviews.delete(tag));
   pendingStylePreviews.set(tag, request);
   return request;
+}
+
+type ArtistPreviewPost = Record<string, unknown>;
+const ARTIST_PREVIEW_POST_TTL_MS = 10 * 60 * 1000;
+const artistPreviewPostCache = new Map<string, { expiresAt: number; posts: ArtistPreviewPost[] }>();
+const pendingArtistPreviewPosts = new Map<string, Promise<ArtistPreviewPost[]>>();
+
+async function loadArtistPreviewPosts(tag: string): Promise<ArtistPreviewPost[]> {
+  const cached = artistPreviewPostCache.get(tag);
+  if (cached && cached.expiresAt > Date.now()) return cached.posts;
+  const pending = pendingArtistPreviewPosts.get(tag);
+  if (pending) return pending;
+  const request = (async () => {
+    const response = await axios.get(DANBOORU_POSTS_URL, {
+      timeout: 30_000,
+      headers: { Accept: "application/json", "User-Agent": "Langbai-NovelAI-Studio/Artist-Gallery" },
+      params: { limit: 200, tags: `${tag} order:score` },
+      ...proxyConfig("update"),
+    });
+    const seen = new Set<number>();
+    const posts = (Array.isArray(response.data) ? response.data : [])
+      .filter((post): post is ArtistPreviewPost => {
+        const id = Number(post?.id);
+        const rating = String(post?.rating ?? "");
+        if (!Number.isFinite(id) || seen.has(id) || !["g", "s"].includes(rating)) return false;
+        seen.add(id);
+        return true;
+      });
+    artistPreviewPostCache.set(tag, { expiresAt: Date.now() + ARTIST_PREVIEW_POST_TTL_MS, posts });
+    return posts;
+  })().finally(() => pendingArtistPreviewPosts.delete(tag));
+  pendingArtistPreviewPosts.set(tag, request);
+  return request;
+}
+
+function pagedStylePreviewFile(tag: string, postId: number, sourceUrl: string) {
+  const tagKey = crypto.createHash("sha1").update(tag).digest("hex").slice(0, 16);
+  const mediaKey = crypto.createHash("sha1").update(`${postId}:${sourceUrl}`).digest("hex").slice(0, 12);
+  const extension = (() => {
+    try {
+      const ext = path.extname(new URL(sourceUrl).pathname).toLocaleLowerCase();
+      return [".png", ".jpg", ".jpeg", ".webp"].includes(ext) ? ext : ".jpg";
+    } catch {
+      return ".jpg";
+    }
+  })();
+  return path.join(stylePreviewCacheDir(), `${tagKey}-${mediaKey}${extension}`);
+}
+
+/** Return twelve safe-rated representative works at a time for the ranking gallery. */
+export async function artistStylePreviewPage(
+  rawTag: unknown,
+  rawPage: unknown,
+  rawPageSize: unknown,
+): Promise<ArtistStylePreviewPage> {
+  const tag = safeStylePreviewTag(rawTag);
+  const page = Math.max(1, Math.floor(Number(rawPage) || 1));
+  const pageSize = Math.max(1, Math.min(24, Math.floor(Number(rawPageSize) || 12)));
+  if (!tag) return { tag: "", page, pageSize, total: 0, hasMore: false, items: [] };
+  const posts = await loadArtistPreviewPosts(tag);
+  const offset = (page - 1) * pageSize;
+  const selected = posts.slice(offset, offset + pageSize);
+  fs.mkdirSync(stylePreviewCacheDir(), { recursive: true });
+  const items = (await mapLimit(selected, 4, async (post): Promise<ArtistStylePreviewResult | null> => {
+    const postId = Number(post.id);
+    const sourceUrl = [post.preview_file_url, post.large_file_url, post.file_url]
+      .map(absoluteDanbooruMediaUrl)
+      .find(Boolean);
+    if (!sourceUrl || !Number.isFinite(postId)) return null;
+    try {
+      const imageFile = pagedStylePreviewFile(tag, postId, sourceUrl);
+      if (!fs.existsSync(imageFile)) {
+        const image = await axios.get<ArrayBuffer>(sourceUrl, {
+          responseType: "arraybuffer",
+          timeout: 45_000,
+          maxContentLength: 12 * 1024 * 1024,
+          headers: danbooruImageHeaders,
+          ...proxyConfig("update"),
+        });
+        const bytes = Buffer.from(image.data);
+        if (bytes.length < 128 || bytes.length > 12 * 1024 * 1024) return null;
+        fs.writeFileSync(imageFile, bytes);
+      }
+      return {
+        tag,
+        imageUrl: toLocalMediaUrl(imageFile),
+        sourceUrl,
+        postUrl: `https://danbooru.donmai.us/posts/${postId}`,
+        width: Math.max(0, Number(post.image_width) || 0),
+        height: Math.max(0, Number(post.image_height) || 0),
+      };
+    } catch {
+      return null;
+    }
+  })).filter((item): item is ArtistStylePreviewResult => Boolean(item));
+  return {
+    tag,
+    page,
+    pageSize,
+    total: posts.length,
+    hasMore: offset + pageSize < posts.length,
+    items,
+  };
 }
 
 async function mapLimit<T, R>(items: T[], limit: number, task: (item: T) => Promise<R>): Promise<R[]> {

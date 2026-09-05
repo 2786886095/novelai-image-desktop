@@ -343,11 +343,11 @@ describe("desktop UI consistency guards", () => {
     expect(navigation).not.toContain('"upscale"');
     expect(promptData).not.toContain('value: "upscale"');
     expect(app).not.toContain('activeTab === "upscale"');
-    expect(app).toContain('aria-label="后期工具"');
+    expect(app).toContain('aria-label={t("postprocess.tools")}');
     expect(app).toContain('generateMode === "enhance"');
     expect(app).toContain('mode === "upscale"');
-    expect(app).toContain('超分只负责扩大输出并补足清晰度');
-    expect(app).toContain('1×只做二次扩散增强；2×会改变分辨率');
+    expect(app).toContain('t("upscale.explain")');
+    expect(app).toContain('t("enhance.explain")');
     const postprocessPanel = app.slice(
       app.indexOf("function PostprocessPanel"),
       app.indexOf("// ── Inspect panel"),
@@ -402,12 +402,12 @@ describe("desktop UI consistency guards", () => {
   it("keeps an explicit redraw source policy and comparison handoff", () => {
     const app = fs.readFileSync(path.join(projectRoot, "src", "App.tsx"), "utf8");
     const store = fs.readFileSync(path.join(projectRoot, "src", "store.ts"), "utf8");
-    expect(app).toContain("始终使用原图");
-    expect(app).toContain("使用最新结果");
+    expect(app).toContain('t("inpaint.sourceOriginal")');
+    expect(app).toContain('t("inpaint.sourceLatest")');
     expect(store).toContain('i2iSourceMode: "original"');
     expect(store).toContain("compareBefore: sourceImage");
     expect(store).toContain('loadWorkbench: state.i2iSourceMode === "latest"');
-    expect(app).toContain('aria-label="下次局部重绘来源"');
+    expect(app).toContain('aria-label={t("inpaint.nextSourceLabel")}');
     expect(store).toContain('inpaintSourceMode: "original"');
     expect(store).toContain('loadWorkbench: state.inpaintSourceMode === "latest"');
     expect(fs.readFileSync(path.join(projectRoot, "src", "InpaintCanvas.tsx"), "utf8"))
@@ -487,6 +487,153 @@ describe("desktop UI consistency guards", () => {
       const names = [...blocks[0][1].matchAll(/^\s*(--[\w-]+)\s*:/gm)].map((match) => match[1]);
       expect(new Set(names).size, `${selector} contains duplicate tokens`).toBe(names.length);
     }
+  });
+
+  it("keeps motion explicit, typography owned by the app, and active theme selectors live", () => {
+    const css = fs.readFileSync(path.join(projectRoot, "src", "styles.css"), "utf8");
+    const app = fs.readFileSync(path.join(projectRoot, "src", "App.tsx"), "utf8");
+    const ui = fs.readFileSync(path.join(projectRoot, "src", "components", "ui.tsx"), "utf8");
+    const catalog = fs.readFileSync(path.join(projectRoot, "src", "ReferenceCatalogPanel.tsx"), "utf8");
+    const presets = fs.readFileSync(path.join(projectRoot, "src", "ReferencePresetManager.tsx"), "utf8");
+
+    expect(css).not.toContain("prefers-reduced-motion");
+    expect(css).not.toContain('[data-theme=');
+    expect(css).toMatch(/html, html body, html body #root\s*\{[^}]*font-family:\s*var\(--font-sans\)/s);
+    expect(css).toMatch(/--font-sans:[^;]*"Microsoft YaHei UI"[^;]*"PingFang SC"/);
+    expect(css).toContain("html.motion-reduced *");
+    expect(css).toContain(".persistent-tools-view.is-active > * { animation: page-enter");
+    expect(css).not.toContain(".tools-hub > * { animation: page-enter");
+    expect(app).toContain('update("reduceMotion", value)');
+    expect(app).toContain('classList.toggle("motion-reduced", settings?.reduceMotion === true)');
+    for (const source of [ui, catalog, presets]) {
+      expect(source).not.toContain("prefers-reduced-motion");
+    }
+  });
+
+  it("keeps tab recovery stateful and defers noncritical route warming", () => {
+    const app = fs.readFileSync(path.join(projectRoot, "src", "App.tsx"), "utf8");
+    const css = fs.readFileSync(path.join(projectRoot, "src", "styles.css"), "utf8");
+    expect(app).toContain('className="persistent-workbench-view"');
+    expect(app).toContain('className="workspace"');
+    expect(app).not.toContain("WIDE_WORKSPACE_TABS.has(activeTab)");
+    expect(css).not.toContain(".workspace-tools {");
+    expect(app).toContain('resetKey={activeTab}');
+    expect(app).not.toContain('<AppErrorBoundary key={activeTab}');
+    expect(app).toContain("const SPLASH_MIN_VISIBLE_MS = 300");
+    expect(app).toContain("const warmCriticalScreen = loadInpaintCanvas()");
+    expect(app).toContain('typeof idleWindow.requestIdleCallback === "function"');
+    const criticalStart = app.indexOf("const warmCriticalScreen");
+    const minimumStart = app.indexOf("const minimumSplash", criticalStart);
+    expect(app.slice(criticalStart, minimumStart)).not.toMatch(/load(?:ToolsHub|OnlineGalleryPage|AgentPage|MetadataInspector)\(/);
+  });
+
+  it("keeps the saved NovelAI token revealable and provides an AI translation provider", () => {
+    const app = fs.readFileSync(path.join(projectRoot, "src", "App.tsx"), "utf8");
+    const types = fs.readFileSync(path.join(projectRoot, "src", "types.ts"), "utf8");
+    const main = fs.readFileSync(path.join(projectRoot, "electron", "main.ts"), "utf8");
+    const preload = fs.readFileSync(path.join(projectRoot, "electron", "preload.ts"), "utf8");
+    const store = fs.readFileSync(path.join(projectRoot, "electron", "ipc", "store.ts"), "utf8");
+    const nai = fs.readFileSync(path.join(projectRoot, "electron", "ipc", "nai.ts"), "utf8");
+    const i18n = fs.readFileSync(path.join(projectRoot, "src", "i18n.ts"), "utf8");
+
+    expect(types).toContain('TranslateProvider = "google" | "baidu" | "ai"');
+    expect(main).toContain('ipcMain.handle("nai:storedToken", () => getToken())');
+    expect(preload).toContain('storedToken: () => ipcRenderer.invoke("nai:storedToken")');
+    expect(app).toContain("window.naiDesktop.storedToken().then(setToken)");
+    expect(app).toContain('<option value="ai">{t("settings.aiTranslate")}</option>');
+    expect(app).toContain('detectModels("translate")');
+    expect(app).toContain('update("translateAiModel", e.target.value)');
+    expect(store).toContain('"translateAiApiKey"');
+    expect(nai).toContain('settings.translateProvider === "ai"');
+    expect(nai).toContain('`${base}/chat/completions`');
+    expect(i18n.match(/"settings\.aiTranslate"/g)).toHaveLength(5);
+  });
+
+  it("uses the shared listbox selector across every desktop feature", () => {
+    const files = [
+      "src/App.tsx",
+      "src/AgentPage.tsx",
+      "src/AitagGallery.tsx",
+      "src/ArtistLab.tsx",
+      "src/ComicGenerator.tsx",
+      "src/PromptCodex.tsx",
+      "src/RandomArtistLab.tsx",
+      "src/V5ArtistWeightRepair.tsx",
+      "src/comic/TagComicGenerator.tsx",
+    ];
+    for (const file of files) {
+      const source = fs.readFileSync(path.join(projectRoot, file), "utf8");
+      expect(source, file).not.toMatch(/<select\b/i);
+    }
+    const ui = fs.readFileSync(path.join(projectRoot, "src", "components", "ui.tsx"), "utf8");
+    const styles = fs.readFileSync(path.join(projectRoot, "src", "styles.css"), "utf8");
+    expect(ui).toContain("export function SelectMenuCompat");
+    expect(ui).toContain("collectSelectOptions(children)");
+    expect(ui).toContain('role="listbox"');
+    expect(styles).toMatch(/\.select-menu-trigger\s*\{[^}]*justify-content:\s*flex-start/s);
+    expect(styles).toMatch(/\.select-menu-value\s*\{[^}]*flex:\s*1 1 auto[^}]*text-align:\s*left/s);
+    expect(styles).toContain("button:has(> .ui-icon):not(.select-menu-trigger)");
+    expect(styles).not.toMatch(/button:has\(> \.ui-icon\)\s*\{[^}]*justify-content:\s*center/s);
+  });
+
+  it("keeps custom selects truthful, keyboard-safe, labelled, and scroll-contained", () => {
+    const ui = fs.readFileSync(path.join(projectRoot, "src", "components", "ui.tsx"), "utf8");
+    const styles = fs.readFileSync(path.join(projectRoot, "src", "styles.css"), "utf8");
+    const tagComic = fs.readFileSync(path.join(projectRoot, "src", "comic", "TagComicGenerator.tsx"), "utf8");
+    expect(ui).toContain("const selectedIndex = options.findIndex");
+    expect(ui).toContain("selectedIndex >= 0 ? options[selectedIndex] : undefined");
+    expect(ui).toContain('event.key === "Tab"');
+    expect(ui).toContain('document.addEventListener("focusin", onFocusIn, true)');
+    expect(ui).toContain("aria-controls={menuId}");
+    expect(ui).toContain("id={menuId}");
+    expect(ui).toContain("const accessibleLabel = selected?.label ? `${ariaLabel}: ${selected.label}` : ariaLabel");
+    expect(ui).toContain("findTypeaheadOptionIndex(options, query, activeIndex)");
+    expect(ui).toContain("if (open && renderMenu) updatePosition();");
+    expect(ui).toContain("[open, renderMenu, updatePosition]");
+    expect(styles).toMatch(/\.select-menu-popover\s*\{[^}]*overscroll-behavior:\s*contain/s);
+    expect(tagComic).toContain('<option value="">{text(language, "useProjectSize")}</option>');
+    expect(tagComic).toContain('if (event.target.value === "")');
+  });
+
+  it("keeps every top-level tab mounted with animated transitions and a shared indicator", () => {
+    const app = fs.readFileSync(path.join(projectRoot, "src", "App.tsx"), "utf8");
+    const tabs = fs.readFileSync(path.join(projectRoot, "src", "app", "AppTabBar.tsx"), "utf8");
+    const css = fs.readFileSync(path.join(projectRoot, "src", "styles.css"), "utf8");
+    expect(app).toContain('active={activeTab === "records"}');
+    expect(app).toContain("PersistentCanvasSurface");
+    expect(app).toContain('active ? "is-active" : "is-hidden"');
+    expect(css).not.toMatch(/\.persistent-tools-view\.is-hidden\s*\{[^}]*display:\s*none/s);
+    expect(css).toMatch(/\.persistent-tools-view\.is-hidden\s*\{[^}]*opacity:\s*0[^}]*visibility:\s*hidden/s);
+    expect(css).toMatch(/\.persistent-tools-view\.is-hidden\s*\{[^}]*transition:\s*none/s);
+    expect(css).not.toMatch(/\.persistent-tools-view\.is-hidden\s*\{[^}]*visibility\s+0s\s+\.?\d+s/s);
+    expect(css).toMatch(/\.persistent-canvas-surface\s*>\s*\.canvas-area\s*\{[^}]*width:\s*100%;[^}]*height:\s*100%;/s);
+    expect(tabs).toContain("startTransition(() => setActiveTab(value))");
+    expect(tabs).toContain("tab-active-indicator");
+    expect(tabs).toContain("export default memo(AppTabBar)");
+  });
+
+  it("uses non-blocking dialogs and virtualizes large history grids", () => {
+    const app = fs.readFileSync(path.join(projectRoot, "src", "App.tsx"), "utf8");
+    const agent = fs.readFileSync(path.join(projectRoot, "src", "AgentPage.tsx"), "utf8");
+    const ui = fs.readFileSync(path.join(projectRoot, "src", "components", "ui.tsx"), "utf8");
+    expect(`${app}\n${agent}`).not.toMatch(/window\.(?:alert|prompt)\s*\(/);
+    expect(agent).toContain("stylePresetDialog");
+    expect(app).toContain("useVirtualizer({");
+    expect(app).toContain("virtualizeHistory = history.length >= 80");
+    expect(app).toContain("const MemoizedHistoryPanel = memo(HistoryPanel)");
+    expect(ui).toContain("onComplete: () => setRenderMenu(false)");
+  });
+
+  it("keeps the reference catalog independent from global UI framework CSS", () => {
+    const catalog = fs.readFileSync(path.join(projectRoot, "src", "ReferenceCatalogPanel.tsx"), "utf8");
+    const presets = fs.readFileSync(path.join(projectRoot, "src", "ReferencePresetManager.tsx"), "utf8");
+    const css = fs.readFileSync(path.join(projectRoot, "src", "styles.css"), "utf8");
+    const pkg = JSON.parse(fs.readFileSync(path.join(projectRoot, "package.json"), "utf8")) as { dependencies?: Record<string, string> };
+    expect(pkg.dependencies).not.toHaveProperty("weui");
+    for (const source of [catalog, presets, css]) expect(source).not.toMatch(/\bweui(?:-|\/)/i);
+    expect(css).toContain(".reference-ui-btn {");
+    expect(css).toContain(".reference-ui-dialog {");
+    expect(css).toContain(".reference-ui-tabs { display: flex; }");
   });
 
   it("lets the tag comic workspace follow the active theme", () => {
@@ -636,5 +783,28 @@ describe("desktop UI consistency guards", () => {
     expect(request).toBeGreaterThan(guard);
     expect(panel).toContain("disabled={outputTooLarge}");
     expect(panel).toContain("disabledReason={outputLimitReason}");
+  });
+
+  it("pages the complete artist ranking and local preset libraries on both clients", () => {
+    const gallery = fs.readFileSync(path.join(projectRoot, "src", "AitagGallery.tsx"), "utf8");
+    const artistIpc = fs.readFileSync(path.join(projectRoot, "electron", "ipc", "artist-lab.ts"), "utf8");
+    const presets = fs.readFileSync(path.join(projectRoot, "src", "ReferencePresetManager.tsx"), "utf8");
+    const mobileGallery = fs.readFileSync(path.join(projectRoot, "mobile", "lib", "screens", "online_gallery_screen.dart"), "utf8");
+    const mobileArtists = fs.readFileSync(path.join(projectRoot, "mobile", "lib", "services", "artist_tag_service.dart"), "utf8");
+    const mobilePresets = fs.readFileSync(path.join(projectRoot, "mobile", "lib", "screens", "generate_screen.dart"), "utf8");
+    expect(gallery).toContain("artistLabArtistRanking(targetPage, targetPageSize, targetQuery, force)");
+    expect(gallery).toContain("artistPageSize");
+    expect(artistIpc).toContain("DANBOORU_TAG_PAGE_SIZE = 1000");
+    expect(artistIpc).toContain("countActiveArtistTags");
+    const ranking = artistIpc.slice(artistIpc.indexOf("export async function loadPopularArtistRanking"), artistIpc.indexOf("async function scorer"));
+    expect(ranking).not.toContain("5000");
+    expect(presets).toContain("LOCAL_PAGE_SIZE_OPTIONS");
+    expect(presets).toContain("LocalPresetPageNumberInput");
+    expect(mobileGallery).toContain("artistService.rankingPage");
+    expect(mobileGallery).toContain("_chooseArtistPage");
+    expect(mobileArtists).toContain("_apiPageSize = 1000");
+    expect(mobileArtists).toContain("Future<ArtistRankingPage> rankingPage");
+    expect(mobilePresets).toContain("referencePresets.pagePosition");
+    expect(mobilePresets).not.toContain("reference-preset-load-more");
   });
 });

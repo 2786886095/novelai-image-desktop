@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../i18n/app_locales.dart';
+import 'studio_theme.dart';
 
 class QualityPresetControl extends StatelessWidget {
   final String language;
@@ -241,7 +242,7 @@ class _TransparentChip extends StatelessWidget {
           color: Colors.transparent,
           child: InkWell(
             onTap: () => onChanged(!selected),
-            borderRadius: BorderRadius.circular(999),
+            borderRadius: BorderRadius.circular(StudioRadii.pill),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 150),
               constraints: const BoxConstraints(minHeight: 28),
@@ -250,7 +251,7 @@ class _TransparentChip extends StatelessWidget {
                 color: selected
                     ? colors.primaryContainer
                     : colors.surfaceContainerHigh.withOpacity(0.66),
-                borderRadius: BorderRadius.circular(999),
+                borderRadius: BorderRadius.circular(StudioRadii.pill),
                 border: Border.all(
                   color: selected
                       ? colors.primary.withOpacity(0.46)

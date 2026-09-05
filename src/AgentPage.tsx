@@ -95,10 +95,12 @@ import {
   tavernNow,
 } from "./tavern/compat";
 import { defaultImagePromptForMessage, visibleMessageContent } from "./tavern/prompt";
+import { tavernUiText, type TavernUiKey } from "./tavern/ui-i18n";
 import { normalizeAppLanguage } from "./i18n";
 import { useAppStore } from "./store";
 import { NAI_MODELS, NAI_SAMPLERS, type AppSettings, type GenerateParams, type StylePromptPreset } from "./types";
 
+import { SelectMenuCompat } from "./components/ui";
 type LibraryTab = "characters" | "chats";
 type InspectorTab = "character" | "world" | "persona" | "model" | "image";
 type MobilePanel = "left" | "right" | null;
@@ -134,21 +136,23 @@ function Avatar({ src, name, size = "normal", software = false }: { src?: string
   );
 }
 
-function CharacterLibraryItem({ character, active, onSelect }: {
+function CharacterLibraryItem({ character, active, onSelect, language }: {
   character: TavernCharacter;
   active: boolean;
   onSelect: () => void;
+  language: unknown;
 }) {
   const builtIn = isBuiltInCharacter(character);
+  const tx = (key: TavernUiKey, values?: Record<string, string | number>) => tavernUiText(language, key, values);
   return (
     <button type="button" className={`tavern-library-card ${active ? "is-active" : ""}`} onClick={onSelect}>
       <Avatar src={character.avatarDataUrl} name={character.name} software={builtIn} />
       <span>
         <strong>{character.name}</strong>
-        <small>{character.personality || character.description || "尚未填写角色设定"}</small>
-        {builtIn ? <em className="tavern-protected-badge"><LockIcon />内置受保护</em> : null}
+        <small>{character.personality || character.description || tx("characterUnset")}</small>
+        {builtIn ? <em className="tavern-protected-badge"><LockIcon />{tx("builtInProtected")}</em> : null}
       </span>
-      {character.favorite ? <FavoriteIcon className="tavern-favorite-icon" aria-label="已收藏" /> : null}
+      {character.favorite ? <FavoriteIcon className="tavern-favorite-icon" aria-label={tx("favorited")} /> : null}
     </button>
   );
 }
@@ -363,8 +367,16 @@ function timeLabel(value: string, language: string) {
   }
 }
 
-function proposalStatus(value: TavernImageProposal["status"]) {
-  return ({ pending: "等待确认", running: "正在生成", completed: "已完成", cancelled: "已取消", error: "生成失败" } as const)[value];
+function proposalStatus(value: TavernImageProposal["status"], language: unknown) {
+  const labels = {
+    pending: ["等待确认", "等待確認", "Awaiting confirmation", "確認待ち", "확인 대기"],
+    running: ["正在生成", "正在生成", "Generating", "生成中", "생성 중"],
+    completed: ["已完成", "已完成", "Completed", "完了", "완료"],
+    cancelled: ["已取消", "已取消", "Cancelled", "キャンセル済み", "취소됨"],
+    error: ["生成失败", "生成失敗", "Generation failed", "生成に失敗", "생성 실패"],
+  } as const;
+  const index = ({ "zh-CN": 0, "zh-TW": 1, "en-US": 2, "ja-JP": 3, "ko-KR": 4 } as const)[normalizeAppLanguage(language)];
+  return labels[value][index];
 }
 
 export default function AgentPage() {
@@ -375,6 +387,7 @@ export default function AgentPage() {
   const language = normalizeAppLanguage(settings?.language);
   const copy = useMemo(() => copyFor(language), [language]);
   const workbench = useMemo(() => workbenchCopy(language), [language]);
+  const tx = useCallback((key: TavernUiKey, values?: Record<string, string | number>) => tavernUiText(language, key, values), [language]);
   const [workspace, setWorkspace] = useState<AgentWorkspaceData | null>(null);
   const [libraryTab, setLibraryTab] = useState<LibraryTab>("characters");
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("image");
@@ -391,6 +404,7 @@ export default function AgentPage() {
   const [composerPopover, setComposerPopover] = useState({ left: 8, width: 360, pointer: 48, bottom: 48 });
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
+  const [stylePresetDialog, setStylePresetDialog] = useState<{ prompt: string; name: string } | null>(null);
   const [characterDraft, setCharacterDraft] = useState<TavernCharacter | null>(null);
   const [selectedLorebookId, setSelectedLorebookId] = useState<string>();
   const [selectedPersonaId, setSelectedPersonaId] = useState<string>();
@@ -541,7 +555,7 @@ export default function AgentPage() {
   };
 
   const createChat = async () => {
-    const result = await window.naiDesktop.createAgentConversation(activeCharacter ? `与${activeCharacter.name}的对话` : undefined);
+    const result = await window.naiDesktop.createAgentConversation(activeCharacter ? tx("chatWith", { name: activeCharacter.name }) : undefined);
     setWorkspace(result.workspace);
     setLibraryTab("chats");
     setMobilePanel(null);
@@ -549,7 +563,7 @@ export default function AgentPage() {
 
   const createCharacter = () => {
     updateWorkspace((next) => {
-      const character = createTavernCharacter(`新角色 ${next.characters.length + 1}`);
+      const character = createTavernCharacter(`${tx("newCharacter")} ${next.characters.length + 1}`);
       next.characters.push(character);
       next.selectedCharacterId = character.id;
       const chat = next.conversations.find((item) => item.id === next.selectedConversationId);
@@ -571,22 +585,22 @@ export default function AgentPage() {
   const saveCharacter = () => {
     if (!characterDraft) return;
     if (isBuiltInCharacter(characterDraft)) {
-      setNotice("内置角色受保护；请在模型或生图页调整运行参数。");
+      setNotice(tx("builtInProtected"));
       return;
     }
     updateWorkspace((next) => {
       const index = next.characters.findIndex((item) => item.id === characterDraft.id);
-      if (index >= 0) next.characters[index] = { ...characterDraft, name: characterDraft.name.trim() || "未命名角色", updatedAt: tavernNow() };
-    }, "角色卡已保存");
+      if (index >= 0) next.characters[index] = { ...characterDraft, name: characterDraft.name.trim() || tx("newCharacter"), updatedAt: tavernNow() };
+    }, tx("saveCard"));
   };
 
   const deleteCharacter = async () => {
     if (!workspace || !activeCharacter || workspace.characters.length <= 1) return;
     if (isBuiltInCharacter(activeCharacter)) {
-      setNotice("“软件智能生图”是内置角色，不能删除。");
+      setNotice(tx("builtInProtected"));
       return;
     }
-    if (!(await confirmAction(`删除角色“${activeCharacter.name}”？对话记录不会删除。`))) return;
+    if (!(await confirmAction(`${tx("delete")} “${activeCharacter.name}”?`))) return;
     updateWorkspace((next) => {
       next.characters = next.characters.filter((item) => item.id !== activeCharacter.id);
       const fallback = next.characters[0]?.id;
@@ -600,15 +614,15 @@ export default function AgentPage() {
   };
 
   const deleteConversation = async (chat: AgentConversation) => {
-    if (!(await confirmAction(`删除对话“${chat.title}”？该对话中的消息与附件会一并删除。`))) return;
+    if (!(await confirmAction(`${tx("delete")} “${chat.title}”?`))) return;
     try {
       let result = await window.naiDesktop.deleteAgentConversation(chat.id);
       if (!result.workspace.conversations.length) {
-        result = await window.naiDesktop.createAgentConversation("新生图对话");
+        result = await window.naiDesktop.createAgentConversation(copy.newChat);
       }
       setWorkspace(result.workspace);
       setLibraryTab("chats");
-      setNotice("对话已删除");
+      setNotice(tx("delete"));
       setError("");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
@@ -617,21 +631,27 @@ export default function AgentPage() {
 
   const saveArtistStringPreset = async (prompt: string) => {
     const value = prompt.trim();
-    if (!value) return setError("请先输入风格提示词。");
-    const suggested = value.split(",").slice(0, 2).join(", ").slice(0, 40) || "酒馆风格提示词";
-    const name = window.prompt("风格提示词名称", suggested)?.trim();
-    if (!name) return;
+    if (!value) return setError(tx("stylePrompt"));
+    const suggested = value.split(",").slice(0, 2).join(", ").slice(0, 40) || tx("stylePrompt");
+    setStylePresetDialog({ prompt: value, name: suggested });
+  };
+
+  const confirmStylePreset = async () => {
+    const request = stylePresetDialog;
+    const name = request?.name.trim();
+    if (!request || !name) return;
     const existing = settings?.stylePromptPresets ?? [];
     const preset: StylePromptPreset = {
       id: tavernId("style"),
       name,
-      prompt: value,
-      group: "酒馆 AI 生图",
+      prompt: request.prompt,
+      group: copy.title,
       createdAt: tavernNow(),
     };
+    setStylePresetDialog(null);
     await window.naiDesktop.setSetting("stylePromptPresets", [...existing, preset]);
     await refreshSettings();
-    setNotice("风格提示词已加入列表");
+    setNotice(tx("addToList"));
   };
 
   const duplicateCharacter = () => {
@@ -640,7 +660,7 @@ export default function AgentPage() {
       const copied = cloneValue(activeCharacter);
       const timestamp = tavernNow();
       copied.id = tavernId("character");
-      copied.name = `${activeCharacter.name}（副本）`;
+      copied.name = `${activeCharacter.name} (${tx("copy")})`;
       copied.favorite = false;
       copied.createdAt = timestamp;
       copied.updatedAt = timestamp;
@@ -653,17 +673,17 @@ export default function AgentPage() {
         chat.activeCharacterId = copied.id;
         if (!chat.characterIds.includes(copied.id)) chat.characterIds.push(copied.id);
       }
-    }, "已复制为可编辑角色");
+    }, tx("duplicateMine"));
   };
 
   const chooseVisual = async (kind: "avatar" | "background") => {
     if (!characterDraft) return;
     if (isBuiltInCharacter(characterDraft)) {
-      setNotice("内置角色头像与背景受保护，可复制为自定义角色后修改。");
+      setNotice(tx("builtInProtected"));
       return;
     }
     const result = await window.naiDesktop.importTavernVisualAsset(kind);
-    if (!result.ok) return setError(result.message ?? "读取图片失败。");
+    if (!result.ok) return setError(result.message ?? tx("attach"));
     if (result.cancelled || !result.dataUrl) return;
     setCharacterDraft((current) => current ? {
       ...current,
@@ -673,7 +693,7 @@ export default function AgentPage() {
 
   const createCharacterLorebook = () => {
     if (!characterDraft || isBuiltInCharacter(characterDraft)) return;
-    const book = normalizeTavernLorebook({ name: `${characterDraft.name || "新角色"} · 世界书`, entries: [] });
+    const book = normalizeTavernLorebook({ name: `${characterDraft.name || tx("newCharacter")} · ${tx("lorebooks")}`, entries: [] });
     updateWorkspace((next) => {
       next.lorebooks.push(book);
       const character = next.characters.find((item) => item.id === characterDraft.id);
@@ -683,7 +703,7 @@ export default function AgentPage() {
       }
       const chat = next.conversations.find((item) => item.id === next.selectedConversationId);
       if (chat && !chat.lorebookIds.includes(book.id)) chat.lorebookIds.push(book.id);
-    }, "已创建并关联角色世界书");
+    }, tx("newLorebook"));
     setCharacterDraft({ ...characterDraft, lorebookId: book.id });
     setSelectedLorebookId(book.id);
     setInspectorTab("world");
@@ -792,10 +812,10 @@ export default function AgentPage() {
       const result = await window.naiDesktop.sendAgentMessage({ conversationId: conversation.id, text, characterId: activeCharacter?.id });
       if (result.ok) return;
       setComposer(text);
-      setError(result.message ?? "发送失败。");
+      setError(result.message ?? copy.send);
     } catch (error) {
       setComposer(text);
-      setError(error instanceof Error ? error.message : "发送失败。");
+      setError(error instanceof Error ? error.message : copy.send);
     }
   };
 
@@ -809,9 +829,9 @@ export default function AgentPage() {
         characterId: message.characterId ?? activeCharacter?.id,
         regenerateMessageId: message.id,
       });
-      if (!result.ok) setError(result.message ?? "重新生成失败。");
+      if (!result.ok) setError(result.message ?? tx("regenerateReply"));
     } catch (error) {
-      setError(error instanceof Error ? error.message : "重新生成失败。");
+      setError(error instanceof Error ? error.message : tx("regenerateReply"));
     }
   };
 
@@ -833,7 +853,7 @@ export default function AgentPage() {
   const attach = async () => {
     if (!conversation) return;
     const result = await window.naiDesktop.importAgentFiles(conversation.id);
-    if (!result.ok) setError(result.message ?? "添加图片失败。");
+    if (!result.ok) setError(result.message ?? tx("attach"));
     else setWorkspace(await window.naiDesktop.getAgentWorkspace());
   };
 
@@ -843,17 +863,17 @@ export default function AgentPage() {
   });
 
   const deleteMessage = async (message: AgentMessage) => {
-    if (!(await confirmAction("删除这条消息？"))) return;
+    if (!(await confirmAction(`${tx("deleteMessage")}?`))) return;
     updateConversation((chat) => {
       chat.messages = chat.messages.filter((item) => item.id !== message.id);
     });
-    setNotice("消息已删除");
+    setNotice(tx("deleteMessage"));
   };
 
   const generateProposal = async (message: AgentMessage, proposal: TavernImageProposal) => {
     if (!conversation) return;
     const result = await window.naiDesktop.generateTavernImage({ conversationId: conversation.id, messageId: message.id, proposal });
-    if (!result.ok) setError(result.message ?? "图片生成失败。");
+    if (!result.ok) setError(result.message ?? proposalStatus("error", language));
   };
 
   const saveProvider = async () => {
@@ -862,7 +882,7 @@ export default function AgentPage() {
       ["agentApiBaseUrl", String(providerDraft.agentApiBaseUrl ?? "")],
       ["agentApiKey", String(providerDraft.agentApiKey ?? "")],
       ["agentApiModel", String(providerDraft.agentApiModel ?? "")],
-      ["agentProviderName", String(providerDraft.agentProviderName ?? "自定义模型")],
+      ["agentProviderName", String(providerDraft.agentProviderName ?? tx("modelName"))],
       ["agentContextWindow", Number(providerDraft.agentContextWindow ?? 128000)],
       ["agentMaxOutputTokens", Number(providerDraft.agentMaxOutputTokens ?? 8192)],
       ["agentVisionEnabled", providerDraft.agentVisionEnabled !== false],
@@ -871,7 +891,7 @@ export default function AgentPage() {
       for (const [key, value] of entries) await window.naiDesktop.setSetting(key, value as never);
       await refreshSettings();
       await window.naiDesktop.restartAgentRuntime();
-      setNotice("模型配置已保存");
+      setNotice(tx("saveConnect"));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     }
@@ -890,7 +910,7 @@ export default function AgentPage() {
       (result.ok ? setNotice : setError)(result.message);
     } catch (reason) {
       setDiscoveredModels([]);
-      setError(reason instanceof Error ? reason.message : "模型检测失败。");
+      setError(reason instanceof Error ? reason.message : tx("autoDetect"));
     } finally {
       setDiscovering(false);
     }
@@ -906,7 +926,7 @@ export default function AgentPage() {
   }, [search, workspace]);
 
   if (!workspace) {
-    return <div className="tavern-loading"><SparklesIcon /><span>正在打开酒馆 AI 生图……</span></div>;
+    return <div className="tavern-loading"><SparklesIcon /><span>{tx("openTavern")}</span></div>;
   }
 
   const background = conversation?.backgroundDataUrl ?? activeCharacter?.backgroundDataUrl;
@@ -917,10 +937,10 @@ export default function AgentPage() {
         <header className="tavern-brand">
           <span className="tavern-brand-mark"><SparklesIcon /></span>
           {!leftCollapsed ? <div><strong>{copy.title}</strong><small>{copy.subtitle}</small></div> : null}
-          <IconButton label={leftCollapsed ? "展开" : "折叠"} className="tavern-desktop-only" onClick={() => setLeftCollapsed((value) => !value)}>
+          <IconButton label={leftCollapsed ? tx("expand") : tx("collapse")} className="tavern-desktop-only" onClick={() => setLeftCollapsed((value) => !value)}>
             {leftCollapsed ? <LeftPanelOpenIcon /> : <LeftPanelCloseIcon />}
           </IconButton>
-          <IconButton label="关闭" className="tavern-mobile-only" onClick={() => setMobilePanel(null)}><CloseIcon /></IconButton>
+          <IconButton label={tx("close")} className="tavern-mobile-only" onClick={() => setMobilePanel(null)}><CloseIcon /></IconButton>
         </header>
         {leftCollapsed ? (
           <div className="tavern-collapsed-actions">
@@ -937,21 +957,21 @@ export default function AgentPage() {
             <div className="tavern-library-tools">
               <label className="tavern-search"><SearchIcon /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={copy.search} /></label>
               <div>
-                <button type="button" onClick={libraryTab === "characters" ? createCharacter : () => void createChat()}><AddIcon />{libraryTab === "characters" ? "新建角色" : copy.newChat}</button>
+                <button type="button" onClick={libraryTab === "characters" ? createCharacter : () => void createChat()}><AddIcon />{libraryTab === "characters" ? tx("newCharacter") : copy.newChat}</button>
                 <button type="button" onClick={() => void importCards()}><ImportIcon />{copy.import}</button>
               </div>
             </div>
             <div className="tavern-library-list">
               {libraryTab === "characters" ? (
                 <>
-                  {!filteredCharacters.length ? <div className="tavern-library-empty"><SearchIcon /><span>没有匹配的角色</span><small>换个关键词，或新建一个角色。</small></div> : null}
-                  {filteredCharacters.some((character) => isBuiltInCharacter(character)) ? <div className="tavern-library-group"><SparklesIcon /><span>内置角色</span><small>固定置顶</small></div> : null}
+                  {!filteredCharacters.length ? <div className="tavern-library-empty"><SearchIcon /><span>{tx("noCharacters")}</span><small>{tx("noCharactersHint")}</small></div> : null}
+                  {filteredCharacters.some((character) => isBuiltInCharacter(character)) ? <div className="tavern-library-group"><SparklesIcon /><span>{tx("builtInCharacters")}</span><small>{tx("pinned")}</small></div> : null}
                   {filteredCharacters.filter((character) => isBuiltInCharacter(character)).map((character) => (
-                    <CharacterLibraryItem key={character.id} character={character} active={activeCharacter?.id === character.id} onSelect={() => selectCharacter(character.id)} />
+                    <CharacterLibraryItem key={character.id} character={character} active={activeCharacter?.id === character.id} onSelect={() => selectCharacter(character.id)} language={language} />
                   ))}
-                  {filteredCharacters.some((character) => !isBuiltInCharacter(character)) ? <div className="tavern-library-group"><PersonIcon /><span>我的角色</span><small>{filteredCharacters.filter((character) => !isBuiltInCharacter(character)).length}</small></div> : null}
+                  {filteredCharacters.some((character) => !isBuiltInCharacter(character)) ? <div className="tavern-library-group"><PersonIcon /><span>{tx("myCharacters")}</span><small>{filteredCharacters.filter((character) => !isBuiltInCharacter(character)).length}</small></div> : null}
                   {filteredCharacters.filter((character) => !isBuiltInCharacter(character)).map((character) => (
-                    <CharacterLibraryItem key={character.id} character={character} active={activeCharacter?.id === character.id} onSelect={() => selectCharacter(character.id)} />
+                    <CharacterLibraryItem key={character.id} character={character} active={activeCharacter?.id === character.id} onSelect={() => selectCharacter(character.id)} language={language} />
                   ))}
                 </>
               ) : filteredChats.length ? filteredChats.map((chat) => {
@@ -961,13 +981,13 @@ export default function AgentPage() {
                   <div key={chat.id} className={`tavern-library-chat ${conversation?.id === chat.id ? "is-active" : ""}`}>
                     <button type="button" className="tavern-library-card" onClick={() => void selectConversation(chat.id)}>
                       <Avatar src={character?.avatarDataUrl} name={character?.name ?? "Chat"} software={isBuiltInCharacter(character)} />
-                      <span><strong>{chat.title}</strong><small>{last?.content || character?.firstMessage || "开始一段新故事"}</small></span>
+                      <span><strong>{chat.title}</strong><small>{last?.content || character?.firstMessage || tx("newStory")}</small></span>
                       {chat.status === "running" ? <i className="is-typing">•••</i> : null}
                     </button>
-                    <IconButton label={`删除对话：${chat.title}`} className="tavern-library-delete" onClick={(event) => { event.stopPropagation(); void deleteConversation(chat); }}><DeleteIcon /></IconButton>
+                    <IconButton label={tx("deleteChatLabel", { name: chat.title })} className="tavern-library-delete" onClick={(event) => { event.stopPropagation(); void deleteConversation(chat); }}><DeleteIcon /></IconButton>
                   </div>
                 );
-              }) : <div className="tavern-library-empty"><MessageIcon /><span>没有匹配的对话</span><small>换个关键词，或开始一段新对话。</small></div>}
+              }) : <div className="tavern-library-empty"><MessageIcon /><span>{tx("noChats")}</span><small>{tx("noChatsHint")}</small></div>}
             </div>
           </>
         )}
@@ -975,7 +995,7 @@ export default function AgentPage() {
 
       <main className="tavern-chat" style={background ? { "--tavern-background": `url(${JSON.stringify(background).slice(1, -1)})` } as React.CSSProperties : undefined}>
         <header className={`tavern-chat-header is-minimal ${conversation && conversation.characterIds.length > 1 ? "has-group" : ""}`}>
-          <IconButton label="角色与对话" className="tavern-mobile-only" onClick={() => setMobilePanel("left")}><MenuIcon /></IconButton>
+          <IconButton label={tx("charactersAndChats")} className="tavern-mobile-only" onClick={() => setMobilePanel("left")}><MenuIcon /></IconButton>
           <div className="tavern-chat-identity">
             <Avatar src={activeCharacter?.avatarDataUrl} name={activeCharacter?.name ?? copy.title} software={isBuiltInCharacter(activeCharacter)} size="small" />
             <span>
@@ -985,10 +1005,10 @@ export default function AgentPage() {
           </div>
           {conversation && conversation.characterIds.length > 1 ? (
             <label className="tavern-speaker-select">
-              <span>当前发言</span>
-              <select value={conversation.activeCharacterId} onChange={(event) => updateConversation((chat) => { chat.activeCharacterId = event.target.value; })}>
+              <span>{tx("currentSpeaker")}</span>
+              <SelectMenuCompat value={conversation.activeCharacterId} onChange={(event) => updateConversation((chat) => { chat.activeCharacterId = event.target.value; })}>
                 {conversation.characterIds.map((id) => workspace.characters.find((item) => item.id === id)).filter(Boolean).map((character) => <option key={character!.id} value={character!.id}>{character!.name}</option>)}
-              </select>
+              </SelectMenuCompat>
             </label>
           ) : null}
           <IconButton label={copy.settings} onClick={() => setMobilePanel("right")} className="tavern-mobile-only"><TuneIcon /></IconButton>
@@ -1029,8 +1049,8 @@ export default function AgentPage() {
             <button
               type="button"
               className="tavern-composer-resize"
-              aria-label="上下拖动调整输入框高度"
-              title="上下拖动调整输入框高度；方向键微调，Home 复位"
+              aria-label={tx("composerResize")}
+              title={tx("composerResizeHint")}
               onPointerDown={startComposerResize}
               onPointerMove={resizeComposer}
               onPointerUp={finishComposerResize}
@@ -1098,7 +1118,7 @@ export default function AgentPage() {
             </div>
             <div className="tavern-composer-toolbar">
               <div className="tavern-composer-tools">
-                <IconButton label="添加图片或文档" onClick={() => void attach()} disabled={!conversation}><AttachmentIcon /></IconButton>
+                <IconButton label={tx("attach")} onClick={() => void attach()} disabled={!conversation}><AttachmentIcon /></IconButton>
                 <button type="button" className={`tavern-tool-chip ${composerMenu === "mode" ? "is-active" : ""}`} onClick={(event) => toggleComposerPopover("mode", event.currentTarget, 340)} disabled={!conversation}>
                   {conversation?.generationMode === "auto" ? <BoltIcon /> : <ConfirmIcon />}<b>{conversation?.generationMode === "auto" ? workbench.autoMode : workbench.confirmMode}</b><ChevronDownIcon />
                 </button>
@@ -1107,13 +1127,13 @@ export default function AgentPage() {
                 </button>
               </div>
               {conversation?.status === "running" ? (
-                <IconButton label="停止" className="is-primary tavern-composer-submit" onClick={() => void window.naiDesktop.abortAgentMessage(conversation.id)}><StopIcon /></IconButton>
+                <IconButton label={tx("stop")} className="is-primary tavern-composer-submit" onClick={() => void window.naiDesktop.abortAgentMessage(conversation.id)}><StopIcon /></IconButton>
               ) : (
                 <IconButton label={copy.send} className="is-primary tavern-composer-submit" disabled={!conversation || (!composer.trim() && !conversation.draftAttachments.length)} onClick={() => void send()}><SendIcon /></IconButton>
               )}
             </div>
           </div>
-          <div className="tavern-image-status" aria-label="当前生图状态">
+          <div className="tavern-image-status" aria-label={tx("imageStatus")}>
             <span className={conversation?.status === "running" ? "is-running" : "is-ready"}><i />{conversation?.status === "running" ? copy.working : workbench.ready}</span>
             <button type="button" onClick={() => openInspector("image")} title={workbench.parametersDesc}><ImageIcon />{imageModelLabel}</button>
             <button type="button" onClick={() => openInspector("image")}><strong>{imageRuntime.width}×{imageRuntime.height}</strong></button>
@@ -1129,10 +1149,10 @@ export default function AgentPage() {
       <aside className={`tavern-inspector ${mobilePanel === "right" ? "is-mobile-open" : ""}`}>
         <header className="tavern-inspector-header">
           {!rightCollapsed ? <div><strong>{copy.settings}</strong><small>{copy.model} · {copy.image}</small></div> : null}
-          <IconButton label={rightCollapsed ? "展开" : "折叠"} className="tavern-desktop-only" onClick={() => setRightCollapsed((value) => !value)}>
+          <IconButton label={rightCollapsed ? tx("expand") : tx("collapse")} className="tavern-desktop-only" onClick={() => setRightCollapsed((value) => !value)}>
             {rightCollapsed ? <RightPanelOpenIcon /> : <RightPanelCloseIcon />}
           </IconButton>
-          <IconButton label="关闭" className="tavern-mobile-only" onClick={() => setMobilePanel(null)}><CloseIcon /></IconButton>
+          <IconButton label={tx("close")} className="tavern-mobile-only" onClick={() => setMobilePanel(null)}><CloseIcon /></IconButton>
         </header>
         {rightCollapsed ? (
           <nav className="tavern-inspector-collapsed">
@@ -1146,8 +1166,8 @@ export default function AgentPage() {
                 ["model", copy.model, <BotIcon key="i" />],
                 ["image", copy.image, <ImageIcon key="i" />],
               ] : [
-                ["character", "角色", <PersonIcon key="i" />],
-                ["world", "世界书", <BookIcon key="i" />],
+                ["character", tx("characterInfo"), <PersonIcon key="i" />],
+                ["world", tx("lorebooks"), <BookIcon key="i" />],
                 ["model", copy.model, <BotIcon key="i" />],
                 ["image", copy.image, <ImageIcon key="i" />],
               ]) as Array<[InspectorTab, string, ReactNode]>).map(([id, label, icon]) => (
@@ -1167,20 +1187,21 @@ export default function AgentPage() {
                   onChooseVisual={chooseVisual}
                   onCreateLorebook={createCharacterLorebook}
                   onOpenLorebook={(id) => { setSelectedLorebookId(id); setInspectorTab("world"); }}
-                  onAiHelp={() => useStarter(`请帮我完善这个角色设定。保留已有信息，补全角色描述、性格与说话方式、场景设定、开场白和必要的世界书条目建议。\n\n角色名称：${characterDraft?.name ?? ""}\n角色描述：${characterDraft?.description ?? ""}\n性格与说话方式：${characterDraft?.personality ?? ""}\n场景设定：${characterDraft?.scenario ?? ""}`)}
+                  onAiHelp={() => useStarter(`${tx("aiImprove")}\n\n${tx("characterName")}: ${characterDraft?.name ?? ""}\n${tx("characterDescription")}: ${characterDraft?.description ?? ""}\n${tx("personality")}: ${characterDraft?.personality ?? ""}\n${tx("scenario")}: ${characterDraft?.scenario ?? ""}`)}
                   onExport={(format) => activeCharacter && void window.naiDesktop.exportTavernCard({ characterId: activeCharacter.id, format }).then((result) => (result.ok ? setNotice : setError)(result.message))}
                   onToggleGroup={(id, checked) => updateConversation((chat) => {
                     chat.characterIds = checked ? [...new Set([...chat.characterIds, id])] : chat.characterIds.filter((item) => item !== id);
                     if (!chat.characterIds.length && activeCharacter) chat.characterIds = [activeCharacter.id];
                     if (!chat.characterIds.includes(chat.activeCharacterId ?? "")) chat.activeCharacterId = chat.characterIds[0];
                   })}
+                  language={language}
                 />
               ) : null}
               {inspectorTab === "world" ? (
-                <LorebookPanel workspace={workspace} conversation={conversation} selectedId={selectedLorebookId} setSelectedId={setSelectedLorebookId} updateWorkspace={updateWorkspace} />
+                <LorebookPanel workspace={workspace} conversation={conversation} selectedId={selectedLorebookId} setSelectedId={setSelectedLorebookId} updateWorkspace={updateWorkspace} onNotice={setNotice} language={language} />
               ) : null}
               {inspectorTab === "persona" ? (
-                <PersonaPanel workspace={workspace} conversation={conversation} selectedId={selectedPersonaId} setSelectedId={setSelectedPersonaId} updateWorkspace={updateWorkspace} />
+                <PersonaPanel workspace={workspace} conversation={conversation} selectedId={selectedPersonaId} setSelectedId={setSelectedPersonaId} updateWorkspace={updateWorkspace} language={language} />
               ) : null}
               {inspectorTab === "model" ? (
                 <ModelPanel
@@ -1190,6 +1211,7 @@ export default function AgentPage() {
                   discovering={discovering}
                   onDiscover={discoverModels}
                   onSave={saveProvider}
+                  language={language}
                 />
               ) : null}
               {inspectorTab === "image" ? (
@@ -1204,13 +1226,42 @@ export default function AgentPage() {
                   updateVisual={updateCharacterVisual}
                   updateConversation={updateConversation}
                   updateMessage={updateMessage}
+                  language={language}
                 />
               ) : null}
             </div>
           </>
         )}
       </aside>
-      {mobilePanel ? <button className="tavern-scrim tavern-mobile-only" aria-label="关闭侧栏" onClick={() => setMobilePanel(null)} /> : null}
+      {mobilePanel ? <button className="tavern-scrim tavern-mobile-only" aria-label={tx("closeSidebar")} onClick={() => setMobilePanel(null)} /> : null}
+      {stylePresetDialog ? createPortal((
+        <div className="modal-backdrop tavern-input-dialog-backdrop" onMouseDown={() => setStylePresetDialog(null)}>
+          <section className="modal input-modal tavern-input-dialog" role="dialog" aria-modal="true" aria-labelledby="tavern-style-preset-title" onMouseDown={(event) => event.stopPropagation()}>
+            <header>
+              <h2 id="tavern-style-preset-title">{tx("saveStyleTitle")}</h2>
+              <button type="button" aria-label={tx("close")} onClick={() => setStylePresetDialog(null)}><CloseIcon /></button>
+            </header>
+            <div className="input-modal-body">
+              <label className="field">
+                <span>{tx("styleName")}</span>
+                <input
+                  autoFocus
+                  value={stylePresetDialog.name}
+                  onChange={(event) => setStylePresetDialog((current) => current ? { ...current, name: event.target.value } : current)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") void confirmStylePreset();
+                    else if (event.key === "Escape") setStylePresetDialog(null);
+                  }}
+                />
+              </label>
+            </div>
+            <footer className="input-modal-footer">
+              <button type="button" className="btn btn-secondary" onClick={() => setStylePresetDialog(null)}>{tx("cancel")}</button>
+              <button type="button" className="btn btn-primary" disabled={!stylePresetDialog.name.trim()} onClick={() => void confirmStylePreset()}>{tx("save")}</button>
+            </footer>
+          </section>
+        </div>
+      ), document.body) : null}
     </section>
   );
 }
@@ -1227,6 +1278,8 @@ function MessageStream({ conversation, workspace, activeCharacter, activePersona
   onGenerate: (message: AgentMessage, proposal: TavernImageProposal) => Promise<void>;
   onRegenerate: (message: AgentMessage) => void;
 }) {
+  const tx = (key: TavernUiKey, values?: Record<string, string | number>) => tavernUiText(language, key, values);
+  const workbench = workbenchCopy(normalizeAppLanguage(language));
   const scrollRef = useRef<HTMLDivElement>(null);
   const followLatestRef = useRef(true);
   const lastMessageIdRef = useRef<string | undefined>(undefined);
@@ -1306,15 +1359,15 @@ function MessageStream({ conversation, workspace, activeCharacter, activePersona
   }, [lastLayoutSignature, lastMessage?.id, settleLatest]);
 
   if (!conversation || !activeCharacter) {
-    return <div className="tavern-empty"><SparklesIcon /><h2>选择一个角色，开启故事</h2><p>支持 PNG / JSON / CHARX 角色卡、世界书、用户设定与群聊。</p></div>;
+    return <div className="tavern-empty"><SparklesIcon /><h2>{tx("chooseCharacter")}</h2><p>{tx("chooseCharacterHint")}</p></div>;
   }
   if (!messages.length) {
     const starters: Array<{ icon: ReactNode; title: string; description: string; prompt: string }> = [
-      { icon: <ImageIcon />, title: "输入描述生成图片", description: "把中文想法整理成可确认的生图方案", prompt: "请把我接下来输入的中文画面描述整理为可确认的 NovelAI 生图方案。" },
-      { icon: <ReverseImageIcon />, title: "反推图片提示词", description: "需要接入支持视觉能力的对话模型", prompt: "请读取我接下来通过回形针上传的图片，调用图片反推能力，输出可用于 NovelAI 的提示词；如果当前模型不支持视觉，请明确提醒我切换视觉模型。" },
-      { icon: <TagSearchIcon />, title: "搜索 Tag", description: "检索并解释 Danbooru 标签", prompt: "请使用本地 Danbooru Tag 搜索能力，帮我查找并解释接下来输入的概念或关键词。" },
-      { icon: <PaletteIcon />, title: "识别画风并寻找画师串", description: "分析目标图并迭代相近画师 Tag 组合", prompt: "请读取我接下来上传的目标图，先分析画风特征，再检索相近 Danbooru 画师 Tag 组合，并按候选、生成、对比、收敛的方式迭代。" },
-      { icon: <DiceIcon />, title: "随机抽取画师串生图", description: "随机组合画师 Tag 与权重后生成", prompt: "请从画师库随机抽取画师 Tag 与权重，组合成可直接用于 NovelAI 的画师串并生成图片。" },
+      { icon: <ImageIcon />, title: workbench.draw, description: workbench.drawDesc, prompt: workbench.drawTemplate },
+      { icon: <ReverseImageIcon />, title: workbench.reference, description: workbench.referenceDesc, prompt: workbench.referenceDesc },
+      { icon: <TagSearchIcon />, title: workbench.prompt, description: workbench.promptDesc, prompt: workbench.promptTemplate },
+      { icon: <PaletteIcon />, title: workbench.modelSettings, description: workbench.modelDesc, prompt: workbench.modelDesc },
+      { icon: <DiceIcon />, title: workbench.autoMode, description: workbench.autoDesc, prompt: workbench.autoDesc },
     ];
     return (
       <div className="tavern-message-scroll" ref={scrollRef}>
@@ -1322,8 +1375,8 @@ function MessageStream({ conversation, workspace, activeCharacter, activePersona
           <section className="tavern-creation-console">
             <header>
               <span><SparklesIcon /></span>
-              <div><strong>你想画什么？</strong><small>选择一种开始方式，或直接在下方输入画面描述</small></div>
-              <em>{conversation.generationMode === "auto" ? "全自动" : "确认模式"}</em>
+              <div><strong>{tx("whatToDraw")}</strong><small>{tx("chooseStart")}</small></div>
+              <em>{conversation.generationMode === "auto" ? tx("autoShort") : tx("confirmShort")}</em>
             </header>
             <div className="tavern-starter-grid">
               {starters.map((starter) => (
@@ -1396,8 +1449,9 @@ function MessageBubble({ conversationId, message, speaker, persona, language, on
   onLayoutChange: () => void;
   animate: boolean;
 }) {
+  const tx = (key: TavernUiKey, values?: Record<string, string | number>) => tavernUiText(language, key, values);
   const isUser = message.role === "user";
-  const name = isUser ? (persona?.id === SOFTWARE_IMAGE_PERSONA_ID ? "你" : persona?.name ?? "你") : speaker?.name ?? "Character";
+  const name = isUser ? (persona?.id === SOFTWARE_IMAGE_PERSONA_ID ? tx("personaTitle") : persona?.name ?? tx("personaTitle")) : speaker?.name ?? "Character";
   const avatar = isUser ? persona?.avatarDataUrl : speaker?.avatarDataUrl;
   const content = visibleMessageContent(message);
   const [proposalDraft, setProposalDraft] = useState(message.imageProposal);
@@ -1411,7 +1465,7 @@ function MessageBubble({ conversationId, message, speaker, persona, language, on
       <div className="tavern-message-body">
         <header><strong>{name}</strong><time>{timeLabel(message.createdAt, language)}</time>{message.status === "streaming" ? <span className="tavern-typing"><i /><i /><i /></span> : null}</header>
         <div className="tavern-message-content">
-          {content ? markdown(content) : message.status === "streaming" ? <span className="tavern-thinking">正在组织回复</span> : null}
+          {content ? markdown(content) : message.status === "streaming" ? <span className="tavern-thinking">{tx("thinking")}</span> : null}
           {message.status === "streaming" && content ? <span className="tavern-stream-caret" /> : null}
         </div>
         {message.error ? <div className="tavern-message-error">{message.error}</div> : null}
@@ -1422,7 +1476,7 @@ function MessageBubble({ conversationId, message, speaker, persona, language, on
                 <button
                   type="button"
                   className="tavern-message-image-preview"
-                  title="双击查看大图；可拖到其他软件"
+                  title={tx("imagePreviewHint")}
                   draggable
                   onDragStart={(event) => {
                     event.preventDefault();
@@ -1433,8 +1487,8 @@ function MessageBubble({ conversationId, message, speaker, persona, language, on
                   <img src={item.fileUrl} alt={item.name} loading="lazy" onLoad={onLayoutChange} />
                 </button>
                 <figcaption className="tavern-message-image-actions">
-                  <button type="button" title="打开本地位置" aria-label="打开本地位置" onClick={() => void window.naiDesktop.openInExplorer(item.filePath)}><FolderOpenIcon /></button>
-                  <button type="button" title="另存为" aria-label="另存为" onClick={() => void window.naiDesktop.exportAgentAttachment(conversationId, message.id, item.id)}><SaveIcon /></button>
+                  <button type="button" title={tx("openLocation")} aria-label={tx("openLocation")} onClick={() => void window.naiDesktop.openInExplorer(item.filePath)}><FolderOpenIcon /></button>
+                  <button type="button" title={tx("saveAs")} aria-label={tx("saveAs")} onClick={() => void window.naiDesktop.exportAgentAttachment(conversationId, message.id, item.id)}><SaveIcon /></button>
                 </figcaption>
               </figure>
             ) : null)}
@@ -1450,29 +1504,30 @@ function MessageBubble({ conversationId, message, speaker, persona, language, on
             }}
             onCancel={() => onUpdate((item) => { if (item.imageProposal) item.imageProposal.status = "cancelled"; })}
             onLayoutChange={onLayoutChange}
+            language={language}
           />
         ) : null}
         <footer className="tavern-message-actions">
           {swipes.length > 1 ? (
             <span className="tavern-swipes">
-              <IconButton label="上一个回复" disabled={swipeIndex <= 0} onClick={() => onUpdate((item) => { item.swipeIndex = Math.max(0, swipeIndex - 1); })}><ChevronLeftIcon /></IconButton>
+              <IconButton label={tx("previousReply")} disabled={swipeIndex <= 0} onClick={() => onUpdate((item) => { item.swipeIndex = Math.max(0, swipeIndex - 1); })}><ChevronLeftIcon /></IconButton>
               <b>{swipeIndex + 1} / {swipes.length}</b>
-              <IconButton label="下一个回复" disabled={swipeIndex >= swipes.length - 1} onClick={() => onUpdate((item) => { item.swipeIndex = Math.min(swipes.length - 1, swipeIndex + 1); })}><ChevronRightIcon /></IconButton>
+              <IconButton label={tx("nextReply")} disabled={swipeIndex >= swipes.length - 1} onClick={() => onUpdate((item) => { item.swipeIndex = Math.min(swipes.length - 1, swipeIndex + 1); })}><ChevronRightIcon /></IconButton>
             </span>
           ) : null}
-          <IconButton label="复制" onClick={() => void navigator.clipboard.writeText(content)}><CopyIcon /></IconButton>
-          {!isUser && message.status !== "streaming" ? <IconButton label="重新生成并保留当前回复" onClick={onRegenerate}><RefreshIcon /></IconButton> : null}
-          {message.status !== "streaming" ? <IconButton label="删除消息" className="tavern-message-delete" onClick={onDelete}><DeleteIcon /></IconButton> : null}
+          <IconButton label={tx("copy")} onClick={() => void navigator.clipboard.writeText(content)}><CopyIcon /></IconButton>
+          {!isUser && message.status !== "streaming" ? <IconButton label={tx("regenerateReply")} onClick={onRegenerate}><RefreshIcon /></IconButton> : null}
+          {message.status !== "streaming" ? <IconButton label={tx("deleteMessage")} className="tavern-message-delete" onClick={onDelete}><DeleteIcon /></IconButton> : null}
         </footer>
       </div>
       {previewImage?.fileUrl ? createPortal((
-        <div className="tavern-image-lightbox" role="dialog" aria-modal="true" aria-label={`预览 ${previewImage.name}`} onClick={() => setPreviewImage(null)}>
+        <div className="tavern-image-lightbox" role="dialog" aria-modal="true" aria-label={tx("previewLabel", { name: previewImage.name })} onClick={() => setPreviewImage(null)}>
           <section onClick={(event) => event.stopPropagation()}>
-            <IconButton label="关闭预览" className="tavern-image-lightbox-close" onClick={() => setPreviewImage(null)}><CloseIcon /></IconButton>
+            <IconButton label={tx("closePreview")} className="tavern-image-lightbox-close" onClick={() => setPreviewImage(null)}><CloseIcon /></IconButton>
             <div className="tavern-image-lightbox-stage"><img src={previewImage.fileUrl} alt={previewImage.name} /></div>
             <footer>
-              <button type="button" title="打开本地位置" aria-label="打开本地位置" onClick={() => void window.naiDesktop.openInExplorer(previewImage.filePath)}><FolderOpenIcon /></button>
-              <button type="button" title="另存为" aria-label="另存为" onClick={() => void window.naiDesktop.exportAgentAttachment(conversationId, message.id, previewImage.id)}><SaveIcon /></button>
+              <button type="button" title={tx("openLocation")} aria-label={tx("openLocation")} onClick={() => void window.naiDesktop.openInExplorer(previewImage.filePath)}><FolderOpenIcon /></button>
+              <button type="button" title={tx("saveAs")} aria-label={tx("saveAs")} onClick={() => void window.naiDesktop.exportAgentAttachment(conversationId, message.id, previewImage.id)}><SaveIcon /></button>
             </footer>
           </section>
         </div>
@@ -1481,20 +1536,22 @@ function MessageBubble({ conversationId, message, speaker, persona, language, on
   );
 }
 
-function ImageProposalCard({ proposal, setProposal, onGenerate, onCancel, onLayoutChange }: {
+function ImageProposalCard({ proposal, setProposal, onGenerate, onCancel, onLayoutChange, language }: {
   proposal: TavernImageProposal;
   setProposal: (value: TavernImageProposal) => void;
   onGenerate: () => void;
   onCancel: () => void;
   onLayoutChange: () => void;
+  language: unknown;
 }) {
+  const tx = (key: TavernUiKey, values?: Record<string, string | number>) => tavernUiText(language, key, values);
   const busy = proposal.status === "running";
   return (
     <section className={`tavern-image-proposal is-${proposal.status}`}>
-      <header><span><MagicIcon /></span><strong>场景生图提案</strong><small>{proposalStatus(proposal.status)}</small></header>
+      <header><span><MagicIcon /></span><strong>{tx("proposal")}</strong><small>{proposalStatus(proposal.status, language)}</small></header>
       <textarea
         className="tavern-proposal-prompt"
-        aria-label="正面提示词"
+        aria-label={tx("positivePrompt")}
         value={proposal.positivePrompt}
         onChange={(event) => setProposal({ ...proposal, positivePrompt: event.target.value })}
         rows={3}
@@ -1502,17 +1559,17 @@ function ImageProposalCard({ proposal, setProposal, onGenerate, onCancel, onLayo
       />
       <div className="tavern-proposal-toolbar">
         <details onToggle={onLayoutChange}>
-          <summary>尺寸与参数 <ChevronDownIcon /></summary>
+          <summary>{tx("sizeAndParams")} <ChevronDownIcon /></summary>
           <div className="tavern-parameter-grid">
-            <Field label="宽"><NumericField label="宽" value={proposal.width ?? 1024} min={64} max={49152} onCommit={(value) => setProposal({ ...proposal, width: Math.round(value) })} /></Field>
-            <Field label="高"><NumericField label="高" value={proposal.height ?? 1024} min={64} max={49152} onCommit={(value) => setProposal({ ...proposal, height: Math.round(value) })} /></Field>
-            <Field label="步数"><NumericField label="步数" value={proposal.steps ?? 28} min={1} max={50} onCommit={(value) => setProposal({ ...proposal, steps: Math.round(value) })} /></Field>
+            <Field label={tx("widthShort")}><NumericField label={tx("widthShort")} value={proposal.width ?? 1024} min={64} max={49152} onCommit={(value) => setProposal({ ...proposal, width: Math.round(value) })} /></Field>
+            <Field label={tx("heightShort")}><NumericField label={tx("heightShort")} value={proposal.height ?? 1024} min={64} max={49152} onCommit={(value) => setProposal({ ...proposal, height: Math.round(value) })} /></Field>
+            <Field label={tx("steps")}><NumericField label={tx("steps")} value={proposal.steps ?? 28} min={1} max={50} onCommit={(value) => setProposal({ ...proposal, steps: Math.round(value) })} /></Field>
             <Field label="CFG"><NumericField label="CFG" value={proposal.scale ?? 5} min={0} max={10} step={0.1} onCommit={(value) => setProposal({ ...proposal, scale: value })} /></Field>
-            <Field label="张数"><NumericField label="张数" value={proposal.count} min={1} max={8} onCommit={(value) => setProposal({ ...proposal, count: Math.round(value) })} /></Field>
+            <Field label={tx("imageCount")}><NumericField label={tx("imageCount")} value={proposal.count} min={1} max={8} onCommit={(value) => setProposal({ ...proposal, count: Math.round(value) })} /></Field>
           </div>
         </details>
         {proposal.status === "pending" || proposal.status === "error" ? (
-          <footer><button type="button" className="is-ghost" onClick={onCancel}><CloseIcon />取消</button><button type="button" className="is-primary" onClick={onGenerate} disabled={!proposal.positivePrompt.trim()}><ImageIcon />确认并生图</button></footer>
+          <footer><button type="button" className="is-ghost" onClick={onCancel}><CloseIcon />{tx("cancel")}</button><button type="button" className="is-primary" onClick={onGenerate} disabled={!proposal.positivePrompt.trim()}><ImageIcon />{tx("confirmGenerate")}</button></footer>
         ) : null}
       </div>
       {proposal.error ? <p className="tavern-message-error">{proposal.error}</p> : null}
@@ -1521,7 +1578,7 @@ function ImageProposalCard({ proposal, setProposal, onGenerate, onCancel, onLayo
   );
 }
 
-function CharacterPanel({ draft, workspace, conversation, onChange, onSave, onDelete, onDuplicate, onChooseVisual, onCreateLorebook, onOpenLorebook, onAiHelp, onExport, onToggleGroup }: {
+function CharacterPanel({ draft, workspace, conversation, onChange, onSave, onDelete, onDuplicate, onChooseVisual, onCreateLorebook, onOpenLorebook, onAiHelp, onExport, onToggleGroup, language }: {
   draft: TavernCharacter | null;
   workspace: AgentWorkspaceData;
   conversation?: AgentConversation;
@@ -1535,8 +1592,10 @@ function CharacterPanel({ draft, workspace, conversation, onChange, onSave, onDe
   onAiHelp: () => void;
   onExport: (format: "png" | "json" | "charx") => void;
   onToggleGroup: (id: string, checked: boolean) => void;
+  language: unknown;
 }) {
-  if (!draft) return <div className="tavern-panel-empty">请选择角色</div>;
+  const tx = (key: TavernUiKey, values?: Record<string, string | number>) => tavernUiText(language, key, values);
+  if (!draft) return <div className="tavern-panel-empty">{tx("selectCharacter")}</div>;
   const builtIn = isBuiltInCharacter(draft);
   if (builtIn) {
     return (
@@ -1544,91 +1603,94 @@ function CharacterPanel({ draft, workspace, conversation, onChange, onSave, onDe
         <div className="tavern-character-hero">
           <div className="tavern-character-avatar-static"><Avatar src={draft.avatarDataUrl} name={draft.name} size="large" /></div>
           <div><strong>{draft.name}</strong><small>CHARACTER CARD · {draft.specVersion}</small></div>
-          <span className="tavern-protected-badge is-strong"><LockIcon />内置</span>
+          <span className="tavern-protected-badge is-strong"><LockIcon />{tx("builtIn")}</span>
         </div>
 
         <section className="tavern-panel-section">
-          <header><div><strong>角色信息</strong><small>只读 · 随软件维护更新</small></div><LockIcon /></header>
-          <div className="tavern-readonly-field"><span>角色名称</span><strong>{draft.name}</strong><LockIcon /></div>
-          <div className="tavern-readonly-field is-multiline"><span>角色描述</span><p>{draft.description}</p><LockIcon /></div>
+          <header><div><strong>{tx("characterInfo")}</strong><small>{tx("readOnlyMaintained")}</small></div><LockIcon /></header>
+          <div className="tavern-readonly-field"><span>{tx("characterName")}</span><strong>{draft.name}</strong><LockIcon /></div>
+          <div className="tavern-readonly-field is-multiline"><span>{tx("characterDescription")}</span><p>{draft.description}</p><LockIcon /></div>
         </section>
 
         <section className="tavern-template-card">
-          <header><span><MagicIcon /></span><div><strong>内置 NovelAI 生图模板</strong><small>使用软件当前提示词模板与生成协议</small></div><span className="tavern-status-chip"><ConfirmIcon />已启用</span></header>
+          <header><span><MagicIcon /></span><div><strong>{tx("builtInTemplate")}</strong><small>{tx("templateProtocol")}</small></div><span className="tavern-status-chip"><ConfirmIcon />{tx("enabled")}</span></header>
           <div className="tavern-template-capabilities">
-            <span>中文意图整理</span><span>Danbooru Tag</span><span>构图与光影</span><span>参数确认</span>
+            <span>{tx("intentOrganization")}</span><span>Danbooru Tag</span><span>{tx("compositionLight")}</span><span>{tx("parameterConfirmation")}</span>
           </div>
-          <p>模板正文不会在界面展示或导出到普通消息中，避免误修改和提示词泄漏。</p>
+          <p>{tx("templateProtectedHint")}</p>
         </section>
 
         <section className="tavern-panel-section">
-          <header><div><strong>当前运行参数</strong><small>去“模型”与“生图”页修改</small></div><SettingsIcon /></header>
+          <header><div><strong>{tx("currentRuntime")}</strong><small>{tx("editModelImage")}</small></div><SettingsIcon /></header>
           <div className="tavern-runtime-grid">
-            <span><small>生图模式</small><strong>{conversation?.generationMode === "auto" ? "全自动" : "确认后生图"}</strong></span>
-            <span><small>默认尺寸</small><strong>{draft.visual.width ?? 1024} × {draft.visual.height ?? 1024}</strong></span>
-            <span><small>采样步数</small><strong>{draft.visual.steps ?? 28}</strong></span>
+            <span><small>{tx("imageMode")}</small><strong>{conversation?.generationMode === "auto" ? tx("autoShort") : tx("confirmGenerate")}</strong></span>
+            <span><small>{tx("defaultSize")}</small><strong>{draft.visual.width ?? 1024} × {draft.visual.height ?? 1024}</strong></span>
+            <span><small>{tx("steps")}</small><strong>{draft.visual.steps ?? 28}</strong></span>
             <span><small>CFG</small><strong>{draft.visual.scale ?? 5}</strong></span>
           </div>
         </section>
 
         <section className="tavern-group-picker">
-          <header><strong>群聊成员</strong><small>内置角色可与自定义角色共同参与对话</small></header>
+          <header><strong>{tx("groupMembers")}</strong><small>{tx("groupMembersHint")}</small></header>
           {workspace.characters.map((character) => <label key={character.id}><input type="checkbox" checked={conversation?.characterIds.includes(character.id) ?? false} onChange={(event) => onToggleGroup(character.id, event.target.checked)} /><Avatar src={character.avatarDataUrl} name={character.name} size="small" /><span>{character.name}</span></label>)}
         </section>
-        <div className="tavern-export-row"><span>兼容导出</span><button onClick={() => onExport("png")}>PNG</button><button onClick={() => onExport("json")}>JSON</button><button onClick={() => onExport("charx")}>CHARX</button></div>
-        <div className="tavern-sticky-actions"><button className="is-primary" onClick={onDuplicate}><CopyIcon />复制为我的角色</button></div>
+        <div className="tavern-export-row"><span>{tx("compatibleExport")}</span><button onClick={() => onExport("png")}>PNG</button><button onClick={() => onExport("json")}>JSON</button><button onClick={() => onExport("charx")}>CHARX</button></div>
+        <div className="tavern-sticky-actions"><button className="is-primary" onClick={onDuplicate}><CopyIcon />{tx("duplicateMine")}</button></div>
       </div>
     );
   }
   return (
     <div className="tavern-panel-stack">
       <div className="tavern-character-hero" style={draft.backgroundDataUrl ? { backgroundImage: `url(${draft.backgroundDataUrl})` } : undefined}>
-        <button type="button" onClick={() => void onChooseVisual("avatar")}><Avatar src={draft.avatarDataUrl} name={draft.name} size="large" /><span><EditIcon />头像</span></button>
+        <button type="button" onClick={() => void onChooseVisual("avatar")}><Avatar src={draft.avatarDataUrl} name={draft.name} size="large" /><span><EditIcon />{tx("avatar")}</span></button>
         <div><strong>{draft.name}</strong><small>{draft.spec} · {draft.specVersion}</small></div>
-        <IconButton label="选择背景" onClick={() => void onChooseVisual("background")}><ImageIcon /></IconButton>
+        <IconButton label={tx("chooseBackground")} onClick={() => void onChooseVisual("background")}><ImageIcon /></IconButton>
       </div>
-      <button type="button" className="tavern-ai-draft-button" onClick={onAiHelp}><MagicIcon /><span><strong>让 AI 帮我完善设定</strong><small>把当前草稿带入对话，可继续补充要求后发送</small></span><ChevronRightIcon /></button>
-      <Field label="角色名称"><input value={draft.name} onChange={(event) => onChange({ ...draft, name: event.target.value })} /></Field>
-      <Field label="昵称"><input value={draft.nickname} onChange={(event) => onChange({ ...draft, nickname: event.target.value })} placeholder="可选" /></Field>
-      <Field label="角色描述"><textarea rows={5} value={draft.description} onChange={(event) => onChange({ ...draft, description: event.target.value })} /></Field>
-      <Field label="性格与说话方式"><textarea rows={4} value={draft.personality} onChange={(event) => onChange({ ...draft, personality: event.target.value })} /></Field>
-      <Field label="场景设定"><textarea rows={4} value={draft.scenario} onChange={(event) => onChange({ ...draft, scenario: event.target.value })} /></Field>
+      <button type="button" className="tavern-ai-draft-button" onClick={onAiHelp}><MagicIcon /><span><strong>{tx("aiImprove")}</strong><small>{tx("aiImproveHint")}</small></span><ChevronRightIcon /></button>
+      <Field label={tx("characterName")}><input value={draft.name} onChange={(event) => onChange({ ...draft, name: event.target.value })} /></Field>
+      <Field label={tx("nickname")}><input value={draft.nickname} onChange={(event) => onChange({ ...draft, nickname: event.target.value })} placeholder={tx("optional")} /></Field>
+      <Field label={tx("characterDescription")}><textarea rows={5} value={draft.description} onChange={(event) => onChange({ ...draft, description: event.target.value })} /></Field>
+      <Field label={tx("personality")}><textarea rows={4} value={draft.personality} onChange={(event) => onChange({ ...draft, personality: event.target.value })} /></Field>
+      <Field label={tx("scenario")}><textarea rows={4} value={draft.scenario} onChange={(event) => onChange({ ...draft, scenario: event.target.value })} /></Field>
       <section className="tavern-character-lorebook-link">
-        <header><div><strong>角色世界书</strong><small>为这个角色补充背景、规则和关键词触发条目</small></div><BookIcon /></header>
+        <header><div><strong>{tx("characterLorebook")}</strong><small>{tx("lorebookHint")}</small></div><BookIcon /></header>
         <div>
-          <select value={draft.lorebookId ?? ""} onChange={(event) => onChange({ ...draft, lorebookId: event.target.value || undefined })}>
-            <option value="">不关联世界书</option>
+          <SelectMenuCompat value={draft.lorebookId ?? ""} onChange={(event) => onChange({ ...draft, lorebookId: event.target.value || undefined })}>
+            <option value="">{tx("noLorebook")}</option>
             {workspace.lorebooks.filter((book) => !isBuiltInLorebook(book)).map((book) => <option key={book.id} value={book.id}>{book.name}</option>)}
-          </select>
-          {draft.lorebookId ? <button type="button" onClick={() => onOpenLorebook(draft.lorebookId!)}><EditIcon />编辑</button> : <button type="button" onClick={onCreateLorebook}><AddIcon />新建</button>}
+          </SelectMenuCompat>
+          {draft.lorebookId ? <button type="button" onClick={() => onOpenLorebook(draft.lorebookId!)}><EditIcon />{tx("edit")}</button> : <button type="button" onClick={onCreateLorebook}><AddIcon />{tx("create")}</button>}
         </div>
       </section>
-      <Field label="开场白"><textarea rows={4} value={draft.firstMessage} onChange={(event) => onChange({ ...draft, firstMessage: event.target.value })} /></Field>
-      <Field label="示例对话"><textarea rows={5} value={draft.exampleMessages} onChange={(event) => onChange({ ...draft, exampleMessages: event.target.value })} placeholder="<START>\n{{user}}: ...\n{{char}}: ..." /></Field>
+      <Field label={tx("greeting")}><textarea rows={4} value={draft.firstMessage} onChange={(event) => onChange({ ...draft, firstMessage: event.target.value })} /></Field>
+      <Field label={tx("exampleDialogue")}><textarea rows={5} value={draft.exampleMessages} onChange={(event) => onChange({ ...draft, exampleMessages: event.target.value })} placeholder="<START>\n{{user}}: ...\n{{char}}: ..." /></Field>
       <details className="tavern-panel-details">
-        <summary>高级角色卡字段 <ChevronDownIcon /></summary>
-        <Field label="系统提示词"><textarea rows={4} value={draft.systemPrompt} onChange={(event) => onChange({ ...draft, systemPrompt: event.target.value })} /></Field>
-        <Field label="历史后置指令"><textarea rows={4} value={draft.postHistoryInstructions} onChange={(event) => onChange({ ...draft, postHistoryInstructions: event.target.value })} /></Field>
-        <Field label="备用开场白（每行一个）"><textarea rows={4} value={draft.alternateGreetings.join("\n")} onChange={(event) => onChange({ ...draft, alternateGreetings: event.target.value.split("\n").filter(Boolean) })} /></Field>
-        <Field label="标签（逗号分隔）"><input value={draft.tags.join(", ")} onChange={(event) => onChange({ ...draft, tags: event.target.value.split(/[,，]/).map((item) => item.trim()).filter(Boolean) })} /></Field>
+        <summary>{tx("advancedFields")} <ChevronDownIcon /></summary>
+        <Field label={tx("systemPrompt")}><textarea rows={4} value={draft.systemPrompt} onChange={(event) => onChange({ ...draft, systemPrompt: event.target.value })} /></Field>
+        <Field label={tx("postHistory")}><textarea rows={4} value={draft.postHistoryInstructions} onChange={(event) => onChange({ ...draft, postHistoryInstructions: event.target.value })} /></Field>
+        <Field label={tx("alternateGreetings")}><textarea rows={4} value={draft.alternateGreetings.join("\n")} onChange={(event) => onChange({ ...draft, alternateGreetings: event.target.value.split("\n").filter(Boolean) })} /></Field>
+        <Field label={tx("tagsComma")}><input value={draft.tags.join(", ")} onChange={(event) => onChange({ ...draft, tags: event.target.value.split(/[,，]/).map((item) => item.trim()).filter(Boolean) })} /></Field>
       </details>
       <section className="tavern-group-picker">
-        <header><strong>群聊成员</strong><small>选择多个角色后可切换当前发言者</small></header>
+        <header><strong>{tx("groupMembers")}</strong><small>{tx("groupSelectHint")}</small></header>
         {workspace.characters.map((character) => <label key={character.id}><input type="checkbox" checked={conversation?.characterIds.includes(character.id) ?? false} onChange={(event) => onToggleGroup(character.id, event.target.checked)} /><Avatar src={character.avatarDataUrl} name={character.name} size="small" /><span>{character.name}</span></label>)}
       </section>
-      <div className="tavern-export-row"><span>导出</span><button onClick={() => onExport("png")}>PNG</button><button onClick={() => onExport("json")}>JSON</button><button onClick={() => onExport("charx")}>CHARX</button></div>
-      <div className="tavern-sticky-actions"><button className="is-danger" onClick={onDelete} disabled={workspace.characters.length <= 1}><DeleteIcon />删除</button><button onClick={onDuplicate}><CopyIcon />复制</button><button className="is-primary" onClick={onSave}><CheckIcon />保存角色卡</button></div>
+      <div className="tavern-export-row"><span>{tx("export")}</span><button onClick={() => onExport("png")}>PNG</button><button onClick={() => onExport("json")}>JSON</button><button onClick={() => onExport("charx")}>CHARX</button></div>
+      <div className="tavern-sticky-actions"><button className="is-danger" onClick={onDelete} disabled={workspace.characters.length <= 1}><DeleteIcon />{tx("delete")}</button><button onClick={onDuplicate}><CopyIcon />{tx("copy")}</button><button className="is-primary" onClick={onSave}><CheckIcon />{tx("saveCard")}</button></div>
     </div>
   );
 }
 
-function LorebookPanel({ workspace, conversation, selectedId, setSelectedId, updateWorkspace }: {
+function LorebookPanel({ workspace, conversation, selectedId, setSelectedId, updateWorkspace, onNotice, language }: {
   workspace: AgentWorkspaceData;
   conversation?: AgentConversation;
   selectedId?: string;
   setSelectedId: (id?: string) => void;
   updateWorkspace: (mutator: (next: AgentWorkspaceData) => void, success?: string) => void;
+  onNotice: (message: string) => void;
+  language: unknown;
 }) {
+  const tx = (key: TavernUiKey, values?: Record<string, string | number>) => tavernUiText(language, key, values);
   const [query, setQuery] = useState("");
   const selected = workspace.lorebooks.find((item) => item.id === selectedId) ?? workspace.lorebooks[0];
   const selectedBuiltIn = isBuiltInLorebook(selected);
@@ -1639,10 +1701,10 @@ function LorebookPanel({ workspace, conversation, selectedId, setSelectedId, upd
   const totalEntries = workspace.lorebooks.reduce((sum, book) => sum + book.entries.length, 0);
   const enabledEntries = workspace.lorebooks.reduce((sum, book) => sum + book.entries.filter((entry) => entry.enabled).length, 0);
   const create = () => updateWorkspace((next) => {
-    const book = normalizeTavernLorebook({ name: `世界书 ${next.lorebooks.length + 1}`, entries: [] });
+    const book = normalizeTavernLorebook({ name: `${tx("lorebooks")} ${next.lorebooks.length + 1}`, entries: [] });
     next.lorebooks.push(book);
     setSelectedId(book.id);
-  }, "已创建新的世界书");
+  }, tx("newLorebook"));
   const update = (mutator: (book: TavernLorebook) => void, allowBuiltIn = false) => updateWorkspace((next) => {
     const book = next.lorebooks.find((item) => item.id === selected?.id);
     if (book && isBuiltInLorebook(book) && !allowBuiltIn) return;
@@ -1651,27 +1713,27 @@ function LorebookPanel({ workspace, conversation, selectedId, setSelectedId, upd
   const removeSelected = async () => {
     if (!selected) return;
     if (selectedBuiltIn) {
-      window.alert("内置世界书受保护，不能删除。你仍可在当前对话中启用或停用它。");
+      onNotice(tx("protectedLoreHint"));
       return;
     }
-    if (!(await confirmAction(`删除世界书“${selected.name}”？它会立即从所有对话与角色关联中移除，且无法撤销。`))) return;
+    if (!(await confirmAction(`${tx("deleteLorebook")}: ${selected.name}?`))) return;
     updateWorkspace((next) => {
       next.lorebooks = next.lorebooks.filter((book) => book.id !== selected.id);
       for (const chat of next.conversations) chat.lorebookIds = chat.lorebookIds.filter((id) => id !== selected.id);
       for (const character of next.characters) if (character.lorebookId === selected.id) character.lorebookId = undefined;
       for (const persona of next.personas) if (persona.lorebookId === selected.id) persona.lorebookId = undefined;
       setSelectedId(next.lorebooks[0]?.id);
-    }, `已删除：${selected.name}`);
+    }, `${tx("delete")}: ${selected.name}`);
   };
   return (
     <div className="tavern-panel-stack">
-      <div className="tavern-section-title"><div><strong>世界书 / Lorebook</strong><small>启用 {conversation?.lorebookIds.length ?? 0} / 共 {workspace.lorebooks.length} 本 · SillyTavern 兼容</small></div><IconButton label="新建世界书" onClick={create}><AddIcon /></IconButton></div>
+      <div className="tavern-section-title"><div><strong>{tx("worldTitle")}</strong><small>{tx("activeCount", { active: conversation?.lorebookIds.length ?? 0, total: workspace.lorebooks.length })}</small></div><IconButton label={tx("newLorebook")} onClick={create}><AddIcon /></IconButton></div>
       <div className="tavern-worldbook-metrics">
-        <span><BookIcon /><small>世界书</small><strong>{workspace.lorebooks.length}</strong></span>
-        <span><CheckIcon /><small>当前启用</small><strong>{conversation?.lorebookIds.length ?? 0}</strong></span>
-        <span><TuneIcon /><small>可用条目</small><strong>{enabledEntries}/{totalEntries}</strong></span>
+        <span><BookIcon /><small>{tx("lorebooks")}</small><strong>{workspace.lorebooks.length}</strong></span>
+        <span><CheckIcon /><small>{tx("currentlyEnabled")}</small><strong>{conversation?.lorebookIds.length ?? 0}</strong></span>
+        <span><TuneIcon /><small>{tx("availableEntries")}</small><strong>{enabledEntries}/{totalEntries}</strong></span>
       </div>
-      <label className="tavern-search tavern-world-search"><SearchIcon /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索世界书名称或说明" /></label>
+      <label className="tavern-search tavern-world-search"><SearchIcon /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={tx("searchLorebooks")} /></label>
       <div className="tavern-select-list">
         {filtered.map((book) => {
           const builtIn = isBuiltInLorebook(book);
@@ -1680,41 +1742,43 @@ function LorebookPanel({ workspace, conversation, selectedId, setSelectedId, upd
             <div key={book.id} className={`tavern-worldbook-item ${selected?.id === book.id ? "is-active" : ""}`}>
               <button type="button" className="tavern-worldbook-main" onClick={() => setSelectedId(book.id)}>
                 <span className="tavern-worldbook-icon"><BookIcon /></span>
-                <span className="tavern-worldbook-copy"><strong>{book.name}</strong><small>{book.description || "暂无说明"}</small><em>{book.entries.length} 条目 · {book.tokenBudget} tokens</em></span>
-                {builtIn ? <em className="tavern-protected-badge"><LockIcon />内置</em> : null}
+                <span className="tavern-worldbook-copy"><strong>{book.name}</strong><small>{book.description || tx("description")}</small><em>{tx("entriesCount", { count: book.entries.length, tokens: book.tokenBudget })}</em></span>
+                {builtIn ? <em className="tavern-protected-badge"><LockIcon />{tx("builtIn")}</em> : null}
               </button>
-              <label className="tavern-compact-switch" title={enabled ? "从当前对话停用" : "在当前对话启用"}>
+              <label className="tavern-compact-switch" title={enabled ? tx("disableInChat") : tx("enableInChat")}>
                 <input type="checkbox" checked={enabled} onChange={(event) => updateWorkspace((next) => { const chat = next.conversations.find((item) => item.id === next.selectedConversationId); if (chat) chat.lorebookIds = event.target.checked ? [...new Set([...chat.lorebookIds, book.id])] : chat.lorebookIds.filter((id) => id !== book.id); })} />
                 <span />
               </label>
-              <IconButton label={builtIn ? "内置世界书不可删除" : `删除 ${book.name}`} disabled={builtIn} className="is-danger" onClick={async () => { setSelectedId(book.id); if (!builtIn && await confirmAction(`删除世界书“${book.name}”？它会从所有对话中移除，且无法撤销。`)) updateWorkspace((next) => { next.lorebooks = next.lorebooks.filter((item) => item.id !== book.id); for (const chat of next.conversations) chat.lorebookIds = chat.lorebookIds.filter((id) => id !== book.id); for (const character of next.characters) if (character.lorebookId === book.id) character.lorebookId = undefined; for (const persona of next.personas) if (persona.lorebookId === book.id) persona.lorebookId = undefined; setSelectedId(next.lorebooks[0]?.id); }, `已删除：${book.name}`); }}><DeleteIcon /></IconButton>
+              <IconButton label={`${tx("deleteLorebook")}: ${book.name}`} disabled={builtIn} className="is-danger" onClick={async () => { setSelectedId(book.id); if (!builtIn && await confirmAction(`${tx("deleteLorebook")}: ${book.name}?`)) updateWorkspace((next) => { next.lorebooks = next.lorebooks.filter((item) => item.id !== book.id); for (const chat of next.conversations) chat.lorebookIds = chat.lorebookIds.filter((id) => id !== book.id); for (const character of next.characters) if (character.lorebookId === book.id) character.lorebookId = undefined; for (const persona of next.personas) if (persona.lorebookId === book.id) persona.lorebookId = undefined; setSelectedId(next.lorebooks[0]?.id); }, `${tx("delete")}: ${book.name}`); }}><DeleteIcon /></IconButton>
             </div>
           );
         })}
       </div>
-      {!selected ? <div className="tavern-panel-empty"><BookIcon /><p>新建或导入世界书后，可为当前对话启用。</p><button onClick={create}><AddIcon />新建世界书</button></div> : (
+      {!selected ? <div className="tavern-panel-empty"><BookIcon /><p>{tx("emptyLorebooks")}</p><button onClick={create}><AddIcon />{tx("newLorebook")}</button></div> : (
         <section key={selected.id} className={`tavern-worldbook-editor ${selectedBuiltIn ? "is-protected" : ""}`}>
-          <header className="tavern-worldbook-editor-head"><div><strong>{selected.name}</strong><small>{selectedBuiltIn ? "内置世界书 · 仅允许启停条目" : "用户世界书 · 可编辑与删除"}</small></div>{selectedBuiltIn ? <span className="tavern-protected-badge is-strong"><LockIcon />受保护</span> : <button className="tavern-danger-button" onClick={removeSelected}><DeleteIcon />删除世界书</button>}</header>
-          {selectedBuiltIn ? <section className="tavern-protected-notice is-compact"><ProtectedIcon /><div><strong>内置内容受保护</strong><p>你可以启用或停用条目，但不能修改模板正文或删除整本世界书。</p></div></section> : null}
-          <Field label="名称"><input defaultValue={selected.name} readOnly={selectedBuiltIn} onBlur={selectedBuiltIn ? undefined : (event) => update((book) => { book.name = event.target.value.trim() || "世界书"; })} /></Field>
-          <Field label="说明"><textarea rows={2} defaultValue={selected.description} readOnly={selectedBuiltIn} onBlur={selectedBuiltIn ? undefined : (event) => update((book) => { book.description = event.target.value; })} /></Field>
-          <div className="tavern-parameter-grid"><Field label="扫描深度"><NumericField label="扫描深度" value={selected.scanDepth} min={1} max={128} readOnly={selectedBuiltIn} onCommit={(value) => update((book) => { book.scanDepth = Math.round(value); })} /></Field><Field label="Token 预算"><NumericField label="Token 预算" value={selected.tokenBudget} min={128} max={262144} readOnly={selectedBuiltIn} onCommit={(value) => update((book) => { book.tokenBudget = Math.round(value); })} /></Field></div>
-          <Toggle checked={selected.recursiveScanning} label="递归扫描" disabled={selectedBuiltIn} onChange={(value) => update((book) => { book.recursiveScanning = value; })} />
-          <div className="tavern-section-title"><strong>条目</strong><button disabled={selectedBuiltIn} onClick={() => update((book) => { book.entries.push({ id: tavernId("lore"), keys: [], secondaryKeys: [], content: "", enabled: true, constant: false, selective: false, caseSensitive: false, insertionOrder: 100 + book.entries.length, priority: 100, position: "after-character", extensions: {} }); })}><AddIcon />添加条目</button></div>
-          <div className="tavern-lore-entries">{selected.entries.map((entry) => <details key={entry.id}><summary><span className={entry.enabled ? "is-enabled" : ""} /><strong>{entry.comment || entry.keys.join(", ") || "未命名条目"}</strong><small>{entry.constant ? "常驻" : entry.keys.join(" · ") || "无关键词"}</small>{selectedBuiltIn ? <LockIcon /> : <ChevronDownIcon />}</summary><div><Field label="标题"><input defaultValue={entry.comment} readOnly={selectedBuiltIn} onBlur={selectedBuiltIn ? undefined : (event) => update((book) => { const item = book.entries.find((value) => value.id === entry.id); if (item) item.comment = event.target.value; })} /></Field><Field label="关键词（逗号分隔）"><input defaultValue={entry.keys.join(", ")} readOnly={selectedBuiltIn} onBlur={selectedBuiltIn ? undefined : (event) => update((book) => { const item = book.entries.find((value) => value.id === entry.id); if (item) item.keys = event.target.value.split(/[,，]/).map((value) => value.trim()).filter(Boolean); })} /></Field><Field label="内容"><textarea rows={5} defaultValue={entry.content} readOnly={selectedBuiltIn} onBlur={selectedBuiltIn ? undefined : (event) => update((book) => { const item = book.entries.find((value) => value.id === entry.id); if (item) item.content = event.target.value; })} /></Field><div className="tavern-inline-toggles"><Toggle checked={entry.enabled} label="启用" onChange={(value) => update((book) => { const item = book.entries.find((entryValue) => entryValue.id === entry.id); if (item) item.enabled = value; }, selectedBuiltIn)} /><Toggle checked={entry.constant} label="常驻" disabled={selectedBuiltIn} onChange={(value) => update((book) => { const item = book.entries.find((entryValue) => entryValue.id === entry.id); if (item) item.constant = value; })} /><button className="is-danger" disabled={selectedBuiltIn} title={selectedBuiltIn ? "内置条目不可删除" : "删除条目"} onClick={async () => { if (!selectedBuiltIn && await confirmAction(`删除条目“${entry.comment || "未命名条目"}”？`)) update((book) => { book.entries = book.entries.filter((value) => value.id !== entry.id); }); }}><DeleteIcon /></button></div></div></details>)}</div>
+          <header className="tavern-worldbook-editor-head"><div><strong>{selected.name}</strong><small>{selectedBuiltIn ? tx("builtInProtected") : tx("edit")}</small></div>{selectedBuiltIn ? <span className="tavern-protected-badge is-strong"><LockIcon />{tx("protected")}</span> : <button className="tavern-danger-button" onClick={removeSelected}><DeleteIcon />{tx("deleteLorebook")}</button>}</header>
+          {selectedBuiltIn ? <section className="tavern-protected-notice is-compact"><ProtectedIcon /><div><strong>{tx("protectedContent")}</strong><p>{tx("protectedLoreHint")}</p></div></section> : null}
+          <Field label={tx("name")}><input defaultValue={selected.name} readOnly={selectedBuiltIn} onBlur={selectedBuiltIn ? undefined : (event) => update((book) => { book.name = event.target.value.trim() || tx("lorebooks"); })} /></Field>
+          <Field label={tx("description")}><textarea rows={2} defaultValue={selected.description} readOnly={selectedBuiltIn} onBlur={selectedBuiltIn ? undefined : (event) => update((book) => { book.description = event.target.value; })} /></Field>
+          <div className="tavern-parameter-grid"><Field label={tx("scanDepth")}><NumericField label={tx("scanDepth")} value={selected.scanDepth} min={1} max={128} readOnly={selectedBuiltIn} onCommit={(value) => update((book) => { book.scanDepth = Math.round(value); })} /></Field><Field label={tx("tokenBudget")}><NumericField label={tx("tokenBudget")} value={selected.tokenBudget} min={128} max={262144} readOnly={selectedBuiltIn} onCommit={(value) => update((book) => { book.tokenBudget = Math.round(value); })} /></Field></div>
+          <Toggle checked={selected.recursiveScanning} label={tx("recursiveScan")} disabled={selectedBuiltIn} onChange={(value) => update((book) => { book.recursiveScanning = value; })} />
+          <div className="tavern-section-title"><strong>{tx("entries")}</strong><button disabled={selectedBuiltIn} onClick={() => update((book) => { book.entries.push({ id: tavernId("lore"), keys: [], secondaryKeys: [], content: "", enabled: true, constant: false, selective: false, caseSensitive: false, insertionOrder: 100 + book.entries.length, priority: 100, position: "after-character", extensions: {} }); })}><AddIcon />{tx("addEntry")}</button></div>
+          <div className="tavern-lore-entries">{selected.entries.map((entry) => <details key={entry.id}><summary><span className={entry.enabled ? "is-enabled" : ""} /><strong>{entry.comment || entry.keys.join(", ") || tx("unnamedEntry")}</strong><small>{entry.constant ? tx("alwaysOn") : entry.keys.join(" · ") || tx("noKeywords")}</small>{selectedBuiltIn ? <LockIcon /> : <ChevronDownIcon />}</summary><div><Field label={tx("title")}><input defaultValue={entry.comment} readOnly={selectedBuiltIn} onBlur={selectedBuiltIn ? undefined : (event) => update((book) => { const item = book.entries.find((value) => value.id === entry.id); if (item) item.comment = event.target.value; })} /></Field><Field label={tx("keywordsComma")}><input defaultValue={entry.keys.join(", ")} readOnly={selectedBuiltIn} onBlur={selectedBuiltIn ? undefined : (event) => update((book) => { const item = book.entries.find((value) => value.id === entry.id); if (item) item.keys = event.target.value.split(/[,，]/).map((value) => value.trim()).filter(Boolean); })} /></Field><Field label={tx("content")}><textarea rows={5} defaultValue={entry.content} readOnly={selectedBuiltIn} onBlur={selectedBuiltIn ? undefined : (event) => update((book) => { const item = book.entries.find((value) => value.id === entry.id); if (item) item.content = event.target.value; })} /></Field><div className="tavern-inline-toggles"><Toggle checked={entry.enabled} label={tx("enabled")} onChange={(value) => update((book) => { const item = book.entries.find((entryValue) => entryValue.id === entry.id); if (item) item.enabled = value; }, selectedBuiltIn)} /><Toggle checked={entry.constant} label={tx("alwaysOn")} disabled={selectedBuiltIn} onChange={(value) => update((book) => { const item = book.entries.find((entryValue) => entryValue.id === entry.id); if (item) item.constant = value; })} /><button className="is-danger" disabled={selectedBuiltIn} title={selectedBuiltIn ? tx("protected") : tx("delete")} onClick={async () => { if (!selectedBuiltIn && await confirmAction(`${tx("delete")}: ${entry.comment || tx("unnamedEntry")}?`)) update((book) => { book.entries = book.entries.filter((value) => value.id !== entry.id); }); }}><DeleteIcon /></button></div></div></details>)}</div>
         </section>
       )}
     </div>
   );
 }
 
-function PersonaPanel({ workspace, conversation, selectedId, setSelectedId, updateWorkspace }: {
+function PersonaPanel({ workspace, conversation, selectedId, setSelectedId, updateWorkspace, language }: {
   workspace: AgentWorkspaceData;
   conversation?: AgentConversation;
   selectedId?: string;
   setSelectedId: (id?: string) => void;
   updateWorkspace: (mutator: (next: AgentWorkspaceData) => void, success?: string) => void;
+  language: unknown;
 }) {
+  const tx = (key: TavernUiKey, values?: Record<string, string | number>) => tavernUiText(language, key, values);
   const selected = workspace.personas.find((item) => item.id === selectedId) ?? workspace.personas[0];
   const choose = (id: string) => {
     setSelectedId(id);
@@ -1725,7 +1789,7 @@ function PersonaPanel({ workspace, conversation, selectedId, setSelectedId, upda
     });
   };
   const create = () => updateWorkspace((next) => {
-    const persona = createTavernPersona(`用户设定 ${next.personas.length + 1}`);
+    const persona = createTavernPersona(`${tx("personaTitle")} ${next.personas.length + 1}`);
     next.personas.push(persona);
     next.selectedPersonaId = persona.id;
     const chat = next.conversations.find((item) => item.id === next.selectedConversationId);
@@ -1738,21 +1802,23 @@ function PersonaPanel({ workspace, conversation, selectedId, setSelectedId, upda
   });
   return (
     <div className="tavern-panel-stack">
-      <div className="tavern-section-title"><div><strong>用户设定 / Persona</strong><small>模型会以此理解“你”是谁</small></div><IconButton label="新建" onClick={create}><AddIcon /></IconButton></div>
+      <div className="tavern-section-title"><div><strong>{tx("personaTitle")}</strong><small>{tx("personaHint")}</small></div><IconButton label={tx("create")} onClick={create}><AddIcon /></IconButton></div>
       <div className="tavern-persona-grid">{workspace.personas.map((persona) => <button key={persona.id} className={conversation?.personaId === persona.id ? "is-active" : ""} onClick={() => choose(persona.id)}><Avatar src={persona.avatarDataUrl} name={persona.name} /><strong>{persona.name}</strong>{conversation?.personaId === persona.id ? <CheckIcon /> : null}</button>)}</div>
-      {selected ? <><Field label="名称"><input defaultValue={selected.name} onBlur={(event) => update((item) => { item.name = event.target.value.trim() || "用户"; })} /></Field><Field label="身份、外貌、性格与关系"><textarea rows={8} defaultValue={selected.description} onBlur={(event) => update((item) => { item.description = event.target.value; })} placeholder="例如：你是来自异世界的旅行者，与角色初次相遇……" /></Field><Field label="关联世界书"><select value={selected.lorebookId ?? ""} onChange={(event) => update((item) => { item.lorebookId = event.target.value || undefined; })}><option value="">不关联</option>{workspace.lorebooks.map((book) => <option key={book.id} value={book.id}>{book.name}</option>)}</select></Field></> : null}
+      {selected ? <><Field label={tx("name")}><input defaultValue={selected.name} onBlur={(event) => update((item) => { item.name = event.target.value.trim() || tx("personaTitle"); })} /></Field><Field label={tx("personaDescription")}><textarea rows={8} defaultValue={selected.description} onBlur={(event) => update((item) => { item.description = event.target.value; })} placeholder={tx("personaPlaceholder")} /></Field><Field label={tx("linkedLorebook")}><SelectMenuCompat value={selected.lorebookId ?? ""} onChange={(event) => update((item) => { item.lorebookId = event.target.value || undefined; })}><option value="">{tx("notLinked")}</option>{workspace.lorebooks.map((book) => <option key={book.id} value={book.id}>{book.name}</option>)}</SelectMenuCompat></Field></> : null}
     </div>
   );
 }
 
-function ModelPanel({ draft, setDraft, models, discovering, onDiscover, onSave }: {
+function ModelPanel({ draft, setDraft, models, discovering, onDiscover, onSave, language }: {
   draft: Partial<AppSettings>;
   setDraft: (value: Partial<AppSettings>) => void;
   models: AgentDiscoveredModel[];
   discovering: boolean;
   onDiscover: () => Promise<void>;
   onSave: () => Promise<void>;
+  language: unknown;
 }) {
+  const tx = (key: TavernUiKey, values?: Record<string, string | number>) => tavernUiText(language, key, values);
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
   const modelPickerRef = useRef<HTMLDivElement>(null);
   const presetId = inferAgentProviderPreset(draft.agentApiProtocol ?? "openai-compatible", String(draft.agentApiBaseUrl ?? ""));
@@ -1792,12 +1858,12 @@ function ModelPanel({ draft, setDraft, models, discovering, onDiscover, onSave }
   }, [modelPickerOpen]);
   return (
     <div className="tavern-panel-stack">
-      <div className="tavern-section-title"><div><strong>直连模型服务</strong><small>直接连接模型 API；Key 仅保存在本机</small></div><BotIcon /></div>
-      <Field label="服务预设"><select value={presetId} onChange={(event) => selectPreset(event.target.value)}>{AGENT_PROVIDER_PRESETS.map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}</select></Field>
-      <Field label="API 协议"><select value={draft.agentApiProtocol ?? "openai-compatible"} onChange={(event) => setDraft({ ...draft, agentApiProtocol: event.target.value as AppSettings["agentApiProtocol"] })}><option value="openai-compatible">OpenAI Chat Completions</option><option value="openai-responses">OpenAI Responses</option><option value="anthropic-messages">Anthropic Messages</option><option value="google-gemini">Google Gemini</option></select></Field>
-      <Field label="API 地址"><input value={String(draft.agentApiBaseUrl ?? "")} onChange={(event) => setDraft({ ...draft, agentApiBaseUrl: event.target.value })} placeholder="https://api.deepseek.com" /></Field>
+      <div className="tavern-section-title"><div><strong>{tx("directModel")}</strong><small>{tx("directModelHint")}</small></div><BotIcon /></div>
+      <Field label={tx("servicePreset")}><SelectMenuCompat value={presetId} onChange={(event) => selectPreset(event.target.value)}>{AGENT_PROVIDER_PRESETS.map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}</SelectMenuCompat></Field>
+      <Field label={tx("apiProtocol")}><SelectMenuCompat value={draft.agentApiProtocol ?? "openai-compatible"} onChange={(event) => setDraft({ ...draft, agentApiProtocol: event.target.value as AppSettings["agentApiProtocol"] })}><option value="openai-compatible">OpenAI Chat Completions</option><option value="openai-responses">OpenAI Responses</option><option value="anthropic-messages">Anthropic Messages</option><option value="google-gemini">Google Gemini</option></SelectMenuCompat></Field>
+      <Field label={tx("apiAddress")}><input value={String(draft.agentApiBaseUrl ?? "")} onChange={(event) => setDraft({ ...draft, agentApiBaseUrl: event.target.value })} placeholder="https://api.deepseek.com" /></Field>
       <Field label="API Key"><input type="password" value={String(draft.agentApiKey ?? "")} onChange={(event) => setDraft({ ...draft, agentApiKey: event.target.value })} autoComplete="off" /></Field>
-      <Field label="模型名称">
+      <Field label={tx("modelName")}>
         <div className="tavern-model-picker" ref={modelPickerRef}>
           <div className="tavern-input-action">
             <div className="tavern-model-combobox">
@@ -1814,26 +1880,26 @@ function ModelPanel({ draft, setDraft, models, discovering, onDiscover, onSave }
                 <button
                   type="button"
                   className={modelPickerOpen ? "is-open" : ""}
-                  aria-label={modelPickerOpen ? "收起模型列表" : "展开模型列表"}
+                  aria-label={modelPickerOpen ? tx("collapseModels") : tx("expandModels")}
                   aria-expanded={modelPickerOpen}
                   onClick={() => setModelPickerOpen((open) => !open)}
                 ><ChevronDownIcon /></button>
               ) : null}
             </div>
             <button type="button" onClick={() => void discoverAndOpen()} disabled={discovering}>
-              {discovering ? <span className="tavern-spinner" /> : <RefreshIcon />}{discovering ? "检测中" : "自动检测"}
+              {discovering ? <span className="tavern-spinner" /> : <RefreshIcon />}{discovering ? tx("detecting") : tx("autoDetect")}
             </button>
           </div>
           {modelPickerOpen && models.length ? (
-            <div className="tavern-model-results" id="tavern-model-options" role="listbox" aria-label="检测到的模型">
-              <header><strong>选择模型</strong><small>检测到 {Math.min(models.length, 24)} 个</small></header>
+            <div className="tavern-model-results" id="tavern-model-options" role="listbox" aria-label={tx("detectedModels")}>
+              <header><strong>{tx("chooseModel")}</strong><small>{tx("detectedCount", { count: Math.min(models.length, 24) })}</small></header>
               <div>
                 {models.slice(0, 24).map((model) => {
                   const selected = model.id === draft.agentApiModel;
                   const limits = resolveAgentModelLimits(model, findAgentProviderPreset(presetId));
                   return (
                     <button key={model.id} type="button" role="option" aria-selected={selected} className={selected ? "is-selected" : ""} onClick={() => selectModel(model)}>
-                      <span><strong>{model.displayName}</strong><small>{limits.contextWindow.toLocaleString()} 上下文 · {limits.maxOutputTokens.toLocaleString()} 最大输出{model.vision ? " · 视觉" : ""}</small></span>
+                      <span><strong>{model.displayName}</strong><small>{tx("modelLimits", { context: limits.contextWindow.toLocaleString(), output: limits.maxOutputTokens.toLocaleString(), vision: model.vision ? tx("visionSuffix") : "" })}</small></span>
                       {selected ? <CheckIcon /> : null}
                     </button>
                   );
@@ -1843,15 +1909,15 @@ function ModelPanel({ draft, setDraft, models, discovering, onDiscover, onSave }
           ) : null}
         </div>
       </Field>
-      <div className="tavern-parameter-grid"><Field label="上下文长度"><NumericField label="上下文长度" value={Number(draft.agentContextWindow ?? 128000)} min={1024} max={4_194_304} onCommit={(value) => setDraft({ ...draft, agentContextWindow: Math.round(value) })} /></Field><Field label="最大输出"><NumericField label="最大输出" value={Number(draft.agentMaxOutputTokens ?? 8192)} min={256} max={262_144} onCommit={(value) => setDraft({ ...draft, agentMaxOutputTokens: Math.round(value) })} /></Field></div>
-      <Toggle checked={draft.agentVisionEnabled !== false} label="允许模型读取对话图片" onChange={(value) => setDraft({ ...draft, agentVisionEnabled: value })} />
-      <p className="tavern-info-card"><SettingsIcon />上下文压缩阈值会根据模型窗口和最大输出自动计算，无需手动配置。</p>
-      <div className="tavern-sticky-actions"><button className="is-primary" onClick={() => void onSave()}><CheckIcon />保存并连接</button></div>
+      <div className="tavern-parameter-grid"><Field label={tx("contextLength")}><NumericField label={tx("contextLength")} value={Number(draft.agentContextWindow ?? 128000)} min={1024} max={4_194_304} onCommit={(value) => setDraft({ ...draft, agentContextWindow: Math.round(value) })} /></Field><Field label={tx("maxOutput")}><NumericField label={tx("maxOutput")} value={Number(draft.agentMaxOutputTokens ?? 8192)} min={256} max={262_144} onCommit={(value) => setDraft({ ...draft, agentMaxOutputTokens: Math.round(value) })} /></Field></div>
+      <Toggle checked={draft.agentVisionEnabled !== false} label={tx("allowImages")} onChange={(value) => setDraft({ ...draft, agentVisionEnabled: value })} />
+      <p className="tavern-info-card"><SettingsIcon />{tx("compressionHint")}</p>
+      <div className="tavern-sticky-actions"><button className="is-primary" onClick={() => void onSave()}><CheckIcon />{tx("saveConnect")}</button></div>
     </div>
   );
 }
 
-function ImagePanel({ workspace, conversation, character, defaults, stylePresets, onSaveStylePreset, onRefreshSettings, updateVisual, updateConversation, updateMessage }: {
+function ImagePanel({ workspace, conversation, character, defaults, stylePresets, onSaveStylePreset, onRefreshSettings, updateVisual, updateConversation, updateMessage, language }: {
   workspace: AgentWorkspaceData;
   conversation?: AgentConversation;
   character?: TavernCharacter;
@@ -1862,7 +1928,9 @@ function ImagePanel({ workspace, conversation, character, defaults, stylePresets
   updateVisual: (patch: Partial<TavernCharacter["visual"]>) => void;
   updateConversation: (mutator: (chat: AgentConversation) => void) => void;
   updateMessage: (id: string, mutator: (message: AgentMessage) => void) => void;
+  language: unknown;
 }) {
+  const tx = (key: TavernUiKey, values?: Record<string, string | number>) => tavernUiText(language, key, values);
   const [userPromptDraft, setUserPromptDraft] = useState({
     negative: character?.visual.negativePrompt.trim() || DEFAULT_TAVERN_NEGATIVE_PROMPT,
     style: character?.visual.stylePrompt ?? "",
@@ -1904,23 +1972,23 @@ function ImagePanel({ workspace, conversation, character, defaults, stylePresets
     stylePrompt: character?.visual.stylePrompt ?? "",
   };
   const sizePresets = [
-    { label: "方图", width: 1024, height: 1024 },
-    { label: "横图", width: 1216, height: 832 },
-    { label: "竖图", width: 832, height: 1216 },
-    { label: "高竖", width: 1024, height: 1536 },
-    { label: "宽横", width: 1536, height: 1024 },
-    { label: "大方图", width: 1472, height: 1472 },
-    { label: "壁纸竖图", width: 1088, height: 1920 },
-    { label: "壁纸横图", width: 1920, height: 1088 },
-    { label: "小竖图", width: 512, height: 768 },
-    { label: "小横图", width: 768, height: 512 },
-    { label: "小方图", width: 640, height: 640 },
+    { label: tx("square"), width: 1024, height: 1024 },
+    { label: tx("landscape"), width: 1216, height: 832 },
+    { label: tx("portrait"), width: 832, height: 1216 },
+    { label: tx("tallPortrait"), width: 1024, height: 1536 },
+    { label: tx("wideLandscape"), width: 1536, height: 1024 },
+    { label: tx("largeSquare"), width: 1472, height: 1472 },
+    { label: tx("wallpaperPortrait"), width: 1088, height: 1920 },
+    { label: tx("wallpaperLandscape"), width: 1920, height: 1088 },
+    { label: tx("smallPortrait"), width: 512, height: 768 },
+    { label: tx("smallLandscape"), width: 768, height: 512 },
+    { label: tx("smallSquare"), width: 640, height: 640 },
   ];
   const sizeGroups = [
-    { label: "常用画幅", items: sizePresets.slice(0, 3) },
-    { label: "高清画幅", items: sizePresets.slice(3, 6) },
-    { label: "壁纸画幅", items: sizePresets.slice(6, 8) },
-    { label: "轻量画幅", items: sizePresets.slice(8) },
+    { label: tx("commonFormats"), items: sizePresets.slice(0, 3) },
+    { label: tx("hdFormats"), items: sizePresets.slice(3, 6) },
+    { label: tx("wallpaperFormats"), items: sizePresets.slice(6, 8) },
+    { label: tx("lightweightFormats"), items: sizePresets.slice(8) },
   ];
   const groupedStylePresets = useMemo(() => {
     const query = styleSearch.trim().toLocaleLowerCase();
@@ -1929,7 +1997,7 @@ function ImagePanel({ workspace, conversation, character, defaults, stylePresets
       : stylePresets;
     const groups = new Map<string, StylePromptPreset[]>();
     for (const preset of filtered) {
-      const group = preset.group?.trim() || "未分组";
+      const group = preset.group?.trim() || tx("ungrouped");
       groups.set(group, [...(groups.get(group) ?? []), preset]);
     }
     return [...groups.entries()].map(([group, items]) => ({ group, items }));
@@ -1972,7 +2040,7 @@ function ImagePanel({ workspace, conversation, character, defaults, stylePresets
     const current = await window.naiDesktop.reconcileStylePromptPresetImages(selectedStylePreset.id, selectedStylePreset.previewImages ?? []);
     const available = 3 - current.length;
     if (available <= 0) return;
-    const imported = await window.naiDesktop.importStylePromptPresetImages(selectedStylePreset.id, available, `${selectedStylePreset.name} · 参考图`);
+    const imported = await window.naiDesktop.importStylePromptPresetImages(selectedStylePreset.id, available, `${selectedStylePreset.name} · ${tx("referenceImage")}`);
     if (imported.length) await updateStylePresetImages(selectedStylePreset.id, [...current, ...imported]);
   };
   useEffect(() => {
@@ -2036,12 +2104,12 @@ function ImagePanel({ workspace, conversation, character, defaults, stylePresets
   };
   return (
     <div className="tavern-panel-stack">
-      <div className="tavern-section-title"><div><strong>对话场景生图</strong><small>模型提案后可确认参数，或开启全自动模式</small></div><ImageIcon /></div>
-      {conversation ? <div className="tavern-mode-cards"><button className={conversation.generationMode === "confirm" ? "is-active" : ""} onClick={() => updateConversation((chat) => { chat.generationMode = "confirm"; })}><CheckIcon /><strong>用户确认模式</strong><span>先展示提示词、尺寸与参数，你确认后才扣除 Anlas 生图。</span></button><button className={conversation.generationMode === "auto" ? "is-active" : ""} onClick={() => updateConversation((chat) => { chat.generationMode = "auto"; })}><MagicIcon /><strong>全自动模式</strong><span>模型提出场景图后自动调用 NovelAI，无需再次确认。</span></button></div> : null}
+      <div className="tavern-section-title"><div><strong>{tx("imageSettingsTitle")}</strong><small>{tx("imageSettingsHint")}</small></div><ImageIcon /></div>
+      {conversation ? <div className="tavern-mode-cards"><button className={conversation.generationMode === "confirm" ? "is-active" : ""} onClick={() => updateConversation((chat) => { chat.generationMode = "confirm"; })}><CheckIcon /><strong>{tx("userConfirmMode")}</strong><span>{tx("userConfirmHint")}</span></button><button className={conversation.generationMode === "auto" ? "is-active" : ""} onClick={() => updateConversation((chat) => { chat.generationMode = "auto"; })}><MagicIcon /><strong>{tx("autoMode")}</strong><span>{tx("autoModeHint")}</span></button></div> : null}
       {character ? (
         <section className="tavern-image-parameter-card">
           <header>
-            <div><strong>本次创作参数</strong><small>手动修改后会作为后续对话与生图提案的默认值</small></div>
+            <div><strong>{tx("sessionParams")}</strong><small>{tx("sessionParamsHint")}</small></div>
             <button type="button" onClick={() => updateVisual({
               model: defaults.model,
               width: defaults.width,
@@ -2050,33 +2118,33 @@ function ImagePanel({ workspace, conversation, character, defaults, stylePresets
               scale: defaults.cfgScale,
               sampler: defaults.sampler,
               count: 1,
-            })}><RefreshIcon />同步生图页默认</button>
+            })}><RefreshIcon />{tx("syncDefaults")}</button>
           </header>
-          <Field label="NovelAI 模型">
-            <select value={runtime.model} onChange={(event) => updateVisual({ model: event.target.value })}>
+          <Field label={tx("naiModel")}>
+            <SelectMenuCompat value={runtime.model} onChange={(event) => updateVisual({ model: event.target.value })}>
               {NAI_MODELS.map((model) => <option key={model.value} value={model.value}>{model.label}</option>)}
-            </select>
+            </SelectMenuCompat>
           </Field>
           <section className="tavern-user-prompt-settings">
-            <header><div><strong>用户提示词设置</strong><small>AI 只生成正面提示词，不会改动下面两项</small></div></header>
-            <Field label="风格提示词">
+            <header><div><strong>{tx("userPromptSettings")}</strong><small>{tx("userPromptHint")}</small></div></header>
+            <Field label={tx("stylePrompt")}>
               <textarea
                 rows={3}
                 value={userPromptDraft.style}
                 onChange={(event) => setUserPromptDraft((current) => ({ ...current, style: event.target.value }))}
-                placeholder="例如：artist:name, 0.8::artist:another::, cinematic lighting"
+                placeholder={`e.g. artist:name, 0.8::artist:another::, cinematic lighting`}
               />
             </Field>
             <div className="style-preset-row tavern-shared-style-picker">
               <div className="style-preset-picker" ref={stylePresetPickerRef}>
                 <button type="button" className="style-preset-trigger" aria-haspopup="listbox" aria-expanded={stylePresetMenuOpen} onClick={toggleStylePresetMenu}>
-                  <span>{selectedStylePreset?.name ?? "从风格提示词列表选择…"}</span>
+                  <span>{selectedStylePreset?.name ?? tx("chooseStyle")}</span>
                   <ChevronDownIcon />
                 </button>
               </div>
               <div className="style-preset-actions">
-                <button type="button" className="btn secondary" onClick={() => void importSelectedStylePreview()} disabled={!selectedStylePreset || (selectedStylePreset.previewImages ?? []).length >= 3}><ImageIcon />参考图 {selectedStylePreset ? `${(selectedStylePreset.previewImages ?? []).length}/3` : ""}</button>
-                <button type="button" className="btn secondary" onClick={() => void onSaveStylePreset(userPromptDraft.style)} disabled={!userPromptDraft.style.trim()}><AddIcon />加入列表</button>
+                <button type="button" className="btn secondary" onClick={() => void importSelectedStylePreview()} disabled={!selectedStylePreset || (selectedStylePreset.previewImages ?? []).length >= 3}><ImageIcon />{tx("referenceImage")} {selectedStylePreset ? `${(selectedStylePreset.previewImages ?? []).length}/3` : ""}</button>
+                <button type="button" className="btn secondary" onClick={() => void onSaveStylePreset(userPromptDraft.style)} disabled={!userPromptDraft.style.trim()}><AddIcon />{tx("addToList")}</button>
               </div>
             </div>
             {stylePresetMenuOpen ? createPortal((
@@ -2086,7 +2154,7 @@ function ImagePanel({ workspace, conversation, character, defaults, stylePresets
                 role="listbox"
                 style={{ left: stylePresetMenuPosition.left, top: stylePresetMenuPosition.top, width: stylePresetMenuPosition.width }}
               >
-                <label className="tavern-style-menu-search"><SearchIcon /><input value={styleSearch} onChange={(event) => setStyleSearch(event.target.value)} placeholder="搜索名称、分组或风格 Tag" /></label>
+                <label className="tavern-style-menu-search"><SearchIcon /><input value={styleSearch} onChange={(event) => setStyleSearch(event.target.value)} placeholder={tx("searchStyles")} /></label>
                 <div className="style-preset-menu-list">
                   {groupedStylePresets.length ? groupedStylePresets.map(({ group, items }) => {
                     const expanded = Boolean(styleSearch.trim()) || selectedStylePresetGroup === group;
@@ -2116,14 +2184,14 @@ function ImagePanel({ workspace, conversation, character, defaults, stylePresets
                                 }}
                               >
                                 <span>{preset.name}</span>
-                                {(preset.previewImages ?? []).length ? <small><ImageIcon />{(preset.previewImages ?? []).length}/3</small> : <small>无参考图</small>}
+                                {(preset.previewImages ?? []).length ? <small><ImageIcon />{(preset.previewImages ?? []).length}/3</small> : <small>{tx("noReference")}</small>}
                               </button>
                             </div>
                           ))}
                         </div> : null}
                       </section>
                     );
-                  }) : <p>没有匹配的风格提示词</p>}
+                  }) : <p>{tx("noStyles")}</p>}
                 </div>
                 {hoveredStylePreset && (hoveredStylePreset.previewImages ?? []).length ? (
                   <aside className="style-preset-hover-preview">
@@ -2133,7 +2201,7 @@ function ImagePanel({ workspace, conversation, character, defaults, stylePresets
                 ) : null}
               </div>
             ), document.body) : null}
-            <Field label="负面提示词">
+            <Field label={tx("negativePrompt")}>
               <textarea
               rows={5}
               value={userPromptDraft.negative}
@@ -2143,9 +2211,9 @@ function ImagePanel({ workspace, conversation, character, defaults, stylePresets
             <button type="button" className="tavern-reset-negative" onClick={() => {
               setUserPromptDraft((current) => ({ ...current, negative: DEFAULT_TAVERN_NEGATIVE_PROMPT }));
               updateVisual({ negativePrompt: DEFAULT_TAVERN_NEGATIVE_PROMPT });
-            }}><RefreshIcon />恢复默认负面词</button>
+            }}><RefreshIcon />{tx("restoreNegative")}</button>
           </section>
-          <div className="tavern-size-groups" aria-label="常用图片尺寸">
+          <div className="tavern-size-groups" aria-label={tx("commonSizes")}>
             {sizeGroups.map((group) => <section key={group.label}>
               <header><strong>{group.label}</strong></header>
               <div className="tavern-size-presets">
@@ -2163,23 +2231,23 @@ function ImagePanel({ workspace, conversation, character, defaults, stylePresets
             </section>)}
           </div>
           <div className="tavern-image-parameter-grid">
-            <Field label="宽度"><NumericField label="图片宽度" value={runtime.width} min={64} max={4096} step={64} onCommit={(width) => updateVisual({ width })} /></Field>
-            <Field label="高度"><NumericField label="图片高度" value={runtime.height} min={64} max={4096} step={64} onCommit={(height) => updateVisual({ height })} /></Field>
-            <Field label="采样步数"><NumericField label="采样步数" value={runtime.steps} min={1} max={50} onCommit={(steps) => updateVisual({ steps })} /></Field>
+            <Field label={tx("width")}><NumericField label={tx("imageWidth")} value={runtime.width} min={64} max={4096} step={64} onCommit={(width) => updateVisual({ width })} /></Field>
+            <Field label={tx("height")}><NumericField label={tx("imageHeight")} value={runtime.height} min={64} max={4096} step={64} onCommit={(height) => updateVisual({ height })} /></Field>
+            <Field label={tx("steps")}><NumericField label={tx("steps")} value={runtime.steps} min={1} max={50} onCommit={(steps) => updateVisual({ steps })} /></Field>
             <Field label="CFG Scale"><NumericField label="CFG Scale" value={runtime.scale} min={0} max={10} step={0.1} onCommit={(scale) => updateVisual({ scale })} /></Field>
-            <Field label="生成张数"><NumericField label="生成张数" value={runtime.count} min={1} max={8} onCommit={(count) => updateVisual({ count })} /></Field>
+            <Field label={tx("imageCount")}><NumericField label={tx("imageCount")} value={runtime.count} min={1} max={8} onCommit={(count) => updateVisual({ count })} /></Field>
           </div>
-          <Field label="采样器">
-            <select value={runtime.sampler} onChange={(event) => updateVisual({ sampler: event.target.value })}>
+          <Field label={tx("sampler")}>
+            <SelectMenuCompat value={runtime.sampler} onChange={(event) => updateVisual({ sampler: event.target.value })}>
               {NAI_SAMPLERS.map((sampler) => <option key={sampler.value} value={sampler.value}>{sampler.label}</option>)}
-            </select>
+            </SelectMenuCompat>
           </Field>
-          <p className="tavern-parameter-chat-hint"><MessageIcon /><span>也可以直接对话调整，例如“改成 832×1216、30 步、生成 2 张”。AI 会沿用最近的画面方案，只更新你指定的参数。</span></p>
+          <p className="tavern-parameter-chat-hint"><MessageIcon /><span>{tx("chatAdjustHint")}</span></p>
         </section>
       ) : null}
-      <button className="tavern-wide-action" onClick={createProposal} disabled={!lastAssistant || !character}><MagicIcon />为最近一条回复创建生图提案</button>
-      <section className="tavern-info-card"><SparklesIcon /><span><strong>Langbai 角色卡扩展</strong><br />角色卡可保存专属正/负面提示词、画风、尺寸与情绪提示词；导出 PNG / JSON / CHARX 时一并保留。</span></section>
-      <div className="tavern-image-summary"><strong>当前对话</strong><span>{conversation?.messages.filter((item) => item.imageProposal).length ?? 0} 个生图提案</span><span>{conversation?.messages.reduce((sum, item) => sum + item.attachments.filter((attachment) => attachment.kind === "image").length, 0) ?? 0} 张图片</span><span>{workspace.characters.length} 个角色卡</span></div>
+      <button className="tavern-wide-action" onClick={createProposal} disabled={!lastAssistant || !character}><MagicIcon />{tx("createFromLatest")}</button>
+      <section className="tavern-info-card"><SparklesIcon /><span><strong>{tx("extensionTitle")}</strong><br />{tx("extensionHint")}</span></section>
+      <div className="tavern-image-summary"><strong>{tx("currentChat")}</strong><span>{tx("proposalsCount", { count: conversation?.messages.filter((item) => item.imageProposal).length ?? 0 })}</span><span>{tx("imagesCount", { count: conversation?.messages.reduce((sum, item) => sum + item.attachments.filter((attachment) => attachment.kind === "image").length, 0) ?? 0 })}</span><span>{tx("charactersCount", { count: workspace.characters.length })}</span></div>
     </div>
   );
 }

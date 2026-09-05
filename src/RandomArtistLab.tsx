@@ -7,7 +7,7 @@ import {
   type InputHTMLAttributes,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { AppPortal, Button, SelectMenu } from "./components/ui";
+import { AppPortal, Button, SelectMenu, SelectMenuCompat } from "./components/ui";
 import { Icon } from "./components/icons";
 import { QualityPresetControl } from "./components/QualityPresetControl";
 import { PositivePromptPresetControl } from "./PositivePromptPresets";
@@ -1394,7 +1394,7 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
         </span>
       </summary>
       <div className="random-generation-grid">
-        <label className="wide"><span>{paramText.model}</span><select value={session.generationParams.model} onChange={(event) => patchGeneration("model", event.target.value as GenerateParams["model"])}>{NAI_MODELS.map((model) => <option key={model.value} value={model.value}>{model.value}</option>)}</select></label>
+        <label className="wide"><span>{paramText.model}</span><SelectMenuCompat value={session.generationParams.model} onChange={(event) => patchGeneration("model", event.target.value as GenerateParams["model"])}>{NAI_MODELS.map((model) => <option key={model.value} value={model.value}>{model.value}</option>)}</SelectMenuCompat></label>
         <fieldset className="random-size-fields">
           <legend>{paramText.size}</legend>
           <div className="random-size-presets" role="group" aria-label={paramText.size}>
@@ -1426,9 +1426,9 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
         <label><span>{paramText.steps}</span><NumericDraftInput min={1} max={50} step={1} value={session.generationParams.steps} normalize={(value) => Math.max(1, Math.min(50, Math.floor(value)))} onCommit={(value) => patchGeneration("steps", value)} /></label>
         <label><span>{paramText.cfg}</span><NumericDraftInput min={1} max={10} step={0.1} value={session.generationParams.cfgScale} onCommit={(value) => patchGeneration("cfgScale", value)} /></label>
         <label><span>{paramText.rescale}</span><NumericDraftInput min={0} max={1} step={0.01} value={session.generationParams.cfgRescale} onCommit={(value) => patchGeneration("cfgRescale", value)} /></label>
-        <label><span>{paramText.sampler}</span><select value={session.generationParams.sampler} onChange={(event) => patchGeneration("sampler", event.target.value as GenerateParams["sampler"])}>{NAI_SAMPLERS.map((sampler) => <option key={sampler.value} value={sampler.value}>{sampler.value}</option>)}</select></label>
-        {supportsNAINoiseScheduleControl(session.generationParams.model) ? <label><span>{paramText.noise}</span><select value={session.generationParams.noiseSchedule} onChange={(event) => patchGeneration("noiseSchedule", event.target.value)}><option value="native">native</option><option value="karras">karras</option><option value="exponential">exponential</option></select></label> : null}
-        <label><span>{paramText.uc}</span><select value={session.generationParams.ucPreset} onChange={(event) => patchGeneration("ucPreset", Number(event.target.value) as GenerateParams["ucPreset"])}>{NAI_UC_PRESETS.map((preset, index) => <option key={preset.value} value={preset.value}>{preset.value} · {ucLabels[index]}</option>)}</select></label>
+        <label><span>{paramText.sampler}</span><SelectMenuCompat value={session.generationParams.sampler} onChange={(event) => patchGeneration("sampler", event.target.value as GenerateParams["sampler"])}>{NAI_SAMPLERS.map((sampler) => <option key={sampler.value} value={sampler.value}>{sampler.value}</option>)}</SelectMenuCompat></label>
+        {supportsNAINoiseScheduleControl(session.generationParams.model) ? <label><span>{paramText.noise}</span><SelectMenuCompat value={session.generationParams.noiseSchedule} onChange={(event) => patchGeneration("noiseSchedule", event.target.value)}><option value="native">native</option><option value="karras">karras</option><option value="exponential">exponential</option></SelectMenuCompat></label> : null}
+        <label><span>{paramText.uc}</span><SelectMenuCompat value={session.generationParams.ucPreset} onChange={(event) => patchGeneration("ucPreset", Number(event.target.value) as GenerateParams["ucPreset"])}>{NAI_UC_PRESETS.map((preset, index) => <option key={preset.value} value={preset.value}>{preset.value} · {ucLabels[index]}</option>)}</SelectMenuCompat></label>
         <label className="wide"><span>{paramText.negative}</span><textarea value={session.generationParams.negativePrompt} onChange={(event) => patchGeneration("negativePrompt", event.target.value)} /></label>
         <QualityPresetControl className="wide" language={language} model={session.generationParams.model} value={session.generationParams.qualityPreset} transparentBackground={session.generationParams.transparentBackground} onChange={(value) => patchGeneration("qualityPreset", value)} onTransparentChange={(value) => patchGeneration("transparentBackground", value)} />
         <div className="random-generation-toggles wide">

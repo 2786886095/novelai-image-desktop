@@ -4,10 +4,12 @@ import 'dart:math';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../billing/anlas.dart';
 import '../i18n/app_locales.dart';
@@ -21,6 +23,7 @@ import '../state/app_state.dart';
 import '../ui/quality_preset_control.dart';
 import '../ui/before_after_compare.dart';
 import '../ui/studio_shell.dart';
+import '../ui/studio_theme.dart';
 import '../ui/zoomable_image.dart';
 import 'reference_catalog_panel.dart';
 import 'positive_prompt_preset_sheet.dart';
@@ -190,7 +193,7 @@ Future<void> _showOpusUsageDialog(BuildContext context) async {
                     child: LinearProgressIndicator(
                       value: percent / 100,
                       minHeight: 12,
-                      borderRadius: BorderRadius.circular(99),
+                      borderRadius: BorderRadius.circular(StudioRadii.pill),
                     ),
                   ),
                   const SizedBox(height: 14),
@@ -1952,7 +1955,7 @@ class _PreviewCard extends StatelessWidget {
                               ? state.generationPreviewProgress
                               : null,
                           minHeight: 5,
-                          borderRadius: BorderRadius.circular(99),
+                          borderRadius: BorderRadius.circular(StudioRadii.pill),
                         ),
                       ],
                     ),
@@ -3605,15 +3608,15 @@ class _ReferencePresetLibraryPanelState
     extends State<ReferencePresetLibraryPanel> {
   static const _allGroups = '__all__';
   static const _ungrouped = '__ungrouped__';
-  static const _presetPageSize = 24;
-  static const _autoCollapseThreshold = 80;
+  static const _presetPageSizeKey = 'reference_preset_page_size_v1';
+  static const _presetPageSizes = [12, 24, 48, 60];
   String _group = _allGroups;
   ReferencePresetKind? _kind;
   bool _busy = false;
   String _query = '';
   int _section = 0;
-  int _visiblePresetLimit = _presetPageSize;
-  bool? _listExpandedOverride;
+  int _presetPage = 1;
+  int _presetPageSize = 12;
   final Set<String> _selectedIds = <String>{};
 
   Widget _presetImage(String path) => path.startsWith('asset:')
@@ -3632,14 +3635,19 @@ class _ReferencePresetLibraryPanelState
         );
 
   void _resetVisiblePresets() {
-    _visiblePresetLimit = _presetPageSize;
-    _listExpandedOverride = null;
+    _presetPage = 1;
   }
 
   @override
   void initState() {
     super.initState();
     _kind = widget.allowedKind;
+    SharedPreferences.getInstance().then((prefs) {
+      final stored = prefs.getInt(_presetPageSizeKey);
+      if (mounted && stored != null && _presetPageSizes.contains(stored)) {
+        setState(() => _presetPageSize = stored);
+      }
+    });
   }
 
   Future<void> _addPreset(BuildContext context) async {
@@ -4172,9 +4180,13 @@ class _ReferencePresetLibraryPanelState
           matchesQuery;
     }).toList()
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    final listExpanded =
-        _listExpandedOverride ?? presets.length <= _autoCollapseThreshold;
-    final visiblePresets = presets.take(_visiblePresetLimit).toList();
+    final presetPageCount = max(1, (presets.length / _presetPageSize).ceil());
+    final safePresetPage = _presetPage.clamp(1, presetPageCount).toInt();
+    final presetStart = (safePresetPage - 1) * _presetPageSize;
+    final visiblePresets = presets
+        .skip(presetStart)
+        .take(_presetPageSize)
+        .toList(growable: false);
 
     Widget presetCard(ReferencePreset preset) {
       final detail = preset.kind == ReferencePresetKind.vibe
@@ -4609,23 +4621,27 @@ class _ReferencePresetLibraryPanelState
                         ),
                         Text(countText(
                             'referencePresets.presetCount', presets.length)),
-                        const SizedBox(width: 4),
-                        IconButton(
-                          key: const ValueKey('reference-preset-list-toggle'),
-                          tooltip: t(listExpanded
-                              ? 'referencePresets.collapseList'
-                              : 'referencePresets.expandList'),
-                          onPressed: presets.isEmpty
-                              ? null
-                              : () => setState(() {
-                                    _listExpandedOverride = !listExpanded;
-                                    if (!listExpanded) {
-                                      _visiblePresetLimit = _presetPageSize;
-                                    }
-                                  }),
-                          icon: Icon(listExpanded
-                              ? Icons.expand_less
-                              : Icons.expand_more),
+                        const SizedBox(width: 8),
+                        DropdownButton<int>(
+                          value: _presetPageSize,
+                          underline: const SizedBox.shrink(),
+                          items: _presetPageSizes
+                              .map((value) => DropdownMenuItem(
+                                    value: value,
+                                    child: Text(t('referencePresets.pageSize')
+                                        .replaceAll('{count}', '$value')),
+                                  ))
+                              .toList(),
+                          onChanged: (value) {
+                            if (value == null) return;
+                            setState(() {
+                              _presetPageSize = value;
+                              _presetPage = 1;
+                            });
+                            SharedPreferences.getInstance().then(
+                              (prefs) => prefs.setInt(_presetPageSizeKey, value),
+                            );
+                          },
                         ),
                       ],
                     ),
@@ -4650,48 +4666,6 @@ class _ReferencePresetLibraryPanelState
                         ),
                       ),
                     )
-                  else if (!listExpanded)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                      child: Card(
-                        margin: EdgeInsets.zero,
-                        color:
-                            Theme.of(context).colorScheme.surfaceContainerLow,
-                        child: Padding(
-                          padding: const EdgeInsets.all(14),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Icon(Icons.photo_library_outlined),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Text(
-                                      t('referencePresets.largeLibraryHint')
-                                          .replaceAll(
-                                              '{count}', '${presets.length}'),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 12),
-                              FilledButton.tonalIcon(
-                                key: const ValueKey(
-                                    'reference-preset-list-expand'),
-                                onPressed: () => setState(() {
-                                  _listExpandedOverride = true;
-                                  _visiblePresetLimit = _presetPageSize;
-                                }),
-                                icon: const Icon(Icons.expand_more),
-                                label: Text(t('referencePresets.expandList')),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    )
                   else ...[
                     GridView.builder(
                       shrinkWrap: true,
@@ -4708,23 +4682,60 @@ class _ReferencePresetLibraryPanelState
                       itemBuilder: (_, index) =>
                           presetCard(visiblePresets[index]),
                     ),
-                    if (visiblePresets.length < presets.length)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
-                        child: SizedBox(
-                          width: double.infinity,
-                          child: OutlinedButton.icon(
-                            key: const ValueKey('reference-preset-load-more'),
-                            onPressed: () => setState(() {
-                              _visiblePresetLimit += _presetPageSize;
-                            }),
-                            icon: const Icon(Icons.expand_more),
-                            label: Text(
-                              '${t('referencePresets.loadMore')} · ${visiblePresets.length}/${presets.length}',
-                            ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+                      child: Wrap(
+                        alignment: WrapAlignment.center,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          OutlinedButton(
+                            onPressed: safePresetPage <= 1
+                                ? null
+                                : () => setState(() => _presetPage = safePresetPage - 1),
+                            child: Text(t('referencePresets.previousPage')),
                           ),
-                        ),
+                          OutlinedButton(
+                            onPressed: () async {
+                              final controller = TextEditingController(text: '$safePresetPage');
+                              final chosen = await showDialog<int>(
+                                context: context,
+                                builder: (dialogContext) => AlertDialog(
+                                  title: Text(t('referencePresets.pageRange')
+                                      .replaceAll('{pages}', '$presetPageCount')),
+                                  content: TextField(
+                                    controller: controller,
+                                    autofocus: true,
+                                    keyboardType: TextInputType.number,
+                                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                    decoration: InputDecoration(labelText: t('referencePresets.choosePage')),
+                                    onSubmitted: (value) => Navigator.pop(dialogContext, int.tryParse(value)),
+                                  ),
+                                  actions: [
+                                    TextButton(onPressed: () => Navigator.pop(dialogContext), child: Text(t('common.cancel'))),
+                                    FilledButton(onPressed: () => Navigator.pop(dialogContext, int.tryParse(controller.text)), child: Text(t('referencePresets.jumpPage'))),
+                                  ],
+                                ),
+                              );
+                              controller.dispose();
+                              if (chosen != null && mounted) {
+                                setState(() => _presetPage = chosen.clamp(1, presetPageCount).toInt());
+                              }
+                            },
+                            child: Text(t('referencePresets.pagePosition')
+                                .replaceAll('{page}', '$safePresetPage')
+                                .replaceAll('{pages}', '$presetPageCount')),
+                          ),
+                          OutlinedButton(
+                            onPressed: safePresetPage >= presetPageCount
+                                ? null
+                                : () => setState(() => _presetPage = safePresetPage + 1),
+                            child: Text(t('referencePresets.nextPage')),
+                          ),
+                        ],
                       ),
+                    ),
                   ],
                 ],
                 if (widget.standalone && _section == 0)

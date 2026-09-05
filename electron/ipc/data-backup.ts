@@ -108,6 +108,9 @@ const API_SETTING_KEYS: Array<keyof AppSettings> = [
   "translateProvider",
   "baiduAppId",
   "baiduSecret",
+  "translateAiApiUrl",
+  "translateAiApiKey",
+  "translateAiModel",
 ];
 const PRESET_SETTING_KEYS: Array<keyof AppSettings> = [
   "promptTemplates",

@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -6,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../i18n/app_locales.dart';
@@ -331,6 +334,18 @@ String _friendlyGalleryError(
   };
 }
 
+({String summary, String perPage, String perPageValue, String choosePage, String pageRange, String pagePosition, String jump, String cancel, String search, String refresh})
+    _artistRankingText(Object? language) => switch (normalizeAppLocaleCode(language)) {
+  'zh-TW' => (summary: '收錄 Danbooru 全部有效畫師 · 共 {count} 位', perPage: '每頁畫師', perPageValue: '每頁 {count} 位', choosePage: '選擇頁數', pageRange: '第 1–{pages} 頁', pagePosition: '第 {page} / {pages} 頁', jump: '跳轉', cancel: '取消', search: '搜尋畫師 Tag', refresh: '手動更新'),
+  'en-US' => (summary: 'All active Danbooru artists · {count} total', perPage: 'Artists per page', perPageValue: '{count} per page', choosePage: 'Choose page', pageRange: 'Pages 1–{pages}', pagePosition: 'Page {page} of {pages}', jump: 'Go', cancel: 'Cancel', search: 'Search artist tags', refresh: 'Update'),
+  'ja-JP' => (summary: 'Danbooru の有効な画家をすべて収録 · 全 {count} 人', perPage: '1ページの画家数', perPageValue: '1ページ {count} 人', choosePage: 'ページを選択', pageRange: '1–{pages} ページ', pagePosition: '{page} / {pages} ページ', jump: '移動', cancel: 'キャンセル', search: '画家タグを検索', refresh: '今すぐ更新'),
+  'ko-KR' => (summary: 'Danbooru의 모든 활성 작가 수록 · 총 {count}명', perPage: '페이지당 작가', perPageValue: '페이지당 {count}명', choosePage: '페이지 선택', pageRange: '1–{pages}페이지', pagePosition: '{page} / {pages}페이지', jump: '이동', cancel: '취소', search: '작가 태그 검색', refresh: '지금 업데이트'),
+  _ => (summary: '收录 Danbooru 全部有效画师 · 共 {count} 位', perPage: '每页画师', perPageValue: '每页 {count} 位', choosePage: '选择页数', pageRange: '第 1–{pages} 页', pagePosition: '第 {page} / {pages} 页', jump: '跳转', cancel: '取消', search: '搜索画师 Tag', refresh: '手动更新'),
+};
+
+String _replaceArtistText(String value, Map<String, Object> fields) => fields.entries
+    .fold(value, (output, entry) => output.replaceAll('{${entry.key}}', '${entry.value}'));
+
 class OnlineGalleryScreen extends StatefulWidget {
   const OnlineGalleryScreen({super.key});
 
@@ -339,6 +354,9 @@ class OnlineGalleryScreen extends StatefulWidget {
 }
 
 class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
+  static const _artistRankingPageSizeKey =
+      'online_gallery_artist_ranking_page_size';
+  static const _artistRankingPageSizes = [12, 24, 48, 60];
   final service = OnlineGalleryService();
   final artistService = ArtistTagService();
   final query = TextEditingController();
@@ -352,14 +370,40 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
   int aitagEpoch = 0;
   List<ArtistTagRecord> artistRanking = const [];
   DateTime? artistRankingUpdatedAt;
+  int artistRankingPage = 1;
+  int artistRankingPageSize = 12;
+  int artistRankingTotal = 0;
+  Timer? artistSearchDebounce;
   int expandedArtistId = 0;
   final Map<int, List<String>> artistPreviews = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _restoreArtistRankingPageSize();
+  }
+
+  Future<void> _restoreArtistRankingPageSize() async {
+    final preferences = await SharedPreferences.getInstance();
+    final saved = preferences.getInt(_artistRankingPageSizeKey);
+    if (!mounted || !_artistRankingPageSizes.contains(saved)) return;
+    setState(() => artistRankingPageSize = saved!);
+  }
+
+  Future<void> _setArtistRankingPageSize(int value) async {
+    if (!_artistRankingPageSizes.contains(value)) return;
+    await SharedPreferences.getInstance()
+        .then((preferences) => preferences.setInt(_artistRankingPageSizeKey, value));
+    if (!mounted) return;
+    await _loadArtistRanking(page: 1, pageSize: value);
+  }
 
   @override
   void dispose() {
     query.dispose();
     scrollController.dispose();
     service.close();
+    artistSearchDebounce?.cancel();
     super.dispose();
   }
 
@@ -379,27 +423,64 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
     }
   }
 
-  Future<void> _loadArtistRanking({bool force = false}) async {
+  Future<void> _loadArtistRanking({
+    bool force = false,
+    int? page,
+    int? pageSize,
+    String? search,
+  }) async {
     setState(() {
       loading = true;
       error = '';
     });
     try {
       final settings = context.read<AppState>().settings;
-      final items = await artistService.popular(settings,
-          limit: 1000, force: force, includeCurated: false);
-      final updatedAt = await artistService.lastUpdatedAt();
+      final result = await artistService.rankingPage(
+        settings,
+        page: page ?? artistRankingPage,
+        pageSize: pageSize ?? artistRankingPageSize,
+        query: search ?? query.text,
+        force: force,
+      );
       if (!mounted) return;
-      items.sort((a, b) => b.postCount.compareTo(a.postCount));
       setState(() {
-        artistRanking = items;
-        artistRankingUpdatedAt = updatedAt;
+        artistRanking = result.items;
+        artistRankingUpdatedAt = result.updatedAt;
+        artistRankingPage = result.page;
+        artistRankingPageSize = result.pageSize;
+        artistRankingTotal = result.total;
       });
     } catch (exception) {
       if (mounted) setState(() => error = exception.toString());
     } finally {
       if (mounted) setState(() => loading = false);
     }
+  }
+
+  Future<void> _chooseArtistPage(int pageCount) async {
+    final labels = _artistRankingText(context.read<AppState>().settings.language);
+    final controller = TextEditingController(text: '$artistRankingPage');
+    final chosen = await showDialog<int>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(_replaceArtistText(labels.pageRange, {'pages': pageCount})),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          decoration: InputDecoration(labelText: labels.choosePage),
+          onSubmitted: (value) => Navigator.pop(dialogContext, int.tryParse(value)),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: Text(labels.cancel)),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, int.tryParse(controller.text)), child: Text(labels.jump)),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (chosen == null || !mounted) return;
+    await _loadArtistRanking(page: chosen.clamp(1, pageCount).toInt());
   }
 
   Future<void> _search(int page) async {
@@ -539,12 +620,16 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
 
   Widget _buildArtistRanking(
       BuildContext context, _GalleryText text, String language) {
-    final needle = query.text.trim().toLowerCase().replaceAll(' ', '_');
-    final rows = needle.isEmpty
-        ? artistRanking
-        : artistRanking
-            .where((item) => item.name.toLowerCase().contains(needle))
-            .toList();
+    final labels = _artistRankingText(language);
+    final updatedLabel = switch (normalizeAppLocaleCode(language)) {
+      'zh-TW' => '更新時間',
+      'en-US' => 'Updated',
+      'ja-JP' => '更新',
+      'ko-KR' => '업데이트',
+      _ => '更新时间',
+    };
+    final rows = artistRanking;
+    final pageCount = math.max(1, (artistRankingTotal / artistRankingPageSize).ceil());
     if (loading && artistRanking.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -562,41 +647,62 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
         child: Column(children: [
           TextField(
             controller: query,
-            onChanged: (_) => setState(() {}),
-            decoration: const InputDecoration(
-              prefixIcon: Icon(Icons.search),
-              hintText: '搜索画师 Tag',
+            onChanged: (value) {
+              artistSearchDebounce?.cancel();
+              artistSearchDebounce = Timer(const Duration(milliseconds: 350),
+                  () => _loadArtistRanking(page: 1, search: value));
+            },
+            decoration: InputDecoration(
+              prefixIcon: const Icon(Icons.search),
+              hintText: labels.search,
             ),
           ),
           const SizedBox(height: 8),
-          Row(children: [
-            Expanded(
-                child: Text(
-              '按 Danbooru 收录作品数排序 · ${rows.length} 位\n更新时间：${artistRankingUpdatedAt?.toLocal().toString().replaceFirst(RegExp(r'\.\d+$'), '') ?? '—'}',
+          Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            Expanded(child: Text(
+              '${_replaceArtistText(labels.summary, {'count': artistRankingTotal})}\n$updatedLabel: ${artistRankingUpdatedAt?.toLocal().toString().replaceFirst(RegExp(r'\.\d+$'), '') ?? '—'}',
               style: Theme.of(context).textTheme.bodySmall,
             )),
+            SizedBox(
+              width: 150,
+              child: DropdownButtonFormField<int>(
+                value: artistRankingPageSize,
+                isExpanded: true,
+                decoration: InputDecoration(labelText: labels.perPage),
+                items: _artistRankingPageSizes
+                    .map((value) => DropdownMenuItem(value: value, child: Text(_replaceArtistText(labels.perPageValue, {'count': value}))))
+                    .toList(),
+                onChanged: loading ? null : (value) {
+                  if (value != null) _setArtistRankingPageSize(value);
+                },
+              ),
+            ),
+            const SizedBox(width: 8),
             OutlinedButton.icon(
-              onPressed: loading ? null : () => _loadArtistRanking(force: true),
+              onPressed: loading ? null : () => _loadArtistRanking(force: true, page: artistRankingPage),
               icon: loading
                   ? const SizedBox.square(
                       dimension: 16,
                       child: CircularProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.refresh, size: 18),
-              label: const Text('手动更新'),
+              label: Text(labels.refresh),
             ),
           ]),
         ]),
       ),
+      if (loading && artistRanking.isNotEmpty) const LinearProgressIndicator(minHeight: 2),
       Expanded(
-          child: ListView.builder(
+          child: RefreshIndicator(
+              onRefresh: () => _loadArtistRanking(force: true),
+              child: ListView.builder(
         key: const PageStorageKey('artist-ranking-list'),
+        physics: const AlwaysScrollableScrollPhysics(),
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         itemCount: rows.length,
         itemExtent: expandedArtistId == 0 ? 76 : null,
         itemBuilder: (context, index) {
           final artist = rows[index];
-          final rank =
-              artistRanking.indexWhere((item) => item.id == artist.id) + 1;
+          final rank = (artistRankingPage - 1) * artistRankingPageSize + index + 1;
           final expanded = expandedArtistId == artist.id;
           final previews = artistPreviews[artist.id];
           return RepaintBoundary(
@@ -676,7 +782,33 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
                             )),
           ]));
         },
-      )),
+      ))),
+      SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            OutlinedButton(
+              onPressed: loading || artistRankingPage <= 1
+                  ? null
+                  : () => _loadArtistRanking(page: artistRankingPage - 1),
+              child: Text(text.previous),
+            ),
+            const SizedBox(width: 8),
+            OutlinedButton(
+              onPressed: loading ? null : () => _chooseArtistPage(pageCount),
+              child: Text(_replaceArtistText(labels.pagePosition, {'page': artistRankingPage, 'pages': pageCount})),
+            ),
+            const SizedBox(width: 8),
+            OutlinedButton(
+              onPressed: loading || artistRankingPage >= pageCount
+                  ? null
+                  : () => _loadArtistRanking(page: artistRankingPage + 1),
+              child: Text(text.next),
+            ),
+          ]),
+        ),
+      ),
     ]);
   }
 
@@ -691,12 +823,15 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
                   : constraints.maxWidth >= 390
                       ? 2
                       : 1;
-      return Scrollbar(
+      return RefreshIndicator(
+        onRefresh: () => _search(result?.page ?? 1),
+        child: Scrollbar(
         controller: scrollController,
         thumbVisibility: true,
         interactive: true,
         child: CustomScrollView(
           controller: scrollController,
+          physics: const AlwaysScrollableScrollPhysics(),
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           slivers: [
             SliverToBoxAdapter(
@@ -853,6 +988,7 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
                 ),
               ),
           ],
+        ),
         ),
       );
     });

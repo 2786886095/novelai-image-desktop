@@ -5,6 +5,7 @@ import { proxyConfig } from "./proxy";
 import { cacheAitagImage } from "./aitag-cache";
 
 const API_BASE = "https://aitag.win";
+const AITAG_API_PAGE_SIZE = 60;
 const REQUEST_TIMEOUT = 30_000;
 const MAX_SEARCH_LENGTH = 2_000;
 const DATA_CACHE_TTL_MS = 10 * 60_000;
@@ -28,6 +29,11 @@ function safePage(value: unknown): number {
   return Number.isInteger(page) && page > 0 && page <= 10_000 ? page : 1;
 }
 
+function safePageSize(value: unknown): number {
+  const size = Number(value);
+  return [12, 24, 48, 60].includes(size) ? size : AITAG_PAGE_SIZE;
+}
+
 function safeSearch(value: unknown): string {
   return typeof value === "string" ? value.trim().slice(0, MAX_SEARCH_LENGTH) : "";
 }
@@ -38,6 +44,7 @@ export function normalizeAitagSearchRequest(value: unknown): Required<AitagSearc
     : {};
   return {
     page: safePage(request.page),
+    pageSize: safePageSize(request.pageSize),
     query: safeSearch(request.query),
     prompt: safeSearch(request.prompt),
     sort: request.sort === "monthly" ? "monthly" : "new",
@@ -78,37 +85,55 @@ async function searchAitagNetwork(request: Required<AitagSearchRequest>): Promis
   const endpoint = request.sort === "monthly"
     ? historicalRank ? "/api/rank/monthly/fixed" : "/api/rank/monthly/real"
     : "/api/ai_works_search";
-  const params: Record<string, string | number> = {
-    page: request.page,
-    page_size: AITAG_PAGE_SIZE,
+  const clientOffset = (request.page - 1) * request.pageSize;
+  const clientEnd = clientOffset + request.pageSize;
+  const firstApiPage = Math.floor(clientOffset / AITAG_API_PAGE_SIZE) + 1;
+  const lastApiPage = Math.floor((clientEnd - 1) / AITAG_API_PAGE_SIZE) + 1;
+
+  const fetchApiPage = async (apiPage: number) => {
+    const params: Record<string, string | number> = {
+      page: apiPage,
+      page_size: AITAG_API_PAGE_SIZE,
+    };
+    if (request.query) params.q = request.query;
+    if (request.prompt) params.prompt = request.prompt;
+    if (request.sort === "new") {
+      params.sort = "new";
+      params.time_range = request.timeRange;
+    } else if (historicalRank) {
+      params.month = request.timeRange === "older"
+        ? "older"
+        : request.timeRange.slice(1);
+    }
+    const response = await axios.get(`${API_BASE}${endpoint}`, {
+      ...requestConfig(),
+      params,
+      // AITag uses HTTP 404 to represent a valid search with zero matches.
+      // Treat only this endpoint-specific case as an empty result; config/work
+      // 404s must still surface as real failures.
+      validateStatus: (status) => (status >= 200 && status < 300) || status === 404,
+    });
+    return response.status === 404
+      ? normalizeAitagSearch({ page: apiPage, page_size: AITAG_API_PAGE_SIZE, total: 0, items: [] })
+      : normalizeAitagSearch(response.data);
   };
-  if (request.query) params.q = request.query;
-  if (request.prompt) params.prompt = request.prompt;
-  if (request.sort === "new") {
-    params.sort = "new";
-    params.time_range = request.timeRange;
-  } else if (historicalRank) {
-    params.month = request.timeRange === "older"
-      ? "older"
-      : request.timeRange.slice(1);
-  }
-  const response = await axios.get(`${API_BASE}${endpoint}`, {
-    ...requestConfig(),
-    params,
-    // AITag uses HTTP 404 to represent a valid search with zero matches.
-    // Treat only this endpoint-specific case as an empty result; config/work
-    // 404s must still surface as real failures.
-    validateStatus: (status) => (status >= 200 && status < 300) || status === 404,
-  });
-  if (response.status === 404) {
-    return { page: request.page, page_size: AITAG_PAGE_SIZE, total: 0, items: [] };
-  }
-  return response.data as unknown;
+
+  const apiPages = await Promise.all(
+    Array.from({ length: lastApiPage - firstApiPage + 1 }, (_, index) => fetchApiPage(firstApiPage + index)),
+  );
+  const combinedItems = apiPages.flatMap((page) => page.items);
+  const sliceStart = clientOffset - (firstApiPage - 1) * AITAG_API_PAGE_SIZE;
+  return {
+    page: request.page,
+    page_size: request.pageSize,
+    total: apiPages[0]?.total ?? 0,
+    items: combinedItems.slice(sliceStart, sliceStart + request.pageSize),
+  };
 }
 
 export async function searchAitagFresh(raw: unknown): Promise<unknown> {
   const request = normalizeAitagSearchRequest(raw);
-  const isDefault = request.page === 1 && !request.query && !request.prompt && request.sort === "new" && request.timeRange === "all";
+  const isDefault = request.page === 1 && request.pageSize === AITAG_PAGE_SIZE && !request.query && !request.prompt && request.sort === "new" && request.timeRange === "all";
   if (isDefault && defaultFreshInFlight) return defaultFreshInFlight;
   const networkRequest = searchAitagNetwork(request);
   if (isDefault) defaultFreshInFlight = networkRequest;

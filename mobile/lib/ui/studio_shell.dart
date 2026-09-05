@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'studio_theme.dart';
+
 enum StudioWindowClass { phone, tablet, wideTablet }
 
 abstract final class StudioBreakpoints {
@@ -127,16 +129,36 @@ class _LazyIndexedStackState extends State<_LazyIndexedStack> {
   }
 
   @override
-  Widget build(BuildContext context) => IndexedStack(
-        index: widget.index,
-        children: List<Widget>.generate(widget.children.length, (index) {
-          final mounted = _mountedIndexes.contains(index);
-          return TickerMode(
-            enabled: index == widget.index,
-            child: mounted ? widget.children[index] : const SizedBox.shrink(),
-          );
-        }, growable: false),
-      );
+  Widget build(BuildContext context) {
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    return Stack(
+      fit: StackFit.expand,
+      children: List<Widget>.generate(widget.children.length, (index) {
+        final mounted = _mountedIndexes.contains(index);
+        final active = index == widget.index;
+        return Positioned.fill(
+          key: ValueKey('studio-page-layer-$index'),
+          child: IgnorePointer(
+            ignoring: !active,
+            child: ExcludeSemantics(
+              excluding: !active,
+              child: AnimatedOpacity(
+                opacity: active ? 1 : 0,
+                duration: reduceMotion ? Duration.zero : AppMotion.standard,
+                curve: AppMotion.easeOut,
+                child: TickerMode(
+                  enabled: active,
+                  child: mounted
+                      ? widget.children[index]
+                      : const SizedBox.shrink(),
+                ),
+              ),
+            ),
+          ),
+        );
+      }, growable: false),
+    );
+  }
 }
 
 class _PhoneShell extends StatelessWidget {
@@ -211,7 +233,12 @@ class _PhoneShell extends StatelessWidget {
         final landscape = size.width > size.height;
         return SafeArea(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            padding: const EdgeInsets.fromLTRB(
+              StudioSpacing.lg,
+              0,
+              StudioSpacing.lg,
+              StudioSpacing.lg,
+            ),
             child: ConstrainedBox(
               constraints: BoxConstraints(maxHeight: size.height * 0.82),
               child: Column(
@@ -220,7 +247,7 @@ class _PhoneShell extends StatelessWidget {
                 children: [
                   Text(allFeaturesLabel,
                       style: Theme.of(context).textTheme.titleMedium),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: StudioSpacing.md),
                   Flexible(
                     child: GridView.count(
                       shrinkWrap: true,
@@ -276,15 +303,15 @@ class _MoreDestinationButton extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     return Material(
       color: selected ? colors.primaryContainer : colors.surfaceContainer,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(StudioRadii.control),
       child: InkWell(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(StudioRadii.control),
         onTap: onPressed,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(selected ? destination.selectedIcon : destination.icon),
-            const SizedBox(height: 6),
+            const SizedBox(height: StudioSpacing.sm),
             Text(destination.label,
                 maxLines: 1, overflow: TextOverflow.ellipsis),
           ],
@@ -330,7 +357,7 @@ class _TabletShell extends StatelessWidget {
                   ? NavigationRailLabelType.none
                   : NavigationRailLabelType.selected,
               leading: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
+                padding: const EdgeInsets.symmetric(vertical: StudioSpacing.md),
                 child: extended
                     ? const Text('Langbai Studio',
                         style: TextStyle(fontWeight: FontWeight.w800))

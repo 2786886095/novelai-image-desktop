@@ -45,6 +45,7 @@ const SENSITIVE_SETTING_KEYS: SettingKey[] = [
   "agentApiKey",
   "tagServerApiKey",
   "baiduSecret",
+  "translateAiApiKey",
 ];
 
 const SUPPORTED_LANGUAGES = new Set(["zh-CN", "zh-TW", "en-US", "ja-JP", "ko-KR"]);
@@ -268,6 +269,7 @@ export function defaultSettings(): AppSettings {
     proxyForTranslate: true,
     updateSource: "github",
     theme: "light",
+    reduceMotion: false,
     autoComplete: true,
     weightHighlight: true,
     promptRandomizer: true,
@@ -327,6 +329,9 @@ export function defaultSettings(): AppSettings {
     translateProvider: "google" as const,
     baiduAppId: "",
     baiduSecret: "",
+    translateAiApiUrl: "https://api.openai.com/v1",
+    translateAiApiKey: "",
+    translateAiModel: "gpt-4o-mini",
     activeHistoryGroupId: "",
     generationGroupId: "",
     modelMode: "anime" as const,
@@ -807,6 +812,37 @@ export function fileExists(filePath: string): boolean {
   }
 }
 
+export type DirectoryEntryCache = Map<string, Set<string> | null>;
+
+function normalizeDirectoryEntryName(name: string): string {
+  return process.platform === "win32" ? name.toLowerCase() : name;
+}
+
+// History images normally share date/group folders. Reading each parent once
+// avoids one synchronous exists/stat call per row while preserving the old
+// existsSync fallback for exceptional unreadable directories.
+export function fileExistsWithDirectoryCache(
+  filePath: string,
+  directoryCache: DirectoryEntryCache,
+): boolean {
+  const directory = path.dirname(filePath);
+  const cacheKey = process.platform === "win32"
+    ? path.resolve(directory).toLowerCase()
+    : path.resolve(directory);
+  if (!directoryCache.has(cacheKey)) {
+    try {
+      const names = fs.readdirSync(directory).map(normalizeDirectoryEntryName);
+      directoryCache.set(cacheKey, new Set(names));
+    } catch {
+      directoryCache.set(cacheKey, null);
+    }
+  }
+  const entries = directoryCache.get(cacheKey);
+  return entries
+    ? entries.has(normalizeDirectoryEntryName(path.basename(filePath)))
+    : fileExists(filePath);
+}
+
 function isInside(parent: string, child: string): boolean {
   try {
     const rel = path.relative(path.resolve(parent), path.resolve(child));
@@ -954,6 +990,7 @@ function reconcileHistoryFiles(force = false): void {
   const outputDir = data.settings.outputDir?.trim();
   if (outputDir && !fileExists(outputDir)) return;
   const indexCache = new Map<string, FileNameIndex>();
+  const directoryCache: DirectoryEntryCache = new Map();
   let changed = false;
   const next: HistoryItem[] = [];
 
@@ -963,7 +1000,7 @@ function reconcileHistoryFiles(force = false): void {
       continue;
     }
 
-    if (fileExists(item.filePath)) {
+    if (fileExistsWithDirectoryCache(item.filePath, directoryCache)) {
       const inferredGroupId = inferGroupIdFromPath(item.filePath, data);
       if (inferredGroupId !== item.groupId) {
         next.push({ ...item, groupId: inferredGroupId });

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novelai_mobile/ui/studio_shell.dart';
+import 'package:novelai_mobile/ui/studio_theme.dart';
 
 const _destinations = [
   StudioDestination(
@@ -100,6 +101,16 @@ void main() {
     expect(find.text('预设'), findsOneWidget);
     final nav = tester.widget<NavigationBar>(find.byType(NavigationBar));
     expect(nav.destinations, hasLength(5));
+    expect(find.byType(AnimatedOpacity), findsNWidgets(_destinations.length));
+    final transitions =
+        tester.widgetList<AnimatedOpacity>(find.byType(AnimatedOpacity));
+    expect(
+        transitions.every((transition) =>
+            transition.duration == AppMotion.standard &&
+            transition.curve == AppMotion.easeOut),
+        isTrue);
+    expect(transitions.where((transition) => transition.opacity == 1),
+        hasLength(1));
   });
 
   testWidgets('landscape phone still uses compact bottom navigation',

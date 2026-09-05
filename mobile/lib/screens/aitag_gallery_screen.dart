@@ -517,12 +517,15 @@ class _AitagGalleryScreenState extends State<AitagGalleryScreen> {
                 : constraints.maxWidth >= 480
                     ? 2
                     : 1;
-        return Scrollbar(
+        return RefreshIndicator(
+          onRefresh: _refresh,
+          child: Scrollbar(
           controller: scrollController,
           thumbVisibility: true,
           interactive: true,
           child: CustomScrollView(
             controller: scrollController,
+            physics: const AlwaysScrollableScrollPhysics(),
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             slivers: [
               SliverToBoxAdapter(
@@ -697,6 +700,7 @@ class _AitagGalleryScreenState extends State<AitagGalleryScreen> {
                               ]),
                         ))),
             ],
+          ),
           ),
         );
       }),

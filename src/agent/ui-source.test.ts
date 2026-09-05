@@ -24,7 +24,8 @@ describe("Character Tavern desktop UI", () => {
     expect(styles).toContain(".tavern-message");
     expect(styles).toContain(".tavern-message.is-character .tavern-message-body");
     expect(styles).toContain(".tavern-run-strip");
-    expect(styles).toContain("prefers-reduced-motion");
+    expect(styles).toContain("html.motion-reduced *");
+    expect(styles).not.toContain("prefers-reduced-motion");
   });
 
   it("exposes SillyTavern card formats and both image-generation modes", () => {
@@ -45,8 +46,8 @@ describe("Character Tavern desktop UI", () => {
     expect(icons).toContain('from "react-icons/md"');
     expect(source).toContain("SOFTWARE_IMAGE_CHARACTER_ID");
     expect(source).toContain("SOFTWARE_IMAGE_LOREBOOK_ID");
-    expect(source).toContain("删除世界书");
-    expect(source).toContain("内置角色受保护");
+    expect(source).toContain('tx("deleteLorebook")');
+    expect(source).toContain('tx("builtInProtected")');
   });
 
   it("keeps the transcript flat and media controls compact", () => {
@@ -54,7 +55,7 @@ describe("Character Tavern desktop UI", () => {
     const styles = fs.readFileSync(path.join(projectRoot, "src", "styles.css"), "utf8");
 
     expect(source).toContain('proposalDraft.status !== "completed"');
-    expect(source).toContain('aria-label="打开本地位置"');
+    expect(source).toContain('aria-label={tx("openLocation")}');
     expect(source).toContain("onDelete={() => onDeleteMessage(message)}");
     expect(source).not.toContain("<span>打开位置</span>");
     expect(source).not.toContain("<span>另存为</span>");
@@ -68,7 +69,7 @@ describe("Character Tavern desktop UI", () => {
     expect(source).toContain("messages.length > 40");
     expect(source).toContain('tavern-virtual-list ${useVirtualRows ? "" : "is-static"}');
     expect(styles).toContain(".tavern-virtual-list.is-static .tavern-virtual-row");
-    expect(source).toContain("无参考图");
+    expect(source).toContain('tx("noReference")');
     expect(styles).toContain("max-width: min(100%, 380px);");
   });
 });
