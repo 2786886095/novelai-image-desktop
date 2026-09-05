@@ -85,32 +85,16 @@ String resolveNovelAiBaseUrl(
   return settings.allowCustomEndpoint ? normalized : fallback;
 }
 
-const _upscaleModels = <String>{
-  'nai-diffusion-5-full',
-  'nai-diffusion-5-curated',
-  'nai-diffusion-4-5-curated',
-  'nai-diffusion-4-full',
-  'nai-diffusion-4-curated',
-  'nai-diffusion-3',
-  'nai-diffusion-3-furry',
-};
+const _upscaleModel = 'nai-diffusion-5-curated';
+const _upscaleDeclaredBlurSigma = 0;
 
-const _upscaleModelAliases = <String, String>{
-  // The standalone upscaler rejects V4.5 Full. Its paired Curated model uses
-  // the same upscaler while keeping the request in the V4.5 model family.
-  'nai-diffusion-4-5-full': 'nai-diffusion-4-5-curated',
-};
+String resolveUpscaleModel(String _) => _upscaleModel;
 
-String resolveUpscaleModel(String rawModel) {
-  var candidate = rawModel.trim().replaceFirst(RegExp(r'-inpainting$'), '');
-  if (candidate == 'nai-diffusion-furry-3') {
-    candidate = 'nai-diffusion-3-furry';
-  }
-  final compatibleModel = _upscaleModelAliases[candidate] ?? candidate;
-  return _upscaleModels.contains(compatibleModel)
-      ? compatibleModel
-      : 'nai-diffusion-5-curated';
-}
+Map<String, dynamic> buildUpscalePayload(Uint8List image, String rawModel) => {
+      'image': base64Encode(image),
+      'model': resolveUpscaleModel(rawModel),
+      'declared_blur_sigma': _upscaleDeclaredBlurSigma,
+    };
 
 class NaiApi {
   final _rng = Random.secure();
@@ -644,10 +628,7 @@ class NaiApi {
                   'Accept':
                       'application/zip, application/octet-stream, image/png',
                 },
-                body: jsonEncode({
-                  'image': base64Encode(passInput),
-                  'model': upscaleModel,
-                }),
+                body: jsonEncode(buildUpscalePayload(passInput, upscaleModel)),
               )
               .timeout(const Duration(seconds: 180)),
         ),

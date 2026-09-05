@@ -135,18 +135,23 @@ void main() {
   });
 
   test('upscale model follows the current image API contract', () {
-    expect(resolveUpscaleModel('nai-diffusion-5-full'), 'nai-diffusion-5-full');
-    expect(resolveUpscaleModel('nai-diffusion-5-full-inpainting'),
-        'nai-diffusion-5-full');
+    expect(resolveUpscaleModel('nai-diffusion-5-full'),
+        'nai-diffusion-5-curated');
     expect(resolveUpscaleModel('nai-diffusion-4-5-full'),
-        'nai-diffusion-4-5-curated');
-    expect(resolveUpscaleModel('nai-diffusion-4-5-full-inpainting'),
-        'nai-diffusion-4-5-curated');
+        'nai-diffusion-5-curated');
     expect(resolveUpscaleModel('nai-diffusion-4-5-curated'),
-        'nai-diffusion-4-5-curated');
-    expect(
-        resolveUpscaleModel('nai-diffusion-furry-3'), 'nai-diffusion-3-furry');
+        'nai-diffusion-5-curated');
+    expect(resolveUpscaleModel('nai-diffusion-3'), 'nai-diffusion-5-curated');
     expect(resolveUpscaleModel('retired-model'), 'nai-diffusion-5-curated');
+    expect(
+      buildUpscalePayload(Uint8List.fromList([1, 2, 3]),
+          'nai-diffusion-4-5-full'),
+      {
+        'image': 'AQID',
+        'model': 'nai-diffusion-5-curated',
+        'declared_blur_sigma': 0,
+      },
+    );
   });
 
   test('restored generation params repair stale and out-of-range values', () {

@@ -174,37 +174,25 @@ export function resolveUpscaleBaseUrl(rawImageBaseUrl: string): string {
   return tokenSafeBaseUrl(rawImageBaseUrl, "https://image.novelai.net");
 }
 
-const UPSCALE_MODELS = new Set([
-  "nai-diffusion-5-full",
-  "nai-diffusion-5-curated",
-  "nai-diffusion-4-5-curated",
-  "nai-diffusion-4-full",
-  "nai-diffusion-4-curated",
-  "nai-diffusion-3",
-  "nai-diffusion-3-furry",
-]);
-
-const UPSCALE_MODEL_ALIASES = new Map<string, string>([
-  // The standalone upscaler rejects V4.5 Full. The paired Curated model uses
-  // the same upscaler while keeping the request in the V4.5 model family.
-  ["nai-diffusion-4-5-full", "nai-diffusion-4-5-curated"],
-]);
+const UPSCALE_MODEL = "nai-diffusion-5-curated";
+const UPSCALE_DECLARED_BLUR_SIGMA = 0;
 
 /** Normalize the current generation model for the dedicated upscale API.
  *
- * The current contract requires exactly `image` + `model`; width, height and
- * scale are no longer request fields. Inpainting suffixes and the legacy furry
- * spelling are renderer-side aliases and must not reach the API.
+ * The official web client uses the dedicated V5 Curated upscaler regardless of
+ * the model that produced the source image. Generation model IDs such as V4.5
+ * Full/Curated are rejected by this endpoint and must not reach the request.
  */
-export function resolveUpscaleModel(rawModel: string): string {
-  const normalized = normalizeModel(String(rawModel || "").trim());
-  const candidate = normalized === "nai-diffusion-furry-3"
-    ? "nai-diffusion-3-furry"
-    : normalized;
-  const compatibleModel = UPSCALE_MODEL_ALIASES.get(candidate) ?? candidate;
-  return UPSCALE_MODELS.has(compatibleModel)
-    ? compatibleModel
-    : "nai-diffusion-5-curated";
+export function resolveUpscaleModel(_rawModel: string): string {
+  return UPSCALE_MODEL;
+}
+
+export function buildUpscalePayload(image: Buffer, rawModel: string) {
+  return {
+    image: image.toString("base64"),
+    model: resolveUpscaleModel(rawModel),
+    declared_blur_sigma: UPSCALE_DECLARED_BLUR_SIGMA,
+  };
 }
 
 export function resolveUpscaleOutputSize(
@@ -4871,10 +4859,7 @@ export async function upscaleImg(
         () =>
           axios.post(
             `${imageBaseUrl}/ai/upscale`,
-            {
-              image: passInput.toString("base64"),
-              model: upscaleModel,
-            },
+            buildUpscalePayload(passInput, upscaleModel),
             {
               headers: {
                 Authorization: `Bearer ${token}`,

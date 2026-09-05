@@ -16,6 +16,7 @@ import {
   prepareExtras,
   prepareInpaintAssets,
   prepareImageBufferForSave,
+  buildUpscalePayload,
   resolveUpscaleBaseUrl,
   resolveUpscaleModel,
   resolveUpscaleOutputSize,
@@ -721,17 +722,21 @@ describe("resolveUpscaleBaseUrl", () => {
 });
 
 describe("resolveUpscaleModel", () => {
-  it("uses supported generation models and strips renderer-only aliases", () => {
-    expect(resolveUpscaleModel("nai-diffusion-5-full")).toBe("nai-diffusion-5-full");
-    expect(resolveUpscaleModel("nai-diffusion-5-full-inpainting")).toBe("nai-diffusion-5-full");
-    expect(resolveUpscaleModel("nai-diffusion-4-5-full")).toBe("nai-diffusion-4-5-curated");
-    expect(resolveUpscaleModel("nai-diffusion-4-5-full-inpainting")).toBe("nai-diffusion-4-5-curated");
-    expect(resolveUpscaleModel("nai-diffusion-4-5-curated")).toBe("nai-diffusion-4-5-curated");
-    expect(resolveUpscaleModel("nai-diffusion-furry-3")).toBe("nai-diffusion-3-furry");
+  it("always uses the dedicated model used by the official upscaler", () => {
+    expect(resolveUpscaleModel("nai-diffusion-5-full")).toBe("nai-diffusion-5-curated");
+    expect(resolveUpscaleModel("nai-diffusion-4-5-full")).toBe("nai-diffusion-5-curated");
+    expect(resolveUpscaleModel("nai-diffusion-4-5-curated")).toBe("nai-diffusion-5-curated");
+    expect(resolveUpscaleModel("nai-diffusion-3")).toBe("nai-diffusion-5-curated");
+    expect(resolveUpscaleModel("retired-model")).toBe("nai-diffusion-5-curated");
   });
 
-  it("falls back to the current SDK default for unknown models", () => {
-    expect(resolveUpscaleModel("retired-model")).toBe("nai-diffusion-5-curated");
+  it("builds the official standalone upscale payload contract", () => {
+    expect(buildUpscalePayload(Buffer.from([1, 2, 3]), "nai-diffusion-4-5-full"))
+      .toEqual({
+        image: "AQID",
+        model: "nai-diffusion-5-curated",
+        declared_blur_sigma: 0,
+      });
   });
 });
 
