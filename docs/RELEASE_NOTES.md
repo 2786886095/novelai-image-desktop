@@ -1,20 +1,20 @@
-## Langbai NovelAI Studio 2.2.0
+## Langbai NovelAI Studio 2.2.1
 
 请根据你的操作系统下载对应安装包：
 
 | 系统 | 安装包 | 安装说明 |
 | --- | --- | --- |
-| 🪟 **Windows**（便携版，x64） | `Langbai-NovelAI-Studio-2.2.0.exe` | 双击即用，无需安装 |
-| 🪟 **Windows**（安装版，x64） | `Langbai-NovelAI-Studio-Setup-2.2.0.exe` | 安装向导可自选路径、创建快捷方式；支持软件内一键更新 |
-| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-2.2.0-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
-| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-2.2.0.zip` | 解压后即为 `.app`，同样需右键「打开」 |
-| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-2.2.0.AppImage` | `chmod +x` 后直接运行 |
+| 🪟 **Windows**（便携版，x64） | `Langbai-NovelAI-Studio-2.2.1.exe` | 双击即用，无需安装 |
+| 🪟 **Windows**（安装版，x64） | `Langbai-NovelAI-Studio-Setup-2.2.1.exe` | 安装向导可自选路径、创建快捷方式；支持软件内一键更新 |
+| 🍎 **macOS** (Intel + Apple 芯片通用) | `Langbai-NovelAI-Studio-2.2.1-universal.dmg` | 拖入「应用程序」；**未签名**，首次打开请右键 →「打开」 |
+| 🍎 **macOS**（压缩包，同上通用版） | `Langbai-NovelAI-Studio-2.2.1.zip` | 解压后即为 `.app`，同样需右键「打开」 |
+| 🐧 **Linux** (x64) | `Langbai-NovelAI-Studio-2.2.1.AppImage` | `chmod +x` 后直接运行 |
 | 🤖 **Android** | `app-release.apk` | 直接安装；需允许「未知来源」 |
 | 📱 **iOS** | `novelai-mobile-unsigned.ipa` | **未签名**，需使用 AltStore / Sideloadly 等工具自行侧载 |
 
 > 桌面端与移动端均为 **API-only** 客户端，需要自备 NovelAI Persistent API Token。
 
-### v2.2.0 更新内容
+### v2.2.1 更新内容
 - 修复 NAI 4.5 Full 独立超分的 HTTP 400：自动使用兼容的 4.5 Curated 超分模型；当预计结果任一边超过 4096 像素时在本地直接说明并取消，不发送超分请求。
 - “增强”选择 2× 同时放大时会预先检查目标像素总量；超过 NovelAI 的 3,145,728 像素上限会直接说明并取消，不发送生成请求。
 - 酒馆 AI 生图、AI 反推和提示词转换共用内置提示增强能力；普通聊天、漫画、批量与常规 NovelAI 生图保持隔离。模型检测改为可展开选择列表，并按所选模型自动匹配上下文长度与最大输出。
@@ -25,4 +25,4 @@
 - 提示词法典改为压缩资源按需解压并缓存，显著缩小渲染脚本体积；下线小说推文模块并移除全部入口、测试与遗留资源。
 - 统一字号、圆角、层级和响应式断点令牌，补齐桌面与移动端回归测试、类型检查和构建门禁。
 
-> v2.2.0 包含此前版本的全部功能与修复，建议桌面端和移动端用户更新。
+> v2.2.1 包含此前版本的全部功能与修复，建议桌面端和移动端用户更新。
