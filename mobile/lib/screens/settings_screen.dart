@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -6,9 +7,12 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../i18n/app_locales.dart';
+import '../agent/tavern_preset_import.dart';
+import '../agent/tavern_models.dart';
 import '../models/nai_models.dart';
 import '../services/storage_permission.dart';
 import '../services/aitag_service.dart';
+import '../services/online_gallery_download_location.dart';
 import '../state/app_state.dart';
 import '../ui/studio_shell.dart';
 import 'data_backup_settings.dart';
@@ -17,6 +21,82 @@ import 'resource_database_settings.dart';
 const _projectGithubUrl = 'https://github.com/2786886095/novelai-image-desktop';
 const _wechatRewardAsset = 'assets/about/wechat-reward.jpg';
 const _alipayRewardAsset = 'assets/about/alipay-reward.jpg';
+
+({
+  String title,
+  String hint,
+  String active,
+  String empty,
+  String import,
+  String rename,
+  String delete,
+  String imported,
+  String failed,
+}) _sharedPromptPresetText(Object? language) {
+  switch (normalizeAppLocaleCode(language)) {
+    case 'zh-TW':
+      return (
+        title: '反推 / 轉換共用預設',
+        hint: '匯入 SillyTavern JSON 後，AI 反推與提示詞轉換共同使用目前選擇。',
+        active: '目前預設',
+        empty: '目前沒有預設；只保留結構化輸出規則。',
+        import: '匯入 JSON',
+        rename: '重新命名',
+        delete: '刪除',
+        imported: '已匯入預設',
+        failed: '匯入失敗',
+      );
+    case 'en-US':
+      return (
+        title: 'Shared reverse / conversion preset',
+        hint:
+            'Import a SillyTavern JSON preset for both AI reverse and prompt conversion.',
+        active: 'Active preset',
+        empty: 'No preset is active; structured output rules remain enabled.',
+        import: 'Import JSON',
+        rename: 'Rename',
+        delete: 'Delete',
+        imported: 'Preset imported',
+        failed: 'Import failed',
+      );
+    case 'ja-JP':
+      return (
+        title: '解析 / 変換 共通プリセット',
+        hint: 'SillyTavern JSON を読み込み、AI 解析と変換で共有します。',
+        active: '現在のプリセット',
+        empty: 'プリセットはありません。構造化出力ルールのみ維持されます。',
+        import: 'JSON を読み込む',
+        rename: '名前を変更',
+        delete: '削除',
+        imported: 'プリセットを読み込みました',
+        failed: '読み込み失敗',
+      );
+    case 'ko-KR':
+      return (
+        title: '분석 / 변환 공유 프리셋',
+        hint: 'SillyTavern JSON 프리셋을 AI 분석과 변환에서 함께 사용합니다.',
+        active: '현재 프리셋',
+        empty: '프리셋이 없습니다. 구조화 출력 규칙만 유지됩니다.',
+        import: 'JSON 가져오기',
+        rename: '이름 변경',
+        delete: '삭제',
+        imported: '프리셋을 가져왔습니다',
+        failed: '가져오기 실패',
+      );
+    default:
+      return (
+        title: '反推 / 转换共用预设',
+        hint: '导入 SillyTavern JSON 后，AI 反推与提示词转换共同使用当前选择。',
+        active: '当前预设',
+        empty: '当前没有预设；只保留结构化输出规则。',
+        import: '导入 JSON',
+        rename: '重命名',
+        delete: '删除',
+        imported: '已导入预设',
+        failed: '导入失败',
+      );
+  }
+}
 
 (String, String) _streamPreviewSettingText(Object? language) {
   switch (normalizeAppLocaleCode(language)) {
@@ -101,6 +181,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _detectedModelKind = '';
   ({int bytes, int files}) _aitagCacheStats = (bytes: 0, files: 0);
   bool _aitagCacheBusy = false;
+  String _sharedPromptPresetStatus = '';
 
   @override
   void initState() {
@@ -169,6 +250,169 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(err ?? detailText.tokenVerifiedSuccess)));
     if (err == null) tokenCtrl.clear();
+  }
+
+  Future<void> _importSharedPromptPreset(AppState state) async {
+    final text = _sharedPromptPresetText(state.settings.language);
+    try {
+      final picked = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['json'],
+        withData: true,
+      );
+      final file = picked?.files.firstOrNull;
+      if (file == null) return;
+      final source = file.bytes != null
+          ? utf8.decode(file.bytes!)
+          : await File(file.path!).readAsString();
+      final result = importTavernSamplerPresetJson(source, fileName: file.name);
+      await state.setSettings((settings) {
+        final duplicate = settings.reverseConvertPromptPresets
+            .indexWhere((item) => item.sourceHash == result.preset.sourceHash);
+        if (duplicate >= 0) {
+          final current = settings.reverseConvertPromptPresets[duplicate];
+          result.preset
+            ..id = current.id
+            ..name = current.name
+            ..createdAt = current.createdAt;
+          settings.reverseConvertPromptPresets[duplicate] = result.preset;
+        } else {
+          settings.reverseConvertPromptPresets.insert(0, result.preset);
+        }
+        settings.reverseConvertPromptPresetId = result.preset.id;
+      });
+      if (!mounted) return;
+      setState(() => _sharedPromptPresetStatus =
+          '${text.imported}: ${result.preset.name} ${result.warnings.join(' ')}');
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _sharedPromptPresetStatus = '${text.failed}: $error');
+    }
+  }
+
+  Future<void> _renameSharedPromptPreset(
+      AppState state, TavernSamplerPreset preset) async {
+    final controller = TextEditingController(text: preset.name);
+    final value = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(_sharedPromptPresetText(state.settings.language).rename),
+        content: TextField(controller: controller, autofocus: true),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('取消')),
+          FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, controller.text),
+              child: const Text('保存')),
+        ],
+      ),
+    );
+    controller.dispose();
+    final name = value?.trim();
+    if (name == null || name.isEmpty) return;
+    await state.setSettings((settings) {
+      final target = settings.reverseConvertPromptPresets
+          .where((item) => item.id == preset.id)
+          .firstOrNull;
+      if (target != null) {
+        target
+          ..name = name.length > 160 ? name.substring(0, 160) : name
+          ..updatedAt = DateTime.now().toUtc().toIso8601String();
+      }
+    });
+  }
+
+  Future<void> _deleteSharedPromptPreset(
+      AppState state, TavernSamplerPreset preset) async {
+    final labels = _sharedPromptPresetText(state.settings.language);
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: Text(labels.delete),
+            content: Text('${labels.delete}: ${preset.name}?'),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('取消')),
+              FilledButton(
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  child: Text(labels.delete)),
+            ],
+          ),
+        ) ??
+        false;
+    if (!confirmed) return;
+    await state.setSettings((settings) {
+      settings.reverseConvertPromptPresets
+          .removeWhere((item) => item.id == preset.id);
+      settings.reverseConvertPromptPresetId =
+          settings.reverseConvertPromptPresets.firstOrNull?.id ?? '';
+    });
+  }
+
+  Widget _sharedPromptPresetCard(AppState state) {
+    final settings = state.settings;
+    final text = _sharedPromptPresetText(settings.language);
+    final selected = settings.reverseConvertPromptPresets
+            .where((item) => item.id == settings.reverseConvertPromptPresetId)
+            .firstOrNull ??
+        settings.reverseConvertPromptPresets.firstOrNull;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(text.title,
+              style: Theme.of(context)
+                  .textTheme
+                  .titleSmall
+                  ?.copyWith(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 4),
+          Text(text.hint, style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 12),
+          if (settings.reverseConvertPromptPresets.isNotEmpty)
+            DropdownButtonFormField<String>(
+              value: selected?.id,
+              decoration: InputDecoration(
+                  labelText: text.active, border: const OutlineInputBorder()),
+              items: settings.reverseConvertPromptPresets
+                  .map((item) =>
+                      DropdownMenuItem(value: item.id, child: Text(item.name)))
+                  .toList(),
+              onChanged: (value) => value == null
+                  ? null
+                  : state.setSettings(
+                      (item) => item.reverseConvertPromptPresetId = value),
+            )
+          else
+            Text(text.empty),
+          const SizedBox(height: 10),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            OutlinedButton.icon(
+                onPressed: () => _importSharedPromptPreset(state),
+                icon: const Icon(Icons.file_download_outlined),
+                label: Text(text.import)),
+            OutlinedButton.icon(
+                onPressed: selected == null
+                    ? null
+                    : () => _renameSharedPromptPreset(state, selected),
+                icon: const Icon(Icons.edit_outlined),
+                label: Text(text.rename)),
+            OutlinedButton.icon(
+                onPressed: selected == null
+                    ? null
+                    : () => _deleteSharedPromptPreset(state, selected),
+                icon: const Icon(Icons.delete_outline_rounded),
+                label: Text(text.delete)),
+          ]),
+          if (_sharedPromptPresetStatus.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(_sharedPromptPresetStatus,
+                style: TextStyle(color: Theme.of(context).colorScheme.primary)),
+          ],
+        ]),
+      ),
+    );
   }
 
   @override
@@ -351,6 +595,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   child: Text(settingsDetailText.clearToken)),
           ]),
           _Section(title: settingsText.reverseSection, children: [
+            _sharedPromptPresetCard(state),
             _TextSetting(
                 label: settingsDetailText.visionApiUrl,
                 value: s.visionApiUrl,
@@ -375,6 +620,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     child: Text(settingsDetailText.detectModel))),
           ]),
           _Section(title: settingsText.convertSection, children: [
+            _sharedPromptPresetCard(state),
             _TextSetting(
                 label: settingsDetailText.textApiUrl,
                 value: s.convertApiUrl,
@@ -672,6 +918,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onChanged: (value) =>
                     state.setSettings((x) => x.imageOutputDir = value),
               ),
+            _GalleryDownloadDirSetting(
+              value: s.onlineGalleryDownloadDir,
+              language: s.language,
+              onChanged: (value) =>
+                  state.setSettings((x) => x.onlineGalleryDownloadDir = value),
+            ),
           ]),
           const ResourceDatabaseSettingsPanel(),
           const DataBackupSettingsPanel(),
@@ -1292,6 +1544,58 @@ class _ImageOutputDirSetting extends StatelessWidget {
               ),
           ],
         ),
+      ],
+    );
+  }
+}
+
+class _GalleryDownloadDirSetting extends StatelessWidget {
+  const _GalleryDownloadDirSetting({
+    required this.value,
+    required this.language,
+    required this.onChanged,
+  });
+
+  final String value;
+  final Object? language;
+  final ValueChanged<String> onChanged;
+
+  Future<void> _pick() async {
+    final text = onlineGalleryDownloadPathText(language);
+    final picked = await FilePicker.platform
+        .getDirectoryPath(dialogTitle: text.dialogTitle);
+    if (picked == null || picked.trim().isEmpty) return;
+    if (Platform.isAndroid && !await StoragePermission.hasAllFilesAccess()) {
+      await StoragePermission.requestAllFilesAccess();
+    }
+    onChanged(picked.trim());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final text = onlineGalleryDownloadPathText(language);
+    final custom = value.trim();
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(text.title, style: theme.textTheme.bodyLarge),
+        const SizedBox(height: 4),
+        Text(custom.isEmpty ? text.defaultLabel : custom,
+            style: theme.textTheme.bodySmall),
+        const SizedBox(height: 2),
+        Text(text.hint,
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.outline)),
+        const SizedBox(height: 8),
+        Wrap(spacing: 8, children: [
+          OutlinedButton.icon(
+              onPressed: _pick,
+              icon: const Icon(Icons.folder_open),
+              label: Text(text.choose)),
+          if (custom.isNotEmpty)
+            TextButton(onPressed: () => onChanged(''), child: Text(text.reset)),
+        ]),
       ],
     );
   }

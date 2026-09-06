@@ -519,7 +519,7 @@ describe("desktop UI consistency guards", () => {
     expect(css).not.toContain(".workspace-tools {");
     expect(app).toContain('resetKey={activeTab}');
     expect(app).not.toContain('<AppErrorBoundary key={activeTab}');
-    expect(app).toContain("const SPLASH_MIN_VISIBLE_MS = 300");
+    expect(app).toContain("const SPLASH_MIN_VISIBLE_MS = 700");
     expect(app).toContain("const warmCriticalScreen = loadInpaintCanvas()");
     expect(app).toContain('typeof idleWindow.requestIdleCallback === "function"');
     const criticalStart = app.indexOf("const warmCriticalScreen");

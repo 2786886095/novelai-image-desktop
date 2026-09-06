@@ -83,6 +83,7 @@ import { logError, logInfo, appendLog } from "./logger";
 import { zhForTag } from "../../src/prompt-data";
 import { proxyConfig } from "./proxy";
 import { injectDshImageAiSystemPrompt } from "./dsh-reverse-convert";
+import { selectedImageTaskPromptPreset } from "../../src/tavern/image-task-preset";
 import {
   COMIC_ANALYZE_SYSTEM_PROMPT,
   CONVERT_SYSTEM_PROMPTS,
@@ -2620,6 +2621,15 @@ export function clearAiCallLog(): { ok: boolean } {
   return { ok: true };
 }
 
+function shouldDisableDeepSeekThinking(apiUrl: string, model: string): boolean {
+  try {
+    const host = new URL(apiUrl).hostname.toLowerCase();
+    return host === "api.deepseek.com" && /^deepseek-v4(?:-|$)/i.test(model.trim());
+  } catch {
+    return false;
+  }
+}
+
 async function callVisionApi(
   systemPrompt: string,
   userContent: Array<{ type: string; [k: string]: any }>,
@@ -2643,6 +2653,9 @@ async function callVisionApi(
   const body = {
     model,
     max_tokens: maxTokens,
+    ...(shouldDisableDeepSeekThinking(base, model)
+      ? { thinking: { type: "disabled" as const } }
+      : {}),
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userContent },
@@ -2771,6 +2784,9 @@ async function callConvertApi(
   const body = {
     model,
     max_tokens: maxTokens,
+    ...(shouldDisableDeepSeekThinking(base, model)
+      ? { thinking: { type: "disabled" as const } }
+      : {}),
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userText },
@@ -3203,6 +3219,10 @@ export async function reversePromptImage(
     task: "reverse",
     enabled: settings.reverseConvertDshEnabled,
     mode: settings.reverseConvertDshMode,
+    sharedPreset: selectedImageTaskPromptPreset(
+      settings.reverseConvertPromptPresets,
+      settings.reverseConvertPromptPresetId,
+    ),
     systemPrompt: [
     resolveModePrompt(
       mode,
@@ -4351,6 +4371,10 @@ export async function convertPromptText(
     task: "convert",
     enabled: settings.reverseConvertDshEnabled,
     mode: settings.reverseConvertDshMode,
+    sharedPreset: selectedImageTaskPromptPreset(
+      settings.reverseConvertPromptPresets,
+      settings.reverseConvertPromptPresetId,
+    ),
     systemPrompt: [
       baseSystemPrompt,
       knownCharacterRuntimeInstruction(

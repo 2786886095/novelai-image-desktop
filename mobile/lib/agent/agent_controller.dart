@@ -17,6 +17,7 @@ import 'agent_tools.dart';
 import 'tavern_builtins.dart';
 import 'tavern_card_service.dart';
 import 'tavern_prompt.dart';
+import 'tavern_preset_import.dart';
 
 class AgentController extends ChangeNotifier {
   final AppState app;
@@ -524,6 +525,20 @@ class AgentController extends ChangeNotifier {
     ];
   }
 
+  TavernImageParameterDefaults _tavernImageDefaults(TavernCharacter character) {
+    final visual = character.visual;
+    final saved = app.params;
+    return TavernImageParameterDefaults(
+      model: visual.model ?? saved.model,
+      width: visual.width ?? saved.width,
+      height: visual.height ?? saved.height,
+      steps: visual.steps ?? saved.steps,
+      scale: visual.scale ?? saved.cfgScale,
+      sampler: visual.sampler ?? saved.sampler,
+      count: visual.count,
+    );
+  }
+
   Future<List<Map<String, dynamic>>> _buildMessages(
       AgentConversation conversation) async {
     final characters = workspace.characters
@@ -554,16 +569,15 @@ class AgentController extends ChangeNotifier {
         persona: persona,
         lorebooks: lorebooks,
         preset: preset,
+        imageDefaults: _tavernImageDefaults(active),
       ),
     );
-    final systemPrompt = active.id == softwareImageCharacterId
-        ? injectDshImageAiSystemPrompt(
-            task: DshImageAiTask.tavernImage,
-            systemPrompt: baseSystemPrompt,
-            enabled: app.settings.reverseConvertDshEnabled,
-            mode: app.settings.reverseConvertDshMode,
-          )
-        : baseSystemPrompt;
+    final systemPrompt = injectDshImageAiSystemPrompt(
+      task: DshImageAiTask.tavernImage,
+      systemPrompt: baseSystemPrompt,
+      enabled: app.settings.reverseConvertDshEnabled,
+      mode: app.settings.reverseConvertDshMode,
+    );
     final messages = <Map<String, dynamic>>[
       {
         'role': 'system',
@@ -732,6 +746,10 @@ class AgentController extends ChangeNotifier {
       }
       final parsedProposal = parsed.proposal;
       if (parsedProposal != null) {
+        applyAuthoritativeTavernImageDefaults(
+          parsedProposal,
+          _tavernImageDefaults(character),
+        );
         parsedProposal
           ..negativePrompt = character.visual.negativePrompt.trim().isEmpty
               ? defaultTavernNegativePrompt
@@ -857,6 +875,7 @@ class AgentController extends ChangeNotifier {
         'langbai_generate_image',
         arguments,
         _availableAttachments(conversation),
+        applyStudioPromptLocks: false,
       );
       execution
         ..status = result.ok ? 'completed' : 'error'
@@ -1062,6 +1081,66 @@ class AgentController extends ChangeNotifier {
     await _persist();
     _notify();
     return result;
+  }
+
+  Future<TavernPresetImportResult?> importTavernPreset() async {
+    final picked = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['json'],
+      withData: true,
+    );
+    final file = picked?.files.firstOrNull;
+    if (file == null) return null;
+    final bytes = file.bytes ??
+        (file.path == null ? null : await File(file.path!).readAsBytes());
+    if (bytes == null) throw const FormatException('无法读取预设文件。');
+    final result = importTavernSamplerPresetJson(
+      utf8.decode(bytes),
+      fileName: file.name,
+    );
+    workspace.samplerPresets.insert(0, result.preset);
+    selectedConversation?.samplerPresetId = result.preset.id;
+    await _persist();
+    _notify();
+    return result;
+  }
+
+  Future<void> selectTavernPreset(String id) async {
+    if (!workspace.samplerPresets.any((item) => item.id == id)) return;
+    selectedConversation?.samplerPresetId = id;
+    await _persist();
+    _notify();
+  }
+
+  Future<bool> renameTavernPreset(String id, String name) async {
+    final clean = name.trim();
+    final preset =
+        workspace.samplerPresets.where((item) => item.id == id).firstOrNull;
+    if (preset == null || clean.isEmpty) return false;
+    preset
+      ..name = clean.length > 160 ? clean.substring(0, 160) : clean
+      ..updatedAt = tavernNow();
+    await _persist();
+    _notify();
+    return true;
+  }
+
+  Future<bool> deleteTavernPreset(String id,
+      {String fallbackName = '对话预设'}) async {
+    if (!workspace.samplerPresets.any((item) => item.id == id)) return false;
+    workspace.samplerPresets.removeWhere((item) => item.id == id);
+    if (workspace.samplerPresets.isEmpty) {
+      workspace.samplerPresets.add(TavernSamplerPreset(name: fallbackName));
+    }
+    final fallback = workspace.samplerPresets.first.id;
+    for (final conversation in workspace.conversations) {
+      if (conversation.samplerPresetId == id) {
+        conversation.samplerPresetId = fallback;
+      }
+    }
+    await _persist();
+    _notify();
+    return true;
   }
 
   Future<void> setCharacterAvatar(TavernCharacter character) async {

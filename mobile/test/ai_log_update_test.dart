@@ -8,6 +8,30 @@ import 'package:novelai_mobile/services/nai_api.dart';
 import 'package:novelai_mobile/services/update_service.dart';
 
 void main() {
+  test('DeepSeek V4 thinking is disabled only for the official endpoint', () {
+    expect(
+      shouldDisableDeepSeekThinking(
+        'https://api.deepseek.com',
+        'deepseek-v4-flash-vision-exp',
+      ),
+      isTrue,
+    );
+    expect(
+      shouldDisableDeepSeekThinking(
+        'https://example.test/v1',
+        'deepseek-v4-flash-vision-exp',
+      ),
+      isFalse,
+    );
+    expect(
+      shouldDisableDeepSeekThinking(
+        'https://api.deepseek.com',
+        'gpt-4o-mini',
+      ),
+      isFalse,
+    );
+  });
+
   test('semantic version comparison handles v prefix and missing segments', () {
     expect(compareVersions('v0.10.0', '0.9.9'), 1);
     expect(compareVersions('0.9.9', '0.9.9+27'), -1);

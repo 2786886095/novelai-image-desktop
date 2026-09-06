@@ -138,12 +138,27 @@ void main() {
     addTearDown(controller.dispose);
     await controller.load();
 
+    await controller.updateActiveCharacterVisual(
+      model: 'nai-diffusion-5-full',
+      width: 1088,
+      height: 1920,
+      steps: 31,
+      scale: 4.5,
+      sampler: 'k_euler_ancestral',
+      count: 3,
+    );
+
     await controller.send('画出当前场景');
 
     final response = controller.selectedConversation!.messages.last;
     expect(response.content, '*她站在雨中。*');
     expect(response.imageProposal, isNotNull);
     expect(response.imageProposal!.positivePrompt, '1girl, rain');
+    expect((response.imageProposal!.width, response.imageProposal!.height),
+        (1088, 1920));
+    expect((response.imageProposal!.steps, response.imageProposal!.scale),
+        (31, 4.5));
+    expect(response.imageProposal!.count, 3);
     expect(response.imageProposal!.status, 'pending');
     expect(response.tools, isEmpty);
   });

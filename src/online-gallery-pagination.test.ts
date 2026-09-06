@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 const read = (path: string) => fs.readFileSync(path, "utf8");
 
-describe("online gallery pagination and adaptive previews", () => {
+describe("online gallery pagination, masonry cards and adaptive previews", () => {
   it("uses bounded numeric page inputs instead of materializing page option lists", () => {
     const gallery = read("src/AitagGallery.tsx");
     const catalog = read("src/ReferenceCatalogPanel.tsx");
@@ -71,16 +71,51 @@ describe("online gallery pagination and adaptive previews", () => {
     expect(main).toContain('"artistLab:stylePreviewPage"');
   });
 
-  it("preserves source aspect ratios across online image grids", () => {
+  it("uses source-ratio masonry cards and preview/download actions across online galleries", () => {
     const gallery = read("src/AitagGallery.tsx");
-    const catalog = read("src/ReferenceCatalogPanel.tsx");
     const styles = read("src/styles.css");
+    const onlineIpc = read("electron/ipc/online-gallery.ts");
+    const preload = read("electron/preload.ts");
+    const app = read("src/App.tsx");
 
     expect(gallery).toContain("image.naturalWidth / image.naturalHeight");
     expect(gallery).toContain("`${item.cover.width} / ${item.cover.height}`");
-    expect(catalog).toContain("`${asset.width} / ${asset.height}`");
+    expect(gallery).not.toContain("parentElement.style.aspectRatio");
+    expect(gallery).toContain("function useMasonryCard");
+    expect(gallery).toContain("new ResizeObserver(schedule)");
+    expect(gallery).toContain("node.style.gridRowEnd");
+    expect(gallery.match(/className="aitag-detail-preview-trigger"/g)).toHaveLength(2);
+    expect(gallery).toContain("function GalleryImageLightbox");
+    expect(gallery).toContain("downloadOnlineGalleryImages");
     expect(styles).toContain(".aitag-work-grid {");
-    expect(styles).toMatch(/\.aitag-card-image img[\s\S]*?object-fit:\s*contain/);
-    expect(styles).toMatch(/\.reference-catalog-grid[^}]*align-items:\s*start/);
+    expect(styles).toMatch(/\.aitag-card-image\s*\{[\s\S]*?aspect-ratio:\s*4\s*\/\s*3/);
+    expect(styles).toMatch(/\.aitag-card-image img\s*\{[^}]*object-fit:\s*contain/);
+    expect(styles).toMatch(/\.aitag-card-image\s*\{[^}]*width:\s*100%[^}]*min-width:\s*0[^}]*max-width:\s*100%/);
+    expect(styles).toMatch(/\.aitag-card-copy\s*\{[^}]*height:\s*156px/);
+    expect(styles).not.toMatch(/\.aitag-detail-preview-trigger\s*\{[^}]*aspect-ratio:/);
+    expect(styles).toMatch(/\.aitag-detail-preview-trigger > img\s*\{[^}]*width:\s*auto[^}]*height:\s*auto[^}]*max-width:\s*100%[^}]*max-height:\s*72vh[^}]*object-fit:\s*contain/);
+    expect(styles).toMatch(/\.aitag-page \.aitag-card:hover \.aitag-card-image img\s*\{[^}]*transform:\s*none/);
+    expect(styles).toMatch(/\.aitag-work-grid\s*\{[^}]*grid-auto-flow:\s*row dense[^}]*grid-auto-rows:\s*1px[^}]*align-items:\s*start/);
+    expect(styles).toMatch(/\.artist-ranking-preview-grid > button\s*\{[\s\S]*?aspect-ratio:\s*1/);
+    expect(styles).toMatch(/\.aitag-image-strip\s*\{[^}]*grid-auto-columns:\s*76px/);
+    expect(onlineIpc).toContain("export async function downloadOnlineGalleryImages");
+    expect(onlineIpc).toContain("selectOnlineGalleryDownloadDir");
+    expect(onlineIpc).toContain('dialog.showOpenDialog({');
+    expect(onlineIpc).toContain('setSetting("onlineGalleryDownloadDir", selected)');
+    expect(onlineIpc).toContain("settings.onlineGalleryDownloadDir?.trim()");
+    expect(onlineIpc).toContain('path.join(downloadRoot, "Online Gallery"');
+    expect(preload).toContain('ipcRenderer.invoke("online-gallery:download-images"');
+    expect(preload).toContain('ipcRenderer.invoke("online-gallery:select-download-dir"');
+    expect(app).toContain('t("settings.galleryDownloadDirFirstUse")');
+  });
+
+  it("shows a blocking progress surface while desktop updates download and install", () => {
+    const app = read("src/App.tsx");
+    const styles = read("src/styles.css");
+
+    expect(app).toContain('className="update-install-overlay"');
+    expect(app).toContain("const SPLASH_MIN_VISIBLE_MS = 700");
+    expect(styles).toContain(".update-install-overlay {");
+    expect(styles).toMatch(/\.update-install-progress i[^}]*transition:\s*width/);
   });
 });

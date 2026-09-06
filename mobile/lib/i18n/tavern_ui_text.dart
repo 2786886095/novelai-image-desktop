@@ -1,6 +1,36 @@
 import 'app_locales.dart';
 
 const _tavernExtraRows = <String, List<String>>{
+  'chatPreset': ['对话预设', '對話預設', 'Chat preset', 'チャットプリセット', '채팅 프리셋'],
+  'chatPresetHint': [
+    '控制酒馆对话的系统提示词与采样参数',
+    '控制酒館對話的系統提示詞與採樣參數',
+    'Controls the Tavern system prompt and sampling',
+    '酒場のシステムプロンプトとサンプリングを制御',
+    'Tavern 시스템 프롬프트와 샘플링을 제어합니다'
+  ],
+  'importPreset': [
+    '导入 JSON 预设',
+    '匯入 JSON 預設',
+    'Import JSON preset',
+    'JSON プリセットを読み込む',
+    'JSON 프리셋 가져오기'
+  ],
+  'renamePreset': [
+    '重命名预设',
+    '重新命名預設',
+    'Rename preset',
+    'プリセット名を変更',
+    '프리셋 이름 변경'
+  ],
+  'deletePreset': ['删除预设', '刪除預設', 'Delete preset', 'プリセットを削除', '프리셋 삭제'],
+  'presetImportRules': [
+    '只导入文本提示与采样参数；不执行脚本、计划任务或 assistant 预填充。',
+    '只匯入文字提示與採樣參數；不執行腳本、排程任務或 assistant 預填充。',
+    'Only text prompts and sampling are imported; scripts, scheduled tasks, and assistant prefill are never executed.',
+    'テキストとサンプリングのみを読み込み、スクリプト、予定タスク、assistant プリフィルは実行しません。',
+    '텍스트 프롬프트와 샘플링만 가져오며 스크립트, 예약 작업, assistant 프리필은 실행하지 않습니다.'
+  ],
   'starterGenerateTitle': [
     '输入描述生成图片',
     '輸入描述生成圖片',

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ImgHTMLAttributes } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ImgHTMLAttributes, type ReactNode } from "react";
 import {
   AITAG_PAGE_SIZE,
   AITAG_SITE_URL,
@@ -116,7 +116,7 @@ const TEXT = {
     noSelected: "请至少勾选一个兼容参数",
     gallerySource: "画廊来源", artistTitle: "画师排行榜", artistSubtitle: "收录 Danbooru 全部有效画师标签，并按作品数排序；作品数代表收录量与热度，不代表画师质量。", updated: "更新", neverUpdated: "尚未更新", manualUpdate: "手动更新", openDanbooru: "打开 Danbooru", artistSearch: "搜索画师 Tag", artistCount: "共 {count} 位画师", artistPageSize: "每页 {count} 位画师", loadingArtists: "正在读取画师排行…", works: "作品", copyArtistTag: "复制画师 Tag", copyTag: "复制 Tag", openArtistLibrary: "打开该画师作品库", library: "作品库 ↗", loadingPreviews: "正在读取代表作品…", noPreviews: "暂无可用参考图", previewHint: "双击全屏预览", previewPage: "第 {page} / {pages} 页 · 每页 12 张", rankingPage: "第 {page} / {pages} 页 · {start}–{end} / {total}", rankingPagination: "画师排行榜分页", itemsPerPage: "每页数量", choosePage: "选择页数", pagePosition: "第 {page} / {pages} 页", loadingPage: "正在准备第 {page} 页…", closePreview: "关闭预览", previousImage: "上一张", nextImage: "下一张", openSourcePage: "打开来源页面", rating: "内容分级", size: "尺寸", negativePrompt: "负面提示词", note: "说明", backCollections: "返回图鉴列表", openSourceSite: "打开来源网站", safeOnly: "仅显示全年龄", loadingSource: "正在读取 {source} 数据…", artistPreviewLabel: "{artist} 代表作品 {index}", artistLightbox: "{artist} 作品预览",
     sourceNotice: "数据与图片来自 AITag；接口结构变更时可能暂时不可用。",
-    unavailableImage: "图片不可用", imageLoading: "加载中", codex: "法典", imageCount: "{count} 张配图", openCollection: "点击进入图鉴", score: "评分 {count}", invalidCredentials: "Gelbooru 凭据无效或已失效，请检查 User ID 与 API Key。", sourceFailed: "读取该来源失败，请检查网络或稍后重试。", detailFailed: "无法打开作品详情，请稍后重试。", tagArtists: "艺术家", tagCharacters: "角色", tagCopyrights: "作品", tagGeneral: "通用", tagMetadata: "元数据", sourceDescription: "当前来源：{source}。点击卡片可查看完整图片、标签与可用提示词。", searchCollections: "搜索图鉴、标题、作者或提示词", searchTags: "搜索标签，多个标签用空格分隔", resultCount: "{count} 个结果", resultTotal: "共 {count} 个结果",
+    unavailableImage: "图片不可用", imageLoading: "加载中", codex: "法典", imageCount: "{count} 张配图", openCollection: "点击进入图鉴", score: "评分 {count}", invalidCredentials: "Gelbooru 凭据无效或已失效，请检查 User ID 与 API Key。", sourceFailed: "读取该来源失败，请检查网络或稍后重试。", detailFailed: "无法打开作品详情，请稍后重试。", tagArtists: "艺术家", tagCharacters: "角色", tagCopyrights: "作品", tagGeneral: "通用", tagMetadata: "元数据", sourceDescription: "当前来源：{source}。点击卡片可查看完整图片、标签与可用提示词。", searchCollections: "搜索图鉴、标题、作者或提示词", searchTags: "搜索标签，多个标签用空格分隔", resultCount: "{count} 个结果", resultTotal: "共 {count} 个结果", downloadCurrent: "下载当前图片", downloadSeries: "下载整个系列", downloading: "正在下载…", downloadDone: "已保存 {count} 张图片到输出目录", downloadFailed: "下载失败，请检查网络与输出目录。",
   },
   "zh-TW": {
     title: "線上畫廊",
@@ -167,7 +167,7 @@ const TEXT = {
     noSelected: "請至少勾選一個相容參數",
     gallerySource: "畫廊來源", artistTitle: "畫師排行榜", artistSubtitle: "收錄 Danbooru 全部有效畫師標籤並依作品數排序；作品數代表收錄量與熱度，不代表畫師品質。", updated: "更新", neverUpdated: "尚未更新", manualUpdate: "手動更新", openDanbooru: "開啟 Danbooru", artistSearch: "搜尋畫師 Tag", artistCount: "共 {count} 位畫師", artistPageSize: "每頁 {count} 位畫師", loadingArtists: "正在讀取畫師排行…", works: "作品", copyArtistTag: "複製畫師 Tag", copyTag: "複製 Tag", openArtistLibrary: "開啟該畫師作品庫", library: "作品庫 ↗", loadingPreviews: "正在讀取代表作品…", noPreviews: "暫無可用參考圖", previewHint: "按兩下全螢幕預覽", previewPage: "第 {page} / {pages} 頁 · 每頁 12 張", rankingPage: "第 {page} / {pages} 頁 · {start}–{end} / {total}", rankingPagination: "畫師排行榜分頁", itemsPerPage: "每頁數量", choosePage: "選擇頁數", pagePosition: "第 {page} / {pages} 頁", loadingPage: "正在準備第 {page} 頁…", closePreview: "關閉預覽", previousImage: "上一張", nextImage: "下一張", openSourcePage: "開啟來源頁面", rating: "內容分級", size: "尺寸", negativePrompt: "負面提示詞", note: "說明", backCollections: "返回圖鑑清單", openSourceSite: "開啟來源網站", safeOnly: "僅顯示全年齡", loadingSource: "正在讀取 {source} 資料…", artistPreviewLabel: "{artist} 代表作品 {index}", artistLightbox: "{artist} 作品預覽",
     sourceNotice: "資料與圖片來自 AITag；介面結構變更時可能暫時無法使用。",
-    unavailableImage: "圖片無法使用", imageLoading: "載入中", codex: "圖鑑", imageCount: "{count} 張配圖", openCollection: "按一下進入圖鑑", score: "評分 {count}", invalidCredentials: "Gelbooru 憑證無效或已失效，請檢查 User ID 與 API Key。", sourceFailed: "讀取此來源失敗，請檢查網路或稍後重試。", detailFailed: "無法開啟作品詳情，請稍後重試。", tagArtists: "藝術家", tagCharacters: "角色", tagCopyrights: "作品", tagGeneral: "一般", tagMetadata: "中繼資料", sourceDescription: "目前來源：{source}。按一下卡片可查看完整圖片、標籤與可用提示詞。", searchCollections: "搜尋圖鑑、標題、作者或提示詞", searchTags: "搜尋標籤，多個標籤以空格分隔", resultCount: "{count} 個結果", resultTotal: "共 {count} 個結果",
+    unavailableImage: "圖片無法使用", imageLoading: "載入中", codex: "圖鑑", imageCount: "{count} 張配圖", openCollection: "按一下進入圖鑑", score: "評分 {count}", invalidCredentials: "Gelbooru 憑證無效或已失效，請檢查 User ID 與 API Key。", sourceFailed: "讀取此來源失敗，請檢查網路或稍後重試。", detailFailed: "無法開啟作品詳情，請稍後重試。", tagArtists: "藝術家", tagCharacters: "角色", tagCopyrights: "作品", tagGeneral: "一般", tagMetadata: "中繼資料", sourceDescription: "目前來源：{source}。按一下卡片可查看完整圖片、標籤與可用提示詞。", searchCollections: "搜尋圖鑑、標題、作者或提示詞", searchTags: "搜尋標籤，多個標籤以空格分隔", resultCount: "{count} 個結果", resultTotal: "共 {count} 個結果", downloadCurrent: "下載目前圖片", downloadSeries: "下載整個系列", downloading: "下載中…", downloadDone: "已將 {count} 張圖片儲存至輸出目錄", downloadFailed: "下載失敗，請檢查網路與輸出目錄。",
   },
   "en-US": {
     title: "Online Gallery",
@@ -218,7 +218,7 @@ const TEXT = {
     noSelected: "Select at least one compatible parameter",
     gallerySource: "Gallery source", artistTitle: "Artist ranking", artistSubtitle: "Includes every active Danbooru artist tag and ranks them by indexed works. Counts indicate volume and popularity, not artist quality.", updated: "Updated", neverUpdated: "Not updated yet", manualUpdate: "Update now", openDanbooru: "Open Danbooru", artistSearch: "Search artist tags", artistCount: "{count} artists total", artistPageSize: "{count} artists per page", loadingArtists: "Loading artist ranking…", works: "works", copyArtistTag: "Copy artist tag", copyTag: "Copy tag", openArtistLibrary: "Open this artist's library", library: "Library ↗", loadingPreviews: "Loading representative works…", noPreviews: "No reference images available", previewHint: "Double-click for full-screen preview", previewPage: "Page {page} of {pages} · 12 per page", rankingPage: "Page {page} of {pages} · {start}–{end} / {total}", rankingPagination: "Artist ranking pages", itemsPerPage: "Items per page", choosePage: "Choose page", pagePosition: "Page {page} of {pages}", loadingPage: "Preparing page {page}…", closePreview: "Close preview", previousImage: "Previous image", nextImage: "Next image", openSourcePage: "Open source page", rating: "Rating", size: "Size", negativePrompt: "Negative prompt", note: "Notes", backCollections: "Back to collections", openSourceSite: "Open source website", safeOnly: "Safe content only", loadingSource: "Loading {source} data…", artistPreviewLabel: "{artist} representative work {index}", artistLightbox: "{artist} work preview",
     sourceNotice: "Data and images are provided by AITag; availability may change with its API.",
-    unavailableImage: "Image unavailable", imageLoading: "Loading", codex: "Collection", imageCount: "{count} images", openCollection: "Open collection", score: "Score {count}", invalidCredentials: "The Gelbooru credentials are invalid or expired. Check the User ID and API key.", sourceFailed: "Could not load this source. Check the network and try again.", detailFailed: "Could not open the work details. Try again later.", tagArtists: "Artists", tagCharacters: "Characters", tagCopyrights: "Copyrights", tagGeneral: "General", tagMetadata: "Metadata", sourceDescription: "Current source: {source}. Open a card to view the full image, tags, and reusable prompt.", searchCollections: "Search collections, titles, authors, or prompts", searchTags: "Search tags separated by spaces", resultCount: "{count} results", resultTotal: "{count} results total",
+    unavailableImage: "Image unavailable", imageLoading: "Loading", codex: "Collection", imageCount: "{count} images", openCollection: "Open collection", score: "Score {count}", invalidCredentials: "The Gelbooru credentials are invalid or expired. Check the User ID and API key.", sourceFailed: "Could not load this source. Check the network and try again.", detailFailed: "Could not open the work details. Try again later.", tagArtists: "Artists", tagCharacters: "Characters", tagCopyrights: "Copyrights", tagGeneral: "General", tagMetadata: "Metadata", sourceDescription: "Current source: {source}. Open a card to view the full image, tags, and reusable prompt.", searchCollections: "Search collections, titles, authors, or prompts", searchTags: "Search tags separated by spaces", resultCount: "{count} results", resultTotal: "{count} results total", downloadCurrent: "Download current image", downloadSeries: "Download full series", downloading: "Downloading…", downloadDone: "Saved {count} images to the output folder", downloadFailed: "Download failed. Check the network and output folder.",
   },
   "ja-JP": {
     title: "オンラインギャラリー",
@@ -269,7 +269,7 @@ const TEXT = {
     noSelected: "互換設定を1つ以上選択してください",
     gallerySource: "ギャラリーソース", artistTitle: "画家ランキング", artistSubtitle: "Danbooru の有効な画家タグをすべて収録し、作品数で並べています。作品数は収録量と人気の目安で、画家の品質評価ではありません。", updated: "更新", neverUpdated: "未更新", manualUpdate: "今すぐ更新", openDanbooru: "Danbooru を開く", artistSearch: "画家タグを検索", artistCount: "全 {count} 人の画家", artistPageSize: "1ページ {count} 人", loadingArtists: "画家ランキングを読み込み中…", works: "作品", copyArtistTag: "画家タグをコピー", copyTag: "タグをコピー", openArtistLibrary: "この画家の作品一覧を開く", library: "作品一覧 ↗", loadingPreviews: "代表作品を読み込み中…", noPreviews: "参照画像がありません", previewHint: "ダブルクリックで全画面プレビュー", previewPage: "{page} / {pages} ページ・1 ページ 12 枚", rankingPage: "{page} / {pages} ページ・{start}–{end} / {total}", rankingPagination: "画家ランキングのページ", itemsPerPage: "1ページの件数", choosePage: "ページを選択", pagePosition: "{page} / {pages} ページ", loadingPage: "{page}ページを準備中…", closePreview: "プレビューを閉じる", previousImage: "前の画像", nextImage: "次の画像", openSourcePage: "ソースページを開く", rating: "レーティング", size: "サイズ", negativePrompt: "ネガティブプロンプト", note: "説明", backCollections: "図鑑一覧へ戻る", openSourceSite: "ソースサイトを開く", safeOnly: "全年齢のみ", loadingSource: "{source} データを読み込み中…", artistPreviewLabel: "{artist} の代表作品 {index}", artistLightbox: "{artist} の作品プレビュー",
     sourceNotice: "データと画像は AITag 提供です。API 変更時は一時的に利用できない場合があります。",
-    unavailableImage: "画像を利用できません", imageLoading: "読み込み中", codex: "図鑑", imageCount: "画像 {count} 枚", openCollection: "図鑑を開く", score: "スコア {count}", invalidCredentials: "Gelbooru の認証情報が無効か期限切れです。User ID と API Key を確認してください。", sourceFailed: "このソースを読み込めません。ネットワークを確認して再試行してください。", detailFailed: "作品の詳細を開けません。後でもう一度お試しください。", tagArtists: "画家", tagCharacters: "キャラクター", tagCopyrights: "作品", tagGeneral: "一般", tagMetadata: "メタデータ", sourceDescription: "現在のソース：{source}。カードから画像・タグ・利用可能なプロンプトを確認できます。", searchCollections: "図鑑・タイトル・作者・プロンプトを検索", searchTags: "タグをスペース区切りで検索", resultCount: "{count} 件", resultTotal: "全 {count} 件",
+    unavailableImage: "画像を利用できません", imageLoading: "読み込み中", codex: "図鑑", imageCount: "画像 {count} 枚", openCollection: "図鑑を開く", score: "スコア {count}", invalidCredentials: "Gelbooru の認証情報が無効か期限切れです。User ID と API Key を確認してください。", sourceFailed: "このソースを読み込めません。ネットワークを確認して再試行してください。", detailFailed: "作品の詳細を開けません。後でもう一度お試しください。", tagArtists: "画家", tagCharacters: "キャラクター", tagCopyrights: "作品", tagGeneral: "一般", tagMetadata: "メタデータ", sourceDescription: "現在のソース：{source}。カードから画像・タグ・利用可能なプロンプトを確認できます。", searchCollections: "図鑑・タイトル・作者・プロンプトを検索", searchTags: "タグをスペース区切りで検索", resultCount: "{count} 件", resultTotal: "全 {count} 件", downloadCurrent: "現在の画像を保存", downloadSeries: "シリーズ全体を保存", downloading: "保存中…", downloadDone: "{count} 枚を出力フォルダに保存しました", downloadFailed: "保存に失敗しました。ネットワークと出力フォルダを確認してください。",
   },
   "ko-KR": {
     title: "온라인 갤러리",
@@ -320,7 +320,7 @@ const TEXT = {
     noSelected: "호환 매개변수를 하나 이상 선택하세요",
     gallerySource: "갤러리 소스", artistTitle: "작가 순위", artistSubtitle: "Danbooru의 모든 활성 작가 태그를 수록하고 작품 수로 정렬합니다. 작품 수는 수록량과 인기도를 나타내며 작가 품질 평가는 아닙니다.", updated: "업데이트", neverUpdated: "아직 업데이트되지 않음", manualUpdate: "지금 업데이트", openDanbooru: "Danbooru 열기", artistSearch: "작가 태그 검색", artistCount: "총 작가 {count}명", artistPageSize: "페이지당 작가 {count}명", loadingArtists: "작가 순위 불러오는 중…", works: "작품", copyArtistTag: "작가 태그 복사", copyTag: "태그 복사", openArtistLibrary: "작가 작품 라이브러리 열기", library: "작품 라이브러리 ↗", loadingPreviews: "대표 작품 불러오는 중…", noPreviews: "사용 가능한 참고 이미지 없음", previewHint: "두 번 클릭해 전체 화면 미리보기", previewPage: "{page} / {pages}페이지 · 페이지당 12장", rankingPage: "{page} / {pages}페이지 · {start}–{end} / {total}", rankingPagination: "작가 순위 페이지", itemsPerPage: "페이지당 항목", choosePage: "페이지 선택", pagePosition: "{page} / {pages}페이지", loadingPage: "{page}페이지 준비 중…", closePreview: "미리보기 닫기", previousImage: "이전 이미지", nextImage: "다음 이미지", openSourcePage: "원본 페이지 열기", rating: "등급", size: "크기", negativePrompt: "부정 프롬프트", note: "설명", backCollections: "도감 목록으로", openSourceSite: "원본 사이트 열기", safeOnly: "전체 이용가만", loadingSource: "{source} 데이터 불러오는 중…", artistPreviewLabel: "{artist} 대표 작품 {index}", artistLightbox: "{artist} 작품 미리보기",
     sourceNotice: "데이터와 이미지는 AITag에서 제공되며 API 변경 시 일시적으로 사용할 수 없을 수 있습니다.",
-    unavailableImage: "이미지를 사용할 수 없음", imageLoading: "불러오는 중", codex: "도감", imageCount: "이미지 {count}장", openCollection: "도감 열기", score: "점수 {count}", invalidCredentials: "Gelbooru 인증 정보가 잘못되었거나 만료되었습니다. User ID와 API Key를 확인하세요.", sourceFailed: "이 소스를 불러오지 못했습니다. 네트워크를 확인하고 다시 시도하세요.", detailFailed: "작품 상세 정보를 열지 못했습니다. 잠시 후 다시 시도하세요.", tagArtists: "작가", tagCharacters: "캐릭터", tagCopyrights: "작품", tagGeneral: "일반", tagMetadata: "메타데이터", sourceDescription: "현재 소스: {source}. 카드를 열어 전체 이미지, 태그, 재사용 가능한 프롬프트를 확인하세요.", searchCollections: "도감, 제목, 작가 또는 프롬프트 검색", searchTags: "태그를 공백으로 구분해 검색", resultCount: "결과 {count}개", resultTotal: "총 {count}개 결과",
+    unavailableImage: "이미지를 사용할 수 없음", imageLoading: "불러오는 중", codex: "도감", imageCount: "이미지 {count}장", openCollection: "도감 열기", score: "점수 {count}", invalidCredentials: "Gelbooru 인증 정보가 잘못되었거나 만료되었습니다. User ID와 API Key를 확인하세요.", sourceFailed: "이 소스를 불러오지 못했습니다. 네트워크를 확인하고 다시 시도하세요.", detailFailed: "작품 상세 정보를 열지 못했습니다. 잠시 후 다시 시도하세요.", tagArtists: "작가", tagCharacters: "캐릭터", tagCopyrights: "작품", tagGeneral: "일반", tagMetadata: "메타데이터", sourceDescription: "현재 소스: {source}. 카드를 열어 전체 이미지, 태그, 재사용 가능한 프롬프트를 확인하세요.", searchCollections: "도감, 제목, 작가 또는 프롬프트 검색", searchTags: "태그를 공백으로 구분해 검색", resultCount: "결과 {count}개", resultTotal: "총 {count}개 결과", downloadCurrent: "현재 이미지 저장", downloadSeries: "전체 시리즈 저장", downloading: "저장 중…", downloadDone: "이미지 {count}장을 출력 폴더에 저장했습니다", downloadFailed: "저장하지 못했습니다. 네트워크와 출력 폴더를 확인하세요.",
   },
 } as const;
 
@@ -383,6 +383,61 @@ function CopyButton({ value, text }: { value: string; text: GalleryText }) {
   );
 }
 
+function GalleryImageLightbox({
+  label,
+  image,
+  index,
+  total,
+  onClose,
+  onPrevious,
+  onNext,
+  sourceUrl,
+  onDownloadCurrent,
+  onDownloadAll,
+  downloadBusy,
+  text,
+}: {
+  label: string;
+  image: ReactNode;
+  index: number;
+  total: number;
+  onClose: () => void;
+  onPrevious?: () => void;
+  onNext?: () => void;
+  sourceUrl?: string;
+  onDownloadCurrent?: () => void;
+  onDownloadAll?: () => void;
+  downloadBusy?: boolean;
+  text: GalleryText;
+}) {
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+      else if (event.key === "ArrowLeft" && onPrevious) onPrevious();
+      else if (event.key === "ArrowRight" && onNext) onNext();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose, onNext, onPrevious]);
+
+  return <AppPortal>
+    <div className="modal-backdrop artist-ranking-lightbox-backdrop" onClick={onClose}>
+      <section className="artist-ranking-lightbox online-gallery-lightbox" role="dialog" aria-modal="true" aria-label={label} onClick={(event) => event.stopPropagation()}>
+        <button type="button" className="artist-ranking-lightbox-close" aria-label={text.closePreview} onClick={onClose}>×</button>
+        <div className="online-gallery-lightbox-image">{image}</div>
+        <footer>
+          <button type="button" disabled={!onPrevious} onClick={onPrevious}>{text.previousImage}</button>
+          <span>{index + 1} / {total}</span>
+          {onDownloadCurrent ? <button type="button" disabled={downloadBusy} onClick={onDownloadCurrent}>{downloadBusy ? text.downloading : text.downloadCurrent}</button> : null}
+          {onDownloadAll && total > 1 ? <button type="button" disabled={downloadBusy} onClick={onDownloadAll}>{text.downloadSeries}</button> : null}
+          {sourceUrl ? <button type="button" onClick={() => void window.naiDesktop.openExternal(sourceUrl)}>{text.openSourcePage}</button> : null}
+          <button type="button" disabled={!onNext} onClick={onNext}>{text.nextImage}</button>
+        </footer>
+      </section>
+    </div>
+  </AppPortal>;
+}
+
 function loadGallerySource(): OnlineGallerySourceId {
   const stored = localStorage.getItem(ONLINE_GALLERY_SOURCE_KEY);
   return ONLINE_GALLERY_SOURCES.some((source) => source.id === stored)
@@ -440,11 +495,31 @@ function ArtistRankingGallery({
     items: ArtistStylePreviewResult[];
     index: number;
   } | null>(null);
+  const [previewDownloadBusy, setPreviewDownloadBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [updatedAt, setUpdatedAt] = useState(0);
   const rankingRequest = useRef(0);
   const rankingQueryReady = useRef(false);
+
+  const downloadArtistPreviews = async (all: boolean) => {
+    if (!previewLightbox || previewDownloadBusy) return;
+    const current = previewLightbox.items[previewLightbox.index];
+    const items = all ? previewLightbox.items : [current];
+    setPreviewDownloadBusy(true);
+    try {
+      await window.naiDesktop.downloadOnlineGalleryImages({
+        source: "artist-ranking",
+        itemId: previewLightbox.artist,
+        title: previewLightbox.artist,
+        images: items.map((item, index) => ({ id: item.tag || String(index + 1), url: item.imageUrl })),
+      });
+    } catch {
+      // The lightbox remains open so the user can retry or use the source page.
+    } finally {
+      setPreviewDownloadBusy(false);
+    }
+  };
 
   const load = useCallback(async (
     force = false,
@@ -636,7 +711,6 @@ function ArtistRankingGallery({
                         type="button"
                         aria-label={formatText(text.artistPreviewLabel, { artist: artist.name, index: index + 1 })}
                         title={text.previewHint}
-                        style={item.width > 0 && item.height > 0 ? { aspectRatio: `${item.width} / ${item.height}` } : undefined}
                         onDoubleClick={() => setPreviewLightbox({ artist: artist.name, items: previewResult.items, index })}
                         onKeyDown={(event) => {
                           if (event.key === "Enter" || event.key === " ") {
@@ -675,6 +749,8 @@ function ArtistRankingGallery({
             <footer>
               <button type="button" disabled={previewLightbox.index <= 0} onClick={() => setPreviewLightbox((current) => current ? { ...current, index: Math.max(0, current.index - 1) } : current)}>{text.previousImage}</button>
               <span>{previewLightbox.index + 1} / {previewLightbox.items.length} · {previewLightbox.items[previewLightbox.index].width}×{previewLightbox.items[previewLightbox.index].height}</span>
+              <button type="button" disabled={previewDownloadBusy} onClick={() => void downloadArtistPreviews(false)}>{previewDownloadBusy ? text.downloading : text.downloadCurrent}</button>
+              <button type="button" disabled={previewDownloadBusy || previewLightbox.items.length <= 1} onClick={() => void downloadArtistPreviews(true)}>{text.downloadSeries}</button>
               <button type="button" onClick={() => void window.naiDesktop.openExternal(previewLightbox.items[previewLightbox.index].postUrl || previewLightbox.items[previewLightbox.index].sourceUrl)}>{text.openSourcePage}</button>
               <button type="button" disabled={previewLightbox.index >= previewLightbox.items.length - 1} onClick={() => setPreviewLightbox((current) => current ? { ...current, index: Math.min(current.items.length - 1, current.index + 1) } : current)}>{text.nextImage}</button>
             </footer>
@@ -734,9 +810,38 @@ function OnlineCachedImage({
     : <span className="aitag-image-loading">{failed ? text.unavailableImage : text.imageLoading}</span>;
 }
 
+function useMasonryCard(ref: { current: HTMLElement | null }) {
+  useEffect(() => {
+    const node = ref.current;
+    const grid = node?.parentElement;
+    if (!node || !grid) return;
+    let frame = 0;
+    const update = () => {
+      const style = window.getComputedStyle(grid);
+      const rowHeight = Number.parseFloat(style.gridAutoRows) || 1;
+      const rowGap = Number.parseFloat(style.rowGap) || 0;
+      const height = node.getBoundingClientRect().height;
+      node.style.gridRowEnd = `span ${Math.max(1, Math.ceil((height + rowGap) / (rowHeight + rowGap)))}`;
+    };
+    const schedule = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(update);
+    };
+    const observer = new ResizeObserver(schedule);
+    observer.observe(node);
+    schedule();
+    return () => {
+      observer.disconnect();
+      window.cancelAnimationFrame(frame);
+    };
+  }, [ref]);
+}
+
 function ExternalWorkCard({ item, onOpen, text }: { item: OnlineGalleryItem; onOpen: (item: OnlineGalleryItem) => void; text: GalleryText }) {
+  const rootRef = useRef<HTMLElement | null>(null);
+  useMasonryCard(rootRef);
   return (
-    <article className="aitag-card online-gallery-card">
+    <article ref={rootRef} className="aitag-card online-gallery-card">
       <button type="button" className="aitag-card-hit" aria-label={item.title} onClick={() => onOpen(item)}>
         <div className="aitag-card-image" style={item.cover.width > 0 && item.cover.height > 0 ? { aspectRatio: `${item.cover.width} / ${item.cover.height}` } : undefined}>
           {item.cover.previewUrl
@@ -791,6 +896,9 @@ function ExternalGallery({
   const [error, setError] = useState("");
   const [selected, setSelected] = useState<OnlineGalleryDetail | null>(null);
   const [selectedMedia, setSelectedMedia] = useState(0);
+  const [detailPreviewOpen, setDetailPreviewOpen] = useState(false);
+  const [downloadBusy, setDownloadBusy] = useState(false);
+  const [downloadStatus, setDownloadStatus] = useState("");
   const gelbooruApiKey = DEFAULT_GELBOORU_API_KEY;
   const gelbooruUserId = DEFAULT_GELBOORU_USER_ID;
   const requestSequence = useRef(0);
@@ -849,6 +957,8 @@ function ExternalGallery({
 
   useEffect(() => {
     setSelected(null);
+    setDetailPreviewOpen(false);
+    setDownloadStatus("");
     setCollectionId("");
     setCollectionTitle("");
     setQueryValue("");
@@ -884,10 +994,33 @@ function ExternalGallery({
       });
       setSelected(detail);
       setSelectedMedia(0);
+      setDetailPreviewOpen(false);
+      setDownloadStatus("");
     } catch {
       setError(text.detailFailed);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const downloadImages = async (all: boolean) => {
+    if (!selected || downloadBusy) return;
+    const available = selected.media.length ? selected.media : [selected.item.cover];
+    const targets = all ? available : [available[selectedMedia] ?? available[0]];
+    setDownloadBusy(true);
+    setDownloadStatus(text.downloading);
+    try {
+      const result = await window.naiDesktop.downloadOnlineGalleryImages({
+        source,
+        itemId: selected.item.id,
+        title: selected.item.title,
+        images: targets.map((item) => ({ id: item.id, url: item.downloadUrl || item.displayUrl, extension: item.extension })),
+      });
+      setDownloadStatus(result.cancelled ? "" : result.savedPaths.length ? formatText(text.downloadDone, { count: result.savedPaths.length }) : text.downloadFailed);
+    } catch {
+      setDownloadStatus(text.downloadFailed);
+    } finally {
+      setDownloadBusy(false);
     }
   };
 
@@ -908,7 +1041,11 @@ function ExternalGallery({
             <h2>{selected.item.title || `#${selected.item.id}`}</h2>
             <p>{info.label} · {selected.item.createdAt || "—"}</p>
           </div>
-          <button type="button" className="btn secondary" disabled={!selected.item.sourceUrl} onClick={() => void window.naiDesktop.openExternal(selected.item.sourceUrl)}>{text.openSourcePage}</button>
+          <div className="aitag-header-actions">
+            <button type="button" className="btn primary" disabled={downloadBusy} onClick={() => void downloadImages(false)}>{downloadBusy ? text.downloading : text.downloadCurrent}</button>
+            {selected.media.length > 1 ? <button type="button" className="btn secondary" disabled={downloadBusy} onClick={() => void downloadImages(true)}>{text.downloadSeries}</button> : null}
+            <button type="button" className="btn secondary" disabled={!selected.item.sourceUrl} onClick={() => void window.naiDesktop.openExternal(selected.item.sourceUrl)}>{text.openSourcePage}</button>
+          </div>
         </header>
         <section className="aitag-work-facts">
           <article><span>{text.gallerySource}</span><b>{info.label}</b></article>
@@ -918,17 +1055,18 @@ function ExternalGallery({
         </section>
         <section className="aitag-detail-grid">
           <div className="aitag-detail-visual">
-            {media.displayUrl ? <OnlineCachedImage source={source} text={text} src={media.displayUrl} alt={selected.item.title} /> : null}
+            {media.displayUrl ? <button type="button" className="aitag-detail-preview-trigger" title={text.previewHint} aria-label={`${selected.item.title} · ${text.previewHint}`} onDoubleClick={() => setDetailPreviewOpen(true)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setDetailPreviewOpen(true); } }}><OnlineCachedImage source={source} text={text} src={media.displayUrl} alt={selected.item.title} /></button> : null}
             {selected.media.length > 1 ? (
               <div className="aitag-image-strip">
                 {selected.media.map((candidate, index) => (
-                  <button key={candidate.id} type="button" className={index === selectedMedia ? "active" : ""} style={candidate.width > 0 && candidate.height > 0 ? { aspectRatio: `${candidate.width} / ${candidate.height}` } : undefined} onClick={() => setSelectedMedia(index)}>
+                  <button key={candidate.id} type="button" className={index === selectedMedia ? "active" : ""} onClick={() => setSelectedMedia(index)}>
                     <OnlineCachedImage source={source} text={text} src={candidate.previewUrl} alt={`${selected.item.title} ${index + 1}`} />
                     <span>{index + 1}</span>
                   </button>
                 ))}
               </div>
             ) : null}
+            {downloadStatus ? <p className="online-gallery-download-status" aria-live="polite">{downloadStatus}</p> : null}
           </div>
           <div className="aitag-metadata-panel online-gallery-detail-info">
             {selected.prompt ? (
@@ -958,6 +1096,20 @@ function ExternalGallery({
             {selected.note ? <article className="aitag-data-block"><header><h3>{text.note}</h3></header><p>{selected.note}</p></article> : null}
           </div>
         </section>
+        {detailPreviewOpen ? <GalleryImageLightbox
+          label={selected.item.title || `#${selected.item.id}`}
+          image={<OnlineCachedImage source={source} text={text} src={media.displayUrl} alt={selected.item.title} />}
+          index={selectedMedia}
+          total={selected.media.length || 1}
+          onClose={() => setDetailPreviewOpen(false)}
+          onPrevious={selectedMedia > 0 ? () => setSelectedMedia((value) => value - 1) : undefined}
+          onNext={selectedMedia < selected.media.length - 1 ? () => setSelectedMedia((value) => value + 1) : undefined}
+          sourceUrl={selected.item.sourceUrl}
+          onDownloadCurrent={() => void downloadImages(false)}
+          onDownloadAll={() => void downloadImages(true)}
+          downloadBusy={downloadBusy}
+          text={text}
+        /> : null}
       </main>
     );
   }
@@ -1070,6 +1222,7 @@ function WorkCard({
   const rootRef = useRef<HTMLElement | null>(null);
   const [imageUrl, setImageUrl] = useState("");
   const [aspectRatio, setAspectRatio] = useState<number | null>(null);
+  useMasonryCard(rootRef);
 
   useEffect(() => {
     const node = rootRef.current;
@@ -1131,6 +1284,9 @@ export default function AitagGallery({ onBack }: { onBack?: () => void }) {
   const [error, setError] = useState(false);
   const [selected, setSelected] = useState<AitagWorkDetail | null>(gallerySession.selected);
   const [selectedImage, setSelectedImage] = useState(gallerySession.selectedImage);
+  const [detailPreviewOpen, setDetailPreviewOpen] = useState(false);
+  const [downloadBusy, setDownloadBusy] = useState(false);
+  const [downloadStatus, setDownloadStatus] = useState("");
   const [detailLoading, setDetailLoading] = useState(false);
   const [compatibleSelection, setCompatibleSelection] = useState<Set<keyof ImportedParams>>(loadCompatibleSelection);
   const searchSequence = useRef(0);
@@ -1270,6 +1426,8 @@ export default function AitagGallery({ onBack }: { onBack?: () => void }) {
       const detail = await loadDetail(work.id);
       setSelected(detail);
       setSelectedImage(0);
+      setDetailPreviewOpen(false);
+      setDownloadStatus("");
     } catch {
       setError(true);
     } finally {
@@ -1309,6 +1467,26 @@ export default function AitagGallery({ onBack }: { onBack?: () => void }) {
       else next.add(key);
       return next;
     });
+  };
+
+  const downloadImages = async (all: boolean) => {
+    if (!selected || downloadBusy || selected.images.length === 0) return;
+    const targets = all ? selected.images : [selected.images[selectedImage] ?? selected.images[0]];
+    setDownloadBusy(true);
+    setDownloadStatus(text.downloading);
+    try {
+      const result = await window.naiDesktop.downloadOnlineGalleryImages({
+        source: "aitag",
+        itemId: String(selected.work.id),
+        title: selected.work.title,
+        images: targets.map((item) => ({ id: String(item.id), url: aitagImageUrl(config, item), extension: item.imageType })),
+      });
+      setDownloadStatus(result.cancelled ? "" : result.savedPaths.length ? formatText(text.downloadDone, { count: result.savedPaths.length }) : text.downloadFailed);
+    } catch {
+      setDownloadStatus(text.downloadFailed);
+    } finally {
+      setDownloadBusy(false);
+    }
   };
   const maxPage = Math.max(1, Math.ceil(result.total / (result.pageSize || pageSize || AITAG_PAGE_SIZE)));
   const timeOptions = useMemo(() => {
@@ -1363,7 +1541,11 @@ export default function AitagGallery({ onBack }: { onBack?: () => void }) {
             </div>
             <p>{text.sourceNotice}</p>
           </div>
-          <button type="button" className="btn secondary" onClick={() => void window.naiDesktop.openExternal(`${AITAG_SITE_URL}/i/${selected.work.id}`)}>{text.source}</button>
+          <div className="aitag-header-actions">
+            <button type="button" className="btn primary" disabled={downloadBusy || selected.images.length === 0} onClick={() => void downloadImages(false)}>{downloadBusy ? text.downloading : text.downloadCurrent}</button>
+            {selected.images.length > 1 ? <button type="button" className="btn secondary" disabled={downloadBusy} onClick={() => void downloadImages(true)}>{text.downloadSeries}</button> : null}
+            <button type="button" className="btn secondary" onClick={() => void window.naiDesktop.openExternal(`${AITAG_SITE_URL}/i/${selected.work.id}`)}>{text.source}</button>
+          </div>
         </header>
 
         <section className="aitag-work-facts">
@@ -1375,18 +1557,16 @@ export default function AitagGallery({ onBack }: { onBack?: () => void }) {
 
         <section className="aitag-detail-grid">
           <div className="aitag-detail-visual">
-            {imageUrl ? <AitagCachedImage src={imageUrl} alt={interpolate(text.image, "index", selectedImage + 1)} /> : null}
+            {imageUrl ? <button type="button" className="aitag-detail-preview-trigger" title={text.previewHint} aria-label={`${interpolate(text.image, "index", selectedImage + 1)} · ${text.previewHint}`} onDoubleClick={() => setDetailPreviewOpen(true)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setDetailPreviewOpen(true); } }}><AitagCachedImage src={imageUrl} alt={interpolate(text.image, "index", selectedImage + 1)} /></button> : null}
             <div className="aitag-image-strip">
               {selected.images.map((candidate, index) => (
                 <button key={candidate.id || index} type="button" className={index === selectedImage ? "active" : ""} onClick={() => setSelectedImage(index)}>
-                  <AitagCachedImage src={aitagImageUrl(config, candidate)} alt={interpolate(text.image, "index", index + 1)} loading="lazy" onLoad={(event) => {
-                    const image = event.currentTarget;
-                    if (image.naturalWidth > 0 && image.naturalHeight > 0 && image.parentElement) image.parentElement.style.aspectRatio = `${image.naturalWidth} / ${image.naturalHeight}`;
-                  }} />
+                  <AitagCachedImage src={aitagImageUrl(config, candidate)} alt={interpolate(text.image, "index", index + 1)} loading="lazy" />
                   <span>{index + 1}</span>
                 </button>
               ))}
             </div>
+            {downloadStatus ? <p className="online-gallery-download-status" aria-live="polite">{downloadStatus}</p> : null}
           </div>
           <div className="aitag-metadata-panel">
             <div className="aitag-metadata-title">
@@ -1444,6 +1624,20 @@ export default function AitagGallery({ onBack }: { onBack?: () => void }) {
             </article>
           </div>
         </section>
+        {detailPreviewOpen && imageUrl ? <GalleryImageLightbox
+          label={interpolate(text.image, "index", selectedImage + 1)}
+          image={<AitagCachedImage src={imageUrl} alt={interpolate(text.image, "index", selectedImage + 1)} />}
+          index={selectedImage}
+          total={selected.images.length}
+          onClose={() => setDetailPreviewOpen(false)}
+          onPrevious={selectedImage > 0 ? () => setSelectedImage((value) => value - 1) : undefined}
+          onNext={selectedImage < selected.images.length - 1 ? () => setSelectedImage((value) => value + 1) : undefined}
+          sourceUrl={`${AITAG_SITE_URL}/i/${selected.work.id}`}
+          onDownloadCurrent={() => void downloadImages(false)}
+          onDownloadAll={() => void downloadImages(true)}
+          downloadBusy={downloadBusy}
+          text={text}
+        /> : null}
       </main>
     );
   }

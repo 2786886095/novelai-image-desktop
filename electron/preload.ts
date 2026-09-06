@@ -182,6 +182,9 @@ contextBridge.exposeInMainWorld("naiDesktop", {
     ipcRenderer.invoke("online-gallery:search", request),
   onlineGalleryDetail: (request: import("../src/online-gallery").OnlineGalleryDetailRequest) =>
     ipcRenderer.invoke("online-gallery:detail", request),
+  downloadOnlineGalleryImages: (request: import("../src/online-gallery").OnlineGalleryDownloadRequest) =>
+    ipcRenderer.invoke("online-gallery:download-images", request),
+  selectOnlineGalleryDownloadDir: () => ipcRenderer.invoke("online-gallery:select-download-dir"),
   onlineGalleryClearDataCache: () => ipcRenderer.invoke("online-gallery:clear-data-cache"),
   onlineGalleryCacheImage: (
     source: import("../src/online-gallery").OnlineGallerySourceId,

@@ -117,6 +117,7 @@ export function createTavernSamplerPreset(name = "沉浸叙事"): TavernSamplerP
     frequencyPenalty: 0,
     presencePenalty: 0,
     stop: [],
+    source: "langbai",
     createdAt: timestamp,
     updatedAt: timestamp,
   };
@@ -155,6 +156,11 @@ export function normalizeTavernSamplerPreset(value: unknown): TavernSamplerPrese
       ? { maxOutputTokens: Math.round(finite(raw.maxOutputTokens, 4096, 128, 131_072)) }
       : {}),
     stop: stringArray(raw.stop).slice(0, 32),
+    ...(raw.source === "builtin" || raw.source === "sillytavern-json" || raw.source === "langbai"
+      ? { source: raw.source }
+      : {}),
+    ...(string(raw.sourceName).trim() ? { sourceName: string(raw.sourceName).trim().slice(0, 260) } : {}),
+    ...(string(raw.sourceHash).trim() ? { sourceHash: string(raw.sourceHash).trim().slice(0, 128) } : {}),
     createdAt: isoDate(raw.createdAt, timestamp),
     updatedAt: isoDate(raw.updatedAt, timestamp),
   };

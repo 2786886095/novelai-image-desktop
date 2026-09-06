@@ -22,6 +22,7 @@ import {
   applyAgentPromptLocks,
   buildAgentGenerationInput,
   defaultAgentInpaintModel,
+  resolveAgentPromptLocks,
 } from "../../src/agent/generation-input";
 import {
   DEFAULT_AUGMENT_OPTIONS,
@@ -218,10 +219,10 @@ function generationInput(request: AgentToolBridgeRequest, args: Record<string, u
       return readBase64(attachment.filePath);
     },
   );
-  result.params = applyAgentPromptLocks(result.params, {
+  result.params = applyAgentPromptLocks(result.params, resolveAgentPromptLocks({
     ...(settings.lockStylePrompt ? { stylePrompt: settings.savedStylePrompt } : {}),
     ...(settings.lockNegativePrompt ? { negativePrompt: settings.savedNegativePrompt } : {}),
-  });
+  }, request.promptLocks));
   return result;
 }
 

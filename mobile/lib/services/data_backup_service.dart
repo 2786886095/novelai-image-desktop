@@ -1723,6 +1723,7 @@ class DataBackupService {
       // Configuration is the only overwrite category, but device-specific
       // output paths, API values, and merge-only preset libraries stay intact.
       incoming['imageOutputDir'] = current['imageOutputDir'];
+      incoming['onlineGalleryDownloadDir'] = current['onlineGalleryDownloadDir'];
       incoming['backupDir'] = current['backupDir'];
       for (final key in _apiSettingKeys) {
         incoming[key] = current[key];

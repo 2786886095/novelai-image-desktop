@@ -490,6 +490,9 @@ class TavernSamplerPreset {
   double presencePenalty;
   int? maxOutputTokens;
   List<String> stop;
+  String? source;
+  String? sourceName;
+  String? sourceHash;
   String createdAt;
   String updatedAt;
 
@@ -506,6 +509,9 @@ class TavernSamplerPreset {
     this.presencePenalty = 0,
     this.maxOutputTokens,
     List<String>? stop,
+    this.source = 'langbai',
+    this.sourceName,
+    this.sourceHash,
     String? createdAt,
     String? updatedAt,
   })  : id = id ?? tavernId('sampler'),
@@ -528,6 +534,12 @@ class TavernSamplerPreset {
             ? _integer(json['maxOutputTokens'], 4096, 128, 131072)
             : null,
         stop: _strings(json['stop']),
+        source: const {'builtin', 'sillytavern-json', 'langbai'}
+                .contains(json['source']?.toString())
+            ? json['source'].toString()
+            : null,
+        sourceName: json['sourceName']?.toString(),
+        sourceHash: json['sourceHash']?.toString(),
         createdAt: _string(json['createdAt'], tavernNow()),
         updatedAt: _string(json['updatedAt'], tavernNow()),
       );
@@ -543,6 +555,9 @@ class TavernSamplerPreset {
         'presencePenalty': presencePenalty,
         if (maxOutputTokens != null) 'maxOutputTokens': maxOutputTokens,
         'stop': stop,
+        if (source != null) 'source': source,
+        if (sourceName != null) 'sourceName': sourceName,
+        if (sourceHash != null) 'sourceHash': sourceHash,
         'createdAt': createdAt,
         'updatedAt': updatedAt,
       };
@@ -560,6 +575,7 @@ class TavernImageProposal {
   int? steps;
   double? scale;
   String? sampler;
+  List<String> explicitParameters;
   int count;
   String? error;
   String createdAt;
@@ -576,10 +592,12 @@ class TavernImageProposal {
     this.steps,
     this.scale,
     this.sampler,
+    List<String>? explicitParameters,
     this.count = 1,
     this.error,
     String? createdAt,
-  })  : id = id ?? tavernId('image'),
+  })  : explicitParameters = explicitParameters ?? <String>[],
+        id = id ?? tavernId('image'),
         createdAt = createdAt ?? tavernNow();
 
   factory TavernImageProposal.fromJson(Map<String, dynamic> json) =>
@@ -603,6 +621,7 @@ class TavernImageProposal {
         sampler: _string(json['sampler']).trim().isEmpty
             ? null
             : _string(json['sampler']),
+        explicitParameters: _strings(json['explicitParameters']),
         count: _integer(json['count'], 1, 1, 8),
         error: _string(json['error']).trim().isEmpty
             ? null
@@ -622,6 +641,8 @@ class TavernImageProposal {
         if (steps != null) 'steps': steps,
         if (scale != null) 'scale': scale,
         if (sampler != null) 'sampler': sampler,
+        if (explicitParameters.isNotEmpty)
+          'explicitParameters': explicitParameters,
         'count': count,
         if (error != null) 'error': error,
         'createdAt': createdAt,

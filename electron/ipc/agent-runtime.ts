@@ -19,9 +19,12 @@ import {
   buildTavernPromptMessages,
   defaultImagePromptForMessage,
   parseLangbaiImageProposal,
+  resolveTavernImageProposalParameters,
+  type TavernImageParameterDefaults,
   type TavernPromptMessage,
 } from "../../src/tavern/prompt";
-import { DEFAULT_TAVERN_NEGATIVE_PROMPT, SOFTWARE_IMAGE_CHARACTER_ID } from "../../src/tavern/builtins";
+import { DEFAULT_TAVERN_NEGATIVE_PROMPT } from "../../src/tavern/builtins";
+import { DEFAULT_PARAMS } from "../../src/types";
 import { injectDshImageAiSystemPrompt } from "./dsh-reverse-convert";
 import { getSettings } from "./store";
 import { proxyConfig } from "./proxy";
@@ -584,26 +587,41 @@ function proposalFromRaw(
   raw: Record<string, unknown> | null,
   assistant: AgentMessage,
   character: ReturnType<typeof readAgentWorkspace>["characters"][number],
+  defaults: TavernImageParameterDefaults,
 ): TavernImageProposal | undefined {
   if (!raw) return undefined;
   const positivePrompt = typeof raw.positivePrompt === "string" && raw.positivePrompt.trim()
     ? raw.positivePrompt.trim()
     : defaultImagePromptForMessage(assistant, character);
   if (!positivePrompt) return undefined;
+  const parameters = resolveTavernImageProposalParameters(raw, defaults);
   return {
     id: crypto.randomUUID(),
     status: "pending",
     positivePrompt,
     negativePrompt: character.visual.negativePrompt.trim() || DEFAULT_TAVERN_NEGATIVE_PROMPT,
     stylePrompt: character.visual.stylePrompt,
-    ...(typeof raw.model === "string" && raw.model ? { model: raw.model } : character.visual.model ? { model: character.visual.model } : {}),
-    ...(Number.isFinite(Number(raw.width ?? character.visual.width)) ? { width: Math.round(numeric(raw.width ?? character.visual.width, 1024, 64, 2048)) } : {}),
-    ...(Number.isFinite(Number(raw.height ?? character.visual.height)) ? { height: Math.round(numeric(raw.height ?? character.visual.height, 1024, 64, 2048)) } : {}),
-    ...(Number.isFinite(Number(raw.steps ?? character.visual.steps)) ? { steps: Math.round(numeric(raw.steps ?? character.visual.steps, 28, 1, 50)) } : {}),
-    ...(Number.isFinite(Number(raw.scale ?? character.visual.scale)) ? { scale: numeric(raw.scale ?? character.visual.scale, 5, 0, 10) } : {}),
-    ...(typeof (raw.sampler ?? character.visual.sampler) === "string" ? { sampler: String(raw.sampler ?? character.visual.sampler) } : {}),
-    count: Math.round(numeric(raw.count ?? character.visual.count, 1, 1, 8)),
+    ...(parameters.model ? { model: parameters.model } : {}),
+    ...(parameters.width !== undefined ? { width: Math.round(numeric(parameters.width, 1024, 64, 2048)) } : {}),
+    ...(parameters.height !== undefined ? { height: Math.round(numeric(parameters.height, 1024, 64, 2048)) } : {}),
+    ...(parameters.steps !== undefined ? { steps: Math.round(numeric(parameters.steps, 28, 1, 50)) } : {}),
+    ...(parameters.scale !== undefined ? { scale: numeric(parameters.scale, 5, 0, 10) } : {}),
+    ...(parameters.sampler ? { sampler: parameters.sampler } : {}),
+    count: Math.round(numeric(parameters.count, 1, 1, 8)),
     createdAt: timestamp(),
+  };
+}
+
+function tavernImageDefaults(character: ReturnType<typeof readAgentWorkspace>["characters"][number]): TavernImageParameterDefaults {
+  const saved = getSettings().lastGenerationState?.params ?? DEFAULT_PARAMS;
+  return {
+    model: character.visual.model || saved.model,
+    width: character.visual.width ?? saved.width,
+    height: character.visual.height ?? saved.height,
+    steps: character.visual.steps ?? saved.steps,
+    scale: character.visual.scale ?? saved.cfgScale,
+    sampler: character.visual.sampler || saved.sampler,
+    count: character.visual.count ?? 1,
   };
 }
 
@@ -676,6 +694,10 @@ export async function generateTavernImage(request: TavernImageRequest) {
   try {
     const result = await executeAgentTool({
       tool: "langbai_generate_image",
+      promptLocks: {
+        stylePrompt: proposal.stylePrompt,
+        negativePrompt: proposal.negativePrompt,
+      },
       args: {
         positivePrompt: proposal.positivePrompt,
         negativePrompt: proposal.negativePrompt,
@@ -822,6 +844,7 @@ export async function sendAgentMessage(request: AgentSendRequest) {
         activeConversation.lastCompactedAt,
       ),
     };
+    const imageDefaults = request.imageDefaults ?? tavernImageDefaults(character);
     const prompt = buildTavernPromptMessages({
       conversation: effectiveConversation,
       characters: cast.length ? cast : [character],
@@ -829,22 +852,21 @@ export async function sendAgentMessage(request: AgentSendRequest) {
       persona,
       lorebooks,
       preset,
+      imageDefaults,
     });
-    if (character.id === SOFTWARE_IMAGE_CHARACTER_ID) {
-      const systemIndex = prompt.findIndex((item) => item.role === "system" && typeof item.content === "string");
-      if (systemIndex >= 0) {
-        const systemMessage = prompt[systemIndex];
-        if (typeof systemMessage.content === "string") {
-          prompt[systemIndex] = {
-            ...systemMessage,
-            content: injectDshImageAiSystemPrompt({
-              task: "tavern-image",
-              systemPrompt: systemMessage.content,
-              enabled: settings.reverseConvertDshEnabled,
-              mode: settings.reverseConvertDshMode,
-            }),
-          };
-        }
+    const systemIndex = prompt.findIndex((item) => item.role === "system" && typeof item.content === "string");
+    if (systemIndex >= 0) {
+      const systemMessage = prompt[systemIndex];
+      if (typeof systemMessage.content === "string") {
+        prompt[systemIndex] = {
+          ...systemMessage,
+          content: injectDshImageAiSystemPrompt({
+            task: "tavern-image",
+            systemPrompt: systemMessage.content,
+            enabled: settings.reverseConvertDshEnabled,
+            mode: settings.reverseConvertDshMode,
+          }),
+        };
       }
     }
     if (activeConversation.lastSummary?.trim()) {
@@ -868,7 +890,7 @@ export async function sendAgentMessage(request: AgentSendRequest) {
       swipes.push(assistant.content);
       assistant.swipes = swipes;
       assistant.swipeIndex = swipes.length - 1;
-      assistant.imageProposal = proposalFromRaw(parsed.proposal, assistant, character);
+      assistant.imageProposal = proposalFromRaw(parsed.proposal, assistant, character, imageDefaults);
       target.lastTurnUsage = turn.usage;
       target.status = "idle";
     });

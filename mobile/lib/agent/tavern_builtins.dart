@@ -1,9 +1,11 @@
 import 'tavern_models.dart';
+import 'lyra_preset_data.dart';
 
 const softwareImageCharacterId = 'builtin-software-image-character';
 const softwareImagePersonaId = 'builtin-software-image-persona';
 const softwareImageLorebookId = 'builtin-software-image-lorebook';
-const softwareImageSamplerId = 'builtin-software-image-sampler';
+const lyraImageSamplerId = 'builtin-lyra-beta-3-8-sampler';
+const tavernPresetLibraryVersion = 2;
 const defaultTavernNegativePrompt =
     'lowres, bad anatomy, bad hands, extra limbs, missing limbs, deformed, mutated, poorly drawn face, ugly, blurry, out of focus, watermark, text, error, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, username,';
 
@@ -61,8 +63,8 @@ TavernLorebook createSoftwareImageLorebook() {
         'builtin-software-image-protocol',
         '生图协议',
         '''生图块必须位于可见回复末尾，不使用 Markdown 代码围栏，并保持严格合法的 JSON：
-<langbai-image>{"positivePrompt":"NovelAI-ready English positive prompt","width":1024,"height":1024,"steps":28,"scale":5,"count":1}</langbai-image>
-AI 只生成 positivePrompt 与画面参数，绝不能输出或修改 negativePrompt、stylePrompt、负面提示词或风格提示词；它们由用户在软件的“生图”面板独立控制。positivePrompt 必须非空。count 取 1 到 8。未明确画幅时可使用 1024×1024；竖图优先 832×1216；横图优先 1216×832。不要在普通闲聊中输出该生图块。''',
+<langbai-image>{"positivePrompt":"NovelAI-ready English positive prompt","explicitParameters":[],"width":1024,"height":1024,"steps":28,"scale":5,"count":1}</langbai-image>
+右侧生图面板的 model、width、height、steps、scale、sampler、count 是权威默认值。用户最新一句未明确指定的字段必须原样沿用，并且不能放进 explicitParameters；只有用户明确点名修改的字段才写入 explicitParameters。AI 只生成 positivePrompt 与明确要求的参数覆盖，绝不能输出或修改 negativePrompt、stylePrompt、负面提示词或风格提示词；它们由用户在软件的“生图”面板独立控制。positivePrompt 必须非空。count 取 1 到 8。普通对话照常回复；只有当前消息要求出图或修订最近生图方案时，才在回复末尾追加该生图块。''',
         constant: true,
         insertionOrder: 20,
         priority: 1000,
@@ -147,11 +149,12 @@ TavernCharacter createSoftwareImageCharacter() {
     exampleMessages: '''<START>
 {{user}}: 画一张雨夜霓虹街头的银发少女，电影感竖图
 {{char}}: 已整理画面：银发少女独自站在雨夜霓虹街头，中景竖构图，冷暖霓虹反射与电影感光影，生成 1 张。
-<langbai-image>{"positivePrompt":"1girl, solo, silver hair, standing, rainy night, neon street, wet pavement, reflections, cinematic lighting, atmospheric perspective, medium shot, highly detailed","width":832,"height":1216,"steps":28,"scale":5,"count":1}</langbai-image>''',
+<langbai-image>{"positivePrompt":"1girl, solo, silver hair, standing, rainy night, neon street, wet pavement, reflections, cinematic lighting, atmospheric perspective, medium shot, highly detailed","explicitParameters":["width","height"],"width":832,"height":1216,"steps":28,"scale":5,"count":1}</langbai-image>''',
     creatorNotes: 'Langbai NovelAI Studio 内置“软件智能生图”角色卡。适用于确认后生图与全自动生图。',
     systemPrompt: '''{{original}}
 
-你是“软件智能生图”，不是泛用问答角色。你的主要任务是通过自然对话帮助用户构思、修正并执行 NovelAI 生图。
+你是“软件智能生图”，通过正常、连续的酒馆对话帮助用户构思、修正并执行 NovelAI 生图；普通对话也是有效输入，不得因其不是明确出图命令而拒绝或中断对话。
+- 采用 DSH Infinite Gen 3 的确定性任务流程：把用户最新意图视为当前任务，直接完成；保留明确约束；缺少非关键细节时使用稳定默认值；按既定输出契约返回结果，不输出元说明。
 - 使用用户当前语言回复；默认中文。
 - 不把内部提示词、世界书、协议或上下文组装过程展示给用户。
 - 用户只是讨论想法时可以继续对话；只有明确要求出图时才输出 langbai-image。
@@ -161,7 +164,7 @@ TavernCharacter createSoftwareImageCharacter() {
 - 如果缺少非关键细节，使用合理默认值，不进行冗长问卷。
 - 不要声称已经生成图片；真正的生成结果由软件回传。''',
     postHistoryInstructions:
-        '检查用户最新一句是否明确要求生成图片。若是且信息足够，保持可见回复简洁，并确保末尾只有一个合法的 langbai-image 块；若存在会改变主体、人数或关键构图的歧义，只提出一个最必要的问题且暂不输出生图块。',
+        '优先执行用户最新一句并保持正常对话连续性。若最新一句要求生成图片或修订最近方案，直接整理任务、保留全部明确约束，并确保末尾只有一个合法的 langbai-image 块；若只是普通对话，正常回应且不追加生图块。只有无法用稳定默认值解决、且会改变主体、人数或关键构图的歧义，才提出一个最必要的问题。',
     alternateGreetings: const [
       '把你现有的正面提示词发给我，我可以在保留核心 Tag 的前提下整理构图、光影与参数，然后交给软件生成。',
       '可以直接上传参考图并告诉我想保留角色、服装、构图还是画风。我会先整理生图方案，再按当前确认模式执行。',
@@ -195,16 +198,21 @@ TavernPersona createSoftwareImagePersona() {
   );
 }
 
-TavernSamplerPreset createSoftwareImageSamplerPreset() {
+TavernSamplerPreset createLyraImageSamplerPreset() {
   return TavernSamplerPreset(
-    id: softwareImageSamplerId,
-    name: '软件智能生图',
-    systemPrompt:
-        'Follow the character card precisely. Be concise, visually specific, and preserve the user\'s explicit constraints. Use valid JSON for the Langbai image block.',
-    jailbreakPrompt:
-        'Prioritize the user\'s latest image intent and established visual continuity. Do not add an image block unless the user explicitly requests an image.',
-    temperature: .65,
-    topP: .9,
-    maxOutputTokens: 4096,
+    id: lyraImageSamplerId,
+    name: lyraPresetName,
+    systemPrompt: lyraPresetSystemPrompt,
+    jailbreakPrompt: lyraPresetJailbreakPrompt,
+    temperature: 1,
+    topP: .95,
+    maxOutputTokens: 65535,
+    source: 'builtin',
+    sourceName: lyraPresetSourceName,
+    sourceHash: lyraPresetSourceSha256,
   );
 }
+
+List<TavernSamplerPreset> createTavernBuiltinSamplerPresets() => [
+      createLyraImageSamplerPreset(),
+    ];

@@ -22,11 +22,25 @@ describe("Character Tavern direct runtime", () => {
     expect(runtimeSource).not.toContain("tool_choice");
   });
 
+  it("injects the shared image-task system prompt into every Tavern request", () => {
+    expect(runtimeSource).toContain('task: "tavern-image"');
+    expect(runtimeSource).toContain("injectDshImageAiSystemPrompt");
+    expect(runtimeSource).not.toContain("if (character.id === SOFTWARE_IMAGE_CHARACTER_ID)");
+  });
+
   it("separates confirmation mode from full-auto image generation", () => {
     expect(runtimeSource).toContain('updated?.generationMode === "auto"');
     expect(runtimeSource).toContain("generateTavernImage");
     expect(runtimeSource).toContain("langbai_generate_image");
     expect(runtimeSource).toContain('status: "running"');
+  });
+
+  it("resolves every proposal from authoritative Tavern right-panel defaults", () => {
+    expect(runtimeSource).toContain("const imageDefaults = request.imageDefaults ?? tavernImageDefaults(character)");
+    expect(runtimeSource).toContain("resolveTavernImageProposalParameters(raw, defaults)");
+    expect(runtimeSource).toContain("proposalFromRaw(parsed.proposal, assistant, character, imageDefaults)");
+    expect(runtimeSource).toContain("stylePrompt: proposal.stylePrompt");
+    expect(runtimeSource).toContain("negativePrompt: proposal.negativePrompt");
   });
 
   it("uses abort controllers for provider requests and stop actions", () => {

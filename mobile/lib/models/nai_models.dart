@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import '../agent/agent_models.dart';
 import '../agent/agent_context.dart';
 import '../agent/agent_provider_catalog.dart';
+import '../agent/tavern_builtins.dart';
 import '../i18n/app_locales.dart';
 
 class NaiOption {
@@ -14,7 +15,7 @@ class NaiOption {
 }
 
 const appName = 'Langbai NovelAI Studio';
-const appVersion = '2.2.3';
+const appVersion = '2.2.4';
 
 const naiModels = <NaiOption>[
   NaiOption(
@@ -828,6 +829,7 @@ class AppSettings {
   // Custom base folder for saved originals. Empty = app documents/images.
   // Images are organised as <base>/<date>/<group>/ like the desktop client.
   String imageOutputDir;
+  String onlineGalleryDownloadDir;
   // Custom folder for automatic and import-rescue backups. Empty = app
   // documents/backups. This device path is never replaced by an import.
   String backupDir;
@@ -849,6 +851,8 @@ class AppSettings {
   bool promptRuleAutoRepairEnabled;
   bool reverseConvertDshEnabled;
   String reverseConvertDshMode;
+  List<TavernSamplerPreset> reverseConvertPromptPresets;
+  String reverseConvertPromptPresetId;
   String comicPromptTemplate;
   // Last-used tool selections, persisted so they survive an app restart
   // (mirrors the desktop "last generation state").
@@ -927,6 +931,7 @@ class AppSettings {
     this.saveToGallery = true,
     this.streamPreviewEnabled = true,
     this.imageOutputDir = '',
+    this.onlineGalleryDownloadDir = '',
     this.backupDir = '',
     this.activeHistoryGroupId = '',
     this.generationGroupId = '',
@@ -946,6 +951,8 @@ class AppSettings {
     this.promptRuleAutoRepairEnabled = false,
     this.reverseConvertDshEnabled = true,
     this.reverseConvertDshMode = 'focused',
+    List<TavernSamplerPreset>? reverseConvertPromptPresets,
+    String? reverseConvertPromptPresetId,
     this.comicPromptTemplate = '',
     this.reversePromptMode = 'tags',
     this.reversePromptTemplateVersion = 'v5',
@@ -970,7 +977,14 @@ class AppSettings {
     this.autoBackupRetentionCount = 7,
     this.autoBackupIncludeImages = false,
     this.autoBackupAssetPolicyVersion = 1,
-  })  : reversePromptTemplates = reversePromptTemplates ?? {},
+  })  : reverseConvertPromptPresets =
+            reverseConvertPromptPresets ?? [createLyraImageSamplerPreset()],
+        reverseConvertPromptPresetId = reverseConvertPromptPresetId ??
+            (reverseConvertPromptPresets ?? [createLyraImageSamplerPreset()])
+                .firstOrNull
+                ?.id ??
+            '',
+        reversePromptTemplates = reversePromptTemplates ?? {},
         convertPromptTemplates = convertPromptTemplates ?? {},
         promptShortcuts = promptShortcuts ?? [],
         stylePromptPresets = stylePromptPresets ?? [],
@@ -1023,6 +1037,7 @@ class AppSettings {
         'saveToGallery': saveToGallery,
         'streamPreviewEnabled': streamPreviewEnabled,
         'imageOutputDir': imageOutputDir,
+        'onlineGalleryDownloadDir': onlineGalleryDownloadDir,
         'backupDir': backupDir,
         'activeHistoryGroupId': activeHistoryGroupId,
         'generationGroupId': generationGroupId,
@@ -1045,6 +1060,9 @@ class AppSettings {
         'promptRuleAutoRepairEnabled': promptRuleAutoRepairEnabled,
         'reverseConvertDshEnabled': reverseConvertDshEnabled,
         'reverseConvertDshMode': reverseConvertDshMode,
+        'reverseConvertPromptPresets':
+            reverseConvertPromptPresets.map((item) => item.toJson()).toList(),
+        'reverseConvertPromptPresetId': reverseConvertPromptPresetId,
         'comicPromptTemplate': comicPromptTemplate,
         'reversePromptMode': reversePromptMode,
         'reversePromptTemplateVersion': reversePromptTemplateVersion,
@@ -1126,6 +1144,7 @@ class AppSettings {
         saveToGallery: j['saveToGallery'] ?? true,
         streamPreviewEnabled: j['streamPreviewEnabled'] ?? true,
         imageOutputDir: j['imageOutputDir'] ?? '',
+        onlineGalleryDownloadDir: j['onlineGalleryDownloadDir'] ?? '',
         backupDir: j['backupDir'] ?? '',
         activeHistoryGroupId: j['activeHistoryGroupId'] ?? '',
         generationGroupId: j['generationGroupId'] ?? '',
@@ -1168,6 +1187,23 @@ class AppSettings {
         reverseConvertDshEnabled: j['reverseConvertDshEnabled'] ?? true,
         reverseConvertDshMode:
             j['reverseConvertDshMode'] == 'strict' ? 'strict' : 'focused',
+        reverseConvertPromptPresets:
+            j.containsKey('reverseConvertPromptPresets')
+                ? (j['reverseConvertPromptPresets'] as List? ?? const [])
+                    .whereType<Map>()
+                    .map((item) => TavernSamplerPreset.fromJson(
+                        Map<String, dynamic>.from(item)))
+                    .where((item) =>
+                        item.id.isNotEmpty &&
+                        item.name.trim().isNotEmpty &&
+                        (item.systemPrompt.trim().isNotEmpty ||
+                            item.jailbreakPrompt.trim().isNotEmpty))
+                    .toList()
+                : [createLyraImageSamplerPreset()],
+        reverseConvertPromptPresetId:
+            j['reverseConvertPromptPresetId'] is String
+                ? _stringValue(j['reverseConvertPromptPresetId'], '')
+                : null,
         comicPromptTemplate: j['comicPromptTemplate'] ?? '',
         reversePromptMode: j['reversePromptMode'] ?? 'tags',
         reversePromptTemplateVersion:

@@ -1,13 +1,16 @@
 import 'dart:math' as math;
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../i18n/app_locales.dart';
 import '../images/png_metadata.dart';
 import '../services/aitag_service.dart';
+import '../services/online_gallery_download_location.dart';
 import '../state/app_state.dart';
 import 'metadata_inspector_screen.dart';
 
@@ -58,6 +61,11 @@ class _Text {
       selectAll,
       clearAll,
       noSelected,
+      preview,
+      downloadCurrent,
+      downloadSeries,
+      downloading,
+      downloaded,
       notice;
   const _Text({
     required this.title,
@@ -106,6 +114,11 @@ class _Text {
     required this.selectAll,
     required this.clearAll,
     required this.noSelected,
+    required this.preview,
+    required this.downloadCurrent,
+    required this.downloadSeries,
+    required this.downloading,
+    required this.downloaded,
     required this.notice,
   });
 }
@@ -160,6 +173,11 @@ _Text _textFor(Object? value) {
           selectAll: '全選',
           clearAll: '清除',
           noSelected: '請至少勾選一個相容參數',
+          preview: '全螢幕預覽',
+          downloadCurrent: '下載目前圖片',
+          downloadSeries: '下載整個系列',
+          downloading: '下載中…',
+          downloaded: '已儲存 {count} 張圖片',
           notice: '資料與圖片來自 AITag；介面結構變更時可能暫時無法使用。');
     case 'en-US':
       return const _Text(
@@ -211,6 +229,11 @@ _Text _textFor(Object? value) {
           selectAll: 'Select all',
           clearAll: 'Clear all',
           noSelected: 'Select at least one compatible parameter',
+          preview: 'Full-screen preview',
+          downloadCurrent: 'Download current image',
+          downloadSeries: 'Download full series',
+          downloading: 'Downloading…',
+          downloaded: 'Saved {count} images',
           notice:
               'Data and images are provided by AITag; availability may change with its API.');
     case 'ja-JP':
@@ -261,6 +284,11 @@ _Text _textFor(Object? value) {
           selectAll: 'すべて選択',
           clearAll: 'すべて解除',
           noSelected: '互換設定を1つ以上選択してください',
+          preview: '全画面プレビュー',
+          downloadCurrent: '現在の画像を保存',
+          downloadSeries: 'シリーズ全体を保存',
+          downloading: '保存中…',
+          downloaded: '{count} 枚を保存しました',
           notice: 'データと画像は AITag 提供です。API 変更時は一時的に利用できない場合があります。');
     case 'ko-KR':
       return const _Text(
@@ -310,6 +338,11 @@ _Text _textFor(Object? value) {
           selectAll: '전체 선택',
           clearAll: '전체 해제',
           noSelected: '호환 매개변수를 하나 이상 선택하세요',
+          preview: '전체 화면 미리보기',
+          downloadCurrent: '현재 이미지 저장',
+          downloadSeries: '전체 시리즈 저장',
+          downloading: '저장 중…',
+          downloaded: '이미지 {count}장을 저장했습니다',
           notice: '데이터와 이미지는 AITag에서 제공되며 API 변경 시 일시적으로 사용할 수 없을 수 있습니다.');
     default:
       return const _Text(
@@ -359,6 +392,11 @@ _Text _textFor(Object? value) {
           selectAll: '全选',
           clearAll: '清空',
           noSelected: '请至少勾选一个兼容参数',
+          preview: '全屏预览',
+          downloadCurrent: '下载当前图片',
+          downloadSeries: '下载整个系列',
+          downloading: '正在下载…',
+          downloaded: '已保存 {count} 张图片',
           notice: '数据与图片来自 AITag；接口结构变更时可能暂时不可用。');
   }
 }
@@ -652,16 +690,13 @@ class _AitagGalleryScreenState extends State<AitagGalleryScreen> {
                     hasScrollBody: false,
                     child: Center(child: Text(text.empty)))
               else
-                SliverPadding(
-                  padding: const EdgeInsets.all(16),
-                  sliver: SliverGrid.builder(
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: columns,
-                        crossAxisSpacing: 10,
-                        mainAxisSpacing: 10,
-                        childAspectRatio: columns == 1 ? 1.45 : .72),
-                    itemCount: result.items.length,
-                    itemBuilder: (context, index) => _WorkCard(
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: _MasonryGrid(
+                      columnCount: columns,
+                      itemCount: result.items.length,
+                      itemBuilder: (context, index) => _WorkCard(
                         work: result.items[index],
                         service: service,
                         text: text,
@@ -671,6 +706,7 @@ class _AitagGalleryScreenState extends State<AitagGalleryScreen> {
                                     service: service,
                                     workId: result.items[index].id,
                                     text: text)))),
+                    ),
                   ),
                 ),
               if (!loading && !failed && result.items.isNotEmpty)
@@ -735,6 +771,69 @@ class _CachedAitagImage extends StatelessWidget {
   }
 }
 
+class _MasonryGrid extends StatelessWidget {
+  final int columnCount;
+  final int itemCount;
+  final IndexedWidgetBuilder itemBuilder;
+
+  const _MasonryGrid({
+    required this.columnCount,
+    required this.itemCount,
+    required this.itemBuilder,
+  });
+
+  @override
+  Widget build(BuildContext context) => Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (var column = 0; column < columnCount; column++) ...[
+            if (column > 0) const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                children: [
+                  for (var index = column;
+                      index < itemCount;
+                      index += columnCount)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: itemBuilder(context, index),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      );
+}
+
+Future<void> _showAitagPreview(BuildContext context, AitagService service, String url) =>
+    showDialog<void>(
+      context: context,
+      useSafeArea: false,
+      barrierColor: Colors.black87,
+      builder: (dialogContext) => Dialog.fullscreen(
+        backgroundColor: Colors.black,
+        child: Stack(children: [
+          Positioned.fill(child: InteractiveViewer(
+            minScale: .8,
+            maxScale: 6,
+            child: Center(child: _CachedAitagImage(service: service, url: url, fit: BoxFit.contain)),
+          )),
+          SafeArea(child: Align(
+            alignment: AlignmentDirectional.topEnd,
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: IconButton.filledTonal(
+                tooltip: MaterialLocalizations.of(dialogContext).closeButtonTooltip,
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                icon: const Icon(Icons.close),
+              ),
+            ),
+          )),
+        ]),
+      ),
+    );
+
 class _WorkCard extends StatelessWidget {
   final AitagWork work;
   final AitagService service;
@@ -754,23 +853,28 @@ class _WorkCard extends StatelessWidget {
             child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Expanded(
-                      child: FutureBuilder<AitagWorkDetail>(
+                  FutureBuilder<AitagWorkDetail>(
                           future: service.work(work.id),
                           builder: (context, snapshot) {
                             final image = snapshot.data?.images.firstOrNull;
                             final url =
                                 image == null ? '' : service.imageUrl(image);
-                            return Stack(fit: StackFit.expand, children: [
+                            return Stack(children: [
                               if (url.isNotEmpty)
-                                _CachedAitagImage(
-                                    service: service,
-                                    url: url,
-                                    fit: BoxFit.cover)
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: _CachedAitagImage(
+                                      service: service,
+                                      url: url,
+                                      fit: BoxFit.fitWidth),
+                                )
                               else
-                                const Center(
-                                    child: Icon(Icons.image_search_outlined,
-                                        size: 38)),
+                                const AspectRatio(
+                                  aspectRatio: 4 / 3,
+                                  child: Center(
+                                      child: Icon(Icons.image_search_outlined,
+                                          size: 38)),
+                                ),
                               Positioned(
                                   right: 7,
                                   bottom: 7,
@@ -779,7 +883,7 @@ class _WorkCard extends StatelessWidget {
                                       label: Text(_f(text.images, 'count',
                                           work.imageCount)))),
                             ]);
-                          })),
+                          }),
                   Padding(
                       padding: const EdgeInsets.all(10),
                       child: Column(
@@ -826,6 +930,7 @@ class _AitagDetailScreen extends StatefulWidget {
 
 class _AitagDetailScreenState extends State<_AitagDetailScreen> {
   int selected = 0;
+  bool downloading = false;
   late final Future<AitagWorkDetail> detail =
       widget.service.work(widget.workId);
 
@@ -835,6 +940,49 @@ class _AitagDetailScreenState extends State<_AitagDetailScreen> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(widget.text.copied),
           duration: const Duration(seconds: 1)));
+    }
+  }
+
+  Future<void> _download(AitagWorkDetail detail, List<AitagImage> images) async {
+    if (downloading || images.isEmpty) return;
+    final state = context.read<AppState>();
+    if (!await ensureOnlineGalleryDownloadDirectory(state)) return;
+    if (!mounted) return;
+    setState(() => downloading = true);
+    final messenger = ScaffoldMessenger.of(context);
+    final storage = state.storage;
+    messenger.showSnackBar(SnackBar(content: Text(widget.text.downloading)));
+    var saved = 0;
+    try {
+      for (var index = 0; index < images.length; index++) {
+        final image = images[index];
+        final url = widget.service.imageUrl(image);
+        final response = await http.get(Uri.parse(url), headers: aitagImageHeaders).timeout(const Duration(minutes: 2));
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          throw HttpException('HTTP ${response.statusCode}');
+        }
+        final extension = image.imageType.trim().isNotEmpty
+            ? image.imageType
+            : (RegExp(r'\.([a-zA-Z0-9]{2,5})$').firstMatch(Uri.parse(url).path)?.group(1) ?? 'jpg');
+        await storage.saveOnlineGalleryImage(
+          response.bodyBytes,
+          source: 'aitag',
+          itemId: '${detail.work.id}',
+          title: detail.work.title,
+          imageId: '${(index + 1).toString().padLeft(2, '0')}-${image.id}',
+          extension: extension,
+        );
+        saved++;
+      }
+      if (mounted) {
+        messenger.showSnackBar(SnackBar(content: Text(_f(widget.text.downloaded, 'count', saved))));
+      }
+    } catch (_) {
+      if (mounted) {
+        messenger.showSnackBar(SnackBar(content: Text(widget.text.failed)));
+      }
+    } finally {
+      if (mounted) setState(() => downloading = false);
     }
   }
 
@@ -883,12 +1031,16 @@ class _AitagDetailScreenState extends State<_AitagDetailScreen> {
                     children: [
                       if (url.isNotEmpty)
                         ConstrainedBox(
-                            constraints: BoxConstraints(
-                                maxHeight: constraints.maxHeight * .68),
+                          constraints: BoxConstraints(
+                              maxHeight: constraints.maxHeight * .68),
+                          child: GestureDetector(
+                            onDoubleTap: () => _showAitagPreview(context, widget.service, url),
                             child: _CachedAitagImage(
                                 service: widget.service,
                                 url: url,
-                                fit: BoxFit.contain)),
+                                fit: BoxFit.contain),
+                          ),
+                        ),
                       if (data.images.length > 1)
                         SizedBox(
                             height: 94,
@@ -918,7 +1070,31 @@ class _AitagDetailScreenState extends State<_AitagDetailScreen> {
                                             service: widget.service,
                                             url: widget.service
                                                 .imageUrl(data.images[i]),
-                                            fit: BoxFit.cover))))),
+                                            fit: BoxFit.contain))))),
+                      if (image != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 10),
+                          child: Wrap(spacing: 8, runSpacing: 8, children: [
+                            FilledButton.tonalIcon(
+                              onPressed: () => _showAitagPreview(context, widget.service, url),
+                              icon: const Icon(Icons.fullscreen),
+                              label: Text(widget.text.preview),
+                            ),
+                            FilledButton.tonalIcon(
+                              onPressed: downloading ? null : () => _download(data, [image]),
+                              icon: downloading
+                                  ? const SizedBox.square(dimension: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                                  : const Icon(Icons.download_outlined),
+                              label: Text(widget.text.downloadCurrent),
+                            ),
+                            if (data.images.length > 1)
+                              FilledButton.tonalIcon(
+                                onPressed: downloading ? null : () => _download(data, data.images),
+                                icon: const Icon(Icons.download_for_offline_outlined),
+                                label: Text(widget.text.downloadSeries),
+                              ),
+                          ]),
+                        ),
                     ]);
                 final details = Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,

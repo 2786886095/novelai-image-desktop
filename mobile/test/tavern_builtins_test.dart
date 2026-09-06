@@ -12,8 +12,27 @@ void main() {
     expect(
         workspace.characters.single.lorebookId, workspace.lorebooks.single.id);
     expect(workspace.personas.single.lorebookId, workspace.lorebooks.single.id);
-    expect(workspace.samplerPresets.single.name, '软件智能生图');
+    expect(workspace.samplerPresets, hasLength(1));
+    expect(workspace.samplerPresets.first.name, '夏瑾 天琴座 Beta 3.8');
     expect(workspace.lorebooks.single.entries.length, greaterThanOrEqualTo(7));
+  });
+
+  test('renamed or deleted built-in presets stay persisted after migration',
+      () {
+    final renamed = createLyraImageSamplerPreset()..name = '我的图像预设';
+    final workspace = AgentWorkspace.fromJson({
+      'version': agentWorkspaceVersion,
+      'presetLibraryVersion': tavernPresetLibraryVersion,
+      'characters': [createSoftwareImageCharacter().toJson()],
+      'personas': [createSoftwareImagePersona().toJson()],
+      'lorebooks': [createSoftwareImageLorebook().toJson()],
+      'samplerPresets': [renamed.toJson()],
+      'conversations': const [],
+    });
+
+    expect(workspace.samplerPresets, hasLength(1));
+    expect(workspace.samplerPresets.single.name, '我的图像预设');
+    expect(workspace.samplerPresets.single.id, lyraImageSamplerId);
   });
 
   test('unreleased legacy Agent workspace is reset instead of migrated', () {
@@ -63,7 +82,7 @@ void main() {
           'name': '被误改的世界书',
         },
       ],
-      'samplerPresets': [createSoftwareImageSamplerPreset().toJson()],
+      'samplerPresets': [createLyraImageSamplerPreset().toJson()],
       'conversations': const [],
     });
 
@@ -76,5 +95,32 @@ void main() {
     expect(character.visual.width, 832);
     expect(character.visual.height, 1216);
     expect(lorebook.name, '软件智能生图 · 世界书');
+  });
+
+  test('migration replaces the previous preset library with Lyra', () {
+    final imported = createLyraImageSamplerPreset()
+      ..id = 'sampler-imported'
+      ..source = 'sillytavern-json';
+    final workspace = AgentWorkspace.fromJson({
+      'version': agentWorkspaceVersion,
+      'presetLibraryVersion': 1,
+      'characters': [createSoftwareImageCharacter().toJson()],
+      'personas': [createSoftwareImagePersona().toJson()],
+      'lorebooks': [createSoftwareImageLorebook().toJson()],
+      'samplerPresets': [
+        {
+          ...createLyraImageSamplerPreset().toJson(),
+          'id': 'builtin-darkside-image-sampler'
+        },
+        {
+          ...createLyraImageSamplerPreset().toJson(),
+          'id': 'builtin-software-image-sampler'
+        },
+        imported.toJson(),
+      ],
+      'conversations': const [],
+    });
+    expect(
+        workspace.samplerPresets.map((item) => item.id), [lyraImageSamplerId]);
   });
 }

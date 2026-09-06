@@ -4,6 +4,7 @@ import {
   applyAgentPromptLocks,
   buildAgentGenerationInput,
   defaultAgentInpaintModel,
+  resolveAgentPromptLocks,
 } from "./generation-input";
 
 describe("agent generation input", () => {
@@ -97,6 +98,18 @@ describe("agent generation input", () => {
 
     expect(params.stylePrompt).toBe("locked style");
     expect(params.negativePrompt).toBe("locked negative");
+  });
+
+  it("lets Tavern right-panel locks replace Studio locks, including intentional blanks", () => {
+    const locks = resolveAgentPromptLocks(
+      { stylePrompt: "studio style", negativePrompt: "studio negative" },
+      { stylePrompt: "", negativePrompt: "tavern negative" },
+    );
+    expect(locks).toEqual({ stylePrompt: "", negativePrompt: "tavern negative" });
+    expect(applyAgentPromptLocks(DEFAULT_PARAMS, locks)).toMatchObject({
+      stylePrompt: "",
+      negativePrompt: "tavern negative",
+    });
   });
 
   it("selects the correct inpaint family for V4.5 before V5", () => {

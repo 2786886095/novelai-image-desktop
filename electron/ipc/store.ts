@@ -16,6 +16,10 @@ import {
   normalizeAgentApiBaseUrl,
   normalizeAgentProviderProtocol,
 } from "../../src/agent/provider-catalog";
+import {
+  createDefaultImageTaskPromptPreset,
+  normalizeImageTaskPromptPresets,
+} from "../../src/tavern/image-task-preset";
 
 export interface PersistedData {
   token?: string;
@@ -255,6 +259,7 @@ export function defaultSettings(): AppSettings {
     hasOnboarded: false,
     language: "zh-CN",
     outputDir: defaultOutputDir(),
+    onlineGalleryDownloadDir: "",
     logDir: "",
     apiBaseUrl: "https://api.novelai.net",
     imageBaseUrl: "https://image.novelai.net",
@@ -296,6 +301,8 @@ export function defaultSettings(): AppSettings {
     reversePromptTemplatesV45: emptyModeTemplates(),
     reverseConvertDshEnabled: true,
     reverseConvertDshMode: "focused" as const,
+    reverseConvertPromptPresets: [createDefaultImageTaskPromptPreset()],
+    reverseConvertPromptPresetId: createDefaultImageTaskPromptPreset().id,
     comicAnalyzePromptTemplates: { tags: "", natural: "", mixed: "" },
     comicAnalyzePromptTemplate: COMIC_ANALYZE_SYSTEM_PROMPT,
     convertApiUrl: "https://api.openai.com/v1",
@@ -393,6 +400,14 @@ function normalize(raw: Partial<PersistedData> | null): PersistedData {
   settings.language = normalizeLanguage(settings.language);
   settings.reversePromptTemplateVersion = settings.reversePromptTemplateVersion === "v4.5" ? "v4.5" : "v5";
   settings.convertPromptTemplateVersion = settings.convertPromptTemplateVersion === "v4.5" ? "v4.5" : "v5";
+  settings.reverseConvertPromptPresets = normalizeImageTaskPromptPresets(
+    rawSettings.reverseConvertPromptPresets,
+  );
+  settings.reverseConvertPromptPresetId = settings.reverseConvertPromptPresets.some(
+    (preset) => preset.id === rawSettings.reverseConvertPromptPresetId,
+  )
+    ? String(rawSettings.reverseConvertPromptPresetId)
+    : settings.reverseConvertPromptPresets[0]?.id ?? "";
   settings.updateSource = settings.updateSource === "gitee" ? "gitee" : "github";
   settings.stylePromptPresetGroups = Array.from(
     new Set(

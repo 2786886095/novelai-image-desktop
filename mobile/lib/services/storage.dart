@@ -619,7 +619,7 @@ class Storage {
       }
     }
     final defaultBase = (await imagesDir()).path;
-    final custom = settings.imageOutputDir.trim();
+    final custom = settings.onlineGalleryDownloadDir.trim();
     for (final base in <String>[if (custom.isNotEmpty) custom, defaultBase]) {
       final dir = Directory(
         [base, date, if (groupFolder != null) groupFolder].join('/'),
@@ -884,6 +884,53 @@ class Storage {
       path = '${directory.path}/$baseName-${suffix++}.$extension';
     }
     return path;
+  }
+
+  Future<File> saveOnlineGalleryImage(
+    List<int> bytes, {
+    required String source,
+    required String itemId,
+    required String title,
+    required String imageId,
+    required String extension,
+  }) async {
+    final settings = await getSettings();
+    final defaultBase = (await imagesDir()).path;
+    final custom = settings.imageOutputDir.trim();
+    final safeSource =
+        sanitizeFolderName(source.trim().isEmpty ? 'gallery' : source);
+    final safeFolder =
+        sanitizeFolderName('${title.trim().isEmpty ? 'work' : title}-$itemId');
+    Directory? output;
+    for (final base in <String>[if (custom.isNotEmpty) custom, defaultBase]) {
+      try {
+        final candidate = Directory([
+          base,
+          'Online Gallery',
+          safeSource,
+          safeFolder
+        ].join(Platform.pathSeparator));
+        if (!candidate.existsSync()) candidate.createSync(recursive: true);
+        output = candidate;
+        break;
+      } catch (_) {
+        // A revoked custom Android folder falls back to app-managed storage.
+      }
+    }
+    output ??= Directory(defaultBase)..createSync(recursive: true);
+    final normalizedExtension = RegExp(r'^(png|jpe?g|webp|gif|avif)$',
+                caseSensitive: false)
+            .hasMatch(extension)
+        ? (extension.toLowerCase() == 'jpeg' ? 'jpg' : extension.toLowerCase())
+        : 'jpg';
+    final baseName = _safeFilePrefix(imageId.trim().isEmpty
+        ? DateTime.now().microsecondsSinceEpoch.toString()
+        : imageId);
+    final filePath =
+        await _uniqueFilePath(output, baseName, normalizedExtension);
+    final file = File(filePath);
+    await file.writeAsBytes(bytes, flush: true);
+    return file;
   }
 }
 

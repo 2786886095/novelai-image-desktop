@@ -122,6 +122,9 @@ export interface TavernSamplerPreset {
   presencePenalty: number;
   maxOutputTokens?: number;
   stop: string[];
+  source?: "builtin" | "sillytavern-json" | "langbai";
+  sourceName?: string;
+  sourceHash?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -270,6 +273,7 @@ export interface AgentWorkspaceData {
   personas: TavernPersona[];
   lorebooks: TavernLorebook[];
   samplerPresets: TavernSamplerPreset[];
+  presetLibraryVersion?: number;
   selectedCharacterId?: string;
   selectedPersonaId?: string;
   defaultGenerationMode: TavernGenerationMode;
@@ -344,6 +348,16 @@ export interface AgentSendRequest {
   attachmentIds?: string[];
   characterId?: string;
   regenerateMessageId?: string;
+  /** Renderer snapshot prevents a just-edited Tavern right panel from racing workspace persistence. */
+  imageDefaults?: {
+    model?: string;
+    width?: number;
+    height?: number;
+    steps?: number;
+    scale?: number;
+    sampler?: string;
+    count: number;
+  };
 }
 
 export interface TavernImageRequest {
@@ -384,6 +398,12 @@ export interface AgentToolBridgeRequest {
   args: Record<string, unknown>;
   sessionId?: string;
   callId?: string;
+  /** Trusted caller-owned prompt values. Tavern generation uses this to keep
+   * its right-panel style/negative fields independent from Studio locks. */
+  promptLocks?: {
+    stylePrompt?: string;
+    negativePrompt?: string;
+  };
 }
 
 export interface AgentToolBridgeResponse {

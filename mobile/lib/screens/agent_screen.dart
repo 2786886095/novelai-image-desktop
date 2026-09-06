@@ -43,6 +43,8 @@ Map<String, String> _tavernText(Object? language) {
     'chats': '对话',
     'newCharacter': '新建角色',
     'newChat': '新建对话',
+    'renameChat': '重命名对话',
+    'conversationName': '对话名称',
     'import': '导入角色卡',
     'search': '搜索角色或对话',
     'context': '模型与生图',
@@ -121,6 +123,8 @@ Map<String, String> _tavernText(Object? language) {
       'chats': 'Chats',
       'newCharacter': 'New character',
       'newChat': 'New chat',
+      'renameChat': 'Rename chat',
+      'conversationName': 'Chat name',
       'import': 'Import card',
       'search': 'Search characters or chats',
       'context': 'Model & image',
@@ -203,6 +207,8 @@ Map<String, String> _tavernText(Object? language) {
       'chats': '對話',
       'newCharacter': '新增角色',
       'newChat': '新增對話',
+      'renameChat': '重新命名對話',
+      'conversationName': '對話名稱',
       'import': '匯入角色卡',
       'search': '搜尋角色或對話',
       'context': '模型與生圖',
@@ -263,6 +269,8 @@ Map<String, String> _tavernText(Object? language) {
       'chats': 'チャット',
       'newCharacter': '新規キャラクター',
       'newChat': '新規チャット',
+      'renameChat': 'チャット名を変更',
+      'conversationName': 'チャット名',
       'import': 'カードを読み込む',
       'search': '検索',
       'context': 'モデルと画像生成',
@@ -311,6 +319,8 @@ Map<String, String> _tavernText(Object? language) {
       'chats': '대화',
       'newCharacter': '새 캐릭터',
       'newChat': '새 대화',
+      'renameChat': '대화 이름 변경',
+      'conversationName': '대화 이름',
       'import': '카드 가져오기',
       'search': '검색',
       'context': '모델과 이미지',
@@ -420,6 +430,76 @@ class _AgentScreenState extends State<AgentScreen> {
       content: Text(message),
       backgroundColor: error ? Theme.of(context).colorScheme.error : null,
     ));
+  }
+
+  Future<void> _renameChat(
+    AgentController controller,
+    AgentConversation chat,
+    Map<String, String> text,
+  ) async {
+    final field = TextEditingController(text: chat.title);
+    final name = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(text['renameChat']!),
+        content: TextField(
+          controller: field,
+          autofocus: true,
+          maxLength: 100,
+          textInputAction: TextInputAction.done,
+          decoration: InputDecoration(labelText: text['conversationName']!),
+          onSubmitted: (value) {
+            if (value.trim().isNotEmpty) Navigator.of(dialogContext).pop(value);
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(text['cancel']!),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (field.text.trim().isNotEmpty) {
+                Navigator.of(dialogContext).pop(field.text);
+              }
+            },
+            child: Text(text['save']!),
+          ),
+        ],
+      ),
+    );
+    field.dispose();
+    if (name?.trim().isNotEmpty == true) {
+      controller.renameConversation(chat.id, name!);
+    }
+  }
+
+  Future<void> _deleteChat(
+    AgentController controller,
+    AgentConversation chat,
+    Map<String, String> text,
+  ) async {
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: Text(text['delete']!),
+            content: Text('${text['delete']} “${chat.title}”?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: Text(text['cancel']!),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: Text(text['delete']!),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!confirmed) return;
+    await controller.deleteConversation(chat.id);
+    _snack(text['delete']!);
   }
 
   Future<void> _send() async {
@@ -832,9 +912,11 @@ class _AgentScreenState extends State<AgentScreen> {
         onTap: () => controller.selectConversation(chat.id),
         trailing: PopupMenuButton<String>(
           onSelected: (value) async {
-            if (value == 'delete') await controller.deleteConversation(chat.id);
+            if (value == 'rename') await _renameChat(controller, chat, text);
+            if (value == 'delete') await _deleteChat(controller, chat, text);
           },
           itemBuilder: (_) => [
+            PopupMenuItem(value: 'rename', child: Text(text['renameChat']!)),
             PopupMenuItem(value: 'delete', child: Text(text['delete']!)),
           ],
         ),
@@ -2542,7 +2624,80 @@ class _AgentScreenState extends State<AgentScreen> {
 
   Widget _modelContext(AgentController controller, Map<String, String> text) {
     final settings = controller.app.settings;
+    final activePreset = controller.activeSamplerPreset;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      _sectionCard(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(text['chatPreset']!,
+              style: const TextStyle(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 3),
+          Text(text['chatPresetHint']!,
+              style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<String>(
+            value: activePreset?.id,
+            isExpanded: true,
+            items: controller.workspace.samplerPresets
+                .map((preset) => DropdownMenuItem(
+                      value: preset.id,
+                      child: Text(preset.name,
+                          maxLines: 1, overflow: TextOverflow.ellipsis),
+                    ))
+                .toList(),
+            onChanged: (value) {
+              if (value != null) controller.selectTavernPreset(value);
+            },
+          ),
+          if (activePreset != null) ...[
+            const SizedBox(height: 7),
+            Text(
+              '${activePreset.sourceName ?? activePreset.source ?? 'Langbai'}\n${activePreset.temperature.toStringAsFixed(2)} temp · ${activePreset.topP.toStringAsFixed(2)} top-p · ${activePreset.maxOutputTokens ?? '-'} tokens',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+          const SizedBox(height: 9),
+          Wrap(spacing: 7, runSpacing: 7, children: [
+            OutlinedButton.icon(
+              onPressed: () async {
+                try {
+                  final result = await controller.importTavernPreset();
+                  if (!mounted || result == null) return;
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text([
+                      '${text['importPreset']}: ${result.preset.name}',
+                      ...result.warnings,
+                    ].join(' ')),
+                  ));
+                } catch (error) {
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context)
+                      .showSnackBar(SnackBar(content: Text('$error')));
+                }
+              },
+              icon: const Icon(Icons.file_open_rounded),
+              label: Text(text['importPreset']!),
+            ),
+            OutlinedButton.icon(
+              onPressed: activePreset == null
+                  ? null
+                  : () => _renameTavernPreset(controller, activePreset, text),
+              icon: const Icon(Icons.edit_rounded),
+              label: Text(text['renamePreset']!),
+            ),
+            OutlinedButton.icon(
+              onPressed: activePreset == null
+                  ? null
+                  : () => _deleteTavernPreset(controller, activePreset, text),
+              icon: const Icon(Icons.delete_outline_rounded),
+              label: Text(text['deletePreset']!),
+            ),
+          ]),
+          const SizedBox(height: 8),
+          Text(text['presetImportRules']!,
+              style: Theme.of(context).textTheme.bodySmall),
+        ]),
+      ),
+      const SizedBox(height: 8),
       _sectionCard(
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
@@ -3537,10 +3692,13 @@ class _AgentScreenState extends State<AgentScreen> {
             ? controller.activeCharacter!.visual.negativePrompt
             : defaultTavernNegativePrompt,
         stylePrompt: controller.activeCharacter?.visual.stylePrompt ?? '',
+        model: current.model,
         width: int.tryParse(width.text),
         height: int.tryParse(height.text),
         steps: int.tryParse(steps.text),
         scale: double.tryParse(scale.text),
+        sampler: current.sampler,
+        explicitParameters: current.explicitParameters,
         count: int.tryParse(count.text)?.clamp(1, 8) ?? 1,
       );
       message.imageProposal = proposal;
@@ -3548,6 +3706,66 @@ class _AgentScreenState extends State<AgentScreen> {
     }
     for (final field in [positive, width, height, steps, scale, count]) {
       field.dispose();
+    }
+  }
+
+  Future<void> _renameTavernPreset(
+    AgentController controller,
+    TavernSamplerPreset preset,
+    Map<String, String> text,
+  ) async {
+    final name = TextEditingController(text: preset.name);
+    final value = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(text['renamePreset']!),
+        content: TextField(
+          controller: name,
+          autofocus: true,
+          maxLength: 160,
+          decoration: InputDecoration(labelText: text['chatPreset']),
+          onSubmitted: (value) => Navigator.pop(dialogContext, value),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: Text(text['cancel']!)),
+          FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, name.text),
+              child: Text(text['save']!)),
+        ],
+      ),
+    );
+    name.dispose();
+    if (value != null) await controller.renameTavernPreset(preset.id, value);
+  }
+
+  Future<void> _deleteTavernPreset(
+    AgentController controller,
+    TavernSamplerPreset preset,
+    Map<String, String> text,
+  ) async {
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: Text(text['deletePreset']!),
+            content: Text('${text['deletePreset']}: ${preset.name}?'),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: Text(text['cancel']!)),
+              FilledButton(
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  child: Text(text['delete']!)),
+            ],
+          ),
+        ) ??
+        false;
+    if (confirmed) {
+      await controller.deleteTavernPreset(
+        preset.id,
+        fallbackName: text['chatPreset']!,
+      );
     }
   }
 

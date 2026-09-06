@@ -58,6 +58,11 @@ import ReferencePresetManager, {
   type QuickPresetSource,
 } from "./ReferencePresetManager";
 import { isScrollInsideFloatingMenu } from "./floating-menu";
+import { importTavernSamplerPresetJson } from "./tavern/preset-import";
+import {
+  imageTaskPromptPresetFromSampler,
+  type ImageTaskPromptPreset,
+} from "./tavern/image-task-preset";
 import { desktopUiFormat, desktopUiText, getGeneratePanelText, getLocalizedTabItems, getSettingsSectionText, getSettingsShellText, getTokenGuideText, localizedDesktopOptionLabel, SUPPORTED_APP_LANGUAGES } from "./i18n";
 import {
   CAT_COLOR,
@@ -5639,6 +5644,10 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
   const [tagTesting, setTagTesting] = useState(false);
   const [aitagCacheStats, setAitagCacheStats] = useState({ bytes: 0, files: 0 });
   const [aitagCacheBusy, setAitagCacheBusy] = useState(false);
+  const reverseConvertPresetFileRef = useRef<HTMLInputElement>(null);
+  const [reverseConvertPresetStatus, setReverseConvertPresetStatus] = useState("");
+  const [renamingReverseConvertPresetId, setRenamingReverseConvertPresetId] = useState("");
+  const [renamingReverseConvertPresetName, setRenamingReverseConvertPresetName] = useState("");
   const [aitagCacheRetentionDays, setAitagCacheRetentionDays] = useState(() => {
     const days = Number(localStorage.getItem("langbai.aitag.cache-retention-days.v1") ?? "30");
     return Number.isFinite(days) ? days : 30;
@@ -5673,6 +5682,80 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
     await window.naiDesktop.setSetting(key, value);
     await refreshSettings();
   };
+  const persistReverseConvertPresets = async (
+    presets: ImageTaskPromptPreset[],
+    selectedId: string,
+  ) => {
+    await window.naiDesktop.setSetting("reverseConvertPromptPresets", presets);
+    await window.naiDesktop.setSetting("reverseConvertPromptPresetId", selectedId);
+    await refreshSettings();
+  };
+  const importReverseConvertPreset = async (file?: File) => {
+    if (!file) return;
+    setReverseConvertPresetStatus("");
+    try {
+      const source = await file.text();
+      const result = importTavernSamplerPresetJson(source, file.name);
+      const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(source));
+      result.preset.sourceHash = [...new Uint8Array(digest)]
+        .map((value) => value.toString(16).padStart(2, "0"))
+        .join("")
+        .toUpperCase();
+      const preset = imageTaskPromptPresetFromSampler(result.preset);
+      const current = settings.reverseConvertPromptPresets ?? [];
+      const duplicateIndex = current.findIndex((item) => (
+        preset.sourceHash && item.sourceHash === preset.sourceHash
+      ));
+      const presets = duplicateIndex >= 0
+        ? current.map((item, index) => index === duplicateIndex
+          ? { ...preset, id: item.id, name: item.name, createdAt: item.createdAt }
+          : item)
+        : [preset, ...current];
+      const selectedId = duplicateIndex >= 0 ? current[duplicateIndex].id : preset.id;
+      await persistReverseConvertPresets(presets, selectedId);
+      setReverseConvertPresetStatus([
+        `${t("settings.promptPresetImported")}: ${preset.name}`,
+        ...result.warnings,
+      ].join(" "));
+    } catch (reason) {
+      setReverseConvertPresetStatus(
+        `${t("settings.promptPresetImportFailed")}: ${reason instanceof Error ? reason.message : String(reason)}`,
+      );
+    } finally {
+      if (reverseConvertPresetFileRef.current) reverseConvertPresetFileRef.current.value = "";
+    }
+  };
+  const beginRenameReverseConvertPreset = () => {
+    const selected = settings.reverseConvertPromptPresets.find(
+      (item) => item.id === settings.reverseConvertPromptPresetId,
+    ) ?? settings.reverseConvertPromptPresets[0];
+    if (!selected) return;
+    setRenamingReverseConvertPresetId(selected.id);
+    setRenamingReverseConvertPresetName(selected.name);
+  };
+  const saveReverseConvertPresetName = async () => {
+    const name = renamingReverseConvertPresetName.trim().slice(0, 160);
+    if (!renamingReverseConvertPresetId || !name) return;
+    const updatedAt = new Date().toISOString();
+    await persistReverseConvertPresets(
+      settings.reverseConvertPromptPresets.map((item) => item.id === renamingReverseConvertPresetId
+        ? { ...item, name, updatedAt }
+        : item),
+      settings.reverseConvertPromptPresetId,
+    );
+    setRenamingReverseConvertPresetId("");
+    setReverseConvertPresetStatus(t("settings.promptPresetRenamed"));
+  };
+  const deleteReverseConvertPreset = async () => {
+    const selected = settings.reverseConvertPromptPresets.find(
+      (item) => item.id === settings.reverseConvertPromptPresetId,
+    ) ?? settings.reverseConvertPromptPresets[0];
+    if (!selected || !(await confirmAction(`${t("settings.deletePromptPreset")}: ${selected.name}?`))) return;
+    const presets = settings.reverseConvertPromptPresets.filter((item) => item.id !== selected.id);
+    await persistReverseConvertPresets(presets, presets[0]?.id ?? "");
+    setRenamingReverseConvertPresetId("");
+    setReverseConvertPresetStatus(t("settings.promptPresetDeleted"));
+  };
   const updateProxy = async (mode: AppSettings["proxyMode"], value: string) => {
     await window.naiDesktop.setSetting("proxyMode", mode);
     await window.naiDesktop.setSetting("proxyUrl", value);
@@ -5687,6 +5770,10 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
   };
   const selectDir = async () => {
     await window.naiDesktop.selectOutputDir();
+    await refreshSettings();
+  };
+  const selectGalleryDir = async () => {
+    await window.naiDesktop.selectOnlineGalleryDownloadDir();
     await refreshSettings();
   };
   const clearAitagCache = async () => {
@@ -5759,6 +5846,69 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
     ["performance", settingsShellText.nav.performance, "speed"],
     ["about", settingsShellText.nav.about, "info"],
   ];
+  const selectedReverseConvertPreset = settings.reverseConvertPromptPresets.find(
+    (item) => item.id === settings.reverseConvertPromptPresetId,
+  ) ?? settings.reverseConvertPromptPresets[0];
+  const reverseConvertPresetManager = (
+    <section className="reverse-convert-preset-manager">
+      <header>
+        <div>
+          <strong>{t("settings.sharedPromptPreset")}</strong>
+          <small>{t("settings.sharedPromptPresetHint")}</small>
+        </div>
+        <span>{settings.reverseConvertPromptPresets.length}</span>
+      </header>
+      {settings.reverseConvertPromptPresets.length ? (
+        <label className="field">
+          <span>{t("settings.activePromptPreset")}</span>
+          <SelectMenuCompat
+            value={selectedReverseConvertPreset?.id ?? ""}
+            onChange={(event) => void update("reverseConvertPromptPresetId", event.target.value)}
+          >
+            {settings.reverseConvertPromptPresets.map((preset) => (
+              <option value={preset.id} key={preset.id}>{preset.name}</option>
+            ))}
+          </SelectMenuCompat>
+        </label>
+      ) : <div className="info-card"><span>{t("settings.noPromptPresets")}</span></div>}
+      {renamingReverseConvertPresetId ? (
+        <div className="reverse-convert-preset-rename">
+          <input
+            autoFocus
+            value={renamingReverseConvertPresetName}
+            aria-label={t("settings.promptPresetName")}
+            onChange={(event) => setRenamingReverseConvertPresetName(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") void saveReverseConvertPresetName();
+              if (event.key === "Escape") setRenamingReverseConvertPresetId("");
+            }}
+          />
+          <Button variant="primary" onClick={() => void saveReverseConvertPresetName()}>
+            <IconText icon="✓">{t("common.save")}</IconText>
+          </Button>
+        </div>
+      ) : null}
+      <div className="row-actions reverse-convert-preset-actions">
+        <input
+          ref={reverseConvertPresetFileRef}
+          className="tavern-file-input"
+          type="file"
+          accept=".json,application/json"
+          onChange={(event) => void importReverseConvertPreset(event.target.files?.[0])}
+        />
+        <Button onClick={() => reverseConvertPresetFileRef.current?.click()}>
+          <IconText icon="⇩">{t("settings.importJsonPreset")}</IconText>
+        </Button>
+        <Button disabled={!selectedReverseConvertPreset} onClick={beginRenameReverseConvertPreset}>
+          <IconText icon="✎">{t("settings.renamePromptPreset")}</IconText>
+        </Button>
+        <Button variant="danger" disabled={!selectedReverseConvertPreset} onClick={() => void deleteReverseConvertPreset()}>
+          <IconText icon="⌫">{t("settings.deletePromptPreset")}</IconText>
+        </Button>
+      </div>
+      {reverseConvertPresetStatus ? <p className="settings-hint reverse-convert-preset-status" role="status">{reverseConvertPresetStatus}</p> : null}
+    </section>
+  );
 
   return (
     <AppPortal>
@@ -5882,6 +6032,22 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                   </Button>
                   <Button onClick={() => window.naiDesktop.openInExplorer(settings.outputDir)}>
                     <IconText icon="↗">{t("settings.openOutputDir")}</IconText>
+                  </Button>
+                </div>
+                <label className="field">
+                  <span>{t("settings.galleryDownloadDir")}</span>
+                  <input
+                    value={settings.onlineGalleryDownloadDir ?? ""}
+                    placeholder={t("settings.galleryDownloadDirFirstUse")}
+                    onChange={(e) => void update("onlineGalleryDownloadDir", e.target.value)}
+                  />
+                </label>
+                <div className="row-actions">
+                  <Button onClick={selectGalleryDir}>
+                    <IconText icon={<Icon name="folder" />}>{t("settings.browse")}</IconText>
+                  </Button>
+                  <Button disabled={!settings.onlineGalleryDownloadDir?.trim()} onClick={() => window.naiDesktop.openInExplorer(settings.onlineGalleryDownloadDir)}>
+                    <IconText icon="↗">{t("settings.openGalleryDownloadDir")}</IconText>
                   </Button>
                 </div>
                 <Toggle
@@ -6116,6 +6282,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
             {section === "ai-reverse" && (
               <div className="settings-form">
                 <p className="settings-hint">{t("settings.aiReverseHint")}</p>
+                {reverseConvertPresetManager}
                 <label className="field">
                   <span>{t("settings.apiUrl")}</span>
                   <input
@@ -6166,6 +6333,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
             {section === "convert-api" && (
               <div className="settings-form">
                 <p className="settings-hint">{t("settings.convertHint")}</p>
+                {reverseConvertPresetManager}
                 <label className="field">
                   <span>{t("settings.apiUrl")}</span>
                   <input
@@ -6736,7 +6904,7 @@ function UpdateBanner() {
   const downloaded = updateProgress?.kind === "downloaded";
   const failed = updateProgress?.kind === "error";
 
-  return (
+  return <>
     <div className="update-banner">
       <span>
         <Icon name="upgrade" /> {f("update.newVersion", { latest: updateInfo.latestVersion, current: updateInfo.currentVersion })}
@@ -6766,7 +6934,17 @@ function UpdateBanner() {
         {!busy && !downloaded ? <button className="btn btn-ghost" onClick={dismissUpdate}>{t("update.later")}</button> : null}
       </div>
     </div>
-  );
+    {(busy || downloaded) ? <AppPortal>
+      <div className="update-install-overlay" role="status" aria-live="polite">
+        <section className="update-install-panel">
+          <span className="update-install-spinner" aria-hidden="true" />
+          <h2>{downloaded ? t("update.autoRestarting") : updateProgress?.kind === "progress" ? f("update.downloading", { percent: updateProgress.percent }) : t("update.checking")}</h2>
+          <p>{f("update.newVersion", { latest: updateInfo.latestVersion, current: updateInfo.currentVersion })}</p>
+          <div className="update-install-progress"><i style={{ width: `${updateProgress?.kind === "progress" ? Math.max(2, Math.min(100, updateProgress.percent)) : downloaded ? 100 : 12}%` }} /></div>
+        </section>
+      </div>
+    </AppPortal> : null}
+  </>;
 }
 
 function VersionedModeTemplateEditor({
@@ -7173,7 +7351,7 @@ function MainPage() {
 
 // ── Root ──────────────────────────────────────────────────────────────────────
 export default function App() {
-  const SPLASH_MIN_VISIBLE_MS = 300;
+  const SPLASH_MIN_VISIBLE_MS = 700;
   const [splash, setSplash] = useState(true);
   const bootDone = useAppStore((state) => state.bootDone);
   const load = useAppStore((state) => state.load);

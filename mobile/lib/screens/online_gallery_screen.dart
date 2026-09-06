@@ -5,9 +5,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
-import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -15,6 +13,7 @@ import '../i18n/app_locales.dart';
 import '../artist/artist_recipe.dart';
 import '../services/artist_tag_service.dart';
 import '../services/online_gallery_service.dart';
+import '../services/online_gallery_download_location.dart';
 import '../state/app_state.dart';
 import 'aitag_gallery_screen.dart';
 
@@ -44,8 +43,12 @@ class _GalleryText {
   final String copied;
   final String usePrompt;
   final String promptApplied;
-  final String shareImage;
-  final String sharing;
+  final String preview;
+  final String downloadCurrent;
+  final String downloadSeries;
+  final String downloading;
+  final String downloaded;
+  final String downloadFailed;
   final String metadata;
   final String artists;
   final String characters;
@@ -80,8 +83,12 @@ class _GalleryText {
     required this.copied,
     required this.usePrompt,
     required this.promptApplied,
-    required this.shareImage,
-    required this.sharing,
+    required this.preview,
+    required this.downloadCurrent,
+    required this.downloadSeries,
+    required this.downloading,
+    required this.downloaded,
+    required this.downloadFailed,
     required this.metadata,
     required this.artists,
     required this.characters,
@@ -121,8 +128,12 @@ _GalleryText _galleryText(Object? language) {
         copied: '已複製',
         usePrompt: '套用到生成',
         promptApplied: '提示詞已套用到生成頁',
-        shareImage: '下載 / 分享',
-        sharing: '正在準備圖片…',
+        preview: '全螢幕預覽',
+        downloadCurrent: '下載目前圖片',
+        downloadSeries: '下載整個系列',
+        downloading: '下載中…',
+        downloaded: '已儲存 {count} 張圖片',
+        downloadFailed: '下載失敗，請檢查網路與下載目錄。',
         metadata: '原始資料',
         artists: '藝術家',
         characters: '角色',
@@ -159,8 +170,12 @@ _GalleryText _galleryText(Object? language) {
         copied: 'Copied',
         usePrompt: 'Use in Generate',
         promptApplied: 'Prompt applied to Generate',
-        shareImage: 'Download / Share',
-        sharing: 'Preparing image…',
+        preview: 'Full-screen preview',
+        downloadCurrent: 'Download current image',
+        downloadSeries: 'Download full series',
+        downloading: 'Downloading…',
+        downloaded: 'Saved {count} images',
+        downloadFailed: 'Download failed. Check the network and download folder.',
         metadata: 'Raw metadata',
         artists: 'Artists',
         characters: 'Characters',
@@ -196,8 +211,12 @@ _GalleryText _galleryText(Object? language) {
         copied: 'コピー済み',
         usePrompt: '生成画面で使用',
         promptApplied: '生成画面に適用しました',
-        shareImage: '保存 / 共有',
-        sharing: '画像を準備中…',
+        preview: '全画面プレビュー',
+        downloadCurrent: '現在の画像を保存',
+        downloadSeries: 'シリーズ全体を保存',
+        downloading: '保存中…',
+        downloaded: '{count} 枚を保存しました',
+        downloadFailed: '保存に失敗しました。ネットワークと保存先を確認してください。',
         metadata: '元データ',
         artists: 'アーティスト',
         characters: 'キャラクター',
@@ -233,8 +252,12 @@ _GalleryText _galleryText(Object? language) {
         copied: '복사됨',
         usePrompt: '생성에 적용',
         promptApplied: '생성 화면에 프롬프트를 적용했습니다',
-        shareImage: '다운로드 / 공유',
-        sharing: '이미지 준비 중…',
+        preview: '전체 화면 미리보기',
+        downloadCurrent: '현재 이미지 저장',
+        downloadSeries: '전체 시리즈 저장',
+        downloading: '저장 중…',
+        downloaded: '이미지 {count}장을 저장했습니다',
+        downloadFailed: '저장하지 못했습니다. 네트워크와 저장 폴더를 확인하세요.',
         metadata: '원본 데이터',
         artists: '작가',
         characters: '캐릭터',
@@ -270,8 +293,12 @@ _GalleryText _galleryText(Object? language) {
         copied: '已复制',
         usePrompt: '应用到生成',
         promptApplied: '提示词已应用到生成页',
-        shareImage: '下载 / 分享',
-        sharing: '正在准备图片…',
+        preview: '全屏预览',
+        downloadCurrent: '下载当前图片',
+        downloadSeries: '下载整个系列',
+        downloading: '正在下载…',
+        downloaded: '已保存 {count} 张图片',
+        downloadFailed: '下载失败，请检查网络与下载目录。',
         metadata: '原始数据',
         artists: '艺术家',
         characters: '角色',
@@ -769,15 +796,19 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
                                   const SizedBox(width: 8),
                               itemBuilder: (_, previewIndex) => ClipRRect(
                                 borderRadius: BorderRadius.circular(10),
-                                child: Image.network(previews[previewIndex],
-                                    width: 132,
-                                    fit: BoxFit.cover,
-                                    cacheWidth: 264,
-                                    errorBuilder: (_, __, ___) =>
-                                        const SizedBox(
-                                            width: 132,
-                                            child: Icon(
-                                                Icons.broken_image_outlined))),
+                                child: GestureDetector(
+                                  onDoubleTap: () => _showSimpleNetworkPreview(context, previews[previewIndex]),
+                                  child: Image.network(previews[previewIndex],
+                                      width: 132,
+                                      height: 132,
+                                      fit: BoxFit.contain,
+                                      cacheWidth: 264,
+                                      errorBuilder: (_, __, ___) =>
+                                          const SizedBox(
+                                              width: 132,
+                                              child: Icon(
+                                                  Icons.broken_image_outlined))),
+                                ),
                               ),
                             )),
           ]));
@@ -940,20 +971,17 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
                 child: Center(child: Text(text.empty)),
               )
             else
-              SliverPadding(
-                padding: const EdgeInsets.all(16),
-                sliver: SliverGrid.builder(
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: columns,
-                    crossAxisSpacing: 10,
-                    mainAxisSpacing: 10,
-                    childAspectRatio: columns == 1 ? 1.35 : .72,
-                  ),
-                  itemCount: result!.items.length,
-                  itemBuilder: (context, index) => _GalleryCard(
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: _MasonryGrid(
+                    columnCount: columns,
+                    itemCount: result!.items.length,
+                    itemBuilder: (context, index) => _GalleryCard(
                     item: result!.items[index],
                     text: text,
                     onTap: () => _openItem(result!.items[index]),
+                  ),
                   ),
                 ),
               ),
@@ -995,6 +1023,41 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
   }
 }
 
+class _MasonryGrid extends StatelessWidget {
+  final int columnCount;
+  final int itemCount;
+  final IndexedWidgetBuilder itemBuilder;
+
+  const _MasonryGrid({
+    required this.columnCount,
+    required this.itemCount,
+    required this.itemBuilder,
+  });
+
+  @override
+  Widget build(BuildContext context) => Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (var column = 0; column < columnCount; column++) ...[
+            if (column > 0) const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                children: [
+                  for (var index = column;
+                      index < itemCount;
+                      index += columnCount)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: itemBuilder(context, index),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      );
+}
+
 class _GalleryCard extends StatelessWidget {
   final OnlineGalleryItem item;
   final _GalleryText text;
@@ -1007,21 +1070,26 @@ class _GalleryCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) => Card(
+  Widget build(BuildContext context) {
+    final coverAspectRatio = item.cover.width > 0 && item.cover.height > 0
+        ? item.cover.width / item.cover.height
+        : 4 / 3;
+    return Card(
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(
+              AspectRatio(
+                aspectRatio: coverAspectRatio,
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
                     _NetworkGalleryImage(
                       url: item.cover.previewUrl,
                       source: item.source,
-                      fit: BoxFit.cover,
+                      fit: BoxFit.contain,
                     ),
                     PositionedDirectional(
                       top: 7,
@@ -1066,6 +1134,7 @@ class _GalleryCard extends StatelessWidget {
           ),
         ),
       );
+  }
 }
 
 class _NetworkGalleryImage extends StatelessWidget {
@@ -1102,6 +1171,41 @@ class _NetworkGalleryImage extends StatelessWidget {
   }
 }
 
+Future<void> _showGalleryPreview(BuildContext context, Widget image) =>
+    showDialog<void>(
+      context: context,
+      useSafeArea: false,
+      barrierColor: Colors.black87,
+      builder: (dialogContext) => Dialog.fullscreen(
+        backgroundColor: Colors.black,
+        child: Stack(children: [
+          Positioned.fill(
+            child: InteractiveViewer(
+              minScale: .8,
+              maxScale: 6,
+              child: Center(child: image),
+            ),
+          ),
+          SafeArea(
+            child: Align(
+              alignment: AlignmentDirectional.topEnd,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: IconButton.filledTonal(
+                  tooltip: MaterialLocalizations.of(dialogContext).closeButtonTooltip,
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  icon: const Icon(Icons.close),
+                ),
+              ),
+            ),
+          ),
+        ]),
+      ),
+    );
+
+Future<void> _showSimpleNetworkPreview(BuildContext context, String url) =>
+    _showGalleryPreview(context, Image.network(url, fit: BoxFit.contain));
+
 class _OnlineGalleryDetailScreen extends StatefulWidget {
   final OnlineGalleryService service;
   final OnlineGalleryItem item;
@@ -1117,38 +1221,51 @@ class _OnlineGalleryDetailScreenState
     extends State<_OnlineGalleryDetailScreen> {
   late final Future<OnlineGalleryDetail> detail =
       widget.service.detail(widget.item);
-  bool sharing = false;
+  bool downloading = false;
 
-  Future<void> _share(OnlineGalleryMedia media, _GalleryText text) async {
-    if (sharing || media.downloadUrl.isEmpty) return;
-    setState(() => sharing = true);
+  Future<void> _download(List<OnlineGalleryMedia> media, _GalleryText text) async {
+    if (downloading || media.isEmpty) return;
+    final state = context.read<AppState>();
+    if (!await ensureOnlineGalleryDownloadDirectory(state)) return;
+    if (!mounted) return;
+    setState(() => downloading = true);
     final messenger = ScaffoldMessenger.of(context);
-    messenger.showSnackBar(SnackBar(content: Text(text.sharing)));
+    final storage = state.storage;
+    messenger.showSnackBar(SnackBar(content: Text(text.downloading)));
+    var saved = 0;
     try {
-      final response = await http.get(Uri.parse(media.downloadUrl), headers: {
-        'Referer': '${widget.item.source.siteUrl}/',
-        'User-Agent': 'Langbai-NovelAI-Studio-Mobile',
-      }).timeout(const Duration(minutes: 2));
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw HttpException('HTTP ${response.statusCode}');
+      for (var index = 0; index < media.length; index++) {
+        final item = media[index];
+        final url = item.downloadUrl.isNotEmpty ? item.downloadUrl : item.displayUrl;
+        if (url.isEmpty) continue;
+        final response = await http.get(Uri.parse(url), headers: {
+          'Referer': '${widget.item.source.siteUrl}/',
+          'User-Agent': 'Langbai-NovelAI-Studio-Mobile',
+        }).timeout(const Duration(minutes: 2));
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          throw HttpException('HTTP ${response.statusCode}');
+        }
+        final extension = RegExp(r'\.([a-zA-Z0-9]{2,5})$')
+                .firstMatch(Uri.parse(url).path)?.group(1) ?? 'jpg';
+        await storage.saveOnlineGalleryImage(
+          response.bodyBytes,
+          source: widget.item.source.id,
+          itemId: widget.item.id,
+          title: widget.item.title,
+          imageId: '${(index + 1).toString().padLeft(2, '0')}-${item.id}',
+          extension: extension,
+        );
+        saved++;
       }
-      final path = Uri.parse(media.downloadUrl).path;
-      final extension =
-          RegExp(r'\.([a-zA-Z0-9]{2,5})$').firstMatch(path)?.group(1) ?? 'png';
-      final temp = await getTemporaryDirectory();
-      final file = File(
-          '${temp.path}${Platform.pathSeparator}online-${widget.item.source.id}-${widget.item.id}.$extension');
-      await file.writeAsBytes(response.bodyBytes, flush: true);
-      await Share.shareXFiles([XFile(file.path)], text: widget.item.title);
+      if (mounted) {
+        messenger.showSnackBar(SnackBar(content: Text(_format(text.downloaded, 'count', saved))));
+      }
     } catch (error) {
       if (mounted) {
-        final language = context.read<AppState>().settings.language;
-        messenger.showSnackBar(SnackBar(
-            content: Text(
-                _friendlyGalleryError(error, widget.item.source, language))));
+        messenger.showSnackBar(SnackBar(content: Text(text.downloadFailed)));
       }
     } finally {
-      if (mounted) setState(() => sharing = false);
+      if (mounted) setState(() => downloading = false);
     }
   }
 
@@ -1218,8 +1335,8 @@ class _OnlineGalleryDetailScreenState
             final image = _DetailMedia(
               detail: value,
               text: text,
-              onShare: _share,
-              sharing: sharing,
+              onDownload: _download,
+              downloading: downloading,
             );
             final info = _DetailInfo(
               detail: value,
@@ -1237,7 +1354,11 @@ class _OnlineGalleryDetailScreenState
             return ListView(
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 28),
               children: [
-                SizedBox(height: constraints.maxHeight * .58, child: image),
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                      maxHeight: constraints.maxHeight * .68),
+                  child: image,
+                ),
                 const SizedBox(height: 12),
                 info,
               ],
@@ -1252,15 +1373,15 @@ class _OnlineGalleryDetailScreenState
 class _DetailMedia extends StatefulWidget {
   final OnlineGalleryDetail detail;
   final _GalleryText text;
-  final Future<void> Function(OnlineGalleryMedia media, _GalleryText text)
-      onShare;
-  final bool sharing;
+  final Future<void> Function(List<OnlineGalleryMedia> media, _GalleryText text)
+      onDownload;
+  final bool downloading;
 
   const _DetailMedia({
     required this.detail,
     required this.text,
-    required this.onShare,
-    required this.sharing,
+    required this.onDownload,
+    required this.downloading,
   });
 
   @override
@@ -1275,19 +1396,34 @@ class _DetailMediaState extends State<_DetailMedia> {
     final media = widget.detail.media.isEmpty
         ? [widget.detail.item.cover]
         : widget.detail.media;
-    return Stack(children: [
+    final currentIndex = index.clamp(0, media.length - 1);
+    final current = media[currentIndex];
+    final aspectRatio = current.width > 0 && current.height > 0
+        ? current.width / current.height
+        : 4 / 3;
+    final stage = Stack(children: [
       Positioned.fill(
         child: PageView.builder(
           itemCount: media.length,
           onPageChanged: (value) => setState(() => index = value),
-          itemBuilder: (context, itemIndex) => InteractiveViewer(
-            minScale: 1,
-            maxScale: 5,
-            child: Center(
-              child: _NetworkGalleryImage(
+          itemBuilder: (context, itemIndex) => GestureDetector(
+            onDoubleTap: () => _showGalleryPreview(
+              context,
+              _NetworkGalleryImage(
                 url: media[itemIndex].displayUrl,
                 source: widget.detail.item.source,
                 fit: BoxFit.contain,
+              ),
+            ),
+            child: InteractiveViewer(
+              minScale: 1,
+              maxScale: 5,
+              child: Center(
+                child: _NetworkGalleryImage(
+                  url: media[itemIndex].displayUrl,
+                  source: widget.detail.item.source,
+                  fit: BoxFit.contain,
+                ),
               ),
             ),
           ),
@@ -1302,20 +1438,53 @@ class _DetailMediaState extends State<_DetailMedia> {
       PositionedDirectional(
         end: 10,
         bottom: 10,
-        child: FilledButton.tonalIcon(
-          onPressed: widget.sharing
-              ? null
-              : () => widget.onShare(media[index], widget.text),
-          icon: widget.sharing
-              ? const SizedBox.square(
-                  dimension: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.download_outlined),
-          label: Text(widget.text.shareImage),
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          alignment: WrapAlignment.end,
+          children: [
+            FilledButton.tonalIcon(
+              onPressed: () => _showGalleryPreview(
+                context,
+                _NetworkGalleryImage(
+                  url: media[currentIndex].displayUrl,
+                  source: widget.detail.item.source,
+                  fit: BoxFit.contain,
+                ),
+              ),
+              icon: const Icon(Icons.fullscreen),
+              label: Text(widget.text.preview),
+            ),
+            FilledButton.tonalIcon(
+              onPressed: widget.downloading
+                  ? null
+                  : () => widget.onDownload([media[currentIndex]], widget.text),
+              icon: widget.downloading
+                  ? const SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.download_outlined),
+              label: Text(widget.text.downloadCurrent),
+            ),
+            if (media.length > 1)
+              FilledButton.tonalIcon(
+                onPressed: widget.downloading
+                    ? null
+                    : () => widget.onDownload(media, widget.text),
+                icon: const Icon(Icons.download_for_offline_outlined),
+                label: Text(widget.text.downloadSeries),
+              ),
+          ],
         ),
       ),
     ]);
+    return Center(
+      child: AspectRatio(
+        aspectRatio: aspectRatio,
+        child: stage,
+      ),
+    );
   }
 }
 

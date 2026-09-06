@@ -5,6 +5,12 @@ import { describe, expect, it } from "vitest";
 const projectRoot = process.cwd();
 
 describe("Character Tavern desktop UI", () => {
+  it("sends a right-panel parameter snapshot with each Tavern request", () => {
+    const source = fs.readFileSync(path.join(projectRoot, "src", "AgentPage.tsx"), "utf8");
+    expect(source).toContain("imageDefaults: activeCharacter ? {");
+    expect(source).toContain("width: activeCharacter.visual.width ?? params.width");
+    expect(source).toContain("sampler: activeCharacter.visual.sampler || params.sampler");
+  });
   it("uses virtualized Markdown chat with collapsible side rails", () => {
     const source = fs.readFileSync(path.join(projectRoot, "src", "AgentPage.tsx"), "utf8");
     const styles = fs.readFileSync(path.join(projectRoot, "src", "styles.css"), "utf8");
@@ -71,5 +77,48 @@ describe("Character Tavern desktop UI", () => {
     expect(styles).toContain(".tavern-virtual-list.is-static .tavern-virtual-row");
     expect(source).toContain('tx("noReference")');
     expect(styles).toContain("max-width: min(100%, 380px);");
+  });
+
+  it("closes the generated-image preview from blank stage clicks without swallowing image actions", () => {
+    const source = fs.readFileSync(path.join(projectRoot, "src", "AgentPage.tsx"), "utf8");
+
+    expect(source).toContain('className="tavern-image-lightbox"');
+    expect(source).toContain('target.closest("img, button")');
+    expect(source).toContain("setPreviewImage(null);");
+    expect(source).not.toContain('<section onClick={(event) => event.stopPropagation()}>');
+  });
+
+  it("renames Tavern conversations with the persisted desktop IPC", () => {
+    const source = fs.readFileSync(path.join(projectRoot, "src", "AgentPage.tsx"), "utf8");
+
+    expect(source).toContain("window.naiDesktop.renameAgentConversation");
+    expect(source).toContain('tx("renameChatLabel"');
+    expect(source).toContain('id="tavern-rename-chat-title"');
+    expect(source).not.toContain("window.prompt");
+  });
+
+  it("prevents stale saves from resurrecting deleted chats and confirms copy visibly", () => {
+    const source = fs.readFileSync(path.join(projectRoot, "src", "AgentPage.tsx"), "utf8");
+    const styles = fs.readFileSync(path.join(projectRoot, "src", "styles.css"), "utf8");
+
+    expect(source).toContain("saveRevision.current += 1");
+    expect(source).toContain("deletingConversationId");
+    expect(source).toContain('role="status"><CheckIcon />{tx("copied")}');
+    expect(source).toContain("copyMessage");
+    expect(source).toContain("setCopied(false), 900");
+    expect(styles).toContain(".tavern-copy-feedback");
+    expect(styles).toContain("position: fixed");
+    expect(styles).toContain("top: clamp(190px, 24vh, 220px)");
+    expect(styles).toContain("transform: translate(-50%, -50%)");
+    expect(styles).toContain(".tavern-library-delete.is-busy");
+  });
+
+  it("manages a shared reverse/convert JSON preset library in settings", () => {
+    const source = fs.readFileSync(path.join(projectRoot, "src", "App.tsx"), "utf8");
+    expect(source).toContain("importReverseConvertPreset");
+    expect(source).toContain("reverseConvertPromptPresets");
+    expect(source).toContain("reverseConvertPromptPresetId");
+    expect(source).toContain('accept=".json,application/json"');
+    expect(source).toContain("deleteReverseConvertPreset");
   });
 });

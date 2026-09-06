@@ -4052,7 +4052,8 @@ SettingsDetailText settingsDetailTextFor(Object? value) {
         shortcutNegative: '附加負面提示詞',
         imageOutputPath: '圖片存放路徑',
         defaultImageDir: '應用預設目錄（按 日期/分組 歸檔）',
-        imagePathHint: '圖片按 日期/分組 歸檔，與電腦端一致。自訂路徑在 Android 11+ 需「所有文件存取權限」。',
+        imagePathHint:
+            '生成圖片與線上畫廊下載均儲存在此目錄；畫廊系列會放入 Online Gallery 子目錄。自訂路徑在 Android 11+ 需「所有文件存取權限」。',
         chooseFolder: '選擇資料夾',
         chooseImageFolderDialog: '選擇圖片存放資料夾',
         restoreDefault: '恢復預設',
@@ -4156,7 +4157,7 @@ SettingsDetailText settingsDetailTextFor(Object? value) {
         imageOutputPath: 'Image output path',
         defaultImageDir: 'App default folder (archived by date/group)',
         imagePathHint:
-            'Images are archived by date/group, matching desktop. Custom paths on Android 11+ require “All files access”.',
+            'Generated images and online-gallery downloads use this folder; gallery series are stored under Online Gallery. Custom paths on Android 11+ require “All files access”.',
         chooseFolder: 'Choose folder',
         chooseImageFolderDialog: 'Choose image output folder',
         restoreDefault: 'Restore default',
@@ -4254,7 +4255,7 @@ SettingsDetailText settingsDetailTextFor(Object? value) {
         imageOutputPath: '画像保存先',
         defaultImageDir: 'アプリ既定フォルダ（日付/グループ別）',
         imagePathHint:
-            '画像はデスクトップ版と同じく日付/グループ別に保存されます。Android 11+ のカスタムパスには「すべてのファイルへのアクセス」が必要です。',
+            '生成画像とオンラインギャラリーの保存先です。シリーズは Online Gallery サブフォルダに保存されます。Android 11+ のカスタムパスには「すべてのファイルへのアクセス」が必要です。',
         chooseFolder: 'フォルダを選択',
         chooseImageFolderDialog: '画像保存フォルダを選択',
         restoreDefault: '既定に戻す',
@@ -4355,7 +4356,7 @@ SettingsDetailText settingsDetailTextFor(Object? value) {
         imageOutputPath: '이미지 저장 경로',
         defaultImageDir: '앱 기본 폴더(날짜/그룹별 보관)',
         imagePathHint:
-            '이미지는 데스크톱과 동일하게 날짜/그룹별로 보관됩니다. Android 11+ 사용자 지정 경로에는 “모든 파일 접근” 권한이 필요합니다.',
+            '생성 이미지와 온라인 갤러리 다운로드가 이 폴더에 저장되며, 시리즈는 Online Gallery 하위 폴더를 사용합니다. Android 11+ 사용자 지정 경로에는 “모든 파일 접근” 권한이 필요합니다.',
         chooseFolder: '폴더 선택',
         chooseImageFolderDialog: '이미지 저장 폴더 선택',
         restoreDefault: '기본값 복원',
@@ -4450,7 +4451,8 @@ SettingsDetailText settingsDetailTextFor(Object? value) {
         shortcutNegative: '附加负面提示词',
         imageOutputPath: '图片存放路径',
         defaultImageDir: '应用默认目录（按 日期/分组 归档）',
-        imagePathHint: '图片按 日期/分组 归档，与电脑端一致。自定义路径在 Android 11+ 需「所有文件访问权限」。',
+        imagePathHint:
+            '生成图片和在线画廊下载都保存在此目录；画廊系列会放入 Online Gallery 子目录。自定义路径在 Android 11+ 需「所有文件访问权限」。',
         chooseFolder: '选择文件夹',
         chooseImageFolderDialog: '选择图片存放文件夹',
         restoreDefault: '恢复默认',

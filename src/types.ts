@@ -1321,6 +1321,8 @@ export interface AppSettings {
   hasOnboarded: boolean;
   language: AppLanguage;
   outputDir: string;
+  /** Online-gallery download root. Empty means the first download asks once. */
+  onlineGalleryDownloadDir: string;
   /** Folder for the app.log error log. Empty = default <userData>/logs. */
   logDir: string;
   apiBaseUrl: string;
@@ -1393,6 +1395,9 @@ export interface AppSettings {
   /** Built-in DSH Infinite Gen 3 adapter, scoped to Tavern image, reverse, and convert only. */
   reverseConvertDshEnabled: boolean;
   reverseConvertDshMode: "focused" | "strict";
+  /** User-manageable SillyTavern JSON presets shared by AI reverse and prompt conversion. */
+  reverseConvertPromptPresets: import("./tavern/image-task-preset").ImageTaskPromptPreset[];
+  reverseConvertPromptPresetId: string;
   // Legacy per-mode comic storyboard templates. Kept for migration only.
   comicAnalyzePromptTemplates: ModePromptTemplates;
   // Current single storyboard analysis template used by the comic generator.
@@ -1717,6 +1722,10 @@ export interface NaiDesktopApi {
   onlineGalleryDetail: (
     request: import("./online-gallery").OnlineGalleryDetailRequest,
   ) => Promise<import("./online-gallery").OnlineGalleryDetail>;
+  downloadOnlineGalleryImages: (
+    request: import("./online-gallery").OnlineGalleryDownloadRequest,
+  ) => Promise<import("./online-gallery").OnlineGalleryDownloadResult>;
+  selectOnlineGalleryDownloadDir: () => Promise<string | null>;
   onlineGalleryClearDataCache: () => Promise<void>;
   onlineGalleryCacheImage: (
     source: import("./online-gallery").OnlineGallerySourceId,

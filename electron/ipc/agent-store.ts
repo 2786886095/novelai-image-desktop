@@ -26,10 +26,11 @@ import {
 } from "../../src/tavern/compat";
 import {
   createSoftwareImageStarterKit,
+  createTavernBuiltinSamplerPresets,
   SOFTWARE_IMAGE_CHARACTER_ID,
   SOFTWARE_IMAGE_LOREBOOK_ID,
   SOFTWARE_IMAGE_PERSONA_ID,
-  SOFTWARE_IMAGE_SAMPLER_ID,
+  TAVERN_PRESET_LIBRARY_VERSION,
 } from "../../src/tavern/builtins";
 import { toLocalMediaUrl } from "./local-media-protocol";
 import { atomicWriteFileSync, getSettings, readWithBackupRecoverySync, rotateBackupsSync } from "./store";
@@ -65,7 +66,9 @@ function defaultSkills(): AgentSkill[] {
 
 export function createEmptyAgentWorkspace(): AgentWorkspaceData {
   const createdAt = now();
-  const { character, persona, lorebook, sampler } = createSoftwareImageStarterKit();
+  const { character, persona, lorebook } = createSoftwareImageStarterKit();
+  const samplerPresets = createTavernBuiltinSamplerPresets();
+  const sampler = samplerPresets[0]!;
   const settings = getSettings();
   const conversation: AgentConversation = {
     id: crypto.randomUUID(),
@@ -96,7 +99,8 @@ export function createEmptyAgentWorkspace(): AgentWorkspaceData {
     characters: [character],
     personas: [persona],
     lorebooks: [lorebook],
-    samplerPresets: [sampler],
+    samplerPresets,
+    presetLibraryVersion: TAVERN_PRESET_LIBRARY_VERSION,
     selectedCharacterId: character.id,
     selectedPersonaId: persona.id,
     defaultGenerationMode: "confirm",
@@ -112,7 +116,6 @@ function restoreProtectedStarterKit(
   characters: ReturnType<typeof normalizeTavernCharacter>[],
   personas: TavernPersona[],
   lorebooks: TavernLorebook[],
-  samplerPresets: TavernSamplerPreset[],
 ) {
   const kit = createSoftwareImageStarterKit();
   const characterIndex = characters.findIndex((item) => item.id === SOFTWARE_IMAGE_CHARACTER_ID);
@@ -157,7 +160,6 @@ function restoreProtectedStarterKit(
   } else {
     personas.unshift(kit.persona);
   }
-  if (!samplerPresets.some((item) => item.id === SOFTWARE_IMAGE_SAMPLER_ID)) samplerPresets.unshift(kit.sampler);
 }
 
 function attachmentKind(extension: string): AgentAttachment["kind"] {
@@ -267,7 +269,12 @@ export function normalizeAgentWorkspace(raw: unknown): AgentWorkspaceData {
     .map((item) => normalizeTavernLorebook(item));
   const samplerPresets: TavernSamplerPreset[] = (Array.isArray(input.samplerPresets) ? input.samplerPresets : [])
     .map((item) => normalizeTavernSamplerPreset(item));
-  restoreProtectedStarterKit(characters, personas, lorebooks, samplerPresets);
+  restoreProtectedStarterKit(characters, personas, lorebooks);
+  const incomingPresetLibraryVersion = Math.max(0, Math.trunc(Number(input.presetLibraryVersion) || 0));
+  if (incomingPresetLibraryVersion < TAVERN_PRESET_LIBRARY_VERSION) {
+    samplerPresets.splice(0, samplerPresets.length, ...createTavernBuiltinSamplerPresets());
+  }
+  if (!samplerPresets.length) samplerPresets.push(createTavernBuiltinSamplerPresets()[0]);
   const defaultCharacterId = characters.some((item) => item.id === input.selectedCharacterId)
     ? input.selectedCharacterId
     : characters[0].id;
@@ -371,6 +378,7 @@ export function normalizeAgentWorkspace(raw: unknown): AgentWorkspaceData {
     personas,
     lorebooks,
     samplerPresets,
+    presetLibraryVersion: TAVERN_PRESET_LIBRARY_VERSION,
     ...(defaultCharacterId ? { selectedCharacterId: defaultCharacterId } : {}),
     ...(defaultPersonaId ? { selectedPersonaId: defaultPersonaId } : {}),
     defaultGenerationMode: input.defaultGenerationMode === "auto" ? "auto" : "confirm",
@@ -382,17 +390,21 @@ export function readAgentWorkspace(): AgentWorkspaceData {
   if (cache) return clone(cache);
   const file = agentWorkspacePath();
   let resetLegacyWorkspace = false;
+  let migratedPresetLibrary = false;
   const recovered = readWithBackupRecoverySync<AgentWorkspaceData>(
     file,
     (text) => {
       const parsed = JSON.parse(text) as Partial<AgentWorkspaceData>;
       if (Number(parsed?.version) !== AGENT_WORKSPACE_VERSION) resetLegacyWorkspace = true;
+      if (Math.max(0, Math.trunc(Number(parsed?.presetLibraryVersion) || 0)) < TAVERN_PRESET_LIBRARY_VERSION) {
+        migratedPresetLibrary = true;
+      }
       return normalizeAgentWorkspace(parsed);
     },
     (value) => JSON.stringify(value, null, 2),
   );
   cache = recovered?.value ?? createEmptyAgentWorkspace();
-  if (!recovered || resetLegacyWorkspace) writeAgentWorkspace(cache);
+  if (!recovered || resetLegacyWorkspace || migratedPresetLibrary) writeAgentWorkspace(cache);
   return clone(cache);
 }
 
@@ -477,6 +489,9 @@ export function renameAgentConversation(conversationId: string, title: string): 
 
 export function deleteAgentConversation(conversationId: string): AgentWorkspaceMutationResult {
   const workspace = readAgentWorkspace();
+  if (!workspace.conversations.some((item) => item.id === conversationId)) {
+    return { ok: false, message: "对话不存在或已经删除。", workspace };
+  }
   workspace.conversations = workspace.conversations.filter((item) => item.id !== conversationId);
   workspace.memories = workspace.memories.filter((item) => item.conversationId !== conversationId);
   if (workspace.selectedConversationId === conversationId) workspace.selectedConversationId = workspace.conversations[0]?.id;

@@ -119,7 +119,7 @@ const PRESET_SETTING_KEYS: Array<keyof AppSettings> = [
   "positivePromptPresets",
   "promptChunks",
 ];
-const DEVICE_PATH_KEYS: Array<keyof AppSettings> = ["outputDir", "logDir", "backupDir"];
+const DEVICE_PATH_KEYS: Array<keyof AppSettings> = ["outputDir", "onlineGalleryDownloadDir", "logDir", "backupDir"];
 
 type AssetReference = {
   asset: string;

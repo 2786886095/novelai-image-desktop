@@ -169,6 +169,56 @@ describe("convertComicPanels fallback path", () => {
     expect(logs).toHaveLength(1);
     expect(logs[0].label).not.toContain("规则校验");
   });
+
+  it("disables default thinking for official DeepSeek V4 conversion and reverse requests", async () => {
+    settingsRef.current = {
+      ...settingsRef.current,
+      convertApiUrl: "https://api.deepseek.com",
+      convertApiKey: "sk-test",
+      convertApiModel: "deepseek-v4-flash-vision-exp",
+      visionApiUrl: "https://api.deepseek.com",
+      visionApiKey: "sk-test",
+      visionApiModel: "deepseek-v4-flash-vision-exp",
+      reversePromptTemplates: { tags: "", natural: "", mixed: "" },
+      mcpForReverse: false,
+    };
+    axiosMock.post
+      .mockResolvedValueOnce({
+        data: {
+          choices: [{ message: { content: "1girl, blue hair" }, finish_reason: "stop" }],
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          choices: [{ message: { content: "1girl, solo" }, finish_reason: "stop" }],
+        },
+      });
+    const { convertPromptText, reversePromptImage } = await import("./nai");
+
+    expect((await convertPromptText("蓝发少女", "tags", false)).ok).toBe(true);
+    expect(
+      (await reversePromptImage(Buffer.from("fake-image").toString("base64"))).ok,
+    ).toBe(true);
+
+    for (const call of axiosMock.post.mock.calls) {
+      expect(call[1]).toMatchObject({ thinking: { type: "disabled" } });
+    }
+  });
+
+  it("does not add DeepSeek-specific thinking controls to compatible third-party endpoints", async () => {
+    settingsRef.current.convertApiUrl = "https://example.test/v1";
+    settingsRef.current.convertApiKey = "sk-test";
+    settingsRef.current.convertApiModel = "deepseek-v4-flash-vision-exp";
+    axiosMock.post.mockResolvedValue({
+      data: {
+        choices: [{ message: { content: "1girl, solo" }, finish_reason: "stop" }],
+      },
+    });
+    const { convertPromptText } = await import("./nai");
+
+    expect((await convertPromptText("一个女孩", "tags", false)).ok).toBe(true);
+    expect(axiosMock.post.mock.calls[0]?.[1]).not.toHaveProperty("thinking");
+  });
 });
 
 describe("prompt codex enhancement", () => {

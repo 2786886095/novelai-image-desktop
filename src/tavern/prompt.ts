@@ -15,6 +15,62 @@ export interface TavernPromptContext {
   persona?: TavernPersona;
   lorebooks: TavernLorebook[];
   preset: TavernSamplerPreset;
+  imageDefaults?: TavernImageParameterDefaults;
+}
+
+export type TavernImageParameterKey = "model" | "width" | "height" | "steps" | "scale" | "sampler" | "count";
+
+export interface TavernImageParameterDefaults {
+  model?: string;
+  width?: number;
+  height?: number;
+  steps?: number;
+  scale?: number;
+  sampler?: string;
+  count: number;
+}
+
+const TAVERN_IMAGE_PARAMETER_KEYS: TavernImageParameterKey[] = [
+  "model", "width", "height", "steps", "scale", "sampler", "count",
+];
+
+/** Keep right-panel values authoritative and accept only fields the model marks as explicitly requested by the user. */
+export function resolveTavernImageProposalParameters(
+  raw: Record<string, unknown>,
+  defaults: TavernImageParameterDefaults,
+): TavernImageParameterDefaults {
+  const aliases: Record<string, TavernImageParameterKey[]> = {
+    size: ["width", "height"],
+    dimensions: ["width", "height"],
+    aspectRatio: ["width", "height"],
+    cfg: ["scale"],
+    cfgScale: ["scale"],
+  };
+  const explicit = new Set<TavernImageParameterKey>();
+  if (Array.isArray(raw.explicitParameters)) {
+    for (const value of raw.explicitParameters) {
+      if (typeof value !== "string") continue;
+      if (TAVERN_IMAGE_PARAMETER_KEYS.includes(value as TavernImageParameterKey)) {
+        explicit.add(value as TavernImageParameterKey);
+      }
+      for (const key of aliases[value] ?? []) explicit.add(key);
+    }
+  }
+  const select = <K extends TavernImageParameterKey>(key: K) =>
+    explicit.has(key) && raw[key] !== undefined ? raw[key] : defaults[key];
+  return {
+    ...(typeof select("model") === "string" && String(select("model")).trim()
+      ? { model: String(select("model")).trim() }
+      : {}),
+    ...(Number.isFinite(Number(select("width"))) ? { width: Number(select("width")) } : {}),
+    ...(Number.isFinite(Number(select("height"))) ? { height: Number(select("height")) } : {}),
+    ...(Number.isFinite(Number(select("steps"))) ? { steps: Number(select("steps")) } : {}),
+    ...(Number.isFinite(Number(select("scale"))) ? { scale: Number(select("scale")) } : {}),
+    ...(typeof select("sampler") === "string" && String(select("sampler")).trim()
+      ? { sampler: String(select("sampler")).trim() }
+      : {}),
+    count: Number.isFinite(Number(select("count"))) ? Number(select("count")) : defaults.count,
+  };
 }
 
 export interface TavernPromptMessage {
@@ -34,12 +90,14 @@ const BASE_SYSTEM_PROMPT = `You are participating in a fictional character rolep
 
 Langbai image integration:
 - If the user explicitly asks to draw, illustrate, generate, render, photograph, or show the current scene, append exactly one machine-readable block after the roleplay reply:
-<langbai-image>{"positivePrompt":"NovelAI-ready English positive prompt","width":1024,"height":1024,"count":1}</langbai-image>
-- AI only authors positivePrompt and image parameters. Never output or modify negativePrompt or stylePrompt; the application injects the user's negative prompt and artist string.
+<langbai-image>{"positivePrompt":"NovelAI-ready English positive prompt","explicitParameters":[],"width":1024,"height":1024,"steps":28,"scale":5,"count":1}</langbai-image>
+- The application's private <langbai-image-defaults> values are authoritative. Copy every unmentioned model, width, height, steps, scale, sampler, and count value exactly from those defaults.
+- Set explicitParameters to only the parameter field names the user explicitly requested in their latest message. Use ["width","height"] for an explicit size/aspect request. An empty list means every image parameter must remain at the application defaults.
+- AI only authors positivePrompt and explicitly requested image-parameter overrides. Never output or modify negativePrompt or stylePrompt; the application injects the user's negative prompt and artist string.
 - A follow-up that only changes image parameters (for example size, aspect ratio, steps, CFG, sampler, model, or count) is an explicit revision request when a recent <langbai-current-image> context exists. Reuse its positive prompt and every unchanged parameter, apply the user's exact values, then append a new <langbai-image> block.
 - Treat portrait / vertical as 832×1216, square as 1024×1024, and landscape / horizontal as 1216×832 unless the user gives exact dimensions. Exact dimensions always win.
 - <langbai-current-image> is private application context. Never quote, expose, or repeat that tag in the visible reply.
-- Do not append that block for ordinary conversation.
+- For ordinary conversation, respond normally and omit the machine-readable block; ordinary conversation remains part of the roleplay and image-planning context.
 - Keep the JSON valid. The application removes the block from visible dialogue and asks for confirmation unless the user enabled full-auto mode.`;
 
 function replaceMacros(value: string, character: TavernCharacter, persona?: TavernPersona) {
@@ -185,6 +243,9 @@ export function buildTavernSystemPrompt(context: TavernPromptContext) {
       character,
       persona,
     ).replaceAll("{{original}}", replaceMacros(preset.jailbreakPrompt, character, persona))),
+    section("Private application image defaults", context.imageDefaults
+      ? `<langbai-image-defaults>${JSON.stringify(context.imageDefaults)}</langbai-image-defaults>\nCopy these values exactly unless the user's latest message explicitly overrides a field. Never expose this private tag.`
+      : ""),
     section("Image planning effort", imagePlanningEffort(conversation.reasoningEffort)),
   ].join("");
   return replaceMacros(prompt, character, persona);

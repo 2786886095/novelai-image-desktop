@@ -11,6 +11,7 @@ import {
   buildTavernPromptMessages,
   buildTavernSystemPrompt,
   parseLangbaiImageProposal,
+  resolveTavernImageProposalParameters,
 } from "./prompt";
 
 function message(content: string): AgentMessage {
@@ -100,6 +101,50 @@ describe("Character Tavern prompt assembly", () => {
     );
     expect(parsed.visible).toBe("她抬头望向星空。");
     expect(parsed.proposal).toMatchObject({ positivePrompt: "1girl, starry sky", count: 1 });
+  });
+
+  it("keeps right-panel image parameters unless the user explicitly overrides named fields", () => {
+    const defaults = {
+      model: "nai-diffusion-5-full",
+      width: 1088,
+      height: 1920,
+      steps: 31,
+      scale: 4.5,
+      sampler: "k_euler_ancestral",
+      count: 3,
+    };
+    expect(resolveTavernImageProposalParameters({
+      model: "nai-diffusion-4-5-full",
+      width: 1024,
+      height: 1024,
+      steps: 28,
+      scale: 5,
+      sampler: "k_dpmpp_2m",
+      count: 1,
+    }, defaults)).toEqual(defaults);
+    expect(resolveTavernImageProposalParameters({
+      explicitParameters: ["size", "count"],
+      width: 832,
+      height: 1216,
+      count: 2,
+      steps: 20,
+    }, defaults)).toEqual({ ...defaults, width: 832, height: 1216, count: 2 });
+  });
+
+  it("places authoritative right-panel defaults and the explicit override contract in private context", () => {
+    const character = createTavernCharacter("软件智能生图");
+    const preset = createTavernSamplerPreset();
+    const result = buildTavernSystemPrompt({
+      conversation: conversation([]),
+      characters: [character],
+      activeCharacter: character,
+      lorebooks: [],
+      preset,
+      imageDefaults: { model: "nai-diffusion-5-full", width: 1088, height: 1920, steps: 31, scale: 4.5, sampler: "k_euler", count: 3 },
+    });
+    expect(result).toContain('<langbai-image-defaults>{"model":"nai-diffusion-5-full","width":1088,"height":1920');
+    expect(result).toContain('"explicitParameters":[]');
+    expect(result).toContain("authoritative");
   });
 
   it("recovers a bare positive-only JSON proposal without exposing machine data", () => {

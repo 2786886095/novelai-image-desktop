@@ -73,6 +73,7 @@ import type {
   TavernImageProposal,
   TavernLorebook,
   TavernPersona,
+  TavernSamplerPreset,
   AgentReasoningEffort,
 } from "./agent/types";
 import {
@@ -90,11 +91,13 @@ import {
 import {
   createTavernCharacter,
   createTavernPersona,
+  createTavernSamplerPreset,
   normalizeTavernLorebook,
   tavernId,
   tavernNow,
 } from "./tavern/compat";
 import { defaultImagePromptForMessage, visibleMessageContent } from "./tavern/prompt";
+import { importTavernSamplerPresetJson } from "./tavern/preset-import";
 import { tavernUiText, type TavernUiKey } from "./tavern/ui-i18n";
 import { normalizeAppLanguage } from "./i18n";
 import { useAppStore } from "./store";
@@ -404,6 +407,8 @@ export default function AgentPage() {
   const [composerPopover, setComposerPopover] = useState({ left: 8, width: 360, pointer: 48, bottom: 48 });
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
+  const [deletingConversationId, setDeletingConversationId] = useState("");
+  const [renameDialog, setRenameDialog] = useState<{ id: string; name: string } | null>(null);
   const [stylePresetDialog, setStylePresetDialog] = useState<{ prompt: string; name: string } | null>(null);
   const [characterDraft, setCharacterDraft] = useState<TavernCharacter | null>(null);
   const [selectedLorebookId, setSelectedLorebookId] = useState<string>();
@@ -614,9 +619,17 @@ export default function AgentPage() {
   };
 
   const deleteConversation = async (chat: AgentConversation) => {
-    if (!(await confirmAction(`${tx("delete")} “${chat.title}”?`))) return;
+    if (deletingConversationId) return;
+    setDeletingConversationId(chat.id);
     try {
+      if (!(await confirmAction(`${tx("delete")} “${chat.title}”?`))) return;
+      // Invalidate any older save response before the atomic delete result is
+      // applied; otherwise a slow save can visually resurrect the removed row.
+      saveRevision.current += 1;
       let result = await window.naiDesktop.deleteAgentConversation(chat.id);
+      if (!result.ok || result.workspace.conversations.some((item) => item.id === chat.id)) {
+        throw new Error(result.message ?? tx("delete"));
+      }
       if (!result.workspace.conversations.length) {
         result = await window.naiDesktop.createAgentConversation(copy.newChat);
       }
@@ -624,6 +637,23 @@ export default function AgentPage() {
       setLibraryTab("chats");
       setNotice(tx("delete"));
       setError("");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setDeletingConversationId("");
+    }
+  };
+
+  const confirmConversationRename = async () => {
+    const request = renameDialog;
+    const name = request?.name.trim();
+    if (!request || !name) return;
+    try {
+      const result = await window.naiDesktop.renameAgentConversation(request.id, name);
+      setWorkspace(result.workspace);
+      if (!result.ok) setError(result.message ?? tx("renameChatTitle"));
+      else setNotice(tx("renameChatTitle"));
+      setRenameDialog(null);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     }
@@ -809,7 +839,16 @@ export default function AgentPage() {
     setComposer("");
     setError("");
     try {
-      const result = await window.naiDesktop.sendAgentMessage({ conversationId: conversation.id, text, characterId: activeCharacter?.id });
+      const imageDefaults = activeCharacter ? {
+        model: activeCharacter.visual.model || params.model,
+        width: activeCharacter.visual.width ?? params.width,
+        height: activeCharacter.visual.height ?? params.height,
+        steps: activeCharacter.visual.steps ?? params.steps,
+        scale: activeCharacter.visual.scale ?? params.cfgScale,
+        sampler: activeCharacter.visual.sampler || params.sampler,
+        count: activeCharacter.visual.count ?? 1,
+      } : undefined;
+      const result = await window.naiDesktop.sendAgentMessage({ conversationId: conversation.id, text, characterId: activeCharacter?.id, imageDefaults });
       if (result.ok) return;
       setComposer(text);
       setError(result.message ?? copy.send);
@@ -828,6 +867,15 @@ export default function AgentPage() {
         text: "",
         characterId: message.characterId ?? activeCharacter?.id,
         regenerateMessageId: message.id,
+        imageDefaults: activeCharacter ? {
+          model: activeCharacter.visual.model || params.model,
+          width: activeCharacter.visual.width ?? params.width,
+          height: activeCharacter.visual.height ?? params.height,
+          steps: activeCharacter.visual.steps ?? params.steps,
+          scale: activeCharacter.visual.scale ?? params.cfgScale,
+          sampler: activeCharacter.visual.sampler || params.sampler,
+          count: activeCharacter.visual.count ?? 1,
+        } : undefined,
       });
       if (!result.ok) setError(result.message ?? tx("regenerateReply"));
     } catch (error) {
@@ -984,7 +1032,8 @@ export default function AgentPage() {
                       <span><strong>{chat.title}</strong><small>{last?.content || character?.firstMessage || tx("newStory")}</small></span>
                       {chat.status === "running" ? <i className="is-typing">•••</i> : null}
                     </button>
-                    <IconButton label={tx("deleteChatLabel", { name: chat.title })} className="tavern-library-delete" onClick={(event) => { event.stopPropagation(); void deleteConversation(chat); }}><DeleteIcon /></IconButton>
+                    <IconButton label={tx("renameChatLabel", { name: chat.title })} className="tavern-library-rename" onClick={(event) => { event.stopPropagation(); setRenameDialog({ id: chat.id, name: chat.title }); }}><EditIcon /></IconButton>
+                    <IconButton label={tx("deleteChatLabel", { name: chat.title })} disabled={Boolean(deletingConversationId)} className={`tavern-library-delete ${deletingConversationId === chat.id ? "is-busy" : ""}`} onClick={(event) => { event.stopPropagation(); void deleteConversation(chat); }}><DeleteIcon /></IconButton>
                   </div>
                 );
               }) : <div className="tavern-library-empty"><MessageIcon /><span>{tx("noChats")}</span><small>{tx("noChatsHint")}</small></div>}
@@ -1211,6 +1260,11 @@ export default function AgentPage() {
                   discovering={discovering}
                   onDiscover={discoverModels}
                   onSave={saveProvider}
+                  workspace={workspace}
+                  conversation={conversation}
+                  updateWorkspace={updateWorkspace}
+                  onNotice={setNotice}
+                  onError={setError}
                   language={language}
                 />
               ) : null}
@@ -1234,6 +1288,35 @@ export default function AgentPage() {
         )}
       </aside>
       {mobilePanel ? <button className="tavern-scrim tavern-mobile-only" aria-label={tx("closeSidebar")} onClick={() => setMobilePanel(null)} /> : null}
+      {renameDialog ? createPortal((
+        <div className="modal-backdrop tavern-input-dialog-backdrop" onMouseDown={() => setRenameDialog(null)}>
+          <section className="modal input-modal tavern-input-dialog" role="dialog" aria-modal="true" aria-labelledby="tavern-rename-chat-title" onMouseDown={(event) => event.stopPropagation()}>
+            <header>
+              <h2 id="tavern-rename-chat-title">{tx("renameChatTitle")}</h2>
+              <button type="button" aria-label={tx("close")} onClick={() => setRenameDialog(null)}><CloseIcon /></button>
+            </header>
+            <div className="input-modal-body">
+              <label className="field">
+                <span>{tx("conversationName")}</span>
+                <input
+                  autoFocus
+                  maxLength={100}
+                  value={renameDialog.name}
+                  onChange={(event) => setRenameDialog((current) => current ? { ...current, name: event.target.value } : current)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") void confirmConversationRename();
+                    else if (event.key === "Escape") setRenameDialog(null);
+                  }}
+                />
+              </label>
+            </div>
+            <footer className="input-modal-footer">
+              <button type="button" className="btn btn-secondary" onClick={() => setRenameDialog(null)}>{tx("cancel")}</button>
+              <button type="button" className="btn btn-primary" disabled={!renameDialog.name.trim()} onClick={() => void confirmConversationRename()}>{tx("save")}</button>
+            </footer>
+          </section>
+        </div>
+      ), document.body) : null}
       {stylePresetDialog ? createPortal((
         <div className="modal-backdrop tavern-input-dialog-backdrop" onMouseDown={() => setStylePresetDialog(null)}>
           <section className="modal input-modal tavern-input-dialog" role="dialog" aria-modal="true" aria-labelledby="tavern-style-preset-title" onMouseDown={(event) => event.stopPropagation()}>
@@ -1456,7 +1539,29 @@ function MessageBubble({ conversationId, message, speaker, persona, language, on
   const content = visibleMessageContent(message);
   const [proposalDraft, setProposalDraft] = useState(message.imageProposal);
   const [previewImage, setPreviewImage] = useState<AgentAttachment | null>(null);
+  const [copied, setCopied] = useState(false);
+  const copyTimerRef = useRef<number | undefined>(undefined);
   useEffect(() => setProposalDraft(message.imageProposal), [message.imageProposal]);
+  useEffect(() => () => {
+    if (copyTimerRef.current) window.clearTimeout(copyTimerRef.current);
+  }, []);
+  const copyMessage = async () => {
+    try {
+      await navigator.clipboard.writeText(content);
+    } catch {
+      const textarea = document.createElement("textarea");
+      textarea.value = content;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      textarea.remove();
+    }
+    setCopied(true);
+    if (copyTimerRef.current) window.clearTimeout(copyTimerRef.current);
+    copyTimerRef.current = window.setTimeout(() => setCopied(false), 900);
+  };
   const swipes = message.swipes ?? [];
   const swipeIndex = Math.max(0, Math.min(swipes.length - 1, message.swipeIndex ?? swipes.length - 1));
   return (
@@ -1515,14 +1620,24 @@ function MessageBubble({ conversationId, message, speaker, persona, language, on
               <IconButton label={tx("nextReply")} disabled={swipeIndex >= swipes.length - 1} onClick={() => onUpdate((item) => { item.swipeIndex = Math.min(swipes.length - 1, swipeIndex + 1); })}><ChevronRightIcon /></IconButton>
             </span>
           ) : null}
-          <IconButton label={tx("copy")} onClick={() => void navigator.clipboard.writeText(content)}><CopyIcon /></IconButton>
+          <span className={`tavern-copy-action ${copied ? "is-copied" : ""}`}>
+            <IconButton label={copied ? tx("copied") : tx("copy")} className={copied ? "is-copied" : ""} onClick={() => void copyMessage()}>{copied ? <CheckIcon /> : <CopyIcon />}</IconButton>
+          </span>
           {!isUser && message.status !== "streaming" ? <IconButton label={tx("regenerateReply")} onClick={onRegenerate}><RefreshIcon /></IconButton> : null}
           {message.status !== "streaming" ? <IconButton label={tx("deleteMessage")} className="tavern-message-delete" onClick={onDelete}><DeleteIcon /></IconButton> : null}
         </footer>
+        {copied ? <span className="tavern-copy-feedback" role="status"><CheckIcon />{tx("copied")}</span> : null}
       </div>
       {previewImage?.fileUrl ? createPortal((
         <div className="tavern-image-lightbox" role="dialog" aria-modal="true" aria-label={tx("previewLabel", { name: previewImage.name })} onClick={() => setPreviewImage(null)}>
-          <section onClick={(event) => event.stopPropagation()}>
+          <section onClick={(event) => {
+            const target = event.target;
+            if (target instanceof Element && target.closest("img, button")) {
+              event.stopPropagation();
+              return;
+            }
+            setPreviewImage(null);
+          }}>
             <IconButton label={tx("closePreview")} className="tavern-image-lightbox-close" onClick={() => setPreviewImage(null)}><CloseIcon /></IconButton>
             <div className="tavern-image-lightbox-stage"><img src={previewImage.fileUrl} alt={previewImage.name} /></div>
             <footer>
@@ -1809,19 +1924,75 @@ function PersonaPanel({ workspace, conversation, selectedId, setSelectedId, upda
   );
 }
 
-function ModelPanel({ draft, setDraft, models, discovering, onDiscover, onSave, language }: {
+function ModelPanel({ draft, setDraft, models, discovering, onDiscover, onSave, workspace, conversation, updateWorkspace, onNotice, onError, language }: {
   draft: Partial<AppSettings>;
   setDraft: (value: Partial<AppSettings>) => void;
   models: AgentDiscoveredModel[];
   discovering: boolean;
   onDiscover: () => Promise<void>;
   onSave: () => Promise<void>;
+  workspace: AgentWorkspaceData;
+  conversation?: AgentConversation;
+  updateWorkspace: (mutator: (next: AgentWorkspaceData) => void, success?: string) => void;
+  onNotice: (message: string) => void;
+  onError: (message: string) => void;
   language: unknown;
 }) {
   const tx = (key: TavernUiKey, values?: Record<string, string | number>) => tavernUiText(language, key, values);
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
+  const [renamePresetId, setRenamePresetId] = useState("");
+  const [renamePresetValue, setRenamePresetValue] = useState("");
+  const presetFileRef = useRef<HTMLInputElement>(null);
   const modelPickerRef = useRef<HTMLDivElement>(null);
   const presetId = inferAgentProviderPreset(draft.agentApiProtocol ?? "openai-compatible", String(draft.agentApiBaseUrl ?? ""));
+  const activeTavernPreset = workspace.samplerPresets.find((item) => item.id === conversation?.samplerPresetId)
+    ?? workspace.samplerPresets[0];
+  const selectTavernPreset = (id: string) => updateWorkspace((next) => {
+    const chat = next.conversations.find((item) => item.id === next.selectedConversationId);
+    if (chat && next.samplerPresets.some((item) => item.id === id)) chat.samplerPresetId = id;
+  });
+  const importPresetFile = async (file?: File) => {
+    if (!file) return;
+    try {
+      const source = await file.text();
+      const result = importTavernSamplerPresetJson(source, file.name);
+      const digest = await globalThis.crypto.subtle.digest("SHA-256", new TextEncoder().encode(source));
+      result.preset.sourceHash = [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, "0")).join("").toUpperCase();
+      updateWorkspace((next) => {
+        next.samplerPresets.unshift(result.preset);
+        const chat = next.conversations.find((item) => item.id === next.selectedConversationId);
+        if (chat) chat.samplerPresetId = result.preset.id;
+      });
+      onNotice([`${tx("importPreset")}: ${result.preset.name}`, ...result.warnings].join(" "));
+    } catch (reason) {
+      onError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      if (presetFileRef.current) presetFileRef.current.value = "";
+    }
+  };
+  const savePresetRename = () => {
+    const name = renamePresetValue.trim();
+    if (!renamePresetId || !name) return;
+    updateWorkspace((next) => {
+      const preset = next.samplerPresets.find((item) => item.id === renamePresetId);
+      if (preset) {
+        preset.name = name.slice(0, 160);
+        preset.updatedAt = tavernNow();
+      }
+    });
+    setRenamePresetId("");
+  };
+  const deleteTavernPreset = async (preset: TavernSamplerPreset) => {
+    if (!(await confirmAction(`${tx("deletePreset")}: ${preset.name}?`))) return;
+    updateWorkspace((next) => {
+      next.samplerPresets = next.samplerPresets.filter((item) => item.id !== preset.id);
+      if (!next.samplerPresets.length) next.samplerPresets.push(createTavernSamplerPreset(tx("promptPreset")));
+      const fallback = next.samplerPresets[0]?.id;
+      for (const chat of next.conversations) {
+        if (chat.samplerPresetId === preset.id) chat.samplerPresetId = fallback;
+      }
+    });
+  };
   const selectPreset = (id: string) => {
     const preset = findAgentProviderPreset(id);
     if (!preset) return;
@@ -1858,6 +2029,31 @@ function ModelPanel({ draft, setDraft, models, discovering, onDiscover, onSave, 
   }, [modelPickerOpen]);
   return (
     <div className="tavern-panel-stack">
+      <div className="tavern-section-title"><div><strong>{tx("promptPreset")}</strong><small>{tx("promptPresetHint")}</small></div><TuneIcon /></div>
+      <Field label={tx("promptPreset")}>
+        <SelectMenuCompat value={activeTavernPreset?.id ?? ""} onChange={(event) => selectTavernPreset(event.target.value)}>
+          {workspace.samplerPresets.map((preset) => <option key={preset.id} value={preset.id}>{preset.name}</option>)}
+        </SelectMenuCompat>
+      </Field>
+      {activeTavernPreset ? (
+        <section className="tavern-preset-manager">
+          <div className="tavern-preset-meta">
+            <small><ImportIcon />{activeTavernPreset.sourceName || activeTavernPreset.source || "Langbai"}</small>
+            <span>{activeTavernPreset.temperature.toFixed(2)} temp · {activeTavernPreset.topP.toFixed(2)} top-p · {activeTavernPreset.maxOutputTokens ?? tx("maxOutput")} tokens</span>
+          </div>
+          {renamePresetId === activeTavernPreset.id ? (
+            <div className="tavern-input-action"><input autoFocus value={renamePresetValue} aria-label={tx("presetName")} onChange={(event) => setRenamePresetValue(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") savePresetRename(); if (event.key === "Escape") setRenamePresetId(""); }} /><button type="button" className="btn btn-primary" onClick={savePresetRename}><CheckIcon />{tx("save")}</button></div>
+          ) : (
+            <div className="tavern-preset-actions">
+              <button type="button" className="btn" onClick={() => { setRenamePresetId(activeTavernPreset.id); setRenamePresetValue(activeTavernPreset.name); }}><EditIcon />{tx("renamePreset")}</button>
+              <button type="button" className="btn btn-danger" onClick={() => void deleteTavernPreset(activeTavernPreset)}><DeleteIcon />{tx("deletePreset")}</button>
+            </div>
+          )}
+        </section>
+      ) : null}
+      <input ref={presetFileRef} className="tavern-file-input" type="file" accept=".json,application/json" onChange={(event) => void importPresetFile(event.target.files?.[0])} />
+      <button type="button" className="btn full" onClick={() => presetFileRef.current?.click()}><ImportIcon />{tx("importPreset")}</button>
+      <p className="tavern-info-card"><SettingsIcon />{tx("presetImportRules")}</p>
       <div className="tavern-section-title"><div><strong>{tx("directModel")}</strong><small>{tx("directModelHint")}</small></div><BotIcon /></div>
       <Field label={tx("servicePreset")}><SelectMenuCompat value={presetId} onChange={(event) => selectPreset(event.target.value)}>{AGENT_PROVIDER_PRESETS.map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}</SelectMenuCompat></Field>
       <Field label={tx("apiProtocol")}><SelectMenuCompat value={draft.agentApiProtocol ?? "openai-compatible"} onChange={(event) => setDraft({ ...draft, agentApiProtocol: event.target.value as AppSettings["agentApiProtocol"] })}><option value="openai-compatible">OpenAI Chat Completions</option><option value="openai-responses">OpenAI Responses</option><option value="anthropic-messages">Anthropic Messages</option><option value="google-gemini">Google Gemini</option></SelectMenuCompat></Field>

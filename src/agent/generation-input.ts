@@ -44,6 +44,15 @@ export function applyAgentPromptLocks(
   };
 }
 
+/** A trusted operation-specific lock set replaces, rather than merges with,
+ * Studio-wide locks. Empty strings are intentional and must remain empty. */
+export function resolveAgentPromptLocks(
+  studioLocks: AgentPromptLocks,
+  operationLocks?: AgentPromptLocks,
+): AgentPromptLocks {
+  return operationLocks ?? studioLocks;
+}
+
 /** Match a generation model to its compatible NovelAI inpaint endpoint. */
 export function defaultAgentInpaintModel(model: GenerateParams["model"]): NAIInpaintModel {
   if (model.includes("4-5")) return "nai-diffusion-4-5-full-inpainting";

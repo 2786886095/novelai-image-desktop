@@ -1,8 +1,13 @@
 import axios from "axios";
 import { createHash } from "crypto";
+import { dialog } from "electron";
+import { access, mkdir, rename, rm, writeFile } from "fs/promises";
+import path from "path";
 import type {
   OnlineGalleryDetail,
   OnlineGalleryDetailRequest,
+  OnlineGalleryDownloadRequest,
+  OnlineGalleryDownloadResult,
   OnlineGalleryItem,
   OnlineGalleryMedia,
   OnlineGalleryPage,
@@ -16,6 +21,7 @@ import {
   splitOnlineGalleryTags,
 } from "../../src/online-gallery";
 import { proxyConfig } from "./proxy";
+import { getSettings, setSetting } from "./store";
 
 const PAGE_SIZE = 60;
 const REQUEST_TIMEOUT = 30_000;
@@ -648,4 +654,107 @@ export function clearOnlineGalleryDataCache() {
   quickCatalogCache = null;
   quickCodexCache.clear();
   requestCache.clear();
+}
+
+function safeDownloadPart(value: unknown, fallback: string) {
+  const normalized = text(value).trim().replace(/[<>:"/\\|?*\x00-\x1f]/g, "_").replace(/[. ]+$/g, "");
+  return (normalized || fallback).slice(0, 96);
+}
+
+function safeDownloadUrl(value: unknown) {
+  const raw = httpsUrl(value);
+  if (!raw) return "";
+  const parsed = new URL(raw);
+  const host = parsed.hostname.toLowerCase();
+  if (host === "localhost" || host.endsWith(".localhost") || host === "0.0.0.0" || host === "127.0.0.1" || host === "::1") return "";
+  if (/^(10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host)) return "";
+  return parsed.toString();
+}
+
+function downloadExtension(url: string, hint: unknown) {
+  const requested = text(hint).toLowerCase().replace(/^\./, "");
+  if (/^(png|jpe?g|webp|gif|avif)$/.test(requested)) return requested === "jpeg" ? "jpg" : requested;
+  const match = new URL(url).pathname.match(/\.([a-z0-9]{2,5})$/i);
+  const inferred = match?.[1]?.toLowerCase() ?? "jpg";
+  return /^(png|jpe?g|webp|gif|avif)$/.test(inferred) ? (inferred === "jpeg" ? "jpg" : inferred) : "jpg";
+}
+
+async function uniqueDownloadPath(directory: string, base: string, extension: string) {
+  for (let suffix = 0; suffix < 10_000; suffix += 1) {
+    const candidate = path.join(directory, `${base}${suffix ? ` (${suffix})` : ""}.${extension}`);
+    try {
+      await access(candidate);
+    } catch {
+      return candidate;
+    }
+  }
+  throw new Error("Unable to allocate a gallery download filename");
+}
+
+export async function selectOnlineGalleryDownloadDir(): Promise<string | null> {
+  const settings = getSettings();
+  const result = await dialog.showOpenDialog({
+    title: "选择在线画廊下载目录",
+    defaultPath: settings.onlineGalleryDownloadDir?.trim() || settings.outputDir,
+    properties: ["openDirectory", "createDirectory"],
+  });
+  const selected = result.canceled ? "" : result.filePaths[0]?.trim() ?? "";
+  if (!selected) return null;
+  setSetting("onlineGalleryDownloadDir", selected);
+  return selected;
+}
+
+export async function downloadOnlineGalleryImages(raw: unknown): Promise<OnlineGalleryDownloadResult> {
+  const input = record(raw) as unknown as OnlineGalleryDownloadRequest;
+  const source = text(input.source).trim();
+  if (!["aitag", "artist-ranking", "safebooru", "danbooru", "gelbooru", "quicktag"].includes(source)) throw new Error("Invalid gallery source");
+  const images = list(input.images).slice(0, 100).map((entry, index) => {
+    const item = record(entry);
+    const url = safeDownloadUrl(item.url);
+    return url ? { id: safeDownloadPart(item.id, String(index + 1)), url, extension: downloadExtension(url, item.extension) } : null;
+  }).filter((item): item is { id: string; url: string; extension: string } => Boolean(item));
+  if (!images.length) throw new Error("No downloadable gallery images were supplied");
+
+  let settings = getSettings();
+  let downloadRoot = settings.onlineGalleryDownloadDir?.trim() ?? "";
+  if (!downloadRoot) {
+    downloadRoot = await selectOnlineGalleryDownloadDir() ?? "";
+    if (!downloadRoot) {
+      return { ok: false, cancelled: true, savedPaths: [], failed: 0, outputDir: "", message: "Download cancelled" };
+    }
+    settings = getSettings();
+  }
+  const folder = safeDownloadPart(`${input.title || "work"}-${input.itemId || Date.now()}`, "work");
+  const outputDir = path.join(downloadRoot, "Online Gallery", safeDownloadPart(source, "gallery"), folder);
+  await mkdir(outputDir, { recursive: true });
+  const savedPaths: string[] = [];
+  let failed = 0;
+  for (let index = 0; index < images.length; index += 1) {
+    const image = images[index];
+    let partial = "";
+    try {
+      const response = await axios.get<ArrayBuffer>(image.url, {
+        responseType: "arraybuffer",
+        timeout: 120_000,
+        maxContentLength: 100 * 1024 * 1024,
+        headers: headers(new URL(image.url).origin),
+        ...proxyConfig("update"),
+      });
+      const target = await uniqueDownloadPath(outputDir, `${String(index + 1).padStart(2, "0")}-${image.id}`, image.extension);
+      partial = `${target}.part`;
+      await writeFile(partial, Buffer.from(response.data));
+      await rename(partial, target);
+      savedPaths.push(target);
+    } catch {
+      failed += 1;
+      if (partial) await rm(partial, { force: true }).catch(() => undefined);
+    }
+  }
+  return {
+    ok: savedPaths.length > 0 && failed === 0,
+    savedPaths,
+    failed,
+    outputDir,
+    message: `${savedPaths.length} saved, ${failed} failed`,
+  };
 }

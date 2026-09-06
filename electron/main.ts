@@ -90,7 +90,7 @@ import {
   clearAitagCache,
   cacheOnlineGalleryImage,
 } from "./ipc/aitag-cache";
-import { clearOnlineGalleryDataCache, getOnlineGalleryDetail, searchOnlineGallery } from "./ipc/online-gallery";
+import { clearOnlineGalleryDataCache, downloadOnlineGalleryImages, getOnlineGalleryDetail, searchOnlineGallery, selectOnlineGalleryDownloadDir } from "./ipc/online-gallery";
 import {
   artistLabModelStatus,
   artistStylePreview,
@@ -769,6 +769,8 @@ function registerIpc() {
   ipcMain.handle("aitag:clear-cache", () => clearAitagCache());
   ipcMain.handle("online-gallery:search", (_event, request: unknown) => searchOnlineGallery(request));
   ipcMain.handle("online-gallery:detail", (_event, request: unknown) => getOnlineGalleryDetail(request));
+  ipcMain.handle("online-gallery:download-images", (_event, request: unknown) => downloadOnlineGalleryImages(request));
+  ipcMain.handle("online-gallery:select-download-dir", () => selectOnlineGalleryDownloadDir());
   ipcMain.handle("online-gallery:clear-data-cache", () => clearOnlineGalleryDataCache());
   ipcMain.handle("online-gallery:cache-image", (_event, source: unknown, url: unknown, days: unknown, force: unknown) =>
     cacheOnlineGalleryImage(source, url, days, force),

@@ -75,6 +75,68 @@ void main() {
     expect(parsed.proposal?.height, 1216);
   });
 
+  test('keeps right-panel parameters unless named as explicit overrides', () {
+    const defaults = TavernImageParameterDefaults(
+      model: 'nai-diffusion-5-full',
+      width: 1088,
+      height: 1920,
+      steps: 31,
+      scale: 4.5,
+      sampler: 'k_euler_ancestral',
+      count: 3,
+    );
+    final proposal = TavernImageProposal(
+      positivePrompt: '1girl',
+      model: 'nai-diffusion-4-5-full',
+      width: 1024,
+      height: 1024,
+      steps: 20,
+      scale: 6,
+      sampler: 'k_dpmpp_2m',
+      count: 1,
+    );
+    applyAuthoritativeTavernImageDefaults(proposal, defaults);
+    expect(proposal.toJson(), containsPair('model', 'nai-diffusion-5-full'));
+    expect((proposal.width, proposal.height), (1088, 1920));
+    expect((proposal.steps, proposal.scale, proposal.count), (31, 4.5, 3));
+
+    final explicit = TavernImageProposal(
+      positivePrompt: '1girl',
+      width: 832,
+      height: 1216,
+      count: 2,
+      steps: 20,
+      explicitParameters: ['size', 'count'],
+    );
+    applyAuthoritativeTavernImageDefaults(explicit, defaults);
+    expect((explicit.width, explicit.height, explicit.count), (832, 1216, 2));
+    expect(explicit.steps, 31);
+  });
+
+  test('includes application image defaults in private prompt context', () {
+    final character = TavernCharacter(name: '软件智能生图');
+    final prompt = buildTavernSystemPrompt(TavernPromptContext(
+      conversation: AgentConversation(id: 'chat', title: 'Image planning'),
+      characters: [character],
+      activeCharacter: character,
+      persona: null,
+      lorebooks: const [],
+      preset: TavernSamplerPreset(),
+      imageDefaults: const TavernImageParameterDefaults(
+        model: 'nai-diffusion-5-full',
+        width: 1088,
+        height: 1920,
+        steps: 31,
+        scale: 4.5,
+        sampler: 'k_euler',
+        count: 3,
+      ),
+    ));
+    expect(prompt, contains('<langbai-image-defaults>'));
+    expect(prompt, contains('"width":1088'));
+    expect(prompt, contains('explicitParameters'));
+  });
+
   test('swipe selection controls the prompt-visible message', () {
     final message = AgentMessage(
       id: 'message',

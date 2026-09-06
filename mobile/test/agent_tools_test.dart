@@ -107,6 +107,49 @@ void main() {
     expect(storage.storedParams?.positivePrompt, 'original');
   });
 
+  test(
+      'Tavern generation uses right-panel prompt values instead of Studio locks',
+      () async {
+    final root = Directory.systemTemp.createTempSync('tavern-prompt-locks-');
+    addTearDown(() => root.deleteSync(recursive: true));
+    final app = _ToolAppState(root: root, storage: _ToolStorage())
+      ..params = GenerateParams(
+        positivePrompt: 'studio prompt',
+        negativePrompt: 'studio negative',
+        stylePrompt: 'studio style',
+      )
+      ..settings = AppSettings(
+        lockStylePrompt: true,
+        savedStylePrompt: 'locked studio style',
+        lockNegativePrompt: true,
+        savedNegativePrompt: 'locked studio negative',
+      );
+    final executor = AgentToolExecutor(
+      app: app,
+      listMemories: () => const [],
+      upsertMemory: (input) async => const {},
+      deleteMemory: (id) async => false,
+    );
+
+    final result = await executor.execute(
+      'langbai_generate_image',
+      {
+        'positivePrompt': 'tavern prompt',
+        'stylePrompt': '',
+        'negativePrompt': 'tavern negative',
+        'count': 1,
+      },
+      const [],
+      applyStudioPromptLocks: false,
+    );
+
+    expect(result.ok, isTrue);
+    expect(app.generatedParams?.positivePrompt, 'tavern prompt');
+    expect(app.generatedParams?.stylePrompt, '');
+    expect(app.generatedParams?.negativePrompt, 'tavern negative');
+    expect(app.params.stylePrompt, 'studio style');
+  });
+
   test('apply prompt is intentionally durable', () async {
     final root = Directory.systemTemp.createTempSync('agent-apply-state-');
     addTearDown(() => root.deleteSync(recursive: true));

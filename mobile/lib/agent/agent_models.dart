@@ -561,6 +561,7 @@ class AgentWorkspace {
   List<TavernPersona> personas;
   List<TavernLorebook> lorebooks;
   List<TavernSamplerPreset> samplerPresets;
+  int presetLibraryVersion;
   String? selectedCharacterId;
   String? selectedPersonaId;
   String defaultGenerationMode;
@@ -576,6 +577,7 @@ class AgentWorkspace {
     List<TavernPersona>? personas,
     List<TavernLorebook>? lorebooks,
     List<TavernSamplerPreset>? samplerPresets,
+    this.presetLibraryVersion = tavernPresetLibraryVersion,
     this.selectedCharacterId,
     this.selectedPersonaId,
     this.defaultGenerationMode = 'confirm',
@@ -586,7 +588,7 @@ class AgentWorkspace {
         characters = characters ?? [createSoftwareImageCharacter()],
         personas = personas ?? [createSoftwareImagePersona()],
         lorebooks = lorebooks ?? [createSoftwareImageLorebook()],
-        samplerPresets = samplerPresets ?? [createSoftwareImageSamplerPreset()],
+        samplerPresets = samplerPresets ?? createTavernBuiltinSamplerPresets(),
         updatedAt = updatedAt ?? agentNow();
 
   factory AgentWorkspace.fromJson(Map<String, dynamic> json) {
@@ -652,8 +654,14 @@ class AgentWorkspace {
         .whereType<Map>()
         .map((item) => TavernSamplerPreset.fromJson(_map(item)))
         .toList();
-    if (!samplerPresets.any((item) => item.id == softwareImageSamplerId)) {
-      samplerPresets.insert(0, createSoftwareImageSamplerPreset());
+    final incomingPresetLibraryVersion = _int(json['presetLibraryVersion'], 0);
+    if (incomingPresetLibraryVersion < tavernPresetLibraryVersion) {
+      samplerPresets
+        ..clear()
+        ..addAll(createTavernBuiltinSamplerPresets());
+    }
+    if (samplerPresets.isEmpty) {
+      samplerPresets.add(createLyraImageSamplerPreset());
     }
     final conversations = (json['conversations'] as List? ?? const [])
         .whereType<Map>()
@@ -711,6 +719,7 @@ class AgentWorkspace {
       personas: personas,
       lorebooks: lorebooks,
       samplerPresets: samplerPresets,
+      presetLibraryVersion: tavernPresetLibraryVersion,
       selectedCharacterId:
           characters.any((item) => item.id == selectedCharacter)
               ? selectedCharacter
@@ -735,6 +744,7 @@ class AgentWorkspace {
         'personas': personas.map((item) => item.toJson()).toList(),
         'lorebooks': lorebooks.map((item) => item.toJson()).toList(),
         'samplerPresets': samplerPresets.map((item) => item.toJson()).toList(),
+        'presetLibraryVersion': presetLibraryVersion,
         if (selectedCharacterId != null)
           'selectedCharacterId': selectedCharacterId,
         if (selectedPersonaId != null) 'selectedPersonaId': selectedPersonaId,

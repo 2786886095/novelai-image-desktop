@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart' show MediaType;
 
 import '../billing/anlas.dart';
+import '../agent/tavern_models.dart';
 import '../images/image_processing.dart';
 import '../models/nai_models.dart';
 import '../prompts/dsh_image_ai.dart';
@@ -96,7 +97,21 @@ Map<String, dynamic> buildUpscalePayload(Uint8List image, String rawModel) => {
       'declared_blur_sigma': _upscaleDeclaredBlurSigma,
     };
 
+bool shouldDisableDeepSeekThinking(String apiUrl, String model) {
+  final uri = Uri.tryParse(apiUrl.trim());
+  return uri?.host.toLowerCase() == 'api.deepseek.com' &&
+      RegExp(r'^deepseek-v4(?:-|$)', caseSensitive: false)
+          .hasMatch(model.trim());
+}
+
 class NaiApi {
+  TavernSamplerPreset? _reverseConvertPromptPreset(AppSettings settings) {
+    for (final preset in settings.reverseConvertPromptPresets) {
+      if (preset.id == settings.reverseConvertPromptPresetId) return preset;
+    }
+    return settings.reverseConvertPromptPresets.firstOrNull;
+  }
+
   final _rng = Random.secure();
   final Map<String, String> _vibeEncodeCache = {};
   final List<AiCallLogEntry> _aiCallLog = [];
@@ -1011,6 +1026,8 @@ class NaiApi {
       systemPrompt: baseSystem,
       enabled: settings.reverseConvertDshEnabled,
       mode: settings.reverseConvertDshMode,
+      sharedPreset: _reverseConvertPromptPreset(settings),
+      useDefaultSharedPreset: false,
     );
     final scopeText = switch (scope) {
       ReversePromptScope.full => 'full image',
@@ -1347,6 +1364,8 @@ class NaiApi {
       systemPrompt: baseSystem,
       enabled: settings.reverseConvertDshEnabled,
       mode: settings.reverseConvertDshMode,
+      sharedPreset: _reverseConvertPromptPreset(settings),
+      useDefaultSharedPreset: false,
     );
     final ruleRepairEnabled = settings.promptRuleAutoRepairEnabled &&
         mode != ReversePromptMode.natural;
@@ -1899,6 +1918,8 @@ class NaiApi {
                   body: jsonEncode({
                     'model': effectiveModel,
                     'max_tokens': tokens,
+                    if (shouldDisableDeepSeekThinking(apiUrl, effectiveModel))
+                      'thinking': {'type': 'disabled'},
                     'messages': [
                       {'role': 'system', 'content': system},
                       {'role': 'user', 'content': user},

@@ -612,9 +612,8 @@ class AgentToolExecutor {
   }
 
   Future<void> _applyGenerationInput(
-    Map<String, dynamic> args,
-    List<AgentAttachment> available,
-  ) async {
+      Map<String, dynamic> args, List<AgentAttachment> available,
+      {bool applyStudioPromptLocks = true}) async {
     app.setParam((params) {
       params.positivePrompt = _text(args['positivePrompt']);
       if (args['negativePrompt'] is String) {
@@ -675,10 +674,10 @@ class AgentToolExecutor {
       if (args['fileNamePrefix'] is String) {
         params.fileNamePrefix = _text(args['fileNamePrefix'], 80);
       }
-      if (app.settings.lockStylePrompt) {
+      if (applyStudioPromptLocks && app.settings.lockStylePrompt) {
         params.stylePrompt = app.settings.savedStylePrompt;
       }
-      if (app.settings.lockNegativePrompt) {
+      if (applyStudioPromptLocks && app.settings.lockNegativePrompt) {
         params.negativePrompt = app.settings.savedNegativePrompt;
       }
     });
@@ -774,10 +773,8 @@ class AgentToolExecutor {
       };
 
   Future<AgentToolResult> execute(
-    String tool,
-    Map<String, dynamic> args,
-    List<AgentAttachment> available,
-  ) async {
+      String tool, Map<String, dynamic> args, List<AgentAttachment> available,
+      {bool applyStudioPromptLocks = true}) async {
     final title = agentToolTitle(tool);
     final snapshot = _agentTransientTools.contains(tool)
         ? _AgentAppSnapshot.capture(app)
@@ -1040,7 +1037,11 @@ class AgentToolExecutor {
           );
         case 'langbai_generate_image':
           final before = app.history.map((item) => item.id).toSet();
-          await _applyGenerationInput(args, available);
+          await _applyGenerationInput(
+            args,
+            available,
+            applyStudioPromptLocks: applyStudioPromptLocks,
+          );
           app.setBatchCount(_int(args['count'], 1, 1, 8));
           final images = await _collectNewImages(before, app.generate);
           return AgentToolResult(
@@ -1066,7 +1067,11 @@ class AgentToolExecutor {
               _findAttachment(_text(args['attachmentId']), available);
           final before = app.history.map((item) => item.id).toSet();
           await app.setWorkbenchPath(source.filePath);
-          await _applyGenerationInput(args, available);
+          await _applyGenerationInput(
+            args,
+            available,
+            applyStudioPromptLocks: applyStudioPromptLocks,
+          );
           app.i2i
             ..strength = _double(args['strength'], 0.7, 0.01, 1)
             ..noise = _double(args['noise'], 0, 0, 0.99);

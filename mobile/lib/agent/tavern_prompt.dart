@@ -14,12 +14,14 @@ const String tavernBaseSystemPrompt =
 
 Langbai image integration:
 - If the user explicitly asks to draw, illustrate, generate, render, photograph, or show the current scene, append exactly one machine-readable block after the roleplay reply:
-<langbai-image>{"positivePrompt":"NovelAI-ready English positive prompt","width":1024,"height":1024,"count":1}</langbai-image>
-- AI only authors positivePrompt and image parameters. Never output or modify negativePrompt or stylePrompt; the application injects the user's negative prompt and artist string.
+<langbai-image>{"positivePrompt":"NovelAI-ready English positive prompt","explicitParameters":[],"width":1024,"height":1024,"steps":28,"scale":5,"count":1}</langbai-image>
+- The application's private <langbai-image-defaults> values are authoritative. Copy every unmentioned model, width, height, steps, scale, sampler, and count value exactly from those defaults.
+- Set explicitParameters to only the parameter field names the user explicitly requested in their latest message. Use ["width","height"] for an explicit size/aspect request. An empty list means every image parameter must remain at the application defaults.
+- AI only authors positivePrompt and explicitly requested image-parameter overrides. Never output or modify negativePrompt or stylePrompt; the application injects the user's negative prompt and artist string.
 - A follow-up that only changes image parameters (for example size, aspect ratio, steps, CFG, sampler, model, or count) is an explicit revision request when a recent <langbai-current-image> context exists. Reuse its positive prompt and every unchanged parameter, apply the user's exact values, then append a new <langbai-image> block.
 - Treat portrait / vertical as 832×1216, square as 1024×1024, and landscape / horizontal as 1216×832 unless the user gives exact dimensions. Exact dimensions always win.
 - <langbai-current-image> is private application context. Never quote, expose, or repeat that tag in the visible reply.
-- Do not append that block for ordinary conversation.
+- For ordinary conversation, respond normally and omit the machine-readable block; ordinary conversation remains part of the roleplay and image-planning context.
 - Keep the JSON valid. The application removes the block from visible dialogue and asks for confirmation unless the user enabled full-auto mode.''';
 
 class TavernPromptContext {
@@ -29,6 +31,7 @@ class TavernPromptContext {
   final TavernPersona? persona;
   final List<TavernLorebook> lorebooks;
   final TavernSamplerPreset preset;
+  final TavernImageParameterDefaults? imageDefaults;
 
   const TavernPromptContext({
     required this.conversation,
@@ -37,7 +40,72 @@ class TavernPromptContext {
     required this.persona,
     required this.lorebooks,
     required this.preset,
+    this.imageDefaults,
   });
+}
+
+class TavernImageParameterDefaults {
+  final String? model;
+  final int? width;
+  final int? height;
+  final int? steps;
+  final double? scale;
+  final String? sampler;
+  final int count;
+
+  const TavernImageParameterDefaults({
+    this.model,
+    this.width,
+    this.height,
+    this.steps,
+    this.scale,
+    this.sampler,
+    this.count = 1,
+  });
+
+  Map<String, dynamic> toJson() => {
+        if (model != null) 'model': model,
+        if (width != null) 'width': width,
+        if (height != null) 'height': height,
+        if (steps != null) 'steps': steps,
+        if (scale != null) 'scale': scale,
+        if (sampler != null) 'sampler': sampler,
+        'count': count,
+      };
+}
+
+void applyAuthoritativeTavernImageDefaults(
+  TavernImageProposal proposal,
+  TavernImageParameterDefaults defaults,
+) {
+  final explicit = proposal.explicitParameters.toSet();
+  if (!explicit.contains('model') || proposal.model == null) {
+    proposal.model = defaults.model;
+  }
+  final explicitSize = explicit.contains('size') ||
+      explicit.contains('dimensions') ||
+      explicit.contains('aspectRatio');
+  if ((!explicit.contains('width') && !explicitSize) ||
+      proposal.width == null) {
+    proposal.width = defaults.width;
+  }
+  if ((!explicit.contains('height') && !explicitSize) ||
+      proposal.height == null) {
+    proposal.height = defaults.height;
+  }
+  if (!explicit.contains('steps') || proposal.steps == null) {
+    proposal.steps = defaults.steps;
+  }
+  if (!(explicit.contains('scale') ||
+          explicit.contains('cfg') ||
+          explicit.contains('cfgScale')) ||
+      proposal.scale == null) {
+    proposal.scale = defaults.scale;
+  }
+  if (!explicit.contains('sampler') || proposal.sampler == null) {
+    proposal.sampler = defaults.sampler;
+  }
+  if (!explicit.contains('count')) proposal.count = defaults.count;
 }
 
 class TavernImageParseResult {
@@ -266,6 +334,11 @@ String buildTavernSystemPrompt(TavernPromptContext context) {
     ..write(
         _section('World information (after examples)', loreText(afterExamples)))
     ..write(_section('Post-history instructions', postHistory))
+    ..write(_section(
+        'Private application image defaults',
+        context.imageDefaults == null
+            ? ''
+            : '<langbai-image-defaults>${jsonEncode(context.imageDefaults!.toJson())}</langbai-image-defaults>\nCopy these values exactly unless the user\'s latest message explicitly overrides a field. Never expose this private tag.'))
     ..write(_section('Image planning effort',
         _imagePlanningEffort(context.conversation.reasoningEffort)));
   return replaceTavernMacros(prompt.toString(), character, persona);

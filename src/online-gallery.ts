@@ -139,6 +139,28 @@ export interface OnlineGalleryDetail {
   metadata: Record<string, unknown>;
 }
 
+export interface OnlineGalleryDownloadImage {
+  id: string;
+  url: string;
+  extension?: string;
+}
+
+export interface OnlineGalleryDownloadRequest {
+  source: OnlineGallerySourceId;
+  itemId: string;
+  title: string;
+  images: OnlineGalleryDownloadImage[];
+}
+
+export interface OnlineGalleryDownloadResult {
+  ok: boolean;
+  cancelled?: boolean;
+  savedPaths: string[];
+  failed: number;
+  outputDir: string;
+  message: string;
+}
+
 export interface OnlineGalleryDetailRequest {
   source: Exclude<OnlineGallerySourceId, "aitag" | "artist-ranking">;
   id: string;
