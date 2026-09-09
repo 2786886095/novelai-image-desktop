@@ -16,6 +16,7 @@ export default defineConfig({
     },
   },
   test: {
+    include: ["src/**/*.test.{ts,tsx}", "electron/**/*.test.{ts,tsx}"],
     // CI runners are slower and run test files in parallel; some tests load the
     // large electron/ipc/nai.ts via dynamic import, which can exceed vitest's 5s
     // default under that contention (green locally, flaky-timeout in CI — which

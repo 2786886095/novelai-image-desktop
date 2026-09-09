@@ -1,0 +1,75 @@
+{
+  "codexes": [
+    {
+      "id": "artist_nai5_personal",
+      "title": "NovelAI v5",
+      "entryCount": 3,
+      "cover": "cover.jpg"
+    },
+    {
+      "id": "clothes",
+      "title": "Clothes",
+      "entryCount": 1,
+      "cover": ""
+    },
+    {
+      "id": "unavailable",
+      "title": "Unavailable",
+      "entryCount": 1,
+      "cover": ""
+    }
+  ],
+  "books": {
+    "artist_nai5_personal": {
+      "id": "artist_nai5_personal",
+      "title": "NovelAI v5",
+      "entries": [
+        {
+          "id": "sample-1",
+          "title": "Watercolor",
+          "tags": "watercolor, blue sky",
+          "path": [
+            "画风组词典",
+            "梦神NAI5F画风合集"
+          ],
+          "rating": "safe",
+          "image": "1.jpg",
+          "original": "1.png"
+        },
+        {
+          "id": "hidden",
+          "title": "Restricted fixture",
+          "tags": "watercolor",
+          "path": [
+            "other"
+          ],
+          "rating": "r18"
+        },
+        {
+          "id": "sample-2",
+          "title": "Pencil",
+          "tags": "pencil, blue sky",
+          "path": [
+            "single"
+          ],
+          "rating": "safe"
+        }
+      ]
+    },
+    "clothes": {
+      "id": "clothes",
+      "title": "Clothes",
+      "entries": [
+        {
+          "id": "sample-1",
+          "title": "Blue coat",
+          "tags": "watercolor, blue coat",
+          "path": [
+            "衣服"
+          ],
+          "rating": "safe"
+        }
+      ]
+    }
+  }
+}

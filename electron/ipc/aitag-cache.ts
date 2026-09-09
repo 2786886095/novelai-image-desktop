@@ -1,3 +1,4 @@
+import { galleryImageHeaders, galleryImageExtension } from "../../src/gallery-download";
 import { app } from "electron";
 import axios from "axios";
 import { createHash } from "crypto";
@@ -14,18 +15,9 @@ const imageRequests = new Map<string, Promise<string>>();
 type GalleryImageSource = "aitag" | "danbooru" | "safebooru" | "gelbooru" | "quicktag";
 
 function isSupportedImageBuffer(bytes: Buffer) {
-  if (bytes.length < 12) return false;
-  // PNG
-  if (bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return true;
-  // JPEG
-  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return true;
-  // GIF
-  if (bytes.subarray(0, 6).toString("ascii") === "GIF87a" || bytes.subarray(0, 6).toString("ascii") === "GIF89a") return true;
-  // WebP
-  if (bytes.subarray(0, 4).toString("ascii") === "RIFF" && bytes.subarray(8, 12).toString("ascii") === "WEBP") return true;
-  // AVIF/HEIF-family files expose their brand in the ISO BMFF ftyp box.
-  return bytes.subarray(4, 8).toString("ascii") === "ftyp"
-    && /^(?:avif|avis|mif1|msf1|heic|heix)$/i.test(bytes.subarray(8, 12).toString("ascii"));
+  return galleryImageExtension(bytes) !== null || (bytes.length >= 12
+    && bytes.subarray(4, 8).toString("ascii") === "ftyp"
+    && /^(?:mif1|msf1|heic|heix)$/i.test(bytes.subarray(8, 12).toString("ascii")));
 }
 
 async function isUsableCachedImage(file: string) {
@@ -98,24 +90,6 @@ export async function pruneAitagCache(rawDays: unknown) {
   return aitagCacheStats();
 }
 
-function requestHeaders(source: GalleryImageSource) {
-  const origin = source === "aitag"
-    ? "https://aitag.win"
-    : source === "danbooru"
-      ? "https://danbooru.donmai.us"
-      : source === "safebooru"
-        ? "https://safebooru.donmai.us"
-        : source === "gelbooru"
-          ? "https://gelbooru.com"
-          : "https://novelai.quicktagcloud.com";
-  return {
-    Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
-    Referer: `${origin}/`,
-    Origin: origin,
-    "User-Agent": "Langbai-NovelAI-Studio/Online-Gallery-Image-Client",
-  };
-}
-
 function safeGallerySource(value: unknown): GalleryImageSource {
   return value === "danbooru" || value === "safebooru" || value === "gelbooru" || value === "quicktag"
     ? value
@@ -152,7 +126,7 @@ async function cacheGalleryImage(rawSource: unknown, rawUrl: unknown, rawDays?: 
       // Third-party galleries commonly reject renderer hotlinks. Fetch in the
       // main process with the matching source context and expose only a
       // validated cached file through the allow-listed local media protocol.
-      headers: requestHeaders(source),
+      headers: galleryImageHeaders(source),
       ...proxyConfig("update"),
     });
     const bytes = Buffer.from(response.data);

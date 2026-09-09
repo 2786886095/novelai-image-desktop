@@ -1,3 +1,8 @@
+import '../widgets/image_save_feedback.dart';
+import '../services/quicktag.dart';
+import 'quicktag_navigation.dart';
+import 'gallery_image_aspect.dart';
+import '../services/quicktag_ui.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
@@ -175,7 +180,8 @@ _GalleryText _galleryText(Object? language) {
         downloadSeries: 'Download full series',
         downloading: 'Downloading…',
         downloaded: 'Saved {count} images',
-        downloadFailed: 'Download failed. Check the network and download folder.',
+        downloadFailed:
+            'Download failed. Check the network and download folder.',
         metadata: 'Raw metadata',
         artists: 'Artists',
         characters: 'Characters',
@@ -323,14 +329,7 @@ String _sourceLabel(OnlineGallerySource source, Object? language) {
       _ => '画师排行榜',
     };
   }
-  if (source != OnlineGallerySource.quicktag) return source.label;
-  return switch (normalizeAppLocaleCode(language)) {
-    'zh-TW' => '法典圖鑑',
-    'en-US' => 'Prompt Codex',
-    'ja-JP' => 'プロンプト図鑑',
-    'ko-KR' => '프롬프트 도감',
-    _ => '法典图鉴',
-  };
+  return source.label;
 }
 
 String _friendlyGalleryError(
@@ -361,17 +360,86 @@ String _friendlyGalleryError(
   };
 }
 
-({String summary, String perPage, String perPageValue, String choosePage, String pageRange, String pagePosition, String jump, String cancel, String search, String refresh})
-    _artistRankingText(Object? language) => switch (normalizeAppLocaleCode(language)) {
-  'zh-TW' => (summary: '收錄 Danbooru 全部有效畫師 · 共 {count} 位', perPage: '每頁畫師', perPageValue: '每頁 {count} 位', choosePage: '選擇頁數', pageRange: '第 1–{pages} 頁', pagePosition: '第 {page} / {pages} 頁', jump: '跳轉', cancel: '取消', search: '搜尋畫師 Tag', refresh: '手動更新'),
-  'en-US' => (summary: 'All active Danbooru artists · {count} total', perPage: 'Artists per page', perPageValue: '{count} per page', choosePage: 'Choose page', pageRange: 'Pages 1–{pages}', pagePosition: 'Page {page} of {pages}', jump: 'Go', cancel: 'Cancel', search: 'Search artist tags', refresh: 'Update'),
-  'ja-JP' => (summary: 'Danbooru の有効な画家をすべて収録 · 全 {count} 人', perPage: '1ページの画家数', perPageValue: '1ページ {count} 人', choosePage: 'ページを選択', pageRange: '1–{pages} ページ', pagePosition: '{page} / {pages} ページ', jump: '移動', cancel: 'キャンセル', search: '画家タグを検索', refresh: '今すぐ更新'),
-  'ko-KR' => (summary: 'Danbooru의 모든 활성 작가 수록 · 총 {count}명', perPage: '페이지당 작가', perPageValue: '페이지당 {count}명', choosePage: '페이지 선택', pageRange: '1–{pages}페이지', pagePosition: '{page} / {pages}페이지', jump: '이동', cancel: '취소', search: '작가 태그 검색', refresh: '지금 업데이트'),
-  _ => (summary: '收录 Danbooru 全部有效画师 · 共 {count} 位', perPage: '每页画师', perPageValue: '每页 {count} 位', choosePage: '选择页数', pageRange: '第 1–{pages} 页', pagePosition: '第 {page} / {pages} 页', jump: '跳转', cancel: '取消', search: '搜索画师 Tag', refresh: '手动更新'),
-};
+({
+  String summary,
+  String perPage,
+  String perPageValue,
+  String choosePage,
+  String pageRange,
+  String pagePosition,
+  String jump,
+  String cancel,
+  String search,
+  String refresh
+}) _artistRankingText(Object? language) =>
+    switch (normalizeAppLocaleCode(language)) {
+      'zh-TW' => (
+          summary: '收錄 Danbooru 全部有效畫師 · 共 {count} 位',
+          perPage: '每頁畫師',
+          perPageValue: '每頁 {count} 位',
+          choosePage: '選擇頁數',
+          pageRange: '第 1–{pages} 頁',
+          pagePosition: '第 {page} / {pages} 頁',
+          jump: '跳轉',
+          cancel: '取消',
+          search: '搜尋畫師 Tag',
+          refresh: '手動更新'
+        ),
+      'en-US' => (
+          summary: 'All active Danbooru artists · {count} total',
+          perPage: 'Artists per page',
+          perPageValue: '{count} per page',
+          choosePage: 'Choose page',
+          pageRange: 'Pages 1–{pages}',
+          pagePosition: 'Page {page} of {pages}',
+          jump: 'Go',
+          cancel: 'Cancel',
+          search: 'Search artist tags',
+          refresh: 'Update'
+        ),
+      'ja-JP' => (
+          summary: 'Danbooru の有効な画家をすべて収録 · 全 {count} 人',
+          perPage: '1ページの画家数',
+          perPageValue: '1ページ {count} 人',
+          choosePage: 'ページを選択',
+          pageRange: '1–{pages} ページ',
+          pagePosition: '{page} / {pages} ページ',
+          jump: '移動',
+          cancel: 'キャンセル',
+          search: '画家タグを検索',
+          refresh: '今すぐ更新'
+        ),
+      'ko-KR' => (
+          summary: 'Danbooru의 모든 활성 작가 수록 · 총 {count}명',
+          perPage: '페이지당 작가',
+          perPageValue: '페이지당 {count}명',
+          choosePage: '페이지 선택',
+          pageRange: '1–{pages}페이지',
+          pagePosition: '{page} / {pages}페이지',
+          jump: '이동',
+          cancel: '취소',
+          search: '작가 태그 검색',
+          refresh: '지금 업데이트'
+        ),
+      _ => (
+          summary: '收录 Danbooru 全部有效画师 · 共 {count} 位',
+          perPage: '每页画师',
+          perPageValue: '每页 {count} 位',
+          choosePage: '选择页数',
+          pageRange: '第 1–{pages} 页',
+          pagePosition: '第 {page} / {pages} 页',
+          jump: '跳转',
+          cancel: '取消',
+          search: '搜索画师 Tag',
+          refresh: '手动更新'
+        ),
+    };
 
-String _replaceArtistText(String value, Map<String, Object> fields) => fields.entries
-    .fold(value, (output, entry) => output.replaceAll('{${entry.key}}', '${entry.value}'));
+String _replaceArtistText(String value, Map<String, Object> fields) =>
+    fields.entries.fold(
+        value,
+        (output, entry) =>
+            output.replaceAll('{${entry.key}}', '${entry.value}'));
 
 class OnlineGalleryScreen extends StatefulWidget {
   const OnlineGalleryScreen({super.key});
@@ -394,6 +462,11 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
   bool safeOnly = true;
   String error = '';
   String collectionId = '';
+  List<String> categoryPath = [];
+  String collectionType = '';
+  bool searchAll = false;
+  int quickPageSize = 12;
+  int searchRevision = 0;
   int aitagEpoch = 0;
   List<ArtistTagRecord> artistRanking = const [];
   DateTime? artistRankingUpdatedAt;
@@ -419,14 +492,15 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
 
   Future<void> _setArtistRankingPageSize(int value) async {
     if (!_artistRankingPageSizes.contains(value)) return;
-    await SharedPreferences.getInstance()
-        .then((preferences) => preferences.setInt(_artistRankingPageSizeKey, value));
+    await SharedPreferences.getInstance().then(
+        (preferences) => preferences.setInt(_artistRankingPageSizeKey, value));
     if (!mounted) return;
     await _loadArtistRanking(page: 1, pageSize: value);
   }
 
   @override
   void dispose() {
+    searchRevision++;
     query.dispose();
     scrollController.dispose();
     service.close();
@@ -436,11 +510,15 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
 
   Future<void> _selectSource(OnlineGallerySource value) async {
     if (value == source) return;
+    searchRevision++;
     setState(() {
       source = value;
       result = null;
       error = '';
       collectionId = '';
+      categoryPath = [];
+      collectionType = '';
+      searchAll = false;
       query.clear();
     });
     if (value == OnlineGallerySource.artistRanking) {
@@ -485,7 +563,8 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
   }
 
   Future<void> _chooseArtistPage(int pageCount) async {
-    final labels = _artistRankingText(context.read<AppState>().settings.language);
+    final labels =
+        _artistRankingText(context.read<AppState>().settings.language);
     final controller = TextEditingController(text: '$artistRankingPage');
     final chosen = await showDialog<int>(
       context: context,
@@ -497,11 +576,17 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
           keyboardType: TextInputType.number,
           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
           decoration: InputDecoration(labelText: labels.choosePage),
-          onSubmitted: (value) => Navigator.pop(dialogContext, int.tryParse(value)),
+          onSubmitted: (value) =>
+              Navigator.pop(dialogContext, int.tryParse(value)),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: Text(labels.cancel)),
-          FilledButton(onPressed: () => Navigator.pop(dialogContext, int.tryParse(controller.text)), child: Text(labels.jump)),
+          TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: Text(labels.cancel)),
+          FilledButton(
+              onPressed: () =>
+                  Navigator.pop(dialogContext, int.tryParse(controller.text)),
+              child: Text(labels.jump)),
         ],
       ),
     );
@@ -519,6 +604,7 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
       setState(() => aitagEpoch++);
       return;
     }
+    final sequence = ++searchRevision;
     setState(() {
       loading = true;
       error = '';
@@ -530,20 +616,35 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
         query: query.text,
         collectionId: collectionId,
         safeOnly: safeOnly,
+        categoryPath: categoryPath,
+        searchAll: searchAll,
+        collectionType: collectionType,
+        pageSize: quickPageSize,
       );
-      if (!mounted) return;
-      setState(() => result = value);
+      if (!mounted || sequence != searchRevision) return;
+      setState(() {
+        result = value;
+        collectionType = value.navigation?['collectionType'] as String? ?? '';
+        collectionId = value.collectionId;
+        if (collectionId.isNotEmpty) searchAll = false;
+        categoryPath =
+            List<String>.from(value.navigation?['categoryPath'] ?? []);
+      });
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (scrollController.hasClients) scrollController.jumpTo(0);
       });
     } catch (exception) {
-      if (mounted) {
+      if (mounted && sequence == searchRevision) {
         final language = context.read<AppState>().settings.language;
-        setState(
-            () => error = _friendlyGalleryError(exception, source, language));
+        setState(() => error =
+            exception.toString().contains('hidden by the all-ages filter')
+                ? quickTagUi(language)['filterBlocked']!
+                : _friendlyGalleryError(exception, source, language));
       }
     } finally {
-      if (mounted) setState(() => loading = false);
+      if (mounted && sequence == searchRevision) {
+        setState(() => loading = false);
+      }
     }
   }
 
@@ -551,6 +652,8 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
     if (item.isCollection) {
       setState(() {
         collectionId = item.collectionId;
+        categoryPath = [];
+        searchAll = false;
         query.clear();
       });
       _search(1);
@@ -656,7 +759,8 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
       _ => '更新时间',
     };
     final rows = artistRanking;
-    final pageCount = math.max(1, (artistRankingTotal / artistRankingPageSize).ceil());
+    final pageCount =
+        math.max(1, (artistRankingTotal / artistRankingPageSize).ceil());
     if (loading && artistRanking.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -686,8 +790,11 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
           ),
           const SizedBox(height: 8),
           Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Expanded(child: Text(
-              '${_replaceArtistText(labels.summary, {'count': artistRankingTotal})}\n$updatedLabel: ${artistRankingUpdatedAt?.toLocal().toString().replaceFirst(RegExp(r'\.\d+$'), '') ?? '—'}',
+            Expanded(
+                child: Text(
+              '${_replaceArtistText(labels.summary, {
+                    'count': artistRankingTotal
+                  })}\n$updatedLabel: ${artistRankingUpdatedAt?.toLocal().toString().replaceFirst(RegExp(r'\.\d+$'), '') ?? '—'}',
               style: Theme.of(context).textTheme.bodySmall,
             )),
             SizedBox(
@@ -697,16 +804,24 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
                 isExpanded: true,
                 decoration: InputDecoration(labelText: labels.perPage),
                 items: _artistRankingPageSizes
-                    .map((value) => DropdownMenuItem(value: value, child: Text(_replaceArtistText(labels.perPageValue, {'count': value}))))
+                    .map((value) => DropdownMenuItem(
+                        value: value,
+                        child: Text(_replaceArtistText(
+                            labels.perPageValue, {'count': value}))))
                     .toList(),
-                onChanged: loading ? null : (value) {
-                  if (value != null) _setArtistRankingPageSize(value);
-                },
+                onChanged: loading
+                    ? null
+                    : (value) {
+                        if (value != null) _setArtistRankingPageSize(value);
+                      },
               ),
             ),
             const SizedBox(width: 8),
             OutlinedButton.icon(
-              onPressed: loading ? null : () => _loadArtistRanking(force: true, page: artistRankingPage),
+              onPressed: loading
+                  ? null
+                  : () =>
+                      _loadArtistRanking(force: true, page: artistRankingPage),
               icon: loading
                   ? const SizedBox.square(
                       dimension: 16,
@@ -717,103 +832,117 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
           ]),
         ]),
       ),
-      if (loading && artistRanking.isNotEmpty) const LinearProgressIndicator(minHeight: 2),
+      if (loading && artistRanking.isNotEmpty)
+        const LinearProgressIndicator(minHeight: 2),
       Expanded(
           child: RefreshIndicator(
               onRefresh: () => _loadArtistRanking(force: true),
               child: ListView.builder(
-        key: const PageStorageKey('artist-ranking-list'),
-        physics: const AlwaysScrollableScrollPhysics(),
-        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-        itemCount: rows.length,
-        itemExtent: expandedArtistId == 0 ? 76 : null,
-        itemBuilder: (context, index) {
-          final artist = rows[index];
-          final rank = (artistRankingPage - 1) * artistRankingPageSize + index + 1;
-          final expanded = expandedArtistId == artist.id;
-          final previews = artistPreviews[artist.id];
-          return RepaintBoundary(
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-            ListTile(
-              minVerticalPadding: 6,
-              leading: SizedBox(
-                  width: 42,
-                  child: Text('#$rank',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleMedium
-                          ?.copyWith(fontWeight: FontWeight.w800))),
-              title: Text(artist.name.replaceAll('_', ' '),
-                  maxLines: 1, overflow: TextOverflow.ellipsis),
-              subtitle: Text('artist:${artist.name} · ${artist.postCount} 作品',
-                  maxLines: 1, overflow: TextOverflow.ellipsis),
-              trailing: Wrap(spacing: 2, children: [
-                IconButton(
-                    tooltip: '复制 Tag',
-                    onPressed: () => Clipboard.setData(
-                        ClipboardData(text: 'artist:${artist.name}')),
-                    icon: const Icon(Icons.copy, size: 20)),
-                IconButton(
-                    tooltip: '打开作品库',
-                    onPressed: () => launchUrl(
-                        Uri.parse(
-                            'https://danbooru.donmai.us/posts?tags=${Uri.encodeQueryComponent(artist.name)}'),
-                        mode: LaunchMode.externalApplication),
-                    icon: const Icon(Icons.open_in_new, size: 20)),
-                IconButton(
-                    tooltip: '预览画风',
-                    onPressed: () async {
-                      setState(
-                          () => expandedArtistId = expanded ? 0 : artist.id);
-                      if (!expanded && !artistPreviews.containsKey(artist.id)) {
-                        final loaded = await artistService
-                            .previews(
-                                context.read<AppState>().settings, artist.name,
-                                limit: 3)
-                            .catchError((_) => <String>[]);
-                        if (mounted) {
-                          setState(() => artistPreviews[artist.id] = loaded);
-                        }
-                      }
-                    },
-                    icon:
-                        Icon(expanded ? Icons.expand_less : Icons.expand_more)),
-              ]),
-            ),
-            if (expanded)
-              SizedBox(
-                  height: 148,
-                  child: previews == null
-                      ? const Center(child: CircularProgressIndicator())
-                      : previews.isEmpty
-                          ? const Center(child: Text('暂无可用参考图'))
-                          : ListView.separated(
-                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                              scrollDirection: Axis.horizontal,
-                              itemCount: previews.length,
-                              separatorBuilder: (_, __) =>
-                                  const SizedBox(width: 8),
-                              itemBuilder: (_, previewIndex) => ClipRRect(
-                                borderRadius: BorderRadius.circular(10),
-                                child: GestureDetector(
-                                  onDoubleTap: () => _showSimpleNetworkPreview(context, previews[previewIndex]),
-                                  child: Image.network(previews[previewIndex],
-                                      width: 132,
-                                      height: 132,
-                                      fit: BoxFit.contain,
-                                      cacheWidth: 264,
-                                      errorBuilder: (_, __, ___) =>
-                                          const SizedBox(
+                key: const PageStorageKey('artist-ranking-list'),
+                physics: const AlwaysScrollableScrollPhysics(),
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                itemCount: rows.length,
+                itemExtent: expandedArtistId == 0 ? 76 : null,
+                itemBuilder: (context, index) {
+                  final artist = rows[index];
+                  final rank = (artistRankingPage - 1) * artistRankingPageSize +
+                      index +
+                      1;
+                  final expanded = expandedArtistId == artist.id;
+                  final previews = artistPreviews[artist.id];
+                  return RepaintBoundary(
+                      child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    ListTile(
+                      minVerticalPadding: 6,
+                      leading: SizedBox(
+                          width: 42,
+                          child: Text('#$rank',
+                              textAlign: TextAlign.center,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.w800))),
+                      title: Text(artist.name.replaceAll('_', ' '),
+                          maxLines: 1, overflow: TextOverflow.ellipsis),
+                      subtitle: Text(
+                          'artist:${artist.name} · ${artist.postCount} 作品',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis),
+                      trailing: Wrap(spacing: 2, children: [
+                        IconButton(
+                            tooltip: '复制 Tag',
+                            onPressed: () => Clipboard.setData(
+                                ClipboardData(text: 'artist:${artist.name}')),
+                            icon: const Icon(Icons.copy, size: 20)),
+                        IconButton(
+                            tooltip: '打开作品库',
+                            onPressed: () => launchUrl(
+                                Uri.parse(
+                                    'https://danbooru.donmai.us/posts?tags=${Uri.encodeQueryComponent(artist.name)}'),
+                                mode: LaunchMode.externalApplication),
+                            icon: const Icon(Icons.open_in_new, size: 20)),
+                        IconButton(
+                            tooltip: '预览画风',
+                            onPressed: () async {
+                              setState(() =>
+                                  expandedArtistId = expanded ? 0 : artist.id);
+                              if (!expanded &&
+                                  !artistPreviews.containsKey(artist.id)) {
+                                final loaded = await artistService
+                                    .previews(context.read<AppState>().settings,
+                                        artist.name,
+                                        limit: 3)
+                                    .catchError((_) => <String>[]);
+                                if (mounted) {
+                                  setState(
+                                      () => artistPreviews[artist.id] = loaded);
+                                }
+                              }
+                            },
+                            icon: Icon(expanded
+                                ? Icons.expand_less
+                                : Icons.expand_more)),
+                      ]),
+                    ),
+                    if (expanded)
+                      SizedBox(
+                          height: 148,
+                          child: previews == null
+                              ? const Center(child: CircularProgressIndicator())
+                              : previews.isEmpty
+                                  ? const Center(child: Text('暂无可用参考图'))
+                                  : ListView.separated(
+                                      padding: const EdgeInsets.fromLTRB(
+                                          16, 0, 16, 12),
+                                      scrollDirection: Axis.horizontal,
+                                      itemCount: previews.length,
+                                      separatorBuilder: (_, __) =>
+                                          const SizedBox(width: 8),
+                                      itemBuilder: (_, previewIndex) =>
+                                          ClipRRect(
+                                        borderRadius: BorderRadius.circular(10),
+                                        child: GestureDetector(
+                                          onDoubleTap: () =>
+                                              _showSimpleNetworkPreview(context,
+                                                  previews[previewIndex]),
+                                          child: Image.network(
+                                              previews[previewIndex],
                                               width: 132,
-                                              child: Icon(
-                                                  Icons.broken_image_outlined))),
-                                ),
-                              ),
-                            )),
-          ]));
-        },
-      ))),
+                                              height: 132,
+                                              fit: BoxFit.contain,
+                                              cacheWidth: 264,
+                                              errorBuilder: (_, __, ___) =>
+                                                  const SizedBox(
+                                                      width: 132,
+                                                      child: Icon(Icons
+                                                          .broken_image_outlined))),
+                                        ),
+                                      ),
+                                    )),
+                  ]));
+                },
+              ))),
       SafeArea(
         top: false,
         child: Padding(
@@ -828,7 +957,8 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
             const SizedBox(width: 8),
             OutlinedButton(
               onPressed: loading ? null : () => _chooseArtistPage(pageCount),
-              child: Text(_replaceArtistText(labels.pagePosition, {'page': artistRankingPage, 'pages': pageCount})),
+              child: Text(_replaceArtistText(labels.pagePosition,
+                  {'page': artistRankingPage, 'pages': pageCount})),
             ),
             const SizedBox(width: 8),
             OutlinedButton(
@@ -843,6 +973,32 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
     ]);
   }
 
+  Future<void> _chooseQuickPage() async {
+    final ui = quickTagUi(context.read<AppState>().settings.language);
+    final input = TextEditingController(text: '${result?.page ?? 1}');
+    final page = await showDialog<int>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+                title: Text(ui['jump']!),
+                content: TextField(
+                    controller: input,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    onSubmitted: (v) => Navigator.pop(ctx, int.tryParse(v))),
+                actions: [
+                  TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: Text(
+                          MaterialLocalizations.of(ctx).cancelButtonLabel)),
+                  FilledButton(
+                      onPressed: () =>
+                          Navigator.pop(ctx, int.tryParse(input.text)),
+                      child: Text(ui['jump']!))
+                ]));
+    input.dispose();
+    if (page != null && mounted) await _search(page);
+  }
+
   Widget _buildExternal(BuildContext context, _GalleryText text) {
     return LayoutBuilder(builder: (context, constraints) {
       final columns = constraints.maxWidth >= 1180
@@ -855,168 +1011,228 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
                       ? 2
                       : 1;
       return RefreshIndicator(
-        onRefresh: () => _search(result?.page ?? 1),
+        onRefresh: () {
+          service.clearDataCache();
+          return _search(result?.page ?? 1);
+        },
         child: Scrollbar(
-        controller: scrollController,
-        thumbVisibility: true,
-        interactive: true,
-        child: CustomScrollView(
           controller: scrollController,
-          physics: const AlwaysScrollableScrollPhysics(),
-          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-          slivers: [
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                child: Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        if (collectionId.isNotEmpty)
-                          Align(
-                            alignment: AlignmentDirectional.centerStart,
-                            child: TextButton.icon(
-                              onPressed: loading
-                                  ? null
-                                  : () {
-                                      setState(() {
-                                        collectionId = '';
-                                        query.clear();
-                                      });
-                                      _search(1);
-                                    },
-                              icon: const Icon(Icons.arrow_back),
-                              label: Text(text.backCollections),
-                            ),
-                          ),
-                        TextField(
-                          controller: query,
-                          textInputAction: TextInputAction.search,
-                          onSubmitted: (_) => _search(1),
-                          decoration: InputDecoration(
-                            prefixIcon: const Icon(Icons.search),
-                            hintText: text.query,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            FilterChip(
-                              avatar:
-                                  const Icon(Icons.shield_outlined, size: 18),
-                              label: Text(text.safeOnly),
-                              selected: safeOnly,
-                              onSelected: loading
-                                  ? null
-                                  : (value) {
-                                      setState(() => safeOnly = value);
-                                      _search(1);
-                                    },
-                            ),
-                            FilledButton.icon(
-                              onPressed: loading ? null : () => _search(1),
-                              icon: const Icon(Icons.search),
-                              label: Text(text.search),
-                            ),
-                            if (result?.total != null)
-                              Text(_format(
-                                  text.results, 'count', result!.total!)),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            if (loading)
-              SliverFillRemaining(
-                hasScrollBody: false,
-                child: Center(
-                  child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    const CircularProgressIndicator(),
-                    const SizedBox(height: 12),
-                    Text(text.loading),
-                  ]),
-                ),
-              )
-            else if (error.isNotEmpty)
-              SliverFillRemaining(
-                hasScrollBody: false,
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(mainAxisSize: MainAxisSize.min, children: [
-                      const Icon(Icons.cloud_off_outlined, size: 36),
-                      const SizedBox(height: 10),
-                      Text(error, textAlign: TextAlign.center),
-                      const SizedBox(height: 12),
-                      OutlinedButton.icon(
-                        onPressed: () => _search(result?.page ?? 1),
-                        icon: const Icon(Icons.refresh),
-                        label: Text(text.retry),
-                      ),
-                    ]),
-                  ),
-                ),
-              )
-            else if (result == null || result!.items.isEmpty)
-              SliverFillRemaining(
-                hasScrollBody: false,
-                child: Center(child: Text(text.empty)),
-              )
-            else
+          thumbVisibility: true,
+          interactive: true,
+          child: CustomScrollView(
+            controller: scrollController,
+            physics: const AlwaysScrollableScrollPhysics(),
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            slivers: [
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: _MasonryGrid(
-                    columnCount: columns,
-                    itemCount: result!.items.length,
-                    itemBuilder: (context, index) => _GalleryCard(
-                    item: result!.items[index],
-                    text: text,
-                    onTap: () => _openItem(result!.items[index]),
-                  ),
-                  ),
-                ),
-              ),
-            if (!loading && result != null && result!.items.isNotEmpty)
-              SliverToBoxAdapter(
-                child: SafeArea(
-                  top: false,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 18),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        OutlinedButton(
-                          onPressed: result!.page > 1
-                              ? () => _search(result!.page - 1)
-                              : null,
-                          child: Text(text.previous),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 14),
-                          child: Text(_format(text.page, 'page', result!.page)),
-                        ),
-                        OutlinedButton(
-                          onPressed: result!.hasMore
-                              ? () => _search(result!.page + 1)
-                              : null,
-                          child: Text(text.next),
-                        ),
-                      ],
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                  child: Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (source == OnlineGallerySource.quicktag)
+                            QuickTagNavigation(
+                                onGroup: (type) {
+                                  setState(() {
+                                    collectionType = type;
+                                    collectionId = '';
+                                    categoryPath = [];
+                                    searchAll = false;
+                                    query.clear();
+                                  });
+                                  _search(1);
+                                },
+                                navigation: result?.navigation,
+                                collectionId: collectionId,
+                                searchAll: searchAll,
+                                loading: loading,
+                                language:
+                                    context.read<AppState>().settings.language,
+                                pageSize: quickPageSize,
+                                onSelect: (id, path) {
+                                  setState(() {
+                                    collectionId = id;
+                                    categoryPath = path;
+                                    searchAll = false;
+                                    query.clear();
+                                  });
+                                  _search(1);
+                                },
+                                onScope: (all) {
+                                  setState(() {
+                                    searchAll = all;
+                                    if (all) {
+                                      collectionType = '';
+                                      collectionId = '';
+                                      categoryPath = [];
+                                    }
+                                  });
+                                  _search(1);
+                                },
+                                onPageSize: (size) {
+                                  setState(() => quickPageSize = size);
+                                  _search(1);
+                                }),
+                          if (collectionId.isNotEmpty)
+                            Align(
+                              alignment: AlignmentDirectional.centerStart,
+                              child: TextButton.icon(
+                                onPressed: loading
+                                    ? null
+                                    : () {
+                                        setState(() {
+                                          collectionId = '';
+                                          categoryPath = [];
+                                          searchAll = false;
+                                          query.clear();
+                                        });
+                                        _search(1);
+                                      },
+                                icon: const Icon(Icons.arrow_back),
+                                label: Text(text.backCollections),
+                              ),
+                            ),
+                          TextField(
+                            controller: query,
+                            textInputAction: TextInputAction.search,
+                            onSubmitted: (_) => _search(1),
+                            decoration: InputDecoration(
+                              prefixIcon: const Icon(Icons.search),
+                              hintText: text.query,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              FilterChip(
+                                avatar:
+                                    const Icon(Icons.shield_outlined, size: 18),
+                                label: Text(text.safeOnly),
+                                selected: safeOnly,
+                                onSelected: loading
+                                    ? null
+                                    : (value) {
+                                        setState(() => safeOnly = value);
+                                        _search(1);
+                                      },
+                              ),
+                              FilledButton.icon(
+                                onPressed: loading ? null : () => _search(1),
+                                icon: const Icon(Icons.search),
+                                label: Text(text.search),
+                              ),
+                              if (result?.total != null)
+                                Text(_format(
+                                    text.results, 'count', result!.total!)),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
-          ],
-        ),
+              if (loading && result?.items.isNotEmpty == true)
+                const SliverToBoxAdapter(
+                    child: LinearProgressIndicator(minHeight: 2)),
+              if (error.isNotEmpty && result?.items.isNotEmpty == true)
+                SliverToBoxAdapter(child: Text(error)),
+              if (loading && (result?.items.isEmpty ?? true))
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Center(
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      const CircularProgressIndicator(),
+                      const SizedBox(height: 12),
+                      Text(text.loading),
+                    ]),
+                  ),
+                )
+              else if (error.isNotEmpty && (result?.items.isEmpty ?? true))
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(mainAxisSize: MainAxisSize.min, children: [
+                        const Icon(Icons.cloud_off_outlined, size: 36),
+                        const SizedBox(height: 10),
+                        Text(error, textAlign: TextAlign.center),
+                        const SizedBox(height: 12),
+                        OutlinedButton.icon(
+                          onPressed: () => _search(result?.page ?? 1),
+                          icon: const Icon(Icons.refresh),
+                          label: Text(text.retry),
+                        ),
+                      ]),
+                    ),
+                  ),
+                )
+              else if (result == null || result!.items.isEmpty)
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Center(child: Text(text.empty)),
+                )
+              else
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: _MasonryGrid(
+                      columnCount: columns,
+                      itemCount: result!.items.length,
+                      itemBuilder: (context, index) => _GalleryCard(
+                        item: result!.items[index],
+                        text: text,
+                        onTap: () => _openItem(result!.items[index]),
+                      ),
+                    ),
+                  ),
+                ),
+              if (!loading && result != null && result!.items.isNotEmpty)
+                SliverToBoxAdapter(
+                  child: SafeArea(
+                    top: false,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 18),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          OutlinedButton(
+                            onPressed: !loading && result!.page > 1
+                                ? () => _search(result!.page - 1)
+                                : null,
+                            child: Text(text.previous),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 14),
+                            child: source == OnlineGallerySource.quicktag
+                                ? TextButton(
+                                    onPressed:
+                                        loading ? null : _chooseQuickPage,
+                                    child: Text(
+                                        '${result!.page} / ${(result!.total! / result!.pageSize).ceil().clamp(1, 100000)}'))
+                                : Text(
+                                    _format(text.page, 'page', result!.page)),
+                          ),
+                          OutlinedButton(
+                            onPressed: !loading && result!.hasMore
+                                ? () => _search(result!.page + 1)
+                                : null,
+                            child: Text(text.next),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       );
     });
@@ -1075,67 +1291,79 @@ class _GalleryCard extends StatelessWidget {
         ? item.cover.width / item.cover.height
         : 4 / 3;
     return Card(
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              AspectRatio(
-                aspectRatio: coverAspectRatio,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    _NetworkGalleryImage(
-                      url: item.cover.previewUrl,
-                      source: item.source,
-                      fit: BoxFit.contain,
-                    ),
-                    PositionedDirectional(
-                      top: 7,
-                      start: 7,
-                      child: Chip(
-                        visualDensity: VisualDensity.compact,
-                        label: Text(item.isCollection
-                            ? _format(text.images, 'count', item.mediaCount)
-                            : item.rating.toUpperCase()),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            GalleryImageAspect(
+                enabled: item.cover.previewUrl.isNotEmpty,
+                provider:
+                    _galleryImageProvider(item.cover.previewUrl, item.source),
+                fallback: coverAspectRatio,
+                builder: (context, ratio) => AspectRatio(
+                      aspectRatio: ratio,
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          _NetworkGalleryImage(
+                            url: item.cover.previewUrl,
+                            source: item.source,
+                            fit: BoxFit.contain,
+                          ),
+                          PositionedDirectional(
+                            top: 7,
+                            start: 7,
+                            child: Chip(
+                              visualDensity: VisualDensity.compact,
+                              label: Text(item.isCollection
+                                  ? _format(
+                                      text.images, 'count', item.mediaCount)
+                                  : item.rating.toUpperCase()),
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(item.title.isEmpty ? '#${item.id}' : item.title,
+                    )),
+            Padding(
+              padding: const EdgeInsets.all(10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(item.title.isEmpty ? '#${item.id}' : item.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleSmall),
+                  if (item.author.isNotEmpty) ...[
+                    const SizedBox(height: 3),
+                    Text(item.author,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleSmall),
-                    if (item.author.isNotEmpty) ...[
-                      const SizedBox(height: 3),
-                      Text(item.author,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodySmall),
-                    ],
-                    if (item.description.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(item.description,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodySmall),
-                    ],
+                        style: Theme.of(context).textTheme.bodySmall),
                   ],
-                ),
+                  if (item.description.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(item.description,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall),
+                  ],
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
-      );
+      ),
+    );
   }
 }
+
+NetworkImage _galleryImageProvider(String url, OnlineGallerySource source) =>
+    NetworkImage(url, headers: {
+      'Referer': '${source.siteUrl}/',
+      'User-Agent': 'Langbai-NovelAI-Studio-Mobile'
+    });
 
 class _NetworkGalleryImage extends StatelessWidget {
   final String url;
@@ -1192,7 +1420,8 @@ Future<void> _showGalleryPreview(BuildContext context, Widget image) =>
               child: Padding(
                 padding: const EdgeInsets.all(12),
                 child: IconButton.filledTonal(
-                  tooltip: MaterialLocalizations.of(dialogContext).closeButtonTooltip,
+                  tooltip: MaterialLocalizations.of(dialogContext)
+                      .closeButtonTooltip,
                   onPressed: () => Navigator.of(dialogContext).pop(),
                   icon: const Icon(Icons.close),
                 ),
@@ -1223,47 +1452,60 @@ class _OnlineGalleryDetailScreenState
       widget.service.detail(widget.item);
   bool downloading = false;
 
-  Future<void> _download(List<OnlineGalleryMedia> media, _GalleryText text) async {
+  Future<void> _download(
+      List<OnlineGalleryMedia> media, _GalleryText text) async {
     if (downloading || media.isEmpty) return;
-    final state = context.read<AppState>();
-    if (!await ensureOnlineGalleryDownloadDirectory(state)) return;
-    if (!mounted) return;
     setState(() => downloading = true);
-    final messenger = ScaffoldMessenger.of(context);
-    final storage = state.storage;
-    messenger.showSnackBar(SnackBar(content: Text(text.downloading)));
+    final state = context.read<AppState>();
+    final feedback = ImageSaveFeedback.show(context, state.settings.language);
     var saved = 0;
+    var failed = 0;
+    String? outputPath;
     try {
+      if (!await ensureOnlineGalleryDownloadDirectory(state)) {
+        feedback.finish(saved: 0, cancelled: true);
+        return;
+      }
+      if (!mounted) {
+        feedback.finish(saved: 0, cancelled: true);
+        return;
+      }
+      feedback.downloading(text.downloading, media.length);
       for (var index = 0; index < media.length; index++) {
         final item = media[index];
-        final url = item.downloadUrl.isNotEmpty ? item.downloadUrl : item.displayUrl;
-        if (url.isEmpty) continue;
-        final response = await http.get(Uri.parse(url), headers: {
-          'Referer': '${widget.item.source.siteUrl}/',
-          'User-Agent': 'Langbai-NovelAI-Studio-Mobile',
-        }).timeout(const Duration(minutes: 2));
-        if (response.statusCode < 200 || response.statusCode >= 300) {
-          throw HttpException('HTTP ${response.statusCode}');
+        try {
+          final url =
+              item.downloadUrl.isNotEmpty ? item.downloadUrl : item.displayUrl;
+          if (url.isEmpty) throw const FormatException('EMPTY_IMAGE_URL');
+          final response = await http.get(Uri.parse(url), headers: {
+            'Referer': '${widget.item.source.siteUrl}/',
+            'User-Agent': 'Langbai-NovelAI-Studio-Mobile',
+          }).timeout(const Duration(minutes: 2));
+          if (response.statusCode < 200 || response.statusCode >= 300) {
+            throw HttpException('HTTP ${response.statusCode}');
+          }
+          final extension = RegExp(r'\.([a-zA-Z0-9]{2,5})$')
+                  .firstMatch(Uri.parse(url).path)
+                  ?.group(1) ??
+              'jpg';
+          final file = await state.storage.saveOnlineGalleryImage(
+            response.bodyBytes,
+            source: widget.item.source.id,
+            itemId: widget.item.id,
+            title: widget.item.title,
+            imageId: '${(index + 1).toString().padLeft(2, '0')}-${item.id}',
+            extension: extension,
+          );
+          outputPath = file.parent.path;
+          saved++;
+        } catch (_) {
+          failed++;
         }
-        final extension = RegExp(r'\.([a-zA-Z0-9]{2,5})$')
-                .firstMatch(Uri.parse(url).path)?.group(1) ?? 'jpg';
-        await storage.saveOnlineGalleryImage(
-          response.bodyBytes,
-          source: widget.item.source.id,
-          itemId: widget.item.id,
-          title: widget.item.title,
-          imageId: '${(index + 1).toString().padLeft(2, '0')}-${item.id}',
-          extension: extension,
-        );
-        saved++;
       }
-      if (mounted) {
-        messenger.showSnackBar(SnackBar(content: Text(_format(text.downloaded, 'count', saved))));
-      }
-    } catch (error) {
-      if (mounted) {
-        messenger.showSnackBar(SnackBar(content: Text(text.downloadFailed)));
-      }
+      feedback.finish(saved: saved, failed: failed, path: outputPath);
+    } catch (_) {
+      feedback.finish(
+          saved: saved, failed: media.length - saved, path: outputPath);
     } finally {
       if (mounted) setState(() => downloading = false);
     }
@@ -1355,8 +1597,8 @@ class _OnlineGalleryDetailScreenState
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 28),
               children: [
                 ConstrainedBox(
-                  constraints: BoxConstraints(
-                      maxHeight: constraints.maxHeight * .68),
+                  constraints:
+                      BoxConstraints(maxHeight: constraints.maxHeight * .68),
                   child: image,
                 ),
                 const SizedBox(height: 12),
@@ -1479,10 +1721,13 @@ class _DetailMediaState extends State<_DetailMedia> {
         ),
       ),
     ]);
-    return Center(
-      child: AspectRatio(
-        aspectRatio: aspectRatio,
-        child: stage,
+    return GalleryImageAspect(
+      enabled: current.displayUrl.isNotEmpty,
+      provider:
+          _galleryImageProvider(current.displayUrl, widget.detail.item.source),
+      fallback: aspectRatio,
+      builder: (context, ratio) => Center(
+        child: AspectRatio(aspectRatio: ratio, child: stage),
       ),
     );
   }
@@ -1555,6 +1800,18 @@ class _DetailInfo extends StatelessWidget {
             label: Text(text.usePrompt),
           ),
         ],
+        if (item.source == OnlineGallerySource.quicktag)
+          for (final block
+              in quickCharacters(detail.metadata['entry']).indexed) ...[
+            const SizedBox(height: 12),
+            _PromptBlock(
+              title:
+                  '${text.characters} ${block.$1 + 1} · ${block.$2['label']}',
+              value: block.$2['prompt']!,
+              copy: text.copy,
+              onCopy: () => onCopy(block.$2['prompt']!, text),
+            ),
+          ],
         for (final group in groups)
           if (group.$2.isNotEmpty) ...[
             const SizedBox(height: 18),

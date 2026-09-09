@@ -1,3 +1,4 @@
+import { processableImage } from "./image-codec";
 import { dialog, nativeImage } from "electron";
 import fs from "node:fs";
 import path from "node:path";
@@ -104,10 +105,11 @@ function writePngCard(input: Buffer, character: TavernCharacter) {
   return Buffer.concat([PNG_SIGNATURE, ...kept, chara, ccv3, makePngChunk("IEND", Buffer.alloc(0))]);
 }
 
-function avatarPng(character: TavernCharacter) {
+async function avatarPng(character: TavernCharacter) {
   if (!character.avatarDataUrl) return FALLBACK_PNG;
   try {
-    const image = nativeImage.createFromDataURL(character.avatarDataUrl);
+    const bytes = Buffer.from(character.avatarDataUrl.split(",")[1] ?? "", "base64");
+    const image = nativeImage.createFromBuffer(await processableImage(bytes));
     if (!image.isEmpty()) return image.toPNG();
   } catch {
     // Fall through to a valid neutral PNG so the card remains portable.
@@ -238,7 +240,7 @@ async function charxBuffer(character: TavernCharacter) {
   assets.push({ type: "icon", uri: "embeded://assets/icon/images/avatar.png", name: "avatar", ext: "png" });
   data.assets = assets;
   zip.file("card.json", JSON.stringify(card, null, 2));
-  zip.file("assets/icon/images/avatar.png", avatarPng(character));
+  zip.file("assets/icon/images/avatar.png", await avatarPng(character));
   return zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE", compressionOptions: { level: 9 } });
 }
 
@@ -260,7 +262,7 @@ export async function exportTavernCard(request: TavernCardExportRequest) {
     if (request.format === "json") {
       fs.writeFileSync(result.filePath, JSON.stringify(tavernCharacterToV3(character), null, 2), "utf8");
     } else if (request.format === "png") {
-      fs.writeFileSync(result.filePath, writePngCard(avatarPng(character), character));
+      fs.writeFileSync(result.filePath, writePngCard(await avatarPng(character), character));
     } else {
       fs.writeFileSync(result.filePath, await charxBuffer(character));
     }
@@ -270,8 +272,8 @@ export async function exportTavernCard(request: TavernCardExportRequest) {
   }
 }
 
-export async function importTavernVisualAsset(kind: "avatar" | "background") {
-  const result = await dialog.showOpenDialog({
+export async function importTavernVisualAsset(kind: "avatar" | "background", sourcePath?: string) {
+  const result = sourcePath ? {canceled:false,filePaths:[sourcePath]} : await dialog.showOpenDialog({
     title: kind === "avatar" ? "选择角色头像" : "选择对话背景",
     properties: ["openFile"],
     filters: [{ name: "图片", extensions: ["png", "jpg", "jpeg", "webp", "gif", "bmp"] }],
@@ -281,7 +283,7 @@ export async function importTavernVisualAsset(kind: "avatar" | "background") {
     const filePath = result.filePaths[0];
     const stat = fs.statSync(filePath);
     if (!stat.isFile() || stat.size > 32 * 1024 * 1024) throw new Error("图片不存在或超过 32 MB。");
-    let image = nativeImage.createFromPath(filePath);
+    let image = nativeImage.createFromBuffer(await processableImage(fs.readFileSync(filePath)));
     if (image.isEmpty()) throw new Error("无法读取该图片格式。");
     const size = image.getSize();
     const limit = kind === "avatar" ? 1024 : 2560;

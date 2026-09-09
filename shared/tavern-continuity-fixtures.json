@@ -1,0 +1,299 @@
+[
+  {
+    "name": "append preserves clothing",
+    "base": {
+      "id": "base",
+      "status": "completed",
+      "positivePrompt": "red coat, white shirt",
+      "negativePrompt": "",
+      "stylePrompt": "",
+      "count": 1,
+      "createdAt": "2026-09-08T00:00:00.000Z"
+    },
+    "raw": {
+      "baseImageId": "base",
+      "promptPatch": {
+        "replacements": [],
+        "append": [
+          "night"
+        ]
+      }
+    },
+    "expected": "red coat, white shirt, night",
+    "review": false
+  },
+  {
+    "name": "replace clothing color only",
+    "base": {
+      "id": "base",
+      "status": "completed",
+      "positivePrompt": "red coat, white shirt",
+      "negativePrompt": "",
+      "stylePrompt": "",
+      "count": 1,
+      "createdAt": "2026-09-08T00:00:00.000Z"
+    },
+    "raw": {
+      "baseImageId": "base",
+      "promptPatch": {
+        "replacements": [
+          {
+            "from": "red coat",
+            "to": "black coat"
+          }
+        ],
+        "append": []
+      }
+    },
+    "expected": "black coat, white shirt",
+    "review": false
+  },
+  {
+    "name": "explicit removal",
+    "base": {
+      "id": "base",
+      "status": "completed",
+      "positivePrompt": "red coat, white shirt",
+      "negativePrompt": "",
+      "stylePrompt": "",
+      "count": 1,
+      "createdAt": "2026-09-08T00:00:00.000Z"
+    },
+    "raw": {
+      "baseImageId": "base",
+      "promptPatch": {
+        "replacements": [
+          {
+            "from": "red coat, ",
+            "to": ""
+          }
+        ],
+        "append": []
+      }
+    },
+    "expected": "white shirt",
+    "review": false
+  },
+  {
+    "name": "parameter-only revision is byte exact",
+    "base": {
+      "id": "base",
+      "status": "completed",
+      "positivePrompt": "red coat, white shirt",
+      "negativePrompt": "",
+      "stylePrompt": "",
+      "count": 1,
+      "createdAt": "2026-09-08T00:00:00.000Z"
+    },
+    "raw": {
+      "baseImageId": "base",
+      "promptPatch": {
+        "replacements": [],
+        "append": []
+      }
+    },
+    "expected": "red coat, white shirt",
+    "review": false
+  },
+  {
+    "name": "legacy rewrite cannot silently erase clothing",
+    "base": {
+      "id": "base",
+      "status": "completed",
+      "positivePrompt": "red coat, white shirt",
+      "negativePrompt": "",
+      "stylePrompt": "",
+      "count": 1,
+      "createdAt": "2026-09-08T00:00:00.000Z"
+    },
+    "raw": {
+      "positivePrompt": "night"
+    },
+    "expected": "red coat, white shirt",
+    "review": true
+  },
+  {
+    "name": "model cannot reset established image",
+    "base": {
+      "id": "base",
+      "status": "completed",
+      "positivePrompt": "red coat, white shirt",
+      "negativePrompt": "",
+      "stylePrompt": "",
+      "count": 1,
+      "createdAt": "2026-09-08T00:00:00.000Z"
+    },
+    "raw": {
+      "promptMode": "new",
+      "positivePrompt": "a lake"
+    },
+    "expected": "red coat, white shirt",
+    "review": true
+  },
+  {
+    "name": "new image has no inherited state",
+    "base": null,
+    "raw": {
+      "promptMode": "new",
+      "positivePrompt": "a lake"
+    },
+    "expected": "a lake",
+    "review": false
+  },
+  {
+    "name": "stale image ID is held",
+    "base": {
+      "id": "base",
+      "status": "completed",
+      "positivePrompt": "red coat, white shirt",
+      "negativePrompt": "",
+      "stylePrompt": "",
+      "count": 1,
+      "createdAt": "2026-09-08T00:00:00.000Z"
+    },
+    "raw": {
+      "baseImageId": "stale",
+      "promptPatch": {
+        "replacements": [],
+        "append": [
+          "night"
+        ]
+      }
+    },
+    "expected": "red coat, white shirt",
+    "review": true
+  },
+  {
+    "name": "invalid second operation rolls whole edit back",
+    "base": {
+      "id": "base",
+      "status": "completed",
+      "positivePrompt": "red coat, white shirt",
+      "negativePrompt": "",
+      "stylePrompt": "",
+      "count": 1,
+      "createdAt": "2026-09-08T00:00:00.000Z"
+    },
+    "raw": {
+      "baseImageId": "base",
+      "promptPatch": {
+        "replacements": [
+          {
+            "from": "red coat",
+            "to": "black coat"
+          },
+          {
+            "from": "not present",
+            "to": "blue"
+          }
+        ],
+        "append": []
+      }
+    },
+    "expected": "red coat, white shirt",
+    "review": true
+  },
+  {
+    "name": "empty final prompt is held",
+    "base": {
+      "id": "base",
+      "status": "completed",
+      "positivePrompt": "red coat, white shirt",
+      "negativePrompt": "",
+      "stylePrompt": "",
+      "count": 1,
+      "createdAt": "2026-09-08T00:00:00.000Z"
+    },
+    "raw": {
+      "baseImageId": "base",
+      "promptPatch": {
+        "replacements": [
+          {
+            "from": "red coat, white shirt",
+            "to": ""
+          }
+        ],
+        "append": []
+      }
+    },
+    "expected": "red coat, white shirt",
+    "review": true
+  },
+  {
+    "name": "malformed append is held",
+    "base": {
+      "id": "base",
+      "status": "completed",
+      "positivePrompt": "red coat, white shirt",
+      "negativePrompt": "",
+      "stylePrompt": "",
+      "count": 1,
+      "createdAt": "2026-09-08T00:00:00.000Z"
+    },
+    "raw": {
+      "baseImageId": "base",
+      "promptPatch": {
+        "replacements": [],
+        "append": [
+          0
+        ]
+      }
+    },
+    "expected": "red coat, white shirt",
+    "review": true
+  },
+  {
+    "name": "ambiguous match is held",
+    "base": {
+      "id": "base",
+      "status": "completed",
+      "positivePrompt": "red coat, red hat",
+      "negativePrompt": "",
+      "stylePrompt": "",
+      "count": 1,
+      "createdAt": "2026-09-08T00:00:00.000Z"
+    },
+    "raw": {
+      "baseImageId": "base",
+      "promptPatch": {
+        "replacements": [
+          {
+            "from": "red",
+            "to": "blue"
+          }
+        ],
+        "append": []
+      }
+    },
+    "expected": "red coat, red hat",
+    "review": true
+  },
+  {
+    "name": "weighted punctuation and dollar literal preserved",
+    "base": {
+      "id": "base",
+      "status": "completed",
+      "positivePrompt": "1.2::artist:name::, red coat, white shirt",
+      "negativePrompt": "",
+      "stylePrompt": "",
+      "count": 1,
+      "createdAt": "2026-09-08T00:00:00.000Z"
+    },
+    "raw": {
+      "baseImageId": "base",
+      "promptPatch": {
+        "replacements": [
+          {
+            "from": "red coat",
+            "to": "$& blue coat"
+          }
+        ],
+        "append": [
+          "night"
+        ]
+      }
+    },
+    "expected": "1.2::artist:name::, $& blue coat, white shirt, night",
+    "review": false
+  }
+]

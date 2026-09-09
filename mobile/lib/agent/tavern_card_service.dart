@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import 'agent_models.dart';
+import '../images/image_processing.dart';
 
 const _langbaiExtension = 'langbai_novelai_studio';
 const _pngSignature = <int>[137, 80, 78, 71, 13, 10, 26, 10];
@@ -79,8 +80,8 @@ TavernLorebook _externalLorebook(Object? value, String fallbackName) {
                 ? (raw['tokenBudget'] as num).round()
                 : 2048)
         .clamp(128, 131072),
-    recursiveScanning: raw['recursive_scanning'] == true ||
-        raw['recursiveScanning'] == true,
+    recursiveScanning:
+        raw['recursive_scanning'] == true || raw['recursiveScanning'] == true,
     entries: [
       for (var index = 0; index < entries.length; index++)
         TavernLorebookEntry.fromJson(_map(entries[index]), index),
@@ -94,8 +95,8 @@ TavernCharacter normalizeExternalCharacter(
   String? avatarDataUrl,
 }) {
   final root = _map(value);
-  final externalSpec = root['spec'] == 'chara_card_v2' ||
-      root['spec'] == 'chara_card_v3';
+  final externalSpec =
+      root['spec'] == 'chara_card_v2' || root['spec'] == 'chara_card_v3';
   final data = externalSpec ? _map(root['data']) : root;
   final extensions = _map(data['extensions']);
   final langbai = _map(extensions[_langbaiExtension]);
@@ -111,9 +112,7 @@ TavernCharacter normalizeExternalCharacter(
     id: _text(langbai['id'] ?? data['id']).trim().isNotEmpty
         ? _text(langbai['id'] ?? data['id'])
         : null,
-    spec: root['spec'] == 'chara_card_v2'
-        ? 'chara_card_v2'
-        : 'chara_card_v3',
+    spec: root['spec'] == 'chara_card_v2' ? 'chara_card_v2' : 'chara_card_v3',
     specVersion: _text(
       root['spec_version'],
       root['spec'] == 'chara_card_v2' ? '2.0' : '3.0',
@@ -127,8 +126,8 @@ TavernCharacter normalizeExternalCharacter(
     exampleMessages: _text(data['mes_example'] ?? data['exampleMessages']),
     creatorNotes: _text(data['creator_notes'] ?? data['creatorNotes']),
     systemPrompt: _text(data['system_prompt'] ?? data['systemPrompt']),
-    postHistoryInstructions:
-        _text(data['post_history_instructions'] ?? data['postHistoryInstructions']),
+    postHistoryInstructions: _text(
+        data['post_history_instructions'] ?? data['postHistoryInstructions']),
     alternateGreetings:
         _strings(data['alternate_greetings'] ?? data['alternateGreetings']),
     groupOnlyGreetings:
@@ -216,10 +215,10 @@ Map<String, dynamic> tavernCharacterToV3(TavernCharacter character) {
       if (character.embeddedLorebook != null)
         'character_book': _portableLorebook(character.embeddedLorebook!),
       'source': character.source,
-      'creation_date': DateTime.tryParse(character.createdAt)
-          ?.millisecondsSinceEpoch,
-      'modification_date': DateTime.tryParse(character.updatedAt)
-          ?.millisecondsSinceEpoch,
+      'creation_date':
+          DateTime.tryParse(character.createdAt)?.millisecondsSinceEpoch,
+      'modification_date':
+          DateTime.tryParse(character.updatedAt)?.millisecondsSinceEpoch,
       'extensions': extensions,
     },
   };
@@ -251,9 +250,7 @@ int _crc32(List<int> bytes) {
   for (final byte in bytes) {
     crc ^= byte;
     for (var bit = 0; bit < 8; bit++) {
-      crc = (crc & 1) == 1
-          ? (crc >> 1) ^ 0xedb88320
-          : crc >> 1;
+      crc = (crc & 1) == 1 ? (crc >> 1) ^ 0xedb88320 : crc >> 1;
     }
   }
   return (crc ^ 0xffffffff) & 0xffffffff;
@@ -277,8 +274,10 @@ Uint8List _pngTextChunk(String keyword, String value) {
 
 Map<String, String> _readPngText(Uint8List bytes) {
   if (bytes.length < 12 ||
-      !_pngSignature.asMap().entries.every(
-          (entry) => bytes[entry.key] == entry.value)) {
+      !_pngSignature
+          .asMap()
+          .entries
+          .every((entry) => bytes[entry.key] == entry.value)) {
     throw const FormatException('不是有效的 PNG 角色卡。');
   }
   final output = <String, String>{};
@@ -387,8 +386,7 @@ class TavernCardService {
         decoded,
         avatarDataUrl: 'data:image/png;base64,${base64Encode(bytes)}',
       );
-      character.name =
-          uniqueTavernName(existingCharacterNames, character.name);
+      character.name = uniqueTavernName(existingCharacterNames, character.name);
       return TavernCardImportResult(character: character, format: 'png');
     }
     if (extension == '.charx') {
@@ -398,7 +396,8 @@ class TavernCardService {
         throw const FormatException('CHARX 解压后超过 96 MB。');
       }
       final cardFile = archive.files
-          .where((file) => file.isFile && p.posix.basename(file.name) == 'card.json')
+          .where((file) =>
+              file.isFile && p.posix.basename(file.name) == 'card.json')
           .firstOrNull;
       if (cardFile == null) throw const FormatException('CHARX 缺少 card.json。');
       final root = jsonDecode(utf8.decode(cardFile.content as List<int>));
@@ -424,8 +423,7 @@ class TavernCardService {
       }
       final character =
           normalizeExternalCharacter(root, avatarDataUrl: avatarDataUrl);
-      character.name =
-          uniqueTavernName(existingCharacterNames, character.name);
+      character.name = uniqueTavernName(existingCharacterNames, character.name);
       return TavernCardImportResult(character: character, format: 'charx');
     }
     final root = jsonDecode(utf8.decode(bytes));
@@ -455,10 +453,12 @@ class TavernCardService {
     if (bytes == null || bytes.isEmpty || bytes.length > 32 * 1024 * 1024) {
       throw const FormatException('图片为空或超过 32 MB。');
     }
-    final decoded = image_lib.decodeImage(bytes);
+    final decoded =
+        image_lib.decodeImage(await processingImageBytes(bytes), frame: 0);
     if (decoded == null) throw const FormatException('无法识别图片。');
     final maximum = background ? 1920 : 768;
-    final longest = decoded.width > decoded.height ? decoded.width : decoded.height;
+    final longest =
+        decoded.width > decoded.height ? decoded.width : decoded.height;
     final resized = longest > maximum
         ? image_lib.copyResize(
             decoded,
@@ -484,7 +484,9 @@ class TavernCardService {
       if (character.avatarDataUrl == null) {
         throw const FormatException('导出 PNG 角色卡前请先设置角色头像。');
       }
-      final source = image_lib.decodeImage(_dataUrlBytes(character.avatarDataUrl!));
+      final source = image_lib.decodeImage(
+          await processingImageBytes(_dataUrlBytes(character.avatarDataUrl!)),
+          frame: 0);
       if (source == null) throw const FormatException('角色头像无法转换为 PNG。');
       final avatar = Uint8List.fromList(image_lib.encodePng(source));
       bytes = _writePngCard(avatar, tavernCharacterToV2(character), v3);
@@ -494,7 +496,9 @@ class TavernCardService {
       final card = utf8.encode(jsonEncode(v3));
       archive.addFile(ArchiveFile('card.json', card.length, card));
       if (character.avatarDataUrl != null) {
-        final source = image_lib.decodeImage(_dataUrlBytes(character.avatarDataUrl!));
+        final source = image_lib.decodeImage(
+            await processingImageBytes(_dataUrlBytes(character.avatarDataUrl!)),
+            frame: 0);
         if (source == null) throw const FormatException('角色头像无法写入 CHARX。');
         final avatar = image_lib.encodePng(source);
         archive.addFile(ArchiveFile(

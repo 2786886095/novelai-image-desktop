@@ -1,3 +1,5 @@
+import { ImageSaveFeedback } from "./components/ImageSaveFeedback";
+import { imagePasteProps } from "./image-paste";
 import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import clsx from "clsx";
@@ -1312,7 +1314,7 @@ function StylePresetImagesModal({
   text: ReturnType<typeof getGeneratePanelText>["prompt"];
   onImport: () => void;
   onDropImages: (sourcePaths: string[]) => void;
-  onReplace: (image: StylePromptPreviewImage) => void;
+  onReplace: (image: StylePromptPreviewImage, sourcePath?: string) => void;
   onDelete: (image: StylePromptPreviewImage) => void;
   onClose: () => void;
 }) {
@@ -1358,7 +1360,7 @@ function StylePresetImagesModal({
               if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
               setDragging(false);
             }}
-            onDrop={(event) => {
+            data-image-paste="drop" data-image-paste-multiple="true" tabIndex={0} onDrop={(event) => {
               if (!hasDraggedFiles(event.dataTransfer)) return;
               event.preventDefault();
               setDragging(false);
@@ -1398,7 +1400,7 @@ function StylePresetImagesModal({
                     </button>
                     <small title={image.name}>{image.name}</small>
                     <div>
-                      <Button type="button" variant="secondary" onClick={() => onReplace(image)}>
+                      <Button {...imagePasteProps(paths=>onReplace(image,paths[0]))} type="button" variant="secondary" onClick={() => onReplace(image)}>
                         <Icon name="folderOpen" /> {text.stylePresetReplaceImage}
                       </Button>
                       <Button type="button" variant="ghost" onClick={() => onDelete(image)}>
@@ -1871,8 +1873,9 @@ function PromptAndParams({
   async function replaceStylePresetImage(
     preset: StylePromptPreset,
     image: StylePromptPreviewImage,
+    sourcePath?: string,
   ) {
-    const imported = await window.naiDesktop.importStylePromptPresetImages(
+    const imported = sourcePath ? await window.naiDesktop.importStylePromptPresetImagePaths([sourcePath],preset.id,1) : await window.naiDesktop.importStylePromptPresetImages(
       preset.id,
       1,
       generateText.prompt.stylePresetReplaceImage,
@@ -2204,7 +2207,7 @@ function PromptAndParams({
           text={generateText.prompt}
           onImport={() => void importStylePresetImages(styleImageManagerPreset)}
           onDropImages={(paths) => void importDroppedStylePresetImages(styleImageManagerPreset, paths)}
-          onReplace={(image) => void replaceStylePresetImage(styleImageManagerPreset, image)}
+          onReplace={(image, sourcePath) => void replaceStylePresetImage(styleImageManagerPreset, image, sourcePath)}
           onDelete={(image) => void deleteStylePresetImage(styleImageManagerPreset, image)}
           onClose={() => setStyleImageManagerPresetId("")}
         />
@@ -2623,7 +2626,7 @@ function WorkbenchImageUpload() {
       className={clsx("wb-upload", dragging && "dragging")}
       onDragOver={handleDragOver}
       onDragLeave={() => setDragging(false)}
-      onDrop={handleDrop}
+      data-image-paste="drop" tabIndex={0} onDrop={handleDrop}
     >
       {workbenchImage ? (
         <>
@@ -4144,7 +4147,7 @@ function ReversePanel() {
           className={clsx("inspect-drop-zone", dragging && "dragging")}
           onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
           onDragLeave={() => setDragging(false)}
-          onDrop={(e) => {
+          data-image-paste="drop" tabIndex={0} onDrop={(e) => {
             e.preventDefault();
             setDragging(false);
             const file = e.dataTransfer.files[0];
@@ -5108,7 +5111,7 @@ function ImageCanvas() {
         className="canvas-area"
         onDragOver={handleDragOver}
         onDragLeave={() => setDropOver(false)}
-        onDrop={handleDrop}
+        data-image-paste="drop" tabIndex={0} onDrop={handleDrop}
       >
         {dropOver && (
           <div className="superdrop-overlay">
@@ -5129,7 +5132,7 @@ function ImageCanvas() {
       className="canvas-area"
       onDragOver={handleDragOver}
       onDragLeave={() => setDropOver(false)}
-      onDrop={handleDrop}
+      data-image-paste="drop" tabIndex={0} onDrop={handleDrop}
     >
       {dropOver && (
         <div className="superdrop-overlay">
@@ -7336,6 +7339,7 @@ function MainPage() {
         )}
       </footer>
       {showOnboarding && <OnboardingWizard />}
+      <ImageSaveFeedback language={language} />
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
       {displayToast && (
         <div className="toast" role="alert">

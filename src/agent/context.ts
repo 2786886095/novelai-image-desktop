@@ -99,7 +99,7 @@ export function estimateConversationTokens(messages: AgentMessage[]): number {
       (sum, tool) => sum + estimateTextTokens(JSON.stringify(tool.input ?? {})) + estimateTextTokens(tool.output ?? tool.error ?? ""),
       0,
     );
-    return total + estimateTextTokens(message.content) + estimateTextTokens(message.reasoning ?? "") + attachments + tools + 8;
+    return total + (message.imageProposal ? estimateTextTokens(JSON.stringify(message.imageProposal)) : 0) + estimateTextTokens(message.content) + estimateTextTokens(message.reasoning ?? "") + attachments + tools + 8;
   }, 0);
 }
 

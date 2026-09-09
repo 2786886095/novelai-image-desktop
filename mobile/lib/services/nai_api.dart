@@ -506,6 +506,7 @@ class NaiApi {
     Uint8List imageBytes,
     I2IParams i2i,
   ) async {
+    imageBytes = await processingImageBytes(imageBytes);
     params = params.normalized();
     final seed = params.seedMode != 'random' && params.seed > 0
         ? params.seed
@@ -561,7 +562,10 @@ class NaiApi {
     final seed = params.seedMode != 'random' && params.seed > 0
         ? params.seed
         : randomSeed();
-    final prepared = prepareInpaintAssets(imageBytes, maskBytes);
+    final prepared = prepareInpaintAssets(
+      await processingImageBytes(imageBytes),
+      await processingImageBytes(maskBytes),
+    );
     final candidates = <String>[inpaintModel];
     if (inpaintModel == 'nai-diffusion-5-curated-inpainting') {
       candidates.add('nai-diffusion-5-full-inpainting');
@@ -628,7 +632,7 @@ class NaiApi {
       Uint8List imageBytes, int scale, String model) async {
     final upscaleModel = resolveUpscaleModel(model);
     final passes = scale == 4 ? 2 : 1;
-    var passInput = imageBytes;
+    var passInput = await processingImageBytes(imageBytes);
     for (var pass = 0; pass < passes; pass += 1) {
       final res = await _withClient(
         settings,
@@ -664,7 +668,7 @@ class NaiApi {
     AugmentOptions options,
   ) async {
     final payload = <String, dynamic>{
-      'image': base64Encode(imageBytes),
+      'image': base64Encode(await processingImageBytes(imageBytes)),
       'width': width,
       'height': height,
       'req_type': tool,
@@ -890,10 +894,9 @@ class NaiApi {
       // in a JSON POST is silently ignored — the image was never applied (which is
       // why precise reference had no effect). Each image is preprocessed to an
       // opaque RGB official size; we keep that base64 here only as the byte source.
-      final processed = precise
-          .map((item) => base64Encode(prepareDirectorReferenceImage(
-              base64Decode(_stripBase64(item.base64)))))
-          .toList();
+      final processed = await Future.wait(precise.map((item) async =>
+          base64Encode(prepareDirectorReferenceImage(await processingImageBytes(
+              base64Decode(_stripBase64(item.base64)))))));
       parameters['director_reference_images'] = processed;
       parameters['director_reference_images_cached'] = [
         for (var i = 0; i < processed.length; i++)
@@ -1613,6 +1616,14 @@ class NaiApi {
 
   Future<VibeTransferItem> _encodeVibeOrRaw(String token, AppSettings settings,
       String model, VibeTransferItem vibe) async {
+    final input = base64Decode(_stripBase64(vibe.base64));
+    if (isWebpImage(input)) {
+      vibe = VibeTransferItem(
+          base64: base64Encode(await processingImageBytes(input)),
+          infoExtracted: vibe.infoExtracted,
+          strength: vibe.strength,
+          sourcePath: vibe.sourcePath);
+    }
     if (!model.contains('-4')) return vibe;
     final cacheKey = _vibeCacheKey(model, vibe);
     final cached = _vibeEncodeCache[cacheKey];

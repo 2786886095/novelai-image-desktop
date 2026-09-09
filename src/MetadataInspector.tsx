@@ -757,7 +757,7 @@ export default function MetadataInspector({ onBack }: { onBack: () => void }) {
           setDragging(true);
         }}
         onDragLeave={() => setDragging(false)}
-        onDrop={(event) => {
+        data-image-paste="drop" tabIndex={0} onDrop={(event) => {
           event.preventDefault();
           setDragging(false);
           const file = event.dataTransfer.files[0];

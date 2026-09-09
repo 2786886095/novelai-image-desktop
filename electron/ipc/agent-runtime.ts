@@ -1,3 +1,4 @@
+import { imageStateContext, latestImageState, resolveImagePrompt } from "../../src/tavern/image-continuity";
 import axios, { type AxiosResponse } from "axios";
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -17,7 +18,6 @@ import { effectiveContextMessages, shouldAutoCompact } from "../../src/agent/con
 import { agentApiUrl, agentProviderRequiresApiKey } from "../../src/agent/provider-catalog";
 import {
   buildTavernPromptMessages,
-  defaultImagePromptForMessage,
   parseLangbaiImageProposal,
   resolveTavernImageProposalParameters,
   type TavernImageParameterDefaults,
@@ -588,17 +588,17 @@ function proposalFromRaw(
   assistant: AgentMessage,
   character: ReturnType<typeof readAgentWorkspace>["characters"][number],
   defaults: TavernImageParameterDefaults,
+  base?: TavernImageProposal,
 ): TavernImageProposal | undefined {
   if (!raw) return undefined;
-  const positivePrompt = typeof raw.positivePrompt === "string" && raw.positivePrompt.trim()
-    ? raw.positivePrompt.trim()
-    : defaultImagePromptForMessage(assistant, character);
+  const { positivePrompt, continuity } = resolveImagePrompt(raw, base);
   if (!positivePrompt) return undefined;
   const parameters = resolveTavernImageProposalParameters(raw, defaults);
   return {
     id: crypto.randomUUID(),
     status: "pending",
     positivePrompt,
+    continuity,
     negativePrompt: character.visual.negativePrompt.trim() || DEFAULT_TAVERN_NEGATIVE_PROMPT,
     stylePrompt: character.visual.stylePrompt,
     ...(parameters.model ? { model: parameters.model } : {}),
@@ -657,7 +657,7 @@ function compactableTranscript(conversation: AgentConversation) {
     .filter((message) => !boundary || message.createdAt.localeCompare(boundary) > 0);
   const transcript = messages.map((message) => {
     const speaker = message.role === "user" ? "User" : message.role === "assistant" ? "Character" : "System";
-    const content = message.content.trim().slice(0, 8_000);
+    const content = message.content.trim().slice(0, 8_000) + (message.imageProposal ? `\nImage prompt snapshot: ${JSON.stringify({ positivePrompt: message.imageProposal.positivePrompt, stylePrompt: message.imageProposal.stylePrompt, negativePrompt: message.imageProposal.negativePrompt })}` : "");
     const images = message.attachments.filter((item) => item.kind === "image").length;
     return `${speaker}: ${content}${images ? `\n[${images} image attachment(s)]` : ""}`;
   }).join("\n\n");
@@ -675,6 +675,7 @@ function localRoleplaySummary(conversation: AgentConversation) {
 }
 
 export async function generateTavernImage(request: TavernImageRequest) {
+  if (request.proposal.continuity?.reviewRequired) return { ok: false, message: "请先确认提示词变更，旧方案已保留。" };
   const workspace = readAgentWorkspace();
   const conversation = workspace.conversations.find((item) => item.id === request.conversationId);
   const message = conversation?.messages.find((item) => item.id === request.messageId);
@@ -717,6 +718,10 @@ export async function generateTavernImage(request: TavernImageRequest) {
       if (!item) return;
       item.imageProposal = { ...proposal, status: "completed", error: undefined };
       item.attachments.push(...(result.generatedImages ?? []));
+      if (item.swipeIndex !== undefined) {
+        (item.imageProposalSwipes ??= [])[item.swipeIndex] = structuredClone(item.imageProposal);
+        (item.swipeAttachments ??= [])[item.swipeIndex] = structuredClone(item.attachments);
+      }
       item.tools.push({
         id: crypto.randomUUID(),
         name: "langbai_generate_image",
@@ -781,7 +786,13 @@ export async function sendAgentMessage(request: AgentSendRequest) {
       assistant.status = "streaming";
       assistant.error = undefined;
       assistant.reasoning = undefined;
+      const imageSwipes = assistant.imageProposalSwipes ?? Array.from({ length: assistant.swipes.length }, () => null);
+      imageSwipes[assistant.swipeIndex ?? Math.max(0, assistant.swipes.length - 1)] = assistant.imageProposal ?? null;
+      assistant.imageProposalSwipes = imageSwipes;
       assistant.imageProposal = undefined;
+      const imageFiles = assistant.swipeAttachments ?? Array.from({ length: assistant.swipes.length }, () => []);
+      imageFiles[assistant.swipeIndex ?? Math.max(0, assistant.swipes.length - 1)] = assistant.attachments;
+      assistant.swipeAttachments = imageFiles;
       assistant.attachments = [];
       assistant.tools = [];
       assistant.characterId = character.id;
@@ -836,10 +847,12 @@ export async function sendAgentMessage(request: AgentSendRequest) {
     const cast = activeConversation.characterIds
       .map((id) => live.characters.find((item) => item.id === id))
       .filter((item): item is typeof character => Boolean(item));
+    const beforeReply = activeConversation.messages.slice(0, activeConversation.messages.findIndex((m) => m.id === messageId));
+    const imageBase = latestImageState(beforeReply, character.id, undefined, activeConversation.imageStateResetAt);
     const effectiveConversation: AgentConversation = {
       ...activeConversation,
       messages: effectiveContextMessages(
-        activeConversation.messages,
+        beforeReply,
         activeConversation.lastSummary,
         activeConversation.lastCompactedAt,
       ),
@@ -875,6 +888,7 @@ export async function sendAgentMessage(request: AgentSendRequest) {
         content: `Earlier roleplay summary and continuity notes:\n${activeConversation.lastSummary.trim()}`,
       });
     }
+    prompt.splice(1, 0, { role: "system", content: imageStateContext(imageBase) });
     const turn = await completeProvider(promptMessagesWithImages(prompt, request.conversationId), controller, (delta) => deltas.push(delta));
     deltas.flush();
     const parsed = parseLangbaiImageProposal(turn.content);
@@ -890,14 +904,17 @@ export async function sendAgentMessage(request: AgentSendRequest) {
       swipes.push(assistant.content);
       assistant.swipes = swipes;
       assistant.swipeIndex = swipes.length - 1;
-      assistant.imageProposal = proposalFromRaw(parsed.proposal, assistant, character, imageDefaults);
+      assistant.imageProposal = proposalFromRaw(parsed.proposal, assistant, character, imageDefaults, imageBase);
+      const snapshots = assistant.imageProposalSwipes ?? Array.from({ length: swipes.length - 1 }, () => null);
+      snapshots[assistant.swipeIndex] = assistant.imageProposal ?? null;
+      assistant.imageProposalSwipes = snapshots;
       target.lastTurnUsage = turn.usage;
       target.status = "idle";
     });
     emitWorkspace();
     const updated = readAgentWorkspace().conversations.find((item) => item.id === request.conversationId);
     const stored = updated?.messages.find((item) => item.id === messageId);
-    if (stored?.imageProposal && updated?.generationMode === "auto") {
+    if (stored?.imageProposal && !stored.imageProposal.continuity?.reviewRequired && updated?.generationMode === "auto") {
       await generateTavernImage({ conversationId: request.conversationId, messageId, proposal: stored.imageProposal });
     }
     return { ok: true };

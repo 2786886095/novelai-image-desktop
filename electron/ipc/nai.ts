@@ -1,3 +1,4 @@
+import { processableImage } from "./image-codec";
 import { app, dialog, nativeImage } from "electron";
 import axios from "axios";
 import FormData from "form-data";
@@ -927,6 +928,7 @@ export async function prepareExtras(
   signal?: AbortSignal,
 ): Promise<GenerateExtras | undefined> {
   if (!extras) return extras;
+  if (extras.vibeImages?.length) extras = {...extras, vibeImages: await Promise.all(extras.vibeImages.map(async ref => ({...ref, base64:(await processableImage(Buffer.from(stripBase64Prefix(ref.base64), "base64"))).toString("base64")})))};
 
   // Precise/director references: any size accepted, preprocessed to the nearest
   // of NovelAI's three official sizes (scale-to-fit + black pad), matching the
@@ -938,13 +940,13 @@ export async function prepareExtras(
         "精准参考当前仅支持 NovelAI V4.5；V5 首发尚未开放该功能。请切换到 V4.5 Full/Curated，或移除精准参考图。",
       );
     }
-    preciseReferences = preciseReferences.map((ref, index) => ({
+    preciseReferences = await Promise.all(preciseReferences.map(async (ref, index) => ({
       ...ref,
       base64: prepareDirectorReferenceImage(
-        stripBase64Prefix(ref.base64),
+        (await processableImage(Buffer.from(stripBase64Prefix(ref.base64), "base64"))).toString("base64"),
         index,
       ),
-    }));
+    })));
   }
 
   if (!extras.vibeImages || extras.vibeImages.length === 0) {
@@ -1747,7 +1749,7 @@ async function readWorkbenchImage(): Promise<{
   image: WorkingImage;
 }> {
   if (!workbenchImagePath) throw new Error("请先加载图片。");
-  const buffer = await fs.readFile(workbenchImagePath);
+  const buffer = await processableImage(await fs.readFile(workbenchImagePath));
   const dims = readImageDimensions(buffer);
   return {
     base64: buffer.toString("base64"),

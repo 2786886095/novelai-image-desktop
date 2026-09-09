@@ -1,3 +1,6 @@
+import '../agent/image_ui.dart';
+import '../agent/style_tag_picker.dart';
+import '../agent/style_draw.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -1531,8 +1534,53 @@ class _AgentScreenState extends State<AgentScreen> {
                 child: CircularProgressIndicator(strokeWidth: 2)),
         ]),
         const SizedBox(height: 8),
-        Text(proposal.positivePrompt,
-            maxLines: 3, overflow: TextOverflow.ellipsis),
+        ExpansionTile(
+            title: Text(imageUi(controller.app.settings.language)['current']!),
+            children: [
+              SelectableText(proposal.positivePrompt),
+              if (proposal.stylePrompt.isNotEmpty)
+                SelectableText(proposal.stylePrompt),
+              if (proposal.continuity?['previousPrompt'] is String)
+                ExpansionTile(
+                    title: Text(
+                        imageUi(controller.app.settings.language)['previous']!),
+                    children: [
+                      SelectableText(
+                          proposal.continuity!['previousPrompt'] as String)
+                    ]),
+            ]),
+        if (proposal.continuity?['reviewRequired'] == true) ...[
+          Text(imageUi(controller.app.settings.language)['review']!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error)),
+          if (proposal.continuity?['suggestedPrompt'] is String)
+            SelectableText(proposal.continuity!['suggestedPrompt'] as String),
+          Wrap(spacing: 8, children: [
+            TextButton(
+                onPressed: () async {
+                  proposal.continuity!['reviewRequired'] = false;
+                  await controller.saveWorkspace();
+                },
+                child:
+                    Text(imageUi(controller.app.settings.language)['keep']!)),
+            if (proposal.continuity?['suggestedPrompt'] is String)
+              TextButton(
+                  onPressed: () async {
+                    proposal.positivePrompt =
+                        proposal.continuity!['suggestedPrompt'] as String;
+                    proposal.continuity!['reviewRequired'] = false;
+                    await controller.saveWorkspace();
+                  },
+                  child:
+                      Text(imageUi(controller.app.settings.language)['adopt']!))
+          ]),
+        ] else if (proposal.continuity?['changes'] is List)
+          ExpansionTile(
+              title:
+                  Text(imageUi(controller.app.settings.language)['changes']!),
+              children: [
+                for (final change in proposal.continuity!['changes'] as List)
+                  SelectableText('${change['from']} → ${change['to']}')
+              ]),
         const SizedBox(height: 6),
         Text(
           '${proposal.width ?? 1024}×${proposal.height ?? 1024} · ${proposal.steps ?? 28} steps · CFG ${proposal.scale ?? 5} · ×${proposal.count}',
@@ -1549,7 +1597,9 @@ class _AgentScreenState extends State<AgentScreen> {
             padding: const EdgeInsets.only(top: 10),
             child: Wrap(spacing: 8, runSpacing: 8, children: [
               FilledButton.icon(
-                onPressed: () => controller.generateTavernImage(message.id),
+                onPressed: proposal.continuity?['reviewRequired'] == true
+                    ? null
+                    : () => controller.generateTavernImage(message.id),
                 icon: const Icon(Icons.auto_awesome_rounded, size: 18),
                 label: Text(text['generate']!),
               ),
@@ -3074,6 +3124,8 @@ class _AgentScreenState extends State<AgentScreen> {
           : character.visual.negativePrompt,
     );
     final style = TextEditingController(text: character.visual.stylePrompt);
+    String? styleBeforeLibrary;
+    String? styleAfterLibrary;
     final saved = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
@@ -3108,6 +3160,35 @@ class _AgentScreenState extends State<AgentScreen> {
                 ),
                 const SizedBox(height: 10),
                 _field(style, text['stylePrompt']!, lines: 4),
+                Wrap(spacing: 8, children: [
+                  OutlinedButton.icon(
+                      onPressed: () async {
+                        final addition = await showTavernStyleTags(
+                            dialogContext, controller.app);
+                        if (addition != null && dialogContext.mounted) {
+                          setDialogState(() {
+                            styleBeforeLibrary = style.text;
+                            style.text =
+                                appendStylePrompt(style.text, addition);
+                            styleAfterLibrary = style.text;
+                          });
+                        }
+                      },
+                      icon: const Icon(Icons.style_outlined),
+                      label: Text(imageUi(
+                          controller.app.settings.language)['library']!)),
+                  TextButton(
+                      onPressed: styleBeforeLibrary == null
+                          ? null
+                          : () => setDialogState(() {
+                                if (style.text == styleAfterLibrary) {
+                                  style.text = styleBeforeLibrary!;
+                                }
+                                styleBeforeLibrary = null;
+                              }),
+                      child: Text(
+                          imageUi(controller.app.settings.language)['undo']!)),
+                ]),
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton.icon(
@@ -3149,6 +3230,28 @@ class _AgentScreenState extends State<AgentScreen> {
                     label: Text(text['addToList']!),
                   ),
                 ),
+                ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(
+                        imageUi(controller.app.settings.language)['reset']!),
+                    subtitle: Text(imageUi(
+                        controller.app.settings.language)['resetHint']!),
+                    trailing: IconButton(
+                        tooltip:
+                            imageUi(controller.app.settings.language)['reset'],
+                        onPressed: controller.sending
+                            ? null
+                            : () async {
+                                final chat = controller.selectedConversation;
+                                if (chat != null) {
+                                  chat.imageStateResetAt = agentNow();
+                                  await controller.saveWorkspace();
+                                  if (dialogContext.mounted) {
+                                    Navigator.pop(dialogContext, false);
+                                  }
+                                }
+                              },
+                        icon: const Icon(Icons.add_photo_alternate_outlined))),
                 _field(negative, text['negativePrompt']!, lines: 7),
                 Align(
                   alignment: Alignment.centerRight,
@@ -3684,6 +3787,9 @@ class _AgentScreenState extends State<AgentScreen> {
     if (saved == true) {
       final proposal = TavernImageProposal(
         id: current.id,
+        continuity: current.continuity == null
+            ? null
+            : {...current.continuity!, 'reviewRequired': false},
         positivePrompt: positive.text,
         negativePrompt: controller.activeCharacter?.visual.negativePrompt
                     .trim()

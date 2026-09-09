@@ -2422,7 +2422,8 @@ class AppState extends ChangeNotifier {
       final image = await _workbenchBytes();
       final dims = workbenchImage;
       if (dims == null) throw Exception(_rt('error.imageRequired'));
-      final prepared = prepareImageWithinPixels(image);
+      final prepared =
+          prepareImageWithinPixels(await processingImageBytes(image));
       final outputSize = resolveUpscaleOutputSize(
           prepared.width, prepared.height, upscaleScale);
       if (outputSize.exceedsLimit) {
@@ -2468,7 +2469,7 @@ class AppState extends ChangeNotifier {
       final image = await _workbenchBytes();
       final dims = workbenchImage;
       if (dims == null) throw Exception(_rt('error.imageRequired'));
-      final prepared = prepareDirectorImage(image);
+      final prepared = prepareDirectorImage(await processingImageBytes(image));
       final before = await _authorizeQuotedRun(
         token,
         (fresh) => calculateDirectorAnlas(

@@ -61,7 +61,7 @@ export const ONLINE_GALLERY_SOURCES: readonly OnlineGallerySourceInfo[] = [
   },
   {
     id: "quicktag",
-    label: "法典图鉴",
+    label: "QuickTagCloud",
     siteUrl: "https://novelai.quicktagcloud.com",
     supportsPromptSearch: false,
     supportsCollections: true,
@@ -75,6 +75,9 @@ export interface OnlineGallerySearchRequest {
   query?: string;
   collectionId?: string;
   safeOnly?: boolean;
+  categoryPath?: string[];
+  searchAll?: boolean;
+  collectionType?: string;
   gelbooruApiKey?: string;
   gelbooruUserId?: string;
 }
@@ -119,6 +122,7 @@ export interface OnlineGalleryItem {
 }
 
 export interface OnlineGalleryPage {
+  navigation?: import("./quicktag").QuickNavigation;
   source: Exclude<OnlineGallerySourceId, "aitag" | "artist-ranking">;
   page: number;
   pageSize: number;
@@ -157,6 +161,7 @@ export interface OnlineGalleryDownloadResult {
   cancelled?: boolean;
   savedPaths: string[];
   failed: number;
+  failures?: { id: string; reason: string }[];
   outputDir: string;
   message: string;
 }

@@ -79,7 +79,9 @@ describe("online gallery pagination, masonry cards and adaptive previews", () =>
     const app = read("src/App.tsx");
 
     expect(gallery).toContain("image.naturalWidth / image.naturalHeight");
-    expect(gallery).toContain("`${item.cover.width} / ${item.cover.height}`");
+    expect(gallery).toContain("item.cover.width / item.cover.height");
+    expect(gallery).toContain("ratio: naturalWidth / naturalHeight");
+    expect(gallery).toContain("loadedSize?.url === item.cover.previewUrl");
     expect(gallery).not.toContain("parentElement.style.aspectRatio");
     expect(gallery).toContain("function useMasonryCard");
     expect(gallery).toContain("new ResizeObserver(schedule)");

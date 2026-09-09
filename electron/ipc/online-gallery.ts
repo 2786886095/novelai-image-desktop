@@ -1,7 +1,9 @@
-import axios from "axios";
+import { galleryImageHeaders, validateGalleryImage, MAX_GALLERY_IMAGE_BYTES } from "../../src/gallery-download";
+import { quickCatalogNavigation, quickResolveCollection, quickCollectionType, quickCategories, quickLink, quickMatch, quickSafe, quickSourceUrl } from "../../src/quicktag";
+import axios, { type AxiosRequestConfig } from "axios";
 import { createHash } from "crypto";
 import { dialog } from "electron";
-import { access, mkdir, rename, rm, writeFile } from "fs/promises";
+import { mkdir, open, rm } from "fs/promises";
 import path from "path";
 import type {
   OnlineGalleryDetail,
@@ -352,12 +354,25 @@ function ensureQuickUrl(value: string, allowedHosts: Set<string>) {
 }
 
 async function fetchJson(value: string, referer: string): Promise<unknown> {
-  const response = await axios.get(value, {
+  const response = await quickGet(value, {
     timeout: REQUEST_TIMEOUT,
     headers: headers(referer),
     ...proxyConfig("update"),
   });
   return response.data as unknown;
+}
+
+// Retry only idempotent public reads after transient transport/server errors.
+async function quickGet<T = unknown>(url: string, options: AxiosRequestConfig) {
+  for (let attempt = 0; ; attempt++) {
+    try { return await axios.get<T>(url, options); }
+    catch (error) {
+      const failure = error as { code?: string; response?: { status?: number } };
+      const transient = ["ECONNRESET", "ETIMEDOUT", "EAI_AGAIN", "ECONNABORTED", "ERR_NETWORK"].includes(failure.code ?? "") || [502, 503, 504].includes(failure.response?.status ?? 0);
+      if (attempt >= 1 || !transient) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+  }
 }
 
 async function loadQuickCatalog(): Promise<QuickTagCatalog> {
@@ -435,19 +450,20 @@ function quickCollectionItem(catalog: QuickTagCatalog, codex: QuickTagCodexMeta)
     negativePrompt: "",
     tags: emptyOnlineGalleryTagGroups(),
     cover: makeMedia(`quicktag:${codex.id}:cover`, cover, cover, cover, 0, 0),
-    sourceUrl: catalog.siteBaseUrl,
+    sourceUrl: quickSourceUrl(codex.id),
   };
 }
 
 async function loadQuickCodex(catalog: QuickTagCatalog, id: string): Promise<QuickTagCodex> {
   const meta = catalog.codexes.find((item) => item.id === id);
   if (!meta) throw new Error("QuickTagCloud collection was not found");
-  const cachedCodex = quickCodexCache.get(id);
+  const cacheKey = `${catalog.release}:${id}`;
+  const cachedCodex = quickCodexCache.get(cacheKey);
   if (cachedCodex && cachedCodex.expiresAt > Date.now()) return cachedCodex.promise;
   const promise = (async () => {
     const canonicalPath = `${id}.json`;
     const url = meta.dataUrl || `${catalog.releaseBaseUrl}${encodedPath(canonicalPath)}`;
-    const response = await axios.get<ArrayBuffer>(url, {
+    const response = await quickGet<ArrayBuffer>(url, {
       responseType: "arraybuffer",
       timeout: 180_000,
       maxContentLength: 32 * 1024 * 1024,
@@ -472,8 +488,8 @@ async function loadQuickCodex(catalog: QuickTagCatalog, id: string): Promise<Qui
       entries: list(parsed.entries).map(record),
     };
   })();
-  quickCodexCache.set(id, { expiresAt: Date.now() + 30 * 60_000, promise });
-  promise.catch(() => quickCodexCache.delete(id));
+  quickCodexCache.set(cacheKey, { expiresAt: Date.now() + 30 * 60_000, promise });
+  promise.catch(() => quickCodexCache.delete(cacheKey));
   return promise;
 }
 
@@ -511,7 +527,7 @@ function quickEntryItem(catalog: QuickTagCatalog, codex: QuickTagCodex, entry: J
     author: [text(entry.credit), text(entry.author), codex.author].filter(Boolean).filter((value, position, all) => all.indexOf(value) === position).join(" · "),
     description: text(entry.note) || path.join(" / "),
     createdAt: codex.version,
-    rating: codex.nsfw || bool(entry.nsfw) ? "explicit" : "general",
+    rating: codex.nsfw || !quickSafe(entry) ? "explicit" : "general",
     score: 0,
     favoriteCount: 0,
     viewCount: 0,
@@ -520,46 +536,60 @@ function quickEntryItem(catalog: QuickTagCatalog, codex: QuickTagCodex, entry: J
     negativePrompt: text(entry.negative ?? entry.negativePrompt),
     tags: { ...emptyOnlineGalleryTagGroups(), general: prompt.split(",").map((tag) => tag.trim()).filter(Boolean) },
     cover: media[0] ?? makeMedia(`quicktag:${codex.id}:${id}:0`, "", "", "", 0, 0),
-    sourceUrl: httpsUrl(codex.source) || catalog.siteBaseUrl,
+    sourceUrl: quickSourceUrl(codex.id, id, path),
   };
 }
 
 async function fetchQuickTag(request: OnlineGallerySearchRequest): Promise<OnlineGalleryPage> {
   const catalog = await loadQuickCatalog();
-  const targetPage = page(request.page);
-  const targetPageSize = pageSize(request.pageSize);
-  const search = query(request.query).toLowerCase();
+  const link = quickLink(query(request.query));
+  const search = link?.query ?? query(request.query);
   const safeOnly = request.safeOnly !== false;
-  const collectionId = safeCollectionId(request.collectionId);
-  if (!collectionId) {
-    const filtered = catalog.codexes
-      .filter((item) => !safeOnly || !item.nsfw)
-      .filter((item) => !search || [item.title, item.author, item.id, text(item.source)].join(" ").toLowerCase().includes(search));
+  const collectionId = quickResolveCollection(catalog.codexes, safeCollectionId(link?.collectionId ?? request.collectionId));
+  const collectionType = collectionId ? quickCollectionType(catalog.codexes.find(c => c.id === collectionId)?.type) : request.collectionType ?? "";
+  let categoryPath = link?.path.length ? link.path : request.categoryPath ?? [];
+  const available = catalog.codexes.filter((item) => (!safeOnly || !item.nsfw) && (!collectionType || quickCollectionType(item.type) === collectionType));
+  const navigation: NonNullable<OnlineGalleryPage["navigation"]> = { ...quickCatalogNavigation(catalog.codexes, safeOnly), collectionType, categories: [] as ReturnType<typeof quickCategories>, categoryPath, failedCollections: [] as string[], release: catalog.release };
+  const targetPageSize = pageSize(request.pageSize);
+  const slice = (filtered: OnlineGalleryItem[], title = ""): OnlineGalleryPage => {
+    const targetPage = Math.min(page(request.page), Math.max(1, Math.ceil(filtered.length / targetPageSize)));
     const offset = (targetPage - 1) * targetPageSize;
-    return {
-      source: "quicktag",
-      page: targetPage,
-      pageSize: targetPageSize,
-      total: filtered.length,
-      hasMore: offset + targetPageSize < filtered.length,
-      items: filtered.slice(offset, offset + targetPageSize).map((item) => quickCollectionItem(catalog, item)),
-    };
+    return { source: "quicktag", page: targetPage, pageSize: targetPageSize, total: filtered.length, hasMore: offset + targetPageSize < filtered.length, collectionId, collectionTitle: title, navigation, items: filtered.slice(offset, offset + targetPageSize) };
+  };
+  if (!collectionId && !request.searchAll) {
+    const filtered = available.filter((item) => quickMatch({...item, tags:item.id}, search));
+    return slice(filtered.map((item) => quickCollectionItem(catalog, item)));
+  }
+  if (!collectionId) {
+    if (!search.trim()) return slice([]);
+    const groups: OnlineGalleryItem[][] = Array.from({length:available.length},()=>[]);
+    let next = 0;
+    await Promise.all(Array.from({length:Math.min(3,available.length)},async()=>{
+      while(next < available.length) {
+        const index = next++, meta = available[index];
+        try { const codex = await loadQuickCodex(catalog, meta.id); groups[index] = codex.entries.flatMap((entry,i) => (!safeOnly || quickSafe(entry)) && quickMatch(entry,search) ? [quickEntryItem(catalog,codex,entry,i)] : []); }
+        catch { navigation.failedCollections.push(meta.title); }
+      }
+    }));
+    return slice(groups.flat());
   }
   const codex = await loadQuickCodex(catalog, collectionId);
   if (safeOnly && codex.nsfw) throw new Error("This QuickTagCloud collection is hidden by the all-ages filter");
-  const all = codex.entries.map((entry, index) => quickEntryItem(catalog, codex, entry, index));
-  const filtered = all.filter((item) => !search || [item.title, item.author, item.description, item.prompt].join(" ").toLowerCase().includes(search));
-  const offset = (targetPage - 1) * targetPageSize;
-  return {
-    source: "quicktag",
-    page: targetPage,
-    pageSize: targetPageSize,
-    total: filtered.length,
-    hasMore: offset + targetPageSize < filtered.length,
-    collectionId,
-    collectionTitle: codex.title,
-    items: filtered.slice(offset, offset + targetPageSize),
-  };
+  const visible = codex.entries.filter((entry)=>!safeOnly || quickSafe(entry));
+  navigation.categories = quickCategories(visible, codex.tree, codex.emptyCategories);
+  navigation.declaredCount = catalog.codexes.find(c => c.id === collectionId)?.entryCount;
+  navigation.loadedCount = codex.entries.length;
+  if (link?.code && !link.path.length) {
+    const matches = quickCategories(codex.entries, codex.tree, codex.emptyCategories).filter((c)=>c.code===link.code);
+    if(matches.length !== 1) throw new Error("QuickTagCloud category link is obsolete or ambiguous");
+    categoryPath = matches[0].path;
+  }
+  navigation.categoryPath = categoryPath;
+  const filtered = codex.entries.flatMap((entry,index)=> {
+    const entryPath = list(entry.path).map(text);
+    return (!safeOnly || quickSafe(entry)) && categoryPath.every((part,i)=>entryPath[i]===part) && (!link?.entry || text(entry.id)===(record(codex.entryAliases)[link.entry] ?? link.entry)) && quickMatch(entry,search) ? [quickEntryItem(catalog,codex,entry,index)] : [];
+  });
+  return slice(filtered,codex.title);
 }
 
 export async function searchOnlineGallery(raw: unknown): Promise<OnlineGalleryPage> {
@@ -570,6 +600,9 @@ export async function searchOnlineGallery(raw: unknown): Promise<OnlineGalleryPa
     pageSize: pageSize(input.pageSize),
     query: query(input.query),
     collectionId: safeCollectionId(input.collectionId),
+    categoryPath: list(input.categoryPath).filter((s): s is string => typeof s === "string").slice(0, 16),
+    searchAll: input.searchAll === true,
+    collectionType: query(input.collectionType),
     safeOnly: input.safeOnly !== false,
     gelbooruApiKey: query(input.gelbooruApiKey),
     gelbooruUserId: query(input.gelbooruUserId),
@@ -671,24 +704,27 @@ function safeDownloadUrl(value: unknown) {
   return parsed.toString();
 }
 
-function downloadExtension(url: string, hint: unknown) {
-  const requested = text(hint).toLowerCase().replace(/^\./, "");
-  if (/^(png|jpe?g|webp|gif|avif)$/.test(requested)) return requested === "jpeg" ? "jpg" : requested;
-  const match = new URL(url).pathname.match(/\.([a-z0-9]{2,5})$/i);
-  const inferred = match?.[1]?.toLowerCase() ?? "jpg";
-  return /^(png|jpe?g|webp|gif|avif)$/.test(inferred) ? (inferred === "jpeg" ? "jpg" : inferred) : "jpg";
+// Exclusive creation prevents simultaneous downloads from overwriting each other.
+async function saveGalleryImage(directory: string, base: string, extension: string, bytes: Buffer) {
+  for (let suffix = 0; suffix < 10_000; suffix += 1) {
+    const target = path.join(directory, `${base}${suffix ? ` (${suffix})` : ""}.${extension}`);
+    let handle;
+    try { handle = await open(target, "wx"); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code === "EEXIST") continue; throw error; }
+    try { await handle.writeFile(bytes); }
+    catch (error) { await handle.close(); await rm(target, { force: true }).catch(() => undefined); throw error; }
+    await handle.close();
+    return target;
+  }
+  throw new Error("FILENAME_EXHAUSTED");
 }
 
-async function uniqueDownloadPath(directory: string, base: string, extension: string) {
-  for (let suffix = 0; suffix < 10_000; suffix += 1) {
-    const candidate = path.join(directory, `${base}${suffix ? ` (${suffix})` : ""}.${extension}`);
-    try {
-      await access(candidate);
-    } catch {
-      return candidate;
-    }
-  }
-  throw new Error("Unable to allocate a gallery download filename");
+function downloadFailure(error: unknown) {
+  const value = error as { response?: { status?: number }; code?: string; message?: string };
+  if (value.response?.status) return `HTTP_${value.response.status}`;
+  if (["IMAGE_TOO_LARGE", "INVALID_IMAGE_RESPONSE", "INVALID_IMAGE_URL", "FILENAME_EXHAUSTED"].includes(value.message ?? "")) return value.message!;
+  if (/^[A-Z][A-Z0-9_]{1,48}$/.test(value.code ?? "")) return value.code!;
+  return "DOWNLOAD_FAILED";
 }
 
 export async function selectOnlineGalleryDownloadDir(): Promise<string | null> {
@@ -708,12 +744,12 @@ export async function downloadOnlineGalleryImages(raw: unknown): Promise<OnlineG
   const input = record(raw) as unknown as OnlineGalleryDownloadRequest;
   const source = text(input.source).trim();
   if (!["aitag", "artist-ranking", "safebooru", "danbooru", "gelbooru", "quicktag"].includes(source)) throw new Error("Invalid gallery source");
-  const images = list(input.images).slice(0, 100).map((entry, index) => {
+  const images = list(input.images).map((entry, index) => {
     const item = record(entry);
-    const url = safeDownloadUrl(item.url);
-    return url ? { id: safeDownloadPart(item.id, String(index + 1)), url, extension: downloadExtension(url, item.extension) } : null;
-  }).filter((item): item is { id: string; url: string; extension: string } => Boolean(item));
+    return { id: safeDownloadPart(item.id, String(index + 1)), url: safeDownloadUrl(item.url) };
+  });
   if (!images.length) throw new Error("No downloadable gallery images were supplied");
+  if (images.length > 1000) throw new Error("Gallery download batch exceeds 1000 images");
 
   let settings = getSettings();
   let downloadRoot = settings.onlineGalleryDownloadDir?.trim() ?? "";
@@ -728,32 +764,31 @@ export async function downloadOnlineGalleryImages(raw: unknown): Promise<OnlineG
   const outputDir = path.join(downloadRoot, "Online Gallery", safeDownloadPart(source, "gallery"), folder);
   await mkdir(outputDir, { recursive: true });
   const savedPaths: string[] = [];
-  let failed = 0;
+  const failures: { id: string; reason: string }[] = [];
   for (let index = 0; index < images.length; index += 1) {
     const image = images[index];
-    let partial = "";
     try {
+      if (!image.url) throw new Error("INVALID_IMAGE_URL");
       const response = await axios.get<ArrayBuffer>(image.url, {
         responseType: "arraybuffer",
         timeout: 120_000,
-        maxContentLength: 100 * 1024 * 1024,
-        headers: headers(new URL(image.url).origin),
+        maxContentLength: MAX_GALLERY_IMAGE_BYTES,
+        headers: galleryImageHeaders(source),
         ...proxyConfig("update"),
       });
-      const target = await uniqueDownloadPath(outputDir, `${String(index + 1).padStart(2, "0")}-${image.id}`, image.extension);
-      partial = `${target}.part`;
-      await writeFile(partial, Buffer.from(response.data));
-      await rename(partial, target);
-      savedPaths.push(target);
-    } catch {
-      failed += 1;
-      if (partial) await rm(partial, { force: true }).catch(() => undefined);
+      const bytes = Buffer.from(response.data);
+      const extension = validateGalleryImage(bytes, String(response.headers?.["content-type"] ?? ""));
+      savedPaths.push(await saveGalleryImage(outputDir, `${String(index + 1).padStart(2, "0")}-${image.id}`, extension, bytes));
+    } catch (error) {
+      failures.push({ id: image.id, reason: downloadFailure(error) });
     }
   }
+  const failed = failures.length;
   return {
     ok: savedPaths.length > 0 && failed === 0,
     savedPaths,
     failed,
+    failures,
     outputDir,
     message: `${savedPaths.length} saved, ${failed} failed`,
   };

@@ -1,9 +1,9 @@
+import '../widgets/image_save_feedback.dart';
+import '../services/gallery_download.dart';
 import 'dart:math' as math;
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -558,185 +558,189 @@ class _AitagGalleryScreenState extends State<AitagGalleryScreen> {
         return RefreshIndicator(
           onRefresh: _refresh,
           child: Scrollbar(
-          controller: scrollController,
-          thumbVisibility: true,
-          interactive: true,
-          child: CustomScrollView(
             controller: scrollController,
-            physics: const AlwaysScrollableScrollPhysics(),
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            slivers: [
-              SliverToBoxAdapter(
-                  child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
-                child: Card(
-                    child: Padding(
-                  padding: const EdgeInsets.all(14),
-                  child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Text(text.subtitle,
-                            style: Theme.of(context).textTheme.bodyMedium),
-                        const SizedBox(height: 12),
-                        TextField(
-                            controller: query,
-                            textInputAction: TextInputAction.search,
-                            onSubmitted: (_) => _search(1),
-                            decoration: InputDecoration(
-                                prefixIcon: const Icon(Icons.search),
-                                hintText: text.query)),
-                        const SizedBox(height: 10),
-                        TextField(
-                            controller: prompt,
-                            textInputAction: TextInputAction.search,
-                            onSubmitted: (_) => _search(1),
-                            decoration: InputDecoration(
-                                prefixIcon:
-                                    const Icon(Icons.auto_awesome_outlined),
-                                hintText: text.prompt)),
-                        const SizedBox(height: 10),
-                        Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            children: [
-                              SegmentedButton<String>(
-                                  segments: [
-                                    ButtonSegment(
-                                        value: 'new', label: Text(text.newest)),
-                                    ButtonSegment(
-                                        value: 'monthly',
-                                        label: Text(text.monthly))
-                                  ],
-                                  selected: {
-                                    sort
-                                  },
-                                  onSelectionChanged: loading
-                                      ? null
-                                      : (value) {
-                                          final nextSort = value.first;
-                                          final nextTimeRange =
-                                              nextSort == 'monthly'
-                                                  ? 'current'
-                                                  : 'all';
-                                          setState(() {
-                                            sort = nextSort;
-                                            timeRange = nextTimeRange;
-                                          });
-                                          _search(1,
-                                              sortOverride: nextSort,
-                                              timeRangeOverride: nextTimeRange);
-                                        }),
-                              SizedBox(
-                                width: 240,
-                                child: DropdownButtonFormField<String>(
-                                  value: timeRange,
-                                  isExpanded: true,
-                                  decoration: InputDecoration(
-                                    labelText: text.timeRange,
-                                    prefixIcon: const Icon(
-                                        Icons.calendar_month_outlined),
-                                  ),
-                                  items: timeOptions
-                                      .map((option) => DropdownMenuItem(
-                                            value: option.value,
-                                            child: Text(option.label,
-                                                overflow:
-                                                    TextOverflow.ellipsis),
-                                          ))
-                                      .toList(),
-                                  onChanged: loading
-                                      ? null
-                                      : (value) {
-                                          if (value == null) return;
-                                          setState(() => timeRange = value);
-                                          _search(1, timeRangeOverride: value);
-                                        },
-                                ),
-                              ),
-                              FilledButton.icon(
-                                  onPressed: loading ? null : () => _search(1),
-                                  icon: const Icon(Icons.search),
-                                  label: Text(text.search)),
-                              Text(_f(text.total, 'count', result.total)),
-                            ]),
-                      ]),
-                )),
-              )),
-              if (loading)
-                SliverFillRemaining(
-                    hasScrollBody: false,
-                    child: Center(
-                        child:
-                            Column(mainAxisSize: MainAxisSize.min, children: [
-                      const CircularProgressIndicator(),
-                      const SizedBox(height: 12),
-                      Text(text.loading)
-                    ])))
-              else if (failed)
-                SliverFillRemaining(
-                    hasScrollBody: false,
-                    child: Center(
-                        child:
-                            Column(mainAxisSize: MainAxisSize.min, children: [
-                      Text(text.failed),
-                      const SizedBox(height: 12),
-                      OutlinedButton(
-                          onPressed: () => _search(result.page),
-                          child: Text(text.retry))
-                    ])))
-              else if (result.items.isEmpty)
-                SliverFillRemaining(
-                    hasScrollBody: false,
-                    child: Center(child: Text(text.empty)))
-              else
+            thumbVisibility: true,
+            interactive: true,
+            child: CustomScrollView(
+              controller: scrollController,
+              physics: const AlwaysScrollableScrollPhysics(),
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              slivers: [
                 SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: _MasonryGrid(
-                      columnCount: columns,
-                      itemCount: result.items.length,
-                      itemBuilder: (context, index) => _WorkCard(
-                        work: result.items[index],
-                        service: service,
-                        text: text,
-                        onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                                builder: (_) => _AitagDetailScreen(
-                                    service: service,
-                                    workId: result.items[index].id,
-                                    text: text)))),
+                    child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+                  child: Card(
+                      child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(text.subtitle,
+                              style: Theme.of(context).textTheme.bodyMedium),
+                          const SizedBox(height: 12),
+                          TextField(
+                              controller: query,
+                              textInputAction: TextInputAction.search,
+                              onSubmitted: (_) => _search(1),
+                              decoration: InputDecoration(
+                                  prefixIcon: const Icon(Icons.search),
+                                  hintText: text.query)),
+                          const SizedBox(height: 10),
+                          TextField(
+                              controller: prompt,
+                              textInputAction: TextInputAction.search,
+                              onSubmitted: (_) => _search(1),
+                              decoration: InputDecoration(
+                                  prefixIcon:
+                                      const Icon(Icons.auto_awesome_outlined),
+                                  hintText: text.prompt)),
+                          const SizedBox(height: 10),
+                          Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                SegmentedButton<String>(
+                                    segments: [
+                                      ButtonSegment(
+                                          value: 'new',
+                                          label: Text(text.newest)),
+                                      ButtonSegment(
+                                          value: 'monthly',
+                                          label: Text(text.monthly))
+                                    ],
+                                    selected: {
+                                      sort
+                                    },
+                                    onSelectionChanged: loading
+                                        ? null
+                                        : (value) {
+                                            final nextSort = value.first;
+                                            final nextTimeRange =
+                                                nextSort == 'monthly'
+                                                    ? 'current'
+                                                    : 'all';
+                                            setState(() {
+                                              sort = nextSort;
+                                              timeRange = nextTimeRange;
+                                            });
+                                            _search(1,
+                                                sortOverride: nextSort,
+                                                timeRangeOverride:
+                                                    nextTimeRange);
+                                          }),
+                                SizedBox(
+                                  width: 240,
+                                  child: DropdownButtonFormField<String>(
+                                    value: timeRange,
+                                    isExpanded: true,
+                                    decoration: InputDecoration(
+                                      labelText: text.timeRange,
+                                      prefixIcon: const Icon(
+                                          Icons.calendar_month_outlined),
+                                    ),
+                                    items: timeOptions
+                                        .map((option) => DropdownMenuItem(
+                                              value: option.value,
+                                              child: Text(option.label,
+                                                  overflow:
+                                                      TextOverflow.ellipsis),
+                                            ))
+                                        .toList(),
+                                    onChanged: loading
+                                        ? null
+                                        : (value) {
+                                            if (value == null) return;
+                                            setState(() => timeRange = value);
+                                            _search(1,
+                                                timeRangeOverride: value);
+                                          },
+                                  ),
+                                ),
+                                FilledButton.icon(
+                                    onPressed:
+                                        loading ? null : () => _search(1),
+                                    icon: const Icon(Icons.search),
+                                    label: Text(text.search)),
+                                Text(_f(text.total, 'count', result.total)),
+                              ]),
+                        ]),
+                  )),
+                )),
+                if (loading)
+                  SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: Center(
+                          child:
+                              Column(mainAxisSize: MainAxisSize.min, children: [
+                        const CircularProgressIndicator(),
+                        const SizedBox(height: 12),
+                        Text(text.loading)
+                      ])))
+                else if (failed)
+                  SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: Center(
+                          child:
+                              Column(mainAxisSize: MainAxisSize.min, children: [
+                        Text(text.failed),
+                        const SizedBox(height: 12),
+                        OutlinedButton(
+                            onPressed: () => _search(result.page),
+                            child: Text(text.retry))
+                      ])))
+                else if (result.items.isEmpty)
+                  SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: Center(child: Text(text.empty)))
+                else
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: _MasonryGrid(
+                        columnCount: columns,
+                        itemCount: result.items.length,
+                        itemBuilder: (context, index) => _WorkCard(
+                            work: result.items[index],
+                            service: service,
+                            text: text,
+                            onTap: () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                    builder: (_) => _AitagDetailScreen(
+                                        service: service,
+                                        workId: result.items[index].id,
+                                        text: text)))),
+                      ),
                     ),
                   ),
-                ),
-              if (!loading && !failed && result.items.isNotEmpty)
-                SliverToBoxAdapter(
-                    child: SafeArea(
-                        top: false,
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 18),
-                          child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                OutlinedButton(
-                                    onPressed: result.page > 1
-                                        ? () => _search(result.page - 1)
-                                        : null,
-                                    child: Text(text.previous)),
-                                Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 14),
-                                    child: Text(
-                                        '${_f(text.page, 'page', result.page)} / $maxPage')),
-                                OutlinedButton(
-                                    onPressed: result.page < maxPage
-                                        ? () => _search(result.page + 1)
-                                        : null,
-                                    child: Text(text.next)),
-                              ]),
-                        ))),
-            ],
-          ),
+                if (!loading && !failed && result.items.isNotEmpty)
+                  SliverToBoxAdapter(
+                      child: SafeArea(
+                          top: false,
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 18),
+                            child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  OutlinedButton(
+                                      onPressed: result.page > 1
+                                          ? () => _search(result.page - 1)
+                                          : null,
+                                      child: Text(text.previous)),
+                                  Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 14),
+                                      child: Text(
+                                          '${_f(text.page, 'page', result.page)} / $maxPage')),
+                                  OutlinedButton(
+                                      onPressed: result.page < maxPage
+                                          ? () => _search(result.page + 1)
+                                          : null,
+                                      child: Text(text.next)),
+                                ]),
+                          ))),
+              ],
+            ),
           ),
         );
       }),
@@ -806,7 +810,8 @@ class _MasonryGrid extends StatelessWidget {
       );
 }
 
-Future<void> _showAitagPreview(BuildContext context, AitagService service, String url) =>
+Future<void> _showAitagPreview(
+        BuildContext context, AitagService service, String url) =>
     showDialog<void>(
       context: context,
       useSafeArea: false,
@@ -814,17 +819,22 @@ Future<void> _showAitagPreview(BuildContext context, AitagService service, Strin
       builder: (dialogContext) => Dialog.fullscreen(
         backgroundColor: Colors.black,
         child: Stack(children: [
-          Positioned.fill(child: InteractiveViewer(
+          Positioned.fill(
+              child: InteractiveViewer(
             minScale: .8,
             maxScale: 6,
-            child: Center(child: _CachedAitagImage(service: service, url: url, fit: BoxFit.contain)),
+            child: Center(
+                child: _CachedAitagImage(
+                    service: service, url: url, fit: BoxFit.contain)),
           )),
-          SafeArea(child: Align(
+          SafeArea(
+              child: Align(
             alignment: AlignmentDirectional.topEnd,
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: IconButton.filledTonal(
-                tooltip: MaterialLocalizations.of(dialogContext).closeButtonTooltip,
+                tooltip:
+                    MaterialLocalizations.of(dialogContext).closeButtonTooltip,
                 onPressed: () => Navigator.of(dialogContext).pop(),
                 icon: const Icon(Icons.close),
               ),
@@ -854,36 +864,36 @@ class _WorkCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   FutureBuilder<AitagWorkDetail>(
-                          future: service.work(work.id),
-                          builder: (context, snapshot) {
-                            final image = snapshot.data?.images.firstOrNull;
-                            final url =
-                                image == null ? '' : service.imageUrl(image);
-                            return Stack(children: [
-                              if (url.isNotEmpty)
-                                SizedBox(
-                                  width: double.infinity,
-                                  child: _CachedAitagImage(
-                                      service: service,
-                                      url: url,
-                                      fit: BoxFit.fitWidth),
-                                )
-                              else
-                                const AspectRatio(
-                                  aspectRatio: 4 / 3,
-                                  child: Center(
-                                      child: Icon(Icons.image_search_outlined,
-                                          size: 38)),
-                                ),
-                              Positioned(
-                                  right: 7,
-                                  bottom: 7,
-                                  child: Chip(
-                                      visualDensity: VisualDensity.compact,
-                                      label: Text(_f(text.images, 'count',
-                                          work.imageCount)))),
-                            ]);
-                          }),
+                      future: service.work(work.id),
+                      builder: (context, snapshot) {
+                        final image = snapshot.data?.images.firstOrNull;
+                        final url =
+                            image == null ? '' : service.imageUrl(image);
+                        return Stack(children: [
+                          if (url.isNotEmpty)
+                            SizedBox(
+                              width: double.infinity,
+                              child: _CachedAitagImage(
+                                  service: service,
+                                  url: url,
+                                  fit: BoxFit.fitWidth),
+                            )
+                          else
+                            const AspectRatio(
+                              aspectRatio: 4 / 3,
+                              child: Center(
+                                  child: Icon(Icons.image_search_outlined,
+                                      size: 38)),
+                            ),
+                          Positioned(
+                              right: 7,
+                              bottom: 7,
+                              child: Chip(
+                                  visualDensity: VisualDensity.compact,
+                                  label: Text(_f(
+                                      text.images, 'count', work.imageCount)))),
+                        ]);
+                      }),
                   Padding(
                       padding: const EdgeInsets.all(10),
                       child: Column(
@@ -943,44 +953,44 @@ class _AitagDetailScreenState extends State<_AitagDetailScreen> {
     }
   }
 
-  Future<void> _download(AitagWorkDetail detail, List<AitagImage> images) async {
+  Future<void> _download(
+      AitagWorkDetail detail, List<AitagImage> images) async {
     if (downloading || images.isEmpty) return;
-    final state = context.read<AppState>();
-    if (!await ensureOnlineGalleryDownloadDirectory(state)) return;
-    if (!mounted) return;
     setState(() => downloading = true);
-    final messenger = ScaffoldMessenger.of(context);
-    final storage = state.storage;
-    messenger.showSnackBar(SnackBar(content: Text(widget.text.downloading)));
-    var saved = 0;
+    final state = context.read<AppState>();
+    final feedback = ImageSaveFeedback.show(context, state.settings.language);
     try {
-      for (var index = 0; index < images.length; index++) {
-        final image = images[index];
-        final url = widget.service.imageUrl(image);
-        final response = await http.get(Uri.parse(url), headers: aitagImageHeaders).timeout(const Duration(minutes: 2));
-        if (response.statusCode < 200 || response.statusCode >= 300) {
-          throw HttpException('HTTP ${response.statusCode}');
-        }
-        final extension = image.imageType.trim().isNotEmpty
-            ? image.imageType
-            : (RegExp(r'\.([a-zA-Z0-9]{2,5})$').firstMatch(Uri.parse(url).path)?.group(1) ?? 'jpg');
-        await storage.saveOnlineGalleryImage(
-          response.bodyBytes,
+      if (!await ensureOnlineGalleryDownloadDirectory(state)) {
+        feedback.finish(saved: 0, cancelled: true);
+        return;
+      }
+      if (!mounted) {
+        feedback.finish(saved: 0, cancelled: true);
+        return;
+      }
+      feedback.downloading(widget.text.downloading, images.length);
+      final result = await downloadGalleryBatch<AitagImage>(
+        images: images,
+        id: (image) => '${image.id}',
+        fetch: widget.service.downloadImage,
+        save: (image, index, bytes, extension) =>
+            state.storage.saveOnlineGalleryImage(
+          bytes,
           source: 'aitag',
           itemId: '${detail.work.id}',
           title: detail.work.title,
           imageId: '${(index + 1).toString().padLeft(2, '0')}-${image.id}',
           extension: extension,
-        );
-        saved++;
-      }
-      if (mounted) {
-        messenger.showSnackBar(SnackBar(content: Text(_f(widget.text.downloaded, 'count', saved))));
-      }
+        ),
+      );
+      feedback.finish(
+          saved: result.savedFiles.length,
+          failed: result.failures.length,
+          path: result.savedFiles.isEmpty
+              ? null
+              : result.savedFiles.first.parent.path);
     } catch (_) {
-      if (mounted) {
-        messenger.showSnackBar(SnackBar(content: Text(widget.text.failed)));
-      }
+      feedback.finish(saved: 0, failed: images.length);
     } finally {
       if (mounted) setState(() => downloading = false);
     }
@@ -1034,7 +1044,8 @@ class _AitagDetailScreenState extends State<_AitagDetailScreen> {
                           constraints: BoxConstraints(
                               maxHeight: constraints.maxHeight * .68),
                           child: GestureDetector(
-                            onDoubleTap: () => _showAitagPreview(context, widget.service, url),
+                            onDoubleTap: () =>
+                                _showAitagPreview(context, widget.service, url),
                             child: _CachedAitagImage(
                                 service: widget.service,
                                 url: url,
@@ -1076,21 +1087,30 @@ class _AitagDetailScreenState extends State<_AitagDetailScreen> {
                           padding: const EdgeInsets.only(top: 10),
                           child: Wrap(spacing: 8, runSpacing: 8, children: [
                             FilledButton.tonalIcon(
-                              onPressed: () => _showAitagPreview(context, widget.service, url),
+                              onPressed: () => _showAitagPreview(
+                                  context, widget.service, url),
                               icon: const Icon(Icons.fullscreen),
                               label: Text(widget.text.preview),
                             ),
                             FilledButton.tonalIcon(
-                              onPressed: downloading ? null : () => _download(data, [image]),
+                              onPressed: downloading
+                                  ? null
+                                  : () => _download(data, [image]),
                               icon: downloading
-                                  ? const SizedBox.square(dimension: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                                  ? const SizedBox.square(
+                                      dimension: 16,
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2))
                                   : const Icon(Icons.download_outlined),
                               label: Text(widget.text.downloadCurrent),
                             ),
                             if (data.images.length > 1)
                               FilledButton.tonalIcon(
-                                onPressed: downloading ? null : () => _download(data, data.images),
-                                icon: const Icon(Icons.download_for_offline_outlined),
+                                onPressed: downloading
+                                    ? null
+                                    : () => _download(data, data.images),
+                                icon: const Icon(
+                                    Icons.download_for_offline_outlined),
                                 label: Text(widget.text.downloadSeries),
                               ),
                           ]),

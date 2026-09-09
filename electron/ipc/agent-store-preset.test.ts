@@ -44,3 +44,15 @@ describe("Tavern preset library persistence", () => {
     expect(normalized.samplerPresets.map((item) => item.id)).toEqual([LYRA_IMAGE_SAMPLER_ID]);
   });
 });
+
+
+describe("image continuity persistence", () => {
+  it("round-trips current and alternate prompts plus the explicit reset boundary", () => {
+    const workspace=createEmptyAgentWorkspace();
+    const image={id:"image-1",status:"completed",positivePrompt:"red coat, white shirt",negativePrompt:"",stylePrompt:"artist:name",count:1,createdAt:"2026-09-08T00:00:00.000Z",continuity:{baseImageId:"image-0",previousPrompt:"red coat",reviewRequired:false,changes:[{from:"",to:"white shirt"}]}};
+    const restored=normalizeAgentWorkspace(JSON.parse(JSON.stringify({...workspace,conversations:[{id:"chat",title:"Continuity",imageStateResetAt:"2026-09-07T00:00:00.000Z",messages:[{id:"m",role:"assistant",content:"scene",attachments:[],tools:[],status:"complete",imageProposal:image,imageProposalSwipes:[null,image]}]}]})));
+    expect(restored.conversations[0].imageStateResetAt).toBe("2026-09-07T00:00:00.000Z");
+    expect(restored.conversations[0].messages[0].imageProposal?.continuity?.previousPrompt).toBe("red coat");
+    expect(restored.conversations[0].messages[0].imageProposalSwipes?.[1]?.positivePrompt).toBe("red coat, white shirt");
+  });
+});

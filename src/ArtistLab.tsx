@@ -1,3 +1,4 @@
+import { imagePasteProps } from "./image-paste";
 import { useEffect, useRef, useState } from "react";
 import { useAppStore } from "./store";
 import { Button, CommittedNumberInput, SelectMenuCompat } from "./components/ui";
@@ -131,8 +132,8 @@ function TargetArtistLab({ onBack }: { onBack: () => void }) {
   }, [session]);
   useEffect(() => { void window.naiDesktop.artistLabModelStatus(session.modelMode).then(setModelStatus); }, [session.modelMode]);
 
-  const chooseTarget = async () => {
-    const target = await window.naiDesktop.artistLabPickTarget();
+  const chooseTarget = async (path?: string) => {
+    const target = await window.naiDesktop.artistLabPickTarget(path);
     if (target) patch({ target, baseline: undefined, results: [], matches: [], discoveryOffset: 0, bestProgress: 0, round: 0, resetCount: 0, imagesUsed: 0 });
   };
 
@@ -272,7 +273,7 @@ function TargetArtistLab({ onBack }: { onBack: () => void }) {
   return <main className="artist-lab target-artist-lab">
     <header className="artist-lab-hero"><div><h2>{text.title}</h2><p>{text.subtitle}</p></div><Button onClick={onBack}>{text.back}</Button></header>
     <section className="artist-lab-config-grid">
-      <article className="artist-lab-panel target-panel"><h3>{text.target}</h3>{session.target ? <img src={session.target.fileUrl} alt={session.target.name} /> : <div className="artist-target-empty"><Icon name="scan" /></div>}<Button onClick={() => void chooseTarget()}>{session.target ? text.change : text.choose}</Button><small>{text.local}</small></article>
+      <article {...imagePasteProps(paths=>chooseTarget(paths[0]))} className="artist-lab-panel target-panel"><h3>{text.target}</h3>{session.target ? <img src={session.target.fileUrl} alt={session.target.name} /> : <div className="artist-target-empty"><Icon name="scan" /></div>}<Button onClick={() => void chooseTarget()}>{session.target ? text.change : text.choose}</Button><small>{text.local}</small></article>
       <article className="artist-lab-panel artist-lab-controls">
         <label><span>{text.model}</span><SelectMenuCompat value={session.modelMode} onChange={(event) => patch({ modelMode: event.target.value as ArtistLabModelMode })}><option value="high">{text.high}</option><option value="light">{text.light}</option></SelectMenuCompat></label>
         <div className="artist-model-cache"><span>{text.cache}: {modelStatus ? `${formatBytes(modelStatus.cachedBytes)} · ${modelStatus.cachedFiles}` : "—"}</span><Button variant="ghost" onClick={async () => setModelStatus(await window.naiDesktop.artistLabClearModels())}>{text.clear}</Button></div>

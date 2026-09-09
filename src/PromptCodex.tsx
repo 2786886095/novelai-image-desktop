@@ -26,7 +26,7 @@ const PAGE_SIZE = 120;
 
 const TEXT = {
   "zh-CN": {
-    title: "NovelAI 个人法典",
+    title: "所长个人法典 · nai4.top",
     subtitle: "离线收录三套法典，按原章节、统一分类或关键词查找并直接复制。",
     back: "返回工具",
     search: "搜索名称、章节或 Tag",
@@ -49,7 +49,7 @@ const TEXT = {
     introductionHint: "作者、版本、使用方式与测试环境（不作为提示词参与搜索）",
   },
   "zh-TW": {
-    title: "NovelAI 個人法典",
+    title: "所長個人法典 · nai4.top",
     subtitle: "離線收錄三套法典，可依原章節、統一分類或關鍵字查找並直接複製。",
     back: "返回工具",
     search: "搜尋名稱、章節或 Tag",
@@ -72,7 +72,7 @@ const TEXT = {
     introductionHint: "作者、版本、使用方式與測試環境（不作為提示詞參與搜尋）",
   },
   "en-US": {
-    title: "NovelAI Personal Codex",
+    title: "Personal Codex · nai4.top",
     subtitle:
       "Three offline codices with original sections, unified categories, search, and one-click copy.",
     back: "Back to Tools",
@@ -97,7 +97,7 @@ const TEXT = {
       "Author, version, usage, and test environment (excluded from prompt search)",
   },
   "ja-JP": {
-    title: "NovelAI 個人プロンプト法典",
+    title: "個人プロンプト法典 · nai4.top",
     subtitle:
       "3冊をオフライン収録。元の章、統一分類、キーワードで検索してコピーできます。",
     back: "ツールへ戻る",
@@ -121,7 +121,7 @@ const TEXT = {
     introductionHint: "作者・版・使い方・テスト環境（プロンプト検索には含みません）",
   },
   "ko-KR": {
-    title: "NovelAI 개인 프롬프트 법전",
+    title: "개인 프롬프트 법전 · nai4.top",
     subtitle:
       "세 법전을 오프라인으로 제공하며 원본 장·통합 분류·키워드로 찾아 복사할 수 있습니다.",
     back: "도구로 돌아가기",

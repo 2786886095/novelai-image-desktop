@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:math';
 
 import 'agent_models.dart';
@@ -55,6 +56,10 @@ int estimateAgentConversationTokens(List<AgentMessage> messages) =>
               estimateAgentTextTokens('${item.input ?? const {}}') +
               estimateAgentTextTokens(item.output ?? item.error ?? ''));
       return total +
+          (message.imageProposal == null
+              ? 0
+              : estimateAgentTextTokens(
+                  jsonEncode(message.imageProposal!.toJson()))) +
           estimateAgentTextTokens(message.content) +
           estimateAgentTextTokens(message.reasoning ?? '') +
           attachments +

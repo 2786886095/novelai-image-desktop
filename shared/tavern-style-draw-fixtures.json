@@ -1,0 +1,44 @@
+[
+  {
+    "tags": [
+      "watercolor",
+      "lineart",
+      "soft lighting"
+    ],
+    "pinned": [
+      "lineart"
+    ],
+    "count": 1,
+    "min": 0.2,
+    "max": 1.2,
+    "seed": 42,
+    "expected": "0.86::lineart::, 0.31::watercolor::"
+  },
+  {
+    "tags": [
+      "watercolor",
+      "lineart"
+    ],
+    "pinned": [
+      "lineart"
+    ],
+    "count": 0,
+    "min": 0,
+    "max": 0,
+    "seed": 0,
+    "expected": "0::lineart::"
+  },
+  {
+    "tags": [
+      "watercolor",
+      "lineart",
+      "soft lighting"
+    ],
+    "pinned": [],
+    "count": 3,
+    "min": 1.2,
+    "max": 0.2,
+    "seed": 4294967295,
+    "expected": "1.14::watercolor::, 0.68::soft lighting::, 0.8::lineart::"
+  }
+]

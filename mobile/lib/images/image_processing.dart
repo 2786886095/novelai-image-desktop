@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:image/image.dart' as image_lib;
 
@@ -79,8 +80,55 @@ const int _inpaintBlendDilateCells = 4;
 const int _inpaintBlendBlurRadius = 20;
 const int _inpaintBlendBlurPasses = 2;
 
+bool isWebpImage(Uint8List bytes) =>
+    bytes.length >= 12 &&
+    String.fromCharCodes(bytes.sublist(0, 4)) == 'RIFF' &&
+    String.fromCharCodes(bytes.sublist(8, 12)) == 'WEBP';
+
+/// Static generation endpoints receive PNG while the imported WebP stays intact.
+Future<Uint8List> processingImageBytes(Uint8List bytes) async {
+  if (!isWebpImage(bytes)) return bytes;
+  if (bytes.length > 32 * 1024 * 1024) {
+    throw const FormatException('Image exceeds 32 MB');
+  }
+  // The bundled pure-Dart decoder rejects some valid VP8L images. Use the
+  // same engine codec as Image.memory, without changing the imported original.
+  ui.ImmutableBuffer? buffer;
+  ui.ImageDescriptor? descriptor;
+  ui.Codec? codec;
+  ui.Image? image;
+  try {
+    buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
+    descriptor = await ui.ImageDescriptor.encoded(buffer);
+    if (descriptor.width * descriptor.height > 64 * 1024 * 1024) {
+      throw const FormatException('Image exceeds 64 megapixels');
+    }
+    codec = await descriptor.instantiateCodec();
+    image = (await codec.getNextFrame()).image;
+    final output = await image.toByteData(format: ui.ImageByteFormat.png);
+    if (output == null) throw const FormatException('Could not encode WebP');
+    return output.buffer
+        .asUint8List(output.offsetInBytes, output.lengthInBytes);
+  } catch (_) {
+    throw const FormatException('Invalid or oversized WebP');
+  } finally {
+    image?.dispose();
+    codec?.dispose();
+    descriptor?.dispose();
+    buffer?.dispose();
+  }
+}
+
 (int, int) decodeImageDimensions(Uint8List bytes) {
-  final decoded = image_lib.decodeImage(bytes);
+  if (isWebpImage(bytes)) {
+    try {
+      final info = image_lib.WebPDecoder().startDecode(bytes);
+      return info == null ? (0, 0) : (info.width, info.height);
+    } catch (_) {
+      return (0, 0);
+    }
+  }
+  final decoded = image_lib.decodeImage(bytes, frame: 0);
   return decoded == null ? (0, 0) : (decoded.width, decoded.height);
 }
 
@@ -88,7 +136,7 @@ PreparedImage prepareImageWithinPixels(
   Uint8List bytes, {
   int maxPixels = 1024 * 1024,
 }) {
-  final source = image_lib.decodeImage(bytes);
+  final source = image_lib.decodeImage(bytes, frame: 0);
   if (source == null) throw const FormatException('Could not read image data');
   final pixels = source.width * source.height;
   if (pixels <= maxPixels) {
@@ -119,7 +167,7 @@ PreparedDirectorImage prepareDirectorImage(
   Uint8List bytes, {
   int maxPixels = 1024 * 1024,
 }) {
-  final source = image_lib.decodeImage(bytes);
+  final source = image_lib.decodeImage(bytes, frame: 0);
   if (source == null) {
     throw const FormatException('Could not read postprocess image');
   }
@@ -163,7 +211,7 @@ PreparedDirectorImage prepareDirectorImage(
 /// electron/ipc/nai.ts prepareDirectorReferenceImage, fixed there for the
 /// same reason).
 Uint8List prepareDirectorReferenceImage(Uint8List bytes) {
-  final source = image_lib.decodeImage(bytes);
+  final source = image_lib.decodeImage(bytes, frame: 0);
   if (source == null) {
     throw const FormatException('Could not read precise reference image');
   }
@@ -204,7 +252,7 @@ Uint8List prepareDirectorReferenceImage(Uint8List bytes) {
 }
 
 Uint8List resizeImageToSize(Uint8List bytes, int width, int height) {
-  final source = image_lib.decodeImage(bytes);
+  final source = image_lib.decodeImage(bytes, frame: 0);
   if (source == null || width <= 0 || height <= 0) return bytes;
   if (source.width == width && source.height == height) return bytes;
   final resized = image_lib.copyResize(
@@ -220,8 +268,8 @@ PreparedInpaintAssets prepareInpaintAssets(
   Uint8List imageBytes,
   Uint8List maskBytes,
 ) {
-  final source = image_lib.decodeImage(imageBytes);
-  final mask = image_lib.decodeImage(maskBytes);
+  final source = image_lib.decodeImage(imageBytes, frame: 0);
+  final mask = image_lib.decodeImage(maskBytes, frame: 0);
   if (source == null) {
     throw const FormatException('Could not read inpaint source image');
   }
@@ -425,7 +473,7 @@ Uint8List compositeInpaintResult(
   Uint8List generatedBytes,
   PreparedInpaintAssets prepared,
 ) {
-  var generated = image_lib.decodeImage(generatedBytes);
+  var generated = image_lib.decodeImage(generatedBytes, frame: 0);
   final source = image_lib.decodeImage(prepared.imageBytes);
   if (generated == null || source == null) {
     throw const FormatException('Could not decode inpaint response');
@@ -524,7 +572,7 @@ Uint8List _copyPngMetadataChunks(Uint8List source, Uint8List target) {
 }
 
 Uint8List cropImageToSize(Uint8List bytes, int width, int height) {
-  final source = image_lib.decodeImage(bytes);
+  final source = image_lib.decodeImage(bytes, frame: 0);
   if (source == null || source.width < width || source.height < height) {
     return bytes;
   }

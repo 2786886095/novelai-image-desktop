@@ -1,3 +1,7 @@
+import { galleryDownloadFeedback } from "./gallery-download";
+import quickTagLabels from "../shared/quicktag-ui.json";
+import { quickCharacters } from "./quicktag";
+import { QuickTagNavigation } from "./QuickTagNavigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type ImgHTMLAttributes, type ReactNode } from "react";
 import {
   AITAG_PAGE_SIZE,
@@ -365,7 +369,6 @@ function formatText(value: string, replacements: Record<string, string | number>
 
 function localizedGallerySourceLabel(source: OnlineGallerySourceId, text: GalleryText) {
   if (source === "artist-ranking") return text.artistTitle;
-  if (source === "quicktag") return text.codex;
   return onlineGallerySourceInfo(source).label;
 }
 
@@ -837,16 +840,22 @@ function useMasonryCard(ref: { current: HTMLElement | null }) {
   }, [ref]);
 }
 
-function ExternalWorkCard({ item, onOpen, text }: { item: OnlineGalleryItem; onOpen: (item: OnlineGalleryItem) => void; text: GalleryText }) {
+export function ExternalWorkCard({ item, onOpen, text }: { item: OnlineGalleryItem; onOpen: (item: OnlineGalleryItem) => void; text: GalleryText }) {
   const rootRef = useRef<HTMLElement | null>(null);
+  const [loadedSize, setLoadedSize] = useState<{url: string; ratio: number} | null>(null);
+  const ratio = loadedSize?.url === item.cover.previewUrl ? loadedSize.ratio
+    : item.cover.width > 0 && item.cover.height > 0 ? item.cover.width / item.cover.height : 4 / 3;
   useMasonryCard(rootRef);
   return (
     <article ref={rootRef} className="aitag-card online-gallery-card">
       <button type="button" className="aitag-card-hit" aria-label={item.title} onClick={() => onOpen(item)}>
-        <div className="aitag-card-image" style={item.cover.width > 0 && item.cover.height > 0 ? { aspectRatio: `${item.cover.width} / ${item.cover.height}` } : undefined}>
+        <div className="aitag-card-image" style={{ aspectRatio: ratio }}>
           {item.cover.previewUrl
-            ? <OnlineCachedImage source={item.source} text={text} src={item.cover.previewUrl} alt="" />
-            : <span>{item.kind === "collection" ? text.codex : onlineGallerySourceInfo(item.source).label}</span>}
+            ? <OnlineCachedImage key={item.cover.previewUrl} source={item.source} text={text} src={item.cover.previewUrl} alt="" onLoad={(event) => {
+                const { naturalWidth, naturalHeight } = event.currentTarget;
+                if (naturalWidth > 0 && naturalHeight > 0) setLoadedSize({url: item.cover.previewUrl, ratio: naturalWidth / naturalHeight});
+              }} />
+            : <span>{onlineGallerySourceInfo(item.source).label}</span>}
           <small>{item.kind === "collection" ? formatText(text.imageCount, { count: item.mediaCount }) : item.rating.toUpperCase()}</small>
         </div>
         <div className="aitag-card-copy">
@@ -888,6 +897,10 @@ function ExternalGallery({
   const [queryValue, setQueryValue] = useState("");
   const [safeOnly, setSafeOnly] = useState(true);
   const [collectionId, setCollectionId] = useState("");
+  const language = useAppStore((state) => state.settings?.language);
+  const [categoryPath, setCategoryPath] = useState<string[]>([]);
+  const [collectionType, setCollectionType] = useState("");
+  const [searchAll, setSearchAll] = useState(false);
   const [collectionTitle, setCollectionTitle] = useState("");
   const [result, setResult] = useState<OnlineGalleryPage>({ ...EMPTY_EXTERNAL_PAGE, source });
   const [pageSize, setPageSize] = useState(loadGalleryPageSize);
@@ -910,6 +923,9 @@ function ExternalGallery({
     targetQuery = queryValue,
     targetSafeOnly = safeOnly,
     targetPageSize = pageSize,
+    targetPath = targetCollection === collectionId ? categoryPath : [],
+    targetAll = searchAll,
+    targetType = collectionType,
   ) => {
     const sequence = ++requestSequence.current;
     const keepCurrentPage = result.items.length > 0;
@@ -924,6 +940,7 @@ function ExternalGallery({
         pageSize: targetPageSize,
         query: targetQuery,
         collectionId: targetCollection || undefined,
+        categoryPath: targetPath, searchAll: targetAll, collectionType: targetType,
         safeOnly: targetSafeOnly,
         gelbooruApiKey,
         gelbooruUserId,
@@ -937,12 +954,16 @@ function ExternalGallery({
       }
       if (sequence !== requestSequence.current) return;
       setResult(pageResult);
+      setCollectionId(pageResult.collectionId ?? "");
+      if (pageResult.collectionId) setSearchAll(false);
+      setCategoryPath(pageResult.navigation?.categoryPath ?? []);
+      setCollectionType(pageResult.navigation?.collectionType ?? "");
       setCollectionTitle(pageResult.collectionTitle ?? "");
       if (scrollAfterSwap) window.requestAnimationFrame(() => scrollGalleryPageToTop(pageRef.current));
     } catch (reason) {
       if (sequence !== requestSequence.current) return;
       const message = String(reason ?? "");
-      setError(source === "gelbooru" && /401|403|unauthorized|credentials|GELBOORU/i.test(message)
+      setError(/hidden by.*all-ages/i.test(message) ? quickTagLabels[normalizeAppLanguage(language)].filterBlocked : source === "gelbooru" && /401|403|unauthorized|credentials|GELBOORU/i.test(message)
         ? text.invalidCredentials
         : text.sourceFailed);
     } finally {
@@ -951,7 +972,7 @@ function ExternalGallery({
         setLoading(false);
       }
     }
-  }, [collectionId, gelbooruApiKey, gelbooruUserId, pageSize, queryValue, result.items.length, result.page, safeOnly, source, text.invalidCredentials, text.sourceFailed]);
+  }, [collectionType, categoryPath, searchAll, collectionId, gelbooruApiKey, gelbooruUserId, pageSize, queryValue, result.items.length, result.page, safeOnly, source, text.invalidCredentials, text.sourceFailed]);
 
   useEffect(() => { globalThis.localStorage?.setItem(GALLERY_PAGE_SIZE_KEY, String(pageSize)); }, [pageSize]);
 
@@ -960,13 +981,15 @@ function ExternalGallery({
     setDetailPreviewOpen(false);
     setDownloadStatus("");
     setCollectionId("");
+    setCategoryPath([]); setSearchAll(false); setCollectionType("");
     setCollectionTitle("");
     setQueryValue("");
     setResult({ ...EMPTY_EXTERNAL_PAGE, source });
   }, [source]);
 
   useEffect(() => {
-    void search(1, "", "", true);
+    void search(1, "", "", safeOnly, pageSize, [], false, "");
+    return () => { requestSequence.current++; };
   }, [source]); // source switch only; searches after that are explicit
 
   const refresh = async () => {
@@ -976,12 +999,12 @@ function ExternalGallery({
 
   const openItem = async (item: OnlineGalleryItem) => {
     if (item.kind === "collection") {
-      setCollectionId(item.id);
-      setCollectionTitle(item.title);
+      setSearchAll(false);
       setQueryValue("");
-      await search(1, item.id, "");
+      await search(1, item.id, "", safeOnly, pageSize, [], false);
       return;
     }
+    const sequence = ++requestSequence.current;
     setLoading(true);
     setError("");
     try {
@@ -992,14 +1015,15 @@ function ExternalGallery({
         gelbooruApiKey,
         gelbooruUserId,
       });
+      if (sequence !== requestSequence.current) return;
       setSelected(detail);
       setSelectedMedia(0);
       setDetailPreviewOpen(false);
       setDownloadStatus("");
     } catch {
-      setError(text.detailFailed);
+      if (sequence === requestSequence.current) setError(text.detailFailed);
     } finally {
-      setLoading(false);
+      if (sequence === requestSequence.current) setLoading(false);
     }
   };
 
@@ -1016,7 +1040,7 @@ function ExternalGallery({
         title: selected.item.title,
         images: targets.map((item) => ({ id: item.id, url: item.downloadUrl || item.displayUrl, extension: item.extension })),
       });
-      setDownloadStatus(result.cancelled ? "" : result.savedPaths.length ? formatText(text.downloadDone, { count: result.savedPaths.length }) : text.downloadFailed);
+      setDownloadStatus(galleryDownloadFeedback(result, text.downloadDone, text.downloadFailed));
     } catch {
       setDownloadStatus(text.downloadFailed);
     } finally {
@@ -1081,6 +1105,12 @@ function ExternalGallery({
                 <pre>{selected.prompt}</pre>
               </article>
             ) : null}
+            {source === "quicktag" && quickCharacters(selected.metadata.entry).map((block, index) => (
+              <article key={index} className="aitag-data-block">
+                <header><h3>{text.tagCharacters} {index + 1}{block.label ? ` · ${block.label}` : ""}</h3><CopyButton value={block.prompt} text={text} /></header>
+                <pre>{block.prompt}</pre>
+              </article>
+            ))}
             {selected.negativePrompt ? (
               <article className="aitag-data-block">
                 <header><h3>{text.negativePrompt}</h3><CopyButton value={selected.negativePrompt} text={text} /></header>
@@ -1127,12 +1157,17 @@ function ExternalGallery({
           <p>{collectionId ? `${info.label} · ${collectionTitle}` : formatText(text.sourceDescription, { source: info.label })}</p>
         </div>
         <div className="aitag-header-actions">
-          {collectionId ? <button type="button" className="btn secondary" onClick={() => { setCollectionId(""); setCollectionTitle(""); setQueryValue(""); void search(1, "", ""); }}>{text.backCollections}</button> : null}
+          {collectionId ? <button type="button" className="btn secondary" onClick={() => { setQueryValue(""); setSearchAll(false); void search(1, "", "", safeOnly, pageSize, [], false, ""); }}>{text.backCollections}</button> : null}
           <button type="button" className="btn secondary" disabled={loading} onClick={() => void refresh()}>{text.refresh}</button>
           <button type="button" className="btn secondary" onClick={() => void window.naiDesktop.openExternal(info.siteUrl)}>{text.openSourceSite}</button>
         </div>
       </header>
       <section className="aitag-search-panel">
+        {source === "quicktag" && <QuickTagNavigation navigation={result.navigation} collectionId={collectionId} searchAll={searchAll} loading={loading} language={language}
+          onGroup={(type)=>{setQueryValue("");setSearchAll(false);void search(1,"","",safeOnly,pageSize,[],false,type);}}
+          onSelect={(id,path)=>{setQueryValue("");setSearchAll(false);void search(1,id,"",safeOnly,pageSize,path,false);}}
+          onScope={(all)=>{setSearchAll(all);void search(1,all ? "" : collectionId,queryValue,safeOnly,pageSize,all ? [] : categoryPath,all,all ? "" : collectionType);}} />}
+
         <div className="online-gallery-search-row">
           <input value={queryValue} onChange={(event) => setQueryValue(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void search(1); }} placeholder={source === "quicktag" ? text.searchCollections : text.searchTags} />
           <button type="button" className="btn primary" disabled={loading} onClick={() => void search(1)}>{text.search}</button>
@@ -1146,12 +1181,12 @@ function ExternalGallery({
       {loading && result.items.length === 0 ? <div className="aitag-state">{formatText(text.loadingSource, { source: info.label })}</div> : null}
       {error ? <div className="aitag-state error"><span>{error}</span><button type="button" className="btn secondary" onClick={() => void search(result.page)}>{text.retry}</button></div> : null}
       {!loading && !error && result.items.length === 0 ? <div className="aitag-state">{text.empty}</div> : null}
-      {!error && result.items.length > 0 ? (
+      {result.items.length > 0 ? (
         <section className="aitag-work-grid online-gallery-work-grid">
-          {result.items.map((item) => <ExternalWorkCard key={`${item.source}:${item.id}`} item={item} text={text} onOpen={(value) => void openItem(value)} />)}
+          {result.items.map((item) => <ExternalWorkCard key={`${item.source}:${item.collectionId ?? ""}:${item.id}`} item={item} text={text} onOpen={(value) => void openItem(value)} />)}
         </section>
       ) : null}
-      {!error && result.items.length > 0 ? (
+      {result.items.length > 0 ? (
         <nav className="aitag-pagination" aria-label={text.page}>
           <button type="button" className="btn secondary" disabled={result.page <= 1 || pendingPage !== null} onClick={() => void search(result.page - 1)}>{text.previous}</button>
           <GalleryPageNumberInput page={pendingPage ?? result.page} pageCount={maxPage || undefined} disabled={pendingPage !== null} text={text} onChange={(next) => void search(next)} />
@@ -1479,9 +1514,9 @@ export default function AitagGallery({ onBack }: { onBack?: () => void }) {
         source: "aitag",
         itemId: String(selected.work.id),
         title: selected.work.title,
-        images: targets.map((item) => ({ id: String(item.id), url: aitagImageUrl(config, item), extension: item.imageType })),
+        images: targets.map((item) => ({ id: String(item.id), url: aitagImageUrl(config, item), extension: "webp" })),
       });
-      setDownloadStatus(result.cancelled ? "" : result.savedPaths.length ? formatText(text.downloadDone, { count: result.savedPaths.length }) : text.downloadFailed);
+      setDownloadStatus(galleryDownloadFeedback(result, text.downloadDone, text.downloadFailed));
     } catch {
       setDownloadStatus(text.downloadFailed);
     } finally {

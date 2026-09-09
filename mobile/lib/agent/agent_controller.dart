@@ -1,3 +1,4 @@
+import 'image_continuity.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -584,6 +585,11 @@ class AgentController extends ChangeNotifier {
         'content': systemPrompt,
       },
     ];
+    messages.add({
+      'role': 'system',
+      'content': imageStateContext(latestImageState(conversation.messages,
+          characterId: active.id, resetAt: conversation.imageStateResetAt))
+    });
     if (conversation.lastSummary?.trim().isNotEmpty == true) {
       messages.add({
         'role': 'system',
@@ -724,28 +730,21 @@ class AgentController extends ChangeNotifier {
         assistant.content += turn.content;
       }
       var parsed = parseLangbaiImageProposal(assistant.content);
-      final asksForImage = RegExp(
-        r'(生图|生成.{0,4}图|画.{0,3}(一张|一个|出来)|绘制|illustrat|generate.{0,8}image|draw|render)',
-        caseSensitive: false,
-      ).hasMatch(text);
       final character = workspace.characters
               .where((item) => item.id == conversation.activeCharacterId)
               .firstOrNull ??
           workspace.characters.first;
-      if (parsed.proposal == null && asksForImage) {
-        parsed = TavernImageParseResult(
-          parsed.visible,
-          TavernImageProposal(
-            positivePrompt: defaultTavernImagePrompt(assistant, character),
-            negativePrompt: character.visual.negativePrompt.trim().isEmpty
-                ? defaultTavernNegativePrompt
-                : character.visual.negativePrompt,
-            stylePrompt: character.visual.stylePrompt,
-          ),
-        );
-      }
       final parsedProposal = parsed.proposal;
       if (parsedProposal != null) {
+        final resolved = resolveImagePrompt(
+            parsedProposal.toJson(),
+            latestImageState(conversation.messages,
+                characterId: character.id,
+                resetAt: conversation.imageStateResetAt));
+        parsedProposal
+          ..positivePrompt = resolved.positivePrompt
+          ..continuity = resolved.continuity;
+        parsedProposal.promptPatch = null;
         applyAuthoritativeTavernImageDefaults(
           parsedProposal,
           _tavernImageDefaults(character),
@@ -776,7 +775,8 @@ class AgentController extends ChangeNotifier {
           usage,
         );
       if (assistant.imageProposal != null &&
-          conversation.generationMode == 'auto') {
+          conversation.generationMode == 'auto' &&
+          assistant.imageProposal!.continuity?['reviewRequired'] != true) {
         await _generateTavernImageInternal(
           conversation,
           assistant,
@@ -846,6 +846,7 @@ class AgentController extends ChangeNotifier {
     AgentMessage message,
     TavernImageProposal proposal,
   ) async {
+    if (proposal.continuity?['reviewRequired'] == true) return;
     if (proposal.positivePrompt.trim().isEmpty) {
       proposal
         ..status = 'error'
@@ -1200,7 +1201,7 @@ class AgentController extends ChangeNotifier {
     final recent = messages.map((message) {
       final text = message.content.trim();
       final clipped = text.length > 500 ? '${text.substring(0, 500)}…' : text;
-      return '${message.role}: $clipped';
+      return '${message.role}: $clipped${message.imageProposal == null ? '' : '\nImage prompt snapshot: ${jsonEncode(message.imageProposal!.toJson())}'}';
     }).join('\n');
     return [
       if (conversation.lastSummary?.trim().isNotEmpty == true)

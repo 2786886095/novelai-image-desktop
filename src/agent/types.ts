@@ -130,6 +130,7 @@ export interface TavernSamplerPreset {
 }
 
 export interface TavernImageProposal {
+  continuity?: import("../tavern/image-continuity").ImagePromptContinuity;
   id: string;
   status: "pending" | "running" | "completed" | "cancelled" | "error";
   positivePrompt: string;
@@ -213,6 +214,8 @@ export interface AgentMessage {
   swipes?: string[];
   swipeIndex?: number;
   imageProposal?: TavernImageProposal;
+  imageProposalSwipes?: Array<TavernImageProposal | null>;
+  swipeAttachments?: AgentAttachment[][];
 }
 
 export interface AgentConversation {
@@ -228,6 +231,7 @@ export interface AgentConversation {
   compactCount: number;
   lastCompactedAt?: string;
   lastSummary?: string;
+  imageStateResetAt?: string;
   createdAt: string;
   updatedAt: string;
   characterIds: string[];

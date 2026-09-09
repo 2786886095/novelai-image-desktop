@@ -429,7 +429,7 @@ export function PositivePromptPresetControl({
         if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
         setDragging(false);
       }}
-      onDrop={(event) => handleDrop(event, selected)}
+      data-image-paste="drop" data-image-paste-multiple="true" tabIndex={0} onDrop={(event) => handleDrop(event, selected)}
     >
       <header>
         <div><strong>{text.images}</strong><small>{formatText(text.imageCount, { count: selectedImages.length })}</small></div>

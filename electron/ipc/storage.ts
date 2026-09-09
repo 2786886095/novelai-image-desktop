@@ -74,7 +74,7 @@ export async function exportGroup(groupId: string) {
     defaultPath: `${safeName(groupName)}.zip`,
     filters: [{ name: "ZIP 压缩包", extensions: ["zip"] }],
   });
-  if (result.canceled || !result.filePath) return { ok: false, message: "已取消导出。" };
+  if (result.canceled || !result.filePath) return { ok: false, cancelled: true, message: "已取消导出。" };
 
   const template = getSetting("imageNameTemplate");
   const zip = new JSZip();
@@ -99,7 +99,7 @@ export async function exportGroup(groupId: string) {
 
   const content = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
   await fs.writeFile(result.filePath, content);
-  return { ok: true, message: `已导出 ${added} 张图片。`, path: result.filePath };
+  return { ok: true, count: added, failed: items.length - added, message: `已导出 ${added} 张图片。`, path: result.filePath };
 }
 
 /** Bundle an explicit ordered list of files into a ZIP. Used by batch img2img so
@@ -131,7 +131,7 @@ export async function exportFiles(files: BatchExportFile[], defaultName = "image
     defaultPath: `${safeName(defaultName || "images")}.zip`,
     filters: [{ name: "ZIP 压缩包", extensions: ["zip"] }],
   });
-  if (result.canceled || !result.filePath) return { ok: false, message: "已取消导出。" };
+  if (result.canceled || !result.filePath) return { ok: false, cancelled: true, message: "已取消导出。" };
 
   const zip = new JSZip();
   const used = new Set<string>();
@@ -163,7 +163,7 @@ export async function exportFiles(files: BatchExportFile[], defaultName = "image
 
   const content = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
   await fs.writeFile(result.filePath, content);
-  return { ok: true, message: `已导出 ${added} 张图片。`, path: result.filePath };
+  return { ok: true, count: added, failed: requested.length - added, message: `已导出 ${added} 张图片。`, path: result.filePath };
 }
 
 export function listHistory(date?: string, groupId?: string) {

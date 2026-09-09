@@ -2,6 +2,9 @@ const token = process.env.GITEE_TOKEN?.trim();
 const owner = process.env.GITEE_OWNER?.trim() || "langbai666";
 const repo = process.env.GITEE_REPO?.trim() || "novelai-image-desktop";
 const keepTag = process.env.GITEE_KEEP_TAG?.trim() || process.argv[2]?.trim();
+// Publishing a new version must not implicitly remove older downloads.
+// Storage reclamation is a separate, explicit maintenance operation.
+const pruneOldReleases = process.env.GITEE_PRUNE_OLD_RELEASES === "1";
 const api = `https://gitee.com/api/v5/repos/${owner}/${repo}`;
 
 if (!token || !/^v\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/.test(keepTag || "")) {
@@ -62,7 +65,7 @@ for (const release of await listReleases()) {
   if (!Array.isArray(assets)) continue;
   const assetsToDelete = release?.tag_name === keepTag
     ? assets.filter((asset, index) => assets.findIndex((candidate) => candidate?.name === asset?.name) !== index)
-    : assets;
+    : pruneOldReleases ? assets : [];
   for (const asset of assetsToDelete) {
     const assetId = Number(asset?.id);
     if (!Number.isFinite(assetId)) continue;

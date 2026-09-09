@@ -363,7 +363,12 @@ TavernImageParseResult parseLangbaiImageProposal(String content) {
     if (decoded is Map) {
       proposal =
           TavernImageProposal.fromJson(Map<String, dynamic>.from(decoded));
-      if (proposal.positivePrompt.trim().isEmpty) proposal = null;
+      proposal
+        ..id = tavernId('image')
+        ..createdAt = tavernNow()
+        ..status = 'pending';
+      if (proposal.positivePrompt.trim().isEmpty &&
+          proposal.promptPatch == null) proposal = null;
     }
   } catch (_) {
     proposal = null;

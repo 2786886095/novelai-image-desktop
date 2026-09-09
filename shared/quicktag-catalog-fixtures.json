@@ -1,0 +1,116 @@
+{
+  "catalog": [
+    {
+      "id": "style",
+      "type": "string",
+      "title": "Style collection",
+      "entryCount": 2,
+      "aliases": [
+        "old-style"
+      ]
+    },
+    {
+      "id": "codex",
+      "type": "codex",
+      "title": "Codex collection",
+      "entryCount": 1
+    },
+    {
+      "id": "hidden",
+      "type": "codex",
+      "title": "Filtered collection",
+      "entryCount": 1,
+      "nsfw": true
+    },
+    {
+      "id": "layout",
+      "type": "composition",
+      "title": "Composition collection",
+      "entryCount": 1
+    },
+    {
+      "id": "pack",
+      "type": "pack",
+      "title": "Image pack",
+      "entryCount": 1
+    },
+    {
+      "id": "future",
+      "type": "future-type",
+      "title": "Future section",
+      "entryCount": 1
+    }
+  ],
+  "tree": [
+    {
+      "name": "Clothes",
+      "children": [
+        {
+          "name": "Coats",
+          "children": [
+            {
+              "name": "Blue",
+              "children": []
+            }
+          ]
+        },
+        {
+          "name": "Empty",
+          "children": []
+        }
+      ]
+    }
+  ],
+  "entries": [
+    {
+      "id": "one",
+      "path": [
+        "Clothes",
+        "Coats",
+        "Blue"
+      ],
+      "tags": "  blue coat  "
+    },
+    {
+      "id": "two",
+      "path": [
+        "Unlisted"
+      ],
+      "tags": "red scarf"
+    }
+  ],
+  "emptyCategories": [
+    [
+      "Extras",
+      "Empty"
+    ]
+  ],
+  "expectedPaths": [
+    [
+      "Clothes"
+    ],
+    [
+      "Clothes",
+      "Coats"
+    ],
+    [
+      "Clothes",
+      "Coats",
+      "Blue"
+    ],
+    [
+      "Clothes",
+      "Empty"
+    ],
+    [
+      "Extras"
+    ],
+    [
+      "Extras",
+      "Empty"
+    ],
+    [
+      "Unlisted"
+    ]
+  ]
+}

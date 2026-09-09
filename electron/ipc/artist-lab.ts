@@ -1,3 +1,4 @@
+import { processableImage } from "./image-codec";
 import { app, dialog, nativeImage } from "electron";
 import axios from "axios";
 import fs from "fs";
@@ -77,15 +78,15 @@ function directoryStats(root: string): { bytes: number; files: number } {
   return { bytes, files };
 }
 
-export async function pickArtistLabTarget() {
-  const result = await dialog.showOpenDialog({
+export async function pickArtistLabTarget(sourcePath?: string) {
+  const result = sourcePath ? {canceled:false,filePaths:[sourcePath]} : await dialog.showOpenDialog({
     title: "选择目标画风图片",
     properties: ["openFile"],
     filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp"] }],
   });
   if (result.canceled || !result.filePaths[0]) return null;
   const filePath = result.filePaths[0];
-  const size = nativeImage.createFromPath(filePath).getSize();
+  const size = nativeImage.createFromBuffer(await processableImage(fs.readFileSync(filePath))).getSize();
   return {
     filePath,
     fileUrl: toLocalMediaUrl(filePath),

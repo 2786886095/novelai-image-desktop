@@ -730,7 +730,11 @@ describe("desktop UI consistency guards", () => {
       expect(match[1], match[0]).not.toMatch(/\d+(?:\.\d+)?(?:px|%)/);
     }
     const zValues = [...css.matchAll(/z-index:\s*([^;{}]+)/g)].map((match) => match[1].trim());
-    expect(new Set(zValues).size).toBeLessThanOrEqual(10);
+    // Save notifications require one semantic layer above fullscreen previews.
+    expect(new Set(zValues)).toEqual(new Set([
+      "base", "behind", "dropdown", "floating", "help", "overlay", "overlay-raised",
+      "overlay-top", "raised", "sticky", "notification",
+    ].map(name => `var(--z-${name})`)));
     expect(zValues.every((value) => /^var\(--z-[\w-]+\)$/.test(value))).toBe(true);
     const breakpoints = new Set(
       [...css.matchAll(/@media\s*\([^)]*max-width:\s*(\d+)px/g)].map((match) => Number(match[1])),

@@ -1,3 +1,4 @@
+import { readClipboardImageFiles, savePastedImageFiles } from "./ipc/image-clipboard";
 import {
   app,
   BrowserWindow,
@@ -695,7 +696,7 @@ function registerIpc() {
   ipcMain.handle("agent:generateImage", (_event, request: TavernImageRequest) => generateTavernImage(request));
   ipcMain.handle("agent:importCards", (_event, sourcePaths?: string[]) => importTavernCards(sourcePaths));
   ipcMain.handle("agent:exportCard", (_event, request: TavernCardExportRequest) => exportTavernCard(request));
-  ipcMain.handle("agent:importVisual", (_event, kind: "avatar" | "background") => importTavernVisualAsset(kind));
+  ipcMain.handle("agent:importVisual", (_event, kind: "avatar" | "background", sourcePath?: string) => importTavernVisualAsset(kind, sourcePath));
   ipcMain.handle("agent:abort", (_event, conversationId: string) => abortAgentMessage(conversationId));
   ipcMain.handle("agent:compact", (_event, conversationId: string) => compactAgentConversation(conversationId));
   ipcMain.handle("agent:respondPermission", (_event, permissionId: string, response: "once" | "always" | "reject") => respondAgentPermission(permissionId, response));
@@ -712,7 +713,7 @@ function registerIpc() {
   ipcMain.handle("promptCodex:cache", () => loadPromptCodexCache());
   ipcMain.handle("promptCodex:bundled", () => loadBundledPromptCodex());
   ipcMain.handle("promptCodex:update", () => updatePromptCodex());
-  ipcMain.handle("artistLab:pickTarget", () => pickArtistLabTarget());
+  ipcMain.handle("artistLab:pickTarget", (_event, sourcePath?: string) => pickArtistLabTarget(sourcePath));
   ipcMain.handle(
     "artistLab:searchArtists",
     (_event, query: unknown, limit: unknown) => searchArtistTags(query, limit),
@@ -863,6 +864,8 @@ function registerIpc() {
     (_event, tool: DirectorTool, options: AugmentOptions) =>
       augmentImg(tool, options),
   );
+  ipcMain.handle("imageInput:readClipboard", () => readClipboardImageFiles());
+  ipcMain.handle("imageInput:save", (_event, images: unknown) => savePastedImageFiles(images));
   ipcMain.handle("nai:loadImage", () => loadImageFile());
   ipcMain.handle("nai:loadImageFromPath", (_event, filePath: string) =>
     loadImageFromPath(filePath),

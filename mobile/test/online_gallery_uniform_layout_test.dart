@@ -13,10 +13,13 @@ void main() {
     final storage = File('lib/services/storage.dart').readAsStringSync();
     final location = File('lib/services/online_gallery_download_location.dart')
         .readAsStringSync();
-    final settings = File('lib/screens/settings_screen.dart').readAsStringSync();
+    final settings =
+        File('lib/screens/settings_screen.dart').readAsStringSync();
 
     expect(online, contains('fit: BoxFit.contain'));
-    expect(online, contains('aspectRatio: aspectRatio'));
+    expect(online, contains('aspectRatio: ratio'));
+    expect(online, contains('GalleryImageAspect('));
+    expect(online, contains('fallback: aspectRatio'));
     expect(online, contains('maxHeight: constraints.maxHeight * .68'));
     expect(online, contains('class _MasonryGrid extends StatelessWidget'));
     expect(online, contains('crossAxisAlignment: CrossAxisAlignment.start'));
@@ -48,7 +51,8 @@ void main() {
     expect(online, contains('ensureOnlineGalleryDownloadDirectory(state)'));
     expect(aitag, contains('ensureOnlineGalleryDownloadDirectory(state)'));
     expect(location, contains('FilePicker.platform.getDirectoryPath'));
-    expect(location, contains('settings.onlineGalleryDownloadDir = picked.trim()'));
+    expect(location,
+        contains('settings.onlineGalleryDownloadDir = picked.trim()'));
     expect(settings, contains('_GalleryDownloadDirSetting('));
   });
 }

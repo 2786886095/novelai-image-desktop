@@ -1,3 +1,4 @@
+import { ImagePasteSupport } from "./image-paste";
 import React from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
@@ -11,6 +12,7 @@ window.addEventListener("unhandledrejection", (event) => {
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <AppErrorBoundary scope="app" root>
+      <ImagePasteSupport />
       <App />
     </AppErrorBoundary>
   </React.StrictMode>,

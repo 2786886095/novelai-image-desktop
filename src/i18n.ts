@@ -3047,7 +3047,7 @@ const DESKTOP_EXTRA_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "inspect.subjectPlaceholder":
       "例如：这是芙宁娜 / 只反推右侧角色 / 只反推桌上的盒子",
     "inspect.knownCharacter": "这是网络/游戏/动漫角色，生成角色名版和特征版",
-    "promptCodex.enabled": "个人法典增强",
+    "promptCodex.enabled": "所长个人法典增强（nai4.top）",
     "promptCodex.reverseHint": "内部合并为一次任务：先识别图片，再按草稿检索法典并进行第二阶段精修。会多调用一次外部 AI API，不消耗 NovelAI Anlas。",
     "promptCodex.convertHint": "根据输入从本地法典检索相关规范和 Tag，并同时约束普通结果、角色名版与特征版。",
     "promptCodex.autoRepair": "规则校验失败时自动调用 AI 修复",
@@ -3213,7 +3213,7 @@ const DESKTOP_EXTRA_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "inspect.subjectPlaceholder":
       "例如：這是芙寧娜 / 只反推右側角色 / 只反推桌上的盒子",
     "inspect.knownCharacter": "這是網路/遊戲/動漫角色，生成角色名版和特徵版",
-    "promptCodex.enabled": "個人法典增強",
+    "promptCodex.enabled": "所長個人法典增強（nai4.top）",
     "promptCodex.reverseHint": "介面合併為一次任務：先辨識圖片，再按草稿檢索法典並進行第二階段精修。會多呼叫一次外部 AI API，不消耗 NovelAI Anlas。",
     "promptCodex.convertHint": "依輸入從本機法典檢索相關規範與 Tag，並同時約束一般結果、角色名版與特徵版。",
     "promptCodex.autoRepair": "規則校驗失敗時自動呼叫 AI 修復",
@@ -3386,7 +3386,7 @@ const DESKTOP_EXTRA_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
       "Example: this is Furina / only inspect the right-side character / only inspect the box on the desk",
     "inspect.knownCharacter":
       "This is a web/game/anime character; generate name and feature versions",
-    "promptCodex.enabled": "Personal Codex enhancement",
+    "promptCodex.enabled": "Personal Codex enhancement (nai4.top)",
     "promptCodex.reverseHint": "Shown as one task: the app first inspects the image, retrieves relevant local codex entries from the draft, then performs a second refinement call. This adds one external AI API call but spends no NovelAI Anlas.",
     "promptCodex.convertHint": "Retrieves relevant local rules and tags from the input and applies them to the normal result plus both character variants.",
     "promptCodex.autoRepair": "Call AI to repair failed rule checks",
@@ -3561,7 +3561,7 @@ const DESKTOP_EXTRA_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
       "例：これは Furina / 右側のキャラだけ / 机上の箱だけ",
     "inspect.knownCharacter":
       "Web/ゲーム/アニメのキャラクターとして、名前版と特徴版を生成",
-    "promptCodex.enabled": "個人法典で強化",
+    "promptCodex.enabled": "個人法典で強化（nai4.top）",
     "promptCodex.reverseHint": "画面上は1件の処理です。画像を解析し、草稿から関連法典を検索して第2段階の精修を行います。外部AI APIをもう1回呼び出しますが、NovelAI Anlasは消費しません。",
     "promptCodex.convertHint": "入力から関連するローカル規則とTagを検索し、通常結果・名前版・特徴版のすべてに適用します。",
     "promptCodex.autoRepair": "ルール検査に失敗した場合 AI で自動修復",
@@ -3734,7 +3734,7 @@ const DESKTOP_EXTRA_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
       "예: Furina입니다 / 오른쪽 캐릭터만 / 책상 위 상자만",
     "inspect.knownCharacter":
       "웹/게임/애니 캐릭터로 이름 버전과 특징 버전 생성",
-    "promptCodex.enabled": "개인 법전 강화",
+    "promptCodex.enabled": "개인 법전 강화 (nai4.top)",
     "promptCodex.reverseHint": "화면에서는 하나의 작업으로 표시됩니다. 이미지를 먼저 분석하고 초안으로 관련 법전을 검색한 뒤 두 번째 정제 호출을 수행합니다. 외부 AI API를 한 번 더 호출하지만 NovelAI Anlas는 사용하지 않습니다.",
     "promptCodex.convertHint": "입력에서 관련 로컬 규칙과 Tag를 검색해 일반 결과와 이름/특징 버전에 모두 적용합니다.",
     "promptCodex.autoRepair": "규칙 검사 실패 시 AI로 자동 수정",

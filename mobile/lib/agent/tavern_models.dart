@@ -564,6 +564,10 @@ class TavernSamplerPreset {
 }
 
 class TavernImageProposal {
+  Map<String, dynamic>? continuity;
+  Map<String, dynamic>? promptPatch;
+  String? baseImageId;
+  String? promptMode;
   String id;
   String status;
   String positivePrompt;
@@ -583,6 +587,10 @@ class TavernImageProposal {
   TavernImageProposal({
     String? id,
     this.status = 'pending',
+    this.continuity,
+    this.promptPatch,
+    this.baseImageId,
+    this.promptMode,
     required this.positivePrompt,
     this.negativePrompt = '',
     this.stylePrompt = '',
@@ -604,6 +612,14 @@ class TavernImageProposal {
       TavernImageProposal(
         id: _string(json['id'], tavernId('image')),
         status: _string(json['status'], 'pending'),
+        continuity: json['continuity'] is Map
+            ? Map<String, dynamic>.from(json['continuity'])
+            : null,
+        promptPatch: json['promptPatch'] is Map
+            ? Map<String, dynamic>.from(json['promptPatch'])
+            : null,
+        baseImageId: json['baseImageId'] as String?,
+        promptMode: json['promptMode'] as String?,
         positivePrompt: _string(json['positivePrompt']),
         negativePrompt: _string(json['negativePrompt']),
         stylePrompt: _string(json['stylePrompt']),
@@ -632,6 +648,10 @@ class TavernImageProposal {
   Map<String, dynamic> toJson() => {
         'id': id,
         'status': status,
+        if (continuity != null) 'continuity': continuity,
+        if (promptPatch != null) 'promptPatch': promptPatch,
+        if (baseImageId != null) 'baseImageId': baseImageId,
+        if (promptMode != null) 'promptMode': promptMode,
         'positivePrompt': positivePrompt,
         'negativePrompt': negativePrompt,
         'stylePrompt': stylePrompt,

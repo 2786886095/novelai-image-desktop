@@ -83,7 +83,7 @@ const _mobileUiText = <String, Map<String, String>>{
     'inspect.knownCharacterSubtitle': '开启后同时生成角色名版与特征版',
     'convert.knownCharacterTitle': '这是网络 / 游戏 / 动漫角色',
     'convert.knownCharacterSubtitle': '生成同一画面的角色名版与特征版；特征版会用角色的标志性外貌与服装替换角色名',
-    'promptCodex.enabled': '个人法典增强',
+    'promptCodex.enabled': '所长个人法典增强（nai4.top）',
     'promptCodex.reverseHint':
         '界面合并为一次任务：先识别图片，再检索法典并二次精修。会多调用一次外部 AI API，不消耗 NovelAI Anlas。',
     'promptCodex.convertHint': '根据输入检索本地法典，并同时约束普通结果、角色名版与特征版。',
@@ -607,7 +607,7 @@ const _mobileUiText = <String, Map<String, String>>{
     'inspect.knownCharacterSubtitle': '開啟後同時生成角色名版與特徵版',
     'convert.knownCharacterTitle': '這是網路 / 遊戲 / 動漫角色',
     'convert.knownCharacterSubtitle': '生成同一畫面的角色名版與特徵版；特徵版會用角色的標誌性外觀與服裝取代角色名',
-    'promptCodex.enabled': '個人法典增強',
+    'promptCodex.enabled': '所長個人法典增強（nai4.top）',
     'promptCodex.reverseHint':
         '介面合併為一次任務：先辨識圖片，再檢索法典並二次精修。會多呼叫一次外部 AI API，不消耗 NovelAI Anlas。',
     'promptCodex.convertHint': '依輸入檢索本機法典，並同時約束一般結果、角色名版與特徵版。',
@@ -1135,7 +1135,7 @@ const _mobileUiText = <String, Map<String, String>>{
     'convert.knownCharacterTitle': 'This is a web / game / anime character',
     'convert.knownCharacterSubtitle':
         'Generate name and feature versions of the same image; the feature version replaces names with signature appearance and clothing',
-    'promptCodex.enabled': 'Personal Codex enhancement',
+    'promptCodex.enabled': 'Personal Codex enhancement (nai4.top)',
     'promptCodex.reverseHint':
         'Shown as one task: inspect the image, retrieve matching local codex entries, then refine it in a second external AI call. No NovelAI Anlas is spent.',
     'promptCodex.convertHint':
@@ -1714,7 +1714,7 @@ const _mobileUiText = <String, Map<String, String>>{
     'convert.knownCharacterTitle': 'Web / ゲーム / アニメのキャラクター',
     'convert.knownCharacterSubtitle':
         '同じ画面の名前版と特徴版を生成し、特徴版では名前を象徴的な外見・衣装に置き換えます',
-    'promptCodex.enabled': '個人法典で強化',
+    'promptCodex.enabled': '個人法典で強化（nai4.top）',
     'promptCodex.reverseHint':
         '画面上は1件の処理です。画像を解析し、関連法典を検索して外部AIで第2段階の精修を行います。NovelAI Anlasは消費しません。',
     'promptCodex.convertHint': '取得したローカル規則を通常結果・名前版・特徴版のすべてに適用します。',
@@ -2250,7 +2250,7 @@ const _mobileUiText = <String, Map<String, String>>{
     'convert.knownCharacterTitle': '웹 / 게임 / 애니메이션 캐릭터',
     'convert.knownCharacterSubtitle':
         '같은 화면의 이름/특징 버전을 만들며 특징 버전은 이름을 대표 외형과 의상으로 바꿉니다',
-    'promptCodex.enabled': '개인 법전 강화',
+    'promptCodex.enabled': '개인 법전 강화 (nai4.top)',
     'promptCodex.reverseHint':
         '화면에는 하나의 작업으로 표시됩니다. 이미지를 분석하고 관련 법전을 검색한 뒤 외부 AI로 두 번째 정제를 수행합니다. NovelAI Anlas는 사용하지 않습니다.',
     'promptCodex.convertHint': '검색한 로컬 규칙을 일반 결과와 이름/특징 버전에 모두 적용합니다.',

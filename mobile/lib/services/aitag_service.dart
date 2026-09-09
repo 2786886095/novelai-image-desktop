@@ -1,6 +1,8 @@
+import 'gallery_download.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
@@ -251,6 +253,10 @@ class AitagService {
   Future<File> cachedImage(String url, {int retentionDays = 30}) =>
       AitagImageCache.get(url, _client, retentionDays: retentionDays);
 
+  Future<({Uint8List bytes, String extension})> downloadImage(
+          AitagImage image) =>
+      fetchGalleryImage(_client, imageUrl(image), aitagImageHeaders);
+
   String imageUrl(AitagImage image) {
     if (image.authorId.isEmpty ||
         image.imageType.isEmpty ||
@@ -295,26 +301,21 @@ class AitagImageCache {
         '.webp';
     final file = File(
         '${dir.path}${Platform.pathSeparator}${sha256.convert(utf8.encode(url))}$ext');
-    if (await file.exists() && await file.length() > 0) {
-      await file.setLastModified(DateTime.now());
-      return file;
+    if (await file.exists()) {
+      if (await file.length() <= _maxCachedImageBytes) {
+        try {
+          validateGalleryImage(await file.readAsBytes());
+          await file.setLastModified(DateTime.now());
+          return file;
+        } on FormatException {/* Replace invalid legacy cache bodies. */}
+      }
+      await file.delete();
     }
     // The AITag image CDN rejects hotlinked requests without an AITag referer
     // (HTTP 403). Keep these headers on both cache downloads and the UI's
     // direct-network fallback so thumbnails and detail images behave alike.
-    final response = await client
-        .get(uri, headers: aitagImageHeaders)
-        .timeout(const Duration(seconds: 30));
-    if (response.statusCode < 200 ||
-        response.statusCode >= 300 ||
-        response.bodyBytes.isEmpty) {
-      throw http.ClientException(
-          'AITag image HTTP ${response.statusCode}', uri);
-    }
-    if (response.bodyBytes.length > _maxCachedImageBytes) {
-      throw http.ClientException('AITag image too large', uri);
-    }
-    await file.writeAsBytes(response.bodyBytes, flush: true);
+    final image = await fetchGalleryImage(client, url, aitagImageHeaders);
+    await file.writeAsBytes(image.bytes, flush: true);
     return file;
   }
 

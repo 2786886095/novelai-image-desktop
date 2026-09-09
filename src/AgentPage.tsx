@@ -1,3 +1,7 @@
+import { imagePasteProps } from "./image-paste";
+import { StyleTagPicker } from "./tavern/StyleTagPicker";
+import { imageUi } from "./tavern/image-ui";
+import { latestImageState, selectImageSwipe } from "./tavern/image-continuity";
 import {
   useCallback,
   useEffect,
@@ -13,6 +17,7 @@ import {
 import { createPortal } from "react-dom";
 import { confirmAction } from "./components/confirm";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { measureMessageRow, measureMountedMessageRows } from "./tavern/message-layout";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeSanitize from "rehype-sanitize";
@@ -706,13 +711,13 @@ export default function AgentPage() {
     }, tx("duplicateMine"));
   };
 
-  const chooseVisual = async (kind: "avatar" | "background") => {
+  const chooseVisual = async (kind: "avatar" | "background", sourcePath?: string) => {
     if (!characterDraft) return;
     if (isBuiltInCharacter(characterDraft)) {
       setNotice(tx("builtInProtected"));
       return;
     }
-    const result = await window.naiDesktop.importTavernVisualAsset(kind);
+    const result = await window.naiDesktop.importTavernVisualAsset(kind, sourcePath);
     if (!result.ok) return setError(result.message ?? tx("attach"));
     if (result.cancelled || !result.dataUrl) return;
     setCharacterDraft((current) => current ? {
@@ -898,9 +903,9 @@ export default function AgentPage() {
     });
   };
 
-  const attach = async () => {
+  const attach = async (paths?: string[]) => {
     if (!conversation) return;
-    const result = await window.naiDesktop.importAgentFiles(conversation.id);
+    const result = await window.naiDesktop.importAgentFiles(conversation.id, paths);
     if (!result.ok) setError(result.message ?? tx("attach"));
     else setWorkspace(await window.naiDesktop.getAgentWorkspace());
   };
@@ -1094,7 +1099,7 @@ export default function AgentPage() {
               ))}
             </div>
           ) : null}
-          <div className="tavern-composer-shell" ref={composerShellRef}>
+          <div {...imagePasteProps(paths => attach(paths), true)} className="tavern-composer-shell" ref={composerShellRef}>
             <button
               type="button"
               className="tavern-composer-resize"
@@ -1349,7 +1354,7 @@ export default function AgentPage() {
   );
 }
 
-function MessageStream({ conversation, workspace, activeCharacter, activePersona, language, onStarter, onUpdateMessage, onDeleteMessage, onGenerate, onRegenerate }: {
+export function MessageStream({ conversation, workspace, activeCharacter, activePersona, language, onStarter, onUpdateMessage, onDeleteMessage, onGenerate, onRegenerate }: {
   conversation?: AgentConversation;
   workspace: AgentWorkspaceData;
   activeCharacter?: TavernCharacter;
@@ -1380,6 +1385,12 @@ function MessageStream({ conversation, workspace, activeCharacter, activePersona
     seenMessageIdsRef.current = new Set(messages.map((message) => message.id));
   }
   const virtualizer = useVirtualizer({
+    enabled: useVirtualRows,
+    // Measuring newly mounted history may adjust the scroll anchor during
+    // React's ref commit. Let React batch that update instead of nested flushSync.
+    useFlushSync: false,
+    measureElement: measureMessageRow,
+    useAnimationFrameWithResizeObserver: true,
     count: messages.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: (index) => messages[index]?.attachments.length ? 250 : 150,
@@ -1402,7 +1413,7 @@ function MessageStream({ conversation, workspace, activeCharacter, activePersona
   const settleLatest = useCallback(() => {
     const scroller = scrollRef.current;
     if (!scroller || !messages.length) return;
-    if (useVirtualRows) virtualizer.measure();
+    if (useVirtualRows) measureMountedMessageRows(scroller, virtualizer.measureElement);
     requestAnimationFrame(() => {
       const currentScroller = scrollRef.current;
       if (!currentScroller || !followLatestRef.current) return;
@@ -1593,12 +1604,13 @@ function MessageBubble({ conversationId, message, speaker, persona, language, on
                 </button>
                 <figcaption className="tavern-message-image-actions">
                   <button type="button" title={tx("openLocation")} aria-label={tx("openLocation")} onClick={() => void window.naiDesktop.openInExplorer(item.filePath)}><FolderOpenIcon /></button>
-                  <button type="button" title={tx("saveAs")} aria-label={tx("saveAs")} onClick={() => void window.naiDesktop.exportAgentAttachment(conversationId, message.id, item.id)}><SaveIcon /></button>
+                  <button type="button" title={tx("saveAs")} aria-label={tx("saveAs")} onClick={() => void window.naiDesktop.exportAgentAttachment(conversationId, message.id, item.id).catch(() => undefined)}><SaveIcon /></button>
                 </figcaption>
               </figure>
             ) : null)}
           </div>
         ) : null}
+        {proposalDraft?.status === "completed" && <details className="tavern-continuity" onToggle={onLayoutChange}><summary>{imageUi(language).current}</summary><p>{proposalDraft.positivePrompt}</p><p>{proposalDraft.stylePrompt}</p>{proposalDraft.continuity?.previousPrompt && <details><summary>{imageUi(language).previous}</summary><p>{proposalDraft.continuity.previousPrompt}</p></details>}</details>}
         {proposalDraft && proposalDraft.status !== "completed" && proposalDraft.status !== "cancelled" ? (
           <ImageProposalCard
             proposal={proposalDraft}
@@ -1615,9 +1627,9 @@ function MessageBubble({ conversationId, message, speaker, persona, language, on
         <footer className="tavern-message-actions">
           {swipes.length > 1 ? (
             <span className="tavern-swipes">
-              <IconButton label={tx("previousReply")} disabled={swipeIndex <= 0} onClick={() => onUpdate((item) => { item.swipeIndex = Math.max(0, swipeIndex - 1); })}><ChevronLeftIcon /></IconButton>
+              <IconButton label={tx("previousReply")} disabled={swipeIndex <= 0} onClick={() => onUpdate((item) => { selectImageSwipe(item, Math.max(0, swipeIndex - 1)); })}><ChevronLeftIcon /></IconButton>
               <b>{swipeIndex + 1} / {swipes.length}</b>
-              <IconButton label={tx("nextReply")} disabled={swipeIndex >= swipes.length - 1} onClick={() => onUpdate((item) => { item.swipeIndex = Math.min(swipes.length - 1, swipeIndex + 1); })}><ChevronRightIcon /></IconButton>
+              <IconButton label={tx("nextReply")} disabled={swipeIndex >= swipes.length - 1} onClick={() => onUpdate((item) => { selectImageSwipe(item, Math.min(swipes.length - 1, swipeIndex + 1)); })}><ChevronRightIcon /></IconButton>
             </span>
           ) : null}
           <span className={`tavern-copy-action ${copied ? "is-copied" : ""}`}>
@@ -1642,7 +1654,7 @@ function MessageBubble({ conversationId, message, speaker, persona, language, on
             <div className="tavern-image-lightbox-stage"><img src={previewImage.fileUrl} alt={previewImage.name} /></div>
             <footer>
               <button type="button" title={tx("openLocation")} aria-label={tx("openLocation")} onClick={() => void window.naiDesktop.openInExplorer(previewImage.filePath)}><FolderOpenIcon /></button>
-              <button type="button" title={tx("saveAs")} aria-label={tx("saveAs")} onClick={() => void window.naiDesktop.exportAgentAttachment(conversationId, message.id, previewImage.id)}><SaveIcon /></button>
+              <button type="button" title={tx("saveAs")} aria-label={tx("saveAs")} onClick={() => void window.naiDesktop.exportAgentAttachment(conversationId, message.id, previewImage.id).catch(() => undefined)}><SaveIcon /></button>
             </footer>
           </section>
         </div>
@@ -1672,6 +1684,9 @@ function ImageProposalCard({ proposal, setProposal, onGenerate, onCancel, onLayo
         rows={3}
         disabled={busy}
       />
+      {proposal.continuity && <div className="tavern-continuity">
+        {proposal.continuity.reviewRequired ? <><p role="alert">{imageUi(language).review}</p>{proposal.continuity.suggestedPrompt && <p>{proposal.continuity.suggestedPrompt}</p>}<div className="tavern-continuity-actions"><button type="button" className="btn secondary" onClick={() => setProposal({ ...proposal, continuity: { ...proposal.continuity!, reviewRequired: false } })}>{imageUi(language).keep}</button>{proposal.continuity.suggestedPrompt && <button type="button" className="btn secondary" onClick={() => setProposal({ ...proposal, positivePrompt: proposal.continuity!.suggestedPrompt!, continuity: { ...proposal.continuity!, reviewRequired: false } })}>{imageUi(language).adopt}</button>}</div></> : <details onToggle={onLayoutChange}><summary>{imageUi(language).changes} · {proposal.continuity.changes.length}</summary><small>{imageUi(language).preserved}</small>{proposal.continuity.changes.map((change, i) => <p key={i}>{change.from && <del>{change.from}</del>}{change.from && change.to ? " → " : ""}{change.to && <ins>{change.to}</ins>}</p>)}</details>}
+      </div>}
       <div className="tavern-proposal-toolbar">
         <details onToggle={onLayoutChange}>
           <summary>{tx("sizeAndParams")} <ChevronDownIcon /></summary>
@@ -1684,7 +1699,7 @@ function ImageProposalCard({ proposal, setProposal, onGenerate, onCancel, onLayo
           </div>
         </details>
         {proposal.status === "pending" || proposal.status === "error" ? (
-          <footer><button type="button" className="is-ghost" onClick={onCancel}><CloseIcon />{tx("cancel")}</button><button type="button" className="is-primary" onClick={onGenerate} disabled={!proposal.positivePrompt.trim()}><ImageIcon />{tx("confirmGenerate")}</button></footer>
+          <footer><button type="button" className="is-ghost" onClick={onCancel}><CloseIcon />{tx("cancel")}</button><button type="button" className="is-primary" onClick={onGenerate} disabled={!proposal.positivePrompt.trim() || proposal.continuity?.reviewRequired}><ImageIcon />{tx("confirmGenerate")}</button></footer>
         ) : null}
       </div>
       {proposal.error ? <p className="tavern-message-error">{proposal.error}</p> : null}
@@ -1701,7 +1716,7 @@ function CharacterPanel({ draft, workspace, conversation, onChange, onSave, onDe
   onSave: () => void;
   onDelete: () => void;
   onDuplicate: () => void;
-  onChooseVisual: (kind: "avatar" | "background") => Promise<void>;
+  onChooseVisual: (kind: "avatar" | "background", sourcePath?: string) => Promise<void>;
   onCreateLorebook: () => void;
   onOpenLorebook: (id: string) => void;
   onAiHelp: () => void;
@@ -1757,9 +1772,9 @@ function CharacterPanel({ draft, workspace, conversation, onChange, onSave, onDe
   return (
     <div className="tavern-panel-stack">
       <div className="tavern-character-hero" style={draft.backgroundDataUrl ? { backgroundImage: `url(${draft.backgroundDataUrl})` } : undefined}>
-        <button type="button" onClick={() => void onChooseVisual("avatar")}><Avatar src={draft.avatarDataUrl} name={draft.name} size="large" /><span><EditIcon />{tx("avatar")}</span></button>
+        <button {...imagePasteProps(paths => onChooseVisual("avatar",paths[0]))} type="button" onClick={() => void onChooseVisual("avatar")}><Avatar src={draft.avatarDataUrl} name={draft.name} size="large" /><span><EditIcon />{tx("avatar")}</span></button>
         <div><strong>{draft.name}</strong><small>{draft.spec} · {draft.specVersion}</small></div>
-        <IconButton label={tx("chooseBackground")} onClick={() => void onChooseVisual("background")}><ImageIcon /></IconButton>
+        <IconButton {...imagePasteProps(paths => onChooseVisual("background",paths[0]))} label={tx("chooseBackground")} onClick={() => void onChooseVisual("background")}><ImageIcon /></IconButton>
       </div>
       <button type="button" className="tavern-ai-draft-button" onClick={onAiHelp}><MagicIcon /><span><strong>{tx("aiImprove")}</strong><small>{tx("aiImproveHint")}</small></span><ChevronRightIcon /></button>
       <Field label={tx("characterName")}><input value={draft.name} onChange={(event) => onChange({ ...draft, name: event.target.value })} /></Field>
@@ -2231,12 +2246,12 @@ function ImagePanel({ workspace, conversation, character, defaults, stylePresets
     );
     await onRefreshSettings();
   };
-  const importSelectedStylePreview = async () => {
+  const importSelectedStylePreview = async (paths?: string[]) => {
     if (!selectedStylePreset) return;
     const current = await window.naiDesktop.reconcileStylePromptPresetImages(selectedStylePreset.id, selectedStylePreset.previewImages ?? []);
     const available = 3 - current.length;
     if (available <= 0) return;
-    const imported = await window.naiDesktop.importStylePromptPresetImages(selectedStylePreset.id, available, `${selectedStylePreset.name} · ${tx("referenceImage")}`);
+    const imported = paths ? await window.naiDesktop.importStylePromptPresetImagePaths(paths, selectedStylePreset.id, available) : await window.naiDesktop.importStylePromptPresetImages(selectedStylePreset.id, available, `${selectedStylePreset.name} · ${tx("referenceImage")}`);
     if (imported.length) await updateStylePresetImages(selectedStylePreset.id, [...current, ...imported]);
   };
   useEffect(() => {
@@ -2331,6 +2346,7 @@ function ImagePanel({ workspace, conversation, character, defaults, stylePresets
                 placeholder={`e.g. artist:name, 0.8::artist:another::, cinematic lighting`}
               />
             </Field>
+            <StyleTagPicker key={character?.id} value={userPromptDraft.style} language={language} onChange={(style) => setUserPromptDraft((current) => ({ ...current, style }))} />
             <div className="style-preset-row tavern-shared-style-picker">
               <div className="style-preset-picker" ref={stylePresetPickerRef}>
                 <button type="button" className="style-preset-trigger" aria-haspopup="listbox" aria-expanded={stylePresetMenuOpen} onClick={toggleStylePresetMenu}>
@@ -2339,7 +2355,7 @@ function ImagePanel({ workspace, conversation, character, defaults, stylePresets
                 </button>
               </div>
               <div className="style-preset-actions">
-                <button type="button" className="btn secondary" onClick={() => void importSelectedStylePreview()} disabled={!selectedStylePreset || (selectedStylePreset.previewImages ?? []).length >= 3}><ImageIcon />{tx("referenceImage")} {selectedStylePreset ? `${(selectedStylePreset.previewImages ?? []).length}/3` : ""}</button>
+                <button {...imagePasteProps(paths => importSelectedStylePreview(paths), true)} type="button" className="btn secondary" onClick={() => void importSelectedStylePreview()} disabled={!selectedStylePreset || (selectedStylePreset.previewImages ?? []).length >= 3}><ImageIcon />{tx("referenceImage")} {selectedStylePreset ? `${(selectedStylePreset.previewImages ?? []).length}/3` : ""}</button>
                 <button type="button" className="btn secondary" onClick={() => void onSaveStylePreset(userPromptDraft.style)} disabled={!userPromptDraft.style.trim()}><AddIcon />{tx("addToList")}</button>
               </div>
             </div>
@@ -2443,6 +2459,7 @@ function ImagePanel({ workspace, conversation, character, defaults, stylePresets
       ) : null}
       <button className="tavern-wide-action" onClick={createProposal} disabled={!lastAssistant || !character}><MagicIcon />{tx("createFromLatest")}</button>
       <section className="tavern-info-card"><SparklesIcon /><span><strong>{tx("extensionTitle")}</strong><br />{tx("extensionHint")}</span></section>
+      {conversation && <details className="tavern-continuity"><summary>{imageUi(language).current}</summary><p>{latestImageState(conversation.messages, character?.id, undefined, conversation.imageStateResetAt)?.positivePrompt ?? "—"}</p><small>{imageUi(language).resetHint}</small><button type="button" className="btn secondary" disabled={conversation.status === "running"} onClick={() => updateConversation((chat) => { chat.imageStateResetAt = new Date().toISOString(); })}>{imageUi(language).reset}</button></details>}
       <div className="tavern-image-summary"><strong>{tx("currentChat")}</strong><span>{tx("proposalsCount", { count: conversation?.messages.filter((item) => item.imageProposal).length ?? 0 })}</span><span>{tx("imagesCount", { count: conversation?.messages.reduce((sum, item) => sum + item.attachments.filter((attachment) => attachment.kind === "image").length, 0) ?? 0 })}</span><span>{tx("charactersCount", { count: workspace.characters.length })}</span></div>
     </div>
   );

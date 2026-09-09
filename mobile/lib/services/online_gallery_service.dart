@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:io';
+import 'quicktag.dart';
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
@@ -35,7 +38,7 @@ extension OnlineGallerySourceInfo on OnlineGallerySource {
         OnlineGallerySource.safebooru => 'Safebooru',
         OnlineGallerySource.danbooru => 'Danbooru',
         OnlineGallerySource.gelbooru => 'Gelbooru',
-        OnlineGallerySource.quicktag => '法典图鉴',
+        OnlineGallerySource.quicktag => 'QuickTagCloud',
       };
 
   String get siteUrl => switch (this) {
@@ -126,6 +129,7 @@ class OnlineGalleryItem {
 }
 
 class OnlineGalleryPage {
+  final Map<String, dynamic>? navigation;
   final OnlineGallerySource source;
   final int page;
   final int pageSize;
@@ -144,6 +148,7 @@ class OnlineGalleryPage {
     this.hasMore = false,
     this.collectionId = '',
     this.collectionTitle = '',
+    this.navigation,
   });
 }
 
@@ -303,6 +308,7 @@ class _QuickCodex {
   final String version;
   final String source;
   final List<Map<String, dynamic>> entries;
+  final Map<String, dynamic> raw;
 
   const _QuickCodex({
     required this.meta,
@@ -311,6 +317,7 @@ class _QuickCodex {
     required this.version,
     required this.source,
     required this.entries,
+    this.raw = const {},
   });
 }
 
@@ -337,10 +344,30 @@ class OnlineGalleryService {
         'User-Agent': _userAgent,
       };
 
+  Future<http.Response> _quickGet(Uri uri, String referer,
+      {Duration timeout = const Duration(seconds: 30)}) async {
+    for (var attempt = 0;; attempt++) {
+      try {
+        final response =
+            await _client.get(uri, headers: _headers(referer)).timeout(timeout);
+        if (attempt == 0 && [502, 503, 504].contains(response.statusCode)) {
+          await Future<void>.delayed(const Duration(milliseconds: 250));
+          continue;
+        }
+        return response;
+      } catch (error) {
+        final transient = error is SocketException ||
+            error is HandshakeException ||
+            error is TimeoutException ||
+            error is http.ClientException;
+        if (attempt >= 1 || !transient) rethrow;
+        await Future<void>.delayed(const Duration(milliseconds: 250));
+      }
+    }
+  }
+
   Future<Object?> _getJson(Uri uri, String referer) async {
-    final response = await _client
-        .get(uri, headers: _headers(referer))
-        .timeout(const Duration(seconds: 30));
+    final response = await _quickGet(uri, referer);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw http.ClientException('HTTP ${response.statusCode}', uri);
     }
@@ -353,6 +380,10 @@ class OnlineGalleryService {
     String query = '',
     String collectionId = '',
     bool safeOnly = true,
+    List<String> categoryPath = const [],
+    bool searchAll = false,
+    String collectionType = '',
+    int pageSize = 12,
   }) {
     final targetPage = page.clamp(1, 100000).toInt();
     final safeQuery = query.trim();
@@ -362,8 +393,15 @@ class OnlineGalleryService {
         _searchDonmai(source, targetPage, safeQuery, safeOnly),
       OnlineGallerySource.gelbooru =>
         _searchGelbooru(targetPage, safeQuery, safeOnly),
-      OnlineGallerySource.quicktag =>
-        _searchQuickTag(targetPage, safeQuery, collectionId, safeOnly),
+      OnlineGallerySource.quicktag => _searchQuickTag(
+          targetPage,
+          safeQuery,
+          collectionId,
+          safeOnly,
+          categoryPath,
+          searchAll,
+          collectionType,
+          [12, 24, 48, 60].contains(pageSize) ? pageSize : 12),
       OnlineGallerySource.aitag => Future.error(
           ArgumentError('AITag is handled by its dedicated data service')),
       OnlineGallerySource.artistRanking => Future.error(
@@ -615,7 +653,7 @@ class OnlineGalleryService {
       rating: meta.nsfw ? 'explicit' : 'general',
       mediaCount: meta.imagedCount,
       cover: _media('quicktag:${meta.id}:cover', cover, cover, cover),
-      sourceUrl: OnlineGallerySource.quicktag.siteUrl,
+      sourceUrl: quickSourceUrl(meta.id),
     );
   }
 
@@ -628,9 +666,8 @@ class OnlineGalleryService {
         ? Uri.parse(meta.dataUrl)
         : _trustedQuickUri(
             Uri.parse(catalog.releaseBaseUrl).resolve(canonicalName));
-    final response = await _client
-        .get(url, headers: _headers(OnlineGallerySource.quicktag.siteUrl))
-        .timeout(const Duration(minutes: 3));
+    final response = await _quickGet(url, OnlineGallerySource.quicktag.siteUrl,
+        timeout: const Duration(minutes: 3));
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw http.ClientException('HTTP ${response.statusCode}', url);
     }
@@ -654,6 +691,7 @@ class OnlineGalleryService {
       author: _text(parsed['author']).ifEmpty(meta.author),
       version: _text(parsed['version']).ifEmpty(meta.version),
       source: _text(parsed['source']),
+      raw: {...meta.raw, ...parsed},
       entries: _list(parsed['entries']).map(_map).toList(),
     );
     _quickCodexes[id] = codex;
@@ -725,8 +763,7 @@ class OnlineGalleryService {
       author: authors,
       description: _text(entry['note']).ifEmpty(path.join(' / ')),
       createdAt: codex.version,
-      rating:
-          codex.meta.nsfw || _boolean(entry['nsfw']) ? 'explicit' : 'general',
+      rating: codex.meta.nsfw || !quickSafe(entry) ? 'explicit' : 'general',
       mediaCount: media.length,
       prompt: prompt,
       negativePrompt: _text(entry['negative'] ?? entry['negativePrompt']),
@@ -739,67 +776,143 @@ class OnlineGalleryService {
       ),
       cover: media.firstOrNull ??
           _media('quicktag:${codex.meta.id}:$id:0', '', '', ''),
-      sourceUrl:
-          _https(codex.source).ifEmpty(OnlineGallerySource.quicktag.siteUrl),
+      sourceUrl: quickSourceUrl(codex.meta.id, entry: id, path: path),
     );
   }
 
   Future<OnlineGalleryPage> _searchQuickTag(
-    int page,
-    String query,
-    String collectionId,
-    bool safeOnly,
-  ) async {
+      int page,
+      String query,
+      String collectionId,
+      bool safeOnly,
+      List<String> requestedPath,
+      bool searchAll,
+      String requestedType,
+      int pageSize) async {
     final catalog = await _loadQuickCatalog();
-    final search = query.toLowerCase();
-    final safeCollection = _safeCollectionId(collectionId);
-    if (safeCollection.isEmpty) {
-      final filtered = catalog.codexes
-          .where((item) => !safeOnly || !item.nsfw)
-          .where((item) =>
-              search.isEmpty ||
-              [item.title, item.author, item.id]
-                  .join(' ')
-                  .toLowerCase()
-                  .contains(search))
-          .toList();
-      final offset = (page - 1) * _pageSize;
-      final items = filtered
-          .skip(offset)
-          .take(_pageSize)
-          .map((item) => _quickCollection(catalog, item))
-          .toList();
+    final link = quickLink(query);
+    final search = link?['query'] as String? ?? query;
+    final id = quickResolveCollection(
+        catalog.codexes.map((c) => c.raw).toList(),
+        _safeCollectionId(link?['collectionId'] ?? collectionId));
+    final collectionType = id.isNotEmpty
+        ? quickCollectionType(
+            catalog.codexes.firstWhere((c) => c.id == id).raw['type'])
+        : requestedType;
+    var categoryPath = List<String>.from(
+        (link?['path'] as List?)?.isNotEmpty == true
+            ? link!['path']
+            : requestedPath);
+    final available = catalog.codexes
+        .where((c) =>
+            (!safeOnly || !c.nsfw) &&
+            (collectionType.isEmpty ||
+                quickCollectionType(c.raw['type']) == collectionType))
+        .toList();
+    final navigation = <String, dynamic>{
+      ...quickCatalogNavigation(
+          catalog.codexes.map((c) => c.raw).toList(), safeOnly),
+      'collectionType': collectionType,
+      'categories': <Map<String, dynamic>>[],
+      'categoryPath': categoryPath,
+      'failedCollections': <String>[],
+      'release': Uri.parse(catalog.releaseBaseUrl)
+          .pathSegments
+          .where((s) => s.isNotEmpty)
+          .last
+    };
+    OnlineGalleryPage slice(List<OnlineGalleryItem> items,
+        [String title = '']) {
+      final target = page
+              .clamp(1, (items.length / pageSize).ceil().clamp(1, 100000))
+              .toInt(),
+          offset = (page
+                      .clamp(
+                          1, (items.length / pageSize).ceil().clamp(1, 100000))
+                      .toInt() -
+                  1) *
+              pageSize;
       return OnlineGalleryPage(
-        source: OnlineGallerySource.quicktag,
-        page: page,
-        total: filtered.length,
-        hasMore: offset + _pageSize < filtered.length,
-        items: items,
-      );
+          source: OnlineGallerySource.quicktag,
+          page: target,
+          pageSize: pageSize,
+          total: items.length,
+          hasMore: offset + pageSize < items.length,
+          collectionId: id,
+          collectionTitle: title,
+          navigation: navigation,
+          items: items.skip(offset).take(pageSize).toList());
     }
-    final codex = await _loadQuickCodex(catalog, safeCollection);
+
+    if (id.isEmpty && !searchAll) {
+      return slice(available
+          .where((c) => quickMatch(
+              {'title': c.title, 'author': c.author, 'tags': c.id}, search))
+          .map((c) => _quickCollection(catalog, c))
+          .toList());
+    }
+    if (id.isEmpty) {
+      if (search.trim().isEmpty) return slice([]);
+      final groups =
+          List.generate(available.length, (_) => <OnlineGalleryItem>[]);
+      var next = 0;
+      await Future.wait(List.generate(available.length.clamp(0, 3), (_) async {
+        while (next < available.length) {
+          final index = next++, meta = available[next - 1];
+          try {
+            final codex = await _loadQuickCodex(catalog, meta.id);
+            groups[index] = codex.entries.indexed
+                .where((e) =>
+                    (!safeOnly || quickSafe(e.$2)) && quickMatch(e.$2, search))
+                .map((e) => _quickEntry(catalog, codex, e.$2, e.$1))
+                .toList();
+          } catch (_) {
+            (navigation['failedCollections'] as List<String>).add(meta.title);
+          }
+        }
+      }));
+      return slice(groups.expand((g) => g).toList());
+    }
+    final codex = await _loadQuickCodex(catalog, id);
     if (safeOnly && codex.meta.nsfw) {
       throw StateError('This collection is hidden by the all-ages filter');
     }
-    final all = codex.entries.indexed
-        .map((entry) => _quickEntry(catalog, codex, entry.$2, entry.$1))
-        .where((item) =>
-            search.isEmpty ||
-            [item.title, item.author, item.description, item.prompt]
-                .join(' ')
-                .toLowerCase()
-                .contains(search))
+    navigation['categories'] = quickCategories(
+        codex.entries.where((e) => !safeOnly || quickSafe(e)).toList(),
+        tree: codex.raw['tree'],
+        empty: codex.raw['emptyCategories']);
+    navigation['declaredCount'] = codex.meta.entryCount;
+    navigation['loadedCount'] = codex.entries.length;
+    if (link != null &&
+        (link['code'] as String).isNotEmpty &&
+        (link['path'] as List).isEmpty) {
+      final matches = quickCategories(codex.entries,
+              tree: codex.raw['tree'], empty: codex.raw['emptyCategories'])
+          .where((c) => c['code'] == link['code'])
+          .toList();
+      if (matches.length != 1) {
+        throw const FormatException(
+            'QuickTagCloud category link is obsolete or ambiguous');
+      }
+      categoryPath = List<String>.from(matches.single['path']);
+    }
+    navigation['categoryPath'] = categoryPath;
+    final filtered = codex.entries.indexed
+        .where((e) {
+          final path = _list(e.$2['path']).map(_text).toList();
+          return (!safeOnly || quickSafe(e.$2)) &&
+              categoryPath.indexed
+                  .every((p) => p.$1 < path.length && path[p.$1] == p.$2) &&
+              (link == null ||
+                  link['entry'] == '' ||
+                  e.$2['id'] ==
+                      (_map(codex.raw['entryAliases'])[link['entry']] ??
+                          link['entry'])) &&
+              quickMatch(e.$2, search);
+        })
+        .map((e) => _quickEntry(catalog, codex, e.$2, e.$1))
         .toList();
-    final offset = (page - 1) * _pageSize;
-    return OnlineGalleryPage(
-      source: OnlineGallerySource.quicktag,
-      page: page,
-      total: all.length,
-      hasMore: offset + _pageSize < all.length,
-      collectionId: safeCollection,
-      collectionTitle: codex.title,
-      items: all.skip(offset).take(_pageSize).toList(),
-    );
+    return slice(filtered, codex.title);
   }
 
   Future<OnlineGalleryDetail> detail(OnlineGalleryItem item) {
@@ -896,6 +1009,12 @@ class OnlineGalleryService {
   }
 
   void clearCache() {
+    _quickCatalog = null;
+    _quickCodexes.clear();
+    _detailCache.clear();
+  }
+
+  void clearDataCache() {
     _quickCatalog = null;
     _quickCodexes.clear();
     _detailCache.clear();

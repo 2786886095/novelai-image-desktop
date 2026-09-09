@@ -80,7 +80,7 @@ class _PromptCodexScreenState extends State<PromptCodexScreen> {
     switch (_language) {
       case 'zh-TW':
         return {
-          'title': 'NovelAI 個人法典',
+          'title': '所長個人法典 · nai4.top',
           'search': '搜尋名稱、章節或 Tag',
           'all': '全部',
           'category': '統一分類',
@@ -99,7 +99,7 @@ class _PromptCodexScreenState extends State<PromptCodexScreen> {
         };
       case 'en-US':
         return {
-          'title': 'NovelAI Personal Codex',
+          'title': 'Personal Codex · nai4.top',
           'search': 'Search names, sections, or tags',
           'all': 'All',
           'category': 'Unified category',
@@ -119,7 +119,7 @@ class _PromptCodexScreenState extends State<PromptCodexScreen> {
         };
       case 'ja-JP':
         return {
-          'title': 'NovelAI 個人プロンプト法典',
+          'title': '個人プロンプト法典 · nai4.top',
           'search': '名称・章・Tag を検索',
           'all': 'すべて',
           'category': '統一分類',
@@ -138,7 +138,7 @@ class _PromptCodexScreenState extends State<PromptCodexScreen> {
         };
       case 'ko-KR':
         return {
-          'title': 'NovelAI 개인 프롬프트 법전',
+          'title': '개인 프롬프트 법전 · nai4.top',
           'search': '이름, 장 또는 태그 검색',
           'all': '전체',
           'category': '통합 분류',
@@ -157,7 +157,7 @@ class _PromptCodexScreenState extends State<PromptCodexScreen> {
         };
       default:
         return {
-          'title': 'NovelAI 个人法典',
+          'title': '所长个人法典 · nai4.top',
           'search': '搜索名称、章节或 Tag',
           'all': '全部',
           'category': '统一分类',

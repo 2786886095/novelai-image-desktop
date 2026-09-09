@@ -1053,7 +1053,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
     for (const file of Array.from(files).slice(0, capacity)) {
       const result = await window.naiDesktop.tagComicImportReference({
         projectId: project.id,
-        sourcePath: window.naiDesktop.getPathForFile(file),
+        sourcePath: (file as File & { path?: string }).path || window.naiDesktop.getPathForFile(file),
       });
       if (!result.ok || !result.asset) {
         setToast(
@@ -1986,7 +1986,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                     onDragStart={() => setDraggedPanelId(panel.id)}
                     onDragEnd={() => setDraggedPanelId("")}
                     onDragOver={(event) => event.preventDefault()}
-                    onDrop={(event) => {
+                    data-image-paste="drop" tabIndex={0} onDrop={(event) => {
                       event.preventDefault();
                       movePanelTo(draggedPanelId, panel.id);
                       setDraggedPanelId("");

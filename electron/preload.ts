@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
+import { createImageSaveTracker, type ImageSaveNotice } from "../src/image-save-feedback";
 import type {
   AnlasQuoteRequest,
   AppSettings,
@@ -58,7 +59,11 @@ import type {
   TavernImageRequest,
 } from "../src/agent/types";
 
+const imageSaves = createImageSaveTracker();
+
 contextBridge.exposeInMainWorld("naiDesktop", {
+  onImageSaveFeedback: (callback: (notices: ImageSaveNotice[]) => void) => imageSaves.subscribe(callback),
+  dismissImageSaveFeedback: (id: number) => imageSaves.dismiss(id),
   platform: process.platform,
   getResourceDatabaseOverview: (): Promise<ResourceDatabaseOverview> =>
     ipcRenderer.invoke("resource-database:overview"),
@@ -101,12 +106,12 @@ contextBridge.exposeInMainWorld("naiDesktop", {
   deleteAgentConversation: (conversationId: string) => ipcRenderer.invoke("agent:deleteConversation", conversationId),
   importAgentFiles: (conversationId: string, sourcePaths?: string[]) => ipcRenderer.invoke("agent:importFiles", conversationId, sourcePaths),
   deleteAgentAttachment: (conversationId: string, attachmentId: string) => ipcRenderer.invoke("agent:deleteAttachment", conversationId, attachmentId),
-  exportAgentAttachment: (conversationId: string, messageId: string, attachmentId: string) => ipcRenderer.invoke("agent:exportAttachment", conversationId, messageId, attachmentId),
+  exportAgentAttachment: (conversationId: string, messageId: string, attachmentId: string) => imageSaves.run(`agent:${conversationId}:${messageId}:${attachmentId}`, "image", () => ipcRenderer.invoke("agent:exportAttachment", conversationId, messageId, attachmentId), 1),
   sendAgentMessage: (request: AgentSendRequest) => ipcRenderer.invoke("agent:send", request),
   generateTavernImage: (request: TavernImageRequest) => ipcRenderer.invoke("agent:generateImage", request),
   importTavernCards: (sourcePaths?: string[]) => ipcRenderer.invoke("agent:importCards", sourcePaths),
   exportTavernCard: (request: TavernCardExportRequest) => ipcRenderer.invoke("agent:exportCard", request),
-  importTavernVisualAsset: (kind: "avatar" | "background") => ipcRenderer.invoke("agent:importVisual", kind),
+  importTavernVisualAsset: (kind: "avatar" | "background", sourcePath?: string) => ipcRenderer.invoke("agent:importVisual", kind, sourcePath),
   abortAgentMessage: (conversationId: string) => ipcRenderer.invoke("agent:abort", conversationId),
   compactAgentConversation: (conversationId: string) => ipcRenderer.invoke("agent:compact", conversationId),
   respondAgentPermission: (permissionId: string, response: "once" | "always" | "reject") => ipcRenderer.invoke("agent:respondPermission", permissionId, response),
@@ -131,7 +136,7 @@ contextBridge.exposeInMainWorld("naiDesktop", {
     ipcRenderer.invoke("promptCodex:bundled"),
   promptCodexUpdate: (): Promise<PromptCodexSnapshot> =>
     ipcRenderer.invoke("promptCodex:update"),
-  artistLabPickTarget: () => ipcRenderer.invoke("artistLab:pickTarget"),
+  artistLabPickTarget: (sourcePath?: string) => ipcRenderer.invoke("artistLab:pickTarget", sourcePath),
   artistLabSearchArtists: (query?: string, limit?: number) =>
     ipcRenderer.invoke("artistLab:searchArtists", query, limit),
   artistLabPopularArtists: (limit?: number, force?: boolean) =>
@@ -183,7 +188,7 @@ contextBridge.exposeInMainWorld("naiDesktop", {
   onlineGalleryDetail: (request: import("../src/online-gallery").OnlineGalleryDetailRequest) =>
     ipcRenderer.invoke("online-gallery:detail", request),
   downloadOnlineGalleryImages: (request: import("../src/online-gallery").OnlineGalleryDownloadRequest) =>
-    ipcRenderer.invoke("online-gallery:download-images", request),
+    imageSaves.run(`gallery:${request.source}:${request.itemId}:${request.images.map(item => item.id).join(",")}`, "download", () => ipcRenderer.invoke("online-gallery:download-images", request), request.images.length),
   selectOnlineGalleryDownloadDir: () => ipcRenderer.invoke("online-gallery:select-download-dir"),
   onlineGalleryClearDataCache: () => ipcRenderer.invoke("online-gallery:clear-data-cache"),
   onlineGalleryCacheImage: (
@@ -354,6 +359,8 @@ contextBridge.exposeInMainWorld("naiDesktop", {
   ) as Promise<ArtistStyleCatalogResult>,
   translate: (text: string, target?: string) =>
     ipcRenderer.invoke("nai:translate", text, target),
+  readClipboardImageFiles: () => ipcRenderer.invoke("imageInput:readClipboard"),
+  savePastedImageFiles: (images: Array<{name:string;bytes:Uint8Array}>) => ipcRenderer.invoke("imageInput:save", images),
   loadImage: () => ipcRenderer.invoke("nai:loadImage"),
   loadImageFromPath: (filePath: string) =>
     ipcRenderer.invoke("nai:loadImageFromPath", filePath),
@@ -378,9 +385,9 @@ contextBridge.exposeInMainWorld("naiDesktop", {
   deleteHistoryGroup: (id: string) =>
     ipcRenderer.invoke("storage:deleteGroup", id),
   exportHistoryGroup: (groupId: string) =>
-    ipcRenderer.invoke("storage:exportGroup", groupId),
+    imageSaves.run(`group:${groupId}`, "archive", () => ipcRenderer.invoke("storage:exportGroup", groupId)),
   exportFiles: (files: BatchExportFile[], defaultName?: string) =>
-    ipcRenderer.invoke("storage:exportFiles", files, defaultName),
+    imageSaves.run(`files:${JSON.stringify(files)}`, "archive", () => ipcRenderer.invoke("storage:exportFiles", files, defaultName), files.length),
   setHistoryGroup: (id: string, groupId?: string) =>
     ipcRenderer.invoke("storage:setHistoryGroup", id, groupId),
   deleteHistory: (id: string) => ipcRenderer.invoke("storage:delete", id),

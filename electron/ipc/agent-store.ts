@@ -212,6 +212,13 @@ function normalizeImageProposal(raw: unknown): TavernImageProposal | undefined {
     id: typeof value.id === "string" && value.id ? value.id : crypto.randomUUID(),
     status,
     positivePrompt,
+    ...(value.continuity && typeof value.continuity === "object" ? { continuity: {
+      baseImageId: typeof value.continuity.baseImageId === "string" ? value.continuity.baseImageId : undefined,
+      previousPrompt: typeof value.continuity.previousPrompt === "string" ? value.continuity.previousPrompt.slice(0, 100_000) : undefined,
+      suggestedPrompt: typeof value.continuity.suggestedPrompt === "string" ? value.continuity.suggestedPrompt.slice(0, 100_000) : undefined,
+      reviewRequired: value.continuity.reviewRequired === true,
+      changes: Array.isArray(value.continuity.changes) ? value.continuity.changes.filter((c) => c && typeof c.from === "string" && typeof c.to === "string").slice(0, 64).map((c) => ({ from: c.from.slice(0, 100_000), to: c.to.slice(0, 100_000) })) : [],
+    } } : {}),
     negativePrompt: typeof value.negativePrompt === "string" ? value.negativePrompt.slice(0, 100_000) : "",
     stylePrompt: typeof value.stylePrompt === "string" ? value.stylePrompt.slice(0, 100_000) : "",
     ...(typeof value.model === "string" && value.model.trim() ? { model: value.model.trim() } : {}),
@@ -252,6 +259,8 @@ function normalizeMessage(raw: Partial<AgentMessage>): AgentMessage | null {
       : {}),
     ...(Number.isFinite(Number(raw.swipeIndex)) ? { swipeIndex: Math.max(0, Math.trunc(Number(raw.swipeIndex))) } : {}),
     ...(imageProposal ? { imageProposal } : {}),
+    ...(Array.isArray(raw.imageProposalSwipes) ? { imageProposalSwipes: raw.imageProposalSwipes.slice(0, 100).map((p) => normalizeImageProposal(p) ?? null) } : {}),
+    ...(Array.isArray(raw.swipeAttachments) ? { swipeAttachments: raw.swipeAttachments.slice(0, 100).map((items) => Array.isArray(items) ? items.map(rehydrateAttachment).filter((a): a is AgentAttachment => Boolean(a)) : []) } : {}),
   };
 }
 
@@ -319,6 +328,7 @@ export function normalizeAgentWorkspace(raw: unknown): AgentWorkspaceData {
         compactCount: Math.max(0, Math.trunc(Number(conversation.compactCount) || 0)),
         ...(lastCompactedAt ? { lastCompactedAt } : {}),
         ...(lastSummary ? { lastSummary } : {}),
+        ...(typeof conversation.imageStateResetAt === "string" ? { imageStateResetAt: conversation.imageStateResetAt } : {}),
         createdAt: typeof conversation.createdAt === "string" ? conversation.createdAt : now(),
         updatedAt: typeof conversation.updatedAt === "string" ? conversation.updatedAt : now(),
         characterIds,

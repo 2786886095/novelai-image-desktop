@@ -259,6 +259,8 @@ class AgentMessage {
   List<String> swipes;
   int swipeIndex;
   TavernImageProposal? imageProposal;
+  List<TavernImageProposal?>? imageProposalSwipes;
+  List<List<AgentAttachment>>? swipeAttachments;
 
   AgentMessage({
     required this.id,
@@ -276,6 +278,8 @@ class AgentMessage {
     List<String>? swipes,
     this.swipeIndex = 0,
     this.imageProposal,
+    this.imageProposalSwipes,
+    this.swipeAttachments,
   })  : attachments = attachments ?? [],
         tools = tools ?? [],
         swipes = swipes ?? [],
@@ -308,6 +312,22 @@ class AgentMessage {
             .map((item) => '$item')
             .toList(),
         swipeIndex: max(0, _int(json['swipeIndex'])),
+        swipeAttachments: json['swipeAttachments'] is List
+            ? (json['swipeAttachments'] as List)
+                .map((a) => a is List
+                    ? a
+                        .whereType<Map>()
+                        .map((v) => AgentAttachment.fromJson(_map(v)))
+                        .toList()
+                    : <AgentAttachment>[])
+                .toList()
+            : null,
+        imageProposalSwipes: json['imageProposalSwipes'] is List
+            ? (json['imageProposalSwipes'] as List)
+                .map((p) =>
+                    p is Map ? TavernImageProposal.fromJson(_map(p)) : null)
+                .toList()
+            : null,
         imageProposal: json['imageProposal'] is Map
             ? TavernImageProposal.fromJson(_map(json['imageProposal']))
             : null,
@@ -329,6 +349,13 @@ class AgentMessage {
         if (swipes.isNotEmpty) 'swipes': swipes,
         if (swipes.isNotEmpty) 'swipeIndex': swipeIndex,
         if (imageProposal != null) 'imageProposal': imageProposal!.toJson(),
+        if (swipeAttachments != null)
+          'swipeAttachments': swipeAttachments!
+              .map((a) => a.map((v) => v.toJson()).toList())
+              .toList(),
+        if (imageProposalSwipes != null)
+          'imageProposalSwipes':
+              imageProposalSwipes!.map((p) => p?.toJson()).toList(),
       };
 }
 
@@ -343,6 +370,7 @@ class AgentConversation {
   int compactCount;
   String? lastCompactedAt;
   String? lastSummary;
+  String? imageStateResetAt;
   String createdAt;
   String updatedAt;
   List<String> characterIds;
@@ -367,6 +395,7 @@ class AgentConversation {
     this.compactCount = 0,
     this.lastCompactedAt,
     this.lastSummary,
+    this.imageStateResetAt,
     String? createdAt,
     String? updatedAt,
     List<String>? characterIds,
@@ -412,6 +441,7 @@ class AgentConversation {
         compactCount: max(0, _int(json['compactCount'])),
         lastCompactedAt: json['lastCompactedAt']?.toString(),
         lastSummary: json['lastSummary']?.toString(),
+        imageStateResetAt: json['imageStateResetAt']?.toString(),
         createdAt: _text(json['createdAt'], agentNow()),
         updatedAt: _text(json['updatedAt'], agentNow()),
         characterIds: (json['characterIds'] as List? ?? const [])
@@ -445,6 +475,7 @@ class AgentConversation {
         'compactCount': compactCount,
         if (lastCompactedAt != null) 'lastCompactedAt': lastCompactedAt,
         if (lastSummary != null) 'lastSummary': lastSummary,
+        if (imageStateResetAt != null) 'imageStateResetAt': imageStateResetAt,
         'createdAt': createdAt,
         'updatedAt': updatedAt,
         'characterIds': characterIds,

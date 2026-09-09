@@ -1567,12 +1567,14 @@ export interface NaiDesktopApi {
   deleteAgentConversation: (conversationId: string) => Promise<import("./agent/types").AgentWorkspaceMutationResult>;
   importAgentFiles: (conversationId: string, sourcePaths?: string[]) => Promise<import("./agent/types").AgentImportFilesResult>;
   deleteAgentAttachment: (conversationId: string, attachmentId: string) => Promise<import("./agent/types").AgentWorkspaceMutationResult>;
+  onImageSaveFeedback: (callback: (notices: import("./image-save-feedback").ImageSaveNotice[]) => void) => () => void;
+  dismissImageSaveFeedback: (id: number) => void;
   exportAgentAttachment: (conversationId: string, messageId: string, attachmentId: string) => Promise<{ ok: boolean; cancelled?: boolean; message: string; filePath?: string }>;
   sendAgentMessage: (request: import("./agent/types").AgentSendRequest) => Promise<{ ok: boolean; message?: string }>;
   generateTavernImage: (request: import("./agent/types").TavernImageRequest) => Promise<{ ok: boolean; message?: string }>;
   importTavernCards: (sourcePaths?: string[]) => Promise<import("./agent/types").TavernCardImportResult>;
   exportTavernCard: (request: import("./agent/types").TavernCardExportRequest) => Promise<{ ok: boolean; cancelled?: boolean; message: string; filePath?: string }>;
-  importTavernVisualAsset: (kind: "avatar" | "background") => Promise<{ ok: boolean; cancelled?: boolean; message?: string; dataUrl?: string; fileName?: string }>;
+  importTavernVisualAsset: (kind: "avatar" | "background", sourcePath?: string) => Promise<{ ok: boolean; cancelled?: boolean; message?: string; dataUrl?: string; fileName?: string }>;
   abortAgentMessage: (conversationId: string) => Promise<{ ok: boolean; message?: string }>;
   compactAgentConversation: (conversationId: string) => Promise<{ ok: boolean; message?: string }>;
   respondAgentPermission: (
@@ -1653,7 +1655,7 @@ export interface NaiDesktopApi {
     loaded: number;
     total: number;
   }) => void) => () => void;
-  artistLabPickTarget: () => Promise<{
+  artistLabPickTarget: (sourcePath?: string) => Promise<{
     filePath: string;
     fileUrl: string;
     name: string;
@@ -1787,6 +1789,8 @@ export interface NaiDesktopApi {
     options: AugmentOptions,
   ) => Promise<GenerateResult>;
   cancel: () => Promise<{ ok: boolean }>;
+  readClipboardImageFiles: () => Promise<Array<{name:string;bytes:Uint8Array}>>;
+  savePastedImageFiles: (images: Array<{name:string;bytes:Uint8Array}>) => Promise<string[]>;
   loadImage: () => Promise<LoadImageResult>;
   loadImageFromPath: (filePath: string) => Promise<LoadImageResult>;
   saveMetadataSnapshot: (payload: MetadataSnapshotPayload) => Promise<MetadataSnapshotResult>;
