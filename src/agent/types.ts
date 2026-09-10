@@ -322,6 +322,8 @@ export interface AgentModelDiscoveryResult {
 export interface AgentWorkspaceLocation {
   path: string;
   installAdjacent: boolean;
+  migrationId?: string;
+  backupPath?: string;
   migratedFromLegacy: boolean;
   fallbackReason?: string;
 }

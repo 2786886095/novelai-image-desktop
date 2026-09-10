@@ -36,7 +36,7 @@ import {
 } from "../../src/tavern/builtins";
 import { toLocalMediaUrl } from "./local-media-protocol";
 import { atomicWriteFileSync, getSettings, readWithBackupRecoverySync, rotateBackupsSync } from "./store";
-import { agentWorkspaceDirectory } from "./agent-workspace-location";
+import { agentWorkspaceDirectory, rebaseAgentWorkspaceFile } from "./agent-workspace-location";
 
 const MAX_FILE_BYTES = 48 * 1024 * 1024;
 const MAX_IMPORT_BYTES = 192 * 1024 * 1024;
@@ -184,14 +184,15 @@ function mimeFor(extension: string) {
 function rehydrateAttachment(raw: Partial<AgentAttachment>): AgentAttachment | null {
   if (typeof raw.id !== "string" || typeof raw.name !== "string" || typeof raw.filePath !== "string") return null;
   const extension = path.extname(raw.name).toLowerCase();
+  const filePath = rebaseAgentWorkspaceFile(raw.filePath);
   return {
     id: raw.id,
     name: raw.name,
     mime: typeof raw.mime === "string" ? raw.mime : mimeFor(extension),
     size: Math.max(0, Number(raw.size) || 0),
     kind: raw.kind === "image" || raw.kind === "document" || raw.kind === "text" ? raw.kind : attachmentKind(extension),
-    filePath: raw.filePath,
-    fileUrl: fs.existsSync(raw.filePath) ? toLocalMediaUrl(raw.filePath) : undefined,
+    filePath,
+    fileUrl: fs.existsSync(filePath) ? toLocalMediaUrl(filePath) : undefined,
     ...(Number.isFinite(raw.width) ? { width: raw.width } : {}),
     ...(Number.isFinite(raw.height) ? { height: raw.height } : {}),
     createdAt: typeof raw.createdAt === "string" ? raw.createdAt : now(),
@@ -250,7 +251,10 @@ function normalizeMessage(raw: Partial<AgentMessage>): AgentMessage | null {
     attachments: (Array.isArray(raw.attachments) ? raw.attachments : [])
       .map((item) => rehydrateAttachment(item))
       .filter((item): item is AgentAttachment => Boolean(item)),
-    tools: Array.isArray(raw.tools) ? raw.tools : [],
+    tools: (Array.isArray(raw.tools) ? raw.tools : []).filter((tool) => tool && typeof tool === "object").map((tool) => ({
+      ...tool,
+      ...(Array.isArray(tool.generatedImages) ? { generatedImages: tool.generatedImages.map(rehydrateAttachment).filter((a): a is AgentAttachment => Boolean(a)) } : {}),
+    })),
     ...(raw.usage ? { usage: raw.usage } : {}),
     status: ["complete", "streaming", "error", "aborted"].includes(String(raw.status))
       ? raw.status as AgentMessage["status"]

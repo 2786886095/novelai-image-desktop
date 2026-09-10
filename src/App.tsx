@@ -7042,6 +7042,35 @@ function V5MigrationNotice() {
   );
 }
 
+function WorkspaceMigrationNotice() {
+  const language = useAppStore((s) => s.settings?.language);
+  const [location, setLocation] = useState<Awaited<ReturnType<typeof window.naiDesktop.getAgentWorkspaceLocation>> | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void window.naiDesktop.getAgentWorkspaceLocation().then((result) => {
+      if (alive && result.migrationId && localStorage.getItem(`workspace-migration:${result.migrationId}`) !== "seen") setLocation(result);
+    }).catch((error) => { if (alive) useAppStore.getState().setToast(error instanceof Error ? error.message : String(error)); });
+    return () => { alive = false; };
+  }, []);
+  if (!location) return null;
+  const copy = language === "en-US"
+    ? ["Tavern data migrated and verified. Conversations and attachments are preserved; an original backup is retained.", "Open data folder", "Got it"]
+    : language === "ja-JP"
+    ? ["酒場データの移行と検証が完了しました。会話・添付ファイルと元のバックアップを保持しています。", "保存先を開く", "確認"]
+    : language === "ko-KR"
+    ? ["대화와 첨부 파일의 이전 및 검증을 완료했습니다. 원본 백업도 보관됩니다.", "저장 폴더 열기", "확인"]
+    : language === "zh-TW"
+    ? ["酒館資料已遷移並校驗，對話與附件已保留，原始備份仍在。", "開啟資料目錄", "知道了"]
+    : ["酒馆数据已迁移并校验，对话与附件已保留，原始备份仍在。", "打开数据目录", "知道了"];
+  return <div className="update-banner" role="status">
+    <span>{copy[0]}</span>
+    <div className="update-banner-actions">
+      <Button onClick={() => { void window.naiDesktop.openAgentWorkspaceDirectory().then((r) => { if (!r.ok) useAppStore.getState().setToast(r.message ?? "打开目录失败"); }).catch((e) => useAppStore.getState().setToast(String(e))); }}>{copy[1]}</Button>
+      <Button onClick={() => { localStorage.setItem(`workspace-migration:${location.migrationId}`, "seen"); setLocation(null); }}>{copy[2]}</Button>
+    </div>
+  </div>;
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 // Draggable splitter between workspace rails. Drag = resize; double-click = reset.
 // Width changes apply live (store) and persist to localStorage on release.
@@ -7240,7 +7269,10 @@ function MainPage() {
   return (
     <div className="app-shell">
       <AppTitleBar />
-      <UpdateBanner />
+      <div className="app-notice-slot">
+        <UpdateBanner />
+        <WorkspaceMigrationNotice />
+      </div>
       <V5MigrationNotice />
       <AppMenuBar openSettings={() => setShowSettings(true)} />
       <AppTabBar />

@@ -13,7 +13,7 @@ permissions:
 jobs:
   android:
     # This release was explicitly scoped to desktop; future releases are unaffected.
-    if: "github.ref_name != 'v2.2.6' && !contains(github.event.head_commit.message, 'release: v2.2.6')"
+    if: "github.ref_name != 'v2.2.7' && !contains(github.event.head_commit.message, 'release: v2.2.7')"
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -91,7 +91,7 @@ jobs:
 
   ios:
     # This release was explicitly scoped to desktop; future releases are unaffected.
-    if: "github.ref_name != 'v2.2.6' && !contains(github.event.head_commit.message, 'release: v2.2.6')"
+    if: "github.ref_name != 'v2.2.7' && !contains(github.event.head_commit.message, 'release: v2.2.7')"
     runs-on: macos-latest
     defaults:
       run:

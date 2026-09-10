@@ -40,7 +40,7 @@ export function assertSafeDataDirectory(directory: string, installDirectory: str
   }
 }
 
-export function assertUpdateOutputProtection(installDirectory: string, data: unknown): void {
+export function assertUpdateOutputProtection(installDirectory: string, data: unknown, options: { installerMigratesWorkspace?: boolean } = {}): void {
   if (!data || typeof data !== 'object') throw new Error('更新已停止：读取图片保存设置失败。');
   const record = data as Record<string, unknown>;
   const settings = record.settings as Record<string, unknown> | undefined;
@@ -60,6 +60,9 @@ export function assertUpdateOutputProtection(installDirectory: string, data: unk
         && isInstallationDataPath(item.filePath, installDirectory)) risky.push(path.dirname(item.filePath));
   }
   for (const name of ['outputs', 'LangbaiWorkspace']) {
+    // Only callers using the new verified-backup installer may defer this check.
+    // Images/settings/history remain protected; this is not a global bypass.
+    if (name === 'LangbaiWorkspace' && options.installerMigratesWorkspace) continue;
     const legacy = path.join(installDirectory, name);
     if (fs.existsSync(legacy) && fs.readdirSync(legacy).length) risky.push(legacy);
   }

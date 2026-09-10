@@ -51,6 +51,12 @@ describe.skipIf(process.platform !== 'win32')('in-app update protection wiring',
     expect(state.spawn).not.toHaveBeenCalled(); expect(state.quit).not.toHaveBeenCalled();
     expect(state.send).toHaveBeenLastCalledWith('app:updateEvent',expect.objectContaining({kind:'error'}));
   });
+  it('lets the verified new installer migrate the default Tavern directory without blocking the download', async () => {
+    vi.useFakeTimers();
+    const workspace=path.join(state.install,'LangbaiWorkspace');fs.mkdirSync(workspace);fs.writeFileSync(path.join(workspace,'agent-workspace.json'),'keep');
+    const api=await updater();expect(await api.downloadUpdate()).toMatchObject({ok:true});await vi.advanceTimersByTimeAsync(900);
+    expect(state.spawn).toHaveBeenCalledTimes(1);expect(fs.readFileSync(path.join(workspace,'agent-workspace.json'),'utf8')).toBe('keep');
+  });
   it('allows the existing silent-install arguments only for external data', async () => {
     vi.useFakeTimers(); const api = await updater();
     expect(await api.downloadUpdate()).toMatchObject({ok:true});

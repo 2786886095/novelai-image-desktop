@@ -15,7 +15,7 @@ class NaiOption {
 }
 
 const appName = 'Langbai NovelAI Studio';
-const appVersion = '2.2.6';
+const appVersion = '2.2.7';
 
 const naiModels = <NaiOption>[
   NaiOption(

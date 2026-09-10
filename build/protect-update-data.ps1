@@ -1,9 +1,12 @@
 ﻿param(
   [Parameter(Mandatory=$true)][string]$InstallDir,
-  [string]$AppDataDir = [Environment]::GetFolderPath('ApplicationData')
+  [string]$AppDataDir = [Environment]::GetFolderPath('ApplicationData'),
+  [switch]$MigrateWorkspace,
+  [string]$ExecutableName = 'Langbai NovelAI Studio.exe'
 )
 $ErrorActionPreference = 'Stop'
-# This script only reads. A non-zero result stops NSIS before the old uninstaller runs.
+# Read-only by default. The installer explicitly enables verified workspace backup.
+# Neither mode removes or modifies any existing user file.
 $canonicalPaths = @{}
 $historyDirectories = @{}
 function Get-CanonicalPath([string]$Value, [int]$Depth = 0) {
@@ -78,7 +81,9 @@ try {
   # installer timeout scanning thousands of unrelated history entries first.
   foreach ($name in @('outputs', 'LangbaiWorkspace')) {
     $legacy = Join-Path $InstallDir $name
-    if ((Test-Path -LiteralPath $legacy) -and @(Get-ChildItem -LiteralPath $legacy -Force | Select-Object -First 1).Count -gt 0) { [void]$risks.Add($legacy) }
+    if ((Test-Path -LiteralPath $legacy) -and @(Get-ChildItem -LiteralPath $legacy -Force | Select-Object -First 1).Count -gt 0) {
+      if ($name -ne 'LangbaiWorkspace' -or -not $MigrateWorkspace) { [void]$risks.Add($legacy) }
+    }
   }
   Stop-IfDataAtRisk
   $storeName = 'novelai-image-desktop.json'
@@ -114,6 +119,11 @@ try {
     }
   }
   Stop-IfDataAtRisk
+  $workspace=Join-Path $InstallDir 'LangbaiWorkspace'
+  if ($MigrateWorkspace -and (Test-Path -LiteralPath $workspace) -and @(Get-ChildItem -LiteralPath $workspace -Force | Select-Object -First 1).Count -gt 0) {
+    . (Join-Path $PSScriptRoot 'backup-agent-workspace.ps1')
+    Backup-AgentWorkspace $workspace $AppDataDir $ExecutableName
+  }
   Write-Output 'UPDATE_DATA_CHECK_OK'
   exit 0
 } catch {
