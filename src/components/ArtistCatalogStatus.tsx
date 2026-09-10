@@ -1,0 +1,35 @@
+import type { ArtistCatalogInfo, ArtistCatalogSelection } from "../artist-lab";
+import type { AppLanguage } from "../types";
+
+const COPY = {
+ "zh-CN": {updateCancelled:"已取消更新，原快照与当前候选保持不变。",updateTimeout:"更新超时，请稍后重试。",updateWorkerFailed:"画师库后台进程异常，请重试。",updateBusy:"已有榜单更新任务正在运行。",updateNetworkFailed:"网络请求失败",updateDiskFailed:"磁盘写入失败",previousCandidates:"当前候选仍来自旧快照；换一批后使用新榜单。",settingsFailed:"选择设置未保存，重启后可能恢复旧选择。",title:"Danbooru 固定画师库",description:"全量榜单快照保存在本机，抽取与换一批不联网。",mode:"抽取方式",random:"全库随机（等概率、不重复）",ranked:"热门前 N 名",count:"本次抽取数量",draw:"换一批候选",load:"读取本地画师库…",total:"快照有效画师 Tag",date:"榜单快照日期",bundled:"软件内置快照",downloaded:"手动更新的本地快照",pending:"方式或数量已改变，点击换一批生效。",update:"更新全量榜单",confirm:"联网更新会遍历全部画师，首次可能需要十多分钟；期间可继续使用当前候选。",start:"确认更新",cancel:"取消",updated:"全量快照已更新；点击换一批使用新榜单。",failed:"本地画师库读取失败，请重试或检查安装文件。",updateFailed:"更新未完成，原快照与当前候选保持不变。",selection:"本次候选",warning:"一次抽取较多画师可能短暂卡顿；默认 1000 名。"},
+ "zh-TW": {updateCancelled:"已取消更新，原快照與候選保持不變。",updateTimeout:"更新逾時，請稍後重試。",updateWorkerFailed:"絵師庫背景程序異常，請重試。",updateBusy:"已有榜單更新正在執行。",updateNetworkFailed:"網路請求失敗",updateDiskFailed:"磁碟寫入失敗",previousCandidates:"目前候選仍來自舊快照；重新抽選後使用新榜單。",settingsFailed:"選擇設定未儲存，重啟後可能恢復舊選擇。",title:"Danbooru 固定畫師庫",description:"完整榜單快照儲存在本機，抽取及換一批不需連線。",mode:"抽取方式",random:"全庫隨機（等機率、不重複）",ranked:"熱門前 N 名",count:"本次抽取數量",draw:"換一批候選",load:"讀取本機畫師庫…",total:"快照有效畫師 Tag",date:"榜單快照日期",bundled:"軟體內建快照",downloaded:"手動更新的本機快照",pending:"方式或數量已變更，點擊換一批生效。",update:"更新完整榜單",confirm:"連線更新會遍歷全部畫師，可能需要十多分鐘；期間可繼續使用目前候選。",start:"確認更新",cancel:"取消",updated:"完整快照已更新；點擊換一批使用新榜單。",failed:"本機畫師庫讀取失敗，請重試或檢查安裝檔案。",updateFailed:"更新未完成，原快照與候選保持不變。",selection:"本次候選",warning:"一次抽取大量畫師可能短暫停頓；預設 1000 名。"},
+ "en-US": {updateCancelled:"Update cancelled. The previous snapshot and candidates are unchanged.",updateTimeout:"Update timed out. Try again later.",updateWorkerFailed:"The catalog worker failed. Please retry.",updateBusy:"Another catalog update is already running.",updateNetworkFailed:"Network request failed",updateDiskFailed:"Disk write failed",previousCandidates:"Current candidates still use the previous snapshot. Draw again to use the new catalog.",settingsFailed:"Selection settings were not saved; reopening may restore the previous selection.",title:"Fixed Danbooru artist catalog",description:"A full local ranking snapshot. Drawing candidates makes no network requests.",mode:"Selection mode",random:"Entire catalog (uniform, no repeats)",ranked:"Top N by post count",count:"Candidates to draw",draw:"Draw another pool",load:"Reading local artist catalog…",total:"Active artist tags in snapshot",date:"Ranking snapshot date",bundled:"Bundled snapshot",downloaded:"Manually updated local snapshot",pending:"Mode or count changed. Draw again to apply.",update:"Update full catalog",confirm:"An online update scans all artists and may take over ten minutes. Current candidates remain usable.",start:"Confirm update",cancel:"Cancel",updated:"Catalog updated. Draw another pool to use it.",failed:"Local catalog could not be read. Retry or check the installation files.",updateFailed:"Update did not complete. Previous snapshot and candidates are unchanged.",selection:"Current candidates",warning:"Large selections may briefly pause the UI. Default: 1,000."},
+ "ja-JP": {updateCancelled:"更新をキャンセルしました。元の一覧と候補は維持されます。",updateTimeout:"更新がタイムアウトしました。後でもう一度お試しください。",updateWorkerFailed:"一覧のバックグラウンド処理に失敗しました。",updateBusy:"別の一覧更新が実行中です。",updateNetworkFailed:"ネットワーク要求に失敗しました",updateDiskFailed:"ディスクへの書き込みに失敗しました",previousCandidates:"現在の候補は古い一覧から選択されています。再抽選で新しい一覧を使用します。",settingsFailed:"選択設定を保存できませんでした。再起動時に以前の選択に戻る場合があります。",title:"Danbooru 固定絵師カタログ",description:"全件の順位スナップショットをローカルに保存。抽選時は通信しません。",mode:"抽選方式",random:"全件から均等抽選（重複なし）",ranked:"投稿数上位 N 名",count:"抽選人数",draw:"候補を再抽選",load:"ローカルの絵師一覧を読込中…",total:"スナップショット内の有効絵師タグ",date:"一覧の取得日時",bundled:"同梱スナップショット",downloaded:"手動更新したスナップショット",pending:"方式・人数の変更は再抽選で反映します。",update:"全件一覧を更新",confirm:"全件をオンラインで取得するため10分以上かかる場合があります。現在の候補は引き続き使用できます。",start:"更新を開始",cancel:"キャンセル",updated:"一覧を更新しました。再抽選すると新しい一覧を使用します。",failed:"ローカル一覧の読み込みに失敗しました。再試行するかインストールを確認してください。",updateFailed:"更新が完了しませんでした。元の一覧と候補は維持されます。",selection:"現在の候補",warning:"大量の候補を一度に抽選すると一時停止する場合があります。初期値は1000名です。"},
+ "ko-KR": {updateCancelled:"업데이트를 취소했습니다. 기존 스냅샷과 후보는 유지됩니다.",updateTimeout:"업데이트 시간이 초과되었습니다. 나중에 다시 시도하세요.",updateWorkerFailed:"작가 목록 백그라운드 처리에 실패했습니다.",updateBusy:"다른 목록 업데이트가 실행 중입니다.",updateNetworkFailed:"네트워크 요청 실패",updateDiskFailed:"디스크 쓰기 실패",previousCandidates:"현재 후보는 이전 스냅샷을 사용합니다. 다시 추첨하여 새 목록을 사용하세요.",settingsFailed:"선택 설정이 저장되지 않았습니다. 재시작 시 이전 선택으로 돌아갈 수 있습니다.",title:"Danbooru 고정 작가 목록",description:"전체 순위 스냅샷을 로컬에 저장합니다. 후보 추첨에는 네트워크를 사용하지 않습니다.",mode:"추첨 방식",random:"전체에서 균등 추첨 (중복 없음)",ranked:"게시물 수 상위 N명",count:"추첨할 작가 수",draw:"후보 다시 추첨",load:"로컬 작가 목록 읽는 중…",total:"스냅샷의 유효 작가 태그",date:"목록 스냅샷 날짜",bundled:"내장 스냅샷",downloaded:"수동 업데이트된 로컬 스냅샷",pending:"방식이나 수가 바뀌었습니다. 다시 추첨하여 적용하세요.",update:"전체 목록 업데이트",confirm:"전체 작가를 온라인으로 조회하므로 10분 이상 걸릴 수 있습니다. 현재 후보는 계속 사용할 수 있습니다.",start:"업데이트 확인",cancel:"취소",updated:"목록이 업데이트되었습니다. 다시 추첨하여 사용하세요.",failed:"로컬 목록 읽기에 실패했습니다. 다시 시도하거나 설치 파일을 확인하세요.",updateFailed:"업데이트가 완료되지 않았습니다. 기존 스냅샷과 후보는 유지됩니다.",selection:"현재 후보",warning:"많은 작가를 한 번에 추첨하면 잠시 멈출 수 있습니다. 기본값은 1,000명입니다."},
+} satisfies Record<AppLanguage,Record<string,string>>;
+export const artistCatalogText=(language:AppLanguage)=>COPY[language];
+export function formatCatalogUpdateError(error: unknown, language: AppLanguage): string {
+ const t=COPY[language], message=error instanceof Error?error.message:typeof error==="string"?error:"";
+ if (/catalog update cancel(?:led|ed)/i.test(message)) return t.updateCancelled;
+ if (/catalog operation timed out/i.test(message)) return t.updateFailed+" "+t.updateTimeout;
+ if (/catalog worker (?:failed|stopped)/i.test(message)) return t.updateFailed+" "+t.updateWorkerFailed;
+ if (/catalog update already running/i.test(message)) return t.updateBusy;
+ const status=message.match(/catalog network request failed(?: \((\d{3})\))?/i);
+ if (status) return t.updateFailed+" "+t.updateNetworkFailed+(status[1]?` (HTTP ${status[1]})`:"");
+ const disk=message.match(/\b(ENOSPC|EACCES|EPERM)\b/);
+ if (disk) return t.updateFailed+" "+t.updateDiskFailed+` (${disk[1]})`;
+ return t.updateFailed;
+}
+export function ArtistCatalogStatus({snapshot,latestCatalog,language}:{snapshot:ArtistCatalogSelection|null;latestCatalog?:ArtistCatalogInfo|null;language:AppLanguage}) {
+ const t=COPY[language];
+ if(!snapshot)return null;
+ const catalog=latestCatalog??snapshot.catalog;
+ const previous=catalog.savedAt!==snapshot.catalog.savedAt;
+ return <div className="artist-catalog-status" role="status" aria-live="polite">
+   <span>{t.total}：{catalog.total.toLocaleString(language)}</span>
+   <small>{t.date}：{new Date(catalog.savedAt).toLocaleString(language)} · {catalog.source==="bundled"?t.bundled:t.downloaded}</small>
+   <small>{t.selection}：{snapshot.items.length.toLocaleString(language)} / {snapshot.requested.toLocaleString(language)} · {snapshot.mode==="random"?t.random:t.ranked}</small>
+   {previous && <small>{t.previousCandidates}</small>}
+ </div>;
+}

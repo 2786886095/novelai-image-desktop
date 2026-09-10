@@ -1,3 +1,4 @@
+import { OutputRecoveryNotice } from "./OutputRecoveryNotice";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { CheckIcon, CloseIcon, FolderOpenIcon, RefreshIcon } from "../tavern/MaterialIcons";
@@ -48,6 +49,6 @@ export function ImageSaveNoticeCard({ notice, language, onDismiss, onOpen }: {
 export function ImageSaveFeedback({ language }: { language: unknown }) {
   const [notices, setNotices] = useState<ImageSaveNotice[]>([]);
   useEffect(() => window.naiDesktop.onImageSaveFeedback?.(setNotices), []);
-  return createPortal(<div className="image-save-feedback">{notices.map(notice => <ImageSaveNoticeCard key={notice.id} notice={notice} language={language}
+  return createPortal(<div className="image-save-feedback"><OutputRecoveryNotice />{notices.map(notice => <ImageSaveNoticeCard key={notice.id} notice={notice} language={language}
     onDismiss={() => window.naiDesktop.dismissImageSaveFeedback(notice.id)} onOpen={path => window.naiDesktop.openInExplorer(path)} />)}</div>, document.body);
 }

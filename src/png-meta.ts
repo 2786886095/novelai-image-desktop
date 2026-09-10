@@ -1,3 +1,4 @@
+import { metadataReplayFromComment } from "./metadata-replay";
 // Embedded image metadata parsing and mapping to GenerateParams.
 //
 // Supported inputs:
@@ -78,14 +79,14 @@ export function parseNovelAICharCaptions(meta: Record<string, string>): CharCapt
   const useCoords = prompt?.use_coords === true;
   return positiveItems.flatMap((raw, index) => {
     const item = objectValue(raw);
-    const value = nonEmpty(item?.char_caption);
-    if (!value) return [];
+    const value = typeof item?.char_caption === 'string' ? item.char_caption : undefined;
+    if (!value?.trim()) return [];
     const negativeItem = objectValue(negativeItems[index]);
     const centers = Array.isArray(item?.centers) ? item.centers : [];
     const center = objectValue(centers[0]);
     return [{
       prompt: value,
-      negativePrompt: nonEmpty(negativeItem?.char_caption) ?? "",
+      negativePrompt: typeof negativeItem?.char_caption === "string" ? negativeItem.char_caption : "",
       useCoords,
       x: finiteNumber(center?.x) ?? 0.5,
       y: finiteNumber(center?.y) ?? 0.5,
@@ -340,9 +341,9 @@ function schedulerToNai(value: unknown): string | undefined {
 function cleanImported(imported: ImportedParams): ImportedParams {
   const out = Object.fromEntries(
     Object.entries(imported).filter(([key, value]) =>
-      value !== undefined && (value !== "" || key === "stylePrompt")),
+      value !== undefined && (value !== "" || ["stylePrompt", "positivePrompt", "negativePrompt"].includes(key))),
   ) as ImportedParams;
-  if (out.seed !== undefined) out.seedMode = out.seed > 0 ? "fixed" : "random";
+  if (out.seed !== undefined) out.seedMode = out.seed >= 0 ? "fixed" : "random";
   return out;
 }
 
@@ -363,15 +364,18 @@ export function parseImportedParams(meta: Record<string, string>): ImportedParam
   const v4PromptCaption = objectValue(v4Prompt?.caption);
   const v4Negative = objectValue(comment.v4_negative_prompt);
   const v4NegativeCaption = objectValue(v4Negative?.caption);
-  const prompt = nonEmpty(v4PromptCaption?.base_caption) ?? meta.Description ?? nonEmpty(comment.prompt);
-  const negativePrompt = nonEmpty(v4NegativeCaption?.base_caption) ?? nonEmpty(comment.uc);
+  const rawText = (value: unknown) => typeof value === "string" ? value : undefined;
+  const prompt = rawText(v4PromptCaption?.base_caption) ?? rawText(comment.prompt) ?? meta.Description;
+  const negativePrompt = rawText(v4NegativeCaption?.base_caption) ?? rawText(comment.uc);
   const modelCandidate =
     (typeof comment.model === "string" ? comment.model : undefined) ?? meta.Source;
   const isNovelAi = /novelai/i.test(`${meta.Software ?? ""} ${meta.Source ?? ""}`) || Boolean(v4Prompt);
 
   return cleanImported({
-    positivePrompt: nonEmpty(prompt),
+    positivePrompt: prompt,
     negativePrompt,
+    preservePromptText: isNovelAi ? true : undefined,
+    metadataReplay: isNovelAi ? metadataReplayFromComment(comment, modelToNai(modelCandidate)) : undefined,
     // NovelAI embeds the already-expanded effective prompts. Restoring them
     // while retaining local style/quality/UC presets would append text twice.
     stylePrompt: isNovelAi ? "" : undefined,
@@ -393,9 +397,7 @@ export function parseImportedParams(meta: Record<string, string>): ImportedParam
     qualityToggle: isNovelAi ? false : undefined,
     qualityPreset: isNovelAi ? "none" : undefined,
     transparentBackground:
-      isNovelAi && comment.tag_hint_transparent_background === true
-        ? true
-        : undefined,
+      isNovelAi ? comment.tag_hint_transparent_background === true : undefined,
     variety: isNovelAi ? comment.skip_cfg_above_sigma === 58 : undefined,
   });
 }

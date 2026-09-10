@@ -6,6 +6,17 @@ type Row = readonly [string, string, string, string, string];
 // by the desktop and mobile layouts but not by ordinary chat or generation.
 // Tuple order: zh-CN, zh-TW, en-US, ja-JP, ko-KR.
 const TEXT = {
+  copying: ["正在复制…", "正在複製…", "Copying…", "コピー中…", "복사 중…"],
+  copyFailed: ["复制失败，请重试", "複製失敗，請重試", "Copy failed. Try again.", "コピーに失敗しました。再試行してください。", "복사하지 못했습니다. 다시 시도하세요."],
+  generateNow: ["立即生图", "立即生圖", "Generate now", "今すぐ生成", "지금 생성"],
+  repairingImage: ["正在自动整理提示词", "正在自動整理提示詞", "Repairing image plan", "画像プランを修正中", "이미지 계획 수정 중"],
+  repairingImageHint: ["模型返回格式不符，正在自动修正一次；完成后继续当前生图模式。", "模型回傳格式不符，正在自動修正一次；完成後繼續目前生圖模式。", "Repairing the model output once, then continuing in the selected mode.", "出力形式を一度修正してから、選択中のモードで続行します。", "출력 형식을 한 번 수정한 후 선택한 모드로 계속합니다."],
+  autoImagePaused: ["自动生图已暂停", "自動生圖已暫停", "Auto generation paused", "自動生成は一時停止中", "자동 생성 일시 중지"],
+  autoImagePausedHint: ["自动整理未成功，尚未提交生图，原提示词已保留。可重新生成回复，或选择下方方案直接继续。", "自動整理未成功，尚未提交生圖，原提示詞已保留。可重新生成回覆，或選擇下方方案直接繼續。", "Repair did not succeed. No image was submitted; the original prompt is retained. Retry the reply or choose a plan below to continue.", "修正できなかったため画像は未送信です。元のプロンプトを保持しています。応答を再試行するか、下のプランで続行してください。", "수정에 실패하여 이미지는 제출되지 않았습니다. 원본 프롬프트는 유지됩니다. 응답을 재시도하거나 아래 계획을 선택하세요."],
+  autoImageReady: ["准备自动生成", "準備自動生成", "Preparing auto generation", "自動生成を準備中", "자동 생성 준비 중"],
+  keepAndGenerate: ["使用原方案并生成", "使用原方案並生成", "Generate original plan", "元のプランで生成", "원래 계획으로 생성"],
+  adoptAndGenerate: ["采用新方案并生成", "採用新方案並生成", "Generate proposed plan", "新しいプランで生成", "새 계획으로 생성"],
+  retryImage: ["重试生图", "重試生圖", "Retry image generation", "画像生成を再試行", "이미지 생성 재시도"],
   characterUnset: ["尚未填写角色设定", "尚未填寫角色設定", "Character details not set", "キャラクター設定は未入力です", "캐릭터 설정이 없습니다"],
   builtInProtected: ["内置受保护", "內置受保護", "Built-in · protected", "内蔵・保護済み", "내장 · 보호됨"],
   favorited: ["已收藏", "已收藏", "Favorited", "お気に入り済み", "즐겨찾기됨"],
@@ -39,6 +50,8 @@ const TEXT = {
   styleName: ["风格提示词名称", "風格提示詞名稱", "Style prompt name", "スタイルプロンプト名", "스타일 프롬프트 이름"],
   cancel: ["取消", "取消", "Cancel", "キャンセル", "취소"],
   save: ["保存", "儲存", "Save", "保存", "저장"],
+  newMessages: ["有新消息 · 查看最新", "有新訊息 · 查看最新", "New messages · View latest", "新着メッセージ · 最新を表示", "새 메시지 · 최신 보기"],
+  replyComplete: ["新回复已完成", "新回覆已完成", "New reply completed", "新しい返信が完了しました", "새 답변이 완료되었습니다"],
   chooseCharacter: ["选择一个角色，开启故事", "選擇一個角色，開啟故事", "Choose a character and start a story", "キャラクターを選んで物語を始める", "캐릭터를 선택해 이야기를 시작하세요"],
   chooseCharacterHint: ["支持 PNG / JSON / CHARX 角色卡、世界书、用户设定与群聊。", "支援 PNG / JSON / CHARX 角色卡、世界書、使用者設定與群聊。", "Supports PNG, JSON, and CHARX cards, lorebooks, personas, and group chats.", "PNG / JSON / CHARX カード、ワールド情報、ペルソナ、グループチャットに対応。", "PNG / JSON / CHARX 카드, 로어북, 페르소나, 그룹 대화를 지원합니다."],
   whatToDraw: ["你想画什么？", "你想畫什麼？", "What would you like to create?", "何を描きますか？", "무엇을 그리고 싶나요?"],

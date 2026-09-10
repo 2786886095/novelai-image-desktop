@@ -543,7 +543,8 @@ describe("desktop UI consistency guards", () => {
     expect(app).toContain('<option value="ai">{t("settings.aiTranslate")}</option>');
     expect(app).toContain('detectModels("translate")');
     expect(app).toContain('update("translateAiModel", e.target.value)');
-    expect(store).toContain('"translateAiApiKey"');
+    expect(store).toContain("SENSITIVE_SETTING_KEYS");
+    expect(fs.readFileSync(path.join(projectRoot, "electron/ipc/credential-vault.ts"), "utf8")).toContain('"translateAiApiKey"');
     expect(nai).toContain('settings.translateProvider === "ai"');
     expect(nai).toContain('`${base}/chat/completions`');
     expect(i18n.match(/"settings\.aiTranslate"/g)).toHaveLength(5);

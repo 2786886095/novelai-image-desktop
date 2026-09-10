@@ -1,4 +1,8 @@
+import 'provider_outcome.dart';
+import 'image_repair.dart';
+import '../models/nai_models.dart';
 import 'image_continuity.dart';
+import 'scene_bindings.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -31,6 +35,7 @@ class AgentController extends ChangeNotifier {
   bool loaded = false;
   bool sending = false;
   bool compacting = false;
+  final Set<String> _savingSceneMessages = {};
   String? error;
 
   Set<String> _alwaysAllowed = <String>{};
@@ -148,10 +153,45 @@ class AgentController extends ChangeNotifier {
     _notify();
   }
 
+  /// Save the editor against the exact scene it opened, never a newer proposal.
+  Future<void> saveTavernScene(String conversationId, String messageId,
+      Map<String, dynamic> expected, Map<String, dynamic> updated) async {
+    final conversation = workspace.conversations.where((c) => c.id == conversationId).firstOrNull;
+    final message = conversation?.messages.where((m) => m.id == messageId).firstOrNull;
+    final proposal = message?.imageProposal;
+    if (proposal == null || _savingSceneMessages.contains(messageId) ||
+        proposal.status == 'generating' || proposal.status == 'complete' ||
+        canonicalSceneValue(proposal.scene) != canonicalSceneValue(expected)) {
+      throw StateError('SCENE_STALE');
+    }
+    final checked = readSceneBindings(updated);
+    if (checked == null) throw StateError('SCENE_INVALID');
+    final prompt = compileSceneBindings(checked)['positivePrompt'] as String;
+    final oldScene = proposal.scene, oldPrompt = proposal.positivePrompt;
+    _savingSceneMessages.add(messageId);
+    proposal..scene = checked..positivePrompt = prompt;
+    try {
+      await _persist();
+    } catch (_) {
+      if (identical(message!.imageProposal, proposal) && identical(proposal.scene, checked)) {
+        proposal..scene = oldScene..positivePrompt = oldPrompt;
+      }
+      rethrow;
+    } finally {
+      _savingSceneMessages.remove(messageId);
+      _notify();
+    }
+  }
+
   void _schedulePersist() {
     _persistTimer?.cancel();
     _persistTimer = Timer(const Duration(milliseconds: 180), () {
-      if (!_disposed) unawaited(_persist());
+      if (!_disposed) {
+        unawaited(_persist().catchError((Object caught) {
+          error = caught.toString().replaceFirst('Exception: ', '');
+          _notify();
+        }));
+      }
     });
   }
 
@@ -588,7 +628,7 @@ class AgentController extends ChangeNotifier {
     messages.add({
       'role': 'system',
       'content': imageStateContext(latestImageState(conversation.messages,
-          characterId: active.id, resetAt: conversation.imageStateResetAt))
+          characterId: active.id, resetAt: conversation.imageStateResetAt), model: _tavernImageDefaults(active).model)
     });
     if (conversation.lastSummary?.trim().isNotEmpty == true) {
       messages.add({
@@ -729,6 +769,11 @@ class AgentController extends ChangeNotifier {
           !assistant.content.endsWith(turn.content)) {
         assistant.content += turn.content;
       }
+      if (turn.issue != null || turn.content.trim().isEmpty) {
+        assistant.usage = turn.usage;
+        throw AgentProviderException(providerIssueMessage(
+            app.settings.language, turn.issue ?? 'empty'));
+      }
       var parsed = parseLangbaiImageProposal(assistant.content);
       final character = workspace.characters
               .where((item) => item.id == conversation.activeCharacterId)
@@ -736,23 +781,39 @@ class AgentController extends ChangeNotifier {
           workspace.characters.first;
       final parsedProposal = parsed.proposal;
       if (parsedProposal != null) {
-        final resolved = resolveImagePrompt(
-            parsedProposal.toJson(),
-            latestImageState(conversation.messages,
-                characterId: character.id,
-                resetAt: conversation.imageStateResetAt));
+        final base=latestImageState(conversation.messages,characterId:character.id,resetAt:conversation.imageStateResetAt);
+        final raw=parsedProposal.toJson();
+        applyAuthoritativeTavernImageDefaults(parsedProposal,_tavernImageDefaults(character));
+        final repair=await repairImagePrompt(raw:raw,base:base,model:parsedProposal.model,
+          checkCancelled:_throwIfAborted,abortRequest:provider.abort,
+          onStart:(){
+            final initial=resolveImagePrompt(raw,base,model:parsedProposal.model);
+            assistant.imageProposal=parsedProposal;
+            parsedProposal.continuity={...initial.continuity,'repairStatus':'repairing'};
+            _notify();
+          },
+          request:(instruction)=>provider.complete(settings:app.settings,apiKey:apiKey,
+            messages:[...modelMessages,{'role':'assistant','content':turn.content},{'role':'user','content':instruction}],
+            tools:const [],toolsEnabled:false,onDelta:(_){},
+            generationConfig:{'temperature':preset.temperature,'topP':preset.topP,
+              'frequencyPenalty':preset.frequencyPenalty,'presencePenalty':preset.presencePenalty,
+              'maxOutputTokens':preset.maxOutputTokens??app.settings.agentMaxOutputTokens,'stop':preset.stop,'reasoningEffort':conversation.reasoningEffort}),
+        );
+        if(repair.usage!=null) usage.add(repair.usage!);
+        final resolved = resolveImagePrompt(repair.raw,base,model:parsedProposal.model);
+        if(repair.state!='unchanged') resolved.continuity['repairStatus']=repair.state;
         parsedProposal
           ..positivePrompt = resolved.positivePrompt
-          ..continuity = resolved.continuity;
+          ..continuity = resolved.continuity
+          ..scene = resolved.scene;
         parsedProposal.promptPatch = null;
+        parsedProposal.scenePatch = null;
         applyAuthoritativeTavernImageDefaults(
           parsedProposal,
           _tavernImageDefaults(character),
         );
         parsedProposal
-          ..negativePrompt = character.visual.negativePrompt.trim().isEmpty
-              ? defaultTavernNegativePrompt
-              : character.visual.negativePrompt
+          ..negativePrompt = character.visual.negativePrompt
           ..stylePrompt = character.visual.stylePrompt;
       }
       assistant
@@ -822,13 +883,18 @@ class AgentController extends ChangeNotifier {
   }
 
   Map<String, dynamic> _imageArguments(TavernImageProposal proposal) {
+    if (proposal.scene == null && proposal.continuity?['bindingError']=='SCENE_REQUIRED') throw StateError('SCENE_REQUIRED');
     final character = activeCharacter;
-    final negative = character?.visual.negativePrompt.trim().isNotEmpty == true
-        ? character!.visual.negativePrompt
-        : defaultTavernNegativePrompt;
+    final negative = character?.visual.negativePrompt ?? '';
     final style = character?.visual.stylePrompt ?? '';
+    final compiled=proposal.scene == null?null:compileSceneBindings(proposal.scene!);
+    if(compiled!=null){
+      final params=GenerateParams.fromJson({...app.params.toJson(),'model':proposal.model??app.params.model});
+      if(!params.isV4Plus||(compiled['characterPrompts'] as List).length>params.maxCharacterPrompts) throw StateError('SCENE_MODEL_CAPACITY');
+    }
     return {
       'positivePrompt': proposal.positivePrompt,
+      if(compiled!=null) ...compiled,
       'negativePrompt': negative,
       'stylePrompt': style,
       if (proposal.model != null) 'model': proposal.model,
@@ -853,7 +919,12 @@ class AgentController extends ChangeNotifier {
         ..error = '正面提示词不能为空。';
       return;
     }
-    final arguments = _imageArguments(proposal);
+    Map<String,dynamic> arguments;
+    try {
+      arguments = _imageArguments(proposal);
+      if (proposal.scene != null) proposal.positivePrompt = arguments['positivePrompt'] as String;
+      proposal..stylePrompt=arguments['stylePrompt'] as String..negativePrompt=arguments['negativePrompt'] as String;
+    } catch (error) { proposal..status = 'error'..error = error.toString(); await _persist(); _notify(); return; }
     final execution = AgentToolExecution(
       id: agentId('tool'),
       name: 'langbai_generate_image',
@@ -869,9 +940,10 @@ class AgentController extends ChangeNotifier {
     conversation
       ..status = 'running'
       ..updatedAt = agentNow();
-    await _persist();
     _notify();
     try {
+      // A failed preflight write must take the same recovery path as generation.
+      await _persist();
       final result = await tools.execute(
         'langbai_generate_image',
         arguments,
@@ -900,8 +972,13 @@ class AgentController extends ChangeNotifier {
       conversation
         ..status = 'idle'
         ..updatedAt = agentNow();
-      await _persist();
-      _notify();
+      try {
+        await _persist();
+      } catch (caught) {
+        error = caught.toString().replaceFirst('Exception: ', '');
+      } finally {
+        _notify();
+      }
     }
   }
 
@@ -915,7 +992,7 @@ class AgentController extends ChangeNotifier {
         conversation.messages.where((item) => item.id == messageId).firstOrNull;
     if (message == null) return;
     final proposal = editedProposal ?? message.imageProposal;
-    if (proposal == null || proposal.status == 'generating') return;
+    if (proposal == null || proposal.status == 'generating' || _savingSceneMessages.contains(messageId)) return;
     message.imageProposal = proposal;
     await _generateTavernImageInternal(conversation, message, proposal);
   }

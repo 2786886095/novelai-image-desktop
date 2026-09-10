@@ -216,36 +216,48 @@ export function parseArtistRecipe(input: string): ParsedRecipeToken[] {
   return output;
 }
 
-function weightedChoice<T>(items: T[], weights: number[], random: () => number): number {
-  const total = weights.reduce((sum, value) => sum + Math.max(0, value), 0);
-  if (total <= 0) return Math.floor(random() * items.length);
-  let cursor = random() * total;
-  for (let index = 0; index < items.length; index += 1) {
-    cursor -= Math.max(0, weights[index]);
-    if (cursor <= 0) return index;
+// Build once per batch instead of scanning/copying the full artist pool for
+// every selected tag. Fenwick sampling retains the same popularity/favorite
+// weights and samples without replacement, including the entire long tail.
+function createArtistSampler(pool: ArtistTagRecord[], favorites: Set<string>) {
+  const n = pool.length;
+  const weights = new Float64Array(n);
+  const tree = new Float64Array(n + 1);
+  for (let i = 1; i <= n; i++) {
+    weights[i - 1] = Math.sqrt(Math.max(1, pool[i - 1].postCount)) * (favorites.has(pool[i - 1].name) ? 4 : 1);
+    tree[i] += weights[i - 1];
+    const parent = i + (i & -i);
+    if (parent <= n) tree[parent] += tree[i];
   }
-  return items.length - 1;
-}
-
-function chooseDistinctArtists(
-  pool: ArtistTagRecord[],
-  size: number,
-  favorites: Set<string>,
-  random: () => number,
-): ArtistTagRecord[] {
-  const available = [...pool];
-  const selected: ArtistTagRecord[] = [];
-  while (available.length > 0 && selected.length < size) {
-    const weights = available.map((artist) => {
-      // Popularity is a prior, not a monopoly: sqrt compresses the long tail.
-      const popularity = Math.sqrt(Math.max(1, artist.postCount));
-      return popularity * (favorites.has(artist.name) ? 4 : 1);
-    });
-    const index = weightedChoice(available, weights, random);
-    selected.push(available[index]);
-    available.splice(index, 1);
-  }
-  return selected;
+  let highestBit = 1;
+  while (highestBit * 2 <= n) highestBit *= 2;
+  const update = (index: number, delta: number) => {
+    for (let i = index + 1; i <= n; i += i & -i) tree[i] += delta;
+  };
+  const totalWeight = () => {
+    let total = 0;
+    for (let i = n; i > 0; i -= i & -i) total += tree[i];
+    return total;
+  };
+  return (size: number, random: () => number) => {
+    const selected: number[] = [];
+    try {
+      while (selected.length < Math.min(n, size)) {
+        let cursor = Math.max(0, Math.min(1 - Number.EPSILON, random())) * totalWeight();
+        let index = 0;
+        for (let bit = highestBit; bit > 0; bit = Math.floor(bit / 2)) {
+          const next = index + bit;
+          if (next <= n && tree[next] <= cursor) { cursor -= tree[next]; index = next; }
+        }
+        index = Math.min(index, n - 1);
+        // Floating-point cancellation near the upper boundary must not draw a
+        // removed entry twice. This rare correction scans only for one entry.
+        if (selected.includes(index)) index = pool.findIndex((_, i) => !selected.includes(i));
+        selected.push(index); update(index, -weights[index]);
+      }
+      return selected.map(i => pool[i]);
+    } finally { for (const i of selected) update(i, weights[i]); }
+  };
 }
 
 function normalizedWeightBounds(rawMin: number | undefined, rawMax: number | undefined, defaults: [number, number]): [number, number] {
@@ -512,6 +524,7 @@ export function generatePopularArtistRecipes(
   const [artistWeightMin, artistWeightMax] = normalizedWeightBounds(options.artistWeightMin, options.artistWeightMax, [0.2, 1.2]);
   const [franchiseWeightMin, franchiseWeightMax] = normalizedWeightBounds(options.franchiseWeightMin, options.franchiseWeightMax, [0.15, 0.8]);
   const favorites = new Set((options.favoriteArtists ?? []).map(canonicalArtistTagName).filter(Boolean));
+  const sampleArtists = createArtistSampler(pool, favorites);
   const baseAuxiliary = parseArtistRecipe(options.auxiliaryPrompt ?? "")
     .filter((token) => token.kind !== "artist");
   const customTagPool = parseCustomTagPool(options.customTagPool ?? "");
@@ -525,7 +538,7 @@ export function generatePopularArtistRecipes(
     // median while still allowing sparse and very dense combinations.
     const span = maxArtists - minArtists + 1;
     const size = minArtists + Math.floor(((random() + random()) / 2) * span);
-    const selected = chooseDistinctArtists(pool, Math.min(maxArtists, size), favorites, random);
+    const selected = sampleArtists(Math.min(maxArtists, size), random);
     if (selected.length === 0) break;
     const leadCount = selected.length >= 8 && random() < 0.35 ? 2 : 1;
     const accentCount = selected.length >= 5 ? Math.max(1, Math.round(selected.length * 0.25)) : 0;

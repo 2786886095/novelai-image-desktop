@@ -103,9 +103,11 @@ describe("Character Tavern desktop UI", () => {
 
     expect(source).toContain("saveRevision.current += 1");
     expect(source).toContain("deletingConversationId");
-    expect(source).toContain('role="status"><CheckIcon />{tx("copied")}');
+    expect(source).toContain('role="status"');
+    expect(source).toContain('copyFailed');
+    expect(source).toContain('await copyTavernText(content)');
     expect(source).toContain("copyMessage");
-    expect(source).toContain("setCopied(false), 900");
+    expect(source).toContain("setCopied(false), 1400");
     expect(styles).toContain(".tavern-copy-feedback");
     expect(styles).toContain("position: fixed");
     expect(styles).toContain("top: clamp(190px, 24vh, 220px)");

@@ -1,3 +1,4 @@
+import { recoverLegacyCredentials } from "./ipc/credential-recovery";
 import { readClipboardImageFiles, savePastedImageFiles } from "./ipc/image-clipboard";
 import {
   app,
@@ -99,11 +100,14 @@ import {
   discoverSimilarArtists,
   clearArtistLabModels,
   loadPopularArtistRanking,
-  loadPopularArtistTags,
+  loadPopularArtistPool,
   pickArtistLabTarget,
   scoreArtistLabImages,
   searchArtistTags,
 } from "./ipc/artist-lab";
+import { createArtistPoolSyncManager } from "./ipc/artist-pool-sync";
+import { createArtistCatalogService } from "./ipc/artist-catalog-service";
+import { createSelectedArtistPoolManager, createArtistPoolTotalService } from "./ipc/artist-pool-selected";
 import {
   ARTIST_FAVORITE_COLLECTIONS,
   loadArtistFavoriteLibrary,
@@ -269,6 +273,7 @@ const uiCapturePath = process.env.NAI_UI_CAPTURE_PATH?.trim();
 const uiCaptureUserData = process.env.NAI_UI_CAPTURE_USER_DATA?.trim();
 const normalizedUiCapturePath = uiCapturePath?.replaceAll("\\", "/").toLowerCase() ?? "";
 if (uiCaptureUserData) app.setPath("userData", path.resolve(uiCaptureUserData));
+else pinUserDataAndMigrate();
 if (!app.requestSingleInstanceLock()) {
   app.quit();
   process.exit(0);
@@ -316,6 +321,7 @@ function pinUserDataAndMigrate() {
   const appData = app.getPath("appData");
   const stableDir = path.join(appData, STABLE_USER_DATA_DIR);
   try {
+    fs.mkdirSync(stableDir, {recursive: true});
     app.setPath("userData", stableDir);
     migrateLegacyUserDataStore({
       appData,
@@ -344,6 +350,10 @@ function createWindow() {
     title: "Langbai NovelAI Studio",
     icon: iconPath,
     webPreferences: {
+      // Capture mode has no visible window: keep rAF/virtualized lists painting.
+      // Otherwise screenshots can falsely show an empty conversation mid-transition.
+      offscreen: Boolean(uiCapturePath),
+      backgroundThrottling: !uiCapturePath,
       preload: path.join(__dirname, "preload.js"),
       nodeIntegration: false,
       contextIsolation: true,
@@ -720,9 +730,55 @@ function registerIpc() {
   );
   ipcMain.handle(
     "artistLab:popularArtists",
-    (_event, limit: unknown, force: unknown) =>
-      loadPopularArtistTags(limit, force, true),
+    async (_event, limit: unknown) =>
+      (await loadPopularArtistPool(limit)).items,
   );
+  ipcMain.handle(
+    "artistLab:popularArtistPool",
+    (_event, limit: unknown) => loadPopularArtistPool(limit),
+  );
+  const artistPoolSync = createArtistPoolSyncManager();
+  ipcMain.handle("artistLab:allArtists", async (event, requestId: string) => {
+    const owner = event.sender.id;
+    const destroyed = () => artistPoolSync.dispose(owner);
+    event.sender.once("destroyed", destroyed);
+    try {
+      return await artistPoolSync.start(owner, requestId, progress => {
+        if (!event.sender.isDestroyed()) event.sender.send("artistLab:syncProgress", progress);
+      });
+    } finally { event.sender.removeListener("destroyed", destroyed); }
+  });
+  const catalogAppRoot = path.resolve(__dirname,"../..");
+  const catalogRoot = catalogAppRoot.endsWith(".asar") ? catalogAppRoot+".unpacked" : catalogAppRoot;
+  const catalogService = createArtistCatalogService({
+    workerPath:path.join(catalogRoot,"dist-electron/electron/ipc/artist-catalog-worker.js"),
+    bundled:path.join(catalogRoot,"dist/artist-catalog/danbooru.bin.gz"),
+    current:path.join(app.getPath("userData"),"artist-catalog/current.bin.gz"),
+  });
+  app.once("before-quit",()=>catalogService.dispose());
+  ipcMain.handle("artistLab:catalogSelect",(event,count:unknown,mode:unknown,seed:unknown)=>catalogService.select(event.sender.id,count,mode,seed));
+  ipcMain.handle("artistLab:catalogUpdate",async(event,id:string)=>{
+    const owner=event.sender.id, destroyed=()=>catalogService.disposeOwner(owner);
+    event.sender.once("destroyed",destroyed);
+    try{return await catalogService.update(owner,id,progress=>{if(!event.sender.isDestroyed())event.sender.send("artistLab:syncProgress",progress);});}
+    finally{event.sender.removeListener("destroyed",destroyed);}
+  });
+  ipcMain.handle("artistLab:catalogCancel",(event,id:string)=>catalogService.cancel(event.sender.id,id));
+  const selectedArtistPool = createSelectedArtistPoolManager();
+  const artistPoolTotal = createArtistPoolTotalService();
+  ipcMain.handle("artistLab:selectedArtists", async (event, requestId: string, count: unknown) => {
+    const owner = event.sender.id;
+    const destroyed = () => selectedArtistPool.dispose(owner);
+    event.sender.once("destroyed", destroyed);
+    try {
+      return await selectedArtistPool.start(owner, requestId, count, progress => {
+        if (!event.sender.isDestroyed()) event.sender.send("artistLab:syncProgress", progress);
+      });
+    } finally { event.sender.removeListener("destroyed", destroyed); }
+  });
+  ipcMain.handle("artistLab:artistTotal", (_event, force: unknown) => artistPoolTotal(force === true));
+  ipcMain.handle("artistLab:cancelSync", (event, requestId: string) =>
+    selectedArtistPool.cancel(event.sender.id, requestId) || artistPoolSync.cancel(event.sender.id, requestId));
   ipcMain.handle(
     "artistLab:artistRanking",
     (_event, page: unknown, pageSize: unknown, query: unknown, force: unknown) =>
@@ -1301,7 +1357,10 @@ function registerIpc() {
 
 app.whenReady().then(async () => {
   await installLocalMediaProtocol();
-  if (!uiCaptureUserData) pinUserDataAndMigrate();
+  if (!uiCaptureUserData) {
+    try { await recoverLegacyCredentials(); }
+    catch { console.warn("[credentials] Recovery incomplete; original encrypted credentials preserved."); }
+  }
   readStore();
   // Materialize/repair the built-in Character Tavern workspace before the
   // renderer opens. This prevents an unreleased broken workspace from

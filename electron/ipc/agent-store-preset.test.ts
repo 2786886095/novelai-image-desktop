@@ -1,3 +1,4 @@
+import sceneFixture from '../../shared/tavern-scene-fixtures.json';
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("./store", () => ({
@@ -55,4 +56,14 @@ describe("image continuity persistence", () => {
     expect(restored.conversations[0].messages[0].imageProposal?.continuity?.previousPrompt).toBe("red coat");
     expect(restored.conversations[0].messages[0].imageProposalSwipes?.[1]?.positivePrompt).toBe("red coat, white shirt");
   });
+});
+
+it('persists bound scenes independently in current and alternate replies',()=>{
+ const w=createEmptyAgentWorkspace();
+ const image={id:'bound',status:'pending',positivePrompt:'1boy,1girl',negativePrompt:'',stylePrompt:'',count:1,createdAt:'2026-09-09',scene:sceneFixture.scene};
+ const data={...w,conversations:[{id:'c',title:'Bound',messages:[{id:'m',role:'assistant',content:'',attachments:[],tools:[],status:'complete',imageProposal:image,imageProposalSwipes:[image,null]}]}]};
+ const reopened=normalizeAgentWorkspace(JSON.parse(JSON.stringify(data)));
+ expect(reopened.conversations[0].messages[0].imageProposal?.scene).toEqual(sceneFixture.scene);
+ expect(reopened.conversations[0].messages[0].imageProposalSwipes?.[0]?.scene).toEqual(sceneFixture.scene);
+ expect(reopened.conversations[0].messages[0].imageProposal?.scene).not.toBe(reopened.conversations[0].messages[0].imageProposalSwipes?.[0]?.scene);
 });

@@ -1,0 +1,2625 @@
+{
+  "scene": {
+    "version": 1,
+    "revision": 0,
+    "entities": [
+      {
+        "id": "a",
+        "kind": "character",
+        "name": "红发男子",
+        "subject": "boy",
+        "prompt": "adult man",
+        "position": {
+          "x": 0,
+          "y": 1
+        }
+      },
+      {
+        "id": "b",
+        "kind": "character",
+        "name": "金发女子",
+        "subject": "girl",
+        "prompt": "adult woman"
+      },
+      {
+        "id": "coat_a",
+        "kind": "garment",
+        "name": "A 的外套",
+        "prompt": "coat",
+        "ownerId": "a",
+        "wearerId": "a"
+      },
+      {
+        "id": "coat_b",
+        "kind": "garment",
+        "name": "B 的外套",
+        "prompt": "jacket",
+        "ownerId": "b",
+        "wearerId": "b"
+      },
+      {
+        "id": "shirt_a",
+        "kind": "garment",
+        "name": "A 的衬衫",
+        "prompt": "shirt",
+        "ownerId": "a",
+        "wearerId": "a"
+      },
+      {
+        "id": "hat_b",
+        "kind": "prop",
+        "name": "B 的帽子",
+        "prompt": "hat",
+        "ownerId": "b"
+      }
+    ],
+    "facts": [
+      {
+        "id": "setting",
+        "entityId": "scene",
+        "slot": "setting",
+        "prompt": "city street at sunset"
+      },
+      {
+        "id": "hair_a",
+        "entityId": "a",
+        "slot": "hair",
+        "prompt": "red hair"
+      },
+      {
+        "id": "hair_b",
+        "entityId": "b",
+        "slot": "hair",
+        "prompt": "blonde hair"
+      },
+      {
+        "id": "expression_a",
+        "entityId": "a",
+        "slot": "expression",
+        "prompt": "smile"
+      },
+      {
+        "id": "expression_b",
+        "entityId": "b",
+        "slot": "expression",
+        "prompt": "serious"
+      },
+      {
+        "id": "color_a",
+        "entityId": "coat_a",
+        "slot": "color",
+        "prompt": "red"
+      },
+      {
+        "id": "material_a",
+        "entityId": "coat_a",
+        "slot": "material",
+        "prompt": "leather"
+      },
+      {
+        "id": "color_b",
+        "entityId": "coat_b",
+        "slot": "color",
+        "prompt": "blue"
+      },
+      {
+        "id": "shirt_color",
+        "entityId": "shirt_a",
+        "slot": "color",
+        "prompt": "white"
+      }
+    ],
+    "relations": [
+      {
+        "id": "touch",
+        "actorId": "a",
+        "targetId": "b",
+        "action": "touching",
+        "actorPart": "right hand",
+        "targetPart": "left shoulder"
+      },
+      {
+        "id": "hold",
+        "actorId": "a",
+        "targetId": "hat_b",
+        "action": "holding",
+        "actorPart": "left hand"
+      }
+    ]
+  },
+  "cases": [
+    {
+      "name": "only A coat color",
+      "scene": {
+        "version": 1,
+        "revision": 0,
+        "entities": [
+          {
+            "id": "a",
+            "kind": "character",
+            "name": "红发男子",
+            "subject": "boy",
+            "prompt": "adult man",
+            "position": {
+              "x": 0,
+              "y": 1
+            }
+          },
+          {
+            "id": "b",
+            "kind": "character",
+            "name": "金发女子",
+            "subject": "girl",
+            "prompt": "adult woman"
+          },
+          {
+            "id": "coat_a",
+            "kind": "garment",
+            "name": "A 的外套",
+            "prompt": "coat",
+            "ownerId": "a",
+            "wearerId": "a"
+          },
+          {
+            "id": "coat_b",
+            "kind": "garment",
+            "name": "B 的外套",
+            "prompt": "jacket",
+            "ownerId": "b",
+            "wearerId": "b"
+          },
+          {
+            "id": "shirt_a",
+            "kind": "garment",
+            "name": "A 的衬衫",
+            "prompt": "shirt",
+            "ownerId": "a",
+            "wearerId": "a"
+          },
+          {
+            "id": "hat_b",
+            "kind": "prop",
+            "name": "B 的帽子",
+            "prompt": "hat",
+            "ownerId": "b"
+          }
+        ],
+        "facts": [
+          {
+            "id": "setting",
+            "entityId": "scene",
+            "slot": "setting",
+            "prompt": "city street at sunset"
+          },
+          {
+            "id": "hair_a",
+            "entityId": "a",
+            "slot": "hair",
+            "prompt": "red hair"
+          },
+          {
+            "id": "hair_b",
+            "entityId": "b",
+            "slot": "hair",
+            "prompt": "blonde hair"
+          },
+          {
+            "id": "expression_a",
+            "entityId": "a",
+            "slot": "expression",
+            "prompt": "smile"
+          },
+          {
+            "id": "expression_b",
+            "entityId": "b",
+            "slot": "expression",
+            "prompt": "serious"
+          },
+          {
+            "id": "color_a",
+            "entityId": "coat_a",
+            "slot": "color",
+            "prompt": "red"
+          },
+          {
+            "id": "material_a",
+            "entityId": "coat_a",
+            "slot": "material",
+            "prompt": "leather"
+          },
+          {
+            "id": "color_b",
+            "entityId": "coat_b",
+            "slot": "color",
+            "prompt": "blue"
+          },
+          {
+            "id": "shirt_color",
+            "entityId": "shirt_a",
+            "slot": "color",
+            "prompt": "white"
+          }
+        ],
+        "relations": [
+          {
+            "id": "touch",
+            "actorId": "a",
+            "targetId": "b",
+            "action": "touching",
+            "actorPart": "right hand",
+            "targetPart": "left shoulder"
+          },
+          {
+            "id": "hold",
+            "actorId": "a",
+            "targetId": "hat_b",
+            "action": "holding",
+            "actorPart": "left hand"
+          }
+        ]
+      },
+      "patch": {
+        "revision": 0,
+        "operations": [
+          {
+            "collection": "facts",
+            "id": "color_a",
+            "before": {
+              "id": "color_a",
+              "entityId": "coat_a",
+              "slot": "color",
+              "prompt": "red"
+            },
+            "after": {
+              "id": "color_a",
+              "entityId": "coat_a",
+              "slot": "color",
+              "prompt": "black"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "only B expression",
+      "scene": {
+        "version": 1,
+        "revision": 0,
+        "entities": [
+          {
+            "id": "a",
+            "kind": "character",
+            "name": "红发男子",
+            "subject": "boy",
+            "prompt": "adult man",
+            "position": {
+              "x": 0,
+              "y": 1
+            }
+          },
+          {
+            "id": "b",
+            "kind": "character",
+            "name": "金发女子",
+            "subject": "girl",
+            "prompt": "adult woman"
+          },
+          {
+            "id": "coat_a",
+            "kind": "garment",
+            "name": "A 的外套",
+            "prompt": "coat",
+            "ownerId": "a",
+            "wearerId": "a"
+          },
+          {
+            "id": "coat_b",
+            "kind": "garment",
+            "name": "B 的外套",
+            "prompt": "jacket",
+            "ownerId": "b",
+            "wearerId": "b"
+          },
+          {
+            "id": "shirt_a",
+            "kind": "garment",
+            "name": "A 的衬衫",
+            "prompt": "shirt",
+            "ownerId": "a",
+            "wearerId": "a"
+          },
+          {
+            "id": "hat_b",
+            "kind": "prop",
+            "name": "B 的帽子",
+            "prompt": "hat",
+            "ownerId": "b"
+          }
+        ],
+        "facts": [
+          {
+            "id": "setting",
+            "entityId": "scene",
+            "slot": "setting",
+            "prompt": "city street at sunset"
+          },
+          {
+            "id": "hair_a",
+            "entityId": "a",
+            "slot": "hair",
+            "prompt": "red hair"
+          },
+          {
+            "id": "hair_b",
+            "entityId": "b",
+            "slot": "hair",
+            "prompt": "blonde hair"
+          },
+          {
+            "id": "expression_a",
+            "entityId": "a",
+            "slot": "expression",
+            "prompt": "smile"
+          },
+          {
+            "id": "expression_b",
+            "entityId": "b",
+            "slot": "expression",
+            "prompt": "serious"
+          },
+          {
+            "id": "color_a",
+            "entityId": "coat_a",
+            "slot": "color",
+            "prompt": "red"
+          },
+          {
+            "id": "material_a",
+            "entityId": "coat_a",
+            "slot": "material",
+            "prompt": "leather"
+          },
+          {
+            "id": "color_b",
+            "entityId": "coat_b",
+            "slot": "color",
+            "prompt": "blue"
+          },
+          {
+            "id": "shirt_color",
+            "entityId": "shirt_a",
+            "slot": "color",
+            "prompt": "white"
+          }
+        ],
+        "relations": [
+          {
+            "id": "touch",
+            "actorId": "a",
+            "targetId": "b",
+            "action": "touching",
+            "actorPart": "right hand",
+            "targetPart": "left shoulder"
+          },
+          {
+            "id": "hold",
+            "actorId": "a",
+            "targetId": "hat_b",
+            "action": "holding",
+            "actorPart": "left hand"
+          }
+        ]
+      },
+      "patch": {
+        "revision": 0,
+        "operations": [
+          {
+            "collection": "facts",
+            "id": "expression_b",
+            "before": {
+              "id": "expression_b",
+              "entityId": "b",
+              "slot": "expression",
+              "prompt": "serious"
+            },
+            "after": {
+              "id": "expression_b",
+              "entityId": "b",
+              "slot": "expression",
+              "prompt": "laughing"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "rename keeps identity",
+      "scene": {
+        "version": 1,
+        "revision": 0,
+        "entities": [
+          {
+            "id": "a",
+            "kind": "character",
+            "name": "红发男子",
+            "subject": "boy",
+            "prompt": "adult man",
+            "position": {
+              "x": 0,
+              "y": 1
+            }
+          },
+          {
+            "id": "b",
+            "kind": "character",
+            "name": "金发女子",
+            "subject": "girl",
+            "prompt": "adult woman"
+          },
+          {
+            "id": "coat_a",
+            "kind": "garment",
+            "name": "A 的外套",
+            "prompt": "coat",
+            "ownerId": "a",
+            "wearerId": "a"
+          },
+          {
+            "id": "coat_b",
+            "kind": "garment",
+            "name": "B 的外套",
+            "prompt": "jacket",
+            "ownerId": "b",
+            "wearerId": "b"
+          },
+          {
+            "id": "shirt_a",
+            "kind": "garment",
+            "name": "A 的衬衫",
+            "prompt": "shirt",
+            "ownerId": "a",
+            "wearerId": "a"
+          },
+          {
+            "id": "hat_b",
+            "kind": "prop",
+            "name": "B 的帽子",
+            "prompt": "hat",
+            "ownerId": "b"
+          }
+        ],
+        "facts": [
+          {
+            "id": "setting",
+            "entityId": "scene",
+            "slot": "setting",
+            "prompt": "city street at sunset"
+          },
+          {
+            "id": "hair_a",
+            "entityId": "a",
+            "slot": "hair",
+            "prompt": "red hair"
+          },
+          {
+            "id": "hair_b",
+            "entityId": "b",
+            "slot": "hair",
+            "prompt": "blonde hair"
+          },
+          {
+            "id": "expression_a",
+            "entityId": "a",
+            "slot": "expression",
+            "prompt": "smile"
+          },
+          {
+            "id": "expression_b",
+            "entityId": "b",
+            "slot": "expression",
+            "prompt": "serious"
+          },
+          {
+            "id": "color_a",
+            "entityId": "coat_a",
+            "slot": "color",
+            "prompt": "red"
+          },
+          {
+            "id": "material_a",
+            "entityId": "coat_a",
+            "slot": "material",
+            "prompt": "leather"
+          },
+          {
+            "id": "color_b",
+            "entityId": "coat_b",
+            "slot": "color",
+            "prompt": "blue"
+          },
+          {
+            "id": "shirt_color",
+            "entityId": "shirt_a",
+            "slot": "color",
+            "prompt": "white"
+          }
+        ],
+        "relations": [
+          {
+            "id": "touch",
+            "actorId": "a",
+            "targetId": "b",
+            "action": "touching",
+            "actorPart": "right hand",
+            "targetPart": "left shoulder"
+          },
+          {
+            "id": "hold",
+            "actorId": "a",
+            "targetId": "hat_b",
+            "action": "holding",
+            "actorPart": "left hand"
+          }
+        ]
+      },
+      "patch": {
+        "revision": 0,
+        "operations": [
+          {
+            "collection": "entities",
+            "id": "a",
+            "before": {
+              "id": "a",
+              "kind": "character",
+              "name": "红发男子",
+              "subject": "boy",
+              "prompt": "adult man",
+              "position": {
+                "x": 0,
+                "y": 1
+              }
+            },
+            "after": {
+              "id": "a",
+              "kind": "character",
+              "name": "Alex",
+              "subject": "boy",
+              "prompt": "adult man",
+              "position": {
+                "x": 0,
+                "y": 1
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "empty remains empty",
+      "scene": {
+        "version": 1,
+        "revision": 0,
+        "entities": [
+          {
+            "id": "a",
+            "kind": "character",
+            "name": "红发男子",
+            "subject": "boy",
+            "prompt": "adult man",
+            "position": {
+              "x": 0,
+              "y": 1
+            }
+          },
+          {
+            "id": "b",
+            "kind": "character",
+            "name": "金发女子",
+            "subject": "girl",
+            "prompt": "adult woman"
+          },
+          {
+            "id": "coat_a",
+            "kind": "garment",
+            "name": "A 的外套",
+            "prompt": "coat",
+            "ownerId": "a",
+            "wearerId": "a"
+          },
+          {
+            "id": "coat_b",
+            "kind": "garment",
+            "name": "B 的外套",
+            "prompt": "jacket",
+            "ownerId": "b",
+            "wearerId": "b"
+          },
+          {
+            "id": "shirt_a",
+            "kind": "garment",
+            "name": "A 的衬衫",
+            "prompt": "shirt",
+            "ownerId": "a",
+            "wearerId": "a"
+          },
+          {
+            "id": "hat_b",
+            "kind": "prop",
+            "name": "B 的帽子",
+            "prompt": "hat",
+            "ownerId": "b"
+          }
+        ],
+        "facts": [
+          {
+            "id": "setting",
+            "entityId": "scene",
+            "slot": "setting",
+            "prompt": "city street at sunset"
+          },
+          {
+            "id": "hair_a",
+            "entityId": "a",
+            "slot": "hair",
+            "prompt": "red hair"
+          },
+          {
+            "id": "hair_b",
+            "entityId": "b",
+            "slot": "hair",
+            "prompt": "blonde hair"
+          },
+          {
+            "id": "expression_a",
+            "entityId": "a",
+            "slot": "expression",
+            "prompt": "smile"
+          },
+          {
+            "id": "expression_b",
+            "entityId": "b",
+            "slot": "expression",
+            "prompt": "serious"
+          },
+          {
+            "id": "color_a",
+            "entityId": "coat_a",
+            "slot": "color",
+            "prompt": "red"
+          },
+          {
+            "id": "material_a",
+            "entityId": "coat_a",
+            "slot": "material",
+            "prompt": "leather"
+          },
+          {
+            "id": "color_b",
+            "entityId": "coat_b",
+            "slot": "color",
+            "prompt": "blue"
+          },
+          {
+            "id": "shirt_color",
+            "entityId": "shirt_a",
+            "slot": "color",
+            "prompt": "white"
+          }
+        ],
+        "relations": [
+          {
+            "id": "touch",
+            "actorId": "a",
+            "targetId": "b",
+            "action": "touching",
+            "actorPart": "right hand",
+            "targetPart": "left shoulder"
+          },
+          {
+            "id": "hold",
+            "actorId": "a",
+            "targetId": "hat_b",
+            "action": "holding",
+            "actorPart": "left hand"
+          }
+        ]
+      },
+      "patch": {
+        "revision": 0,
+        "operations": [
+          {
+            "collection": "facts",
+            "id": "expression_a",
+            "before": {
+              "id": "expression_a",
+              "entityId": "a",
+              "slot": "expression",
+              "prompt": "smile"
+            },
+            "after": {
+              "id": "expression_a",
+              "entityId": "a",
+              "slot": "expression",
+              "prompt": ""
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "interaction action keeps endpoints",
+      "scene": {
+        "version": 1,
+        "revision": 0,
+        "entities": [
+          {
+            "id": "a",
+            "kind": "character",
+            "name": "红发男子",
+            "subject": "boy",
+            "prompt": "adult man",
+            "position": {
+              "x": 0,
+              "y": 1
+            }
+          },
+          {
+            "id": "b",
+            "kind": "character",
+            "name": "金发女子",
+            "subject": "girl",
+            "prompt": "adult woman"
+          },
+          {
+            "id": "coat_a",
+            "kind": "garment",
+            "name": "A 的外套",
+            "prompt": "coat",
+            "ownerId": "a",
+            "wearerId": "a"
+          },
+          {
+            "id": "coat_b",
+            "kind": "garment",
+            "name": "B 的外套",
+            "prompt": "jacket",
+            "ownerId": "b",
+            "wearerId": "b"
+          },
+          {
+            "id": "shirt_a",
+            "kind": "garment",
+            "name": "A 的衬衫",
+            "prompt": "shirt",
+            "ownerId": "a",
+            "wearerId": "a"
+          },
+          {
+            "id": "hat_b",
+            "kind": "prop",
+            "name": "B 的帽子",
+            "prompt": "hat",
+            "ownerId": "b"
+          }
+        ],
+        "facts": [
+          {
+            "id": "setting",
+            "entityId": "scene",
+            "slot": "setting",
+            "prompt": "city street at sunset"
+          },
+          {
+            "id": "hair_a",
+            "entityId": "a",
+            "slot": "hair",
+            "prompt": "red hair"
+          },
+          {
+            "id": "hair_b",
+            "entityId": "b",
+            "slot": "hair",
+            "prompt": "blonde hair"
+          },
+          {
+            "id": "expression_a",
+            "entityId": "a",
+            "slot": "expression",
+            "prompt": "smile"
+          },
+          {
+            "id": "expression_b",
+            "entityId": "b",
+            "slot": "expression",
+            "prompt": "serious"
+          },
+          {
+            "id": "color_a",
+            "entityId": "coat_a",
+            "slot": "color",
+            "prompt": "red"
+          },
+          {
+            "id": "material_a",
+            "entityId": "coat_a",
+            "slot": "material",
+            "prompt": "leather"
+          },
+          {
+            "id": "color_b",
+            "entityId": "coat_b",
+            "slot": "color",
+            "prompt": "blue"
+          },
+          {
+            "id": "shirt_color",
+            "entityId": "shirt_a",
+            "slot": "color",
+            "prompt": "white"
+          }
+        ],
+        "relations": [
+          {
+            "id": "touch",
+            "actorId": "a",
+            "targetId": "b",
+            "action": "touching",
+            "actorPart": "right hand",
+            "targetPart": "left shoulder"
+          },
+          {
+            "id": "hold",
+            "actorId": "a",
+            "targetId": "hat_b",
+            "action": "holding",
+            "actorPart": "left hand"
+          }
+        ]
+      },
+      "patch": {
+        "revision": 0,
+        "operations": [
+          {
+            "collection": "relations",
+            "id": "touch",
+            "before": {
+              "id": "touch",
+              "actorId": "a",
+              "targetId": "b",
+              "action": "touching",
+              "actorPart": "right hand",
+              "targetPart": "left shoulder"
+            },
+            "after": {
+              "id": "touch",
+              "actorId": "a",
+              "targetId": "b",
+              "action": "patting",
+              "actorPart": "right hand",
+              "targetPart": "left shoulder"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "AI owner change requires review",
+      "scene": {
+        "version": 1,
+        "revision": 0,
+        "entities": [
+          {
+            "id": "a",
+            "kind": "character",
+            "name": "红发男子",
+            "subject": "boy",
+            "prompt": "adult man",
+            "position": {
+              "x": 0,
+              "y": 1
+            }
+          },
+          {
+            "id": "b",
+            "kind": "character",
+            "name": "金发女子",
+            "subject": "girl",
+            "prompt": "adult woman"
+          },
+          {
+            "id": "coat_a",
+            "kind": "garment",
+            "name": "A 的外套",
+            "prompt": "coat",
+            "ownerId": "a",
+            "wearerId": "a"
+          },
+          {
+            "id": "coat_b",
+            "kind": "garment",
+            "name": "B 的外套",
+            "prompt": "jacket",
+            "ownerId": "b",
+            "wearerId": "b"
+          },
+          {
+            "id": "shirt_a",
+            "kind": "garment",
+            "name": "A 的衬衫",
+            "prompt": "shirt",
+            "ownerId": "a",
+            "wearerId": "a"
+          },
+          {
+            "id": "hat_b",
+            "kind": "prop",
+            "name": "B 的帽子",
+            "prompt": "hat",
+            "ownerId": "b"
+          }
+        ],
+        "facts": [
+          {
+            "id": "setting",
+            "entityId": "scene",
+            "slot": "setting",
+            "prompt": "city street at sunset"
+          },
+          {
+            "id": "hair_a",
+            "entityId": "a",
+            "slot": "hair",
+            "prompt": "red hair"
+          },
+          {
+            "id": "hair_b",
+            "entityId": "b",
+            "slot": "hair",
+            "prompt": "blonde hair"
+          },
+          {
+            "id": "expression_a",
+            "entityId": "a",
+            "slot": "expression",
+            "prompt": "smile"
+          },
+          {
+            "id": "expression_b",
+            "entityId": "b",
+            "slot": "expression",
+            "prompt": "serious"
+          },
+          {
+            "id": "color_a",
+            "entityId": "coat_a",
+            "slot": "color",
+            "prompt": "red"
+          },
+          {
+            "id": "material_a",
+            "entityId": "coat_a",
+            "slot": "material",
+            "prompt": "leather"
+          },
+          {
+            "id": "color_b",
+            "entityId": "coat_b",
+            "slot": "color",
+            "prompt": "blue"
+          },
+          {
+            "id": "shirt_color",
+            "entityId": "shirt_a",
+            "slot": "color",
+            "prompt": "white"
+          }
+        ],
+        "relations": [
+          {
+            "id": "touch",
+            "actorId": "a",
+            "targetId": "b",
+            "action": "touching",
+            "actorPart": "right hand",
+            "targetPart": "left shoulder"
+          },
+          {
+            "id": "hold",
+            "actorId": "a",
+            "targetId": "hat_b",
+            "action": "holding",
+            "actorPart": "left hand"
+          }
+        ]
+      },
+      "patch": {
+        "revision": 0,
+        "operations": [
+          {
+            "collection": "entities",
+            "id": "coat_a",
+            "before": {
+              "id": "coat_a",
+              "kind": "garment",
+              "name": "A 的外套",
+              "prompt": "coat",
+              "ownerId": "a",
+              "wearerId": "a"
+            },
+            "after": {
+              "id": "coat_a",
+              "kind": "garment",
+              "name": "A 的外套",
+              "prompt": "coat",
+              "ownerId": "a",
+              "wearerId": "b"
+            }
+          }
+        ]
+      },
+      "error": "SCENE_REBIND"
+    },
+    {
+      "name": "explicit user owner change",
+      "scene": {
+        "version": 1,
+        "revision": 0,
+        "entities": [
+          {
+            "id": "a",
+            "kind": "character",
+            "name": "红发男子",
+            "subject": "boy",
+            "prompt": "adult man",
+            "position": {
+              "x": 0,
+              "y": 1
+            }
+          },
+          {
+            "id": "b",
+            "kind": "character",
+            "name": "金发女子",
+            "subject": "girl",
+            "prompt": "adult woman"
+          },
+          {
+            "id": "coat_a",
+            "kind": "garment",
+            "name": "A 的外套",
+            "prompt": "coat",
+            "ownerId": "a",
+            "wearerId": "a"
+          },
+          {
+            "id": "coat_b",
+            "kind": "garment",
+            "name": "B 的外套",
+            "prompt": "jacket",
+            "ownerId": "b",
+            "wearerId": "b"
+          },
+          {
+            "id": "shirt_a",
+            "kind": "garment",
+            "name": "A 的衬衫",
+            "prompt": "shirt",
+            "ownerId": "a",
+            "wearerId": "a"
+          },
+          {
+            "id": "hat_b",
+            "kind": "prop",
+            "name": "B 的帽子",
+            "prompt": "hat",
+            "ownerId": "b"
+          }
+        ],
+        "facts": [
+          {
+            "id": "setting",
+            "entityId": "scene",
+            "slot": "setting",
+            "prompt": "city street at sunset"
+          },
+          {
+            "id": "hair_a",
+            "entityId": "a",
+            "slot": "hair",
+            "prompt": "red hair"
+          },
+          {
+            "id": "hair_b",
+            "entityId": "b",
+            "slot": "hair",
+            "prompt": "blonde hair"
+          },
+          {
+            "id": "expression_a",
+            "entityId": "a",
+            "slot": "expression",
+            "prompt": "smile"
+          },
+          {
+            "id": "expression_b",
+            "entityId": "b",
+            "slot": "expression",
+            "prompt": "serious"
+          },
+          {
+            "id": "color_a",
+            "entityId": "coat_a",
+            "slot": "color",
+            "prompt": "red"
+          },
+          {
+            "id": "material_a",
+            "entityId": "coat_a",
+            "slot": "material",
+            "prompt": "leather"
+          },
+          {
+            "id": "color_b",
+            "entityId": "coat_b",
+            "slot": "color",
+            "prompt": "blue"
+          },
+          {
+            "id": "shirt_color",
+            "entityId": "shirt_a",
+            "slot": "color",
+            "prompt": "white"
+          }
+        ],
+        "relations": [
+          {
+            "id": "touch",
+            "actorId": "a",
+            "targetId": "b",
+            "action": "touching",
+            "actorPart": "right hand",
+            "targetPart": "left shoulder"
+          },
+          {
+            "id": "hold",
+            "actorId": "a",
+            "targetId": "hat_b",
+            "action": "holding",
+            "actorPart": "left hand"
+          }
+        ]
+      },
+      "patch": {
+        "revision": 0,
+        "operations": [
+          {
+            "collection": "entities",
+            "id": "coat_a",
+            "before": {
+              "id": "coat_a",
+              "kind": "garment",
+              "name": "A 的外套",
+              "prompt": "coat",
+              "ownerId": "a",
+              "wearerId": "a"
+            },
+            "after": {
+              "id": "coat_a",
+              "kind": "garment",
+              "name": "A 的外套",
+              "prompt": "coat",
+              "ownerId": "a",
+              "wearerId": "b"
+            }
+          }
+        ]
+      },
+      "byUser": true
+    },
+    {
+      "name": "AI actor swap requires review",
+      "scene": {
+        "version": 1,
+        "revision": 0,
+        "entities": [
+          {
+            "id": "a",
+            "kind": "character",
+            "name": "红发男子",
+            "subject": "boy",
+            "prompt": "adult man",
+            "position": {
+              "x": 0,
+              "y": 1
+            }
+          },
+          {
+            "id": "b",
+            "kind": "character",
+            "name": "金发女子",
+            "subject": "girl",
+            "prompt": "adult woman"
+          },
+          {
+            "id": "coat_a",
+            "kind": "garment",
+            "name": "A 的外套",
+            "prompt": "coat",
+            "ownerId": "a",
+            "wearerId": "a"
+          },
+          {
+            "id": "coat_b",
+            "kind": "garment",
+            "name": "B 的外套",
+            "prompt": "jacket",
+            "ownerId": "b",
+            "wearerId": "b"
+          },
+          {
+            "id": "shirt_a",
+            "kind": "garment",
+            "name": "A 的衬衫",
+            "prompt": "shirt",
+            "ownerId": "a",
+            "wearerId": "a"
+          },
+          {
+            "id": "hat_b",
+            "kind": "prop",
+            "name": "B 的帽子",
+            "prompt": "hat",
+            "ownerId": "b"
+          }
+        ],
+        "facts": [
+          {
+            "id": "setting",
+            "entityId": "scene",
+            "slot": "setting",
+            "prompt": "city street at sunset"
+          },
+          {
+            "id": "hair_a",
+            "entityId": "a",
+            "slot": "hair",
+            "prompt": "red hair"
+          },
+          {
+            "id": "hair_b",
+            "entityId": "b",
+            "slot": "hair",
+            "prompt": "blonde hair"
+          },
+          {
+            "id": "expression_a",
+            "entityId": "a",
+            "slot": "expression",
+            "prompt": "smile"
+          },
+          {
+            "id": "expression_b",
+            "entityId": "b",
+            "slot": "expression",
+            "prompt": "serious"
+          },
+          {
+            "id": "color_a",
+            "entityId": "coat_a",
+            "slot": "color",
+            "prompt": "red"
+          },
+          {
+            "id": "material_a",
+            "entityId": "coat_a",
+            "slot": "material",
+            "prompt": "leather"
+          },
+          {
+            "id": "color_b",
+            "entityId": "coat_b",
+            "slot": "color",
+            "prompt": "blue"
+          },
+          {
+            "id": "shirt_color",
+            "entityId": "shirt_a",
+            "slot": "color",
+            "prompt": "white"
+          }
+        ],
+        "relations": [
+          {
+            "id": "touch",
+            "actorId": "a",
+            "targetId": "b",
+            "action": "touching",
+            "actorPart": "right hand",
+            "targetPart": "left shoulder"
+          },
+          {
+            "id": "hold",
+            "actorId": "a",
+            "targetId": "hat_b",
+            "action": "holding",
+            "actorPart": "left hand"
+          }
+        ]
+      },
+      "patch": {
+        "revision": 0,
+        "operations": [
+          {
+            "collection": "relations",
+            "id": "touch",
+            "before": {
+              "id": "touch",
+              "actorId": "a",
+              "targetId": "b",
+              "action": "touching",
+              "actorPart": "right hand",
+              "targetPart": "left shoulder"
+            },
+            "after": {
+              "id": "touch",
+              "actorId": "b",
+              "targetId": "a",
+              "action": "touching",
+              "actorPart": "right hand",
+              "targetPart": "left shoulder"
+            }
+          }
+        ]
+      },
+      "error": "SCENE_REBIND"
+    },
+    {
+      "name": "explicit interaction actor swap",
+      "scene": {
+        "version": 1,
+        "revision": 0,
+        "entities": [
+          {
+            "id": "a",
+            "kind": "character",
+            "name": "红发男子",
+            "subject": "boy",
+            "prompt": "adult man",
+            "position": {
+              "x": 0,
+              "y": 1
+            }
+          },
+          {
+            "id": "b",
+            "kind": "character",
+            "name": "金发女子",
+            "subject": "girl",
+            "prompt": "adult woman"
+          },
+          {
+            "id": "coat_a",
+            "kind": "garment",
+            "name": "A 的外套",
+            "prompt": "coat",
+            "ownerId": "a",
+            "wearerId": "a"
+          },
+          {
+            "id": "coat_b",
+            "kind": "garment",
+            "name": "B 的外套",
+            "prompt": "jacket",
+            "ownerId": "b",
+            "wearerId": "b"
+          },
+          {
+            "id": "shirt_a",
+            "kind": "garment",
+            "name": "A 的衬衫",
+            "prompt": "shirt",
+            "ownerId": "a",
+            "wearerId": "a"
+          },
+          {
+            "id": "hat_b",
+            "kind": "prop",
+            "name": "B 的帽子",
+            "prompt": "hat",
+            "ownerId": "b"
+          }
+        ],
+        "facts": [
+          {
+            "id": "setting",
+            "entityId": "scene",
+            "slot": "setting",
+            "prompt": "city street at sunset"
+          },
+          {
+            "id": "hair_a",
+            "entityId": "a",
+            "slot": "hair",
+            "prompt": "red hair"
+          },
+          {
+            "id": "hair_b",
+            "entityId": "b",
+            "slot": "hair",
+            "prompt": "blonde hair"
+          },
+          {
+            "id": "expression_a",
+            "entityId": "a",
+            "slot": "expression",
+            "prompt": "smile"
+          },
+          {
+            "id": "expression_b",
+            "entityId": "b",
+            "slot": "expression",
+            "prompt": "serious"
+          },
+          {
+            "id": "color_a",
+            "entityId": "coat_a",
+            "slot": "color",
+            "prompt": "red"
+          },
+          {
+            "id": "material_a",
+            "entityId": "coat_a",
+            "slot": "material",
+            "prompt": "leather"
+          },
+          {
+            "id": "color_b",
+            "entityId": "coat_b",
+            "slot": "color",
+            "prompt": "blue"
+          },
+          {
+            "id": "shirt_color",
+            "entityId": "shirt_a",
+            "slot": "color",
+            "prompt": "white"
+          }
+        ],
+        "relations": [
+          {
+            "id": "touch",
+            "actorId": "a",
+            "targetId": "b",
+            "action": "touching",
+            "actorPart": "right hand",
+            "targetPart": "left shoulder"
+          },
+          {
+            "id": "hold",
+            "actorId": "a",
+            "targetId": "hat_b",
+            "action": "holding",
+            "actorPart": "left hand"
+          }
+        ]
+      },
+      "patch": {
+        "revision": 0,
+        "operations": [
+          {
+            "collection": "relations",
+            "id": "touch",
+            "before": {
+              "id": "touch",
+              "actorId": "a",
+              "targetId": "b",
+              "action": "touching",
+              "actorPart": "right hand",
+              "targetPart": "left shoulder"
+            },
+            "after": {
+              "id": "touch",
+              "actorId": "b",
+              "targetId": "a",
+              "action": "touching",
+              "actorPart": "right hand",
+              "targetPart": "left shoulder"
+            }
+          }
+        ]
+      },
+      "byUser": true
+    },
+    {
+      "name": "duplicate slot rejected",
+      "scene": {
+        "version": 1,
+        "revision": 0,
+        "entities": [
+          {
+            "id": "a",
+            "kind": "character",
+            "name": "红发男子",
+            "subject": "boy",
+            "prompt": "adult man",
+            "position": {
+              "x": 0,
+              "y": 1
+            }
+          },
+          {
+            "id": "b",
+            "kind": "character",
+            "name": "金发女子",
+            "subject": "girl",
+            "prompt": "adult woman"
+          },
+          {
+            "id": "coat_a",
+            "kind": "garment",
+            "name": "A 的外套",
+            "prompt": "coat",
+            "ownerId": "a",
+            "wearerId": "a"
+          },
+          {
+            "id": "coat_b",
+            "kind": "garment",
+            "name": "B 的外套",
+            "prompt": "jacket",
+            "ownerId": "b",
+            "wearerId": "b"
+          },
+          {
+            "id": "shirt_a",
+            "kind": "garment",
+            "name": "A 的衬衫",
+            "prompt": "shirt",
+            "ownerId": "a",
+            "wearerId": "a"
+          },
+          {
+            "id": "hat_b",
+            "kind": "prop",
+            "name": "B 的帽子",
+            "prompt": "hat",
+            "ownerId": "b"
+          }
+        ],
+        "facts": [
+          {
+            "id": "setting",
+            "entityId": "scene",
+            "slot": "setting",
+            "prompt": "city street at sunset"
+          },
+          {
+            "id": "hair_a",
+            "entityId": "a",
+            "slot": "hair",
+            "prompt": "red hair"
+          },
+          {
+            "id": "hair_b",
+            "entityId": "b",
+            "slot": "hair",
+            "prompt": "blonde hair"
+          },
+          {
+            "id": "expression_a",
+            "entityId": "a",
+            "slot": "expression",
+            "prompt": "smile"
+          },
+          {
+            "id": "expression_b",
+            "entityId": "b",
+            "slot": "expression",
+            "prompt": "serious"
+          },
+          {
+            "id": "color_a",
+            "entityId": "coat_a",
+            "slot": "color",
+            "prompt": "red"
+          },
+          {
+            "id": "material_a",
+            "entityId": "coat_a",
+            "slot": "material",
+            "prompt": "leather"
+          },
+          {
+            "id": "color_b",
+            "entityId": "coat_b",
+            "slot": "color",
+            "prompt": "blue"
+          },
+          {
+            "id": "shirt_color",
+            "entityId": "shirt_a",
+            "slot": "color",
+            "prompt": "white"
+          }
+        ],
+        "relations": [
+          {
+            "id": "touch",
+            "actorId": "a",
+            "targetId": "b",
+            "action": "touching",
+            "actorPart": "right hand",
+            "targetPart": "left shoulder"
+          },
+          {
+            "id": "hold",
+            "actorId": "a",
+            "targetId": "hat_b",
+            "action": "holding",
+            "actorPart": "left hand"
+          }
+        ]
+      },
+      "patch": {
+        "revision": 0,
+        "operations": [
+          {
+            "collection": "facts",
+            "id": "color_a",
+            "before": {
+              "id": "color_a",
+              "entityId": "coat_a",
+              "slot": "color",
+              "prompt": "red"
+            },
+            "after": {
+              "id": "color_a",
+              "entityId": "coat_a",
+              "slot": "material",
+              "prompt": "red"
+            }
+          }
+        ]
+      },
+      "error": "SCENE_INVALID"
+    },
+    {
+      "name": "locked fact",
+      "scene": {
+        "version": 1,
+        "revision": 0,
+        "entities": [
+          {
+            "id": "a",
+            "kind": "character",
+            "name": "红发男子",
+            "subject": "boy",
+            "prompt": "adult man",
+            "position": {
+              "x": 0,
+              "y": 1
+            }
+          },
+          {
+            "id": "b",
+            "kind": "character",
+            "name": "金发女子",
+            "subject": "girl",
+            "prompt": "adult woman"
+          },
+          {
+            "id": "coat_a",
+            "kind": "garment",
+            "name": "A 的外套",
+            "prompt": "coat",
+            "ownerId": "a",
+            "wearerId": "a"
+          },
+          {
+            "id": "coat_b",
+            "kind": "garment",
+            "name": "B 的外套",
+            "prompt": "jacket",
+            "ownerId": "b",
+            "wearerId": "b"
+          },
+          {
+            "id": "shirt_a",
+            "kind": "garment",
+            "name": "A 的衬衫",
+            "prompt": "shirt",
+            "ownerId": "a",
+            "wearerId": "a"
+          },
+          {
+            "id": "hat_b",
+            "kind": "prop",
+            "name": "B 的帽子",
+            "prompt": "hat",
+            "ownerId": "b"
+          }
+        ],
+        "facts": [
+          {
+            "id": "setting",
+            "entityId": "scene",
+            "slot": "setting",
+            "prompt": "city street at sunset"
+          },
+          {
+            "id": "hair_a",
+            "entityId": "a",
+            "slot": "hair",
+            "prompt": "red hair"
+          },
+          {
+            "id": "hair_b",
+            "entityId": "b",
+            "slot": "hair",
+            "prompt": "blonde hair"
+          },
+          {
+            "id": "expression_a",
+            "entityId": "a",
+            "slot": "expression",
+            "prompt": "smile"
+          },
+          {
+            "id": "expression_b",
+            "entityId": "b",
+            "slot": "expression",
+            "prompt": "serious"
+          },
+          {
+            "id": "color_a",
+            "entityId": "coat_a",
+            "slot": "color",
+            "prompt": "red",
+            "locked": true
+          },
+          {
+            "id": "material_a",
+            "entityId": "coat_a",
+            "slot": "material",
+            "prompt": "leather"
+          },
+          {
+            "id": "color_b",
+            "entityId": "coat_b",
+            "slot": "color",
+            "prompt": "blue"
+          },
+          {
+            "id": "shirt_color",
+            "entityId": "shirt_a",
+            "slot": "color",
+            "prompt": "white"
+          }
+        ],
+        "relations": [
+          {
+            "id": "touch",
+            "actorId": "a",
+            "targetId": "b",
+            "action": "touching",
+            "actorPart": "right hand",
+            "targetPart": "left shoulder"
+          },
+          {
+            "id": "hold",
+            "actorId": "a",
+            "targetId": "hat_b",
+            "action": "holding",
+            "actorPart": "left hand"
+          }
+        ]
+      },
+      "patch": {
+        "revision": 0,
+        "operations": [
+          {
+            "collection": "facts",
+            "id": "color_a",
+            "before": {
+              "id": "color_a",
+              "entityId": "coat_a",
+              "slot": "color",
+              "prompt": "red",
+              "locked": true
+            },
+            "after": {
+              "id": "color_a",
+              "entityId": "coat_a",
+              "slot": "color",
+              "prompt": "black",
+              "locked": true
+            }
+          }
+        ]
+      },
+      "error": "SCENE_LOCKED"
+    },
+    {
+      "name": "locked owner protects garment",
+      "scene": {
+        "version": 1,
+        "revision": 0,
+        "entities": [
+          {
+            "id": "a",
+            "kind": "character",
+            "name": "红发男子",
+            "subject": "boy",
+            "prompt": "adult man",
+            "position": {
+              "x": 0,
+              "y": 1
+            },
+            "locked": true
+          },
+          {
+            "id": "b",
+            "kind": "character",
+            "name": "金发女子",
+            "subject": "girl",
+            "prompt": "adult woman"
+          },
+          {
+            "id": "coat_a",
+            "kind": "garment",
+            "name": "A 的外套",
+            "prompt": "coat",
+            "ownerId": "a",
+            "wearerId": "a"
+          },
+          {
+            "id": "coat_b",
+            "kind": "garment",
+            "name": "B 的外套",
+            "prompt": "jacket",
+            "ownerId": "b",
+            "wearerId": "b"
+          },
+          {
+            "id": "shirt_a",
+            "kind": "garment",
+            "name": "A 的衬衫",
+            "prompt": "shirt",
+            "ownerId": "a",
+            "wearerId": "a"
+          },
+          {
+            "id": "hat_b",
+            "kind": "prop",
+            "name": "B 的帽子",
+            "prompt": "hat",
+            "ownerId": "b"
+          }
+        ],
+        "facts": [
+          {
+            "id": "setting",
+            "entityId": "scene",
+            "slot": "setting",
+            "prompt": "city street at sunset"
+          },
+          {
+            "id": "hair_a",
+            "entityId": "a",
+            "slot": "hair",
+            "prompt": "red hair"
+          },
+          {
+            "id": "hair_b",
+            "entityId": "b",
+            "slot": "hair",
+            "prompt": "blonde hair"
+          },
+          {
+            "id": "expression_a",
+            "entityId": "a",
+            "slot": "expression",
+            "prompt": "smile"
+          },
+          {
+            "id": "expression_b",
+            "entityId": "b",
+            "slot": "expression",
+            "prompt": "serious"
+          },
+          {
+            "id": "color_a",
+            "entityId": "coat_a",
+            "slot": "color",
+            "prompt": "red"
+          },
+          {
+            "id": "material_a",
+            "entityId": "coat_a",
+            "slot": "material",
+            "prompt": "leather"
+          },
+          {
+            "id": "color_b",
+            "entityId": "coat_b",
+            "slot": "color",
+            "prompt": "blue"
+          },
+          {
+            "id": "shirt_color",
+            "entityId": "shirt_a",
+            "slot": "color",
+            "prompt": "white"
+          }
+        ],
+        "relations": [
+          {
+            "id": "touch",
+            "actorId": "a",
+            "targetId": "b",
+            "action": "touching",
+            "actorPart": "right hand",
+            "targetPart": "left shoulder"
+          },
+          {
+            "id": "hold",
+            "actorId": "a",
+            "targetId": "hat_b",
+            "action": "holding",
+            "actorPart": "left hand"
+          }
+        ]
+      },
+      "patch": {
+        "revision": 0,
+        "operations": [
+          {
+            "collection": "facts",
+            "id": "color_a",
+            "before": {
+              "id": "color_a",
+              "entityId": "coat_a",
+              "slot": "color",
+              "prompt": "red"
+            },
+            "after": {
+              "id": "color_a",
+              "entityId": "coat_a",
+              "slot": "color",
+              "prompt": "black"
+            }
+          }
+        ]
+      },
+      "error": "SCENE_LOCKED"
+    },
+    {
+      "name": "stale revision",
+      "scene": {
+        "version": 1,
+        "revision": 0,
+        "entities": [
+          {
+            "id": "a",
+            "kind": "character",
+            "name": "红发男子",
+            "subject": "boy",
+            "prompt": "adult man",
+            "position": {
+              "x": 0,
+              "y": 1
+            }
+          },
+          {
+            "id": "b",
+            "kind": "character",
+            "name": "金发女子",
+            "subject": "girl",
+            "prompt": "adult woman"
+          },
+          {
+            "id": "coat_a",
+            "kind": "garment",
+            "name": "A 的外套",
+            "prompt": "coat",
+            "ownerId": "a",
+            "wearerId": "a"
+          },
+          {
+            "id": "coat_b",
+            "kind": "garment",
+            "name": "B 的外套",
+            "prompt": "jacket",
+            "ownerId": "b",
+            "wearerId": "b"
+          },
+          {
+            "id": "shirt_a",
+            "kind": "garment",
+            "name": "A 的衬衫",
+            "prompt": "shirt",
+            "ownerId": "a",
+            "wearerId": "a"
+          },
+          {
+            "id": "hat_b",
+            "kind": "prop",
+            "name": "B 的帽子",
+            "prompt": "hat",
+            "ownerId": "b"
+          }
+        ],
+        "facts": [
+          {
+            "id": "setting",
+            "entityId": "scene",
+            "slot": "setting",
+            "prompt": "city street at sunset"
+          },
+          {
+            "id": "hair_a",
+            "entityId": "a",
+            "slot": "hair",
+            "prompt": "red hair"
+          },
+          {
+            "id": "hair_b",
+            "entityId": "b",
+            "slot": "hair",
+            "prompt": "blonde hair"
+          },
+          {
+            "id": "expression_a",
+            "entityId": "a",
+            "slot": "expression",
+            "prompt": "smile"
+          },
+          {
+            "id": "expression_b",
+            "entityId": "b",
+            "slot": "expression",
+            "prompt": "serious"
+          },
+          {
+            "id": "color_a",
+            "entityId": "coat_a",
+            "slot": "color",
+            "prompt": "red"
+          },
+          {
+            "id": "material_a",
+            "entityId": "coat_a",
+            "slot": "material",
+            "prompt": "leather"
+          },
+          {
+            "id": "color_b",
+            "entityId": "coat_b",
+            "slot": "color",
+            "prompt": "blue"
+          },
+          {
+            "id": "shirt_color",
+            "entityId": "shirt_a",
+            "slot": "color",
+            "prompt": "white"
+          }
+        ],
+        "relations": [
+          {
+            "id": "touch",
+            "actorId": "a",
+            "targetId": "b",
+            "action": "touching",
+            "actorPart": "right hand",
+            "targetPart": "left shoulder"
+          },
+          {
+            "id": "hold",
+            "actorId": "a",
+            "targetId": "hat_b",
+            "action": "holding",
+            "actorPart": "left hand"
+          }
+        ]
+      },
+      "patch": {
+        "revision": 4,
+        "operations": [
+          {
+            "collection": "facts",
+            "id": "color_a",
+            "before": {
+              "id": "color_a",
+              "entityId": "coat_a",
+              "slot": "color",
+              "prompt": "red"
+            },
+            "after": {
+              "id": "color_a",
+              "entityId": "coat_a",
+              "slot": "color",
+              "prompt": "black"
+            }
+          }
+        ]
+      },
+      "error": "SCENE_STALE"
+    },
+    {
+      "name": "stale value",
+      "scene": {
+        "version": 1,
+        "revision": 0,
+        "entities": [
+          {
+            "id": "a",
+            "kind": "character",
+            "name": "红发男子",
+            "subject": "boy",
+            "prompt": "adult man",
+            "position": {
+              "x": 0,
+              "y": 1
+            }
+          },
+          {
+            "id": "b",
+            "kind": "character",
+            "name": "金发女子",
+            "subject": "girl",
+            "prompt": "adult woman"
+          },
+          {
+            "id": "coat_a",
+            "kind": "garment",
+            "name": "A 的外套",
+            "prompt": "coat",
+            "ownerId": "a",
+            "wearerId": "a"
+          },
+          {
+            "id": "coat_b",
+            "kind": "garment",
+            "name": "B 的外套",
+            "prompt": "jacket",
+            "ownerId": "b",
+            "wearerId": "b"
+          },
+          {
+            "id": "shirt_a",
+            "kind": "garment",
+            "name": "A 的衬衫",
+            "prompt": "shirt",
+            "ownerId": "a",
+            "wearerId": "a"
+          },
+          {
+            "id": "hat_b",
+            "kind": "prop",
+            "name": "B 的帽子",
+            "prompt": "hat",
+            "ownerId": "b"
+          }
+        ],
+        "facts": [
+          {
+            "id": "setting",
+            "entityId": "scene",
+            "slot": "setting",
+            "prompt": "city street at sunset"
+          },
+          {
+            "id": "hair_a",
+            "entityId": "a",
+            "slot": "hair",
+            "prompt": "red hair"
+          },
+          {
+            "id": "hair_b",
+            "entityId": "b",
+            "slot": "hair",
+            "prompt": "blonde hair"
+          },
+          {
+            "id": "expression_a",
+            "entityId": "a",
+            "slot": "expression",
+            "prompt": "smile"
+          },
+          {
+            "id": "expression_b",
+            "entityId": "b",
+            "slot": "expression",
+            "prompt": "serious"
+          },
+          {
+            "id": "color_a",
+            "entityId": "coat_a",
+            "slot": "color",
+            "prompt": "red"
+          },
+          {
+            "id": "material_a",
+            "entityId": "coat_a",
+            "slot": "material",
+            "prompt": "leather"
+          },
+          {
+            "id": "color_b",
+            "entityId": "coat_b",
+            "slot": "color",
+            "prompt": "blue"
+          },
+          {
+            "id": "shirt_color",
+            "entityId": "shirt_a",
+            "slot": "color",
+            "prompt": "white"
+          }
+        ],
+        "relations": [
+          {
+            "id": "touch",
+            "actorId": "a",
+            "targetId": "b",
+            "action": "touching",
+            "actorPart": "right hand",
+            "targetPart": "left shoulder"
+          },
+          {
+            "id": "hold",
+            "actorId": "a",
+            "targetId": "hat_b",
+            "action": "holding",
+            "actorPart": "left hand"
+          }
+        ]
+      },
+      "patch": {
+        "revision": 0,
+        "operations": [
+          {
+            "collection": "facts",
+            "id": "color_a",
+            "before": {
+              "id": "color_a",
+              "entityId": "coat_a",
+              "slot": "color",
+              "prompt": "green"
+            },
+            "after": {
+              "id": "color_a",
+              "entityId": "coat_a",
+              "slot": "color",
+              "prompt": "black"
+            }
+          }
+        ]
+      },
+      "error": "SCENE_STALE"
+    },
+    {
+      "name": "atomic batch",
+      "scene": {
+        "version": 1,
+        "revision": 0,
+        "entities": [
+          {
+            "id": "a",
+            "kind": "character",
+            "name": "红发男子",
+            "subject": "boy",
+            "prompt": "adult man",
+            "position": {
+              "x": 0,
+              "y": 1
+            }
+          },
+          {
+            "id": "b",
+            "kind": "character",
+            "name": "金发女子",
+            "subject": "girl",
+            "prompt": "adult woman"
+          },
+          {
+            "id": "coat_a",
+            "kind": "garment",
+            "name": "A 的外套",
+            "prompt": "coat",
+            "ownerId": "a",
+            "wearerId": "a"
+          },
+          {
+            "id": "coat_b",
+            "kind": "garment",
+            "name": "B 的外套",
+            "prompt": "jacket",
+            "ownerId": "b",
+            "wearerId": "b"
+          },
+          {
+            "id": "shirt_a",
+            "kind": "garment",
+            "name": "A 的衬衫",
+            "prompt": "shirt",
+            "ownerId": "a",
+            "wearerId": "a"
+          },
+          {
+            "id": "hat_b",
+            "kind": "prop",
+            "name": "B 的帽子",
+            "prompt": "hat",
+            "ownerId": "b"
+          }
+        ],
+        "facts": [
+          {
+            "id": "setting",
+            "entityId": "scene",
+            "slot": "setting",
+            "prompt": "city street at sunset"
+          },
+          {
+            "id": "hair_a",
+            "entityId": "a",
+            "slot": "hair",
+            "prompt": "red hair"
+          },
+          {
+            "id": "hair_b",
+            "entityId": "b",
+            "slot": "hair",
+            "prompt": "blonde hair"
+          },
+          {
+            "id": "expression_a",
+            "entityId": "a",
+            "slot": "expression",
+            "prompt": "smile"
+          },
+          {
+            "id": "expression_b",
+            "entityId": "b",
+            "slot": "expression",
+            "prompt": "serious"
+          },
+          {
+            "id": "color_a",
+            "entityId": "coat_a",
+            "slot": "color",
+            "prompt": "red"
+          },
+          {
+            "id": "material_a",
+            "entityId": "coat_a",
+            "slot": "material",
+            "prompt": "leather"
+          },
+          {
+            "id": "color_b",
+            "entityId": "coat_b",
+            "slot": "color",
+            "prompt": "blue"
+          },
+          {
+            "id": "shirt_color",
+            "entityId": "shirt_a",
+            "slot": "color",
+            "prompt": "white"
+          }
+        ],
+        "relations": [
+          {
+            "id": "touch",
+            "actorId": "a",
+            "targetId": "b",
+            "action": "touching",
+            "actorPart": "right hand",
+            "targetPart": "left shoulder"
+          },
+          {
+            "id": "hold",
+            "actorId": "a",
+            "targetId": "hat_b",
+            "action": "holding",
+            "actorPart": "left hand"
+          }
+        ]
+      },
+      "patch": {
+        "revision": 0,
+        "operations": [
+          {
+            "collection": "facts",
+            "id": "color_a",
+            "before": {
+              "id": "color_a",
+              "entityId": "coat_a",
+              "slot": "color",
+              "prompt": "red"
+            },
+            "after": {
+              "id": "color_a",
+              "entityId": "coat_a",
+              "slot": "color",
+              "prompt": "black"
+            }
+          },
+          {
+            "collection": "facts",
+            "id": "bad",
+            "before": {
+              "id": "color_a",
+              "entityId": "coat_a",
+              "slot": "color",
+              "prompt": "green"
+            },
+            "after": {
+              "id": "color_a",
+              "entityId": "coat_a",
+              "slot": "color",
+              "prompt": "black"
+            }
+          }
+        ]
+      },
+      "error": "SCENE_STALE"
+    },
+    {
+      "name": "orphan removal rejected",
+      "scene": {
+        "version": 1,
+        "revision": 0,
+        "entities": [
+          {
+            "id": "a",
+            "kind": "character",
+            "name": "红发男子",
+            "subject": "boy",
+            "prompt": "adult man",
+            "position": {
+              "x": 0,
+              "y": 1
+            }
+          },
+          {
+            "id": "b",
+            "kind": "character",
+            "name": "金发女子",
+            "subject": "girl",
+            "prompt": "adult woman"
+          },
+          {
+            "id": "coat_a",
+            "kind": "garment",
+            "name": "A 的外套",
+            "prompt": "coat",
+            "ownerId": "a",
+            "wearerId": "a"
+          },
+          {
+            "id": "coat_b",
+            "kind": "garment",
+            "name": "B 的外套",
+            "prompt": "jacket",
+            "ownerId": "b",
+            "wearerId": "b"
+          },
+          {
+            "id": "shirt_a",
+            "kind": "garment",
+            "name": "A 的衬衫",
+            "prompt": "shirt",
+            "ownerId": "a",
+            "wearerId": "a"
+          },
+          {
+            "id": "hat_b",
+            "kind": "prop",
+            "name": "B 的帽子",
+            "prompt": "hat",
+            "ownerId": "b"
+          }
+        ],
+        "facts": [
+          {
+            "id": "setting",
+            "entityId": "scene",
+            "slot": "setting",
+            "prompt": "city street at sunset"
+          },
+          {
+            "id": "hair_a",
+            "entityId": "a",
+            "slot": "hair",
+            "prompt": "red hair"
+          },
+          {
+            "id": "hair_b",
+            "entityId": "b",
+            "slot": "hair",
+            "prompt": "blonde hair"
+          },
+          {
+            "id": "expression_a",
+            "entityId": "a",
+            "slot": "expression",
+            "prompt": "smile"
+          },
+          {
+            "id": "expression_b",
+            "entityId": "b",
+            "slot": "expression",
+            "prompt": "serious"
+          },
+          {
+            "id": "color_a",
+            "entityId": "coat_a",
+            "slot": "color",
+            "prompt": "red"
+          },
+          {
+            "id": "material_a",
+            "entityId": "coat_a",
+            "slot": "material",
+            "prompt": "leather"
+          },
+          {
+            "id": "color_b",
+            "entityId": "coat_b",
+            "slot": "color",
+            "prompt": "blue"
+          },
+          {
+            "id": "shirt_color",
+            "entityId": "shirt_a",
+            "slot": "color",
+            "prompt": "white"
+          }
+        ],
+        "relations": [
+          {
+            "id": "touch",
+            "actorId": "a",
+            "targetId": "b",
+            "action": "touching",
+            "actorPart": "right hand",
+            "targetPart": "left shoulder"
+          },
+          {
+            "id": "hold",
+            "actorId": "a",
+            "targetId": "hat_b",
+            "action": "holding",
+            "actorPart": "left hand"
+          }
+        ]
+      },
+      "patch": {
+        "revision": 0,
+        "operations": [
+          {
+            "collection": "entities",
+            "id": "a",
+            "before": {
+              "id": "a",
+              "kind": "character",
+              "name": "红发男子",
+              "subject": "boy",
+              "prompt": "adult man",
+              "position": {
+                "x": 0,
+                "y": 1
+              }
+            },
+            "after": null
+          }
+        ]
+      },
+      "error": "SCENE_INVALID"
+    }
+  ]
+}

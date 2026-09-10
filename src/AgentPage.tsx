@@ -1,3 +1,9 @@
+import { copyTavernText } from "./tavern/clipboard";
+import { useId } from "react";
+import { sceneErrorMessage } from "./tavern/scene-errors";
+import { SceneBindingsEditor } from "./tavern/SceneBindingsEditor";
+import { compileSceneBindings } from "./tavern/scene-bindings";
+import { useTavernPromptDraft } from "./tavern/prompt-draft";
 import { imagePasteProps } from "./image-paste";
 import { StyleTagPicker } from "./tavern/StyleTagPicker";
 import { imageUi } from "./tavern/image-ui";
@@ -165,15 +171,16 @@ function CharacterLibraryItem({ character, active, onSelect, language }: {
   );
 }
 
-function IconButton({ label, children, onClick, className = "", disabled = false }: {
+function IconButton({ label, children, onClick, className = "", disabled = false, busy = false }: {
   label: string;
   children: ReactNode;
   onClick?: (event: ReactMouseEvent<HTMLButtonElement>) => void;
   className?: string;
   disabled?: boolean;
+  busy?: boolean;
 }) {
   return (
-    <button type="button" className={`tavern-icon-button ${className}`} title={label} aria-label={label} onClick={onClick} disabled={disabled}>
+    <button type="button" className={`tavern-icon-button ${className}`} title={label} aria-label={label} onClick={onClick} disabled={disabled || busy} aria-busy={busy || undefined}>
       {children}
     </button>
   );
@@ -1082,7 +1089,7 @@ export default function AgentPage() {
         />
 
         <footer className="tavern-composer-wrap">
-          {error ? <div className="tavern-banner is-error"><span>{error}</span><button onClick={() => setError("")}><CloseIcon /></button></div> : null}
+          {error ? <div className="tavern-banner is-error"><span>{sceneErrorMessage(error, language)}</span><button onClick={() => setError("")}><CloseIcon /></button></div> : null}
           {notice ? <div className="tavern-banner is-success"><CheckIcon /><span>{notice}</span><button onClick={() => setNotice("")}><CloseIcon /></button></div> : null}
           {conversation?.status === "running" ? (
             <div className="tavern-run-strip" role="status" aria-live="polite">
@@ -1370,6 +1377,10 @@ export function MessageStream({ conversation, workspace, activeCharacter, active
   const workbench = workbenchCopy(normalizeAppLanguage(language));
   const scrollRef = useRef<HTMLDivElement>(null);
   const followLatestRef = useRef(true);
+  const interactionPausedRef = useRef(false);
+  const [unreadMessages, setUnreadMessages] = useState(0);
+  const [announcement, setAnnouncement] = useState("");
+  const announcedReplyRef = useRef<string | undefined>(undefined);
   const lastMessageIdRef = useRef<string | undefined>(undefined);
   const seenConversationIdRef = useRef<string | undefined>(undefined);
   const seenMessageIdsRef = useRef<Set<string>>(new Set());
@@ -1380,6 +1391,9 @@ export function MessageStream({ conversation, workspace, activeCharacter, active
   const useVirtualRows = messages.length > 40;
   if (conversation?.id !== seenConversationIdRef.current) {
     seenConversationIdRef.current = conversation?.id;
+    followLatestRef.current = true; interactionPausedRef.current = false;
+    lastMessageIdRef.current = messages.at(-1)?.id;
+    announcedReplyRef.current = messages.at(-1)?.status === "streaming" ? undefined : messages.at(-1)?.id;
     // Existing history should be stable when opening/switching a chat. Only
     // messages that arrive afterward receive the short entrance animation.
     seenMessageIdsRef.current = new Set(messages.map((message) => message.id));
@@ -1397,6 +1411,11 @@ export function MessageStream({ conversation, workspace, activeCharacter, active
     overscan: 6,
     getItemKey: (index) => messages[index]?.id ?? index,
   });
+  // Only compensate changes wholly above the viewport. A partially visible
+  // message may contain the summary the reader just clicked; anchoring its
+  // entire height would shift that summary by the size of the opened panel.
+  virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item, _delta, instance) =>
+    item.end <= (instance.scrollOffset ?? 0);
   const lastMessage = messages[messages.length - 1];
   const lastLayoutSignature = lastMessage
     ? [
@@ -1431,16 +1450,22 @@ export function MessageStream({ conversation, workspace, activeCharacter, active
       currentScroller.scrollTo({ top: currentScroller.scrollHeight - currentScroller.clientHeight, behavior: "auto" });
     });
   }, [messages.length, useVirtualRows, virtualizer]);
+  // Disclosure toggles (including nested character/clothing panels) are reader
+  // interactions, not new messages. Remeasure without invoking follow-latest.
   const remeasure = useCallback(() => {
-    requestAnimationFrame(settleLatest);
-  }, [settleLatest]);
+    if (!useVirtualRows) return;
+    requestAnimationFrame(() => {
+      const scroller = scrollRef.current;
+      if (scroller) measureMountedMessageRows(scroller, virtualizer.measureElement);
+    });
+  }, [useVirtualRows, virtualizer]);
   useEffect(() => {
     if (!messages.length) scrollRef.current?.scrollTo({ top: 0, behavior: "auto" });
   }, [conversation?.id, messages.length]);
   useEffect(() => {
     if (lastMessage?.id !== lastMessageIdRef.current) {
       lastMessageIdRef.current = lastMessage?.id;
-      followLatestRef.current = true;
+      if (!followLatestRef.current) setUnreadMessages(count => count + 1);
     }
     const frame = requestAnimationFrame(settleLatest);
     const settleTimer = lastMessage?.status === "streaming" ? 0 : window.setTimeout(() => {
@@ -1451,6 +1476,14 @@ export function MessageStream({ conversation, workspace, activeCharacter, active
       if (settleTimer) clearTimeout(settleTimer);
     };
   }, [lastLayoutSignature, lastMessage?.id, settleLatest]);
+
+  useEffect(() => { setUnreadMessages(0); setAnnouncement(""); }, [conversation?.id]);
+  useEffect(() => {
+    // Completion-only status: streaming tokens and disclosure changes never rewrite a live log.
+    if (lastMessage?.role === "assistant" && lastMessage.status !== "streaming" && announcedReplyRef.current !== lastMessage.id) {
+      announcedReplyRef.current = lastMessage.id; setAnnouncement(`${tx("replyComplete")} · ${messages.length}`);
+    }
+  }, [lastMessage?.id, lastMessage?.status]);
 
   if (!conversation || !activeCharacter) {
     return <div className="tavern-empty"><SparklesIcon /><h2>{tx("chooseCharacter")}</h2><p>{tx("chooseCharacterHint")}</p></div>;
@@ -1487,14 +1520,27 @@ export function MessageStream({ conversation, workspace, activeCharacter, active
     );
   }
   return (
+    <div className="tavern-message-region">
     <div
       className="tavern-message-scroll"
       ref={scrollRef}
       role="log"
-      aria-live="polite"
+      aria-live="off"
+      aria-busy={lastMessage?.status === "streaming"}
+      onPointerDownCapture={(event) => {
+        if ((event.target as Element).closest("summary, input, textarea, select, button")) { followLatestRef.current = false; interactionPausedRef.current = true; }
+      }}
+      onKeyDownCapture={(event) => {
+        if ((event.target as Element).closest("summary, input, textarea, select, button")) { followLatestRef.current = false; interactionPausedRef.current = true; }
+      }}
+      onWheel={() => { interactionPausedRef.current = false; }}
+      onTouchMove={() => { interactionPausedRef.current = false; }}
       onScroll={(event) => {
         const target = event.currentTarget;
-        followLatestRef.current = target.scrollHeight - target.scrollTop - target.clientHeight < 140;
+        if (!interactionPausedRef.current) {
+          followLatestRef.current = target.scrollHeight - target.scrollTop - target.clientHeight < 140;
+          if (followLatestRef.current) setUnreadMessages(0);
+        }
       }}
     >
       <div className={`tavern-virtual-list ${useVirtualRows ? "" : "is-static"}`} style={useVirtualRows ? { height: virtualizer.getTotalSize() } : undefined}>
@@ -1511,6 +1557,7 @@ export function MessageStream({ conversation, workspace, activeCharacter, active
             <div key={message.id} ref={useVirtualRows ? virtualizer.measureElement : undefined} data-index={row.index} className="tavern-virtual-row" style={useVirtualRows ? { transform: `translateY(${row.start}px)` } : undefined}>
               <MessageBubble
                 conversationId={conversation.id}
+                autoMode={conversation.generationMode === "auto"}
                 message={message}
                 speaker={character}
                 persona={activePersona}
@@ -1527,11 +1574,18 @@ export function MessageStream({ conversation, workspace, activeCharacter, active
         })}
       </div>
     </div>
+    <span className="tavern-message-announcement" role="status" aria-live="polite" aria-atomic="true">{announcement}</span>
+    {unreadMessages > 0 && <button type="button" className="btn tavern-new-messages" onClick={() => {
+      interactionPausedRef.current = false; followLatestRef.current = true;
+      setUnreadMessages(0); setAnnouncement(""); settleLatest();
+    }}>{tx("newMessages")} ({unreadMessages})</button>}
+    </div>
   );
 }
 
-function MessageBubble({ conversationId, message, speaker, persona, language, onUpdate, onDelete, onGenerate, onRegenerate, onLayoutChange, animate }: {
+function MessageBubble({ conversationId, autoMode, message, speaker, persona, language, onUpdate, onDelete, onGenerate, onRegenerate, onLayoutChange, animate }: {
   conversationId: string;
+  autoMode: boolean;
   message: AgentMessage;
   speaker?: TavernCharacter;
   persona?: TavernPersona;
@@ -1551,27 +1605,25 @@ function MessageBubble({ conversationId, message, speaker, persona, language, on
   const [proposalDraft, setProposalDraft] = useState(message.imageProposal);
   const [previewImage, setPreviewImage] = useState<AgentAttachment | null>(null);
   const [copied, setCopied] = useState(false);
+  const [copying, setCopying] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
+  const copyFlight = useRef(false);
   const copyTimerRef = useRef<number | undefined>(undefined);
   useEffect(() => setProposalDraft(message.imageProposal), [message.imageProposal]);
   useEffect(() => () => {
     if (copyTimerRef.current) window.clearTimeout(copyTimerRef.current);
   }, []);
   const copyMessage = async () => {
-    try {
-      await navigator.clipboard.writeText(content);
-    } catch {
-      const textarea = document.createElement("textarea");
-      textarea.value = content;
-      textarea.style.position = "fixed";
-      textarea.style.opacity = "0";
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand("copy");
-      textarea.remove();
-    }
-    setCopied(true);
+    if (copyFlight.current) return;
+    copyFlight.current = true; setCopying(true); setCopied(false); setCopyFailed(false);
     if (copyTimerRef.current) window.clearTimeout(copyTimerRef.current);
-    copyTimerRef.current = window.setTimeout(() => setCopied(false), 900);
+    try {
+      await copyTavernText(content);
+      setCopied(true);
+      copyTimerRef.current = window.setTimeout(() => setCopied(false), 1400);
+    } catch {
+      setCopyFailed(true);
+    } finally { copyFlight.current = false; setCopying(false); }
   };
   const swipes = message.swipes ?? [];
   const swipeIndex = Math.max(0, Math.min(swipes.length - 1, message.swipeIndex ?? swipes.length - 1));
@@ -1584,7 +1636,7 @@ function MessageBubble({ conversationId, message, speaker, persona, language, on
           {content ? markdown(content) : message.status === "streaming" ? <span className="tavern-thinking">{tx("thinking")}</span> : null}
           {message.status === "streaming" && content ? <span className="tavern-stream-caret" /> : null}
         </div>
-        {message.error ? <div className="tavern-message-error">{message.error}</div> : null}
+        {message.error ? <div className="tavern-message-error">{sceneErrorMessage(message.error, language)}</div> : null}
         {message.attachments.length ? (
           <div className={`tavern-message-images ${message.attachments.length === 1 ? "is-single" : message.attachments.length === 2 ? "is-pair" : "is-many"}`}>
             {message.attachments.map((item) => item.fileUrl ? (
@@ -1610,14 +1662,17 @@ function MessageBubble({ conversationId, message, speaker, persona, language, on
             ) : null)}
           </div>
         ) : null}
+        {proposalDraft?.status === "completed" && <SceneBindingsEditor scene={proposalDraft.scene} language={language} onLayoutChange={onLayoutChange} />}
         {proposalDraft?.status === "completed" && <details className="tavern-continuity" onToggle={onLayoutChange}><summary>{imageUi(language).current}</summary><p>{proposalDraft.positivePrompt}</p><p>{proposalDraft.stylePrompt}</p>{proposalDraft.continuity?.previousPrompt && <details><summary>{imageUi(language).previous}</summary><p>{proposalDraft.continuity.previousPrompt}</p></details>}</details>}
         {proposalDraft && proposalDraft.status !== "completed" && proposalDraft.status !== "cancelled" ? (
           <ImageProposalCard
             proposal={proposalDraft}
-            setProposal={setProposalDraft}
-            onGenerate={() => {
-              onUpdate((item) => { item.imageProposal = proposalDraft; });
-              void onGenerate(proposalDraft);
+            autoMode={autoMode}
+            setProposal={(next) => { setProposalDraft(next); if(next.scene) onUpdate(item => {item.imageProposal=next;}); }}
+            onGenerate={(next) => {
+              setProposalDraft(next);
+              onUpdate((item) => { item.imageProposal = next; });
+              return onGenerate(next);
             }}
             onCancel={() => onUpdate((item) => { if (item.imageProposal) item.imageProposal.status = "cancelled"; })}
             onLayoutChange={onLayoutChange}
@@ -1633,12 +1688,15 @@ function MessageBubble({ conversationId, message, speaker, persona, language, on
             </span>
           ) : null}
           <span className={`tavern-copy-action ${copied ? "is-copied" : ""}`}>
-            <IconButton label={copied ? tx("copied") : tx("copy")} className={copied ? "is-copied" : ""} onClick={() => void copyMessage()}>{copied ? <CheckIcon /> : <CopyIcon />}</IconButton>
+            <IconButton label={copying ? tx("copying") : copied ? tx("copied") : tx("copy")} busy={copying} className={copied ? "is-copied" : ""} onClick={() => void copyMessage()}>{copied ? <CheckIcon /> : <CopyIcon />}</IconButton>
           </span>
           {!isUser && message.status !== "streaming" ? <IconButton label={tx("regenerateReply")} onClick={onRegenerate}><RefreshIcon /></IconButton> : null}
           {message.status !== "streaming" ? <IconButton label={tx("deleteMessage")} className="tavern-message-delete" onClick={onDelete}><DeleteIcon /></IconButton> : null}
         </footer>
-        {copied ? <span className="tavern-copy-feedback" role="status"><CheckIcon />{tx("copied")}</span> : null}
+        {copied || copying || copyFailed ? <span className={`tavern-copy-feedback ${copyFailed ? "is-error" : ""}`} role="status">
+          {copied ? <CheckIcon /> : copying ? <RefreshIcon /> : <CloseIcon />}
+          {copying ? tx("copying") : copied ? tx("copied") : tx("copyFailed")}
+        </span> : null}
       </div>
       {previewImage?.fileUrl ? createPortal((
         <div className="tavern-image-lightbox" role="dialog" aria-modal="true" aria-label={tx("previewLabel", { name: previewImage.name })} onClick={() => setPreviewImage(null)}>
@@ -1663,46 +1721,74 @@ function MessageBubble({ conversationId, message, speaker, persona, language, on
   );
 }
 
-function ImageProposalCard({ proposal, setProposal, onGenerate, onCancel, onLayoutChange, language }: {
+export function ImageProposalCard({ proposal, autoMode, setProposal, onGenerate, onCancel, onLayoutChange, language }: {
   proposal: TavernImageProposal;
+  autoMode: boolean;
   setProposal: (value: TavernImageProposal) => void;
-  onGenerate: () => void;
+  onGenerate: (value: TavernImageProposal) => Promise<void>;
   onCancel: () => void;
   onLayoutChange: () => void;
   language: unknown;
 }) {
   const tx = (key: TavernUiKey, values?: Record<string, string | number>) => tavernUiText(language, key, values);
-  const busy = proposal.status === "running";
+  const [parametersOpen, setParametersOpen] = useState(false);
+  const parametersId = useId();
+  const repairing = proposal.continuity?.repairStatus === "repairing";
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const submitFlight = useRef(false);
+  const busy = proposal.status === "running" || repairing || submitting;
+  const submit = async (value: TavernImageProposal) => {
+    if (submitFlight.current || busy) return;
+    submitFlight.current = true; setSubmitting(true); setSubmitError("");
+    try { await onGenerate(value); }
+    catch (reason) { setSubmitError(reason instanceof Error ? reason.message : String(reason)); }
+    finally { submitFlight.current = false; setSubmitting(false); }
+  };
+  const needsReview = proposal.continuity?.reviewRequired === true;
+  const reviewChoice = (adopt: boolean) => {
+    const next = { ...proposal,
+      ...(adopt ? {positivePrompt: proposal.continuity!.suggestedPrompt!} : {}),
+      continuity: {...proposal.continuity!, reviewRequired: false}, error: undefined,
+    };
+    setProposal(next);
+    if (autoMode) void submit(next);
+  };
   return (
     <section className={`tavern-image-proposal is-${proposal.status}`}>
-      <header><span><MagicIcon /></span><strong>{tx("proposal")}</strong><small>{proposalStatus(proposal.status, language)}</small></header>
+      <header><span><MagicIcon /></span><strong>{tx("proposal")}</strong><small role="status">{submitting ? proposalStatus("running", language) : repairing ? tx("repairingImage") : autoMode && needsReview ? tx("autoImagePaused") : autoMode && proposal.status === "pending" ? tx("autoImageReady") : proposalStatus(proposal.status, language)}</small></header>
+      {repairing && <p role="status" className="muted">{tx("repairingImageHint")}</p>}
+      {autoMode && needsReview && !repairing && <p role="alert" className="muted">{tx("autoImagePausedHint")}</p>}
+      <SceneBindingsEditor scene={proposal.scene} language={language} disabled={busy} onLayoutChange={onLayoutChange} onChange={scene => setProposal({...proposal,scene,positivePrompt:compileSceneBindings(scene).positivePrompt})} />
       <textarea
         className="tavern-proposal-prompt"
         aria-label={tx("positivePrompt")}
         value={proposal.positivePrompt}
         onChange={(event) => setProposal({ ...proposal, positivePrompt: event.target.value })}
         rows={3}
-        disabled={busy}
+        disabled={busy || !!proposal.scene}
       />
-      {proposal.continuity && <div className="tavern-continuity">
-        {proposal.continuity.reviewRequired ? <><p role="alert">{imageUi(language).review}</p>{proposal.continuity.suggestedPrompt && <p>{proposal.continuity.suggestedPrompt}</p>}<div className="tavern-continuity-actions"><button type="button" className="btn secondary" onClick={() => setProposal({ ...proposal, continuity: { ...proposal.continuity!, reviewRequired: false } })}>{imageUi(language).keep}</button>{proposal.continuity.suggestedPrompt && <button type="button" className="btn secondary" onClick={() => setProposal({ ...proposal, positivePrompt: proposal.continuity!.suggestedPrompt!, continuity: { ...proposal.continuity!, reviewRequired: false } })}>{imageUi(language).adopt}</button>}</div></> : <details onToggle={onLayoutChange}><summary>{imageUi(language).changes} · {proposal.continuity.changes.length}</summary><small>{imageUi(language).preserved}</small>{proposal.continuity.changes.map((change, i) => <p key={i}>{change.from && <del>{change.from}</del>}{change.from && change.to ? " → " : ""}{change.to && <ins>{change.to}</ins>}</p>)}</details>}
+      {proposal.continuity && !repairing && <div className="tavern-continuity">
+        {proposal.continuity.reviewRequired ? <><p role="alert">{imageUi(language).review}</p>{proposal.continuity.suggestedPrompt && <p>{proposal.continuity.suggestedPrompt}</p>}<div className="tavern-continuity-actions"><button type="button" className="btn secondary" disabled={!proposal.positivePrompt.trim() || (!proposal.scene && proposal.continuity?.bindingError === "SCENE_REQUIRED")} onClick={() => reviewChoice(false)}>{autoMode ? tx("keepAndGenerate") : imageUi(language).keep}</button>{proposal.continuity.suggestedPrompt && <button type="button" className="btn secondary" onClick={() => reviewChoice(true)}>{autoMode ? tx("adoptAndGenerate") : imageUi(language).adopt}</button>}</div></> : <details onToggle={onLayoutChange}><summary>{imageUi(language).changes} · {proposal.continuity.changes.length}</summary><small>{imageUi(language).preserved}</small>{proposal.continuity.changes.map((change, i) => <p key={i}>{change.from && <del>{change.from}</del>}{change.from && change.to ? " → " : ""}{change.to && <ins>{change.to}</ins>}</p>)}</details>}
       </div>}
       <div className="tavern-proposal-toolbar">
-        <details onToggle={onLayoutChange}>
-          <summary>{tx("sizeAndParams")} <ChevronDownIcon /></summary>
-          <div className="tavern-parameter-grid">
-            <Field label={tx("widthShort")}><NumericField label={tx("widthShort")} value={proposal.width ?? 1024} min={64} max={49152} onCommit={(value) => setProposal({ ...proposal, width: Math.round(value) })} /></Field>
-            <Field label={tx("heightShort")}><NumericField label={tx("heightShort")} value={proposal.height ?? 1024} min={64} max={49152} onCommit={(value) => setProposal({ ...proposal, height: Math.round(value) })} /></Field>
-            <Field label={tx("steps")}><NumericField label={tx("steps")} value={proposal.steps ?? 28} min={1} max={50} onCommit={(value) => setProposal({ ...proposal, steps: Math.round(value) })} /></Field>
-            <Field label="CFG"><NumericField label="CFG" value={proposal.scale ?? 5} min={0} max={10} step={0.1} onCommit={(value) => setProposal({ ...proposal, scale: value })} /></Field>
-            <Field label={tx("imageCount")}><NumericField label={tx("imageCount")} value={proposal.count} min={1} max={8} onCommit={(value) => setProposal({ ...proposal, count: Math.round(value) })} /></Field>
-          </div>
-        </details>
-        {proposal.status === "pending" || proposal.status === "error" ? (
-          <footer><button type="button" className="is-ghost" onClick={onCancel}><CloseIcon />{tx("cancel")}</button><button type="button" className="is-primary" onClick={onGenerate} disabled={!proposal.positivePrompt.trim() || proposal.continuity?.reviewRequired}><ImageIcon />{tx("confirmGenerate")}</button></footer>
+        <button type="button" className="btn tavern-parameters-toggle" aria-expanded={parametersOpen} aria-controls={parametersId}
+          onClick={() => { setParametersOpen(open => !open); requestAnimationFrame(onLayoutChange); }}>{tx("sizeAndParams")} <ChevronDownIcon /></button>
+
+        {!repairing && (proposal.status === "pending" || proposal.status === "error") ? (
+          <footer><button type="button" className="is-ghost" disabled={busy} onClick={onCancel}><CloseIcon />{tx("cancel")}</button>{(!autoMode || !needsReview) && <button type="button" className="is-primary" onClick={() => void submit(proposal)} aria-busy={submitting || undefined} disabled={busy || !proposal.positivePrompt.trim() || proposal.continuity?.reviewRequired}><ImageIcon />{autoMode ? tx(proposal.status === "error" ? "retryImage" : "generateNow") : tx("confirmGenerate")}</button>}</footer>
         ) : null}
+        {parametersOpen && (
+          <div id={parametersId} className="tavern-parameter-grid">
+            <Field label={tx("widthShort")}><NumericField readOnly={busy} label={tx("widthShort")} value={proposal.width ?? 1024} min={64} max={49152} onCommit={(value) => setProposal({ ...proposal, width: Math.round(value) })} /></Field>
+            <Field label={tx("heightShort")}><NumericField readOnly={busy} label={tx("heightShort")} value={proposal.height ?? 1024} min={64} max={49152} onCommit={(value) => setProposal({ ...proposal, height: Math.round(value) })} /></Field>
+            <Field label={tx("steps")}><NumericField readOnly={busy} label={tx("steps")} value={proposal.steps ?? 28} min={1} max={50} onCommit={(value) => setProposal({ ...proposal, steps: Math.round(value) })} /></Field>
+            <Field label="CFG"><NumericField readOnly={busy} label="CFG" value={proposal.scale ?? 5} min={0} max={10} step={0.1} onCommit={(value) => setProposal({ ...proposal, scale: value })} /></Field>
+            <Field label={tx("imageCount")}><NumericField readOnly={busy} label={tx("imageCount")} value={proposal.count} min={1} max={8} onCommit={(value) => setProposal({ ...proposal, count: Math.round(value) })} /></Field>
+          </div>
+        )}
       </div>
-      {proposal.error ? <p className="tavern-message-error">{proposal.error}</p> : null}
+      {submitError || proposal.error ? <p role="alert" className="tavern-message-error">{sceneErrorMessage(submitError || proposal.error, language)}</p> : null}
       {busy ? <div className="tavern-image-progress"><span /></div> : null}
     </section>
   );
@@ -2142,10 +2228,7 @@ function ImagePanel({ workspace, conversation, character, defaults, stylePresets
   language: unknown;
 }) {
   const tx = (key: TavernUiKey, values?: Record<string, string | number>) => tavernUiText(language, key, values);
-  const [userPromptDraft, setUserPromptDraft] = useState({
-    negative: character?.visual.negativePrompt.trim() || DEFAULT_TAVERN_NEGATIVE_PROMPT,
-    style: character?.visual.stylePrompt ?? "",
-  });
+  const { draft: userPromptDraft, edit: editUserPromptDraft, flush: flushUserPromptDraft } = useTavernPromptDraft(character, updateVisual);
   const [styleSearch, setStyleSearch] = useState("");
   const [stylePresetMenuOpen, setStylePresetMenuOpen] = useState(false);
   const [selectedStylePresetGroup, setSelectedStylePresetGroup] = useState("all");
@@ -2154,22 +2237,6 @@ function ImagePanel({ workspace, conversation, character, defaults, stylePresets
   const stylePresetMenuRef = useRef<HTMLDivElement>(null);
   const attemptedStylePreviewRecoveryRef = useRef("");
   const [stylePresetMenuPosition, setStylePresetMenuPosition] = useState({ left: 0, top: 0, width: 330 });
-  useEffect(() => {
-    setUserPromptDraft({
-      negative: character?.visual.negativePrompt.trim() || DEFAULT_TAVERN_NEGATIVE_PROMPT,
-      style: character?.visual.stylePrompt ?? "",
-    });
-  }, [character?.id]);
-  useEffect(() => {
-    if (!character) return;
-    const timer = window.setTimeout(() => {
-      const negativePrompt = userPromptDraft.negative.trim() || DEFAULT_TAVERN_NEGATIVE_PROMPT;
-      const stylePrompt = userPromptDraft.style;
-      if (negativePrompt === character.visual.negativePrompt && stylePrompt === character.visual.stylePrompt) return;
-      updateVisual({ negativePrompt, stylePrompt });
-    }, 320);
-    return () => window.clearTimeout(timer);
-  }, [character?.id, character?.visual.negativePrompt, character?.visual.stylePrompt, userPromptDraft.negative, userPromptDraft.style]);
   const lastAssistant = [...(conversation?.messages ?? [])].reverse().find((item) => item.role === "assistant" && item.status === "complete");
   const runtime = {
     model: character?.visual.model || defaults.model,
@@ -2179,7 +2246,7 @@ function ImagePanel({ workspace, conversation, character, defaults, stylePresets
     scale: character?.visual.scale ?? defaults.cfgScale,
     sampler: character?.visual.sampler || defaults.sampler,
     count: character?.visual.count ?? 1,
-    negativePrompt: character?.visual.negativePrompt.trim() || DEFAULT_TAVERN_NEGATIVE_PROMPT,
+    negativePrompt: character?.visual.negativePrompt ?? "",
     stylePrompt: character?.visual.stylePrompt ?? "",
   };
   const sizePresets = [
@@ -2303,7 +2370,7 @@ function ImagePanel({ workspace, conversation, character, defaults, stylePresets
       message.imageProposal = {
         id: tavernId("image"), status: "pending",
         positivePrompt: defaultImagePromptForMessage(message, character),
-        negativePrompt: userPromptDraft.negative.trim() || DEFAULT_TAVERN_NEGATIVE_PROMPT,
+        negativePrompt: userPromptDraft.negative,
         stylePrompt: userPromptDraft.style,
         model: runtime.model,
         width: runtime.width, height: runtime.height,
@@ -2336,17 +2403,17 @@ function ImagePanel({ workspace, conversation, character, defaults, stylePresets
               {NAI_MODELS.map((model) => <option key={model.value} value={model.value}>{model.label}</option>)}
             </SelectMenuCompat>
           </Field>
-          <section className="tavern-user-prompt-settings">
+          <section className="tavern-user-prompt-settings" onBlurCapture={flushUserPromptDraft}>
             <header><div><strong>{tx("userPromptSettings")}</strong><small>{tx("userPromptHint")}</small></div></header>
             <Field label={tx("stylePrompt")}>
               <textarea
                 rows={3}
                 value={userPromptDraft.style}
-                onChange={(event) => setUserPromptDraft((current) => ({ ...current, style: event.target.value }))}
+                onChange={(event) => editUserPromptDraft("style", event.target.value)}
                 placeholder={`e.g. artist:name, 0.8::artist:another::, cinematic lighting`}
               />
             </Field>
-            <StyleTagPicker key={character?.id} value={userPromptDraft.style} language={language} onChange={(style) => setUserPromptDraft((current) => ({ ...current, style }))} />
+            <StyleTagPicker key={character?.id} value={userPromptDraft.style} language={language} onChange={(style) => editUserPromptDraft("style", style)} />
             <div className="style-preset-row tavern-shared-style-picker">
               <div className="style-preset-picker" ref={stylePresetPickerRef}>
                 <button type="button" className="style-preset-trigger" aria-haspopup="listbox" aria-expanded={stylePresetMenuOpen} onClick={toggleStylePresetMenu}>
@@ -2389,7 +2456,7 @@ function ImagePanel({ workspace, conversation, character, defaults, stylePresets
                                 onFocus={() => setHoveredStylePresetId(preset.id)}
                                 onBlur={() => setHoveredStylePresetId("")}
                                 onClick={() => {
-                                  setUserPromptDraft((current) => ({ ...current, style: preset.prompt }));
+                                  editUserPromptDraft("style", preset.prompt);
                                   updateVisual({ stylePrompt: preset.prompt });
                                   setStylePresetMenuOpen(false);
                                   setHoveredStylePresetId("");
@@ -2417,11 +2484,11 @@ function ImagePanel({ workspace, conversation, character, defaults, stylePresets
               <textarea
               rows={5}
               value={userPromptDraft.negative}
-              onChange={(event) => setUserPromptDraft((current) => ({ ...current, negative: event.target.value }))}
+              onChange={(event) => editUserPromptDraft("negative", event.target.value)}
             />
             </Field>
             <button type="button" className="tavern-reset-negative" onClick={() => {
-              setUserPromptDraft((current) => ({ ...current, negative: DEFAULT_TAVERN_NEGATIVE_PROMPT }));
+              editUserPromptDraft("negative", DEFAULT_TAVERN_NEGATIVE_PROMPT);
               updateVisual({ negativePrompt: DEFAULT_TAVERN_NEGATIVE_PROMPT });
             }}><RefreshIcon />{tx("restoreNegative")}</button>
           </section>

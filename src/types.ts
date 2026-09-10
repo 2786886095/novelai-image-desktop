@@ -1,3 +1,4 @@
+import { normalizeMetadataReplay, type MetadataReplay } from "./metadata-replay";
 import { version as packageVersion } from "../package.json";
 import { fitNAIImageSize } from "./nai-dimensions";
 
@@ -162,6 +163,9 @@ export type QualityPreset = "standard" | "light" | "none";
 export type ImageToImageSizeMode = "adaptive" | "custom";
 
 export interface GenerateParams {
+  /** Preserve authored metadata text, including repeated tags and weight scopes. */
+  preservePromptText?: boolean;
+  metadataReplay?: MetadataReplay;
   model: NAIModel;
   stylePrompt: string;
   positivePrompt: string;
@@ -217,6 +221,13 @@ export const DEFAULT_PARAMS: GenerateParams = {
 /** NovelAI seeds are unsigned 32-bit values in exported image metadata. */
 export const MAX_NAI_SEED = 0xffff_ffff;
 
+/** Preserve the first fixed seed; subsequent images wrap in the full uint32 range. */
+export function seedForBatch(seed: number, index: number): number {
+  const initial = Math.min(MAX_NAI_SEED, Math.max(0, Number.isFinite(seed) ? Math.round(seed) : 0));
+  const offset = Number.isSafeInteger(index) && index > 0 ? index : 0;
+  return (initial + offset % (MAX_NAI_SEED + 1)) % (MAX_NAI_SEED + 1);
+}
+
 const SUPPORTED_MODEL_VALUES = new Set<string>(NAI_MODELS.map((item) => item.value));
 const SUPPORTED_SAMPLER_VALUES = new Set<string>(NAI_SAMPLERS.map((item) => item.value));
 const SUPPORTED_NOISE_SCHEDULES = new Set(["native", "karras", "exponential"]);
@@ -256,6 +267,8 @@ export function normalizeGenerateParams(value?: Partial<GenerateParams> | null):
   const dimensions = fitNAIImageSize(source.width, source.height, DEFAULT_PARAMS);
   return {
     model: normalizedModel,
+    ...(source.preservePromptText === true ? { preservePromptText: true } : {}),
+    ...(normalizeMetadataReplay(source.metadataReplay) ? { metadataReplay: normalizeMetadataReplay(source.metadataReplay) } : {}),
     stylePrompt: typeof source.stylePrompt === "string" ? source.stylePrompt : "",
     positivePrompt: typeof source.positivePrompt === "string" ? source.positivePrompt : "",
     negativePrompt: typeof source.negativePrompt === "string" ? source.negativePrompt : "",
@@ -1317,7 +1330,16 @@ export interface ArtistStylePreviewPage {
 
 export type AppLanguage = "zh-CN" | "zh-TW" | "en-US" | "ja-JP" | "ko-KR";
 
+export interface OutputMigrationNotice {
+  id: string; status: "recovered" | "failed"; sourcePaths: string[]; targetPath: string; copiedFiles: number; error?: string;
+}
+
 export interface AppSettings {
+  /** Runtime-only fields whose original ciphertext is retained for recovery. */
+  credentialIssues?: string[];
+  outputMigrationNotice?: OutputMigrationNotice | null;
+  /** Retain recovery sources until the user has moved them out of the replaceable app directory. */
+  protectedOutputPaths?: string[];
   hasOnboarded: boolean;
   language: AppLanguage;
   outputDir: string;
@@ -1520,6 +1542,8 @@ export interface AiModelListResult {
 
 /** Compatible generation parameters extracted from embedded image metadata. */
 export interface ImportedParams {
+  preservePromptText?: boolean;
+  metadataReplay?: MetadataReplay;
   positivePrompt?: string;
   negativePrompt?: string;
   stylePrompt?: string;
@@ -1670,6 +1694,18 @@ export interface NaiDesktopApi {
     limit?: number,
     force?: boolean,
   ) => Promise<import("./artist-lab").ArtistTagRecord[]>;
+  artistLabPopularArtistPool: (
+    limit?: number,
+    force?: boolean,
+  ) => Promise<import("./artist-lab").ArtistPoolSnapshot>;
+  artistLabAllArtists: (requestId: string) => Promise<import("./artist-lab").ArtistPoolSnapshot>;
+  artistLabCatalogSelect: (count:number,mode:import("./artist-lab").ArtistCatalogMode,seed:number) => Promise<import("./artist-lab").ArtistCatalogSelection>;
+  artistLabCatalogUpdate: (id:string) => Promise<import("./artist-lab").ArtistCatalogInfo>;
+  artistLabCatalogCancel: (id:string) => Promise<boolean>;
+  artistLabSelectedArtists: (requestId: string, count: number) => Promise<import("./artist-lab").ArtistPoolSnapshot>;
+  artistLabArtistTotal: (force?: boolean) => Promise<import("./artist-lab").ArtistPoolTotal>;
+  artistLabCancelArtistSync: (requestId: string) => Promise<boolean>;
+  onArtistPoolSyncProgress: (callback: (progress: import("./artist-lab").ArtistPoolSyncProgress) => void) => () => void;
   artistLabArtistRanking: (
     page?: number,
     pageSize?: number,

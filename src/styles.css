@@ -19550,27 +19550,11 @@ button.prompt-chip-head::after,
   justify-content: space-between;
   gap: 6px 10px;
 }
-.tavern-image-proposal .tavern-proposal-toolbar > details {
-  min-width: 126px;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-}
-.tavern-image-proposal .tavern-proposal-toolbar > details[open] {
-  order: 3;
-  flex: 1 0 100%;
-  padding-top: 2px;
-}
-.tavern-image-proposal .tavern-proposal-toolbar summary {
-  width: fit-content;
-  min-height: 30px;
-  padding: 0 8px;
-  border-radius: var(--radius-md);
-  color: var(--text-secondary);
-  font-size: 11px;
-}
-.tavern-image-proposal .tavern-proposal-toolbar summary:hover { background: var(--accent-soft); color: var(--accent); }
-.tavern-image-proposal .tavern-proposal-toolbar details > :not(summary) { margin: 5px 0 0; }
+
+
+
+
+
 .tavern-image-proposal .tavern-parameter-grid {
   grid-template-columns: repeat(5, minmax(78px, 1fr));
   padding: 9px;
@@ -19973,3 +19957,160 @@ html.motion-reduced .image-save-notice, html.motion-reduced .image-save-notice-i
 
 .quicktag-directory input { width: 100%; box-sizing: border-box; min-height: 34px; padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-input); color: var(--text-primary); }
 .quicktag-directory input::placeholder { color: var(--text-secondary); }
+
+/* Keep candidate-source and refresh failures beside the actual pool count. */
+.artist-pool-status { display: grid; gap: 4px; max-width: 64ch; font-size: 12px; line-height: 1.5; color: var(--text-muted); overflow-wrap: anywhere; }
+.artist-pool-status[data-warning="true"] { color: var(--text-secondary); border-inline-start: 2px solid var(--warning); padding-inline-start: 8px; }
+.random-pool-summary > div:first-child { min-width: 0; }
+
+/* Artist pool: selected-count refresh, separate metadata-only catalog total. */
+.artist-pool-total { margin-top: 8px; color: var(--text-primary); font-size: 12px; }
+.artist-pool-total small { color: var(--text-secondary) !important; font-weight: 400 !important; }
+.random-pool-summary .artist-pool-warning { margin-top: 8px; color: var(--text-secondary); font-weight: 400; }
+.random-pool-summary .artist-pool-warning.is-large { color: var(--accent); font-weight: 600; }
+
+/* Fixed local catalog: same semantic controls, bounded desktop/mobile layout. */
+.artist-catalog-status { display: grid; gap: 6px; margin-block: 12px; }
+.artist-catalog-actions { max-width: 540px; }
+.artist-catalog-actions > label:first-child { width: min(280px, 100%); }
+.artist-catalog-confirm { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 8px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-dialog); }
+.artist-catalog-confirm > small { flex-basis: 100%; }
+@media (max-width: 768px) { .artist-catalog-actions { max-width: 100%; } }
+
+/* Metadata import uses the same theme tokens and bounded, keyboard-operable controls. */
+.metadata-apply-heading { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.metadata-apply-heading h3 { flex:1; margin:0; }
+.metadata-apply-disclosure > summary { cursor:pointer; list-style:none; min-height:32px; }
+.metadata-apply-disclosure > summary::-webkit-details-marker { display:none; }
+.metadata-apply-disclosure > summary strong { flex:1; }
+.metadata-apply-disclosure > summary:focus-visible { outline:none; box-shadow:var(--focus-ring); border-radius:var(--radius-sm); }
+.metadata-apply-disclosure[open] > summary .disclosure-chevron { transform:rotate(90deg); }
+.metadata-apply-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+.metadata-select-item { display:flex; align-items:flex-start; gap:10px; min-width:0; padding:10px 12px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg-input); color:var(--text-primary); font:inherit; text-align:start; cursor:pointer; }
+.metadata-select-item > span:last-child { display:grid; gap:5px; min-width:0; }
+.metadata-select-item small { display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; overflow-wrap:anywhere; color:var(--text-secondary); }
+.metadata-select-check { display:grid; place-items:center; flex:0 0 18px; width:18px; height:18px; border:1px solid var(--border-strong); border-radius:var(--radius-sm); color:transparent; }
+.metadata-select-item[aria-checked="true"] .metadata-select-check { background:var(--accent); color:var(--accent-text); border-color:var(--accent); }
+.metadata-select-item:hover { border-color:var(--accent); }
+.metadata-select-item:focus-visible { outline:none; box-shadow:var(--focus-ring); }
+.metadata-apply-panel > .btn { margin-top:12px; }
+@media(max-width:768px) { .metadata-apply-panel .metadata-compatible-grid { grid-template-columns:minmax(0,1fr); } }
+
+/* Bound scene editor: reuse field, btn and SelectMenu; keep controls in normal flow. */
+
+.tavern-scene-bindings { min-width:0; margin:10px 0; overflow-wrap:anywhere; }
+
+.tavern-scene-bindings summary { cursor:pointer; padding:8px 0; font-weight:600; }
+
+.tavern-scene-bindings .tavern-binding-entity { border:1px solid var(--border); border-radius:var(--radius-md); background:var(--bg-panel); padding:8px 12px; margin:8px 0; min-width:0; }
+
+.tavern-binding-row, .tavern-binding-add { display:flex; align-items:end; gap:8px; margin:10px 0; min-width:0; flex-wrap:wrap; }
+
+.tavern-binding-row > .field, .tavern-binding-add > .field { flex:1 1 180px; min-width:0; margin-bottom:0; }
+
+.tavern-scene-bindings .field input { min-width:0; box-sizing:border-box; font:inherit; }
+
+.tavern-scene-bindings .select-menu { width:100%; min-width:0; }
+
+.tavern-binding-actions { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+
+.tavern-scene-bindings .btn { min-height:34px; flex-shrink:0; }
+
+.tavern-binding-lock[aria-pressed="true"] { color:var(--accent); background:var(--accent-soft); border-color:var(--accent); }
+
+.tavern-binding-lock[aria-pressed="false"] { color:var(--text-secondary); }
+
+.tavern-binding-entity > .field { margin-block:10px; }
+
+@media(max-width:768px) {
+
+  .tavern-scene-bindings .tavern-binding-entity { padding:6px 8px; }
+
+  .tavern-scene-bindings .btn { min-height:40px; }
+
+  .tavern-binding-row > .field, .tavern-binding-add > .field { flex-basis:100%; }
+
+}
+
+
+/* Review fixes: stable two-column action header and explicit reader control. */
+.tavern-message-region { position: relative; flex: 1; container-type: inline-size; min-height: 0; min-width: 0; display: flex; }
+.tavern-message-region > .tavern-message-scroll { flex: 1; min-width: 0; min-height: 0; }
+.tavern-new-messages { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); z-index: var(--z-raised); max-width: calc(100% - 24px); white-space: normal; background: var(--surface); color: var(--accent); box-shadow: var(--shadow-sm); }
+.tavern-image-proposal .tavern-proposal-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: start; }
+.tavern-image-proposal .tavern-proposal-toolbar > .tavern-parameters-toggle { justify-self: start; min-width: 0; white-space: normal; }
+.tavern-parameters-toggle[aria-expanded="true"] { color: var(--accent); background: var(--accent-soft); }
+.tavern-image-proposal .tavern-proposal-toolbar > footer { grid-column: 2; grid-row: 1; margin-left: 0; flex-wrap: wrap; justify-content: flex-end; }
+.tavern-image-proposal .tavern-proposal-toolbar > .tavern-parameter-grid { grid-column: 1 / -1; grid-row: 2; margin: 0; }
+.tavern-binding-input { min-width: 0; width: 100%; }
+.tavern-binding-conflict, .tavern-binding-removal { padding: 10px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-panel); overflow-wrap: anywhere; }
+.tavern-binding-conflict { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.tavern-binding-conflict > span { flex-basis: 100%; }
+.tavern-binding-remove { margin: 6px 0; }
+@container (max-width: 360px) {
+  .tavern-image-proposal .tavern-proposal-toolbar { grid-template-columns: 1fr; }
+  .tavern-image-proposal .tavern-proposal-toolbar > footer { grid-column: 1; grid-row: 2; justify-self: end; }
+  .tavern-image-proposal .tavern-proposal-toolbar > .tavern-parameter-grid { grid-row: 3; }
+}
+
+.storage-directory-input { flex: 1; min-width: 0; }
+.storage-directory-input > input { width: 100%; }
+.storage-directory-input > p { overflow-wrap: anywhere; }
+
+.tavern-message-announcement { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* DISCLOSURE FEEDBACK — visible states without moving the clicked anchor. */
+details > summary {
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background-color 140ms var(--ease-out), color 140ms var(--ease-out), box-shadow 140ms var(--ease-out);
+}
+details > summary:hover {
+  background-color: var(--accent-soft);
+  color: var(--accent);
+}
+details > summary:active {
+  background-color: color-mix(in srgb, var(--accent) 18%, var(--bg-panel));
+}
+details > summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  box-shadow: var(--focus-ring);
+}
+details > summary:hover > svg { color: var(--accent); }
+/* Use one consistent indicator, with no duplicate native marker. */
+.tavern-scene-bindings > summary,
+.tavern-binding-entity > summary,
+.tavern-continuity > summary,
+.tavern-continuity > details > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  list-style: none;
+}
+.tavern-scene-bindings > summary::-webkit-details-marker,
+.tavern-binding-entity > summary::-webkit-details-marker,
+.tavern-continuity > summary::-webkit-details-marker,
+.tavern-continuity > details > summary::-webkit-details-marker { display: none; }
+.tavern-scene-bindings > summary::after,
+.tavern-binding-entity > summary::after,
+.tavern-continuity > summary::after,
+.tavern-continuity > details > summary::after {
+  content: "";
+  flex: 0 0 7px;
+  width: 7px;
+  height: 7px;
+  margin: 0 8px 0 auto;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 160ms var(--ease-out), color 140ms var(--ease-out);
+}
+.tavern-scene-bindings[open] > summary::after,
+.tavern-binding-entity[open] > summary::after,
+.tavern-continuity[open] > summary::after,
+.tavern-continuity > details[open] > summary::after { transform: rotate(45deg); }
+.tavern-parameters-toggle > svg:last-child { transition: transform 160ms var(--ease-out); }
+.tavern-parameters-toggle[aria-expanded="true"] > svg:last-child { transform: rotate(180deg); }
+
+.tavern-copy-feedback.is-error { color: var(--danger); }

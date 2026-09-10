@@ -10,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../i18n/app_locales.dart';
 import '../images/png_metadata.dart';
 import '../services/aitag_service.dart';
+import '../services/aitag_error.dart';
 import '../services/online_gallery_download_location.dart';
 import '../state/app_state.dart';
 import 'metadata_inspector_screen.dart';
@@ -430,6 +431,7 @@ class _AitagGalleryScreenState extends State<AitagGalleryScreen> {
   String timeRange = 'all';
   bool loading = true;
   bool failed = false;
+  Object? loadError;
 
   @override
   void initState() {
@@ -463,8 +465,13 @@ class _AitagGalleryScreenState extends State<AitagGalleryScreen> {
           sort: sortOverride ?? sort,
           timeRange: timeRangeOverride ?? timeRange);
       if (mounted) setState(() => result = next);
-    } catch (_) {
-      if (mounted) setState(() => failed = true);
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          failed = true;
+          loadError = error;
+        });
+      }
     } finally {
       if (mounted) setState(() => loading = false);
     }
@@ -683,11 +690,10 @@ class _AitagGalleryScreenState extends State<AitagGalleryScreen> {
                       child: Center(
                           child:
                               Column(mainAxisSize: MainAxisSize.min, children: [
-                        Text(text.failed),
+                        Text(formatAitagFailure(loadError, language)),
                         const SizedBox(height: 12),
                         OutlinedButton(
-                            onPressed: () => _search(result.page),
-                            child: Text(text.retry))
+                            onPressed: _refresh, child: Text(text.retry))
                       ])))
                 else if (result.items.isEmpty)
                   SliverFillRemaining(

@@ -1,3 +1,6 @@
+import '../agent/scene_bindings.dart';
+import '../agent/scene_bindings_editor.dart';
+import '../agent/scene_bindings_ui.dart';
 import '../agent/image_ui.dart';
 import '../agent/style_tag_picker.dart';
 import '../agent/style_draw.dart';
@@ -1534,6 +1537,23 @@ class _AgentScreenState extends State<AgentScreen> {
                 child: CircularProgressIndicator(strokeWidth: 2)),
         ]),
         const SizedBox(height: 8),
+        if(proposal.scene != null) OutlinedButton.icon(
+          icon:const Icon(Icons.account_tree_outlined),
+          label:Text((sceneBindingsUi[controller.app.settings.language]??sceneBindingsUi['en-US']!)['title']!),
+          onPressed:generating?null:() async {
+            final messenger = ScaffoldMessenger.of(context);
+            final expected = readSceneBindings(proposal.scene)!;
+            final conversationId = controller.selectedConversation!.id;
+            final language = controller.app.settings.language;
+            final updated = await showSceneBindingsEditor(context, expected, language,
+              readOnly: complete,
+              onSave: (scene) => controller.saveTavernScene(conversationId, message.id, expected, scene));
+            if(updated != null && messenger.mounted) {
+              messenger.showSnackBar(SnackBar(
+                content: Text((sceneBindingsUi[language] ?? sceneBindingsUi['en-US']!)['saved']!)));
+            }
+          },
+        ),
         ExpansionTile(
             title: Text(imageUi(controller.app.settings.language)['current']!),
             children: [
@@ -1550,13 +1570,15 @@ class _AgentScreenState extends State<AgentScreen> {
                     ]),
             ]),
         if (proposal.continuity?['reviewRequired'] == true) ...[
-          Text(imageUi(controller.app.settings.language)['review']!,
+          Text(proposal.continuity?['bindingError']=='SCENE_REQUIRED'
+              ? (sceneBindingsUi[controller.app.settings.language]??sceneBindingsUi['en-US']!)['SCENE_REQUIRED']!
+              : imageUi(controller.app.settings.language)['review']!,
               style: TextStyle(color: Theme.of(context).colorScheme.error)),
           if (proposal.continuity?['suggestedPrompt'] is String)
             SelectableText(proposal.continuity!['suggestedPrompt'] as String),
           Wrap(spacing: 8, children: [
             TextButton(
-                onPressed: () async {
+                onPressed: (proposal.scene == null && proposal.continuity?['bindingError']=='SCENE_REQUIRED') ? null : () async {
                   proposal.continuity!['reviewRequired'] = false;
                   await controller.saveWorkspace();
                 },
@@ -2926,12 +2948,8 @@ class _AgentScreenState extends State<AgentScreen> {
                           overflow: TextOverflow.ellipsis),
                       const SizedBox(height: 3),
                       Text(
-                          formatTavernText(text['negativeValue']!, {
-                            'value':
-                                character.visual.negativePrompt.trim().isEmpty
-                                    ? defaultTavernNegativePrompt
-                                    : character.visual.negativePrompt
-                          }),
+                          formatTavernText(text['negativeValue']!,
+                              {'value': character.visual.negativePrompt}),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis),
                       const SizedBox(height: 7),
@@ -3119,9 +3137,7 @@ class _AgentScreenState extends State<AgentScreen> {
     final character = controller.activeCharacter;
     if (character == null) return;
     final negative = TextEditingController(
-      text: character.visual.negativePrompt.trim().isEmpty
-          ? defaultTavernNegativePrompt
-          : character.visual.negativePrompt,
+      text: character.visual.negativePrompt,
     );
     final style = TextEditingController(text: character.visual.stylePrompt);
     String? styleBeforeLibrary;
@@ -3753,7 +3769,7 @@ class _AgentScreenState extends State<AgentScreen> {
           width: 620,
           child: SingleChildScrollView(
             child: Column(mainAxisSize: MainAxisSize.min, children: [
-              _field(positive, text['proposalPositive']!, lines: 8),
+              if(current.scene == null) _field(positive, text['proposalPositive']!, lines: 8) else SelectableText(current.positivePrompt),
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(text['proposalHint']!),
@@ -3787,16 +3803,12 @@ class _AgentScreenState extends State<AgentScreen> {
     if (saved == true) {
       final proposal = TavernImageProposal(
         id: current.id,
+        scene: current.scene,
         continuity: current.continuity == null
             ? null
             : {...current.continuity!, 'reviewRequired': false},
         positivePrompt: positive.text,
-        negativePrompt: controller.activeCharacter?.visual.negativePrompt
-                    .trim()
-                    .isNotEmpty ==
-                true
-            ? controller.activeCharacter!.visual.negativePrompt
-            : defaultTavernNegativePrompt,
+        negativePrompt: controller.activeCharacter?.visual.negativePrompt ?? '',
         stylePrompt: controller.activeCharacter?.visual.stylePrompt ?? '',
         model: current.model,
         width: int.tryParse(width.text),

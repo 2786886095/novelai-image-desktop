@@ -130,6 +130,7 @@ export interface TavernSamplerPreset {
 }
 
 export interface TavernImageProposal {
+  scene?: import("../tavern/scene-bindings").SceneBindings;
   continuity?: import("../tavern/image-continuity").ImagePromptContinuity;
   id: string;
   status: "pending" | "running" | "completed" | "cancelled" | "error";

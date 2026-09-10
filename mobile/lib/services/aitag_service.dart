@@ -1,4 +1,5 @@
 import 'gallery_download.dart';
+import 'aitag_error.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -137,19 +138,55 @@ class AitagService {
 
   Future<Map<String, dynamic>> _get(Uri uri,
       {bool emptySearchOnNotFound = false}) async {
-    final response = await _client.get(uri, headers: const {
-      'Accept': 'application/json',
-      'User-Agent': 'Langbai-NovelAI-Studio-Mobile/AITag-Data-Client',
-    }).timeout(const Duration(seconds: 30));
-    if (emptySearchOnNotFound && response.statusCode == 404) {
+    late http.Response response;
+    try {
+      response = await _client.get(uri, headers: const {
+        'Accept': 'application/json',
+        // Match the public site's data-source context, as image requests do.
+        'Referer': '$aitagSiteUrl/',
+        'User-Agent': 'Langbai-NovelAI-Studio-Mobile/AITag-Data-Client',
+      }).timeout(const Duration(seconds: 30));
+    } on TimeoutException {
+      throw const AitagFailure('TIMEOUT');
+    } on SocketException {
+      throw const AitagFailure('NETWORK');
+    } on http.ClientException {
+      throw const AitagFailure('NETWORK');
+    }
+    final body = utf8.decode(response.bodyBytes, allowMalformed: true);
+    Object? decoded;
+    try {
+      decoded = jsonDecode(body);
+    } catch (_) {/* Validate below. */}
+    if (emptySearchOnNotFound &&
+        response.statusCode == 404 &&
+        (body.isEmpty ||
+            (decoded is Map &&
+                (decoded.isEmpty ||
+                    (decoded['items'] is List &&
+                        (decoded['items'] as List).isEmpty &&
+                        decoded['total'] == 0))))) {
       return <String, dynamic>{};
     }
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw http.ClientException('AITag HTTP ${response.statusCode}', uri);
+      final sample = body.substring(0, body.length.clamp(0, 16000));
+      final blocked = response.statusCode == 403 &&
+          RegExp('cloudflare', caseSensitive: false).hasMatch(sample) &&
+          RegExp('blocked|attention required|challenge', caseSensitive: false)
+              .hasMatch(sample);
+      throw AitagFailure(
+          blocked ? 'BLOCKED_403' : 'HTTP_${response.statusCode}');
     }
-    final decoded = jsonDecode(utf8.decode(response.bodyBytes));
-    if (decoded is! Map<String, dynamic>) {
-      throw const FormatException('Invalid AITag response');
+    if (decoded is! Map<String, dynamic> ||
+        decoded['error'] != null ||
+        (emptySearchOnNotFound &&
+            (decoded['items'] is! List ||
+                num.tryParse('${decoded['total']}') == null ||
+                !num.parse('${decoded['total']}').isFinite ||
+                num.parse('${decoded['total']}') < 0)) ||
+        (uri.path.startsWith('/api/work/') &&
+            (decoded['work'] is! Map || decoded['images'] is! List))) {
+      throw const AitagFailure('INVALID_RESPONSE');
     }
     return decoded;
   }

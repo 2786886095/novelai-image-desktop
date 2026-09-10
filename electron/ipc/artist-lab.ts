@@ -12,9 +12,10 @@ import type {
   ArtistLabModelStatus,
   ArtistTagRecord,
   ArtistRankingSnapshot,
+  ArtistPoolSnapshot,
 } from "../../src/artist-lab";
 import type { ArtistStylePreviewPage, ArtistStylePreviewResult } from "../../src/types";
-import { ARTIST_TAG_ALIASES, CURATED_ARTIST_TAGS } from "../../src/curated-artists";
+import { ARTIST_TAG_ALIASES } from "../../src/curated-artists";
 import { proxyConfig } from "./proxy";
 
 const DANBOORU_TAGS_URL = "https://danbooru.donmai.us/tags.json";
@@ -132,7 +133,7 @@ async function fetchArtistTagsPage(query: string, limit: number, page: number): 
     },
     ...proxyConfig("update"),
   });
-  if (!Array.isArray(response.data)) return [];
+  if (!Array.isArray(response.data)) throw new ArtistPoolError("invalid-response");
   return response.data
     .map((item: any): ArtistTagRecord | null => {
       const id = Number(item?.id);
@@ -148,78 +149,132 @@ async function fetchArtistTagsPage(query: string, limit: number, page: number): 
     .filter((item: ArtistTagRecord | null): item is ArtistTagRecord => Boolean(item) && !item!.deprecated);
 }
 
-function appendCuratedArtistTags(items: ArtistTagRecord[], includeCurated: boolean): ArtistTagRecord[] {
-  const normalizedItems = items
-    .filter((item) => Number.isSafeInteger(item.id) && item.id > 0 && !item.deprecated)
-    .map((item) => ({ ...item, name: canonicalArtistName(item.name) }))
-    .filter((item) => Boolean(item.name));
-  const seenIds = new Set(normalizedItems.map((item) => item.id));
-  const seenNames = new Set(normalizedItems.map((item) => item.name));
-  const deduplicated = normalizedItems.filter((item, index) => (
-    normalizedItems.findIndex((candidate) => candidate.id === item.id || candidate.name === item.name) === index
-  ));
-  if (!includeCurated) return deduplicated;
-  return [
-    ...deduplicated,
-    ...CURATED_ARTIST_TAGS.filter((item) => !seenIds.has(item.id) && !seenNames.has(canonicalArtistName(item.name))),
-  ];
+function normalizeRankedArtists(items: ArtistTagRecord[]): ArtistTagRecord[] {
+  const result: ArtistTagRecord[] = [];
+  const seenIds = new Set<number>();
+  const seenNames = new Set<string>();
+  for (const item of items) {
+    if (!item || !Number.isSafeInteger(item.id) || item.id <= 0 || item.deprecated) continue;
+    const name = canonicalArtistName(item.name);
+    if (!name || seenIds.has(item.id) || seenNames.has(name)) continue;
+    seenIds.add(item.id); seenNames.add(name);
+    result.push({ ...item, name, postCount: Number.isFinite(Number(item.postCount)) ? Math.max(0, Number(item.postCount)) : 0 });
+  }
+  return result;
 }
 
 export async function loadPopularArtistTags(
   rawLimit: unknown,
   rawForce: unknown,
-  rawIncludeCurated: unknown = false,
 ): Promise<ArtistTagRecord[]> {
+  const result = await requestPopularArtistPool(rawLimit, rawForce === true, false);
+  if (result.issue && result.items.length === 0) throw new ArtistPoolError(result.issue);
+  return result.items;
+}
+
+class ArtistPoolError extends Error {
+  constructor(readonly issue: NonNullable<ArtistPoolSnapshot["issue"]>) { super(issue); }
+}
+
+const artistPoolRequests = new Map<string, Promise<ArtistPoolSnapshot>>();
+
+// Random artist draws always use a fresh Danbooru response: no static additions
+// and no disk-cache substitution, including when the request fails.
+export function loadPopularArtistPool(rawLimit: unknown): Promise<ArtistPoolSnapshot> {
+  return requestPopularArtistPool(rawLimit, true, true);
+}
+
+function requestPopularArtistPool(rawLimit: unknown, force: boolean, liveOnly: boolean): Promise<ArtistPoolSnapshot> {
   const limit = Math.max(20, Math.min(5000, Math.floor(Number(rawLimit) || 300)));
-  const force = rawForce === true;
-  const includeCurated = rawIncludeCurated === true;
+  const key = JSON.stringify([popularArtistCacheFile(), limit, force, liveOnly]);
+  const pending = artistPoolRequests.get(key);
+  if (pending) return pending;
+  const request = readPopularArtistPool(limit, force, liveOnly).finally(() => { artistPoolRequests.delete(key); });
+  artistPoolRequests.set(key, request);
+  return request;
+}
+
+async function readPopularArtistPool(limit: number, force: boolean, liveOnly: boolean): Promise<ArtistPoolSnapshot> {
   let cachedItems: ArtistTagRecord[] = [];
-  try {
+  let savedAt: number | null = null;
+  const snapshot = (items: ArtistTagRecord[], source: ArtistPoolSnapshot["source"], issue: ArtistPoolSnapshot["issue"] = null): ArtistPoolSnapshot => {
+    const ranked = normalizeRankedArtists(items).slice(0, limit);
+    return { items: ranked, source, issue,
+      requested: limit, rankedCount: ranked.length, savedAt: source === "empty" ? null : savedAt };
+  };
+  if (!liveOnly) try {
     const cached = JSON.parse(fs.readFileSync(popularArtistCacheFile(), "utf8")) as {
       savedAt?: number;
       items?: ArtistTagRecord[];
     };
-    if (Array.isArray(cached.items)) cachedItems = appendCuratedArtistTags(cached.items, false);
+    if (Array.isArray(cached.items)) cachedItems = normalizeRankedArtists(cached.items);
+    savedAt = Number.isFinite(cached.savedAt) ? Number(cached.savedAt) : null;
     if (!force) {
       if (
         Number.isFinite(cached.savedAt) &&
-        Date.now() - Number(cached.savedAt) < POPULAR_ARTIST_CACHE_MAX_AGE &&
+        Date.now() >= Number(cached.savedAt) && Date.now() - Number(cached.savedAt) < POPULAR_ARTIST_CACHE_MAX_AGE &&
         cachedItems.length >= limit
       ) {
-        return appendCuratedArtistTags(cachedItems.slice(0, limit), includeCurated);
+        return snapshot(cachedItems, "cache");
       }
     }
   } catch {
     // Missing or unreadable cache falls through to the live ranking.
   }
 
-  const output: ArtistTagRecord[] = force ? [] : [...cachedItems];
-  const seen = new Set<number>(output.map((item) => item.id));
+  // Rebuild from page one with a FIXED page size: resuming a partially cached
+  // page or changing the last page's limit changes offsets and skips artists.
+  const output: ArtistTagRecord[] = [];
+  const seen = new Set<number>();
   try {
-    const startPage = Math.floor(output.length / 100) + 1;
-    for (let page = startPage; output.length < limit; page += 1) {
-      const pageSize = Math.min(100, limit - output.length);
+    const pageSize = Math.min(DANBOORU_TAG_PAGE_SIZE, limit);
+    for (let page = 1; page <= Math.ceil(limit / pageSize); page += 1) {
       const batch = await fetchArtistTagsPage("", pageSize, page);
-      if (batch.length === 0) break;
-      for (const artist of batch) {
+      if (batch.length === 0) throw new ArtistPoolError("empty-response");
+      const previousSize = output.length;
+      for (const artist of normalizeRankedArtists(batch)) {
         if (!seen.has(artist.id)) {
           seen.add(artist.id);
           output.push(artist);
         }
       }
+      if (output.length === previousSize) throw new ArtistPoolError(previousSize ? "repeated-page" : "invalid-response");
       if (batch.length < pageSize) break;
     }
   } catch (error) {
-    if (cachedItems.length > 0) return appendCuratedArtistTags(cachedItems.slice(0, limit), includeCurated);
-    throw error;
+    const detail = error as { code?: string; response?: { status?: number } };
+    const issue = error instanceof ArtistPoolError ? error.issue
+      : ["ETIMEDOUT", "ECONNABORTED"].includes(detail?.code ?? "") ? "timeout" : "network";
+    // Preserve the cache file on failure, but NEVER use it (or a partial
+    // response) as a substitute for the live-only random candidate pool.
+    const available = liveOnly ? [] : cachedItems.length ? cachedItems : output;
+    const source = liveOnly || !available.length ? "empty" : cachedItems.length ? "cache" : "network";
+    const result = snapshot(available, source, issue);
+    if (Number.isInteger(detail?.response?.status)) result.httpStatus = detail.response!.status;
+    return result;
   }
+  output.splice(0, output.length, ...normalizeRankedArtists(output));
   output.sort((left, right) => right.postCount - left.postCount || left.name.localeCompare(right.name));
+  // A truncated response is usable, but must not erase a larger saved pool.
+  if (output.length < Math.min(limit, cachedItems.length)) return snapshot(cachedItems, "cache", "empty-response");
+  savedAt = Date.now();
+  const cacheFile = popularArtistCacheFile();
+  const temporaryFile = `${cacheFile}.${crypto.randomUUID()}.tmp`;
   try {
-    fs.writeFileSync(popularArtistCacheFile(), JSON.stringify({ savedAt: Date.now(), items: output }), "utf8");
+    // A concurrent larger load or a smaller requested limit must not shrink a
+    // good cache. Atomic replacement also avoids a half-written JSON on exit.
+    let existingSize = cachedItems.length;
+    try { existingSize = Math.max(existingSize, normalizeRankedArtists(JSON.parse(fs.readFileSync(cacheFile, "utf8")).items ?? []).length); } catch { /* unreadable cache */ }
+    if (output.length >= existingSize) {
+      fs.writeFileSync(temporaryFile, JSON.stringify({ savedAt, items: output }), "utf8");
+      fs.renameSync(temporaryFile, cacheFile);
+    }
   } catch {
     // The ranking is still usable for this session if persistence fails.
+  } finally {
+    try { fs.unlinkSync(temporaryFile); } catch { /* only our temporary file */ }
   }
-  return appendCuratedArtistTags(output.slice(0, limit), includeCurated);
+  return snapshot(output, "network");
 }
 
 type ArtistRankingCountCache = Record<string, { total: number; savedAt: number }>;

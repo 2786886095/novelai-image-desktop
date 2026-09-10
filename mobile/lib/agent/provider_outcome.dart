@@ -1,0 +1,36 @@
+// Generated from shared/provider-outcome-ui.json.
+const providerOutcomeLabels = {
+  "zh-CN": {
+    "limit": "模型达到最大输出长度，回复未完成。原方案已保留；请提高最大输出或降低推理强度后重试。",
+    "empty": "模型没有返回正文或生图方案。原方案已保留；请重试，若仅产生思考内容可提高最大输出或降低推理强度。",
+    "incomplete": "模型回复中途结束，未提交生图。原方案已保留，请重试。",
+    "failed": "模型服务返回了失败状态，未提交生图。原方案已保留，请检查模型配置后重试。"
+  },
+  "zh-TW": {
+    "limit": "模型達到最大輸出長度，回覆未完成。原方案已保留；請提高最大輸出或降低推理強度後重試。",
+    "empty": "模型未回傳正文或生圖方案。原方案已保留；請重試，若僅產生思考內容可提高最大輸出或降低推理強度。",
+    "incomplete": "模型回覆中途結束，未提交生圖。原方案已保留，請重試。",
+    "failed": "模型服務回傳失敗狀態，未提交生圖。原方案已保留，請檢查模型設定後重試。"
+  },
+  "en-US": {
+    "limit": "The model reached its output limit before finishing. Your previous image plan is preserved. Increase maximum output or reduce reasoning effort and retry.",
+    "empty": "The model returned no reply or image plan. Your previous plan is preserved. Retry; if it only produced reasoning, increase maximum output or reduce reasoning effort.",
+    "incomplete": "The model response ended early. No image was submitted. Your previous plan is preserved; please retry.",
+    "failed": "The model service reported a failure. No image was submitted. Your previous plan is preserved; check the model configuration and retry."
+  },
+  "ja-JP": {
+    "limit": "出力上限に達し、応答が完了していません。以前のプランは保持されています。最大出力を増やすか推論の強度を下げて再試行してください。",
+    "empty": "本文や画像プランが返されませんでした。以前のプランは保持されています。再試行するか、最大出力と推論の強度を調整してください。",
+    "incomplete": "応答が途中で終了しました。画像生成は送信していません。以前のプランは保持されています。再試行してください。",
+    "failed": "モデルサービスが失敗を返しました。画像生成は送信していません。以前のプランは保持されています。設定を確認して再試行してください。"
+  },
+  "ko-KR": {
+    "limit": "모델이 응답을 마치기 전에 출력 한도에 도달했습니다. 이전 계획은 보존됩니다. 최대 출력을 늘리거나 추론 강도를 낮춘 후 다시 시도하세요.",
+    "empty": "모델이 본문이나 이미지 계획을 반환하지 않았습니다. 이전 계획은 보존됩니다. 다시 시도하거나 최대 출력과 추론 강도를 조정하세요.",
+    "incomplete": "모델 응답이 중간에 종료되었습니다. 이미지 생성은 요청하지 않았으며 이전 계획은 보존됩니다. 다시 시도하세요.",
+    "failed": "모델 서비스가 실패 상태를 반환했습니다. 이미지 생성은 요청하지 않았으며 이전 계획은 보존됩니다. 설정을 확인하고 다시 시도하세요."
+  }
+};
+
+String providerIssueMessage(String language, String issue) =>
+    (providerOutcomeLabels[language] ?? providerOutcomeLabels["zh-CN"]!)[issue]!;

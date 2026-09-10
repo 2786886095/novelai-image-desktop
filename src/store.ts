@@ -1,3 +1,4 @@
+import type { MetadataRestoreOptions } from "./metadata-selection";
 import { create } from "zustand";
 import type {
   AccountSummary,
@@ -34,7 +35,7 @@ import type {
   PreciseReferenceImage,
   WorkingImage,
 } from "./types";
-import { createDefaultBatchRedraw, DEFAULT_AUGMENT_OPTIONS, DEFAULT_I2I_PARAMS, DEFAULT_PARAMS, DIRECTOR_TOOLS, EMOTION_OPTIONS, isNAIV5Model, maxNAICharacterPrompts, NAI_INPAINT_MODELS, normalizeGenerateParams } from "./types";
+import { createDefaultBatchRedraw, DEFAULT_AUGMENT_OPTIONS, DEFAULT_I2I_PARAMS, DEFAULT_PARAMS, DIRECTOR_TOOLS, EMOTION_OPTIONS, isNAIV5Model, maxNAICharacterPrompts, NAI_INPAINT_MODELS, normalizeGenerateParams, seedForBatch } from "./types";
 import { normalizeAppLanguage } from "./i18n";
 import { expandWildcards } from "./wildcards";
 import { adaptiveNAIImageSize } from "./nai-dimensions";
@@ -463,7 +464,7 @@ interface AppState {
   restoreImportedMetadata: (
     patch: ImportedParams,
     captions: CharCaptionItem[],
-    options?: { preserveMissing?: boolean },
+    options?: MetadataRestoreOptions,
   ) => void;
   checkUpdate: () => Promise<void>;
   dismissUpdate: () => void;
@@ -1325,14 +1326,16 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((state) => ({
       params: normalizeGenerateParams({ ...state.params, ...patch }),
       charCaptions:
-        options?.preserveMissing && restoredCaptions.length === 0
+        options?.restoreCharacters === false || (options?.restoreCharacters !== true && options?.preserveMissing && restoredCaptions.length === 0)
           ? state.charCaptions
           : restoredCaptions,
       // Exact restore can start clean, while generation-workbench imports use
       // preserveMissing so fields absent from the image keep their current value.
-      vibeImages: options?.preserveMissing ? state.vibeImages : [],
-      preciseReferences: options?.preserveMissing ? state.preciseReferences : [],
+      vibeImages: options?.resetReferences || !options?.preserveMissing ? [] : state.vibeImages,
+      preciseReferences: options?.resetReferences || !options?.preserveMissing ? [] : state.preciseReferences,
+      settings: options?.modelMode && state.settings ? { ...state.settings, modelMode: options.modelMode } : state.settings,
     }));
+    if (options?.modelMode) void window.naiDesktop.setSetting("modelMode", options.modelMode).catch(() => undefined);
     persistGenerationState(get);
   },
 
@@ -2388,10 +2391,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         extras = initialExtras;
         base = {
           ...base,
-          seed:
-            initialSeed > 0
-              ? ((initialSeed - 1 + initialIndex) % 2_147_483_647) + 1
-              : 0,
+          seed: seedForBatch(initialSeed, initialIndex),
         };
         initialIndex++;
       } else {
@@ -2426,8 +2426,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       const currentParams = {
         ...base,
         // Expand {a|b|c} wildcards independently per image so batches vary.
-        positivePrompt: expandWildcards(base.positivePrompt),
-        negativePrompt: expandWildcards(base.negativePrompt),
+        positivePrompt: base.preservePromptText ? base.positivePrompt : expandWildcards(base.positivePrompt),
+        negativePrompt: base.preservePromptText ? base.negativePrompt : expandWildcards(base.negativePrompt),
       };
 
       // No renderer-side resend: a failed generate POST may already have produced
@@ -2631,11 +2631,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
       const runParams: GenerateParams = {
         ...initialParams,
-        seed: initialSeed > 0
-          ? ((initialSeed - 1 + index) % 2_147_483_647) + 1
-          : 0,
-        positivePrompt: expandWildcards(initialParams.positivePrompt),
-        negativePrompt: expandWildcards(initialParams.negativePrompt),
+        seed: seedForBatch(initialSeed, index),
+        positivePrompt: initialParams.preservePromptText ? initialParams.positivePrompt : expandWildcards(initialParams.positivePrompt),
+        negativePrompt: initialParams.preservePromptText ? initialParams.negativePrompt : expandWildcards(initialParams.negativePrompt),
       };
       set({
         generationPreview: null,

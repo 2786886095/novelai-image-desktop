@@ -108,8 +108,9 @@ class Storage {
 
   Future<void> setAgentWorkspace(AgentWorkspace workspace) async {
     workspace.updatedAt = agentNow();
-    await (await _prefs)
+    final saved = await (await _prefs)
         .setString(_kAgentWorkspace, jsonEncode(workspace.toJson()));
+    if (!saved) throw StateError('Agent workspace could not be saved.');
   }
 
   Future<Set<String>> getAgentAlwaysAllowedTools() async =>

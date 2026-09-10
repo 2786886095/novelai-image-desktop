@@ -293,10 +293,11 @@ export function BackupRestoreSettings({
   useEffect(() => { void refresh(); }, [settings.backupDir, settings.autoBackupEnabled, settings.autoBackupIntervalHours, settings.autoBackupRetentionCount]);
 
   const chooseDirectory = async () => {
-    const selected = await window.naiDesktop.selectBackupDirectory();
-    if (!selected) return;
-    await update("backupDir", selected);
-    await refresh();
+    try {
+      const selected = await window.naiDesktop.selectBackupDirectory();
+      if (!selected) return;
+      await update("backupDir", selected); await refresh(); setMessage("");
+    } catch (error) { setMessage(error instanceof Error ? error.message : String(error)); }
   };
 
   const backupNow = async () => {

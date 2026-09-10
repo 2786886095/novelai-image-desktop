@@ -1,3 +1,6 @@
+import { CredentialVault, SENSITIVE_SETTING_KEYS } from "./credential-vault";
+import { assertSafeDataDirectory, PROTECTED_DIRECTORY_KEYS } from "./update-output-protection";
+import { migrateInstalledOutputData } from "./output-recovery";
 import { app, safeStorage } from "electron";
 import crypto from "crypto";
 import fs from "fs";
@@ -42,15 +45,7 @@ function storePath() {
 // safeStorage (OS keychain / DPAPI) before being written to disk. The in-memory
 // cache always holds plaintext; only the JSON file holds ciphertext. Existing
 // plaintext stores are transparently migrated on the next write.
-const ENC_PREFIX = "enc:v1:";
-const SENSITIVE_SETTING_KEYS: SettingKey[] = [
-  "visionApiKey",
-  "convertApiKey",
-  "agentApiKey",
-  "tagServerApiKey",
-  "baiduSecret",
-  "translateAiApiKey",
-];
+const credentialVault = new CredentialVault(safeStorage);
 
 const SUPPORTED_LANGUAGES = new Set(["zh-CN", "zh-TW", "en-US", "ja-JP", "ko-KR"]);
 
@@ -58,53 +53,27 @@ function normalizeLanguage(value: unknown): AppSettings["language"] {
   return typeof value === "string" && SUPPORTED_LANGUAGES.has(value) ? (value as AppSettings["language"]) : "zh-CN";
 }
 
-function canEncrypt(): boolean {
-  try {
-    return safeStorage.isEncryptionAvailable();
-  } catch {
-    return false;
-  }
-}
-
-function encField(value: unknown): unknown {
-  if (typeof value !== "string" || value === "" || value.startsWith(ENC_PREFIX)) return value;
-  if (!canEncrypt()) return value;
-  try {
-    return ENC_PREFIX + safeStorage.encryptString(value).toString("base64");
-  } catch {
-    return value;
-  }
-}
-
-function decField(value: unknown): unknown {
-  if (typeof value !== "string" || !value.startsWith(ENC_PREFIX)) return value;
-  if (!canEncrypt()) return value;
-  try {
-    return safeStorage.decryptString(Buffer.from(value.slice(ENC_PREFIX.length), "base64"));
-  } catch {
-    return value;
-  }
-}
-
 function encryptForDisk(data: PersistedData): PersistedData {
   const clone: PersistedData = { ...data, settings: { ...data.settings } };
-  if (clone.token) clone.token = encField(clone.token) as string;
+  clone.token = credentialVault.encode("token", clone.token) as string;
+  delete clone.settings.credentialIssues;
   const settings = clone.settings as unknown as Record<string, unknown>;
   for (const key of SENSITIVE_SETTING_KEYS) {
-    settings[key] = encField(settings[key]);
+    settings[key] = credentialVault.encode(key, settings[key]);
   }
   return clone;
 }
 
 function decryptFromDisk(raw: Partial<PersistedData>): Partial<PersistedData> {
+  credentialVault.reset();
   const clone: Partial<PersistedData> = { ...raw };
-  if (typeof clone.token === "string") clone.token = decField(clone.token) as string;
+  if (typeof clone.token === "string") clone.token = credentialVault.decode("token", clone.token) as string;
   if (clone.settings) {
     clone.settings = { ...clone.settings };
     const settings = clone.settings as unknown as Record<string, unknown>;
     for (const key of SENSITIVE_SETTING_KEYS) {
       const current = settings[key];
-      if (typeof current === "string") settings[key] = decField(current);
+      if (typeof current === "string") settings[key] = credentialVault.decode(key, current);
     }
   }
   return clone;
@@ -169,89 +138,15 @@ function isKnownV45DefaultReverseTemplates(value: unknown): boolean {
   return KNOWN_V45_REVERSE_TEMPLATE_FINGERPRINTS.has(modeTemplatesFingerprint(value));
 }
 
-function samePath(left: string, right: string): boolean {
-  return path.resolve(left).toLowerCase() === path.resolve(right).toLowerCase();
-}
-
-function remapManagedPath(filePath: string | undefined, oldRoot: string, newRoot: string): string | undefined {
-  if (!filePath || !isInside(oldRoot, filePath)) return filePath;
-  return path.join(newRoot, path.relative(oldRoot, filePath));
-}
-
-function copyTreeWithoutOverwriting(source: string, destination: string): void {
-  fs.mkdirSync(destination, { recursive: true });
-  for (const entry of fs.readdirSync(source, { withFileTypes: true })) {
-    const from = path.join(source, entry.name);
-    const to = path.join(destination, entry.name);
-    if (entry.isDirectory()) {
-      copyTreeWithoutOverwriting(from, to);
-    } else if (entry.isFile() && !fs.existsSync(to)) {
-      fs.copyFileSync(from, to, fs.constants.COPYFILE_EXCL);
-      try {
-        const stat = fs.statSync(from);
-        fs.utimesSync(to, stat.atime, stat.mtime);
-      } catch {
-        // Timestamp preservation is best effort; the image itself is safe.
-      }
-    }
-  }
-}
-
-/**
- * Migrate the unsafe legacy NSIS default (<install>/outputs) into Pictures.
- * Files are copied, never deleted here. The installer first moves the legacy
- * directory outside its replaceable app folder; the new app then merges that
- * recovery copy into Pictures. Path parameters keep this regression-testable.
- */
-export function migrateLegacyInstalledOutput(
-  data: PersistedData,
-  oldRoot: string,
-  newRoot: string,
-  installerBackupRoot?: string,
-): { data: PersistedData; changed: boolean; copied: boolean } {
-  if (!data.settings.outputDir?.trim() || !samePath(data.settings.outputDir, oldRoot)) {
-    return { data, changed: false, copied: false };
-  }
-
-  let copied = false;
-  try {
-    const sources = [oldRoot, installerBackupRoot]
-      .filter((value): value is string => typeof value === "string" && fs.existsSync(value));
-    fs.mkdirSync(newRoot, { recursive: true });
-    for (const source of sources) {
-      copyTreeWithoutOverwriting(source, newRoot);
-      copied = true;
-    }
-  } catch (error) {
-    console.error("[store] failed to protect legacy output folder:", error);
-    // Do not redirect future saves when the existing files could not be copied.
-    return { data, changed: false, copied: false };
-  }
-
-  const history = data.history.map((item) => {
-    const nextPath = remapManagedPath(item.filePath, oldRoot, newRoot);
-    if (!nextPath || nextPath === item.filePath || !fs.existsSync(nextPath)) return item;
-    return { ...item, filePath: nextPath, fileUrl: toLocalMediaUrl(nextPath) };
-  });
-  return {
-    data: {
-      ...data,
-      settings: { ...data.settings, outputDir: newRoot },
-      history,
-    },
-    changed: true,
-    copied,
-  };
+/** Kept as a public compatibility entry point for older migration fixtures. */
+export function migrateLegacyInstalledOutput(data: PersistedData, oldRoot: string, newRoot: string, installerBackupRoot?: string) {
+  return migrateInstalledOutputData(data, oldRoot, newRoot, installerBackupRoot);
 }
 
 function migrateLegacyInstalledOutputForCurrentApp(data: PersistedData) {
-  const picturesRoot = app.getPath("pictures");
-  return migrateLegacyInstalledOutput(
-    data,
-    path.join(installedAppDir(), "outputs"),
-    defaultOutputDir(),
-    path.join(picturesRoot, "Langbai NovelAI Studio Update Backup"),
-  );
+  const install = installedAppDir();
+  return migrateInstalledOutputData(data, path.join(install, "outputs"), defaultOutputDir(),
+    path.join(app.getPath("pictures"), "Langbai NovelAI Studio Update Backup"), install);
 }
 
 export function defaultSettings(): AppSettings {
@@ -696,15 +591,15 @@ export function readStore(): PersistedData {
 }
 
 export function writeStore(next: PersistedData) {
-  cache = next; // in-memory cache stays plaintext
   const file = storePath();
   fs.mkdirSync(path.dirname(file), { recursive: true });
   rotateBackupsSync(file);
   atomicWriteFileSync(file, JSON.stringify(encryptForDisk(next), null, 2));
+  cache = next; // commit cache only after persistence succeeds
 }
 
 export function getSettings(): AppSettings {
-  return readStore().settings;
+  return { ...readStore().settings, credentialIssues: credentialVault.issues() };
 }
 
 export function getSetting<K extends SettingKey>(key: K): AppSettings[K] {
@@ -712,7 +607,12 @@ export function getSetting<K extends SettingKey>(key: K): AppSettings[K] {
 }
 
 export function setSetting<K extends SettingKey>(key: K, value: AppSettings[K]): AppSettings[K] {
+  if (key === "outputDir" && (typeof value !== "string" || !value.trim())) throw new Error("请选择图片保存目录，保存位置不可留空。");
+  if ((PROTECTED_DIRECTORY_KEYS as readonly string[]).includes(key) && typeof value === "string") {
+    assertSafeDataDirectory(value, installedAppDir());
+  }
   const data = readStore();
+  if ((SENSITIVE_SETTING_KEYS as readonly string[]).includes(key)) credentialVault.forget(key);
   data.settings = {
     ...data.settings,
     [key]: key === "language" ? normalizeLanguage(value) : value,
@@ -731,12 +631,14 @@ export function getToken() {
 
 export function setToken(token: string) {
   const data = readStore();
+  credentialVault.forget("token");
   data.token = token;
   writeStore(data);
 }
 
 export function clearToken() {
   const data = readStore();
+  credentialVault.forget("token");
   delete data.token;
   delete data.account;
   writeStore(data);

@@ -38,8 +38,10 @@ jobs:
           gh release download "${{ inputs.tag }}" \
             --pattern 'Langbai-NovelAI-Studio-Setup-*.exe' \
             --pattern 'latest.yml' \
-            --pattern 'app-release.apk' \
             --dir .tmp/gitee-source
+          if gh release view "${{ inputs.tag }}" --json assets --jq '.assets[].name' | grep -qx 'app-release.apk'; then
+            gh release download "${{ inputs.tag }}" --pattern 'app-release.apk' --dir .tmp/gitee-source
+          fi
 
       - name: Prepare desktop updater chunks
         run: |
@@ -59,6 +61,7 @@ jobs:
         run: node scripts/sync-gitee-release.mjs "${{ inputs.tag }}" --dir .tmp/gitee-update --file .tmp/gitee-source/latest.yml
 
       - name: Publish Android installer to Gitee
+        if: hashFiles('.tmp/gitee-source/app-release.apk') != ''
         env:
           GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
           GITEE_OWNER: langbai666

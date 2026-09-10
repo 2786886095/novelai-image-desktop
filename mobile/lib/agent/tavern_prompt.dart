@@ -368,7 +368,7 @@ TavernImageParseResult parseLangbaiImageProposal(String content) {
         ..createdAt = tavernNow()
         ..status = 'pending';
       if (proposal.positivePrompt.trim().isEmpty &&
-          proposal.promptPatch == null) proposal = null;
+          proposal.promptPatch == null && proposal.scene == null && proposal.scenePatch == null) proposal = null;
     }
   } catch (_) {
     proposal = null;

@@ -1,3 +1,4 @@
+import { formatAitagFailure } from "./aitag-error";
 import { galleryDownloadFeedback } from "./gallery-download";
 import quickTagLabels from "../shared/quicktag-ui.json";
 import { quickCharacters } from "./quicktag";
@@ -1316,7 +1317,7 @@ export default function AitagGallery({ onBack }: { onBack?: () => void }) {
   const [pendingPage, setPendingPage] = useState<number | null>(null);
   const [result, setResult] = useState(() => gallerySession.result);
   const [loading, setLoading] = useState(!gallerySession.loaded);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
   const [selected, setSelected] = useState<AitagWorkDetail | null>(gallerySession.selected);
   const [selectedImage, setSelectedImage] = useState(gallerySession.selectedImage);
   const [detailPreviewOpen, setDetailPreviewOpen] = useState(false);
@@ -1359,7 +1360,7 @@ export default function AitagGallery({ onBack }: { onBack?: () => void }) {
     const scrollAfterSwap = keepCurrentPage && targetPage !== page;
     setPendingPage(keepCurrentPage ? targetPage : null);
     setLoading(true);
-    setError(false);
+    setError(null);
     try {
       const raw = await window.naiDesktop.aitagSearch({
         page: targetPage,
@@ -1387,8 +1388,8 @@ export default function AitagGallery({ onBack }: { onBack?: () => void }) {
       gallerySession.page = normalized.page;
       gallerySession.loaded = true;
       if (scrollAfterSwap) window.requestAnimationFrame(() => scrollGalleryPageToTop(pageRef.current));
-    } catch {
-      if (sequence === searchSequence.current) setError(true);
+    } catch (reason) {
+      if (sequence === searchSequence.current) setError(reason instanceof Error ? reason : new Error(String(reason)));
     } finally {
       if (sequence === searchSequence.current) {
         setPendingPage(null);
@@ -1416,22 +1417,22 @@ export default function AitagGallery({ onBack }: { onBack?: () => void }) {
       }
       try {
         const [rawConfig, rawResult] = await Promise.all([
-          window.naiDesktop.aitagConfig(),
+          window.naiDesktop.aitagConfig().catch(() => null),
           window.naiDesktop.aitagSearchFresh({ page: 1, pageSize, query: "", prompt: "", sort: "new", timeRange: "all" }),
         ]);
         if (!active) return;
-        const nextConfig = normalizeAitagConfig(rawConfig);
+        const nextConfig = rawConfig ? normalizeAitagConfig(rawConfig) : gallerySession.config;
         const nextResult = normalizeAitagSearch(rawResult);
         setConfig(nextConfig);
         setResult(nextResult);
         setPage(nextResult.page);
-        setError(false);
+        setError(null);
         gallerySession.config = nextConfig;
         gallerySession.result = nextResult;
         gallerySession.page = nextResult.page;
         gallerySession.loaded = true;
-      } catch {
-        if (active && !snapshot) setError(true);
+      } catch (reason) {
+        if (active && !snapshot) setError(reason instanceof Error ? reason : new Error(String(reason)));
       } finally {
         if (active) setLoading(false);
       }
@@ -1456,15 +1457,15 @@ export default function AitagGallery({ onBack }: { onBack?: () => void }) {
 
   const openWork = async (work: AitagWorkSummary) => {
     setDetailLoading(true);
-    setError(false);
+    setError(null);
     try {
       const detail = await loadDetail(work.id);
       setSelected(detail);
       setSelectedImage(0);
       setDetailPreviewOpen(false);
       setDownloadStatus("");
-    } catch {
-      setError(true);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason : new Error(String(reason)));
     } finally {
       setDetailLoading(false);
     }
@@ -1710,20 +1711,20 @@ export default function AitagGallery({ onBack }: { onBack?: () => void }) {
             </SelectMenuCompat>
           </label>
           <SelectMenu className="gallery-page-size-picker" value={String(pageSize)} ariaLabel={text.itemsPerPage} label={text.itemsPerPage} options={GALLERY_PAGE_SIZE_OPTIONS.map((item) => ({ value: String(item), label: String(item) }))} onChange={(next) => { const size = Number(next); setPageSize(size); void search(1, { pageSize: size }); }} />
-          <span>{interpolate(text.total, "count", result.total)}</span>
+          {(!error || result.items.length > 0) && <span>{interpolate(text.total, "count", result.total)}</span>}
         </div>
       </section>
 
       {(loading && result.items.length === 0) || detailLoading ? <div className="aitag-state">{text.loading}</div> : null}
-      {error ? <div className="aitag-state error"><span>{text.failed}</span><button type="button" className="btn secondary" onClick={() => void search(page)}>{text.retry}</button></div> : null}
+      {error ? <div className="aitag-state error"><span role="alert">{formatAitagFailure(error, language)}</span><button type="button" className="btn secondary" onClick={() => void refresh()}>{text.retry}</button></div> : null}
       {!loading && !error && result.items.length === 0 ? <div className="aitag-state">{text.empty}</div> : null}
-      {!error && result.items.length > 0 ? (
+      {result.items.length > 0 ? (
         <section className="aitag-work-grid">
           {result.items.map((work) => <WorkCard key={work.id} work={work} config={config} text={text} loadDetail={loadDetail} onOpen={(item) => void openWork(item)} />)}
         </section>
       ) : null}
 
-      {!error && result.items.length > 0 ? (
+      {result.items.length > 0 ? (
         <nav className="aitag-pagination" aria-label={text.page}>
           <button type="button" className="btn secondary" disabled={page <= 1 || pendingPage !== null} onClick={() => void search(page - 1)}>{text.previous}</button>
           <GalleryPageNumberInput page={pendingPage ?? page} pageCount={maxPage} disabled={pendingPage !== null} text={text} onChange={(next) => void search(next)} />

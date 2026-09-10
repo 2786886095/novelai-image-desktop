@@ -27,6 +27,26 @@ http.StreamedResponse _response(
     );
 
 void main() {
+  for (final status in ['incomplete', 'failed']) {
+    test('Responses retains terminal $status state and usage', () async {
+      final client = AgentProviderClient(clientFactory: (settings, uri) async =>
+          _ScriptedClient((request) async => _response(200, jsonEncode({
+            'status': status,
+            'incomplete_details': {'reason': 'max_output_tokens'},
+            'output': [],
+            'usage': {'input_tokens': 20, 'output_tokens': 30, 'total_tokens': 50},
+          }))));
+      final result = await client.complete(
+        settings: AppSettings(agentApiProtocol: 'openai-responses',
+            agentApiBaseUrl: 'https://fixture.invalid/v1', agentApiModel: 'fixture'),
+        apiKey: 'fixture', messages: const [{'role': 'user', 'content': 'hello'}],
+        tools: const [], onDelta: (_) {},
+      );
+      expect(result.issue, status == 'incomplete' ? 'limit' : 'failed');
+      expect(result.usage.total, 50);
+    });
+  }
+
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test('streams content, tool calls, and mutually exclusive token usage',

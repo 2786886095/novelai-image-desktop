@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:math';
 
 String tavernNow() => DateTime.now().toUtc().toIso8601String();
@@ -564,6 +565,8 @@ class TavernSamplerPreset {
 }
 
 class TavernImageProposal {
+  Map<String,dynamic>? scene;
+  Map<String,dynamic>? scenePatch;
   Map<String, dynamic>? continuity;
   Map<String, dynamic>? promptPatch;
   String? baseImageId;
@@ -587,6 +590,8 @@ class TavernImageProposal {
   TavernImageProposal({
     String? id,
     this.status = 'pending',
+    this.scene,
+    this.scenePatch,
     this.continuity,
     this.promptPatch,
     this.baseImageId,
@@ -612,6 +617,8 @@ class TavernImageProposal {
       TavernImageProposal(
         id: _string(json['id'], tavernId('image')),
         status: _string(json['status'], 'pending'),
+        scene: json['scene'] is Map ? Map<String,dynamic>.from(jsonDecode(jsonEncode(json['scene']))) : json['scene'] == null ? null : {'version': -1},
+        scenePatch: json['scenePatch'] is Map ? Map<String,dynamic>.from(json['scenePatch']) : json['scenePatch'] == null ? null : {'revision': -1},
         continuity: json['continuity'] is Map
             ? Map<String, dynamic>.from(json['continuity'])
             : null,
@@ -648,6 +655,8 @@ class TavernImageProposal {
   Map<String, dynamic> toJson() => {
         'id': id,
         'status': status,
+        if (scene != null) 'scene': scene,
+        if (scenePatch != null) 'scenePatch': scenePatch,
         if (continuity != null) 'continuity': continuity,
         if (promptPatch != null) 'promptPatch': promptPatch,
         if (baseImageId != null) 'baseImageId': baseImageId,

@@ -30,12 +30,14 @@ class AgentProviderToolCall {
 }
 
 class AgentProviderTurn {
+  final String? issue;
   final String content;
   final String reasoning;
   final List<AgentProviderToolCall> toolCalls;
   final AgentTokenUsage usage;
 
   const AgentProviderTurn({
+    this.issue,
     this.content = '',
     this.reasoning = '',
     this.toolCalls = const [],
@@ -1078,7 +1080,16 @@ class AgentProviderClient {
       }
     }
     if (content.isNotEmpty) onDelta(content.toString());
+    final issue = payload['status'] == 'failed' || payload['error'] != null
+        ? 'failed'
+        : payload['status'] == 'incomplete'
+            ? (payload['incomplete_details'] is Map &&
+                    payload['incomplete_details']['reason'] == 'max_output_tokens'
+                ? 'limit'
+                : 'incomplete')
+            : null;
     return AgentProviderTurn(
+      issue: issue,
       content: content.toString(),
       reasoning: reasoning.toString(),
       toolCalls: calls.where((item) => item.name.isNotEmpty).toList(),

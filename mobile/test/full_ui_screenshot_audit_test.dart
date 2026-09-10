@@ -421,7 +421,19 @@ void main() {
     return;
   }
 
-  setUpAll(_loadAuditFonts);
+  setUpAll(() async {
+    await _loadAuditFonts();
+    // Widget tests have no native path_provider implementation. Keep every
+    // settings/resource probe inside this audit's own fixture directory.
+    final profile = Directory('${_auditOutputRoot()}/profile')..createSync(recursive:true);
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(const MethodChannel('plugins.flutter.io/path_provider'),
+          (_) async => profile.absolute.path);
+  });
+  tearDownAll(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(const MethodChannel('plugins.flutter.io/path_provider'), null);
+  });
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
   final primaryViewports = <(String, Size)>[

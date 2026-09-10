@@ -8,6 +8,40 @@ export interface ArtistTagRecord {
   deprecated: boolean;
 }
 
+export type ArtistCatalogMode = "random" | "ranked";
+export interface ArtistCatalogInfo { total:number; savedAt:number; source:"bundled"|"downloaded"; }
+export interface ArtistCatalogSelection extends ArtistPoolSnapshot {
+  catalog:ArtistCatalogInfo; mode:ArtistCatalogMode; seed:number;
+}
+
+export interface ArtistPoolSnapshot {
+  items: ArtistTagRecord[];
+  source: "network" | "cache" | "empty";
+  requested: number | "all";
+  rankedCount: number;
+  savedAt: number | null;
+  issue: "network" | "timeout" | "invalid-response" | "empty-response" | "repeated-page" | "cancelled" | null;
+  httpStatus?: number;
+  complete?: boolean;
+  startedAt?: number;
+  pages?: number;
+}
+
+export interface ArtistPoolSyncProgress {
+  requestId: string;
+  loaded: number;
+  pages: number;
+  state: "loading" | "retrying";
+  retryAfterMs?: number;
+}
+
+export interface ArtistPoolTotal {
+  total: number | null;
+  checkedAt: number | null;
+  lowerBound: boolean;
+  issue: "network" | "invalid-response" | null;
+}
+
 export interface ArtistRankingSnapshot {
   items: ArtistTagRecord[];
   savedAt: number;

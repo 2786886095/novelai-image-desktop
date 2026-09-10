@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'dart:async';
+import 'package:novelai_mobile/services/aitag_error.dart';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -7,6 +9,66 @@ import 'package:novelai_mobile/images/png_metadata.dart';
 import 'package:novelai_mobile/services/aitag_service.dart';
 
 void main() {
+  test('AITag protection failure is explicit and recovers on retry', () async {
+    var calls = 0;
+    final service = AitagService(client: MockClient((_) async {
+      calls++;
+      return calls == 1
+          ? http.Response(
+              '<html>Cloudflare: Sorry, you have been blocked</html>', 403)
+          : http.Response('{"page":1,"total":1,"items":[{"id":7}]}', 200);
+    }));
+    await expectLater(
+        service.search(),
+        throwsA(
+            isA<AitagFailure>().having((e) => e.code, 'code', 'BLOCKED_403')));
+    expect(calls, 1);
+    expect((await service.search()).items.single.id, 7);
+    expect(calls, 2);
+    service.close();
+  });
+  test('AITag HTML 404 and HTML 200 are not empty galleries', () async {
+    for (final status in [404, 200]) {
+      final service = AitagService(
+          client: MockClient(
+              (_) async => http.Response('<html>unavailable</html>', status)));
+      await expectLater(
+          service.search(),
+          throwsA(isA<AitagFailure>().having((e) => e.code, 'code',
+              status == 404 ? 'HTTP_404' : 'INVALID_RESPONSE')));
+      service.close();
+    }
+  });
+  test('AITag source context restores requests rejected without it', () async {
+    final service = AitagService(client: MockClient((request) async {
+      if (request.headers['referer'] != '$aitagSiteUrl/') {
+        return http.Response(
+            '<html>Cloudflare: you have been blocked</html>', 403);
+      }
+      return http.Response('{"page":1,"total":1,"items":[{"id":7}]}', 200);
+    }));
+    expect((await service.search()).items.single.id, 7);
+    expect((await service.search(sort: 'monthly')).items.single.id, 7);
+    service.close();
+  });
+
+  test('AITag timeout has a separate diagnosis', () async {
+    final service = AitagService(
+        client: MockClient((_) async => throw TimeoutException('expired')));
+    await expectLater(service.search(),
+        throwsA(isA<AitagFailure>().having((e) => e.code, 'code', 'TIMEOUT')));
+    service.close();
+  });
+  test('AITag errors are localized and do not expose server HTML', () {
+    for (final language in ['zh-CN', 'zh-TW', 'en-US', 'ja-JP', 'ko-KR']) {
+      final text =
+          formatAitagFailure('AITAG_BLOCKED_403 <html>secret</html>', language);
+      expect(text, contains('403'));
+      expect(text, isNot(contains('secret')));
+    }
+    expect(formatAitagFailure(const AitagFailure('HTTP_429'), 'zh-CN'),
+        contains('429'));
+  });
   test('AITag HTTP 404 search response is a valid empty result', () async {
     final service = AitagService(
       client: MockClient((_) async => http.Response('', 404)),
@@ -27,6 +89,9 @@ void main() {
           headers: const {'content-type': 'application/json'},
         );
     final client = MockClient((request) async {
+      expect(request.headers['referer'], '$aitagSiteUrl/',
+          reason:
+              'AITag data endpoints reject requests without source context');
       if (request.url.path == '/api/config') {
         return jsonResponse({
           'asset_base_url': 'https://cdn.example/',

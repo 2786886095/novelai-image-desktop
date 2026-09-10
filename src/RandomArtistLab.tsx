@@ -9,6 +9,9 @@ import {
 } from "react";
 import { AppPortal, Button, SelectMenu, SelectMenuCompat } from "./components/ui";
 import { Icon } from "./components/icons";
+import { normalizeArtistPoolCount, MAX_ARTIST_POOL_COUNT } from "./artist-pool-options";
+import { ArtistCatalogStatus, artistCatalogText, formatCatalogUpdateError } from "./components/ArtistCatalogStatus";
+import type { ArtistCatalogMode, ArtistCatalogSelection } from "./artist-lab";
 import { QualityPresetControl } from "./components/QualityPresetControl";
 import { PositivePromptPresetControl } from "./PositivePromptPresets";
 import { WeightDistributionControls } from "./components/WeightDistributionControls";
@@ -32,7 +35,8 @@ import {
   matchesCustomTagSearch,
   RANDOM_CUSTOM_TAG_LIBRARY,
 } from "./random-custom-tag-library";
-import { createArtistLabRandom, type ArtistTagRecord } from "./artist-lab";
+import { createArtistLabRandom, type ArtistTagRecord, type ArtistPoolSyncProgress } from "./artist-lab";
+import { artistPoolSyncCopy } from "./components/ArtistPoolStatus";
 import { useAppStore } from "./store";
 import {
   DEFAULT_PARAMS,
@@ -78,6 +82,9 @@ type RandomResult = ArtistRecipeComparison & {
 };
 
 type RandomSession = {
+  poolSize: number;
+  poolMode: ArtistCatalogMode;
+  poolSeed: number;
   basePrompt: string;
   auxiliaryPrompt: string;
   count: number;
@@ -101,7 +108,6 @@ type RandomSession = {
   franchiseMaxCount: number;
   franchiseWeightMin: number;
   franchiseWeightMax: number;
-  poolSize: number;
   seedMode: "random" | "fixed";
   seed: number;
   drawSeed: number;
@@ -116,6 +122,7 @@ type RandomSession = {
 };
 
 const STORAGE_KEY = RANDOM_ARTIST_SESSION_STORAGE_KEY;
+const CATALOG_SELECTION_KEY = "langbai.artist-catalog.selection.v1";
 const LEGACY_STORAGE_KEYS = [
   "langbai.artist-lab.random.v5",
   "langbai.artist-lab.random.v4",
@@ -424,9 +431,6 @@ function clampRecipeCount(value: unknown, fallback: number, minimum = 0): number
   return Math.max(minimum, Math.min(20, Math.floor(Number.isFinite(numeric) ? numeric : fallback)));
 }
 
-function clampPoolSize(value: unknown): number {
-  return Math.max(100, Math.min(5000, positiveInteger(value, 1000)));
-}
 
 type NumericDraftInputProps = Omit<InputHTMLAttributes<HTMLInputElement>, "value" | "onChange"> & {
   value: number;
@@ -506,8 +510,14 @@ function restore(inherited: GenerateParams): RandomSession {
     const legacy = LEGACY_STORAGE_KEYS.map((key) => localStorage.getItem(key)).find(Boolean) ?? null;
     const migratingToV5Weights = current == null && legacy != null;
     const raw = JSON.parse(current ?? legacy ?? "null") as (Partial<RandomSession> & { artistCount?: number }) | null;
+    let fixed: {count?:number;mode?:string;seed?:number}|null=null;
+    try {fixed=JSON.parse(localStorage.getItem(CATALOG_SELECTION_KEY)??"null");} catch { /* Preserve the existing session if the small preference record is damaged. */ }
+    const savedPoolSeed=fixed?.seed??raw?.poolSeed;
     const legacyArtistCount = clampRecipeCount(raw?.artistCount, 5, 1);
     sessionCache = {
+      poolSize: normalizeArtistPoolCount(fixed?.count??raw?.poolSize),
+      poolMode: (fixed?.mode??raw?.poolMode) === "ranked" ? "ranked" : "random",
+      poolSeed: Number.isSafeInteger(savedPoolSeed) ? Number(savedPoolSeed) >>> 0 : freshSeed(),
       basePrompt: typeof raw?.basePrompt === "string" ? raw.basePrompt : inherited.positivePrompt,
       auxiliaryPrompt: typeof raw?.auxiliaryPrompt === "string" ? raw.auxiliaryPrompt : "",
       count: positiveInteger(raw?.count, 8),
@@ -533,7 +543,6 @@ function restore(inherited: GenerateParams): RandomSession {
       franchiseMaxCount: clampRecipeCount(raw?.franchiseMaxCount, 2),
       franchiseWeightMin: clampRecipeWeight(migratingToV5Weights ? undefined : raw?.franchiseWeightMin, RANDOM_V5_DEFAULTS.franchiseWeightMin),
       franchiseWeightMax: clampRecipeWeight(migratingToV5Weights ? undefined : raw?.franchiseWeightMax, RANDOM_V5_DEFAULTS.franchiseWeightMax),
-      poolSize: clampPoolSize(raw?.poolSize),
       seedMode: raw?.seedMode === "random" ? "random" : "fixed",
       seed: Math.min(2_147_483_647, Math.max(1, Math.floor(Number(raw?.seed) || 246813579))),
       drawSeed: positiveInteger(raw?.drawSeed, freshSeed()),
@@ -549,7 +558,7 @@ function restore(inherited: GenerateParams): RandomSession {
       favorites: loadArtistFavorites("random"),
     };
   } catch {
-    sessionCache = { basePrompt: inherited.positivePrompt, auxiliaryPrompt: "", customTagPool: "", customTagModes: {}, count: 8, ...RANDOM_V5_DEFAULTS, includeFranchiseStyles: false, poolSize: 1000, seedMode: "fixed", seed: 246813579, drawSeed: freshSeed(), mutateAuxiliary: false, biasFavorites: false, weightTuneInput: "", weightTuneCount: 8, weightVariation: 20, generationParams: normalizeGenerationParams(undefined, DEFAULT_PARAMS), results: [], favorites: loadArtistFavorites("random") };
+    sessionCache = { poolSize: 1000, poolMode: "random", poolSeed: freshSeed(), basePrompt: inherited.positivePrompt, auxiliaryPrompt: "", customTagPool: "", customTagModes: {}, count: 8, ...RANDOM_V5_DEFAULTS, includeFranchiseStyles: false, seedMode: "fixed", seed: 246813579, drawSeed: freshSeed(), mutateAuxiliary: false, biasFavorites: false, weightTuneInput: "", weightTuneCount: 8, weightVariation: 20, generationParams: normalizeGenerationParams(undefined, DEFAULT_PARAMS), results: [], favorites: loadArtistFavorites("random") };
   }
   return sessionCache;
 }
@@ -635,6 +644,17 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
     (tag) => session.customTagModes[tag.toLocaleLowerCase()] === "random",
   ).length;
   const [pool, setPool] = useState<ArtistTagRecord[]>([]);
+  const [poolSnapshot, setPoolSnapshot] = useState<ArtistCatalogSelection | null>(null);
+  const [latestCatalog, setLatestCatalog] = useState<ArtistCatalogSelection["catalog"] | null>(null);
+  const [poolFailed, setPoolFailed] = useState(false);
+  const [poolProgress, setPoolProgress] = useState<ArtistPoolSyncProgress | null>(null);
+  const poolSyncIdRef = useRef("");
+  const poolText = artistPoolSyncCopy(language);
+  const selectionText = artistCatalogText(language);
+  const [updatingCatalog, setUpdatingCatalog] = useState(false);
+  const [confirmCatalogUpdate, setConfirmCatalogUpdate] = useState(false);
+  const [catalogMessage, setCatalogMessage] = useState("");
+  const poolRequestRef = useRef(0);
   const [loading, setLoading] = useState(false);
   const [running, setRunning] = useState(false);
   const [message, setMessage] = useState("");
@@ -810,6 +830,11 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
   });
 
   useEffect(() => {
+    // Persist only the tiny selection record immediately; do not serialize image history on each draw.
+    try {localStorage.setItem(CATALOG_SELECTION_KEY,JSON.stringify({count:session.poolSize,mode:session.poolMode,seed:session.poolSeed}));}
+    catch {setCatalogMessage(selectionText.settingsFailed);}
+  }, [session.poolSize,session.poolMode,session.poolSeed,selectionText.settingsFailed]);
+  useEffect(() => {
     sessionCache = session;
     sessionRef.current = session;
     if (persistenceTimerRef.current !== null) window.clearTimeout(persistenceTimerRef.current);
@@ -899,16 +924,42 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
     return Object.fromEntries((["artStyle", "medium", "color", "lighting"] as StyleMutationCategory[]).map((key, index) => [key, values[index] ?? key])) as Record<StyleMutationCategory, string>;
   }, [text.categories]);
 
-  const loadPool = async (force = false) => {
-    setLoading(true);
+  const loadPool = async (seed = sessionRef.current.poolSeed) => {
+    const request = ++poolRequestRef.current;
+    setLoading(true); setPoolFailed(false);
     try {
-      const targetSize = clampPoolSize(session.poolSize);
-      setPool(await window.naiDesktop.artistLabPopularArtists(targetSize, force));
-      setMessage("");
-    } catch (error: any) { setMessage(error?.message ?? String(error)); }
-    finally { setLoading(false); }
+      const current=sessionRef.current;
+      const result=await window.naiDesktop.artistLabCatalogSelect(current.poolSize,current.poolMode,seed);
+      if(request!==poolRequestRef.current)return;
+      setPool(result.items);setPoolSnapshot(result);
+      setLatestCatalog(previous=>previous && previous.savedAt>result.catalog.savedAt?previous:result.catalog);
+    } catch {if(request===poolRequestRef.current)setPoolFailed(true);}
+    finally {if(request===poolRequestRef.current)setLoading(false);}
   };
-  useEffect(() => { void loadPool(false); }, []);
+  const drawPool = () => {
+    const seed=freshSeed();patch({poolSeed:seed});void loadPool(seed);
+  };
+  const updateCatalog = async () => {
+    setConfirmCatalogUpdate(false);setUpdatingCatalog(true);setCatalogMessage("");setPoolProgress(null);
+    const id=crypto.randomUUID();poolSyncIdRef.current=id;
+    try {
+      const catalog=await window.naiDesktop.artistLabCatalogUpdate(id);
+      if(poolSyncIdRef.current===id) {setLatestCatalog(catalog);setCatalogMessage(selectionText.updated);}
+    }
+    catch (error) {if(poolSyncIdRef.current===id)setCatalogMessage(formatCatalogUpdateError(error,language));}
+    finally {if(poolSyncIdRef.current===id){setUpdatingCatalog(false);poolSyncIdRef.current="";}}
+  };
+  useEffect(() => {
+    const unsubscribe = window.naiDesktop.onArtistPoolSyncProgress(progress => {
+      if (progress.requestId === poolSyncIdRef.current) setPoolProgress(progress);
+    });
+    void loadPool();
+    return () => {
+      poolRequestRef.current++; unsubscribe();
+      const updateId=poolSyncIdRef.current;poolSyncIdRef.current="";
+      if (updateId) void window.naiDesktop.artistLabCatalogCancel(updateId).catch(() => undefined);
+    };
+  }, []);
 
   const likedArtists = useMemo(
     () => session.favorites.flatMap((item) => item.artists.map((artist) => artist.name)),
@@ -919,10 +970,6 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
       ? session.favorites.flatMap((item) => (item.variant ?? (item.mutations.length > 0 ? "mutated" : "plain")) === "mutated" ? item.mutations : [])
       : [],
     [session.favorites, session.mutateAuxiliary],
-  );
-  const poolKey = useMemo(
-    () => pool.map((artist) => `${artist.id}:${artist.postCount}`).join("|"),
-    [pool],
   );
   const planned = useMemo(() => generatePopularArtistRecipes(pool, {
     count: session.count,
@@ -949,7 +996,7 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
     favoriteArtists: session.biasFavorites ? likedArtists : undefined,
     favoriteMutations: session.mutateAuxiliary && session.biasFavorites ? likedMutations : undefined,
     random: createArtistLabRandom(session.drawSeed),
-  }), [poolKey, session.count, session.artistMinCount, session.artistMaxCount, session.artistWeightMin, session.artistWeightMax, session.weightControlMode, session.artistWeightMode, session.artistWeightLeftDispersion, session.artistWeightRightDispersion, session.artistWeightSoftBalance, session.auxiliaryPrompt, session.customTagPool, JSON.stringify(session.customTagModes), session.randomCustomTagMinCount, session.randomCustomTagMaxCount, session.customTagWeightMin, session.customTagWeightMax, session.mutateAuxiliary, session.biasFavorites, likedArtists.join("|"), likedMutations.map((item) => `${item.category}:${item.value}:${item.weight}`).join("|"), session.drawSeed]);
+  }), [pool, session.count, session.artistMinCount, session.artistMaxCount, session.artistWeightMin, session.artistWeightMax, session.weightControlMode, session.artistWeightMode, session.artistWeightLeftDispersion, session.artistWeightRightDispersion, session.artistWeightSoftBalance, session.auxiliaryPrompt, session.customTagPool, JSON.stringify(session.customTagModes), session.randomCustomTagMinCount, session.randomCustomTagMaxCount, session.customTagWeightMin, session.customTagWeightMax, session.mutateAuxiliary, session.biasFavorites, likedArtists.join("|"), likedMutations.map((item) => `${item.category}:${item.value}:${item.weight}`).join("|"), session.drawSeed]);
   const plannedComparisons = useMemo(
     () => expandArtistRecipeComparisons(planned, session.mutateAuxiliary),
     [planned, session.mutateAuxiliary],
@@ -1204,7 +1251,26 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
   return <>
   <main ref={scrollRef} className="artist-lab random-artist-lab">
     <header className="artist-lab-hero"><div><h2>{text.title}</h2><p>{text.subtitle}</p></div><Button onClick={onBack}>{text.back}</Button></header>
-    <section className="artist-lab-panel random-pool-summary"><div><h3>{text.pool}</h3><strong>{loading ? text.loading : interpolate(text.ready, { count: pool.length })}</strong><small>{text.hint}</small></div><div className="artist-pool-actions"><label><span>{text.poolSize}</span><NumericDraftInput min={100} max={5000} step={100} value={session.poolSize} normalize={clampPoolSize} onCommit={(poolSize) => patch({ poolSize })} /></label><Button onClick={() => void loadPool(false)} disabled={loading}>{text.load}</Button><Button onClick={() => void loadPool(true)} disabled={loading}>{text.refresh}</Button></div></section>
+    <section className="artist-lab-panel random-pool-summary">
+      <div>
+        <h3>{selectionText.title}</h3>
+        <strong>{loading ? selectionText.load : interpolate(text.ready, { count: pool.length })}</strong>
+        <p>{selectionText.description}</p>
+        <ArtistCatalogStatus snapshot={poolSnapshot} latestCatalog={latestCatalog} language={language} />
+        <small className={`artist-pool-warning ${session.poolSize >= 50000 ? "is-large" : ""}`}>{selectionText.warning}</small>
+        {poolFailed && <small role="alert">{selectionText.failed}</small>}
+        {poolSnapshot && (poolSnapshot.requested !== session.poolSize || poolSnapshot.mode !== session.poolMode) && <small>{selectionText.pending}</small>}
+        {updatingCatalog && <small role="status">{poolText.progress.replace("{count}",(poolProgress?.loaded??0).toLocaleString(language)).replace("{pages}",String(poolProgress?.pages??0))}</small>}
+        {catalogMessage && <small role="status">{catalogMessage}</small>}
+      </div>
+      <div className="artist-pool-actions artist-catalog-actions">
+        <label>{selectionText.mode}<SelectMenuCompat value={session.poolMode} disabled={loading||running} onChange={event=>patch({poolMode:event.target.value as ArtistCatalogMode})}><option value="random">{selectionText.random}</option><option value="ranked">{selectionText.ranked}</option></SelectMenuCompat></label>
+        <label>{selectionText.count}<NumericDraftInput type="number" aria-label={selectionText.count} value={session.poolSize} min={1} max={MAX_ARTIST_POOL_COUNT} step={100} disabled={loading||running} normalize={normalizeArtistPoolCount} onCommit={poolSize=>patch({poolSize})}/></label>
+        <Button variant="primary" data-testid="artist-pool-refresh" onClick={drawPool} disabled={loading||running}>{selectionText.draw}</Button>
+        {updatingCatalog ? <Button onClick={()=>void window.naiDesktop.artistLabCatalogCancel(poolSyncIdRef.current).catch(error=>setCatalogMessage(formatCatalogUpdateError(error,language)))}>{poolText.cancel}</Button> : <Button data-testid="artist-catalog-update" onClick={()=>setConfirmCatalogUpdate(true)} disabled={running}>{selectionText.update}</Button>}
+        {confirmCatalogUpdate && <div className="artist-catalog-confirm"><small>{selectionText.confirm}</small><Button data-testid="artist-catalog-confirm" onClick={()=>void updateCatalog()}>{selectionText.start}</Button><Button onClick={()=>setConfirmCatalogUpdate(false)}>{selectionText.cancel}</Button></div>}
+      </div>
+    </section>
     <section className="artist-lab-panel random-artist-settings">
       <div className="random-settings-reset wide"><small>{resetText.hint}</small><Button type="button" variant="ghost" onClick={restoreDrawDefaults}><Icon name="refresh" />{resetText.label}</Button></div>
       <div className="random-fixed-prompt-grid wide">
@@ -1480,7 +1546,7 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
     </details>
     <section className="artist-lab-panel artist-queue-panel"><div className="artist-section-heading"><div><h3>{text.preview}</h3><small>{text.previewHint}</small></div><div className="artist-preview-actions"><b>{interpolate(text.pairSummary, { pairs: planned.length, images: plannedComparisons.length })}</b></div></div>{planned.length === 0 ? <div className="artist-queue-empty">{text.empty}</div> : <ol className="artist-combination-queue">{planned.map((recipe, index) => <li key={recipe.id}><span>#{String(index + 1).padStart(2, "0")}</span><div><b className="artist-ab-label">{text.variantPlain}</b><code>{formatArtistCardTags({ prompt: recipe.basePrompt })}</code>{renderFranchiseTerms(recipe)}{session.mutateAuxiliary && <><b className="artist-ab-label">{text.variantMutated}</b><code>{formatArtistCardTags(recipe)}</code>{renderMutationTerms(recipe)}</>}</div></li>)}</ol>}</section>
     <section className="artist-result-toolbar">
-      <div className="artist-result-actions"><Button onClick={() => void draw(false)} disabled={running || pool.length === 0}><Icon name="dice" />{text.draw}</Button>{running ? <Button variant="danger" onClick={() => { cancelRef.current = true; void window.naiDesktop.cancel(); }}>{text.stop}</Button> : <Button variant="primary" onClick={() => void run(false)}>{text.generate}</Button>}<Button disabled={running || likedArtists.length === 0} onClick={() => void draw(true)}>{text.refine}</Button><span>{running ? interpolate(text.running, { done: batchDone, total: session.results.length }) : message}</span></div>
+      <div className="artist-result-actions"><Button onClick={() => void draw(false)} disabled={running || pool.length === 0}><Icon name="dice" />{text.draw}</Button>{running ? <Button variant="danger" onClick={() => { cancelRef.current = true; void window.naiDesktop.cancel(); }}>{text.stop}</Button> : <Button variant="primary" disabled={loading || pool.length === 0} onClick={() => void run(false)}>{text.generate}</Button>}<Button disabled={running || likedArtists.length === 0} onClick={() => void draw(true)}>{text.refine}</Button><span>{running ? interpolate(text.running, { done: batchDone, total: session.results.length }) : message}</span></div>
       <nav className="artist-result-tabs" aria-label={`${text.preview} / ${favoriteFolderLabel}`}>
         <button type="button" className={!showFavorites ? "active" : ""} onClick={() => switchGallery(false)}><span>{text.preview}</span><b>{session.results.length}</b></button>
         <button type="button" className={showFavorites ? "active" : ""} onClick={() => switchGallery(true)}><span>{favoriteFolderLabel}</span><b>{session.favorites.length}</b></button>

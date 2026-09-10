@@ -1,3 +1,7 @@
+import { providerIssueMessage, responseIssue, type ProviderIssue } from "../../src/agent/provider-outcome";
+import { repairImagePrompt, combineImageTurnUsage } from "../../src/tavern/image-repair";
+import { compileSceneBindings } from "../../src/tavern/scene-bindings";
+import { compileSceneForModel } from "../../src/tavern/scene-generation";
 import { imageStateContext, latestImageState, resolveImagePrompt } from "../../src/tavern/image-continuity";
 import axios, { type AxiosResponse } from "axios";
 import crypto from "node:crypto";
@@ -23,7 +27,6 @@ import {
   type TavernImageParameterDefaults,
   type TavernPromptMessage,
 } from "../../src/tavern/prompt";
-import { DEFAULT_TAVERN_NEGATIVE_PROMPT } from "../../src/tavern/builtins";
 import { DEFAULT_PARAMS } from "../../src/types";
 import { injectDshImageAiSystemPrompt } from "./dsh-reverse-convert";
 import { getSettings } from "./store";
@@ -36,6 +39,7 @@ import { executeAgentTool } from "./agent-tools";
 
 type EventSink = (event: AgentEvent) => void;
 type ProviderTurn = {
+  issue?: ProviderIssue;
   content: string;
   reasoning: string;
   usage?: AgentTokenUsage;
@@ -43,6 +47,7 @@ type ProviderTurn = {
 
 let eventSink: EventSink = () => undefined;
 const activeRequests = new Map<string, AbortController>();
+const repairParents = new WeakMap<AbortController, AbortController>();
 
 function timestamp() {
   return new Date().toISOString();
@@ -268,13 +273,13 @@ function openAiContentDelta(value: unknown) {
 
 function activePreset(controller: AbortController) {
   const workspace = readAgentWorkspace();
-  const conversation = workspace.conversations.find((item) => item.status === "running" && activeRequests.get(item.id) === controller);
+  const conversation = workspace.conversations.find((item) => item.status === "running" && activeRequests.get(item.id) === (repairParents.get(controller) ?? controller));
   return workspace.samplerPresets.find((item) => item.id === conversation?.samplerPresetId);
 }
 
 function activeReasoningEffort(controller: AbortController) {
   const workspace = readAgentWorkspace();
-  const conversation = workspace.conversations.find((item) => item.status === "running" && activeRequests.get(item.id) === controller);
+  const conversation = workspace.conversations.find((item) => item.status === "running" && activeRequests.get(item.id) === (repairParents.get(controller) ?? controller));
   return conversation?.reasoningEffort ?? "auto";
 }
 
@@ -388,7 +393,7 @@ function parseResponsesJson(payload: Record<string, unknown>) {
       else content += text;
     }
   }
-  return { content, reasoning, usage: tokenUsage(payload.usage) };
+  return { content, reasoning, usage: tokenUsage(payload.usage), issue: responseIssue(payload) };
 }
 
 async function openAiResponses(
@@ -430,11 +435,13 @@ async function openAiResponses(
     if (parsed.content) onDelta(parsed.content);
     return parsed;
   }
+  let issue: ProviderIssue | undefined;
+  let finished = false;
   let content = "";
   let reasoning = "";
   let usage: AgentTokenUsage | undefined;
   await consumeSse(response.data, (event, data) => {
-    if (data === "[DONE]") return;
+    if (data === "[DONE]") { finished = true; return; }
     let payload: Record<string, unknown>;
     try { payload = JSON.parse(data) as Record<string, unknown>; } catch { return; }
     const kind = String(payload.type ?? event);
@@ -444,11 +451,16 @@ async function openAiResponses(
       if (delta) onDelta(delta);
     } else if (kind.includes("reasoning") && kind.endsWith(".delta")) {
       reasoning += String(payload.delta ?? "");
-    } else if (kind === "response.completed" && payload.response && typeof payload.response === "object") {
-      usage = tokenUsage((payload.response as Record<string, unknown>).usage) ?? usage;
+    } else if (["response.completed", "response.incomplete", "response.failed"].includes(kind) && payload.response && typeof payload.response === "object") {
+      finished = true;
+      const final = payload.response as Record<string, unknown>;
+      usage = tokenUsage(final.usage) ?? usage;
+      issue = responseIssue({...final, status: kind.slice("response.".length)}) ?? issue;
+    } else if (kind === "error") {
+      issue = "failed";
     }
   });
-  return { content, reasoning, usage };
+  return { content, reasoning, usage, issue: issue ?? (!finished ? "incomplete" : undefined) };
 }
 
 function dataUrlParts(url: string) {
@@ -591,15 +603,17 @@ function proposalFromRaw(
   base?: TavernImageProposal,
 ): TavernImageProposal | undefined {
   if (!raw) return undefined;
-  const { positivePrompt, continuity } = resolveImagePrompt(raw, base);
-  if (!positivePrompt) return undefined;
   const parameters = resolveTavernImageProposalParameters(raw, defaults);
+  const { positivePrompt, continuity, scene } = resolveImagePrompt(raw, base, parameters.model);
+  if (!positivePrompt && !continuity.bindingError) return undefined;
   return {
     id: crypto.randomUUID(),
     status: "pending",
     positivePrompt,
     continuity,
-    negativePrompt: character.visual.negativePrompt.trim() || DEFAULT_TAVERN_NEGATIVE_PROMPT,
+    ...(scene ? {scene} : {}),
+    ...(continuity.bindingError ? { error: `结构化方案格式需要修正，原方案已保留：${continuity.bindingError}` } : {}),
+    negativePrompt: character.visual.negativePrompt,
     stylePrompt: character.visual.stylePrompt,
     ...(parameters.model ? { model: parameters.model } : {}),
     ...(parameters.width !== undefined ? { width: Math.round(numeric(parameters.width, 1024, 64, 2048)) } : {}),
@@ -675,18 +689,28 @@ function localRoleplaySummary(conversation: AgentConversation) {
 }
 
 export async function generateTavernImage(request: TavernImageRequest) {
+  if (!request.proposal.scene && request.proposal.continuity?.bindingError === "SCENE_REQUIRED") return { ok: false, message: "SCENE_REQUIRED" };
   if (request.proposal.continuity?.reviewRequired) return { ok: false, message: "请先确认提示词变更，旧方案已保留。" };
   const workspace = readAgentWorkspace();
   const conversation = workspace.conversations.find((item) => item.id === request.conversationId);
   const message = conversation?.messages.find((item) => item.id === request.messageId);
   if (!conversation || !message) return { ok: false, message: "找不到对应的对话消息。" };
+  if (message.imageProposal?.status === "running") return { ok: false, message: "当前图片正在生成，请勿重复提交。" };
   const character = workspace.characters.find((item) => item.id === conversation.activeCharacterId)
     ?? workspace.characters[0];
   const proposal = {
     ...request.proposal,
-    negativePrompt: character?.visual.negativePrompt.trim() || DEFAULT_TAVERN_NEGATIVE_PROMPT,
+    negativePrompt: character?.visual.negativePrompt ?? "",
     stylePrompt: character?.visual.stylePrompt ?? "",
   };
+  let bound: ReturnType<typeof compileSceneBindings> | undefined;
+  try {
+    if (proposal.scene) {
+      const model = proposal.model ?? tavernImageDefaults(character).model!;
+      bound = compileSceneForModel(proposal.scene,model);
+      proposal.positivePrompt = bound.positivePrompt;
+    }
+  } catch (error) { return {ok:false, message:error instanceof Error ? error.message : "SCENE_INVALID"}; }
   updateAgentConversation(request.conversationId, (target) => {
     const item = target.messages.find((entry) => entry.id === request.messageId);
     if (item) item.imageProposal = { ...proposal, status: "running", error: undefined };
@@ -700,6 +724,7 @@ export async function generateTavernImage(request: TavernImageRequest) {
         negativePrompt: proposal.negativePrompt,
       },
       args: {
+        ...(bound ? {characterPrompts: bound.characterPrompts} : {}),
         positivePrompt: proposal.positivePrompt,
         negativePrompt: proposal.negativePrompt,
         stylePrompt: proposal.stylePrompt,
@@ -888,33 +913,71 @@ export async function sendAgentMessage(request: AgentSendRequest) {
         content: `Earlier roleplay summary and continuity notes:\n${activeConversation.lastSummary.trim()}`,
       });
     }
-    prompt.splice(1, 0, { role: "system", content: imageStateContext(imageBase) });
+    prompt.splice(1, 0, { role: "system", content: imageStateContext(imageBase, imageDefaults.model) });
     const turn = await completeProvider(promptMessagesWithImages(prompt, request.conversationId), controller, (delta) => deltas.push(delta));
     deltas.flush();
+    if (turn.issue || !turn.content.trim()) {
+      updateAgentConversation(request.conversationId, target => {
+        const assistant = target.messages.find(item => item.id === messageId);
+        if (assistant) { assistant.reasoning = turn.reasoning || undefined; assistant.usage = turn.usage; }
+      });
+      throw new Error(providerIssueMessage(settings.language, turn.issue ?? "empty"));
+    }
     const parsed = parseLangbaiImageProposal(turn.content);
+    let proposalRaw = parsed.proposal;
+    let repairStatus: "repaired" | "failed" | undefined;
+    let usage = turn.usage;
+    if (proposalRaw && resolveImagePrompt(proposalRaw, imageBase, resolveTavernImageProposalParameters(proposalRaw, imageDefaults).model).continuity.reviewRequired) {
+      const repair = await repairImagePrompt({
+        raw: proposalRaw, base: imageBase, model: resolveTavernImageProposalParameters(proposalRaw, imageDefaults).model, signal: controller.signal,
+        onStart: () => {
+          updateAgentConversation(request.conversationId, target => {
+            const assistant = target.messages.find(item => item.id === messageId);
+            if (!assistant) return;
+            assistant.content = parsed.visible || "……";
+            assistant.imageProposal = proposalFromRaw(proposalRaw, assistant, character, imageDefaults, imageBase);
+            if (assistant.imageProposal?.continuity) assistant.imageProposal.continuity.repairStatus = "repairing";
+          });
+          emitWorkspace();
+        },
+        request: (instruction, repairController) => {
+          repairParents.set(repairController, controller);
+          return completeProvider(promptMessagesWithImages([
+            ...prompt, {role: "assistant", content: turn.content}, {role: "user", content: instruction},
+          ], request.conversationId), repairController, () => undefined);
+        },
+      });
+      proposalRaw = repair.raw;
+      if (repair.state !== "unchanged") {
+        repairStatus = repair.state;
+        usage = combineImageTurnUsage(turn.usage, repair.usage);
+      }
+    }
+    controller.signal.throwIfAborted();
     updateAgentConversation(request.conversationId, (target) => {
       const assistant = target.messages.find((item) => item.id === messageId);
       if (!assistant) return;
       assistant.content = parsed.visible || "……";
       assistant.reasoning = turn.reasoning || undefined;
-      assistant.usage = turn.usage;
+      assistant.usage = usage;
       assistant.status = "complete";
       assistant.completedAt = timestamp();
       const swipes = assistant.swipes?.length ? [...assistant.swipes] : [];
       swipes.push(assistant.content);
       assistant.swipes = swipes;
       assistant.swipeIndex = swipes.length - 1;
-      assistant.imageProposal = proposalFromRaw(parsed.proposal, assistant, character, imageDefaults, imageBase);
+      assistant.imageProposal = proposalFromRaw(proposalRaw, assistant, character, imageDefaults, imageBase);
+      if (assistant.imageProposal?.continuity && repairStatus) assistant.imageProposal.continuity.repairStatus = repairStatus;
       const snapshots = assistant.imageProposalSwipes ?? Array.from({ length: swipes.length - 1 }, () => null);
       snapshots[assistant.swipeIndex] = assistant.imageProposal ?? null;
       assistant.imageProposalSwipes = snapshots;
-      target.lastTurnUsage = turn.usage;
+      target.lastTurnUsage = usage;
       target.status = "idle";
     });
     emitWorkspace();
     const updated = readAgentWorkspace().conversations.find((item) => item.id === request.conversationId);
     const stored = updated?.messages.find((item) => item.id === messageId);
-    if (stored?.imageProposal && !stored.imageProposal.continuity?.reviewRequired && updated?.generationMode === "auto") {
+    if (stored?.imageProposal?.status === "pending" && !stored.imageProposal.continuity?.reviewRequired && updated?.generationMode === "auto") {
       await generateTavernImage({ conversationId: request.conversationId, messageId, proposal: stored.imageProposal });
     }
     return { ok: true };
@@ -925,6 +988,10 @@ export async function sendAgentMessage(request: AgentSendRequest) {
     updateAgentConversation(request.conversationId, (target) => {
       const assistant = target.messages.find((item) => item.id === messageId);
       if (assistant) {
+        if (assistant.imageProposal?.continuity?.repairStatus === "repairing") {
+          assistant.imageProposal.continuity.repairStatus = "failed";
+          assistant.imageProposal.status = aborted ? "cancelled" : "error";
+        }
         assistant.status = aborted ? "aborted" : "error";
         assistant.error = aborted ? undefined : message;
         assistant.completedAt = timestamp();

@@ -1,3 +1,5 @@
+import { MetadataApplyPanel } from "./MetadataApplyPanel";
+import { metadataApplyKeys } from "./metadata-selection";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import { Button, IconText, SelectMenu } from "./components/ui";
@@ -281,6 +283,8 @@ const TEXT: Record<AppLanguage, MetadataText> = {
 };
 
 export const IMPORT_LABELS: Record<keyof ImportedParams, string> = {
+  preservePromptText: "Preserve prompt text",
+  metadataReplay: "Original sampling flags",
   positivePrompt: "Positive prompt",
   negativePrompt: "Negative prompt",
   stylePrompt: "Style prompt",
@@ -488,8 +492,6 @@ function sourceLabel(report: ImageMetadataReport, text: MetadataText) {
 export default function MetadataInspector({ onBack }: { onBack: () => void }) {
   const language = normalizeAppLanguage(useAppStore((state) => state.settings?.language));
   const activeTab = useAppStore((state) => state.activeTab);
-  const restoreImportedMetadata = useAppStore((state) => state.restoreImportedMetadata);
-  const setActiveTab = useAppStore((state) => state.setActiveTab);
   const setToast = useAppStore((state) => state.setToast);
   const text = TEXT[language];
   const [report, setReport] = useState<ImageMetadataReport | null>(null);
@@ -518,8 +520,7 @@ export default function MetadataInspector({ onBack }: { onBack: () => void }) {
   const compatibleEntries = useMemo(
     () =>
       report
-        ? (Object.entries(report.imported) as [keyof ImportedParams, ImportedParams[keyof ImportedParams]][])
-            .filter(([, value]) => value !== undefined)
+        ? metadataApplyKeys(report)
         : [],
     [report],
   );
@@ -639,20 +640,6 @@ export default function MetadataInspector({ onBack }: { onBack: () => void }) {
       if (historyReadInFlightRef.current === historyRevision) historyReadInFlightRef.current = 0;
       if (historyRevision === historyReadRevisionRef.current) setHistoryReadingId("");
     }
-  }
-
-  function applyCompatible() {
-    if (!report || !compatibleEntries.length) {
-      setToast(text.noCompatible);
-      return;
-    }
-    restoreImportedMetadata(
-      report.imported,
-      report.characterCaptions,
-      { preserveMissing: true },
-    );
-    setActiveTab("generate");
-    setToast(text.applied);
   }
 
   async function copyRaw() {
@@ -803,28 +790,8 @@ export default function MetadataInspector({ onBack }: { onBack: () => void }) {
               <strong>{compatibleEntries.length}</strong>
               <small>{text.compatibleHint}</small>
             </div>
-            <Button
-              variant="primary"
-              disabled={!compatibleEntries.length}
-              onClick={applyCompatible}
-            >
-              {text.apply}
-            </Button>
           </section>
-
-          {compatibleEntries.length > 0 && (
-            <section className="metadata-section">
-              <h3>{text.compatible}</h3>
-              <div className="metadata-compatible-grid">
-                {compatibleEntries.map(([key, value]) => (
-                  <div key={key}>
-                    <span>{parameterLabel(language, IMPORT_LABELS[key])}</span>
-                    <strong>{String(value)}</strong>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
+          <MetadataApplyPanel report={report} language={language} />
 
           <section className="metadata-section">
             <h3>{text.params}</h3>

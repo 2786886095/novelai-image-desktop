@@ -1,6 +1,6 @@
 {
   "name": "langbai-novelai-studio",
-  "version": "2.2.5",
+  "version": "2.2.6",
   "private": true,
   "description": "Langbai NovelAI Studio: API-only NovelAI image generation desktop client with Chinese UI.",
   "author": "Langbai",
@@ -10,7 +10,7 @@
     "url": "git+https://github.com/2786886095/novelai-image-desktop.git"
   },
   "homepage": "https://github.com/2786886095/novelai-image-desktop#readme",
-  "main": "dist-electron/electron/main.js",
+  "main": "dist-electron/electron/bootstrap.js",
   "scripts": {
     "dev": "concurrently -k \"npm:dev:renderer\" \"npm:dev:electron\"",
     "dev:renderer": "vite --host 127.0.0.1",
@@ -51,7 +51,8 @@
     "rehype-sanitize": "^6.0.0",
     "remark-gfm": "^4.0.1",
     "socks-proxy-agent": "^7.0.0",
-    "zustand": "^5.0.9"
+    "zustand": "^5.0.9",
+    "sharp": "0.35.4"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",
@@ -65,7 +66,7 @@
     "electron-builder": "^26.15.3",
     "typescript": "^6.0.3",
     "vite": "^8.0.16",
-    "vitest": "^4.1.9",
+    "vitest": "^4.1.11",
     "wait-on": "^9.0.10"
   },
   "overrides": {
@@ -130,8 +131,6 @@
       "category": "public.app-category.graphics-design",
       "files": [
         "!node_modules/@huggingface/transformers/**",
-        "!node_modules/@img/**",
-        "!node_modules/sharp/**",
         "!node_modules/onnxruntime-node/**"
       ],
       "target": [
@@ -150,8 +149,6 @@
       "category": "Graphics",
       "files": [
         "!node_modules/@huggingface/transformers/**",
-        "!node_modules/@img/**",
-        "!node_modules/sharp/**",
         "!node_modules/onnxruntime-node/**"
       ],
       "target": [
@@ -160,7 +157,11 @@
     },
     "dmg": {
       "artifactName": "Langbai-NovelAI-Studio-${version}-${arch}.${ext}"
-    }
+    },
+    "asarUnpack": [
+      "dist-electron/electron/ipc/artist-catalog-*.js",
+      "dist/artist-catalog/**"
+    ]
   },
   "allowScripts": {
     "electron@42.11.0": true,

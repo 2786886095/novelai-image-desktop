@@ -1,3 +1,6 @@
+import { assertUpdateOutputProtection } from "./update-output-protection";
+import { installedAppDir } from "./app-mode";
+import { readStore } from "./store";
 import { app } from "electron";
 import type { BrowserWindow } from "electron";
 import axios from "axios";
@@ -224,6 +227,8 @@ async function runDownload(preferredSource: UpdateSource): Promise<{ ok: boolean
   if (process.platform !== "win32") {
     return { ok: false, message: "当前平台请从发行页面手动下载安装包。" };
   }
+  try { assertUpdateOutputProtection(installedAppDir(), readStore()); }
+  catch (error) { const message = error instanceof Error ? error.message : String(error); send({ kind: "error", message }); return { ok: false, message }; }
   downloadedInstallerPath = "";
   downloadedVersion = "";
   send({ kind: "checking" });
@@ -280,6 +285,8 @@ function scheduleAutomaticInstall() {
 /** Launches the verified Setup.exe silently, then exits the current build. */
 export function installUpdate() {
   if (process.platform !== "win32" || !downloadedInstallerPath || installLaunchInFlight) return;
+  try { assertUpdateOutputProtection(installedAppDir(), readStore()); }
+  catch (error) { send({ kind: "error", message: error instanceof Error ? error.message : String(error) }); return; }
   installLaunchInFlight = true;
   const child = spawn(downloadedInstallerPath, automaticInstallerArgs(), {
     detached: true,

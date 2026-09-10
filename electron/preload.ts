@@ -141,6 +141,20 @@ contextBridge.exposeInMainWorld("naiDesktop", {
     ipcRenderer.invoke("artistLab:searchArtists", query, limit),
   artistLabPopularArtists: (limit?: number, force?: boolean) =>
     ipcRenderer.invoke("artistLab:popularArtists", limit, force),
+  artistLabPopularArtistPool: (limit?: number, force?: boolean) =>
+    ipcRenderer.invoke("artistLab:popularArtistPool", limit, force),
+  artistLabAllArtists: (requestId: string) => ipcRenderer.invoke("artistLab:allArtists", requestId),
+  artistLabCatalogSelect: (count: number, mode: "random"|"ranked", seed: number) => ipcRenderer.invoke("artistLab:catalogSelect",count,mode,seed),
+  artistLabCatalogUpdate: (id: string) => ipcRenderer.invoke("artistLab:catalogUpdate",id),
+  artistLabCatalogCancel: (id: string) => ipcRenderer.invoke("artistLab:catalogCancel",id),
+  artistLabSelectedArtists: (requestId: string, count: number) => ipcRenderer.invoke("artistLab:selectedArtists", requestId, count),
+  artistLabArtistTotal: (force = false) => ipcRenderer.invoke("artistLab:artistTotal", force),
+  artistLabCancelArtistSync: (requestId: string) => ipcRenderer.invoke("artistLab:cancelSync", requestId),
+  onArtistPoolSyncProgress: (callback: (progress: import("../src/artist-lab").ArtistPoolSyncProgress) => void) => {
+    const listener = (_event: unknown, progress: import("../src/artist-lab").ArtistPoolSyncProgress) => callback(progress);
+    ipcRenderer.on("artistLab:syncProgress", listener);
+    return () => ipcRenderer.removeListener("artistLab:syncProgress", listener);
+  },
   artistLabArtistRanking: (page?: number, pageSize?: number, query?: string, force?: boolean) =>
     ipcRenderer.invoke("artistLab:artistRanking", page, pageSize, query, force),
   artistLabScoreImages: (

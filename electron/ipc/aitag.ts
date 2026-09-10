@@ -1,4 +1,5 @@
 import axios from "axios";
+import { readAitagResponse, aitagTransportError, type AitagResponseKind } from "./aitag-response";
 import type { AitagSearchRequest } from "../../src/aitag";
 import { AITAG_PAGE_SIZE, aitagImageUrl, normalizeAitagConfig, normalizeAitagDetail, normalizeAitagSearch } from "../../src/aitag";
 import { proxyConfig } from "./proxy";
@@ -59,17 +60,31 @@ function requestConfig() {
     timeout: REQUEST_TIMEOUT,
     headers: {
       Accept: "application/json",
+      // AITag requires the same source context as its public website. Without
+      // this header the data endpoints return Cloudflare HTML 403, even when
+      // the homepage and image CDN work. Apply to config, lists, ranks, detail.
+      Referer: `${API_BASE}/`,
       "User-Agent": "Langbai-NovelAI-Studio/AITag-Data-Client",
     },
     ...proxyConfig("update"),
   };
 }
 
+async function requestJson(path: string, kind: AitagResponseKind, params?: Record<string, string | number>) {
+  try {
+    const response = await axios.get(`${API_BASE}${path}`, {
+      ...requestConfig(), params, maxContentLength: 16 * 1024 * 1024,
+      validateStatus: () => true,
+    });
+    return readAitagResponse(response.status, response.data, kind);
+  } catch (reason) {
+    throw aitagTransportError(reason);
+  }
+}
+
 export async function getAitagConfig(): Promise<unknown> {
-  return cached(configCache, async () => {
-    const response = await axios.get(`${API_BASE}/api/config`, requestConfig());
-    return response.data as unknown;
-  }, (value) => { configCache = value.expires ? value : null; });
+  return cached(configCache, () => requestJson("/api/config", "config"),
+    (value) => { configCache = value.expires ? value : null; });
 }
 
 export async function searchAitag(raw: unknown): Promise<unknown> {
@@ -105,17 +120,7 @@ async function searchAitagNetwork(request: Required<AitagSearchRequest>): Promis
         ? "older"
         : request.timeRange.slice(1);
     }
-    const response = await axios.get(`${API_BASE}${endpoint}`, {
-      ...requestConfig(),
-      params,
-      // AITag uses HTTP 404 to represent a valid search with zero matches.
-      // Treat only this endpoint-specific case as an empty result; config/work
-      // 404s must still surface as real failures.
-      validateStatus: (status) => (status >= 200 && status < 300) || status === 404,
-    });
-    return response.status === 404
-      ? normalizeAitagSearch({ page: apiPage, page_size: AITAG_API_PAGE_SIZE, total: 0, items: [] })
-      : normalizeAitagSearch(response.data);
+    return normalizeAitagSearch(await requestJson(endpoint, "search", params));
   };
 
   const apiPages = await Promise.all(
@@ -146,8 +151,9 @@ export async function searchAitagFresh(raw: unknown): Promise<unknown> {
   const cacheKey = JSON.stringify(request);
   searchCache.set(cacheKey, { expires: Date.now() + DATA_CACHE_TTL_MS, promise: Promise.resolve(value) });
   if (isDefault) {
-    const config = await getAitagConfig();
-    defaultSnapshot = { config, search: value };
+    // Optional CDN/filter configuration must not discard a successful page.
+    const config = await getAitagConfig().catch(() => null);
+    if (config) defaultSnapshot = { config, search: value };
   }
   return value;
 }
@@ -160,8 +166,7 @@ export async function getAitagWork(rawId: unknown): Promise<unknown> {
   const id = Number(rawId);
   if (!Number.isSafeInteger(id) || id <= 0) throw new Error("Invalid AITag work id");
   return cached(workCache.get(id), async () => {
-    const response = await axios.get(`${API_BASE}/api/work/${id}`, requestConfig());
-    return response.data as unknown;
+    return requestJson(`/api/work/${id}`, "work");
   }, (value) => {
     if (value.expires) workCache.set(id, value); else workCache.delete(id);
   });

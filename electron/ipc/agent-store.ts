@@ -1,3 +1,5 @@
+import { recoverInterruptedImageRepairs } from "../../src/tavern/image-repair";
+import { readSceneBindings } from "../../src/tavern/scene-bindings";
 import { dialog } from "electron";
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -200,7 +202,7 @@ function normalizeImageProposal(raw: unknown): TavernImageProposal | undefined {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
   const value = raw as Partial<TavernImageProposal>;
   const positivePrompt = typeof value.positivePrompt === "string" ? value.positivePrompt.slice(0, 100_000) : "";
-  if (!positivePrompt.trim()) return undefined;
+  if (!positivePrompt.trim() && !value.continuity?.bindingError) return undefined;
   const status = ["pending", "running", "completed", "cancelled", "error"].includes(String(value.status))
     ? value.status as TavernImageProposal["status"]
     : "pending";
@@ -212,11 +214,14 @@ function normalizeImageProposal(raw: unknown): TavernImageProposal | undefined {
     id: typeof value.id === "string" && value.id ? value.id : crypto.randomUUID(),
     status,
     positivePrompt,
+    ...(value.scene !== undefined ? {scene: readSceneBindings(value.scene) ?? value.scene, ...(readSceneBindings(value.scene) ? {} : {status: "error" as const, error: "SCENE_INVALID"})} : {}),
     ...(value.continuity && typeof value.continuity === "object" ? { continuity: {
       baseImageId: typeof value.continuity.baseImageId === "string" ? value.continuity.baseImageId : undefined,
       previousPrompt: typeof value.continuity.previousPrompt === "string" ? value.continuity.previousPrompt.slice(0, 100_000) : undefined,
       suggestedPrompt: typeof value.continuity.suggestedPrompt === "string" ? value.continuity.suggestedPrompt.slice(0, 100_000) : undefined,
       reviewRequired: value.continuity.reviewRequired === true,
+      ...(["repairing", "repaired", "failed"].includes(value.continuity.repairStatus ?? "") ? { repairStatus: value.continuity.repairStatus } : {}),
+      ...(typeof value.continuity.bindingError === "string" ? {bindingError:value.continuity.bindingError.slice(0,160)} : {}),
       changes: Array.isArray(value.continuity.changes) ? value.continuity.changes.filter((c) => c && typeof c.from === "string" && typeof c.to === "string").slice(0, 64).map((c) => ({ from: c.from.slice(0, 100_000), to: c.to.slice(0, 100_000) })) : [],
     } } : {}),
     negativePrompt: typeof value.negativePrompt === "string" ? value.negativePrompt.slice(0, 100_000) : "",
@@ -414,7 +419,8 @@ export function readAgentWorkspace(): AgentWorkspaceData {
     (value) => JSON.stringify(value, null, 2),
   );
   cache = recovered?.value ?? createEmptyAgentWorkspace();
-  if (!recovered || resetLegacyWorkspace || migratedPresetLibrary) writeAgentWorkspace(cache);
+  const recoveredRepairs = cache.conversations.map(recoverInterruptedImageRepairs).some(Boolean);
+  if (!recovered || resetLegacyWorkspace || migratedPresetLibrary || recoveredRepairs) writeAgentWorkspace(cache);
   return clone(cache);
 }
 

@@ -1,3 +1,7 @@
+import { credentialIssueMessage } from "./credential-status";
+import { StorageDirectoryInput } from "./components/StorageDirectoryInput";
+import { normalizeAppLanguage } from "./i18n";
+import { MetadataApplyPanel } from "./MetadataApplyPanel";
 import { ImageSaveFeedback } from "./components/ImageSaveFeedback";
 import { imagePasteProps } from "./image-paste";
 import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
@@ -2491,7 +2495,6 @@ function PromptAndParams({
           className={clsx(params.seedMode === "fixed" && "active")}
           onClick={() => {
             setParam("seedMode", "fixed");
-            if (params.seed <= 0) setParam("seed", Math.floor(Math.random() * MAX_NAI_SEED) + 1);
           }}
         >
           <Icon name="pin" /> {generateText.prompt.fixedSeed}
@@ -2499,7 +2502,7 @@ function PromptAndParams({
       </div>
       {params.seedMode === "fixed" && (
         <div className="seed-row">
-          <NumberInput label={generateText.prompt.fixedSeedValue} value={params.seed} min={1} max={MAX_NAI_SEED} onChange={(v) => setParam("seed", v)} />
+          <NumberInput label={generateText.prompt.fixedSeedValue} value={params.seed} min={0} max={MAX_NAI_SEED} onChange={(v) => setParam("seed", v)} />
           <Button
             className="seed-randomize-button"
             title={generateText.prompt.randomizeSeedTitle}
@@ -3119,15 +3122,12 @@ function LogSettingsSection({
   }, [refresh, logDir]);
 
   const setDir = async (dir: string) => {
-    await window.naiDesktop.setSetting("logDir", dir);
-    await refreshSettings();
+    try { await window.naiDesktop.setSetting("logDir", dir); await refreshSettings(); return true; }
+    catch (error) { setToast(error instanceof Error ? error.message : String(error)); return false; }
   };
   const choose = async () => {
-    const dir = await window.naiDesktop.selectLogDir();
-    if (dir) {
-      await setDir(dir);
-      setToast(t("log.updatedPath"));
-    }
+    try { const dir = await window.naiDesktop.selectLogDir(); if (dir && await setDir(dir)) setToast(t("log.updatedPath")); }
+    catch (error) { setToast(error instanceof Error ? error.message : String(error)); }
   };
   const openFile = async () => {
     const r = await window.naiDesktop.openLogFile();
@@ -3154,12 +3154,7 @@ function LogSettingsSection({
       />
       <label className="field">
         <span>{t("log.path")}</span>
-        <input
-          value={logDir}
-          placeholder={t("log.placeholder")}
-          disabled={!loggingEnabled}
-          onChange={(e) => void setDir(e.target.value)}
-        />
+        <StorageDirectoryInput settingKey="logDir" value={logDir} placeholder={t("log.placeholder")} disabled={!loggingEnabled} />
       </label>
       <p className="field-hint">
         {info ? (
@@ -4033,8 +4028,6 @@ function ReversePanel() {
   const refreshSettings = useAppStore((state) => state.refreshSettings);
   const language = settings?.language;
   const inspectMeta = useAppStore((state) => state.inspectMeta);
-  const applyParams = useAppStore((state) => state.applyParams);
-  const setActiveTab = useAppStore((state) => state.setActiveTab);
   const [dragging, setDragging] = useState(false);
   const fileReadRevision = useRef(0);
   const hasImage = Boolean(inspectImageUrl);
@@ -4051,26 +4044,10 @@ function ReversePanel() {
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
 
-  const imported = useMemo(
-    () => (inspectMeta ? inspectImageMetadata(inspectMeta).imported : {}),
+  const metadataReport = useMemo(
+    () => inspectMeta ? inspectImageMetadata(inspectMeta) : null,
     [inspectMeta],
   );
-  const hasMeta = Object.keys(imported).length > 0;
-
-  function restoreParams() {
-    if (!hasMeta) {
-      setToast(t("inspect.noMeta"));
-      return;
-    }
-    // The locked negative prompt must survive this restore too, same as
-    // reset/template. (parseImportedParams never extracts stylePrompt from
-    // metadata, so only negativePrompt is relevant here.)
-    const patch = { ...imported };
-    if (settings?.lockNegativePrompt) delete patch.negativePrompt;
-    applyParams(patch);
-    setActiveTab("generate");
-    setToast(t("inspect.metaRestored"));
-  }
 
   const modes: [ReversePromptMode, string, string][] = [
     ["tags", t("mode.tags"), t("inspect.mode.tagsTip")],
@@ -4173,18 +4150,7 @@ function ReversePanel() {
           </label>
         </div>
 
-        {hasImage && (
-          <div className="meta-restore">
-            <Button variant="secondary" className="full" disabled={!hasMeta} onClick={restoreParams}>
-              {t("inspect.restoreParams")}
-            </Button>
-            <small>
-              {hasMeta
-                ? t("inspect.restoreMetaOk")
-                : t("inspect.restoreMetaMissing")}
-            </small>
-          </div>
-        )}
+        {hasImage && metadataReport && <MetadataApplyPanel report={metadataReport} language={normalizeAppLanguage(language)} />}
 
         <div className="reverse-scope-card reverse-template-version-card">
           <span className="field-label-row">{t("inspect.templateVersionTitle")}</span>
@@ -5772,12 +5738,12 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
     await refreshAccount();
   };
   const selectDir = async () => {
-    await window.naiDesktop.selectOutputDir();
-    await refreshSettings();
+    try { await window.naiDesktop.selectOutputDir(); await refreshSettings(); }
+    catch (error) { useAppStore.getState().setToast(error instanceof Error ? error.message : String(error)); }
   };
   const selectGalleryDir = async () => {
-    await window.naiDesktop.selectOnlineGalleryDownloadDir();
-    await refreshSettings();
+    try { await window.naiDesktop.selectOnlineGalleryDownloadDir(); await refreshSettings(); }
+    catch (error) { useAppStore.getState().setToast(error instanceof Error ? error.message : String(error)); }
   };
   const clearAitagCache = async () => {
     setAitagCacheBusy(true);
@@ -5930,6 +5896,9 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
             ))}
           </nav>
           <section className="settings-content">
+            {Boolean(settings?.credentialIssues?.length) && (
+              <p className="error-banner" role="alert">{credentialIssueMessage(settings?.language, settings?.credentialIssues ?? [])}</p>
+            )}
             {section === "api" && (
               <div className="settings-form">
                 <div className="account-card">
@@ -6027,7 +5996,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
               <div className="settings-form">
                 <label className="field">
                   <span>{t("settings.outputDir")}</span>
-                  <input value={settings.outputDir} onChange={(e) => void update("outputDir", e.target.value)} />
+                  <StorageDirectoryInput settingKey="outputDir" value={settings.outputDir ?? ""} />
                 </label>
                 <div className="row-actions">
                   <Button onClick={selectDir}>
@@ -6039,11 +6008,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                 </div>
                 <label className="field">
                   <span>{t("settings.galleryDownloadDir")}</span>
-                  <input
-                    value={settings.onlineGalleryDownloadDir ?? ""}
-                    placeholder={t("settings.galleryDownloadDirFirstUse")}
-                    onChange={(e) => void update("onlineGalleryDownloadDir", e.target.value)}
-                  />
+                  <StorageDirectoryInput placeholder={t("settings.galleryDownloadDirFirstUse")} settingKey="onlineGalleryDownloadDir" value={settings.onlineGalleryDownloadDir ?? ""} />
                 </label>
                 <div className="row-actions">
                   <Button onClick={selectGalleryDir}>
@@ -6836,11 +6801,10 @@ function OnboardingWizard() {
                 </label>
                 <Button
                   onClick={async () => {
-                    const selected = await window.naiDesktop.selectOutputDir();
-                    if (selected) {
-                      await refreshSettings();
-                      setShowOnboarding(true);
-                    }
+                    try {
+                      const selected = await window.naiDesktop.selectOutputDir();
+                      if (selected) { await refreshSettings(); setShowOnboarding(true); }
+                    } catch (error) { useAppStore.getState().setToast(error instanceof Error ? error.message : String(error)); }
                   }}
                 >
                   <IconText icon={<Icon name="folder" />}>{t("settings.browse")}</IconText>

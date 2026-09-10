@@ -517,11 +517,11 @@ function finiteClamped(value: number, fallback: number) {
   return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : fallback;
 }
 
-function normalizedCharCaptions(extras: GenerateExtras | undefined, model: string) {
+function normalizedCharCaptions(extras: GenerateExtras | undefined, model: string, preserveText = false) {
   return (extras?.charCaptions ?? [])
     .map((c) => ({
-      prompt: c.prompt.trim(),
-      negativePrompt: c.negativePrompt?.trim() ?? "",
+      prompt: preserveText ? c.prompt : c.prompt.trim(),
+      negativePrompt: preserveText ? c.negativePrompt ?? "" : c.negativePrompt?.trim() ?? "",
       useCoords: Boolean(c.useCoords),
       x: finiteClamped(Number(c.x), 0.5),
       y: finiteClamped(Number(c.y), 0.5),
@@ -541,6 +541,7 @@ function shouldRetryCharCaptionsAsPipe(
 ) {
   const status = error?.response?.status;
   return (
+    !params.preservePromptText &&
     isV4Plus(params.model) &&
     hasCharCaptions(extras, params.model) &&
     (status === 400 || status === 422)
@@ -574,31 +575,35 @@ export function buildPayload(
     ...normalizeGenerateParams(params as GenerateParams),
     ...(inpaintModel ? { model: inpaintModel } : {}),
   } as PayloadParams;
-  actualSeed = Math.min(MAX_NAI_SEED, Math.max(1, Math.round(Number(actualSeed) || 1)));
-  const basePrompt = mergePrompt(params.stylePrompt, params.positivePrompt);
+  actualSeed = Math.min(MAX_NAI_SEED, Math.max(0, Math.round(Number.isFinite(Number(actualSeed)) && Number(actualSeed) >= 0 ? Number(actualSeed) : 1)));
+  const merge = params.preservePromptText
+    ? (...segments: string[]) => segments.filter(segment => segment !== "").join(", ")
+    : mergePrompt;
+  const replay = params.metadataReplay?.model === params.model ? params.metadataReplay : undefined;
+  const basePrompt = merge(params.stylePrompt, params.positivePrompt);
   // In the official client, Furry is a mode for every V4+ checkpoint rather
   // than a separate V4/V5 model. It is represented by placing `fur dataset,`
   // at the very start of the prompt. Keep the dedicated Furry V3 unchanged.
   const modePrompt =
     extras?.modelMode === "furry" && isV4Plus(params.model) &&
     !/(?:^|,\s*)fur dataset(?:\s*,|$)/i.test(basePrompt)
-      ? mergePrompt("fur dataset", basePrompt)
+      ? merge("fur dataset", basePrompt)
       : basePrompt;
   const qualityPreset = params.qualityPreset ?? (params.qualityToggle ? "standard" : "none");
   const transparentBackground = isNAIV5Model(params.model) && params.transparentBackground;
-  const qualityPrompt = mergePrompt(
+  const qualityPrompt = merge(
     modePrompt,
     qualityTags(params.model, qualityPreset, modePrompt),
   );
   const effectivePrompt = transparentBackground
-    ? mergePrompt(qualityPrompt, "transparent background")
+    ? merge(qualityPrompt, "transparent background")
     : qualityPrompt;
-  const effectiveNegative = mergePrompt(
+  const effectiveNegative = merge(
     params.negativePrompt,
     ucPresetText(params.model, params.ucPreset),
   );
   const v4Plus = isV4Plus(params.model);
-  const cleanedCharCaptions = normalizedCharCaptions(extras, params.model);
+  const cleanedCharCaptions = normalizedCharCaptions(extras, params.model, params.preservePromptText);
   const inputPrompt =
     charCaptionMode === "pipe"
       ? withPipeCharCaptions(effectivePrompt, cleanedCharCaptions)
@@ -669,7 +674,7 @@ export function buildPayload(
       // use_coords is false. (0.5, 0.5) is the protocol's AI-choice sentinel.
       centers: [{ x: c.useCoords ? c.x : 0.5, y: c.useCoords ? c.y : 0.5 }],
     }));
-    const negativeCharCaptionsPayload = cleanedCharCaptions.some((c) => c.negativePrompt)
+    const negativeCharCaptionsPayload = (replay?.keepEmptyNegativeCharacters || cleanedCharCaptions.some((c) => c.negativePrompt))
       ? cleanedCharCaptions.map((c) => ({
           char_caption: c.negativePrompt,
           centers: [{ x: c.useCoords ? c.x : 0.5, y: c.useCoords ? c.y : 0.5 }],
@@ -688,6 +693,7 @@ export function buildPayload(
       },
       use_coords: useCoords,
       use_order: true,
+      ...replay?.positive,
     };
     parameters.v4_negative_prompt = {
       caption: {
@@ -697,11 +703,14 @@ export function buildPayload(
       use_coords: useCoords && negativeCharCaptionsPayload.length > 0,
       use_order: false,
       legacy_uc: !usesModernStructuredPrompt(params.model),
+      ...replay?.negative,
     };
   } else {
     parameters.sm = params.smea;
     parameters.sm_dyn = params.smea && params.smeaDyn;
   }
+
+  if (replay) Object.assign(parameters, replay.parameters);
 
   // Vibe Transfer (reference_image_multiple) — legacy reference conditioning.
   if (supportsNAIVibeTransfer(params.model) && extras?.vibeImages && extras.vibeImages.length > 0) {
@@ -4479,7 +4488,7 @@ export async function generateImage(
   const job = beginJob();
 
   // "fixed" mode honors the chosen seed; "random" (or seed<=0) rolls a new one.
-  const useFixedSeed = params.seedMode !== "random" && params.seed > 0;
+  const useFixedSeed = params.seedMode !== "random" && params.seed >= 0;
   const actualSeed = useFixedSeed
     ? params.seed
     : crypto.randomInt(1, 2_147_483_647);
@@ -4571,7 +4580,7 @@ export async function generateI2I(
   const job = beginJob();
 
   const actualSeed =
-    params.seedMode !== "random" && params.seed > 0
+    params.seedMode !== "random" && params.seed >= 0
       ? params.seed
       : crypto.randomInt(1, 2_147_483_647);
   try {
@@ -4658,7 +4667,7 @@ export async function redrawImage(
 
   const job = beginJob();
   const actualSeed =
-    params.seedMode !== "random" && params.seed > 0
+    params.seedMode !== "random" && params.seed >= 0
       ? params.seed
       : crypto.randomInt(1, 2_147_483_647);
   try {
@@ -4756,7 +4765,7 @@ export async function inpaintImage(
     const { buffer } = await readWorkbenchImage();
     const preparedAssets = prepareInpaintAssets(buffer, maskBase64);
     const actualSeed =
-      params.seedMode !== "random" && params.seed > 0
+      params.seedMode !== "random" && params.seed >= 0
         ? params.seed
         : crypto.randomInt(1, 2_147_483_647);
     const normalizedStrength = Math.max(

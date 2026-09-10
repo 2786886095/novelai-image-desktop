@@ -38,7 +38,7 @@ describe("Character Tavern direct runtime", () => {
   it("resolves every proposal from authoritative Tavern right-panel defaults", () => {
     expect(runtimeSource).toContain("const imageDefaults = request.imageDefaults ?? tavernImageDefaults(character)");
     expect(runtimeSource).toContain("resolveTavernImageProposalParameters(raw, defaults)");
-    expect(runtimeSource).toContain("proposalFromRaw(parsed.proposal, assistant, character, imageDefaults, imageBase)");
+    expect(runtimeSource).toMatch(/proposalFromRaw\(\s*proposalRaw,\s*assistant,\s*character,\s*imageDefaults,\s*imageBase\s*\)/);
     expect(runtimeSource).toContain("stylePrompt: proposal.stylePrompt");
     expect(runtimeSource).toContain("negativePrompt: proposal.negativePrompt");
   });
@@ -74,7 +74,7 @@ describe("Character Tavern direct runtime", () => {
 
 it("keeps current image state outside compaction and blocks unreviewed automatic submission", () => {
   const runtime = runtimeSource;
-  expect(runtime).toContain("imageStateContext(imageBase)");
+  expect(runtime).toContain("imageStateContext(imageBase, imageDefaults.model)");
   expect(runtime).toContain("!stored.imageProposal.continuity?.reviewRequired");
   expect(runtime).toContain("request.proposal.continuity?.reviewRequired");
   expect(runtime).toContain("Image prompt snapshot:");
