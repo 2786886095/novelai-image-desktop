@@ -129,6 +129,7 @@
     "mac": {
       "icon": "build/icon.png",
       "category": "public.app-category.graphics-design",
+    "x64ArchFiles": "Contents/Resources/app.asar.unpacked/node_modules/@img/sharp-{darwin,libvips-darwin}-{arm64,x64}/**",
       "files": [
         "!node_modules/@huggingface/transformers/**",
         "!node_modules/onnxruntime-node/**"

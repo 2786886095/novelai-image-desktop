@@ -62,6 +62,10 @@ jobs:
       - name: Validate desktop source
         run: npm run typecheck && npm test
 
+      - name: Install both macOS sharp architectures
+        if: runner.os == 'macOS'
+        run: node scripts/install-macos-sharp.mjs
+
       - name: Build app (${{ matrix.name }})
         run: npm run build && npx electron-builder --publish never
         env:

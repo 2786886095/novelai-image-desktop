@@ -1,0 +1,88 @@
+name: Rebuild macOS release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing draft release tag (immutable source)
+        required: true
+        default: v2.2.6
+
+permissions:
+  contents: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  rebuild:
+    runs-on: macos-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          path: packaging
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag }}
+          path: source
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: source/package-lock.json
+      - name: Verify draft and source
+        working-directory: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          test "$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft)" = true
+          test "$(node -p "'v'+require('./package.json').version")" = "$RELEASE_TAG"
+          git rev-parse HEAD
+      - name: Install and validate
+        working-directory: source
+        run: |
+          npm ci
+          node ../packaging/scripts/install-macos-sharp.mjs
+          npx electron --version
+          npm run typecheck
+          npm test
+      - name: Build immutable release source with sharp packaging rule
+        working-directory: source
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+          SHARP_ARCH_FILES: 'Contents/Resources/app.asar.unpacked/node_modules/@img/sharp-{darwin,libvips-darwin}-{arm64,x64}/**'
+        run: |
+          npm run build
+          npx electron-builder --publish never --config.mac.x64ArchFiles="$SHARP_ARCH_FILES"
+          git diff --exit-code
+      - name: Test packaged sharp on both architectures
+        working-directory: source
+        run: |
+          app="release/mac-universal/Langbai NovelAI Studio.app/Contents"
+          for cpu in arm64 x86_64; do
+            ELECTRON_RUN_AS_NODE=1 /usr/bin/arch -"$cpu" "$app/MacOS/Langbai NovelAI Studio" -e '
+              const path=require("path");
+              const root=path.resolve(process.argv[1],"Resources/app.asar");
+              const sharp=require(root+"/node_modules/sharp");
+              sharp({create:{width:3,height:2,channels:3,background:"#7047d8"}}).png().toBuffer()
+                .then(b=>sharp(b).metadata()).then(m=>{if(m.width!==3||m.height!==2)throw Error("codec mismatch");console.log("PACKAGED_SHARP_OK",process.arch,m.width,m.height);})
+                .catch(e=>{console.error(e);process.exit(1);});
+            ' "$app"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verified-macos-release
+          path: |
+            source/release/*.dmg
+            source/release/*.zip
+          if-no-files-found: error
+      - name: Attach verified macOS assets to existing draft
+        working-directory: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          test "$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft)" = true
+          gh release upload "$RELEASE_TAG" release/*.dmg release/*.zip
