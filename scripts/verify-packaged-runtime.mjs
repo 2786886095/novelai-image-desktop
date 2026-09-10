@@ -30,7 +30,7 @@ function run(command,args,env,name){
 const probe=path.resolve('scripts/packaged-runtime-probe.cjs');
 const appRoot=path.join(resources,'app.asar');
 if(process.platform==='darwin'){
- for(const arch of ['arm64','x86_64'])run('/usr/bin/arch',['-'+arch,binary,probe,appRoot],{ELECTRON_RUN_AS_NODE:'1'},'runtime-'+arch);
+ for(const arch of [process.arch === 'arm64' ? 'arm64' : 'x86_64'])run('/usr/bin/arch',['-'+arch,binary,probe,appRoot],{ELECTRON_RUN_AS_NODE:'1'},'runtime-'+arch);
 }else run(binary,[probe,appRoot],{ELECTRON_RUN_AS_NODE:'1'},'runtime');
 for(const tab of ['01-generate','08-tools','09-reference-presets']){
  const image=path.join(output,tab+'.png');

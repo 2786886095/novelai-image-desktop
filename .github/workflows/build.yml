@@ -5,6 +5,15 @@ on:
     branches: [main]
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      publish_after_verification:
+        description: Publish and close the verified issue batch only after all gates pass
+        type: boolean
+        default: false
+      mobile_run:
+        description: Successful Build Mobile run with the identical mobile source tree
+        type: string
+        required: false
 
 # Needed for softprops/action-gh-release to create/attach to Releases on v* tags.
 permissions:
@@ -73,6 +82,10 @@ jobs:
           # No signing certs in CI — skip macOS code signing / notarization.
           CSC_IDENTITY_AUTO_DISCOVERY: false
 
+      - name: Install CJK fonts for Linux UI verification
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -qq && sudo apt-get install -y fonts-noto-cjk
+
       - name: Verify packaged native runtime and startup
         run: node scripts/verify-packaged-runtime.mjs
 
@@ -102,3 +115,57 @@ jobs:
           # Desktop hotfixes are published only after all release assets are verified.
           draft: true
           files: ${{ matrix.artifacts }}
+
+  mac-intel-smoke:
+    needs: build
+    runs-on: macos-15-intel
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@v4
+        with:
+          name: novelai-image-desktop-macos
+          path: release
+      - name: Extract the same universal app and verify it on native Intel
+        run: |
+          mkdir -p release/mac-universal
+          ditto -x -k release/*.zip release/mac-universal
+          node scripts/verify-packaged-runtime.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: packaged-smoke-macos-intel
+          path: |
+            release/packaged-smoke/*.json
+            release/packaged-smoke/*.log
+            release/packaged-smoke/*.png
+
+  publish-verified:
+    needs: [build, mac-intel-smoke]
+    if: github.event_name == 'workflow_dispatch' && inputs.publish_after_verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: write
+      issues: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: novelai-image-desktop-*
+          path: release-assets
+          merge-multiple: true
+      - name: Verify mobile source, versions, signatures and installer hashes; then publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MOBILE_RUN: ${{ inputs.mobile_run }}
+        run: node scripts/publish-verified-issue-release.mjs
