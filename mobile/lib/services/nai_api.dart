@@ -73,7 +73,10 @@ String resolveNovelAiBaseUrl(
   AppSettings settings,
 ) {
   final candidate = value.trim().isEmpty ? fallback : value.trim();
-  final normalized = candidate.replaceAll(RegExp(r'/+$'), '');
+  final normalized = candidate.replaceAll(RegExp(r'/+$'), '').replaceFirst(
+      RegExp(
+          r'/(?:ai/(?:generate-image(?:-stream)?|upscale|augment-image)|user/(?:data|subscription))$'),
+      '');
   final uri = Uri.tryParse(normalized);
   final host = uri?.host.toLowerCase() ?? '';
   final official = uri?.scheme == 'https' &&

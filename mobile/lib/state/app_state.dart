@@ -211,6 +211,7 @@ class AppState extends ChangeNotifier {
       // its hardcoded defaults instead of restoring the last-used values.
       if (settings.persistGenerateParams) {
         params = await storage.getParams();
+        extras.charCaptions = await storage.getCharacterPrompts();
         batchIntervalSeconds =
             normalizeBatchIntervalSeconds(settings.batchIntervalSeconds);
       }
@@ -430,6 +431,16 @@ class AppState extends ChangeNotifier {
     await storage.setSettings(settings);
     notifyListeners();
     _scheduleGenerationQuote();
+  }
+
+  void markCharacterChanged() {
+    unawaited(storage
+        .setCharacterPrompts(extras.charCaptions)
+        .catchError((Object error) {
+      status = '$error';
+      notifyListeners();
+    }));
+    markChanged();
   }
 
   void markChanged() {
@@ -748,6 +759,31 @@ class AppState extends ChangeNotifier {
     return true;
   }
 
+  Future<void> addStylePromptPresets(List<StylePromptPreset> presets) async {
+    final next = AppSettings.fromJson(settings.toJson());
+    next.stylePromptPresets = [...settings.stylePromptPresets, ...presets];
+    await storage.setSettings(next);
+    settings = next;
+    notifyListeners();
+  }
+
+  Future<void> renameStylePromptPreset(String id, String rawName) async {
+    final name = rawName.trim();
+    if (name.isEmpty) return;
+    final preset =
+        settings.stylePromptPresets.where((p) => p.id == id).firstOrNull;
+    if (preset == null) return;
+    final previous = preset.name;
+    preset.name = name;
+    try {
+      await storage.setSettings(settings);
+    } catch (_) {
+      preset.name = previous;
+      rethrow;
+    }
+    notifyListeners();
+  }
+
   Future<void> removeStylePromptPreset(String id) async {
     await storage.deleteStylePromptPreviewImages(id);
     settings.stylePromptPresets.removeWhere((item) => item.id == id);
@@ -1001,6 +1037,7 @@ class AppState extends ChangeNotifier {
     }
     params = params.normalized();
     unawaited(storage.setParams(params));
+    unawaited(storage.setCharacterPrompts(extras.charCaptions));
     status = _rt('status.metadataRestored');
     notifyListeners();
     _scheduleGenerationQuote();
@@ -1024,6 +1061,7 @@ class AppState extends ChangeNotifier {
     extras.charCaptions.add(CharCaptionItem(
       useCoords: extras.charCaptions.any((caption) => caption.useCoords),
     ));
+    unawaited(storage.setCharacterPrompts(extras.charCaptions));
     notifyListeners();
     _scheduleGenerationQuote();
   }
@@ -1031,6 +1069,7 @@ class AppState extends ChangeNotifier {
   void removeCharacter(int index) {
     if (index < 0 || index >= extras.charCaptions.length) return;
     extras.charCaptions.removeAt(index);
+    unawaited(storage.setCharacterPrompts(extras.charCaptions));
     notifyListeners();
     _scheduleGenerationQuote();
   }

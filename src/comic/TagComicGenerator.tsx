@@ -1,3 +1,4 @@
+import {PreviewImageViewer} from '../components/PreviewImageViewer';
 import { useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import { Button, CommittedNumberInput, NumberInput, Toggle, SelectMenuCompat } from "../components/ui";
@@ -795,6 +796,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
     () => new Set(),
   );
   const [preview, setPreview] = useState<string | null>(null);
+  const previewItems=useMemo(()=>[...new Set(project.panels.flatMap(panel=>panel.candidates.flatMap(candidate=>candidate.outputUrl?[candidate.outputUrl]:[])))],[project.panels]);
   const [queue, setQueue] = useState<{ total: number; done: number } | null>(
     null,
   );
@@ -2396,11 +2398,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
           aria-label={text(language, "closePreview")}
           onClick={() => setPreview(null)}
         >
-          <img
-            src={preview}
-            alt=""
-            onClick={(event) => event.stopPropagation()}
-          />
+          <PreviewImageViewer images={previewItems.map(src=>({src,alt:text(language,"closePreview")}))} index={Math.max(0,previewItems.indexOf(preview))} onIndex={index=>setPreview(previewItems[index])}/>
           <button
             type="button"
             className="redraw-lightbox-close"

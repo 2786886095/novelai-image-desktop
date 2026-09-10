@@ -1,3 +1,4 @@
+import {normalizeNovelAiEndpoint} from '../../src/nai-endpoint';
 import { processableImage } from "./image-codec";
 import { app, dialog, nativeImage } from "electron";
 import axios from "axios";
@@ -113,8 +114,7 @@ import { NaiSseFrameDecoder, NaiStreamFrameDecoder, type NaiStreamFrame } from "
 let workbenchImagePath: string | null = null;
 
 function normalizeBaseUrl(url: string, fallback: string) {
-  const value = (url || fallback).trim().replace(/\/+$/, "");
-  return value.length > 0 ? value : fallback;
+  return normalizeNovelAiEndpoint(url || "", fallback);
 }
 
 // Only official NovelAI hosts (and localhost, for local proxies/mirrors a user

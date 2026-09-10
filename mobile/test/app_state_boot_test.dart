@@ -66,6 +66,11 @@ class _BootStorage extends Storage {
   Future<void> setSettings(AppSettings value) async => settings = value;
 
   @override
+  Future<List<CharCaptionItem>> getCharacterPrompts() async => [];
+  @override
+  Future<void> setCharacterPrompts(List<CharCaptionItem> captions) async {}
+
+  @override
   Future<GenerateParams> getParams() async => GenerateParams();
 
   @override

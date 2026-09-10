@@ -1,3 +1,4 @@
+import '../ui/zoomable_image.dart';
 import '../widgets/image_save_feedback.dart';
 import '../services/gallery_download.dart';
 import 'dart:math' as math;
@@ -816,39 +817,14 @@ class _MasonryGrid extends StatelessWidget {
       );
 }
 
-Future<void> _showAitagPreview(
-        BuildContext context, AitagService service, String url) =>
-    showDialog<void>(
-      context: context,
-      useSafeArea: false,
-      barrierColor: Colors.black87,
-      builder: (dialogContext) => Dialog.fullscreen(
-        backgroundColor: Colors.black,
-        child: Stack(children: [
-          Positioned.fill(
-              child: InteractiveViewer(
-            minScale: .8,
-            maxScale: 6,
-            child: Center(
-                child: _CachedAitagImage(
-                    service: service, url: url, fit: BoxFit.contain)),
-          )),
-          SafeArea(
-              child: Align(
-            alignment: AlignmentDirectional.topEnd,
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: IconButton.filledTonal(
-                tooltip:
-                    MaterialLocalizations.of(dialogContext).closeButtonTooltip,
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                icon: const Icon(Icons.close),
-              ),
-            ),
-          )),
-        ]),
-      ),
-    );
+Future<void> _showAitagPreview(BuildContext context, AitagService service,
+        String url, List<String> urls) =>
+    showGalleryImagePreview(context,
+        images: urls
+            .map((url) => _CachedAitagImage(
+                service: service, url: url, fit: BoxFit.contain))
+            .toList(),
+        initialIndex: urls.indexOf(url));
 
 class _WorkCard extends StatelessWidget {
   final AitagWork work;
@@ -1050,8 +1026,13 @@ class _AitagDetailScreenState extends State<_AitagDetailScreen> {
                           constraints: BoxConstraints(
                               maxHeight: constraints.maxHeight * .68),
                           child: GestureDetector(
-                            onDoubleTap: () =>
-                                _showAitagPreview(context, widget.service, url),
+                            onDoubleTap: () => _showAitagPreview(
+                                context,
+                                widget.service,
+                                url,
+                                data.images
+                                    .map(widget.service.imageUrl)
+                                    .toList()),
                             child: _CachedAitagImage(
                                 service: widget.service,
                                 url: url,
@@ -1094,7 +1075,12 @@ class _AitagDetailScreenState extends State<_AitagDetailScreen> {
                           child: Wrap(spacing: 8, runSpacing: 8, children: [
                             FilledButton.tonalIcon(
                               onPressed: () => _showAitagPreview(
-                                  context, widget.service, url),
+                                  context,
+                                  widget.service,
+                                  url,
+                                  data.images
+                                      .map(widget.service.imageUrl)
+                                      .toList()),
                               icon: const Icon(Icons.fullscreen),
                               label: Text(widget.text.preview),
                             ),

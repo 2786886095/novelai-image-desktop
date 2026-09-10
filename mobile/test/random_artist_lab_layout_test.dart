@@ -201,6 +201,9 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await tester
+        .ensureVisible(find.widgetWithText(SwitchListTile, '抽卡时额外加入随机风格词'));
+    await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(SwitchListTile, '抽卡时额外加入随机风格词'));
     await tester.pumpAndSettle();
     final bodyList =

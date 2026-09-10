@@ -1,4 +1,5 @@
 import type { MetadataRestoreOptions } from "./metadata-selection";
+import {normalizeCharacterCaptions} from './character-presets';
 import { create } from "zustand";
 import type {
   AccountSummary,
@@ -520,6 +521,7 @@ interface AppState {
   removeCharCaption: (id: string) => void;
   updateCharCaption: (id: string, patch: Partial<Omit<CharCaption, "id">>) => void;
   clearCharCaptions: () => void;
+  setCharCaptions: (captions: CharCaptionItem[]) => void;
   // Batch img2img project
   setBatchRedraw: (updater: (prev: BatchRedrawProject) => BatchRedrawProject) => void;
   resetBatchRedraw: () => void;
@@ -993,6 +995,7 @@ function buildLastGenerationState(state: AppState): LastGenerationState {
     // positivePrompt is included so it survives a restart/crash, matching the
     // mobile client (which already persists the full params unconditionally).
     params: normalizeGenerateParams(state.params),
+    charCaptions: normalizeCharacterCaptions(state.charCaptions),
     batchCount: state.batchCount,
     batchIntervalSeconds: state.batchIntervalSeconds,
     i2iParams: state.i2iParams,
@@ -1183,6 +1186,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const repairedTools = normalizedLastToolState(last, get());
       set((state) => ({
         params: settings.persistGenerateParams ? normalizeGenerateParams({ ...state.params, ...last.params }) : state.params,
+        charCaptions: settings.persistGenerateParams ? normalizeCharacterCaptions(last.charCaptions) : state.charCaptions,
         batchCount: settings.persistGenerateParams
           ? Math.max(1, Math.min(999, last.batchCount ?? state.batchCount))
           : state.batchCount,
@@ -1768,20 +1772,29 @@ export const useAppStore = create<AppState>((set, get) => ({
         },
       ],
     }));
+    persistGenerationState(get);
   },
 
   removeCharCaption(id) {
     set((state) => ({ charCaptions: state.charCaptions.filter((c) => c.id !== id) }));
+    persistGenerationState(get);
   },
 
   updateCharCaption(id, patch) {
     set((state) => ({
       charCaptions: state.charCaptions.map((c) => (c.id === id ? { ...c, ...patch } : c)),
     }));
+    persistGenerationState(get);
   },
 
   clearCharCaptions() {
     set({ charCaptions: [] });
+    persistGenerationState(get);
+  },
+
+  setCharCaptions(captions) {
+    set({charCaptions: normalizeCharacterCaptions(captions)});
+    persistGenerationState(get);
   },
 
   // ── Batch img2img project ──────────────────────────────────────────────────

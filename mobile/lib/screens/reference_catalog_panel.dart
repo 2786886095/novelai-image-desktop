@@ -1,3 +1,4 @@
+import '../ui/zoomable_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -475,34 +476,15 @@ class _ReferenceCatalogPanelState extends State<ReferenceCatalogPanel> {
   }
 
   Future<void> _preview(BuildContext context, ReferenceCatalogAsset asset) =>
-      showDialog<void>(
-        context: context,
-        builder: (dialogContext) => Dialog.fullscreen(
-          child: SafeArea(
-            child: Stack(children: [
-              Positioned.fill(
-                child: InteractiveViewer(
-                  minScale: .5,
-                  maxScale: 5,
-                  child: Center(
-                      child: _RemoteCatalogImage(
-                    urls: asset.thumbnailUrls,
-                    fit: BoxFit.contain,
-                  )),
-                ),
-              ),
-              Positioned(
-                right: 12,
-                top: 12,
-                child: IconButton.filledTonal(
-                  onPressed: () => Navigator.pop(dialogContext),
-                  icon: const Icon(Icons.close),
-                ),
-              ),
-            ]),
-          ),
-        ),
-      );
+      showGalleryImagePreview(context,
+          images: _filtered
+              .map((i) => _RemoteCatalogImage(
+                  urls: i.thumbnailUrls, fit: BoxFit.contain))
+              .toList(),
+          initialIndex: _filtered.indexWhere((i) => i.id == asset.id),
+          captions: _filtered
+              .map((i) => i.nameFor(context.read<AppState>().settings.language))
+              .toList());
 
   @override
   Widget build(BuildContext context) {

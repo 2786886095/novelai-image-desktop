@@ -170,6 +170,10 @@ function TargetArtistLab({ onBack }: { onBack: () => void }) {
     patch({ results: [], baseline: undefined, matches: [], discoveryOffset: 0, bestProgress: 0, round: 0, resetCount: 0, imagesUsed: 0 });
     let baselineSimilarity = 0;
     try {
+      setMessage(text.cache);
+      // Download/validate the scorer before spending any generation credits.
+      await window.naiDesktop.artistLabScoreImages(session.modelMode, session.target.filePath, session.target.filePath);
+      if (cancelRef.current) {setRunning(false); return;}
       setMessage(text.baseline);
       const generated = await window.naiDesktop.generateArtistLab(fixedParams, extras, "target");
       const image = generated.items[0];

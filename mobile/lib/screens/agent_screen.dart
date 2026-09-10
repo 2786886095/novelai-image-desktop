@@ -1,3 +1,4 @@
+import '../ui/zoomable_image.dart';
 import '../agent/scene_bindings.dart';
 import '../agent/scene_bindings_editor.dart';
 import '../agent/scene_bindings_ui.dart';
@@ -1408,10 +1409,19 @@ class _AgentScreenState extends State<AgentScreen> {
         runSpacing: 8,
         children: attachments.map((item) {
           if (item.kind == 'image' && File(item.filePath).existsSync()) {
-            return ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Image.file(File(item.filePath),
-                  width: 148, height: 110, fit: BoxFit.cover),
+            return GestureDetector(
+              onDoubleTap: () => _openGeneratedImage(
+                  item,
+                  attachments
+                      .where((image) =>
+                          image.kind == 'image' &&
+                          File(image.filePath).existsSync())
+                      .toList()),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.file(File(item.filePath),
+                    width: 148, height: 110, fit: BoxFit.cover),
+              ),
             );
           }
           return Chip(
@@ -1437,8 +1447,8 @@ class _AgentScreenState extends State<AgentScreen> {
         runSpacing: 8,
         children: images
             .map((item) => GestureDetector(
-                  onTap: () => _openGeneratedImage(item),
-                  onDoubleTap: () => _openGeneratedImage(item),
+                  onTap: () => _openGeneratedImage(item, images),
+                  onDoubleTap: () => _openGeneratedImage(item, images),
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(
                         minWidth: 140, maxWidth: 280, maxHeight: 360),
@@ -1457,44 +1467,21 @@ class _AgentScreenState extends State<AgentScreen> {
     );
   }
 
-  Future<void> _openGeneratedImage(AgentAttachment item) async {
+  Future<void> _openGeneratedImage(
+      AgentAttachment item, List<AgentAttachment> images) async {
     final text = _tavernText(context.read<AppState>().settings.language);
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) => Dialog.fullscreen(
-        child: Stack(children: [
-          Positioned.fill(
-            child: ColoredBox(
-              color: Colors.black,
-              child: InteractiveViewer(
-                minScale: .5,
-                maxScale: 6,
-                child: Center(
-                  child: Image.file(File(item.filePath), fit: BoxFit.contain),
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            top: 12,
-            right: 12,
-            child: Row(children: [
-              IconButton.filled(
-                tooltip: text['saveShare']!,
-                onPressed: () => Share.shareXFiles(
-                  [XFile(item.filePath)],
-                  text: item.name,
-                ),
-                icon: const Icon(Icons.download_rounded),
-              ),
-              const SizedBox(width: 8),
-              IconButton.filled(
-                onPressed: () => Navigator.pop(dialogContext),
-                icon: const Icon(Icons.close_rounded),
-              ),
-            ]),
-          ),
-        ]),
+    await showGalleryImagePreview(
+      context,
+      images: images
+          .map((image) => Image.file(File(image.filePath), fit: BoxFit.contain))
+          .toList(),
+      initialIndex: images.indexOf(item),
+      captions: images.map((image) => image.name).toList(),
+      actionsBuilder: (_, index) => IconButton.filledTonal(
+        tooltip: text['saveShare']!,
+        onPressed: () => Share.shareXFiles([XFile(images[index].filePath)],
+            text: images[index].name),
+        icon: const Icon(Icons.download_rounded),
       ),
     );
   }
@@ -1537,23 +1524,30 @@ class _AgentScreenState extends State<AgentScreen> {
                 child: CircularProgressIndicator(strokeWidth: 2)),
         ]),
         const SizedBox(height: 8),
-        if(proposal.scene != null) OutlinedButton.icon(
-          icon:const Icon(Icons.account_tree_outlined),
-          label:Text((sceneBindingsUi[controller.app.settings.language]??sceneBindingsUi['en-US']!)['title']!),
-          onPressed:generating?null:() async {
-            final messenger = ScaffoldMessenger.of(context);
-            final expected = readSceneBindings(proposal.scene)!;
-            final conversationId = controller.selectedConversation!.id;
-            final language = controller.app.settings.language;
-            final updated = await showSceneBindingsEditor(context, expected, language,
-              readOnly: complete,
-              onSave: (scene) => controller.saveTavernScene(conversationId, message.id, expected, scene));
-            if(updated != null && messenger.mounted) {
-              messenger.showSnackBar(SnackBar(
-                content: Text((sceneBindingsUi[language] ?? sceneBindingsUi['en-US']!)['saved']!)));
-            }
-          },
-        ),
+        if (proposal.scene != null)
+          OutlinedButton.icon(
+            icon: const Icon(Icons.account_tree_outlined),
+            label: Text((sceneBindingsUi[controller.app.settings.language] ??
+                sceneBindingsUi['en-US']!)['title']!),
+            onPressed: generating
+                ? null
+                : () async {
+                    final messenger = ScaffoldMessenger.of(context);
+                    final expected = readSceneBindings(proposal.scene)!;
+                    final conversationId = controller.selectedConversation!.id;
+                    final language = controller.app.settings.language;
+                    final updated = await showSceneBindingsEditor(
+                        context, expected, language,
+                        readOnly: complete,
+                        onSave: (scene) => controller.saveTavernScene(
+                            conversationId, message.id, expected, scene));
+                    if (updated != null && messenger.mounted) {
+                      messenger.showSnackBar(SnackBar(
+                          content: Text((sceneBindingsUi[language] ??
+                              sceneBindingsUi['en-US']!)['saved']!)));
+                    }
+                  },
+          ),
         ExpansionTile(
             title: Text(imageUi(controller.app.settings.language)['current']!),
             children: [
@@ -1570,18 +1564,24 @@ class _AgentScreenState extends State<AgentScreen> {
                     ]),
             ]),
         if (proposal.continuity?['reviewRequired'] == true) ...[
-          Text(proposal.continuity?['bindingError']=='SCENE_REQUIRED'
-              ? (sceneBindingsUi[controller.app.settings.language]??sceneBindingsUi['en-US']!)['SCENE_REQUIRED']!
-              : imageUi(controller.app.settings.language)['review']!,
+          Text(
+              proposal.continuity?['bindingError'] == 'SCENE_REQUIRED'
+                  ? (sceneBindingsUi[controller.app.settings.language] ??
+                      sceneBindingsUi['en-US']!)['SCENE_REQUIRED']!
+                  : imageUi(controller.app.settings.language)['review']!,
               style: TextStyle(color: Theme.of(context).colorScheme.error)),
           if (proposal.continuity?['suggestedPrompt'] is String)
             SelectableText(proposal.continuity!['suggestedPrompt'] as String),
           Wrap(spacing: 8, children: [
             TextButton(
-                onPressed: (proposal.scene == null && proposal.continuity?['bindingError']=='SCENE_REQUIRED') ? null : () async {
-                  proposal.continuity!['reviewRequired'] = false;
-                  await controller.saveWorkspace();
-                },
+                onPressed: (proposal.scene == null &&
+                        proposal.continuity?['bindingError'] ==
+                            'SCENE_REQUIRED')
+                    ? null
+                    : () async {
+                        proposal.continuity!['reviewRequired'] = false;
+                        await controller.saveWorkspace();
+                      },
                 child:
                     Text(imageUi(controller.app.settings.language)['keep']!)),
             if (proposal.continuity?['suggestedPrompt'] is String)
@@ -3769,7 +3769,10 @@ class _AgentScreenState extends State<AgentScreen> {
           width: 620,
           child: SingleChildScrollView(
             child: Column(mainAxisSize: MainAxisSize.min, children: [
-              if(current.scene == null) _field(positive, text['proposalPositive']!, lines: 8) else SelectableText(current.positivePrompt),
+              if (current.scene == null)
+                _field(positive, text['proposalPositive']!, lines: 8)
+              else
+                SelectableText(current.positivePrompt),
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(text['proposalHint']!),

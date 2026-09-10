@@ -10,7 +10,12 @@ describe("image decoding is a declared cross-platform production dependency", ()
     expect(lock.packages["node_modules/sharp"].version).toBe(manifest.dependencies.sharp);
   });
   it.each(["mac", "linux"])("does not strip mandatory sharp or its native libraries from %s", platform => {
-    expect(manifest.build[platform].files).not.toContain("!node_modules/sharp/**");
-    expect(manifest.build[platform].files).not.toContain("!node_modules/@img/**");
+    expect(manifest.build[platform].files ?? []).not.toContain("!node_modules/sharp/**");
+    expect(manifest.build[platform].files ?? []).not.toContain("!node_modules/@img/**");
   });
+});
+
+it.each(['mac','linux'])('includes actual scoring runtime for %s instead of advertising an excluded feature',platform=>{
+ for(const excluded of ['!node_modules/@huggingface/transformers/**','!node_modules/onnxruntime-node/**'])expect(manifest.build[platform].files??[]).not.toContain(excluded);
+ for(const architecture of ['darwin','linux'])expect(manifest.build.files).not.toContain(`!node_modules/onnxruntime-node/bin/napi-v3/${architecture}/**`);
 });

@@ -6,6 +6,7 @@ import {
   type DragEvent,
 } from "react";
 import clsx from "clsx";
+import { PreviewImageViewer } from "./components/PreviewImageViewer";
 import { AppPortal, Button } from "./components/ui";
 import { confirmAction } from "./components/confirm";
 import { Icon } from "./components/icons";
@@ -173,6 +174,8 @@ export function PositivePromptPresetControl({
       || preset.prompt.toLocaleLowerCase().includes(needle));
   }, [presets, query]);
   const selectedImages = selected?.previewImages ?? [];
+  const previewImages = lightbox && !selectedImages.some(image => image.id === lightbox.id)
+    ? [...selectedImages, lightbox] : selectedImages;
   const activeImage = selectedImages.find((image) => image.id === activeImageId)
     ?? selectedImages[0]
     ?? null;
@@ -610,7 +613,7 @@ export function PositivePromptPresetControl({
        )}
        {lightbox && <div className="positive-preset-lightbox" role="dialog" aria-modal="true" aria-label={text.viewLarge} onMouseDown={() => setLightbox(null)}>
         <button type="button" aria-label={text.close} onClick={() => setLightbox(null)}><Icon name="close" /></button>
-        <img src={lightbox.fileUrl} alt={lightbox.name} onMouseDown={(event) => event.stopPropagation()} />
+        <PreviewImageViewer images={previewImages.map(image => ({src: image.fileUrl, alt: image.name}))} index={Math.max(0,previewImages.findIndex(image => image.id === lightbox.id))} onIndex={index => setLightbox(previewImages[index])} onBackgroundClick={() => setLightbox(null)} />
         <span>{lightbox.name}</span>
       </div>}
     </AppPortal>}

@@ -20133,3 +20133,16 @@ details > summary:hover > svg { color: var(--accent); }
 .tavern-scene-summary { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
 .tavern-scene-summary > small { flex: 1 1 180px; }
 .tavern-scene-link { min-height: 32px; }
+
+/* END DISCLOSURE FEEDBACK */
+
+/* Shared image inspection: fixed viewport, full aspect ratio, pointer pan. */
+.image-preview-viewer { width: min(84vw, 1200px); max-width: 100%; outline: none; }
+.image-preview-controls { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px; padding: 8px; width: fit-content; max-width: 100%; margin: 0 auto; color: var(--text-primary); background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+.image-preview-stage { height: min(70vh, 900px); min-height: 160px; display: flex; align-items: center; justify-content: center; overflow: hidden; touch-action: none; }
+.image-preview-stage > img { display: block; width: auto; height: auto; max-width: 100%; max-height: 100%; flex: none; object-fit: contain; user-select: none; transform-origin: center; }
+
+.image-preview-transform { display: flex; align-items: center; justify-content: center; max-width: 100%; max-height: 100%; }
+.image-preview-transform img { max-width: 100%; max-height: 70vh; object-fit: contain; user-select: none; }
+
+.image-preview-viewer:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

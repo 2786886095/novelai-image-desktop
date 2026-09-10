@@ -27,7 +27,9 @@ void main() {
     expect(online, isNot(contains('SliverGrid.builder')));
     expect(online, isNot(contains('constraints.maxHeight * .58')));
     expect(online, contains('onDoubleTap:'));
-    expect(online, contains('_showGalleryPreview'));
+    expect(online, contains('showGalleryImagePreview'));
+    expect(online, contains('initialIndex: currentIndex'));
+    expect(online, contains('initialIndex: itemIndex'));
     expect(online, contains('downloadCurrent'));
     expect(online, contains('downloadSeries'));
     expect(online, isNot(contains('Share.shareXFiles')));
@@ -42,6 +44,8 @@ void main() {
     expect(aitag, contains('scrollDirection: Axis.horizontal'));
     expect(aitag, contains('onDoubleTap:'));
     expect(aitag, contains('_showAitagPreview'));
+    expect(aitag, contains('showGalleryImagePreview'));
+    expect(aitag, contains('initialIndex: urls.indexOf(url)'));
     expect(aitag, contains('downloadCurrent'));
     expect(aitag, contains('downloadSeries'));
 

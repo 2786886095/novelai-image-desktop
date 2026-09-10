@@ -443,6 +443,30 @@ class Storage {
   Future<void> setParams(GenerateParams p) async =>
       (await _prefs).setString(_kParams, jsonEncode(p.normalized().toJson()));
 
+  Future<List<CharCaptionItem>> getCharacterPrompts() async {
+    final raw = (await _prefs).getString('character_prompts_v1');
+    if (raw == null) return [];
+    try {
+      final list = jsonDecode(raw);
+      if (list is! List) return [];
+      return list
+          .whereType<Map>()
+          .take(32)
+          .map((v) => CharCaptionItem.fromJson(Map<String, dynamic>.from(v)))
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<void> setCharacterPrompts(List<CharCaptionItem> captions) {
+    // Snapshot before awaiting preferences so rapid edits cannot mutate an in-flight write.
+    final value = jsonEncode(captions.map((c) => c.toJson()).toList());
+    return _prefs.then((prefs) async {
+      await prefs.setString('character_prompts_v1', value);
+    });
+  }
+
   Future<ComicProject> getComicProject(GenerateParams fallbackParams) async {
     final raw = (await _prefs).getString(_kComicProject);
     if (raw == null) return ComicProject.empty(fallbackParams);

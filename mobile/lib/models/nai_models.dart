@@ -15,7 +15,7 @@ class NaiOption {
 }
 
 const appName = 'Langbai NovelAI Studio';
-const appVersion = '2.2.8';
+const appVersion = '2.2.9';
 
 const naiModels = <NaiOption>[
   NaiOption(
@@ -404,7 +404,36 @@ double _finiteClamp(
   return value.clamp(minimum, maximum).toDouble();
 }
 
+List<Map<String, dynamic>> normalizeCharacterPromptPresets(dynamic raw) {
+  if (raw is! List) return [];
+  final seen = <String>{};
+  final result = <Map<String, dynamic>>[];
+  for (final p in raw.whereType<Map>()) {
+    final id = p['id'];
+    if (id is! String ||
+        id.isEmpty ||
+        seen.contains(id) ||
+        p['name'] is! String ||
+        p['captions'] is! List) continue;
+    seen.add(id);
+    result.add({
+      'id': id,
+      'name': p['name'],
+      'createdAt': p['createdAt'] is String ? p['createdAt'] : '',
+      'captions': (p['captions'] as List)
+          .whereType<Map>()
+          .take(32)
+          .map((c) =>
+              CharCaptionItem.fromJson(Map<String, dynamic>.from(c)).toJson())
+          .toList()
+    });
+  }
+  return result;
+}
+
 class CharCaptionItem {
+  static double _coordinate(dynamic value) =>
+      value is num && value.isFinite ? value.clamp(0, 1).toDouble() : 0.5;
   String prompt;
   String negativePrompt;
   bool useCoords;
@@ -425,11 +454,12 @@ class CharCaptionItem {
         'y': y
       };
   factory CharCaptionItem.fromJson(Map<String, dynamic> j) => CharCaptionItem(
-        prompt: j['prompt'] ?? '',
-        negativePrompt: j['negativePrompt'] ?? '',
-        useCoords: j['useCoords'] ?? false,
-        x: (j['x'] ?? 0.5).toDouble(),
-        y: (j['y'] ?? 0.5).toDouble(),
+        prompt: j['prompt'] is String ? j['prompt'] : '',
+        negativePrompt:
+            j['negativePrompt'] is String ? j['negativePrompt'] : '',
+        useCoords: j['useCoords'] == true,
+        x: _coordinate(j['x']),
+        y: _coordinate(j['y']),
       );
 }
 
@@ -842,6 +872,7 @@ class AppSettings {
   String imageNameTemplate;
   List<PromptShortcutTemplate> promptShortcuts;
   List<StylePromptPreset> stylePromptPresets;
+  List<Map<String, dynamic>> characterPromptPresets;
   List<String> stylePromptPresetGroups;
   List<PositivePromptPreset> positivePromptPresets;
   Map<String, String> reversePromptTemplates;
@@ -942,6 +973,7 @@ class AppSettings {
     this.imageNameTemplate = '{date}_{seq}_{model}',
     List<PromptShortcutTemplate>? promptShortcuts,
     List<StylePromptPreset>? stylePromptPresets,
+    List<Map<String, dynamic>>? characterPromptPresets,
     List<String>? stylePromptPresetGroups,
     List<PositivePromptPreset>? positivePromptPresets,
     Map<String, String>? reversePromptTemplates,
@@ -988,6 +1020,7 @@ class AppSettings {
         convertPromptTemplates = convertPromptTemplates ?? {},
         promptShortcuts = promptShortcuts ?? [],
         stylePromptPresets = stylePromptPresets ?? [],
+        characterPromptPresets = characterPromptPresets ?? [],
         stylePromptPresetGroups = stylePromptPresetGroups ?? ['Default'],
         positivePromptPresets = positivePromptPresets ?? [];
 
@@ -1048,6 +1081,7 @@ class AppSettings {
         'imageNameTemplate': imageNameTemplate,
         'promptShortcuts':
             promptShortcuts.map((item) => item.toJson()).toList(),
+        'characterPromptPresets': characterPromptPresets,
         'stylePromptPresets':
             stylePromptPresets.map((item) => item.toJson()).toList(),
         'stylePromptPresetGroups': stylePromptPresetGroups,
@@ -1159,6 +1193,8 @@ class AppSettings {
                     Map<String, dynamic>.from(item)))
                 .toList() ??
             [],
+        characterPromptPresets:
+            normalizeCharacterPromptPresets(j['characterPromptPresets']),
         stylePromptPresets: (j['stylePromptPresets'] as List?)
                 ?.whereType<Map>()
                 .map((item) =>

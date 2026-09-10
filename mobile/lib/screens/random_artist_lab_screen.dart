@@ -1,3 +1,6 @@
+import '../ui/zoomable_image.dart';
+import '../artist/favorite_style_labels.dart';
+import '../artist/custom_artist_pool.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -116,7 +119,12 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
   final _weightVariation = TextEditingController(text: '20');
   final _scrollController = ScrollController();
   GenerateParams _generationParams = GenerateParams();
-  List<ArtistTagRecord> _pool = const [];
+  List<ArtistTagRecord> _onlinePool = const [];
+  final _customArtists = TextEditingController();
+  bool _useCustomArtists = false;
+  List<ArtistTagRecord> get _pool => _useCustomArtists
+      ? parseCustomArtistPool(_customArtists.text)
+      : _onlinePool;
   List<ArtistRecipe> _planned = const [];
   final List<_Result> _results = [];
   final List<_Result> _favorites = [];
@@ -862,6 +870,9 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
       await prefs.setInt('${_prefsPrefix}weightDefaultsVersion', 2);
     }
     _poolSize.text = '${prefs.getInt('${_prefsPrefix}poolSize') ?? 1000}';
+    _customArtists.text = prefs.getString('${_prefsPrefix}customArtists') ?? '';
+    _useCustomArtists =
+        prefs.getBool('${_prefsPrefix}useCustomArtists') ?? false;
     _seed.text = '${prefs.getInt('${_prefsPrefix}seed') ?? 246813579}';
     _weightTuneInput.text =
         prefs.getString('${_prefsPrefix}weightTuneInput') ?? '';
@@ -930,6 +941,14 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     await _loadPool(false);
   }
 
+  Future<void> _saveCustomArtistPool() async {
+    // Editing one field must not rewrite the complete session/favorites for every key.
+    final text = _customArtists.text, enabled = _useCustomArtists;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('${_prefsPrefix}customArtists', text);
+    await prefs.setBool('${_prefsPrefix}useCustomArtists', enabled);
+  }
+
   Future<void> _save() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('${_prefsPrefix}base', _base.text);
@@ -981,6 +1000,8 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
             .clamp(.1, 10)
             .toDouble());
     await prefs.setInt('${_prefsPrefix}poolSize', _poolLimit());
+    await prefs.setString('${_prefsPrefix}customArtists', _customArtists.text);
+    await prefs.setBool('${_prefsPrefix}useCustomArtists', _useCustomArtists);
     await prefs.setInt('${_prefsPrefix}seed', _seedValue());
     await prefs.setString(
         '${_prefsPrefix}weightTuneInput', _weightTuneInput.text);
@@ -1065,7 +1086,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     });
     try {
       final app = context.read<AppState>();
-      _pool = await _service.popular(app.settings,
+      _onlinePool = await _service.popular(app.settings,
           limit: _poolLimit(), force: force);
       setState(() => _planned = _buildPlan());
     } catch (error) {
@@ -1277,6 +1298,148 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     _setStateKeepingScroll(() => _running = false);
   }
 
+  Future<void> _exportFavoriteStyles() async {
+    final app = context.read<AppState>();
+    final t = favoriteStyleLabels[app.settings.language] ??
+        favoriteStyleLabels['en-US']!;
+    final items = List<_Result>.from(_favorites);
+    final selected = items.map((i) => i.recipe.id).toSet();
+    final names = {for (final i in items) i.recipe.id: i.recipe.prompt};
+    bool busy = false;
+    String error = '';
+    await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => StatefulBuilder(
+            builder: (dialogContext, update) => PopScope(
+                canPop: !busy,
+                child: AlertDialog(
+                  title: Text(t[0]),
+                  content: SizedBox(
+                      width: 500,
+                      height: 400,
+                      child: Column(children: [
+                        Wrap(spacing: 8, children: [
+                          TextButton(
+                              onPressed: busy
+                                  ? null
+                                  : () => update(() => selected
+                                      .addAll(items.map((i) => i.recipe.id))),
+                              child: Text(t[1])),
+                          TextButton(
+                              onPressed:
+                                  busy ? null : () => update(selected.clear),
+                              child: Text(t[2]))
+                        ]),
+                        Expanded(
+                            child: ListView.builder(
+                                itemCount: items.length,
+                                itemBuilder: (context, index) {
+                                  final i = items[index];
+                                  return Row(children: [
+                                    Checkbox(
+                                        value: selected.contains(i.recipe.id),
+                                        onChanged: busy
+                                            ? null
+                                            : (v) => update(() => v == true
+                                                ? selected.add(i.recipe.id)
+                                                : selected
+                                                    .remove(i.recipe.id))),
+                                    if (i.image != null)
+                                      Image.file(File(i.image!.filePath),
+                                          width: 44,
+                                          height: 44,
+                                          fit: BoxFit.contain,
+                                          errorBuilder: (_, __, ___) =>
+                                              const Icon(Icons.broken_image)),
+                                    Expanded(
+                                        child: TextFormField(
+                                            initialValue: names[i.recipe.id],
+                                            maxLength: 120,
+                                            enabled: !busy,
+                                            onChanged: (v) =>
+                                                names[i.recipe.id] = v))
+                                  ]);
+                                })),
+                        if (error.isNotEmpty) Text(error),
+                      ])),
+                  actions: [
+                    TextButton(
+                        onPressed:
+                            busy ? null : () => Navigator.pop(dialogContext),
+                        child: Text(t[4])),
+                    FilledButton(
+                        onPressed: busy || selected.isEmpty
+                            ? null
+                            : () async {
+                                update(() => busy = true);
+                                final created = <StylePromptPreset>[];
+                                bool committed = false;
+                                try {
+                                  for (final item in items.where(
+                                      (i) => selected.contains(i.recipe.id))) {
+                                    final preset = StylePromptPreset(
+                                        id:
+                                            'style-${DateTime.now().microsecondsSinceEpoch}-${created.length}',
+                                        name: names[item.recipe.id]
+                                                    ?.trim()
+                                                    .isNotEmpty ==
+                                                true
+                                            ? names[item.recipe.id]!.trim()
+                                            : item.recipe.prompt,
+                                        prompt: item.recipe.prompt,
+                                        group: 'Default',
+                                        createdAt:
+                                            DateTime.now().toIso8601String());
+                                    created.add(preset);
+                                    if (item.image != null) {
+                                      final copied = await app.storage
+                                          .copyStylePromptPreviewImage(
+                                              presetId: preset.id,
+                                              sourcePath: item.image!.filePath,
+                                              sourceName: item.image!.id);
+                                      if (copied == null) {
+                                        throw Exception(item.image!.filePath);
+                                      }
+                                      preset.previewImages = [copied];
+                                    }
+                                  }
+                                  await app.addStylePromptPresets(created);
+                                  committed = true;
+                                  if (dialogContext.mounted) {
+                                    Navigator.pop(dialogContext);
+                                  }
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                            content: Text(
+                                                '${t[5]} · ${created.length}')));
+                                  }
+                                } catch (e) {
+                                  if (!committed) {
+                                    for (final p in created) {
+                                      try {
+                                        await app.storage
+                                            .deleteStylePromptPreviewImages(
+                                                p.id);
+                                      } catch (_) {}
+                                    }
+                                  }
+                                  if (dialogContext.mounted) {
+                                    update(() => error = '$e');
+                                  }
+                                } finally {
+                                  if (dialogContext.mounted) {
+                                    update(() => busy = false);
+                                  }
+                                }
+                              },
+                        child: Text(
+                            '${t[3]} · ${selected.length}${busy ? '…' : ''}'))
+                  ],
+                ))));
+  }
+
   Future<void> _saveFavorite(_Result result) async {
     if (result.image == null || result.liked || result.saving) return;
     final app = context.read<AppState>();
@@ -1329,55 +1492,21 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
 
   Future<void> _previewResult(
       _Result result, Map<String, String> text, AppState app) async {
-    final image = result.image;
-    if (image == null) return;
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) => Dialog.fullscreen(
-        child: SafeArea(
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: InteractiveViewer(
-                  minScale: .5,
-                  maxScale: 5,
-                  child: Center(
-                    child: Image.file(
-                      File(image.filePath),
-                      fit: BoxFit.contain,
-                      errorBuilder: (_, __, ___) =>
-                          const Icon(Icons.broken_image_outlined, size: 48),
-                    ),
-                  ),
-                ),
-              ),
-              Positioned(
-                left: 12,
-                right: 12,
-                top: 8,
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        '${_modelLabel(result, app)} · ${result.recipe.variant == 'mutated' ? text['variantMutated'] : text['variantPlain']}',
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    IconButton.filledTonal(
-                      tooltip:
-                          MaterialLocalizations.of(context).closeButtonTooltip,
-                      onPressed: () => Navigator.of(dialogContext).pop(),
-                      icon: const Icon(Icons.close),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+    final list = (_showFavorites ? _favorites : _results)
+        .where((i) => i.image != null)
+        .toList();
+    await showGalleryImagePreview(context,
+        images: list
+            .map((i) => Image.file(File(i.image!.filePath),
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) =>
+                    const Icon(Icons.broken_image_outlined)))
+            .toList(),
+        initialIndex: list.indexWhere((i) => i.recipe.id == result.recipe.id),
+        captions: list
+            .map((i) =>
+                '${_modelLabel(i, app)} · ${i.recipe.variant == 'mutated' ? text['variantMutated'] : text['variantPlain']}')
+            .toList());
   }
 
   @override
@@ -1400,6 +1529,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     _minFranchiseWeight.dispose();
     _maxFranchiseWeight.dispose();
     _poolSize.dispose();
+    _customArtists.dispose();
     _seed.dispose();
     _width.dispose();
     _height.dispose();
@@ -2359,6 +2489,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
     final text = _text(app.settings.language);
+    final customPoolText = customArtistPoolText(app.settings.language);
     final parameterText = _parameterText(app.settings.language);
     final tuneText = _tuneText(app.settings.language);
     final favoriteFolderLabel = switch (app.settings.language) {
@@ -2422,8 +2553,8 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                         Text(
                             _loading
                                 ? text['empty']!
-                                : text['total']!
-                                    .replaceAll('{count}', '${_pool.length}'),
+                                : text['total']!.replaceAll(
+                                    '{count}', '${_onlinePool.length}'),
                             style: Theme.of(context).textTheme.bodySmall),
                         const SizedBox(height: 4),
                         Text(text['hint']!,
@@ -2451,6 +2582,38 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
               ),
             ),
           ),
+          Card(
+              child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(children: [
+                    SwitchListTile(
+                        title: Text(customPoolText[0]),
+                        value: _useCustomArtists,
+                        onChanged: _running
+                            ? null
+                            : (v) {
+                                setState(() {
+                                  _useCustomArtists = v;
+                                  _planned = _buildPlan();
+                                });
+                                unawaited(_saveCustomArtistPool());
+                              }),
+                    if (_useCustomArtists)
+                      TextField(
+                          controller: _customArtists,
+                          minLines: 2,
+                          maxLines: 5,
+                          enabled: !_running,
+                          decoration: InputDecoration(
+                              labelText:
+                                  '${customPoolText[1]} · ${_pool.length}',
+                              helperText: customPoolText[2],
+                              helperMaxLines: 3),
+                          onChanged: (_) {
+                            setState(() => _planned = _buildPlan());
+                            unawaited(_saveCustomArtistPool());
+                          }),
+                  ]))),
           const SizedBox(height: 10),
           Card(
             clipBehavior: Clip.antiAlias,
@@ -3238,6 +3401,10 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
               ),
             ),
           if (_showFavorites) ...[
+            OutlinedButton(
+                onPressed: _favorites.isEmpty ? null : _exportFavoriteStyles,
+                child: Text((favoriteStyleLabels[app.settings.language] ??
+                    favoriteStyleLabels['en-US']!)[0])),
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(14),

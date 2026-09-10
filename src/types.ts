@@ -295,6 +295,7 @@ export function normalizeGenerateParams(value?: Partial<GenerateParams> | null):
 
 export interface LastGenerationState {
   params: GenerateParams;
+  charCaptions?: CharCaption[];
   batchCount: number;
   batchIntervalSeconds?: number;
   i2iParams: I2IParams;
@@ -1489,6 +1490,7 @@ export interface AppSettings {
   promptTemplates: PromptTemplate[];
   // Named style-prompt presets available from the generation panel.
   stylePromptPresets: StylePromptPreset[];
+  characterPromptPresets?: import('./character-presets').CharacterPromptPreset[];
   // Stored separately so empty user-created groups survive restarts.
   stylePromptPresetGroups: string[];
   // Positive-only reusable prompt presets shared by Generate and compatible

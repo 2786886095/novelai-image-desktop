@@ -1,3 +1,4 @@
+import {prepareArtistModel} from './artist-model-download';
 import { processableImage } from "./image-codec";
 import { app, dialog, nativeImage } from "electron";
 import axios from "axios";
@@ -378,13 +379,15 @@ async function scorer(mode: ArtistLabModelMode) {
   if (pending) return pending;
   const promise = (async () => {
     const transformers = await import("@huggingface/transformers");
+    await prepareArtistModel(modelCacheDir(), MODEL_IDS[mode], mode === "light");
     transformers.env.cacheDir = modelCacheDir();
-    transformers.env.allowLocalModels = false;
-    transformers.env.allowRemoteModels = true;
+    transformers.env.localModelPath = modelCacheDir() + path.sep;
+    transformers.env.allowLocalModels = true;
+    transformers.env.allowRemoteModels = false;
     const pipe = await transformers.pipeline(
       "image-feature-extraction",
       MODEL_IDS[mode],
-      { dtype: mode === "high" ? "fp32" : "q8" } as any,
+      { dtype: mode === "high" ? "fp32" : "q8", local_files_only: true } as any,
     );
     pipelines.set(mode, pipe);
     return pipe;
@@ -870,12 +873,12 @@ export function artistLabModelStatus(rawMode: unknown): ArtistLabModelStatus {
 }
 
 export async function clearArtistLabModels(): Promise<ArtistLabModelStatus> {
+  if (loading.size > 0) throw new Error("Model is still loading; try again after it finishes");
   for (const pipe of pipelines.values()) {
     try { await pipe.dispose?.(); } catch { /* best effort */ }
   }
   pipelines.clear();
   embeddingCache.clear();
-  if (loading.size > 0) throw new Error("Model is still loading; try again after it finishes");
   fs.rmSync(modelCacheDir(), { recursive: true, force: true });
   return artistLabModelStatus("high");
 }

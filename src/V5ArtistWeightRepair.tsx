@@ -1,3 +1,4 @@
+import {PreviewImageViewer} from './components/PreviewImageViewer';
 import {
   useEffect,
   useMemo,
@@ -856,6 +857,7 @@ export default function V5ArtistWeightRepair({
     );
   };
 
+  const previewItems=(showFavorites?favorites:results).filter(item=>item.image);
   const completed = results.filter((item) => item.status === "done" || item.status === "failed").length;
   return <>
     <main className="artist-lab v5-artist-repair artist-string-tool">
@@ -1035,6 +1037,6 @@ export default function V5ArtistWeightRepair({
       </div>
       <footer><span>{drawStylePreview.meaning}</span>{drawStylePreview.result && <small>{drawStylePreview.result.width}×{drawStylePreview.result.height}</small>}</footer>
     </aside></AppPortal>}
-    {previewCandidate?.image && <AppPortal><div className="modal-backdrop artist-result-preview-backdrop" role="dialog" aria-modal="true" aria-label={text.preview} onMouseDown={() => setPreviewCandidate(null)}><div className="artist-result-preview" onMouseDown={(event) => event.stopPropagation()}><button type="button" className="artist-result-preview-close" aria-label={text.back} onClick={() => setPreviewCandidate(null)}><Icon name="close" /></button><img src={previewCandidate.image.fileUrl} alt={previewCandidate.prompt} /><footer><b>{modelLabel(previewCandidate.image.model || previewCandidate.generationModel || generationParams.model)}</b><span>{previewCandidate.image.width}×{previewCandidate.image.height}</span></footer></div></div></AppPortal>}
+    {previewCandidate?.image && <AppPortal><div className="modal-backdrop artist-result-preview-backdrop" role="dialog" aria-modal="true" aria-label={text.preview} onMouseDown={() => setPreviewCandidate(null)}><div className="artist-result-preview" onMouseDown={(event) => event.stopPropagation()}><button type="button" className="artist-result-preview-close" aria-label={text.back} onClick={() => setPreviewCandidate(null)}><Icon name="close" /></button><PreviewImageViewer images={previewItems.map(item=>({src:item.image!.fileUrl,alt:item.prompt}))} index={Math.max(0,previewItems.findIndex(item=>item.id===previewCandidate.id))} onIndex={index=>setPreviewCandidate(previewItems[index])}/><footer><b>{modelLabel(previewCandidate.image.model || previewCandidate.generationModel || generationParams.model)}</b><span>{previewCandidate.image.width}×{previewCandidate.image.height}</span></footer></div></div></AppPortal>}
   </>;
 }

@@ -1,3 +1,6 @@
+import {PreviewImageViewer} from './components/PreviewImageViewer';
+import {HistoryImagePicker, historyPickerText} from './components/HistoryImagePicker';
+import { characterPresetText } from './character-presets';
 import { credentialIssueMessage } from "./credential-status";
 import { StorageDirectoryInput } from "./components/StorageDirectoryInput";
 import { normalizeAppLanguage } from "./i18n";
@@ -51,6 +54,7 @@ import {
 import { Button, IconText, AppPortal, Toggle, NumberInput, CommittedNumberInput, SliderInput, SecretInput, SelectMenu, SelectMenuCompat } from "./components/ui";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import { confirmAction } from "./components/confirm";
+import {CharacterPresetControls} from './components/CharacterPresetControls';
 import { Icon, type IconName } from "./components/icons";
 import { AppMenuBar, AppTitleBar } from "./app/AppChrome";
 import AppTabBar from "./app/AppTabBar";
@@ -1092,6 +1096,7 @@ function CharCaptionsModal({ onClose }: { onClose: () => void }) {
           <h2>{t("character.title")}</h2>
           <button aria-label={t("common.close")} onClick={onClose}><Icon name="close" /></button>
         </header>
+        <CharacterPresetControls />
         <div className="char-body">
           {!supportsCharacters && (
             <div className="status-box bad">
@@ -1324,6 +1329,7 @@ function StylePresetImagesModal({
 }) {
   const [preview, setPreview] = useState<StylePromptPreviewImage | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const images = preset.previewImages ?? [];
   const language = useAppStore((state) => state.settings?.language);
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
@@ -1372,7 +1378,7 @@ function StylePresetImagesModal({
               if (paths.length > 0) onDropImages(paths);
             }}
           >
-            {images.length === 0 ? (
+            {historyOpen ? <HistoryImagePicker onChoose={onDropImages} onClose={()=>setHistoryOpen(false)}/> : images.length === 0 ? (
               <div
                 className="style-image-empty"
                 role="button"
@@ -1418,6 +1424,7 @@ function StylePresetImagesModal({
             <p>{text.stylePresetImageHint}</p>
           </div>
           <footer>
+            <Button disabled={images.length>=3} onClick={()=>setHistoryOpen(v=>!v)}>{historyPickerText(language)[0]}</Button>
             <Button type="button" onClick={onClose}>{t("common.close")}</Button>
             <Button type="button" variant="primary" disabled={images.length >= 3} onClick={onImport}>
               <Icon name="folderOpen" /> {text.stylePresetAddImages}
@@ -1428,7 +1435,7 @@ function StylePresetImagesModal({
       {preview && (
         <div className="style-image-lightbox" role="dialog" aria-modal="true" onMouseDown={() => setPreview(null)}>
           <button type="button" aria-label={t("common.close")} onClick={() => setPreview(null)}><Icon name="close" /></button>
-          <img src={preview.fileUrl} alt={`${preset.name} · ${preview.name}`} onMouseDown={(event) => event.stopPropagation()} />
+          <PreviewImageViewer images={images.map(item=>({src:item.fileUrl,alt:`${preset.name} · ${item.name}`}))} index={Math.max(0,images.findIndex(item=>item.id===preview.id))} onIndex={index=>setPreview(images[index])}/>
         </div>
       )}
     </AppPortal>
@@ -1486,7 +1493,7 @@ function PromptAndParams({
   const stylePresetPickerRef = useRef<HTMLDivElement>(null);
   const stylePresetMenuRef = useRef<HTMLDivElement>(null);
   const [stylePresetMenuPosition, setStylePresetMenuPosition] = useState({ left: 0, top: 0, width: 240 });
-  const [styleNamePrompt, setStyleNamePrompt] = useState<{ stylePrompt: string; fallbackName: string } | null>(null);
+  const [styleNamePrompt, setStyleNamePrompt] = useState<{ stylePrompt: string; fallbackName: string; presetId?: string } | null>(null);
   const adaptiveI2ISize = workbenchImage
     ? adaptiveNAIImageSize(workbenchImage.width, workbenchImage.height, params)
     : { width: params.width, height: params.height };
@@ -1726,6 +1733,15 @@ function PromptAndParams({
   async function confirmSaveStylePromptPreset(rawName: string) {
     const name = rawName.trim();
     if (!name || !styleNamePrompt) return;
+    if (styleNamePrompt.presetId) {
+      try {
+        await window.naiDesktop.setSetting("stylePromptPresets", stylePromptPresets.map(p => p.id === styleNamePrompt.presetId ? {...p, name} : p));
+        await refreshSettings();
+        setStyleNamePrompt(null);
+        setToast(f("prompt.stylePresetSaved", { name }));
+      } catch (error) { setToast(String(error)); }
+      return;
+    }
     const preset: StylePromptPreset = {
       id: makeStylePresetId(),
       name,
@@ -2165,6 +2181,7 @@ function PromptAndParams({
                       <button type="button" className="style-preset-more" title={t("prompt.styleMove")} aria-label={f("prompt.styleMoveTo", { name: preset.name })} onClick={() => setStylePresetActionId((current) => current === preset.id ? "" : preset.id)}><Icon name="moreHorizontal" /></button>
                       {stylePresetActionId === preset.id && (
                         <div className="style-preset-item-popover">
+                          <button type="button" onClick={() => {setStylePresetActionId(""); setStyleNamePrompt({stylePrompt: preset.prompt, fallbackName: preset.name, presetId: preset.id});}}>{characterPresetText(settings?.language).rename}</button>
                           <strong>{t("prompt.styleMove")}</strong>
                           {stylePromptPresetGroups.map((group) => (
                             <button type="button" key={group} disabled={(preset.group || "Default") === group} onClick={() => void moveStylePromptPreset(preset.id, group)}>
@@ -2198,7 +2215,7 @@ function PromptAndParams({
       )}
       {styleNamePrompt && (
         <InputModal
-          title={generateText.prompt.stylePresetSave}
+          title={styleNamePrompt.presetId ? characterPresetText(settings?.language).rename : generateText.prompt.stylePresetSave}
           label={generateText.prompt.stylePresetNamePrompt}
           initial={styleNamePrompt.fallbackName}
           onConfirm={(value) => void confirmSaveStylePromptPreset(value)}
@@ -4832,8 +4849,9 @@ function ZoomableImageStage({
   }
 
   function handlePointerDown(event: React.PointerEvent<HTMLDivElement>) {
+    event.currentTarget.focus({preventScroll:true});
     if (zoom <= 1) return;
-    if (event.button !== 1) return;
+    if (event.button !== 0 && event.button !== 1) return;
     const target = event.target as HTMLElement;
     if (target.closest("button")) return;
     event.preventDefault();
@@ -4880,6 +4898,17 @@ function ZoomableImageStage({
       </div>
       <div
         ref={shellRef}
+        tabIndex={0}
+        aria-label={alt}
+        onKeyDown={event=>{
+          if ((event.target as HTMLElement).closest('input,textarea,button,[contenteditable="true"]')) return;
+          const delta=event.key==='ArrowRight'||event.key==='ArrowDown'?1:event.key==='ArrowLeft'||event.key==='ArrowUp'?-1:0;
+          if(!delta||!image.id)return;
+          const state=useAppStore.getState(),index=state.history.findIndex(item=>item.id===image.id);
+          if(index<0)return;
+          event.preventDefault();event.stopPropagation();
+          const next=state.history[index+delta];if(next)state.selectImage(next);
+        }}
         className={clsx("zoom-frame-shell", zoom > 1 && "is-zoomed", isPanning && "is-panning")}
         onWheel={handleWheel}
         onPointerDown={handlePointerDown}
@@ -5423,6 +5452,7 @@ function HistoryPanel() {
   }
 
   async function deleteItem(item: HistoryItem) {
+    if (!(await confirmAction(`${t("common.delete")}: ${item.filePath.split(/[\\/]/).pop()}?`))) return;
     const deleted = await deleteHistory(item.id);
     if (deleted) setToast(t("history.deleteImageDone"));
   }
@@ -5935,11 +5965,13 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                 {status && <div className={clsx("status-box", status.valid ? "ok" : "bad")}>{status.message}</div>}
                 <label className="field">
                   <span>{t("settings.accountEndpoint")}</span>
-                  <input value={settings.apiBaseUrl} onChange={(e) => void update("apiBaseUrl", e.target.value)} />
+                  <input value={settings.apiBaseUrl} placeholder="https://api.novelai.net" onChange={(e) => void update("apiBaseUrl", e.target.value)} />
+                  <small>https://api.novelai.net</small>
                 </label>
                 <label className="field">
                   <span>{t("settings.imageEndpoint")}</span>
-                  <input value={settings.imageBaseUrl} onChange={(e) => void update("imageBaseUrl", e.target.value)} />
+                  <input value={settings.imageBaseUrl} placeholder="https://image.novelai.net" onChange={(e) => void update("imageBaseUrl", e.target.value)} />
+                  <small>https://image.novelai.net</small>
                 </label>
                 <label className="field-inline">
                   <input

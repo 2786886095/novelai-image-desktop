@@ -1,3 +1,4 @@
+import '../ui/zoomable_image.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -1101,58 +1102,22 @@ class _V5ArtistWeightRepairScreenState
   }
 
   Future<void> _previewResult(
-    _RepairDrawResult result,
-    Map<String, String> text,
-  ) async {
-    final image = result.image;
-    if (image == null) return;
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) => Dialog.fullscreen(
-        child: SafeArea(
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: InteractiveViewer(
-                  minScale: .5,
-                  maxScale: 6,
-                  child: Center(
-                    child: Image.file(
-                      File(image.filePath),
-                      fit: BoxFit.contain,
-                      errorBuilder: (_, __, ___) =>
-                          const Icon(Icons.broken_image_outlined, size: 48),
-                    ),
-                  ),
-                ),
-              ),
-              Positioned(
-                left: 12,
-                right: 12,
-                top: 8,
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        '${result.generationModel} · ${image.width}×${image.height}',
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    IconButton.filledTonal(
-                      tooltip:
-                          MaterialLocalizations.of(context).closeButtonTooltip,
-                      onPressed: () => Navigator.of(dialogContext).pop(),
-                      icon: const Icon(Icons.close),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+      _RepairDrawResult result, Map<String, String> text) async {
+    final list = (_showFavorites ? _favorites : _results)
+        .where((i) => i.image != null)
+        .toList();
+    await showGalleryImagePreview(context,
+        images: list
+            .map((i) => Image.file(File(i.image!.filePath),
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) =>
+                    const Icon(Icons.broken_image_outlined)))
+            .toList(),
+        initialIndex: list.indexOf(result),
+        captions: list
+            .map((i) =>
+                '${i.generationModel} · ${i.image!.width}×${i.image!.height}')
+            .toList());
   }
 
   Widget _drawResultCard(

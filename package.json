@@ -1,6 +1,6 @@
 {
   "name": "langbai-novelai-studio",
-  "version": "2.2.8",
+  "version": "2.2.9",
   "private": true,
   "description": "Langbai NovelAI Studio: API-only NovelAI image generation desktop client with Chinese UI.",
   "author": "Langbai",
@@ -98,8 +98,6 @@
       "THIRD_PARTY_NOTICES.md",
       "!**/*.map",
       "!node_modules/onnxruntime-web/**",
-      "!node_modules/onnxruntime-node/bin/napi-v3/darwin/**",
-      "!node_modules/onnxruntime-node/bin/napi-v3/linux/**",
       "!node_modules/onnxruntime-node/bin/napi-v3/win32/arm64/**",
       "!node_modules/@huggingface/transformers/dist/ort-wasm*",
       "!node_modules/@huggingface/transformers/dist/transformers.js",
@@ -129,11 +127,7 @@
     "mac": {
       "icon": "build/icon.png",
       "category": "public.app-category.graphics-design",
-    "x64ArchFiles": "Contents/Resources/app.asar.unpacked/node_modules/@img/sharp-{darwin,libvips-darwin}-{arm64,x64}/**",
-      "files": [
-        "!node_modules/@huggingface/transformers/**",
-        "!node_modules/onnxruntime-node/**"
-      ],
+      "x64ArchFiles": "Contents/Resources/app.asar.unpacked/node_modules/{@img/sharp-{darwin,libvips-darwin}-{arm64,x64},onnxruntime-node/bin/napi-v3/darwin/{arm64,x64}}/**",
       "target": [
         {
           "target": "dmg",
@@ -148,10 +142,6 @@
     "linux": {
       "icon": "build/icon.png",
       "category": "Graphics",
-      "files": [
-        "!node_modules/@huggingface/transformers/**",
-        "!node_modules/onnxruntime-node/**"
-      ],
       "target": [
         "AppImage"
       ]

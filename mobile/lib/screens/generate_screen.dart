@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'character_preset_bar.dart';
 import 'dart:io';
 import 'dart:math';
 
@@ -1193,61 +1194,70 @@ class _StylePresetControlsState extends State<_StylePresetControls> {
     );
   }
 
-  void _showPreview(
-    BuildContext context,
-    StylePromptPreset preset,
-    StylePromptPreviewImage image,
-  ) {
-    showDialog<void>(
-      context: context,
-      barrierColor: Colors.black.withOpacity(0.9),
-      builder: (dialogContext) => Dialog.fullscreen(
-        backgroundColor: Colors.black,
-        child: SafeArea(
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: InteractiveViewer(
-                  minScale: 0.5,
-                  maxScale: 6,
-                  child: Center(
-                    child: Image.file(
-                      File(image.filePath),
-                      fit: BoxFit.contain,
-                      errorBuilder: (_, __, ___) => const Icon(
-                        Icons.broken_image_outlined,
-                        color: Colors.white70,
-                        size: 64,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              Positioned(
-                top: 8,
-                right: 8,
-                child: IconButton.filledTonal(
-                  tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
-                  onPressed: () => Navigator.pop(dialogContext),
-                  icon: const Icon(Icons.close),
-                ),
-              ),
-              Positioned(
-                left: 16,
-                right: 64,
-                bottom: 12,
-                child: Text(
-                  '${preset.name} · ${image.name}',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.white),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+  void _showPreview(BuildContext context, StylePromptPreset preset,
+      StylePromptPreviewImage image) {
+    showGalleryImagePreview(context,
+        images: preset.previewImages
+            .map((i) => Image.file(File(i.filePath),
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) =>
+                    const Icon(Icons.broken_image_outlined)))
+            .toList(),
+        initialIndex: preset.previewImages.indexWhere((i) => i.id == image.id),
+        captions: preset.previewImages
+            .map((i) => '${preset.name} · ${i.name}')
+            .toList());
+  }
+
+  Future<void> _chooseHistoryStyleImage(
+      BuildContext context, AppState state, StylePromptPreset preset) async {
+    final names = {
+      'zh-CN': '从历史记录选择',
+      'zh-TW': '從歷史記錄選擇',
+      'en-US': 'Choose from history',
+      'ja-JP': '履歴から選択',
+      'ko-KR': '기록에서 선택'
+    };
+    final selected = await showDialog<HistoryItem>(
+        context: context,
+        builder: (context) => AlertDialog(
+                title: Text(names[state.settings.language] ?? names['en-US']!),
+                content: SizedBox(
+                    width: 480,
+                    height: 400,
+                    child: GridView.builder(
+                        gridDelegate:
+                            const SliverGridDelegateWithMaxCrossAxisExtent(
+                                maxCrossAxisExtent: 140,
+                                crossAxisSpacing: 8,
+                                mainAxisSpacing: 8),
+                        itemCount: state.history.length,
+                        itemBuilder: (context, index) {
+                          final item = state.history[index];
+                          return InkWell(
+                              onTap: () => Navigator.pop(context, item),
+                              child: Image.file(File(item.filePath),
+                                  fit: BoxFit.contain,
+                                  errorBuilder: (_, __, ___) =>
+                                      const Icon(Icons.broken_image_outlined)));
+                        })),
+                actions: [
+                  TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: Text(
+                          characterPresetLabels(state.settings.language)[7]))
+                ]));
+    if (selected == null) return;
+    try {
+      await state.importStylePromptPreviewImages(
+          preset: preset,
+          sources: [(path: selected.filePath, name: selected.id)]);
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$error')));
+      }
+    }
   }
 
   Future<void> _showImageManager(
@@ -1304,6 +1314,20 @@ class _StylePresetControlsState extends State<_StylePresetControls> {
                       ],
                     ),
                   ),
+                  TextButton.icon(
+                      onPressed: images.length >= 3
+                          ? null
+                          : () =>
+                              _chooseHistoryStyleImage(context, state, preset),
+                      icon: const Icon(Icons.history),
+                      label: Text(const {
+                            'zh-CN': '从历史记录选择',
+                            'zh-TW': '從歷史記錄選擇',
+                            'en-US': 'Choose from history',
+                            'ja-JP': '履歴から選択',
+                            'ko-KR': '기록에서 선택'
+                          }[state.settings.language] ??
+                          'Choose from history')),
                   Expanded(
                     child: images.isEmpty
                         ? Center(
@@ -1556,6 +1580,20 @@ class _StylePresetControlsState extends State<_StylePresetControls> {
                   onSelected: (value) async {
                     if (value == '__images') {
                       await _showImageManager(sheetContext, preset.id, text);
+                    } else if (value == '__rename') {
+                      final name = await requestPresetName(
+                          sheetContext, state.settings.language,
+                          initial: preset.name);
+                      if (name != null) {
+                        try {
+                          await state.renameStylePromptPreset(preset.id, name);
+                        } catch (error) {
+                          if (sheetContext.mounted) {
+                            ScaffoldMessenger.of(sheetContext).showSnackBar(
+                                SnackBar(content: Text('$error')));
+                          }
+                        }
+                      }
                     } else if (value == '__delete') {
                       if (!await _confirmStyleDelete(
                           sheetContext, preset.name, state.settings.language)) {
@@ -1592,6 +1630,10 @@ class _StylePresetControlsState extends State<_StylePresetControls> {
                           ),
                         )),
                     const PopupMenuDivider(),
+                    PopupMenuItem<String>(
+                        value: '__rename',
+                        child: Text(
+                            characterPresetLabels(state.settings.language)[3])),
                     PopupMenuItem<String>(
                       value: '__images',
                       child: Text(text.stylePresetImages),
@@ -2927,6 +2969,7 @@ class _CharacterPrompts extends StatelessWidget {
               const SizedBox(height: 8),
               const _CharacterPositionEditor(),
             ],
+            const CharacterPresetBar(),
             for (var i = 0; i < s.extras.charCaptions.length; i++)
               _CharCard(
                 key: ObjectKey(s.extras.charCaptions[i]),
@@ -2955,7 +2998,7 @@ class _CharacterPositionEditor extends StatelessWidget {
       for (final caption in captions) {
         caption.useCoords = enabled;
       }
-      state.markChanged();
+      state.markCharacterChanged();
     }
 
     return DecoratedBox(
@@ -3082,7 +3125,7 @@ class _CharacterPositionEditor extends StatelessWidget {
                                                 event.delta.dy / canvasHeight)
                                             .clamp(0.0, 1.0)
                                             .toDouble();
-                                      state.markChanged();
+                                      state.markCharacterChanged();
                                     },
                                     child: Center(
                                       child: Container(
@@ -4183,10 +4226,8 @@ class _ReferencePresetLibraryPanelState
     final presetPageCount = max(1, (presets.length / _presetPageSize).ceil());
     final safePresetPage = _presetPage.clamp(1, presetPageCount).toInt();
     final presetStart = (safePresetPage - 1) * _presetPageSize;
-    final visiblePresets = presets
-        .skip(presetStart)
-        .take(_presetPageSize)
-        .toList(growable: false);
+    final visiblePresets =
+        presets.skip(presetStart).take(_presetPageSize).toList(growable: false);
 
     Widget presetCard(ReferencePreset preset) {
       final detail = preset.kind == ReferencePresetKind.vibe
@@ -4639,7 +4680,8 @@ class _ReferencePresetLibraryPanelState
                               _presetPage = 1;
                             });
                             SharedPreferences.getInstance().then(
-                              (prefs) => prefs.setInt(_presetPageSizeKey, value),
+                              (prefs) =>
+                                  prefs.setInt(_presetPageSizeKey, value),
                             );
                           },
                         ),
@@ -4693,34 +4735,51 @@ class _ReferencePresetLibraryPanelState
                           OutlinedButton(
                             onPressed: safePresetPage <= 1
                                 ? null
-                                : () => setState(() => _presetPage = safePresetPage - 1),
+                                : () => setState(
+                                    () => _presetPage = safePresetPage - 1),
                             child: Text(t('referencePresets.previousPage')),
                           ),
                           OutlinedButton(
                             onPressed: () async {
-                              final controller = TextEditingController(text: '$safePresetPage');
+                              final controller = TextEditingController(
+                                  text: '$safePresetPage');
                               final chosen = await showDialog<int>(
                                 context: context,
                                 builder: (dialogContext) => AlertDialog(
                                   title: Text(t('referencePresets.pageRange')
-                                      .replaceAll('{pages}', '$presetPageCount')),
+                                      .replaceAll(
+                                          '{pages}', '$presetPageCount')),
                                   content: TextField(
                                     controller: controller,
                                     autofocus: true,
                                     keyboardType: TextInputType.number,
-                                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                                    decoration: InputDecoration(labelText: t('referencePresets.choosePage')),
-                                    onSubmitted: (value) => Navigator.pop(dialogContext, int.tryParse(value)),
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.digitsOnly
+                                    ],
+                                    decoration: InputDecoration(
+                                        labelText:
+                                            t('referencePresets.choosePage')),
+                                    onSubmitted: (value) => Navigator.pop(
+                                        dialogContext, int.tryParse(value)),
                                   ),
                                   actions: [
-                                    TextButton(onPressed: () => Navigator.pop(dialogContext), child: Text(t('common.cancel'))),
-                                    FilledButton(onPressed: () => Navigator.pop(dialogContext, int.tryParse(controller.text)), child: Text(t('referencePresets.jumpPage'))),
+                                    TextButton(
+                                        onPressed: () =>
+                                            Navigator.pop(dialogContext),
+                                        child: Text(t('common.cancel'))),
+                                    FilledButton(
+                                        onPressed: () => Navigator.pop(
+                                            dialogContext,
+                                            int.tryParse(controller.text)),
+                                        child: Text(
+                                            t('referencePresets.jumpPage'))),
                                   ],
                                 ),
                               );
                               controller.dispose();
                               if (chosen != null && mounted) {
-                                setState(() => _presetPage = chosen.clamp(1, presetPageCount).toInt());
+                                setState(() => _presetPage =
+                                    chosen.clamp(1, presetPageCount).toInt());
                               }
                             },
                             child: Text(t('referencePresets.pagePosition')
@@ -4730,7 +4789,8 @@ class _ReferencePresetLibraryPanelState
                           OutlinedButton(
                             onPressed: safePresetPage >= presetPageCount
                                 ? null
-                                : () => setState(() => _presetPage = safePresetPage + 1),
+                                : () => setState(
+                                    () => _presetPage = safePresetPage + 1),
                             child: Text(t('referencePresets.nextPage')),
                           ),
                         ],
@@ -4854,7 +4914,7 @@ class _CharCardState extends State<_CharCard> {
                       ),
                       onChanged: (v) {
                         c.prompt = v;
-                        s.markChanged();
+                        s.markCharacterChanged();
                       },
                     ),
                     const SizedBox(height: 8),
@@ -4867,7 +4927,7 @@ class _CharCardState extends State<_CharCard> {
                       ),
                       onChanged: (v) {
                         c.negativePrompt = v;
-                        s.markChanged();
+                        s.markCharacterChanged();
                       },
                     ),
                     if (c.useCoords)
@@ -4888,7 +4948,7 @@ class _CharCardState extends State<_CharCard> {
                                     display: c.x.toStringAsFixed(2),
                                     onChanged: (v) {
                                       c.x = v;
-                                      s.markChanged();
+                                      s.markCharacterChanged();
                                     })),
                             Expanded(
                                 child: _Slider(
@@ -4900,7 +4960,7 @@ class _CharCardState extends State<_CharCard> {
                                     display: c.y.toStringAsFixed(2),
                                     onChanged: (v) {
                                       c.y = v;
-                                      s.markChanged();
+                                      s.markCharacterChanged();
                                     })),
                           ]),
                         ],

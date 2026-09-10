@@ -335,6 +335,16 @@ class _GalleryScreenState extends State<GalleryScreen> {
                     height: 420,
                     child: ZoomableImage(
                       image: Image.file(file, fit: BoxFit.contain),
+                      gallery: context
+                          .read<AppState>()
+                          .history
+                          .map((i) =>
+                              Image.file(File(i.filePath), fit: BoxFit.contain))
+                          .toList(),
+                      initialIndex: context
+                          .read<AppState>()
+                          .history
+                          .indexWhere((i) => i.id == item.id),
                     ),
                   ),
                 ),
@@ -446,6 +456,22 @@ class _GalleryScreenState extends State<GalleryScreen> {
                     icon: const Icon(Icons.delete_outline),
                     label: Text(t('common.delete')),
                     onPressed: () async {
+                      final confirmed = await showDialog<bool>(
+                          context: sheetContext,
+                          builder: (context) => AlertDialog(
+                                  title: Text(t('common.delete')),
+                                  content: Text(_fileName(item.filePath)),
+                                  actions: [
+                                    TextButton(
+                                        onPressed: () =>
+                                            Navigator.pop(context, false),
+                                        child: Text(t('common.cancel'))),
+                                    FilledButton(
+                                        onPressed: () =>
+                                            Navigator.pop(context, true),
+                                        child: Text(t('common.delete')))
+                                  ]));
+                      if (confirmed != true || !context.mounted) return;
                       await context.read<AppState>().deleteHistory(item.id);
                       if (sheetContext.mounted) Navigator.pop(sheetContext);
                     },

@@ -1,3 +1,4 @@
+import {PreviewImageViewer} from './components/PreviewImageViewer';
 import { formatAitagFailure } from "./aitag-error";
 import { galleryDownloadFeedback } from "./gallery-download";
 import quickTagLabels from "../shared/quicktag-ui.json";
@@ -417,8 +418,8 @@ function GalleryImageLightbox({
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
-      else if (event.key === "ArrowLeft" && onPrevious) onPrevious();
-      else if (event.key === "ArrowRight" && onNext) onNext();
+      else if ((event.key === "ArrowLeft" || event.key === "ArrowUp") && onPrevious) onPrevious();
+      else if ((event.key === "ArrowRight" || event.key === "ArrowDown") && onNext) onNext();
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
@@ -428,7 +429,7 @@ function GalleryImageLightbox({
     <div className="modal-backdrop artist-ranking-lightbox-backdrop" onClick={onClose}>
       <section className="artist-ranking-lightbox online-gallery-lightbox" role="dialog" aria-modal="true" aria-label={label} onClick={(event) => event.stopPropagation()}>
         <button type="button" className="artist-ranking-lightbox-close" aria-label={text.closePreview} onClick={onClose}>×</button>
-        <div className="online-gallery-lightbox-image">{image}</div>
+        <PreviewImageViewer images={[{src:`${label}:${index}`,alt:label}]} index={0} onIndex={()=>{}} showNavigation={false} renderImage={image}/>
         <footer>
           <button type="button" disabled={!onPrevious} onClick={onPrevious}>{text.previousImage}</button>
           <span>{index + 1} / {total}</span>
@@ -749,7 +750,7 @@ function ArtistRankingGallery({
         <div className="modal-backdrop artist-ranking-lightbox-backdrop" onClick={() => setPreviewLightbox(null)}>
           <section className="artist-ranking-lightbox" role="dialog" aria-modal="true" aria-label={formatText(text.artistLightbox, { artist: previewLightbox.artist })} onClick={(event) => event.stopPropagation()}>
             <button type="button" className="artist-ranking-lightbox-close" aria-label={text.closePreview} onClick={() => setPreviewLightbox(null)}>×</button>
-            <img src={previewLightbox.items[previewLightbox.index].imageUrl} alt={formatText(text.artistLightbox, { artist: previewLightbox.artist })} />
+            <PreviewImageViewer images={previewLightbox.items.map(item=>({src:item.imageUrl,alt:formatText(text.artistLightbox,{artist:previewLightbox.artist})}))} index={previewLightbox.index} onIndex={index=>setPreviewLightbox(current=>current?{...current,index}:current)}/>
             <footer>
               <button type="button" disabled={previewLightbox.index <= 0} onClick={() => setPreviewLightbox((current) => current ? { ...current, index: Math.max(0, current.index - 1) } : current)}>{text.previousImage}</button>
               <span>{previewLightbox.index + 1} / {previewLightbox.items.length} · {previewLightbox.items[previewLightbox.index].width}×{previewLightbox.items[previewLightbox.index].height}</span>

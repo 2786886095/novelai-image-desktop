@@ -1,3 +1,4 @@
+import '../ui/zoomable_image.dart';
 import '../widgets/image_save_feedback.dart';
 import '../services/quicktag.dart';
 import 'quicktag_navigation.dart';
@@ -925,7 +926,8 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
                                         child: GestureDetector(
                                           onDoubleTap: () =>
                                               _showSimpleNetworkPreview(context,
-                                                  previews[previewIndex]),
+                                                  previews[previewIndex],
+                                                  urls: previews),
                                           child: Image.network(
                                               previews[previewIndex],
                                               width: 132,
@@ -1399,41 +1401,14 @@ class _NetworkGalleryImage extends StatelessWidget {
   }
 }
 
-Future<void> _showGalleryPreview(BuildContext context, Widget image) =>
-    showDialog<void>(
-      context: context,
-      useSafeArea: false,
-      barrierColor: Colors.black87,
-      builder: (dialogContext) => Dialog.fullscreen(
-        backgroundColor: Colors.black,
-        child: Stack(children: [
-          Positioned.fill(
-            child: InteractiveViewer(
-              minScale: .8,
-              maxScale: 6,
-              child: Center(child: image),
-            ),
-          ),
-          SafeArea(
-            child: Align(
-              alignment: AlignmentDirectional.topEnd,
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: IconButton.filledTonal(
-                  tooltip: MaterialLocalizations.of(dialogContext)
-                      .closeButtonTooltip,
-                  onPressed: () => Navigator.of(dialogContext).pop(),
-                  icon: const Icon(Icons.close),
-                ),
-              ),
-            ),
-          ),
-        ]),
-      ),
-    );
-
-Future<void> _showSimpleNetworkPreview(BuildContext context, String url) =>
-    _showGalleryPreview(context, Image.network(url, fit: BoxFit.contain));
+Future<void> _showSimpleNetworkPreview(BuildContext context, String url,
+    {List<String>? urls}) {
+  final all = urls ?? [url];
+  return showGalleryImagePreview(context,
+      images:
+          all.map((url) => Image.network(url, fit: BoxFit.contain)).toList(),
+      initialIndex: all.indexOf(url));
+}
 
 class _OnlineGalleryDetailScreen extends StatefulWidget {
   final OnlineGalleryService service;
@@ -1649,14 +1624,14 @@ class _DetailMediaState extends State<_DetailMedia> {
           itemCount: media.length,
           onPageChanged: (value) => setState(() => index = value),
           itemBuilder: (context, itemIndex) => GestureDetector(
-            onDoubleTap: () => _showGalleryPreview(
-              context,
-              _NetworkGalleryImage(
-                url: media[itemIndex].displayUrl,
-                source: widget.detail.item.source,
-                fit: BoxFit.contain,
-              ),
-            ),
+            onDoubleTap: () => showGalleryImagePreview(context,
+                images: media
+                    .map((image) => _NetworkGalleryImage(
+                        url: image.displayUrl,
+                        source: widget.detail.item.source,
+                        fit: BoxFit.contain))
+                    .toList(),
+                initialIndex: itemIndex),
             child: InteractiveViewer(
               minScale: 1,
               maxScale: 5,
@@ -1686,14 +1661,14 @@ class _DetailMediaState extends State<_DetailMedia> {
           alignment: WrapAlignment.end,
           children: [
             FilledButton.tonalIcon(
-              onPressed: () => _showGalleryPreview(
-                context,
-                _NetworkGalleryImage(
-                  url: media[currentIndex].displayUrl,
-                  source: widget.detail.item.source,
-                  fit: BoxFit.contain,
-                ),
-              ),
+              onPressed: () => showGalleryImagePreview(context,
+                  images: media
+                      .map((image) => _NetworkGalleryImage(
+                          url: image.displayUrl,
+                          source: widget.detail.item.source,
+                          fit: BoxFit.contain))
+                      .toList(),
+                  initialIndex: currentIndex),
               icon: const Icon(Icons.fullscreen),
               label: Text(widget.text.preview),
             ),

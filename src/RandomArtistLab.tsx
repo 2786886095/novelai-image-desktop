@@ -1,3 +1,6 @@
+import {PreviewImageViewer} from './components/PreviewImageViewer';
+import {FavoriteStyleExport} from './components/FavoriteStyleExport';
+import {parseCustomArtistPool, customArtistPoolText} from './custom-artist-pool';
 import {
   useEffect,
   useLayoutEffect,
@@ -82,6 +85,8 @@ type RandomResult = ArtistRecipeComparison & {
 };
 
 type RandomSession = {
+  customArtists?: string;
+  useCustomArtists?: boolean;
   poolSize: number;
   poolMode: ArtistCatalogMode;
   poolSeed: number;
@@ -515,6 +520,8 @@ function restore(inherited: GenerateParams): RandomSession {
     const savedPoolSeed=fixed?.seed??raw?.poolSeed;
     const legacyArtistCount = clampRecipeCount(raw?.artistCount, 5, 1);
     sessionCache = {
+      customArtists: typeof raw?.customArtists === "string" ? raw.customArtists : "",
+      useCustomArtists: raw?.useCustomArtists === true,
       poolSize: normalizeArtistPoolCount(fixed?.count??raw?.poolSize),
       poolMode: (fixed?.mode??raw?.poolMode) === "ranked" ? "ranked" : "random",
       poolSeed: Number.isSafeInteger(savedPoolSeed) ? Number(savedPoolSeed) >>> 0 : freshSeed(),
@@ -643,7 +650,10 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
   const selectedRandomTagCount = selectedCustomTagValues.filter(
     (tag) => session.customTagModes[tag.toLocaleLowerCase()] === "random",
   ).length;
-  const [pool, setPool] = useState<ArtistTagRecord[]>([]);
+  const [onlinePool, setPool] = useState<ArtistTagRecord[]>([]);
+  const customPool = useMemo(()=>parseCustomArtistPool(session.customArtists??""),[session.customArtists]);
+  const pool = session.useCustomArtists ? customPool : onlinePool;
+  const customPoolText = customArtistPoolText(language);
   const [poolSnapshot, setPoolSnapshot] = useState<ArtistCatalogSelection | null>(null);
   const [latestCatalog, setLatestCatalog] = useState<ArtistCatalogSelection["catalog"] | null>(null);
   const [poolFailed, setPoolFailed] = useState(false);
@@ -1198,6 +1208,7 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
       : session.generationParams.model;
   };
   const modelLabel = (model: string) => NAI_MODELS.find((item) => item.value === model)?.label ?? model;
+  const previewItems=(showFavorites?session.favorites:session.results).filter(item=>item.image);
   const favoriteModels = [...new Set(session.favorites.map(resultModel))];
   const effectiveFavoriteModelFilter = favoriteModelFilter === "all" || favoriteModels.includes(favoriteModelFilter)
     ? favoriteModelFilter
@@ -1254,7 +1265,7 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
     <section className="artist-lab-panel random-pool-summary">
       <div>
         <h3>{selectionText.title}</h3>
-        <strong>{loading ? selectionText.load : interpolate(text.ready, { count: pool.length })}</strong>
+        <strong>{loading ? selectionText.load : interpolate(text.ready, { count: onlinePool.length })}</strong>
         <p>{selectionText.description}</p>
         <ArtistCatalogStatus snapshot={poolSnapshot} latestCatalog={latestCatalog} language={language} />
         <small className={`artist-pool-warning ${session.poolSize >= 50000 ? "is-large" : ""}`}>{selectionText.warning}</small>
@@ -1270,6 +1281,10 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
         {updatingCatalog ? <Button onClick={()=>void window.naiDesktop.artistLabCatalogCancel(poolSyncIdRef.current).catch(error=>setCatalogMessage(formatCatalogUpdateError(error,language)))}>{poolText.cancel}</Button> : <Button data-testid="artist-catalog-update" onClick={()=>setConfirmCatalogUpdate(true)} disabled={running}>{selectionText.update}</Button>}
         {confirmCatalogUpdate && <div className="artist-catalog-confirm"><small>{selectionText.confirm}</small><Button data-testid="artist-catalog-confirm" onClick={()=>void updateCatalog()}>{selectionText.start}</Button><Button onClick={()=>setConfirmCatalogUpdate(false)}>{selectionText.cancel}</Button></div>}
       </div>
+    </section>
+    <section className="artist-lab-panel">
+      <label className="check-field"><input type="checkbox" checked={session.useCustomArtists??false} disabled={running} onChange={e=>patch({useCustomArtists:e.target.checked})}/>{customPoolText.enable}</label>
+      {session.useCustomArtists&&<label className="field"><span>{customPoolText.list} · {customPool.length}</span><textarea aria-label={customPoolText.list} value={session.customArtists??""} disabled={running} placeholder="{artist:artist_one}, {artist:artist_two}" onChange={e=>patch({customArtists:e.target.value})}/><small>{customPoolText.hint}</small></label>}
     </section>
     <section className="artist-lab-panel random-artist-settings">
       <div className="random-settings-reset wide"><small>{resetText.hint}</small><Button type="button" variant="ghost" onClick={restoreDrawDefaults}><Icon name="refresh" />{resetText.label}</Button></div>
@@ -1556,6 +1571,7 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
     {showFavorites && <section className="artist-lab-panel artist-favorites-panel">
       <div className="artist-section-heading">
         <div><h3>{favoriteFolderLabel}</h3><small>{text.favoritesHint}</small></div>
+        <FavoriteStyleExport items={session.favorites}/>
         <div className="artist-favorite-model-filter">
           <span>{text.modelGroup}</span>
           <SelectMenu
@@ -1588,6 +1604,6 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
     </div>
     <footer><span>{stylePreview.meaning}</span>{stylePreview.result && <small>{stylePreview.result.width}×{stylePreview.result.height}</small>}</footer>
   </aside></AppPortal>}
-  {previewResult?.image && <AppPortal><div className="modal-backdrop artist-result-preview-backdrop" role="dialog" aria-modal="true" aria-label={text.previewImage} onMouseDown={() => setPreviewResult(null)}><div className="artist-result-preview" onMouseDown={(event) => event.stopPropagation()}><button type="button" className="artist-result-preview-close" aria-label={text.back} onClick={() => setPreviewResult(null)}><Icon name="close" /></button><img src={previewResult.image.fileUrl} alt={previewResult.prompt} /><footer><b>{modelLabel(resultModel(previewResult))}</b><span>{variantOf(previewResult) === "mutated" ? text.variantMutated : text.variantPlain} · {previewResult.image.width}×{previewResult.image.height}</span></footer></div></div></AppPortal>}
+  {previewResult?.image && <AppPortal><div className="modal-backdrop artist-result-preview-backdrop" role="dialog" aria-modal="true" aria-label={text.previewImage} onMouseDown={() => setPreviewResult(null)}><div className="artist-result-preview" onMouseDown={(event) => event.stopPropagation()}><button type="button" className="artist-result-preview-close" aria-label={text.back} onClick={() => setPreviewResult(null)}><Icon name="close" /></button><PreviewImageViewer images={previewItems.map(item=>({src:item.image!.fileUrl,alt:item.prompt}))} index={Math.max(0,previewItems.findIndex(item=>item.id===previewResult.id))} onIndex={index=>setPreviewResult(previewItems[index])}/><footer><b>{modelLabel(resultModel(previewResult))}</b><span>{variantOf(previewResult) === "mutated" ? text.variantMutated : text.variantPlain} · {previewResult.image.width}×{previewResult.image.height}</span></footer></div></div></AppPortal>}
   </>;
 }

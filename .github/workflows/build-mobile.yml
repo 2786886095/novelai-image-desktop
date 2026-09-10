@@ -15,6 +15,7 @@ jobs:
     # These hotfixes are desktop-only; future releases are unaffected.
     if: "github.ref_name != 'v2.2.7' && github.ref_name != 'v2.2.8' && !contains(github.event.head_commit.message, 'release: v2.2.7') && !contains(github.event.head_commit.message, 'release: v2.2.8')"
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     defaults:
       run:
         working-directory: mobile
@@ -37,6 +38,9 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Validate mobile source
+        run: flutter analyze --no-pub && flutter test --no-pub
+
       # Sign the release APK with a STABLE key (from repo secrets) so every
       # published version installs over the previous one. If the secrets aren't
       # set, this no-ops and the build falls back to the debug key (build.gradle).
@@ -48,8 +52,8 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
-            echo "::warning::ANDROID_KEYSTORE_BASE64 not set — release APK uses the debug key, so in-place updates will still conflict. Add the keystore secrets to fix."
-            exit 0
+            echo "::error::Stable Android signing key is required for release verification."
+            exit 1
           fi
           echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/release.keystore
           cat > android/key.properties <<EOF
@@ -74,25 +78,16 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
+          draft: true
           body_path: docs/RELEASE_NOTES.md
           files: mobile/build/app/outputs/flutter-apk/app-release.apk
 
-      - name: Publish Android installer to Gitee Release
-        if: startsWith(github.ref, 'refs/tags/v')
-        env:
-          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
-          GITEE_OWNER: langbai666
-          GITEE_REPO: novelai-image-desktop
-          GITEE_RELEASE_TAG: ${{ github.ref_name }}
-        working-directory: ${{ github.workspace }}
-        run: |
-          node scripts/prune-gitee-release-assets.mjs "${{ github.ref_name }}"
-          node scripts/sync-gitee-release.mjs "${{ github.ref_name }}" --file mobile/build/app/outputs/flutter-apk/app-release.apk
 
   ios:
     # These hotfixes are desktop-only; future releases are unaffected.
     if: "github.ref_name != 'v2.2.7' && github.ref_name != 'v2.2.8' && !contains(github.event.head_commit.message, 'release: v2.2.7') && !contains(github.event.head_commit.message, 'release: v2.2.8')"
     runs-on: macos-latest
+    timeout-minutes: 45
     defaults:
       run:
         working-directory: mobile
@@ -108,6 +103,9 @@ jobs:
 
       - name: Install dependencies
         run: flutter pub get
+
+      - name: Validate mobile source
+        run: flutter analyze --no-pub && flutter test --no-pub
 
       # No Apple Developer cert in CI: build without code signing. The resulting
       # .app is packaged into an UNSIGNED .ipa that cannot be installed on a
@@ -135,5 +133,6 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
+          draft: true
           body_path: docs/RELEASE_NOTES.md
           files: mobile/novelai-mobile-unsigned.ipa

@@ -1,3 +1,4 @@
+import '../ui/zoomable_image.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -1812,32 +1813,19 @@ Future<void> _confirmAndRun(
 }
 
 Future<void> _preview(BuildContext context, String path) async {
-  await showDialog<void>(
-    context: context,
-    barrierColor: Colors.black87,
-    builder: (context) => Dialog.fullscreen(
-      backgroundColor: Colors.black,
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: InteractiveViewer(
-              minScale: 0.5,
-              maxScale: 6,
-              child: Center(child: Image.file(File(path), fit: BoxFit.contain)),
-            ),
-          ),
-          Positioned(
-            top: 12,
-            right: 12,
-            child: SafeArea(
-              child: IconButton.filled(
-                onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.close),
-              ),
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
+  final paths = context
+      .read<ComicController>()
+      .project
+      .panels
+      .expand((panel) => panel.candidates)
+      .map((candidate) => candidate.outputPath)
+      .where((path) => path.isNotEmpty && File(path).existsSync())
+      .toSet()
+      .toList();
+  if (!paths.contains(path)) paths.add(path);
+  await showGalleryImagePreview(context,
+      images: paths
+          .map((path) => Image.file(File(path), fit: BoxFit.contain))
+          .toList(),
+      initialIndex: paths.indexOf(path));
 }

@@ -1,3 +1,4 @@
+import {PreviewImageViewer} from './components/PreviewImageViewer';
 import { useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 import { Button, CommittedNumberInput, NumberInput, Toggle, SelectMenuCompat } from "./components/ui";
@@ -739,6 +740,7 @@ export function BatchRedraw({ onBack }: { onBack?: () => void }) {
   const [aiFilling, setAiFilling] = useState(false);
   const [showReferencePresets, setShowReferencePresets] = useState(false);
   const [lightbox, setLightbox] = useState<string | null>(null);
+  const previewItems=useMemo(()=>lightbox?[...new Set([...project.items.flatMap(item=>[dataUrlFromBase64(item.base64),...batchRedrawCandidates(item).map(candidate=>candidate.resultUrl)]),lightbox])]:[],[lightbox,project.items]);
   const [activeItemId, setActiveItemId] = useState<string | null>(null);
   const [resultFilter, setResultFilter] = useState<
     "all" | "done" | "failed" | "pending"
@@ -2308,7 +2310,7 @@ export function BatchRedraw({ onBack }: { onBack?: () => void }) {
           role="presentation"
           onClick={() => setLightbox(null)}
         >
-          <img src={lightbox} alt={t("batch.results.previewAlt")} />
+          <PreviewImageViewer images={previewItems.map(src=>({src,alt:t("batch.results.previewAlt")}))} index={Math.max(0,previewItems.indexOf(lightbox))} onIndex={index=>setLightbox(previewItems[index])}/>
           <button
             className="redraw-lightbox-close"
             onClick={() => setLightbox(null)}

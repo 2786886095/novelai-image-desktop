@@ -1,3 +1,4 @@
+import {PreviewImageViewer} from './components/PreviewImageViewer';
 import { copyTavernText } from "./tavern/clipboard";
 import { ImageFailureDialog, type ImageFailureNotice } from "./agent/ImageFailureDialog";
 import { explicitlyRequestsImage, imageOutcomeText } from "./agent/image-outcome";
@@ -1783,7 +1784,7 @@ function MessageBubble({ conversationId, autoMode, message, speaker, persona, la
             setPreviewImage(null);
           }}>
             <IconButton label={tx("closePreview")} className="tavern-image-lightbox-close" onClick={() => setPreviewImage(null)}><CloseIcon /></IconButton>
-            <div className="tavern-image-lightbox-stage"><img src={previewImage.fileUrl} alt={previewImage.name} /></div>
+            <PreviewImageViewer onBackgroundClick={()=>setPreviewImage(null)} images={message.attachments.filter(item=>item.fileUrl).map(item=>({src:item.fileUrl!,alt:item.name}))} index={Math.max(0,message.attachments.filter(item=>item.fileUrl).findIndex(item=>item.id===previewImage.id))} onIndex={index=>setPreviewImage(message.attachments.filter(item=>item.fileUrl)[index])}/>
             <footer>
               <button type="button" title={tx("openLocation")} aria-label={tx("openLocation")} onClick={() => void window.naiDesktop.openInExplorer(previewImage.filePath)}><FolderOpenIcon /></button>
               <button type="button" title={tx("saveAs")} aria-label={tx("saveAs")} onClick={() => void window.naiDesktop.exportAgentAttachment(conversationId, message.id, previewImage.id).catch(() => undefined)}><SaveIcon /></button>
