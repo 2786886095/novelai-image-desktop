@@ -84,12 +84,12 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           body_path: docs/RELEASE_NOTES.md
-          # v2.2.7 is published after all desktop assets are verified.
-          draft: ${{ github.ref_name == 'v2.2.7' }}
+          # Desktop hotfixes are published only after all release assets are verified.
+          draft: ${{ contains(fromJSON('["v2.2.7","v2.2.8"]'), github.ref_name) }}
           files: ${{ matrix.artifacts }}
 
       - name: Prepare mainland Gitee updater parts
-        if: startsWith(github.ref, 'refs/tags/v') && matrix.name == 'windows' && github.ref_name != 'v2.2.7'
+        if: startsWith(github.ref, 'refs/tags/v') && matrix.name == 'windows' && !contains(fromJSON('["v2.2.7","v2.2.8"]'), github.ref_name)
         shell: pwsh
         run: |
           $setup = Get-ChildItem -LiteralPath release -Filter 'Langbai-NovelAI-Studio-Setup-*.exe' | Select-Object -First 1
@@ -97,7 +97,7 @@ jobs:
           node scripts/prepare-gitee-update.mjs --setup $setup.FullName --output release/gitee-update --version '${{ github.ref_name }}'
 
       - name: Publish Windows installer to Gitee Release
-        if: startsWith(github.ref, 'refs/tags/v') && matrix.name == 'windows' && github.ref_name != 'v2.2.7'
+        if: startsWith(github.ref, 'refs/tags/v') && matrix.name == 'windows' && !contains(fromJSON('["v2.2.7","v2.2.8"]'), github.ref_name)
         env:
           GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
           GITEE_OWNER: langbai666

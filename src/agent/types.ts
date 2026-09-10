@@ -347,6 +347,7 @@ export type AgentEvent =
   | { kind: "permission"; request: AgentPermissionRequest }
   | { kind: "permission-resolved"; permissionId: string; response: "once" | "always" | "reject" }
   | { kind: "apply-prompt"; positivePrompt: string; negativePrompt?: string; stylePrompt?: string }
+  | { kind: "image-error"; conversationId: string; messageId: string; stage: "proposal" | "generation"; message: string }
   | { kind: "error"; conversationId?: string; message: string };
 
 export interface AgentSendRequest {

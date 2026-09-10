@@ -1,7 +1,10 @@
 import { copyTavernText } from "./tavern/clipboard";
+import { ImageFailureDialog, type ImageFailureNotice } from "./agent/ImageFailureDialog";
+import { explicitlyRequestsImage, imageOutcomeText } from "./agent/image-outcome";
 import { useId } from "react";
 import { sceneErrorMessage } from "./tavern/scene-errors";
-import { SceneBindingsEditor } from "./tavern/SceneBindingsEditor";
+import { SceneRailPanel } from "./tavern/SceneRailPanel";
+import { sceneRailSource, sceneRailText, sceneDraftCopy, sceneDraftLabel } from "./tavern/scene-rail";
 import { compileSceneBindings } from "./tavern/scene-bindings";
 import { useTavernPromptDraft } from "./tavern/prompt-draft";
 import { imagePasteProps } from "./image-paste";
@@ -116,7 +119,7 @@ import { NAI_MODELS, NAI_SAMPLERS, type AppSettings, type GenerateParams, type S
 
 import { SelectMenuCompat } from "./components/ui";
 type LibraryTab = "characters" | "chats";
-type InspectorTab = "character" | "world" | "persona" | "model" | "image";
+type InspectorTab = "character" | "world" | "persona" | "model" | "image" | "scene";
 type MobilePanel = "left" | "right" | null;
 type ComposerMenu = "reasoning" | "mode" | null;
 
@@ -404,7 +407,9 @@ export default function AgentPage() {
   const workbench = useMemo(() => workbenchCopy(language), [language]);
   const tx = useCallback((key: TavernUiKey, values?: Record<string, string | number>) => tavernUiText(language, key, values), [language]);
   const [workspace, setWorkspace] = useState<AgentWorkspaceData | null>(null);
+  const [followRequest, setFollowRequest] = useState(0);
   const [libraryTab, setLibraryTab] = useState<LibraryTab>("characters");
+  const [sceneSelection, setSceneSelection] = useState<{conversationId:string;messageId:string}|null>(null);
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("image");
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
@@ -419,6 +424,12 @@ export default function AgentPage() {
   const [composerPopover, setComposerPopover] = useState({ left: 8, width: 360, pointer: 48, bottom: 48 });
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
+  const [imageFailures, setImageFailures] = useState<ImageFailureNotice[]>([]);
+  const reportImageFailure = useCallback((failure: ImageFailureNotice) => {
+    setImageFailures(current => current.some(item => item.conversationId === failure.conversationId
+      && item.stage === failure.stage && item.message === failure.message)
+      ? current : [...current, failure]);
+  }, []);
   const [deletingConversationId, setDeletingConversationId] = useState("");
   const [renameDialog, setRenameDialog] = useState<{ id: string; name: string } | null>(null);
   const [stylePresetDialog, setStylePresetDialog] = useState<{ prompt: string; name: string } | null>(null);
@@ -452,12 +463,13 @@ export default function AgentPage() {
         });
       }
       if (event.kind === "error") setError(event.message);
+      if (event.kind === "image-error") { setError(event.message); reportImageFailure(event); }
     });
     return () => {
       alive = false;
       unsubscribe();
     };
-  }, []);
+  }, [reportImageFailure]);
 
   useEffect(() => {
     if (!settings) return;
@@ -844,11 +856,12 @@ export default function AgentPage() {
     window.localStorage.setItem("tavern-composer-height-v2", String(next));
   };
 
-  const send = async () => {
-    if (!conversation || conversation.status === "running") return;
-    const text = composer;
-    if (!text.trim() && !conversation.draftAttachments.length) return;
-    setComposer("");
+  const send = async (sceneRequest?: string): Promise<boolean> => {
+    if (!conversation || conversation.status === "running") return false;
+    const text = sceneRequest ?? composer;
+    if (!text.trim() && !conversation.draftAttachments.length) return false;
+    if (sceneRequest === undefined) setComposer("");
+    setFollowRequest(value => value + 1);
     setError("");
     try {
       const imageDefaults = activeCharacter ? {
@@ -860,18 +873,23 @@ export default function AgentPage() {
         sampler: activeCharacter.visual.sampler || params.sampler,
         count: activeCharacter.visual.count ?? 1,
       } : undefined;
-      const result = await window.naiDesktop.sendAgentMessage({ conversationId: conversation.id, text, characterId: activeCharacter?.id, imageDefaults });
-      if (result.ok) return;
-      setComposer(text);
+      const result = await window.naiDesktop.sendAgentMessage({ conversationId: conversation.id, text, characterId: activeCharacter?.id, imageDefaults, ...(sceneRequest !== undefined ? {attachmentIds: []} : {}) });
+      if (result.ok) return true;
+      if (sceneRequest === undefined) setComposer(text);
       setError(result.message ?? copy.send);
+      if (explicitlyRequestsImage(text)) reportImageFailure({ conversationId: conversation.id, messageId: "send-preflight", stage: "proposal", message: result.message ?? copy.send });
     } catch (error) {
-      setComposer(text);
+      if (sceneRequest === undefined) setComposer(text);
       setError(error instanceof Error ? error.message : copy.send);
+      if (explicitlyRequestsImage(text)) reportImageFailure({ conversationId: conversation.id, messageId: "send-transport", stage: "proposal", message: error instanceof Error ? error.message : copy.send });
     }
+    return false;
   };
 
   const regenerate = async (message: AgentMessage) => {
     if (!conversation) return;
+    const requestedImage = !!message.imageProposal || explicitlyRequestsImage(conversation.messages
+      .slice(0, conversation.messages.findIndex(item => item.id === message.id)).filter(item => item.role === "user").at(-1)?.content ?? "");
     setError("");
     try {
       const result = await window.naiDesktop.sendAgentMessage({
@@ -889,9 +907,13 @@ export default function AgentPage() {
           count: activeCharacter.visual.count ?? 1,
         } : undefined,
       });
-      if (!result.ok) setError(result.message ?? tx("regenerateReply"));
+      if (!result.ok) {
+        setError(result.message ?? tx("regenerateReply"));
+        if (requestedImage) reportImageFailure({ conversationId: conversation.id, messageId: message.id, stage: "proposal", message: result.message ?? tx("regenerateReply") });
+      }
     } catch (error) {
       setError(error instanceof Error ? error.message : tx("regenerateReply"));
+      if (requestedImage) reportImageFailure({ conversationId: conversation.id, messageId: message.id, stage: "proposal", message: error instanceof Error ? error.message : tx("regenerateReply") });
     }
   };
 
@@ -917,6 +939,12 @@ export default function AgentPage() {
     else setWorkspace(await window.naiDesktop.getAgentWorkspace());
   };
 
+  const railSource = sceneRailSource(conversation, activeCharacter?.id,
+    sceneSelection?.conversationId === conversation?.id ? sceneSelection?.messageId : undefined);
+  const openScene = (messageId: string) => {
+    if (conversation) setSceneSelection(messageId === sceneRailSource(conversation, activeCharacter?.id).latest?.id ? null : {conversationId: conversation.id, messageId});
+    openInspector("scene");
+  };
   const updateMessage = (messageId: string, mutator: (message: AgentMessage) => void) => updateConversation((chat) => {
     const message = chat.messages.find((item) => item.id === messageId);
     if (message) mutator(message);
@@ -932,8 +960,16 @@ export default function AgentPage() {
 
   const generateProposal = async (message: AgentMessage, proposal: TavernImageProposal) => {
     if (!conversation) return;
-    const result = await window.naiDesktop.generateTavernImage({ conversationId: conversation.id, messageId: message.id, proposal });
-    if (!result.ok) setError(result.message ?? proposalStatus("error", language));
+    setError("");
+    try {
+      const result = await window.naiDesktop.generateTavernImage({ conversationId: conversation.id, messageId: message.id, proposal });
+      if (!result.ok) setError(result.message ?? proposalStatus("error", language));
+    } catch (reason) {
+      const detail = reason instanceof Error ? reason.message : String(reason);
+      setError(detail);
+      reportImageFailure({ conversationId: conversation.id, messageId: message.id, stage: "generation", message: detail });
+      throw reason;
+    }
   };
 
   const saveProvider = async () => {
@@ -1076,6 +1112,7 @@ export default function AgentPage() {
         </header>
 
         <MessageStream
+          followRequest={followRequest}
           conversation={conversation}
           workspace={workspace}
           activeCharacter={activeCharacter}
@@ -1086,6 +1123,7 @@ export default function AgentPage() {
           onDeleteMessage={deleteMessage}
           onGenerate={generateProposal}
           onRegenerate={(message) => void regenerate(message)}
+          onOpenScene={openScene}
         />
 
         <footer className="tavern-composer-wrap">
@@ -1219,6 +1257,7 @@ export default function AgentPage() {
           <nav className="tavern-inspector-collapsed">
             <IconButton label={copy.model} onClick={() => { setRightCollapsed(false); setInspectorTab("model"); }}><BotIcon /></IconButton>
             <IconButton label={copy.image} onClick={() => { setRightCollapsed(false); setInspectorTab("image"); }}><ImageIcon /></IconButton>
+            <IconButton label={sceneRailText(language).tab} onClick={() => openInspector("scene")}><MagicIcon /></IconButton>
           </nav>
         ) : (
           <>
@@ -1226,16 +1265,31 @@ export default function AgentPage() {
               {((isBuiltInCharacter(activeCharacter) ? [
                 ["model", copy.model, <BotIcon key="i" />],
                 ["image", copy.image, <ImageIcon key="i" />],
+                ["scene", sceneRailText(language).tab, <MagicIcon key="s" />],
               ] : [
                 ["character", tx("characterInfo"), <PersonIcon key="i" />],
                 ["world", tx("lorebooks"), <BookIcon key="i" />],
                 ["model", copy.model, <BotIcon key="i" />],
                 ["image", copy.image, <ImageIcon key="i" />],
+                ["scene", sceneRailText(language).tab, <MagicIcon key="s" />],
               ]) as Array<[InspectorTab, string, ReactNode]>).map(([id, label, icon]) => (
                 <button type="button" key={id} className={inspectorTab === id ? "is-active" : ""} onClick={() => setInspectorTab(id)}>{icon}<span>{label}</span></button>
               ))}
             </nav>
             <div className="tavern-inspector-content">
+              {inspectorTab === "scene" && <SceneRailPanel key={conversation?.id} source={railSource} language={language}
+                onLatest={()=>setSceneSelection(null)} onCreateCopy={()=>{
+                  if(!railSource.message||railSource.historical||railSource.busy)return;
+                  const draft=sceneDraftCopy(railSource.message,sceneDraftLabel(language));
+                  updateConversation(chat=>{chat.messages.push(draft);});setSceneSelection(null);
+                }} onRequestEdit={request=>{setSceneSelection(null); return send(request);}} onChange={scene=>{
+                  if(!railSource.canEdit||!railSource.message)return;
+                  updateMessage(railSource.message.id, message=>{
+                    if(message.imageProposal?.status!=="pending"||message.imageProposal.scene?.revision!==railSource.message?.imageProposal?.scene?.revision)return;
+                    message.imageProposal={...message.imageProposal,scene,positivePrompt:compileSceneBindings(scene).positivePrompt};
+                    if(message.swipeIndex!==undefined)(message.imageProposalSwipes??=[])[message.swipeIndex]=structuredClone(message.imageProposal);
+                  });
+                }}/>}
               {inspectorTab === "character" ? (
                 <CharacterPanel
                   draft={characterDraft}
@@ -1300,6 +1354,14 @@ export default function AgentPage() {
         )}
       </aside>
       {mobilePanel ? <button className="tavern-scrim tavern-mobile-only" aria-label={tx("closeSidebar")} onClick={() => setMobilePanel(null)} /> : null}
+      {imageFailures[0] && <ImageFailureDialog
+        key={`${imageFailures[0].conversationId}:${imageFailures[0].messageId}:${imageFailures[0].stage}:${imageFailures[0].message}`}
+        failure={{ ...imageFailures[0], message: sceneErrorMessage(imageFailures[0].message, language) }} language={language}
+        onClose={() => setImageFailures(current => current.slice(1))}
+        onOpen={() => {
+          void selectConversation(imageFailures[0].conversationId).catch(reason => setError(reason instanceof Error ? reason.message : String(reason)));
+          setImageFailures(current => current.slice(1));
+        }} />}
       {renameDialog ? createPortal((
         <div className="modal-backdrop tavern-input-dialog-backdrop" onMouseDown={() => setRenameDialog(null)}>
           <section className="modal input-modal tavern-input-dialog" role="dialog" aria-modal="true" aria-labelledby="tavern-rename-chat-title" onMouseDown={(event) => event.stopPropagation()}>
@@ -1361,7 +1423,8 @@ export default function AgentPage() {
   );
 }
 
-export function MessageStream({ conversation, workspace, activeCharacter, activePersona, language, onStarter, onUpdateMessage, onDeleteMessage, onGenerate, onRegenerate }: {
+export function MessageStream({ followRequest = 0, conversation, workspace, activeCharacter, activePersona, language, onStarter, onUpdateMessage, onDeleteMessage, onGenerate, onRegenerate, onOpenScene }: {
+  followRequest?: number;
   conversation?: AgentConversation;
   workspace: AgentWorkspaceData;
   activeCharacter?: TavernCharacter;
@@ -1372,6 +1435,7 @@ export function MessageStream({ conversation, workspace, activeCharacter, active
   onDeleteMessage: (message: AgentMessage) => void;
   onGenerate: (message: AgentMessage, proposal: TavernImageProposal) => Promise<void>;
   onRegenerate: (message: AgentMessage) => void;
+  onOpenScene?: (messageId:string)=>void;
 }) {
   const tx = (key: TavernUiKey, values?: Record<string, string | number>) => tavernUiText(language, key, values);
   const workbench = workbenchCopy(normalizeAppLanguage(language));
@@ -1441,7 +1505,8 @@ export function MessageStream({ conversation, workspace, activeCharacter, active
         currentScroller.scrollTo({ top: 0, behavior: "auto" });
         return;
       }
-      if (lastRow && lastRow.getBoundingClientRect().height >= currentScroller.clientHeight - 18) {
+      if (lastRow && lastRow.getBoundingClientRect().height >= currentScroller.clientHeight - 18
+        && !lastRow.querySelector(".tavern-proposal-toolbar .is-primary")) {
         const viewportRect = currentScroller.getBoundingClientRect();
         const rowRect = lastRow.getBoundingClientRect();
         currentScroller.scrollTo({ top: currentScroller.scrollTop + rowRect.top - viewportRect.top, behavior: "auto" });
@@ -1450,6 +1515,12 @@ export function MessageStream({ conversation, workspace, activeCharacter, active
       currentScroller.scrollTo({ top: currentScroller.scrollHeight - currentScroller.clientHeight, behavior: "auto" });
     });
   }, [messages.length, useVirtualRows, virtualizer]);
+  // Sending is an explicit request to follow the new response; opening disclosures is not.
+  useEffect(() => {
+    if (!followRequest) return;
+    interactionPausedRef.current = false; followLatestRef.current = true;
+    setUnreadMessages(0); settleLatest();
+  }, [followRequest]);
   // Disclosure toggles (including nested character/clothing panels) are reader
   // interactions, not new messages. Remeasure without invoking follow-latest.
   const remeasure = useCallback(() => {
@@ -1566,6 +1637,7 @@ export function MessageStream({ conversation, workspace, activeCharacter, active
                 onDelete={() => onDeleteMessage(message)}
                 onGenerate={(proposal) => onGenerate(message, proposal)}
                 onRegenerate={() => onRegenerate(message)}
+                onOpenScene={()=>onOpenScene?.(message.id)}
                 onLayoutChange={remeasure}
                 animate={animate}
               />
@@ -1583,7 +1655,7 @@ export function MessageStream({ conversation, workspace, activeCharacter, active
   );
 }
 
-function MessageBubble({ conversationId, autoMode, message, speaker, persona, language, onUpdate, onDelete, onGenerate, onRegenerate, onLayoutChange, animate }: {
+function MessageBubble({ conversationId, autoMode, message, speaker, persona, language, onUpdate, onDelete, onGenerate, onRegenerate, onOpenScene, onLayoutChange, animate }: {
   conversationId: string;
   autoMode: boolean;
   message: AgentMessage;
@@ -1594,6 +1666,7 @@ function MessageBubble({ conversationId, autoMode, message, speaker, persona, la
   onDelete: () => void;
   onGenerate: (proposal: TavernImageProposal) => Promise<void>;
   onRegenerate: () => void;
+  onOpenScene:()=>void;
   onLayoutChange: () => void;
   animate: boolean;
 }) {
@@ -1662,11 +1735,12 @@ function MessageBubble({ conversationId, autoMode, message, speaker, persona, la
             ) : null)}
           </div>
         ) : null}
-        {proposalDraft?.status === "completed" && <SceneBindingsEditor scene={proposalDraft.scene} language={language} onLayoutChange={onLayoutChange} />}
+        {proposalDraft?.status === "completed" && <button type="button" className="btn tavern-scene-link" onClick={onOpenScene}><MagicIcon />{sceneRailText(language).snapshot}</button>}
         {proposalDraft?.status === "completed" && <details className="tavern-continuity" onToggle={onLayoutChange}><summary>{imageUi(language).current}</summary><p>{proposalDraft.positivePrompt}</p><p>{proposalDraft.stylePrompt}</p>{proposalDraft.continuity?.previousPrompt && <details><summary>{imageUi(language).previous}</summary><p>{proposalDraft.continuity.previousPrompt}</p></details>}</details>}
         {proposalDraft && proposalDraft.status !== "completed" && proposalDraft.status !== "cancelled" ? (
           <ImageProposalCard
             proposal={proposalDraft}
+            onOpenScene={onOpenScene}
             autoMode={autoMode}
             setProposal={(next) => { setProposalDraft(next); if(next.scene) onUpdate(item => {item.imageProposal=next;}); }}
             onGenerate={(next) => {
@@ -1721,8 +1795,9 @@ function MessageBubble({ conversationId, autoMode, message, speaker, persona, la
   );
 }
 
-export function ImageProposalCard({ proposal, autoMode, setProposal, onGenerate, onCancel, onLayoutChange, language }: {
+export function ImageProposalCard({ proposal, onOpenScene, autoMode, setProposal, onGenerate, onCancel, onLayoutChange, language }: {
   proposal: TavernImageProposal;
+  onOpenScene?:()=>void;
   autoMode: boolean;
   setProposal: (value: TavernImageProposal) => void;
   onGenerate: (value: TavernImageProposal) => Promise<void>;
@@ -1759,7 +1834,7 @@ export function ImageProposalCard({ proposal, autoMode, setProposal, onGenerate,
       <header><span><MagicIcon /></span><strong>{tx("proposal")}</strong><small role="status">{submitting ? proposalStatus("running", language) : repairing ? tx("repairingImage") : autoMode && needsReview ? tx("autoImagePaused") : autoMode && proposal.status === "pending" ? tx("autoImageReady") : proposalStatus(proposal.status, language)}</small></header>
       {repairing && <p role="status" className="muted">{tx("repairingImageHint")}</p>}
       {autoMode && needsReview && !repairing && <p role="alert" className="muted">{tx("autoImagePausedHint")}</p>}
-      <SceneBindingsEditor scene={proposal.scene} language={language} disabled={busy} onLayoutChange={onLayoutChange} onChange={scene => setProposal({...proposal,scene,positivePrompt:compileSceneBindings(scene).positivePrompt})} />
+      {onOpenScene&&<div className="tavern-scene-summary"><small className="muted">{sceneRailText(language).summary}</small><button type="button" className="btn tavern-scene-link" onClick={onOpenScene}><MagicIcon />{sceneRailText(language).open}</button></div>}
       <textarea
         className="tavern-proposal-prompt"
         aria-label={tx("positivePrompt")}
@@ -1771,6 +1846,8 @@ export function ImageProposalCard({ proposal, autoMode, setProposal, onGenerate,
       {proposal.continuity && !repairing && <div className="tavern-continuity">
         {proposal.continuity.reviewRequired ? <><p role="alert">{imageUi(language).review}</p>{proposal.continuity.suggestedPrompt && <p>{proposal.continuity.suggestedPrompt}</p>}<div className="tavern-continuity-actions"><button type="button" className="btn secondary" disabled={!proposal.positivePrompt.trim() || (!proposal.scene && proposal.continuity?.bindingError === "SCENE_REQUIRED")} onClick={() => reviewChoice(false)}>{autoMode ? tx("keepAndGenerate") : imageUi(language).keep}</button>{proposal.continuity.suggestedPrompt && <button type="button" className="btn secondary" onClick={() => reviewChoice(true)}>{autoMode ? tx("adoptAndGenerate") : imageUi(language).adopt}</button>}</div></> : <details onToggle={onLayoutChange}><summary>{imageUi(language).changes} · {proposal.continuity.changes.length}</summary><small>{imageUi(language).preserved}</small>{proposal.continuity.changes.map((change, i) => <p key={i}>{change.from && <del>{change.from}</del>}{change.from && change.to ? " → " : ""}{change.to && <ins>{change.to}</ins>}</p>)}</details>}
       </div>}
+      {(repairing || proposal.status === "running" || submitting || (!autoMode && proposal.status === "pending" && !needsReview)) &&
+        <p className="muted tavern-proposal-stage" role="status">{imageOutcomeText(language)[repairing ? "repairPending" : proposal.status === "running" || submitting ? "generationPending" : "awaitingConfirmation"]}</p>}
       <div className="tavern-proposal-toolbar">
         <button type="button" className="btn tavern-parameters-toggle" aria-expanded={parametersOpen} aria-controls={parametersId}
           onClick={() => { setParametersOpen(open => !open); requestAnimationFrame(onLayoutChange); }}>{tx("sizeAndParams")} <ChevronDownIcon /></button>

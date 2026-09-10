@@ -12,8 +12,8 @@ permissions:
 
 jobs:
   android:
-    # This release was explicitly scoped to desktop; future releases are unaffected.
-    if: "github.ref_name != 'v2.2.7' && !contains(github.event.head_commit.message, 'release: v2.2.7')"
+    # These hotfixes are desktop-only; future releases are unaffected.
+    if: "github.ref_name != 'v2.2.7' && github.ref_name != 'v2.2.8' && !contains(github.event.head_commit.message, 'release: v2.2.7') && !contains(github.event.head_commit.message, 'release: v2.2.8')"
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -90,8 +90,8 @@ jobs:
           node scripts/sync-gitee-release.mjs "${{ github.ref_name }}" --file mobile/build/app/outputs/flutter-apk/app-release.apk
 
   ios:
-    # This release was explicitly scoped to desktop; future releases are unaffected.
-    if: "github.ref_name != 'v2.2.7' && !contains(github.event.head_commit.message, 'release: v2.2.7')"
+    # These hotfixes are desktop-only; future releases are unaffected.
+    if: "github.ref_name != 'v2.2.7' && github.ref_name != 'v2.2.8' && !contains(github.event.head_commit.message, 'release: v2.2.7') && !contains(github.event.head_commit.message, 'release: v2.2.8')"
     runs-on: macos-latest
     defaults:
       run:

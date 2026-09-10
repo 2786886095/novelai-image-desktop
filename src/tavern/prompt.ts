@@ -289,11 +289,28 @@ export function buildTavernPromptMessages(context: TavernPromptContext): TavernP
 
 export function parseLangbaiImageProposal(content: string) {
   const match = content.match(/<langbai-image>\s*([\s\S]*?)\s*<\/langbai-image>/i);
-  const bareStart = match ? -1 : content.search(/\{\s*"positivePrompt"\s*:/i);
+  // Some providers return the requested JSON in a code fence or as a bare object.
+  // Recognize the structural fields regardless of property order, not only positivePrompt.
+  if (!match) {
+    const candidates = [...content.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)]
+      .map(m => ({ json: m[1], block: m[0] }));
+    if (content.trim().startsWith("{")) candidates.push({ json: content.trim(), block: content.trim() });
+    for (const candidate of candidates) {
+      try {
+        const raw = JSON.parse(candidate.json);
+        if (raw && typeof raw === "object" && !Array.isArray(raw)
+          && ["positivePrompt", "scene", "scenePatch", "promptPatch"].some(key => Object.hasOwn(raw, key))) {
+          return { visible: content.replace(candidate.block, "").trim(), proposal: raw as Record<string, unknown>, issue: undefined };
+        }
+      } catch { /* The marked malformed directive is diagnosed below. */ }
+    }
+  }
+  const bareStart = match ? -1 : content.search(/\{\s*"(?:positivePrompt|scene|scenePatch|promptPatch)"\s*:/i);
   const machineText = match?.[1] ?? (bareStart >= 0
     ? content.slice(bareStart).replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim()
     : "");
-  if (!machineText) return { visible: content.trim(), proposal: null as Record<string, unknown> | null };
+  if (!machineText) return { visible: content.trim(), proposal: null as Record<string, unknown> | null,
+    issue: /<langbai-image\b/i.test(content) ? "invalid" as const : undefined };
   let proposal: Record<string, unknown> | null = null;
   try {
     const parsed = JSON.parse(machineText);
@@ -301,11 +318,11 @@ export function parseLangbaiImageProposal(content: string) {
   } catch {
     proposal = null;
   }
-  if (!proposal && !match) return { visible: content.trim(), proposal };
+  if (!proposal && !match) return { visible: content.trim(), proposal, issue: "invalid" as const };
   const visible = match
     ? content.replace(match[0], "")
     : content.slice(0, bareStart).replace(/```(?:json)?\s*$/i, "");
-  return { visible: visible.trim(), proposal };
+  return { visible: visible.trim(), proposal, issue: proposal ? undefined : "invalid" as const };
 }
 
 export function defaultImagePromptForMessage(

@@ -103,6 +103,22 @@ describe("Character Tavern prompt assembly", () => {
     expect(parsed.proposal).toMatchObject({ positivePrompt: "1girl, starry sky", count: 1 });
   });
 
+  it("recovers structured JSON in fences regardless of property order", () => {
+    const parsed = parseLangbaiImageProposal('方案。\n```json\n{"width":1024,"scene":{"version":1}}\n```');
+    expect(parsed.visible).toBe('方案。');
+    expect(parsed.proposal).toMatchObject({width:1024,scene:{version:1}});
+    expect(parsed.issue).toBeUndefined();
+    expect(parseLangbaiImageProposal('{"count":1,"promptPatch":{"append":["forest"]}}').proposal).toMatchObject({promptPatch:{append:['forest']}});
+  });
+
+  it("distinguishes malformed image directives from ordinary conversation", () => {
+    for (const text of ['<langbai-image>{broken}</langbai-image>', '<langbai-image>{"scene":', '{"positivePrompt":broken}']) {
+      expect(parseLangbaiImageProposal(text).issue).toBe('invalid');
+    }
+    expect(parseLangbaiImageProposal('你好。').issue).toBeUndefined();
+    expect(parseLangbaiImageProposal('```json\n{"weather":"fine"}\n```').proposal).toBeNull();
+  });
+
   it("keeps right-panel image parameters unless the user explicitly overrides named fields", () => {
     const defaults = {
       model: "nai-diffusion-5-full",

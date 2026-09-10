@@ -1,4 +1,5 @@
 import { providerIssueMessage, responseIssue, type ProviderIssue } from "../../src/agent/provider-outcome";
+import { isRepeatImageRequest, explicitlyRequestsImage, imageOutcomeText, type ImageFailureStage } from "../../src/agent/image-outcome";
 import { repairImagePrompt, combineImageTurnUsage } from "../../src/tavern/image-repair";
 import { compileSceneBindings } from "../../src/tavern/scene-bindings";
 import { compileSceneForModel } from "../../src/tavern/scene-generation";
@@ -688,14 +689,30 @@ function localRoleplaySummary(conversation: AgentConversation) {
   return transcript.length > 24_000 ? transcript.slice(-24_000) : transcript;
 }
 
+function notifyImageFailure(conversationId: string, messageId: string, message: string, stage: ImageFailureStage) {
+  emit({ kind: "image-error", conversationId, messageId, message, stage });
+  return { ok: false as const, message };
+}
+
+function failImageRequest(request: TavernImageRequest, message: string) {
+  updateAgentConversation(request.conversationId, target => {
+    const item = target.messages.find(entry => entry.id === request.messageId);
+    if (!item) return;
+    item.imageProposal = { ...request.proposal, status: "error", error: message };
+    if (item.swipeIndex !== undefined) (item.imageProposalSwipes ??= [])[item.swipeIndex] = structuredClone(item.imageProposal);
+  });
+  emitWorkspace();
+  return notifyImageFailure(request.conversationId, request.messageId, message, "generation");
+}
+
 export async function generateTavernImage(request: TavernImageRequest) {
-  if (!request.proposal.scene && request.proposal.continuity?.bindingError === "SCENE_REQUIRED") return { ok: false, message: "SCENE_REQUIRED" };
-  if (request.proposal.continuity?.reviewRequired) return { ok: false, message: "请先确认提示词变更，旧方案已保留。" };
   const workspace = readAgentWorkspace();
   const conversation = workspace.conversations.find((item) => item.id === request.conversationId);
   const message = conversation?.messages.find((item) => item.id === request.messageId);
-  if (!conversation || !message) return { ok: false, message: "找不到对应的对话消息。" };
+  if (!conversation || !message) return notifyImageFailure(request.conversationId, request.messageId, "找不到对应的对话消息。", "generation");
   if (message.imageProposal?.status === "running") return { ok: false, message: "当前图片正在生成，请勿重复提交。" };
+  if (!request.proposal.scene && request.proposal.continuity?.bindingError === "SCENE_REQUIRED") return failImageRequest(request, "SCENE_REQUIRED");
+  if (request.proposal.continuity?.reviewRequired) return failImageRequest(request, "请先确认提示词变更，旧方案已保留。");
   const character = workspace.characters.find((item) => item.id === conversation.activeCharacterId)
     ?? workspace.characters[0];
   const proposal = {
@@ -710,10 +727,13 @@ export async function generateTavernImage(request: TavernImageRequest) {
       bound = compileSceneForModel(proposal.scene,model);
       proposal.positivePrompt = bound.positivePrompt;
     }
-  } catch (error) { return {ok:false, message:error instanceof Error ? error.message : "SCENE_INVALID"}; }
+  } catch (error) { return failImageRequest(request, error instanceof Error ? error.message : "SCENE_INVALID"); }
   updateAgentConversation(request.conversationId, (target) => {
     const item = target.messages.find((entry) => entry.id === request.messageId);
-    if (item) item.imageProposal = { ...proposal, status: "running", error: undefined };
+    if (item) {
+      item.imageProposal = { ...proposal, status: "running", error: undefined };
+      if (item.status === "complete") item.error = undefined;
+    }
   });
   emitWorkspace();
   try {
@@ -737,12 +757,17 @@ export async function generateTavernImage(request: TavernImageRequest) {
         count: proposal.count,
       },
     }, emit);
-    if (!result.ok) throw new Error(result.output || "图片生成失败。");
+    if (!result.ok) {
+      const detail = result.data && typeof result.data === "object" ? (result.data as { message?: unknown }).message : undefined;
+      throw new Error(typeof detail === "string" && detail.trim() ? detail : result.output || "图片生成失败。");
+    }
+    const images = Array.isArray(result.generatedImages) ? result.generatedImages.filter(image => image.kind === "image" && typeof image.filePath === "string" && image.filePath.trim() && fs.existsSync(image.filePath)) : [];
+    if (!images.length) throw new Error(imageOutcomeText(getSettings().language).empty);
     updateAgentConversation(request.conversationId, (target) => {
       const item = target.messages.find((entry) => entry.id === request.messageId);
       if (!item) return;
       item.imageProposal = { ...proposal, status: "completed", error: undefined };
-      item.attachments.push(...(result.generatedImages ?? []));
+      item.attachments.push(...images);
       if (item.swipeIndex !== undefined) {
         (item.imageProposalSwipes ??= [])[item.swipeIndex] = structuredClone(item.imageProposal);
         (item.swipeAttachments ??= [])[item.swipeIndex] = structuredClone(item.attachments);
@@ -754,7 +779,7 @@ export async function generateTavernImage(request: TavernImageRequest) {
         status: "completed",
         input: { positivePrompt: proposal.positivePrompt, count: proposal.count },
         output: result.output,
-        generatedImages: result.generatedImages,
+        generatedImages: images,
         startedAt: proposal.createdAt,
         completedAt: timestamp(),
       });
@@ -763,12 +788,7 @@ export async function generateTavernImage(request: TavernImageRequest) {
     return { ok: true };
   } catch (error) {
     const messageText = error instanceof Error ? error.message : String(error);
-    updateAgentConversation(request.conversationId, (target) => {
-      const item = target.messages.find((entry) => entry.id === request.messageId);
-      if (item) item.imageProposal = { ...proposal, status: "error", error: messageText };
-    });
-    emitWorkspace();
-    return { ok: false, message: messageText };
+    return failImageRequest({ ...request, proposal }, messageText);
   }
 }
 
@@ -779,7 +799,13 @@ export async function sendAgentMessage(request: AgentSendRequest) {
   let conversation = initial.conversations.find((item) => item.id === request.conversationId);
   if (!conversation) return { ok: false, message: "对话不存在。" };
   const settings = getSettings();
-  if (shouldAutoCompact(conversation.context, settings.agentAutoCompact, settings.agentAutoCompactThreshold)) {
+  const previousMessage = conversation.messages.at(-1);
+  const repeatImage = !request.regenerateMessageId && isRepeatImageRequest(request.text)
+    && !request.attachmentIds?.length && !conversation.draftAttachments.length
+    && previousMessage?.role === "assistant" && previousMessage.status === "complete"
+    && !!previousMessage.imageProposal && ["pending", "completed"].includes(previousMessage.imageProposal.status)
+    && !previousMessage.imageProposal.continuity?.reviewRequired;
+  if (!repeatImage && shouldAutoCompact(conversation.context, settings.agentAutoCompact, settings.agentAutoCompactThreshold)) {
     await compactAgentConversation(request.conversationId, true);
     initial = readAgentWorkspace();
     conversation = initial.conversations.find((item) => item.id === request.conversationId);
@@ -883,6 +909,34 @@ export async function sendAgentMessage(request: AgentSendRequest) {
       ),
     };
     const imageDefaults = request.imageDefaults ?? tavernImageDefaults(character);
+    // A literal repeat is an application action, not another model-authored scene revision.
+    // Do not cross a reset, a different character, an unresolved edit, or attachment input.
+    if (repeatImage && imageBase && imageBase.id === previousMessage?.imageProposal?.id) {
+      const raw = { baseImageId: imageBase.id, ...(imageBase.scene
+        ? { scenePatch: { revision: imageBase.scene.revision, operations: [] } }
+        : { promptPatch: { replacements: [], append: [] } }) };
+      const pending = proposalFromRaw(raw, previousMessage, character, imageDefaults, imageBase);
+      if (pending && !pending.continuity?.reviewRequired) {
+        controller.signal.throwIfAborted();
+        const auto = activeConversation.generationMode === "auto";
+        updateAgentConversation(request.conversationId, target => {
+          const assistant = target.messages.find(item => item.id === messageId)!;
+          assistant.content = imageOutcomeText(settings.language)[auto ? "repeatAuto" : "repeatConfirm"];
+          assistant.status = "complete";
+          assistant.completedAt = timestamp();
+          assistant.imageProposal = pending;
+          assistant.swipes = [assistant.content]; assistant.swipeIndex = 0;
+          assistant.imageProposalSwipes = [structuredClone(pending)]; assistant.swipeAttachments = [[]];
+          target.status = "idle";
+        });
+        emitWorkspace();
+        if (auto) {
+          const generated = await generateTavernImage({conversationId: request.conversationId, messageId, proposal: pending});
+          if (!generated.ok) return {ok: true, imageError: generated.message};
+        }
+        return {ok: true};
+      }
+    }
     const prompt = buildTavernPromptMessages({
       conversation: effectiveConversation,
       characters: cast.length ? cast : [character],
@@ -977,8 +1031,26 @@ export async function sendAgentMessage(request: AgentSendRequest) {
     emitWorkspace();
     const updated = readAgentWorkspace().conversations.find((item) => item.id === request.conversationId);
     const stored = updated?.messages.find((item) => item.id === messageId);
+    const requestedText = request.regenerateMessageId
+      ? beforeReply.filter(message => message.role === "user").at(-1)?.content ?? ""
+      : request.text;
+    const proposalIssue = parsed.issue ? imageOutcomeText(settings.language).invalid
+      : !stored?.imageProposal && (proposalRaw || explicitlyRequestsImage(requestedText)) ? imageOutcomeText(settings.language).missing
+      : updated?.generationMode === "auto" && stored?.imageProposal?.continuity?.reviewRequired ? imageOutcomeText(settings.language).review
+      : undefined;
+    if (proposalIssue) {
+      updateAgentConversation(request.conversationId, target => {
+        const assistant = target.messages.find(item => item.id === messageId);
+        if (assistant) assistant.error = proposalIssue;
+      });
+      emitWorkspace();
+      notifyImageFailure(request.conversationId, messageId, proposalIssue, "proposal");
+      // The reply was received: do not restore the submitted user text into the composer.
+      return { ok: true, imageError: proposalIssue };
+    }
     if (stored?.imageProposal?.status === "pending" && !stored.imageProposal.continuity?.reviewRequired && updated?.generationMode === "auto") {
-      await generateTavernImage({ conversationId: request.conversationId, messageId, proposal: stored.imageProposal });
+      const generated = await generateTavernImage({ conversationId: request.conversationId, messageId, proposal: stored.imageProposal });
+      if (!generated.ok) return { ok: true, imageError: generated.message };
     }
     return { ok: true };
   } catch (error) {
@@ -999,7 +1071,11 @@ export async function sendAgentMessage(request: AgentSendRequest) {
       target.status = aborted ? "idle" : "error";
     });
     emitWorkspace();
-    if (!aborted) emit({ kind: "error", conversationId: request.conversationId, message });
+    if (!aborted) {
+      emit({ kind: "error", conversationId: request.conversationId, message });
+      const failed = readAgentWorkspace().conversations.find(item => item.id === request.conversationId)?.messages.find(item => item.id === messageId);
+      if (explicitlyRequestsImage(request.text) || failed?.imageProposal) notifyImageFailure(request.conversationId, messageId, message, "proposal");
+    }
     return { ok: false, message };
   } finally {
     activeRequests.delete(request.conversationId);

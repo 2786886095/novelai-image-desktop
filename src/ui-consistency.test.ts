@@ -665,7 +665,7 @@ describe("desktop UI consistency guards", () => {
     expect(app).toContain('scope={`tab:${activeTab}`}');
     expect(boundary).toContain("getDerivedStateFromError");
     expect(comic).toMatch(/try \{[\s\S]*generateCandidate[\s\S]*finally \{[\s\S]*queueRef\.current\.running = false/);
-    expect(tavern).toMatch(/catch \(error\) \{\s*setComposer\(text\)/);
+    expect(tavern).toMatch(/catch \(error\) \{\s*if \(sceneRequest === undefined\) setComposer\(text\)/);
     expect(store).toMatch(/catch \(error\) \{[\s\S]*status: "failed"/);
     expect(updater).toContain("mainWindow.webContents.isDestroyed()");
     expect(nai).toContain('signal?.removeEventListener("abort", onAbort)');
