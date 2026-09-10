@@ -10,6 +10,10 @@ on:
         description: Publish and close the verified issue batch only after all gates pass
         type: boolean
         default: false
+      verified_build_run:
+        description: Reuse installers only if all four native build gates passed and application source is identical
+        type: string
+        required: false
       mobile_run:
         description: Successful Build Mobile run with the identical mobile source tree
         type: string
@@ -25,6 +29,7 @@ env:
 
 jobs:
   build:
+    if: ${{ !inputs.verified_build_run }}
     strategy:
       fail-fast: false
       matrix:
@@ -145,7 +150,7 @@ jobs:
 
   publish-verified:
     needs: [build, mac-intel-smoke]
-    if: github.event_name == 'workflow_dispatch' && inputs.publish_after_verification
+    if: always() && github.event_name == 'workflow_dispatch' && inputs.publish_after_verification && (inputs.verified_build_run || (needs.build.result == 'success' && needs.mac-intel-smoke.result == 'success'))
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
@@ -164,8 +169,11 @@ jobs:
           pattern: novelai-image-desktop-*
           path: release-assets
           merge-multiple: true
+          run-id: ${{ inputs.verified_build_run || github.run_id }}
+          github-token: ${{ github.token }}
       - name: Verify mobile source, versions, signatures and installer hashes; then publish
         env:
           GH_TOKEN: ${{ github.token }}
           MOBILE_RUN: ${{ inputs.mobile_run }}
+          BUILD_RUN: ${{ inputs.verified_build_run || github.run_id }}
         run: node scripts/publish-verified-issue-release.mjs
