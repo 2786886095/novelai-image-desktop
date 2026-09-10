@@ -110,6 +110,10 @@
       "target": [
         "portable",
         "nsis"
+      ],
+      "files": [
+        "!node_modules/onnxruntime-node/bin/napi-v3/darwin/**",
+        "!node_modules/onnxruntime-node/bin/napi-v3/linux/**"
       ]
     },
     "nsis": {
@@ -137,6 +141,10 @@
           "target": "zip",
           "arch": "universal"
         }
+      ],
+      "files": [
+        "!node_modules/onnxruntime-node/bin/napi-v3/win32/**",
+        "!node_modules/onnxruntime-node/bin/napi-v3/linux/**"
       ]
     },
     "linux": {
@@ -144,6 +152,10 @@
       "category": "Graphics",
       "target": [
         "AppImage"
+      ],
+      "files": [
+        "!node_modules/onnxruntime-node/bin/napi-v3/win32/**",
+        "!node_modules/onnxruntime-node/bin/napi-v3/darwin/**"
       ]
     },
     "dmg": {
@@ -151,7 +163,10 @@
     },
     "asarUnpack": [
       "dist-electron/electron/ipc/artist-catalog-*.js",
-      "dist/artist-catalog/**"
+      "dist/artist-catalog/**",
+      "node_modules/sharp/**",
+      "node_modules/@img/**",
+      "node_modules/onnxruntime-node/**"
     ]
   },
   "allowScripts": {
