@@ -1965,9 +1965,7 @@ async function saveBuffers(
       (saveOptions?.ignoreActiveGroup ? undefined : resolveGenerationSaveGroup());
   const dir = saveOptions?.temporary
     ? artistLabTemporaryRoot()
-    : activeGroup
-      ? path.join(settings.outputDir, date, activeGroup.folderName)
-      : path.join(settings.outputDir, date);
+    : settings.outputDir;
   await fs.mkdir(dir, { recursive: true });
 
   const items: HistoryItem[] = [];
@@ -3970,10 +3968,7 @@ export async function generateComicPanel(
           ),
   };
   const extras = comicReferencesToExtras(request);
-  // Ensure the comic's history group UP FRONT so panels are saved INTO its disk
-  // subfolder (outputDir/<date>/<group>/) and tagged with its groupId at save
-  // time — previously they landed in the flat date folder and only got the
-  // groupId reassigned afterwards (disk folder didn't match the group).
+  // Keep comic grouping in history metadata; all permanent images use the output root.
   const historyGroup = ensureHistoryGroup(
     request.projectTitle,
     request.historyGroupId,
@@ -4191,8 +4186,7 @@ export async function promoteArtistLabFavorite(rawItem: HistoryItem): Promise<Hi
   await fs.access(source);
   const settings = getSettings();
   const group = ensureHistoryGroup("画风实验室-随机抽卡");
-  const date = rawItem.date || dateStamp(new Date());
-  const dir = path.join(settings.outputDir, date, sanitizeGroupFolderName(group.name));
+  const dir = settings.outputDir;
   await fs.mkdir(dir, { recursive: true });
   const parsed = path.parse(source);
   const destination = await uniqueFilePath(dir, parsed.name, parsed.ext.replace(/^\./, "") || "png");
@@ -4932,9 +4926,7 @@ export async function upscaleImg(
     const now = new Date();
     const date = dateStamp(now);
     const activeGroup = resolveGenerationSaveGroup();
-    const dir = activeGroup
-      ? path.join(settings.outputDir, date, activeGroup.folderName)
-      : path.join(settings.outputDir, date);
+    const dir = settings.outputDir;
     await fs.mkdir(dir, { recursive: true });
     const baseName = path
       .basename(workbenchImagePath, path.extname(workbenchImagePath))

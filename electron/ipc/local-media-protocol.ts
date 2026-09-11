@@ -50,7 +50,7 @@ const allowedMediaPaths = new Set<string>();
 
 function mediaPathKey(filePath: string) {
   const resolved = path.resolve(filePath);
-  return process.platform === "win32" ? resolved.toLowerCase() : resolved;
+  return resolved.toLowerCase();
 }
 
 /** Register before Electron becomes ready. */

@@ -2,9 +2,11 @@ import { dialog, shell } from "electron";
 import fs from "fs/promises";
 import path from "path";
 import JSZip from "jszip";
+import { scanOutputImages } from "./output-images";
 import type { BatchExportFile, HistoryItem } from "../../src/types";
 import { toLocalMediaUrl } from "./local-media-protocol";
 import {
+  addHistory,
   createHistoryGroup,
   deleteHistoryGroup,
   getHistory,
@@ -166,8 +168,13 @@ export async function exportFiles(files: BatchExportFile[], defaultName = "image
   return { ok: true, count: added, failed: requested.length - added, message: `已导出 ${added} 张图片。`, path: result.filePath };
 }
 
-export function listHistory(date?: string, groupId?: string) {
-  return getHistory(date, groupId);
+export async function listHistory(date?: string, groupId?: string) {
+  const known = getHistory();
+  const images = await scanOutputImages(getSetting("outputDir"), known);
+  const ids = new Set(known.map(item => item.id));
+  const discovered = images.filter(item => !ids.has(item.id));
+  if (discovered.length) addHistory(discovered);
+  return images.filter(item => (!date || item.date === date) && (!groupId || (groupId === "__ungrouped" ? !item.groupId : item.groupId === groupId)));
 }
 
 export function listHistoryDates() {
@@ -222,19 +229,16 @@ export async function renameHistoryItem(id: string, rawName: string): Promise<{ 
 }
 
 export async function deleteHistoryItem(id: string) {
-  const item = removeHistory(id);
-  // Only unlink a path that's actually inside the configured output
-  // directory — a record that was ever mis-bound (e.g. two groups sharing a
-  // renamed file's basename) must never let a delete reach outside the app's
-  // own managed space.
+  const item = getHistory().find(item => item.id === id);
+  if (!item) throw new Error("找不到该图片记录。");
   const outputDir = getSetting("outputDir");
-  if (item?.filePath && outputDir && isInsideDir(item.filePath, outputDir)) {
-    try {
-      await fs.unlink(item.filePath);
-    } catch {
-      // History index deletion should still succeed if the file was already removed.
-    }
+  if (!outputDir || !isInsideDir(item.filePath, outputDir)) {
+    throw new Error("只能删除当前输出目录中的图片。");
   }
+  // Remove the record only after Windows successfully moves the file to trash.
+  // Never fall back to permanent deletion when the recycle bin is unavailable.
+  await shell.trashItem(item.filePath);
+  removeHistory(id);
   return { ok: true };
 }
 

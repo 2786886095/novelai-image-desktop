@@ -1,9 +1,8 @@
 /**
  * Character Tavern icon vocabulary.
  *
- * Desktop uses the Material icon paths exposed by react-icons so its visual
- * language matches Flutter's built-in `Icons.*` set without bundling another
- * component framework. Business components import semantic names from this
+ * Windows uses Material icon paths exposed by react-icons.
+ * Business components import semantic names from this
  * module instead of mixing icon libraries directly.
  */
 export {

@@ -1,6 +1,5 @@
-// Material icons match Flutter's built-in Icons vocabulary. Every functional
-// glyph inherits the surrounding color and size so desktop and mobile use the
-// same visual language; the old inline paths remain only as a safe fallback.
+// Material icons inherit the surrounding color and size.
+// The old inline paths remain as a safe fallback.
 import clsx from "clsx";
 import type { ReactNode } from "react";
 import type { IconType } from "react-icons";

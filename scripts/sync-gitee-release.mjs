@@ -70,7 +70,7 @@ async function releaseForTag() {
     if (createdRelease && Number.isFinite(Number(createdRelease.id))) return createdRelease;
   }
 
-  // Desktop and Android workflows can race while creating the same release.
+  // Release workflows can race while creating the same release.
   const existing = await request(`${api}/releases/tags/${encodeURIComponent(tag)}`, {}, 4);
   if (!existing.ok) throw new Error(`Unable to create or recover Gitee release (${created.status})`);
   return existing.json();
@@ -181,7 +181,7 @@ async function syncFile(file) {
       // response headers to GitHub-hosted runners. Bound each transfer, then
       // verify the release attachment before deciding whether it failed.
       // Small desktop chunks should complete quickly. The directly installable
-      // Android APK is larger and receives a longer, bounded transfer window.
+      // Large assets receive a longer, bounded transfer window.
       const timeoutMs = localSize > 32 * 1024 * 1024 ? 1_800_000 : 180_000;
       const response = await uploadFile(releaseId, file, name, timeoutMs);
       if (response.ok) uploaded = true;

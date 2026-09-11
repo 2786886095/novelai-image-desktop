@@ -284,8 +284,8 @@ function normalize(raw: Partial<PersistedData> | null): PersistedData {
   );
   settings.agentVisionEnabled = settings.agentVisionEnabled !== false;
   // v2.0.2 enabled full-library image archives for every installation. On a
-  // large gallery that can consume hundreds of MB and starve both Electron
-  // and Flutter shortly after launch. Existing installations are migrated
+  // large gallery that can consume hundreds of MB and starve Electron
+  // shortly after launch. Existing installations are migrated
   // once to the lightweight policy; manually exporting still includes every
   // selected asset, and toggling image auto-backup on persists version 1.
   if (Number(rawSettings.autoBackupAssetPolicyVersion ?? 0) < 1) {
@@ -732,7 +732,7 @@ export function fileExists(filePath: string): boolean {
 export type DirectoryEntryCache = Map<string, Set<string> | null>;
 
 function normalizeDirectoryEntryName(name: string): string {
-  return process.platform === "win32" ? name.toLowerCase() : name;
+  return name.toLowerCase();
 }
 
 // History images normally share date/group folders. Reading each parent once
@@ -743,9 +743,7 @@ export function fileExistsWithDirectoryCache(
   directoryCache: DirectoryEntryCache,
 ): boolean {
   const directory = path.dirname(filePath);
-  const cacheKey = process.platform === "win32"
-    ? path.resolve(directory).toLowerCase()
-    : path.resolve(directory);
+  const cacheKey = path.resolve(directory).toLowerCase();
   if (!directoryCache.has(cacheKey)) {
     try {
       const names = fs.readdirSync(directory).map(normalizeDirectoryEntryName);

@@ -1,179 +1,61 @@
-name: Build
+name: Build Windows
 
 on:
   push:
     branches: [main]
     tags: ['v*']
   workflow_dispatch:
-    inputs:
-      publish_after_verification:
-        description: Publish and close the verified issue batch only after all gates pass
-        type: boolean
-        default: false
-      verified_build_run:
-        description: Reuse installers only if all four native build gates passed and application source is identical
-        type: string
-        required: false
-      mobile_run:
-        description: Successful Build Mobile run with the identical mobile source tree
-        type: string
-        required: false
 
-# Needed for softprops/action-gh-release to create/attach to Releases on v* tags.
 permissions:
   contents: write
 
-# Force bundled JS actions onto Node 24 (silences the Node 20 deprecation notice).
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build:
-    if: ${{ !inputs.verified_build_run }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-latest
-            name: macos
-            artifacts: |
-              release/*.dmg
-              release/*.zip
-          - os: windows-latest
-            name: windows
-            artifacts: |
-              release/*.exe
-              release/latest.yml
-          - os: ubuntu-latest
-            name: linux
-            artifacts: |
-              release/*.AppImage
-
-    runs-on: ${{ matrix.os }}
+    runs-on: windows-latest
     timeout-minutes: 45
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          # Electron 42 requires Node >=22.12. Keep CI on the same supported
-          # runtime family used by the packaged application tooling.
           node-version: 24
           cache: npm
-
       - name: Install dependencies
         run: npm ci
-
-      # Electron 42 may download its binary lazily even after npm ci. Without a
-      # serial warm-up, parallel Vitest workers can race while creating
-      # electron/dist on fresh Windows and macOS runners (directory exists).
       - name: Warm Electron binary
-        if: runner.os != 'Linux'
         run: npx electron --version
-
-      - name: Validate desktop source
+      - name: Validate Windows source
         run: npm run typecheck && npm test
-
-      - name: Install both macOS sharp architectures
-        if: runner.os == 'macOS'
-        run: node scripts/install-macos-sharp.mjs
-
-      - name: Build app (${{ matrix.name }})
-        run: npm run build && npx electron-builder --publish never
-        env:
-          # No signing certs in CI — skip macOS code signing / notarization.
-          CSC_IDENTITY_AUTO_DISCOVERY: false
-
-      - name: Install CJK fonts for Linux UI verification
-        if: runner.os == 'Linux'
-        run: sudo apt-get update -qq && sudo apt-get install -y fonts-noto-cjk
-
+      - name: Build Windows installers
+        run: npm run build && npx electron-builder --win portable nsis --publish never
       - name: Verify packaged native runtime and startup
         run: node scripts/verify-packaged-runtime.mjs
-
       - name: Upload packaged smoke evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: packaged-smoke-${{ matrix.name }}
+          name: packaged-smoke-windows
           path: |
             release/packaged-smoke/*.json
             release/packaged-smoke/*.log
             release/packaged-smoke/*.png
           if-no-files-found: warn
-
-      - name: Upload artifacts
+      - name: Upload Windows installers
         uses: actions/upload-artifact@v4
         with:
-          name: novelai-image-desktop-${{ matrix.name }}
-          path: ${{ matrix.artifacts }}
+          name: novelai-image-desktop-windows
+          path: |
+            release/*.exe
+            release/latest.yml
           if-no-files-found: error
-
-      - name: Attach to GitHub Release
+      - name: Attach to draft GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           body_path: docs/RELEASE_NOTES.md
-          # Desktop hotfixes are published only after all release assets are verified.
           draft: true
-          files: ${{ matrix.artifacts }}
-
-  mac-intel-smoke:
-    needs: build
-    runs-on: macos-15-intel
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 24
-      - uses: actions/download-artifact@v4
-        with:
-          name: novelai-image-desktop-macos
-          path: release
-      - name: Extract the same universal app and verify it on native Intel
-        run: |
-          mkdir -p release/mac-universal
-          ditto -x -k release/*.zip release/mac-universal
-          node scripts/verify-packaged-runtime.mjs
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: packaged-smoke-macos-intel
-          path: |
-            release/packaged-smoke/*.json
-            release/packaged-smoke/*.log
-            release/packaged-smoke/*.png
-
-  publish-verified:
-    needs: [build, mac-intel-smoke]
-    if: always() && github.event_name == 'workflow_dispatch' && inputs.publish_after_verification && (inputs.verified_build_run || (needs.build.result == 'success' && needs.mac-intel-smoke.result == 'success'))
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    permissions:
-      contents: write
-      issues: write
-      actions: read
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 24
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: novelai-image-desktop-*
-          path: release-assets
-          merge-multiple: true
-          run-id: ${{ inputs.verified_build_run || github.run_id }}
-          github-token: ${{ github.token }}
-      - name: Verify mobile source, versions, signatures and installer hashes; then publish
-        env:
-          GH_TOKEN: ${{ github.token }}
-          MOBILE_RUN: ${{ inputs.mobile_run }}
-          BUILD_RUN: ${{ inputs.verified_build_run || github.run_id }}
-        run: node scripts/publish-verified-issue-release.mjs
+          files: |
+            release/*.exe
+            release/latest.yml

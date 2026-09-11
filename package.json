@@ -17,7 +17,6 @@
     "dev:electron": "wait-on http://127.0.0.1:5173 && npm run build:electron && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .",
     "build": "npm run build:renderer && npm run build:electron",
     "build:prompt-codex": "node scripts/build-prompt-codex.mjs",
-    "generate:random-tags": "node scripts/generate-random-tag-library.mjs",
     "build:renderer": "vite build",
     "build:electron": "tsc -p tsconfig.electron.json",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.electron.json --noEmit",
@@ -26,9 +25,8 @@
     "start": "npm run build && electron .",
     "pack": "node scripts/cleanup-portable-release.mjs && npm run build && electron-builder --win portable nsis && node scripts/copy-ascii-release.mjs && node scripts/cleanup-portable-release.mjs",
     "pack:portable": "node scripts/cleanup-portable-release.mjs && npm run build && electron-builder --win portable && node scripts/copy-ascii-release.mjs && node scripts/cleanup-portable-release.mjs",
-    "pack:dir": "npm run build && electron-builder --dir",
-    "dist": "npm run build && electron-builder --win portable nsis",
-    "dist:mac": "npm run build && electron-builder --mac"
+    "pack:dir": "npm run build && electron-builder --win --dir",
+    "dist": "npm run build && electron-builder --win portable nsis"
   },
   "dependencies": {
     "@huggingface/transformers": "^3.8.1",
@@ -127,39 +125,6 @@
       "shortcutName": "Langbai NovelAI Studio",
       "deleteAppDataOnUninstall": false,
       "runAfterFinish": true
-    },
-    "mac": {
-      "icon": "build/icon.png",
-      "category": "public.app-category.graphics-design",
-      "x64ArchFiles": "Contents/Resources/app.asar.unpacked/node_modules/{@img/sharp-{darwin,libvips-darwin}-{arm64,x64},onnxruntime-node/bin/napi-v3/darwin/{arm64,x64}}/**",
-      "target": [
-        {
-          "target": "dmg",
-          "arch": "universal"
-        },
-        {
-          "target": "zip",
-          "arch": "universal"
-        }
-      ],
-      "files": [
-        "!node_modules/onnxruntime-node/bin/napi-v3/win32/**",
-        "!node_modules/onnxruntime-node/bin/napi-v3/linux/**"
-      ]
-    },
-    "linux": {
-      "icon": "build/icon.png",
-      "category": "Graphics",
-      "target": [
-        "AppImage"
-      ],
-      "files": [
-        "!node_modules/onnxruntime-node/bin/napi-v3/win32/**",
-        "!node_modules/onnxruntime-node/bin/napi-v3/darwin/**"
-      ]
-    },
-    "dmg": {
-      "artifactName": "Langbai-NovelAI-Studio-${version}-${arch}.${ext}"
     },
     "asarUnpack": [
       "dist-electron/electron/ipc/artist-catalog-*.js",

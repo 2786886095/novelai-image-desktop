@@ -14,7 +14,7 @@ export async function readClipboardImageFiles(): Promise<Array<{name:string;byte
     if (bytes.length > MAX_IMAGE_BYTES) throw new Error("Clipboard image exceeds 32 MB");
     return [{name:"clipboard.png",bytes}];
   }
-  if (process.platform !== "win32" || !clipboard.availableFormats().includes("FileNameW")) return [];
+  if (!clipboard.availableFormats().includes("FileNameW")) return [];
   const file = clipboard.readBuffer("FileNameW").toString("utf16le").replace(/\0+$/, "");
   if (!path.isAbsolute(file) || !/\.(png|jpe?g|webp|gif|avif)$/i.test(file)) return [];
   const stat = await fs.stat(file);

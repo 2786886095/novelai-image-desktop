@@ -649,7 +649,7 @@ function showCompletedImage(
     const matchesGroup = !selectedGroup
       || (selectedGroup === "__ungrouped" ? !item.groupId : item.groupId === selectedGroup);
     const sameDateVisible = state.history.filter((candidate) => {
-      if (candidate.date !== item.date) return false;
+
       if (!selectedGroup) return true;
       if (selectedGroup === "__ungrouped") return !candidate.groupId;
       return candidate.groupId === selectedGroup;
@@ -658,7 +658,7 @@ function showCompletedImage(
       currentImage: visibleItem,
       comparisonBeforeImage: options.compareBefore ?? null,
       comparisonSurface: options.compareBefore ? options.comparisonSurface ?? state.activeCanvasSurface : null,
-      selectedDate: item.date,
+      selectedDate: "",
       historyDates: [item.date, ...state.historyDates.filter((date) => date !== item.date)].sort((a, b) => b.localeCompare(a)),
       history: matchesGroup
         ? [visibleItem, ...sameDateVisible.filter((candidate) => candidate.id !== item.id)]
@@ -992,8 +992,7 @@ function normalizedLastToolState(last: LastGenerationState, state: AppState) {
 
 function buildLastGenerationState(state: AppState): LastGenerationState {
   return {
-    // positivePrompt is included so it survives a restart/crash, matching the
-    // mobile client (which already persists the full params unconditionally).
+    // positivePrompt is included so it survives a restart/crash.
     params: normalizeGenerateParams(state.params),
     charCaptions: normalizeCharacterCaptions(state.charCaptions),
     batchCount: state.batchCount,
@@ -1170,8 +1169,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     const isPortable = portableResult.status === "fulfilled" ? portableResult.value : false;
     set({ isPortable });
 
-    const selectedDate = dates[0] ?? "";
-    const selectedGroupId = settings.activeHistoryGroupId ?? "";
+    const selectedDate = "";
+    const selectedGroupId = "";
     const generationGroupId = groups.some((group) => group.id === settings.generationGroupId)
       ? settings.generationGroupId
       : "";
@@ -1465,16 +1464,23 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
-  async refreshHistory(date) {
+  async refreshHistory(_date) {
+    const outputDir = get().settings?.outputDir;
     const [dates, groups] = await Promise.all([
       window.naiDesktop.getHistoryDates(),
       window.naiDesktop.getHistoryGroups(),
     ]);
-    const selectedDate = date ?? get().selectedDate ?? dates[0] ?? "";
-    const selectedGroupId = get().selectedGroupId;
+    const selectedDate = "";
+    const selectedGroupId = "";
     const history = (await window.naiDesktop.getHistory(selectedDate || undefined, selectedGroupId || undefined))
       .map(withCompletedImageBridge);
-    set({ historyDates: dates, historyGroups: groups, selectedDate, history });
+    if (get().settings?.outputDir !== outputDir) return;
+    set(state => {
+      const byId = new Map(history.map(item => [item.id, item]));
+      const existingIds = new Set(state.history.map(item => item.id));
+      const ordered = [...state.history.flatMap(item => byId.has(item.id) ? [byId.get(item.id)!] : []), ...history.filter(item => !existingIds.has(item.id))];
+      return { historyDates: dates, historyGroups: groups, selectedDate, selectedGroupId, history: ordered, currentImage: ordered.find(item => item.id === state.currentImage?.id) ?? ordered[0] ?? null };
+    });
   },
 
   async refreshSettings() {

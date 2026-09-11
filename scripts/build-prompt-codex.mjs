@@ -185,11 +185,8 @@ async function main() {
   };
   const json = `${JSON.stringify(snapshot)}\n`;
   const desktopTarget = path.join(ROOT, "public", "prompt-codex.json.gz");
-  const mobileTarget = path.join(ROOT, "mobile", "assets", "prompt_codex.json");
   await fs.mkdir(path.dirname(desktopTarget), { recursive: true });
   await fs.writeFile(desktopTarget, await gzipAsync(Buffer.from(json), { level: 9 }));
-  await fs.mkdir(path.dirname(mobileTarget), { recursive: true });
-  await fs.writeFile(mobileTarget, json, "utf8");
   process.stdout.write(
     `total: ${promptEntries.length}; intro: ${introduction.length}; bytes: ${Buffer.byteLength(json)}\n`,
   );

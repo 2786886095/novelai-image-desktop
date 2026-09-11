@@ -1,4 +1,4 @@
-/** Generated from the user-supplied SillyTavern preset. Keep desktop/mobile values identical. */
+/** Generated from the user-supplied SillyTavern preset. Keep Windows values identical. */
 export const LYRA_PRESET_NAME = "夏瑾 天琴座 Beta 3.8";
 export const LYRA_PRESET_SOURCE_NAME = "夏瑾 天琴座 Beta 3.8.json";
 export const LYRA_PRESET_SOURCE_SHA256 = "09D89AE4F64E05C06962786BB19A8C7364898E863DCC3FCDE99F661E841EF6A9";

@@ -10,17 +10,11 @@ function read(relativePath: string): string {
 }
 
 describe("release version consistency", () => {
-  it("keeps desktop and mobile user-facing versions aligned with package.json", () => {
+  it("keeps Windows user-facing versions aligned with package.json", () => {
     const packageVersion = JSON.parse(read("package.json")).version as string;
-    const mobileModel = read("mobile/lib/models/nai_models.dart");
-    const mobilePubspec = read("mobile/pubspec.yaml");
     const mcpClient = read("electron/ipc/mcp-client.ts");
 
     expect(APP_VERSION).toBe(packageVersion);
-    expect(mobileModel).toContain(`const appVersion = '${packageVersion}';`);
-    expect(mobilePubspec).toMatch(
-      new RegExp(`^version:\\s+${packageVersion.replaceAll(".", "\\.")}\\+\\d+$`, "m"),
-    );
     expect(mcpClient).toContain(`version: "${packageVersion}"`);
   });
 

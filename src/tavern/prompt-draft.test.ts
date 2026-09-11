@@ -22,8 +22,8 @@ describe("user-owned tavern prompt drafts", () => {
       .toEqual({ negativePrompt: "blur" });
   });
   it("missing visual settings initialize empty", () => expect(readPromptDraft()).toEqual({ negative: "", style: "" }));
-  it("desktop runtime and mobile do not reintroduce implicit negative defaults", () => {
-    for (const file of ["electron/ipc/agent-runtime.ts", "src/AgentPage.tsx", "mobile/lib/agent/agent_controller.dart", "mobile/lib/screens/agent_screen.dart"]) {
+  it("Windows runtime do not reintroduce implicit negative defaults", () => {
+    for (const file of ["electron/ipc/agent-runtime.ts", "src/AgentPage.tsx"]) {
       const code = readFileSync(file, "utf8");
       expect(code).not.toMatch(/negativePrompt\.trim\(\)\s*\|\|\s*DEFAULT_TAVERN_NEGATIVE_PROMPT/);
       expect(code).not.toMatch(/negativePrompt\.trim\(\)\.isEmpty\s*\?\s*defaultTavernNegativePrompt/);

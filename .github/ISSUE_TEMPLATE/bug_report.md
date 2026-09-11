@@ -17,7 +17,7 @@ labels: bug
 <!-- 你期望发生什么 -->
 
 ## 环境
-- 操作系统：<!-- Windows 11 / macOS 14 / Ubuntu 22.04 -->
+- 操作系统：<!-- Windows 版本 -->
 - 应用版本：<!-- 关于页面或 release 文件名 -->
 - NovelAI 模型：<!-- 如 nai-diffusion-4-5-full -->
 

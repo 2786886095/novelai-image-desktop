@@ -3,7 +3,6 @@ dist/
 dist-electron/
 release/
 *.log
-.DS_Store
 .tmp/
 scripts/__pycache__/
 *.pyc

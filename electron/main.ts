@@ -868,8 +868,8 @@ function registerIpc() {
   ipcMain.handle("artistLab:promoteFavorite", (_event, item) =>
     promoteArtistLabFavorite(item),
   );
-  ipcMain.handle("artistLab:listPromotedFavorites", () =>
-    listHistory().filter((item) => (
+  ipcMain.handle("artistLab:listPromotedFavorites", async () =>
+    (await listHistory()).filter((item) => (
       item.feature === "artist-lab"
       && typeof item.filePath === "string"
       && path.basename(item.filePath).toLowerCase().startsWith("artist-lab-random")
@@ -1386,7 +1386,7 @@ app.whenReady().then(async () => {
 });
 
 app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") app.quit();
+  app.quit();
 });
 
 app.on("before-quit", () => {

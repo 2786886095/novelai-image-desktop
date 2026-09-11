@@ -1,3 +1,4 @@
+import { buildImageOrder, moveImageOrder } from "./image-order";
 import {PreviewImageViewer} from './components/PreviewImageViewer';
 import {HistoryImagePicker, historyPickerText} from './components/HistoryImagePicker';
 import { characterPresetText } from './character-presets';
@@ -7,7 +8,7 @@ import { normalizeAppLanguage } from "./i18n";
 import { MetadataApplyPanel } from "./MetadataApplyPanel";
 import { ImageSaveFeedback } from "./components/ImageSaveFeedback";
 import { imagePasteProps } from "./image-paste";
-import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import clsx from "clsx";
 import { format } from "date-fns";
@@ -51,7 +52,7 @@ import {
   V45_CONVERT_SYSTEM_PROMPTS,
   V45_SCOPED_REVERSE_SYSTEM_PROMPTS,
 } from "./data/prompt-templates-v45";
-import { Button, IconText, AppPortal, Toggle, NumberInput, CommittedNumberInput, SliderInput, SecretInput, SelectMenu, SelectMenuCompat } from "./components/ui";
+import { Button, IconText, AppPortal, Toggle, NumberInput, CommittedNumberInput, SliderInput, SecretInput, SelectMenuCompat } from "./components/ui";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import { confirmAction } from "./components/confirm";
 import {CharacterPresetControls} from './components/CharacterPresetControls';
@@ -112,7 +113,6 @@ import {
   type ModelMode,
   type AiCallLogEntry,
   type AppSettings,
-  type HistoryItem,
   type GenerateParams,
   type ModePromptTemplates,
   type PromptTemplate,
@@ -3389,11 +3389,6 @@ function GeneratePanel({ openSettings }: { openSettings: () => void }) {
   const fileNamePrefix = useAppStore((state) => state.params.fileNamePrefix);
   const model = useAppStore((state) => state.params.model);
   const setParam = useAppStore((state) => state.setParam);
-  const groups = useAppStore((state) => state.historyGroups);
-  const generationGroupId = useAppStore((state) => state.generationGroupId);
-  const setGenerationGroupId = useAppStore((state) => state.setGenerationGroupId);
-  const createGenerationGroup = useAppStore((state) => state.createGenerationGroup);
-  const [newGroupName, setNewGroupName] = useState("");
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
 
@@ -3419,45 +3414,6 @@ function GeneratePanel({ openSettings }: { openSettings: () => void }) {
             onChange={(e) => setParam("fileNamePrefix", e.target.value)}
           />
         </label>
-        <div className="field">
-          <span>{t("generate.historyGroup")}</span>
-          <SelectMenu
-            value={groups.some((group) => group.id === generationGroupId) ? generationGroupId : ""}
-            ariaLabel={t("generate.historyGroup")}
-            options={[
-              { value: "", label: t("history.ungrouped") },
-              ...groups.map((group) => ({ value: group.id, label: group.name })),
-            ]}
-            onChange={(value) => void setGenerationGroupId(value)}
-          />
-        </div>
-        <div className="history-group-create generation-group-create">
-          <input
-            value={newGroupName}
-            placeholder={t("history.newGroup")}
-            onChange={(event) => setNewGroupName(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key !== "Enter") return;
-              event.preventDefault();
-              const name = newGroupName.trim();
-              if (!name) return;
-              void createGenerationGroup(name);
-              setNewGroupName("");
-            }}
-          />
-          <button
-            type="button"
-            disabled={!newGroupName.trim()}
-            onClick={() => {
-              const name = newGroupName.trim();
-              if (!name) return;
-              void createGenerationGroup(name);
-              setNewGroupName("");
-            }}
-          >
-            {t("history.create")}
-          </button>
-        </div>
         <p className="wildcard-hint">
           <Icon name="bulb" /> {f("generate.wildcardHint", { example: "{red|blue|green} hair", tag: "{tag}" })}
         </p>
@@ -5376,243 +5332,140 @@ function TokenGuideModal({ onClose }: { onClose: () => void }) {
 }
 
 // ── History panel ─────────────────────────────────────────────────────────────
-function HistoryPanel() {
-  const history = useAppStore((state) => state.history);
-  const isGenerating = useAppStore((state) => state.isGenerating);
-  const generationPhase = useAppStore((state) => state.generationPhase);
-  const dates = useAppStore((state) => state.historyDates);
-  const groups = useAppStore((state) => state.historyGroups);
-  const selectedDate = useAppStore((state) => state.selectedDate);
-  const selectedGroupId = useAppStore((state) => state.selectedGroupId);
-  const setSelectedDate = useAppStore((state) => state.setSelectedDate);
-  const setSelectedGroupId = useAppStore((state) => state.setSelectedGroupId);
-  const createHistoryGroup = useAppStore((state) => state.createHistoryGroup);
-  const renameHistoryGroup = useAppStore((state) => state.renameHistoryGroup);
-  const deleteHistoryGroup = useAppStore((state) => state.deleteHistoryGroup);
-  const exportHistoryGroup = useAppStore((state) => state.exportHistoryGroup);
-  const setHistoryItemGroup = useAppStore((state) => state.setHistoryItemGroup);
-  const selectImage = useAppStore((state) => state.selectImage);
-  const deleteHistory = useAppStore((state) => state.deleteHistory);
-  const renameHistoryItem = useAppStore((state) => state.renameHistoryItem);
-  const setActiveTab = useAppStore((state) => state.setActiveTab);
-  const setToast = useAppStore((state) => state.setToast);
-  const language = useAppStore((state) => state.settings?.language);
-  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
-  const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
-  const pendingHistoryLabel = generationPhase === "saving" ? t("canvas.savingTitle") : t("canvas.generatingTitle");
-  const [newGroupName, setNewGroupName] = useState("");
-  // Renaming stays inside the app so it is themeable and non-blocking.
-  const [renameTarget, setRenameTarget] = useState<
-    { kind: "item" | "group"; id: string; initial: string; title: string; label: string } | null
-  >(null);
-  const historyScrollRef = useRef<HTMLDivElement>(null);
-  const virtualizeHistory = history.length >= 80 && !isGenerating;
-  const historyRowVirtualizer = useVirtualizer({
-    count: virtualizeHistory ? Math.ceil(history.length / 2) : 0,
-    getScrollElement: () => historyScrollRef.current,
-    estimateSize: () => 236,
-    overscan: 4,
-    getItemKey: (index) => history[index * 2]?.id ?? index,
-  });
-
-  function renameItem(item: HistoryItem) {
-    const current = item.filePath.split(/[\\/]/).pop()?.replace(/\.[^.]+$/, "") ?? "";
-    setRenameTarget({ kind: "item", id: item.id, initial: current, title: t("history.renameImageModal"), label: t("history.renameImageLabel") });
+function OutputImageStrip() {
+  const history = useAppStore(state => state.history);
+  const currentImage = useAppStore(state => state.currentImage);
+  const selectImage = useAppStore(state => state.selectImage);
+  const outputDir = useAppStore(state => state.settings?.outputDir);
+  const bootDone = useAppStore(state => state.bootDone);
+  const activeTab = useAppStore(state => state.activeTab);
+  const stripRef = useRef<HTMLDivElement>(null);
+  const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+  const [rename, setRename] = useState<{ id: string; name: string } | null>(null);
+  const [renameError, setRenameError] = useState("");
+  const [renaming, setRenaming] = useState(false);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const drag = useRef<{ id: string; x: number; startX: number; startY: number; active: boolean; timer: number } | null>(null);
+  const suppressClick = useRef(false);
+  const pendingThumbnailFocus = useRef<string | null>(null);
+  const fileName = (filePath: string) => outputDir && filePath.toLowerCase().startsWith(outputDir.toLowerCase() + "\\") ? filePath.slice(outputDir.length + 1) : filePath;
+  const order = useMemo(() => buildImageOrder(history.map(item => fileName(item.filePath))), [history, outputDir]);
+  const orderRef = useRef(order);
+  orderRef.current = order;
+  useEffect(() => { setMenu(null); setRename(null); }, [outputDir]);
+  useEffect(() => {
+    const close = () => setMenu(null);
+    const escape = (event: KeyboardEvent) => { if (event.key === "Escape") { setMenu(null); if (!renaming) setRename(null); } };
+    window.addEventListener("click", close); window.addEventListener("blur", close); window.addEventListener("keydown", escape);
+    return () => { window.removeEventListener("click", close); window.removeEventListener("blur", close); window.removeEventListener("keydown", escape); };
+  }, [renaming]);
+  useEffect(() => {
+    const finish = () => { if (drag.current) { clearTimeout(drag.current.timer); suppressClick.current = drag.current.active; } drag.current = null; setDragId(null); };
+    const move = (event: PointerEvent) => {
+      if (!drag.current) return;
+      drag.current.x = event.clientX;
+      if (!drag.current.active && Math.hypot(event.clientX - drag.current.startX, event.clientY - drag.current.startY) > 8) finish();
+      if (drag.current?.active) event.preventDefault();
+    };
+    const tick = window.setInterval(() => {
+      const gesture = drag.current, strip = stripRef.current;
+      if (!gesture?.active || !strip) return;
+      const bounds = strip.getBoundingClientRect();
+      if (gesture.x < bounds.left + 35) strip.scrollLeft -= 18;
+      if (gesture.x > bounds.right - 35) strip.scrollLeft += 18;
+      const state = useAppStore.getState();
+      const from = state.history.findIndex(item => item.id === gesture.id) + 1;
+      const to = Math.max(1, Math.min(state.history.length, Math.floor((gesture.x - bounds.left + strip.scrollLeft - 6) / 102) + 1));
+      if (!from || from === to) return;
+      const nextOrder = moveImageOrder(orderRef.current, from, to);
+      const byName = new Map(state.history.map(item => [fileName(item.filePath), item]));
+      const next = Array.from(nextOrder.values()).map(name => byName.get(name)!);
+      if (next.some(item => !item)) return;
+      orderRef.current = nextOrder;
+      useAppStore.setState({ history: next });
+    }, 40);
+    window.addEventListener("pointermove", move, { passive: false }); window.addEventListener("pointerup", finish); window.addEventListener("pointercancel", finish); window.addEventListener("blur", finish);
+    return () => { finish(); clearInterval(tick); window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", finish); window.removeEventListener("pointercancel", finish); window.removeEventListener("blur", finish); };
+  }, [outputDir]);
+  async function submitRename() {
+    if (!rename || renaming) return;
+    setRenaming(true); setRenameError("");
+    try {
+      const result = await window.naiDesktop.renameHistoryItem(rename.id, rename.name);
+      if (!result.ok || !result.item) { setRenameError(result.message ?? "重命名失败"); return; }
+      const item = result.item;
+      useAppStore.setState(state => ({ history: state.history.map(old => old.id === item.id ? item : old), currentImage: state.currentImage?.id === item.id ? item : state.currentImage }));
+      setRename(null);
+    } catch (error) { setRenameError(String(error)); } finally { setRenaming(false); }
   }
-
-  function submitGroup() {
-    const name = newGroupName.trim();
-    if (!name) return;
-    void createHistoryGroup(name);
-    setNewGroupName("");
-  }
-
-  const activeGroup = groups.find((g) => g.id === selectedGroupId);
-  const canExport = selectedGroupId !== "" && history.length > 0;
-
-  function renameActiveGroup() {
-    if (!activeGroup) return;
-    setRenameTarget({ kind: "group", id: activeGroup.id, initial: activeGroup.name, title: t("history.renameGroupModal"), label: t("history.renameGroupLabel") });
-  }
-
-  function confirmRename(value: string) {
-    const name = value.trim();
-    const target = renameTarget;
-    setRenameTarget(null);
-    if (!name || !target) return;
-    if (target.kind === "item") void renameHistoryItem(target.id, name);
-    else void renameHistoryGroup(target.id, name);
-  }
-
-  async function deleteActiveGroup() {
-    if (!activeGroup) return;
-    if (await confirmAction(f("history.deleteGroupConfirm", { name: activeGroup.name }))) {
-      void deleteHistoryGroup(activeGroup.id);
-    }
-  }
-
-  async function deleteItem(item: HistoryItem) {
-    if (!(await confirmAction(`${t("common.delete")}: ${item.filePath.split(/[\\/]/).pop()}?`))) return;
-    const deleted = await deleteHistory(item.id);
-    if (deleted) setToast(t("history.deleteImageDone"));
-  }
-
-  async function inspectHistoryMetadata(item: HistoryItem) {
-    const result = await window.naiDesktop.saveMetadataSnapshotFromPath(item.filePath);
-    if (!result.ok) {
-      setToast(t("history.metadataFailed"));
-      return;
-    }
-    setActiveTab("metadata");
-  }
-
-  const renderHistoryItem = (item: HistoryItem) => (
-    <div className="history-item" key={item.id}>
-      <button onClick={() => selectImage(item)}>
-        <div className="history-thumb-frame">
-          <img
-            src={item.fileUrl}
-            alt={t("history.thumbAlt")}
-            draggable
-            loading="lazy"
-            decoding="async"
-            title={t("history.dragTitle")}
-            onDragStart={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              window.naiDesktop.startImageDrag(item.filePath);
-            }}
-            onError={() => void useAppStore.getState().dropMissingImage(item.id)}
-          />
-        </div>
-      </button>
-      <div className="history-item-footer">
-        <span className="history-meta">{item.model} · {item.width}×{item.height}</span>
-        <div className="history-item-group-row" onClick={(event) => event.stopPropagation()}>
-          <SelectMenu
-            className="history-item-group-trigger"
-            value={item.groupId ?? ""}
-            ariaLabel={t("history.itemGroupTitle")}
-            label={<Icon name="folder" />}
-            options={[
-              { value: "", label: t("history.ungrouped") },
-              ...groups.map((group) => ({ value: group.id, label: group.name })),
-            ]}
-            onChange={(value) => void setHistoryItemGroup(item.id, value || undefined)}
-          />
-        </div>
-      </div>
-      <div className="history-item-controls" onClick={(event) => event.stopPropagation()}>
-        <button className="history-metadata" title={t("history.metadataTitle")} aria-label={t("history.metadataTitle")} onClick={() => void inspectHistoryMetadata(item)}>
-          <Icon name="eye" />
-        </button>
-        <button className="history-rename" title={t("history.renameImageTitle")} aria-label={t("history.renameImageTitle")} onClick={() => renameItem(item)}>
-          <Icon name="brush" />
-        </button>
-        <button className="history-delete" title={t("history.deleteImageTitle")} aria-label={t("history.deleteImageTitle")} onClick={() => void deleteItem(item)}>
-          <Icon name="close" />
-        </button>
-      </div>
-    </div>
-  );
-
-  return (
-    <aside className="history-panel">
-      <div className="history-title">
-        <div>
-          <strong>{t("history.title")}</strong>
-          <small>{history.length > 0 ? f("history.count", { count: history.length }) : t("history.emptySubtitle")}</small>
-        </div>
-      </div>
-      <div className="history-filters">
-        <SelectMenu
-          ariaLabel={t("history.dateAria")}
-          value={selectedDate}
-          options={[{ value: "", label: t("history.allDates") }, ...dates.map((date) => ({ value: date, label: date }))]}
-          onChange={(value) => void setSelectedDate(value)}
-        />
-        <SelectMenu
-          ariaLabel={t("history.groupAria")}
-          value={selectedGroupId}
-          options={[
-            { value: "", label: t("history.allGroups") },
-            { value: "__ungrouped", label: t("history.ungrouped") },
-            ...groups.map((group) => ({ value: group.id, label: group.name })),
-          ]}
-          onChange={(value) => void setSelectedGroupId(value)}
-        />
-        <div className="history-group-create">
-          <input
-            value={newGroupName}
-            placeholder={t("history.newGroup")}
-            onChange={(e) => setNewGroupName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") submitGroup();
-            }}
-          />
-          <button type="button" onClick={submitGroup}>{t("history.create")}</button>
-        </div>
-        <div className="history-group-actions">
-          <button type="button" disabled={!canExport} title={t("history.exportTitle")} onClick={() => void exportHistoryGroup(selectedGroupId)}>
-            <Icon name="download" /> {t("history.export")}
-          </button>
-          <button type="button" disabled={!activeGroup} title={t("history.renameGroupTitle")} onClick={renameActiveGroup}>
-            <Icon name="brush" /> {t("history.rename")}
-          </button>
-          <button type="button" disabled={!activeGroup} title={t("history.deleteGroupTitle")} onClick={deleteActiveGroup}>
-            <Icon name="trash" /> {t("history.delete")}
-          </button>
-        </div>
-      </div>
-      <div ref={historyScrollRef} className={clsx("history-grid", virtualizeHistory && "is-virtualized")}>
-        {isGenerating && (
-          <div className="history-item history-item-pending" aria-label={pendingHistoryLabel}>
-            <div className="history-thumb-frame history-thumb-pending" aria-hidden="true">
-              <span><Icon name="sparkles" /></span>
-            </div>
-            <div className="history-item-footer">
-              <span className="history-meta">{pendingHistoryLabel}</span>
-            </div>
-          </div>
-        )}
-        {history.length === 0 && !isGenerating && (
-          <div className="history-empty">
-            <span><Icon name="image" /></span>
-            <strong>{t("history.emptyTitle")}</strong>
-            <small>{t("history.emptyHint")}</small>
-          </div>
-        )}
-        {virtualizeHistory ? (
-          <div className="history-virtual-inner" style={{ height: historyRowVirtualizer.getTotalSize() }}>
-            {historyRowVirtualizer.getVirtualItems().map((row) => (
-              <div
-                key={row.key}
-                ref={historyRowVirtualizer.measureElement}
-                data-index={row.index}
-                className="history-virtual-row"
-                style={{ transform: `translateY(${row.start}px)` }}
-              >
-                {history.slice(row.index * 2, row.index * 2 + 2).map(renderHistoryItem)}
-              </div>
-            ))}
-          </div>
-        ) : history.map(renderHistoryItem)}
-      </div>
-      {renameTarget && (
-        <InputModal
-          title={renameTarget.title}
-          label={renameTarget.label}
-          initial={renameTarget.initial}
-          confirmText={t("history.renameConfirm")}
-          onConfirm={confirmRename}
-          onClose={() => setRenameTarget(null)}
-        />
-      )}
-    </aside>
-  );
+  const virtualizer = useVirtualizer({ horizontal: true, count: history.length, getScrollElement: () => stripRef.current, estimateSize: () => 102, overscan: 8 });
+  useEffect(() => {
+    if (!bootDone || !outputDir) return;
+    useAppStore.setState({ history: [], currentImage: null, comparisonBeforeImage: null });
+    void useAppStore.getState().refreshHistory().catch(() => {
+      if (useAppStore.getState().settings?.outputDir === outputDir) useAppStore.setState({ history: [], currentImage: null, toast: "无法读取输出目录，请检查目录和访问权限。" });
+    });
+  }, [bootDone, outputDir]);
+  useEffect(() => {
+    const index = history.findIndex(item => item.id === currentImage?.id);
+    if (index >= 0 && !drag.current?.active) virtualizer.scrollToIndex(index, { align: "auto" });
+  }, [currentImage?.id, history, virtualizer]);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
+      if (!["generate", "inpaint", "postprocess", "inspect", "convert"].includes(activeTab)) return;
+      if ((event.target as HTMLElement)?.closest('input, textarea, select, [contenteditable="true"], [role="dialog"], .modal-overlay')) return;
+      if (useAppStore.getState().showSettings || menu || rename) return;
+      const delta = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+      if (!delta) return;
+      const state = useAppStore.getState();
+      const index = state.history.findIndex(item => item.id === state.currentImage?.id);
+      const next = state.history[index < 0 ? 0 : index + delta];
+      if (next) {
+        event.preventDefault();
+        const focused = document.activeElement;
+        if (focused instanceof HTMLElement && stripRef.current?.contains(focused)) {
+          pendingThumbnailFocus.current = next.id;
+          focused.blur();
+        }
+        state.selectImage(next);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [activeTab, menu, rename]);
+  return <><div className="output-image-strip" ref={stripRef} aria-label="输出目录图片">
+    {history.length ? <div style={{ width: virtualizer.getTotalSize(), height: "100%", position: "relative", flexShrink: 0 }}>{virtualizer.getVirtualItems().map(entry => {
+      const item = history[entry.index];
+      const name = item.filePath.split(/[\\/]/).pop() ?? "图片";
+      return <button type="button" key={item.id}
+        tabIndex={item.id === currentImage?.id ? 0 : -1}
+        ref={button => {
+          if (button && pendingThumbnailFocus.current === item.id) {
+            pendingThumbnailFocus.current = null;
+            button.focus({ preventScroll: true });
+          }
+        }}
+        style={{ position: "absolute", left: entry.start, width: 94, height: "100%" }} aria-current={item.id === currentImage?.id} title={name} className={dragId === item.id ? "is-dragging" : undefined} draggable={false}
+        onContextMenu={event => { event.preventDefault(); setMenu({ id: item.id, x: Math.min(event.clientX, window.innerWidth - 160), y: Math.min(event.clientY, window.innerHeight - 105) }); }}
+        onPointerDown={event => { if (event.button !== 0) return; suppressClick.current = false; const gesture = { id: item.id, x: event.clientX, startX: event.clientX, startY: event.clientY, active: false, timer: 0 }; gesture.timer = window.setTimeout(() => { gesture.active = true; selectImage(item); setDragId(item.id); setMenu(null); }, 50); drag.current = gesture; }}
+        onClick={() => { if (suppressClick.current) { suppressClick.current = false; return; } selectImage(item); }}>
+        <img src={item.fileUrl} alt={name} loading="lazy" draggable={false} />
+        <span>{name}</span>
+      </button>;
+    })}</div> : <span className="output-image-strip-empty">输出目录中暂无图片</span>}
+  </div>
+    {menu && <AppPortal><div className="output-image-menu" role="menu" style={{ left: menu.x, top: menu.y }}>
+      <button role="menuitem" onClick={() => { const item = history.find(item => item.id === menu.id); if (item) { const name = item.filePath.split(/[\\/]/).pop() ?? ""; setRename({ id: item.id, name: name.replace(/\.[^.]+$/, "") }); setRenameError(""); } setMenu(null); }}>重命名</button>
+      <button role="menuitem" onClick={() => { const id = menu.id; setMenu(null); void useAppStore.getState().deleteHistory(id).then(ok => { if (ok) useAppStore.setState({ toast: "图片已移入系统回收站。" }); }); }}>删除</button>
+    </div></AppPortal>}
+    {rename && <AppPortal><div className="output-rename-backdrop"><form className="output-rename-dialog" role="dialog" aria-modal="true" aria-label="重命名图片" onSubmit={event => { event.preventDefault(); void submitRename(); }}>
+      <strong>重命名图片</strong><input autoFocus aria-label="图片名称（不含扩展名）" value={rename.name} disabled={renaming} onFocus={event => event.target.select()} onChange={event => setRename({ ...rename, name: event.target.value })} />
+      <small>保留原扩展名，修改磁盘上的文件名，位置不变。</small>{renameError && <p role="alert">{renameError}</p>}
+      <div><Button disabled={renaming} onClick={() => setRename(null)}>取消</Button><button type="submit" disabled={renaming || !rename.name.trim()}>{renaming ? "保存中…" : "保存"}</button></div>
+    </form></div></AppPortal>}
+  </>;
 }
-
-const MemoizedHistoryPanel = memo(HistoryPanel);
 
 // ── Settings modal ────────────────────────────────────────────────────────────
 function SettingsModal({ onClose }: { onClose: () => void }) {
@@ -7320,6 +7173,7 @@ function MainPage() {
         >
           <LeftPanel openSettings={() => setShowSettings(true)} />
           <WorkspaceResizer edge="left" />
+          <div className="preview-with-strip">
           <div className="persistent-canvas-host">
             <PersistentCanvasSurface active={activeTab !== "inpaint"}>
               <ImageCanvas />
@@ -7330,8 +7184,8 @@ function MainPage() {
               </Suspense>
             </PersistentCanvasSurface>
           </div>
-          <WorkspaceResizer edge="right" />
-          <MemoizedHistoryPanel />
+          <OutputImageStrip />
+          </div>
         </PersistentTabView>
         <PersistentTabView active={activeTab === "records"} scope="tab:records">
           <AiLogPanel />

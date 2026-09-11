@@ -1,5 +1,7 @@
 # Langbai NovelAI Studio
 
+本项目仅支持 Windows，提供安装版与便携版。
+
 ### 从一句灵感，到一组作品。
 
 中文 NovelAI 图像创作工作台。
@@ -13,7 +15,6 @@
 
 [![Release](https://img.shields.io/github/v/release/2786886095/novelai-image-desktop?color=2563eb)](https://github.com/2786886095/novelai-image-desktop/releases/latest)
 [![Build](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build.yml/badge.svg)](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build.yml)
-[![Build Mobile](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build-mobile.yml/badge.svg)](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build-mobile.yml)
 [![License: MIT](https://img.shields.io/badge/Code-MIT-586069)](./LICENSE)
 
 <a id="quick-start"></a>
@@ -75,16 +76,10 @@
 | --- | --- | --- |
 | Windows x64 · 安装版 | [Setup.exe](https://github.com/2786886095/novelai-image-desktop/releases/download/v2.2.9/Langbai-NovelAI-Studio-Setup-2.2.9.exe) | 长期使用建议选这个；安装向导、快捷方式、软件内更新 |
 | Windows x64 · 便携版 | [便携版.exe](https://github.com/2786886095/novelai-image-desktop/releases/download/v2.2.9/Langbai-NovelAI-Studio-2.2.9.exe) | 双击运行；启动时解压到临时目录，更新需下载新包替换 |
-| macOS · Intel / Apple 芯片 | [通用 DMG](https://github.com/2786886095/novelai-image-desktop/releases/download/v2.2.9/Langbai-NovelAI-Studio-2.2.9-universal.dmg) / [ZIP](https://github.com/2786886095/novelai-image-desktop/releases/download/v2.2.9/Langbai-NovelAI-Studio-2.2.9.zip) | 当前未签名；安装与系统提示处理见[安装说明](./docs/guide/GETTING_STARTED.md#install) |
-| Linux x64 | [AppImage](https://github.com/2786886095/novelai-image-desktop/releases/download/v2.2.9/Langbai-NovelAI-Studio-2.2.9.AppImage) | 添加执行权限后运行 |
-| Android | [APK](https://github.com/2786886095/novelai-image-desktop/releases/download/v2.2.9/app-release.apk) | 手动安装 APK |
-| iOS | [未签名 IPA](https://github.com/2786886095/novelai-image-desktop/releases/download/v2.2.9/novelai-mobile-unsigned.ipa) | 需要自行签名或侧载，不是 App Store 安装包 |
-
-**v2.2.9 为电脑端更新；Android / iOS 暂时保留 v2.2.5 下载，不发布未纳入本轮验收的手机包。**
 
 Windows 便携版与安装版共享本机用户数据目录 `%APPDATA%\novelai-image-desktop\`。**便携版不等于零痕迹，也不是所有数据都写在程序旁边。** 更换包前建议备份设置和作品。
 
-桌面端和移动端可以在设置中选择 GitHub / Gitee 更新源，默认 GitHub，所选源不可用时尝试备用源。不同平台的更新方式见[安装与更新](./docs/guide/GETTING_STARTED.md#updates)。
+Windows 客户端可以在设置中选择 GitHub / Gitee 更新源，默认 GitHub，所选源不可用时尝试备用源。更新方式见[安装与更新](./docs/guide/GETTING_STARTED.md#updates)。
 
 <a id="faq"></a>
 ## 常见问题
@@ -110,13 +105,6 @@ Windows 便携版与安装版共享本机用户数据目录 `%APPDATA%\novelai-i
 
 </details>
 
-<details>
-<summary><b>手机端只有基础生图吗？</b></summary>
-
-不止。移动端已有酒馆、漫画、参考预设、在线画廊、反推与原数据等功能。桌面端和移动端不保证每个工具完全相同；例如桌面的本地画风相似度迭代仅 Windows 提供。各项平台差异见[功能指南](./docs/guide/FEATURES.md#platforms)。
-
-</details>
-
 更多连接、保存与报错排查见[首次使用教程](./docs/guide/GETTING_STARTED.md#troubleshooting)。
 
 <a id="privacy"></a>
@@ -131,7 +119,7 @@ Windows 便携版与安装版共享本机用户数据目录 `%APPDATA%\novelai-i
 <a id="development"></a>
 ## 给开发者
 
-桌面端：Electron + React + TypeScript。移动端：Flutter。
+Windows 客户端：Electron + React + TypeScript。
 
 [源码运行与构建](./docs/guide/DEVELOPMENT.md) · [贡献指南](./CONTRIBUTING.md) · [第三方声明](./THIRD_PARTY_NOTICES.md) · [MIT 代码许可证](./LICENSE)
 

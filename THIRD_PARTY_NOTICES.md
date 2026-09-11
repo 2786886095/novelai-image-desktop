@@ -21,14 +21,6 @@ distributed with the corresponding packages in `node_modules`.
 - License: MIT
 - Use: virtualised chat rendering for long conversations.
 
-## flutter_markdown_plus
-
-- Project: https://pub.dev/packages/flutter_markdown_plus
-- Copyright: the project contributors
-- License: BSD-3-Clause
-- Use: selectable Markdown and code-block rendering in the Android/iOS
-  Character Tavern interface.
-
 ## dsh-infinite-gen-3
 
 - Project: https://github.com/Minglink/dsh-infinite-gen-3

@@ -3,7 +3,7 @@ import { normalizeAppLanguage } from "../i18n";
 type Row = readonly [string, string, string, string, string];
 
 // Tavern keeps a dense, feature-local vocabulary because the same copy is used
-// by the desktop and mobile layouts but not by ordinary chat or generation.
+// by the Windows layouts but not by ordinary chat or generation.
 // Tuple order: zh-CN, zh-TW, en-US, ja-JP, ko-KR.
 const TEXT = {
   copying: ["正在复制…", "正在複製…", "Copying…", "コピー中…", "복사 중…"],

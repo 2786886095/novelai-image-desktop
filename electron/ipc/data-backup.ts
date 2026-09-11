@@ -224,14 +224,6 @@ function safeFileName(value: string, fallback = "image") {
   return `${base}${extension}`;
 }
 
-function safeFolderName(value: string, fallback = "Imported") {
-  return String(value ?? "")
-    .replace(/[\\/:*?"<>|\u0000-\u001f]+/g, "-")
-    .replace(/^\.+/, "")
-    .trim()
-    .slice(0, 80) || fallback;
-}
-
 async function uniqueDestination(directory: string, requested: string) {
   const safe = safeFileName(requested);
   const parsed = path.parse(safe);
@@ -1005,10 +997,7 @@ async function restoreHistoryItem(
     return duplicate;
   }
   const groupId = raw.groupId ? state.groupIdMap.get(raw.groupId) : undefined;
-  const group = groupId ? state.store.historyGroups.find((item) => item.id === groupId) : undefined;
-  const folder = group
-    ? path.join(state.outputDir, dateFolder(raw.date), safeFolderName(group.name, "group"))
-    : path.join(state.outputDir, dateFolder(raw.date));
+  const folder = state.outputDir;
   await fs.mkdir(folder, { recursive: true });
   const destination = await uniqueDestination(folder, asset.reference.originalName);
   await atomicWrite(destination.filePath, asset.bytes);
@@ -1479,13 +1468,7 @@ export async function importDataBackup(
         archive.zip,
         "data/generation-params.json",
         null,
-      ) ?? (
-        await readJsonEntry<{ params?: Record<string, unknown> }>(
-          archive.zip,
-          "data/mobile-configuration.json",
-          {},
-        )
-      ).params;
+      );
       if (incomingParams && typeof incomingParams === "object" && !Array.isArray(incomingParams)) {
         const previous = next.settings.lastGenerationState
           ?? current.settings.lastGenerationState

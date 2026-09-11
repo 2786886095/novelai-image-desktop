@@ -5,7 +5,7 @@
 export const AGENT_WORKSPACE_VERSION = 4 as const;
 
 /**
- * Wire formats supported by both desktop and mobile Agent runtimes.
+ * Wire formats supported by the Windows Agent runtime.
  * Provider brands such as DeepSeek/OpenRouter/Ollama are presets layered on
  * top of one of these transports rather than separate, misleading protocols.
  */
@@ -14,7 +14,7 @@ export type AgentProviderProtocol =
   | "openai-responses"
   | "anthropic-messages"
   | "google-gemini";
-export type AgentRuntimeKind = "direct-provider" | "mobile-compatible";
+export type AgentRuntimeKind = "direct-provider";
 export type AgentConversationStatus = "idle" | "running" | "waiting-permission" | "error";
 export type TavernGenerationMode = "confirm" | "auto";
 /**

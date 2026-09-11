@@ -329,7 +329,7 @@ async function callStdio(
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, argv, {
-      shell: process.platform === "win32",
+      shell: true,
       stdio: ["pipe", "pipe", "pipe"],
     });
     let stdout = "";

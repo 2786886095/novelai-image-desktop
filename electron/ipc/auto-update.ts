@@ -224,9 +224,6 @@ async function downloadFromGithub(): Promise<{ path: string; version: string }> 
 }
 
 async function runDownload(preferredSource: UpdateSource): Promise<{ ok: boolean; message: string }> {
-  if (process.platform !== "win32") {
-    return { ok: false, message: "当前平台请从发行页面手动下载安装包。" };
-  }
   try { assertUpdateOutputProtection(installedAppDir(), readStore(), {installerMigratesWorkspace:true}); }
   catch (error) { const message = error instanceof Error ? error.message : String(error); send({ kind: "error", message }); return { ok: false, message }; }
   downloadedInstallerPath = "";
@@ -284,7 +281,7 @@ function scheduleAutomaticInstall() {
 
 /** Launches the verified Setup.exe silently, then exits the current build. */
 export function installUpdate() {
-  if (process.platform !== "win32" || !downloadedInstallerPath || installLaunchInFlight) return;
+  if (!downloadedInstallerPath || installLaunchInFlight) return;
   try { assertUpdateOutputProtection(installedAppDir(), readStore(), {installerMigratesWorkspace:true}); }
   catch (error) { send({ kind: "error", message: error instanceof Error ? error.message : String(error) }); return; }
   installLaunchInFlight = true;

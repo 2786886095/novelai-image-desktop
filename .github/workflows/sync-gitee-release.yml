@@ -13,15 +13,13 @@ permissions:
 
 jobs:
   sync:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
-
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
-
       - name: Reclaim old Gitee release attachment quota
         env:
           GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
@@ -29,42 +27,25 @@ jobs:
           GITEE_REPO: novelai-image-desktop
           GITEE_KEEP_TAG: ${{ inputs.tag }}
         run: node scripts/prune-gitee-release-assets.mjs
-
-      - name: Download published installers
+      - name: Download published Windows installers
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
         run: |
-          mkdir -p .tmp/gitee-source
-          gh release download "${{ inputs.tag }}" \
-            --pattern 'Langbai-NovelAI-Studio-Setup-*.exe' \
-            --pattern 'latest.yml' \
-            --dir .tmp/gitee-source
-          if gh release view "${{ inputs.tag }}" --json assets --jq '.assets[].name' | grep -qx 'app-release.apk'; then
-            gh release download "${{ inputs.tag }}" --pattern 'app-release.apk' --dir .tmp/gitee-source
-          fi
-
-      - name: Prepare desktop updater chunks
+          New-Item -ItemType Directory -Force .tmp/gitee-source | Out-Null
+          gh release download "$env:RELEASE_TAG" --pattern 'Langbai-NovelAI-Studio-Setup-*.exe' --pattern 'latest.yml' --dir .tmp/gitee-source
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Prepare Windows updater chunks
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
         run: |
-          setup="$(find .tmp/gitee-source -maxdepth 1 -name 'Langbai-NovelAI-Studio-Setup-*.exe' -print -quit)"
-          test -n "$setup"
-          node scripts/prepare-gitee-update.mjs \
-            --setup "$setup" \
-            --output .tmp/gitee-update \
-            --version "${{ inputs.tag }}"
-
-      - name: Publish desktop updater to Gitee
+          $setupFile = Get-ChildItem .tmp/gitee-source -Filter 'Langbai-NovelAI-Studio-Setup-*.exe' | Select-Object -First 1
+          if (-not $setupFile) { throw 'Windows installer missing' }
+          node scripts/prepare-gitee-update.mjs --setup "$($setupFile.FullName)" --output .tmp/gitee-update --version "$env:RELEASE_TAG"
+      - name: Publish Windows updater to Gitee
         env:
           GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
           GITEE_OWNER: langbai666
           GITEE_REPO: novelai-image-desktop
           GITEE_RELEASE_TAG: ${{ inputs.tag }}
-        run: node scripts/sync-gitee-release.mjs "${{ inputs.tag }}" --dir .tmp/gitee-update --file .tmp/gitee-source/latest.yml
-
-      - name: Publish Android installer to Gitee
-        if: hashFiles('.tmp/gitee-source/app-release.apk') != ''
-        env:
-          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
-          GITEE_OWNER: langbai666
-          GITEE_REPO: novelai-image-desktop
-          GITEE_RELEASE_TAG: ${{ inputs.tag }}
-        run: node scripts/sync-gitee-release.mjs "${{ inputs.tag }}" --file .tmp/gitee-source/app-release.apk
+        run: node scripts/sync-gitee-release.mjs "$env:GITEE_RELEASE_TAG" --dir .tmp/gitee-update --file .tmp/gitee-source/latest.yml

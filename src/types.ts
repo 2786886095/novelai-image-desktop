@@ -1205,8 +1205,7 @@ export interface PromptChunk {
 export type ReferencePresetKind = "vibe" | "precise";
 
 /** Durable, named reference image stored under the app's userData directory.
- * The JSON shape intentionally matches the mobile .nairp manifest so archives
- * can move between desktop, Android and iOS without conversion. */
+ * The JSON shape uses the .nairp manifest for portable reference archives. */
 export interface ReferencePreset {
   id: string;
   name: string;
@@ -1430,7 +1429,7 @@ export interface AppSettings {
   convertApiKey: string;
   convertApiModel: string;
   convertSystemPrompt: string;
-  // Character Tavern model provider. Desktop and mobile both connect directly
+  // Character Tavern model provider. Windows clients connect directly
   // to the selected provider using the protocol below.
   agentApiProtocol: import("./agent/types").AgentProviderProtocol;
   agentApiBaseUrl: string;
@@ -1525,8 +1524,7 @@ export interface UpdateInfo {
 
 /**
  * Windows downloads a verified NSIS installer from the user's preferred source
- * and automatically retries the other mirror. Other desktop platforms use
- * UpdateInfo.releaseUrl manually.
+ * and automatically retries the other mirror.
  */
 export type UpdateProgressEvent =
   | { kind: "checking" }

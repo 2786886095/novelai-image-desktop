@@ -8,8 +8,3 @@ it('native disclosures expose hover, press, keyboard focus without moving layout
  expect(layer).toContain('.tavern-parameters-toggle[aria-expanded="true"] > svg:last-child');
  expect(css).toContain('html.motion-reduced');
 });
-it('mobile character expansion keeps its own arrow instead of replacing it with lock',()=>{
- const source=readFileSync('mobile/lib/agent/scene_bindings_editor.dart','utf8');
- expect(source).not.toMatch(/trailing:\s*widget.readOnly\s*\?\s*null\s*:\s*lock\('entities'/);
- expect(source).toMatch(/leading:\s*widget.readOnly/);
-});

@@ -69,7 +69,7 @@ async function decryptInLegacyContext(localState: string, values: string[]): Pro
  * encryption key. Recover only this app's known legacy contexts, then rewrite
  * recovered fields under the stable context. Never guess/substitute an API key. */
 export async function recoverLegacyCredentials() {
-  if (process.platform !== "win32" || !safeStorage.isEncryptionAvailable()) return;
+  if (!safeStorage.isEncryptionAvailable()) return;
   const stable = app.getPath("userData");
   if (path.basename(stable).toLowerCase() !== STABLE_USER_DATA_DIR) return;
   const file = path.join(stable, STORE_FILE_NAME);

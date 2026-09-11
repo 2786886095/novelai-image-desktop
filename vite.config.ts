@@ -12,7 +12,7 @@ export default defineConfig({
     // .tmp. Watching those Chromium databases can lock files on Windows and
     // make the dev renderer consume gigabytes of memory or stop responding.
     watch: {
-      ignored: ["**/.tmp/**", "**/release/**", "**/mobile/build/**"],
+      ignored: ["**/.tmp/**", "**/release/**"],
     },
   },
   test: {

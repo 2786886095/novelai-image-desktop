@@ -13,19 +13,8 @@
 | --- | --- |
 | Windows 安装版 | 运行带 `Setup` 的 `.exe`，按向导选择路径和快捷方式 |
 | Windows 便携版 | 直接运行不带 `Setup` 的 `.exe`；首次解压可能需要等待 |
-| macOS | 打开 DMG 并将应用拖入「应用程序」，或解压 ZIP。当前版本未签名；若系统拦截，请核对下载来源，并按 macOS 提供的应用打开流程处理 |
-| Linux | 给 AppImage 添加执行权限后运行；v2.2.4 命令见下方 |
-| Android | 下载并打开 APK，按系统提示允许当前安装来源；版本更新继续使用对应 APK |
-| iOS | 当前提供未签名 IPA，需要自己的签名或侧载环境；下载文件本身不等于已经安装 |
 
-Linux v2.2.4，在安装包所在目录运行：
-
-```bash
-chmod +x Langbai-NovelAI-Studio-2.2.4.AppImage
-./Langbai-NovelAI-Studio-2.2.4.AppImage
-```
-
-普通使用者无需克隆仓库、执行 `npm install` 或安装 Flutter；这些步骤属于[开发者指南](./DEVELOPMENT.md)。
+普通使用者无需克隆仓库、执行 `npm install`；这些步骤属于[开发者指南](./DEVELOPMENT.md)。
 
 <a id="token"></a>
 ## 2. 配置 NovelAI Token
@@ -49,7 +38,7 @@ GitHub / Gitee **下载源**控制安装包与更新下载，不会把 NovelAI �
 1. 进入「生成 → 文生图」，选择账号可用模型。不同模型支持的参数可能不同，以软件当前显示为准。
 2. 输入下面这段简单提示词，暂时保留默认参数，张数设为 1。
 3. 确认尺寸与预计费用，再点击生成。不要在等待期间反复提交。
-4. 桌面端使用顶部「输出目录」查看文件，或在右侧历史与素材中查看结果。移动端使用其图库与保存 / 下载入口管理结果。
+4. 桌面端使用顶部「输出目录」查看文件，或在右侧历史与素材中查看结果。
 
 ```text
 1girl, solo, blue hair, blue eyes, white dress, garden, sunlight, smile
@@ -83,7 +72,6 @@ GitHub / Gitee **下载源**控制安装包与更新下载，不会把 NovelAI �
 - **先备份再迁移**：重要作品单独备份。跨电脑迁移前同时检查配置目录、输出目录与预设导出文件，不要只复制程序。
 - **Windows 安装版**：支持软件内下载更新并重启安装；失败时尝试备用源。
 - **Windows 便携版**：按更新提示进入发行页，手动下载新包替换。
-- **macOS / Linux / Android / iOS**：使用对应平台的发行包和安装 / 侧载流程，不沿用 Windows 的 NSIS 更新方式。
 - **下载源**：设置可选 GitHub / Gitee，默认 GitHub。某个镜像资产尚未同步时，可直接切回 GitHub。
 
 <a id="troubleshooting"></a>

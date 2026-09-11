@@ -36,7 +36,7 @@ description: 将中文画面描述、小说片段或参考图分析结果转换�
 2. 不收录剧情专名、对白上下文、作者身份或与提示词无关的叙事事实。
 3. 给每条内容添加来源、分类、关键词、分级标记和适用范围。
 4. 与现有条目去重；对未经验证的 Tag 标记为候选，不冒充官方规范。
-5. 更新 `references/guidance.json` 后，在软件仓库根目录运行 `node scripts/sync-novelai-prompt-codex.mjs`，同步软件移动端资源与个人技能。
+5. 更新 `references/guidance.json` 后，在软件仓库根目录运行 `node scripts/sync-novelai-prompt-codex.mjs`，将 Windows 内置资源同步到个人技能。
 
 ## 资料位置
 
@@ -45,4 +45,4 @@ description: 将中文画面描述、小说片段或参考图分析结果转换�
 - 分级映射：`references/classified-mappings.md`
 - 检索索引：`references/guidance.json`
 - 来源与质量说明：`references/source-notes.md`
-- 完整个人法典：桌面内置资源位于 `public/prompt-codex.json.gz`，移动端源位于 `mobile/assets/prompt_codex.json`；同步到个人技能后位于 `references/prompt-codex.json`
+- 完整个人法典：桌面内置资源位于 `public/prompt-codex.json.gz`；同步到个人技能后位于 `references/prompt-codex.json`

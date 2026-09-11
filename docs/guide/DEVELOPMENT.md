@@ -24,7 +24,7 @@ npm run build
 npm run pack
 ```
 
-`npm run pack` 在 Windows 同时生成便携版与 NSIS 安装版。只需便携版时使用 `npm run pack:portable`。macOS 构建入口为 `npm run dist:mac`，完整跨平台发行使用仓库 CI。
+`npm run pack` 在 Windows 同时生成便携版与 NSIS 安装版。只需便携版时使用 `npm run pack:portable`。Windows 发行使用仓库 CI。
 
 v2.2.4 的 Windows 产物示例：
 
@@ -36,19 +36,6 @@ release/latest.yml
 ```
 
 兼容旧启动脚本的别名 `release/NovelAI-Image-Desktop.exe` 仍会生成。根目录 `启动程序.bat` 是开发 / 本地运行相关入口，不应替代给普通用户的安装包指引。
-
-## 移动端
-
-安装 Flutter 及目标平台工具链后：
-
-```powershell
-cd mobile
-flutter pub get
-flutter analyze
-flutter test
-```
-
-Android 与 iOS 的构建、签名和安装条件各不相同；仓库发行的 iOS IPA 当前未签名。
 
 ## 代码地图
 
@@ -63,12 +50,11 @@ Android 与 iOS 的构建、签名和安装条件各不相同；仓库发行的 
 | `src/ToolsHub.tsx` / `src/comic/` | 工具入口与漫画分镜流程 |
 | `src/MetadataInspector.tsx` | 图片原数据查看 |
 | `src/store.ts` / `src/types.ts` | 状态、共享类型和默认参数 |
-| `mobile/` | Flutter 客户端 |
 
 ## 发行与协作
 
-版本标签 `v*` 触发桌面与移动端工作流，并将产物汇总到同一个 Release。维护者发布前应检查版本字段、测试结果、发行说明及 CI 权限；README 编辑本身不需要创建发行标签。
+版本标签 `v*` 触发 Windows 工作流，并将产物汇总到同一个 Release。维护者发布前应检查版本字段、测试结果、发行说明及 CI 权限；README 编辑本身不需要创建发行标签。
 
-[桌面工作流](../../.github/workflows/build.yml) · [移动工作流](../../.github/workflows/build-mobile.yml) · [版本记录](../RELEASE_NOTES.md)
+[桌面工作流](../../.github/workflows/build.yml) · [版本记录](../RELEASE_NOTES.md)
 
 不要提交 Token、服务 Key、本机用户配置或私人素材。贡献前阅读 [CONTRIBUTING.md](../../CONTRIBUTING.md) 与 [THIRD_PARTY_NOTICES.md](../../THIRD_PARTY_NOTICES.md)。

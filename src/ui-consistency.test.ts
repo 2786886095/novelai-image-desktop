@@ -220,19 +220,6 @@ describe("desktop UI consistency guards", () => {
     expect(styles).toContain('.reference-preset-search-row .select-menu-trigger');
   });
 
-  it("uses compact non-overflowing history hover actions", () => {
-    const source = fs.readFileSync(path.join(projectRoot, "src", "App.tsx"), "utf8");
-    const styles = fs.readFileSync(path.join(projectRoot, "src", "styles.css"), "utf8");
-    expect(source).toContain('label={<Icon name="folder" />}');
-    expect(source).toContain('className="history-item-group-row"');
-    expect(styles).toContain('grid-template-columns: repeat(3, minmax(0, 1fr))');
-    expect(styles).toContain('left: 6px;');
-    expect(styles).toContain('right: 6px;');
-    expect(styles).toContain('min-width: 0;');
-    expect(styles).toContain('.history-item:hover .history-item-group-row');
-    expect(source).toContain('saveMetadataSnapshotFromPath(item.filePath)');
-    expect(styles).toContain('.history-item-group-row .select-menu-value');
-  });
 
   it("persists the compact account and V5 allowance footer", () => {
     const source = fs.readFileSync(path.join(projectRoot, "src", "App.tsx"), "utf8");
@@ -243,13 +230,13 @@ describe("desktop UI consistency guards", () => {
     expect(source).toContain('!accountDetailsCollapsed && (');
   });
 
-  it("keeps generation completion stable across the canvas and both side rails", () => {
+  it("keeps generation completion stable across the canvas and the output strip", () => {
     const source = fs.readFileSync(path.join(projectRoot, "src", "App.tsx"), "utf8");
     const store = fs.readFileSync(path.join(projectRoot, "src", "store.ts"), "utf8");
     const styles = fs.readFileSync(path.join(projectRoot, "src", "styles.css"), "utf8");
     expect(source).toContain("handoffPreview");
     expect(source).toContain('className="run-state-swap"');
-    expect(source).toContain('className="history-item history-item-pending"');
+    expect(source).toContain('className="output-image-strip"');
     expect(source).not.toContain('f("account.lastSpent", { amount: lastAnlasSpent })');
     expect(store).toContain("completedImageBridges");
     expect(store).toContain("preloadCompletedImage(item.fileUrl)");
@@ -274,12 +261,6 @@ describe("desktop UI consistency guards", () => {
     expect(styles).toContain('grid-template-columns: repeat(2, minmax(0, 1fr));');
   });
 
-  it("deletes a history image without opening a blocking native confirmation dialog", () => {
-    const source = fs.readFileSync(path.join(projectRoot, "src", "App.tsx"), "utf8");
-    expect(source).not.toContain('window.confirm(f("history.deleteImageConfirm"');
-    expect(source).toContain('const deleted = await deleteHistory(item.id)');
-    expect(source).toContain('setToast(t("history.deleteImageDone"))');
-  });
 
   it("renders official V5 Opus allowance as a live progress bar", () => {
     const source = fs.readFileSync(path.join(projectRoot, "src", "App.tsx"), "utf8");
@@ -613,15 +594,16 @@ describe("desktop UI consistency guards", () => {
     expect(tabs).toContain("export default memo(AppTabBar)");
   });
 
-  it("uses non-blocking dialogs and virtualizes large history grids", () => {
+  it("uses non-blocking dialogs and virtualizes the output image strip", () => {
     const app = fs.readFileSync(path.join(projectRoot, "src", "App.tsx"), "utf8");
     const agent = fs.readFileSync(path.join(projectRoot, "src", "AgentPage.tsx"), "utf8");
     const ui = fs.readFileSync(path.join(projectRoot, "src", "components", "ui.tsx"), "utf8");
     expect(`${app}\n${agent}`).not.toMatch(/window\.(?:alert|prompt)\s*\(/);
     expect(agent).toContain("stylePresetDialog");
     expect(app).toContain("useVirtualizer({");
-    expect(app).toContain("virtualizeHistory = history.length >= 80");
-    expect(app).toContain("const MemoizedHistoryPanel = memo(HistoryPanel)");
+    expect(app).toContain("horizontal: true, count: history.length");
+    expect(app).toContain("<OutputImageStrip />");
+    expect(app).not.toContain("<MemoizedHistoryPanel />");
     expect(ui).toContain("onComplete: () => setRenderMenu(false)");
   });
 
@@ -790,13 +772,10 @@ describe("desktop UI consistency guards", () => {
     expect(panel).toContain("disabledReason={outputLimitReason}");
   });
 
-  it("pages the complete artist ranking and local preset libraries on both clients", () => {
+  it("pages the complete artist ranking and local preset libraries on Windows", () => {
     const gallery = fs.readFileSync(path.join(projectRoot, "src", "AitagGallery.tsx"), "utf8");
     const artistIpc = fs.readFileSync(path.join(projectRoot, "electron", "ipc", "artist-lab.ts"), "utf8");
     const presets = fs.readFileSync(path.join(projectRoot, "src", "ReferencePresetManager.tsx"), "utf8");
-    const mobileGallery = fs.readFileSync(path.join(projectRoot, "mobile", "lib", "screens", "online_gallery_screen.dart"), "utf8");
-    const mobileArtists = fs.readFileSync(path.join(projectRoot, "mobile", "lib", "services", "artist_tag_service.dart"), "utf8");
-    const mobilePresets = fs.readFileSync(path.join(projectRoot, "mobile", "lib", "screens", "generate_screen.dart"), "utf8");
     expect(gallery).toContain("artistLabArtistRanking(targetPage, targetPageSize, targetQuery, force)");
     expect(gallery).toContain("artistPageSize");
     expect(artistIpc).toContain("DANBOORU_TAG_PAGE_SIZE = 1000");
@@ -805,11 +784,5 @@ describe("desktop UI consistency guards", () => {
     expect(ranking).not.toContain("5000");
     expect(presets).toContain("LOCAL_PAGE_SIZE_OPTIONS");
     expect(presets).toContain("LocalPresetPageNumberInput");
-    expect(mobileGallery).toContain("artistService.rankingPage");
-    expect(mobileGallery).toContain("_chooseArtistPage");
-    expect(mobileArtists).toContain("_apiPageSize = 1000");
-    expect(mobileArtists).toContain("Future<ArtistRankingPage> rankingPage");
-    expect(mobilePresets).toContain("referencePresets.pagePosition");
-    expect(mobilePresets).not.toContain("reference-preset-load-more");
   });
 });

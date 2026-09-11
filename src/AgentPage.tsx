@@ -121,7 +121,7 @@ import { NAI_MODELS, NAI_SAMPLERS, type AppSettings, type GenerateParams, type S
 import { SelectMenuCompat } from "./components/ui";
 type LibraryTab = "characters" | "chats";
 type InspectorTab = "character" | "world" | "persona" | "model" | "image" | "scene";
-type MobilePanel = "left" | "right" | null;
+type CompactPanel = "left" | "right" | null;
 type ComposerMenu = "reasoning" | "mode" | null;
 
 const FALLBACK_AVATAR = "AI";
@@ -414,7 +414,7 @@ export default function AgentPage() {
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("image");
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
-  const [mobilePanel, setMobilePanel] = useState<MobilePanel>(null);
+  const [compactPanel, setCompactPanel] = useState<CompactPanel>(null);
   const [search, setSearch] = useState("");
   const [composer, setComposer] = useState("");
   const [composerHeight, setComposerHeight] = useState(() => {
@@ -567,7 +567,7 @@ export default function AgentPage() {
     const result = await window.naiDesktop.selectAgentConversation(id);
     setWorkspace(result.workspace);
     setLibraryTab("chats");
-    setMobilePanel(null);
+    setCompactPanel(null);
   };
 
   const selectCharacter = (id: string) => {
@@ -581,14 +581,14 @@ export default function AgentPage() {
     });
     setInspectorTab(id === SOFTWARE_IMAGE_CHARACTER_ID ? "image" : "character");
     if (id !== SOFTWARE_IMAGE_CHARACTER_ID) setRightCollapsed(false);
-    setMobilePanel(null);
+    setCompactPanel(null);
   };
 
   const createChat = async () => {
     const result = await window.naiDesktop.createAgentConversation(activeCharacter ? tx("chatWith", { name: activeCharacter.name }) : undefined);
     setWorkspace(result.workspace);
     setLibraryTab("chats");
-    setMobilePanel(null);
+    setCompactPanel(null);
   };
 
   const createCharacter = () => {
@@ -785,7 +785,7 @@ export default function AgentPage() {
   const openInspector = (tab: InspectorTab) => {
     setInspectorTab(tab);
     setRightCollapsed(false);
-    if (window.innerWidth <= 960) setMobilePanel("right");
+    if (window.innerWidth <= 960) setCompactPanel("right");
   };
 
   const setGenerationMode = (mode: "confirm" | "auto") => {
@@ -1030,14 +1030,14 @@ export default function AgentPage() {
 
   return (
     <section className={`tavern-page ${leftCollapsed ? "is-left-collapsed" : ""} ${rightCollapsed ? "is-right-collapsed" : ""}`}>
-      <aside className={`tavern-library ${mobilePanel === "left" ? "is-mobile-open" : ""}`}>
+      <aside className={`tavern-library ${compactPanel === "left" ? "is-compact-open" : ""}`}>
         <header className="tavern-brand">
           <span className="tavern-brand-mark"><SparklesIcon /></span>
           {!leftCollapsed ? <div><strong>{copy.title}</strong><small>{copy.subtitle}</small></div> : null}
           <IconButton label={leftCollapsed ? tx("expand") : tx("collapse")} className="tavern-desktop-only" onClick={() => setLeftCollapsed((value) => !value)}>
             {leftCollapsed ? <LeftPanelOpenIcon /> : <LeftPanelCloseIcon />}
           </IconButton>
-          <IconButton label={tx("close")} className="tavern-mobile-only" onClick={() => setMobilePanel(null)}><CloseIcon /></IconButton>
+          <IconButton label={tx("close")} className="tavern-compact-only" onClick={() => setCompactPanel(null)}><CloseIcon /></IconButton>
         </header>
         {leftCollapsed ? (
           <div className="tavern-collapsed-actions">
@@ -1093,7 +1093,7 @@ export default function AgentPage() {
 
       <main className="tavern-chat" style={background ? { "--tavern-background": `url(${JSON.stringify(background).slice(1, -1)})` } as React.CSSProperties : undefined}>
         <header className={`tavern-chat-header is-minimal ${conversation && conversation.characterIds.length > 1 ? "has-group" : ""}`}>
-          <IconButton label={tx("charactersAndChats")} className="tavern-mobile-only" onClick={() => setMobilePanel("left")}><MenuIcon /></IconButton>
+          <IconButton label={tx("charactersAndChats")} className="tavern-compact-only" onClick={() => setCompactPanel("left")}><MenuIcon /></IconButton>
           <div className="tavern-chat-identity">
             <Avatar src={activeCharacter?.avatarDataUrl} name={activeCharacter?.name ?? copy.title} software={isBuiltInCharacter(activeCharacter)} size="small" />
             <span>
@@ -1109,7 +1109,7 @@ export default function AgentPage() {
               </SelectMenuCompat>
             </label>
           ) : null}
-          <IconButton label={copy.settings} onClick={() => setMobilePanel("right")} className="tavern-mobile-only"><TuneIcon /></IconButton>
+          <IconButton label={copy.settings} onClick={() => setCompactPanel("right")} className="tavern-compact-only"><TuneIcon /></IconButton>
         </header>
 
         <MessageStream
@@ -1246,13 +1246,13 @@ export default function AgentPage() {
         </footer>
       </main>
 
-      <aside className={`tavern-inspector ${mobilePanel === "right" ? "is-mobile-open" : ""}`}>
+      <aside className={`tavern-inspector ${compactPanel === "right" ? "is-compact-open" : ""}`}>
         <header className="tavern-inspector-header">
           {!rightCollapsed ? <div><strong>{copy.settings}</strong><small>{copy.model} · {copy.image}</small></div> : null}
           <IconButton label={rightCollapsed ? tx("expand") : tx("collapse")} className="tavern-desktop-only" onClick={() => setRightCollapsed((value) => !value)}>
             {rightCollapsed ? <RightPanelOpenIcon /> : <RightPanelCloseIcon />}
           </IconButton>
-          <IconButton label={tx("close")} className="tavern-mobile-only" onClick={() => setMobilePanel(null)}><CloseIcon /></IconButton>
+          <IconButton label={tx("close")} className="tavern-compact-only" onClick={() => setCompactPanel(null)}><CloseIcon /></IconButton>
         </header>
         {rightCollapsed ? (
           <nav className="tavern-inspector-collapsed">
@@ -1354,7 +1354,7 @@ export default function AgentPage() {
           </>
         )}
       </aside>
-      {mobilePanel ? <button className="tavern-scrim tavern-mobile-only" aria-label={tx("closeSidebar")} onClick={() => setMobilePanel(null)} /> : null}
+      {compactPanel ? <button className="tavern-scrim tavern-compact-only" aria-label={tx("closeSidebar")} onClick={() => setCompactPanel(null)} /> : null}
       {imageFailures[0] && <ImageFailureDialog
         key={`${imageFailures[0].conversationId}:${imageFailures[0].messageId}:${imageFailures[0].stage}:${imageFailures[0].message}`}
         failure={{ ...imageFailures[0], message: sceneErrorMessage(imageFailures[0].message, language) }} language={language}
