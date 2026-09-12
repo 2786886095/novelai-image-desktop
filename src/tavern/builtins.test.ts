@@ -13,7 +13,7 @@ describe("software intelligent image starter kit", () => {
     expect(kit.persona.lorebookId).toBe(kit.lorebook.id);
     expect(kit.sampler.name).toBe("夏瑾 天琴座 Beta 3.8");
     expect(kit.lorebook.entries.length).toBeGreaterThanOrEqual(7);
-    expect(kit.lorebook.entries.filter((entry) => entry.constant)).toHaveLength(2);
+    expect(activeLorebookEntries([kit.lorebook], []).map(({ entry }) => entry.id)).toEqual(expect.arrayContaining(["builtin-software-image-workflow", "builtin-software-image-protocol"]));
     expect(kit.character.visual.negativePrompt).toBe(DEFAULT_TAVERN_NEGATIVE_PROMPT);
     expect(kit.character.visual.stylePrompt).toBe("");
   });

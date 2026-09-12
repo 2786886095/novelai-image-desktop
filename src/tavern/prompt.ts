@@ -1,3 +1,5 @@
+import moyuImageGuidance from "../../shared/tavern-image-guidance.json";
+import { isOriginalImageGuidance, renderOriginalImageGuidance } from "./image-guidance";
 import type {
   AgentConversation,
   AgentMessage,
@@ -141,9 +143,20 @@ function roughTokens(value: string) {
   return Math.ceil(ascii / 4 + (value.length - ascii) / 1.7);
 }
 
+function matchesImageGuidanceModel(entry: TavernLorebookEntry, model?: string) {
+  // Metadata is attached only to the built-in guidance; other books retain their matching semantics.
+  const config = entry.extensions.langbai_image_guidance;
+  if (!config || typeof config !== "object" || Array.isArray(config)) return true;
+  const prefixes = (config as { modelPrefixes?: unknown }).modelPrefixes;
+  if (!Array.isArray(prefixes) || prefixes.length === 0) return true;
+  return typeof model === "string" && prefixes.some((prefix) =>
+    typeof prefix === "string" && model.startsWith(prefix));
+}
+
 export function activeLorebookEntries(
   lorebooks: TavernLorebook[],
   messages: AgentMessage[],
+  imageModel?: string,
 ) {
   const selected: Array<{ book: TavernLorebook; entry: TavernLorebookEntry }> = [];
   for (const book of lorebooks) {
@@ -151,7 +164,7 @@ export function activeLorebookEntries(
     let source = recent.map((message) => message.content).join("\n");
     let remaining = Math.max(128, book.tokenBudget);
     const candidates = [...book.entries]
-      .filter((entry) => entryMatches(entry, source))
+      .filter((entry) => matchesImageGuidanceModel(entry, imageModel) && entryMatches(entry, source))
       .sort((left, right) => right.priority - left.priority || left.insertionOrder - right.insertionOrder);
     for (const entry of candidates) {
       const cost = roughTokens(entry.content);
@@ -163,7 +176,7 @@ export function activeLorebookEntries(
     if (book.recursiveScanning && remaining > 0) {
       const existing = new Set(selected.filter((item) => item.book.id === book.id).map((item) => item.entry.id));
       for (const entry of [...book.entries].sort((a, b) => b.priority - a.priority || a.insertionOrder - b.insertionOrder)) {
-        if (existing.has(entry.id) || !entryMatches(entry, source)) continue;
+        if (existing.has(entry.id) || !matchesImageGuidanceModel(entry, imageModel) || !entryMatches(entry, source)) continue;
         const cost = roughTokens(entry.content);
         if (cost > remaining) continue;
         selected.push({ book, entry });
@@ -199,13 +212,14 @@ export function buildTavernSystemPrompt(context: TavernPromptContext) {
     ...context.lorebooks,
     ...(character.embeddedLorebook ? [character.embeddedLorebook] : []),
   ];
-  const activeLore = activeLorebookEntries(allLorebooks, conversation.messages);
+  const activeLore = activeLorebookEntries(allLorebooks, conversation.messages, context.imageDefaults?.model);
+  const renderedLore = renderOriginalImageGuidance(activeLore);
   const beforeCharacter = activeLore.filter(({ entry }) => entry.position === "before-character");
   const afterCharacter = activeLore.filter(({ entry }) => entry.position === "after-character" || entry.position === "depth");
   const beforeExamples = activeLore.filter(({ entry }) => entry.position === "before-examples");
   const afterExamples = activeLore.filter(({ entry }) => entry.position === "after-examples");
   const loreText = (items: typeof activeLore) => items
-    .map(({ book, entry }) => `### ${entry.comment || book.name}\n${entry.content.trim()}`)
+    .map(({ book, entry }) => `### ${entry.comment || book.name}\n${(renderedLore.get(entry) ?? entry.content).trim()}`)
     .join("\n\n");
 
   const base = replaceMacros(BASE_SYSTEM_PROMPT, character, persona);
@@ -247,6 +261,8 @@ export function buildTavernSystemPrompt(context: TavernPromptContext) {
       ? `<langbai-image-defaults>${JSON.stringify(context.imageDefaults)}</langbai-image-defaults>\nCopy these values exactly unless the user's latest message explicitly overrides a field. Never expose this private tag.`
       : ""),
     section("Image planning effort", imagePlanningEffort(conversation.reasoningEffort)),
+    section("Worldbook application adapter", activeLore.some(({ entry }) => isOriginalImageGuidance(entry))
+      ? moyuImageGuidance.runtimeContract : ""),
   ].join("");
   return replaceMacros(prompt, character, persona);
 }

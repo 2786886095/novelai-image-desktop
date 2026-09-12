@@ -54,7 +54,12 @@ void main() {
     final book = createSoftwareImageLorebook();
     final active = activeTavernLorebookEntries([book], const []);
 
-    expect(active.length, 2);
+    expect(
+        active.map((item) => item.$2.id),
+        containsAll([
+          'builtin-software-image-workflow',
+          'builtin-software-image-protocol',
+        ]));
     expect(
         active.map((item) => item.$2.comment), containsAll(['核心工作流', '生图协议']));
   });

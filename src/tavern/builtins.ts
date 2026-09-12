@@ -1,3 +1,4 @@
+import moyuImageGuidance from "../../shared/tavern-image-guidance.json";
 import type {
   TavernCharacter,
   TavernLorebook,
@@ -62,11 +63,18 @@ export function createSoftwareImageLorebook(): TavernLorebook {
   return {
     id: SOFTWARE_IMAGE_LOREBOOK_ID,
     name: "软件智能生图 · 世界书",
-    description: "Langbai NovelAI Studio 内置生图工作流：意图整理、提示词、构图、参考图与连续性规则。",
+    description: "内置生图工作流与摸鱼世界书指导：V5 使用 9.7、V4.5 使用 8.31 技术原文；保留软件协议和右侧参数。",
     scanDepth: 12,
-    tokenBudget: 4096,
+    tokenBudget: 16384,
     recursiveScanning: false,
     entries: [
+      ...moyuImageGuidance.entries.map((entry) => loreEntry(entry.id, entry.comment, entry.content, {
+        keys: entry.keys, secondaryKeys: entry.secondaryKeys, enabled: entry.enabled,
+        constant: entry.constant, selective: entry.selective, caseSensitive: entry.caseSensitive,
+        insertionOrder: entry.insertionOrder,
+        priority: entry.priority,
+        extensions: { langbai_image_guidance: { modelPrefixes: entry.modelPrefixes, source: entry.source } },
+      })),
       loreEntry(
         "builtin-software-image-workflow",
         "核心工作流",
@@ -88,7 +96,7 @@ export function createSoftwareImageLorebook(): TavernLorebook {
         "生图协议",
         `生图块必须位于可见回复末尾，不使用 Markdown 代码围栏，并保持严格合法的 JSON：
 <langbai-image>{"positivePrompt":"NovelAI-ready English positive prompt","explicitParameters":[],"width":1024,"height":1024,"steps":28,"scale":5,"count":1}</langbai-image>
-右侧生图面板的 model、width、height、steps、scale、sampler、count 是权威默认值。用户最新一句未明确指定的字段必须原样沿用，并且不能放进 explicitParameters；只有用户明确点名修改的字段才写入 explicitParameters。AI 只生成 positivePrompt 与明确要求的参数覆盖，绝不能输出或修改 negativePrompt、stylePrompt、负面提示词或风格提示词；它们由用户在软件的“生图”面板独立控制。positivePrompt 必须非空。count 取 1 到 8。普通对话照常回复；只有当前消息要求出图或修订最近生图方案时，才在回复末尾追加该生图块。`,
+右侧生图面板的 model、width、height、steps、scale、sampler、count 是权威默认值。用户最新一句未明确指定的字段必须原样沿用，并且不能放进 explicitParameters；只有用户明确点名修改的字段才写入 explicitParameters。首次非结构化出图使用 positivePrompt；应用提供 scene、scenePatch 或 promptPatch 契约时优先遵循该契约，不用完整提示词重写替代局部修订。AI 可以提出用户明确要求的参数覆盖，绝不能输出或修改 negativePrompt、stylePrompt、负面提示词或风格提示词；它们由用户在软件的“生图”面板独立控制。首次非结构化方案的 positivePrompt 必须非空。count 取 1 到 8。普通对话照常回复；只有当前消息要求出图或修订最近生图方案时，才在回复末尾追加该生图块。`,
         {
           constant: true,
           insertionOrder: 20,
@@ -99,7 +107,7 @@ export function createSoftwareImageLorebook(): TavernLorebook {
       loreEntry(
         "builtin-software-image-tags",
         "提示词与权重",
-        `正面提示词使用 NovelAI 能理解的英文 Danbooru Tag 与必要的简短自然语言补充，按“主体与人数 → 身份/外观 → 服装 → 动作与表情 → 构图与镜头 → 场景 → 光影与氛围 → 画风与质量”的顺序组织。保留用户明确给出的 artist Tag、下划线、权重语法与角色名，不擅自标准化或删除。避免互相矛盾、同义反复和与画面无关的 Tag。`,
+        `正面提示词使用 NovelAI 能理解的英文 Danbooru Tag 与必要的简短自然语言补充，按“主体与人数 → 身份/外观 → 服装 → 动作与表情 → 构图与镜头 → 场景 → 光影与氛围”的顺序组织。保留用户明确给出的 artist Tag、下划线、权重语法与角色名，不擅自标准化或删除。只精简本轮新写的内容，保留既有方案未被点名修改的 Tag；不自动加入画师或质量词。避免互相矛盾、同义反复和与画面无关的 Tag。`,
         {
           keys: ["tag", "Tag", "TAG", "提示词", "权重", "画师串", "artist", "Danbooru"],
           insertionOrder: 30,
@@ -147,7 +155,7 @@ export function createSoftwareImageLorebook(): TavernLorebook {
         },
       ),
     ],
-    extensions: KIT_MARKER,
+    extensions: { ...KIT_MARKER, imageGuidanceVersion: moyuImageGuidance.version },
     createdAt: timestamp,
     updatedAt: timestamp,
   };

@@ -1,3 +1,5 @@
+import 'tavern_image_guidance.dart';
+import 'tavern_image_guidance_data.dart';
 import 'dart:convert';
 
 import 'agent_models.dart';
@@ -179,10 +181,20 @@ int _roughTokens(String value) {
   return (ascii / 4 + (value.length - ascii) / 1.7).ceil();
 }
 
+bool _matchesImageGuidanceModel(TavernLorebookEntry entry, String? model) {
+  final config = entry.extensions['langbai_image_guidance'];
+  if (config is! Map) return true;
+  final prefixes = config['modelPrefixes'];
+  if (prefixes is! List || prefixes.isEmpty) return true;
+  return model != null &&
+      prefixes.any((prefix) => prefix is String && model.startsWith(prefix));
+}
+
 List<(TavernLorebook, TavernLorebookEntry)> activeTavernLorebookEntries(
   List<TavernLorebook> lorebooks,
-  List<AgentMessage> messages,
-) {
+  List<AgentMessage> messages, {
+  String? imageModel,
+}) {
   final selected = <(TavernLorebook, TavernLorebookEntry)>[];
   for (final book in lorebooks) {
     final depth = book.scanDepth < 1 ? 1 : book.scanDepth;
@@ -192,14 +204,17 @@ List<(TavernLorebook, TavernLorebookEntry)> activeTavernLorebookEntries(
         .map((message) => visibleTavernMessageContent(message))
         .join('\n');
     var remaining = book.tokenBudget < 128 ? 128 : book.tokenBudget;
-    final candidates =
-        book.entries.where((entry) => _entryMatches(entry, source)).toList()
-          ..sort((left, right) {
-            final byPriority = right.priority.compareTo(left.priority);
-            return byPriority != 0
-                ? byPriority
-                : left.insertionOrder.compareTo(right.insertionOrder);
-          });
+    final candidates = book.entries
+        .where((entry) =>
+            _matchesImageGuidanceModel(entry, imageModel) &&
+            _entryMatches(entry, source))
+        .toList()
+      ..sort((left, right) {
+        final byPriority = right.priority.compareTo(left.priority);
+        return byPriority != 0
+            ? byPriority
+            : left.insertionOrder.compareTo(right.insertionOrder);
+      });
     final existing = <String>{};
     for (final entry in candidates) {
       final cost = _roughTokens(entry.content);
@@ -217,7 +232,9 @@ List<(TavernLorebook, TavernLorebookEntry)> activeTavernLorebookEntries(
               : left.insertionOrder.compareTo(right.insertionOrder);
         });
       for (final entry in remainingEntries) {
-        if (existing.contains(entry.id) || !_entryMatches(entry, source)) {
+        if (existing.contains(entry.id) ||
+            !_matchesImageGuidanceModel(entry, imageModel) ||
+            !_entryMatches(entry, source)) {
           continue;
         }
         final cost = _roughTokens(entry.content);
@@ -260,8 +277,10 @@ String buildTavernSystemPrompt(TavernPromptContext context) {
     ...context.lorebooks,
     if (character.embeddedLorebook != null) character.embeddedLorebook!,
   ];
-  final active =
-      activeTavernLorebookEntries(allLorebooks, context.conversation.messages);
+  final active = activeTavernLorebookEntries(
+      allLorebooks, context.conversation.messages,
+      imageModel: context.imageDefaults?.model);
+  final renderedLore = renderOriginalImageGuidance(active);
   final beforeCharacter =
       active.where((item) => item.$2.position == 'before-character').toList();
   final afterCharacter = active
@@ -275,7 +294,7 @@ String buildTavernSystemPrompt(TavernPromptContext context) {
   String loreText(List<(TavernLorebook, TavernLorebookEntry)> entries) =>
       entries.map((item) {
         final comment = item.$2.comment?.trim() ?? '';
-        return '### ${comment.isNotEmpty ? comment : item.$1.name}\n${item.$2.content.trim()}';
+        return '### ${comment.isNotEmpty ? comment : item.$1.name}\n${(renderedLore[item.$2] ?? item.$2.content).trim()}';
       }).join('\n\n');
 
   final base = replaceTavernMacros(tavernBaseSystemPrompt, character, persona);
@@ -340,7 +359,12 @@ String buildTavernSystemPrompt(TavernPromptContext context) {
             ? ''
             : '<langbai-image-defaults>${jsonEncode(context.imageDefaults!.toJson())}</langbai-image-defaults>\nCopy these values exactly unless the user\'s latest message explicitly overrides a field. Never expose this private tag.'))
     ..write(_section('Image planning effort',
-        _imagePlanningEffort(context.conversation.reasoningEffort)));
+        _imagePlanningEffort(context.conversation.reasoningEffort)))
+    ..write(_section(
+        'Worldbook application adapter',
+        active.any((item) => isOriginalImageGuidance(item.$2))
+            ? moyuImageGuidance['runtimeContract'] as String
+            : ''));
   return replaceTavernMacros(prompt.toString(), character, persona);
 }
 
@@ -368,7 +392,9 @@ TavernImageParseResult parseLangbaiImageProposal(String content) {
         ..createdAt = tavernNow()
         ..status = 'pending';
       if (proposal.positivePrompt.trim().isEmpty &&
-          proposal.promptPatch == null && proposal.scene == null && proposal.scenePatch == null) proposal = null;
+          proposal.promptPatch == null &&
+          proposal.scene == null &&
+          proposal.scenePatch == null) proposal = null;
     }
   } catch (_) {
     proposal = null;

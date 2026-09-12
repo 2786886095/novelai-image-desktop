@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       publish_after_verification:
-        description: Publish and close the verified issue batch only after all gates pass
+        description: Publish the release only after all gates pass
         type: boolean
         default: false
       verified_build_run:
@@ -155,7 +155,6 @@ jobs:
     timeout-minutes: 25
     permissions:
       contents: write
-      issues: write
       actions: read
     steps:
       - uses: actions/checkout@v5
@@ -176,4 +175,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           MOBILE_RUN: ${{ inputs.mobile_run }}
           BUILD_RUN: ${{ inputs.verified_build_run || github.run_id }}
-        run: node scripts/publish-verified-issue-release.mjs
+        run: node scripts/publish-verified-release.mjs

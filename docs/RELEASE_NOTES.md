@@ -1,37 +1,20 @@
-## Langbai NovelAI Studio 2.2.9
+## Langbai NovelAI Studio 2.2.10
 
-本次更新同时覆盖电脑端与 Flutter 手机端。
+### v2.2.10 更新内容
 
-### v2.2.9 更新内容
+#### 酒馆 AI 生图世界书（电脑端 / Flutter 同步）
+- 按右侧生图模型自动选择技术指导：V5 使用 9.7，V4.5 使用 8.31（含 Full / Curated）。
+- 每套收录 15 个技术原文条目；正文逐条核对，不使用此前的精简摘要。排除不适合内置的混合示例/前置思考及其他模型条目，不是两份原始 JSON 的全文件复制。
+- 世界书变量在单次请求、单本世界书内展开，不运行脚本，不串用其他会话的变量。
+- 保留现有结构化生图及局部修订契约。右侧模型、尺寸、张数、负面词和风格提示词仍是权威设置，空值保留，不按原书配额额外生成图片。
+- 已有会话加载时刷新内置条目，保留用户自建世界书、角色生图设置及已保存的条目启用状态。
 
-#### 提示词与抽卡
-- 角色提示词、负面词、位置坐标随生成参数保存，重启后恢复；支持角色预设保存、应用、重命名和删除。
-- 已保存的风格预设可以重命名，参考图可从历史记录选择。
-- 随机抽卡支持自定义画师候选列表，不与排行榜混用；收藏可批量转为独立风格预设，并复制预览图，保留原收藏。
+### 验证口径
+本地桌面 974 条测试通过，Flutter 535 条通过、1 条跳过，类型检查及两端构建通过。发行包另外经过各平台 CI 构建与桌面原生运行时/启动检查后发布。
+未对这套世界书进行真实付费模型生成质量验证，不承诺提升幅度；详细内容与运行适配说明见仓库 docs/TAVERN_IMAGE_GUIDANCE.md。
 
-#### 图片操作
-- 电脑端大图支持放大后左键拖动及方向键连续切换。
-- 手机端酒馆、图库、漫画、抽卡和预设大图统一提供前后切换与缩放；下载或分享操作跟随当前图片。
-- 历史图片删除增加确认，避免误删。
-
-#### 修复与打包
-- 修复桌面目标画风评分模型下载不使用 AI 代理的问题；先准备评分模型再开始迭代生成，失败保留已下载文件并说明原因。
-- 规范误填为具体操作路径的 NovelAI 接口地址，保留用户配置的代理前缀。
-- 保留 sharp 图片编解码依赖，补齐 macOS/Linux 评分运行时，并增加安装包内原生模块与启动检查。
-- 元数据种子导入沿用已修复逻辑，纳入回归测试。
-
-### 安装说明
-| 平台 | 文件 |
-| --- | --- |
-| Windows 安装版 | `Langbai-NovelAI-Studio-Setup-2.2.9.exe` |
-| Windows 便携版 | `Langbai-NovelAI-Studio-2.2.9.exe` |
-| macOS 通用 | `Langbai-NovelAI-Studio-2.2.9-universal.dmg` / `Langbai-NovelAI-Studio-2.2.9.zip` |
-| Linux | `Langbai-NovelAI-Studio-2.2.9.AppImage` |
-| Android / iOS | `app-release.apk` / `novelai-mobile-unsigned.ipa` |
-
-- Windows：安装版与便携版；macOS：通用 DMG/ZIP；Linux：AppImage。
-- Android：使用稳定签名的 APK，可覆盖安装兼容的既有正式版。
-- iOS：无签名 IPA 仅用于自行签名测试，不是可直接安装的 App Store 版本。
-- 更新前请保留用户图片和工作区；自定义输出目录应位于安装目录之外。
-
-发布前保持草稿状态；所有构建及验收门禁完成后才公开。
+### 安装与更新
+- Windows 安装版：`Langbai-NovelAI-Studio-Setup-2.2.10.exe`；便携版：`Langbai-NovelAI-Studio-2.2.10.exe`。
+- macOS：`Langbai-NovelAI-Studio-2.2.10-universal.dmg` / `Langbai-NovelAI-Studio-2.2.10.zip`；Linux：`Langbai-NovelAI-Studio-2.2.10.AppImage`。
+- Android：稳定签名 APK。iOS：未签名 IPA，需要自行签名，不是 App Store 安装包。
+- 请把图片和用户数据保存在安装目录之外。世界书原文比精简版更长，会占用更多对话上下文。
