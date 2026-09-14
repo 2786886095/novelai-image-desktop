@@ -941,7 +941,7 @@ function reconcileHistoryFiles(force = false): void {
     next.push({
       ...item,
       filePath: moved.path,
-      fileUrl: toLocalMediaUrl(moved.path),
+      fileUrl: toLocalMediaUrl(moved.path, item.id),
       groupId: inferGroupIdFromPath(moved.path, data),
     });
     changed = true;
@@ -968,7 +968,7 @@ export function pruneMissingHistoryItem(id: string): boolean {
     const updated = {
       ...item,
       filePath: moved.path,
-      fileUrl: toLocalMediaUrl(moved.path),
+      fileUrl: toLocalMediaUrl(moved.path, item.id),
       groupId: inferGroupIdFromPath(moved.path, data),
     };
     data.history = data.history.map((h) => (h.id === id ? updated : h));
@@ -997,13 +997,18 @@ export function getHistory(date?: string, groupId?: string): HistoryItem[] {
     // authoritative path so existing libraries recover without migration or
     // touching the image files on disk.
     .map((item) => item.filePath
-      ? { ...item, fileUrl: toLocalMediaUrl(item.filePath) }
+      ? { ...item, fileUrl: toLocalMediaUrl(item.filePath, item.id) }
       : item);
 }
 
 export function getHistoryDates(): string[] {
   reconcileHistoryFiles();
   return Array.from(new Set(readStore().history.map((item) => item.date))).sort().reverse();
+}
+
+/** Identity-only snapshot: no filesystem reconciliation or per-image stat calls. */
+export function getHistoryReferenceItems(): Array<Pick<HistoryItem, "id" | "filePath">> {
+  return readStore().history.map(({ id, filePath }) => ({ id, filePath }));
 }
 
 export function removeHistory(id: string): HistoryItem | null {

@@ -19388,6 +19388,8 @@ button.prompt-chip-head::after,
 .tavern-image-lightbox > section {
   position: relative;
   display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  place-items: center;
   width: 100vw;
   height: 100dvh;
   overflow: hidden;
@@ -19395,6 +19397,20 @@ button.prompt-chip-head::after,
   border-radius: 0;
   background: transparent;
   box-shadow: none;
+}
+/* The shared viewer is the only in-flow child; close/save controls are absolute.
+   Keep its image stage centered, with navigation outside the stage's geometry. */
+.tavern-image-lightbox .image-preview-viewer { position: relative; }
+.tavern-image-lightbox .image-preview-controls {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%);
+  width: max-content;
+}
+.tavern-image-lightbox .image-preview-stage {
+  height: min(70vh, calc(100dvh - 160px));
+  min-height: 0;
 }
 .tavern-image-lightbox-stage { min-height: 0; padding: 36px 44px 76px; overflow: auto; background: transparent; }
 .tavern-image-lightbox-stage img { max-width: 100%; max-height: calc(100dvh - 112px); border-radius: var(--radius-sm); box-shadow: 0 18px 60px rgba(0,0,0,.34); }

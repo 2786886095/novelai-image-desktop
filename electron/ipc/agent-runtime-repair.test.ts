@@ -1,3 +1,4 @@
+import { imageOutcomeText } from "../../src/agent/image-outcome";
 import {beforeEach,afterEach,describe,it,expect,vi} from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -29,6 +30,18 @@ beforeEach(async()=>{
 const send=()=>sendAgentMessage({conversationId:'chat',text:'把红色外套改成蓝色，其它保留'});
 const latest=()=>mocked.workspace.conversations[0].messages.at(-1);
 describe('automatic generation integration',()=>{
+ it('retains completed batch images and swipe/tool references while notifying the later failure',async()=>{
+  const old=mocked.workspace.conversations[0].messages[0];old.swipeIndex=0;
+  const image={id:'partial-image',name:'image.png',kind:'image',mime:'image/png',filePath:path.join(imageRoot,'image.png'),size:1,createdAt:new Date().toISOString()};
+  mocked.generate.mockResolvedValueOnce({ok:false,output:'HTTP 429',data:{message:'HTTP 429'},generatedImages:[image]});
+  const result=await generateTavernImage({conversationId:'chat',messageId:old.id,proposal:{...old.imageProposal,count:3}});
+  expect(result.ok).toBe(false);expect(old.imageProposal.status).toBe('error');
+  expect(old.attachments.map((a:any)=>a.id)).toEqual(['partial-image']);
+  expect(old.swipeAttachments[0]).toEqual(old.attachments);
+  expect(old.tools[0]).toMatchObject({status:'error',generatedImages:[image]});
+  expect(mocked.events.filter(e=>e.kind==='image-error')).toEqual([expect.objectContaining({message:expect.stringContaining('HTTP 429')})]);
+  expect(old.imageProposal.error).toContain('1');
+ });
  it('reports automatic image failures without treating the completed chat reply as an unsent user message',async()=>{
   mocked.post.mockResolvedValueOnce(block(repaired));mocked.generate.mockResolvedValueOnce({ok:false,output:'raw failure',data:{message:'Fixture image service HTTP 429'}});
   expect(await send()).toMatchObject({ok:true,imageError:'Fixture image service HTTP 429'});
@@ -38,7 +51,7 @@ describe('automatic generation integration',()=>{
  });
  it('rejects a successful tool response with zero images, and a later retry restores completed status',async()=>{
   mocked.post.mockResolvedValueOnce(block(repaired));mocked.generate.mockResolvedValueOnce({ok:true,output:'success but empty',generatedImages:[]});
-  expect(await send()).toMatchObject({ok:true,imageError:expect.stringContaining('没有返回任何图片')});
+  expect(await send()).toMatchObject({ok:true,imageError:imageOutcomeText('zh-CN').empty});
   expect(latest().imageProposal.status).toBe('error');expect(latest().tools).toEqual([]);
   expect((await generateTavernImage({conversationId:'chat',messageId:latest().id,proposal:latest().imageProposal})).ok).toBe(true);
   expect(latest().imageProposal.status).toBe('completed');expect(latest().attachments).toHaveLength(1);
@@ -55,14 +68,14 @@ describe('automatic generation integration',()=>{
  });
  it('marks malformed machine blocks as a plan failure, instead of silently hiding them',async()=>{
   mocked.post.mockResolvedValueOnce({status:200,headers:{'content-type':'application/json'},data:Readable.from([JSON.stringify({choices:[{message:{content:'文字回复。<langbai-image>{broken}</langbai-image>'}}]})])});
-  expect(await send()).toMatchObject({ok:true,imageError:expect.stringContaining('格式无效')});
-  expect(latest().content).toBe('文字回复。');expect(latest().error).toContain('格式无效');expect(mocked.generate).not.toHaveBeenCalled();
+  expect(await send()).toMatchObject({ok:true,imageError:imageOutcomeText('zh-CN').invalid});
+  expect(latest().content).toBe('文字回复。');expect(latest().error).toBe(imageOutcomeText('zh-CN').invalid);expect(mocked.generate).not.toHaveBeenCalled();
   expect(mocked.events.filter(e=>e.kind==='image-error')).toEqual([expect.objectContaining({stage:'proposal'})]);
  });
  it('notifies an explicit image request receiving only text but leaves ordinary conversation alone',async()=>{
   const text=()=>({status:200,headers:{'content-type':'application/json'},data:Readable.from([JSON.stringify({choices:[{message:{content:'这是一段普通文字。'}}]})])});
   mocked.post.mockImplementation(text);
-  expect(await sendAgentMessage({conversationId:'chat',text:'请生成一张森林图片'})).toMatchObject({ok:true,imageError:expect.stringContaining('没有提供可执行')});
+  expect(await sendAgentMessage({conversationId:'chat',text:'请生成一张森林图片'})).toMatchObject({ok:true,imageError:imageOutcomeText('zh-CN').missing});
   mocked.events=[];
   expect(await sendAgentMessage({conversationId:'chat',text:'你好，今天怎么样？'})).toEqual({ok:true});
   expect(mocked.events.some(e=>e.kind==='image-error')).toBe(false);expect(mocked.generate).not.toHaveBeenCalled();
@@ -86,11 +99,11 @@ describe('automatic generation integration',()=>{
  it('a second invalid response pauses instead of generating or looping',async()=>{
   mocked.post.mockResolvedValueOnce(block(invalid)).mockResolvedValueOnce(block(invalid));await send();
   expect(mocked.post).toHaveBeenCalledTimes(2);expect(mocked.generate).not.toHaveBeenCalled();expect(latest().imageProposal.continuity.repairStatus).toBe('failed');expect(latest().imageProposal.positivePrompt).toContain('white scarf');
-  expect(mocked.events.filter(e=>e.kind==='image-error')).toEqual([expect.objectContaining({stage:'proposal',message:expect.stringContaining('全自动生成已暂停')})]);
+  expect(mocked.events.filter(e=>e.kind==='image-error')).toEqual([expect.objectContaining({stage:'proposal',message:imageOutcomeText('zh-CN').review})]);
  });
  it('clears the paused-plan message when the user explicitly keeps the preserved plan and generates',async()=>{
   mocked.post.mockResolvedValueOnce(block(invalid)).mockResolvedValueOnce(block(invalid));await send();
-  expect(latest().error).toContain('全自动生成已暂停');
+  expect(latest().error).toBe(imageOutcomeText('zh-CN').review);
   const proposal={...latest().imageProposal,continuity:{...latest().imageProposal.continuity,reviewRequired:false}};
   expect((await generateTavernImage({conversationId:'chat',messageId:latest().id,proposal})).ok).toBe(true);
   expect(latest().error).toBeUndefined();expect(latest().imageProposal.status).toBe('completed');
@@ -172,7 +185,7 @@ describe('literal repeat image action',()=>{
   await sendAgentMessage({conversationId:'chat',text:'重新生成'});
   expect(mocked.post).not.toHaveBeenCalled();expect(mocked.generate).not.toHaveBeenCalled();
   expect(latest().imageProposal.status).toBe('pending');expect(latest().imageProposal.continuity.reviewRequired).toBe(false);
-  expect(latest().content).toContain('确认生成');
+  expect(latest().content).toBe(imageOutcomeText('zh-CN').repeatConfirm);
   await generateTavernImage({conversationId:'chat',messageId:latest().id,proposal:latest().imageProposal});
   expect(latest().imageProposal.status).toBe('completed');expect(latest().attachments).toHaveLength(1);
  });

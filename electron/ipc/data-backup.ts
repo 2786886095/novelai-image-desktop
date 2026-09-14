@@ -318,7 +318,7 @@ async function portableAgentAttachment(
   const { filePath: _filePath, fileUrl: _fileUrl, ...metadata } = cloneJson(attachment);
   return {
     ...metadata,
-    asset: await addAsset(zip, attachment.filePath, assetByHash, includeAssets),
+    asset: attachment.unavailable ? undefined : await addAsset(zip, attachment.filePath, assetByHash, includeAssets),
   };
 }
 

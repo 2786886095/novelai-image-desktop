@@ -3058,17 +3058,17 @@ export const useAppStore = create<AppState>((set, get) => ({
     const nextHistory = previousHistory.filter((item) => item.id !== id);
     const deletingCurrent = previousCurrent?.id === id;
     if (deletingCurrent) workbenchLoadRevision += 1;
+    const deletionRevision = workbenchLoadRevision;
+    const optimisticCurrent = deletingCurrent
+      ? get().isGenerating ? null : nextHistory[0] ?? null
+      : previousCurrent;
     set({
       history: nextHistory,
       // Do not swap an arbitrary old thumbnail into the canvas underneath an
       // active generating overlay. It looked like the running request had
       // changed to the deleted record. The successful result will become the
       // current image naturally; a failed run leaves an honest empty canvas.
-      currentImage: deletingCurrent
-        ? get().isGenerating
-          ? null
-          : nextHistory[0] ?? null
-        : previousCurrent,
+      currentImage: optimisticCurrent,
       comparisonBeforeImage: deletingCurrent ? null : get().comparisonBeforeImage,
     });
     try {
@@ -3080,6 +3080,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       // races with a second concurrent deletion and can resurrect images that
       // were successfully removed after this request started.
       set((state) => {
+        const restoreSelection = deletingCurrent
+          && workbenchLoadRevision === deletionRevision
+          && state.currentImage === optimisticCurrent;
         const history = !removedItem || state.history.some((item) => item.id === id)
           ? state.history
           : [
@@ -3089,8 +3092,8 @@ export const useAppStore = create<AppState>((set, get) => ({
             ];
         return {
           history,
-          currentImage: previousCurrent?.id === id ? previousCurrent : state.currentImage,
-          comparisonBeforeImage: previousCurrent?.id === id ? previousComparison : state.comparisonBeforeImage,
+          currentImage: restoreSelection ? previousCurrent : state.currentImage,
+          comparisonBeforeImage: restoreSelection ? previousComparison : state.comparisonBeforeImage,
           toast: compactStoreError(state.settings, error),
         };
       });

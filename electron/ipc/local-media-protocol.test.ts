@@ -8,6 +8,17 @@ import {
 } from "./local-media-protocol";
 
 describe("local media protocol URLs", () => {
+  it("gives reused output paths distinct image identities without breaking path validation", () => {
+    const source = path.resolve("outputs/2026-09-14_1.png");
+    const oldUrl = toLocalMediaUrl(source, "deleted-record");
+    const newUrl = toLocalMediaUrl(source, "new-record");
+    expect(newUrl).not.toBe(oldUrl);
+    expect(toLocalMediaUrl(source, "new-record")).toBe(newUrl);
+    expect(localMediaUrlToPath(oldUrl)).toBe(source);
+    expect(localMediaUrlToPath(newUrl)).toBe(source);
+    expect(localMediaUrlToPath(toLocalMediaUrl(source, "a?b#c /中文"))).toBe(source);
+    expect(localMediaUrlToPath(`${LOCAL_MEDIA_SCHEME}://file/${encodeURIComponent(pathToFileURL(path.resolve('never-exposed.png')).toString())}?v=new-record`)).toBeNull();
+  });
   it("round-trips Windows paths with spaces and Unicode", () => {
     const source = path.resolve("C:/Users/测试 用户/Pictures/作品 01.png");
     const url = toLocalMediaUrl(source);

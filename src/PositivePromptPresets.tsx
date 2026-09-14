@@ -67,7 +67,7 @@ const TEXT: Record<AppLanguage, PresetText> = {
   "zh-CN": {
     trigger: "正面预设",
     title: "正面提示词预设",
-    subtitle: "选择后直接替换当前正面提示词；参考图只用于查看，不会参与生图。",
+    subtitle: "选择预设替换当前正面提示词。",
     saveCurrent: "保存当前",
     createBlank: "手动新建",
     search: "搜索名称或提示词",
@@ -86,7 +86,7 @@ const TEXT: Record<AppLanguage, PresetText> = {
     apply: "替换当前正面提示词",
     images: "参考查看图",
     imageCount: "{count}/3 张",
-    imageHint: "仅用于辨认和对照该提示词，不会自动加入任何生成参数。",
+    imageHint: "预设预览图，仅供查看。",
     imageEmpty: "尚未添加参考图",
     addImages: "添加图片",
     dropImages: "也可将图片拖到这里",
@@ -107,15 +107,15 @@ const TEXT: Record<AppLanguage, PresetText> = {
   },
   "en-US": {
     trigger: "Prompt presets", title: "Positive prompt presets", subtitle: "Applying a preset replaces the current positive prompt. Reference images are view-only and never enter generation.",
-    saveCurrent: "Save current", createBlank: "Create manually", search: "Search names or prompts", empty: "No positive prompt presets yet", emptyHint: "Save the current positive prompt or enter one manually.", unnamed: "Untitled preset", prompt: "Positive prompt", name: "Preset name", nameHint: "Leave blank to name it from the beginning of the prompt", promptHint: "Only positive-prompt text is saved", edit: "Edit", remove: "Delete", save: "Save", cancel: "Cancel", close: "Close", apply: "Replace current positive prompt", images: "Reference images", imageCount: "{count}/3 images", imageHint: "For visual recognition only. Images are never added to generation parameters.", imageEmpty: "No reference images", addImages: "Add images", dropImages: "You can also drop images here", imageLimit: "Each preset supports up to 3 reference images.", removeImage: "Remove image", viewLarge: "View full image", saveBeforeImages: "Save the preset first, then add up to 3 reference images.", promptRequired: "Enter a positive prompt.", duplicate: "An identical preset already exists and was not duplicated.", saved: "Positive prompt preset saved.", deleted: "Positive prompt preset deleted.", deleteConfirm: "Delete “{name}” and its reference images?", applyNotice: "Current positive prompt replaced.",
+    saveCurrent: "Save current", createBlank: "Create manually", search: "Search names or prompts", empty: "No positive prompt presets yet", emptyHint: "Save the current positive prompt or enter one manually.", unnamed: "Untitled preset", prompt: "Positive prompt", name: "Preset name", nameHint: "Leave blank to name it from the beginning of the prompt", promptHint: "Only positive-prompt text is saved", edit: "Edit", remove: "Delete", save: "Save", cancel: "Cancel", close: "Close", apply: "Replace current positive prompt", images: "Reference images", imageCount: "{count}/3 images", imageHint: "Preset preview images, for viewing only.", imageEmpty: "No reference images", addImages: "Add images", dropImages: "You can also drop images here", imageLimit: "Each preset supports up to 3 reference images.", removeImage: "Remove image", viewLarge: "View full image", saveBeforeImages: "Save the preset first, then add up to 3 reference images.", promptRequired: "Enter a positive prompt.", duplicate: "An identical preset already exists and was not duplicated.", saved: "Positive prompt preset saved.", deleted: "Positive prompt preset deleted.", deleteConfirm: "Delete “{name}” and its reference images?", applyNotice: "Current positive prompt replaced.",
   },
   "ja-JP": {
     trigger: "正面プリセット", title: "ポジティブプロンプトプリセット", subtitle: "適用すると現在のポジティブプロンプトを置換します。参照画像は閲覧専用で生成には使われません。",
-    saveCurrent: "現在を保存", createBlank: "手動で新規作成", search: "名前またはプロンプトを検索", empty: "プリセットはまだありません", emptyHint: "現在の内容を保存するか、手動で入力して保存できます。", unnamed: "名称未設定", prompt: "ポジティブプロンプト", name: "プリセット名", nameHint: "空欄の場合はプロンプト冒頭から自動命名", promptHint: "ポジティブプロンプトのみ保存します", edit: "編集", remove: "削除", save: "保存", cancel: "キャンセル", close: "閉じる", apply: "現在の正面プロンプトを置換", images: "参照画像", imageCount: "{count}/3 枚", imageHint: "確認用のみ。生成パラメータには追加されません。", imageEmpty: "参照画像なし", addImages: "画像を追加", dropImages: "ここに画像をドロップできます", imageLimit: "各プリセットは最大3枚です。", removeImage: "画像を削除", viewLarge: "大きく表示", saveBeforeImages: "先にプリセットを保存すると、最大3枚の画像を追加できます。", promptRequired: "ポジティブプロンプトを入力してください。", duplicate: "同じプリセットが既にあるため重複保存しませんでした。", saved: "プリセットを保存しました。", deleted: "プリセットを削除しました。", deleteConfirm: "「{name}」と参照画像を削除しますか？", applyNotice: "現在のポジティブプロンプトを置換しました。",
+    saveCurrent: "現在を保存", createBlank: "手動で新規作成", search: "名前またはプロンプトを検索", empty: "プリセットはまだありません", emptyHint: "現在の内容を保存するか、手動で入力して保存できます。", unnamed: "名称未設定", prompt: "ポジティブプロンプト", name: "プリセット名", nameHint: "空欄の場合はプロンプト冒頭から自動命名", promptHint: "ポジティブプロンプトのみ保存します", edit: "編集", remove: "削除", save: "保存", cancel: "キャンセル", close: "閉じる", apply: "現在の正面プロンプトを置換", images: "参照画像", imageCount: "{count}/3 枚", imageHint: "プリセット確認用の画像です。", imageEmpty: "参照画像なし", addImages: "画像を追加", dropImages: "ここに画像をドロップできます", imageLimit: "各プリセットは最大3枚です。", removeImage: "画像を削除", viewLarge: "大きく表示", saveBeforeImages: "先にプリセットを保存すると、最大3枚の画像を追加できます。", promptRequired: "ポジティブプロンプトを入力してください。", duplicate: "同じプリセットが既にあるため重複保存しませんでした。", saved: "プリセットを保存しました。", deleted: "プリセットを削除しました。", deleteConfirm: "「{name}」と参照画像を削除しますか？", applyNotice: "現在のポジティブプロンプトを置換しました。",
   },
   "ko-KR": {
     trigger: "긍정 프리셋", title: "긍정 프롬프트 프리셋", subtitle: "적용하면 현재 긍정 프롬프트를 교체합니다. 참고 이미지는 보기 전용이며 생성에 사용되지 않습니다.",
-    saveCurrent: "현재 내용 저장", createBlank: "직접 만들기", search: "이름 또는 프롬프트 검색", empty: "저장된 긍정 프롬프트가 없습니다", emptyHint: "현재 내용을 저장하거나 직접 입력해 저장할 수 있습니다.", unnamed: "이름 없는 프리셋", prompt: "긍정 프롬프트", name: "프리셋 이름", nameHint: "비워 두면 프롬프트 앞부분으로 자동 이름 지정", promptHint: "긍정 프롬프트만 저장합니다", edit: "편집", remove: "삭제", save: "저장", cancel: "취소", close: "닫기", apply: "현재 긍정 프롬프트 교체", images: "참고 이미지", imageCount: "{count}/3장", imageHint: "확인용이며 어떤 생성 매개변수에도 자동으로 추가되지 않습니다.", imageEmpty: "참고 이미지 없음", addImages: "이미지 추가", dropImages: "이미지를 여기에 놓을 수도 있습니다", imageLimit: "프리셋당 최대 3장까지 저장할 수 있습니다.", removeImage: "이미지 제거", viewLarge: "큰 이미지 보기", saveBeforeImages: "먼저 프리셋을 저장한 뒤 최대 3장의 참고 이미지를 추가하세요.", promptRequired: "긍정 프롬프트를 입력하세요.", duplicate: "동일한 프리셋이 이미 있어 중복 저장하지 않았습니다.", saved: "긍정 프롬프트 프리셋을 저장했습니다.", deleted: "긍정 프롬프트 프리셋을 삭제했습니다.", deleteConfirm: "‘{name}’과 참고 이미지를 삭제할까요?", applyNotice: "현재 긍정 프롬프트를 교체했습니다.",
+    saveCurrent: "현재 내용 저장", createBlank: "직접 만들기", search: "이름 또는 프롬프트 검색", empty: "저장된 긍정 프롬프트가 없습니다", emptyHint: "현재 내용을 저장하거나 직접 입력해 저장할 수 있습니다.", unnamed: "이름 없는 프리셋", prompt: "긍정 프롬프트", name: "프리셋 이름", nameHint: "비워 두면 프롬프트 앞부분으로 자동 이름 지정", promptHint: "긍정 프롬프트만 저장합니다", edit: "편집", remove: "삭제", save: "저장", cancel: "취소", close: "닫기", apply: "현재 긍정 프롬프트 교체", images: "참고 이미지", imageCount: "{count}/3장", imageHint: "프리셋 확인용 이미지입니다.", imageEmpty: "참고 이미지 없음", addImages: "이미지 추가", dropImages: "이미지를 여기에 놓을 수도 있습니다", imageLimit: "프리셋당 최대 3장까지 저장할 수 있습니다.", removeImage: "이미지 제거", viewLarge: "큰 이미지 보기", saveBeforeImages: "먼저 프리셋을 저장한 뒤 최대 3장의 참고 이미지를 추가하세요.", promptRequired: "긍정 프롬프트를 입력하세요.", duplicate: "동일한 프리셋이 이미 있어 중복 저장하지 않았습니다.", saved: "긍정 프롬프트 프리셋을 저장했습니다.", deleted: "긍정 프롬프트 프리셋을 삭제했습니다.", deleteConfirm: "‘{name}’과 참고 이미지를 삭제할까요?", applyNotice: "현재 긍정 프롬프트를 교체했습니다.",
   },
 };
 

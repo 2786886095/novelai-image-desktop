@@ -1,5 +1,6 @@
 import {normalizeNovelAiEndpoint} from '../../src/nai-endpoint';
 import { processableImage } from "./image-codec";
+import { writeUniqueImageFile } from "./image-output";
 import { app, dialog, nativeImage } from "electron";
 import axios from "axios";
 import FormData from "form-data";
@@ -1815,24 +1816,6 @@ function buildImageFileName(
   return name || `${ctx.now.getTime()}-${ctx.seq}`;
 }
 
-/** Return a non-colliding path, appending -1, -2... if needed. */
-async function uniqueFilePath(
-  dir: string,
-  base: string,
-  ext: string,
-): Promise<string> {
-  let candidate = path.join(dir, `${base}.${ext}`);
-  let n = 1;
-  for (;;) {
-    try {
-      await fs.access(candidate);
-      candidate = path.join(dir, `${base}-${n++}.${ext}`);
-    } catch {
-      return candidate; // does not exist
-    }
-  }
-}
-
 // Sanitize a user group name into a safe folder segment (strip path-illegal
 // characters, collapse whitespace, drop leading dots so we never produce a
 // hidden/`..`-like folder, cap length).
@@ -1984,17 +1967,16 @@ async function saveBuffers(
       prefix,
       name: params.fileNamePrefix,
     });
-    const filePath = await uniqueFilePath(dir, base, ext);
     // Optionally strip embedded generation metadata before writing to disk.
     const outBuffer = prepareImageBufferForSave(
       buffers[index],
       settings.keepImageMetadata !== false,
     );
-    await fs.writeFile(filePath, outBuffer);
+    const filePath = await writeUniqueImageFile(dir, base, ext, outBuffer);
     items.push({
       id,
       filePath,
-      fileUrl: toLocalMediaUrl(filePath),
+      fileUrl: toLocalMediaUrl(filePath, id),
       date,
       createdAt: now.toISOString(),
       params: { ...params, seed: actualSeed },
@@ -4195,17 +4177,14 @@ export async function promoteArtistLabFavorite(rawItem: HistoryItem): Promise<Hi
   const dir = path.join(settings.outputDir, date, sanitizeGroupFolderName(group.name));
   await fs.mkdir(dir, { recursive: true });
   const parsed = path.parse(source);
-  const destination = await uniqueFilePath(dir, parsed.name, parsed.ext.replace(/^\./, "") || "png");
-  try {
-    await fs.rename(source, destination);
-  } catch {
-    await fs.copyFile(source, destination);
-    await fs.unlink(source).catch(() => undefined);
-  }
+  const destination = await writeUniqueImageFile(
+    dir, parsed.name, parsed.ext.replace(/^\./, "") || "png", await fs.readFile(source),
+  );
+  await fs.unlink(source).catch(() => undefined);
   const promoted: HistoryItem = {
     ...rawItem,
     filePath: destination,
-    fileUrl: toLocalMediaUrl(destination),
+    fileUrl: toLocalMediaUrl(destination, rawItem.id),
     feature: "artist-lab",
     groupId: group.id,
   };

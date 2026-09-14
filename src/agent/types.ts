@@ -178,6 +178,8 @@ export interface AgentAttachment {
   filePath: string;
   /** Renderer-safe URL rebuilt by the native layer. */
   fileUrl?: string;
+  /** A removed/replaced image must never resolve to a later file at the same path. */
+  unavailable?: "deleted" | "missing" | "replaced";
   width?: number;
   height?: number;
   createdAt: string;

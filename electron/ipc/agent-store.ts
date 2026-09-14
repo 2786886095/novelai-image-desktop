@@ -35,7 +35,8 @@ import {
   TAVERN_PRESET_LIBRARY_VERSION,
 } from "../../src/tavern/builtins";
 import { toLocalMediaUrl } from "./local-media-protocol";
-import { atomicWriteFileSync, getSettings, readWithBackupRecoverySync, rotateBackupsSync } from "./store";
+import { atomicWriteFileSync, getSettings, getHistoryReferenceItems, fileExistsWithDirectoryCache, readWithBackupRecoverySync, rotateBackupsSync } from "./store";
+import { invalidateHistoryAttachments, reconcileHistoryAttachments } from "./agent-attachment-lifecycle";
 import { agentWorkspaceDirectory, rebaseAgentWorkspaceFile } from "./agent-workspace-location";
 
 const MAX_FILE_BYTES = 48 * 1024 * 1024;
@@ -192,7 +193,8 @@ function rehydrateAttachment(raw: Partial<AgentAttachment>): AgentAttachment | n
     size: Math.max(0, Number(raw.size) || 0),
     kind: raw.kind === "image" || raw.kind === "document" || raw.kind === "text" ? raw.kind : attachmentKind(extension),
     filePath,
-    fileUrl: fs.existsSync(filePath) ? toLocalMediaUrl(filePath) : undefined,
+    fileUrl: !raw.unavailable && fs.existsSync(filePath) ? toLocalMediaUrl(filePath, raw.id) : undefined,
+    ...(["deleted", "missing", "replaced"].includes(String(raw.unavailable)) ? { unavailable: raw.unavailable } : {}),
     ...(Number.isFinite(raw.width) ? { width: raw.width } : {}),
     ...(Number.isFinite(raw.height) ? { height: raw.height } : {}),
     createdAt: typeof raw.createdAt === "string" ? raw.createdAt : now(),
@@ -406,7 +408,7 @@ export function normalizeAgentWorkspace(raw: unknown): AgentWorkspaceData {
 }
 
 export function readAgentWorkspace(): AgentWorkspaceData {
-  if (cache) return clone(cache);
+  if (cache) return resolvedWorkspace(cache);
   const file = agentWorkspacePath();
   let resetLegacyWorkspace = false;
   let migratedPresetLibrary = false;
@@ -425,11 +427,27 @@ export function readAgentWorkspace(): AgentWorkspaceData {
   cache = recovered?.value ?? createEmptyAgentWorkspace();
   const recoveredRepairs = cache.conversations.map(recoverInterruptedImageRepairs).some(Boolean);
   if (!recovered || resetLegacyWorkspace || migratedPresetLibrary || recoveredRepairs) writeAgentWorkspace(cache);
-  return clone(cache);
+  return resolvedWorkspace(cache);
+}
+
+function resolvedWorkspace(workspace: AgentWorkspaceData): AgentWorkspaceData {
+  const next = clone(workspace);
+  const directories = new Map<string, Set<string> | null>();
+  reconcileHistoryAttachments(next, getHistoryReferenceItems(), getSettings().outputDir,
+    file => fileExistsWithDirectoryCache(file, directories), toLocalMediaUrl);
+  return next;
+}
+
+/** Persist before unlink, so restart and alternate swipes cannot resurrect a path. */
+export function invalidateAgentHistoryImage(id: string): void {
+  const workspace = readAgentWorkspace();
+  if (invalidateHistoryAttachments(workspace, id)) writeAgentWorkspace(workspace);
 }
 
 export function writeAgentWorkspace(workspace: AgentWorkspaceData) {
-  const normalized = normalizeAgentWorkspace({ ...workspace, updatedAt: now() });
+  // A still-open renderer editor may save a snapshot from before deletion.
+  // Resolve identities at the write boundary too, not only on the next read.
+  const normalized = resolvedWorkspace(normalizeAgentWorkspace({ ...workspace, updatedAt: now() }));
   const file = agentWorkspacePath();
   fs.mkdirSync(path.dirname(file), { recursive: true });
   rotateBackupsSync(file);
@@ -651,7 +669,7 @@ export async function exportAgentAttachment(
   const conversation = workspace.conversations.find((item) => item.id === conversationId);
   const message = conversation?.messages.find((item) => item.id === messageId);
   const attachment = message?.attachments.find((item) => item.id === attachmentId);
-  if (!attachment || attachment.kind !== "image") {
+  if (!attachment || attachment.unavailable || attachment.kind !== "image") {
     return { ok: false, message: "生成图片不存在。" };
   }
   const sourcePath = path.resolve(attachment.filePath);

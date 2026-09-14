@@ -189,6 +189,7 @@ function promptMessagesWithImages(messages: TavernPromptMessage[], conversationI
     const backing = sourceById.get(message.sourceMessageId);
     if (!backing || backing.role !== "user") return plain(message);
     const images = backing.attachments
+      .filter((attachment) => !attachment.unavailable)
       .map((attachment) => imageDataUrl(attachment.filePath, attachment.mime, attachment.size))
       .filter((value): value is string => Boolean(value)) ?? [];
     if (!images.length) return plain(message);
@@ -757,16 +758,15 @@ export async function generateTavernImage(request: TavernImageRequest) {
         count: proposal.count,
       },
     }, emit);
-    if (!result.ok) {
-      const detail = result.data && typeof result.data === "object" ? (result.data as { message?: unknown }).message : undefined;
-      throw new Error(typeof detail === "string" && detail.trim() ? detail : result.output || "图片生成失败。");
-    }
-    const images = Array.isArray(result.generatedImages) ? result.generatedImages.filter(image => image.kind === "image" && typeof image.filePath === "string" && image.filePath.trim() && fs.existsSync(image.filePath)) : [];
+    const detail = result.data && typeof result.data === "object" ? (result.data as { message?: unknown }).message : undefined;
+    const failure = typeof detail === "string" && detail.trim() ? detail : result.output || "图片生成失败。";
+    const images = Array.isArray(result.generatedImages) ? result.generatedImages.filter(image => !image.unavailable && image.kind === "image" && typeof image.filePath === "string" && image.filePath.trim() && fs.existsSync(image.filePath)) : [];
+    if (!result.ok && !images.length) throw new Error(failure);
     if (!images.length) throw new Error(imageOutcomeText(getSettings().language).empty);
     updateAgentConversation(request.conversationId, (target) => {
       const item = target.messages.find((entry) => entry.id === request.messageId);
       if (!item) return;
-      item.imageProposal = { ...proposal, status: "completed", error: undefined };
+      item.imageProposal = { ...proposal, status: result.ok ? "completed" : "error", error: result.ok ? undefined : failure };
       item.attachments.push(...images);
       if (item.swipeIndex !== undefined) {
         (item.imageProposalSwipes ??= [])[item.swipeIndex] = structuredClone(item.imageProposal);
@@ -776,14 +776,20 @@ export async function generateTavernImage(request: TavernImageRequest) {
         id: crypto.randomUUID(),
         name: "langbai_generate_image",
         title: "场景图片",
-        status: "completed",
+        status: result.ok ? "completed" : "error",
         input: { positivePrompt: proposal.positivePrompt, count: proposal.count },
         output: result.output,
+        ...(!result.ok ? { error: failure } : {}),
         generatedImages: images,
         startedAt: proposal.createdAt,
         completedAt: timestamp(),
       });
     });
+    if (!result.ok) {
+      const summary = imageOutcomeText(getSettings().language).partial
+        .replace('{count}', String(images.length)).replace('{error}', failure);
+      return failImageRequest({ ...request, proposal }, summary);
+    }
     emitWorkspace();
     return { ok: true };
   } catch (error) {

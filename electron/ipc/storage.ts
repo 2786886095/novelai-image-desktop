@@ -4,6 +4,7 @@ import path from "path";
 import JSZip from "jszip";
 import type { BatchExportFile, HistoryItem } from "../../src/types";
 import { toLocalMediaUrl } from "./local-media-protocol";
+import { invalidateAgentHistoryImage } from "./agent-store";
 import {
   createHistoryGroup,
   deleteHistoryGroup,
@@ -196,32 +197,39 @@ export async function renameHistoryItem(id: string, rawName: string): Promise<{ 
   if (!item) return { ok: false, message: "找不到该图片记录。" };
   const cleaned = safeName(rawName);
   if (!cleaned) return { ok: false, message: "文件名不能为空。" };
-  const dir = path.dirname(item.filePath);
-  const ext = path.extname(item.filePath) || ".png";
+  const sourcePath = item.filePath;
+  const dir = path.dirname(sourcePath);
+  const ext = path.extname(sourcePath) || ".png";
   let target = path.join(dir, `${cleaned}${ext}`);
-  if (path.resolve(target) === path.resolve(item.filePath)) {
+  if (path.resolve(target) === path.resolve(sourcePath)) {
     return { ok: true, item }; // unchanged
   }
-  // Avoid clobbering an existing file.
+  // Reserve the destination atomically. access() followed by rename() lets
+  // concurrent requests overwrite a file created between those two calls.
   let n = 1;
   while (true) {
     try {
-      await fs.access(target);
-      target = path.join(dir, `${cleaned}-${n++}${ext}`);
-    } catch {
+      await fs.copyFile(sourcePath, target, fs.constants.COPYFILE_EXCL);
       break;
+    } catch (error: any) {
+      if (error?.code !== 'EEXIST') return { ok: false, message: `重命名失败：${error?.message ?? "未知错误"}` };
+      target = path.join(dir, `${cleaned}-${n++}${ext}`);
     }
   }
   try {
-    await fs.rename(item.filePath, target);
+    await fs.unlink(sourcePath);
   } catch (e: any) {
+    // The source still belongs to the original record; remove only our copy.
+    await fs.unlink(target).catch(() => undefined);
     return { ok: false, message: `重命名失败：${e?.message ?? "未知错误"}` };
   }
-  const updated = updateHistoryItem(id, { filePath: target, fileUrl: toLocalMediaUrl(target) });
-  return { ok: true, item: updated ?? { ...item, filePath: target, fileUrl: toLocalMediaUrl(target) } };
+  const fileUrl = toLocalMediaUrl(target, id);
+  const updated = updateHistoryItem(id, { filePath: target, fileUrl });
+  return { ok: true, item: updated ?? { ...item, filePath: target, fileUrl } };
 }
 
 export async function deleteHistoryItem(id: string) {
+  invalidateAgentHistoryImage(id);
   const item = removeHistory(id);
   // Only unlink a path that's actually inside the configured output
   // directory — a record that was ever mis-bound (e.g. two groups sharing a

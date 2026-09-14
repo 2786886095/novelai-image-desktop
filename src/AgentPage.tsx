@@ -1678,6 +1678,11 @@ function MessageBubble({ conversationId, autoMode, message, speaker, persona, la
   const content = visibleMessageContent(message);
   const [proposalDraft, setProposalDraft] = useState(message.imageProposal);
   const [previewImage, setPreviewImage] = useState<AgentAttachment | null>(null);
+  useEffect(() => {
+    if (!previewImage) return;
+    const current = message.attachments.find(item => item.id === previewImage.id);
+    if (!current?.fileUrl || current.unavailable) setPreviewImage(null);
+  }, [message.attachments, previewImage]);
   const [copied, setCopied] = useState(false);
   const [copying, setCopying] = useState(false);
   const [copyFailed, setCopyFailed] = useState(false);
@@ -1733,7 +1738,7 @@ function MessageBubble({ conversationId, autoMode, message, speaker, persona, la
                   <button type="button" title={tx("saveAs")} aria-label={tx("saveAs")} onClick={() => void window.naiDesktop.exportAgentAttachment(conversationId, message.id, item.id).catch(() => undefined)}><SaveIcon /></button>
                 </figcaption>
               </figure>
-            ) : null)}
+            ) : <p key={item.id} className="tavern-message-error" role="status">{tx("imageUnavailable")}</p>)}
           </div>
         ) : null}
         {proposalDraft?.status === "completed" && <button type="button" className="btn tavern-scene-link" onClick={onOpenScene}><MagicIcon />{sceneRailText(language).snapshot}</button>}

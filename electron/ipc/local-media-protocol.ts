@@ -70,11 +70,15 @@ export function registerLocalMediaScheme() {
 }
 
 /** Build a renderer-safe URL without disabling Chromium web security. */
-export function toLocalMediaUrl(filePath: string): string {
+export function toLocalMediaUrl(filePath: string, revision?: string): string {
   const resolved = path.resolve(filePath);
   allowedMediaPaths.add(mediaPathKey(resolved));
   const fileUrl = pathToFileURL(resolved).toString();
-  return `${LOCAL_MEDIA_SCHEME}://file/${encodeURIComponent(fileUrl)}`;
+  // Chromium can reuse a live decoded image even with Cache-Control: no-store.
+  // A deleted output filename may be reused, so records must carry their own
+  // stable identity through save, history refresh and restart.
+  const suffix = revision === undefined ? "" : `?v=${encodeURIComponent(revision)}`;
+  return `${LOCAL_MEDIA_SCHEME}://file/${encodeURIComponent(fileUrl)}${suffix}`;
 }
 
 export function localMediaUrlToPath(value: string): string | null {

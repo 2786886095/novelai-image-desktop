@@ -1101,9 +1101,11 @@ function registerIpc() {
     "storage:setHistoryGroup",
     (_event, id: string, groupId?: string) => assignHistoryGroup(id, groupId),
   );
-  ipcMain.handle("storage:delete", (_event, id: string) =>
-    deleteHistoryItem(id),
-  );
+  ipcMain.handle("storage:delete", async (_event, id: string) => {
+    const result = await deleteHistoryItem(id);
+    if (!mainWindow?.isDestroyed()) mainWindow?.webContents.send("agent:event", { kind: "workspace", workspace: readAgentWorkspace() });
+    return result;
+  });
   ipcMain.handle("storage:pruneMissing", (_event, id: string) =>
     pruneMissingHistoryItem(id),
   );

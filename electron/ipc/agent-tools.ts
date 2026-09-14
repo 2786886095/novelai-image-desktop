@@ -18,6 +18,7 @@ import type {
   UpscaleScale,
 } from "../../src/types";
 import { inspectImageMetadata, parseImageMeta } from "../../src/png-meta";
+import { imageOutcomeText } from "../../src/agent/image-outcome";
 import {
   applyAgentPromptLocks,
   buildAgentGenerationInput,
@@ -248,8 +249,11 @@ function attachmentForRequest(request: AgentToolBridgeRequest, value: unknown): 
   const local = candidates.find((item) => item.id === attachmentId);
   const cached = cachedToolAttachments.get(attachmentId);
   const history = getHistory().find((item) => item.id === attachmentId);
-  const attachment = local ?? cached ?? (history ? imageAttachment(history) : undefined);
-  if (!attachment || !attachment.filePath || !fs.existsSync(attachment.filePath)) {
+  // Tool-cache entries are not authority for a generated history image: its
+  // record may have been deleted while its old pathname was reused.
+  const validCached = history || attachmentId.startsWith("reference-preset:") ? cached : undefined;
+  const attachment = local ?? validCached ?? (history ? imageAttachment(history) : undefined);
+  if (!attachment || attachment.unavailable || !attachment.filePath || !fs.existsSync(attachment.filePath)) {
     throw new Error(`找不到 attachmentId=${attachmentId} 对应的本机文件。`);
   }
   return attachment;
@@ -444,10 +448,18 @@ export async function executeAgentTool(
         const items: HistoryItem[] = [];
         let lastMessage = "";
         for (let index = 0; index < count; index += 1) {
-          const result = await generateImage({ ...params, seedMode: params.seedMode }, extras);
-          lastMessage = result.message;
-          if (!result.ok) return response(false, "生图失败", result);
-          items.push(...result.items);
+          try {
+            const result = await generateImage({ ...params, seedMode: params.seedMode }, extras);
+            lastMessage = result.message;
+            items.push(...result.items);
+            if (!result.ok) return response(false, "生图失败", { ...result, items }, items.map(imageAttachment));
+            if (!result.items.length) return response(false, "生图失败", {
+              message: imageOutcomeText(getSettings().language).empty, items,
+            }, items.map(imageAttachment));
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            return response(false, "生图失败", { message, items }, items.map(imageAttachment));
+          }
         }
         const images = items.map(imageAttachment);
         return response(true, "图片生成完成", { message: lastMessage, count: images.length, items }, images);
