@@ -52,9 +52,11 @@ describe("desktop UI consistency guards", () => {
     expect(styles).toContain(".weight-tool-btn");
     expect(styles).toContain("grid-template-columns: 15px minmax(0, 1fr) 15px");
     expect(source).toContain('className="char-position-stage"');
-    expect(source).toContain('className="char-position-marker"');
-    expect(source).toContain("setPointerCapture(event.pointerId)");
-    expect(source).toContain('updateCharCaption(caption.id, { ...patch, useCoords: true })');
+    const marker = fs.readFileSync(path.join(projectRoot,"src/components/CharacterEditing.tsx"),"utf8");
+    expect(source).toContain('<CharacterPositionMarker');
+    expect(marker).toContain('className="char-position-marker"');
+    expect(marker).toContain('setPointerCapture(e.pointerId)');
+    expect(marker).toContain('onPointerUp=');
   });
 
   it("lets each character prompt card collapse independently", () => {
@@ -240,7 +242,7 @@ describe("desktop UI consistency guards", () => {
     expect(source).toContain('className="account-details-toggle"');
     expect(source).toContain('className={clsx("account-details-shell", accountDetailsCollapsed && "collapsed")}');
     expect(source).toContain('className="account-details-content"');
-    expect(source).toContain('!accountDetailsCollapsed && (');
+    expect(source).toContain('<AnimatedCollapse open={!accountDetailsCollapsed}>');
   });
 
   it("keeps generation completion stable across the canvas and both side rails", () => {
@@ -570,7 +572,7 @@ describe("desktop UI consistency guards", () => {
     const styles = fs.readFileSync(path.join(projectRoot, "src", "styles.css"), "utf8");
     expect(ui).toContain("export function SelectMenuCompat");
     expect(ui).toContain("collectSelectOptions(children)");
-    expect(ui).toContain('role="listbox"');
+    expect(ui).toContain('role={open ? "listbox" : undefined}');
     expect(styles).toMatch(/\.select-menu-trigger\s*\{[^}]*justify-content:\s*flex-start/s);
     expect(styles).toMatch(/\.select-menu-value\s*\{[^}]*flex:\s*1 1 auto[^}]*text-align:\s*left/s);
     expect(styles).toContain("button:has(> .ui-icon):not(.select-menu-trigger)");
@@ -622,7 +624,8 @@ describe("desktop UI consistency guards", () => {
     expect(app).toContain("useVirtualizer({");
     expect(app).toContain("virtualizeHistory = history.length >= 80");
     expect(app).toContain("const MemoizedHistoryPanel = memo(HistoryPanel)");
-    expect(ui).toContain("onComplete: () => setRenderMenu(false)");
+    expect(ui).toContain('useDisclosurePresence(open, menuRef)');
+    expect(ui).toContain('disclosureAttributes(open)');
   });
 
   it("keeps the reference catalog independent from global UI framework CSS", () => {

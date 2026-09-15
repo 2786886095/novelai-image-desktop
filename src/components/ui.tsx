@@ -17,7 +17,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import clsx from "clsx";
-import gsap from "gsap";
+import {useDisclosurePresence, disclosureAttributes} from "./disclosure-motion";
 import { Icon, iconNameForLegacyGlyph, isIconName } from "./icons";
 
 export function Button({
@@ -132,9 +132,9 @@ export function SelectMenu({
   const generatedId = useId();
   const menuId = `${id ?? `select-menu-${generatedId.replace(/:/g, "")}`}-listbox`;
   const [open, setOpen] = useState(defaultOpen);
-  const [renderMenu, setRenderMenu] = useState(defaultOpen);
+  const renderMenu = useDisclosurePresence(open, menuRef);
   const [activeIndex, setActiveIndex] = useState(0);
-  const [position, setPosition] = useState({ left: 0, top: 0, width: 220, maxHeight: 320 });
+  const [position, setPosition] = useState({ left: 0, top: 0, width: 220, maxHeight: 320, opensUp: false, bottom: 0 });
   const selectedIndex = options.findIndex((option) => option.value === value);
   const selected = selectedIndex >= 0 ? options[selectedIndex] : undefined;
   const firstEnabledIndex = options.findIndex((option) => !option.disabled);
@@ -156,12 +156,9 @@ export function SelectMenu({
     const maxHeight = Math.max(132, Math.min(320, opensUp ? above - gap : below - gap));
     const left = Math.min(Math.max(viewportGap, rect.left), window.innerWidth - width - viewportGap);
     const top = opensUp ? Math.max(viewportGap, rect.top - Math.min(estimatedHeight, maxHeight) - gap) : rect.bottom + gap;
-    setPosition({ left, top, width, maxHeight });
+    setPosition({ left, top, width, maxHeight, opensUp, bottom: window.innerHeight - rect.top + gap });
   }, [options.length]);
 
-  useEffect(() => {
-    if (open) setRenderMenu(true);
-  }, [open]);
 
   useLayoutEffect(() => {
     if (open && renderMenu) updatePosition();
@@ -177,7 +174,6 @@ export function SelectMenu({
       const target = event.target as Node;
       if (triggerRef.current?.contains(target) || menuRef.current?.contains(target)) return;
       setOpen(false);
-      setRenderMenu(false);
     };
     const onViewportChange = () => updatePosition();
     document.addEventListener("pointerdown", onPointerDown, true);
@@ -192,18 +188,6 @@ export function SelectMenu({
     };
   }, [open, renderMenu, updatePosition]);
 
-  useLayoutEffect(() => {
-    if (!renderMenu || !menuRef.current) return;
-    const reduced = document.documentElement.classList.contains("motion-reduced");
-    if (reduced) {
-      if (!open) setRenderMenu(false);
-      return;
-    }
-    const animation = open
-      ? gsap.fromTo(menuRef.current, { autoAlpha: 0, y: -6, scale: 0.985 }, { autoAlpha: 1, y: 0, scale: 1, duration: 0.16, ease: "power2.out", clearProps: "transform,opacity,visibility" })
-      : gsap.to(menuRef.current, { autoAlpha: 0, y: -4, scale: 0.99, duration: 0.12, ease: "power1.in", onComplete: () => setRenderMenu(false) });
-    return () => { animation.kill(); };
-  }, [open, renderMenu]);
 
   useEffect(() => {
     if (!open || !renderMenu) return;
@@ -291,7 +275,6 @@ export function SelectMenu({
         onKeyDown={(event) => {
           if (event.key === "Tab" && open) {
             setOpen(false);
-            setRenderMenu(false);
             return;
           }
           if (event.key === "ArrowDown" || event.key === "ArrowUp") {
@@ -311,14 +294,15 @@ export function SelectMenu({
       {renderMenu && <AppPortal><div
         ref={menuRef}
         id={menuId}
-        className="select-menu-popover"
-        role="listbox"
+        className="select-menu-popover disclosure-popover"
+        {...disclosureAttributes(open)}
+        role={open ? "listbox" : undefined}
         aria-label={ariaLabel}
-        style={{ left: position.left, top: position.top, width: position.width, maxHeight: position.maxHeight }}
+        style={{ left: position.left, top: position.opensUp ? undefined : position.top, bottom: position.opensUp ? position.bottom : undefined, width: position.width, maxHeight: position.maxHeight }}
         onKeyDown={(event) => {
           if (event.key === "Tab") {
+            triggerRef.current?.focus({preventScroll: true});
             setOpen(false);
-            setRenderMenu(false);
           }
           else if (event.key === "ArrowDown") { event.preventDefault(); move(1); }
           else if (event.key === "ArrowUp") { event.preventDefault(); move(-1); }
@@ -341,7 +325,7 @@ export function SelectMenu({
           }
         }}
       >
-        {options.map((option, index) => <button
+        <div className="disclosure-options">{options.map((option, index) => <button
           key={option.value}
           type="button"
           role="option"
@@ -354,7 +338,7 @@ export function SelectMenu({
         >
           <span>{option.label}</span>
           {option.value === value && <Icon name="check" />}
-        </button>)}
+        </button>)}</div>
       </div></AppPortal>}
     </>
   );

@@ -68,8 +68,10 @@ void main() {
     expect(asset.searchText, contains('侦察骑士'));
     expect(asset.searchText, contains('amber'));
     expect(asset.searchText, contains('원신'));
-    expect(asset.preciseUrls.first, 'https://gitee.test/amber.png');
-    expect(asset.thumbnailUrls.first, 'https://gitee.test/amber-thumb.webp');
+    expect(asset.preciseUrls,
+        ['https://example.test/amber.png', 'https://github.test/amber.png']);
+    expect(asset.thumbnailUrls.first, 'https://example.test/amber-thumb.webp');
+    expect(asset.thumbnailUrls.any((url) => url.contains('gitee')), isFalse);
   });
 
   test('gzip-base64 catalog chunk is unpacked before parsing', () {

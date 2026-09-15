@@ -1,3 +1,7 @@
+import {resolveCanvasImage} from "./canvas-preview";
+import {useDisclosurePresence, disclosureAttributes} from "./components/disclosure-motion";
+import {normalizeCharacterCaptions} from "./character-presets";
+import {AnimatedCollapse, CharacterPositionMarker, characterEditLabels, useCharacterReorder} from './components/CharacterEditing';
 import {PreviewImageViewer} from './components/PreviewImageViewer';
 import {HistoryImagePicker, historyPickerText} from './components/HistoryImagePicker';
 import { characterPresetText } from './character-presets';
@@ -1064,6 +1068,9 @@ function CharCaptionsModal({ onClose }: { onClose: () => void }) {
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
   const generateText = useMemo(() => getGeneratePanelText(language), [language]);
+  const setCharCaptions = useAppStore(state=>state.setCharCaptions);
+  const reorder = useCharacterReorder(charCaptions, setCharCaptions);
+  const editText = characterEditLabels(language);
   const customPositions = charCaptions.some((caption) => caption.useCoords);
   const [collapsedCharacters, setCollapsedCharacters] = useState<Set<string>>(() => new Set());
   const toggleCharacterAutoComplete = useCallback(async () => {
@@ -1083,10 +1090,8 @@ function CharCaptionsModal({ onClose }: { onClose: () => void }) {
   }, []);
 
   const setPositionMode = useCallback((custom: boolean) => {
-    for (const caption of charCaptions) {
-      updateCharCaption(caption.id, { useCoords: custom });
-    }
-  }, [charCaptions, updateCharCaption]);
+    setCharCaptions(charCaptions.map(caption=>({...caption,useCoords:custom})));
+  }, [charCaptions, setCharCaptions]);
 
   return (
     <AppPortal>
@@ -1096,8 +1101,8 @@ function CharCaptionsModal({ onClose }: { onClose: () => void }) {
           <h2>{t("character.title")}</h2>
           <button aria-label={t("common.close")} onClick={onClose}><Icon name="close" /></button>
         </header>
-        <CharacterPresetControls />
         <div className="char-body">
+          <CharacterPresetControls />
           {!supportsCharacters && (
             <div className="status-box bad">
               {t("character.unsupported")}
@@ -1129,7 +1134,7 @@ function CharCaptionsModal({ onClose }: { onClose: () => void }) {
                   </button>
                 </div>
               </div>
-              {customPositions && (
+              <AnimatedCollapse open={customPositions}>
                 <div className="char-position-stage-wrap">
                   <div
                     className="char-position-stage"
@@ -1140,65 +1145,20 @@ function CharCaptionsModal({ onClose }: { onClose: () => void }) {
                     aria-label={t("character.positionCanvas")}
                   >
                     <div className="char-position-grid" aria-hidden="true" />
-                    {charCaptions.map((caption, index) => (
-                      <button
-                        key={caption.id}
-                        type="button"
-                        className="char-position-marker"
-                        style={{
-                          left: `${(caption.useCoords ? caption.x : 0.5) * 100}%`,
-                          top: `${(caption.useCoords ? caption.y : 0.5) * 100}%`,
-                        }}
-                        aria-label={f("character.markerLabel", { index: index + 1 })}
-                        title={`${f("character.label", { index: index + 1 })} · X ${caption.x.toFixed(2)} · Y ${caption.y.toFixed(2)}`}
-                        onPointerDown={(event) => {
-                          event.currentTarget.setPointerCapture(event.pointerId);
-                          const stage = event.currentTarget.parentElement;
-                          if (!stage) return;
-                          const rect = stage.getBoundingClientRect();
-                          updateCharCaption(caption.id, {
-                            useCoords: true,
-                            x: Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width)),
-                            y: Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height)),
-                          });
-                        }}
-                        onPointerMove={(event) => {
-                          if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
-                          const stage = event.currentTarget.parentElement;
-                          if (!stage) return;
-                          const rect = stage.getBoundingClientRect();
-                          updateCharCaption(caption.id, {
-                            useCoords: true,
-                            x: Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width)),
-                            y: Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height)),
-                          });
-                        }}
-                        onKeyDown={(event) => {
-                          const step = event.shiftKey ? 0.05 : 0.01;
-                          const patch: { x?: number; y?: number } = {};
-                          if (event.key === "ArrowLeft") patch.x = Math.max(0, caption.x - step);
-                          if (event.key === "ArrowRight") patch.x = Math.min(1, caption.x + step);
-                          if (event.key === "ArrowUp") patch.y = Math.max(0, caption.y - step);
-                          if (event.key === "ArrowDown") patch.y = Math.min(1, caption.y + step);
-                          if (patch.x == null && patch.y == null) return;
-                          event.preventDefault();
-                          updateCharCaption(caption.id, { ...patch, useCoords: true });
-                        }}
-                      >
-                        {index + 1}
-                      </button>
-                    ))}
+                    {charCaptions.map((caption,index)=><CharacterPositionMarker key={caption.id} caption={caption} index={index} label={f("character.markerLabel",{index:index+1})} onCommit={updateCharCaption}/>)}
                   </div>
                 </div>
-              )}
+              </AnimatedCollapse>
             </section>
           )}
+          {reorder.slots && <div className="char-reorder-choice" role="status"><span>{editText.changed}</span><Button onClick={reorder.sync}>{editText.sync}</Button><Button onClick={reorder.keep}>{editText.keep}</Button></div>}
+          <div data-character-list className={clsx("char-sort-list",reorder.dragId && "is-dragging")}>
           {charCaptions.map((cc, idx) => {
-            const collapsed = collapsedCharacters.has(cc.id);
+            const collapsed = Boolean(reorder.dragId) || collapsedCharacters.has(cc.id);
             const contentId = `character-content-${cc.id}`;
             return (
-            <div className={clsx("char-row", collapsed && "collapsed")} key={cc.id}>
-              <div className="char-row-head">
+            <div data-character-id={cc.id} className={clsx("char-row", collapsed && "collapsed", reorder.overId===cc.id && "drag-over")} key={cc.id}>
+              <div className="char-row-head"><button type="button" className="char-drag-handle" aria-label={`${editText.drag}: ${idx+1}`} disabled={charCaptions.length<2} {...reorder.handle(cc.id)}><span aria-hidden="true">☰</span></button>
                 <div className="char-row-title">
                   <strong>{f("character.label", { index: idx + 1 })}</strong>
                   <span className="char-row-position-summary">
@@ -1223,8 +1183,8 @@ function CharCaptionsModal({ onClose }: { onClose: () => void }) {
                   </Button>
                 </div>
               </div>
-              {!collapsed && (
-              <div className="char-row-content" id={contentId}>
+              <AnimatedCollapse open={!collapsed} id={contentId}>
+              <div className="char-row-content">
                 <div
                   className="char-prompt-tools"
                   role="group"
@@ -1244,6 +1204,8 @@ function CharCaptionsModal({ onClose }: { onClose: () => void }) {
                     onApply={(prompt) => updateCharCaption(cc.id, { prompt })}
                   />
                   <PositivePromptPresetControl
+                    character={cc}
+                    onApplyCharacters={captions=>{if(captions.length===1)updateCharCaption(cc.id,captions[0]);else setCharCaptions(normalizeCharacterCaptions(captions));}}
                     value={cc.prompt}
                     onApply={(prompt) => updateCharCaption(cc.id, { prompt })}
                   />
@@ -1288,10 +1250,11 @@ function CharCaptionsModal({ onClose }: { onClose: () => void }) {
                   </div>
                 )}
               </div>
-              )}
+              </AnimatedCollapse>
             </div>
             );
           })}
+          </div>
           <Button className="full" onClick={addCharCaption} disabled={!supportsCharacters || charCaptions.length >= maxCharacters}>
             <IconText icon="+">{t("character.add")}</IconText>
           </Button>
@@ -1478,6 +1441,8 @@ function PromptAndParams({
   const [showVibeModal, setShowVibeModal] = useState(false);
   const [showCharModal, setShowCharModal] = useState(false);
   const [showTemplateMenu, setShowTemplateMenu] = useState(false);
+  const templateMenuRef = useRef<HTMLDivElement>(null);
+  const templateMenuPresent = useDisclosurePresence(showTemplateMenu, templateMenuRef);
   const [chipQuery, setChipQuery] = useState("");
   const [chipOpen, setChipOpen] = useState(false);
   const [showWeights, setShowWeights] = useState(false);
@@ -1492,6 +1457,7 @@ function PromptAndParams({
   const [styleImageManagerPresetId, setStyleImageManagerPresetId] = useState("");
   const stylePresetPickerRef = useRef<HTMLDivElement>(null);
   const stylePresetMenuRef = useRef<HTMLDivElement>(null);
+  const styleMenuPresent = useDisclosurePresence(stylePresetMenuOpen, stylePresetMenuRef);
   const [stylePresetMenuPosition, setStylePresetMenuPosition] = useState({ left: 0, top: 0, width: 240 });
   const [styleNamePrompt, setStyleNamePrompt] = useState<{ stylePrompt: string; fallbackName: string; presetId?: string } | null>(null);
   const adaptiveI2ISize = workbenchImage
@@ -2134,11 +2100,11 @@ function PromptAndParams({
           </Button>
         </div>
       </div>
-      {stylePresetMenuOpen && (
+      {styleMenuPresent && (
         <AppPortal>
           <div
             ref={stylePresetMenuRef}
-            className="style-preset-menu"
+            className="style-preset-menu disclosure-popover" {...disclosureAttributes(stylePresetMenuOpen)}
             role="listbox"
             style={{
               left: stylePresetMenuPosition.left,
@@ -2161,7 +2127,7 @@ function PromptAndParams({
                       </button>
                       {group !== "Default" && <button type="button" className="style-folder-delete" title={t("prompt.styleGroupDelete")} aria-label={t("prompt.styleGroupDelete")} onClick={() => void deleteStylePromptGroup(group)}><Icon name="trash" /></button>}
                     </header>
-                    {expanded && <div className="style-folder-children">
+                    <AnimatedCollapse open={expanded}>{<div className="style-folder-children">
                       {groupPresets.length === 0 && <p>{generateText.prompt.stylePresetPlaceholder}</p>}
                       {groupPresets.map((preset) => (
                     <div className={clsx("style-preset-menu-item", preset.id === selectedStylePresetId && "active")} key={preset.id}>
@@ -2194,7 +2160,7 @@ function PromptAndParams({
                       )}
                     </div>
                       ))}
-                    </div>}
+                    </div>}</AnimatedCollapse>
                   </section>
                 );
               })}
@@ -2234,14 +2200,14 @@ function PromptAndParams({
         />
       )}
       <div className={clsx("prompt-chip-zone", !chipOpen && "collapsed")}>
-        <button type="button" className="prompt-chip-head" onClick={() => setChipOpen((v) => !v)}>
+        <button type="button" className="prompt-chip-head" aria-expanded={chipOpen} onClick={() => setChipOpen((v) => !v)}>
           <span className="chip-head-title">
             <Icon name="chevronRight" className={clsx("chip-caret", chipOpen && "open")} />
             {generateText.prompt.capsuleTitle}
           </span>
           <small className="chip-head-hint">{chipOpen ? generateText.prompt.capsuleHintOpen : generateText.prompt.capsuleHintClosed}</small>
         </button>
-        {chipOpen && (
+        <AnimatedCollapse open={chipOpen} lazy>
           <>
             <div className="prompt-chip-toolbar">
               <input
@@ -2271,7 +2237,7 @@ function PromptAndParams({
               </div>
             )}
           </>
-        )}
+        </AnimatedCollapse>
       </div>
       <div className="prompt-tabs">
         <button className={clsx(promptTab === "positive" && "active")} onClick={() => setPromptTab("positive")}>
@@ -2348,7 +2314,7 @@ function PromptAndParams({
           </button>
         )}
       </div>
-      {showWeights && weightTags.length > 0 && (
+      <AnimatedCollapse open={showWeights && weightTags.length > 0}>
         <div className="weight-editor">
           <div className="weight-editor-hint">{generateText.prompt.weightHint}</div>
           <div className="weight-tag-list">
@@ -2364,7 +2330,7 @@ function PromptAndParams({
             ))}
           </div>
         </div>
-      )}
+      </AnimatedCollapse>
       <div className="prompt-helper">
         {settings?.autoComplete ?? true
           ? generateText.prompt.helperOn
@@ -2393,11 +2359,11 @@ function PromptAndParams({
         </Button>
         {templates.length > 0 && (
           <div className="template-dropdown" style={{ position: "relative" }}>
-            <Button onClick={() => setShowTemplateMenu((v) => !v)}>
+            <Button aria-expanded={showTemplateMenu} onClick={() => setShowTemplateMenu((v) => !v)}>
               <IconText icon="▣">{generateText.prompt.template}<Icon name="chevronDown" className={clsx("prompt-tool-chevron", showTemplateMenu && "open")} /></IconText>
             </Button>
-            {showTemplateMenu && (
-              <div className="menu-pop template-pop">
+            {templateMenuPresent && (
+              <div ref={templateMenuRef} className="menu-pop template-pop disclosure-popover" {...disclosureAttributes(showTemplateMenu)}>
                 {templates.map((tpl) => (
                   <button key={tpl.id} onClick={() => applyTemplate(tpl)}>
                     <span>{tpl.name}</span>
@@ -2901,8 +2867,7 @@ function QueuePanel() {
       <div className="queue-progressbar">
         <div className="queue-progressbar-fill" style={{ width: `${pct}%` }} />
       </div>
-      {!collapsed && (
-        <ul className="queue-list">
+      <AnimatedCollapse open={!collapsed}>{<ul className="queue-list">
           <li className="queue-item queue-item-running">
             <span className="queue-spinner" />
             <span className="queue-item-label">
@@ -2934,8 +2899,7 @@ function QueuePanel() {
               <span className="queue-item-label">{f("queue.batchPending", { count: batchPending })}</span>
             </li>
           )}
-        </ul>
-      )}
+        </ul>}</AnimatedCollapse>
     </div>
   );
 }
@@ -2977,8 +2941,7 @@ function TextToolQueuePanel({
           </button>
         </div>
       </div>
-      {!collapsed && (
-        <ul className="queue-list">
+      <AnimatedCollapse open={!collapsed}>{<ul className="queue-list">
           {jobs.map((job) => (
             <li className={clsx("queue-item", job.status === "processing" && "queue-item-running")} key={job.id}>
               {job.status === "processing" && <span className="queue-spinner" />}
@@ -2999,8 +2962,7 @@ function TextToolQueuePanel({
               </button>
             </li>
           ))}
-        </ul>
-      )}
+        </ul>}</AnimatedCollapse>
     </div>
   );
 }
@@ -3050,13 +3012,11 @@ function TextToolHistoryPanel({
           </button>
         </div>
       </div>
-      {!collapsed && (
-        <ul className="queue-list">
+      <AnimatedCollapse open={!collapsed}>{<ul className="queue-list">
           {items.map((item) => (
             <TextToolHistoryItemRow key={item.id} item={item} onDelete={onDelete} onUse={onUse} />
           ))}
-        </ul>
-      )}
+        </ul>}</AnimatedCollapse>
     </div>
   );
 }
@@ -3102,14 +3062,13 @@ function TextToolHistoryItemRow({
         <span className="texttool-history-item-input">{item.input.trim() || item.result}</span>
         <Icon name="chevronRight" className={clsx("disclosure-chevron", expanded && "open")} />
       </button>
-      {expanded &&
-        (hasVariants ? (
+      <AnimatedCollapse open={expanded}>{hasVariants ? (
           <PromptVariantCards variants={item.variants ?? null} onUse={onUse} />
         ) : (
           <button type="button" className="queue-mini-btn" onClick={() => onUse(item.result)}>
             {t("variant.use")}
           </button>
-        ))}
+        )}</AnimatedCollapse>
     </li>
   );
 }
@@ -3278,8 +3237,7 @@ function AccountAndRunButton({
           </span>
           <Icon name="chevronRight" className={clsx("disclosure-chevron", !accountDetailsCollapsed && "open")} />
         </button>
-        {!accountDetailsCollapsed && (
-          <div className="account-details-content">
+        <AnimatedCollapse open={!accountDetailsCollapsed}>{<div className="account-details-content">
             <div className="account-mini">
               <div>
                 <strong>{account.hasToken ? account.tierName ?? t("account.configured") : t("account.notSet")}</strong>
@@ -3314,8 +3272,7 @@ function AccountAndRunButton({
                 </small>
               </button>
             )}
-          </div>
-        )}
+          </div>}</AnimatedCollapse>
       </div>
       {!account.hasToken ? (
         <Button variant="primary" className="full" onClick={openSettings}>
@@ -4636,20 +4593,20 @@ function AiLogPanel() {
             const open = expanded.has(entry.id);
             return (
               <div className={clsx("ai-log-item", entry.ok ? "ok" : "fail")} key={entry.id}>
-                <button type="button" className="ai-log-item-head" onClick={() => toggle(entry.id)}>
+                <button type="button" className="ai-log-item-head" aria-expanded={open} onClick={() => toggle(entry.id)}>
                   <Icon name="chevronRight" className={clsx("ai-log-caret disclosure-chevron", open && "open")} />
                   <span className={clsx("ai-log-badge", entry.ok ? "ok" : "fail")}>{entry.ok ? t("aiLog.ok") : t("aiLog.fail")}</span>
                   <span className="ai-log-label">{entry.label}</span>
                   <span className="ai-log-meta">{entry.api === "vision" ? t("aiLog.visionApi") : t("aiLog.textApi")} · {entry.model}</span>
                   <span className="ai-log-time">{format(new Date(entry.time), "HH:mm:ss")}</span>
                 </button>
-                {open && (
+                <AnimatedCollapse open={open} lazy>
                   <div className="ai-log-body">
                     <AiLogField title={t("aiLog.systemPrompt")} text={entry.systemPrompt} />
                     <AiLogField title={t("aiLog.user")} text={entry.userText} />
                     <AiLogField title={entry.ok ? t("aiLog.responseOk") : t("aiLog.responseFail")} text={entry.response} />
                   </div>
-                )}
+                </AnimatedCollapse>
               </div>
             );
           })}
@@ -4898,6 +4855,7 @@ function ZoomableImageStage({
       </div>
       <div
         ref={shellRef}
+        data-image-copy-src={image.fileUrl}
         tabIndex={0}
         aria-label={alt}
         onKeyDown={event=>{
@@ -4981,8 +4939,8 @@ function ZoomableImageStage({
   );
 }
 
-function ImageCanvas() {
-  const currentImage = useAppStore((state) => state.currentImage);
+export function ImageCanvas() {
+  const currentImage = useAppStore(resolveCanvasImage);
   const comparisonBeforeImage = useAppStore((state) => state.comparisonBeforeImage);
   const comparisonSurface = useAppStore((state) => state.comparisonSurface);
   const activeCanvasSurface = useAppStore((state) => state.activeCanvasSurface);
@@ -6175,20 +6133,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                     <span>{f("settings.aboutVersion", { version: APP_VERSION })}</span>
                   </div>
                 </div>
-                <label className="field">
-                  <span>{t("settings.updateSource")}</span>
-                  <SelectMenuCompat
-                    value={settings.updateSource ?? "github"}
-                    onChange={async (event) => {
-                      await update("updateSource", event.target.value as AppSettings["updateSource"]);
-                      await useAppStore.getState().checkUpdate();
-                    }}
-                  >
-                    <option value="github">{t("settings.updateSourceGithub")}</option>
-                    <option value="gitee">{t("settings.updateSourceGitee")}</option>
-                  </SelectMenuCompat>
-                  <small className="settings-hint">{t("settings.updateSourceFallback")}</small>
-                </label>
+                <div className="field"><span>{t("settings.updateSource")}</span><strong>GitHub</strong></div>
                 <div className="about-block">
                   <div>
                     <strong>{t("settings.aboutProjectTitle")}</strong>

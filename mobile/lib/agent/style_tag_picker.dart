@@ -1,3 +1,4 @@
+import '../ui/studio_dropdown.dart';
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
@@ -135,7 +136,7 @@ class _TavernStyleTagPickerState extends State<TavernStyleTagPicker> {
                       child: ListView(children: [
                     Text(ui['hint']!,
                         style: Theme.of(context).textTheme.bodySmall),
-                    DropdownButtonFormField<String>(
+                    StudioDropdownButtonFormField<String>(
                         value: scope,
                         isExpanded: true,
                         items: [

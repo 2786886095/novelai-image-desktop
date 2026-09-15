@@ -1,3 +1,4 @@
+import '../ui/studio_dropdown.dart';
 import '../ui/zoomable_image.dart';
 import 'dart:io';
 
@@ -355,7 +356,7 @@ class _GlobalStep extends StatelessWidget {
                   },
                 ),
                 const SizedBox(height: 12),
-                DropdownButtonFormField<int>(
+                StudioDropdownButtonFormField<int>(
                   value: project.initialGenerationCount,
                   decoration: InputDecoration(
                     labelText: t('comic.initialCount'),
@@ -474,7 +475,7 @@ class _PreciseReferenceSection extends StatelessWidget {
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis),
                                   const SizedBox(height: 6),
-                                  DropdownButtonFormField<String>(
+                                  StudioDropdownButtonFormField<String>(
                                     value: reference.type,
                                     isExpanded: true,
                                     decoration: const InputDecoration(
@@ -932,7 +933,7 @@ class _PanelEditor extends StatelessWidget {
           ),
           if (controller.project.sizeMode == ComicSizeMode.perPanel) ...[
             const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
+            StudioDropdownButtonFormField<String>(
               value: panel.imageWidth == null || panel.imageHeight == null
                   ? null
                   : '${panel.imageWidth}x${panel.imageHeight}',
@@ -1057,7 +1058,7 @@ class _PanelPreciseReferences extends StatelessWidget {
                           ),
                         ),
                         if (selection != null) ...[
-                          DropdownButtonFormField<String>(
+                          StudioDropdownButtonFormField<String>(
                             value: selection.type,
                             isExpanded: true,
                             decoration: const InputDecoration(
@@ -1408,7 +1409,7 @@ class _ParamsEditor extends StatelessWidget {
               ),
             SizedBox(
               width: width,
-              child: DropdownButtonFormField<String>(
+              child: StudioDropdownButtonFormField<String>(
                 isExpanded: true,
                 value: naiModels.any((item) => item.value == params.model)
                     ? params.model

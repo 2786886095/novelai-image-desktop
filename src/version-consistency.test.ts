@@ -40,7 +40,7 @@ describe("release version consistency", () => {
     const readme = read("README.md");
     const releaseNotes = read("docs/RELEASE_NOTES.md");
 
-    expect(readme).toContain(`release-v${packageVersion}`);
+    expect(readme).not.toContain("gitee.com");
     expect(readme).toContain(`releases/tag/v${packageVersion}`);
     expect(readme).toContain(
       `Langbai-NovelAI-Studio-${packageVersion}.exe`,

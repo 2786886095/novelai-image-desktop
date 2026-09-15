@@ -1,3 +1,4 @@
+import {normalizeCharacterPresets} from "./character-presets";
 import type { PositivePromptPreset } from "./types";
 
 export const POSITIVE_PROMPT_PRESET_IMAGE_LIMIT = 3;
@@ -49,8 +50,21 @@ export function uniquePositivePromptPresetName(
 }
 
 export function samePositivePromptPreset(
-  left: Pick<PositivePromptPreset, "name" | "prompt">,
-  right: Pick<PositivePromptPreset, "name" | "prompt">,
+  left: Pick<PositivePromptPreset, "name" | "prompt" | "captions">,
+  right: Pick<PositivePromptPreset, "name" | "prompt" | "captions">,
 ): boolean {
-  return left.name.trim() === right.name.trim() && left.prompt === right.prompt;
+  return left.name.trim() === right.name.trim() && left.prompt === right.prompt
+    && JSON.stringify(left.captions ?? []) === JSON.stringify(right.captions ?? []);
+}
+
+export function mergeCharacterPresets(presets: PositivePromptPreset[], legacy: unknown): PositivePromptPreset[] {
+  const next = [...presets];
+  for (const item of normalizeCharacterPresets(legacy)) {
+    let id = `character-${item.id}`;
+    while (next.some(p => p.id === id)) id += '-imported';
+    next.push({id, name: uniquePositivePromptPresetName(next, item.name).value,
+      prompt: item.captions.map(c => c.prompt).join('\n'), captions: item.captions,
+      createdAt: item.createdAt, previewImages: []});
+  }
+  return next;
 }

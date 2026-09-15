@@ -9,6 +9,13 @@ abstract final class StudioSpacing {
 }
 
 abstract final class AppMotion {
+  static const Duration disclosureOpen = Duration(milliseconds: 160);
+  static const Duration disclosureClose = Duration(milliseconds: 120);
+  static final AnimationStyle disclosureStyle = AnimationStyle(
+      duration: disclosureOpen,
+      reverseDuration: disclosureClose,
+      curve: easeOut,
+      reverseCurve: easeOut);
   static const Duration fast = Duration(milliseconds: 120);
   static const Duration standard = Duration(milliseconds: 180);
   static const Duration slow = Duration(milliseconds: 240);
@@ -107,6 +114,10 @@ abstract final class StudioTheme {
       scaffoldBackgroundColor:
           dark ? const Color(0xFF090B16) : const Color(0xFFF8F6FC),
       visualDensity: VisualDensity.standard,
+      expansionTileTheme: ExpansionTileThemeData(
+          expansionAnimationStyle: AppMotion.disclosureStyle,
+          tilePadding: const EdgeInsets.symmetric(horizontal: 16),
+          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12)),
       textTheme: textTheme,
       pageTransitionsTheme: const PageTransitionsTheme(
         builders: {

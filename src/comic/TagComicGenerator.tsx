@@ -1,3 +1,4 @@
+import {AnimatedCollapse} from '../components/CharacterEditing';
 import {PreviewImageViewer} from '../components/PreviewImageViewer';
 import { useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
@@ -2345,8 +2346,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                       </Button>
                     )}
                   </div>
-                  {expanded && (
-                    <div className="tag-comic-candidates">
+                  <AnimatedCollapse open={expanded}>{<div className="tag-comic-candidates">
                       <h4>
                         {format(language, "candidates", {
                           count: panel.candidates.length,
@@ -2381,8 +2381,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                           </button>
                         ))}
                       </div>
-                    </div>
-                  )}
+                    </div>}</AnimatedCollapse>
                 </article>
               );
             })}
@@ -2518,14 +2517,12 @@ function GlobalParams({
       >
         {expanded ? text(language, "collapse") : text(language, "advanced")}
       </button>
-      {expanded && (
-        <PanelParams
+      <AnimatedCollapse open={expanded}>{<PanelParams
           language={language}
           params={params}
           patch={patch}
           compact
-        />
-      )}
+        />}</AnimatedCollapse>
     </div>
   );
 }

@@ -40,3 +40,21 @@ describe("positive prompt presets", () => {
     expect(positivePromptPresetStorageId("abc")).toBe("positive-prompt-abc");
   });
 });
+
+
+describe('unified character preset library', () => {
+ it('migrates complete roles, avoids ID/name collisions and preserves zero/blank fields', async () => {
+  const {mergeCharacterPresets}=await import('./positive-prompt-presets');
+  const existing={id:'character-old',name:'Team',prompt:'base',createdAt:'now'};
+  const next=mergeCharacterPresets([existing],[{id:'old',name:'Team',createdAt:'then',captions:[{prompt:'alice',negativePrompt:'hat',x:0,y:1,useCoords:true},{prompt:'',negativePrompt:'',x:.5,y:0,useCoords:false}]}]);
+  expect(next[0]).toBe(existing);expect(next[1].id).toBe('character-old-imported');expect(next[1].name).toBe('Team (1)');
+  expect(next[1].captions?.[0]).toEqual({prompt:'alice',negativePrompt:'hat',x:0,y:1,useCoords:true});expect(next[1].captions?.[1].prompt).toBe('');
+  expect(mergeCharacterPresets(next,[])).toEqual(next);
+ });
+ it('does not mistake different character configurations for duplicate text presets',()=>{
+  const a={name:'Role',prompt:'alice',captions:[{prompt:'alice',negativePrompt:'hat',x:0,y:1,useCoords:true}]};
+  expect(samePositivePromptPreset(a,{name:'Role',prompt:'alice'})).toBe(false);
+  expect(samePositivePromptPreset(a,{...a,captions:[{...a.captions[0],x:1}]})).toBe(false);
+  expect(samePositivePromptPreset(a,JSON.parse(JSON.stringify(a)))).toBe(true);
+ });
+});

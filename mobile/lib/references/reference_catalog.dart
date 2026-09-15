@@ -5,7 +5,6 @@ import 'package:archive/archive.dart';
 import 'package:http/http.dart' as http;
 
 const referenceCatalogUrls = <String>[
-  'https://gitee.com/langbai666/novelai-image-desktop/raw/main/public/reference-catalog/gitee-index.json',
   'https://2786886095.github.io/novelai-image-desktop/reference-catalog/index.json',
   'https://raw.githubusercontent.com/2786886095/novelai-reference-assets/main/catalog/index.json',
 ];
@@ -220,21 +219,17 @@ class ReferenceCatalogAsset {
       ].join(' ').toLowerCase();
 
   List<String> get preciseUrls => <String>{
-        if ((downloadMirrors['gitee'] ?? '').isNotEmpty)
-          downloadMirrors['gitee']!,
         if (downloadUrl.isNotEmpty) downloadUrl,
         if ((downloadMirrors['github'] ?? '').isNotEmpty)
           downloadMirrors['github']!,
-      }.toList();
+      }.where((url) => !url.toLowerCase().contains("gitee.com")).toList();
 
   List<String> get thumbnailUrls => <String>{
-        if ((thumbnailMirrors['gitee'] ?? '').isNotEmpty)
-          thumbnailMirrors['gitee']!,
         if (thumbnailUrl.isNotEmpty) thumbnailUrl,
         if ((thumbnailMirrors['github'] ?? '').isNotEmpty)
           thumbnailMirrors['github']!,
         ...preciseUrls,
-      }.toList();
+      }.where((url) => !url.toLowerCase().contains("gitee.com")).toList();
 }
 
 class ReferenceCatalog {

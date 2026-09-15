@@ -1,3 +1,5 @@
+import {mergeCharacterPresets} from "../../src/positive-prompt-presets";
+import {normalizeCharacterCaptions} from "../../src/character-presets";
 import { CredentialVault, SENSITIVE_SETTING_KEYS } from "./credential-vault";
 import { assertSafeDataDirectory, PROTECTED_DIRECTORY_KEYS } from "./update-output-protection";
 import { migrateInstalledOutputData } from "./output-recovery";
@@ -303,7 +305,7 @@ function normalize(raw: Partial<PersistedData> | null): PersistedData {
   )
     ? String(rawSettings.reverseConvertPromptPresetId)
     : settings.reverseConvertPromptPresets[0]?.id ?? "";
-  settings.updateSource = settings.updateSource === "gitee" ? "gitee" : "github";
+  settings.updateSource = "github";
   settings.stylePromptPresetGroups = Array.from(
     new Set(
       (Array.isArray(settings.stylePromptPresetGroups)
@@ -391,6 +393,7 @@ function normalize(raw: Partial<PersistedData> | null): PersistedData {
             id: typeof preset.id === "string" ? preset.id : "",
             name: typeof preset.name === "string" ? preset.name.trim() : "",
             prompt: typeof preset.prompt === "string" ? preset.prompt : "",
+            captions: normalizeCharacterCaptions(preset.captions).map(({id: _, ...c}) => c),
             createdAt:
               typeof preset.createdAt === "string"
                 ? preset.createdAt
@@ -398,8 +401,10 @@ function normalize(raw: Partial<PersistedData> | null): PersistedData {
             previewImages,
           };
         })
-        .filter((preset) => preset.id && preset.name && preset.prompt.trim())
+        .filter((preset) => preset.id && preset.name && (preset.prompt.trim() || preset.captions.length))
     : [];
+  settings.positivePromptPresets = mergeCharacterPresets(settings.positivePromptPresets, settings.characterPromptPresets);
+  settings.characterPromptPresets = [];
   settings.promptChunks = Array.isArray(settings.promptChunks)
     ? settings.promptChunks
         .filter((chunk) => chunk && typeof chunk === "object")

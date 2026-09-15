@@ -1,3 +1,4 @@
+import '../ui/character_editing.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../state/app_state.dart';
@@ -101,134 +102,71 @@ class CharacterPresetBar extends StatefulWidget {
 }
 
 class _CharacterPresetBarState extends State<CharacterPresetBar> {
-  String selected = '';
   bool busy = false;
-  Future<void> perform(Future<void> Function() action) async {
-    setState(() => busy = true);
-    try {
-      await action();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('$e')));
-      }
-    } finally {
-      if (mounted) setState(() => busy = false);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
-    final t = characterPresetLabels(state.settings.language);
-    final presets = state.settings.characterPromptPresets;
-    final current = presets.where((p) => p['id'] == selected).firstOrNull;
-    return ExpansionTile(
-        title: Text(t[0]),
-        tilePadding: EdgeInsets.zero,
-        children: [
-          DropdownButtonFormField<String>(
-              value: current == null ? '' : selected,
-              isExpanded: true,
-              decoration: InputDecoration(labelText: t[0]),
-              items: [
-                const DropdownMenuItem(value: '', child: Text('—')),
-                ...presets.map((p) => DropdownMenuItem(
-                    value: p['id'] as String,
-                    child:
-                        Text('${p['name']}', overflow: TextOverflow.ellipsis)))
-              ],
-              onChanged:
-                  busy ? null : (v) => setState(() => selected = v ?? '')),
-          Wrap(spacing: 8, children: [
-            TextButton(
-                onPressed: busy || state.extras.charCaptions.isEmpty
-                    ? null
-                    : () => perform(() async {
-                          final name = await requestPresetName(
-                              context, state.settings.language);
-                          if (name == null) return;
-                          final id =
-                              DateTime.now().microsecondsSinceEpoch.toString();
-                          final item = <String, dynamic>{
-                            'id': id,
-                            'name': name,
-                            'createdAt': DateTime.now().toIso8601String(),
-                            'captions': state.extras.charCaptions
-                                .map((c) => c.toJson())
-                                .toList()
-                          };
-                          await state.setSettings((s) =>
-                              s.characterPromptPresets = [
-                                ...s.characterPromptPresets,
-                                item
-                              ]);
-                          selected = id;
-                        }),
-                child: Text(t[1])),
-            TextButton(
-                onPressed: busy || current == null
-                    ? null
-                    : () => perform(() async {
-                          final captions = (current['captions'] as List)
-                              .whereType<Map>()
-                              .map((c) => CharCaptionItem.fromJson(
-                                  Map<String, dynamic>.from(c)))
-                              .toList();
-                          if (captions.length >
-                              state.params.maxCharacterPrompts) {
-                            throw Exception(t[9]);
-                          }
-                          state.extras.charCaptions = captions;
-                          state.markCharacterChanged();
-                        }),
-                child: Text(t[2])),
-            TextButton(
-                onPressed: busy || current == null
-                    ? null
-                    : () => perform(() async {
-                          final name = await requestPresetName(
-                              context, state.settings.language,
-                              initial: '${current['name']}');
-                          if (name == null) return;
-                          await state.setSettings((s) =>
-                              s.characterPromptPresets = s
-                                  .characterPromptPresets
-                                  .map((p) => p['id'] == selected
-                                      ? {...p, 'name': name}
-                                      : p)
-                                  .toList());
-                        }),
-                child: Text(t[3])),
-            TextButton(
-                onPressed: busy || current == null
-                    ? null
-                    : () => perform(() async {
-                          final yes = await showDialog<bool>(
-                              context: context,
-                              builder: (context) => AlertDialog(
-                                      title:
-                                          Text('${t[4]}: ${current['name']}?'),
-                                      actions: [
-                                        TextButton(
-                                            onPressed: () =>
-                                                Navigator.pop(context, false),
-                                            child: Text(t[7])),
-                                        FilledButton(
-                                            onPressed: () =>
-                                                Navigator.pop(context, true),
-                                            child: Text(t[4]))
-                                      ]));
-                          if (yes != true) return;
-                          await state.setSettings((s) =>
-                              s.characterPromptPresets = s
-                                  .characterPromptPresets
-                                  .where((p) => p['id'] != selected)
-                                  .toList());
-                          selected = '';
-                        }),
-                child: Text(t[4])),
-          ]),
-        ]);
+    final language = state.settings.language;
+    final t = characterPresetLabels(language),
+        labels = characterEditLabels(language);
+    final title = const {
+          'zh-CN': '保存到正面预设',
+          'zh-TW': '儲存到正面預設',
+          'en-US': 'Save to prompt presets',
+          'ja-JP': '正面プリセットに保存',
+          'ko-KR': '긍정 프리셋에 저장'
+        }[language] ??
+        'Save to prompt presets';
+    return Align(
+        alignment: Alignment.centerLeft,
+        child: TextButton.icon(
+            icon: const Icon(Icons.bookmark_add_outlined),
+            label: Text(title),
+            onPressed: busy || state.extras.charCaptions.isEmpty
+                ? null
+                : () async {
+                    setState(() => busy = true);
+                    try {
+                      final snapshot = state.extras.charCaptions
+                          .map((c) => CharCaptionItem.fromJson(c.toJson()))
+                          .toList();
+                      final target = await showDialog<int>(
+                          context: context,
+                          builder: (context) =>
+                              SimpleDialog(title: Text(labels[5]), children: [
+                                SimpleDialogOption(
+                                    onPressed: () => Navigator.pop(context, -1),
+                                    child: Text(labels[4])),
+                                for (var i = 0; i < snapshot.length; i++)
+                                  SimpleDialogOption(
+                                      onPressed: () =>
+                                          Navigator.pop(context, i),
+                                      child: Text(
+                                          '${i + 1} · ${snapshot[i].prompt}',
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis))
+                              ]));
+                      if (target == null || !context.mounted) return;
+                      final name = await requestPresetName(context, language);
+                      if (name == null) return;
+                      final chosen =
+                          target == -1 ? snapshot : [snapshot[target]];
+                      await state.savePositivePromptPreset(
+                          name: name,
+                          prompt: chosen.map((c) => c.prompt).join('\n'),
+                          captions: chosen);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context)
+                            .showSnackBar(SnackBar(content: Text(t[8])));
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context)
+                            .showSnackBar(SnackBar(content: Text('$e')));
+                      }
+                    } finally {
+                      if (mounted) setState(() => busy = false);
+                    }
+                  }));
   }
 }

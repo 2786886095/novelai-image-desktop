@@ -1,3 +1,6 @@
+import 'gallery_favorites_screen.dart';
+import '../services/gallery_favorites.dart';
+import '../ui/studio_dropdown.dart';
 import '../ui/zoomable_image.dart';
 import '../widgets/image_save_feedback.dart';
 import '../services/gallery_download.dart';
@@ -543,6 +546,7 @@ class _AitagGalleryScreenState extends State<AitagGalleryScreen> {
                       icon: const Icon(Icons.arrow_back)),
               title: Text(text.title),
               actions: [
+                const GalleryFavoritesButton(),
                 IconButton(
                     tooltip: text.refresh,
                     onPressed: loading ? null : _refresh,
@@ -639,7 +643,7 @@ class _AitagGalleryScreenState extends State<AitagGalleryScreen> {
                                           }),
                                 SizedBox(
                                   width: 240,
-                                  child: DropdownButtonFormField<String>(
+                                  child: StudioDropdownButtonFormField<String>(
                                     value: timeRange,
                                     isExpanded: true,
                                     decoration: InputDecoration(
@@ -826,6 +830,23 @@ Future<void> _showAitagPreview(BuildContext context, AitagService service,
             .toList(),
         initialIndex: urls.indexOf(url));
 
+GalleryFavorite _aitagFavorite(
+        AitagWork work, AitagService service, List<AitagImage> images) =>
+    GalleryFavorite(
+        source: 'aitag',
+        id: '${work.id}',
+        title: work.title,
+        author: work.userId,
+        sourceUrl: '$aitagSiteUrl/i/${work.id}',
+        prompt: images.firstOrNull?.promptText ?? '',
+        createdAt: work.createDate,
+        score: work.totalBookmarks,
+        savedAt: DateTime.now().millisecondsSinceEpoch,
+        images: images
+            .map((i) =>
+                {'url': service.imageUrl(i), 'thumb': service.imageUrl(i)})
+            .toList());
+
 class _WorkCard extends StatelessWidget {
   final AitagWork work;
   final AitagService service;
@@ -845,6 +866,12 @@ class _WorkCard extends StatelessWidget {
             child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  Align(
+                      alignment: Alignment.centerRight,
+                      child: GalleryFavoriteButton(
+                          item: _aitagFavorite(work, service, []),
+                          prepare: () async => _aitagFavorite(work, service,
+                              (await service.work(work.id)).images))),
                   FutureBuilder<AitagWorkDetail>(
                       future: service.work(work.id),
                       builder: (context, snapshot) {
@@ -1021,6 +1048,11 @@ class _AitagDetailScreenState extends State<_AitagDetailScreen> {
                 final visual = Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      Align(
+                          alignment: Alignment.centerRight,
+                          child: GalleryFavoriteButton(
+                              item: _aitagFavorite(
+                                  data.work, widget.service, data.images))),
                       if (url.isNotEmpty)
                         ConstrainedBox(
                           constraints: BoxConstraints(

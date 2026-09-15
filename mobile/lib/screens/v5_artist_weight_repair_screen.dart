@@ -1,3 +1,5 @@
+import '../ui/studio_theme.dart';
+import '../ui/studio_dropdown.dart';
 import '../ui/zoomable_image.dart';
 import 'dart:convert';
 import 'dart:io';
@@ -1269,6 +1271,9 @@ class _V5ArtistWeightRepairScreenState
         title: Text(text['title']!),
         subtitle: Text(text['hint']!),
         trailing: PopupMenuButton<String>(
+          popUpAnimationStyle: MediaQuery.disableAnimationsOf(context)
+              ? AnimationStyle.noAnimation
+              : AppMotion.disclosureStyle,
           tooltip: text['title'],
           icon: const Icon(Icons.tune),
           onSelected: (value) {
@@ -1314,7 +1319,7 @@ class _V5ArtistWeightRepairScreenState
                 children: [
                   SizedBox(
                     width: constraints.maxWidth,
-                    child: DropdownButtonFormField<String>(
+                    child: StudioDropdownButtonFormField<String>(
                       key: ValueKey('v5-draw-model-${_generationParams.model}'),
                       value: _generationParams.model,
                       isExpanded: true,
@@ -1408,7 +1413,7 @@ class _V5ArtistWeightRepairScreenState
                   ),
                   SizedBox(
                     width: fieldWidth,
-                    child: DropdownButtonFormField<String>(
+                    child: StudioDropdownButtonFormField<String>(
                       key: ValueKey(
                           'v5-draw-sampler-${_generationParams.sampler}'),
                       value: _generationParams.sampler,
@@ -1434,7 +1439,7 @@ class _V5ArtistWeightRepairScreenState
                   if (_generationParams.supportsNoiseScheduleControl)
                     SizedBox(
                       width: fieldWidth,
-                      child: DropdownButtonFormField<String>(
+                      child: StudioDropdownButtonFormField<String>(
                         key: ValueKey(
                             'v5-draw-noise-${_generationParams.noiseSchedule}'),
                         value: _generationParams.noiseSchedule,
@@ -1460,7 +1465,7 @@ class _V5ArtistWeightRepairScreenState
                     ),
                   SizedBox(
                     width: fieldWidth,
-                    child: DropdownButtonFormField<int>(
+                    child: StudioDropdownButtonFormField<int>(
                       key: ValueKey('v5-draw-uc-${_generationParams.ucPreset}'),
                       value: _generationParams.ucPreset,
                       isExpanded: true,

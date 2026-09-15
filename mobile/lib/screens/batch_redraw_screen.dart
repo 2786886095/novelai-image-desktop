@@ -1,3 +1,4 @@
+import '../ui/studio_dropdown.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -490,7 +491,7 @@ class _ParamsStep extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  final selector = DropdownButton<int>(
+                  final selector = StudioDropdownButton<int>(
                     value: normalizeBatchRedrawCandidateCount(
                         project.candidateCount),
                     isExpanded: constraints.maxWidth < 430,
@@ -825,7 +826,7 @@ class _BatchPreciseRow extends StatelessWidget {
           Expanded(
             child: Column(
               children: [
-                DropdownButtonFormField<String>(
+                StudioDropdownButtonFormField<String>(
                   value: item.type,
                   isExpanded: true,
                   decoration:
@@ -992,7 +993,7 @@ class _PromptsStep extends StatelessWidget {
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 100),
       children: [
-        DropdownButtonFormField<ReversePromptMode>(
+        StudioDropdownButtonFormField<ReversePromptMode>(
           value: project.aiMode,
           decoration: InputDecoration(
             labelText: t('batch.aiMode'),
@@ -1429,7 +1430,7 @@ class _BatchGenerateConsole extends StatelessWidget {
                       ),
                       const SizedBox(width: 7),
                       DropdownButtonHideUnderline(
-                        child: DropdownButton<int>(
+                        child: StudioDropdownButton<int>(
                           value: candidateCount,
                           isDense: true,
                           onChanged: onCandidateCountChanged == null
@@ -1863,7 +1864,7 @@ class _BatchParamsEditor extends StatelessWidget {
       initiallyExpanded: initiallyExpanded,
       title: Text(title),
       children: [
-        DropdownButtonFormField<String>(
+        StudioDropdownButtonFormField<String>(
           value: params.model,
           isExpanded: true,
           decoration: InputDecoration(
@@ -1963,7 +1964,7 @@ class _BatchParamsEditor extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        DropdownButtonFormField<String>(
+        StudioDropdownButtonFormField<String>(
           value: params.sampler,
           isExpanded: true,
           decoration: InputDecoration(
@@ -2017,7 +2018,7 @@ class _BatchParamsEditor extends StatelessWidget {
           },
         ),
         if (params.supportsNoiseScheduleControl)
-          DropdownButtonFormField<String>(
+          StudioDropdownButtonFormField<String>(
             value: params.noiseSchedule,
             isExpanded: true,
             decoration: const InputDecoration(
@@ -2038,7 +2039,7 @@ class _BatchParamsEditor extends StatelessWidget {
             },
           ),
         const SizedBox(height: 8),
-        DropdownButtonFormField<int>(
+        StudioDropdownButtonFormField<int>(
           value: params.ucPreset,
           isExpanded: true,
           decoration: const InputDecoration(

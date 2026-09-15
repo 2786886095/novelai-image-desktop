@@ -37,7 +37,7 @@ void main() {
 
       expect(restored.allowCustomEndpoint, isTrue);
       expect(restored.theme, 'dark');
-      expect(restored.updateSource, 'gitee');
+      expect(restored.updateSource, 'github');
       expect(restored.proxyForNai, isFalse);
       expect(restored.translateProvider, 'baidu');
       expect(restored.historyRetentionDays, 90);

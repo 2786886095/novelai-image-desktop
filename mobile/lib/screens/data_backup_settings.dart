@@ -1,3 +1,4 @@
+import '../ui/studio_dropdown.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -158,7 +159,8 @@ Map<String, String> _backupText(Object? language) {
       'referencePresets': 'Reference presets and images',
       'imageHistory': 'Local images and generation history',
       'promptPresets': 'Prompt/style presets and previews',
-      'agentWorkspace': 'Characters, chats, lorebooks, personas, presets, and attachments',
+      'agentWorkspace':
+          'Characters, chats, lorebooks, personas, presets, and attachments',
       'workspaceData': 'Tool projects and other local data',
     },
     'ja-JP': {
@@ -817,7 +819,7 @@ class _DataBackupSettingsPanelState extends State<DataBackupSettingsPanel>
             ),
             Row(children: [
               Expanded(
-                child: DropdownButtonFormField<int>(
+                child: StudioDropdownButtonFormField<int>(
                   value: app.settings.autoBackupIntervalHours,
                   isExpanded: true,
                   decoration: InputDecoration(
@@ -835,7 +837,7 @@ class _DataBackupSettingsPanelState extends State<DataBackupSettingsPanel>
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: DropdownButtonFormField<int>(
+                child: StudioDropdownButtonFormField<int>(
                   value: app.settings.autoBackupRetentionCount,
                   isExpanded: true,
                   decoration: InputDecoration(

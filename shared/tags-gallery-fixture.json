@@ -1,0 +1,5 @@
+{
+  "listing": "<main>hits=<b>2</b><a aria-label=\"Open detail: blue &amp; white\" href=\"/hair/blue_hair\"><picture><source srcset=\"/images/thumbs/blue.webp\"><img src=\"/images/blue.webp\" width=\"480\" height=\"702\"></picture></a><a aria-label=\"Open detail: long hair\" href=\"/hair/long_hair\">[ null ]</a></main>",
+  "detail": "<main><button aria-label=\"Copy tag: blue &amp; white\"></button><img src=\"/images/blue.webp\"><button aria-label=\"Copy tag: blue &amp; white, solo\"></button></main>",
+  "empty": "<main>hits=<b>0</b></main>"
+}

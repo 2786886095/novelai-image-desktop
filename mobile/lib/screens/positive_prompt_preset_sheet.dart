@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'character_preset_bar.dart' show characterPresetLabels;
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -169,12 +171,16 @@ _PresetText _textFor(String language) {
 class PositivePromptPresetButton extends StatelessWidget {
   final String currentPrompt;
   final ValueChanged<String> onApply;
+  final List<CharCaptionItem> currentCaptions;
+  final ValueChanged<List<CharCaptionItem>>? onApplyCharacters;
   final bool compact;
 
   const PositivePromptPresetButton({
     super.key,
     required this.currentPrompt,
     required this.onApply,
+    this.currentCaptions = const [],
+    this.onApplyCharacters,
     this.compact = false,
   });
 
@@ -186,6 +192,8 @@ class PositivePromptPresetButton extends StatelessWidget {
         context,
         currentPrompt: currentPrompt,
         onApply: onApply,
+        currentCaptions: currentCaptions,
+        onApplyCharacters: onApplyCharacters,
       ),
       icon: const Icon(Icons.bookmarks_outlined, size: 18),
       label: Text(text.trigger),
@@ -204,6 +212,8 @@ Future<void> showPositivePromptPresetSheet(
   BuildContext context, {
   required String currentPrompt,
   required ValueChanged<String> onApply,
+  List<CharCaptionItem> currentCaptions = const [],
+  ValueChanged<List<CharCaptionItem>>? onApplyCharacters,
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -215,6 +225,8 @@ Future<void> showPositivePromptPresetSheet(
       child: _PositivePromptPresetSheet(
         currentPrompt: currentPrompt,
         onApply: onApply,
+        currentCaptions: currentCaptions,
+        onApplyCharacters: onApplyCharacters,
       ),
     ),
   );
@@ -223,10 +235,14 @@ Future<void> showPositivePromptPresetSheet(
 class _PositivePromptPresetSheet extends StatefulWidget {
   final String currentPrompt;
   final ValueChanged<String> onApply;
+  final List<CharCaptionItem> currentCaptions;
+  final ValueChanged<List<CharCaptionItem>>? onApplyCharacters;
 
   const _PositivePromptPresetSheet({
     required this.currentPrompt,
     required this.onApply,
+    this.currentCaptions = const [],
+    this.onApplyCharacters,
   });
 
   @override
@@ -244,6 +260,10 @@ class _PositivePromptPresetSheetState
   String _activeImageId = '';
   String _message = '';
   bool _busy = false;
+  List<CharCaptionItem> _draftCaptions = [];
+  String get _draftText => _draftCaptions.isEmpty
+      ? _prompt.text
+      : _draftCaptions.map((c) => c.prompt).join('\n');
 
   @override
   void dispose() {
@@ -256,6 +276,11 @@ class _PositivePromptPresetSheetState
   void _startCreate(List<PositivePromptPreset> presets, bool current) {
     setState(() {
       _editingId = '';
+      _draftCaptions = current
+          ? widget.currentCaptions
+              .map((c) => CharCaptionItem.fromJson(c.toJson()))
+              .toList()
+          : [];
       _prompt.text = current ? widget.currentPrompt : '';
       _name.text = current && widget.currentPrompt.trim().isNotEmpty
           ? defaultPositivePromptPresetName(
@@ -268,6 +293,9 @@ class _PositivePromptPresetSheetState
   void _startEdit(PositivePromptPreset preset) {
     setState(() {
       _editingId = preset.id;
+      _draftCaptions = preset.captions
+          .map((c) => CharCaptionItem.fromJson(c.toJson()))
+          .toList();
       _selectedId = preset.id;
       _name.text = preset.name;
       _prompt.text = preset.prompt;
@@ -276,19 +304,21 @@ class _PositivePromptPresetSheetState
   }
 
   Future<void> _save(AppState state, _PresetText text) async {
-    if (_prompt.text.trim().isEmpty) {
+    if (_draftText.trim().isEmpty && _draftCaptions.isEmpty) {
       setState(() => _message = text.required);
       return;
     }
     final requested = _name.text.trim().isEmpty
         ? defaultPositivePromptPresetName(
-            _prompt.text, state.settings.positivePromptPresets.length + 1)
+            _draftText, state.settings.positivePromptPresets.length + 1)
         : _name.text.trim();
     final duplicate = state.settings.positivePromptPresets
         .where((preset) =>
             preset.id != _editingId &&
             preset.name.trim() == requested &&
-            preset.prompt == _prompt.text)
+            preset.prompt == _draftText &&
+            jsonEncode(preset.captions.map((c) => c.toJson()).toList()) ==
+                jsonEncode(_draftCaptions.map((c) => c.toJson()).toList()))
         .firstOrNull;
     if (duplicate != null) {
       setState(() {
@@ -303,7 +333,8 @@ class _PositivePromptPresetSheetState
       final saved = await state.savePositivePromptPreset(
         id: (_editingId ?? '').isEmpty ? null : _editingId,
         name: requested,
-        prompt: _prompt.text,
+        prompt: _draftText,
+        captions: _draftCaptions,
       );
       if (!mounted) return;
       setState(() {
@@ -683,11 +714,30 @@ class _PositivePromptPresetSheetState
         const SizedBox(height: 12),
         FilledButton.icon(
           onPressed: () {
-            widget.onApply(selected.prompt);
+            if (selected.captions.isNotEmpty) {
+              if (selected.captions.length > state.params.maxCharacterPrompts) {
+                setState(() => _message =
+                    characterPresetLabels(state.settings.language)[9]);
+                return;
+              }
+              final captions = selected.captions
+                  .map((c) => CharCaptionItem.fromJson(c.toJson()))
+                  .toList();
+              if (widget.onApplyCharacters != null) {
+                widget.onApplyCharacters!(captions);
+              } else {
+                state.extras.charCaptions = captions;
+                state.markCharacterChanged();
+              }
+            } else {
+              widget.onApply(selected.prompt);
+            }
             Navigator.pop(context);
           },
           icon: const Icon(Icons.swap_horiz),
-          label: Text(text.apply),
+          label: Text(selected.captions.isNotEmpty
+              ? "${characterPresetLabels(state.settings.language)[2]} · ${selected.captions.length}"
+              : text.apply),
         ),
         if (_message.isNotEmpty) ...[
           const SizedBox(height: 8),
@@ -714,16 +764,40 @@ class _PositivePromptPresetSheetState
           ),
         ),
         const SizedBox(height: 12),
-        TextField(
-          controller: _prompt,
-          minLines: 7,
-          maxLines: 15,
-          decoration: InputDecoration(
-            labelText: text.prompt,
-            hintText: text.promptHint,
-            border: const OutlineInputBorder(),
+        if (_draftCaptions.isNotEmpty)
+          for (var i = 0; i < _draftCaptions.length; i++) ...[
+            Text(mobileUiFormatFor(state.settings.language,
+                'generate.characterLabel', {'index': i + 1})),
+            TextFormField(
+                key: ValueKey('preset-role-positive-$i'),
+                initialValue: _draftCaptions[i].prompt,
+                minLines: 2,
+                maxLines: 5,
+                decoration: InputDecoration(labelText: text.prompt),
+                onChanged: (v) => setState(() => _draftCaptions[i].prompt = v)),
+            TextFormField(
+                key: ValueKey('preset-role-negative-$i'),
+                initialValue: _draftCaptions[i].negativePrompt,
+                minLines: 1,
+                maxLines: 3,
+                decoration: InputDecoration(
+                    labelText: mobileUiTextFor(
+                        state.settings.language, 'generate.characterNegative')),
+                onChanged: (v) =>
+                    setState(() => _draftCaptions[i].negativePrompt = v)),
+            const SizedBox(height: 12),
+          ]
+        else
+          TextField(
+            controller: _prompt,
+            minLines: 7,
+            maxLines: 15,
+            decoration: InputDecoration(
+              labelText: text.prompt,
+              hintText: text.promptHint,
+              border: const OutlineInputBorder(),
+            ),
           ),
-        ),
         const SizedBox(height: 12),
         if ((_editingId ?? '').isNotEmpty && selected != null)
           _images(state, selected, text)
@@ -798,7 +872,10 @@ class _PositivePromptPresetSheetState
                   children: [
                     Text(text.title,
                         style: Theme.of(context).textTheme.titleLarge),
-                    Text(text.subtitle,
+                    Text(
+                        selected?.captions.isNotEmpty == true
+                            ? "${mobileUiTextFor(state.settings.language, 'generate.characterPrompts')} · ${selected!.captions.length}"
+                            : text.subtitle,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodySmall),
@@ -847,7 +924,8 @@ class _PositivePromptPresetSheetState
                     const SizedBox(width: 8),
                     Expanded(
                       child: FilledButton.icon(
-                        onPressed: widget.currentPrompt.trim().isEmpty
+                        onPressed: widget.currentPrompt.trim().isEmpty &&
+                                widget.currentCaptions.isEmpty
                             ? null
                             : () => _startCreate(
                                 state.settings.positivePromptPresets, true),

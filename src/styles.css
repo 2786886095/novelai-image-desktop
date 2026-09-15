@@ -13185,6 +13185,9 @@ button:has(> .ui-icon):not(.select-menu-trigger) {
 
 /* ── 1. Light semantic tokens（对齐报告 §6.4 语义色，覆盖 STUDIO V2 的半透明玻璃 token）── */
 :root {
+  --disclosure-open: 160ms;
+  --disclosure-close: 120ms;
+  --disclosure-exit-ease: cubic-bezier(0.2, 0, 0, 1);
   /* Backgrounds — 内容面一律稳定实色，不再用半透明叠加制造层级 */
   --bg-window:   #f3f3fa;
   --bg-panel:    #f8f7fc;
@@ -13542,7 +13545,7 @@ button:has(> .ui-icon):not(.select-menu-trigger) {
    ═══════════════════════════════════════════════════════════════════════════════ */
 
 /* 13.1 浮层入场：下拉/弹层统一 popIn（复用现有关键帧） */
-.select-menu-popover { animation: popIn 0.16s var(--ease-out); }
+.select-menu-popover { animation: none; }
 
 /* 13.3 输入控件：聚焦/失焦的边框与聚焦环平滑过渡 */
 .field input,
@@ -19944,8 +19947,6 @@ html.motion-reduced .image-save-notice, html.motion-reduced .image-save-notice-i
 .quicktag-navigation small { color: var(--text-secondary); }
 .quicktag-navigation [role="alert"] { color: var(--danger); overflow-wrap: anywhere; }
 
-/* Keyboard image-input target; no layout movement. */
-[data-image-paste-active="true"] { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* Gallery images use decoded dimensions, never the placeholder ratio after load. */
 .online-gallery-card .aitag-card-image img {
@@ -20162,3 +20163,168 @@ details > summary:hover > svg { color: var(--accent); }
 .image-preview-transform img { max-width: 100%; max-height: 70vh; object-fit: contain; user-select: none; }
 
 .image-preview-viewer:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Shared disclosure motion and character editor spacing */
+.animated-collapse { display: grid; grid-template-rows: 0fr; opacity: 0; visibility: hidden; transition: grid-template-rows var(--disclosure-close) var(--ease-out), opacity var(--disclosure-close) var(--ease-out), visibility 0s var(--disclosure-close); }
+.animated-collapse.is-open { grid-template-rows: 1fr; opacity: 1; visibility: visible; transition-duration: var(--disclosure-open); transition-delay: 0s; }
+.animated-collapse > div { min-height: 0; overflow: hidden; }
+.char-modal .character-preset-controls { min-width: 0; padding: 0; }
+.char-row-title { flex: 1; min-width: 0; }
+.char-drag-handle { cursor: grab; touch-action: none; padding: 8px; border: 0; background: transparent; color: var(--text-secondary); border-radius: var(--radius-sm); }
+.char-drag-handle:active { cursor: grabbing; }
+.char-drag-handle:hover, .char-drag-handle:focus-visible { color: var(--accent); background: var(--bg-hover); }
+.char-row.drag-over { border-color: var(--accent); }
+.char-reorder-choice { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-md); }
+.char-position-marker { transition: background-color .12s ease, box-shadow .12s ease; touch-action: none; }
+@supports (interpolate-size: allow-keywords) {
+ details::details-content { interpolate-size: allow-keywords; height: 0; overflow: clip; opacity: 0; transition: height var(--disclosure-close) var(--ease-out), opacity var(--disclosure-close) var(--ease-out), content-visibility var(--disclosure-close) allow-discrete; }
+ details[open]::details-content { height: auto; opacity: 1; transition-duration: var(--disclosure-open); }
+}
+html.motion-reduced .animated-collapse, html.motion-reduced details::details-content { transition-duration: .01ms; transition-delay: 0s; }
+
+.animated-collapse { min-width: 0; }
+.tavern-proposal-toolbar > .animated-collapse { grid-column: 1 / -1; flex-basis: 100%; width: 100%; }
+
+/* Keep the scroller stable while the compact drag list is active. */
+.char-sort-list { display: flex; flex-direction: column; gap: 14px; }
+.char-sort-list.is-dragging .animated-collapse { transition: none; }
+
+.tags-gallery-category { margin-bottom: 12px; }
+
+.quicktag-tree-toggle svg { transition: transform .24s var(--ease-out); }
+.quicktag-row-presence.is-open { animation: popIn .24s var(--ease-out); }
+html.motion-reduced .quicktag-row-presence { animation-duration: .01ms; }
+
+.character-save-dialog { width: min(520px, calc(100vw - 32px)); }
+.character-save-body { display: grid; gap: 16px; padding: 20px 22px; }
+
+/* One height-based disclosure motion: lists unfold without scaling their text. */
+.disclosure-popover {
+  interpolate-size: allow-keywords;
+  height: var(--disclosure-height, auto);
+  opacity: 1;
+  overflow: clip;
+  animation: none;
+  transition: height var(--disclosure-open) var(--ease-out), opacity var(--disclosure-open) var(--ease-out);
+}
+.select-menu-popover.disclosure-popover, .prompt-chunk-popover.disclosure-popover { overflow-y: auto; }
+.select-menu-popover.disclosure-popover { padding: 0; }
+.select-menu-popover > .disclosure-options { padding: 6px; }
+.disclosure-popover[data-disclosure-open="false"] {
+  height: 0;
+  min-height: 0;
+  opacity: 0;
+  pointer-events: none;
+  overflow: clip;
+  transition: height var(--disclosure-close) var(--disclosure-exit-ease), opacity var(--disclosure-close) linear;
+}
+@starting-style {
+  .disclosure-popover[data-disclosure-open="true"] { height: 0; opacity: 0; }
+}
+.select-menu-chevron, .select-menu-chevron-inline, .disclosure-chevron,
+.char-row-toggle .ui-icon, .quicktag-tree-toggle .ui-icon, .style-folder header button > svg:last-child,
+details > summary::after, details > summary .ui-icon {
+  transition: transform var(--disclosure-close) var(--ease-out), color var(--disclosure-close) var(--ease-out);
+}
+.select-menu-chevron.open, .select-menu-chevron-inline.open,
+[aria-expanded="true"] > .disclosure-chevron, [aria-expanded="true"] > .ui-icon:last-child,
+details[open] > summary::after { transition-duration: var(--disclosure-open); }
+.style-folder.expanded header button > svg:last-child { transform: rotate(90deg); }
+html.motion-reduced .disclosure-popover { transition: none; animation: none; }
+
+.prompt-chip-zone { transition: padding var(--disclosure-close) var(--ease-out), gap var(--disclosure-close) var(--ease-out); }
+.prompt-chip-zone:not(.collapsed) { transition-duration: var(--disclosure-open); }
+.chip-caret, .prompt-tool-chevron { transition: transform var(--disclosure-close) var(--ease-out); }
+.chip-caret.open, .prompt-tool-chevron.open { transition-duration: var(--disclosure-open); }
+/* Native disclosure markers are instantaneous. Use one rotating marker where
+   the feature has not already supplied its own icon/after marker. */
+details:not(.tavern-scene-bindings):not(.tavern-binding-entity):not(.tavern-continuity):not(.metadata-apply-disclosure) > summary:not(:has(svg)) { list-style: none; }
+details:not(.tavern-scene-bindings):not(.tavern-binding-entity):not(.tavern-continuity):not(.metadata-apply-disclosure) > summary:not(:has(svg))::-webkit-details-marker { display: none; }
+details:not(.tavern-scene-bindings):not(.tavern-binding-entity):not(.tavern-continuity):not(.metadata-apply-disclosure) > summary:not(:has(svg))::before {
+  content: ""; display: inline-block; flex-shrink: 0; width: 6px; height: 6px; margin-inline: 2px 10px;
+  border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg); transition: transform var(--disclosure-close) var(--ease-out);
+}
+details[open]:not(.tavern-scene-bindings):not(.tavern-binding-entity):not(.tavern-continuity):not(.metadata-apply-disclosure) > summary:not(:has(svg))::before { transform: rotate(45deg); transition-duration: var(--disclosure-open); }
+.tavern-continuity > details > summary::before { display: none !important; }
+
+/* Restore hover previews outside style menus only after the reveal completes. */
+.style-preset-menu.disclosure-popover[data-disclosure-open="true"][data-disclosure-settled="true"] { overflow: visible; }
+.tavern-panel-details > summary svg, .tavern-lore-entries summary > svg, .tavern-image-proposal summary svg { transition-duration: var(--disclosure-close); transition-timing-function: var(--ease-out); }
+.tavern-panel-details[open] > summary svg, .tavern-lore-entries details[open] > summary svg, .tavern-image-proposal details[open] > summary svg { transition-duration: var(--disclosure-open); }
+.tavern-page { transition: grid-template-columns var(--disclosure-open) var(--ease-out); }
+.tavern-page.is-left-collapsed, .tavern-page.is-right-collapsed { transition-duration: var(--disclosure-close); }
+
+/* Floating compound panels keep their intrinsic inner layout while the frame
+   is revealed. This avoids double height animations in nested folders. */
+.disclosure-popover:not(.select-menu-popover) {
+  height: auto;
+  clip-path: inset(0 0 0 0);
+  transition: clip-path var(--disclosure-open) var(--ease-out), opacity var(--disclosure-open) var(--ease-out);
+}
+.disclosure-popover:not(.select-menu-popover)[data-disclosure-open="false"] {
+  height: auto;
+  clip-path: inset(0 0 100% 0);
+  transition: clip-path var(--disclosure-close) var(--disclosure-exit-ease), opacity var(--disclosure-close) linear;
+}
+.disclosure-popover:not(.select-menu-popover)[data-placement="top"][data-disclosure-open="false"] { clip-path: inset(100% 0 0 0); }
+@starting-style {
+  .disclosure-popover:not(.select-menu-popover)[data-disclosure-open="true"] { height: auto; clip-path: inset(0 0 100% 0); }
+  .disclosure-popover:not(.select-menu-popover)[data-placement="top"][data-disclosure-open="true"] { clip-path: inset(100% 0 0 0); }
+}
+.style-preset-menu.disclosure-popover[data-disclosure-open="true"][data-disclosure-settled="true"] { clip-path: none; }
+html.motion-reduced .disclosure-popover { transition: none; }
+
+/* Drag the complete compact card; vacant slot and neighbours stay in the list. */
+.char-sort-list.is-dragging > .char-row { transition: transform 180ms var(--ease-out); will-change: transform; }
+.char-sort-list.is-dragging > .char-drag-placeholder { border: 1px dashed var(--accent); background: var(--bg-selected); }
+.char-drag-placeholder > * { visibility: hidden; }
+.char-drag-preview { position: fixed; margin: 0; z-index: var(--z-overlay-top); pointer-events: none; box-shadow: var(--shadow-lg); border-color: var(--accent); background: var(--bg-dialog); transform: rotate(-1deg); }
+html.motion-reduced .char-sort-list.is-dragging > .char-row { transition: none; }
+
+/* Shared online-gallery favorites: source-independent, local and paginated. */
+.online-gallery-source-picker { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.gallery-heart { min-width: 36px; min-height: 36px; font-size: 20px; }
+.gallery-heart.is-saved { color: var(--danger); }
+.aitag-card > .gallery-heart { margin: 0 12px 10px; }
+.gallery-artist-favorite { position: relative; min-width: 0; }
+.gallery-artist-favorite > button:first-child { width: 100%; padding: 0; border: 0; background: transparent; }
+.gallery-artist-favorite img { width: 100%; object-fit: contain; }
+.gallery-artist-favorite > .gallery-heart { position: absolute; bottom: 6px; right: 6px; background: var(--bg-dialog); }
+.gallery-favorites-backdrop { z-index: var(--z-overlay-top); }
+.gallery-favorites-modal { width: min(1080px,calc(100vw - 32px)); height: min(800px,calc(100dvh - 32px)); display: flex; flex-direction: column; }
+.gallery-favorites-body { min-height: 0; overflow: auto; padding: 20px; }
+.gallery-favorites-filters { display: grid; grid-template-columns: minmax(180px,1.4fr) repeat(3,minmax(130px,1fr)); gap: 12px; margin-bottom: 18px; }
+@media (max-width: 768px) { .gallery-favorites-filters { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media (max-width: 480px) { .gallery-favorites-filters { grid-template-columns: minmax(0,1fr); } }
+.gallery-favorites-filters input { flex: 1; min-width: 140px; }
+.gallery-favorites-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(min(180px,100%),1fr)); gap: 14px; }
+.gallery-favorites-grid article { border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; background: var(--bg-panel); }
+.gallery-favorites-grid article > div { padding: 10px; display: grid; gap: 6px; overflow-wrap: anywhere; }
+.gallery-favorite-preview { width: 100%; height: 190px; border: 0; background: var(--bg-canvas); cursor: pointer; }
+.gallery-favorite-preview img { width: 100%; height: 100%; object-fit: contain; }
+.gallery-favorites-modal footer { display: flex; align-items: center; gap: 10px; justify-content: center; }
+.gallery-favorites-modal footer input { width: 72px; }
+.gallery-favorite-lightbox { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,.8); z-index: var(--z-overlay-top); padding: 20px; }
+.gallery-favorite-lightbox section { max-width: 95vw; max-height: 95vh; overflow: auto; background: var(--bg-dialog); padding: 16px; border-radius: var(--radius-lg); }
+.gallery-favorite-lightbox img { display: block; max-width: 85vw; max-height: 65vh; object-fit: contain; margin: auto; }
+.gallery-favorite-lightbox nav { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 12px; }
+.gallery-favorite-lightbox p { max-width: 80vw; overflow-wrap: anywhere; }
+
+/* A settled compound menu can overflow for nested controls. Keyframes provide
+   a numeric closing clip even when its resting clip-path is none. */
+@keyframes disclosure-compound-exit {
+  from { clip-path: inset(0 0 0 0); }
+  to { clip-path: inset(0 0 100% 0); }
+}
+@keyframes disclosure-compound-exit-up {
+  from { clip-path: inset(0 0 0 0); }
+  to { clip-path: inset(100% 0 0 0); }
+}
+.disclosure-popover:not(.select-menu-popover)[data-disclosure-open="false"] {
+  animation: disclosure-compound-exit var(--disclosure-close) var(--disclosure-exit-ease) both;
+}
+.disclosure-popover:not(.select-menu-popover)[data-placement="top"][data-disclosure-open="false"] {
+  animation-name: disclosure-compound-exit-up;
+}
+html.motion-reduced .disclosure-popover { animation: none; }

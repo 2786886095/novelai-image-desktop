@@ -1,3 +1,4 @@
+import '../ui/studio_dropdown.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -434,7 +435,7 @@ class _PromptCodexScreenState extends State<PromptCodexScreen> {
             LayoutBuilder(builder: (context, constraints) {
               final stackControls = constraints.maxWidth < 370;
               final controls = [
-                DropdownButtonFormField<String>(
+                StudioDropdownButtonFormField<String>(
                   value: _category,
                   isExpanded: true,
                   decoration: InputDecoration(labelText: text['category']),
@@ -450,7 +451,7 @@ class _PromptCodexScreenState extends State<PromptCodexScreen> {
                     _limit = 100;
                   }),
                 ),
-                DropdownButtonFormField<String>(
+                StudioDropdownButtonFormField<String>(
                   value: sections.contains(_section) ? _section : 'all',
                   isExpanded: true,
                   decoration: InputDecoration(labelText: text['section']),

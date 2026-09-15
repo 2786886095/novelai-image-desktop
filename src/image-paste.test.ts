@@ -1,3 +1,4 @@
+import {readFileSync} from "node:fs";
 import {describe,it,expect,vi} from "vitest";
 vi.mock('./store',()=>({useAppStore:{getState:()=>({setToast:vi.fn()}),subscribe:()=>()=>{}}}));
 import {imageFiles,imagePasteProps} from './image-paste';
@@ -13,4 +14,12 @@ describe('image paste contract',()=>{
     a.onPaste(event as any);expect(called).toHaveBeenCalledWith(['F:/local/fixture.webp']);expect(other).not.toHaveBeenCalled();
     expect(event.preventDefault).toHaveBeenCalledTimes(1);expect(a['data-image-paste-multiple']).toBe('true');
   });
+});
+
+it('keeps paste target routing without painting a persistent outline',()=>{
+  const css=readFileSync(new URL('./styles.css',import.meta.url),'utf8');
+  const router=readFileSync(new URL('./image-paste.tsx',import.meta.url),'utf8');
+  expect(css).not.toContain('[data-image-paste-active=');
+  expect(router).toContain("selected = target");
+  expect(router).toContain("document.addEventListener('paste',paste,true)");
 });

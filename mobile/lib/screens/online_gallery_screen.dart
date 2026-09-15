@@ -1,3 +1,8 @@
+import 'gallery_favorites_screen.dart';
+import '../services/gallery_favorites.dart';
+import '../services/gallery_labels.dart';
+import '../ui/studio_dropdown.dart';
+import '../services/tags_gallery.dart';
 import '../ui/zoomable_image.dart';
 import '../widgets/image_save_feedback.dart';
 import '../services/quicktag.dart';
@@ -464,6 +469,7 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
   String error = '';
   String collectionId = '';
   List<String> categoryPath = [];
+  String tagsSort = 'score';
   String collectionType = '';
   bool searchAll = false;
   int quickPageSize = 12;
@@ -614,7 +620,11 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
       final value = await service.search(
         source: source,
         page: page,
-        query: query.text,
+        query: source == OnlineGallerySource.tagsGallery
+            ? galleryTagQuery(
+                query.text, context.read<AppState>().settings.language)
+            : query.text,
+        sort: tagsSort,
         collectionId: collectionId,
         safeOnly: safeOnly,
         categoryPath: categoryPath,
@@ -628,8 +638,10 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
         collectionType = value.navigation?['collectionType'] as String? ?? '';
         collectionId = value.collectionId;
         if (collectionId.isNotEmpty) searchAll = false;
-        categoryPath =
-            List<String>.from(value.navigation?['categoryPath'] ?? []);
+        if (source != OnlineGallerySource.tagsGallery) {
+          categoryPath =
+              List<String>.from(value.navigation?['categoryPath'] ?? []);
+        }
       });
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (scrollController.hasClients) scrollController.jumpTo(0);
@@ -670,7 +682,7 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
 
   Widget _sourceToolbar(
       BuildContext context, _GalleryText text, String language) {
-    final selector = DropdownButtonFormField<OnlineGallerySource>(
+    final selector = StudioDropdownButtonFormField<OnlineGallerySource>(
       value: source,
       isExpanded: true,
       decoration: InputDecoration(
@@ -718,6 +730,7 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
       appBar: AppBar(
         title: Text(text.title),
         actions: [
+          const GalleryFavoritesButton(),
           IconButton(
             tooltip: text.refresh,
             onPressed: loading ? null : () => _search(result?.page ?? 1),
@@ -800,7 +813,7 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
             )),
             SizedBox(
               width: 150,
-              child: DropdownButtonFormField<int>(
+              child: StudioDropdownButtonFormField<int>(
                 value: artistRankingPageSize,
                 isExpanded: true,
                 decoration: InputDecoration(labelText: labels.perPage),
@@ -871,6 +884,21 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis),
                       trailing: Wrap(spacing: 2, children: [
+                        GalleryFavoriteButton(
+                            item: GalleryFavorite(
+                                source: 'artist-ranking',
+                                id: '${artist.id}',
+                                title: artist.name,
+                                author: artist.name,
+                                sourceUrl:
+                                    'https://danbooru.donmai.us/posts?tags=${Uri.encodeComponent(artist.name)}',
+                                prompt: 'artist:${artist.name}',
+                                score: artist.postCount,
+                                savedAt: DateTime.now().millisecondsSinceEpoch,
+                                images: [
+                              for (final url in previews ?? <String>[])
+                                {'url': url, 'thumb': url}
+                            ])),
                         IconButton(
                             tooltip: '复制 Tag',
                             onPressed: () => Clipboard.setData(
@@ -928,17 +956,44 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
                                               _showSimpleNetworkPreview(context,
                                                   previews[previewIndex],
                                                   urls: previews),
-                                          child: Image.network(
-                                              previews[previewIndex],
-                                              width: 132,
-                                              height: 132,
-                                              fit: BoxFit.contain,
-                                              cacheWidth: 264,
-                                              errorBuilder: (_, __, ___) =>
-                                                  const SizedBox(
-                                                      width: 132,
-                                                      child: Icon(Icons
-                                                          .broken_image_outlined))),
+                                          child: Stack(children: [
+                                            Image.network(
+                                                previews[previewIndex],
+                                                width: 132,
+                                                height: 132,
+                                                fit: BoxFit.contain,
+                                                cacheWidth: 264,
+                                                errorBuilder: (_, __, ___) =>
+                                                    const SizedBox(
+                                                        width: 132,
+                                                        child: Icon(Icons
+                                                            .broken_image_outlined))),
+                                            Positioned(
+                                                right: 0,
+                                                bottom: 0,
+                                                child: GalleryFavoriteButton(
+                                                    item: GalleryFavorite(
+                                                        source:
+                                                            'artist-ranking',
+                                                        id:
+                                                            'image:${previews[previewIndex]}',
+                                                        title: artist.name,
+                                                        author: artist.name,
+                                                        sourceUrl:
+                                                            'https://danbooru.donmai.us/posts?tags=${Uri.encodeComponent(artist.name)}',
+                                                        prompt:
+                                                            'artist:${artist.name}',
+                                                        savedAt: DateTime.now()
+                                                            .millisecondsSinceEpoch,
+                                                        images: [
+                                                      {
+                                                        'url': previews[
+                                                            previewIndex],
+                                                        'thumb': previews[
+                                                            previewIndex]
+                                                      }
+                                                    ])))
+                                          ]),
                                         ),
                                       ),
                                     )),
@@ -998,7 +1053,12 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
                       child: Text(ui['jump']!))
                 ]));
     input.dispose();
-    if (page != null && mounted) await _search(page);
+    if (page != null && mounted) {
+      final maxPage = result?.total == null
+          ? 100000
+          : (result!.total! / result!.pageSize).ceil().clamp(1, 100000);
+      await _search(page.clamp(1, maxPage));
+    }
   }
 
   Widget _buildExternal(BuildContext context, _GalleryText text) {
@@ -1035,6 +1095,60 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
+                          if (source == OnlineGallerySource.tagsGallery)
+                            StudioDropdownButtonFormField<String>(
+                                value: tagsSort,
+                                decoration: InputDecoration(
+                                    labelText: galleryLibraryText(context
+                                        .watch<AppState>()
+                                        .settings
+                                        .language)['sort']),
+                                items: [
+                                  for (final e
+                                      in ['score', 'count', 'name'].indexed)
+                                    DropdownMenuItem(
+                                        value: e.$2,
+                                        child: Text(galleryLibraryText(context
+                                            .watch<AppState>()
+                                            .settings
+                                            .language)['tagSorts'][e.$1]))
+                                ],
+                                onChanged: (v) {
+                                  if (v != null) {
+                                    setState(() => tagsSort = v);
+                                    _search(1);
+                                  }
+                                }),
+                          if (source == OnlineGallerySource.tagsGallery)
+                            Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: StudioDropdownButtonFormField<String>(
+                                  value: categoryPath.firstOrNull ?? 'artist',
+                                  decoration: InputDecoration(
+                                      labelText: tagsGalleryUi(context
+                                          .read<AppState>()
+                                          .settings
+                                          .language)[0]),
+                                  isExpanded: true,
+                                  items: [
+                                    for (final (index, id)
+                                        in tagsGalleryCategories.indexed)
+                                      DropdownMenuItem(
+                                          value: id,
+                                          child: Text(tagsGalleryLabels(context
+                                              .read<AppState>()
+                                              .settings
+                                              .language)[index]))
+                                  ],
+                                  onChanged: loading
+                                      ? null
+                                      : (value) {
+                                          if (value == null) return;
+                                          setState(
+                                              () => categoryPath = [value]);
+                                          _search(1);
+                                        },
+                                )),
                           if (source == OnlineGallerySource.quicktag)
                             QuickTagNavigation(
                                 onGroup: (type) {
@@ -1097,6 +1211,31 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
                                 label: Text(text.backCollections),
                               ),
                             ),
+                          if (source == OnlineGallerySource.tagsGallery)
+                            Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: StudioDropdownButtonFormField<int>(
+                                  value: quickPageSize,
+                                  decoration: InputDecoration(
+                                      labelText: quickTagUi(context
+                                          .read<AppState>()
+                                          .settings
+                                          .language)['perPage']),
+                                  items: [
+                                    for (final size in [12, 24, 48, 60])
+                                      DropdownMenuItem(
+                                          value: size, child: Text('$size'))
+                                  ],
+                                  onChanged: loading
+                                      ? null
+                                      : (size) {
+                                          if (size != null) {
+                                            setState(
+                                                () => quickPageSize = size);
+                                            _search(1);
+                                          }
+                                        },
+                                )),
                           TextField(
                             controller: query,
                             textInputAction: TextInputAction.search,
@@ -1112,18 +1251,19 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
                             runSpacing: 8,
                             crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
-                              FilterChip(
-                                avatar:
-                                    const Icon(Icons.shield_outlined, size: 18),
-                                label: Text(text.safeOnly),
-                                selected: safeOnly,
-                                onSelected: loading
-                                    ? null
-                                    : (value) {
-                                        setState(() => safeOnly = value);
-                                        _search(1);
-                                      },
-                              ),
+                              if (source != OnlineGallerySource.tagsGallery)
+                                FilterChip(
+                                  avatar: const Icon(Icons.shield_outlined,
+                                      size: 18),
+                                  label: Text(text.safeOnly),
+                                  selected: safeOnly,
+                                  onSelected: loading
+                                      ? null
+                                      : (value) {
+                                          setState(() => safeOnly = value);
+                                          _search(1);
+                                        },
+                                ),
                               FilledButton.icon(
                                 onPressed: loading ? null : () => _search(1),
                                 icon: const Icon(Icons.search),
@@ -1213,7 +1353,8 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
                           ),
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 14),
-                            child: source == OnlineGallerySource.quicktag
+                            child: source == OnlineGallerySource.quicktag ||
+                                    source == OnlineGallerySource.tagsGallery
                                 ? TextButton(
                                     onPressed:
                                         loading ? null : _chooseQuickPage,
@@ -1289,6 +1430,7 @@ class _GalleryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final language = context.watch<AppState>().settings.language;
     final coverAspectRatio = item.cover.width > 0 && item.cover.height > 0
         ? item.cover.width / item.cover.height
         : 4 / 3;
@@ -1299,6 +1441,10 @@ class _GalleryCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            Align(
+                alignment: Alignment.centerRight,
+                child: GalleryFavoriteButton(
+                    item: GalleryFavorite.fromItem(item))),
             GalleryImageAspect(
                 enabled: item.cover.previewUrl.isNotEmpty,
                 provider:
@@ -1333,7 +1479,12 @@ class _GalleryCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(item.title.isEmpty ? '#${item.id}' : item.title,
+                  Text(
+                      item.source == OnlineGallerySource.tagsGallery
+                          ? localizedGalleryTag(item.title, language)
+                          : item.title.isEmpty
+                              ? '#${item.id}'
+                              : item.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleSmall),
@@ -1519,6 +1670,11 @@ class _OnlineGalleryDetailScreenState
             maxLines: 1,
             overflow: TextOverflow.ellipsis),
         actions: [
+          GalleryFavoriteButton(
+              item: GalleryFavorite.fromItem(widget.item),
+              prepare: () async =>
+                  GalleryFavorite.fromItem(widget.item, detail: await detail)),
+          const GalleryFavoritesButton(),
           IconButton(
             tooltip: text.openSource,
             onPressed: () => launchUrl(Uri.parse(widget.item.sourceUrl),
@@ -1610,6 +1766,13 @@ class _DetailMediaState extends State<_DetailMedia> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.detail.item.source == OnlineGallerySource.tagsGallery &&
+        widget.detail.media.isEmpty) {
+      return Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+              tagsGalleryUi(context.read<AppState>().settings.language)[1]));
+    }
     final media = widget.detail.media.isEmpty
         ? [widget.detail.item.cover]
         : widget.detail.media;
@@ -1798,7 +1961,11 @@ class _DetailInfo extends StatelessWidget {
               runSpacing: 6,
               children: group.$2
                   .map((tag) => InputChip(
-                        label: Text(tag.replaceAll('_', ' ')),
+                        label: Text(
+                            item.source == OnlineGallerySource.tagsGallery
+                                ? localizedGalleryTag(tag,
+                                    context.watch<AppState>().settings.language)
+                                : tag.replaceAll('_', ' ')),
                         onPressed: () => onCopy(tag, text),
                       ))
                   .toList(),

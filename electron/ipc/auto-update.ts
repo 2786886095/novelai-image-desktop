@@ -14,21 +14,10 @@ import { pipeline } from "stream/promises";
 import type { UpdateProgressEvent } from "../../src/types";
 import { proxyConfig } from "./proxy";
 import {
-  latestGiteeRelease,
   latestGithubRelease,
   type RemoteReleaseAsset,
-  type UpdateSource,
-  updateSourceOrder,
 } from "./update";
 
-interface GiteeUpdateManifest {
-  schemaVersion: 1;
-  version: string;
-  filename: string;
-  size: number;
-  sha512: string;
-  parts: Array<{ name: string; size: number; sha512: string }>;
-}
 
 let getMainWindow: (() => BrowserWindow | null) | undefined;
 let downloadedInstallerPath = "";
@@ -60,11 +49,9 @@ function findAsset(assets: RemoteReleaseAsset[], name: string): RemoteReleaseAss
   return found;
 }
 
-function validateDownloadUrl(url: string, source: "gitee" | "github") {
+function validateDownloadUrl(url: string, _source: "github") {
   const parsed = new URL(url);
-  const allowed = source === "gitee"
-    ? new Set(["gitee.com", "files.gitee.com", "foruda.gitee.com"])
-    : new Set(["github.com", "api.github.com", "objects.githubusercontent.com"]);
+  const allowed = new Set(["github.com", "api.github.com", "objects.githubusercontent.com"]);
   if (parsed.protocol !== "https:" || !allowed.has(parsed.hostname.toLowerCase())) {
     throw new Error(`拒绝不受信任的更新地址：${parsed.hostname}`);
   }
@@ -79,17 +66,17 @@ async function sha512Base64(path: string): Promise<string> {
 async function downloadAsset(
   asset: RemoteReleaseAsset,
   destination: string,
-  source: "gitee" | "github",
+  _source: "github",
   expectedSize: number,
   progressState: { completed: number; total: number },
 ) {
-  validateDownloadUrl(asset.url, source);
+  validateDownloadUrl(asset.url, _source);
   const response = await axios.get(asset.url, {
     responseType: "stream",
     timeout: 60_000,
     maxRedirects: 8,
     headers: { Accept: "application/octet-stream" },
-    ...(source === "github" ? proxyConfig("update") : {}),
+    ...proxyConfig("update"),
   });
   let received = 0;
   const meter = new Transform({
@@ -115,81 +102,16 @@ async function downloadAsset(
   progressState.completed += received;
 }
 
-function parseGiteeManifest(payload: unknown): GiteeUpdateManifest {
-  const data = typeof payload === "string" ? JSON.parse(payload) : payload as any;
-  const parts = Array.isArray(data?.parts) ? data.parts : [];
-  const manifest: GiteeUpdateManifest = {
-    schemaVersion: Number(data?.schemaVersion) as 1,
-    version: String(data?.version ?? "").replace(/^v/, ""),
-    filename: safeAssetName(String(data?.filename ?? "")),
-    size: Number(data?.size),
-    sha512: String(data?.sha512 ?? ""),
-    parts: parts.map((part: any) => ({
-      name: safeAssetName(String(part?.name ?? "")),
-      size: Number(part?.size),
-      sha512: String(part?.sha512 ?? ""),
-    })),
-  };
-  if (
-    manifest.schemaVersion !== 1
-    || !manifest.version
-    || !/^Langbai-NovelAI-Studio-Setup-[\w.+-]+\.exe$/i.test(manifest.filename)
-    || !Number.isSafeInteger(manifest.size)
-    || manifest.size <= 0
-    || !/^[A-Za-z0-9+/]{80,}={0,2}$/.test(manifest.sha512)
-    || manifest.parts.length === 0
-    || manifest.parts.some((part) => !Number.isSafeInteger(part.size) || part.size <= 0)
-    || manifest.parts.reduce((sum, part) => sum + part.size, 0) !== manifest.size
-  ) {
-    throw new Error("Gitee 更新清单格式无效");
-  }
-  return manifest;
-}
-
-async function readTextAsset(asset: RemoteReleaseAsset, source: "gitee" | "github"): Promise<string> {
-  validateDownloadUrl(asset.url, source);
+async function readTextAsset(asset: RemoteReleaseAsset, _source: "github"): Promise<string> {
+  validateDownloadUrl(asset.url, _source);
   const response = await axios.get(asset.url, {
     responseType: "text",
     timeout: 20_000,
     maxRedirects: 8,
     headers: { Accept: "application/json, text/yaml, text/plain, */*" },
-    ...(source === "github" ? proxyConfig("update") : {}),
+    ...proxyConfig("update"),
   });
   return String(response.data ?? "");
-}
-
-async function downloadFromGitee(): Promise<{ path: string; version: string }> {
-  const release = await latestGiteeRelease({ includeAttachments: true });
-  const manifestAsset = findAsset(release.assets, "gitee-update.json");
-  const manifest = parseGiteeManifest(await readTextAsset(manifestAsset, "gitee"));
-  if (manifest.version !== release.version) throw new Error("Gitee 更新清单版本与发行版不一致");
-
-  const updateDir = join(app.getPath("temp"), "langbai-novelai-update", manifest.version);
-  await mkdir(updateDir, { recursive: true });
-  const progressState = { completed: 0, total: manifest.size };
-  const partPaths: string[] = [];
-  for (const part of manifest.parts) {
-    const asset = findAsset(release.assets, part.name);
-    const partPath = join(updateDir, part.name);
-    await downloadAsset(asset, partPath, "gitee", part.size, progressState);
-    if (await sha512Base64(partPath) !== part.sha512) {
-      await rm(partPath, { force: true });
-      throw new Error(`${part.name} 完整性校验失败`);
-    }
-    partPaths.push(partPath);
-  }
-
-  const installerPath = join(updateDir, manifest.filename);
-  await rm(installerPath, { force: true });
-  for (const partPath of partPaths) {
-    await pipeline(createReadStream(partPath), createWriteStream(installerPath, { flags: "a" }));
-  }
-  if (await sha512Base64(installerPath) !== manifest.sha512) {
-    await rm(installerPath, { force: true });
-    throw new Error("Gitee 安装包完整性校验失败");
-  }
-  await Promise.all(partPaths.map((partPath) => rm(partPath, { force: true })));
-  return { path: installerPath, version: manifest.version };
 }
 
 function parseLatestYamlSha512(payload: string): string {
@@ -223,7 +145,7 @@ async function downloadFromGithub(): Promise<{ path: string; version: string }> 
   return { path: installerPath, version: release.version };
 }
 
-async function runDownload(preferredSource: UpdateSource): Promise<{ ok: boolean; message: string }> {
+async function runDownload(_preferredSource: string): Promise<{ ok: boolean; message: string }> {
   if (process.platform !== "win32") {
     return { ok: false, message: "当前平台请从发行页面手动下载安装包。" };
   }
@@ -234,10 +156,9 @@ async function runDownload(preferredSource: UpdateSource): Promise<{ ok: boolean
   send({ kind: "checking" });
 
   const errors: string[] = [];
-  for (const sourceName of updateSourceOrder(preferredSource)) {
-    const source = sourceName === "gitee" ? downloadFromGitee : downloadFromGithub;
+  {
     try {
-      const result = await source();
+      const result = await downloadFromGithub();
       downloadedInstallerPath = result.path;
       downloadedVersion = result.version;
       send({ kind: "progress", percent: 100 });
@@ -254,8 +175,8 @@ async function runDownload(preferredSource: UpdateSource): Promise<{ ok: boolean
   return { ok: false, message };
 }
 
-/** Use the selected source first and retry the other mirror on failure. */
-export function downloadUpdate(preferredSource: UpdateSource = "github"): Promise<{ ok: boolean; message: string }> {
+/** Download only from GitHub; accept obsolete saved source values. */
+export function downloadUpdate(preferredSource: string = "github"): Promise<{ ok: boolean; message: string }> {
   if (!downloadInFlight) {
     downloadInFlight = runDownload(preferredSource).finally(() => {
       downloadInFlight = null;

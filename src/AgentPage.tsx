@@ -1,3 +1,5 @@
+import {useDisclosurePresence, disclosureAttributes} from "./components/disclosure-motion";
+import {AnimatedCollapse} from './components/CharacterEditing';
 import {PreviewImageViewer} from './components/PreviewImageViewer';
 import { copyTavernText } from "./tavern/clipboard";
 import { ImageFailureDialog, type ImageFailureNotice } from "./agent/ImageFailureDialog";
@@ -1861,15 +1863,13 @@ export function ImageProposalCard({ proposal, onOpenScene, autoMode, setProposal
         {!repairing && (proposal.status === "pending" || proposal.status === "error") ? (
           <footer><button type="button" className="is-ghost" disabled={busy} onClick={onCancel}><CloseIcon />{tx("cancel")}</button>{(!autoMode || !needsReview) && <button type="button" className="is-primary" onClick={() => void submit(proposal)} aria-busy={submitting || undefined} disabled={busy || !proposal.positivePrompt.trim() || proposal.continuity?.reviewRequired}><ImageIcon />{autoMode ? tx(proposal.status === "error" ? "retryImage" : "generateNow") : tx("confirmGenerate")}</button>}</footer>
         ) : null}
-        {parametersOpen && (
-          <div id={parametersId} className="tavern-parameter-grid">
+        <AnimatedCollapse open={parametersOpen}>{<div id={parametersId} className="tavern-parameter-grid">
             <Field label={tx("widthShort")}><NumericField readOnly={busy} label={tx("widthShort")} value={proposal.width ?? 1024} min={64} max={49152} onCommit={(value) => setProposal({ ...proposal, width: Math.round(value) })} /></Field>
             <Field label={tx("heightShort")}><NumericField readOnly={busy} label={tx("heightShort")} value={proposal.height ?? 1024} min={64} max={49152} onCommit={(value) => setProposal({ ...proposal, height: Math.round(value) })} /></Field>
             <Field label={tx("steps")}><NumericField readOnly={busy} label={tx("steps")} value={proposal.steps ?? 28} min={1} max={50} onCommit={(value) => setProposal({ ...proposal, steps: Math.round(value) })} /></Field>
             <Field label="CFG"><NumericField readOnly={busy} label="CFG" value={proposal.scale ?? 5} min={0} max={10} step={0.1} onCommit={(value) => setProposal({ ...proposal, scale: value })} /></Field>
             <Field label={tx("imageCount")}><NumericField readOnly={busy} label={tx("imageCount")} value={proposal.count} min={1} max={8} onCommit={(value) => setProposal({ ...proposal, count: Math.round(value) })} /></Field>
-          </div>
-        )}
+          </div>}</AnimatedCollapse>
       </div>
       {submitError || proposal.error ? <p role="alert" className="tavern-message-error">{sceneErrorMessage(submitError || proposal.error, language)}</p> : null}
       {busy ? <div className="tavern-image-progress"><span /></div> : null}
@@ -2124,6 +2124,7 @@ function ModelPanel({ draft, setDraft, models, discovering, onDiscover, onSave, 
 }) {
   const tx = (key: TavernUiKey, values?: Record<string, string | number>) => tavernUiText(language, key, values);
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
+  const modelPickerPresent = useDisclosurePresence(modelPickerOpen && models.length > 0);
   const [renamePresetId, setRenamePresetId] = useState("");
   const [renamePresetValue, setRenamePresetValue] = useState("");
   const presetFileRef = useRef<HTMLInputElement>(null);
@@ -2270,8 +2271,8 @@ function ModelPanel({ draft, setDraft, models, discovering, onDiscover, onSave, 
               {discovering ? <span className="tavern-spinner" /> : <RefreshIcon />}{discovering ? tx("detecting") : tx("autoDetect")}
             </button>
           </div>
-          {modelPickerOpen && models.length ? (
-            <div className="tavern-model-results" id="tavern-model-options" role="listbox" aria-label={tx("detectedModels")}>
+          {modelPickerPresent && (
+            <div className="tavern-model-results disclosure-popover" {...disclosureAttributes(modelPickerOpen)} id="tavern-model-options" role={modelPickerOpen ? "listbox" : undefined} aria-label={tx("detectedModels")}>
               <header><strong>{tx("chooseModel")}</strong><small>{tx("detectedCount", { count: Math.min(models.length, 24) })}</small></header>
               <div>
                 {models.slice(0, 24).map((model) => {
@@ -2286,7 +2287,7 @@ function ModelPanel({ draft, setDraft, models, discovering, onDiscover, onSave, 
                 })}
               </div>
             </div>
-          ) : null}
+          )}
         </div>
       </Field>
       <div className="tavern-parameter-grid"><Field label={tx("contextLength")}><NumericField label={tx("contextLength")} value={Number(draft.agentContextWindow ?? 128000)} min={1024} max={4_194_304} onCommit={(value) => setDraft({ ...draft, agentContextWindow: Math.round(value) })} /></Field><Field label={tx("maxOutput")}><NumericField label={tx("maxOutput")} value={Number(draft.agentMaxOutputTokens ?? 8192)} min={256} max={262_144} onCommit={(value) => setDraft({ ...draft, agentMaxOutputTokens: Math.round(value) })} /></Field></div>
@@ -2318,6 +2319,7 @@ function ImagePanel({ workspace, conversation, character, defaults, stylePresets
   const [hoveredStylePresetId, setHoveredStylePresetId] = useState("");
   const stylePresetPickerRef = useRef<HTMLDivElement>(null);
   const stylePresetMenuRef = useRef<HTMLDivElement>(null);
+  const styleMenuPresent = useDisclosurePresence(stylePresetMenuOpen, stylePresetMenuRef);
   const attemptedStylePreviewRecoveryRef = useRef("");
   const [stylePresetMenuPosition, setStylePresetMenuPosition] = useState({ left: 0, top: 0, width: 330 });
   const lastAssistant = [...(conversation?.messages ?? [])].reverse().find((item) => item.role === "assistant" && item.status === "complete");
@@ -2509,10 +2511,10 @@ function ImagePanel({ workspace, conversation, character, defaults, stylePresets
                 <button type="button" className="btn secondary" onClick={() => void onSaveStylePreset(userPromptDraft.style)} disabled={!userPromptDraft.style.trim()}><AddIcon />{tx("addToList")}</button>
               </div>
             </div>
-            {stylePresetMenuOpen ? createPortal((
+            {styleMenuPresent ? createPortal((
               <div
                 ref={stylePresetMenuRef}
-                className="style-preset-menu tavern-shared-style-menu"
+                className="style-preset-menu tavern-shared-style-menu disclosure-popover" {...disclosureAttributes(stylePresetMenuOpen)}
                 role="listbox"
                 style={{ left: stylePresetMenuPosition.left, top: stylePresetMenuPosition.top, width: stylePresetMenuPosition.width }}
               >
@@ -2527,7 +2529,7 @@ function ImagePanel({ workspace, conversation, character, defaults, stylePresets
                             <FolderOpenIcon /><span>{group}</span><small>{items.length}</small><ChevronRightIcon />
                           </button>
                         </header>
-                        {expanded ? <div className="style-folder-children">
+                        <AnimatedCollapse open={expanded}><div className="style-folder-children">
                           {items.map((preset) => (
                             <div className={`style-preset-menu-item tavern-style-preset-menu-item ${userPromptDraft.style === preset.prompt ? "active" : ""}`} key={preset.id}>
                               <button
@@ -2550,7 +2552,7 @@ function ImagePanel({ workspace, conversation, character, defaults, stylePresets
                               </button>
                             </div>
                           ))}
-                        </div> : null}
+                        </div></AnimatedCollapse>
                       </section>
                     );
                   }) : <p>{tx("noStyles")}</p>}

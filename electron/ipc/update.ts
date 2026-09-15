@@ -3,19 +3,10 @@ import axios from "axios";
 import type { UpdateInfo } from "../../src/types";
 import { proxyConfig } from "./proxy";
 
-export type UpdateSource = "github" | "gitee";
+export type UpdateSource = "github";
 
-export function updateSourceOrder(preferredSource: UpdateSource = "github"): [UpdateSource, UpdateSource] {
-  return preferredSource === "gitee" ? ["gitee", "github"] : ["github", "gitee"];
-}
-
+export function updateSourceOrder(_legacySource: string = "github"): UpdateSource[] { return ["github"]; }
 const REPO = "2786886095/novelai-image-desktop";
-const GITEE_OWNER = "langbai666";
-const GITEE_REPO = "novelai-image-desktop";
-
-export const GITEE_RELEASE_URL = `https://gitee.com/${GITEE_OWNER}/${GITEE_REPO}/releases`;
-export const GITEE_RELEASE_API_URL =
-  `https://gitee.com/api/v5/repos/${GITEE_OWNER}/${GITEE_REPO}/releases/latest`;
 export const GITHUB_RELEASE_URL = `https://github.com/${REPO}/releases/latest`;
 export const GITHUB_LATEST_YAML_URL = `${GITHUB_RELEASE_URL}/download/latest.yml`;
 export const GITHUB_RELEASE_API_URL = `https://api.github.com/repos/${REPO}/releases/latest`;
@@ -28,7 +19,7 @@ export interface RemoteReleaseAsset {
 }
 
 export interface RemoteRelease {
-  source: "gitee" | "github";
+  source: "github";
   id?: number;
   version: string;
   pageUrl: string;
@@ -73,41 +64,6 @@ function normalizeAssets(input: unknown): RemoteReleaseAsset[] {
   });
 }
 
-/** Public Gitee release APIs work without embedding a user token in the app. */
-export async function latestGiteeRelease(options: { includeAttachments?: boolean } = {}): Promise<RemoteRelease> {
-  const res = await axios.get(GITEE_RELEASE_API_URL, {
-    headers: { Accept: "application/json", "Cache-Control": "no-cache" },
-    timeout: 10_000,
-  });
-  const version = String(res.data?.tag_name ?? "").replace(/^v/, "").trim();
-  const id = Number(res.data?.id);
-  if (!version || !Number.isFinite(id)) throw new Error("Gitee Release 未返回有效版本");
-
-  let attachments: RemoteReleaseAsset[] = [];
-  if (options.includeAttachments) {
-    const attachRes = await axios.get(
-      `https://gitee.com/api/v5/repos/${GITEE_OWNER}/${GITEE_REPO}/releases/${id}/attach_files`,
-      { headers: { Accept: "application/json" }, timeout: 10_000 },
-    );
-    attachments = normalizeAssets(attachRes.data);
-  }
-
-  // Gitee exposes the same files in both `assets` and `attach_files`, but the
-  // lightweight release list often omits byte sizes. Prefer the attachment
-  // records so update diagnostics and integrity preflight retain full metadata.
-  const assets = [...attachments, ...normalizeAssets(res.data?.assets)];
-  const uniqueAssets = assets.filter(
-    (asset, index) => assets.findIndex((candidate) => candidate.name === asset.name) === index,
-  );
-  return {
-    source: "gitee",
-    id,
-    version,
-    pageUrl: GITEE_RELEASE_URL,
-    assets: uniqueAssets,
-  };
-}
-
 export async function latestGithubRelease(): Promise<RemoteRelease> {
   const res = await axios.get(GITHUB_RELEASE_API_URL, {
     headers: { Accept: "application/vnd.github+json" },
@@ -134,16 +90,6 @@ async function latestVersionFromGithubYaml(): Promise<string> {
   const version = parseLatestYamlVersion(res.data);
   if (!version) throw new Error("latest.yml 中缺少 version 字段");
   return version;
-}
-
-async function checkGiteeUpdate(currentVersion: string): Promise<UpdateInfo> {
-  const latest = await latestGiteeRelease();
-  return {
-    hasUpdate: compareVersions(latest.version, currentVersion) > 0,
-    currentVersion,
-    latestVersion: latest.version,
-    releaseUrl: latest.pageUrl,
-  };
 }
 
 async function checkGithubUpdate(currentVersion: string): Promise<UpdateInfo> {
@@ -176,28 +122,9 @@ async function checkGithubUpdate(currentVersion: string): Promise<UpdateInfo> {
   }
 }
 
-/** Check the selected source first and automatically retry the other mirror. */
-export async function checkUpdate(preferredSource: UpdateSource = "github"): Promise<UpdateInfo> {
-  const currentVersion = app.getVersion();
-  const sourceErrors: string[] = [];
-  let preferredResult: UpdateInfo | undefined;
-  const order = updateSourceOrder(preferredSource);
-
-  for (const source of order) {
-    try {
-      const result = source === "github"
-        ? await checkGithubUpdate(currentVersion)
-        : await checkGiteeUpdate(currentVersion);
-      preferredResult ??= result;
-      if (result.hasUpdate) return result;
-    } catch (error: any) {
-      sourceErrors.push(`${source === "github" ? "GitHub" : "Gitee"}: ${error?.message ?? String(error)}`);
-    }
-  }
-
-  if (preferredResult) return preferredResult;
-
-  const detail = sourceErrors.join("; ");
-  console.warn(`[update] all update sources failed: ${detail}`);
-  return { hasUpdate: false, currentVersion, error: detail || "更新检查失败" };
+/** Legacy source settings are accepted but only GitHub is contacted. */
+export async function checkUpdate(_legacySource: string = "github"): Promise<UpdateInfo> {
+ const currentVersion=app.getVersion();
+ try {return await checkGithubUpdate(currentVersion);}
+ catch(error) {return {hasUpdate:false,currentVersion,error:error instanceof Error?error.message:String(error)};}
 }

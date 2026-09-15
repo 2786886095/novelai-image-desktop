@@ -1,3 +1,5 @@
+import '../ui/studio_theme.dart';
+import '../ui/studio_dropdown.dart';
 import '../ui/zoomable_image.dart';
 import '../artist/favorite_style_labels.dart';
 import '../artist/custom_artist_pool.dart';
@@ -2625,6 +2627,9 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
               title: Text(parameterText['title']!),
               subtitle: Text(parameterText['hint']!),
               trailing: PopupMenuButton<String>(
+                popUpAnimationStyle: MediaQuery.disableAnimationsOf(context)
+                    ? AnimationStyle.noAnimation
+                    : AppMotion.disclosureStyle,
                 tooltip: parameterText['title'],
                 icon: const Icon(Icons.tune),
                 onSelected: (value) {
@@ -2673,7 +2678,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                       children: [
                         SizedBox(
                           width: constraints.maxWidth,
-                          child: DropdownButtonFormField<String>(
+                          child: StudioDropdownButtonFormField<String>(
                             value: _generationParams.model,
                             isExpanded: true,
                             decoration: InputDecoration(
@@ -2769,7 +2774,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                         ),
                         SizedBox(
                           width: fieldWidth,
-                          child: DropdownButtonFormField<String>(
+                          child: StudioDropdownButtonFormField<String>(
                             value: _generationParams.sampler,
                             isExpanded: true,
                             decoration: InputDecoration(
@@ -2793,7 +2798,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                         if (_generationParams.supportsNoiseScheduleControl)
                           SizedBox(
                             width: fieldWidth,
-                            child: DropdownButtonFormField<String>(
+                            child: StudioDropdownButtonFormField<String>(
                               value: _generationParams.noiseSchedule,
                               isExpanded: true,
                               decoration: InputDecoration(
@@ -2817,7 +2822,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                           ),
                         SizedBox(
                           width: fieldWidth,
-                          child: DropdownButtonFormField<int>(
+                          child: StudioDropdownButtonFormField<int>(
                             value: _generationParams.ucPreset,
                             isExpanded: true,
                             decoration:
@@ -3428,7 +3433,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                             width: constraints.maxWidth >= 520
                                 ? 220
                                 : constraints.maxWidth,
-                            child: DropdownButtonFormField<String>(
+                            child: StudioDropdownButtonFormField<String>(
                               value: selectedFavoriteModel,
                               isExpanded: true,
                               decoration: InputDecoration(

@@ -1,3 +1,4 @@
+import {AnimatedCollapse} from './components/CharacterEditing';
 import { MetadataApplyPanel } from "./MetadataApplyPanel";
 import { metadataApplyKeys } from "./metadata-selection";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -680,8 +681,7 @@ export default function MetadataInspector({ onBack }: { onBack: () => void }) {
           <em>{visibleHistoryItems.length}</em>
           <Icon name="chevronRight" className={clsx("disclosure-chevron", historyOpen && "open")} />
         </button>
-        {historyOpen && (
-          <div className="metadata-history-content">
+        <AnimatedCollapse open={historyOpen}>{<div className="metadata-history-content">
             <div className="metadata-history-filter">
               <SelectMenu
                 value={historyGroupId}
@@ -733,8 +733,7 @@ export default function MetadataInspector({ onBack }: { onBack: () => void }) {
                 {text.loadMore} · {renderedHistoryItems.length}/{visibleHistoryItems.length}
               </Button>
             )}
-          </div>
-        )}
+          </div>}</AnimatedCollapse>
       </section>
 
       <section

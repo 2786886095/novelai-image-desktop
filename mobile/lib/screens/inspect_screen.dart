@@ -1,3 +1,4 @@
+import '../ui/studio_dropdown.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -122,7 +123,7 @@ class _ReversePanelState extends State<_ReversePanel> {
                 s.markChanged();
               }),
           const SizedBox(height: 12),
-          DropdownButtonFormField<ReversePromptScope>(
+          StudioDropdownButtonFormField<ReversePromptScope>(
             value: s.reverseScope,
             decoration: InputDecoration(
               labelText: t('inspect.reverseScope'),

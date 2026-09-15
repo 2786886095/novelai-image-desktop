@@ -176,7 +176,7 @@ void main() {
     );
     await tester.pump();
     await tester.tap(find.text('自定义拖动'));
-    await tester.pump();
+    await tester.pumpAndSettle();
     expect(state.extras.charCaptions.every((item) => item.useCoords), isTrue);
     expect(find.byKey(const ValueKey('character-position-canvas')),
         findsOneWidget);
@@ -240,15 +240,22 @@ void main() {
         find.byKey(const ValueKey('character-prompt-field-1')), findsOneWidget);
 
     tester.widget<IconButton>(firstToggle).onPressed!.call();
-    await tester.pump();
+    await tester.pumpAndSettle();
+    await tester.pumpAndSettle();
+    final collapsedField = find
+        .byKey(const ValueKey('character-prompt-field-0'), skipOffstage: false);
+    expect(collapsedField, findsOneWidget);
+    final guards =
+        find.ancestor(of: collapsedField, matching: find.byType(IgnorePointer));
     expect(
-        find.byKey(const ValueKey('character-prompt-field-0')), findsNothing);
+        tester.widgetList<IgnorePointer>(guards).any((guard) => guard.ignoring),
+        isTrue);
     expect(
         find.byKey(const ValueKey('character-prompt-field-1')), findsOneWidget);
     expect(find.text('角色 1'), findsOneWidget);
 
     tester.widget<IconButton>(firstToggle).onPressed!.call();
-    await tester.pump();
+    await tester.pumpAndSettle();
     expect(
         find.byKey(const ValueKey('character-prompt-field-0')), findsOneWidget);
   });

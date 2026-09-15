@@ -66,3 +66,13 @@ describe("reference catalog localization", () => {
     });
   });
 });
+
+
+describe('retired thumbnail mirrors', () => {
+  it('never falls back to a Gitee URL from an old catalog', async () => {
+    const {catalogThumbnailUrls} = await import('./referenceCatalog');
+    const asset = {thumbnailMirrors: {github: 'https://raw.githubusercontent.com/a/b/main/thumb.png'}, downloadMirrors: {github: 'https://example.com/full.png'}, thumbnailUrl: 'https://GITEE.com/old.png', downloadUrl: 'https://sub.gitee.com/old.png'} as Parameters<typeof catalogThumbnailUrls>[0];
+    expect(catalogThumbnailUrls(asset)).toEqual(['https://raw.githubusercontent.com/a/b/main/thumb.png', 'https://example.com/full.png']);
+    expect(catalogThumbnailUrls({...asset, thumbnailMirrors: {}, downloadMirrors: {}})).toEqual([]);
+  });
+});

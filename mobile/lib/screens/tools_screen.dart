@@ -1,3 +1,4 @@
+import '../ui/studio_dropdown.dart';
 import 'dart:io';
 import 'dart:math' as math;
 
@@ -487,7 +488,7 @@ class _InpaintPanelState extends State<_InpaintPanel> {
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 16),
-            DropdownButtonFormField<String>(
+            StudioDropdownButtonFormField<String>(
               value: state.inpaintModel,
               isExpanded: true,
               decoration: InputDecoration(
@@ -657,7 +658,7 @@ class _RedrawParams extends StatelessWidget {
         childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
         expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          DropdownButtonFormField<String>(
+          StudioDropdownButtonFormField<String>(
             value: p.sampler,
             isExpanded: true,
             decoration: InputDecoration(
@@ -703,7 +704,7 @@ class _RedrawParams extends StatelessWidget {
                 (x) => x.cfgRescale = double.parse(v.toStringAsFixed(2))),
           ),
           const SizedBox(height: 8),
-          DropdownButtonFormField<int>(
+          StudioDropdownButtonFormField<int>(
             value: p.ucPreset,
             isExpanded: true,
             decoration: InputDecoration(
@@ -979,7 +980,7 @@ class _DirectorPanel extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(children: [
-          DropdownButtonFormField<String>(
+          StudioDropdownButtonFormField<String>(
             value: s.directorTool,
             decoration: InputDecoration(
                 labelText: t('tools.directorTool'),
@@ -1008,7 +1009,7 @@ class _DirectorPanel extends StatelessWidget {
           ],
           if (s.directorTool == 'emotion') ...[
             const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
+            StudioDropdownButtonFormField<String>(
               value: s.augmentOptions.emotion,
               decoration: InputDecoration(
                   labelText: t('tools.emotion'),

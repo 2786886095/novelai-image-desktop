@@ -12,7 +12,7 @@ const AUTOMATIC_PRUNE_INTERVAL_MS = 30 * 60_000;
 let lastAutomaticPruneAt = 0;
 let automaticPruneInFlight: Promise<void> | null = null;
 const imageRequests = new Map<string, Promise<string>>();
-type GalleryImageSource = "aitag" | "danbooru" | "safebooru" | "gelbooru" | "quicktag";
+type GalleryImageSource = "aitag" | "danbooru" | "safebooru" | "gelbooru" | "quicktag" | "tags-gallery";
 
 function isSupportedImageBuffer(bytes: Buffer) {
   return galleryImageExtension(bytes) !== null || (bytes.length >= 12
@@ -91,7 +91,7 @@ export async function pruneAitagCache(rawDays: unknown) {
 }
 
 function safeGallerySource(value: unknown): GalleryImageSource {
-  return value === "danbooru" || value === "safebooru" || value === "gelbooru" || value === "quicktag"
+  return value === "danbooru" || value === "safebooru" || value === "gelbooru" || value === "quicktag" || value === "tags-gallery"
     ? value
     : "aitag";
 }

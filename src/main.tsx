@@ -1,3 +1,4 @@
+import {ImageCopySupport} from "./image-copy";
 import { ImagePasteSupport } from "./image-paste";
 import React from "react";
 import { createRoot } from "react-dom/client";
@@ -13,6 +14,7 @@ createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <AppErrorBoundary scope="app" root>
       <ImagePasteSupport />
+      <ImageCopySupport />
       <App />
     </AppErrorBoundary>
   </React.StrictMode>,

@@ -7,7 +7,7 @@
 ![芙宁娜主题宣传插画，软件界面为视觉示意](./docs/assets/readme/furina-workbench.png)
 
 <a href="https://github.com/2786886095/novelai-image-desktop/releases/latest"><img src="https://img.shields.io/badge/下载最新版-GitHub-2563EB?style=for-the-badge&amp;labelColor=2563EB" width="216" alt="下载最新版 · GitHub" /></a>
-&nbsp; **[首次使用教程](./docs/guide/GETTING_STARTED.md)** · **[查看全部功能](./docs/guide/FEATURES.md)** · [国内下载线路](https://gitee.com/langbai666/novelai-image-desktop/releases)
+&nbsp; **[首次使用教程](./docs/guide/GETTING_STARTED.md)** · **[查看全部功能](./docs/guide/FEATURES.md)**
 
 > 需配置自己的 **NovelAI Persistent API Token**，生成费用与模型权限以 NovelAI 账号为准。[反推、转换和酒馆等可选 AI 服务需另行配置](./docs/guide/GETTING_STARTED.md#optional)。
 
@@ -53,7 +53,7 @@
 <a id="screenshots"></a>
 ## 看看实际工作台
 
-下面是仓库已有的 **2026-08-30 / v2.0.1 实际界面截图**，用于展示布局；v2.3.0 已增加酒馆等入口，具体功能以当前版本为准。顶部芙宁娜配图是宣传插画，不作为功能截图。
+下面是仓库已有的 **2026-08-30 / v2.0.1 实际界面截图**，用于展示布局；v2.3.1 已增加酒馆等入口，具体功能以当前版本为准。顶部芙宁娜配图是宣传插画，不作为功能截图。
 
 ![生成工作台：左侧提示词与参数、中间画布、右侧历史与素材](./docs/assets/readme/workbench-light.png)
 
@@ -67,24 +67,24 @@
 <a id="download"></a>
 ## 下载与安装
 
-**[GitHub 最新发行版](https://github.com/2786886095/novelai-image-desktop/releases/latest)** · [Gitee 国内线路](https://gitee.com/langbai666/novelai-image-desktop/releases) · [更新记录](./docs/RELEASE_NOTES.md)
+**[GitHub 最新发行版](https://github.com/2786886095/novelai-image-desktop/releases/latest)** · [更新记录](./docs/RELEASE_NOTES.md)
 
-以下直链对应 **[v2.3.0](https://github.com/2786886095/novelai-image-desktop/releases/tag/v2.3.0)**（[该版本 Gitee 镜像](https://gitee.com/langbai666/novelai-image-desktop/releases#release-v2.3.0)）；后续版本请使用上面的「最新发行版」。镜像同步进度可能不同，某个包暂缺时使用 GitHub。
+以下直链对应 **[v2.3.1](https://github.com/2786886095/novelai-image-desktop/releases/tag/v2.3.1)**；后续版本请使用上面的「最新发行版」。
 
 | 平台 | 选择安装包 | 使用说明 |
 | --- | --- | --- |
-| Windows x64 · 安装版 | [Setup.exe](https://github.com/2786886095/novelai-image-desktop/releases/download/v2.3.0/Langbai-NovelAI-Studio-Setup-2.3.0.exe) | 长期使用建议选这个；安装向导、快捷方式、软件内更新 |
-| Windows x64 · 便携版 | [便携版.exe](https://github.com/2786886095/novelai-image-desktop/releases/download/v2.3.0/Langbai-NovelAI-Studio-2.3.0.exe) | 双击运行；启动时解压到临时目录，更新需下载新包替换 |
-| macOS · Intel / Apple 芯片 | [通用 DMG](https://github.com/2786886095/novelai-image-desktop/releases/download/v2.3.0/Langbai-NovelAI-Studio-2.3.0-universal.dmg) / [ZIP](https://github.com/2786886095/novelai-image-desktop/releases/download/v2.3.0/Langbai-NovelAI-Studio-2.3.0.zip) | 当前未签名；安装与系统提示处理见[安装说明](./docs/guide/GETTING_STARTED.md#install) |
-| Linux x64 | [AppImage](https://github.com/2786886095/novelai-image-desktop/releases/download/v2.3.0/Langbai-NovelAI-Studio-2.3.0.AppImage) | 添加执行权限后运行 |
-| Android | [APK](https://github.com/2786886095/novelai-image-desktop/releases/download/v2.3.0/app-release.apk) | 手动安装 APK |
-| iOS | [未签名 IPA](https://github.com/2786886095/novelai-image-desktop/releases/download/v2.3.0/novelai-mobile-unsigned.ipa) | 需要自行签名或侧载，不是 App Store 安装包 |
+| Windows x64 · 安装版 | [Setup.exe](https://github.com/2786886095/novelai-image-desktop/releases/download/v2.3.1/Langbai-NovelAI-Studio-Setup-2.3.1.exe) | 长期使用建议选这个；安装向导、快捷方式、软件内更新 |
+| Windows x64 · 便携版 | [便携版.exe](https://github.com/2786886095/novelai-image-desktop/releases/download/v2.3.1/Langbai-NovelAI-Studio-2.3.1.exe) | 双击运行；启动时解压到临时目录，更新需下载新包替换 |
+| macOS · Intel / Apple 芯片 | [通用 DMG](https://github.com/2786886095/novelai-image-desktop/releases/download/v2.3.1/Langbai-NovelAI-Studio-2.3.1-universal.dmg) / [ZIP](https://github.com/2786886095/novelai-image-desktop/releases/download/v2.3.1/Langbai-NovelAI-Studio-2.3.1.zip) | 当前未签名；安装与系统提示处理见[安装说明](./docs/guide/GETTING_STARTED.md#install) |
+| Linux x64 | [AppImage](https://github.com/2786886095/novelai-image-desktop/releases/download/v2.3.1/Langbai-NovelAI-Studio-2.3.1.AppImage) | 添加执行权限后运行 |
+| Android | [APK](https://github.com/2786886095/novelai-image-desktop/releases/download/v2.3.1/app-release.apk) | 手动安装 APK |
+| iOS | [未签名 IPA](https://github.com/2786886095/novelai-image-desktop/releases/download/v2.3.1/novelai-mobile-unsigned.ipa) | 需要自行签名或侧载，不是 App Store 安装包 |
 
-**v2.3.0 同步更新电脑端与手机端；iOS 附件为未签名测试包。**
+**v2.3.1 同步更新电脑端与手机端；iOS 附件为未签名测试包。**
 
 Windows 便携版与安装版共享本机用户数据目录 `%APPDATA%\novelai-image-desktop\`。**便携版不等于零痕迹，也不是所有数据都写在程序旁边。** 更换包前建议备份设置和作品。
 
-桌面端和移动端可以在设置中选择 GitHub / Gitee 更新源，默认 GitHub，所选源不可用时尝试备用源。不同平台的更新方式见[安装与更新](./docs/guide/GETTING_STARTED.md#updates)。
+桌面端和移动端统一使用 GitHub 下载与更新。不同平台的更新方式见[安装与更新](./docs/guide/GETTING_STARTED.md#updates)。
 
 <a id="faq"></a>
 ## 常见问题

@@ -67,7 +67,7 @@ describe("Character Tavern desktop UI", () => {
     expect(source).not.toContain("<span>另存为</span>");
     expect(styles).toContain(".tavern-style-hover-preview");
     expect(styles).toContain("width: fit-content;");
-    expect(source).toContain('className="style-preset-menu tavern-shared-style-menu"');
+    expect(source).toContain('className="style-preset-menu tavern-shared-style-menu disclosure-popover"');
     expect(source).toContain('className="style-preset-hover-preview"');
     expect(source).toContain("reconcileStylePromptPresetImages");
     expect(source).toContain("importSelectedStylePreview");

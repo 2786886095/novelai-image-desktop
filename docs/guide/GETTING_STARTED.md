@@ -41,7 +41,7 @@ Token 属于账号凭据，请只放在本机配置中，不要贴到 Issue、�
 
 默认使用「自动跟随系统代理 / VPN」。系统代理或 PAC 按请求地址选择线路，TUN / 虚拟网卡模式由系统路由接管。只有选择手动代理模式时才需要填写 HTTP / SOCKS5 地址。
 
-GitHub / Gitee **下载源**控制安装包与更新下载，不会把 NovelAI 生图接口切换成国内镜像。
+GitHub **下载源**控制安装包与更新下载，不会把 NovelAI 生图接口切换成国内镜像。
 
 <a id="first-image"></a>
 ## 3. 生成并找到图片
@@ -84,7 +84,7 @@ GitHub / Gitee **下载源**控制安装包与更新下载，不会把 NovelAI �
 - **Windows 安装版**：支持软件内下载更新并重启安装；失败时尝试备用源。
 - **Windows 便携版**：按更新提示进入发行页，手动下载新包替换。
 - **macOS / Linux / Android / iOS**：使用对应平台的发行包和安装 / 侧载流程，不沿用 Windows 的 NSIS 更新方式。
-- **下载源**：设置可选 GitHub / Gitee，默认 GitHub。某个镜像资产尚未同步时，可直接切回 GitHub。
+- **下载源**：电脑端和手机端统一使用 GitHub。
 
 <a id="troubleshooting"></a>
 ## 连接或生成失败时

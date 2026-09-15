@@ -1,3 +1,7 @@
+import {GalleryFavoriteButton,GalleryFavoritesButton} from './components/GalleryFavorites';
+import {favoriteFromGallery,type GalleryFavorite} from './gallery-favorites';
+import {galleryLibraryText,localizedGalleryTag,galleryTagQuery} from './gallery-labels';
+import {tagsGalleryLabels,tagsGalleryUi} from "./tags-gallery";
 import {PreviewImageViewer} from './components/PreviewImageViewer';
 import { formatAitagFailure } from "./aitag-error";
 import { galleryDownloadFeedback } from "./gallery-download";
@@ -468,7 +472,7 @@ function GallerySourcePicker({
         className="online-gallery-source-menu"
         options={ONLINE_GALLERY_SOURCES.map((source) => ({ value: source.id, label: localizedGallerySourceLabel(source.id, text) }))}
         onChange={(source) => onChange(source as OnlineGallerySourceId)}
-      />
+      /><GalleryFavoritesButton/>
     </div>
   );
 }
@@ -701,7 +705,7 @@ function ArtistRankingGallery({
                 <span className="artist-ranking-copy"><strong>{artist.name.replaceAll("_", " ")}</strong><code>artist:{artist.name}</code></span>
                 <em>{artist.postCount.toLocaleString()} {text.works}</em>
               </button>
-              <div className="artist-ranking-actions">
+              <div className="artist-ranking-actions"><GalleryFavoriteButton item={{source:'artist-ranking',id:String(artist.id),title:artist.name,author:artist.name,sourceUrl:`https://danbooru.donmai.us/posts?tags=${encodeURIComponent(artist.name)}`,prompt:`artist:${artist.name}`,negativePrompt:'',createdAt:'',score:artist.postCount,savedAt:Date.now(),images:preview?[{url:preview.imageUrl,thumb:preview.imageUrl}]:[]}}/>
                 <button type="button" title={text.copyArtistTag} onClick={() => void navigator.clipboard.writeText(`artist:${artist.name}`)}>{text.copyTag}</button>
                 <button type="button" title={text.openArtistLibrary} onClick={() => void window.naiDesktop.openExternal(`https://danbooru.donmai.us/posts?tags=${encodeURIComponent(artist.name)}`)}>{text.library}</button>
               </div>
@@ -711,7 +715,7 @@ function ArtistRankingGallery({
                 {previewResult?.items.length ? <>
                   <div className="artist-ranking-preview-grid">
                     {previewResult.items.map((item, index) => (
-                      <button
+                      <div key={item.postUrl} className="gallery-artist-favorite"><button
                         key={item.postUrl}
                         type="button"
                         aria-label={formatText(text.artistPreviewLabel, { artist: artist.name, index: index + 1 })}
@@ -725,7 +729,7 @@ function ArtistRankingGallery({
                         }}
                       >
                         <img src={item.imageUrl} alt={formatText(text.artistPreviewLabel, { artist: artist.name, index: index + 1 })} loading="lazy" />
-                      </button>
+                      </button><GalleryFavoriteButton item={{source:'danbooru',id:item.postUrl.split('/').pop()||item.postUrl,title:artist.name,author:artist.name,sourceUrl:item.postUrl,prompt:`artist:${artist.name}`,negativePrompt:'',createdAt:'',score:0,savedAt:Date.now(),images:[{url:item.imageUrl,thumb:item.imageUrl}]}}/></div>
                     ))}
                   </div>
                   <nav className="artist-ranking-preview-pagination" aria-label={`${artist.name} · ${text.rankingPagination}`}>
@@ -843,6 +847,7 @@ function useMasonryCard(ref: { current: HTMLElement | null }) {
 }
 
 export function ExternalWorkCard({ item, onOpen, text }: { item: OnlineGalleryItem; onOpen: (item: OnlineGalleryItem) => void; text: GalleryText }) {
+  const language=useAppStore(s=>s.settings?.language);
   const rootRef = useRef<HTMLElement | null>(null);
   const [loadedSize, setLoadedSize] = useState<{url: string; ratio: number} | null>(null);
   const ratio = loadedSize?.url === item.cover.previewUrl ? loadedSize.ratio
@@ -861,7 +866,7 @@ export function ExternalWorkCard({ item, onOpen, text }: { item: OnlineGalleryIt
           <small>{item.kind === "collection" ? formatText(text.imageCount, { count: item.mediaCount }) : item.rating.toUpperCase()}</small>
         </div>
         <div className="aitag-card-copy">
-          <b>{item.title || `#${item.id}`}</b>
+          <b>{item.source==="tags-gallery"?localizedGalleryTag(item.title,language):item.title || `#${item.id}`}</b>
           <span>{item.author || onlineGallerySourceInfo(item.source).label} · {item.createdAt || "—"}</span>
           <p>{item.description || item.prompt.slice(0, 160)}</p>
           <div>
@@ -869,7 +874,7 @@ export function ExternalWorkCard({ item, onOpen, text }: { item: OnlineGalleryIt
             <small>{item.favoriteCount ? formatText(text.bookmarks, { count: item.favoriteCount }) : formatText(text.images, { count: item.mediaCount })}</small>
           </div>
         </div>
-      </button>
+      </button><GalleryFavoriteButton item={favoriteFromGallery(item)}/>
     </article>
   );
 }
@@ -896,6 +901,7 @@ function ExternalGallery({
   const pageRef = useRef<HTMLElement>(null);
   const applyParams = useAppStore((state) => state.applyParams);
   const setActiveTab = useAppStore((state) => state.setActiveTab);
+  const [tagsSort,setTagsSort]=useState('score');
   const [queryValue, setQueryValue] = useState("");
   const [safeOnly, setSafeOnly] = useState(true);
   const [collectionId, setCollectionId] = useState("");
@@ -928,6 +934,7 @@ function ExternalGallery({
     targetPath = targetCollection === collectionId ? categoryPath : [],
     targetAll = searchAll,
     targetType = collectionType,
+    targetSort = tagsSort,
   ) => {
     const sequence = ++requestSequence.current;
     const keepCurrentPage = result.items.length > 0;
@@ -940,7 +947,8 @@ function ExternalGallery({
         source,
         page: targetPage,
         pageSize: targetPageSize,
-        query: targetQuery,
+        query: source === "tags-gallery" ? galleryTagQuery(targetQuery,language) : targetQuery,
+        sort: targetSort as "score"|"count"|"name",
         collectionId: targetCollection || undefined,
         categoryPath: targetPath, searchAll: targetAll, collectionType: targetType,
         safeOnly: targetSafeOnly,
@@ -958,7 +966,7 @@ function ExternalGallery({
       setResult(pageResult);
       setCollectionId(pageResult.collectionId ?? "");
       if (pageResult.collectionId) setSearchAll(false);
-      setCategoryPath(pageResult.navigation?.categoryPath ?? []);
+      setCategoryPath(source === "tags-gallery" ? targetPath : pageResult.navigation?.categoryPath ?? []);
       setCollectionType(pageResult.navigation?.collectionType ?? "");
       setCollectionTitle(pageResult.collectionTitle ?? "");
       if (scrollAfterSwap) window.requestAnimationFrame(() => scrollGalleryPageToTop(pageRef.current));
@@ -974,7 +982,7 @@ function ExternalGallery({
         setLoading(false);
       }
     }
-  }, [collectionType, categoryPath, searchAll, collectionId, gelbooruApiKey, gelbooruUserId, pageSize, queryValue, result.items.length, result.page, safeOnly, source, text.invalidCredentials, text.sourceFailed]);
+  }, [tagsSort, language, collectionType, categoryPath, searchAll, collectionId, gelbooruApiKey, gelbooruUserId, pageSize, queryValue, result.items.length, result.page, safeOnly, source, text.invalidCredentials, text.sourceFailed]);
 
   useEffect(() => { globalThis.localStorage?.setItem(GALLERY_PAGE_SIZE_KEY, String(pageSize)); }, [pageSize]);
 
@@ -1064,11 +1072,11 @@ function ExternalGallery({
         <header className="aitag-header">
           <div>
             <button type="button" className="btn secondary compact" onClick={() => setSelected(null)}>{text.detailBack}</button>
-            <h2>{selected.item.title || `#${selected.item.id}`}</h2>
+            <h2>{source==="tags-gallery"?localizedGalleryTag(selected.item.title,language):selected.item.title || `#${selected.item.id}`}</h2>
             <p>{info.label} · {selected.item.createdAt || "—"}</p>
           </div>
-          <div className="aitag-header-actions">
-            <button type="button" className="btn primary" disabled={downloadBusy} onClick={() => void downloadImages(false)}>{downloadBusy ? text.downloading : text.downloadCurrent}</button>
+          <div className="aitag-header-actions"><GalleryFavoriteButton item={favoriteFromGallery(selected.item,selected)}/><GalleryFavoritesButton/>
+            <button type="button" className="btn primary" disabled={downloadBusy || !selected.media.length} onClick={() => void downloadImages(false)}>{downloadBusy ? text.downloading : text.downloadCurrent}</button>
             {selected.media.length > 1 ? <button type="button" className="btn secondary" disabled={downloadBusy} onClick={() => void downloadImages(true)}>{text.downloadSeries}</button> : null}
             <button type="button" className="btn secondary" disabled={!selected.item.sourceUrl} onClick={() => void window.naiDesktop.openExternal(selected.item.sourceUrl)}>{text.openSourcePage}</button>
           </div>
@@ -1081,6 +1089,7 @@ function ExternalGallery({
         </section>
         <section className="aitag-detail-grid">
           <div className="aitag-detail-visual">
+            {source === "tags-gallery" && !media.displayUrl && <div className="aitag-state">{tagsGalleryUi(language).pending}</div>}
             {media.displayUrl ? <button type="button" className="aitag-detail-preview-trigger" title={text.previewHint} aria-label={`${selected.item.title} · ${text.previewHint}`} onDoubleClick={() => setDetailPreviewOpen(true)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setDetailPreviewOpen(true); } }}><OnlineCachedImage source={source} text={text} src={media.displayUrl} alt={selected.item.title} /></button> : null}
             {selected.media.length > 1 ? (
               <div className="aitag-image-strip">
@@ -1122,7 +1131,7 @@ function ExternalGallery({
             {tagGroups.map(([label, tags]) => tags.length ? (
               <section key={label} className="online-gallery-tag-section">
                 <h3>{label} ({tags.length})</h3>
-                <div>{tags.map((tag) => <button key={tag} type="button" onClick={() => { setSelected(null); setQueryValue(tag); void search(1, collectionId, tag); }}>{tag.replaceAll("_", " ")}</button>)}</div>
+                <div>{tags.map((tag) => <button key={tag} type="button" onClick={() => { setSelected(null); setQueryValue(tag); void search(1, collectionId, tag); }}>{source==="tags-gallery"?localizedGalleryTag(tag,language):tag.replaceAll("_", " ")}</button>)}</div>
               </section>
             ) : null)}
             {selected.note ? <article className="aitag-data-block"><header><h3>{text.note}</h3></header><p>{selected.note}</p></article> : null}
@@ -1165,6 +1174,8 @@ function ExternalGallery({
         </div>
       </header>
       <section className="aitag-search-panel">
+        {source === "tags-gallery" && <SelectMenu label={galleryLibraryText(language).sort} ariaLabel={galleryLibraryText(language).sort} value={tagsSort} options={galleryLibraryText(language).tagSorts.map((label,i)=>({label,value:['score','count','name'][i]}))} onChange={value=>{setTagsSort(value);void search(1,collectionId,queryValue,safeOnly,pageSize,categoryPath,searchAll,collectionType,value);}}/>}
+        {source === "tags-gallery" && <SelectMenu className="tags-gallery-category" label={tagsGalleryUi(language).category} ariaLabel={tagsGalleryUi(language).category} value={categoryPath[0]||"artist"} options={tagsGalleryLabels(language)} onChange={value=>void search(1,"",queryValue,safeOnly,pageSize,[value],false,"")} />}
         {source === "quicktag" && <QuickTagNavigation navigation={result.navigation} collectionId={collectionId} searchAll={searchAll} loading={loading} language={language}
           onGroup={(type)=>{setQueryValue("");setSearchAll(false);void search(1,"","",safeOnly,pageSize,[],false,type);}}
           onSelect={(id,path)=>{setQueryValue("");setSearchAll(false);void search(1,id,"",safeOnly,pageSize,path,false);}}
@@ -1175,7 +1186,7 @@ function ExternalGallery({
           <button type="button" className="btn primary" disabled={loading} onClick={() => void search(1)}>{text.search}</button>
         </div>
         <div className="aitag-sort-tabs online-gallery-filter-row">
-          <label className="online-gallery-safe-toggle"><input type="checkbox" checked={safeOnly} onChange={(event) => { const checked = event.target.checked; setSafeOnly(checked); void search(1, collectionId, queryValue, checked); }} /><span>{text.safeOnly}</span></label>
+          {source !== "tags-gallery" && <label className="online-gallery-safe-toggle"><input type="checkbox" checked={safeOnly} onChange={(event) => { const checked = event.target.checked; setSafeOnly(checked); void search(1, collectionId, queryValue, checked); }} /><span>{text.safeOnly}</span></label>}
           <SelectMenu className="gallery-page-size-picker" value={String(pageSize)} ariaLabel={text.itemsPerPage} label={text.itemsPerPage} options={GALLERY_PAGE_SIZE_OPTIONS.map((item) => ({ value: String(item), label: String(item) }))} onChange={(next) => { const size = Number(next); setPageSize(size); void search(1, collectionId, queryValue, safeOnly, size); }} />
           <span>{formatText(result.total == null ? text.resultCount : text.resultTotal, { count: result.total ?? result.items.length })}</span>
         </div>
@@ -1243,6 +1254,7 @@ function AitagCachedImage({ src, onError, ...props }: ImgHTMLAttributes<HTMLImag
     : <span className="aitag-image-loading">{failed ? "—" : "AITag"}</span>;
 }
 
+function favoriteFromAitag(work:AitagWorkSummary,images:{url:string;thumb:string}[],prompt=''):GalleryFavorite{return {source:'aitag',id:String(work.id),title:work.title,author:work.userId,sourceUrl:`${AITAG_SITE_URL}/i/${work.id}`,prompt,negativePrompt:'',createdAt:work.createDate,score:work.totalBookmarks,images,savedAt:Date.now()};}
 function WorkCard({
   work,
   config,
@@ -1295,7 +1307,7 @@ function WorkCard({
             <small>{interpolate(text.bookmarks, "count", work.totalBookmarks)}</small>
           </div>
         </div>
-      </button>
+      </button><GalleryFavoriteButton item={favoriteFromAitag(work,imageUrl?[{url:imageUrl,thumb:imageUrl}]:[])} prepare={async()=>{const detail=await loadDetail(work.id);return favoriteFromAitag(work,detail.images.map(i=>({url:aitagImageUrl(config,i),thumb:aitagImageUrl(config,i)})),detail.images[0]?.promptText||'');}}/>
     </article>
   );
 }
@@ -1578,7 +1590,7 @@ export default function AitagGallery({ onBack }: { onBack?: () => void }) {
             </div>
             <p>{text.sourceNotice}</p>
           </div>
-          <div className="aitag-header-actions">
+          <div className="aitag-header-actions"><GalleryFavoriteButton item={favoriteFromAitag(selected.work,selected.images.map(i=>({url:aitagImageUrl(config,i),thumb:aitagImageUrl(config,i)})),image?.promptText||'')}/><GalleryFavoritesButton/>
             <button type="button" className="btn primary" disabled={downloadBusy || selected.images.length === 0} onClick={() => void downloadImages(false)}>{downloadBusy ? text.downloading : text.downloadCurrent}</button>
             {selected.images.length > 1 ? <button type="button" className="btn secondary" disabled={downloadBusy} onClick={() => void downloadImages(true)}>{text.downloadSeries}</button> : null}
             <button type="button" className="btn secondary" onClick={() => void window.naiDesktop.openExternal(`${AITAG_SITE_URL}/i/${selected.work.id}`)}>{text.source}</button>

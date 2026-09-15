@@ -5,7 +5,7 @@ export const MAX_GALLERY_IMAGE_BYTES = 64 * 1024 * 1024;
 export function galleryImageHeaders(source: string) {
   const origin = ({ aitag: "https://aitag.win", danbooru: "https://danbooru.donmai.us",
     "artist-ranking": "https://danbooru.donmai.us", safebooru: "https://safebooru.donmai.us",
-    gelbooru: "https://gelbooru.com", quicktag: "https://novelai.quicktagcloud.com" } as Record<string, string>)[source];
+    "tags-gallery": "https://tags.gallery", gelbooru: "https://gelbooru.com", quicktag: "https://novelai.quicktagcloud.com" } as Record<string, string>)[source];
   if (!origin) throw new Error("Invalid gallery source");
   return { Accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8", Referer: `${origin}/`,
     Origin: origin, "User-Agent": "Langbai-NovelAI-Studio/Online-Gallery-Image-Client" };

@@ -1184,6 +1184,8 @@ export interface StylePromptPreset {
  * applying the preset replaces the positive prompt text and never injects an
  * image into generation, i2i, vibe transfer, or precise reference inputs. */
 export interface PositivePromptPreset {
+  /** Optional complete character configuration, stored in the same preset library. */
+  captions?: CharCaptionItem[];
   id: string;
   name: string;
   prompt: string;
@@ -1370,7 +1372,7 @@ export interface AppSettings {
   proxyForUpdate: boolean;
   proxyForTranslate: boolean;
   /** Preferred app update/download mirror. The other source remains fallback. */
-  updateSource: "github" | "gitee";
+  updateSource: "github";
   theme: "light" | "dark" | "system";
   /** Explicit accessibility preference. It is intentionally independent from
    * Windows' generic animation-effects flag so performance tuning does not

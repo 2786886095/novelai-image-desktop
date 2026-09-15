@@ -1,3 +1,5 @@
+import '../ui/studio_dropdown.dart';
+import '../ui/character_editing.dart';
 import 'dart:async';
 import 'character_preset_bar.dart';
 import 'dart:io';
@@ -252,9 +254,8 @@ class GenerateScreen extends StatelessWidget {
     final picked = await ImagePicker()
         .pickImage(source: ImageSource.gallery, imageQuality: 100);
     if (picked != null && context.mounted) {
-      await context
-          .read<AppState>()
-          .setWorkbenchPath(picked.path, applyMetadata: true);
+      // Replacing an input image is not a request to restore its generation settings.
+      await context.read<AppState>().setWorkbenchPath(picked.path);
     }
   }
 
@@ -1576,6 +1577,9 @@ class _StylePresetControlsState extends State<_StylePresetControls> {
                   Navigator.pop(sheetContext);
                 },
                 trailing: PopupMenuButton<String>(
+                  popUpAnimationStyle: MediaQuery.disableAnimationsOf(context)
+                      ? AnimationStyle.noAnimation
+                      : AppMotion.disclosureStyle,
                   tooltip: labels.moveTo,
                   onSelected: (value) async {
                     if (value == '__images') {
@@ -2361,7 +2365,7 @@ class _ParamControls extends StatelessWidget {
           },
         ),
         const SizedBox(height: 12),
-        DropdownButtonFormField<String>(
+        StudioDropdownButtonFormField<String>(
           value: p.model,
           decoration: InputDecoration(
               labelText: text.model, border: const OutlineInputBorder()),
@@ -2441,7 +2445,7 @@ class _ParamControls extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
-        DropdownButtonFormField<String>(
+        StudioDropdownButtonFormField<String>(
           value: p.sampler,
           decoration: InputDecoration(
               labelText: text.sampler, border: const OutlineInputBorder()),
@@ -2483,7 +2487,7 @@ class _ParamControls extends StatelessWidget {
             display: p.cfgRescale.toStringAsFixed(2)),
         if (p.supportsNoiseScheduleControl) ...[
           const SizedBox(height: 6),
-          DropdownButtonFormField<String>(
+          StudioDropdownButtonFormField<String>(
             value: p.noiseSchedule,
             isExpanded: true,
             decoration: InputDecoration(
@@ -2502,7 +2506,7 @@ class _ParamControls extends StatelessWidget {
           ),
         ],
         const SizedBox(height: 10),
-        DropdownButtonFormField<int>(
+        StudioDropdownButtonFormField<int>(
           value: p.ucPreset,
           isExpanded: true,
           decoration: InputDecoration(
@@ -2824,7 +2828,7 @@ class _OutputControls extends StatelessWidget {
                   state.setParam((params) => params.fileNamePrefix = value),
             ),
             const SizedBox(height: 10),
-            DropdownButtonFormField<String>(
+            StudioDropdownButtonFormField<String>(
               value: selected,
               isExpanded: true,
               decoration: InputDecoration(
@@ -2942,7 +2946,24 @@ class _SyncedNumberFieldState extends State<_SyncedNumberField> {
       );
 }
 
-class _CharacterPrompts extends StatelessWidget {
+class _CharacterPrompts extends StatefulWidget {
+  @override
+  State<_CharacterPrompts> createState() => _CharacterPromptsState();
+}
+
+class _CharacterPromptsState extends State<_CharacterPrompts> {
+  List<CharCaptionItem>? orderBefore;
+  List<CharCaptionItem>? slots;
+  void reorder(AppState s, int from, int to) {
+    final items = s.extras.charCaptions;
+    final next = reorderCharacters(items, from, to);
+    if (identical(items, next)) return;
+    orderBefore ??= [...items];
+    slots ??= items.map((c) => CharCaptionItem.fromJson(c.toJson())).toList();
+    s.extras.charCaptions = next;
+    s.markCharacterChanged();
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = context.watch<AppState>();
@@ -2970,11 +2991,49 @@ class _CharacterPrompts extends StatelessWidget {
               const _CharacterPositionEditor(),
             ],
             const CharacterPresetBar(),
-            for (var i = 0; i < s.extras.charCaptions.length; i++)
-              _CharCard(
-                key: ObjectKey(s.extras.charCaptions[i]),
-                index: i,
-              ),
+            if (slots != null)
+              Wrap(
+                  spacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Text(characterEditLabels(language)[3]),
+                    TextButton(
+                        onPressed: () {
+                          final items = s.extras.charCaptions;
+                          if (items.length == slots!.length &&
+                              items.every((c) => orderBefore!.contains(c))) {
+                            for (var i = 0; i < items.length; i++) {
+                              items[i].x = slots![i].x;
+                              items[i].y = slots![i].y;
+                              items[i].useCoords = slots![i].useCoords;
+                            }
+                            s.markCharacterChanged();
+                          }
+                          setState(() {
+                            slots = null;
+                            orderBefore = null;
+                          });
+                        },
+                        child: Text(characterEditLabels(language)[1])),
+                    TextButton(
+                        onPressed: () => setState(() {
+                              slots = null;
+                              orderBefore = null;
+                            }),
+                        child: Text(characterEditLabels(language)[2])),
+                  ]),
+            CharacterReorderList(
+              key: const ValueKey("character-sort-list"),
+              count: s.extras.charCaptions.length,
+              keyFor: (i) => ObjectKey(s.extras.charCaptions[i]),
+              onReorder: (from, to) => reorder(s, from, to),
+              itemBuilder: (context, i, fold, handle) => _CharCard(
+                  key: ObjectKey(s.extras.charCaptions[i]),
+                  index: i,
+                  forceCollapsed: fold,
+                  dragHandle: handle),
+              dragLabel: characterEditLabels(language)[0],
+            ),
           ],
         ),
       ),
@@ -2982,8 +3041,15 @@ class _CharacterPrompts extends StatelessWidget {
   }
 }
 
-class _CharacterPositionEditor extends StatelessWidget {
+class _CharacterPositionEditor extends StatefulWidget {
   const _CharacterPositionEditor();
+  @override
+  State<_CharacterPositionEditor> createState() =>
+      _CharacterPositionEditorState();
+}
+
+class _CharacterPositionEditorState extends State<_CharacterPositionEditor> {
+  final Map<CharCaptionItem, Offset> draft = {};
 
   @override
   Widget build(BuildContext context) {
@@ -3037,138 +3103,159 @@ class _CharacterPositionEditor extends StatelessWidget {
               showSelectedIcon: false,
               onSelectionChanged: (selection) => setMode(selection.first),
             ),
-            if (custom) ...[
-              const SizedBox(height: 12),
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final maxCanvasHeight = min(
-                    420.0,
-                    MediaQuery.sizeOf(context).height * 0.45,
-                  );
-                  final canvasWidth = min(
-                    constraints.maxWidth,
-                    maxCanvasHeight * ratio,
-                  );
-                  final canvasHeight = canvasWidth / ratio;
-                  return Center(
-                    child: Container(
-                      key: const ValueKey('character-position-canvas'),
-                      width: canvasWidth,
-                      height: canvasHeight,
-                      clipBehavior: Clip.hardEdge,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF090B18),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.white24),
-                      ),
-                      child: Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          const Positioned.fill(
-                            child: IgnorePointer(
-                              child: CustomPaint(
-                                painter: _CharacterPositionGridPainter(),
-                              ),
-                            ),
+            StudioCollapse(
+                open: custom,
+                child: Column(children: [
+                  const SizedBox(height: 12),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final maxCanvasHeight = min(
+                        420.0,
+                        MediaQuery.sizeOf(context).height * 0.45,
+                      );
+                      final canvasWidth = min(
+                        constraints.maxWidth,
+                        maxCanvasHeight * ratio,
+                      );
+                      final canvasHeight = canvasWidth / ratio;
+                      return Center(
+                        child: Container(
+                          key: const ValueKey('character-position-canvas'),
+                          width: canvasWidth,
+                          height: canvasHeight,
+                          clipBehavior: Clip.hardEdge,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF090B18),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.white24),
                           ),
-                          for (var index = 0; index < captions.length; index++)
-                            Positioned(
-                              left: ((captions[index].useCoords
-                                          ? captions[index].x
-                                          : 0.5) *
-                                      canvasWidth) -
-                                  22,
-                              top: ((captions[index].useCoords
-                                          ? captions[index].y
-                                          : 0.5) *
-                                      canvasHeight) -
-                                  22,
-                              width: 44,
-                              height: 44,
-                              child: Semantics(
-                                label: mobileUiFormatFor(
-                                  language,
-                                  'generate.positionMarker',
-                                  {'index': index + 1},
+                          child: Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              const Positioned.fill(
+                                child: IgnorePointer(
+                                  child: CustomPaint(
+                                    painter: _CharacterPositionGridPainter(),
+                                  ),
                                 ),
-                                button: true,
-                                child: RawGestureDetector(
-                                  key: ValueKey(
-                                      'character-position-marker-$index'),
-                                  behavior: HitTestBehavior.opaque,
-                                  // Win the gesture arena immediately inside a
-                                  // marker. The raw listener still receives the
-                                  // exact deltas, while the parent ListView is
-                                  // prevented from scrolling during placement.
-                                  gestures: {
-                                    EagerGestureRecognizer:
-                                        GestureRecognizerFactoryWithHandlers<
-                                            EagerGestureRecognizer>(
-                                      EagerGestureRecognizer.new,
-                                      (_) {},
+                              ),
+                              for (var index = 0;
+                                  index < captions.length;
+                                  index++)
+                                Positioned(
+                                  left: ((draft[captions[index]]?.dx ??
+                                              (captions[index].useCoords
+                                                  ? captions[index].x
+                                                  : 0.5)) *
+                                          canvasWidth) -
+                                      22,
+                                  top: ((draft[captions[index]]?.dy ??
+                                              (captions[index].useCoords
+                                                  ? captions[index].y
+                                                  : 0.5)) *
+                                          canvasHeight) -
+                                      22,
+                                  width: 44,
+                                  height: 44,
+                                  child: Semantics(
+                                    label: mobileUiFormatFor(
+                                      language,
+                                      'generate.positionMarker',
+                                      {'index': index + 1},
                                     ),
-                                  },
-                                  child: Listener(
-                                    behavior: HitTestBehavior.opaque,
-                                    onPointerDown: (_) {
-                                      captions[index].useCoords = true;
-                                    },
-                                    onPointerMove: (event) {
-                                      final caption = captions[index];
-                                      caption
-                                        ..useCoords = true
-                                        ..x = (caption.x +
-                                                event.delta.dx / canvasWidth)
-                                            .clamp(0.0, 1.0)
-                                            .toDouble()
-                                        ..y = (caption.y +
-                                                event.delta.dy / canvasHeight)
-                                            .clamp(0.0, 1.0)
-                                            .toDouble();
-                                      state.markCharacterChanged();
-                                    },
-                                    child: Center(
-                                      child: Container(
-                                        width: 34,
-                                        height: 34,
-                                        alignment: Alignment.center,
-                                        decoration: BoxDecoration(
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .primary,
-                                          shape: BoxShape.circle,
-                                          border: Border.all(
-                                            color: Colors.white,
-                                            width: 3,
-                                          ),
-                                          boxShadow: const [
-                                            BoxShadow(
-                                              color: Colors.black45,
-                                              blurRadius: 8,
-                                              offset: Offset(0, 3),
-                                            ),
-                                          ],
+                                    button: true,
+                                    child: RawGestureDetector(
+                                      key: ValueKey(
+                                          'character-position-marker-$index'),
+                                      behavior: HitTestBehavior.opaque,
+                                      // Win the gesture arena immediately inside a
+                                      // marker. The raw listener still receives the
+                                      // exact deltas, while the parent ListView is
+                                      // prevented from scrolling during placement.
+                                      gestures: {
+                                        EagerGestureRecognizer:
+                                            GestureRecognizerFactoryWithHandlers<
+                                                EagerGestureRecognizer>(
+                                          EagerGestureRecognizer.new,
+                                          (_) {},
                                         ),
-                                        child: Text(
-                                          '${index + 1}',
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.w800,
+                                      },
+                                      child: Listener(
+                                        behavior: HitTestBehavior.opaque,
+                                        onPointerDown: (_) {
+                                          final c = captions[index];
+                                          draft[c] = Offset(c.x, c.y);
+                                        },
+                                        onPointerMove: (event) {
+                                          final c = captions[index],
+                                              p = draft[c];
+                                          if (p == null) return;
+                                          setState(() => draft[c] = Offset(
+                                              (p.dx +
+                                                      event.delta.dx /
+                                                          canvasWidth)
+                                                  .clamp(0.0, 1.0)
+                                                  .toDouble(),
+                                              (p.dy +
+                                                      event.delta.dy /
+                                                          canvasHeight)
+                                                  .clamp(0.0, 1.0)
+                                                  .toDouble()));
+                                        },
+                                        onPointerUp: (_) {
+                                          final c = captions[index],
+                                              p = draft.remove(c);
+                                          if (p == null) return;
+                                          c.x = p.dx;
+                                          c.y = p.dy;
+                                          c.useCoords = true;
+                                          state.markCharacterChanged();
+                                          setState(() {});
+                                        },
+                                        onPointerCancel: (_) => setState(() =>
+                                            draft.remove(captions[index])),
+                                        child: Center(
+                                          child: Container(
+                                            width: 34,
+                                            height: 34,
+                                            alignment: Alignment.center,
+                                            decoration: BoxDecoration(
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .primary,
+                                              shape: BoxShape.circle,
+                                              border: Border.all(
+                                                color: Colors.white,
+                                                width: 3,
+                                              ),
+                                              boxShadow: const [
+                                                BoxShadow(
+                                                  color: Colors.black45,
+                                                  blurRadius: 8,
+                                                  offset: Offset(0, 3),
+                                                ),
+                                              ],
+                                            ),
+                                            child: Text(
+                                              '${index + 1}',
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.w800,
+                                              ),
+                                            ),
                                           ),
                                         ),
                                       ),
                                     ),
                                   ),
                                 ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ],
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ])),
           ],
         ),
       ),
@@ -3440,7 +3527,7 @@ class _PreciseReferenceRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                DropdownButtonFormField<String>(
+                StudioDropdownButtonFormField<String>(
                   value: item.type,
                   isExpanded: true,
                   decoration: InputDecoration(
@@ -3745,7 +3832,7 @@ class _ReferencePresetLibraryPanelState
                   ),
                   const SizedBox(height: 10),
                   if (widget.allowedKind == null)
-                    DropdownButtonFormField<ReferencePresetKind>(
+                    StudioDropdownButtonFormField<ReferencePresetKind>(
                       value: kind,
                       isExpanded: true,
                       decoration: InputDecoration(
@@ -3769,7 +3856,7 @@ class _ReferencePresetLibraryPanelState
                     ),
                   if (kind == ReferencePresetKind.precise) ...[
                     const SizedBox(height: 10),
-                    DropdownButtonFormField<String>(
+                    StudioDropdownButtonFormField<String>(
                       value: preciseType,
                       isExpanded: true,
                       decoration: InputDecoration(
@@ -4492,7 +4579,7 @@ class _ReferencePresetLibraryPanelState
                             Row(
                               children: [
                                 Expanded(
-                                  child: DropdownButtonFormField<String>(
+                                  child: StudioDropdownButtonFormField<String>(
                                     value: _group,
                                     isExpanded: true,
                                     decoration: InputDecoration(
@@ -4663,7 +4750,7 @@ class _ReferencePresetLibraryPanelState
                         Text(countText(
                             'referencePresets.presetCount', presets.length)),
                         const SizedBox(width: 8),
-                        DropdownButton<int>(
+                        StudioDropdownButton<int>(
                           value: _presetPageSize,
                           underline: const SizedBox.shrink(),
                           items: _presetPageSizes
@@ -4818,7 +4905,13 @@ class _ReferencePresetLibraryPanelState
 
 class _CharCard extends StatefulWidget {
   final int index;
-  const _CharCard({super.key, required this.index});
+  final bool forceCollapsed;
+  final Widget dragHandle;
+  const _CharCard(
+      {super.key,
+      required this.index,
+      this.forceCollapsed = false,
+      required this.dragHandle});
 
   @override
   State<_CharCard> createState() => _CharCardState();
@@ -4832,6 +4925,7 @@ class _CharCardState extends State<_CharCard> {
     final s = context.watch<AppState>();
     final language = s.settings.language;
     String t(String key) => mobileUiTextFor(language, key);
+    final collapsed = _collapsed || widget.forceCollapsed;
     final c = s.extras.charCaptions[widget.index];
     final characterLabel = mobileUiFormatFor(
       language,
@@ -4858,6 +4952,7 @@ class _CharCardState extends State<_CharCard> {
               padding: const EdgeInsets.fromLTRB(12, 6, 4, 6),
               child: Row(
                 children: [
+                  widget.dragHandle,
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -4883,13 +4978,14 @@ class _CharCardState extends State<_CharCard> {
                   ),
                   IconButton(
                     key: ValueKey('character-card-toggle-${widget.index}'),
-                    tooltip: t(_collapsed
+                    tooltip: t(collapsed
                         ? 'generate.characterExpand'
                         : 'generate.characterCollapse'),
                     onPressed: () => setState(() => _collapsed = !_collapsed),
-                    icon: Icon(
-                      _collapsed ? Icons.expand_more : Icons.expand_less,
-                    ),
+                    icon: AnimatedRotation(
+                        turns: collapsed ? 0 : .5,
+                        duration: AppMotion.standard,
+                        child: const Icon(Icons.expand_more)),
                   ),
                   IconButton(
                     key: ValueKey('character-card-delete-${widget.index}'),
@@ -4900,74 +4996,93 @@ class _CharCardState extends State<_CharCard> {
                 ],
               ),
             ),
-            if (!_collapsed)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
-                child: Column(
-                  children: [
-                    TextFormField(
-                      key: ValueKey('character-prompt-field-${widget.index}'),
-                      initialValue: c.prompt,
-                      decoration: InputDecoration(
-                        labelText: characterLabel,
-                        border: const OutlineInputBorder(),
+            StudioCollapse(
+                instant: widget.forceCollapsed,
+                open: !collapsed,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+                  child: Column(
+                    children: [
+                      PositivePromptPresetButton(
+                          currentPrompt: c.prompt,
+                          currentCaptions: [c],
+                          onApply: (prompt) {
+                            c.prompt = prompt;
+                            s.markCharacterChanged();
+                          },
+                          onApplyCharacters: (captions) {
+                            if (captions.length == 1) {
+                              s.extras.charCaptions[widget.index] =
+                                  captions.single;
+                            } else {
+                              s.extras.charCaptions = captions;
+                            }
+                            s.markCharacterChanged();
+                          }),
+                      TextFormField(
+                        key: ValueKey('character-prompt-field-${widget.index}'),
+                        initialValue: c.prompt,
+                        decoration: InputDecoration(
+                          labelText: characterLabel,
+                          border: const OutlineInputBorder(),
+                        ),
+                        onChanged: (v) {
+                          c.prompt = v;
+                          s.markCharacterChanged();
+                        },
                       ),
-                      onChanged: (v) {
-                        c.prompt = v;
-                        s.markCharacterChanged();
-                      },
-                    ),
-                    const SizedBox(height: 8),
-                    TextFormField(
-                      key: ValueKey('character-negative-field-${widget.index}'),
-                      initialValue: c.negativePrompt,
-                      decoration: InputDecoration(
-                        labelText: t('generate.characterNegative'),
-                        border: const OutlineInputBorder(),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        key: ValueKey(
+                            'character-negative-field-${widget.index}'),
+                        initialValue: c.negativePrompt,
+                        decoration: InputDecoration(
+                          labelText: t('generate.characterNegative'),
+                          border: const OutlineInputBorder(),
+                        ),
+                        onChanged: (v) {
+                          c.negativePrompt = v;
+                          s.markCharacterChanged();
+                        },
                       ),
-                      onChanged: (v) {
-                        c.negativePrompt = v;
-                        s.markCharacterChanged();
-                      },
-                    ),
-                    if (c.useCoords)
-                      ExpansionTile(
-                        tilePadding: EdgeInsets.zero,
-                        title: Text(t('generate.positionExact')),
-                        subtitle: Text(
-                            'X ${c.x.toStringAsFixed(2)} · Y ${c.y.toStringAsFixed(2)}'),
-                        children: [
-                          Row(children: [
-                            Expanded(
-                                child: _Slider(
-                                    label: 'X',
-                                    value: c.x,
-                                    min: 0,
-                                    max: 1,
-                                    divisions: 100,
-                                    display: c.x.toStringAsFixed(2),
-                                    onChanged: (v) {
-                                      c.x = v;
-                                      s.markCharacterChanged();
-                                    })),
-                            Expanded(
-                                child: _Slider(
-                                    label: 'Y',
-                                    value: c.y,
-                                    min: 0,
-                                    max: 1,
-                                    divisions: 100,
-                                    display: c.y.toStringAsFixed(2),
-                                    onChanged: (v) {
-                                      c.y = v;
-                                      s.markCharacterChanged();
-                                    })),
-                          ]),
-                        ],
-                      ),
-                  ],
-                ),
-              ),
+                      if (c.useCoords)
+                        ExpansionTile(
+                          tilePadding: EdgeInsets.zero,
+                          title: Text(t('generate.positionExact')),
+                          subtitle: Text(
+                              'X ${c.x.toStringAsFixed(2)} · Y ${c.y.toStringAsFixed(2)}'),
+                          children: [
+                            Row(children: [
+                              Expanded(
+                                  child: _Slider(
+                                      label: 'X',
+                                      value: c.x,
+                                      min: 0,
+                                      max: 1,
+                                      divisions: 100,
+                                      display: c.x.toStringAsFixed(2),
+                                      onChanged: (v) {
+                                        c.x = v;
+                                        s.markCharacterChanged();
+                                      })),
+                              Expanded(
+                                  child: _Slider(
+                                      label: 'Y',
+                                      value: c.y,
+                                      min: 0,
+                                      max: 1,
+                                      divisions: 100,
+                                      display: c.y.toStringAsFixed(2),
+                                      onChanged: (v) {
+                                        c.y = v;
+                                        s.markCharacterChanged();
+                                      })),
+                            ]),
+                          ],
+                        ),
+                    ],
+                  ),
+                )),
           ],
         ),
       ),

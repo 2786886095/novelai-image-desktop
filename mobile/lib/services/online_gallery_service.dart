@@ -1,3 +1,4 @@
+import 'tags_gallery.dart';
 import 'dart:async';
 import 'dart:io';
 import 'quicktag.dart';
@@ -20,6 +21,7 @@ enum OnlineGallerySource {
   danbooru,
   gelbooru,
   quicktag,
+  tagsGallery,
 }
 
 extension OnlineGallerySourceInfo on OnlineGallerySource {
@@ -30,6 +32,7 @@ extension OnlineGallerySourceInfo on OnlineGallerySource {
         OnlineGallerySource.danbooru => 'danbooru',
         OnlineGallerySource.gelbooru => 'gelbooru',
         OnlineGallerySource.quicktag => 'quicktag',
+        OnlineGallerySource.tagsGallery => 'tags-gallery',
       };
 
   String get label => switch (this) {
@@ -39,6 +42,7 @@ extension OnlineGallerySourceInfo on OnlineGallerySource {
         OnlineGallerySource.danbooru => 'Danbooru',
         OnlineGallerySource.gelbooru => 'Gelbooru',
         OnlineGallerySource.quicktag => 'QuickTagCloud',
+        OnlineGallerySource.tagsGallery => 'TAGs · V4.5',
       };
 
   String get siteUrl => switch (this) {
@@ -49,6 +53,7 @@ extension OnlineGallerySourceInfo on OnlineGallerySource {
         OnlineGallerySource.danbooru => 'https://danbooru.donmai.us',
         OnlineGallerySource.gelbooru => 'https://gelbooru.com',
         OnlineGallerySource.quicktag => 'https://novelai.quicktagcloud.com',
+        OnlineGallerySource.tagsGallery => 'https://tags.gallery/v4-5',
       };
 }
 
@@ -331,6 +336,7 @@ String _safeCollectionId(Object? value) {
 
 class OnlineGalleryService {
   final http.Client _client;
+  late final TagsGalleryClient _tagsGallery = TagsGalleryClient(_client);
   _QuickCatalog? _quickCatalog;
   final Map<String, _QuickCodex> _quickCodexes = {};
   final Map<String, Future<OnlineGalleryDetail>> _detailCache = {};
@@ -376,6 +382,7 @@ class OnlineGalleryService {
 
   Future<OnlineGalleryPage> search({
     required OnlineGallerySource source,
+    String sort = 'score',
     int page = 1,
     String query = '',
     String collectionId = '',
@@ -393,6 +400,12 @@ class OnlineGalleryService {
         _searchDonmai(source, targetPage, safeQuery, safeOnly),
       OnlineGallerySource.gelbooru =>
         _searchGelbooru(targetPage, safeQuery, safeOnly),
+      OnlineGallerySource.tagsGallery => _tagsGallery.search(
+          categoryPath.firstOrNull ?? 'artist',
+          targetPage,
+          pageSize,
+          safeQuery,
+          sort),
       OnlineGallerySource.quicktag => _searchQuickTag(
           targetPage,
           safeQuery,
@@ -925,6 +938,7 @@ class OnlineGalleryService {
             _donmaiDetail(item),
           OnlineGallerySource.gelbooru => _gelbooruDetail(item),
           OnlineGallerySource.quicktag => _quickDetail(item),
+          OnlineGallerySource.tagsGallery => _tagsGallery.detail(item.id),
           OnlineGallerySource.aitag =>
             Future.error(ArgumentError('AITag uses its own detail service')),
           OnlineGallerySource.artistRanking =>
@@ -1012,12 +1026,14 @@ class OnlineGalleryService {
     _quickCatalog = null;
     _quickCodexes.clear();
     _detailCache.clear();
+    _tagsGallery.clear();
   }
 
   void clearDataCache() {
     _quickCatalog = null;
     _quickCodexes.clear();
     _detailCache.clear();
+    _tagsGallery.clear();
   }
 
   void close() => _client.close();

@@ -1,3 +1,5 @@
+import '../ui/studio_theme.dart';
+import '../ui/studio_dropdown.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -371,7 +373,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Text(text.hint, style: Theme.of(context).textTheme.bodySmall),
           const SizedBox(height: 12),
           if (settings.reverseConvertPromptPresets.isNotEmpty)
-            DropdownButtonFormField<String>(
+            StudioDropdownButtonFormField<String>(
               value: selected?.id,
               decoration: InputDecoration(
                   labelText: text.active, border: const OutlineInputBorder()),
@@ -489,36 +491,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
             ),
           ),
-          _Section(title: settingsText.updateSourceTitle, children: [
-            DropdownButtonFormField<String>(
-              value: s.updateSource == 'gitee' ? 'gitee' : 'github',
-              isExpanded: true,
-              decoration: InputDecoration(
-                labelText: settingsText.updateSourceTitle,
-                border: const OutlineInputBorder(),
-              ),
-              items: [
-                DropdownMenuItem(
-                  value: 'github',
-                  child: Text(settingsText.updateSourceGithub),
-                ),
-                DropdownMenuItem(
-                  value: 'gitee',
-                  child: Text(settingsText.updateSourceGitee),
-                ),
-              ],
-              onChanged: (value) async {
-                if (value == null) return;
-                await state.setSettings((settings) {
-                  settings.updateSource = value == 'gitee' ? 'gitee' : 'github';
-                });
-                await state.checkUpdate();
-              },
-            ),
-            Text(settingsText.updateSourceFallback),
-          ]),
+          _Section(
+              title: settingsText.updateSourceTitle,
+              children: const [ListTile(title: Text('GitHub'))]),
           _Section(title: languageText.sectionTitle, children: [
-            DropdownButtonFormField<String>(
+            StudioDropdownButtonFormField<String>(
               value: normalizeAppLocaleCode(s.language),
               isExpanded: true,
               decoration: InputDecoration(
@@ -674,7 +651,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 label: settingsDetailText.tagMcpUrl,
                 value: s.tagServerUrl,
                 onChanged: (v) => state.setSettings((x) => x.tagServerUrl = v)),
-            DropdownButtonFormField<String>(
+            StudioDropdownButtonFormField<String>(
               value: s.tagServerType,
               decoration: InputDecoration(
                   labelText: settingsDetailText.serviceType,
@@ -733,7 +710,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     state.setSettings((x) => x.mcpForReverse = v)),
           ]),
           _Section(title: settingsText.translateSection, children: [
-            DropdownButtonFormField<String>(
+            StudioDropdownButtonFormField<String>(
               value: s.translateProvider,
               isExpanded: true,
               decoration: InputDecoration(
@@ -864,7 +841,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       Text(
                           '${cacheText.$2} · ${_aitagCacheStats.files} · ${_formatBytes(_aitagCacheStats.bytes)}'),
                       const SizedBox(height: 10),
-                      DropdownButtonFormField<int>(
+                      StudioDropdownButtonFormField<int>(
                         value: s.aitagCacheRetentionDays,
                         decoration: InputDecoration(
                             labelText: cacheText.$3,
@@ -963,7 +940,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ]),
           _Section(title: appearanceText.sectionTitle, children: [
-            DropdownButtonFormField<String>(
+            SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(const {
+                      'zh-CN': '减少动效',
+                      'zh-TW': '減少動效',
+                      'en-US': 'Reduce motion',
+                      'ja-JP': 'アニメーションを減らす',
+                      'ko-KR': '모션 줄이기'
+                    }[s.language] ??
+                    'Reduce motion'),
+                value: s.reduceMotion,
+                onChanged: (v) => state.setSettings((x) => x.reduceMotion = v)),
+            StudioDropdownButtonFormField<String>(
               value: s.theme,
               isExpanded: true,
               decoration: InputDecoration(
@@ -1448,6 +1437,9 @@ class _ModelNameField extends StatelessWidget {
           suffixIcon: detectedModels.isEmpty
               ? null
               : PopupMenuButton<String>(
+                  popUpAnimationStyle: MediaQuery.disableAnimationsOf(context)
+                      ? AnimationStyle.noAnimation
+                      : AppMotion.disclosureStyle,
                   tooltip: pickerTooltip,
                   icon: const Icon(Icons.arrow_drop_down),
                   onSelected: (value) {

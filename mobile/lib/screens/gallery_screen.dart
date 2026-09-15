@@ -1,3 +1,5 @@
+import '../ui/studio_theme.dart';
+import '../ui/studio_dropdown.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -79,7 +81,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
                 Row(
                   children: [
                     Expanded(
-                      child: DropdownButtonFormField<String>(
+                      child: StudioDropdownButtonFormField<String>(
                         value: date,
                         isExpanded: true,
                         decoration: InputDecoration(
@@ -104,7 +106,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
                     ),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: DropdownButtonFormField<String>(
+                      child: StudioDropdownButtonFormField<String>(
                         value: group,
                         isExpanded: true,
                         decoration: InputDecoration(
@@ -153,6 +155,10 @@ class _GalleryScreenState extends State<GalleryScreen> {
                         icon: const Icon(Icons.create_new_folder_outlined),
                       ),
                       PopupMenuButton<String>(
+                        popUpAnimationStyle:
+                            MediaQuery.disableAnimationsOf(context)
+                                ? AnimationStyle.noAnimation
+                                : AppMotion.disclosureStyle,
                         tooltip: t('gallery.groupActions'),
                         enabled: group.isNotEmpty && group != _ungroupedFilter,
                         onSelected: (action) {
@@ -547,7 +553,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           title: Text(t('gallery.moveToGroup')),
-          content: DropdownButtonFormField<String>(
+          content: StudioDropdownButtonFormField<String>(
             value: selected,
             isExpanded: true,
             items: [

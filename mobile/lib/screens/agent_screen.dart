@@ -1,3 +1,4 @@
+import '../ui/studio_dropdown.dart';
 import '../ui/zoomable_image.dart';
 import '../agent/scene_bindings.dart';
 import '../agent/scene_bindings_editor.dart';
@@ -918,6 +919,9 @@ class _AgentScreenState extends State<AgentScreen> {
         subtitle: Text(last, maxLines: 2, overflow: TextOverflow.ellipsis),
         onTap: () => controller.selectConversation(chat.id),
         trailing: PopupMenuButton<String>(
+          popUpAnimationStyle: MediaQuery.disableAnimationsOf(context)
+              ? AnimationStyle.noAnimation
+              : AppMotion.disclosureStyle,
           onSelected: (value) async {
             if (value == 'rename') await _renameChat(controller, chat, text);
             if (value == 'delete') await _deleteChat(controller, chat, text);
@@ -1860,7 +1864,12 @@ class _AgentScreenState extends State<AgentScreen> {
     return Align(
       alignment: Alignment.bottomLeft,
       child: AnimatedSize(
-        duration: const Duration(milliseconds: 180),
+        duration: MediaQuery.disableAnimationsOf(context)
+            ? Duration.zero
+            : AppMotion.disclosureOpen,
+        reverseDuration: MediaQuery.disableAnimationsOf(context)
+            ? Duration.zero
+            : AppMotion.disclosureClose,
         curve: Curves.easeOutCubic,
         child: Container(
           key: ValueKey(menu),
@@ -2291,6 +2300,9 @@ class _AgentScreenState extends State<AgentScreen> {
       return const SizedBox.shrink();
     }
     return PopupMenuButton<String>(
+      popUpAnimationStyle: MediaQuery.disableAnimationsOf(context)
+          ? AnimationStyle.noAnimation
+          : AppMotion.disclosureStyle,
       tooltip: text['switchSpeaker']!,
       onSelected: (id) {
         conversation.activeCharacterId = id;
@@ -2706,7 +2718,7 @@ class _AgentScreenState extends State<AgentScreen> {
           Text(text['chatPresetHint']!,
               style: Theme.of(context).textTheme.bodySmall),
           const SizedBox(height: 10),
-          DropdownButtonFormField<String>(
+          StudioDropdownButtonFormField<String>(
             value: activePreset?.id,
             isExpanded: true,
             items: controller.workspace.samplerPresets
@@ -2895,7 +2907,7 @@ class _AgentScreenState extends State<AgentScreen> {
                 ),
               ]),
               const SizedBox(height: 10),
-              DropdownButtonFormField<String>(
+              StudioDropdownButtonFormField<String>(
                 value: model,
                 isExpanded: true,
                 decoration: InputDecoration(
@@ -3051,7 +3063,7 @@ class _AgentScreenState extends State<AgentScreen> {
                 ]);
               }),
               const SizedBox(height: 10),
-              DropdownButtonFormField<String>(
+              StudioDropdownButtonFormField<String>(
                 value: sampler,
                 isExpanded: true,
                 decoration: InputDecoration(
@@ -3151,7 +3163,7 @@ class _AgentScreenState extends State<AgentScreen> {
             width: 640,
             child: SingleChildScrollView(
               child: Column(mainAxisSize: MainAxisSize.min, children: [
-                DropdownButtonFormField<String>(
+                StudioDropdownButtonFormField<String>(
                   value: null,
                   isExpanded: true,
                   decoration: InputDecoration(
@@ -3929,7 +3941,7 @@ class _AgentScreenState extends State<AgentScreen> {
                 child: ListView(
                   padding: const EdgeInsets.all(16),
                   children: [
-                    DropdownButtonFormField<AgentProviderPreset>(
+                    StudioDropdownButtonFormField<AgentProviderPreset>(
                       decoration: InputDecoration(
                           labelText: text['providerPreset']!,
                           border: const OutlineInputBorder()),
@@ -3952,7 +3964,7 @@ class _AgentScreenState extends State<AgentScreen> {
                       },
                     ),
                     const SizedBox(height: 12),
-                    DropdownButtonFormField<String>(
+                    StudioDropdownButtonFormField<String>(
                       value: protocol,
                       decoration: InputDecoration(
                           labelText: text['protocol']!,
@@ -4011,7 +4023,7 @@ class _AgentScreenState extends State<AgentScreen> {
                     ),
                     if (discovered.isNotEmpty) ...[
                       const SizedBox(height: 10),
-                      DropdownButtonFormField<AgentDiscoveredModel>(
+                      StudioDropdownButtonFormField<AgentDiscoveredModel>(
                         decoration: InputDecoration(
                             labelText: text['detectionResult']!,
                             border: const OutlineInputBorder()),

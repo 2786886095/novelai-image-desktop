@@ -1,3 +1,4 @@
+import '../ui/studio_dropdown.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../ui/studio_theme.dart';
@@ -290,7 +291,7 @@ class _SceneBindingsEditorState extends State<SceneBindingsEditor> {
               ])
                 Padding(
                     padding: const EdgeInsets.all(StudioSpacing.sm),
-                    child: DropdownButtonFormField<String>(
+                    child: StudioDropdownButtonFormField<String>(
                         value: e[key] as String? ?? '',
                         isExpanded: true,
                         decoration: InputDecoration(

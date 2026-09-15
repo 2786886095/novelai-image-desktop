@@ -1,3 +1,4 @@
+import type {InputPreviewAnchor} from "./canvas-preview";
 import type { MetadataRestoreOptions } from "./metadata-selection";
 import {normalizeCharacterCaptions} from './character-presets';
 import { create } from "zustand";
@@ -351,6 +352,7 @@ interface AppState {
   generationGroupId: string;
   currentImage: HistoryItem | null;
   workbenchImage: WorkingImage | null;
+  inputPreviewAnchor: InputPreviewAnchor | null;
   /** First image explicitly loaded by the user for the current img2img session. */
   i2iOriginalImage: WorkingImage | null;
   /** Choose whether the next redraw starts from the original or the latest result. */
@@ -1040,6 +1042,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   generationGroupId: "",
   currentImage: null,
   workbenchImage: null,
+  inputPreviewAnchor: null,
   i2iOriginalImage: null,
   i2iSourceMode: "original",
   inpaintSourceMode: "original",
@@ -1498,6 +1501,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({
         workbenchImage: result.image,
         i2iOriginalImage: result.image,
+        inputPreviewAnchor: {result: get().currentImage},
         comparisonBeforeImage: null,
         inpaintMask: null,
         maskRevision: get().maskRevision + 1,
@@ -1556,6 +1560,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({
         workbenchImage: result.image,
         i2iOriginalImage: result.image,
+        inputPreviewAnchor: {result: get().currentImage},
         comparisonBeforeImage: null,
         inpaintMask: null,
         maskRevision: get().maskRevision + 1,
@@ -1586,6 +1591,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (loadRevision !== workbenchLoadRevision) return;
     set({
       workbenchImage: null,
+  inputPreviewAnchor: null,
       i2iOriginalImage: null,
       comparisonBeforeImage: null,
       inpaintMask: null,
@@ -3024,7 +3030,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   selectImage(item) {
     const generating = get().isGenerating;
-    set({ currentImage: item, comparisonBeforeImage: null, statusText: storeFormat(get().settings, "status.historySelected", { date: item.date }) });
+    set({ currentImage: item, inputPreviewAnchor: null, comparisonBeforeImage: null, statusText: storeFormat(get().settings, "status.historySelected", { date: item.date }) });
     // A history thumbnail is always a preview-only action. Embedded PNG
     // metadata must never replace the user's current prompt or generation
     // parameters implicitly; explicit parameter/variation actions own that job.

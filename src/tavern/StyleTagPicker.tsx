@@ -1,3 +1,4 @@
+import {useDisclosurePresence,disclosureAttributes} from "../components/disclosure-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { SelectMenuCompat } from "../components/ui";
 import { RANDOM_CUSTOM_TAG_LIBRARY, matchesCustomTagSearch, customTagMeaning, customTagCategoryLabel } from "../random-custom-tag-library";
@@ -41,9 +42,10 @@ export function StyleTagPicker({ value, onChange, language }: { value: string; o
   const visible = dynamic ? items : builtin.slice(0, limit);
   const toggle = (tag: string) => { setPreview(""); setSelected((s) => s.includes(tag) ? s.filter((t) => t !== tag) : [...s, tag]); setPinned((s) => s.filter((t) => t !== tag)); };
   const add = (text: string) => { const after = appendStylePrompt(value, text); setUndo({ before: value, after }); onChange(after); };
+  const present = useDisclosurePresence(open);
   return <details className="tavern-style-library" onToggle={(event) => setOpen(event.currentTarget.open)}>
     <summary>{ui.library} · {ui.selected} {selected.length}</summary>
-    {open && <div className="tavern-style-library-body">
+    {present && <div className="tavern-style-library-body" {...disclosureAttributes(open)}>
       <small>{ui.hint}</small>
       <SelectMenuCompat aria-label={ui.library} value={scope} onChange={(e) => { setScope(e.target.value); setLimit(80); setItems([]); }}>
         <option value="builtin">{ui.all}</option>

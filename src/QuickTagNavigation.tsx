@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { AnimatedCollapse } from "./components/CharacterEditing";
 import type { QuickNavigation } from "./quicktag";
 import { SelectMenu } from "./components/ui";
 import { Icon } from "./components/icons";
@@ -21,6 +22,16 @@ export function QuickTagNavigation({navigation, collectionId, searchAll, loading
   const prefix = (a: string[], b: string[]) => a.length <= b.length && a.every((p,i) => p === b[i]);
   const isOpen = (path: string[]) => expanded.has(JSON.stringify(path)) || (path.length < active.length && prefix(path, active));
   const visible = all.filter(c => query ? matches.some(m => prefix(c.path, m.path)) : c.path.slice(0,-1).every((_, i) => isOpen(c.path.slice(0,i+1))));
+  // Keep exiting rows only until their collapse finishes, not the entire catalog.
+  const visibleKey = JSON.stringify(visible.map(c => JSON.stringify(c.path)));
+  const visibleKeys = useMemo(() => new Set<string>(JSON.parse(visibleKey)), [visibleKey]);
+  const [retainedKeys, setRetainedKeys] = useState(visibleKeys);
+  useEffect(() => {
+    setRetainedKeys(old => new Set([...old, ...visibleKeys]));
+    const timer = window.setTimeout(() => setRetainedKeys(visibleKeys), 260);
+    return () => window.clearTimeout(timer);
+  }, [visibleKeys]);
+  const presented = all.filter(c => visibleKeys.has(JSON.stringify(c.path)) || retainedKeys.has(JSON.stringify(c.path)));
   const groupName = (id: string) => (text as Record<string,string>)[id] ?? id;
   const fill = (value: string, fields: Record<string, number>) => Object.entries(fields).reduce((s,[k,v]) => s.replace(`{${k}}`, v.toLocaleString()),value);
   return <div className="quicktag-navigation">
@@ -39,12 +50,12 @@ export function QuickTagNavigation({navigation, collectionId, searchAll, loading
       {navigation?.loadedCount != null && <small>{fill(text.loaded,{declared:navigation.declaredCount ?? 0,loaded:navigation.loadedCount})}</small>}
       <input type="search" aria-label={text.findCategory} placeholder={text.findCategory} value={filter} onChange={e=>setFilter(e.target.value)} />
       <div className="quicktag-directory-tree" role="group" aria-label={text.category}>
-        {visible.map(c => {
+        {presented.map(c => {
           const key=JSON.stringify(c.path), hasChildren=all.some(n=>n.path.length===c.path.length+1&&prefix(c.path,n.path));
-          return <div className="quicktag-directory-row" key={key} style={{paddingInlineStart: Math.min(c.path.length-1,8)*14}}>
+          return <AnimatedCollapse key={key} open={visibleKeys.has(key)} className="quicktag-row-presence"><div className="quicktag-directory-row" style={{paddingInlineStart: Math.min(c.path.length-1,8)*14}}>
             {hasChildren ? <button type="button" className="quicktag-tree-toggle" aria-label={c.path.join(" › ")} aria-expanded={isOpen(c.path)||!!query} onClick={()=>setExpanded(old=>{const next=new Set(old);next.has(key)?next.delete(key):next.add(key);return next;})}><Icon name="chevronDown" /></button> : <span className="quicktag-tree-leaf" />}
             <button type="button" className="quicktag-category" disabled={loading} aria-current={key===JSON.stringify(active)?"page":undefined} title={c.path.join(" › ")} onClick={()=>onSelect(collectionId,c.path)}><span>{c.path.at(-1)}</span><small>{c.count.toLocaleString()}</small></button>
-          </div>;
+          </div></AnimatedCollapse>;
         })}
         {!visible.length && <small>{text.emptyCategory}</small>}
       </div>

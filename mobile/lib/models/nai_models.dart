@@ -15,7 +15,7 @@ class NaiOption {
 }
 
 const appName = 'Langbai NovelAI Studio';
-const appVersion = '2.3.0';
+const appVersion = '2.3.1';
 
 const naiModels = <NaiOption>[
   NaiOption(
@@ -812,6 +812,7 @@ class HistoryItem {
 }
 
 class AppSettings {
+  bool reduceMotion;
   String apiBaseUrl;
   String imageBaseUrl;
   bool allowCustomEndpoint;
@@ -919,6 +920,7 @@ class AppSettings {
   int autoBackupAssetPolicyVersion;
 
   AppSettings({
+    this.reduceMotion = false,
     this.apiBaseUrl = 'https://api.novelai.net',
     this.imageBaseUrl = 'https://image.novelai.net',
     this.allowCustomEndpoint = false,
@@ -1020,9 +1022,10 @@ class AppSettings {
         convertPromptTemplates = convertPromptTemplates ?? {},
         promptShortcuts = promptShortcuts ?? [],
         stylePromptPresets = stylePromptPresets ?? [],
-        characterPromptPresets = characterPromptPresets ?? [],
+        characterPromptPresets = [],
         stylePromptPresetGroups = stylePromptPresetGroups ?? ['Default'],
-        positivePromptPresets = positivePromptPresets ?? [];
+        positivePromptPresets = mergeLegacyPositivePresets(
+            positivePromptPresets ?? [], characterPromptPresets ?? []);
 
   bool get darkMode => theme == 'dark';
 
@@ -1109,6 +1112,7 @@ class AppSettings {
         'directorTool': directorTool,
         'augmentDefry': augmentDefry,
         'augmentColorizePrompt': augmentColorizePrompt,
+        'reduceMotion': reduceMotion,
         'augmentEmotion': augmentEmotion,
         'augmentEmotionLevel': augmentEmotionLevel,
         'persistGenerateParams': persistGenerateParams,
@@ -1169,7 +1173,7 @@ class AppSettings {
         proxyForAi: j['proxyForAi'] ?? true,
         proxyForUpdate: j['proxyForUpdate'] ?? true,
         proxyForTranslate: j['proxyForTranslate'] ?? true,
-        updateSource: j['updateSource'] == 'gitee' ? 'gitee' : 'github',
+        updateSource: 'github',
         translateProvider: j['translateProvider'] ?? 'google',
         baiduAppId: j['baiduAppId'] ?? '',
         historyRetentionDays: j['historyRetentionDays'] ?? 365,
@@ -1212,7 +1216,8 @@ class AppSettings {
                 .map((item) => PositivePromptPreset.fromJson(
                     Map<String, dynamic>.from(item)))
                 .where((item) =>
-                    item.id.isNotEmpty && item.prompt.trim().isNotEmpty)
+                    item.id.isNotEmpty &&
+                    (item.prompt.trim().isNotEmpty || item.captions.isNotEmpty))
                 .toList() ??
             [],
         reversePromptTemplates: _stringMap(j['reversePromptTemplates']),
@@ -1257,6 +1262,7 @@ class AppSettings {
             j['directorTool'], directorTools, 'bg-removal'),
         augmentDefry: _finiteClamp(_doubleValue(j['augmentDefry'], 0), 0, 5, 0),
         augmentColorizePrompt: _stringValue(j['augmentColorizePrompt'], ''),
+        reduceMotion: j['reduceMotion'] == true,
         augmentEmotion:
             _supportedOptionValue(j['augmentEmotion'], emotionOptions, 'happy'),
         augmentEmotionLevel:
@@ -1373,6 +1379,7 @@ class StylePromptPreset {
 }
 
 class PositivePromptPreset {
+  List<CharCaptionItem> captions;
   final String id;
   String name;
   String prompt;
@@ -1384,10 +1391,13 @@ class PositivePromptPreset {
     required this.name,
     required this.prompt,
     required this.createdAt,
+    List<CharCaptionItem>? captions,
     List<StylePromptPreviewImage>? previewImages,
-  }) : previewImages = previewImages ?? [];
+  })  : captions = captions ?? [],
+        previewImages = previewImages ?? [];
 
   Map<String, dynamic> toJson() => {
+        'captions': captions.map((c) => c.toJson()).toList(),
         'id': id,
         'name': name,
         'prompt': prompt,
@@ -1397,6 +1407,12 @@ class PositivePromptPreset {
 
   factory PositivePromptPreset.fromJson(Map<String, dynamic> json) =>
       PositivePromptPreset(
+        captions: (json['captions'] as List?)
+                ?.whereType<Map>()
+                .map((c) =>
+                    CharCaptionItem.fromJson(Map<String, dynamic>.from(c)))
+                .toList() ??
+            [],
         id: json['id']?.toString() ?? '',
         name: json['name']?.toString() ?? '',
         prompt: json['prompt']?.toString() ?? '',
@@ -1511,4 +1527,31 @@ class AiCallLogEntry {
     required this.ok,
     required this.response,
   });
+}
+
+List<PositivePromptPreset> mergeLegacyPositivePresets(
+    List<PositivePromptPreset> presets, List<Map<String, dynamic>> legacy) {
+  final next = [...presets];
+  for (final item in normalizeCharacterPromptPresets(legacy)) {
+    var id = 'character-${item['id']}';
+    while (next.any((p) => p.id == id)) {
+      id += '-imported';
+    }
+    final base = '${item['name']}';
+    var name = base;
+    var suffix = 1;
+    while (next.any((p) => p.name.toLowerCase() == name.toLowerCase())) {
+      name = '$base (${suffix++})';
+    }
+    final captions = (item['captions'] as List)
+        .map((c) => CharCaptionItem.fromJson(Map<String, dynamic>.from(c)))
+        .toList();
+    next.add(PositivePromptPreset(
+        id: id,
+        name: name,
+        prompt: captions.map((c) => c.prompt).join('\n'),
+        captions: captions,
+        createdAt: '${item['createdAt']}'));
+  }
+  return next;
 }

@@ -76,11 +76,20 @@ interface ReferenceCatalogPayload {
 
 export const REFERENCE_CATALOG_URLS = [
   import.meta.env.VITE_REFERENCE_CATALOG_URL,
-  "https://gitee.com/langbai666/novelai-image-desktop/raw/main/public/reference-catalog/gitee-index.json",
   "https://2786886095.github.io/novelai-image-desktop/reference-catalog/index.json",
   "https://raw.githubusercontent.com/2786886095/novelai-reference-assets/main/catalog/index.json",
   "/reference-catalog/index.json",
 ].filter((value): value is string => Boolean(value));
+
+/** Ignore retired mirrors even when reading an older cached catalog. */
+export function catalogThumbnailUrls(asset: ReferenceCatalogAsset): string[] {
+  return [...new Set([asset.thumbnailMirrors?.github, asset.downloadMirrors?.github, asset.thumbnailUrl, asset.downloadUrl]
+    .filter((url): url is string => {
+      if (!url) return false;
+      try { const host = new URL(url).hostname.toLowerCase(); return host !== 'gitee.com' && !host.endsWith('.gitee.com'); }
+      catch { return false; }
+    }))];
+}
 
 export function catalogName(asset: ReferenceCatalogAsset, language: AppLanguage | undefined) {
   return asset.names[language ?? "zh-CN"] || asset.names["zh-CN"] || asset.roleId;
@@ -202,7 +211,7 @@ export async function fetchReferenceAsset(
   onProgress: (loaded: number, total: number) => void,
   signal?: AbortSignal,
 ) {
-  const sources = [...new Set([asset.downloadMirrors?.gitee, asset.downloadUrl, asset.downloadMirrors?.github].filter((value): value is string => Boolean(value)))];
+  const sources = [...new Set([asset.downloadMirrors?.github, asset.downloadUrl].filter((value): value is string => Boolean(value) && !/gitee\.com/i.test(value!)))];
   if (window.naiDesktop?.downloadReferenceCatalogAsset) {
     const requestId = `${asset.id}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
     const unsubscribe = window.naiDesktop.onReferenceCatalogDownloadProgress((progress) => {

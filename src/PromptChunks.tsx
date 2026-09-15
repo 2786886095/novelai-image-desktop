@@ -1,3 +1,4 @@
+import {useDisclosurePresence, disclosureAttributes} from "./components/disclosure-motion";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import { AppPortal } from "./components/ui";
@@ -91,6 +92,7 @@ export function PromptChunkControl({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
+  const present = useDisclosurePresence(open, panelRef);
   const [query, setQuery] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
@@ -211,8 +213,8 @@ export function PromptChunkControl({
     <button ref={triggerRef} type="button" className={clsx("prompt-tool-btn", "prompt-chunk-trigger", open && "tool-on")} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen((current) => !current)}>
       <Icon name="plus" /><span>{text.trigger}</span>
     </button>
-    {open && <AppPortal>
-      <div ref={panelRef} className="prompt-chunk-popover" role="dialog" aria-label={text.title} data-placement={position.placement} style={{ left: position.left, top: position.top, width: position.width, maxHeight: position.maxHeight }}>
+    {present && <AppPortal>
+      <div ref={panelRef} className="prompt-chunk-popover disclosure-popover" {...disclosureAttributes(open)} role="dialog" aria-label={text.title} data-placement={position.placement} style={{ left: position.left, top: position.top, width: position.width, maxHeight: position.maxHeight }}>
         <header className="prompt-chunk-head">
           <div><strong>{text.title}</strong><small>{text.subtitle}</small></div>
           <button type="button" aria-label={text.cancel} onClick={() => setOpen(false)}><Icon name="close" /></button>

@@ -1,3 +1,4 @@
+import {loadTagsGalleryPage, tagsGalleryCategory, tagsGalleryDetailUrl, parseTagsGalleryDetail} from "../../src/tags-gallery";
 import { galleryImageHeaders, validateGalleryImage, MAX_GALLERY_IMAGE_BYTES } from "../../src/gallery-download";
 import { quickCatalogNavigation, quickResolveCollection, quickCollectionType, quickCategories, quickLink, quickMatch, quickSafe, quickSourceUrl } from "../../src/quicktag";
 import axios, { type AxiosRequestConfig } from "axios";
@@ -108,7 +109,7 @@ function gelbooruCredentials(request: Pick<OnlineGallerySearchRequest, "gelbooru
 }
 
 function safeSource(value: unknown): ExternalSource {
-  if (value === "danbooru" || value === "safebooru" || value === "gelbooru" || value === "quicktag") return value;
+  if (value === "danbooru" || value === "safebooru" || value === "gelbooru" || value === "quicktag" || value === "tags-gallery") return value;
   throw new Error("Unsupported online gallery source");
 }
 
@@ -609,6 +610,7 @@ export async function searchOnlineGallery(raw: unknown): Promise<OnlineGalleryPa
   };
   if (request.source === "danbooru" || request.source === "safebooru") return fetchDonmai(request);
   if (request.source === "gelbooru") return fetchGelbooru(request);
+  if (request.source === "tags-gallery") return loadTagsGalleryPage(fetchTagsHtml,tagsGalleryCategory(request.categoryPath?.[0]),request.page,request.pageSize,request.query,request.sort);
   return fetchQuickTag(request);
 }
 
@@ -680,6 +682,7 @@ export async function getOnlineGalleryDetail(raw: unknown): Promise<OnlineGaller
   if (!request.id) throw new Error("Online gallery item id is required");
   if (request.source === "danbooru" || request.source === "safebooru") return fetchDonmaiDetail(request);
   if (request.source === "gelbooru") return fetchGelbooruDetail(request);
+  if (request.source === "tags-gallery") return parseTagsGalleryDetail(await fetchTagsHtml(tagsGalleryDetailUrl(request.id)),request.id);
   return fetchQuickDetail(request);
 }
 
@@ -743,7 +746,7 @@ export async function selectOnlineGalleryDownloadDir(): Promise<string | null> {
 export async function downloadOnlineGalleryImages(raw: unknown): Promise<OnlineGalleryDownloadResult> {
   const input = record(raw) as unknown as OnlineGalleryDownloadRequest;
   const source = text(input.source).trim();
-  if (!["aitag", "artist-ranking", "safebooru", "danbooru", "gelbooru", "quicktag"].includes(source)) throw new Error("Invalid gallery source");
+  if (!["aitag", "artist-ranking", "safebooru", "danbooru", "gelbooru", "quicktag", "tags-gallery"].includes(source)) throw new Error("Invalid gallery source");
   const images = list(input.images).map((entry, index) => {
     const item = record(entry);
     return { id: safeDownloadPart(item.id, String(index + 1)), url: safeDownloadUrl(item.url) };
@@ -792,4 +795,8 @@ export async function downloadOnlineGalleryImages(raw: unknown): Promise<OnlineG
     outputDir,
     message: `${savedPaths.length} saved, ${failed} failed`,
   };
+}
+
+function fetchTagsHtml(url:string):Promise<string>{
+ return cached(`tags:${url}`,async()=>{const response=await axios.get<string>(url,{responseType:'text',timeout:REQUEST_TIMEOUT,maxContentLength:5_000_000,headers:{...headers('https://tags.gallery/'),Accept:'text/html'},...proxyConfig('update')});return response.data;});
 }

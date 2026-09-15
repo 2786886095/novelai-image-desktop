@@ -852,9 +852,10 @@ class AppState extends ChangeNotifier {
     String? id,
     required String name,
     required String prompt,
+    List<CharCaptionItem>? captions,
   }) async {
     final cleanPrompt = prompt;
-    if (cleanPrompt.trim().isEmpty) {
+    if (cleanPrompt.trim().isEmpty && (captions?.isEmpty ?? true)) {
       throw ArgumentError('Positive prompt is required.');
     }
     final existingId = id ?? '';
@@ -874,6 +875,11 @@ class AppState extends ChangeNotifier {
         final preset = settings.positivePromptPresets[index]
           ..name = cleanName
           ..prompt = cleanPrompt;
+        if (captions != null) {
+          preset.captions = captions
+              .map((c) => CharCaptionItem.fromJson(c.toJson()))
+              .toList();
+        }
         await storage.setSettings(settings);
         notifyListeners();
         return preset;
@@ -883,6 +889,8 @@ class AppState extends ChangeNotifier {
       id: '${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(1 << 20)}',
       name: cleanName,
       prompt: cleanPrompt,
+      captions:
+          captions?.map((c) => CharCaptionItem.fromJson(c.toJson())).toList(),
       createdAt: DateTime.now().toIso8601String(),
     );
     settings.positivePromptPresets.insert(0, preset);

@@ -1,3 +1,4 @@
+import '../ui/studio_dropdown.dart';
 import '../ui/zoomable_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -625,7 +626,7 @@ class _ReferenceCatalogPanelState extends State<ReferenceCatalogPanel> {
                 LayoutBuilder(builder: (context, constraints) {
                   final stacked = constraints.maxWidth < 560;
                   final controls = <Widget>[
-                    DropdownButtonFormField<String>(
+                    StudioDropdownButtonFormField<String>(
                       value: _game,
                       isExpanded: true,
                       decoration: InputDecoration(
@@ -647,7 +648,7 @@ class _ReferenceCatalogPanelState extends State<ReferenceCatalogPanel> {
                       }),
                     ),
                     if (_game == _all || _categories.length > 1)
-                      DropdownButtonFormField<String>(
+                      StudioDropdownButtonFormField<String>(
                         value: _category,
                         isExpanded: true,
                         decoration: InputDecoration(
@@ -667,7 +668,7 @@ class _ReferenceCatalogPanelState extends State<ReferenceCatalogPanel> {
                           _visible = 60;
                         }),
                       ),
-                    DropdownButtonFormField<int>(
+                    StudioDropdownButtonFormField<int>(
                       value: _columns,
                       isExpanded: true,
                       decoration: InputDecoration(

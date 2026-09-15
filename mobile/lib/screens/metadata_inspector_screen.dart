@@ -1,3 +1,5 @@
+import '../ui/studio_theme.dart';
+import '../ui/studio_dropdown.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -1003,7 +1005,7 @@ class _HistoryMetadataPicker extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  DropdownButtonFormField<String>(
+                  StudioDropdownButtonFormField<String>(
                     value: selectedGroupId,
                     isExpanded: true,
                     decoration: InputDecoration(
@@ -1151,7 +1153,12 @@ class _HistoryMetadataPicker extends StatelessWidget {
             ),
             crossFadeState:
                 expanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
-            duration: const Duration(milliseconds: 180),
+            duration: MediaQuery.disableAnimationsOf(context)
+                ? Duration.zero
+                : AppMotion.disclosureOpen,
+            reverseDuration: MediaQuery.disableAnimationsOf(context)
+                ? Duration.zero
+                : AppMotion.disclosureClose,
           ),
         ],
       ),

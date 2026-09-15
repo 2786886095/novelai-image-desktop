@@ -1267,8 +1267,6 @@ function registerIpc() {
     async (event, request: { id?: string; urls?: string[] }) => {
       const id = String(request?.id ?? "");
       const allowedHosts = new Set([
-        "gitee.com",
-        "raw.giteeusercontent.com",
         "media.githubusercontent.com",
         "raw.githubusercontent.com",
       ]);

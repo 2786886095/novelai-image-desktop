@@ -54,6 +54,8 @@ class NovelAIApp extends StatelessWidget {
     final language =
         context.select<AppState, String>((s) => s.settings.language);
     final localeInfo = appLocaleInfoFor(language);
+    final reduceMotion =
+        context.select<AppState, bool>((s) => s.settings.reduceMotion);
     return MaterialApp(
       title: appName,
       debugShowCheckedModeBanner: false,
@@ -71,11 +73,24 @@ class NovelAIApp extends StatelessWidget {
         'dark' => ThemeMode.dark,
         _ => ThemeMode.system,
       },
-      builder: (context, child) => GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
-        child: child ?? const SizedBox.shrink(),
-      ),
+      builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+              disableAnimations: reduceMotion ||
+                  MediaQuery.disableAnimationsOf(context)),
+          child: Theme(
+              data: Theme.of(context).copyWith(
+                  expansionTileTheme: Theme.of(context)
+                      .expansionTileTheme
+                      .copyWith(
+                          expansionAnimationStyle: reduceMotion ||
+                                  MediaQuery.disableAnimationsOf(context)
+                              ? AnimationStyle.noAnimation
+                              : AppMotion.disclosureStyle)),
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+                child: child ?? const SizedBox.shrink(),
+              ))),
       home: const HomeShell(),
     );
   }

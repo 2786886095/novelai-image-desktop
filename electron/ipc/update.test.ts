@@ -1,133 +1,32 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-
-const { axiosGet } = vi.hoisted(() => ({ axiosGet: vi.fn() }));
-
-vi.mock("electron", () => ({
-  app: { getVersion: () => "1.6.4" },
-}));
-
-vi.mock("axios", () => ({
-  default: { get: axiosGet },
-}));
-
-vi.mock("./proxy", () => ({
-  proxyConfig: () => ({}),
-}));
-
-import { checkUpdate, compareVersions, latestGiteeRelease, parseLatestYamlVersion, updateSourceOrder } from "./update";
-
-describe("desktop update checking", () => {
-  beforeEach(() => {
-    axiosGet.mockReset();
-  });
-
-  it("parses the updater version from latest.yml", () => {
-    expect(parseLatestYamlVersion("version: 1.6.5\npath: app.exe\n")).toBe("1.6.5");
-    expect(parseLatestYamlVersion(Buffer.from("version: 'v2.0.1'\n"))).toBe("2.0.1");
-  });
-
-  it("compares release versions numerically", () => {
-    expect(compareVersions("1.6.5", "1.6.4")).toBe(1);
-    expect(compareVersions("1.10.0", "1.9.9")).toBe(1);
-    expect(compareVersions("v1.6.4", "1.6.4")).toBe(0);
-  });
-
-  it("orders the chosen download source first with automatic fallback", () => {
-    expect(updateSourceOrder()).toEqual(["github", "gitee"]);
-    expect(updateSourceOrder("gitee")).toEqual(["gitee", "github"]);
-  });
-
-  it("uses GitHub as the default update source", async () => {
-    axiosGet.mockResolvedValueOnce({ data: "version: 1.6.5\npath: setup.exe\n" });
-
-    await expect(checkUpdate()).resolves.toMatchObject({
-      hasUpdate: true,
-      currentVersion: "1.6.4",
-      latestVersion: "1.6.5",
-      releaseUrl: expect.stringContaining("github.com"),
-    });
-    expect(axiosGet).toHaveBeenCalledTimes(1);
-    expect(axiosGet.mock.calls[0][0]).toContain("github.com");
-  });
-
-  it("uses Gitee first when selected", async () => {
-    axiosGet.mockResolvedValueOnce({ data: { id: 1765, tag_name: "v1.6.5", assets: [] } });
-
-    await expect(checkUpdate("gitee")).resolves.toMatchObject({
-      hasUpdate: true,
-      latestVersion: "1.6.5",
-      releaseUrl: expect.stringContaining("gitee.com"),
-    });
-    expect(axiosGet.mock.calls[0][0]).toContain("gitee.com/api/v5");
-  });
-
-  it("prefers Gitee attachment metadata when the release list omits sizes", async () => {
-    axiosGet
-      .mockResolvedValueOnce({
-        data: {
-          id: 1765,
-          tag_name: "v1.6.5",
-          assets: [{ name: "part-001", browser_download_url: "https://gitee.com/part-001" }],
-        },
-      })
-      .mockResolvedValueOnce({
-        data: [{
-          id: 9,
-          name: "part-001",
-          size: 8_388_608,
-          browser_download_url: "https://gitee.com/part-001",
-        }],
-      });
-
-    const release = await latestGiteeRelease({ includeAttachments: true });
-    expect(release.assets).toEqual([
-      expect.objectContaining({ name: "part-001", size: 8_388_608 }),
-    ]);
-  });
-
-  it("falls back to Gitee when GitHub is unavailable", async () => {
-    axiosGet
-      .mockRejectedValueOnce(new Error("manifest unavailable"))
-      .mockRejectedValueOnce(new Error("GitHub API unavailable"))
-      .mockResolvedValueOnce({ data: { id: 1765, tag_name: "v1.6.5", assets: [] } });
-
-    await expect(checkUpdate()).resolves.toMatchObject({
-      hasUpdate: true,
-      latestVersion: "1.6.5",
-      releaseUrl: expect.stringContaining("gitee.com"),
-    });
-    expect(axiosGet).toHaveBeenCalledTimes(3);
-  });
-
-  it("falls back to the GitHub API when its manifest is unavailable", async () => {
-    axiosGet
-      .mockRejectedValueOnce(new Error("asset unavailable"))
-      .mockResolvedValueOnce({
-        data: {
-          tag_name: "v1.6.5",
-          html_url: "https://github.com/example/release",
-        },
-      });
-
-    await expect(checkUpdate()).resolves.toMatchObject({
-      hasUpdate: true,
-      latestVersion: "1.6.5",
-      releaseUrl: "https://github.com/example/release",
-    });
-    expect(axiosGet).toHaveBeenCalledTimes(2);
-  });
-
-  it("returns a visible diagnostic when every source fails", async () => {
-    vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    axiosGet
-      .mockRejectedValueOnce(new Error("asset blocked"))
-      .mockRejectedValueOnce(Object.assign(new Error("rate limit exceeded"), { response: { status: 403 } }))
-      .mockRejectedValueOnce(new Error("Gitee blocked"));
-
-    await expect(checkUpdate()).resolves.toMatchObject({
-      hasUpdate: false,
-      currentVersion: "1.6.4",
-      error: expect.stringContaining("rate limit exceeded"),
-    });
-  });
+import {beforeEach,expect,it,vi} from 'vitest';
+const {get}=vi.hoisted(()=>({get:vi.fn()}));
+vi.mock('electron',()=>({app:{getVersion:()=> '2.3.0'}}));
+vi.mock('axios',()=>({default:{get}}));vi.mock('./proxy',()=>({proxyConfig:()=>({})}));
+import {checkUpdate,compareVersions,parseLatestYamlVersion,updateSourceOrder,latestGithubRelease} from './update';
+beforeEach(()=>{get.mockReset();});
+it('parses version fields and compares versions numerically',()=>{
+ expect(parseLatestYamlVersion(Buffer.from("version: 'v2.3.1'"))).toBe('2.3.1');
+ expect(parseLatestYamlVersion('path: file.exe')).toBe('');expect(compareVersions('2.10.0','2.9.0')).toBe(1);
+});
+it('migrates a legacy Gitee preference to a single GitHub source',()=>{
+ expect(updateSourceOrder('gitee')).toEqual(['github']);expect(updateSourceOrder()).toEqual(['github']);
+});
+it.each(['github','gitee'])('checks only GitHub with saved preference %s',async source=>{
+ get.mockResolvedValueOnce({data:'version: 2.3.1'});expect(await checkUpdate(source)).toMatchObject({hasUpdate:true,latestVersion:'2.3.1',releaseUrl:expect.stringContaining('github.com')});
+ expect(get).toHaveBeenCalledTimes(1);expect(get.mock.calls[0][0]).toContain('github.com');
+});
+it('uses the GitHub API when its manifest fails',async()=>{
+ get.mockRejectedValueOnce(Error('blocked')).mockResolvedValueOnce({data:{tag_name:'v2.3.1',html_url:'https://github.com/example/release'}});
+ expect(await checkUpdate()).toMatchObject({hasUpdate:true,latestVersion:'2.3.1'});expect(get.mock.calls[1][0]).toContain('api.github.com');
+});
+it('reports failed checks without calling another mirror',async()=>{
+ get.mockRejectedValue(Error('offline'));expect(await checkUpdate('gitee')).toMatchObject({hasUpdate:false,error:expect.stringContaining('offline')});expect(get).toHaveBeenCalledTimes(2);
+ expect(get.mock.calls.every(([url])=>!url.includes('gitee'))).toBe(true);
+});
+it('keeps an up-to-date response without unnecessary requests',async()=>{
+ get.mockResolvedValueOnce({data:'version: 2.3.0'});expect((await checkUpdate()).hasUpdate).toBe(false);expect(get).toHaveBeenCalledTimes(1);
+});
+it('retains download metadata for installer verification',async()=>{
+ get.mockResolvedValueOnce({data:{tag_name:'v2.3.1',assets:[{name:'setup.exe',browser_download_url:'https://github.com/example/setup.exe',size:123}]}});
+ expect((await latestGithubRelease()).assets).toEqual([{name:'setup.exe',url:'https://github.com/example/setup.exe',size:123}]);
 });

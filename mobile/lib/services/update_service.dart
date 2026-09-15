@@ -52,10 +52,6 @@ Future<UpdateInfo> checkAppUpdate(AppSettings settings) async {
   }
 }
 
-const _giteeReleaseUrl =
-    'https://gitee.com/langbai666/novelai-image-desktop/releases';
-const _giteeReleaseApiUrl =
-    'https://gitee.com/api/v5/repos/langbai666/novelai-image-desktop/releases/latest';
 const _githubReleaseUrl =
     'https://github.com/2786886095/novelai-image-desktop/releases/latest';
 const _githubLatestYmlUrl =
@@ -105,54 +101,6 @@ String? _assetUrl(dynamic value, String wantedName) {
     if (url != null && Uri.tryParse(url)?.scheme == 'https') return url;
   }
   return null;
-}
-
-Future<UpdateInfo> _checkGitee(
-  http.Client client, {
-  required bool isAndroid,
-}) async {
-  final response = await _getWithRetry(
-    client,
-    Uri.parse(_giteeReleaseApiUrl),
-    headers: const {'Accept': 'application/json', 'Cache-Control': 'no-cache'},
-  );
-  if (response.statusCode < 200 || response.statusCode >= 300) {
-    throw Exception('HTTP ${response.statusCode}');
-  }
-  final json = jsonDecode(response.body) as Map<String, dynamic>;
-  final latest = (json['tag_name']?.toString() ?? '')
-      .replaceFirst(RegExp(r'^v'), '')
-      .trim();
-  final releaseId = int.tryParse(json['id']?.toString() ?? '');
-  if (latest.isEmpty || releaseId == null) {
-    throw Exception('invalid Gitee release');
-  }
-
-  final hasUpdate = compareVersions(latest, appVersion) > 0;
-  final wantedAsset = isAndroid ? 'app-release.apk' : null;
-  var installerUrl =
-      wantedAsset == null ? null : _assetUrl(json['assets'], wantedAsset);
-  if (hasUpdate && wantedAsset != null && installerUrl == null) {
-    final attachments = await _getWithRetry(
-      client,
-      Uri.parse(
-        'https://gitee.com/api/v5/repos/langbai666/novelai-image-desktop/releases/$releaseId/attach_files',
-      ),
-      headers: const {'Accept': 'application/json'},
-    );
-    if (attachments.statusCode >= 200 && attachments.statusCode < 300) {
-      installerUrl = _assetUrl(jsonDecode(attachments.body), wantedAsset);
-    }
-  }
-  if (hasUpdate && isAndroid && installerUrl == null) {
-    throw Exception('Gitee release is missing app-release.apk');
-  }
-  return UpdateInfo(
-    hasUpdate: hasUpdate,
-    currentVersion: appVersion,
-    latestVersion: latest,
-    releaseUrl: installerUrl ?? _giteeReleaseUrl,
-  );
 }
 
 Future<UpdateInfo> _checkGithubApi(
@@ -224,36 +172,14 @@ Future<UpdateInfo> _checkGithub(
   return manifestInfo;
 }
 
-/// Check the selected source first and automatically retry the other mirror.
-Future<UpdateInfo> checkAppUpdateWithClient(
-  http.Client client, {
-  String preferredSource = 'github',
-  bool? isAndroid,
-}) async {
-  const current = appVersion;
-  final android = isAndroid ?? Platform.isAndroid;
-  final order = preferredSource == 'gitee'
-      ? const ['gitee', 'github']
-      : const ['github', 'gitee'];
-  UpdateInfo? preferredResult;
-  Object? firstError;
-
-  for (final source in order) {
-    try {
-      final result = source == 'github'
-          ? await _checkGithub(client, isAndroid: android)
-          : await _checkGitee(client, isAndroid: android);
-      preferredResult ??= result;
-      if (result.hasUpdate) return result;
-    } catch (error) {
-      firstError ??= error;
-    }
+/// Old source preferences are ignored after migrating to GitHub-only updates.
+Future<UpdateInfo> checkAppUpdateWithClient(http.Client client,
+    {String preferredSource = 'github', bool? isAndroid}) async {
+  try {
+    return await _checkGithub(client,
+        isAndroid: isAndroid ?? Platform.isAndroid);
+  } catch (_) {
+    return const UpdateInfo(
+        hasUpdate: false, currentVersion: appVersion, error: 'network');
   }
-
-  if (preferredResult != null) return preferredResult;
-  return UpdateInfo(
-    hasUpdate: false,
-    currentVersion: current,
-    error: firstError == null ? 'unavailable' : 'network',
-  );
 }

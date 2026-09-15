@@ -1,3 +1,4 @@
+import '../ui/studio_dropdown.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../services/quicktag_ui.dart';
@@ -103,7 +104,7 @@ class _QuickTagNavigationState extends State<QuickTagNavigation> {
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Text(fill('hidden', {'count': nav!['hiddenCollections']}))),
       const SizedBox(height: 8),
-      DropdownButtonFormField<String>(
+      StudioDropdownButtonFormField<String>(
           value: collections.any((c) => c['id'] == widget.collectionId)
               ? widget.collectionId
               : '',
@@ -207,7 +208,7 @@ class _QuickTagNavigationState extends State<QuickTagNavigation> {
           onChanged: widget.loading ? null : (v) => widget.onScope(v ?? false)),
       Text(ui['hint']!, style: Theme.of(context).textTheme.bodySmall),
       const SizedBox(height: 8),
-      DropdownButtonFormField<int>(
+      StudioDropdownButtonFormField<int>(
           value: widget.pageSize,
           isExpanded: true,
           decoration: InputDecoration(labelText: ui['perPage']),

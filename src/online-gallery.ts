@@ -4,7 +4,8 @@ export type OnlineGallerySourceId =
   | "danbooru"
   | "safebooru"
   | "gelbooru"
-  | "quicktag";
+  | "quicktag"
+  | "tags-gallery";
 
 export type OnlineGalleryItemKind = "work" | "collection";
 
@@ -23,6 +24,7 @@ export interface OnlineGallerySourceInfo {
 }
 
 export const ONLINE_GALLERY_SOURCES: readonly OnlineGallerySourceInfo[] = [
+  {id:"tags-gallery", label:"TAGs · V4.5", siteUrl:"https://tags.gallery/v4-5", supportsPromptSearch:false, supportsCollections:false},
   {
     id: "artist-ranking",
     label: "画师排行榜",
@@ -69,6 +71,7 @@ export const ONLINE_GALLERY_SOURCES: readonly OnlineGallerySourceInfo[] = [
 ] as const;
 
 export interface OnlineGallerySearchRequest {
+  sort?: "score" | "count" | "name";
   source: Exclude<OnlineGallerySourceId, "aitag" | "artist-ranking">;
   page?: number;
   pageSize?: number;

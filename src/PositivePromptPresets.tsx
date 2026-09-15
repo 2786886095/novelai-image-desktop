@@ -1,3 +1,6 @@
+import {normalizeCharacterCaptions, characterPresetText} from "./character-presets";
+import {desktopUiText} from "./i18n";
+import {maxNAICharacterPrompts, type CharCaptionItem} from "./types";
 import {
   useCallback,
   useEffect,
@@ -136,10 +139,13 @@ export function PositivePromptPresetControl({
   value,
   onApply,
   variant = "toolbar",
+  character, onApplyCharacters,
 }: {
   value: string;
   onApply: (prompt: string) => void;
   variant?: "toolbar" | "field";
+  character?: CharCaptionItem;
+  onApplyCharacters?: (captions: CharCaptionItem[]) => void;
 }) {
   const language = useAppStore((state) => state.settings?.language ?? "zh-CN");
   const settings = useAppStore((state) => state.settings);
@@ -153,6 +159,8 @@ export function PositivePromptPresetControl({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
   const [draftPrompt, setDraftPrompt] = useState("");
+  const [draftCaptions,setDraftCaptions] = useState<CharCaptionItem[]>([]);
+  const roleLabel=(index:number)=>desktopUiText(language,"character.label").replace("{index}",String(index+1));
   const [status, setStatus] = useState("");
   const [dragging, setDragging] = useState(false);
   const [activeImageId, setActiveImageId] = useState("");
@@ -237,6 +245,7 @@ export function PositivePromptPresetControl({
 
   function startCreate(useCurrent: boolean) {
     setEditingId("");
+    setDraftCaptions(useCurrent && character ? normalizeCharacterCaptions([{...character,prompt:value}]).map(({id:_,...c})=>c) : []);
     setDraftPrompt(useCurrent ? value : "");
     setDraftName(useCurrent && value.trim()
       ? defaultPositivePromptPresetName(value, presets.length + 1)
@@ -248,12 +257,13 @@ export function PositivePromptPresetControl({
     setEditingId(preset.id);
     setDraftName(preset.name);
     setDraftPrompt(preset.prompt);
+    setDraftCaptions((preset.captions ?? []).map(c=>({...c})));
     setStatus("");
   }
 
   async function saveDraft() {
-    const prompt = draftPrompt;
-    if (!prompt.trim()) {
+    const prompt = draftCaptions.length ? draftCaptions.map(c=>c.prompt).join("\n") : draftPrompt;
+    if (!prompt.trim() && !draftCaptions.length) {
       setStatus(text.promptRequired);
       return;
     }
@@ -263,7 +273,7 @@ export function PositivePromptPresetControl({
         || defaultPositivePromptPresetName(prompt, presets.length + 1);
       const duplicate = presets.find((preset) =>
         preset.id !== editingId
-        && samePositivePromptPreset(preset, { name: requestedName, prompt }));
+        && samePositivePromptPreset(preset, { name: requestedName, prompt, captions: draftCaptions }));
       if (duplicate) {
         setSelectedId(duplicate.id);
         setEditingId(null);
@@ -279,13 +289,14 @@ export function PositivePromptPresetControl({
       let id = editingId || randomId();
       if (editingId) {
         next = presets.map((preset) => preset.id === editingId
-          ? { ...preset, name, prompt }
+          ? { ...preset, name, prompt, captions: draftCaptions }
           : preset);
       } else {
         next = [{
           id,
           name,
           prompt,
+          captions: draftCaptions,
           createdAt: new Date().toISOString(),
           previewImages: [],
         }, ...presets];
@@ -385,8 +396,14 @@ export function PositivePromptPresetControl({
   }
 
   function applyPreset(preset: PositivePromptPreset) {
-    onApply(preset.prompt);
-    setToast(text.applyNotice);
+    if (preset.captions?.length) {
+      if (preset.captions.length > maxNAICharacterPrompts(useAppStore.getState().params.model)) {
+        setStatus(characterPresetText(language).capacity);return;
+      }
+      if(onApplyCharacters) onApplyCharacters(preset.captions.map(c=>({...c})));
+      else useAppStore.getState().setCharCaptions(normalizeCharacterCaptions(preset.captions));
+    } else onApply(preset.prompt);
+    setToast(preset.captions?.length ? characterPresetText(language).apply : text.applyNotice);
     setOpen(false);
   }
 
@@ -518,7 +535,7 @@ export function PositivePromptPresetControl({
           <header className="positive-preset-modal-header">
             <div>
               <span><Icon name="template" /></span>
-              <div><h2 id="positive-preset-title">{text.title}</h2><p>{text.subtitle}</p></div>
+              <div><h2 id="positive-preset-title">{text.title}</h2><p>{selected?.captions?.length ? `${desktopUiText(language,"character.title")} · ${selected.captions.length}` : text.subtitle}</p></div>
             </div>
             <button type="button" aria-label={text.close} onClick={() => setOpen(false)}><Icon name="close" /></button>
           </header>
@@ -526,13 +543,13 @@ export function PositivePromptPresetControl({
           {editingId !== null ? <div className="positive-preset-editor">
             <div className="positive-preset-editor-fields">
               <label><span>{text.name}</span><input value={draftName} placeholder={text.nameHint} onChange={(event) => setDraftName(event.target.value)} /></label>
-              <label><span>{text.prompt}</span><textarea value={draftPrompt} placeholder={text.promptHint} onChange={(event) => setDraftPrompt(event.target.value)} /></label>
+              {draftCaptions.length ? draftCaptions.map((caption,index)=><fieldset key={index}><legend>{roleLabel(index)}</legend><label><span>{text.prompt}</span><textarea value={caption.prompt} onChange={e=>setDraftCaptions(old=>old.map((c,i)=>i===index?{...c,prompt:e.target.value}:c))}/></label><label><span>{desktopUiText(language,"character.negative")}</span><textarea value={caption.negativePrompt ?? ''} onChange={e=>setDraftCaptions(old=>old.map((c,i)=>i===index?{...c,negativePrompt:e.target.value}:c))}/></label></fieldset>) : <label><span>{text.prompt}</span><textarea value={draftPrompt} placeholder={text.promptHint} onChange={(event) => setDraftPrompt(event.target.value)} /></label>}
             </div>
             {editingId && selected?.id === editingId ? imagePanel : <div className="positive-preset-save-first"><Icon name="images" /><span>{text.saveBeforeImages}</span></div>}
             {status && <p className="positive-preset-status" role="status">{status}</p>}
             <footer>
               <Button type="button" variant="ghost" disabled={busy} onClick={() => setEditingId(null)}>{text.cancel}</Button>
-              <Button type="button" variant="primary" disabled={busy || !draftPrompt.trim()} onClick={() => void saveDraft()}><Icon name="check" />{text.save}</Button>
+              <Button type="button" variant="primary" disabled={busy || (!draftPrompt.trim() && !draftCaptions.length)} onClick={() => void saveDraft()}><Icon name="check" />{text.save}</Button>
             </footer>
           </div> : <>
             <div className="positive-preset-toolbar">
@@ -579,10 +596,10 @@ export function PositivePromptPresetControl({
                       <Button type="button" variant="ghost" disabled={busy} onClick={() => void deletePreset(selected)}><Icon name="trash" />{text.remove}</Button>
                     </div>
                   </header>
-                  <section className="positive-preset-prompt-preview"><strong>{text.prompt}</strong><p>{selected.prompt}</p></section>
+                  <section className="positive-preset-prompt-preview"><strong>{text.prompt}</strong><p>{selected.captions?.length ? selected.captions.map((c,i)=>`${roleLabel(i)}: ${c.prompt}`).join("\n") : selected.prompt}</p></section>
                   {imagePanel}
                   {status && <p className="positive-preset-status" role="status">{status}</p>}
-                  <footer><Button type="button" variant="primary" onClick={() => applyPreset(selected)}><Icon name="swap" />{text.apply}</Button></footer>
+                  <footer><Button type="button" variant="primary" onClick={() => applyPreset(selected)}><Icon name="swap" />{selected.captions?.length ? `${characterPresetText(language).apply} · ${selected.captions.length}` : text.apply}</Button></footer>
                 </> : <div className="positive-preset-detail-empty"><Icon name="template" /><strong>{text.empty}</strong><span>{text.emptyHint}</span></div>}
               </article>
             </div>
