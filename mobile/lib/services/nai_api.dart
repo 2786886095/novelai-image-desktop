@@ -160,7 +160,9 @@ class NaiApi {
   void clearAiCallLog() => _aiCallLog.clear();
 
   int countCachedVibes(String model, GenerateExtras extras) => extras.vibeImages
-      .where((vibe) => _vibeEncodeCache.containsKey(_vibeCacheKey(model, vibe)))
+      .where((vibe) =>
+          vibe.matchingEncoding(model) != null ||
+          _vibeEncodeCache.containsKey(_vibeCacheKey(model, vibe)))
       .length;
 
   void cancelActiveGeneration() {
@@ -875,6 +877,9 @@ class NaiApi {
     // V5 does not support Vibe Transfer. The explicit guard above prevents a
     // silent reference-less generation when legacy/stored references remain.
     if (extras.vibeImages.isNotEmpty && params.supportsVibeTransfer) {
+      for (final vibe in extras.vibeImages) {
+        vibe.validateModel(params.model);
+      }
       final encoded = <VibeTransferItem>[];
       for (final vibe in extras.vibeImages) {
         encoded
@@ -1619,6 +1624,15 @@ class NaiApi {
 
   Future<VibeTransferItem> _encodeVibeOrRaw(String token, AppSettings settings,
       String model, VibeTransferItem vibe) async {
+    vibe.validateModel(model);
+    final imported = vibe.matchingEncoding(model);
+    if (imported != null) {
+      return VibeTransferItem(
+          base64: imported,
+          infoExtracted: vibe.infoExtracted,
+          strength: vibe.strength,
+          sourcePath: vibe.sourcePath);
+    }
     final input = base64Decode(_stripBase64(vibe.base64));
     if (isWebpImage(input)) {
       vibe = VibeTransferItem(

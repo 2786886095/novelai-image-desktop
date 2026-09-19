@@ -1,3 +1,4 @@
+import '../services/vibe_file.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -1080,6 +1081,21 @@ class AppState extends ChangeNotifier {
     unawaited(storage.setCharacterPrompts(extras.charCaptions));
     notifyListeners();
     _scheduleGenerationQuote();
+  }
+
+  String? importVibeFile(String text) {
+    try {
+      final refs = parseVibeFile(text);
+      if (extras.vibeImages.length + refs.length > 16) {
+        return _rt('status.vibeLimit');
+      }
+      extras.vibeImages.addAll(refs);
+      notifyListeners();
+      _scheduleGenerationQuote();
+      return null;
+    } catch (error) {
+      return error.toString();
+    }
   }
 
   Future<String?> addVibeImage(String filePath) async {

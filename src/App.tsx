@@ -1,3 +1,4 @@
+import {parseVibeFile, exportVibeFile, vibeFileLabels, validateVibeModel} from "./vibe-file";
 import {resolveCanvasImage} from "./canvas-preview";
 import {useDisclosurePresence, disclosureAttributes} from "./components/disclosure-motion";
 import {normalizeCharacterCaptions} from "./character-presets";
@@ -790,7 +791,7 @@ function recommendPreciseSize(w?: number, h?: number) {
   return { target, exact, padPercent };
 }
 
-function VibeTransferModal({ onClose }: { onClose: () => void }) {
+export function VibeTransferModal({ onClose }: { onClose: () => void }) {
   const language = useAppStore((state) => state.settings?.language);
   const vibeImages = useAppStore((state) => state.vibeImages);
   const addVibeImage = useAppStore((state) => state.addVibeImage);
@@ -805,6 +806,7 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
   const setToast = useAppStore((state) => state.setToast);
   const setParam = useAppStore((state) => state.setParam);
   const model = useAppStore((state) => state.params.model);
+  const vf = vibeFileLabels(language);
   const preciseSupported = supportsNAIPreciseReference(model);
   const vibeSupported = supportsNAIVibeTransfer(model);
   const presetText = referencePresetTextFor(language);
@@ -835,6 +837,21 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
       addVibeImage({ id: crypto.randomUUID(), previewUrl: dataUrl, base64, infoExtracted, strength });
     };
     reader.readAsDataURL(file);
+  }
+
+  async function importVibeFile(file: File) {
+    try {
+      if (file.size > 50 * 1024 * 1024) throw new Error("Vibe file exceeds 50 MB.");
+      const refs = parseVibeFile(await file.text());
+      const state = useAppStore.getState();
+      if (state.vibeImages.length + refs.length > 16) throw new Error("Vibe: maximum 16 references.");
+      useAppStore.setState({vibeImages:[...state.vibeImages,...refs.map(ref=>({...ref,id:crypto.randomUUID()}))]});
+      setToast(`${vf.loaded} · ${refs.length}`);
+    } catch(error) { setToast(String(error instanceof Error ? error.message : error)); }
+  }
+  function exportVibes() {
+    const url=URL.createObjectURL(new Blob([exportVibeFile(vibeImages)],{type:"application/json"}));
+    const link=document.createElement("a");link.href=url;link.download="vibes.naiv4vibebundle";link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
 
   function handlePreciseFile(file: File) {
@@ -887,9 +904,12 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
           {vibeImages.length === 0 && <p className="vibe-empty">{t("reference.emptyVibe")}</p>}
           {vibeImages.map((img) => (
             <div className="vibe-row" key={img.id}>
-              <img src={img.previewUrl} className="vibe-thumb" alt={t("reference.thumbAlt")} />
+              {img.previewUrl ? <img src={img.previewUrl} className="vibe-thumb" alt={t("reference.thumbAlt")} /> : <span className="vibe-thumb">{vf.encoded}</span>}
               <div className="vibe-row-sliders">
-                <div className="reference-control">
+                {img.name && <strong>{img.name}</strong>}
+                {img.encodings?.length ? <p>{[...new Set(img.encodings.map(e=>e.model))].join(", ")}</p> : null}
+                {(() => {try {validateVibeModel(img,model);return null;} catch {return <p role="alert">{vf.mismatch}{img.encodings?.map(e=>`${e.model} (${e.infoExtracted})`).join(", ")}</p>;}})()}
+                <fieldset disabled={!img.base64} style={{border:0,padding:0,margin:0}} className="reference-control">
                   <SliderInput
                     label={t("reference.infoExtracted")}
                     value={img.infoExtracted}
@@ -899,7 +919,7 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
                     onChange={(v) => updateVibeImage(img.id, { infoExtracted: v })}
                   />
                   <p>{t("reference.infoExtractedHelp")}</p>
-                </div>
+                </fieldset>
                 <div className="reference-control">
                   <SliderInput
                     label={t("reference.strength")}
@@ -912,9 +932,9 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
                   <p>{t("reference.vibeStrengthHelp")}</p>
                 </div>
               </div>
-              <button className="vibe-save-preset" title={presetText.quickSave} onClick={() => setQuickSaveSource({ kind: "vibe", previewUrl: img.previewUrl, base64: img.base64, infoExtracted: img.infoExtracted, strength: img.strength })}>
+              {img.base64 && !img.encodings?.length && <button className="vibe-save-preset" title={presetText.quickSave} onClick={() => setQuickSaveSource({ kind: "vibe", previewUrl: img.previewUrl, base64: img.base64, infoExtracted: img.infoExtracted, strength: img.strength })}>
                 <Icon name="star" />
-              </button>
+              </button>}
               <button className="vibe-remove" title={t("reference.remove")} onClick={() => removeVibeImage(img.id)}>
                 <Icon name="close" />
               </button>
@@ -996,6 +1016,8 @@ function VibeTransferModal({ onClose }: { onClose: () => void }) {
           ))}
 
           <div className="vibe-add-row">
+            <label className="btn btn-secondary vibe-add-btn">{vf.load}<input type="file" hidden accept=".json,.naiv4vibe,.naiv4vibebundle" onChange={e=>{const file=e.target.files?.[0];e.target.value="";if(file)void importVibeFile(file);}} /></label>
+            <Button disabled={!vibeImages.length} onClick={exportVibes}>{vf.save}</Button>
             <label className={clsx("btn btn-secondary vibe-add-btn", !vibeSupported && "disabled")} aria-disabled={!vibeSupported}>
               <IconText icon="+">{t("reference.addVibe")}</IconText>
               <input

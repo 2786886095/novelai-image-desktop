@@ -1,3 +1,5 @@
+import 'dart:convert';
+import '../services/vibe_file.dart';
 import '../ui/studio_dropdown.dart';
 import '../ui/character_editing.dart';
 import 'dart:async';
@@ -3291,6 +3293,52 @@ class _CharacterPositionGridPainter extends CustomPainter {
 }
 
 class _ReferenceControls extends StatelessWidget {
+  Future<void> _importVibes(BuildContext context) async {
+    final state = context.read<AppState>();
+    try {
+      final selected = await FilePicker.platform.pickFiles(
+          type: FileType.custom,
+          allowedExtensions: ['json', 'naiv4vibe', 'naiv4vibebundle']);
+      final path = selected?.files.single.path;
+      if (path == null || !context.mounted) return;
+      final file = File(path);
+      if (await file.length() > 50 * 1024 * 1024) {
+        throw const FormatException('Vibe file exceeds 50 MB.');
+      }
+      final text = await file.readAsString();
+      if (!context.mounted) return;
+      final error = state.importVibeFile(text);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(error ?? vibeFileLabels(state.settings.language)[3])));
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.toString())));
+      }
+    }
+  }
+
+  Future<void> _exportVibes(BuildContext context) async {
+    try {
+      final text = exportVibeFile(context.read<AppState>().extras.vibeImages);
+      final box = context.findRenderObject() as RenderBox?;
+      await Share.shareXFiles([
+        XFile.fromData(Uint8List.fromList(utf8.encode(text)),
+            mimeType: 'application/json', name: 'vibes.naiv4vibebundle')
+      ],
+          fileNameOverrides: [
+            'vibes.naiv4vibebundle'
+          ],
+          sharePositionOrigin:
+              box == null ? null : box.localToGlobal(Offset.zero) & box.size);
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.toString())));
+      }
+    }
+  }
+
   Future<void> _pick(BuildContext context, {required bool precise}) async {
     final picked = await ImagePicker()
         .pickImage(source: ImageSource.gallery, imageQuality: 100);
@@ -3348,6 +3396,16 @@ class _ReferenceControls extends StatelessWidget {
               leading: const Icon(Icons.info_outline),
               title: Text(t('generate.vibeUnsupportedV5')),
             ),
+          Wrap(spacing: 8, children: [
+            OutlinedButton(
+                onPressed: () => _importVibes(context),
+                child: Text(vibeFileLabels(language)[0])),
+            OutlinedButton(
+                onPressed: extras.vibeImages.isEmpty
+                    ? null
+                    : () => _exportVibes(context),
+                child: Text(vibeFileLabels(language)[1])),
+          ]),
           for (var index = 0; index < extras.vibeImages.length; index++)
             _VibeReferenceRow(index: index),
           Align(
@@ -3452,22 +3510,42 @@ class _VibeReferenceRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _ReferenceThumbnail(path: item.sourcePath),
+          item.base64.isEmpty
+              ? SizedBox(width: 64, child: Text(vibeFileLabels(language)[2]))
+              : item.sourcePath.isEmpty
+                  ? Image.memory(base64Decode(item.base64),
+                      width: 64,
+                      height: 64,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) =>
+                          const Icon(Icons.broken_image_outlined))
+                  : _ReferenceThumbnail(path: item.sourcePath),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
               children: [
-                _Slider(
-                  label: t('generate.infoExtracted'),
-                  help: t('generate.infoExtractedHelp'),
-                  value: item.infoExtracted,
-                  min: 0,
-                  max: 1,
-                  divisions: 100,
-                  display: item.infoExtracted.toStringAsFixed(2),
-                  onChanged: (value) =>
-                      state.updateVibeImage(index, infoExtracted: value),
-                ),
+                if (item.encodings.isNotEmpty)
+                  Text(item.encodings.map((e) => e.model).toSet().join(', ')),
+                if (item.base64.isEmpty &&
+                    item.matchingEncoding(state.params.model) == null)
+                  Text(
+                      '${vibeFileLabels(language)[2]}: ${item.encodings.map((e) => '${e.model} (${e.infoExtracted})').toSet().join(', ')}',
+                      style: TextStyle(
+                          color: Theme.of(context).colorScheme.error)),
+                if (item.base64.isEmpty)
+                  Text('${t('generate.infoExtracted')}: ${item.infoExtracted}')
+                else
+                  _Slider(
+                    label: t('generate.infoExtracted'),
+                    help: t('generate.infoExtractedHelp'),
+                    value: item.infoExtracted,
+                    min: 0,
+                    max: 1,
+                    divisions: 100,
+                    display: item.infoExtracted.toStringAsFixed(2),
+                    onChanged: (value) =>
+                        state.updateVibeImage(index, infoExtracted: value),
+                  ),
                 _Slider(
                   label: t('generate.referenceStrength'),
                   help: t('generate.vibeStrengthHelp'),
@@ -3484,15 +3562,19 @@ class _VibeReferenceRow extends StatelessWidget {
           ),
           Column(
             children: [
-              IconButton(
-                tooltip: t('referencePresets.save'),
-                onPressed: () => _saveReferencePreset(
-                  context,
-                  kind: ReferencePresetKind.vibe,
-                  index: index,
+              if (item.sourcePath.isNotEmpty && item.encodings.isEmpty)
+                IconButton(
+                  tooltip: t('referencePresets.save'),
+                  onPressed:
+                      item.sourcePath.isEmpty || item.encodings.isNotEmpty
+                          ? null
+                          : () => _saveReferencePreset(
+                                context,
+                                kind: ReferencePresetKind.vibe,
+                                index: index,
+                              ),
+                  icon: const Icon(Icons.bookmark_add_outlined),
                 ),
-                icon: const Icon(Icons.bookmark_add_outlined),
-              ),
               IconButton(
                 tooltip: t('common.remove'),
                 onPressed: () => state.removeVibeImage(index),

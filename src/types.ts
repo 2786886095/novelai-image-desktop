@@ -347,6 +347,8 @@ export const DEFAULT_I2I_PARAMS: I2IParams = {
 
 /** Vibe Transfer / Precise Reference — slim type sent over IPC */
 export interface VibeTransferItem {
+  name?: string;
+  encodings?: import("./vibe-file").VibeEncoding[];
   base64: string; // pure base64 without data-URL prefix
   infoExtracted: number; // 0.0 – 1.0, new Vibe Transfer default 1.0
   strength: number; // 0.0 – 1.0, new Vibe Transfer default 1.0

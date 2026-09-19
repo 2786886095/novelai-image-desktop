@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 import {execFileSync,spawnSync} from 'node:child_process';
 const call=(command,args)=>execFileSync(command,args,{encoding:'utf8',timeout:600000,maxBuffer:8*1024*1024}).trim();
 const version=JSON.parse(fs.readFileSync('package.json','utf8')).version;
-if(version!=='2.3.1')throw Error('This publication script is version-specific');
+if(version!=='2.3.2')throw Error('This publication script is version-specific');
 const tag='v'+version, sha=call('git',['rev-parse','HEAD']);
 const buildRun=process.env.BUILD_RUN;
 if(!/^\d+$/.test(buildRun??''))throw Error('A verified desktop build run is required');
@@ -35,7 +35,7 @@ if(!sdk)throw Error('Android SDK required for signature verification');
 const buildTools=path.join(sdk,'build-tools');
 const tools=fs.readdirSync(buildTools).filter(name=>/^\d+(\.\d+)+$/.test(name)).sort((a,b)=>a==='35.0.0'?-1:b==='35.0.0'?1:b.localeCompare(a,undefined,{numeric:true})).map(name=>path.join(buildTools,name)).find(dir=>fs.existsSync(path.join(dir,'apksigner')));
 if(!tools)throw Error('Android signing verification tools missing');
-call('gh',['release','download','v2.3.0','-p','app-release.apk','-D','previous-android']);
+call('gh',['release','download','v2.3.1','-p','app-release.apk','-D','previous-android']);
 console.log('APK_VERIFIER',tools);
 const certificate=file=>{
  const output=call(path.join(tools,'apksigner'),['verify','--print-certs',file]);

@@ -1,3 +1,4 @@
+import {matchingVibeEncoding, validateVibeModel} from "../../src/vibe-file";
 import {normalizeNovelAiEndpoint} from '../../src/nai-endpoint';
 import { processableImage } from "./image-codec";
 import { writeUniqueImageFile } from "./image-output";
@@ -904,13 +905,14 @@ function vibeCacheKey(
 // How many of the request's vibe references are already encoded+cached this
 // session (so they incur NO further encode charge). Used to make the pre-run
 // quote accurate — re-generating with the same references won't re-encode.
-function countCachedVibes(
+export function countCachedVibes(
   extras: GenerateExtras | undefined,
   params: GenerateParams | undefined,
 ): number {
   if (!extras?.vibeImages?.length || !params) return 0;
   let cached = 0;
   for (const vibe of extras.vibeImages) {
+    if (matchingVibeEncoding(vibe, params.model)) { cached += 1; continue; }
     const key = vibeCacheKey(
       stripBase64Prefix(vibe.base64),
       params.model,
@@ -938,7 +940,12 @@ export async function prepareExtras(
   signal?: AbortSignal,
 ): Promise<GenerateExtras | undefined> {
   if (!extras) return extras;
-  if (extras.vibeImages?.length) extras = {...extras, vibeImages: await Promise.all(extras.vibeImages.map(async ref => ({...ref, base64:(await processableImage(Buffer.from(stripBase64Prefix(ref.base64), "base64"))).toString("base64")})))};
+  // Validate the entire bundle before image decoding or any paid encoding call.
+  if (extras.vibeImages?.length) {
+    if (!supportsNAIVibeTransfer(params.model)) throw new Error("Vibe Transfer requires V4/V4.5 or V3, not V5.");
+    for (const ref of extras.vibeImages) validateVibeModel(ref, params.model);
+    extras = {...extras, vibeImages: await Promise.all(extras.vibeImages.map(async ref => matchingVibeEncoding(ref, params.model) ? ref : ({...ref, base64:(await processableImage(Buffer.from(stripBase64Prefix(ref.base64), "base64"))).toString("base64")})))};
+  }
 
   // Precise/director references: any size accepted, preprocessed to the nearest
   // of NovelAI's three official sizes (scale-to-fit + black pad), matching the
@@ -969,15 +976,15 @@ export async function prepareExtras(
   }
   if (!isV4Plus(params.model)) return { ...extras, preciseReferences }; // V3 path unchanged
 
-  const token = getToken();
-  const settings = getSettings();
-  const imageBaseUrl = tokenSafeBaseUrl(
-    settings.imageBaseUrl,
-    "https://image.novelai.net",
-  );
+  const needsEncoding = extras.vibeImages.some(vibe => !matchingVibeEncoding(vibe, params.model));
+  const token = needsEncoding ? getToken() : "";
+  const settings = needsEncoding ? getSettings() : null;
+  const imageBaseUrl = tokenSafeBaseUrl(settings?.imageBaseUrl ?? "", "https://image.novelai.net");
 
   const encoded = await Promise.all(
     extras.vibeImages.map(async (vibe) => {
+      const imported = matchingVibeEncoding(vibe, params.model);
+      if (imported) return {...vibe, base64: imported};
       const rawBase64 = stripBase64Prefix(vibe.base64);
       const cacheKey = vibeCacheKey(
         rawBase64,

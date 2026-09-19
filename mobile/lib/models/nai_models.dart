@@ -15,7 +15,7 @@ class NaiOption {
 }
 
 const appName = 'Langbai NovelAI Studio';
-const appVersion = '2.3.1';
+const appVersion = '2.3.2';
 
 const naiModels = <NaiOption>[
   NaiOption(
@@ -463,7 +463,41 @@ class CharCaptionItem {
       );
 }
 
+class VibeEncoding {
+  final String model;
+  final double infoExtracted;
+  final String encoding;
+  const VibeEncoding(
+      {required this.model,
+      required this.infoExtracted,
+      required this.encoding});
+  Map<String, dynamic> toJson() =>
+      {'model': model, 'infoExtracted': infoExtracted, 'encoding': encoding};
+  factory VibeEncoding.fromJson(Map<String, dynamic> json) => VibeEncoding(
+      model: json['model'] as String,
+      infoExtracted: (json['infoExtracted'] as num).toDouble(),
+      encoding: json['encoding'] as String);
+}
+
 class VibeTransferItem {
+  final List<VibeEncoding> encodings;
+  final String name;
+  String? matchingEncoding(String model) {
+    for (final e in encodings) {
+      if (e.model == model && (e.infoExtracted - infoExtracted).abs() < 1e-8) {
+        return e.encoding;
+      }
+    }
+    return null;
+  }
+
+  void validateModel(String model) {
+    if (base64.isEmpty && matchingEncoding(model) == null) {
+      throw StateError(
+          'Vibe encoding has no original image. Select its model and extraction value: ${encodings.map((e) => '${e.model} (${e.infoExtracted})').join(', ')}');
+    }
+  }
+
   final String base64;
   final double infoExtracted;
   final double strength;
@@ -473,12 +507,16 @@ class VibeTransferItem {
     this.infoExtracted = 1,
     this.strength = 1,
     this.sourcePath = '',
+    this.encodings = const [],
+    this.name = '',
   });
   Map<String, dynamic> toJson() => {
         'base64': base64,
         'infoExtracted': infoExtracted,
         'strength': strength,
         'sourcePath': sourcePath,
+        'name': name,
+        'encodings': encodings.map((e) => e.toJson()).toList(),
       };
   VibeTransferItem copyWith({double? infoExtracted, double? strength}) =>
       VibeTransferItem(
@@ -486,6 +524,8 @@ class VibeTransferItem {
         infoExtracted: infoExtracted ?? this.infoExtracted,
         strength: strength ?? this.strength,
         sourcePath: sourcePath,
+        encodings: encodings,
+        name: name,
       );
 
   factory VibeTransferItem.fromJson(Map<String, dynamic> json) =>
@@ -494,6 +534,10 @@ class VibeTransferItem {
         infoExtracted: (json['infoExtracted'] as num?)?.toDouble() ?? 1,
         strength: (json['strength'] as num?)?.toDouble() ?? 1,
         sourcePath: json['sourcePath']?.toString() ?? '',
+        name: json['name']?.toString() ?? '',
+        encodings: (json['encodings'] as List? ?? [])
+            .map((e) => VibeEncoding.fromJson(Map<String, dynamic>.from(e)))
+            .toList(),
       );
 }
 
@@ -588,6 +632,8 @@ class GenerateExtras {
                   base64: item.base64,
                   infoExtracted: item.infoExtracted,
                   strength: item.strength,
+                  encodings: List.of(item.encodings),
+                  name: item.name,
                   sourcePath: item.sourcePath,
                 ))
             .toList(),

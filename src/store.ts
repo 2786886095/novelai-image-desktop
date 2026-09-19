@@ -713,7 +713,8 @@ async function runAfterImageRefresh(
 
 function buildExtras(state: AppState): GenerateExtras {
   return {
-    vibeImages: state.vibeImages.map(({ base64, infoExtracted, strength }) => ({
+    vibeImages: state.vibeImages.map(({ base64, infoExtracted, strength, encodings }) => ({
+      encodings,
       base64,
       infoExtracted,
       strength,
@@ -740,8 +741,8 @@ function buildExtras(state: AppState): GenerateExtras {
 // Identity of a vibe reference for encode-dedup, mirroring the main process cache
 // key (model + information_extracted + image bytes). Used so several queued jobs
 // sharing the same reference are only quoted for ONE encode.
-function vibeKeyOf(model: string, vibe: { base64: string; infoExtracted: number }): string {
-  return `${model}|${vibe.infoExtracted}|${vibe.base64}`;
+function vibeKeyOf(model: string, vibe: import("./types").VibeTransferItem): string {
+  return `${model}|${vibe.infoExtracted}|${vibe.base64}|${JSON.stringify(vibe.encodings ?? [])}`;
 }
 
 function extrasVibeKeys(model: string, extras: GenerateExtras): string[] {
