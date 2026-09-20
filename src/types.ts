@@ -1573,6 +1573,7 @@ export interface ImportedParams {
 }
 
 export interface NaiDesktopApi {
+  comparison: (action: import("./artist-comparison/protocol").ComparisonAction) => Promise<import("./artist-comparison/protocol").ComparisonResponse>;
   platform: NodeJS.Platform;
   getResourceDatabaseOverview: () => Promise<ResourceDatabaseOverview>;
   downloadResourceDatabase: (id: ResourceDatabaseId, confirmReplace?: boolean) => Promise<ResourceDatabaseDownloadResult>;

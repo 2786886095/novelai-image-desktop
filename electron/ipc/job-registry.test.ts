@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { beginJob, cancelAllJobs } from "./job-registry";
+import { beginJob, cancelAllJobs, reserveGeneration } from "./job-registry";
 
 describe("job-registry", () => {
   it("an older job finishing after a newer one starts does not clear the newer job's controller", () => {
@@ -42,5 +42,22 @@ describe("job-registry", () => {
     const b = beginJob();
     expect(cancelAllJobs()).toBe(true);
     expect(b.controller.signal.aborted).toBe(true);
+  });
+});
+
+
+describe("comparison generation reservation", () => {
+  it("excludes other modules while allowing its own async requests", async () => {
+    const lease = reserveGeneration("test");
+    try {
+      expect(() => beginJob()).toThrow();
+      expect(() => reserveGeneration("second")).toThrow();
+      await lease.run(async () => { await Promise.resolve(); const j=beginJob(); j.end(); });
+    } finally { lease.release(); }
+    const j=beginJob(); j.end();
+  });
+  it("cannot reserve while an existing generation is in flight", () => {
+    const j=beginJob();
+    try { expect(() => reserveGeneration("test")).toThrow(); } finally { j.end(); }
   });
 });

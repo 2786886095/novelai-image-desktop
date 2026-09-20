@@ -1,7 +1,7 @@
 import {readFileSync} from "node:fs";
 import {describe,it,expect,vi} from "vitest";
 vi.mock('./store',()=>({useAppStore:{getState:()=>({setToast:vi.fn()}),subscribe:()=>()=>{}}}));
-import {imageFiles,imagePasteProps} from './image-paste';
+import {imageFiles,imagePasteProps,prefersTextPaste} from './image-paste';
 describe('image paste contract',()=>{
   it('leaves ordinary text alone and recognizes WebP without a MIME type',()=>{
     expect(imageFiles(null)).toEqual([]);
@@ -22,4 +22,18 @@ it('keeps paste target routing without painting a persistent outline',()=>{
   expect(css).not.toContain('[data-image-paste-active=');
   expect(router).toContain("selected = target");
   expect(router).toContain("document.addEventListener('paste',paste,true)");
+});
+
+
+it('keeps Excel text in an editor even when the clipboard also has a PNG preview', () => {
+  const OriginalElement = globalThis.Element;
+  class FakeElement { constructor(private editor: boolean) {} closest() { return this.editor ? this : null; } }
+  vi.stubGlobal('Element', FakeElement);
+  try {
+    const transfer = { getData: (type: string) => type === 'text/plain' ? 'artist_one\nartist_two' : '', files: [new File(['preview'], 'excel.png', { type: 'image/png' })] } as unknown as DataTransfer;
+    expect(imageFiles(transfer)).toHaveLength(1);
+    expect(prefersTextPaste(new FakeElement(true) as unknown as EventTarget, transfer)).toBe(true);
+    expect(prefersTextPaste(new FakeElement(false) as unknown as EventTarget, transfer)).toBe(false);
+    expect(prefersTextPaste(new FakeElement(true) as unknown as EventTarget, { getData: () => '' } as unknown as DataTransfer)).toBe(false);
+  } finally { vi.stubGlobal('Element', OriginalElement); }
 });

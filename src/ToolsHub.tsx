@@ -30,6 +30,9 @@ function createPreloadedTool(
   return { Component: PreloadedTool, preload };
 }
 
+const comparisonTool = createPreloadedTool(() => import("./artist-comparison/ArtistComparison").then(module => ({ default: module.ArtistComparison })));
+const ArtistComparison = comparisonTool.Component;
+
 const comicTool = createPreloadedTool(() => import("./comic/TagComicGenerator").then((module) => ({ default: module.TagComicGenerator })));
 const redrawTool = createPreloadedTool(() => import("./ComicGenerator").then((module) => ({ default: module.BatchRedraw })));
 const artistLabTool = createPreloadedTool(() => import("./ArtistLab"));
@@ -44,9 +47,10 @@ const PromptCodex = promptCodexTool.Component;
 const V5ArtistWeightRepair = v5ArtistRepairTool.Component;
 const ArtistStringWeightDraw = artistStringDrawTool.Component;
 
-type ToolId = "hub" | "comic" | "redraw" | "artistLab" | "promptCodex" | "v5ArtistRepair" | "artistStringDraw";
+type ToolId = "comparison" | "hub" | "comic" | "redraw" | "artistLab" | "promptCodex" | "v5ArtistRepair" | "artistStringDraw";
 
 const TOOL_ICONS: Record<Exclude<ToolId, "hub">, IconName> = {
+  comparison: "palette",
   comic: "collections",
   redraw: "draw",
   artistLab: "palette",
@@ -56,6 +60,7 @@ const TOOL_ICONS: Record<Exclude<ToolId, "hub">, IconName> = {
 };
 
 const TOOL_LOADERS: Partial<Record<ToolId, () => Promise<void>>> = {
+  comparison: comparisonTool.preload,
   comic: comicTool.preload,
   redraw: redrawTool.preload,
   artistLab: artistLabTool.preload,
@@ -127,6 +132,7 @@ export default function ToolsHub() {
   );
   const [activeTool, setActiveTool] = useState<ToolId>(() => {
     const capture = new URLSearchParams(window.location.search).get("uiCapture");
+    if (capture === "artistComparison") return "comparison";
     if (capture === "v5ArtistRepair") return "v5ArtistRepair";
     if (capture === "artistStringDraw") return "artistStringDraw";
     if (capture === "randomArtist") return isWindows ? "artistLab" : "hub";
@@ -161,6 +167,7 @@ export default function ToolsHub() {
     const title = activeTool === "promptCodex" ? codexText.title : text.title;
     return (
       <Suspense fallback={<ToolLoading title={title} />}>
+        {activeTool === "comparison" ? <ArtistComparison onBack={back} /> : null}
         {activeTool === "comic" ? <TagComicGenerator onBack={back} /> : null}
         {activeTool === "redraw" ? <BatchRedraw onBack={back} /> : null}
         {activeTool === "promptCodex" ? <PromptCodex onBack={back} /> : null}
@@ -177,6 +184,7 @@ export default function ToolsHub() {
         <div><span className="eyebrow">{text.eyebrow}</span><h2>{text.title}</h2><p>{text.subtitle}</p></div>
       </section>
       <section className="tool-card-grid">
+        <button type="button" className="tool-card ready" {...toolCardHandlers("comparison")} onClick={() => setActiveTool("comparison")}><span className="tool-card-heading"><i><Icon name="palette" /></i><b>{language === "zh-CN" || language === "zh-TW" ? "画师比较与组合探索" : "Artist comparison & exploration"}</b></span><span>{language === "zh-CN" || language === "zh-TW" ? "统一条件比较单画师与画师串，自定义评级、备注，从单画师池探索组合。" : "Compare artists and recipes with shared settings, custom ratings and notes; explore recipes from single-artist pools."}</span><small>{text.ready}</small></button>
         <button type="button" className="tool-card ready" {...toolCardHandlers("comic")} onClick={() => setActiveTool("comic")}><span className="tool-card-heading"><i><Icon name={TOOL_ICONS.comic} /></i><b>{text.comicTitle}</b></span><span>{text.comicDesc}</span><small>{text.ready}</small></button>
         <button type="button" className="tool-card ready" {...toolCardHandlers("promptCodex")} onClick={() => setActiveTool("promptCodex")}><span className="tool-card-heading"><i><Icon name={TOOL_ICONS.promptCodex} /></i><b>{codexText.title}</b></span><span>{codexText.desc}</span><small>{text.ready}</small></button>
         <button type="button" className="tool-card ready" {...toolCardHandlers("redraw")} onClick={() => setActiveTool("redraw")}><span className="tool-card-heading"><i><Icon name={TOOL_ICONS.redraw} /></i><b>{text.batchTitle}</b></span><span>{text.batchDesc}</span><small>{text.ready}</small></button>

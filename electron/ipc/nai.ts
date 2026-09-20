@@ -1826,7 +1826,7 @@ function buildImageFileName(
 // Sanitize a user group name into a safe folder segment (strip path-illegal
 // characters, collapse whitespace, drop leading dots so we never produce a
 // hidden/`..`-like folder, cap length).
-function sanitizeGroupFolderName(name: string): string {
+export function sanitizeGroupFolderName(name: string): string {
   const cleaned = name
     .replace(/[\\/:*?"<>|]+/g, "-")
     .replace(/\s+/g, "_")

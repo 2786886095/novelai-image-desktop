@@ -68,6 +68,15 @@ function findTarget(start: EventTarget | null): Target | null {
   return declared ? {element:declared} : null;
 }
 
+/** Spreadsheet clipboards can contain text and an image preview together. */
+export function prefersTextPaste(target: EventTarget | null, transfer: DataTransfer | null): boolean {
+  return Boolean(transfer?.getData('text/plain') && isTextEditor(target));
+}
+function isTextEditor(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  return Boolean(target.closest('textarea,input:not([type="file"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]),[contenteditable="true"],[contenteditable=""]'));
+}
+
 /** One router owns paste. No background clipboard polling and no global target
  * default: a newly opened page/dialog must receive a real click/focus first. */
 export function installImagePasteRouter() {
@@ -120,12 +129,14 @@ export function installImagePasteRouter() {
   const paste = (event: ClipboardEvent) => {
     if (synthetic.has(event)) return;
     lastPaste++;
+    if (prefersTextPaste(event.target, event.clipboardData)) return;
     const files = imageFiles(event.clipboardData);
     if (files.length) { event.preventDefault(); event.stopImmediatePropagation(); void apply(files,selected,revision); }
     else if (!event.clipboardData?.getData('text/plain')) void nativePaste(selected,revision);
   };
   const key = (event: KeyboardEvent) => {
     if (!(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey || event.key.toLowerCase() !== 'v' || event.repeat) return;
+    if (isTextEditor(event.target)) return;
     const before = lastPaste, target = selected, version = revision;
     // Non-editable controls may not receive a browser paste event.
     window.setTimeout(()=>{if (lastPaste === before) void nativePaste(target,version);},100);
