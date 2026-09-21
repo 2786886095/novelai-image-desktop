@@ -1,3 +1,4 @@
+import { planUpscale } from "../../src/upscale-plan";
 import {matchingVibeEncoding, validateVibeModel} from "../../src/vibe-file";
 import {normalizeNovelAiEndpoint} from '../../src/nai-endpoint';
 import { processableImage } from "./image-codec";
@@ -24,7 +25,6 @@ import {
   supportsNAIVibeTransfer,
   supportsNAIVariety,
   MAX_NAI_DIRECTOR_INPUT_PIXELS,
-  MAX_NAI_UPSCALE_INPUT_PIXELS,
   MAX_NAI_UPSCALE_OUTPUT_DIMENSION,
   type AccountSummary,
   type AnlasQuoteRequest,
@@ -204,6 +204,7 @@ export function resolveUpscaleOutputSize(
   height: number,
   scale: UpscaleScale,
 ) {
+  if (scale === "max") { const p = planUpscale(width, height, scale); return { width: p.width, height: p.height, exceedsLimit: p.exceedsLimit }; }
   const outputWidth = width * scale;
   const outputHeight = height * scale;
   return {
@@ -1942,6 +1943,7 @@ async function saveBuffers(
     ignoreActiveGroup?: boolean;
     groupOverride?: { groupId: string; folderName: string };
     temporary?: boolean;
+    actualImageSize?: boolean;
   },
 ): Promise<HistoryItem[]> {
   const settings = getSettings();
@@ -1980,6 +1982,7 @@ async function saveBuffers(
       settings.keepImageMetadata !== false,
     );
     const filePath = await writeUniqueImageFile(dir, base, ext, outBuffer);
+    const actualSize = saveOptions?.actualImageSize ? readImageDimensions(outBuffer) : params;
     items.push({
       id,
       filePath,
@@ -1989,8 +1992,8 @@ async function saveBuffers(
       params: { ...params, seed: actualSeed },
       actualSeed,
       model: modelOverride ?? params.model,
-      width: params.width,
-      height: params.height,
+      width: actualSize.width,
+      height: actualSize.height,
       groupId: activeGroup?.groupId,
     });
   }
@@ -4589,6 +4592,9 @@ export async function generateI2I(
       payload.action = "img2img";
       payload.parameters.image = base64Image;
       payload.parameters.strength = strength;
+      if (i2i.upscaledEnhance && params.model.startsWith("nai-diffusion-5-")) {
+        payload.parameters.upscaled_enhance = true;
+      }
       // The UI no longer exposes this ineffective control. Keep the field for
       // API compatibility, but always send the official/default value.
       payload.parameters.noise = 0;
@@ -4618,7 +4624,7 @@ export async function generateI2I(
     }
     if (buffers.length === 0)
       return { ok: false, message: "图生图成功但无图片返回。", items: [] };
-    const items = await saveBuffers(buffers, params, actualSeed, "i2i");
+    const items = await saveBuffers(buffers, params, actualSeed, "i2i", undefined, { actualImageSize: i2i.upscaledEnhance });
     void refreshStoredAccount();
     return {
       ok: true,
@@ -4856,27 +4862,16 @@ export async function upscaleImg(
     if (!image.width || !image.height) {
       return { ok: false, message: "无法读取图片尺寸，请重新加载图片。" };
     }
-    const preparedImage = prepareLimitedImage(
-      buffer,
-      MAX_NAI_UPSCALE_INPUT_PIXELS,
-    );
-    const outputSize = resolveUpscaleOutputSize(
-      preparedImage.width,
-      preparedImage.height,
-      scale,
-    );
-    if (outputSize.exceedsLimit) {
-      return {
-        ok: false,
-        message: `超分后尺寸将达到 ${outputSize.width}×${outputSize.height}，超过允许的最大尺寸 ${MAX_NAI_UPSCALE_OUTPUT_DIMENSION}×${MAX_NAI_UPSCALE_OUTPUT_DIMENSION}，已取消请求。请改用 2× 或换用更小的原图。`,
-      };
-    }
+    const plan = planUpscale(image.width, image.height, scale);
+    if (plan.exceedsLimit) return { ok: false, message: "当前倍率超过超分限制，请选择 MAX。" };
+    const preparedImage = { width: plan.inputWidth, height: plan.inputHeight, resized: plan.resized, originalWidth: image.width, originalHeight: image.height,
+      base64: resizeImageBufferToPng(buffer, plan.inputWidth, plan.inputHeight).toString("base64") };
     const settings = getSettings();
     // The dedicated upscaler is served by image.novelai.net and returns a ZIP
     // archive (same as generate-image), not a raw PNG.
     const imageBaseUrl = resolveUpscaleBaseUrl(settings.imageBaseUrl);
     const upscaleModel = resolveUpscaleModel(model);
-    const passes = scale === 4 ? 2 : 1;
+    const passes = plan.passes;
     let passInput = Buffer.from(preparedImage.base64, "base64");
     let outBuffer = passInput;
     for (let pass = 0; pass < passes; pass += 1) {
@@ -4907,6 +4902,10 @@ export async function upscaleImg(
         outBuffer = images.length > 0 ? images[0] : Buffer.from(res.data);
       } catch {
         outBuffer = Buffer.from(res.data); // not a zip — treat as raw image bytes
+      }
+      const actual = readImageDimensions(outBuffer);
+      if (actual.width !== plan.inputWidth * 2 ** (pass + 1) || actual.height !== plan.inputHeight * 2 ** (pass + 1)) {
+        throw new Error("超分返回的图片尺寸与请求不符。");
       }
       if (outBuffer.length === 0) break;
       passInput = outBuffer;
@@ -4939,8 +4938,8 @@ export async function upscaleImg(
       ),
     );
     const outDims = readImageDimensions(outBuffer);
-    const outWidth = outDims.width || preparedImage.width * scale;
-    const outHeight = outDims.height || preparedImage.height * scale;
+    const outWidth = outDims.width || plan.width;
+    const outHeight = outDims.height || plan.height;
     const item: HistoryItem = {
       id: crypto.randomUUID(),
       filePath,

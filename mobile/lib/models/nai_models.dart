@@ -708,10 +708,15 @@ class GenerationQueueProgress {
 }
 
 class I2IParams {
+  bool upscaledEnhance;
   double strength;
   double noise;
   int extraNoiseSeed;
-  I2IParams({this.strength = 0.7, this.noise = 0, this.extraNoiseSeed = 0});
+  I2IParams(
+      {this.upscaledEnhance = false,
+      this.strength = 0.7,
+      this.noise = 0,
+      this.extraNoiseSeed = 0});
 }
 
 class AugmentOptions {
@@ -1303,7 +1308,9 @@ class AppSettings {
         inpaintNoise:
             _finiteClamp(_doubleValue(j['inpaintNoise'], 0), 0, 0.99, 0),
         inpaintPositivePrompt: _stringValue(j['inpaintPositivePrompt'], ''),
-        upscaleScale: _intValue(j['upscaleScale'], 2) == 4 ? 4 : 2,
+        upscaleScale: [0, 2, 4].contains(_intValue(j['upscaleScale'], 2))
+            ? _intValue(j['upscaleScale'], 2)
+            : 2,
         directorTool: _supportedOptionValue(
             j['directorTool'], directorTools, 'bg-removal'),
         augmentDefry: _finiteClamp(_doubleValue(j['augmentDefry'], 0), 0, 5, 0),
@@ -1600,4 +1607,9 @@ List<PositivePromptPreset> mergeLegacyPositivePresets(
         createdAt: '${item['createdAt']}'));
   }
   return next;
+}
+
+({int width, int height}) maxNaiEnhanceSize(int width, int height) {
+  final factor = math.min(2.0, math.sqrt(naiMaxPixelArea / (width * height)));
+  return (width: (width * factor).floor(), height: (height * factor).floor());
 }

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import '../ui/studio_theme.dart';
 import '../ui/studio_dropdown.dart';
 import 'dart:io';
@@ -57,7 +58,8 @@ Future<({ImageMetadataReport report, File file, String name})>
   final source = File(item.filePath);
   if (!source.existsSync()) throw StateError('missing history image');
   final bytes = await source.readAsBytes();
-  final report = inspectImageMetadata(parseImageTextMetadata(bytes));
+  final report =
+      inspectImageMetadata(await compute(parseImageTextMetadata, bytes));
   final fileName = source.uri.pathSegments.isEmpty
       ? item.filePath
       : source.uri.pathSegments.last;
@@ -588,7 +590,8 @@ class _MetadataInspectorScreenState extends State<MetadataInspectorScreen> {
           await context.read<AppState>().storage.getMetadataInspectorImage();
       if (snapshot == null || !mounted) return;
       final bytes = await snapshot.file.readAsBytes();
-      final report = inspectImageMetadata(parseImageTextMetadata(bytes));
+      final report =
+          inspectImageMetadata(await compute(parseImageTextMetadata, bytes));
       if (!mounted) return;
       setState(() {
         _report = report;
@@ -608,7 +611,8 @@ class _MetadataInspectorScreenState extends State<MetadataInspectorScreen> {
       final picked = await _picker.pickImage(source: ImageSource.gallery);
       if (picked == null || !mounted) return;
       final bytes = await picked.readAsBytes();
-      final report = inspectImageMetadata(parseImageTextMetadata(bytes));
+      final report =
+          inspectImageMetadata(await compute(parseImageTextMetadata, bytes));
       final snapshot =
           await appState.storage.saveMetadataInspectorImage(bytes, picked.name);
       if (!mounted) return;

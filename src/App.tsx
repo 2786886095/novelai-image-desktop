@@ -1,3 +1,5 @@
+import { planUpscale } from "./upscale-plan";
+import { maxNAIEnhanceSize } from "./nai-dimensions";
 import {parseVibeFile, exportVibeFile, vibeFileLabels, validateVibeModel} from "./vibe-file";
 import {resolveCanvasImage} from "./canvas-preview";
 import {useDisclosurePresence, disclosureAttributes} from "./components/disclosure-motion";
@@ -96,7 +98,6 @@ import {
   EMOTION_OPTIONS,
   MAX_NAI_DIRECTOR_INPUT_PIXELS,
   MAX_NAI_SEED,
-  MAX_NAI_UPSCALE_INPUT_PIXELS,
   MAX_NAI_UPSCALE_OUTPUT_DIMENSION,
   NAI_INPAINT_MODELS,
   NAI_MODELS,
@@ -2666,9 +2667,13 @@ function WorkbenchImageUpload() {
 function FeatureCostCard({
   label,
   feature,
+  sizeOverride,
+  i2iOverride,
 }: {
   label: string;
   feature: AnlasQuoteFeature;
+  sizeOverride?: { width: number; height: number };
+  i2iOverride?: { strength: number; upscaledEnhance: boolean };
 }) {
   const account = useAppStore((state) => state.account);
   const language = useAppStore((state) => state.settings?.language);
@@ -2693,6 +2698,7 @@ function FeatureCostCard({
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
   const quoteKey = JSON.stringify({
+    sizeOverride, i2iOverride,
     feature,
     model: params.model,
     width: params.width,
@@ -2728,11 +2734,11 @@ function FeatureCostCard({
     }
     setLoading(true);
     const timer = window.setTimeout(() => {
-      const quoteSize = feature === "inpaint" && workbenchImage
+      const quoteSize = sizeOverride ?? (feature === "inpaint" && workbenchImage
         ? { width: workbenchImage.width, height: workbenchImage.height }
         : feature === "i2i" && i2iSizeMode === "adaptive" && workbenchImage
           ? adaptiveNAIImageSize(workbenchImage.width, workbenchImage.height, params)
-          : { width: params.width, height: params.height };
+          : { width: params.width, height: params.height });
       const quoteParams = {
         ...params,
         ...quoteSize,
@@ -2756,7 +2762,7 @@ function FeatureCostCard({
           params: quoteParams,
           extras,
           batchCount,
-          i2iParams: { ...i2iParams, noise: 0 },
+          i2iParams: { ...i2iParams, ...i2iOverride, noise: 0 },
           inpaintStrength,
           inpaintNoise: 0,
           inpaintModel,
@@ -3633,17 +3639,10 @@ function UpscalePanel({ openSettings }: { openSettings: () => void }) {
   const scale = useAppStore((state) => state.upscaleScale);
   const setScale = useAppStore((state) => state.setUpscaleScale);
   const upscale = useAppStore((state) => state.upscaleCurrentImage);
-  const preparedSize = workbenchImage
-    ? fitSizeWithinPixels(workbenchImage.width, workbenchImage.height, MAX_NAI_UPSCALE_INPUT_PIXELS)
-    : null;
-  const outputSize = preparedSize
-    ? { width: preparedSize.width * scale, height: preparedSize.height * scale }
-    : null;
-  const outputTooLarge = Boolean(
-    outputSize &&
-      (outputSize.width > MAX_NAI_UPSCALE_OUTPUT_DIMENSION ||
-        outputSize.height > MAX_NAI_UPSCALE_OUTPUT_DIMENSION),
-  );
+  const plan = workbenchImage ? planUpscale(workbenchImage.width, workbenchImage.height, scale) : null;
+  const preparedSize = plan ? { width: plan.inputWidth, height: plan.inputHeight, resized: plan.resized } : null;
+  const outputSize = plan ? { width: plan.width, height: plan.height } : null;
+  const outputTooLarge = Boolean(plan?.exceedsLimit);
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
   const outputLimitReason = outputTooLarge && outputSize
@@ -3657,14 +3656,15 @@ function UpscalePanel({ openSettings }: { openSettings: () => void }) {
         <div className="scale-buttons">
           <Button variant={scale === 2 ? "primary" : "secondary"} onClick={() => setScale(2)}>2×</Button>
           <Button variant={scale === 4 ? "primary" : "secondary"} onClick={() => setScale(4)}>4×</Button>
+          <Button variant={scale === "max" ? "primary" : "secondary"} onClick={() => setScale("max")}>MAX</Button>
         </div>
         {workbenchImage && (
           <div className={clsx("info-card", (preparedSize?.resized || outputTooLarge) && "limit-card")}>
             <strong>{t("upscale.sizeEstimate")}</strong>
             <span>
               {preparedSize?.resized
-                ? `${workbenchImage.width}×${workbenchImage.height} → ${t("upscale.preResize")} ${preparedSize.width}×${preparedSize.height} → ${preparedSize.width * scale}×${preparedSize.height * scale}`
-                : `${workbenchImage.width}×${workbenchImage.height} → ${workbenchImage.width * scale}×${workbenchImage.height * scale}`}
+                ? `${workbenchImage.width}×${workbenchImage.height} → ${t("upscale.preResize")} ${preparedSize.width}×${preparedSize.height} → ${outputSize?.width}×${outputSize?.height}`
+                : `${workbenchImage.width}×${workbenchImage.height} → ${outputSize?.width}×${outputSize?.height}`}
             </span>
             {preparedSize?.resized ? (
               <small>{t("upscale.resizeHint")}</small>
@@ -3675,7 +3675,7 @@ function UpscalePanel({ openSettings }: { openSettings: () => void }) {
         <FeatureCostCard label={t("cost.beforeRun")} feature="upscale" />
       </div>
       <AccountAndRunButton
-        label={f("upscale.run", { scale })}
+        label={f("upscale.run", { scale: scale === "max" ? "MAX" : scale }).replace(/MAX\s*[×x]/, "MAX")}
         onRun={() => void upscale()}
         openSettings={openSettings}
         disabled={outputTooLarge}
@@ -3693,24 +3693,32 @@ function EnhancePanel({ openSettings }: { openSettings: () => void }) {
   const i2iSizeMode = useAppStore((state) => state.i2iSizeMode);
   const applyParams = useAppStore((state) => state.applyParams);
   const setI2IParam = useAppStore((state) => state.setI2IParam);
+  const i2iSourceMode = useAppStore(state => state.i2iSourceMode);
+  const setI2ISourceMode = useAppStore(state => state.setI2ISourceMode);
   const setI2ISizeMode = useAppStore((state) => state.setI2ISizeMode);
   const generateI2I = useAppStore((state) => state.generateI2I);
   const [magnitude, setMagnitude] = useState(3);
-  const [enhanceScale, setEnhanceScale] = useState<1 | 2>(1);
+  const [enhanceScale, setEnhanceScale] = useState<1 | 2 | "max">(1);
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
+
+  const isMax = enhanceScale === "max";
+  const officialMax = isMax && params.model.startsWith("nai-diffusion-5-");
+  const inputSize = workbenchImage ? adaptiveNAIImageSize(workbenchImage.width, workbenchImage.height, params) : params;
 
   async function runEnhance() {
     if (!workbenchImage) return;
     const requestedTarget = resolveNAIEnhanceOutputSize(
       workbenchImage.width,
       workbenchImage.height,
-      enhanceScale,
+      isMax ? 1 : enhanceScale,
       params,
     );
-    if (enhanceScale > 1 && requestedTarget.exceedsLimit) return;
-    const previous = { width: params.width, height: params.height, strength: i2iParams.strength, noise: i2iParams.noise, sizeMode: i2iSizeMode };
-    const target = adaptiveNAIImageSize(workbenchImage.width * enhanceScale, workbenchImage.height * enhanceScale, params);
+    if (!isMax && enhanceScale === 2 && requestedTarget.exceedsLimit) return;
+    const previous = { width: params.width, height: params.height, strength: i2iParams.strength, noise: i2iParams.noise, sizeMode: i2iSizeMode, upscaledEnhance: i2iParams.upscaledEnhance, sourceMode: i2iSourceMode };
+    const target = officialMax ? inputSize : isMax ? adaptiveNAIImageSize(workbenchImage.width * 2, workbenchImage.height * 2, params) : adaptiveNAIImageSize(workbenchImage.width * (enhanceScale as number), workbenchImage.height * (enhanceScale as number), params);
+    setI2ISourceMode("latest");
+    setI2IParam("upscaledEnhance", officialMax);
     setI2ISizeMode("custom");
     applyParams({ width: target.width, height: target.height });
     // Official Enhance is prompt-aware, but conservative defaults must keep the
@@ -3724,18 +3732,20 @@ function EnhancePanel({ openSettings }: { openSettings: () => void }) {
       applyParams({ width: previous.width, height: previous.height });
       setI2IParam("strength", previous.strength);
       setI2IParam("noise", previous.noise);
+      setI2IParam("upscaledEnhance", previous.upscaledEnhance);
+      setI2ISourceMode(previous.sourceMode);
       setI2ISizeMode(previous.sizeMode);
     }
   }
 
   const requestedTarget = workbenchImage
-    ? resolveNAIEnhanceOutputSize(workbenchImage.width, workbenchImage.height, enhanceScale, params)
+    ? resolveNAIEnhanceOutputSize(workbenchImage.width, workbenchImage.height, isMax ? 1 : enhanceScale, params)
     : null;
-  const outputTooLarge = Boolean(enhanceScale > 1 && requestedTarget?.exceedsLimit);
+  const outputTooLarge = Boolean(!isMax && enhanceScale === 2 && requestedTarget?.exceedsLimit);
   const target = workbenchImage && requestedTarget
     ? outputTooLarge
       ? requestedTarget
-      : adaptiveNAIImageSize(workbenchImage.width * enhanceScale, workbenchImage.height * enhanceScale, params)
+      : officialMax ? maxNAIEnhanceSize(inputSize.width, inputSize.height) : adaptiveNAIImageSize(workbenchImage.width * (isMax ? 2 : enhanceScale), workbenchImage.height * (isMax ? 2 : enhanceScale), params)
     : null;
   const outputLimitReason = outputTooLarge && target
     ? f("enhance.outputLimit", { size: `${target.width}×${target.height}`, pixels: (target.width * target.height).toLocaleString(), limit: NAI_MAX_PIXEL_AREA.toLocaleString() })
@@ -3751,12 +3761,13 @@ function EnhancePanel({ openSettings }: { openSettings: () => void }) {
           <div className="scale-buttons">
             <Button variant={enhanceScale === 1 ? "primary" : "secondary"} onClick={() => setEnhanceScale(1)}>{t("enhance.keepResolution")}</Button>
             <Button variant={enhanceScale === 2 ? "primary" : "secondary"} onClick={() => setEnhanceScale(2)}>{t("enhance.doubleResolution")}</Button>
+            <Button variant={isMax ? "primary" : "secondary"} onClick={() => setEnhanceScale("max")}>MAX</Button>
           </div>
         </div>
         {workbenchImage && target ? <div className={clsx("info-card", outputTooLarge && "limit-card")}><strong>{t("enhance.outputSize")}</strong><span>{workbenchImage.width}×{workbenchImage.height} → {target.width}×{target.height}</span><small>{outputTooLarge ? outputLimitReason : t("enhance.outputHint")}</small></div> : null}
-        <FeatureCostCard label={t("cost.beforeRun")} feature="i2i" />
+        <FeatureCostCard label={t("cost.beforeRun")} feature="i2i" sizeOverride={officialMax ? inputSize : target ?? undefined} i2iOverride={{ strength: Math.min(0.48, 0.10 + magnitude * 0.034), upscaledEnhance: officialMax }} />
       </div>
-      <AccountAndRunButton label={f("enhance.run", { scale: enhanceScale })} onRun={() => void runEnhance()} openSettings={openSettings} disabled={outputTooLarge} disabledReason={outputLimitReason} />
+      <AccountAndRunButton label={f("enhance.run", { scale: isMax ? "MAX" : enhanceScale }).replace(/MAX\s*[×x]/, "MAX")} onRun={() => void runEnhance()} openSettings={openSettings} disabled={outputTooLarge} disabledReason={outputLimitReason} />
     </>
   );
 }

@@ -970,7 +970,7 @@ function normalizedLastToolState(last: LastGenerationState, state: AppState) {
     brushOpacity: persistedNumber(last.brushOpacity, state.brushOpacity, 0.05, 1),
     brushColor: normalizedBrushColor(last.brushColor, state.brushColor),
     brushShape,
-    upscaleScale: (last.upscaleScale === 2 || last.upscaleScale === 4
+    upscaleScale: (last.upscaleScale === 2 || last.upscaleScale === 4 || last.upscaleScale === "max"
       ? last.upscaleScale
       : state.upscaleScale) as UpscaleScale,
     directorTool: (PERSISTED_DIRECTOR_TOOLS.has(String(last.directorTool))
@@ -1001,7 +1001,7 @@ function buildLastGenerationState(state: AppState): LastGenerationState {
     charCaptions: normalizeCharacterCaptions(state.charCaptions),
     batchCount: state.batchCount,
     batchIntervalSeconds: state.batchIntervalSeconds,
-    i2iParams: state.i2iParams,
+    i2iParams: { ...state.i2iParams, upscaledEnhance: false },
     inpaintModel: state.inpaintModel,
     inpaintStrength: state.inpaintStrength,
     inpaintNoise: state.inpaintNoise,

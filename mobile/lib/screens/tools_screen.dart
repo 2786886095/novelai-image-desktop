@@ -1,3 +1,4 @@
+import '../images/upscale_plan.dart';
 import '../ui/studio_dropdown.dart';
 import 'dart:io';
 import 'dart:math' as math;
@@ -807,6 +808,10 @@ class _UpscalePanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = context.watch<AppState>();
     final language = s.settings.language;
+    final source = s.workbenchImage;
+    final plan = source == null
+        ? null
+        : planUpscale(source.width, source.height, s.upscaleScale);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -817,7 +822,8 @@ class _UpscalePanel extends StatelessWidget {
           SegmentedButton<int>(
             segments: const [
               ButtonSegment(value: 2, label: Text('2x')),
-              ButtonSegment(value: 4, label: Text('4x'))
+              ButtonSegment(value: 4, label: Text('4x')),
+              ButtonSegment(value: 0, label: Text('MAX'))
             ],
             selected: {s.upscaleScale},
             onSelectionChanged: (v) {
@@ -826,13 +832,21 @@ class _UpscalePanel extends StatelessWidget {
             },
           ),
           const SizedBox(height: 12),
+          if (plan != null)
+            Text(
+                '${source!.width}×${source.height} → ${plan.width}×${plan.height}'),
+          if (plan?.exceedsLimit ?? false)
+            Text('当前倍率超过超分限制，请选择 MAX。',
+                style: TextStyle(color: Theme.of(context).colorScheme.error)),
           _ToolQuoteBar(quote: s.upscaleAnlasQuote),
           const SizedBox(height: 12),
           SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
                   onPressed:
-                      s.busy || s.workbenchImage == null ? null : s.upscale,
+                      s.busy || source == null || (plan?.exceedsLimit ?? false)
+                          ? null
+                          : s.upscale,
                   icon: const Icon(Icons.open_in_full),
                   label:
                       Text(mobileUiTextFor(language, 'tools.startUpscale')))),
@@ -881,27 +895,38 @@ class _EnhancePanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = context.watch<AppState>();
     final source = s.workbenchImage;
+    final isMax = s.enhanceScale == 0;
+    final officialMax = isMax && s.params.model.startsWith('nai-diffusion-5-');
     final requestedTarget = source == null
         ? null
         : resolveNaiEnhanceOutputSize(
             source.width,
             source.height,
-            s.enhanceScale,
+            isMax ? 1 : s.enhanceScale,
             fallbackWidth: source.width,
             fallbackHeight: source.height,
           );
     final outputTooLarge =
         s.enhanceScale > 1 && (requestedTarget?.exceedsLimit ?? false);
-    final target = source == null || requestedTarget == null
+    final normal = source == null || requestedTarget == null
         ? null
         : outputTooLarge
             ? (requestedTarget.width, requestedTarget.height)
             : adaptiveNaiImageSize(
-                source.width * s.enhanceScale,
-                source.height * s.enhanceScale,
+                source.width * (isMax ? 2 : s.enhanceScale),
+                source.height * (isMax ? 2 : s.enhanceScale),
                 fallbackWidth: source.width,
                 fallbackHeight: source.height,
               );
+    final inputSize = source == null
+        ? null
+        : adaptiveNaiImageSize(source.width, source.height);
+    final maxSize = inputSize == null
+        ? null
+        : maxNaiEnhanceSize(inputSize.$1, inputSize.$2);
+    final target = officialMax && maxSize != null
+        ? (maxSize.width, maxSize.height)
+        : normal;
     final outputLimitReason = outputTooLarge && target != null
         ? runtimeFormatFor(
             s.settings.language, 'status.enhanceOutputTooLarge', {
@@ -935,6 +960,7 @@ class _EnhancePanel extends StatelessWidget {
             segments: const [
               ButtonSegment(value: 1, label: Text('1× 保持分辨率')),
               ButtonSegment(value: 2, label: Text('2× 同时放大')),
+              ButtonSegment(value: 0, label: Text('MAX')),
             ],
             selected: {s.enhanceScale},
             onSelectionChanged: (value) {
@@ -961,7 +987,7 @@ class _EnhancePanel extends StatelessWidget {
             onPressed:
                 s.busy || source == null || outputTooLarge ? null : s.enhance,
             icon: const Icon(Icons.auto_awesome),
-            label: Text('增强图像 ${s.enhanceScale}×'),
+            label: Text(isMax ? '增强图像 MAX' : '增强图像 ${s.enhanceScale}×'),
           ),
         ]),
       ),

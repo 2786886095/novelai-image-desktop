@@ -1,3 +1,4 @@
+import '../images/upscale_plan.dart';
 import '../services/vibe_file.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -954,7 +955,8 @@ class AppState extends ChangeNotifier {
   }) async {
     final bytes = await File(filePath).readAsBytes();
     final dims = readImageDimensions(bytes);
-    final report = inspectImageMetadata(parseImageTextMetadata(bytes));
+    final report =
+        inspectImageMetadata(await compute(parseImageTextMetadata, bytes));
     final imported = report.imported;
     workbenchImportedParams = imported.isEmpty ? null : imported;
     workbenchCharacterCaptions = report.characterCaptions;
@@ -1629,6 +1631,7 @@ class AppState extends ChangeNotifier {
       extras: quoteExtras,
       batchCount: count,
       imageToImage: imageToImage,
+      upscaledEnhance: imageToImage && i2i.upscaledEnhance,
       strength: i2i.strength,
       alreadyEncodedVibes: api.countCachedVibes(quoteParams.model, quoteExtras),
       preciseReferenceCount: quoteExtras.preciseReferences.length,
@@ -1678,6 +1681,7 @@ class AppState extends ChangeNotifier {
       extras: quoteExtras,
       batchCount: count,
       imageToImage: imageToImage,
+      upscaledEnhance: imageToImage && i2i.upscaledEnhance,
       strength: i2i.strength,
       alreadyEncodedVibes: api.countCachedVibes(quoteParams.model, quoteExtras),
       preciseReferenceCount: quoteExtras.preciseReferences.length,
@@ -2185,6 +2189,7 @@ class AppState extends ChangeNotifier {
           extras: initialExtras,
           batchCount: total,
           imageToImage: true,
+          upscaledEnhance: i2i.upscaledEnhance,
           strength: i2i.strength,
           alreadyEncodedVibes:
               api.countCachedVibes(initialParams.model, initialExtras),
@@ -2198,6 +2203,7 @@ class AppState extends ChangeNotifier {
         extras: initialExtras,
         batchCount: total,
         imageToImage: true,
+        upscaledEnhance: i2i.upscaledEnhance,
         strength: i2i.strength,
         alreadyEncodedVibes:
             api.countCachedVibes(initialParams.model, initialExtras),
@@ -2292,8 +2298,14 @@ class AppState extends ChangeNotifier {
             if (images.isEmpty) throw Exception(_rt('error.i2iNoImages'));
             final items = <HistoryItem>[];
             for (final bytes in images) {
+              final actualSize = i2i.upscaledEnhance
+                  ? decodeImageDimensions(bytes)
+                  : (taskParams.width, taskParams.height);
               items.add(await storage.saveImage(bytes, taskParams, seed,
-                  feature: 'i2i', groupId: generationGroupId.ifEmptyNull));
+                  feature: 'i2i',
+                  width: actualSize.$1,
+                  height: actualSize.$2,
+                  groupId: generationGroupId.ifEmptyNull));
             }
             comparisonBefore = source;
             comparisonAfter = WorkingImage(
@@ -2360,7 +2372,7 @@ class AppState extends ChangeNotifier {
     final requestedTarget = resolveNaiEnhanceOutputSize(
       source.width,
       source.height,
-      enhanceScale.clamp(1, 2),
+      enhanceScale == 0 ? 1 : enhanceScale.clamp(1, 2),
       fallbackWidth: source.width,
       fallbackHeight: source.height,
     );
@@ -2379,9 +2391,25 @@ class AppState extends ChangeNotifier {
     final previousStrength = i2i.strength;
     final previousNoise = i2i.noise;
     final previousSizeMode = i2iSizeMode;
+    final previousSourceMode = i2iSourceMode;
+    i2iSourceMode = 'latest';
+    final officialMax =
+        enhanceScale == 0 && params.model.startsWith('nai-diffusion-5-');
+    final previousMax = i2i.upscaledEnhance;
+    i2i.upscaledEnhance = officialMax;
     final target = adaptiveNaiImageSize(
-      source.width * enhanceScale.clamp(1, 2),
-      source.height * enhanceScale.clamp(1, 2),
+      source.width *
+          (officialMax
+              ? 1
+              : enhanceScale == 0
+                  ? 2
+                  : enhanceScale.clamp(1, 2)),
+      source.height *
+          (officialMax
+              ? 1
+              : enhanceScale == 0
+                  ? 2
+                  : enhanceScale.clamp(1, 2)),
       fallbackWidth: source.width,
       fallbackHeight: source.height,
     );
@@ -2396,6 +2424,7 @@ class AppState extends ChangeNotifier {
     try {
       await generateI2I();
     } finally {
+      i2i.upscaledEnhance = previousMax;
       params
         ..width = previousWidth
         ..height = previousHeight;
@@ -2403,6 +2432,7 @@ class AppState extends ChangeNotifier {
         ..strength = previousStrength
         ..noise = previousNoise;
       i2iSizeMode = previousSizeMode;
+      i2iSourceMode = previousSourceMode;
       notifyListeners();
       _scheduleGenerationQuote();
     }
@@ -2485,17 +2515,8 @@ class AppState extends ChangeNotifier {
       final image = await _workbenchBytes();
       final dims = workbenchImage;
       if (dims == null) throw Exception(_rt('error.imageRequired'));
-      final prepared =
-          prepareImageWithinPixels(await processingImageBytes(image));
-      final outputSize = resolveUpscaleOutputSize(
-          prepared.width, prepared.height, upscaleScale);
-      if (outputSize.exceedsLimit) {
-        throw Exception(_rf('status.upscaleOutputTooLarge', {
-          'width': outputSize.width,
-          'height': outputSize.height,
-          'max': maxNaiUpscaleOutputDimension,
-        }));
-      }
+      final plan = planUpscale(dims.width, dims.height, upscaleScale);
+      if (plan.exceedsLimit) throw const FormatException('当前倍率超过超分限制，请选择 MAX。');
       final before = await _authorizeQuotedRun(
         token,
         (fresh) => calculateUpscaleAnlas(
@@ -2505,21 +2526,16 @@ class AppState extends ChangeNotifier {
           language: settings.language,
         ),
       );
-      status = prepared.resized
-          ? _rf('status.upscalePreparedRunning', {
-              'width': prepared.width,
-              'height': prepared.height,
-              'scale': upscaleScale,
-            })
-          : _rf('status.upscaleRunning', {'scale': upscaleScale});
+      status = _rf('status.upscaleRunning',
+          {'scale': upscaleScale == 0 ? 'MAX' : upscaleScale});
       notifyListeners();
-      final bytes = await api.upscale(
-          token, settings, prepared.bytes, upscaleScale, params.model);
+      final bytes =
+          await api.upscale(token, settings, image, upscaleScale, params.model);
       final item = await storage.saveImage(bytes, params, 0,
           feature: 'upscale',
           model: 'upscale',
-          width: prepared.width * upscaleScale,
-          height: prepared.height * upscaleScale,
+          width: plan.width,
+          height: plan.height,
           groupId: generationGroupId.ifEmptyNull);
       await _commitCompletedHistory([item], useAsWorkbench: true);
       status = _rf('status.upscaleDone',

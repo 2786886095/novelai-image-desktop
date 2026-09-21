@@ -1,3 +1,4 @@
+import '../images/upscale_plan.dart';
 import 'dart:math';
 
 import '../i18n/runtime_text.dart';
@@ -68,13 +69,17 @@ AnlasQuote calculateImageGenerationAnlas({
   bool imageToImage = false,
   double strength = 1,
   bool forcePaid = false,
+  bool upscaledEnhance = false,
   int alreadyEncodedVibes = 0,
   int preciseReferenceCount = 0,
   Object? language,
 }) {
   final samples = max(1, batchCount.floor());
-  final width = max(1, params.width);
-  final height = max(1, params.height);
+  final size = upscaledEnhance
+      ? maxNaiEnhanceSize(params.width, params.height)
+      : (width: params.width, height: params.height);
+  final width = max(1, size.width);
+  final height = max(1, size.height);
   final pixels = max(width * height, 65536);
   final steps = max(1, params.steps);
   final normalizedStrength = imageToImage ? strength.clamp(0, 1) : 1.0;
@@ -226,53 +231,26 @@ AnlasQuote calculateUpscaleAnlas({
       message: _at(language, 'anlas.loadUpscaleImage'),
     );
   }
-  const maxPixels = 1024 * 1024;
-  final originalPixels = image.width * image.height;
-  final ratio =
-      originalPixels <= maxPixels ? 1.0 : sqrt(maxPixels / originalPixels);
-  final width = max(1, (image.width * ratio).floor());
-  final height = max(1, (image.height * ratio).floor());
-  final pixels = width * height;
+  final plan = planUpscale(image.width, image.height, scale);
+  if (plan.exceedsLimit) {
+    return const AnlasQuote(
+        ok: false,
+        source: AnlasQuoteSource.unavailable,
+        message: '当前倍率超过超分限制，请选择 MAX。');
+  }
   final details = <String>[
-    if (ratio < 1)
-      _af(language, 'anlas.upscaleResize', {
-        'from': '${image.width}x${image.height}',
-        'to': '${width}x$height',
-      })
-    else
-      _af(language, 'anlas.upscaleInput', {
-        'size': '${image.width}x${image.height}',
-      }),
+    '${plan.inputWidth}×${plan.inputHeight} → ${plan.width}×${plan.height}; ${plan.passes} requests'
   ];
-  final activeOpus =
-      account.hasActiveSubscription == true && (account.tierLevel ?? 0) >= 3;
-  var amount = -1;
-  if (activeOpus && pixels <= 409600) {
-    amount = 0;
-  } else if (pixels <= 262144) {
-    amount = 1;
-  } else if (pixels <= 409600) {
-    amount = 2;
-  } else if (pixels <= 524288) {
-    amount = 3;
-  } else if (pixels <= 786432) {
-    amount = 5;
-  } else if (pixels <= 1048576) {
-    amount = 7;
-  }
-  if (amount < 0) {
-    return AnlasQuote(
-      ok: false,
-      source: AnlasQuoteSource.unavailable,
-      balance: account.anlasBalance,
-      message: _at(language, 'anlas.upscaleTooLarge'),
-      details: details,
-    );
-  }
-  final passCount = scale == 4 ? 2 : 1;
-  amount *= passCount;
-  if (passCount > 1) {
-    details.add('4x runs two fixed 2x upscale requests.');
+  var amount = 0;
+  for (var pass = 0; pass < plan.passes; pass++) {
+    final pixels = plan.inputWidth * plan.inputHeight * pow(4, pass);
+    amount += pixels <= 1048576
+        ? 1
+        : pixels <= 1747627
+            ? 2
+            : pixels <= 2446678
+                ? 3
+                : 4;
   }
   final balance = account.anlasBalance;
   return AnlasQuote(

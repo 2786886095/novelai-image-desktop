@@ -1,5 +1,6 @@
+import { planUpscale } from "./upscale-plan";
+import { maxNAIEnhanceSize } from "./nai-dimensions";
 import {
-  MAX_NAI_UPSCALE_INPUT_PIXELS,
   isNAIV4PlusModel,
   supportsNAIPreciseReference,
   supportsNAIVibeTransfer,
@@ -36,16 +37,6 @@ function clamp01(value: unknown, fallback: number) {
   return Math.min(1, Math.max(0, parsed));
 }
 
-function fitSizeWithinPixels(width: number, height: number, maxPixels: number) {
-  const pixels = width * height;
-  if (!width || !height || pixels <= maxPixels) return { width, height, resized: false };
-  const ratio = Math.sqrt(maxPixels / pixels);
-  return {
-    width: Math.max(1, Math.floor(width * ratio)),
-    height: Math.max(1, Math.floor(height * ratio)),
-    resized: true,
-  };
-}
 
 function finalizeQuote(
   feature: AnlasQuoteFeature,
@@ -174,37 +165,15 @@ export function calculateUpscaleAnlas({
       message: "Load the image to upscale before reading the pre-generation cost.",
     };
   }
-  const prepared = fitSizeWithinPixels(image.width, image.height, MAX_NAI_UPSCALE_INPUT_PIXELS);
-  const pixels = prepared.width * prepared.height;
-  const details = [
-    prepared.resized
-      ? `Input is pre-shrunk for NovelAI upscale: ${image.width}x${image.height} -> ${prepared.width}x${prepared.height}.`
-      : `Input size used for upscale quote: ${prepared.width}x${prepared.height}.`,
-    `Upscale scale: ${scale ?? 4}x.`,
-  ];
-  if (isActiveOpus(account) && pixels <= 409_600) {
-    details.push("Opus active: official upscale tier is free for this input size.");
-    return finalizeQuote("upscale", 0, account, details, "estimate-formula");
+  const plan = planUpscale(image.width, image.height, scale ?? 4);
+  if (plan.exceedsLimit) return { ok: false, source: "unavailable", reason: "image-too-large", message: "当前倍率超过超分限制，请选择 MAX。" };
+  const details = [`Input: ${plan.inputWidth}x${plan.inputHeight}; output: ${plan.width}x${plan.height}; requests: ${plan.passes}.`];
+  let amount = 0;
+  for (let pass = 0; pass < plan.passes; pass++) {
+    const pixels = plan.inputWidth * plan.inputHeight * 4 ** pass;
+    amount += pixels <= 1048576 ? 1 : pixels <= 1747627 ? 2 : pixels <= 2446678 ? 3 : 4;
   }
-  let amount = -3;
-  if (pixels <= 262_144) amount = 1;
-  else if (pixels <= 409_600) amount = 2;
-  else if (pixels <= 524_288) amount = 3;
-  else if (pixels <= 786_432) amount = 5;
-  else if (pixels <= 1_048_576) amount = 7;
-  if (amount < 0) {
-    return {
-      ok: false,
-      source: "unavailable",
-      reason: "image-too-large",
-      balance: account?.anlasBalance,
-      message: "Image resolution exceeds the quote range for NovelAI cloud upscale.",
-      details,
-    };
-  }
-  const passCount = scale === 4 ? 2 : 1;
-  if (passCount > 1) details.push("4x runs two fixed 2x upscale requests.");
-  return finalizeQuote("upscale", amount * passCount, account, details, "estimate-formula");
+  return finalizeQuote("upscale", amount, account, details, "estimate-formula");
 }
 
 export function calculateDirectorAnlas({
@@ -265,7 +234,7 @@ export function calculateFeatureAnlasQuote({
   }
   if (feature === "i2i") {
     return calculateImageGenerationAnlas({
-      params,
+      params: i2iParams?.upscaledEnhance ? { ...params, ...maxNAIEnhanceSize(params.width, params.height) } : params,
       account,
       extras,
       alreadyEncodedVibes,

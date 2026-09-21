@@ -98,8 +98,8 @@ void main() {
         image: const WorkingImage(filePath: '', width: 1024, height: 1024),
         account: opusAccount,
         scale: 4,
-      ).amount,
-      14,
+      ).ok,
+      false,
     );
     expect(
       calculateDirectorAnlas(tool: 'bg-removal', account: paidAccount).amount,

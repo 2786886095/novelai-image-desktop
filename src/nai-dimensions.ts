@@ -128,3 +128,9 @@ export function isNAIImageSize(size: NAIImageSize): boolean {
     size.width * size.height <= NAI_MAX_PIXEL_AREA
   );
 }
+
+/** Official Max enhance preview: up to 2x, capped by the generation pixel area. */
+export function maxNAIEnhanceSize(width: number, height: number) {
+  const factor = Math.min(2, Math.sqrt(NAI_MAX_PIXEL_AREA / (width * height)));
+  return { width: Math.floor(width * factor), height: Math.floor(height * factor) };
+}

@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'dart:io';
+import 'package:image/image.dart' as image_lib;
 import 'dart:typed_data';
 
 import '../models/nai_models.dart';
@@ -220,62 +222,186 @@ class ImageMetadataReport {
   });
 }
 
+// Bound decompressed text separately from encoded image size.
+const _maxMetadataBytes = 8 * 1024 * 1024;
+
+class _MetadataSink extends ByteConversionSinkBase {
+  final BytesBuilder bytes = BytesBuilder(copy: false);
+  @override
+  void add(List<int> chunk) {
+    if (bytes.length + chunk.length > _maxMetadataBytes) {
+      throw const FormatException('Image metadata is too large');
+    }
+    bytes.add(chunk);
+  }
+
+  @override
+  void close() {}
+}
+
+Uint8List _inflateMetadata(List<int> bytes, {bool gzip = false}) {
+  final sink = _MetadataSink();
+  final decoder =
+      (gzip ? GZipCodec().decoder : ZLibDecoder()).startChunkedConversion(sink);
+  // Small input chunks bound expansion before the output sink can stop it.
+  for (var i = 0; i < bytes.length; i += 256) {
+    decoder.add(bytes.sublist(i, (i + 256).clamp(0, bytes.length)));
+  }
+  decoder.close();
+  return sink.bytes.takeBytes();
+}
+
 Map<String, String> parsePngTextMetadata(Uint8List bytes) {
   const signature = <int>[137, 80, 78, 71, 13, 10, 26, 10];
   if (bytes.length < 8) return {};
-  for (var index = 0; index < signature.length; index++) {
-    if (bytes[index] != signature[index]) return {};
+  for (var i = 0; i < 8; i++) {
+    if (bytes[i] != signature[i]) return {};
   }
   final data = ByteData.sublistView(bytes);
   final result = <String, String>{};
   var offset = 8;
   while (offset + 12 <= bytes.length) {
-    final length = data.getUint32(offset, Endian.big);
+    final length = data.getUint32(offset);
     if (length > bytes.length - offset - 12) break;
-    final type = ascii.decode(bytes.sublist(offset + 4, offset + 8));
+    final type = latin1.decode(bytes.sublist(offset + 4, offset + 8));
     if (type == 'IEND') break;
-    if (type == 'tEXt' && length > 0) {
-      final chunk = bytes.sublist(offset + 8, offset + 8 + length);
-      final separator = chunk.indexOf(0);
-      if (separator >= 0) {
-        final key = latin1.decode(chunk.sublist(0, separator));
-        final value = utf8.decode(
-          chunk.sublist(separator + 1),
-          allowMalformed: true,
-        );
-        result[key] = value;
-      }
-    } else if (type == 'iTXt' && length > 0) {
-      final chunk = bytes.sublist(offset + 8, offset + 8 + length);
-      final keywordEnd = chunk.indexOf(0);
-      if (keywordEnd >= 0 && keywordEnd + 2 < chunk.length) {
-        final key = latin1.decode(chunk.sublist(0, keywordEnd));
-        final compressed = chunk[keywordEnd + 1] != 0;
-        var cursor = keywordEnd + 3;
-        final languageEnd = chunk.indexOf(0, cursor);
-        if (languageEnd >= 0) {
-          cursor = languageEnd + 1;
-          final translatedEnd = chunk.indexOf(0, cursor);
-          if (translatedEnd >= 0 && !compressed) {
-            result[key] = utf8.decode(
-              chunk.sublist(translatedEnd + 1),
-              allowMalformed: true,
-            );
+    try {
+      if (length <= _maxMetadataBytes) {
+        final chunk =
+            Uint8List.sublistView(bytes, offset + 8, offset + 8 + length);
+        if (type == 'eXIf') {
+          result.addAll(_readTiffMetadata(chunk, 0));
+        } else if (type == 'tEXt' || type == 'zTXt' || type == 'iTXt') {
+          final end = chunk.indexOf(0);
+          if (end > 0 && end <= 79) {
+            final key = latin1.decode(chunk.sublist(0, end));
+            List<int>? text;
+            if (type == 'tEXt') text = chunk.sublist(end + 1);
+            if (type == 'zTXt' &&
+                end + 2 < chunk.length &&
+                chunk[end + 1] == 0) {
+              text = _inflateMetadata(chunk.sublist(end + 2));
+            }
+            if (type == 'iTXt' &&
+                end + 3 < chunk.length &&
+                chunk[end + 2] == 0) {
+              final languageEnd = chunk.indexOf(0, end + 3);
+              final translatedEnd =
+                  languageEnd < 0 ? -1 : chunk.indexOf(0, languageEnd + 1);
+              if (translatedEnd >= 0 && chunk[end + 1] <= 1) {
+                final payload = chunk.sublist(translatedEnd + 1);
+                text =
+                    chunk[end + 1] == 1 ? _inflateMetadata(payload) : payload;
+              }
+            }
+            if (text != null) {
+              result[key] = utf8.decode(text, allowMalformed: true);
+            }
           }
         }
       }
+    } catch (_) {
+      // One malformed optional chunk must not hide other usable metadata.
     }
     offset += 12 + length;
   }
   return result;
 }
 
+Map<String, String> _readStealthMetadata(Uint8List bytes) {
+  if (bytes.length < 33 ||
+      bytes.length > 64 * 1024 * 1024 ||
+      bytes[0] != 137 ||
+      bytes[1] != 80 ||
+      bytes[2] != 78 ||
+      bytes[3] != 71) return {};
+  try {
+    final info = image_lib.PngDecoder().startDecode(bytes);
+    if (info == null ||
+        info.width * info.height > 16 * 1024 * 1024 ||
+        info.width * info.height < 152) return {};
+    final image = image_lib.decodePng(bytes);
+    if (image == null || image.numChannels < 4) return {};
+    var cursor = 0;
+    final capacity = image.width * image.height;
+    int readByte() {
+      if (cursor + 8 > capacity) {
+        throw const FormatException('Truncated stealth metadata');
+      }
+      var value = 0;
+      for (var i = 0; i < 8; i++, cursor++) {
+        value = (value << 1) |
+            (image
+                    .getPixel(cursor ~/ image.height, cursor % image.height)
+                    .a
+                    .toInt() &
+                1);
+      }
+      return value;
+    }
+
+    final signature =
+        String.fromCharCodes(List.generate(15, (_) => readByte()));
+    if (signature != 'stealth_pngcomp' && signature != 'stealth_pnginfo') {
+      return {};
+    }
+    var bits = 0;
+    for (var i = 0; i < 4; i++) {
+      bits = (bits << 8) | readByte();
+    }
+    if (bits <= 0 ||
+        bits % 8 != 0 ||
+        bits > capacity - cursor ||
+        bits ~/ 8 > _maxMetadataBytes) return {};
+    final payload = List.generate(bits ~/ 8, (_) => readByte());
+    final text = utf8.decode(signature == 'stealth_pngcomp'
+        ? _inflateMetadata(payload, gzip: true)
+        : payload);
+    final decoded = jsonDecode(text);
+    if (decoded is! Map) return {};
+    return decoded.map((key, value) =>
+        MapEntry(key.toString(), value is String ? value : jsonEncode(value)));
+  } catch (_) {
+    return {};
+  }
+}
+
 Map<String, String> parseImageTextMetadata(Uint8List bytes) {
   final png = parsePngTextMetadata(bytes);
-  if (png.isNotEmpty) return png;
+  if (!png.containsKey('Comment') &&
+      !png.containsKey('parameters') &&
+      !png.containsKey('prompt')) {
+    final stealth = _readStealthMetadata(bytes);
+    if (stealth.isNotEmpty) {
+      return _normalizeImageMetadata({...stealth, ...png});
+    }
+  }
+  if (png.isNotEmpty) return _normalizeImageMetadata(png);
   final jpeg = _parseJpegMetadata(bytes);
-  if (jpeg.isNotEmpty) return jpeg;
-  return _parseWebpMetadata(bytes);
+  if (jpeg.isNotEmpty) return _normalizeImageMetadata(jpeg);
+  return _normalizeImageMetadata(_parseWebpMetadata(bytes));
+}
+
+// EXIF UserComment often contains the same NovelAI JSON as PNG Comment.
+Map<String, String> _normalizeImageMetadata(Map<String, String> metadata) {
+  if (metadata.containsKey('Comment')) return metadata;
+  for (final key in ['UserComment', 'XPComment', 'ImageDescription']) {
+    try {
+      final value = jsonDecode(metadata[key] ?? '');
+      if (value is! Map) continue;
+      if (value['Comment'] != null) {
+        return {
+          ...value.map((k, v) =>
+              MapEntry(k.toString(), v is String ? v : jsonEncode(v))),
+          ...metadata
+        };
+      }
+      if (value['prompt'] is String || value['v4_prompt'] is Map) {
+        return {...metadata, 'Comment': jsonEncode(value)};
+      }
+    } catch (_) {}
+  }
+  return metadata;
 }
 
 Map<String, String> _parseJpegMetadata(Uint8List bytes) {
@@ -300,7 +426,8 @@ Map<String, String> _parseJpegMetadata(Uint8List bytes) {
         length >= 8 &&
         latin1.decode(bytes.sublist(offset + 4, offset + 10)) ==
             'Exif\u0000\u0000') {
-      return _readTiffMetadata(bytes, offset + 10);
+      return _readTiffMetadata(
+          Uint8List.sublistView(bytes, offset + 10, offset + 2 + length), 0);
     }
     offset += 2 + length;
   }
@@ -323,7 +450,10 @@ Map<String, String> _parseWebpMetadata(Uint8List bytes) {
     if (type == 'EXIF') {
       final hasPrefix = length >= 6 &&
           latin1.decode(bytes.sublist(start, start + 6)) == 'Exif\u0000\u0000';
-      return _readTiffMetadata(bytes, start + (hasPrefix ? 6 : 0));
+      return _readTiffMetadata(
+          Uint8List.sublistView(
+              bytes, start + (hasPrefix ? 6 : 0), start + length),
+          0);
     }
     offset = start + length + (length.isOdd ? 1 : 0);
   }
@@ -404,6 +534,7 @@ Map<String, String> _readTiffMetadata(Uint8List bytes, int tiffStart) {
     final ifd = tiffStart + relativeOffset;
     if (relativeOffset <= 0 ||
         visited.contains(ifd) ||
+        visited.length >= 64 ||
         ifd + 2 > bytes.length) {
       return;
     }

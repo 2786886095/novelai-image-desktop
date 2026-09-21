@@ -1,3 +1,4 @@
+import '../images/upscale_plan.dart';
 import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
@@ -531,6 +532,9 @@ class NaiApi {
         resizeImageToSize(imageBytes, params.width, params.height),
       );
       p['strength'] = i2i.strength.clamp(0, 1);
+      if (i2i.upscaledEnhance && params.model.startsWith('nai-diffusion-5-')) {
+        p['upscaled_enhance'] = true;
+      }
       // Keep NovelAI's transport field for compatibility after removing the
       // ineffective UI control, but always send the default value.
       p['noise'] = 0;
@@ -636,8 +640,12 @@ class NaiApi {
   Future<Uint8List> upscale(String token, AppSettings settings,
       Uint8List imageBytes, int scale, String model) async {
     final upscaleModel = resolveUpscaleModel(model);
-    final passes = scale == 4 ? 2 : 1;
     var passInput = await processingImageBytes(imageBytes);
+    final dims = decodeImageDimensions(passInput);
+    final plan = planUpscale(dims.$1, dims.$2, scale);
+    if (plan.exceedsLimit) throw const FormatException('当前倍率超过超分限制，请选择 MAX。');
+    final passes = plan.passes;
+    passInput = resizeImageToSize(passInput, plan.inputWidth, plan.inputHeight);
     for (var pass = 0; pass < passes; pass += 1) {
       final res = await _withClient(
         settings,
@@ -659,6 +667,11 @@ class NaiApi {
       );
       final images = _extractImages(res.bodyBytes);
       passInput = images.isNotEmpty ? images.first : res.bodyBytes;
+      final actual = decodeImageDimensions(passInput);
+      if (actual.$1 != plan.inputWidth * (1 << (pass + 1)) ||
+          actual.$2 != plan.inputHeight * (1 << (pass + 1))) {
+        throw const FormatException('超分返回的图片尺寸与请求不符。');
+      }
     }
     return passInput;
   }
