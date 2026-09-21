@@ -1,11 +1,13 @@
 ## Langbai NovelAI Studio 2.3.3
 
-### 元数据兼容（Android / iOS）
+### v2.3.3 更新内容
+
+#### 元数据兼容（Android / iOS）
 - 补齐 PNG 压缩文本块 zTXt、压缩 iTXt、PNG EXIF，以及 NovelAI alpha 通道隐写元数据的读取。
 - 改善 EXIF 中 JSON 生成参数的识别；损坏的元数据块不再阻断后续有效字段。
 - 增加解压长度、像素数和 EXIF 遍历边界，并将导入入口的元数据解析移至后台 isolate。
 
-### 增强与超分（电脑端 / 手机端）
+#### 增强与超分（电脑端 / 手机端）
 - 增强和超分新增 MAX，可预览处理后的尺寸。
 - V5 增强 MAX 使用官网 upscaled_enhance 参数；其他模型按普通增强流程适配尺寸上限。
 - 超分根据源图尺寸、每次请求的像素上限及软件现有边长限制规划放大；必要时先调整输入尺寸。
@@ -14,7 +16,7 @@
 - 修正增强源图、预估尺寸和实际结果记录之间的一致性。
 
 ### 安装包
-- Windows x64 安装版与便携版、macOS Universal DMG/ZIP、Linux x64 AppImage。
+- Windows x64 安装版 `Langbai-NovelAI-Studio-Setup-2.3.3.exe` 与便携版 `Langbai-NovelAI-Studio-2.3.3.exe`、macOS Universal DMG/ZIP、Linux x64 AppImage。
 - Android 稳定签名 APK；iOS IPA 未签名，需要自行签名。
 
 ### 验证说明
