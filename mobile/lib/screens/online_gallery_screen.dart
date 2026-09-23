@@ -1,3 +1,4 @@
+import 'style_library_screen.dart';
 import 'gallery_favorites_screen.dart';
 import '../services/gallery_favorites.dart';
 import '../services/gallery_labels.dart';
@@ -1938,6 +1939,8 @@ class _DetailInfo extends StatelessWidget {
             label: Text(text.usePrompt),
           ),
         ],
+        if (item.source == OnlineGallerySource.quicktag && detail.prompt.trim().isNotEmpty)
+          SaveGalleryStyleButton(name:item.title,prompt:detail.prompt,images:(detail.media.isEmpty?[item.cover]:detail.media).map((im)=>im.downloadUrl.isNotEmpty?im.downloadUrl:im.displayUrl).toList()),
         if (item.source == OnlineGallerySource.quicktag)
           for (final block
               in quickCharacters(detail.metadata['entry']).indexed) ...[

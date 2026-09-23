@@ -1,3 +1,6 @@
+import StyleLibrary, {StyleSortSelect,styleText} from "./StyleLibrary";
+import {sortStyles} from "./style-library";
+import {countStyleUse} from "./style-library-client";
 import { planUpscale } from "./upscale-plan";
 import { maxNAIEnhanceSize } from "./nai-dimensions";
 import {parseVibeFile, exportVibeFile, vibeFileLabels, validateVibeModel} from "./vibe-file";
@@ -1706,6 +1709,7 @@ function PromptAndParams({
     setStylePresetMenuOpen(false);
     setHoveredStylePresetId("");
     setLockedAwareParam("stylePrompt", preset.prompt);
+    await countStyleUse(preset.id);
     setToast(f("prompt.stylePresetApplied", { name: preset.name }));
   }
 
@@ -2136,8 +2140,10 @@ function PromptAndParams({
             }}
           >
             <div className="style-preset-menu-list">
+              <StyleSortSelect/>
+              <Button onClick={()=>{setStylePresetMenuOpen(false);useAppStore.getState().setActiveTab("styles");}}>{styleText(settings?.language).title}</Button>
               {stylePromptPresetGroups.map((group) => {
-                const groupPresets = stylePromptPresets.filter((preset) => (preset.group || "Default") === group);
+                const groupPresets = sortStyles(stylePromptPresets, settings?.stylePromptPresetSort).filter((preset) => (preset.group || "Default") === group);
                 const expanded = selectedStylePresetGroup === group;
                 return (
                   <section className={clsx("style-folder", expanded && "expanded")} key={group}>
@@ -7311,6 +7317,7 @@ function MainPage() {
           <WorkspaceResizer edge="right" />
           <MemoizedHistoryPanel />
         </PersistentTabView>
+        <PersistentTabView active={activeTab === "styles"} scope="tab:styles"><StyleLibrary/></PersistentTabView>
         <PersistentTabView active={activeTab === "records"} scope="tab:records">
           <AiLogPanel />
         </PersistentTabView>

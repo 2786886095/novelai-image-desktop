@@ -1,0 +1,12 @@
+import {describe,it,expect,vi,beforeEach} from 'vitest';
+const state=vi.hoisted(()=>({settings:{} as any}));
+vi.mock('./store',()=>({useAppStore:{getState:()=>state,setState:(fn:any)=>Object.assign(state,fn(state))}}));
+import {changeStyles,countStyleUse,saveGalleryStyle} from './style-library-client';
+let api:any;let settings:any;
+beforeEach(()=>{settings={stylePromptPresets:[]};state.settings=settings;api={getSettings:vi.fn(async()=>settings),setSetting:vi.fn(async(k:string,v:any)=>{settings={...settings,[k]:v};return v;}),onlineGalleryCacheImage:vi.fn(async()=> 'nai-local:///cache.png'),importStylePromptPresetImagePaths:vi.fn(async()=>[{id:'im',fileUrl:'nai-local:///copied.png'}]),deleteStylePromptPresetImages:vi.fn(async()=>{})};vi.stubGlobal('window',{naiDesktop:api});});
+describe('style library persistence',()=>{
+ it('serialized use and rating updates are not lost',async()=>{settings.stylePromptPresets=[{id:'a',rating:0,usageCount:0}];await Promise.all([changeStyles(all=>all.map(p=>({...p,rating:4.5}))),countStyleUse('a')]);expect(settings.stylePromptPresets[0]).toMatchObject({rating:4.5,usageCount:1});expect(state.settings.stylePromptPresets).toEqual(settings.stylePromptPresets);});
+ it('saves QuickTag exact prompt, name and local preview with duplicate URLs removed',async()=>{const p=await saveGalleryStyle('Dream','1.2::artist:a::',['https://example.test/a.png','https://example.test/a.png']);expect(settings.stylePromptPresets[0]).toMatchObject({name:'Dream',prompt:'1.2::artist:a::',previewImages:[{id:'im'}]});expect(api.onlineGalleryCacheImage).toHaveBeenCalledTimes(1);expect(p.id).toBeTruthy();expect(api.deleteStylePromptPresetImages).not.toHaveBeenCalled();});
+ it('failed image download does not save partial preset',async()=>{api.onlineGalleryCacheImage.mockRejectedValueOnce(Error('network'));await expect(saveGalleryStyle('D','artist:a',['https://example.test/a'])).rejects.toThrow('network');expect(settings.stylePromptPresets).toEqual([]);expect(api.deleteStylePromptPresetImages).toHaveBeenCalledTimes(1);});
+ it('storage failure cleans up copied images and subsequent save still works',async()=>{api.setSetting.mockRejectedValueOnce(Error('disk'));await expect(saveGalleryStyle('D','artist:a',[])).rejects.toThrow('disk');await saveGalleryStyle('E','artist:b',[]);expect(settings.stylePromptPresets).toHaveLength(1);expect(settings.stylePromptPresets[0].name).toBe('E');});
+});

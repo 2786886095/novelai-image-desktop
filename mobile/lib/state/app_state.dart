@@ -796,6 +796,23 @@ class AppState extends ChangeNotifier {
 
   void applyStylePromptPreset(StylePromptPreset preset) {
     setParam((params) => params.stylePrompt = preset.prompt);
+    unawaited(updateStyleLibrary((s) {
+      final p = s.stylePromptPresets.where((p) => p.id == preset.id).firstOrNull;
+      if (p != null) p.usageCount++;
+    }).catchError((Object e) { status = '$e'; notifyListeners(); }));
+  }
+
+  Future<void> _styleWrites = Future.value();
+  Future<void> updateStyleLibrary(void Function(AppSettings) update) {
+    final next = _styleWrites.catchError((Object _) {}).then((_) async {
+      final copy = AppSettings.fromJson(settings.toJson());
+      update(copy);
+      await storage.setSettings(copy);
+      settings = copy;
+      notifyListeners();
+    });
+    _styleWrites = next;
+    return next;
   }
 
   Future<List<StylePromptPreviewImage>> importStylePromptPreviewImages({

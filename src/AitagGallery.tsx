@@ -1,3 +1,4 @@
+import {GallerySaveStyleButton} from "./StyleLibrary";
 import {GalleryFavoriteButton,GalleryFavoritesButton} from './components/GalleryFavorites';
 import {favoriteFromGallery,type GalleryFavorite} from './gallery-favorites';
 import {galleryLibraryText,localizedGalleryTag,galleryTagQuery} from './gallery-labels';
@@ -1110,6 +1111,7 @@ function ExternalGallery({
                   <h3>{text.promptText}</h3>
                   <div className="online-gallery-inline-actions">
                     <CopyButton value={selected.prompt} text={text} />
+                    {source === "quicktag" && <GallerySaveStyleButton name={selected.item.title} prompt={selected.prompt} images={(selected.media.length?selected.media:[selected.item.cover]).map(im=>im.downloadUrl||im.displayUrl)}/> }
                     <button type="button" className="btn primary compact" onClick={() => { applyParams({ positivePrompt: selected.prompt, ...(selected.negativePrompt ? { negativePrompt: selected.negativePrompt } : {}) }); setActiveTab("generate"); }}>{text.use}</button>
                   </div>
                 </header>

@@ -1,3 +1,5 @@
+import 'screens/style_library_screen.dart';
+import 'i18n/style_library_text.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -137,6 +139,7 @@ class _HomeShellState extends State<HomeShell> {
     (icon: Icons.photo_library_outlined, selectedIcon: Icons.photo_library),
     (icon: Icons.receipt_long_outlined, selectedIcon: Icons.receipt_long),
     (icon: Icons.settings_outlined, selectedIcon: Icons.settings),
+    (icon: Icons.palette_outlined, selectedIcon: Icons.palette),
   ];
 
   @override
@@ -174,6 +177,7 @@ class _HomeShellState extends State<HomeShell> {
       ),
       const AiLogScreen(),
       const SettingsScreen(),
+      StyleLibraryScreen(onApply: () { if(mounted) setState(()=>_index=0); }),
     ];
     _initializeIncomingBackupChannel();
   }
@@ -284,7 +288,7 @@ class _HomeShellState extends State<HomeShell> {
         ),
       );
     }
-    final labels = mainDestinationLabelsFor(language);
+    final labels = [...mainDestinationLabelsFor(language),styleLibraryText(language)['title']!];
     final shellText = shellTextFor(language);
     final destinations = [
       for (var i = 0; i < _destinationIcons.length; i++)

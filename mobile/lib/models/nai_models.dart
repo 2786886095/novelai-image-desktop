@@ -15,7 +15,7 @@ class NaiOption {
 }
 
 const appName = 'Langbai NovelAI Studio';
-const appVersion = '2.3.4';
+const appVersion = '2.3.5';
 
 const naiModels = <NaiOption>[
   NaiOption(
@@ -924,6 +924,7 @@ class AppSettings {
   String imageNameTemplate;
   List<PromptShortcutTemplate> promptShortcuts;
   List<StylePromptPreset> stylePromptPresets;
+  String stylePromptPresetSort;
   List<Map<String, dynamic>> characterPromptPresets;
   List<String> stylePromptPresetGroups;
   List<PositivePromptPreset> positivePromptPresets;
@@ -1026,6 +1027,7 @@ class AppSettings {
     this.imageNameTemplate = '{date}_{seq}_{model}',
     List<PromptShortcutTemplate>? promptShortcuts,
     List<StylePromptPreset>? stylePromptPresets,
+    this.stylePromptPresetSort = "default",
     List<Map<String, dynamic>>? characterPromptPresets,
     List<String>? stylePromptPresetGroups,
     List<PositivePromptPreset>? positivePromptPresets,
@@ -1136,6 +1138,7 @@ class AppSettings {
         'promptShortcuts':
             promptShortcuts.map((item) => item.toJson()).toList(),
         'characterPromptPresets': characterPromptPresets,
+        'stylePromptPresetSort': stylePromptPresetSort,
         'stylePromptPresets':
             stylePromptPresets.map((item) => item.toJson()).toList(),
         'stylePromptPresetGroups': stylePromptPresetGroups,
@@ -1250,6 +1253,7 @@ class AppSettings {
             [],
         characterPromptPresets:
             normalizeCharacterPromptPresets(j['characterPromptPresets']),
+        stylePromptPresetSort: j['stylePromptPresetSort']?.toString() ?? 'default',
         stylePromptPresets: (j['stylePromptPresets'] as List?)
                 ?.whereType<Map>()
                 .map((item) =>
@@ -1387,6 +1391,16 @@ class PromptShortcutTemplate {
 }
 
 class StylePromptPreset {
+  String? coverImageId;
+  int get coverIndex {
+    if (previewImages.isEmpty) return -1;
+    final index = previewImages.indexWhere((im) => im.id == coverImageId);
+    return index < 0 ? 0 : index;
+  }
+
+  double rating;
+  int usageCount;
+  int sortOrder;
   final String id;
   String name;
   String prompt;
@@ -1395,6 +1409,10 @@ class StylePromptPreset {
   List<StylePromptPreviewImage> previewImages;
 
   StylePromptPreset({
+    this.coverImageId,
+    this.rating = 0,
+    this.usageCount = 0,
+    this.sortOrder = 9007199254740991,
     required this.id,
     required this.name,
     required this.prompt,
@@ -1404,6 +1422,10 @@ class StylePromptPreset {
   }) : previewImages = previewImages ?? [];
 
   Map<String, dynamic> toJson() => {
+        'coverImageId': coverIndex < 0 ? null : previewImages[coverIndex].id,
+        'rating': rating,
+        'usageCount': usageCount,
+        'sortOrder': sortOrder,
         'id': id,
         'name': name,
         'prompt': prompt,
@@ -1414,6 +1436,10 @@ class StylePromptPreset {
 
   factory StylePromptPreset.fromJson(Map<String, dynamic> json) =>
       StylePromptPreset(
+        coverImageId: json['coverImageId'] is String ? json['coverImageId'] as String : null,
+        rating: (json['rating'] is num && (json['rating'] as num).isFinite ? (json['rating'] as num).clamp(0,5).toDouble() : 0.0),
+        usageCount: json['usageCount'] is num && (json['usageCount'] as num).isFinite ? (json['usageCount'] as num).clamp(0,9007199254740991).toInt() : 0,
+        sortOrder: json['sortOrder'] is num && (json['sortOrder'] as num).isFinite ? (json['sortOrder'] as num).clamp(0,9007199254740991).toInt() : 9007199254740991,
         id: json['id']?.toString() ?? '',
         name: json['name']?.toString() ?? '',
         prompt: json['prompt']?.toString() ?? '',

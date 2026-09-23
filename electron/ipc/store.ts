@@ -1,3 +1,4 @@
+import {STYLE_SORTS,styleMetadata} from "../../src/style-library";
 import {mergeCharacterPresets} from "../../src/positive-prompt-presets";
 import {normalizeCharacterCaptions} from "../../src/character-presets";
 import { CredentialVault, SENSITIVE_SETTING_KEYS } from "./credential-vault";
@@ -320,6 +321,7 @@ function normalize(raw: Partial<PersistedData> | null): PersistedData {
   if (!settings.stylePromptPresetGroups.includes("Default")) {
     settings.stylePromptPresetGroups.unshift("Default");
   }
+  settings.stylePromptPresetSort = STYLE_SORTS.includes(settings.stylePromptPresetSort as never) ? settings.stylePromptPresetSort : "default";
   settings.stylePromptPresets = Array.isArray(settings.stylePromptPresets)
     ? settings.stylePromptPresets
         .filter((preset) => preset && typeof preset === "object")
@@ -359,6 +361,8 @@ function normalize(raw: Partial<PersistedData> | null): PersistedData {
                 ? preset.createdAt
                 : new Date(0).toISOString(),
             previewImages,
+            ...styleMetadata(preset),
+            coverImageId: previewImages.find(image => image.id === preset.coverImageId)?.id ?? previewImages[0]?.id,
           };
         })
         .filter((preset) => preset.id && preset.name)

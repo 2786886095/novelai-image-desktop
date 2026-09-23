@@ -64,6 +64,7 @@ type MainTabLocale = Record<
 
 const MAIN_TAB_LOCALES: Record<AppLanguage, MainTabLocale> = {
   "zh-CN": {
+    styles: {label: "风格管理", title: "风格管理", desc: "风格管理"},
     generate: {
       label: "生成",
       title: "文生图 / 图生图",
@@ -117,6 +118,7 @@ const MAIN_TAB_LOCALES: Record<AppLanguage, MainTabLocale> = {
     },
   },
   "zh-TW": {
+    styles: {label: "風格管理", title: "風格管理", desc: "風格管理"},
     generate: {
       label: "生成",
       title: "文生圖 / 圖生圖",
@@ -170,6 +172,7 @@ const MAIN_TAB_LOCALES: Record<AppLanguage, MainTabLocale> = {
     },
   },
   "en-US": {
+    styles: {label: "Styles", title: "Styles", desc: "Styles"},
     generate: {
       label: "Generate",
       title: "Text / Image to Image",
@@ -227,6 +230,7 @@ const MAIN_TAB_LOCALES: Record<AppLanguage, MainTabLocale> = {
     },
   },
   "ja-JP": {
+    styles: {label: "スタイル管理", title: "スタイル管理", desc: "スタイル管理"},
     generate: {
       label: "生成",
       title: "テキスト / 画像生成",
@@ -284,6 +288,7 @@ const MAIN_TAB_LOCALES: Record<AppLanguage, MainTabLocale> = {
     },
   },
   "ko-KR": {
+    styles: {label: "스타일 관리", title: "스타일 관리", desc: "스타일 관리"},
     generate: {
       label: "생성",
       title: "텍스트 / 이미지 생성",

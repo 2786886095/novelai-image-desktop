@@ -2,7 +2,7 @@ import { app, dialog } from "electron";
 import fs from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
-import { toLocalMediaUrl } from "./local-media-protocol";
+import { localMediaUrlToPath, toLocalMediaUrl } from "./local-media-protocol";
 import type { StylePromptPreviewImage } from "../../src/types";
 
 const MAX_PREVIEW_IMAGES = 9;
@@ -144,7 +144,8 @@ export function copyStylePromptPreviewImages(
   );
   if (count === 0) return [];
   const copied: StylePromptPreviewImage[] = [];
-  for (const sourcePath of sourcePaths.slice(0, count)) {
+  for (const rawPath of sourcePaths.slice(0, count)) {
+    const sourcePath = localMediaUrlToPath(rawPath) ?? rawPath;
     const extension = path.extname(sourcePath).toLowerCase();
     if (!SUPPORTED_EXTENSIONS.has(extension) || !fs.existsSync(sourcePath)) continue;
     const id = randomUUID();

@@ -730,6 +730,7 @@ export const TAB_ITEMS = [
   { value: "onlineGallery", label: "在线画廊", icon: "globe", title: "在线画廊", desc: "浏览公开作品并提取提示词与参数" },
   { value: "agent", label: "酒馆AI生图", icon: "smartToy", title: "酒馆 AI 生图", desc: "通过自然对话整理提示词、搜索 Tag、分析画风并调用 NovelAI 生图" },
   { value: "records", label: "记录", icon: "history", title: "AI 调用记录", desc: "查看反推/转换/拆分镜每次发送与返回" },
+  { value: "styles", label: "风格管理", icon: "palette", title: "风格管理", desc: "管理风格提示词与预览图" },
 ] as const;
 
 export type PromptChip = {

@@ -1174,6 +1174,10 @@ export interface PromptTemplate {
 }
 
 export interface StylePromptPreset {
+  coverImageId?: string;
+  rating?: number;
+  usageCount?: number;
+  sortOrder?: number;
   id: string;
   name: string;
   prompt: string;
@@ -1495,6 +1499,7 @@ export interface AppSettings {
   promptTemplates: PromptTemplate[];
   // Named style-prompt presets available from the generation panel.
   stylePromptPresets: StylePromptPreset[];
+  stylePromptPresetSort?: string;
   characterPromptPresets?: import('./character-presets').CharacterPromptPreset[];
   // Stored separately so empty user-created groups survive restarts.
   stylePromptPresetGroups: string[];

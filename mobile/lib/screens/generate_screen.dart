@@ -1,3 +1,6 @@
+import 'style_library_screen.dart';
+import '../models/style_library.dart';
+import '../i18n/style_library_text.dart';
 import 'dart:convert';
 import '../services/vibe_file.dart';
 import '../ui/studio_dropdown.dart';
@@ -1676,6 +1679,8 @@ class _StylePresetControlsState extends State<_StylePresetControls> {
                         ],
                       ),
                     ),
+                    const Padding(padding: EdgeInsets.symmetric(horizontal:16), child:StyleSortPicker()),
+                    TextButton(onPressed:(){Navigator.pop(sheetContext);Navigator.push(this.context,MaterialPageRoute(builder:(_)=>StyleLibraryScreen(onApply:()=>Navigator.pop(this.context))));},child:Text(styleLibraryText(state.settings.language)['title']!)),
                     const Divider(height: 1),
                     Expanded(
                       child: ListView(
@@ -1683,12 +1688,8 @@ class _StylePresetControlsState extends State<_StylePresetControls> {
                         padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
                         children: [
                           ...groups.map((group) {
-                            final presets = state.settings.stylePromptPresets
-                                .where((preset) => preset.group == group)
-                                .toList()
-                              ..sort((a, b) => a.name
-                                  .toLowerCase()
-                                  .compareTo(b.name.toLowerCase()));
+                            final presets = sortStyles(state.settings.stylePromptPresets,state.settings.stylePromptPresetSort)
+                                .where((preset) => preset.group == group).toList();
                             return Card(
                               margin: const EdgeInsets.only(bottom: 6),
                               clipBehavior: Clip.antiAlias,
