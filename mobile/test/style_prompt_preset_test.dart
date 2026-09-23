@@ -4,14 +4,14 @@ import 'package:novelai_mobile/state/app_state.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  test('style prompt preset persists at most three preview images', () {
+  test('style prompt preset persists at most nine preview images', () {
     final preset = StylePromptPreset.fromJson({
       'id': 'style-1',
       'name': 'Blue night',
       'prompt': 'blue theme, moonlight',
       'createdAt': '2026-08-08T00:00:00Z',
       'previewImages': List.generate(
-        5,
+        12,
         (index) => {
           'id': 'image-$index',
           'name': '$index.png',
@@ -21,8 +21,8 @@ void main() {
       ),
     });
 
-    expect(preset.previewImages, hasLength(3));
-    expect(preset.toJson()['previewImages'], hasLength(3));
+    expect(preset.previewImages, hasLength(9));
+    expect(preset.toJson()['previewImages'], hasLength(9));
   });
 
   test('legacy style prompt preset loads with an empty image collection', () {

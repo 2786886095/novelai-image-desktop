@@ -2,6 +2,7 @@ import { recoverLegacyCredentials } from "./ipc/credential-recovery";
 import { readClipboardImageFiles, savePastedImageFiles } from "./ipc/image-clipboard";
 import {
   app,
+  dialog,
   BrowserWindow,
   ipcMain,
   Menu,
@@ -299,6 +300,14 @@ function attachEditContextMenu(win: BrowserWindow) {
   win.webContents.on("context-menu", (_event, params) => {
     const { isEditable, editFlags } = params;
     const hasSelection = params.selectionText.trim().length > 0;
+    if (params.mediaType === "image" && params.hasImageContents) {
+      const language = getSettings().language;
+      const labels: Record<string, string> = {"zh-CN":"复制图片", "zh-TW":"複製圖片", "ja-JP":"画像をコピー", "ko-KR":"이미지 복사"};
+      Menu.buildFromTemplate([{label: labels[language] ?? "Copy image",
+        click: () => { if (!win.isDestroyed()) win.webContents.copyImageAt(params.x, params.y); },
+      }]).popup({window: win});
+      return;
+    }
     if (!isEditable && !hasSelection) return;
     const template: Electron.MenuItemConstructorOptions[] = [];
     if (isEditable) {
@@ -365,6 +374,12 @@ function createWindow() {
   });
 
   attachEditContextMenu(mainWindow);
+  mainWindow.webContents.on("did-fail-load", (_event, code, description, _url, isMainFrame) => {
+    if (!isMainFrame || code === -3) return;
+    startupWindow?.destroy();
+    dialog.showErrorBox("启动失败 / Startup failed", `${description} (${code})`);
+    mainWindow?.show();
+  });
 
   // Defense in depth: the app never needs to navigate this window away from
   // its own bundled UI, or open a second BrowserWindow. External links
@@ -380,6 +395,8 @@ function createWindow() {
 
   mainWindow.once("ready-to-show", () => {
     if (!uiCapturePath) mainWindow?.show();
+    startupWindow?.destroy();
+    startupWindow = null;
   });
 
   if (uiCapturePath) {
@@ -1355,7 +1372,14 @@ function registerIpc() {
   ipcMain.handle("app:installUpdate", () => installUpdate());
 }
 
+let startupWindow: BrowserWindow | null = null;
 app.whenReady().then(async () => {
+  if (!uiCapturePath) {
+    startupWindow = new BrowserWindow({width:420,height:180,show:true,resizable:false,
+      title:"Langbai NovelAI Studio",webPreferences:{nodeIntegration:false,contextIsolation:true,sandbox:true}});
+    startupWindow.on("closed", () => { startupWindow = null; });
+    await startupWindow.loadURL("data:text/html;charset=utf-8," + encodeURIComponent('<!doctype html><meta charset="utf-8"><title>Langbai NovelAI Studio</title><body style="font:16px system-ui;padding:24px;background:#f8f7fc;color:#211b31"><strong>Langbai NovelAI Studio</strong><p>正在启动 / Starting…</p><small>正在加载设置与工作区 / Loading settings and workspace</small></body>'));
+  }
   await installLocalMediaProtocol();
   if (!uiCaptureUserData) {
     try { await recoverLegacyCredentials(); }
@@ -1368,7 +1392,7 @@ app.whenReady().then(async () => {
   readAgentWorkspace();
   installGlobalLogging();
   configureSystemProxyResolver((url) => session.defaultSession.resolveProxy(url));
-  await refreshSystemProxy();
+  void refreshSystemProxy().catch(error => console.warn("[startup] proxy refresh failed", error));
   setAgentEventSink((event) => {
     if (!mainWindow?.isDestroyed()) mainWindow?.webContents.send("agent:event", event);
   });
@@ -1383,6 +1407,10 @@ app.whenReady().then(async () => {
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+}).catch((error: unknown) => {
+  startupWindow?.destroy();
+  dialog.showErrorBox("启动失败 / Startup failed", String(error));
+  app.quit();
 });
 
 app.on("window-all-closed", () => {

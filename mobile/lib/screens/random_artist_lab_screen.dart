@@ -1309,77 +1309,13 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     final names = {for (final i in items) i.recipe.id: i.recipe.prompt};
     bool busy = false;
     String error = '';
-    await showDialog<void>(
-        context: context,
-        barrierDismissible: false,
-        builder: (dialogContext) => StatefulBuilder(
-            builder: (dialogContext, update) => PopScope(
-                canPop: !busy,
-                child: AlertDialog(
-                  title: Text(t[0]),
-                  content: SizedBox(
-                      width: 500,
-                      height: 400,
-                      child: Column(children: [
-                        Wrap(spacing: 8, children: [
-                          TextButton(
-                              onPressed: busy
-                                  ? null
-                                  : () => update(() => selected
-                                      .addAll(items.map((i) => i.recipe.id))),
-                              child: Text(t[1])),
-                          TextButton(
-                              onPressed:
-                                  busy ? null : () => update(selected.clear),
-                              child: Text(t[2]))
-                        ]),
-                        Expanded(
-                            child: ListView.builder(
-                                itemCount: items.length,
-                                itemBuilder: (context, index) {
-                                  final i = items[index];
-                                  return Row(children: [
-                                    Checkbox(
-                                        value: selected.contains(i.recipe.id),
-                                        onChanged: busy
-                                            ? null
-                                            : (v) => update(() => v == true
-                                                ? selected.add(i.recipe.id)
-                                                : selected
-                                                    .remove(i.recipe.id))),
-                                    if (i.image != null)
-                                      Image.file(File(i.image!.filePath),
-                                          width: 44,
-                                          height: 44,
-                                          fit: BoxFit.contain,
-                                          errorBuilder: (_, __, ___) =>
-                                              const Icon(Icons.broken_image)),
-                                    Expanded(
-                                        child: TextFormField(
-                                            initialValue: names[i.recipe.id],
-                                            maxLength: 120,
-                                            enabled: !busy,
-                                            onChanged: (v) =>
-                                                names[i.recipe.id] = v))
-                                  ]);
-                                })),
-                        if (error.isNotEmpty) Text(error),
-                      ])),
-                  actions: [
-                    TextButton(
-                        onPressed:
-                            busy ? null : () => Navigator.pop(dialogContext),
-                        child: Text(t[4])),
-                    FilledButton(
-                        onPressed: busy || selected.isEmpty
-                            ? null
-                            : () async {
+    Future<void> saveStyles(BuildContext dialogContext, StateSetter update, Iterable<_Result> chosen) async {
+      if (busy) return;
                                 update(() => busy = true);
                                 final created = <StylePromptPreset>[];
                                 bool committed = false;
                                 try {
-                                  for (final item in items.where(
-                                      (i) => selected.contains(i.recipe.id))) {
+                                  for (final item in chosen) {
                                     final preset = StylePromptPreset(
                                         id:
                                             'style-${DateTime.now().microsecondsSinceEpoch}-${created.length}',
@@ -1435,6 +1371,85 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                                     update(() => busy = false);
                                   }
                                 }
+    }
+    await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => StatefulBuilder(
+            builder: (dialogContext, update) => PopScope(
+                canPop: !busy,
+                child: AlertDialog(
+                  title: Text(t[0]),
+                  content: SizedBox(
+                      width: 500,
+                      height: 400,
+                      child: Column(children: [
+                        Wrap(spacing: 8, children: [
+                          TextButton(
+                              onPressed: busy
+                                  ? null
+                                  : () => update(() => selected
+                                      .addAll(items.map((i) => i.recipe.id))),
+                              child: Text(t[1])),
+                          TextButton(
+                              onPressed:
+                                  busy ? null : () => update(selected.clear),
+                              child: Text(t[2]))
+                        ]),
+                        Expanded(
+                            child: ListView.builder(
+                                itemCount: items.length,
+                                itemBuilder: (context, index) {
+                                  final i = items[index];
+                                  return Row(children: [
+                                    Checkbox(
+                                        value: selected.contains(i.recipe.id),
+                                        onChanged: busy
+                                            ? null
+                                            : (v) => update(() => v == true
+                                                ? selected.add(i.recipe.id)
+                                                : selected
+                                                    .remove(i.recipe.id))),
+                                    if (i.image != null)
+                                      Padding(padding: const EdgeInsets.all(8), child: InkWell(
+                                        onTap: busy ? null : () {
+                                          final gallery = items.where((item) => item.image != null).toList();
+                                          showGalleryImagePreview(context,
+                                            images: gallery.map((item) => Image.file(File(item.image!.filePath), fit: BoxFit.contain,
+                                              errorBuilder: (_, __, ___) => const Icon(Icons.broken_image))).toList(),
+                                            initialIndex: gallery.indexOf(i),
+                                            captions: gallery.map((item) => names[item.recipe.id] ?? item.recipe.prompt).toList(),
+                                            footerBuilder: (previewContext, index) => FilledButton(
+                                              onPressed: () {
+                                                Navigator.pop(previewContext);
+                                                saveStyles(dialogContext, update, [gallery[index]]);
+                                              }, child: Text(t[0])),
+                                          );
+                                        },
+                                        child: Image.file(File(i.image!.filePath), width: 112, height: 128,
+                                          fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Icon(Icons.broken_image)),
+                                      )),
+                                    Expanded(
+                                        child: TextFormField(
+                                            initialValue: names[i.recipe.id],
+                                            maxLength: 120,
+                                            enabled: !busy,
+                                            onChanged: (v) =>
+                                                names[i.recipe.id] = v))
+                                  ]);
+                                })),
+                        if (error.isNotEmpty) Text(error),
+                      ])),
+                  actions: [
+                    TextButton(
+                        onPressed:
+                            busy ? null : () => Navigator.pop(dialogContext),
+                        child: Text(t[4])),
+                    FilledButton(
+                        onPressed: busy || selected.isEmpty
+                            ? null
+                            : () async {
+                                await saveStyles(dialogContext, update, items.where((i) => selected.contains(i.recipe.id)));
                               },
                         child: Text(
                             '${t[3]} · ${selected.length}${busy ? '…' : ''}'))

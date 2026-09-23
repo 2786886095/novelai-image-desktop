@@ -40,7 +40,7 @@ describe("style prompt preview images", () => {
     expect(copied[0].fileUrl).toMatch(/^nai-local:\/\/file\//);
   });
 
-  it("ignores unsupported files and never exceeds three images", () => {
+  it("ignores unsupported files and copies all supported files within nine slots", () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "style-preview-"));
     temporary.push(root);
     const sources = ["a.png", "b.jpg", "c.webp", "d.jpeg", "bad.txt"].map(
@@ -50,7 +50,7 @@ describe("style prompt preview images", () => {
         return file;
       },
     );
-    expect(copyStylePromptPreviewImages(sources, "style", 99, root)).toHaveLength(3);
+    expect(copyStylePromptPreviewImages(sources, "style", 99, root)).toHaveLength(4);
   });
 
   it("recovers orphaned preview files when settings metadata was lost", () => {

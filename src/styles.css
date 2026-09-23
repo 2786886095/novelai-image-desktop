@@ -7019,7 +7019,7 @@ button.prompt-chip-head {
 .style-image-lightbox {
   position: fixed;
   inset: 0;
-  z-index: var(--z-floating);
+  z-index: var(--z-overlay-top);
   display: grid;
   place-items: center;
   padding: 42px;
@@ -20155,7 +20155,7 @@ details > summary:hover > svg { color: var(--accent); }
 
 /* Shared image inspection: fixed viewport, full aspect ratio, pointer pan. */
 .image-preview-viewer { width: min(84vw, 1200px); max-width: 100%; outline: none; }
-.image-preview-controls { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px; padding: 8px; width: fit-content; max-width: 100%; margin: 0 auto; color: var(--text-primary); background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+.image-preview-controls { translate: 0 -12px; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px; padding: 8px; width: fit-content; max-width: 100%; margin: 0 auto; color: var(--text-primary); background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--radius-lg); }
 .image-preview-stage { height: min(70vh, 900px); min-height: 160px; display: flex; align-items: center; justify-content: center; overflow: hidden; touch-action: none; }
 .image-preview-stage > img { display: block; width: auto; height: auto; max-width: 100%; max-height: 100%; flex: none; object-fit: contain; user-select: none; transform-origin: center; }
 
@@ -20328,3 +20328,12 @@ html.motion-reduced .char-sort-list.is-dragging > .char-row { transition: none; 
   animation-name: disclosure-compound-exit-up;
 }
 html.motion-reduced .disclosure-popover { animation: none; }
+
+/* Issue #22: inspect the actual image before saving a style. */
+.favorite-style-grid {display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-top:16px;}
+.favorite-style-card {display:flex;flex-direction:column;gap:10px;min-width:0;border:1px solid var(--border);border-radius:var(--radius-md);padding:12px;background:var(--bg-panel);}
+.favorite-style-card > label {display:flex;gap:8px;align-items:center;overflow-wrap:anywhere;}
+.favorite-style-card .style-image-preview-button {height:220px;width:100%;cursor:zoom-in;}
+.favorite-style-card input:not([type=checkbox]) {width:100%;min-width:0;}
+.favorite-style-preview-actions {position:absolute;bottom:20px;left:50%;transform:translateX(-50%);display:flex;gap:12px;align-items:center;max-width:90vw;z-index:var(--z-raised);}
+.favorite-style-preview-actions p {background:var(--bg-panel);padding:8px;}

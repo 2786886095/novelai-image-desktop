@@ -1,3 +1,4 @@
+import { restoreSavedStyle } from "./style-prompt-restore";
 import type {InputPreviewAnchor} from "./canvas-preview";
 import type { MetadataRestoreOptions } from "./metadata-selection";
 import {normalizeCharacterCaptions} from './character-presets';
@@ -1325,6 +1326,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   restoreImportedMetadata(patch, captions, options) {
+    patch = restoreSavedStyle(patch, get().settings?.stylePromptPresets ?? []);
     const restoredCaptions: CharCaption[] = captions
       .slice(0, maxNAICharacterPrompts(patch.model ?? get().params.model))
       .map((caption) => ({

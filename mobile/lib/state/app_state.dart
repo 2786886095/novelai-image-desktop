@@ -1,3 +1,4 @@
+import '../images/style_prompt_restore.dart';
 import '../images/upscale_plan.dart';
 import '../services/vibe_file.dart';
 import 'dart:async';
@@ -801,7 +802,7 @@ class AppState extends ChangeNotifier {
     required StylePromptPreset preset,
     required List<({String path, String name})> sources,
   }) async {
-    final available = max(0, 3 - preset.previewImages.length);
+    final available = max(0, 9 - preset.previewImages.length);
     if (available == 0) return const [];
     final imported = <StylePromptPreviewImage>[];
     for (final source in sources.take(available)) {
@@ -814,7 +815,7 @@ class AppState extends ChangeNotifier {
     }
     if (imported.isEmpty) return const [];
     preset.previewImages =
-        [...preset.previewImages, ...imported].take(3).toList();
+        [...preset.previewImages, ...imported].take(9).toList();
     await storage.setSettings(settings);
     notifyListeners();
     return imported;
@@ -1021,6 +1022,13 @@ class AppState extends ChangeNotifier {
     final lockedStyle = params.stylePrompt;
     final lockedNegative = params.negativePrompt;
     imported.applyTo(params);
+    if (imported.stylePrompt == '' && imported.positivePrompt != null) {
+      final split = restoreSavedStyle(imported.positivePrompt!, settings.stylePromptPresets.map((p) => p.prompt));
+      if (split != null) {
+        params.stylePrompt = split.style;
+        params.positivePrompt = split.positive;
+      }
+    }
     if (!exact && settings.lockStylePrompt) {
       params.stylePrompt = lockedStyle;
     }

@@ -334,7 +334,7 @@ function normalize(raw: Partial<PersistedData> | null): PersistedData {
                     typeof image.filePath === "string" &&
                     fs.existsSync(image.filePath),
                 )
-                .slice(0, 3)
+                .slice(0, 9)
                 .map((image) => ({
                   id: image.id,
                   name: image.name,

@@ -1164,7 +1164,7 @@ class _StylePresetControlsState extends State<_StylePresetControls> {
     StylePromptPreset preset,
     GenerateScreenText text,
   ) async {
-    final available = 3 - preset.previewImages.length;
+    final available = 9 - preset.previewImages.length;
     final messenger = ScaffoldMessenger.of(context);
     if (available <= 0) {
       messenger
@@ -1301,13 +1301,13 @@ class _StylePresetControlsState extends State<_StylePresetControls> {
                               Text(text.stylePresetImageManager,
                                   style:
                                       Theme.of(context).textTheme.titleLarge),
-                              Text('${preset.name} · ${images.length}/3',
+                              Text('${preset.name} · ${images.length}/9',
                                   overflow: TextOverflow.ellipsis),
                             ],
                           ),
                         ),
                         FilledButton.tonalIcon(
-                          onPressed: images.length >= 3
+                          onPressed: images.length >= 9
                               ? null
                               : () =>
                                   _importImages(context, state, preset, text),
@@ -1318,7 +1318,7 @@ class _StylePresetControlsState extends State<_StylePresetControls> {
                     ),
                   ),
                   TextButton.icon(
-                      onPressed: images.length >= 3
+                      onPressed: images.length >= 9
                           ? null
                           : () =>
                               _chooseHistoryStyleImage(context, state, preset),
@@ -1879,7 +1879,7 @@ class _StylePresetControlsState extends State<_StylePresetControls> {
                       : () => _showImageManager(context, selected.id, text),
                   icon: const Icon(Icons.photo_library_outlined),
                   label: Text(
-                    '${text.stylePresetImages} ${selected?.previewImages.length ?? 0}/3',
+                    '${text.stylePresetImages} ${selected?.previewImages.length ?? 0}/9',
                   ),
                 ),
               ],

@@ -2394,14 +2394,14 @@ function ImagePanel({ workspace, conversation, character, defaults, stylePresets
   const updateStylePresetImages = async (presetId: string, images: StylePromptPreset["previewImages"]) => {
     await window.naiDesktop.setSetting(
       "stylePromptPresets",
-      stylePresets.map((preset) => preset.id === presetId ? { ...preset, previewImages: (images ?? []).slice(0, 3) } : preset),
+      stylePresets.map((preset) => preset.id === presetId ? { ...preset, previewImages: (images ?? []).slice(0, 9) } : preset),
     );
     await onRefreshSettings();
   };
   const importSelectedStylePreview = async (paths?: string[]) => {
     if (!selectedStylePreset) return;
     const current = await window.naiDesktop.reconcileStylePromptPresetImages(selectedStylePreset.id, selectedStylePreset.previewImages ?? []);
-    const available = 3 - current.length;
+    const available = 9 - current.length;
     if (available <= 0) return;
     const imported = paths ? await window.naiDesktop.importStylePromptPresetImagePaths(paths, selectedStylePreset.id, available) : await window.naiDesktop.importStylePromptPresetImages(selectedStylePreset.id, available, `${selectedStylePreset.name} · ${tx("referenceImage")}`);
     if (imported.length) await updateStylePresetImages(selectedStylePreset.id, [...current, ...imported]);
@@ -2507,7 +2507,7 @@ function ImagePanel({ workspace, conversation, character, defaults, stylePresets
                 </button>
               </div>
               <div className="style-preset-actions">
-                <button {...imagePasteProps(paths => importSelectedStylePreview(paths), true)} type="button" className="btn secondary" onClick={() => void importSelectedStylePreview()} disabled={!selectedStylePreset || (selectedStylePreset.previewImages ?? []).length >= 3}><ImageIcon />{tx("referenceImage")} {selectedStylePreset ? `${(selectedStylePreset.previewImages ?? []).length}/3` : ""}</button>
+                <button {...imagePasteProps(paths => importSelectedStylePreview(paths), true)} type="button" className="btn secondary" onClick={() => void importSelectedStylePreview()} disabled={!selectedStylePreset || (selectedStylePreset.previewImages ?? []).length >= 9}><ImageIcon />{tx("referenceImage")} {selectedStylePreset ? `${(selectedStylePreset.previewImages ?? []).length}/9` : ""}</button>
                 <button type="button" className="btn secondary" onClick={() => void onSaveStylePreset(userPromptDraft.style)} disabled={!userPromptDraft.style.trim()}><AddIcon />{tx("addToList")}</button>
               </div>
             </div>
@@ -2548,7 +2548,7 @@ function ImagePanel({ workspace, conversation, character, defaults, stylePresets
                                 }}
                               >
                                 <span>{preset.name}</span>
-                                {(preset.previewImages ?? []).length ? <small><ImageIcon />{(preset.previewImages ?? []).length}/3</small> : <small>{tx("noReference")}</small>}
+                                {(preset.previewImages ?? []).length ? <small><ImageIcon />{(preset.previewImages ?? []).length}/9</small> : <small>{tx("noReference")}</small>}
                               </button>
                             </div>
                           ))}

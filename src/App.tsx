@@ -1296,7 +1296,7 @@ function CharCaptionsModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-function StylePresetImagesModal({
+export function StylePresetImagesModal({
   preset,
   text,
   onImport,
@@ -1335,7 +1335,7 @@ function StylePresetImagesModal({
           <header>
             <div>
               <h2>{text.stylePresetImageManager}</h2>
-              <small>{preset.name} · {images.length}/3</small>
+              <small>{preset.name} · {images.length}/9</small>
             </div>
             <button type="button" aria-label={t("common.close")} onClick={onClose}><Icon name="close" /></button>
           </header>
@@ -1360,7 +1360,7 @@ function StylePresetImagesModal({
               if (!hasDraggedFiles(event.dataTransfer)) return;
               event.preventDefault();
               setDragging(false);
-              const paths = droppedImagePaths(event.dataTransfer, 3 - images.length);
+              const paths = droppedImagePaths(event.dataTransfer, 9 - images.length);
               if (paths.length > 0) onDropImages(paths);
             }}
           >
@@ -1389,7 +1389,7 @@ function StylePresetImagesModal({
                     <button
                       type="button"
                       className="style-image-preview-button"
-                      onDoubleClick={() => setPreview(image)}
+                      onClick={() => setPreview(image)}
                       title={text.stylePresetImageHint}
                     >
                       <img src={image.fileUrl} alt={`${preset.name} · ${image.name}`} />
@@ -1410,18 +1410,18 @@ function StylePresetImagesModal({
             <p>{text.stylePresetImageHint}</p>
           </div>
           <footer>
-            <Button disabled={images.length>=3} onClick={()=>setHistoryOpen(v=>!v)}>{historyPickerText(language)[0]}</Button>
+            <Button disabled={images.length>=9} onClick={()=>setHistoryOpen(v=>!v)}>{historyPickerText(language)[0]}</Button>
             <Button type="button" onClick={onClose}>{t("common.close")}</Button>
-            <Button type="button" variant="primary" disabled={images.length >= 3} onClick={onImport}>
+            <Button type="button" variant="primary" disabled={images.length >= 9} onClick={onImport}>
               <Icon name="folderOpen" /> {text.stylePresetAddImages}
             </Button>
           </footer>
         </div>
       </div>
       {preview && (
-        <div className="style-image-lightbox" role="dialog" aria-modal="true" onMouseDown={() => setPreview(null)}>
+        <div className="style-image-lightbox" role="dialog" aria-modal="true" onClick={event => { if (event.target === event.currentTarget) setPreview(null); }}>
           <button type="button" aria-label={t("common.close")} onClick={() => setPreview(null)}><Icon name="close" /></button>
-          <PreviewImageViewer images={images.map(item=>({src:item.fileUrl,alt:`${preset.name} · ${item.name}`}))} index={Math.max(0,images.findIndex(item=>item.id===preview.id))} onIndex={index=>setPreview(images[index])}/>
+          <PreviewImageViewer onBackgroundClick={()=>setPreview(null)} images={images.map(item=>({src:item.fileUrl,alt:`${preset.name} · ${item.name}`}))} index={Math.max(0,images.findIndex(item=>item.id===preview.id))} onIndex={index=>setPreview(images[index])}/>
         </div>
       )}
     </AppPortal>
@@ -1810,7 +1810,7 @@ function PromptAndParams({
     await window.naiDesktop.setSetting(
       "stylePromptPresets",
       stylePromptPresets.map((item) =>
-        item.id === presetId ? { ...item, previewImages: images.slice(0, 3) } : item,
+        item.id === presetId ? { ...item, previewImages: images.slice(0, 9) } : item,
       ),
     );
     await refreshSettings();
@@ -1837,7 +1837,7 @@ function PromptAndParams({
       preset.id,
       preset.previewImages ?? [],
     );
-    const available = 3 - current.length;
+    const available = 9 - current.length;
     if (available <= 0) {
       setToast(generateText.prompt.stylePresetImageLimit);
       return;
@@ -1859,7 +1859,7 @@ function PromptAndParams({
       preset.id,
       preset.previewImages ?? [],
     );
-    const available = 3 - current.length;
+    const available = 9 - current.length;
     if (available <= 0) {
       setToast(generateText.prompt.stylePresetImageLimit);
       return;
@@ -2111,7 +2111,7 @@ function PromptAndParams({
             disabled={!selectedStylePreset}
             onClick={() => selectedStylePreset && setStyleImageManagerPresetId(selectedStylePreset.id)}
           >
-            <Icon name="eye" /> {generateText.prompt.stylePresetImages} {selectedStylePreset ? `${(selectedStylePreset.previewImages ?? []).length}/3` : ""}
+            <Icon name="eye" /> {generateText.prompt.stylePresetImages} {selectedStylePreset ? `${(selectedStylePreset.previewImages ?? []).length}/9` : ""}
           </Button>
           <Button
             type="button"
@@ -2164,7 +2164,7 @@ function PromptAndParams({
                       >
                         <span>{preset.name}</span>
                         <small>
-                          <Icon name="eye" /> {(preset.previewImages ?? []).length}/3
+                          <Icon name="eye" /> {(preset.previewImages ?? []).length}/9
                         </small>
                       </button>
                       <button type="button" className="style-preset-more" title={t("prompt.styleMove")} aria-label={f("prompt.styleMoveTo", { name: preset.name })} onClick={() => setStylePresetActionId((current) => current === preset.id ? "" : preset.id)}><Icon name="moreHorizontal" /></button>

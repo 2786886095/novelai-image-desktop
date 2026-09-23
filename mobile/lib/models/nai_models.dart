@@ -15,7 +15,7 @@ class NaiOption {
 }
 
 const appName = 'Langbai NovelAI Studio';
-const appVersion = '2.3.3';
+const appVersion = '2.3.4';
 
 const naiModels = <NaiOption>[
   NaiOption(
@@ -1425,7 +1425,7 @@ class StylePromptPreset {
                 ?.whereType<Map>()
                 .map((item) => StylePromptPreviewImage.fromJson(
                     Map<String, dynamic>.from(item)))
-                .take(3)
+                .take(9)
                 .toList() ??
             [],
       );

@@ -5,7 +5,7 @@ import { randomUUID } from "crypto";
 import { toLocalMediaUrl } from "./local-media-protocol";
 import type { StylePromptPreviewImage } from "../../src/types";
 
-const MAX_PREVIEW_IMAGES = 3;
+const MAX_PREVIEW_IMAGES = 9;
 const SUPPORTED_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp"]);
 const MANIFEST_NAME = "manifest.json";
 

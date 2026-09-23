@@ -9,7 +9,8 @@ Future<void> showGalleryImagePreview(BuildContext context,
     {required List<Widget> images,
     int initialIndex = 0,
     List<String>? captions,
-    Widget Function(BuildContext, int)? actionsBuilder}) async {
+    Widget Function(BuildContext, int)? actionsBuilder,
+    Widget Function(BuildContext, int)? footerBuilder}) async {
   if (images.isEmpty) return;
   await showDialog<void>(
       context: context,
@@ -19,7 +20,7 @@ Future<void> showGalleryImagePreview(BuildContext context,
           initialIndex: initialIndex,
           language: context.read<AppState>().settings.language,
           captions: captions,
-          actionsBuilder: actionsBuilder));
+          actionsBuilder: actionsBuilder, footerBuilder: footerBuilder));
 }
 
 class ZoomableImage extends StatefulWidget {
@@ -141,12 +142,13 @@ class _FullscreenImageViewer extends StatefulWidget {
   final Object? language;
   final List<String>? captions;
   final Widget Function(BuildContext, int)? actionsBuilder;
+  final Widget Function(BuildContext, int)? footerBuilder;
   const _FullscreenImageViewer(
       {required this.images,
       required this.initialIndex,
       required this.language,
       this.captions,
-      this.actionsBuilder});
+      this.actionsBuilder, this.footerBuilder});
   @override
   State<_FullscreenImageViewer> createState() => _FullscreenImageViewerState();
 }
@@ -224,6 +226,9 @@ class _FullscreenImageViewerState extends State<_FullscreenImageViewer> {
                         onPressed: () => Navigator.pop(context),
                         icon: const Icon(Icons.close))
                   ]))),
+              if (widget.footerBuilder != null)
+                Positioned(left: 16, right: 16, bottom: 72,
+                  child: SafeArea(child: Center(child: widget.footerBuilder!(context, index)))),
               if (widget.images.length > 1)
                 Positioned(
                     left: 8,

@@ -11,13 +11,14 @@ export function PreviewImageViewer({images,index,onIndex,renderImage,showNavigat
  const [scale,setScale]=useState(1),[pan,setPan]=useState({x:0,y:0});
  const root=useRef<HTMLDivElement>(null),stage=useRef<HTMLDivElement>(null),img=useRef<HTMLImageElement>(null),drag=useRef<{x:number;y:number;px:number;py:number}|null>(null);
  const moved=useRef(false);
+ const backgroundPress=useRef(false);
  const image=images[index];
  const reset=()=>{setScale(1);setPan({x:0,y:0});};
  useEffect(()=>{reset();drag.current=null;},[image?.src]);
  useEffect(()=>{root.current?.focus({preventScroll:true});},[]);
  function move(delta:number){const next=index+delta;if(next>=0&&next<images.length)onIndex(next);}
  function zoom(next:number){setScale(Math.min(8,Math.max(1,next)));setPan({x:0,y:0});}
- return <div ref={root} className="image-preview-viewer" tabIndex={0} onMouseDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();if(moved.current){moved.current=false;return;}if(e.target===stage.current)onBackgroundClick?.();}} onKeyDown={e=>{
+ return <div ref={root} className="image-preview-viewer" tabIndex={0} onPointerDownCapture={e=>{moved.current=false;backgroundPress.current=e.target===root.current||e.target===stage.current;}} onMouseDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();if(moved.current){moved.current=false;return;}if(backgroundPress.current&&(e.target===root.current||e.target===stage.current))onBackgroundClick?.();}} onKeyDown={e=>{
   if((e.target as HTMLElement).closest('input,textarea,[contenteditable="true"]'))return;
   const delta=e.key==='ArrowRight'||e.key==='ArrowDown'?1:e.key==='ArrowLeft'||e.key==='ArrowUp'?-1:0;
   if(delta&&showNavigation){e.preventDefault();e.stopPropagation();move(delta);}
