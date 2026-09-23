@@ -1,5 +1,7 @@
 ## Langbai NovelAI Studio 2.3.5
 
+### v2.3.5 更新内容
+
 ### 风格管理（电脑端 / 手机端）
 - 新增独立「风格管理」页面，统一管理已保存的风格提示词：分类、搜索、编辑名称和内容、预览图管理。
 - 支持拖拽调整自定义顺序，也可通过上下移动按钮排序。
@@ -20,7 +22,7 @@
 - Issue #24「有关程式开启」保持打开。
 
 ### 安装包与验证
-- Windows x64 安装版与便携版、macOS Universal DMG/ZIP、Linux x64 AppImage。
+- Windows x64 安装版 `Langbai-NovelAI-Studio-Setup-2.3.5.exe` 与便携版 `Langbai-NovelAI-Studio-2.3.5.exe`、macOS Universal DMG/ZIP、Linux x64 AppImage。
 - Android 使用原有稳定签名，可覆盖升级；iOS IPA 未签名，需要自行签名。
 - 用户已确认电脑端试用。发布门禁包含各端测试与构建、桌面原生启动和图片编解码检查（含 Intel Mac）、Android 签名延续与版本递增、更新文件哈希核对。
 - 本地桌面 1082 项测试通过，手机端 589 项测试通过，各跳过 1 项；安卓未进行真机测试。
