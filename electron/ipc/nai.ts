@@ -1573,15 +1573,21 @@ export async function quoteAnlasCost(
 export function prepareInpaintAssets(
   imageBuffer: Buffer,
   maskBase64: string,
+  targetSize?: Pick<GenerateParams, "width" | "height">,
 ): PreparedInpaintAssets {
   const sourcePng = PNG.sync.read(bufferToPng(imageBuffer));
   const originalWidth = sourcePng.width;
   const originalHeight = sourcePng.height;
-  const width = ceilToMultiple(originalWidth, INPAINT_SIZE_MULTIPLE);
-  const height = ceilToMultiple(originalHeight, INPAINT_SIZE_MULTIPLE);
+  const requestedWidth = targetSize?.width ?? originalWidth;
+  const requestedHeight = targetSize?.height ?? originalHeight;
+  if (!Number.isFinite(requestedWidth) || !Number.isFinite(requestedHeight) || requestedWidth <= 0 || requestedHeight <= 0) {
+    throw new Error("请选择有效的重绘输出尺寸。");
+  }
+  const width = ceilToMultiple(requestedWidth, INPAINT_SIZE_MULTIPLE);
+  const height = ceilToMultiple(requestedHeight, INPAINT_SIZE_MULTIPLE);
   if (width > 1600 || height > 1600) {
     throw new Error(
-      `重绘原图尺寸 ${originalWidth}×${originalHeight} 超出 NovelAI 允许范围；请先缩小到补齐后不超过 1600×1600。`,
+      `重绘输出尺寸 ${width}×${height} 超出 NovelAI 允许范围；请在尺寸选择中缩小到不超过 1600×1600。`,
     );
   }
   const maskPng = PNG.sync.read(
@@ -4755,7 +4761,7 @@ export async function inpaintImage(
 
   try {
     const { buffer } = await readWorkbenchImage();
-    const preparedAssets = prepareInpaintAssets(buffer, maskBase64);
+    const preparedAssets = prepareInpaintAssets(buffer, maskBase64, params);
     const actualSeed =
       params.seedMode !== "random" && params.seed >= 0
         ? params.seed
@@ -4830,7 +4836,7 @@ export async function inpaintImage(
     );
     void refreshStoredAccount();
     const resizedNote = preparedAssets.resized
-      ? `已按官网规则自适应尺寸 ${preparedAssets.originalWidth}×${preparedAssets.originalHeight} → ${preparedAssets.width}×${preparedAssets.height}。`
+      ? `重绘输出尺寸 ${preparedAssets.originalWidth}×${preparedAssets.originalHeight} → ${preparedAssets.width}×${preparedAssets.height}。`
       : "";
     return {
       ok: true,

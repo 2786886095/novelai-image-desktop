@@ -135,8 +135,8 @@ void main() {
   });
 
   test('upscale model follows the current image API contract', () {
-    expect(resolveUpscaleModel('nai-diffusion-5-full'),
-        'nai-diffusion-5-curated');
+    expect(
+        resolveUpscaleModel('nai-diffusion-5-full'), 'nai-diffusion-5-curated');
     expect(resolveUpscaleModel('nai-diffusion-4-5-full'),
         'nai-diffusion-5-curated');
     expect(resolveUpscaleModel('nai-diffusion-4-5-curated'),
@@ -144,8 +144,8 @@ void main() {
     expect(resolveUpscaleModel('nai-diffusion-3'), 'nai-diffusion-5-curated');
     expect(resolveUpscaleModel('retired-model'), 'nai-diffusion-5-curated');
     expect(
-      buildUpscalePayload(Uint8List.fromList([1, 2, 3]),
-          'nai-diffusion-4-5-full'),
+      buildUpscalePayload(
+          Uint8List.fromList([1, 2, 3]), 'nai-diffusion-4-5-full'),
       {
         'image': 'AQID',
         'model': 'nai-diffusion-5-curated',
@@ -438,7 +438,7 @@ void main() {
         allowCustomEndpoint: true,
         proxyMode: 'direct',
       ),
-      GenerateParams(positivePrompt: 'test'),
+      GenerateParams(positivePrompt: 'test', width: 704, height: 1408),
       image,
       mask,
       'nai-diffusion-4-5-curated-inpainting',
@@ -454,6 +454,13 @@ void main() {
       'nai-diffusion-4-5-full-inpainting',
     ]);
     expect(result.$1, hasLength(1));
+    expect(decodeImageDimensions(result.$1.single), (704, 1408));
+    for (final parameters in inpaintParameters) {
+      expect(parameters['width'], 704);
+      expect(parameters['height'], 1408);
+      expect(decodeImageDimensions(base64Decode(parameters['image'] as String)),
+          (704, 1408));
+    }
     expect(result.$3, 'nai-diffusion-4-5-full-inpainting');
     expect(inpaintParameters.first['add_original_image'], isFalse);
     expect(inpaintParameters.first['inpaintImg2ImgStrength'], 0.55);
@@ -466,7 +473,7 @@ void main() {
       decodeImageDimensions(
         base64Decode(inpaintParameters.first['mask'] as String),
       ),
-      (64, 64),
+      (704, 1408),
     );
   });
 

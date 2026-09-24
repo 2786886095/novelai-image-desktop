@@ -574,6 +574,8 @@ class NaiApi {
     final prepared = prepareInpaintAssets(
       await processingImageBytes(imageBytes),
       await processingImageBytes(maskBytes),
+      targetWidth: params.width,
+      targetHeight: params.height,
     );
     final candidates = <String>[inpaintModel];
     if (inpaintModel == 'nai-diffusion-5-curated-inpainting') {

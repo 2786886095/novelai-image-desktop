@@ -206,8 +206,8 @@ AnlasQuote calculateInpaintAnlas({
   }
   final quoteParams = params.copy()
     ..model = inpaintModel.replaceFirst(RegExp(r'-inpainting$'), '')
-    ..width = max(64, (image.width / 64).ceil() * 64)
-    ..height = max(64, (image.height / 64).ceil() * 64);
+    ..width = max(64, (params.width / 64).ceil() * 64)
+    ..height = max(64, (params.height / 64).ceil() * 64);
   return calculateImageGenerationAnlas(
     params: quoteParams,
     account: account,

@@ -17,7 +17,7 @@ import '../ui/quality_preset_control.dart';
 import '../ui/studio_shell.dart';
 import '../ui/zoomable_image.dart';
 import '../ui/before_after_compare.dart';
-import 'generate_screen.dart' show PromptEditor;
+import 'generate_screen.dart' show PromptEditor, GenerationSizeControls;
 import 'inpaint_mask_editor.dart';
 
 enum ToolPageKind { inpaint, upscale, postprocess }
@@ -570,6 +570,8 @@ class _InpaintPanelState extends State<_InpaintPanel> {
                         : Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
             ),
+            const SizedBox(height: 12),
+            const GenerationSizeControls(imageToImage: false),
             _ToolQuoteBar(quote: state.inpaintAnlasQuote),
             const SizedBox(height: 12),
             const _RedrawParams(),
@@ -639,7 +641,7 @@ class _InpaintMaskRasterPainter extends CustomPainter {
 }
 
 // Generation parameters for redraw, mirroring the generate screen (model is the
-// dedicated inpaint model above; size comes from the source image).
+// dedicated inpaint model above; output size uses the shared size selector).
 class _RedrawParams extends StatelessWidget {
   const _RedrawParams();
 

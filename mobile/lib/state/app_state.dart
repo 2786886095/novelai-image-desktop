@@ -2471,8 +2471,9 @@ class AppState extends ChangeNotifier {
       if (source == null) throw Exception(_rt('error.originalImageRequired'));
       final image = await File(source.filePath).readAsBytes();
       final dims = source;
-      final targetWidth = max(64, (dims.width / 64).ceil() * 64);
-      final targetHeight = max(64, (dims.height / 64).ceil() * 64);
+      final outputParams = params.normalized();
+      final targetWidth = outputParams.width;
+      final targetHeight = outputParams.height;
       // Inpaint keeps its own independent positive prompt
       // (inpaintPositivePrompt) instead of reusing params.positivePrompt —
       // the rest of params (size, sampler, negative prompt, etc.) is still

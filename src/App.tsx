@@ -1435,15 +1435,10 @@ export function StylePresetImagesModal({
 function PromptAndParams({
   includeModel = true,
   imageToImage = false,
-  lockSizeToSource = false,
   promptOverride,
 }: {
   includeModel?: boolean;
   imageToImage?: boolean;
-  /** Inpaint always renders against the loaded source image. Its dimensions are
-   * prepared by the main process and must not be edited through shared generate
-   * parameters. Keep only a compact read-only source-size indicator. */
-  lockSizeToSource?: boolean;
   // When set, the positive-prompt textarea (and every action that edits it —
   // templates, capsule insert, weight adjust, translate, normalize) reads and
   // writes here instead of the shared params.positivePrompt. Used by the
@@ -2403,7 +2398,7 @@ function PromptAndParams({
           </div>
         )}
       </div>
-      {imageToImage && workbenchImage && !lockSizeToSource && (
+      {imageToImage && workbenchImage && (
         <div className="i2i-size-control">
           <div className="i2i-size-mode" role="group" aria-label={t("i2i.sizeMode")}>
             <button
@@ -2431,69 +2426,57 @@ function PromptAndParams({
           </small>
         </div>
       )}
-      {lockSizeToSource ? (
-        workbenchImage && (
-          <div className="inpaint-source-size" aria-label={t("inpaint.sourceSizeLocked")}>
-            <Icon name="image" />
-            <span>{t("inpaint.sourceSizeLocked")}</span>
-            <strong>{workbenchImage.width}×{workbenchImage.height}</strong>
-          </div>
-        )
-      ) : (
-        <>
-          <div className="size-row">
-            <CommittedNumberInput
-              label={generateText.prompt.width}
-              value={params.width}
-              min={NAI_MIN_DIMENSION}
-              max={maxNAIDimensionFor(params.height)}
-              step={NAI_DIMENSION_STEP}
-              normalize={(value) =>
-                snapNAIDimensionWithinArea(value, params.height, params.width)
-              }
-              onCommit={(value) => {
-                if (imageToImage) setI2ISizeMode("custom");
-                setParam("width", value);
-              }}
-            />
-            <span>×</span>
-            <CommittedNumberInput
-              label={generateText.prompt.height}
-              value={params.height}
-              min={NAI_MIN_DIMENSION}
-              max={maxNAIDimensionFor(params.width)}
-              step={NAI_DIMENSION_STEP}
-              normalize={(value) =>
-                snapNAIDimensionWithinArea(value, params.width, params.height)
-              }
-              onCommit={(value) => {
-                if (imageToImage) setI2ISizeMode("custom");
-                setParam("height", value);
-              }}
-            />
-          </div>
-          <small className="dimension-input-hint">{t("size.commitHint")}</small>
-          <div className="preset-row">
-            {[
-              [1024, 1024], [1216, 832], [832, 1216],
-              [1024, 1536], [1536, 1024], [1472, 1472],
-              [1088, 1920], [1920, 1088],
-              [512, 768], [768, 512], [640, 640],
-            ].map(([width, height]) => (
-              <button
-                key={`${width}x${height}`}
-                onClick={() => {
-                  if (imageToImage) setI2ISizeMode("custom");
-                  setParam("width", width);
-                  setParam("height", height);
-                }}
-              >
-                {width}×{height}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
+      <div className="size-row">
+        <CommittedNumberInput
+          label={generateText.prompt.width}
+          value={params.width}
+          min={NAI_MIN_DIMENSION}
+          max={maxNAIDimensionFor(params.height)}
+          step={NAI_DIMENSION_STEP}
+          normalize={(value) =>
+            snapNAIDimensionWithinArea(value, params.height, params.width)
+          }
+          onCommit={(value) => {
+            if (imageToImage) setI2ISizeMode("custom");
+            setParam("width", value);
+          }}
+        />
+        <span>×</span>
+        <CommittedNumberInput
+          label={generateText.prompt.height}
+          value={params.height}
+          min={NAI_MIN_DIMENSION}
+          max={maxNAIDimensionFor(params.width)}
+          step={NAI_DIMENSION_STEP}
+          normalize={(value) =>
+            snapNAIDimensionWithinArea(value, params.width, params.height)
+          }
+          onCommit={(value) => {
+            if (imageToImage) setI2ISizeMode("custom");
+            setParam("height", value);
+          }}
+        />
+      </div>
+      <small className="dimension-input-hint">{t("size.commitHint")}</small>
+      <div className="preset-row">
+        {[
+          [1024, 1024], [1216, 832], [832, 1216],
+          [1024, 1536], [1536, 1024], [1472, 1472],
+          [1088, 1920], [1920, 1088],
+          [512, 768], [768, 512], [640, 640],
+        ].map(([width, height]) => (
+          <button
+            key={`${width}x${height}`}
+            onClick={() => {
+              if (imageToImage) setI2ISizeMode("custom");
+              setParam("width", width);
+              setParam("height", height);
+            }}
+          >
+            {width}×{height}
+          </button>
+        ))}
+      </div>
       <div className="seed-mode-switch">
         <button
           type="button"
@@ -2740,9 +2723,7 @@ function FeatureCostCard({
     }
     setLoading(true);
     const timer = window.setTimeout(() => {
-      const quoteSize = sizeOverride ?? (feature === "inpaint" && workbenchImage
-        ? { width: workbenchImage.width, height: workbenchImage.height }
-        : feature === "i2i" && i2iSizeMode === "adaptive" && workbenchImage
+      const quoteSize = sizeOverride ?? (feature === "i2i" && i2iSizeMode === "adaptive" && workbenchImage
           ? adaptiveNAIImageSize(workbenchImage.width, workbenchImage.height, params)
           : { width: params.width, height: params.height });
       const quoteParams = {
@@ -3628,7 +3609,6 @@ function InpaintPanel({ openSettings }: { openSettings: () => void }) {
         <div className="panel-divider" />
         <PromptAndParams
           includeModel={false}
-          lockSizeToSource
           promptOverride={{ value: inpaintPositivePrompt, onChange: setInpaintPositivePrompt }}
         />
         <FeatureCostCard label={t("cost.beforeRun")} feature="inpaint" />

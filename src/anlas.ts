@@ -248,8 +248,8 @@ export function calculateFeatureAnlasQuote({
     const inpaintParams = {
       ...params,
       model,
-      width: image?.width ? Math.max(64, Math.ceil(image.width / 64) * 64) : params.width,
-      height: image?.height ? Math.max(64, Math.ceil(image.height / 64) * 64) : params.height,
+      width: Math.max(64, Math.ceil(params.width / 64) * 64),
+      height: Math.max(64, Math.ceil(params.height / 64) * 64),
     };
     return calculateImageGenerationAnlas({
       params: inpaintParams,

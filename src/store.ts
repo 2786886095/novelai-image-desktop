@@ -2781,14 +2781,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ toast: message, statusText: message });
       return;
     }
-    // Inpaint keeps its own independent positive prompt, while output dimensions
-    // are always locked to the source. The main process may temporarily pad a
-    // non-64-multiple source for NovelAI and crops it back before saving.
+    // Keep the independent inpaint prompt and the user-selected output size.
+    // The main process scales source and mask together before local compositing.
     const inpaintParams: GenerateParams = {
       ...state.params,
       positivePrompt: state.inpaintPositivePrompt,
-      width: sourceImage.width,
-      height: sourceImage.height,
     };
     // Enter the generating state BEFORE the balance refresh and price quote so a
     // fast double-click can't sneak a second paid request in before the button

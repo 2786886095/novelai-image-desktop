@@ -266,8 +266,10 @@ Uint8List resizeImageToSize(Uint8List bytes, int width, int height) {
 
 PreparedInpaintAssets prepareInpaintAssets(
   Uint8List imageBytes,
-  Uint8List maskBytes,
-) {
+  Uint8List maskBytes, {
+  int? targetWidth,
+  int? targetHeight,
+}) {
   final source = image_lib.decodeImage(imageBytes, frame: 0);
   final mask = image_lib.decodeImage(maskBytes, frame: 0);
   if (source == null) {
@@ -276,11 +278,16 @@ PreparedInpaintAssets prepareInpaintAssets(
   if (mask == null) {
     throw const FormatException('Could not read inpaint mask');
   }
-  final width = max(64, (source.width / 64).ceil() * 64);
-  final height = max(64, (source.height / 64).ceil() * 64);
+  final requestedWidth = targetWidth ?? source.width;
+  final requestedHeight = targetHeight ?? source.height;
+  if (requestedWidth <= 0 || requestedHeight <= 0) {
+    throw const FormatException("Invalid inpaint output size");
+  }
+  final width = max(64, (requestedWidth / 64).ceil() * 64);
+  final height = max(64, (requestedHeight / 64).ceil() * 64);
   if (width > 1600 || height > 1600) {
     throw FormatException(
-      'Inpaint source ${source.width}x${source.height} exceeds the NovelAI limit; resize it so the adapted dimensions stay within 1600x1600.',
+      'Inpaint output ${width}x$height exceeds the NovelAI limit; select dimensions within 1600x1600.',
     );
   }
   final resized = width != source.width || height != source.height;

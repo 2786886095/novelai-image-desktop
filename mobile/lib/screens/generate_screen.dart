@@ -1679,8 +1679,21 @@ class _StylePresetControlsState extends State<_StylePresetControls> {
                         ],
                       ),
                     ),
-                    const Padding(padding: EdgeInsets.symmetric(horizontal:16), child:StyleSortPicker()),
-                    TextButton(onPressed:(){Navigator.pop(sheetContext);Navigator.push(this.context,MaterialPageRoute(builder:(_)=>StyleLibraryScreen(onApply:()=>Navigator.pop(this.context))));},child:Text(styleLibraryText(state.settings.language)['title']!)),
+                    const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 16),
+                        child: StyleSortPicker()),
+                    TextButton(
+                        onPressed: () {
+                          Navigator.pop(sheetContext);
+                          Navigator.push(
+                              this.context,
+                              MaterialPageRoute(
+                                  builder: (_) => StyleLibraryScreen(
+                                      onApply: () =>
+                                          Navigator.pop(this.context))));
+                        },
+                        child: Text(styleLibraryText(
+                            state.settings.language)['title']!)),
                     const Divider(height: 1),
                     Expanded(
                       child: ListView(
@@ -1688,8 +1701,11 @@ class _StylePresetControlsState extends State<_StylePresetControls> {
                         padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
                         children: [
                           ...groups.map((group) {
-                            final presets = sortStyles(state.settings.stylePromptPresets,state.settings.stylePromptPresetSort)
-                                .where((preset) => preset.group == group).toList();
+                            final presets = sortStyles(
+                                    state.settings.stylePromptPresets,
+                                    state.settings.stylePromptPresetSort)
+                                .where((preset) => preset.group == group)
+                                .toList();
                             return Card(
                               margin: const EdgeInsets.only(bottom: 6),
                               clipBehavior: Clip.antiAlias,
@@ -2317,6 +2333,89 @@ class _CapsulePickerSheetState extends State<_CapsulePickerSheet> {
   }
 }
 
+// The same presets and committed dimension fields are used by generation and inpaint.
+class GenerationSizeControls extends StatelessWidget {
+  final bool imageToImage;
+  const GenerationSizeControls({super.key, this.imageToImage = true});
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.read<AppState>();
+    final watched = context.watch<AppState>();
+    final p = watched.params;
+    final language = watched.settings.language;
+    final text = generateScreenTextFor(language);
+    String t(String key) => mobileUiTextFor(language, key);
+    return Column(children: [
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: sizePresets.map((s) {
+          final selected = p.width == s.width && p.height == s.height;
+          return ChoiceChip(
+              label: Text(localizedSizePresetLabel(
+                  language, s.width, s.height, s.label)),
+              selected: selected,
+              onSelected: (_) {
+                if (imageToImage && watched.workbenchImage != null) {
+                  state.setI2ISizeMode('custom');
+                }
+                state.setParam((x) => (x
+                  ..width = s.width
+                  ..height = s.height));
+              });
+        }).toList(),
+      ),
+      const SizedBox(height: 10),
+      Row(
+        children: [
+          Expanded(
+            child: _SyncedNumberField(
+              key: const ValueKey("output-width"),
+              label: text.width,
+              value: p.width,
+              commitOnly: true,
+              normalize: (value) =>
+                  snapNaiDimensionWithinArea(value, p.height, p.width),
+              onChanged: (value) {
+                if (imageToImage && watched.workbenchImage != null) {
+                  state.setI2ISizeMode('custom');
+                }
+                state.setParam((x) => x.width = value);
+              },
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _SyncedNumberField(
+              key: const ValueKey("output-height"),
+              label: text.height,
+              value: p.height,
+              commitOnly: true,
+              normalize: (value) =>
+                  snapNaiDimensionWithinArea(value, p.width, p.height),
+              onChanged: (value) {
+                if (imageToImage && watched.workbenchImage != null) {
+                  state.setI2ISizeMode('custom');
+                }
+                state.setParam((x) => x.height = value);
+              },
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 4),
+      Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          t('size.commitHint'),
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      ),
+    ]);
+  }
+}
+
 class _ParamControls extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -2384,69 +2483,7 @@ class _ParamControls extends StatelessWidget {
               v == null ? null : state.setParam((x) => x.model = v),
         ),
         const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: sizePresets.map((s) {
-            final selected = p.width == s.width && p.height == s.height;
-            return ChoiceChip(
-                label: Text(localizedSizePresetLabel(
-                    language, s.width, s.height, s.label)),
-                selected: selected,
-                onSelected: (_) {
-                  if (watched.workbenchImage != null) {
-                    state.setI2ISizeMode('custom');
-                  }
-                  state.setParam((x) => (x
-                    ..width = s.width
-                    ..height = s.height));
-                });
-          }).toList(),
-        ),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              child: _SyncedNumberField(
-                label: text.width,
-                value: p.width,
-                commitOnly: true,
-                normalize: (value) =>
-                    snapNaiDimensionWithinArea(value, p.height, p.width),
-                onChanged: (value) {
-                  if (watched.workbenchImage != null) {
-                    state.setI2ISizeMode('custom');
-                  }
-                  state.setParam((x) => x.width = value);
-                },
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _SyncedNumberField(
-                label: text.height,
-                value: p.height,
-                commitOnly: true,
-                normalize: (value) =>
-                    snapNaiDimensionWithinArea(value, p.width, p.height),
-                onChanged: (value) {
-                  if (watched.workbenchImage != null) {
-                    state.setI2ISizeMode('custom');
-                  }
-                  state.setParam((x) => x.height = value);
-                },
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: Text(
-            t('size.commitHint'),
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ),
+        const GenerationSizeControls(),
         const SizedBox(height: 12),
         StudioDropdownButtonFormField<String>(
           value: p.sampler,
@@ -2874,6 +2911,7 @@ class _SyncedNumberField extends StatefulWidget {
   final String? helperText;
 
   const _SyncedNumberField({
+    super.key,
     required this.label,
     required this.value,
     required this.onChanged,

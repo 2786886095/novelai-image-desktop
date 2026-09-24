@@ -927,13 +927,11 @@ function reconcileHistoryFiles(force = false): void {
     }
 
     if (fileExistsWithDirectoryCache(item.filePath, directoryCache)) {
-      const inferredGroupId = inferGroupIdFromPath(item.filePath, data);
-      if (inferredGroupId !== item.groupId) {
-        next.push({ ...item, groupId: inferredGroupId });
-        changed = true;
-      } else {
-        next.push(item);
-      }
+      // Group edits are metadata-only; the image stays in its original folder.
+      // A present file must retain its saved assignment (including ungrouped),
+      // otherwise refresh/restart undoes moves, renames and group deletion.
+      // Infer a folder group only below when recovering an actually moved file.
+      next.push(item);
       continue;
     }
 
