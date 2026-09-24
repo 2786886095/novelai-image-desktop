@@ -1,3 +1,4 @@
+import { comparisonAction } from "./artist-comparison/adapter";
 import { recoverLegacyCredentials } from "./ipc/credential-recovery";
 import { readClipboardImageFiles, savePastedImageFiles } from "./ipc/image-clipboard";
 import {
@@ -710,6 +711,7 @@ function createWindow() {
 }
 
 function registerIpc() {
+  ipcMain.handle("artist-comparison:action", (_event, action) => comparisonAction(action));
   ipcMain.handle("agent:getWorkspace", () => readAgentWorkspace());
   ipcMain.handle("agent:saveWorkspace", (_event, workspace: AgentWorkspaceData) => saveTavernWorkspace(workspace));
   ipcMain.handle("agent:createConversation", (_event, title?: string) => createAgentConversation(title));
