@@ -70,7 +70,11 @@ if ((Get-Content -LiteralPath (Join-Path $receipt.destination 'custom-preservati
 if ((Get-FileHash -LiteralPath $sentinel).Hash -ne $before) { throw 'User data changed during upgrade' }
 $uninstall=Get-ChildItem -LiteralPath $target -Filter '*Uninstall*.exe' | Select-Object -First 1
 if (-not $uninstall) { throw 'No test uninstaller found' }
-Run-Installer $uninstall.FullName @('/S')
+# Execute the actual installed uninstaller outside its target with _?=, just as
+# NSIS upgrade does; otherwise its self-copy launcher can return before removal.
+$uninstallerCopy=Join-Path $out 'verified-installed-uninstaller.exe'
+Copy-Item -LiteralPath $uninstall.FullName -Destination $uninstallerCopy
+Run-Installer $uninstallerCopy @('/S',"_?=$target")
 Run-Installer $setup @('/S','--no-desktop-shortcut',"/D=$target")
 $cleanFiles=Verify-Installed
 if ((Get-FileHash -LiteralPath $sentinel).Hash -ne $before) { throw 'Reinstallation removed user data' }
