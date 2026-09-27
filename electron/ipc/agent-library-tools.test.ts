@@ -6,7 +6,7 @@ import {createLibraryTools,desktopLibraryAdapter} from './agent-library-tools';
 import {LIBRARY_FIELDS,validateLibraryRequest} from '../../src/agent/library-contract';
 import {SOFTWARE_WORKFLOWS} from '../../src/agent/workflow-catalog';
 import {normalizeTavernLorebook} from '../../src/tavern/compat';
-fixture.root=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'studio-library-actions-')));
+fixture.root=fs.mkdtempSync(path.join(fs.realpathSync.native(os.tmpdir()),'studio-library-actions-'));
 afterAll(()=>fs.rmSync(fixture.root,{recursive:true,force:true}));
 it('real local workspace CRUD, recoverable backups and one Agent confirmation per overwrite/delete',async()=>{
  const approve=vi.fn(async()=>true),service=createLibraryTools(desktopLibraryAdapter(),approve);
