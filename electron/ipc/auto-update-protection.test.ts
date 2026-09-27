@@ -57,11 +57,11 @@ describe.skipIf(process.platform !== 'win32')('in-app update protection wiring',
     const api=await updater();expect(await api.downloadUpdate()).toMatchObject({ok:true});await vi.advanceTimersByTimeAsync(900);
     expect(state.spawn).toHaveBeenCalledTimes(1);expect(fs.readFileSync(path.join(workspace,'agent-workspace.json'),'utf8')).toBe('keep');
   });
-  it('allows the existing silent-install arguments only for external data', async () => {
+  it('shows installer progress, never hiding the update after the app exits', async () => {
     vi.useFakeTimers(); const api = await updater();
     expect(await api.downloadUpdate()).toMatchObject({ok:true});
     await vi.advanceTimersByTimeAsync(900);
-    expect(state.spawn).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('Setup-2.2.6.exe'),['--updated','/S','--force-run'],expect.objectContaining({windowsHide:true}));
+    expect(state.spawn).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('Setup-2.2.6.exe'),['--updated','--force-run'],expect.objectContaining({windowsHide:false}));
     api.installUpdate(); expect(state.spawn).toHaveBeenCalledTimes(1);
   });
 });

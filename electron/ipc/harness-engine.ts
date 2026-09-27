@@ -269,6 +269,34 @@ export class HarnessEngine {
       return !active || isNewerBundle(manifest.version,active.manifest.version) ? this.options.seed : null;
     } catch(error) { if((error as NodeJS.ErrnoException).code==='ENOENT')return null;throw error; }
   }
+  /** Explicit install/update only. Merely opening the app or checking metadata never downloads. */
+  private async availableSource(active: Awaited<ReturnType<HarnessEngine["readActive"]>>, signal:AbortSignal, upstream?:string) {
+    signal.throwIfAborted();
+    let local:string|null=null;
+    try {
+      local=await this.bundledUpgrade(active);
+      if(local){
+        const manifest=validateManifest(JSON.parse(await fs.readFile(path.join(local,'manifest.json'),'utf8')));
+        if(!upstream||manifest.upstream===upstream){
+          await verifyBundle(local,manifest,signal);
+          return local;
+        }
+      }
+    } catch(error) {
+      signal.throwIfAborted();
+      this.log('随附组件不完整或校验失败，改从独立更新源获取；现有组件与用户资料保持不变。','warn');
+      if(!this.options.updateSource)throw error;
+    }
+    signal.throwIfAborted();
+    if(!this.options.updateSource)return null;
+    const source=await this.options.updateSource(signal,text=>this.log(text));
+    signal.throwIfAborted();
+    if(source){
+      const manifest=validateManifest(JSON.parse(await fs.readFile(path.join(source,'manifest.json'),'utf8')));
+      await verifyBundle(source,manifest,signal);
+    }
+    return source;
+  }
   private async backupUserHome() {
     const home=path.join(this.options.root,'user-home');
     try { await fs.access(home); } catch(error) {if((error as NodeJS.ErrnoException).code==='ENOENT')return;throw error;}
@@ -305,8 +333,10 @@ export class HarnessEngine {
       this.phase = 'installing';
       let active = await this.readActive();
       if (!active) {
-        this.log('首次启动需要准备本地组件，完成后将自动打开浏览器。');
-        active = await this.install(this.options.seed, signal);
+        this.log('首次启动按需下载并校验 Agent 运行环境；可点击关闭取消，已有资料不会删除。');
+        const source=await this.availableSource(null,signal);
+        if(!source)throw Error('暂无可下载的兼容 Agent 组件，请稍后检查更新。');
+        active = await this.install(source, signal);
       }
       else if (await this.bundledUpgrade(active)) {
         this.log('发现软件随附的新组件；当前继续使用已安装版本，请关闭 Agent 后点击更新确认升级。');
@@ -440,12 +470,7 @@ export class HarnessEngine {
         if(kind==='official'&&active&&!isNewerBundle(official!,active.manifest.upstream)){
           result={status:'current',kind,message:'当前已是最新版本。'};return;
         }
-        let source=await this.bundledUpgrade(active);
-        if(source&&kind==='official'){
-          const m=validateManifest(JSON.parse(await fs.readFile(path.join(source,'manifest.json'),'utf8')));
-          if(m.upstream!==official)source=null;
-        }
-        if(!source&&this.options.updateSource)source=await this.options.updateSource(signal,t=>this.log(t));
+        const source=await this.availableSource(active,signal,kind==='official'?official!:undefined);
         if(!source){result={status:kind==='official'?'blocked':'current',kind,message:kind==='official'?'官方新版尚无匹配的兼容组件，请等待适配。':'暂无可安装的适配更新。'};return;}
         const raw=await fs.readFile(path.join(source,'manifest.json'),'utf8'),manifest=validateManifest(JSON.parse(raw));
         if(kind==='official'&&manifest.upstream!==official)throw Error('官方新版尚无匹配的兼容组件，请等待适配。');
@@ -488,9 +513,9 @@ export class HarnessEngine {
       this.phase='updating';this.log('正在检查独立 Agent 组件更新…');
       const active=await this.readActive();
       // A newer bundled component is available offline even before a remote release.
-      const bundled = active || !this.options.updateSource ? await this.bundledUpgrade(active) : null;
-      const source = bundled ?? (this.options.updateSource
-        ? await this.options.updateSource(signal,text=>this.log(text)) : null);
+      const source = active || !this.options.updateSource
+        ? await this.availableSource(active,signal)
+        : await this.options.updateSource(signal,text=>this.log(text));
       signal.throwIfAborted();
       if(source===null){if(active)await this.repairLegacyPlugins(active);this.log('检查完成，没有可用更新；可以点击启动。');this.phase='stopped';return;}
       const manifest=validateManifest(JSON.parse(await fs.readFile(path.join(source,'manifest.json'),'utf8')));

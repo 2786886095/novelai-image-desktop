@@ -185,14 +185,9 @@ export function downloadUpdate(preferredSource: string = "github"): Promise<{ ok
   return downloadInFlight;
 }
 
-/**
- * Mirrors electron-updater's supported NSIS update arguments. `--updated`
- * makes the installer reuse the registered installation mode/path, `/S`
- * skips the assisted pages after the first install, and `--force-run`
- * starts the newly installed build when the silent update completes.
- */
+/** Reuse the installation path while leaving NSIS progress visible. */
 export function automaticInstallerArgs(): string[] {
-  return ["--updated", "/S", "--force-run"];
+  return ["--updated", "--force-run"];
 }
 
 function scheduleAutomaticInstall() {
@@ -203,7 +198,7 @@ function scheduleAutomaticInstall() {
   }, 850);
 }
 
-/** Launches the verified Setup.exe silently, then exits the current build. */
+/** Show the verified installer's real progress rather than leaving an invisible update running. */
 export function installUpdate() {
   if (process.platform !== "win32" || !downloadedInstallerPath || installLaunchInFlight) return;
   try { assertUpdateOutputProtection(installedAppDir(), readStore(), {installerMigratesWorkspace:true}); }
@@ -212,14 +207,14 @@ export function installUpdate() {
   const child = spawn(downloadedInstallerPath, automaticInstallerArgs(), {
     detached: true,
     stdio: "ignore",
-    windowsHide: true,
+    windowsHide: false,
   });
   child.once("error", (error) => {
     installLaunchInFlight = false;
     send({ kind: "error", message: `自动安装启动失败：${error.message}` });
   });
   child.once("spawn", () => {
-    console.info(`[update] launching verified silent installer for ${downloadedVersion}`);
+    console.info(`[update] launching verified installer with progress for ${downloadedVersion}`);
     setTimeout(() => app.quit(), 450);
   });
   child.unref();

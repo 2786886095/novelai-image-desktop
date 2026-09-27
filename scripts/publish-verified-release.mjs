@@ -5,13 +5,21 @@ import crypto from 'node:crypto';
 import {execFileSync,spawnSync} from 'node:child_process';
 const call=(command,args)=>execFileSync(command,args,{encoding:'utf8',timeout:600000,maxBuffer:8*1024*1024}).trim();
 const version=JSON.parse(fs.readFileSync('package.json','utf8')).version;
-if(version!=='2.4.0')throw Error('This publication script is version-specific');
+if(version!=='2.4.1')throw Error('This publication script is version-specific');
 const tag='v'+version, sha=call('git',['rev-parse','HEAD']);
 const buildRun=process.env.BUILD_RUN;
 if(!/^\d+$/.test(buildRun??''))throw Error('A verified desktop build run is required');
 const build=JSON.parse(call('gh',['run','view',buildRun,'--json','headSha,jobs']));
 const desktopJobs=build.jobs.filter(job=>job.name.startsWith('build ('));
 if(desktopJobs.length!==3||desktopJobs.some(job=>job.conclusion!=='success')||!build.jobs.some(job=>job.name==='mac-intel-smoke'&&job.conclusion==='success'))throw Error('All desktop builds and native Intel verification must pass');
+const windows=desktopJobs.find(job=>job.name.includes('windows'));
+for(const name of ['Decode final Windows installers with the actual NSIS decoder','Verify Windows clean installation and upgrade from 2.4.0','Verify real on-demand Agent download, startup and offline reuse']){
+ if(!windows?.steps?.some(step=>step.name===name&&step.conclusion==='success'))throw Error('Required installation gate did not pass: '+name);
+}
+call('gh',['run','download',buildRun,'-n','packaged-smoke-windows','-D','windows-install-evidence']);
+const installation=JSON.parse(fs.readFileSync('windows-install-evidence/upgrade-smoke/verification.json','utf8'));
+const agent=JSON.parse(fs.readFileSync('windows-install-evidence/agent-smoke/verification.json','utf8'));
+if(!installation.pass||installation.version!==version||!installation.userDataPreserved||!agent.pass)throw Error('Actual installation or Agent startup evidence missing');
 // Retry only the publication tooling: installers must match every application file.
 call('git',['diff','--exit-code',build.headSha,sha,'--','.',':!scripts/publish-verified-release.mjs',':!.github/workflows/build.yml']);
 const mobileRun=process.env.MOBILE_RUN;
@@ -41,6 +49,7 @@ const field=name=>updater.match(new RegExp('^'+name+':\\s*(.+)$','m'))?.[1].trim
 if(field('version')!==version||field('path')!==path.basename(desktop[0]))throw Error('Updater version/path mismatch');
 const hash=crypto.createHash('sha512').update(fs.readFileSync(desktop[0])).digest('base64');
 if(field('sha512')!==hash)throw Error('Updater installer hash mismatch');
+if(installation.installerSha256.toLowerCase()!==crypto.createHash('sha256').update(fs.readFileSync(desktop[0])).digest('hex'))throw Error('Published installer is not the one tested through a real upgrade');
 const sdk=process.env.ANDROID_HOME??process.env.ANDROID_SDK_ROOT;
 if(!sdk)throw Error('Android SDK required for signature verification');
 const buildTools=path.join(sdk,'build-tools');

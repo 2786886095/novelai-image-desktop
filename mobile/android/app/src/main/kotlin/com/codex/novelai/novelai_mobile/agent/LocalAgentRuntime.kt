@@ -131,7 +131,7 @@ class LocalAgentRuntime private constructor(private val context: Context) {
     private fun fetchText(url: String): String {
         val connection = URL(url).openConnection() as HttpURLConnection
         connection.connectTimeout=15000;connection.readTimeout=20000
-        connection.setRequestProperty("User-Agent", "Langbai-Studio-Android/2.4.0")
+        connection.setRequestProperty("User-Agent", "Langbai-Studio-Android/2.4.1")
         try { check(connection.responseCode == 200) { "Update HTTP ${connection.responseCode}" }
             val bytes=connection.inputStream.use { it.readBytesLimited(2*1024*1024) };return String(bytes,Charsets.UTF_8)
         } finally { connection.disconnect() }

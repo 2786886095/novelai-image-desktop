@@ -1,6 +1,12 @@
-## Langbai NovelAI Studio 2.4.0
+## Langbai NovelAI Studio 2.4.1
 
-### v2.4.0 更新内容
+### v2.4.1 更新内容
+
+### 安装与更新修复（待实际安装验收，尚未发布）
+- Windows 固定兼容 NSIS 解压器的压缩格式，增加最终安装载荷逐文件解压校验。
+- Windows Agent 运行环境改为首次显式启动时按需下载，复用已安装环境；下载与解压校验显示进度。
+- 遇到损坏的历史随附组件时重新获取独立组件，保持摘要检查，不跳过缺失文件。
+- 软件更新显示安装器进度，不再静默等待。
 
 ### 酒馆 Agent
 - Windows 与 Android 新会话默认全自动生成，不设累计张数上限；可能消耗 Anlas 和已配置模型的费用。可切换逐次确认、设置张数上限（0 表示不限），或立即停止并撤销自动授权。会话选择保存后重启仍保留。
@@ -17,8 +23,8 @@
 - 本机资料、角色卡、预设、导入导出与备份入口接入 Agent；Android 支持统一资料目录。
 
 ### 下载与平台说明
-- Windows 安装版：`Langbai-NovelAI-Studio-Setup-2.4.0.exe`
-- Windows 便携版：`Langbai-NovelAI-Studio-2.4.0.exe`
+- Windows 安装版：`Langbai-NovelAI-Studio-Setup-2.4.1.exe`
+- Windows 便携版：`Langbai-NovelAI-Studio-2.4.1.exe`
 - macOS：通用 DMG / ZIP；Linux：AppImage；Android：`app-release.apk`。
 - iOS 的 `novelai-mobile-unsigned.ipa` 未签名，需自行签名或侧载，并非 App Store 安装包。
 - 本地 Harness 引擎适用于 Windows x64 与 Android ARM64（Android 8+）；其他平台保留原有功能，不代表所有平台引擎能力相同。

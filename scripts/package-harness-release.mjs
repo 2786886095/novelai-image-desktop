@@ -11,7 +11,7 @@ const require=createRequire(import.meta.url);
 const {validateManifest,verifyBundle}=require('../dist-electron/electron/ipc/harness-policy.js');
 const project=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const pkg=JSON.parse(await fs.readFile(path.join(project,'package.json'),'utf8'));
-const seed=path.resolve(project,pkg.build.win.extraResources.find(e=>e.to==='harness-seed').from);
+const seed=path.resolve(project,pkg.build.win.extraResources.find(e=>e.to==='harness-seed')?.from ?? '.tmp/harness-release240');
 const manifest=validateManifest(JSON.parse(await fs.readFile(path.join(seed,'manifest.json'),'utf8')));
 await verifyBundle(seed,manifest);
 const out=path.resolve(process.argv[2] ?? path.join(project,'artifacts',`agent-v${manifest.version}`));await fs.mkdir(out,{recursive:true});

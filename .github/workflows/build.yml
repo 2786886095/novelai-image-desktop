@@ -81,12 +81,6 @@ jobs:
         if: runner.os == 'macOS'
         run: node scripts/install-macos-sharp.mjs
 
-      - name: Fetch hash-pinned Windows Agent seed
-        if: runner.os == 'Windows'
-        run: node scripts/fetch-harness-seed.mjs
-        env:
-          GH_TOKEN: ${{ github.token }}
-
       - name: Build app (${{ matrix.name }})
         run: npm run build && npx electron-builder --publish never
         env:
@@ -100,6 +94,26 @@ jobs:
       - name: Verify packaged native runtime and startup
         run: node scripts/verify-packaged-runtime.mjs
 
+      - name: Decode final Windows installers with the actual NSIS decoder
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Get-ChildItem release/*.exe | ForEach-Object {
+            node scripts/verify-windows-installer.mjs $_.FullName release/win-unpacked release/installer-smoke
+            if ($LASTEXITCODE -ne 0) { throw 'Final installer payload differs from build output' }
+          }
+
+      - name: Verify Windows clean installation and upgrade from 2.4.0
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/verify-windows-upgrade.ps1
+
+      - name: Verify real on-demand Agent download, startup and offline reuse
+        if: runner.os == 'Windows'
+        run: node scripts/verify-agent-on-demand.cjs release/agent-smoke
+
       - name: Upload packaged smoke evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -109,6 +123,9 @@ jobs:
             release/packaged-smoke/*.json
             release/packaged-smoke/*.log
             release/packaged-smoke/*.png
+            release/installer-smoke/*.json
+            release/upgrade-smoke/*.json
+            release/agent-smoke/verification.json
           if-no-files-found: warn
 
       - name: Upload artifacts

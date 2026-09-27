@@ -3,7 +3,7 @@
 [简体中文](./README.md) · [繁體中文](./README.zh-TW.md) · [English](./README.en.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md)
 
 
-**v2.4.0 플랫폼 안내:** 새로운 독립 Tavern Agent 구성 요소는 Windows x64용입니다. macOS/Linux와 Android/iOS는 기존 Tavern 기능을 유지합니다. 호환성 검사, 사용자 확인 및 백업 후 업데이트하며 사용자 플러그인과 데이터를 보존합니다.
+**v2.4.1 플랫폼 안내:** 새로운 독립 Tavern Agent 구성 요소는 Windows x64용입니다. macOS/Linux와 Android/iOS는 기존 Tavern 기능을 유지합니다. 호환성 검사, 사용자 확인 및 백업 후 업데이트하며 사용자 플러그인과 데이터를 보존합니다.
 
 ### 하나의 아이디어에서 여러 작품으로.
 

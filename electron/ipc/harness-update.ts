@@ -20,29 +20,45 @@ export async function downloadCompatibleHarness(root: string, signal: AbortSigna
   const release=releases.find(r=>r.tag_name===`agent-v${selected}`);
   if(!release){log('尚无已发布的兼容 Agent 组件更新。');return null;}
   const asset=release.assets.find(a=>a.name===assetName)!;
-  if(!asset.digest?.match(/^sha256:[a-f0-9]{64}$/) || asset.size>768*1024*1024)throw new Error('Agent 更新包缺少可信摘要或体积异常。');
+  if(!asset.digest?.match(/^sha256:[a-f0-9]{64}$/) || !Number.isSafeInteger(asset.size) || asset.size<=0 || asset.size>768*1024*1024)throw new Error('Agent 更新包缺少可信摘要或体积异常。');
   log(`下载独立组件 ${release.tag_name}…`);
   if(!asset.url.startsWith('https://api.github.com/repos/2786886095/novelai-image-desktop/releases/assets/'))throw new Error('Unexpected update source');
   const download=await fetch(asset.url,{headers:{...headers,Accept:'application/octet-stream'},signal:AbortSignal.any([signal,AbortSignal.timeout(300000)])});
   if(!download.ok || !download.body)throw new Error(`下载失败 HTTP ${download.status}`);
-  const chunks:Uint8Array[]=[];let total=0;
-  for await(const chunk of download.body as unknown as AsyncIterable<Uint8Array>){signal.throwIfAborted();total+=chunk.length;if(total>asset.size)throw new Error('Update size mismatch');chunks.push(chunk);}
+  const chunks:Uint8Array[]=[];let total=0,lastPercent=-5;
+  for await(const chunk of download.body as unknown as AsyncIterable<Uint8Array>){
+    signal.throwIfAborted();total+=chunk.length;if(total>asset.size)throw new Error('Update size mismatch');chunks.push(chunk);
+    const percent=Math.floor(total/asset.size*100);
+    if(percent>=lastPercent+5){lastPercent=percent;log(`Agent 下载 ${percent}%（${(total/1048576).toFixed(1)} / ${(asset.size/1048576).toFixed(1)} MiB）`);}
+  }
   const bytes=Buffer.concat(chunks);
+  chunks.length=0;
   if(bytes.length!==asset.size || `sha256:${crypto.createHash('sha256').update(bytes).digest('hex')}`!==asset.digest)throw new Error('Agent 更新包摘要校验失败。');
   const zip=await JSZip.loadAsync(bytes);
   const rawManifest=zip.file('manifest.json');if(!rawManifest)throw new Error('Missing component manifest');
   const manifest=validateManifest(JSON.parse(await rawManifest.async('string')));
   if(`agent-v${manifest.version}`!==release.tag_name)throw new Error('Release/manifest version mismatch');
   const staging=path.join(root,'downloads',crypto.randomBytes(8).toString('hex'));
-  await fs.mkdir(staging,{recursive:true});let inflated=0;
+  await fs.mkdir(staging,{recursive:true});let inflated=0,completed=0;
+  const count=Object.keys(manifest.files).length;let lastExtract=0;
+  try{
   for(const name of Object.keys(manifest.files)){
     signal.throwIfAborted();const file=zip.file(name);if(!file)throw new Error(`Missing ${name}`);
     const entry=file as typeof file & {unsafeOriginalName?:string};
     if(entry.unsafeOriginalName && entry.unsafeOriginalName!==name)throw new Error('Unsafe archive path');
     const target=safeBundlePath(staging,name);const data=await file.async('nodebuffer');
     inflated+=data.length;if(inflated>2*1024*1024*1024)throw new Error('Expanded component too large');
+    if(crypto.createHash('sha256').update(data).digest('hex')!==manifest.files[name])throw new Error(`Component integrity mismatch: ${name}`);
+    signal.throwIfAborted();
     await fs.mkdir(path.dirname(target),{recursive:true});await fs.writeFile(target,data);
+    const percent=Math.floor(++completed/count*100);
+    if(percent>=lastExtract+10){lastExtract=percent;log(`Agent 解压校验 ${percent}%（${completed}/${count}）`);}
   }
+  signal.throwIfAborted();
   await fs.writeFile(path.join(staging,'manifest.json'),JSON.stringify(manifest));
   return staging;
+  }catch(error){
+    // This uniquely created staging directory is never an installed engine or user home.
+    await fs.rm(staging,{recursive:true,force:true});throw error;
+  }
 }

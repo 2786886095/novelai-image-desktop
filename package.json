@@ -1,6 +1,6 @@
 {
   "name": "langbai-novelai-studio",
-  "version": "2.4.0",
+  "version": "2.4.1",
   "private": true,
   "description": "Langbai NovelAI Studio: API-only NovelAI image generation desktop client with Chinese UI.",
   "author": "Langbai",
@@ -136,17 +136,6 @@
         {"from":"harness/plugins/studio-library","to":"studio-library","filter":["package.json","index.js","protocol.js","jev-config.js","panel-layout-store.js","lib/client.js"]},
         {"from":"harness/plugins/studio-tools","to":"studio-tools","filter":["package.json","index.js"]},
         {
-          "from": ".tmp/harness-release240",
-          "to": "harness-seed",
-          "filter": [
-            "**/*",
-            "!**/.compatibility-home/**",
-            "!**/.cache/**",
-            "!**/.env",
-            "!**/.env.*"
-          ]
-        },
-        {
           "from": "harness/plugins/studio-responsive",
           "to": "studio-responsive",
           "filter": ["package.json", "index.js", "lib/client.js"]
@@ -247,6 +236,7 @@
       "node_modules/@img/**",
       "node_modules/onnxruntime-node/**"
     ],
+    "beforePack": "scripts/configure-windows-archive.cjs",
     "afterPack": "scripts/verify-harness-bundle.cjs"
   },
   "allowScripts": {
