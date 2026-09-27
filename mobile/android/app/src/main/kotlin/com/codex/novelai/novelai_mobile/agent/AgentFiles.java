@@ -10,9 +10,16 @@ import java.util.zip.*;
 public final class AgentFiles {
     private AgentFiles() {}
     public static Path child(Path root, String name) throws IOException {
-        if (name.isEmpty() || name.startsWith("/") || name.contains("\\") || name.contains(":") || name.contains("\0"))
+        return child(root,name,false);
+    }
+    public static Path rootfsChild(Path root,String name)throws IOException {return child(root,name,true);}
+    public static void validateName(String name,boolean linuxRootfs)throws IOException {
+        if (name.isEmpty() || name.startsWith("/") || name.contains("\\") || (!linuxRootfs && name.contains(":")) || name.matches("^[a-zA-Z]:.*") || name.contains("\0"))
             throw new IOException("Invalid archive path");
         for (String part : name.split("/")) if (part.equals("..") || part.equals(".")) throw new IOException("Invalid path segment");
+    }
+    private static Path child(Path root,String name,boolean linuxRootfs)throws IOException {
+        validateName(name,linuxRootfs);
         Path path = root.resolve(name).normalize();
         if (!path.startsWith(root) || path.equals(root)) throw new IOException("Path escapes root");
         for (Path parent = path; parent != null && parent.startsWith(root); parent = parent.getParent())
@@ -25,6 +32,13 @@ public final class AgentFiles {
         StringBuilder value = new StringBuilder(); for(byte b:hash.digest())value.append(String.format(Locale.ROOT,"%02x",b & 255)); return value.toString();
     }
     public static void extract(Path zip, Path destination, long limit) throws IOException {
+        extract(zip,destination,limit,false);
+    }
+    public static void extractRootfs(Path zip,Path destination,long limit)throws IOException {
+        if(File.separatorChar!='/')throw new IOException("Guest rootfs extraction requires POSIX paths");
+        extract(zip,destination,limit,true);
+    }
+    private static void extract(Path zip, Path destination, long limit,boolean linuxRootfs) throws IOException {
         if (Files.exists(destination, LinkOption.NOFOLLOW_LINKS)) throw new IOException("Destination already exists");
         Files.createDirectories(destination);
         Set<String> seen = new HashSet<>(); long total=0; int count=0;
@@ -32,7 +46,7 @@ public final class AgentFiles {
             ZipEntry entry; byte[] buf=new byte[131072];
             while((entry=in.getNextEntry())!=null) {
                 if(++count>150000 || !seen.add(entry.getName()))throw new IOException("Duplicate or excessive entries");
-                Path target=child(destination,entry.getName());
+                Path target=child(destination,entry.getName(),linuxRootfs);
                 if(entry.isDirectory()){Files.createDirectories(target);continue;}
                 Files.createDirectories(target.getParent());
                 try(OutputStream out=Files.newOutputStream(target,StandardOpenOption.CREATE_NEW)) {

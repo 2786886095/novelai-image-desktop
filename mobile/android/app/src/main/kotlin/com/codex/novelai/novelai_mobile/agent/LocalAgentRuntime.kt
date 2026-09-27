@@ -173,10 +173,10 @@ class LocalAgentRuntime private constructor(private val context: Context) {
         phase="preparing";progress=0.5;downloadSpeed=0
         try {
             check(!cancelled) { "Cancelled" }
-            AgentFiles.extract(archive.toPath(),slot.toPath(),meta.getLong("unpackedBytes")+16*1024*1024)
+            AgentFiles.extractRootfs(archive.toPath(),slot.toPath(),meta.getLong("unpackedBytes")+16*1024*1024)
             val manifest=JSONObject(File(slot,".studio-rootfs.json").readText())
             val executable=manifest.getJSONArray("executables")
-            for(i in 0 until executable.length()) check(AgentFiles.child(slot.toPath(),executable.getString(i)).toFile().setExecutable(true,true))
+            for(i in 0 until executable.length()) check(AgentFiles.rootfsChild(slot.toPath(),executable.getString(i)).toFile().setExecutable(true,true))
             val links=manifest.getJSONObject("links")
             for(name in links.keys())AgentFiles.link(slot.toPath(),name,links.getString(name))
             progress=.6

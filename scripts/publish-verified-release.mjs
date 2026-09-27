@@ -25,6 +25,17 @@ const desktop=[`Langbai-NovelAI-Studio-Setup-${version}.exe`,`Langbai-NovelAI-St
 const apk='mobile-assets/android/app-release.apk',ipa='mobile-assets/ios/novelai-mobile-unsigned.ipa';
 const files=[...desktop,apk,ipa];
 for(const file of files)if(!fs.existsSync(file)||fs.statSync(file).size===0)throw Error('Missing asset '+file);
+// The public APK must never point to draft/missing Agent files (HTTP 404).
+const androidSeed=JSON.parse(call('python3',['-c',"import zipfile,sys;z=zipfile.ZipFile(sys.argv[1]);assert not any(n.endswith('agent-rootfs.zip') for n in z.namelist());print(z.read('assets/agent/seed.json').decode())",apk]));
+if(!androidSeed.url?.startsWith('https://github.com/2786886095/novelai-image-desktop/releases/download/agent-v'))throw Error('Missing on-demand Agent URL');
+const component=JSON.parse(call('gh',['release','view','agent-v'+androidSeed.version,'--json','isDraft,assets']));
+if(component.isDraft||!component.assets.some(a=>a.name==='agent-rootfs.zip'&&a.size===androidSeed.bytes)||!component.assets.some(a=>a.name==='android-agent.json'))throw Error('Publish verified Android component assets before the app');
+const descriptorResponse=await fetch(androidSeed.url.replace(/agent-rootfs.zip$/,'android-agent.json'),{signal:AbortSignal.timeout(30000)});
+if(!descriptorResponse.ok)throw Error('Android descriptor is not publicly downloadable');
+const descriptor=await descriptorResponse.json();
+if(descriptor.sha256!==androidSeed.sha256||descriptor.bytes!==androidSeed.bytes||descriptor.upstream!==androidSeed.upstream)throw Error('Public Android runtime differs from APK descriptor');
+const runtimeResponse=await fetch(androidSeed.url,{method:'HEAD',signal:AbortSignal.timeout(30000)});
+if(!runtimeResponse.ok||Number(runtimeResponse.headers.get('content-length'))!==androidSeed.bytes)throw Error('Android runtime download URL/size verification failed');
 const updater=fs.readFileSync('release-assets/latest.yml','utf8');
 const field=name=>updater.match(new RegExp('^'+name+':\\s*(.+)$','m'))?.[1].trim().replace(/^['"]|['"]$/g,'');
 if(field('version')!==version||field('path')!==path.basename(desktop[0]))throw Error('Updater version/path mismatch');

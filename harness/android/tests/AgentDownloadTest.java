@@ -25,6 +25,10 @@ public class AgentDownloadTest {
   AgentDownload d=new AgentDownload();AtomicLong progress=new AtomicLong();
   AgentDownload.Progress report=(n,total,speed)->progress.set(n);
   try{
+   AgentFiles.validateName("var/lib/dpkg/info/libc6:arm64.list",true);
+   fails(()->AgentFiles.validateName("var/lib/dpkg/info/libc6:arm64.list",false));
+   fails(()->AgentFiles.validateName("C:/escape",true));
+   fails(()->AgentFiles.validateName("var/../escape",true));
    Path cache=root.resolve("cache");Path result=d.fetch(url,cache,payload.length,hash,()->false,report);
    check(AgentFiles.hash(result).equals(hash)&&progress.get()==payload.length,"fresh checksum/progress");
    int count=requests.get();d.fetch(url,cache,payload.length,hash,()->false,report);check(requests.get()==count,"cache avoids redownload");
