@@ -28,10 +28,7 @@ class AgentInstrumentation: Instrumentation() {
                 pass("apk-reinstall-preserves-user-data-and-does-not-autostart")
             }else{
                 sendStatus(0,Bundle().apply{putString("stream","QA: opening isolated test activity (30 second limit)\n")})
-                val seat=java.util.concurrent.Executors.newSingleThreadExecutor()
-                val activity=try{
-                    seat.submit<AgentQaActivity>{startActivitySync(Intent().setClassName(targetContext.packageName,"com.codex.novelai.novelai_mobile.agent.AgentQaActivity").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as AgentQaActivity}.get(30,TimeUnit.SECONDS)
-                }finally{seat.shutdownNow()}
+                val activity=openTestActivity()
                 sendStatus(0,Bundle().apply{putString("stream","QA: activity ready; preparing runtime\n")})
                 targetContext.startForegroundService(Intent(targetContext,LocalAgentService::class.java))
                 agent.command("prepare");waitIdle(agent,600000)
@@ -79,11 +76,32 @@ class AgentInstrumentation: Instrumentation() {
             File(targetContext.filesDir,"qa-device-evidence.json").writeText(evidence.toString(2))
             finish(Activity.RESULT_OK,Bundle().apply{putString("stream","ANDROID DEVICE QA PASS\n")})
         }catch(error:Throwable){
-            evidence.put("checks",checks).put("status","failed").put("error",error.message?.take(6000))
+            evidence.put("checks",checks).put("status","failed").put("error",error.toString().take(6000))
             agent?.snapshot()?.get("logs")?.let{evidence.put("logs",it)}
             File(targetContext.filesDir,"qa-device-evidence.json").writeText(evidence.toString(2))
-            agent?.stop();finish(Activity.RESULT_CANCELED,Bundle().apply{putString("stream","ANDROID DEVICE QA FAILED: ${error.message?.take(3000)}\n")})
+            agent?.stop();finish(Activity.RESULT_CANCELED,Bundle().apply{putString("stream","ANDROID DEVICE QA FAILED: ${error.toString().take(3000)}\n")})
         }
+    }
+    private fun openTestActivity():AgentQaActivity {
+        // Do not wait for an idle Flutter message queue: ongoing frame/poll work
+        // can starve startActivitySync even when the app is already foreground.
+        val app=targetContext.applicationContext as android.app.Application
+        val ready=CountDownLatch(1)
+        val found=java.util.concurrent.atomic.AtomicReference<AgentQaActivity>()
+        val observer=object:android.app.Application.ActivityLifecycleCallbacks {
+            override fun onActivityResumed(a:Activity){if(a is AgentQaActivity){found.set(a);ready.countDown()}}
+            override fun onActivityCreated(a:Activity,b:Bundle?){}
+            override fun onActivityStarted(a:Activity){}
+            override fun onActivityPaused(a:Activity){}
+            override fun onActivityStopped(a:Activity){}
+            override fun onActivitySaveInstanceState(a:Activity,b:Bundle){}
+            override fun onActivityDestroyed(a:Activity){}
+        }
+        try {
+            runOnMainSync{app.registerActivityLifecycleCallbacks(observer);targetContext.startActivity(Intent(targetContext,AgentQaActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))}
+            check(ready.await(30,TimeUnit.SECONDS)){"Test activity did not resume within 30 seconds"}
+            return checkNotNull(found.get())
+        }finally{runOnMainSync{app.unregisterActivityLifecycleCallbacks(observer)}}
     }
     private fun waitIdle(agent:LocalAgentRuntime,timeout:Long){
         val deadline=System.currentTimeMillis()+timeout
