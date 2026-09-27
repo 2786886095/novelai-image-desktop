@@ -1,3 +1,6 @@
+import {collectPortableWorkspaceData,mergePortableWorkspaceData} from './features/settings/data-backup-workspace';
+import {flushArtistFavoritePersistence,hydrateArtistFavoriteLibrary} from './artist-favorite-library';
+import {validateTaskRequest} from './agent/task-contract';
 import {useAppStore} from './store';
 import {normalizeGenerateParams, type AppSettings, type LastGenerationState, type SettingKey, type StylePromptPreset} from './types';
 import {projectStudioData,STUDIO_WRITABLE,validateStudioPatch,validateStyleInput,type StudioAgentRequest,type StudioAgentReply} from './studio-agent-contract';
@@ -12,9 +15,11 @@ export interface StudioAgentDependencies {
   setState:(patch:Partial<State>)=>void;
   api:Pick<Window['naiDesktop'],'getSettings'|'commitStudioSetting'|'getHistory'|'getHistoryGroups'|'listReferencePresets'|'getAgentWorkspace'>;
   uuid:()=>string;
+  notifyReferenceChange?:()=>void;
 }
 export function createStudioAgentService(deps:StudioAgentDependencies) {
-  let fingerprint='',sequence=0;
+  let fingerprint='',sequence=0,taskFingerprint='',taskSequence=0;
+  function tasks(){const s=deps.getState();const fp=JSON.stringify([s.isGenerating,s.isGenerateQueueRunning,s.queuePaused,s.generationQueue?.map(x=>x.id)]);if(fp!==taskFingerprint){taskFingerprint=fp;taskSequence++;}return {revision:`${instance}:tasks:${taskSequence}`,running:s.isGenerating,queueRunning:s.isGenerateQueueRunning,paused:s.queuePaused,progress:s.queueProgress,items:projectStudioData(s.generationQueue??[]),status:s.statusText,error:s.lastError,scope:'软件生成队列；暂停在当前图片结束后生效，取消不能撤销已完成的收费调用。'};}
   const instance=deps.uuid();
   async function current() {
     const settings=await deps.api.getSettings();
@@ -38,7 +43,7 @@ export function createStudioAgentService(deps:StudioAgentDependencies) {
       case 'history':rows=await deps.api.getHistory(typeof args.date==='string'?args.date:undefined,typeof args.groupId==='string'?args.groupId:undefined);break;
       case 'historyGroups':rows=await deps.api.getHistoryGroups();break;
       case 'references':rows=(await deps.api.listReferencePresets()).presets;break;
-      case 'characters':case 'personas':case 'lorebooks':case 'memories':case 'conversations': {
+      case 'characters':case 'personas':case 'lorebooks':case 'samplerPresets':case 'memories':case 'conversations': {
         const workspace=await deps.api.getAgentWorkspace();rows=workspace[collection];break;
       }
       default:throw new Error('未知数据集合');
@@ -60,9 +65,60 @@ export function createStudioAgentService(deps:StudioAgentDependencies) {
   async function handle(request:StudioAgentRequest):Promise<StudioAgentReply> {
     try {
       const args=request.args;
+      if(request.action==='tasks') {
+        const input=validateTaskRequest(args),before=tasks(),s=deps.getState();
+        if(input.action==='list')return {ok:true,data:before};
+        if(input.action!=='cancel'&&input.expectedRevision!==before.revision)throw Error('任务队列已变化，请重新读取');
+        if(['pause','resume'].includes(input.action)) {
+          if(!s.isGenerating||!s.isGenerateQueueRunning)throw Error('当前没有可暂停或继续的生成队列');
+          if(s.queuePaused!==(input.action==='pause'))s.togglePause();
+        }else if(input.action==='cancel')await s.cancel();
+        else if(input.action==='clear')s.clearQueue();
+        else {if(!s.generationQueue.some(x=>x.id===input.id))throw Error('排队任务已开始或不存在，请重新读取');s.removeQueueJob(input.id!);}
+        const after=tasks();
+        if(input.action==='remove'&&deps.getState().generationQueue.some(x=>x.id===input.id))throw Error('任务未移除，请回读状态');
+        if(input.action==='clear'&&deps.getState().generationQueue.length)throw Error('队列未清空，请回读状态');
+        return {ok:true,data:{...after,action:input.action,executed:true,...(input.action==='cancel'?{cancellationRequested:true}:{})}};
+      }
+      if(request.action==='backup-capture') {
+        const state=deps.getState();
+        if(state.isGenerating||state.isGenerateQueueRunning||state.batchRunning||state.showSettings)throw Error('请先结束生成任务并保存设置，再执行备份恢复');
+        await flushArtistFavoritePersistence();
+        const fresh=await current();
+        return {ok:true,data:{workspaceData:collectPortableWorkspaceData(),revision:fresh.revision}};
+      }
+      if(request.action==='backup-restore') {
+        const merged=mergePortableWorkspaceData((args.workspaceData??{}) as Record<string,string>);
+        await deps.getState().load();
+        await hydrateArtistFavoriteLibrary();
+        deps.notifyReferenceChange?.();
+        globalThis.window?.dispatchEvent(new Event('langbai:workspace-imported'));
+        return {ok:true,data:{refreshed:true,...merged}};
+      }
+      if(request.action==='read'&&args.refreshApi===true){const saved=await deps.api.getSettings(),state=deps.getState();const keys=['apiBaseUrl','imageBaseUrl','allowCustomEndpoint','allowCustomEndpointFallback','visionApiUrl','visionApiModel','visionApiKey','convertApiUrl','convertApiModel','convertApiKey','agentApiBaseUrl','agentApiModel','agentApiProtocol','agentProviderName','agentApiKey','tagServerUrl','tagServerType','tagServerTool','tagServerEnabled','tagServerApiKey','translateAiApiUrl','translateAiModel','translateAiApiKey'];deps.setState({settings:{...(state.settings??saved),...Object.fromEntries(keys.map(k=>[k,saved[k as SettingKey]]))}});return {ok:true,data:{refreshed:true}};}
+      if(request.action==='read'&&args.refreshLibrary===true){const saved=await deps.api.getSettings(),state=deps.getState();deps.setState({settings:{...(state.settings??saved),stylePromptPresets:saved.stylePromptPresets,positivePromptPresets:saved.positivePromptPresets}});return {ok:true,data:{refreshed:true}};}
+      if(request.action==='read'&&args.refreshCollections!==undefined) {
+        const category=args.refreshCollections;
+        if(!['history','references','text.convert','text.reverse'].includes(String(category)))throw Error('未知资料刷新类别');
+        if(category==='history') {
+          const groups=await deps.api.getHistoryGroups(),state=deps.getState();
+          const exists=(id:string)=>!id||groups.some(group=>group.id===id);
+          const selectedGroupId=exists(state.selectedGroupId)?state.selectedGroupId:'';
+          const generationGroupId=exists(state.generationGroupId)?state.generationGroupId:'';
+          deps.setState({historyGroups:groups,selectedGroupId,generationGroupId});
+          await deps.getState().refreshHistory();
+        } else if(category==='references')deps.notifyReferenceChange?.();
+        else if(category==='text.convert')await deps.getState().loadConvertHistory();
+        else await deps.getState().loadReverseHistory();
+        return {ok:true,data:{refreshed:category}};
+      }
       if(request.action==='list')return {ok:true,data:await list(args)};
       const {settings,state,revision}=await current();
       if(request.action==='read') {
+        if(args.refreshTemplates===true){
+          const keys=['agentPromptTemplateMode','convertPromptTemplates','convertPromptTemplatesV45','reversePromptTemplates','reversePromptTemplatesV45','convertPromptTemplateVersion','reversePromptTemplateVersion'] as const;
+          deps.setState({settings:{...state.settings,...Object.fromEntries(keys.map(key=>[key,settings[key]]))} as AppSettings});
+        }
         const libraryKeys=new Set(['stylePromptPresets','positivePromptPresets','characterPromptPresets','promptChunks','lastGenerationState']);
         const config=Object.fromEntries(Object.entries(settings).map(([k,v])=>[k,libraryKeys.has(k)?{source:k==='lastGenerationState'?'persisted; use generation for live values':'list_studio_data',count:Array.isArray(v)?v.length:undefined}:v]));
         const sections:Record<string,unknown>={
@@ -73,7 +129,7 @@ export function createStudioAgentService(deps:StudioAgentDependencies) {
         };
         const section=String(args.section??'all');
         if(section!=='all'&&!Object.hasOwn(sections,section))throw new Error('未知 section');
-        return {ok:true,data:{revision,capturedAt:new Date().toISOString(),source:'live renderer + freshly persisted settings; excludes unsaved settings-dialog drafts',...(section==='all'?projectStudioData(sections) as object:{[section]:projectStudioData(sections[section])}),writableSchema:STUDIO_WRITABLE,collections:['styles','styleGroups','positivePresets','characterPresets','promptChunks','references','history','historyGroups','characters','personas','lorebooks','memories','conversations']}};
+        return {ok:true,data:{revision,capturedAt:new Date().toISOString(),source:'live renderer + freshly persisted settings; excludes unsaved settings-dialog drafts',...(section==='all'?projectStudioData(sections) as object:{[section]:projectStudioData(sections[section])}),writableSchema:STUDIO_WRITABLE,collections:['styles','styleGroups','positivePresets','characterPresets','promptChunks','references','history','historyGroups','characters','personas','lorebooks','samplerPresets','memories','conversations']}};
       }
       if(request.action!=='prepare'&&request.action!=='apply')throw new Error('未知操作');
       if(typeof args.expectedRevision!=='string'||args.expectedRevision!==revision)throw new Error('配置已变化。请重新读取软件状态，再提交修改。');
@@ -137,7 +193,7 @@ export function createStudioAgentService(deps:StudioAgentDependencies) {
 
 export function installStudioAgent() {
   if(!window.naiDesktop?.onStudioAgentRequest)return;
-  const service=createStudioAgentService({getState:useAppStore.getState,setState:patch=>useAppStore.setState(patch),api:window.naiDesktop,uuid:()=>crypto.randomUUID()});
+  const service=createStudioAgentService({getState:useAppStore.getState,setState:patch=>useAppStore.setState(patch),api:window.naiDesktop,uuid:()=>crypto.randomUUID(),notifyReferenceChange:()=>window.dispatchEvent(new Event('langbai:reference-presets-changed'))});
   return window.naiDesktop.onStudioAgentRequest(request=>{
     void service.handle(request).then(reply=>window.naiDesktop.replyStudioAgent(request.id,reply)).catch(()=>{/* Main may have timed out or closed; do not retry mutations. */});
   });

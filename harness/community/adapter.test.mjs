@@ -1,7 +1,7 @@
 import {test} from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs/promises';import path from 'node:path';
 import {descriptor,allowedTools} from '../plugins/studio-library/protocol.js';
 test('UI RPC is bounded and exposes only the existing data operations',()=>{
- assert.equal(allowedTools.size,4);assert.equal(allowedTools.has('langbai_generate_image'),false);
+ assert.deepEqual([...allowedTools].sort(),['studio_reveal_image','studio_session_material','studio_api_input','studio_resolve_api_input','langbai_read_studio_state','langbai_list_studio_data','langbai_update_studio_config','langbai_save_style_preset','langbai_import_studio_data','studio_session_state','studio_set_session_style','studio_generation_policy','studio_style_preview','studio_stop_generation','studio_workspaces','studio_cleanup_empty_workspaces','studio_image_approval','studio_resolve_image_approval','studio_prompt_template','studio_save_prompt_template','studio_panel_layout','studio_save_panel_layout'].sort());assert.ok(allowedTools.has('studio_generation_policy'));assert.ok(allowedTools.has('studio_resolve_image_approval'));assert.ok(allowedTools.has('studio_save_prompt_template')); assert.equal(allowedTools.has('langbai_generate_image'),false);
  assert.throws(()=>descriptor.parameters[0].codec.schema.parse({}));assert.throws(()=>descriptor.result.schema.parse('x'.repeat(2_000_001)));
  assert.equal(descriptor.result.schema.parse('{"ok":true}'),'{"ok":true}');
 });

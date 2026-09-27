@@ -19,6 +19,7 @@ if (keystorePropertiesFile.exists()) {
 android {
     // Java helpers alongside Kotlin must also reach javac/D8 (not just Kotlin's resolver).
     sourceSets.main.java.srcDirs += 'src/main/kotlin'
+    sourceSets.main.assets.srcDir(layout.buildDirectory.dir('generated/agentPresentation'))
     namespace = "com.codex.novelai.novelai_mobile"
     // Pinned explicitly (not flutter.compileSdkVersion) because the gal plugin
     // reads compileSdk directly and fails when it's left to the Flutter default.
@@ -76,6 +77,20 @@ android {
         }
     }
 }
+
+// Tiny app-owned presentation overlay, separate from the downloaded runtime and
+// user-installed/customised plugins. No model/runtime archive enters the APK.
+def stageAgentPresentation = tasks.register('stageAgentPresentation', Sync) {
+    from(rootProject.file('../../harness/plugins/studio-responsive')) {
+        include 'index.js', 'package.json', 'lib/client.js'
+    }
+    into(layout.buildDirectory.dir('generated/agentPresentation/agent-presentation'))
+    from(rootProject.file('../../harness/plugins/studio-library')) {
+        include 'package.json', 'index.js', 'protocol.js', 'jev-config.js', 'panel-layout-store.js', 'lib/client.js'
+        into 'library'
+    }
+}
+tasks.named('preBuild').configure { dependsOn(stageAgentPresentation) }
 
 tasks.configureEach { task ->
     if (task.name.matches('merge.*Assets')) {

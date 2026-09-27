@@ -1,5 +1,16 @@
 import {it,expect} from 'vitest';import fs from 'node:fs/promises';import os from 'node:os';import path from 'node:path';import crypto from 'node:crypto';
 import {upgradeBundledUserFiles} from './harness-user-upgrade';
+it('retargets a hoisted runtime SDK and restores its original nested link on rollback',async()=>{
+ const root=await fs.mkdtemp(path.join(os.tmpdir(),'harness-migration-'));
+ try{
+  const home=path.join(root,'user-home/profiles/node_modules'),old=path.join(root,'versions/old/runtime/node_modules/app/node_modules/sdk'),next=path.join(root,'versions/new');
+  await fs.mkdir(home,{recursive:true});await fs.mkdir(old,{recursive:true});await fs.mkdir(path.join(next,'runtime/node_modules/sdk'),{recursive:true});
+  const link=path.join(home,'sdk');await fs.symlink(old,link,process.platform==='win32'?'junction':'dir');
+  const result=await upgradeBundledUserFiles(root,{files:{}} as any,next,{files:{}} as any);
+  expect(result.links).toBe(1);expect(await fs.realpath(link)).toBe(await fs.realpath(path.join(next,'runtime/node_modules/sdk')));
+  await result.rollback();expect(await fs.realpath(link)).toBe(await fs.realpath(old));
+ }finally{if(path.dirname(root)===os.tmpdir()&&path.basename(root).startsWith('harness-migration-'))await fs.rm(root,{recursive:true,force:true});}
+});
 it('migrates only untouched bundled code and owned links, and supports transaction rollback',async()=>{
  const root=await fs.mkdtemp(path.join(os.tmpdir(),'harness-migration-'));const hash=(s:string)=>crypto.createHash('sha256').update(s).digest('hex');
  try {
@@ -37,5 +48,18 @@ it('updates an untouched package coherently, removes obsolete files and restores
   expect(await fs.readFile(path.join(home,'index.js'),'utf8')).toBe('old');
   await fs.unlink(path.join(home,'my-plugin-config.json'));await fs.unlink(path.join(home,'obsolete.js'));
   expect((await upgradeBundledUserFiles(root,before,next,after)).changed).toBe(0);
+ }finally{if(path.dirname(root)===os.tmpdir()&&path.basename(root).startsWith('harness-migration-'))await fs.rm(root,{recursive:true,force:true});}
+});
+it('updates only untouched shipped composition and rolls its defaults back exactly',async()=>{
+ const root=await fs.mkdtemp(path.join(os.tmpdir(),'harness-migration-')),hash=(s:string)=>crypto.createHash('sha256').update(s).digest('hex');
+ const next=path.join(root,'versions/new'),rel='community/community.patch.yml',target=path.join(root,'user-home/studio-community.patch.yml');
+ try{
+  await fs.mkdir(path.dirname(target),{recursive:true});await fs.mkdir(path.join(next,'community'),{recursive:true});
+  await fs.writeFile(target,'chatMaxStepsPerRun: 5');await fs.writeFile(path.join(next,rel),'chatMaxStepsPerRun: 12');
+  const before={files:{[rel]:hash('chatMaxStepsPerRun: 5')}} as any,after={files:{[rel]:hash('chatMaxStepsPerRun: 12')}} as any;
+  const result=await upgradeBundledUserFiles(root,before,next,after);expect(result.changed).toBe(1);expect(await fs.readFile(target,'utf8')).toContain(': 12');
+  await result.rollback();expect(await fs.readFile(target,'utf8')).toBe('chatMaxStepsPerRun: 5');
+  await fs.writeFile(target,'chatMaxStepsPerRun: 5\n# user customization');
+  const custom=await upgradeBundledUserFiles(root,before,next,after);expect(custom.changed).toBe(0);expect(custom.custom).toBe(1);expect(await fs.readFile(target,'utf8')).toContain('# user customization');
  }finally{if(path.dirname(root)===os.tmpdir()&&path.basename(root).startsWith('harness-migration-'))await fs.rm(root,{recursive:true,force:true});}
 });

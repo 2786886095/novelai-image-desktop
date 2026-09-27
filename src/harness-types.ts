@@ -6,7 +6,7 @@ export interface HarnessSnapshot {
   installedUpstream?: string | null;
   logs: HarnessLog[];
   dataDirectory: string;
-  updateInfo?: {checkedAt:string;component:string|null;official:string|null;plugins:Record<string,string>;errors:string[];componentFailed?:boolean;officialFailed?:boolean} | null;
+  updateInfo?: {checkedAt:string;component:string|null;official:string|null;plugins:Record<string,string>;errors:string[];componentFailed?:boolean;officialFailed?:boolean;bundledComponent?:string;bundledUpdate?:boolean} | null;
   checkingUpdates?: boolean;
 }
 

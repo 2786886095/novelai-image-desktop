@@ -69,3 +69,17 @@ it('upgrades an installed older bundle from the software seed even without a rem
  await next.update();expect(remote).not.toHaveBeenCalled();expect(next.snapshot().version).toBe('0.1.1');expect(await fs.readFile(path.join(home,'previous.json'),'utf8')).toBe(old);
  await next.update();expect(remote).toHaveBeenCalledOnce();expect(next.snapshot().phase).toBe('stopped');
 });
+
+ it('managed tools activate only over an unchanged seed and leave user plugins intact',async()=>{
+  const {root,seed,home,engine}=await setup();
+  await (engine as any).seedUserFiles(seed);
+  const installed=path.join(home,'user-home/profiles/node_modules/@langbai/dsh-studio-tools');
+  await fs.writeFile(path.join(seed,'plugins/studio-tools/package.json'),'{}');await fs.writeFile(path.join(installed,'package.json'),'{}');
+  const source=path.join(root,'new-tools');await fs.mkdir(source);await fs.writeFile(path.join(source,'package.json'),'{}');await fs.writeFile(path.join(source,'index.js'),'template workflow');
+  (engine as any).options.toolsSource=source;
+  const before=await fs.readFile(path.join(installed,'index.js'),'utf8');
+  const patch=await (engine as any).toolsPatch(seed);expect(await fs.readFile(patch,'utf8')).toContain('studio-tools-managed');
+  expect(await fs.readFile(path.join(installed,'index.js'),'utf8')).toBe(before);
+  await fs.writeFile(path.join(installed,'index.js'),'user modified');expect(await (engine as any).toolsPatch(seed)).toBeNull();
+  expect(await fs.readFile(path.join(installed,'index.js'),'utf8')).toBe('user modified');
+ });

@@ -110,6 +110,7 @@ import {
   parsePromptVariantResponse,
   resolveModePrompt,
 } from "../../src/prompt-mode";
+import {auditMixedEnvelope,mixedTemplateContract,mixedEnvelopeInstruction,patchMixedEnvelope} from '../../src/prompt-template-audit';
 import { beginJob, cancelAllJobs } from "./job-registry";
 import { NaiSseFrameDecoder, NaiStreamFrameDecoder, type NaiStreamFrame } from "./nai-stream";
 
@@ -2797,6 +2798,7 @@ async function callConvertApi(
   maxTokens = 2000,
   label = "提示词转换",
   record = true,
+  retryEmpty = true,
 ): Promise<{ ok: boolean; content?: string; message: string }> {
   const settings = getSettings();
   const apiUrl = settings.convertApiUrl.trim();
@@ -2843,7 +2845,7 @@ async function callConvertApi(
     // and return empty content with finish_reason "length". Retry once with a
     // much larger budget so the actual answer has room (billed per real token,
     // so this only costs more on the genuinely-reasoning case).
-    if (!content.trim() && fin === "length") {
+    if (retryEmpty && !content.trim() && fin === "length") {
       resp = await post(Math.max(maxTokens * 8, 32000));
       content = resp.data?.choices?.[0]?.message?.content ?? "";
       fin = resp.data?.choices?.[0]?.finish_reason;
@@ -2866,6 +2868,7 @@ async function callConvertApi(
       }
       return { ok: false, message };
     }
+    if (fin === "length") return {ok:false,message:"提示词响应被截断，未交给生图；请缩短描述或提高转换服务输出上限。"};
     const cleaned = cleanPromptOutput(content);
     if (record) {
       recordAiCall({
@@ -3245,7 +3248,9 @@ export async function reversePromptImage(
   const reconstructionInstruction = `\n反推必须以“可复现画面”为目标，而不是只做粗略识别。输出前逐项核对：主体数量与身份、背景颜色/复杂度、全身或半身取景、视角、人物在画面中的大小与位置、双腿姿势、左右手臂各自的方向/弯曲/指向、手势、头部朝向、注视和表情。\nTag 模式按“人数与构图 → 身份 → 外貌服装 → 姿势动作 → 背景”排序。优先输出图中能直接观察到、能稳定复现构图的成熟 Danbooru Tag，不要用“电影感”“精美光影”等主观修饰替代白色背景、全身、站立、分腿、伸臂、指向等事实。单人全身图不得只写 pointing：若可见，必须同时保留 1girl、solo、white background/simple background、full body、standing、spread legs/legs apart、outstretched arm、pointing、looking at viewer、smile 等互不冲突的成熟 Tag；已知角色必须保留准确的 Danbooru 身份 Tag。左右关系没有可靠 Tag 时可用最短英文短语补足。不要把 standing wide stance 误写成坐姿语义，也不要臆造图中不存在的背景、动作或光照。`;
   const systemPrompt = injectDshImageAiSystemPrompt({
     task: "reverse",
-    enabled: settings.reverseConvertDshEnabled,
+    // A custom software template is authoritative; unrelated conversation presets
+    // must not prepend their own prose/output rules. Keep the saved switch intact.
+    enabled: (safeTemplateVersion === "v5" ? settings.reversePromptTemplates : settings.reversePromptTemplatesV45)?.[mode]?.trim() ? false : settings.reverseConvertDshEnabled,
     mode: settings.reverseConvertDshMode,
     sharedPreset: selectedImageTaskPromptPreset(
       settings.reverseConvertPromptPresets,
@@ -4377,6 +4382,7 @@ export async function convertPromptText(
 ): Promise<{
   ok: boolean;
   result?: string;
+  validation?: {total:number;tags:number;natural:number;tagPercent:number};
   variants?: { namePrompt: string; featurePrompt: string };
   message: string;
 }> {
@@ -4394,7 +4400,9 @@ export async function convertPromptText(
   ).replace(/\{\{input\}\}/g, "<provided in the user message>");
   const systemPrompt = injectDshImageAiSystemPrompt({
     task: "convert",
-    enabled: settings.reverseConvertDshEnabled,
+    // A custom software template is authoritative; unrelated conversation presets
+    // must not prepend their own prose/output rules. Keep the saved switch intact.
+    enabled: (safeTemplateVersion === "v5" ? settings.convertPromptTemplates : settings.convertPromptTemplatesV45)?.[mode]?.trim() ? false : settings.reverseConvertDshEnabled,
     mode: settings.reverseConvertDshMode,
     sharedPreset: selectedImageTaskPromptPreset(
       settings.reverseConvertPromptPresets,
@@ -4419,14 +4427,61 @@ export async function convertPromptText(
     knownCharacter,
     safeTemplateVersion,
   );
-  const result = await callConvertApi(
+  const contract=!knownCharacter?mixedTemplateContract(baseSystemPrompt,mode):null;
+  if(contract){
+    const internalSystem=systemPrompt+'\n\n'+mixedEnvelopeInstruction;
+    let previous='',problems:string[]=[],stats:{total:number;tags:number;natural:number;tagPercent:number}|undefined;
+    for(let attempt=0;attempt<3;attempt++){
+      const delta=attempt&&stats;
+      const additions=stats?Math.max(0,contract.min-stats.total,Math.ceil(stats.tags/.7)-stats.total):0;
+      const correction=delta?`\n本轮只返回 JSON 增量 {"replace":[{"segment":0,"index":0,"unit":{"kind":"tag","text":"..."}}],"append":[{"segment":0,"units":[{"kind":"natural","text":"..."}]}],"remove":[]}，索引从0开始。没有改动的项不要返回；不要返回 segments 或完整改写。程序合并后复验，因此不得通过把 Tag 假标为 natural 改比例。现有 ${stats!.total} 单元，${stats!.tags} Tag，${stats!.natural} 自然短语；建议额外补充 ${additions} 个不重复的可见关系自然短语（按原要求，无额外人物或情节）。含逗号的短语用 replace 修成一个无逗号短语，保持原意。` : '';
+      const reply=await callConvertApi(internalSystem+correction,userText+(attempt?`\n上次验收问题：${problems.join('；')}。只修正这些问题并保留用户明确要求及已合格单元。不得删除事实换取凑数。\n上一版：${previous}`:''),7000,`提示词转换 · mixed · ${attempt?'校正'+attempt:'模板验收'}`,true,false);
+      if(!reply.ok)return {ok:false,message:'转换失败：'+reply.message};
+      try{
+        previous=delta?patchMixedEnvelope(previous,reply.content??''):reply.content??'';
+        const audit=auditMixedEnvelope(previous,chineseText,contract);problems=audit.issues;stats=audit.stats;
+        if(!problems.length)return {ok:true,result:audit.prompt,validation:audit.stats,message:`转换成功：${audit.stats.total}单元，Tag ${audit.stats.tags} / 自然语言 ${audit.stats.natural}`};
+      }catch(e){problems=[e instanceof Error?e.message:String(e)];}
+    }
+    return {ok:false,message:'提示词未满足所选模板：'+problems.join('；')+'。本次校正已结束，未提交生图；不要自动重复同一任务。'};
+  }
+  let result = await callConvertApi(
     systemPrompt,
     userText,
-    knownCharacter ? 1100 : 700,
+    knownCharacter ? 5000 : 3000,
     `提示词转换 · ${mode}`,
     true,
   );
   if (!result.ok) return { ok: false, message: `转换失败：${result.message}` };
+
+  // A selected template may state a hard comma-unit range. Validate the
+  // measurable contract and known mutually-exclusive camera tags before use.
+  const range = baseSystemPrompt.match(/有效语义单元[\s\S]{0,80}?(\d{1,3})\s*[–—-]\s*(\d{1,3})/);
+  const countUnits = (value:string) => value.split(/[,，]/).map(s=>s.trim()).filter(Boolean).length;
+  if (range && !knownCharacter && Number(range[1]) <= Number(range[2])) {
+    const min = Number(range[1]), max = Number(range[2]);
+    const issues = () => {
+      const value=result.content ?? '', count=countUnits(value), base=value.split('|')[0].toLowerCase().replaceAll('_',' ');
+      const problems:string[]=[];
+      if(count<min||count>max)problems.push(`有 ${count} 个逗号分隔单元，模板要求 ${min}–${max} 个`);
+      if(/[\u4e00-\u9fff]/.test(value))problems.push('只输出英文提示词，删除中文前言、说明和标题');
+      if(/俯视(?:机位|视角|镜头)|从上(?:方|往下)|from above/i.test(chineseText)&&(!/\bfrom above\b/.test(base)||/\b(?:from below|low angle)\b/.test(base)))problems.push('用户指定俯视机位：必须是 from above，删除 from below 和 low angle；人物仰视镜头只用 looking up，不改变机位');
+      if(/holding (?:the )?umbrella with one hand/i.test(value)&&/both hands (?:gripping|holding)/i.test(value))problems.push('一只手持伞与双手握伞互斥，请只保留一种不违背用户要求的握持方式');
+
+      if(/\b(?:from above|high angle|overhead view)\b/.test(base)&&/\b(?:from below|low angle|worm.s eye)\b/.test(base))problems.push('俯视机位与仰视机位互斥；角色抬头 looking up 不等于镜头 from below，请保留用户要求的机位');
+      if(/\bText\s*:/i.test(value)&&!/文字|字样|写着|写上|字幕|标语|牌上|text|lettering|saying|reads/i.test(chineseText))problems.push('用户未要求画面文字，请去掉 Text: 与新增文字内容，不要添加标语');
+      return problems;
+    };
+    let problems=issues();
+    if(problems.length){
+      result=await callConvertApi(systemPrompt,
+        `${userText}\n\n模板格式校正：${problems.join('；')}。请按同一模板重新输出完整提示词；保留明确主体、人数、外貌、场景和排除项，只允许模板和用户许可的合理细节。不要凑重复词，不要解释或计数。\n上一版：${result.content ?? ''}`,
+        3000, `提示词转换 · ${mode} · 模板格式校正`, true);
+      if(!result.ok)return {ok:false,message:`转换失败：${result.message}`};
+      problems=issues();
+      if(problems.length)return {ok:false,message:`提示词未满足所选模板：${problems.join('；')}。自动校正一次后仍未通过；未提交生图。`};
+    }
+  }
 
   const parsed = parsePromptVariantResponse(result.content ?? "", knownCharacter);
   let content = parsed.primary;

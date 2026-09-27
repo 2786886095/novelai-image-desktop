@@ -1,3 +1,6 @@
+import '../ui/settings_section.dart';
+import 'completion_sound_settings.dart';
+import '../i18n/parity_text.dart';
 import '../ui/zoomable_image.dart';
 import '../ui/studio_theme.dart';
 import '../ui/studio_dropdown.dart';
@@ -746,35 +749,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ]),
           _Section(title: settingsText.promptTemplatesSection, children: [
             Text(settingsDetailText.reverseTemplateTitle),
+            StudioDropdownButtonFormField<String>(value:s.reversePromptTemplateVersion,decoration:InputDecoration(labelText:mobileUiTextFor(s.language,'inspect.templateVersionTitle')),items:const [DropdownMenuItem(value:'v4.5',child:Text('NAI 4.5')),DropdownMenuItem(value:'v5',child:Text('NAI V5'))],onChanged:(v){if(v!=null)state.setSettings((x)=>x.reversePromptTemplateVersion=v);}),
             ...ReversePromptMode.values.map((mode) => _TemplateTile(
                   title: mode.label,
                   customizedLabel: settingsDetailText.customized,
                   builtInLabel: settingsDetailText.builtInTemplate,
                   customized:
-                      s.reversePromptTemplates[mode.value]?.trim().isNotEmpty ??
+                      state.promptOverrides('reverse')[mode.value]?.trim().isNotEmpty ??
                           false,
                   onTap: () => _editTemplate(context, 'reverse', mode),
                 )),
             const Divider(),
             Text(settingsDetailText.convertTemplateTitle),
+            StudioDropdownButtonFormField<String>(value:s.convertPromptTemplateVersion,decoration:InputDecoration(labelText:mobileUiTextFor(s.language,'inspect.templateVersionTitle')),items:const [DropdownMenuItem(value:'v4.5',child:Text('NAI 4.5')),DropdownMenuItem(value:'v5',child:Text('NAI V5'))],onChanged:(v){if(v!=null)state.setSettings((x)=>x.convertPromptTemplateVersion=v);}),
             ...ReversePromptMode.values.map((mode) => _TemplateTile(
                   title: mode.label,
                   customizedLabel: settingsDetailText.customized,
                   builtInLabel: settingsDetailText.builtInTemplate,
                   customized:
-                      s.convertPromptTemplates[mode.value]?.trim().isNotEmpty ??
+                      state.promptOverrides('convert')[mode.value]?.trim().isNotEmpty ??
                           false,
                   onTap: () => _editTemplate(context, 'convert', mode),
                 )),
             const Divider(),
-            _TemplateTile(
-              title: settingsDetailText.comicTemplateTitle,
-              customizedLabel: settingsDetailText.customized,
-              builtInLabel: settingsDetailText.builtInTemplate,
-              customized: s.comicPromptTemplate.trim().isNotEmpty,
-              onTap: () =>
-                  _editTemplate(context, 'comic', ReversePromptMode.mixed),
-            ),
+            Text(settingsDetailText.comicTemplateTitle),
+            ...ReversePromptMode.values.map((mode)=>_TemplateTile(title:mode.label,customizedLabel:settingsDetailText.customized,builtInLabel:settingsDetailText.builtInTemplate,customized:s.comicAnalyzePromptTemplates[mode.value]?.trim().isNotEmpty??false,onTap:()=>_editTemplate(context,'comic',mode))),
             Text(settingsDetailText.restoreTemplateNote),
           ]),
           _Section(title: settingsText.promptShortcutsSection, children: [
@@ -906,6 +905,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const ResourceDatabaseSettingsPanel(),
           const DataBackupSettingsPanel(),
           _Section(title: persistText.sectionTitle, children: [
+            SwitchListTile(contentPadding:EdgeInsets.zero,title:Text(parityText(s.language,'i2i')),subtitle:Text(parityText(s.language,'i2iHint')),value:s.persistI2IParams,onChanged:(v)=>state.setSettings((x)=>x.persistI2IParams=v)),
             Text(persistText.sectionDesc),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
@@ -940,6 +940,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   state.setSettings((x) => x.persistDirectorParams = value),
             ),
           ]),
+          const CompletionSoundSettings(),
           _Section(title: appearanceText.sectionTitle, children: [
             SwitchListTile(
                 contentPadding: EdgeInsets.zero,
@@ -1348,25 +1349,8 @@ class _RewardCard extends StatelessWidget {
 
 /// A collapsible settings group: shows only its title until tapped, so the long
 /// settings list reads like a table of contents (点击目录才展开).
-class _Section extends StatelessWidget {
-  final String title;
-  final List<Widget> children;
-  const _Section({required this.title, required this.children});
-  @override
-  Widget build(BuildContext context) => Card(
-        margin: const EdgeInsets.only(top: 12),
-        clipBehavior: Clip.antiAlias,
-        child: ExpansionTile(
-          title: Text(title, style: Theme.of(context).textTheme.titleMedium),
-          shape: const Border(),
-          collapsedShape: const Border(),
-          childrenPadding: const EdgeInsets.fromLTRB(12, 16, 12, 12),
-          expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
-          children:
-              children.expand((w) => [w, const SizedBox(height: 8)]).toList()
-                ..removeLast(),
-        ),
-      );
+class _Section extends SettingsSection {
+  const _Section({required super.title, required super.children});
 }
 
 class _TextSetting extends StatelessWidget {

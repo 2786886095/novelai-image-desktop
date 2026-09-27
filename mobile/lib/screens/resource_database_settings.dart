@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'dart:io';
+import '../ui/settings_section.dart';
+import 'unified_storage_settings.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -403,91 +406,88 @@ class _ResourceDatabaseSettingsPanelState
     final language =
         context.select<AppState, String>((state) => state.settings.language);
     final text = _resourceText(language);
-    return Card(
-      margin: const EdgeInsets.only(top: 12),
-      clipBehavior: Clip.antiAlias,
-      child: ExpansionTile(
-        title: Text(text.title, style: Theme.of(context).textTheme.titleMedium),
-        shape: const Border(),
-        collapsedShape: const Border(),
-        childrenPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-        children: [
-          Align(
-            alignment: AlignmentDirectional.centerStart,
-            child: Text(text.description,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    )),
-          ),
-          const SizedBox(height: 12),
-          if (overview == null)
-            const Padding(
-              padding: EdgeInsets.all(20),
-              child: CircularProgressIndicator(),
-            )
-          else ...[
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.folder_outlined),
-              title: Text(text.path),
-              subtitle: Text(overview!.dataDirectory,
-                  maxLines: 2, overflow: TextOverflow.ellipsis),
-              trailing: IconButton(
-                tooltip: text.copied,
-                onPressed: () {
-                  Clipboard.setData(
-                      ClipboardData(text: overview!.dataDirectory));
-                  ScaffoldMessenger.of(context)
-                      .showSnackBar(SnackBar(content: Text(text.copied)));
-                },
-                icon: const Icon(Icons.copy_outlined),
-              ),
-            ),
-            const Divider(),
-            for (final status in overview!.resources) ...[
-              _ResourceRow(
-                status: status,
-                event: progress[status.definition.id],
-                text: text,
-                phaseLabel: progress[status.definition.id] == null
-                    ? ''
-                    : _phase(progress[status.definition.id]!, text),
-                busy: busy.contains(status.definition.id),
-                onInstall: () => _install(status, text),
-                onPause: () => service.pause(status.definition.id),
-                onRestore: () => _restore(status, text),
-                onDelete: () => _delete(status, text),
-              ),
-              if (status != overview!.resources.last) const Divider(height: 28),
-            ],
-            const Divider(height: 30),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.memory_outlined),
-              title: Text(text.cache),
-              subtitle: Text(
-                '${overview!.memoryEntries} ${text.records} · ${(overview!.memoryHitRate * 100).toStringAsFixed(1)}%',
-              ),
-              trailing: IconButton(
-                tooltip: text.clearCache,
-                onPressed: () {
-                  service.clearMemoryCache();
-                  _load();
-                },
-                icon: const Icon(Icons.delete_sweep_outlined),
-              ),
-            ),
-            Align(
-              alignment: AlignmentDirectional.centerEnd,
-              child: TextButton.icon(
-                onPressed: _load,
-                icon: const Icon(Icons.refresh),
-                label: Text(text.refresh),
-              ),
-            ),
-          ],
+    return SettingsSection(
+      maintainState: true,
+      title: text.title,
+      children: [
+        if (Platform.isAndroid) ...[
+          const UnifiedStorageSettings(),
+          const Divider(height: 24),
         ],
-      ),
+        Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: Text(text.description,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  )),
+        ),
+        const SizedBox(height: 12),
+        if (overview == null)
+          const Padding(
+            padding: EdgeInsets.all(20),
+            child: CircularProgressIndicator(),
+          )
+        else ...[
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.folder_outlined),
+            title: Text(text.path),
+            subtitle: Text(overview!.dataDirectory,
+                maxLines: 2, overflow: TextOverflow.ellipsis),
+            trailing: IconButton(
+              tooltip: text.copied,
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: overview!.dataDirectory));
+                ScaffoldMessenger.of(context)
+                    .showSnackBar(SnackBar(content: Text(text.copied)));
+              },
+              icon: const Icon(Icons.copy_outlined),
+            ),
+          ),
+          const Divider(),
+          for (final status in overview!.resources) ...[
+            _ResourceRow(
+              status: status,
+              event: progress[status.definition.id],
+              text: text,
+              phaseLabel: progress[status.definition.id] == null
+                  ? ''
+                  : _phase(progress[status.definition.id]!, text),
+              busy: busy.contains(status.definition.id),
+              onInstall: () => _install(status, text),
+              onPause: () => service.pause(status.definition.id),
+              onRestore: () => _restore(status, text),
+              onDelete: () => _delete(status, text),
+            ),
+            if (status != overview!.resources.last) const Divider(height: 28),
+          ],
+          const Divider(height: 30),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.memory_outlined),
+            title: Text(text.cache),
+            subtitle: Text(
+              '${overview!.memoryEntries} ${text.records} · ${(overview!.memoryHitRate * 100).toStringAsFixed(1)}%',
+            ),
+            trailing: IconButton(
+              tooltip: text.clearCache,
+              onPressed: () {
+                service.clearMemoryCache();
+                _load();
+              },
+              icon: const Icon(Icons.delete_sweep_outlined),
+            ),
+          ),
+          Align(
+            alignment: AlignmentDirectional.centerEnd,
+            child: TextButton.icon(
+              onPressed: _load,
+              icon: const Icon(Icons.refresh),
+              label: Text(text.refresh),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

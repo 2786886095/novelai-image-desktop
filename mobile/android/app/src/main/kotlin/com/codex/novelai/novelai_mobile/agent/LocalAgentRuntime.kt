@@ -25,6 +25,21 @@ class LocalAgentRuntime private constructor(private val context: Context) {
         const val CHANNEL = "https://api.github.com/repos/2786886095/novelai-image-desktop/releases?per_page=30"
     }
     private val root = File(context.filesDir, "TavernAgent")
+    private fun sharedRoot(): File? {
+        val pointer=File(context.filesDir,"unified-storage.json");if(!pointer.isFile)return null
+        val directory=File(JSONObject(pointer.readText()).getString("root"))
+        check(android.os.Build.VERSION.SDK_INT<30||android.os.Environment.isExternalStorageManager()) { "Shared storage permission was revoked; old data was not substituted" }
+        check(File(directory,"storage-manifest.json").isFile) { "Shared data directory missing" }
+        return directory
+    }
+    private val sharedNames=listOf("roleplay","sessions","mindspace-session-memory")
+    private fun dataOverrides(): Map<String,java.nio.file.Path> {
+        val shared=sharedRoot()?:return emptyMap()
+        return sharedNames.associateWith { name -> File(shared,"TavernAgent/data/$name").toPath() }
+    }
+    private fun backupRoot()=sharedRoot()?.let{File(it,"backups/agent")}?:File(root,"backups")
+    private fun downloadRoot()=sharedRoot()?.let{File(it,"models/agent-downloads")}?:File(root,"downloads")
+    private var exportSnapshot:File?=null
     private val home = File(root, "user-home")
     private val worker = Executors.newSingleThreadExecutor()
     private val logs = ArrayDeque<String>()
@@ -37,6 +52,7 @@ class LocalAgentRuntime private constructor(private val context: Context) {
     @Volatile private var stopping = false
     @Volatile private var portableLock: String? = null
     @Volatile private var launchUrl: String? = null
+    private var browserHandoff: AgentBrowserHandoff? = null
     @Volatile private var progress = 0.0
     @Volatile private var downloadBytes = 0L
     @Volatile private var downloadTotal = 0L
@@ -45,8 +61,12 @@ class LocalAgentRuntime private constructor(private val context: Context) {
     @Volatile private var upstream = ""
     @Volatile private var update: JSONObject? = null
     @Volatile private var downloadAvailable = false
+    @Volatile private var componentFailed=false
+    @Volatile private var officialFailed=false
+    @Volatile private var componentCheckedAt=0L
+    @Volatile private var officialCheckedAt=0L
     @Volatile private var proposal: Proposal? = null
-    private data class Proposal(val token: String, val slot: File, val seed: JSONObject, val before: String, val expires: Long)
+    private data class Proposal(val token: String, val slot: File, val seed: JSONObject, val before: String, val expires: Long, val kind:String)
     private val activeFile get() = File(root, "active.json")
     private fun active(): JSONObject? = if (activeFile.exists()) JSONObject(activeFile.readText()) else null
     private fun activeSlot(): File {
@@ -67,11 +87,13 @@ class LocalAgentRuntime private constructor(private val context: Context) {
         "downloadBytes" to downloadBytes, "downloadTotal" to downloadTotal, "downloadSpeed" to downloadSpeed,
         "runtimeBytes" to (update?.optLong("bytes") ?: runCatching{seed().getLong("bytes")}.getOrDefault(0L)),
         "downloadAvailable" to downloadAvailable,
+        "componentFailed" to componentFailed,"officialFailed" to officialFailed,
+        "componentCheckedAt" to componentCheckedAt,"officialCheckedAt" to officialCheckedAt,
         "running" to (child?.isAlive == true && phase == "running"),
         "installed" to active()?.optString("version"), "installedUpstream" to active()?.optString("upstream"),
         "official" to upstream, "candidate" to update?.optString("version"),
-        "dataDirectory" to home.absolutePath, "backupDirectory" to File(root,"backups").absolutePath,
-        "logs" to logs.toList(), "proposal" to proposal?.let { mapOf("token" to it.token,"version" to it.seed.getString("version"),"upstream" to it.seed.getString("upstream")) }
+        "dataDirectory" to home.absolutePath, "backupDirectory" to backupRoot().absolutePath,
+        "logs" to logs.toList(), "proposal" to proposal?.let { mapOf("token" to it.token,"version" to it.seed.getString("version"),"upstream" to it.seed.getString("upstream"),"kind" to it.kind) }
     )
     @Synchronized fun command(name: String, args: Map<String, Any?> = emptyMap()) {
         check(!busy && !stopping && portableLock==null) { "Another Agent operation or backup is in progress" }
@@ -82,8 +104,8 @@ class LocalAgentRuntime private constructor(private val context: Context) {
             try {
                 root.mkdirs()
                 when(name) {
-                    "check" -> checkUpdates()
-                    "prepare" -> prepare()
+                    "check" -> checkUpdates(args["kind"] as? String ?: "both")
+                    "prepare" -> prepare(args["kind"] as? String ?: "component")
                     "confirm" -> confirm(args["token"] as? String ?: "")
                     "start" -> start(args)
                     "backup" -> backup()
@@ -109,7 +131,7 @@ class LocalAgentRuntime private constructor(private val context: Context) {
     private fun fetchText(url: String): String {
         val connection = URL(url).openConnection() as HttpURLConnection
         connection.connectTimeout=15000;connection.readTimeout=20000
-        connection.setRequestProperty("User-Agent", "Langbai-Studio-Android/2.3.7")
+        connection.setRequestProperty("User-Agent", "Langbai-Studio-Android/2.4.0")
         try { check(connection.responseCode == 200) { "Update HTTP ${connection.responseCode}" }
             val bytes=connection.inputStream.use { it.readBytesLimited(2*1024*1024) };return String(bytes,Charsets.UTF_8)
         } finally { connection.disconnect() }
@@ -119,8 +141,11 @@ class LocalAgentRuntime private constructor(private val context: Context) {
         while(true){val n=read(buffer);if(n<0)break;check(out.size()+n<=limit){"Response too large"};out.write(buffer,0,n)}
         return out.toByteArray()
     }
-    private fun checkUpdates() {
+    private fun checkUpdates(kind:String="both") {
+        require(kind in listOf("component","official","both"))
         log("Checking Studio Android component and official Harness separately…")
+        if(kind!="official"){
+        componentFailed=false
         downloadAvailable=false
         try { val local=seed();validate(local);update=local } catch (_: Exception) { log("No bundled Android seed in this build") }
         try {
@@ -147,26 +172,38 @@ class LocalAgentRuntime private constructor(private val context: Context) {
                 }
                 if(downloadAvailable)break
             }
-        } catch (_: Exception) { log("Studio channel check failed; installed runtime unchanged") }
+        } catch (_: Exception) { componentFailed=true;log("Studio channel check failed; installed runtime unchanged") }
+        componentCheckedAt=System.currentTimeMillis()
+        }
+        if(kind!="component"){
+        officialFailed=false
         try {
             val tags=JSONObject(fetchText("https://registry.npmjs.org/-/package/@deepseek-ai%2Fdsh/dist-tags"))
             upstream=AgentVersions.newest(tags.optString("latest"),tags.optString("next"))
         }
-        catch (_: Exception) { log("Official Harness check failed; no automatic install") }
+        catch (_: Exception) { officialFailed=true;log("Official Harness check failed; no automatic install") }
+        officialCheckedAt=System.currentTimeMillis()
+        }
         log("Update checks finished. Changes require a successful compatibility probe and confirmation.")
     }
-    private fun prepare() {
+    private fun prepare(kind:String="component") {
+        require(kind in listOf("component","official"))
         check(child==null);phase="preparing";proposal=null;progress=0.0
+        checkUpdates("both")
         val meta=update ?: seed();validate(meta)
-        val cached=File(root,"downloads/${meta.getString("sha256")}.part")
-        check(downloadAvailable || (cached.isFile && cached.length()==meta.getLong("bytes"))) { "Compatible Android runtime has not been published yet; check updates later" }
-        check(active()?.optString("sha256") != meta.getString("sha256")) { "This component is already installed" }
+        val cached=File(downloadRoot(),"${meta.getString("sha256")}.part")
+        when(AgentUpdatePolicy.decide(kind,active()?.optString("sha256")?:"",active()?.optString("upstream")?:"",meta.getString("sha256"),meta.getString("upstream"),upstream,officialFailed,downloadAvailable,cached.isFile&&cached.length()==meta.getLong("bytes"))){
+            "current" -> {phase="stopped";log("This component is already installed");return}
+            "official_failed" -> error("Official Harness check failed; no automatic install")
+            "incompatible" -> error("No compatible Android component for the latest official Harness; current data retained")
+            "unpublished" -> error("Compatible Android runtime has not been published yet; check updates later")
+        }
         check(root.usableSpace > meta.getLong("unpackedBytes")*2 + meta.getLong("bytes") + 512L*1024*1024) { "Insufficient free storage" }
         val slot=File(root,"versions/${meta.getString("version")}-${UUID.randomUUID()}")
         val url=meta.optString("url")
         require(url.startsWith("https://github.com/2786886095/novelai-image-desktop/releases/download/agent-v") && url.endsWith("/agent-rootfs.zip")) { "No published compatible runtime download is available" }
         phase="downloading"
-        val archive=downloader.fetch(URL(url),File(root,"downloads").toPath(),meta.getLong("bytes"),meta.getString("sha256"),{cancelled}) { received,total,speed ->
+        val archive=downloader.fetch(URL(url),downloadRoot().toPath(),meta.getLong("bytes"),meta.getString("sha256"),{cancelled}) { received,total,speed ->
             downloadBytes=received;downloadTotal=total;downloadSpeed=speed
             progress=received.toDouble()/total
         }.toFile()
@@ -184,7 +221,7 @@ class LocalAgentRuntime private constructor(private val context: Context) {
             val probe=File(root,"probes/${UUID.randomUUID()}");requireNotNull(probe.parentFile).mkdirs()
             if(home.exists()){
                 val probeZip=File(root,"probe-${UUID.randomUUID()}.zip")
-                try {AgentFiles.backup(home.toPath(),probeZip.toPath());AgentFiles.restoreHome(probeZip.toPath(),probe.toPath())} finally {probeZip.delete()}
+                try {AgentFiles.backup(home.toPath(),probeZip.toPath(),dataOverrides());AgentFiles.restoreHome(probeZip.toPath(),probe.toPath())} finally {probeZip.delete()}
             } else probe.mkdirs()
             runShort(slot,probe,listOf("/usr/local/bin/node","--version"))
             runShort(slot,probe,listOf("/usr/local/bin/node","/opt/agent/seed-home.mjs"))
@@ -194,10 +231,19 @@ class LocalAgentRuntime private constructor(private val context: Context) {
             // No changes made to live user-home before confirmation.
             check(homeFingerprint()==before) { "User data changed during compatibility check" }
             check(!cancelled) { "Cancelled" }
-            proposal=Proposal(UUID.randomUUID().toString(),slot,meta,before,System.currentTimeMillis()+15*60*1000)
+            proposal=Proposal(UUID.randomUUID().toString(),slot,meta,before,System.currentTimeMillis()+15*60*1000,kind)
             phase="awaiting_confirmation";progress=1.0
             log("Compatibility probe passed. Confirm to back up user data and activate this component.")
-        } finally { if(proposal?.slot==slot)archive.delete() }
+        } finally {
+            if(proposal?.slot==slot)archive.delete()
+            else discardCandidate(slot)
+        }
+    }
+    private fun discardCandidate(slot:File){
+        // Only this transaction's unactivated runtime slot; never user-home/backups.
+        if(!slot.exists())return
+        check(slot.parentFile.canonicalFile==File(root,"versions").canonicalFile && active()?.optString("slot")!=slot.name && !Files.isSymbolicLink(slot.toPath()))
+        Files.walk(slot.toPath()).use{paths->paths.sorted(java.util.Comparator.reverseOrder()).forEach{Files.delete(it)}}
     }
     private fun homeFingerprint(): String {
         if(!home.exists())return "empty"
@@ -206,46 +252,119 @@ class LocalAgentRuntime private constructor(private val context: Context) {
             if(Files.isSymbolicLink(path)){digest.update(home.toPath().relativize(path).toString().toByteArray());digest.update(Files.readSymbolicLink(path).toString().toByteArray())}
             else if(Files.isRegularFile(path)){digest.update(home.toPath().relativize(path).toString().toByteArray());digest.update(AgentFiles.hash(path).toByteArray())}
         } }
+        for((name,base) in dataOverrides())Files.walk(base).use{stream->stream.sorted().filter{Files.isRegularFile(it)}.forEach{file->digest.update((name+base.relativize(file)).toByteArray());digest.update(AgentFiles.hash(file).toByteArray())}}
         return digest.digest().joinToString(""){"%02x".format(it)}
     }
     private fun confirm(token: String) {
         val p=proposal ?: error("Prepare a compatible component first")
         check(p.token==token && System.currentTimeMillis()<p.expires && homeFingerprint()==p.before) { "Proposal expired or user data changed; check again" }
         check(child==null);backup();check(!cancelled) { "Cancelled" }
-        val metadata=JSONObject(p.seed.toString()).put("slot",p.slot.name)
-        AgentFiles.atomicText(activeFile.toPath(),metadata.toString())
+        // Migrate the same package composition tested by prepare, on a copy.
+        // Keep the real home and previous active descriptor intact on failure.
+        val staged=File(root,"activation-${UUID.randomUUID()}")
+        val snapshot=File(root,"activation-${UUID.randomUUID()}.zip")
+        val preserved=File(root,"preserved-update-${UUID.randomUUID()}")
+        try {
+            AgentFiles.backup(home.toPath(),snapshot.toPath())
+            AgentFiles.restoreHome(snapshot.toPath(),staged.toPath())
+            runShort(p.slot,staged,listOf("/usr/local/bin/node","/opt/agent/seed-home.mjs"))
+            check(!cancelled && homeFingerprint()==p.before) { "User data changed or activation cancelled; prepare again" }
+            val metadata=JSONObject(p.seed.toString()).put("slot",p.slot.name)
+            AgentHomeActivation.activate(home.toPath(),staged.toPath(),preserved.toPath(),activeFile.toPath(),metadata.toString())
+        } finally {snapshot.delete()}
+        log("Previous home retained at ${preserved.absolutePath}; update backup is available in Backups & Restore.")
         proposal=null;phase="stopped";log("Runtime activated. User files retained. Start explicitly when ready.")
     }
     private fun backup(): File {
         check(child==null)
-        val dir=File(root,"backups/${System.currentTimeMillis()}-${UUID.randomUUID()}");dir.mkdirs()
+        val dir=File(backupRoot(),"${System.currentTimeMillis()}-${UUID.randomUUID()}");dir.mkdirs()
         val zip=File(dir,"user-home.zip")
-        AgentFiles.backup(home.toPath(),zip.toPath())
+        AgentFiles.backup(home.toPath(),zip.toPath(),dataOverrides())
         active()?.let { File(dir,"active.json").writeText(it.toString()) }
         File(dir,"manifest.json").writeText(JSONObject().put("format",1).put("sha256",AgentFiles.hash(zip.toPath())).toString())
         log("Backup created: ${dir.absolutePath}");return dir
     }
-    @Synchronized fun backups(): List<String> = File(root,"backups").listFiles()?.filter { File(it,"manifest.json").isFile }?.map { it.name }?.sortedDescending() ?: emptyList()
+    @Synchronized fun backups(): List<String> = backupRoot().listFiles()?.filter { File(it,"manifest.json").isFile }?.map { it.name }?.sortedDescending() ?: emptyList()
     @Synchronized fun lockData(): Map<String,String> {
         check(!busy && child==null && portableLock==null) { "Stop Agent before exporting user data" }
         val token=UUID.randomUUID().toString();portableLock=token
-        return mapOf("token" to token,"home" to home.absolutePath)
+        try {
+            if(sharedRoot()!=null){
+                val copy=File(root,"export-snapshot-${UUID.randomUUID()}");val zip=File(root,"export-${UUID.randomUUID()}.zip")
+                try{AgentFiles.backup(home.toPath(),zip.toPath(),dataOverrides());AgentFiles.restoreHome(zip.toPath(),copy.toPath())}finally{zip.delete()}
+                exportSnapshot=copy
+            }
+            return mapOf("token" to token,"home" to (exportSnapshot?:home).absolutePath)
+        }catch(error:Exception){portableLock=null;throw error}
     }
-    @Synchronized fun unlockData(token: String) { check(portableLock==token);portableLock=null }
+    @Synchronized fun unlockData(token: String) {
+        check(portableLock==token);portableLock=null
+        exportSnapshot?.let{copy->check(copy.parentFile.canonicalFile==root.canonicalFile&&copy.name.startsWith("export-snapshot-"));copy.deleteRecursively()};exportSnapshot=null
+    }
     private fun restore(name: String) {
         require(Regex("[0-9]+-[a-f0-9-]+\\z").matches(name));check(child==null)
-        val from=File(root,"backups/$name");val meta=JSONObject(File(from,"manifest.json").readText());val zip=File(from,"user-home.zip")
+        val from=File(backupRoot(),name);val meta=JSONObject(File(from,"manifest.json").readText());val zip=File(from,"user-home.zip")
         check(AgentFiles.hash(zip.toPath())==meta.getString("sha256"))
         val target=File(root,"restore-${UUID.randomUUID()}")
         AgentFiles.restoreHome(zip.toPath(),target.toPath())
         backup()
+        val shared=sharedRoot();val sharedData=shared?.let{File(it,"TavernAgent/data")}
+        val staged=shared?.let{File(it,"TavernAgent/data-restore-${UUID.randomUUID()}")}
+        val preserved=shared?.let{File(it,"TavernAgent/data-preserved-${UUID.randomUUID()}")}
+        if(staged!=null){
+            staged.mkdirs()
+            for(name in sharedNames){val source=File(target,name);val dest=File(staged,name)
+                if(source.exists()){
+                    Files.walk(source.toPath()).use { paths->paths.forEach{check(!Files.isSymbolicLink(it)){"Linked shared backup data"}} }
+                    check(source.copyRecursively(dest,overwrite=false))
+                    Files.walk(source.toPath()).use { paths->paths.filter{Files.isRegularFile(it)}.forEach{check(AgentFiles.hash(it)==AgentFiles.hash(dest.toPath().resolve(source.toPath().relativize(it))))} }
+                }else dest.mkdirs()
+            }
+        }
         val old=File(root,"preserved-${UUID.randomUUID()}")
         if(home.exists())check(home.renameTo(old))
-        if(!target.renameTo(home)){if(old.exists())old.renameTo(home);error("Restore activation failed; previous data retained")}
+        try{
+            if(sharedData!=null){check(sharedData.renameTo(preserved!!));check(staged!!.renameTo(sharedData))}
+            check(target.renameTo(home))
+        }catch(error:Exception){
+            if(old.exists()&&!home.exists())old.renameTo(home)
+            if(preserved?.exists()==true){if(sharedData!!.exists())sharedData.renameTo(File(sharedData.parentFile,"data-failed-${UUID.randomUUID()}"));preserved.renameTo(sharedData)}
+            throw error
+        }
         // Keep current runtime: restoring old data never installs executable content automatically.
         proposal=null;phase="stopped";log("Backup restored. Previous home retained at ${old.absolutePath}. Start explicitly to check plugins.")
     }
-    private fun webArgs(): List<String> = listOf("/usr/local/bin/node",CLI,"web","--patch","/studio-home/studio.patch.yml","--patch","/studio-home/studio-community.patch.yml","--patch","/studio-home/studio-roleplay-default.patch.yml","--patch","/studio-home/studio-preview.patch.yml","--patch","/studio-home/studio-data.patch.yml","--no-open","--host","127.0.0.1","--port","0")
+    private fun presentation(slot: File, data: File): File {
+        val libraryNames=listOf("package.json","index.js","protocol.js","jev-config.js","lib/client.js")
+        val installed=File(data,"profiles/node_modules/@langbai/dsh-studio-library")
+        val seeded=File(slot,"opt/agent/plugins/studio-library")
+        val baseStandard=libraryNames.all { name ->
+            val user=File(installed,name); val original=File(seeded,name)
+            user.isFile && original.isFile && user.readBytes().contentEquals(original.readBytes())
+        }
+        // Match the desktop overlay rule: old seeds may lack the new helper,
+        // but a user-supplied/modified helper must not be shadowed.
+        val extra="panel-layout-store.js"
+        val custom=File(installed,extra);val original=File(seeded,extra)
+        val standard=baseStandard && (!custom.exists() || (custom.isFile && original.isFile && custom.readBytes().contentEquals(original.readBytes())))
+        val names=listOf("package.json","index.js","lib/client.js")+if(standard)(libraryNames+extra).map {"library/$it"} else emptyList()
+        val sources=names.associateWith { context.assets.open("agent-presentation/$it").use { input -> input.readBytes() } }
+        val hash=java.security.MessageDigest.getInstance("SHA-256").apply { update("presentation-library-disable-insert-v3".toByteArray()) }
+        for((name,bytes) in sources){hash.update(name.toByteArray());hash.update(bytes)}
+        val directory=File(root,"presentation/"+hash.digest().joinToString(""){"%02x".format(it)})
+        // Content-addressed app files, never user-home, profiles, plugins or sessions.
+        for((name,bytes) in sources){
+            val target=File(directory,name);target.parentFile!!.mkdirs()
+            if(!target.exists())target.writeBytes(bytes)
+            check(target.readBytes().contentEquals(bytes)){"Presentation component checksum mismatch"}
+        }
+        val patch=File(directory,"presentation.patch.yml")
+        val content="- insert:\n    - id: studio-responsive\n      name: \"/studio-presentation/index.js\"\n" + if(standard) "- id: studio-library\n  disabled: true\n- insert:\n    - id: studio-library-managed\n      name: \"/studio-presentation/library/index.js\"\n" else ""
+        if(!patch.exists())patch.writeText(content)
+        check(patch.readText()==content){"Presentation patch checksum mismatch"}
+        return directory
+    }
+    private fun webArgs(): List<String> = listOf("/usr/local/bin/node",CLI,"web","--patch","/studio-home/studio.patch.yml","--patch","/studio-home/studio-community.patch.yml","--patch","/studio-home/studio-roleplay-default.patch.yml","--patch","/studio-home/studio-preview.patch.yml","--patch","/studio-home/studio-data.patch.yml","--patch","/studio-presentation/presentation.patch.yml","--no-open","--host","127.0.0.1","--port","0")
     private fun spawn(slot: File,data: File,args: List<String>,bridge: Map<String,String>): Process {
         check(!cancelled) { "Cancelled" }
         val native=File(context.applicationInfo.nativeLibraryDir)
@@ -254,10 +373,20 @@ class LocalAgentRuntime private constructor(private val context: Context) {
             val target=File(libs,name);if(!target.exists())File(native,source).copyTo(target);target.setWritable(false,false)
         }
         val temp=File(root,"tmp");temp.mkdirs();data.mkdirs()
-        val workspace=if(data==home)File(root,"workspace") else File(data.parentFile,data.name+"-workspace");workspace.mkdirs()
+        val workspace=if(data==home)(sharedRoot()?.let{File(it,"TavernAgent/workspace")}?:File(root,"workspace")) else File(data.parentFile,data.name+"-workspace");workspace.mkdirs()
         val cmd=mutableListOf(File(native,"libproot_legacy.so").absolutePath,"-L","--kill-on-exit","-0","--rootfs=${slot.absolutePath}","--cwd=/workspace")
-        for(binding in listOf("/dev","/proc","/sys","/system","/apex","${data.absolutePath}:/studio-home","${workspace.absolutePath}:/workspace","/proc/self/fd:/dev/fd"))if(File(binding.substringBefore(':')).exists())cmd.addAll(listOf("--bind",binding))
+        for(binding in listOf("/dev","/proc","/sys","/system","/apex","${data.absolutePath}:/studio-home","${workspace.absolutePath}:/workspace","${presentation(slot,data).absolutePath}:/studio-presentation","/proc/self/fd:/dev/fd"))if(File(binding.substringBefore(':')).exists())cmd.add("--bind=$binding")
+        if(data==home)for((name,source) in dataOverrides()){
+            check(source.toFile().isDirectory) { "Shared Agent data directory missing" }
+            File(data,name).mkdirs()
+            cmd.add("--bind=${source.toFile().absolutePath}:/studio-home/$name")
+        }
+        // Previous seed is read only by the seed migrator, and only while
+        // preparing a NEW slot in an isolated home. No live-home upgrade here.
+        val previous=if(data!=home) active()?.let{activeSlot()}?.takeIf{it.canonicalFile!=slot.canonicalFile} else null
+        if(previous!=null)cmd.add("--bind=${File(previous,"opt/agent").absolutePath}:/studio-previous-seed")
         cmd.addAll(listOf("/usr/bin/env","-i","HOME=/studio-home","DSH_HOME=/studio-home","DSH_ROLEPLAY_DATA_DIR=/studio-home/roleplay","STUDIO_WORKSPACE=/workspace","STUDIO_DSH_TOOLS=/opt/agent/runtime/node_modules/@deepseek-ai/dsh-tools/lib/index.js","PATH=/usr/local/bin:/usr/bin:/bin","LANG=C.UTF-8","TMPDIR=/tmp"))
+        if(previous!=null)cmd.add("STUDIO_PREVIOUS_SEED=/studio-previous-seed")
         for((key,value) in bridge)cmd.add("$key=$value")
         cmd.addAll(args)
         val dns=(context.getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager).let { manager ->
@@ -283,7 +412,7 @@ class LocalAgentRuntime private constructor(private val context: Context) {
         val failed=java.util.concurrent.atomic.AtomicBoolean(false)
         Thread {
             try { process.inputStream.bufferedReader().useLines { lines -> lines.forEach { line ->
-                if(line.contains("Failed to load plugins",true) || line.contains("entries did not activate",true))failed.set(true)
+                if(line.contains("Failed to load plugins",true) || line.contains("entries did not activate",true) || line.contains("entry did not activate",true))failed.set(true)
                 Regex("https?://127\\.0\\.0\\.1:[0-9]+[^\\s\\u001b]*").findAll(line).forEach { match ->
                     val uri=URI(match.value.trimEnd('.',',',')'))
                     if(uri.host=="127.0.0.1" && uri.port in 1024..65535 && uri.userInfo==null)found.set(uri.toString())
@@ -323,11 +452,16 @@ class LocalAgentRuntime private constructor(private val context: Context) {
             synchronized(this){if(child===process){child=null;launchUrl=null;phase=if(code==0)"stopped" else "error";log("Agent exited ($code); not automatically restarted")}}
         }.start()
     }
+    @Synchronized fun browserUrl(): String {
+        browserHandoff?.close()
+        return AgentBrowserHandoff(openUrl()).also { browserHandoff=it }.url()
+    }
     @Synchronized fun openUrl(): String { check(phase=="running" && child?.isAlive==true);return launchUrl ?: error("Agent is not ready") }
     fun stop() {
         val owned=synchronized(this){
             if(stopping)return
             stopping=true;cancelled=true;val processes=listOfNotNull(child,auxiliary).distinct()
+            browserHandoff?.close();browserHandoff=null
             child=null;auxiliary=null;launchUrl=null;phase="stopped";processes
         }
         try{downloader.cancel();for(process in owned)terminate(process);log("Agent stopped by user")}

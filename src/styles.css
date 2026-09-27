@@ -20393,8 +20393,10 @@ html.motion-reduced .style-library-card { transition:none; }
 .style-library-previews > div > button:first-child { padding:0; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg-input); overflow:hidden; }
 .style-library-editor input[type=number] { width:140px; }
 
-/* The style workspace owns scrolling; decorative shell overflow must never pan navigation. */
-.app-shell:has(.persistent-tools-view.is-active > .style-library) { overflow:clip; }
+/* Only inner panels own scrolling. `hidden` still creates a scroll container:
+   PageDown/caret reveal can pan the whole frame into the decorative overflow.
+   Clip on every tab, not just Styles; retain native paging inside text fields. */
+.app-shell { overflow: clip; }
 
 /* Batch redraw: generated outputs and originals have separate preview pages. */
 .redraw-lightbox { z-index: var(--z-overlay-top); }

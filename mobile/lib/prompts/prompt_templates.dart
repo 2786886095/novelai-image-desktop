@@ -8,6 +8,7 @@ class PromptTemplateLibrary {
   final Map<String, String> reverse;
   final Map<String, String> reverseV45;
   final Map<String, String> convert;
+  final Map<String, String> convertV45;
   final Map<String, String> scopedReverse;
   final Map<String, String> scopedReverseV45;
   final Map<String, String> comic;
@@ -17,6 +18,7 @@ class PromptTemplateLibrary {
     this.reverse = const {},
     this.reverseV45 = const {},
     this.convert = const {},
+    this.convertV45 = const {},
     this.scopedReverse = const {},
     this.scopedReverseV45 = const {},
     this.comic = const {},
@@ -30,6 +32,7 @@ class PromptTemplateLibrary {
       reverse: readMap('reverse'),
       reverseV45: readMap('reverseV45'),
       convert: readMap('convert'),
+      convertV45: readMap('convertV45'),
       scopedReverse: readMap('scopedReverse'),
       scopedReverseV45: readMap('scopedReverseV45'),
       comic: readMap('comic'),
@@ -49,6 +52,7 @@ class PromptTemplateLibrary {
       'reverse' => reverse[key] ?? '',
       'scopedReverse' => scopedReverse[key] ?? reverse[key] ?? '',
       'convert' => convert[key] ?? '',
+      'convertV45' => convertV45[key] ?? '',
       'comic' => comic[key] ?? comicLegacy,
       _ => '',
     };

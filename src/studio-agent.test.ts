@@ -82,3 +82,14 @@ describe('Studio confirmed mutation service',()=>{
     f.change({bootDone:false});expect((await f.call('read')).ok).toBe(false);expect(f.commit).not.toHaveBeenCalled();
   });
 });
+
+it('gateway refresh reloads affected collections without overwriting generation drafts',async()=>{
+ const f=fixture();const refreshHistory=vi.fn(async()=>{}),loadConvertHistory=vi.fn(async()=>{}),loadReverseHistory=vi.fn(async()=>{});
+ f.change({selectedGroupId:'removed',generationGroupId:'removed',refreshHistory,loadConvertHistory,loadReverseHistory});
+ const prompt=f.state.params.positivePrompt;
+ expect((await f.call('read',{refreshCollections:'history'})).ok).toBe(true);
+ expect(refreshHistory).toHaveBeenCalledOnce();expect(f.state.selectedGroupId).toBe('');expect(f.state.generationGroupId).toBe('');
+ expect((await f.call('read',{refreshCollections:'text.convert'})).ok).toBe(true);expect(loadConvertHistory).toHaveBeenCalledOnce();
+ expect((await f.call('read',{refreshCollections:'text.reverse'})).ok).toBe(true);expect(loadReverseHistory).toHaveBeenCalledOnce();
+ expect((await f.call('read',{refreshCollections:'unknown'})).ok).toBe(false);expect(f.state.params.positivePrompt).toBe(prompt);expect(f.commit).not.toHaveBeenCalled();
+});

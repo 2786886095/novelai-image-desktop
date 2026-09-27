@@ -3,7 +3,7 @@
 [简体中文](./README.md) · [繁體中文](./README.zh-TW.md) · [English](./README.en.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md)
 
 
-**v2.3.7 platform note:** The new standalone Tavern Agent component targets Windows x64. macOS/Linux retain the existing Tavern, and Android/iOS retain the mobile Tavern. Compatibility checks, confirmation and backup precede upgrades; custom plugins and user data are preserved.
+**v2.4.0 platform note:** The new standalone Tavern Agent component targets Windows x64. macOS/Linux retain the existing Tavern, and Android/iOS retain the mobile Tavern. Compatibility checks, confirmation and backup precede upgrades; custom plugins and user data are preserved.
 
 ### From an idea to a collection of images.
 

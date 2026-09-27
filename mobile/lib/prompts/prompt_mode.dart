@@ -363,7 +363,7 @@ String modeUserInstruction(
     return [
       'Output mode: mixed NovelAI $versionLabel prompt.',
       ...outputContract,
-      'Keep approximately 75–85% mature Danbooru/NovelAI tag units and 15–25% concise English natural-language relation phrases. Both parts are mandatory; even a short prompt needs at least one non-invented prose phrase.',
+      'Keep approximately ${templateVersion == 'v4.5' ? '75–85%' : '65–75%'} mature Danbooru/NovelAI tag units and ${templateVersion == 'v4.5' ? '15–25%' : '25–35%'} concise English natural-language relation phrases. Both parts are mandatory; even a short prompt needs at least one non-invented prose phrase.',
       'Use prose for tag-uncovered position, hand/side, target, depth, overlap, or text placement; never pad the ratio by inventing facts or fully restating existing tags.',
       'Discard retrieved candidates that are not exact matches. Use `base | character 1 | character 2` for multiple people and do not return pure prose.',
     ].join('\n');
@@ -517,7 +517,7 @@ String promptRuleRepairSystemPrompt(
           : '只输出修复后的单行英文 Prompt，不要解释、标题或 Markdown。',
       mode == ReversePromptMode.tags
           ? '保持 Danbooru Tag 模式，以英文逗号分隔；多人继续使用 base | character 1 | character 2。'
-          : '保持混合模式：约 75–85% Danbooru Tag + 15–25% 简短英文自然语言，两部分都不得省略；不得靠重复或编造凑比例。',
+          : '保持混合模式：约 ${templateVersion == 'v4.5' ? '75–85%' : '65–75%'} Danbooru Tag + ${templateVersion == 'v4.5' ? '15–25%' : '25–35%'} 简短英文自然语言，两部分都不得省略；不得靠重复或编造凑比例。',
       '成熟整词优先：一个成熟 Tag 已完整表达动作、姿态或构图时，只保留该 Tag 一次，删除拆解词、近义词和重复自然语言；未覆盖的关键差异才允许最少量补充。',
       '候选成熟 Tag 不贴合原始输入时必须舍弃，不能硬套；不得新增原始输入或图片中没有的内容。',
     ].join('\n');

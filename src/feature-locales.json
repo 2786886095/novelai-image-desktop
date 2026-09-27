@@ -1748,5 +1748,26 @@
     "Upgrade confirmation expired or is no longer valid. Check again.",
     "更新の確認が無効または期限切れです。再確認してください。",
     "업그레이드 승인이 만료되었거나 유효하지 않습니다. 다시 검사하세요."
+  ],
+  "本机随附更新：{version}（待兼容检查）": [
+    "本机随附更新：{version}（待兼容检查）",
+    "本機隨附更新：{version}（待相容性檢查）",
+    "Bundled update: {version} (compatibility check pending)",
+    "同梱の更新：{version}（互換性チェック待ち）",
+    "앱에 포함된 업데이트: {version} (호환성 검사 대기)"
+  ],
+  "本机随附组件已安装：{version}": [
+    "本机随附组件已安装：{version}",
+    "本機隨附元件已安裝：{version}",
+    "Bundled component installed: {version}",
+    "同梱コンポーネントをインストール済み：{version}",
+    "앱에 포함된 구성 요소 설치됨: {version}"
+  ],
+  "最新已发布组件：{version}": [
+    "最新已发布组件：{version}",
+    "最新已發佈元件：{version}",
+    "Latest published component: {version}",
+    "公開済みの最新コンポーネント：{version}",
+    "최신 공개 구성 요소: {version}"
   ]
 }

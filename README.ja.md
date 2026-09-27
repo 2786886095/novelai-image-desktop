@@ -3,7 +3,7 @@
 [简体中文](./README.md) · [繁體中文](./README.zh-TW.md) · [English](./README.en.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md)
 
 
-**v2.3.7 対応環境：** 新しい独立 Tavern Agent コンポーネントは Windows x64 向けです。macOS/Linux と Android/iOS は既存の酒場機能を維持します。更新は互換性確認、ユーザー確認、バックアップの順に行い、カスタムプラグインとデータを保持します。
+**v2.4.0 対応環境：** 新しい独立 Tavern Agent コンポーネントは Windows x64 向けです。macOS/Linux と Android/iOS は既存の酒場機能を維持します。更新は互換性確認、ユーザー確認、バックアップの順に行い、カスタムプラグインとデータを保持します。
 
 ### ひとつのアイデアから、一連の作品へ。
 

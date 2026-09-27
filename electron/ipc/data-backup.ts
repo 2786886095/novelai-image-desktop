@@ -776,8 +776,13 @@ export async function inspectDataBackup(): Promise<DataBackupInspectResult> {
   if (result.canceled || !result.filePaths[0]) {
     return { ok: false, cancelled: true, categories: [], message: "已取消导入。" };
   }
+  return inspectDataBackupFile(result.filePaths[0]);
+}
+
+/** Trusted local caller; model-facing access must resolve an app-owned backup ID first. */
+export async function inspectDataBackupFile(filePath: string): Promise<DataBackupInspectResult> {
   try {
-    const { manifest, zip } = await loadArchive(result.filePaths[0]);
+    const { manifest, zip } = await loadArchive(filePath);
     // Discover native payload even in old archives whose manifest hid it under legacy categories.
     const native=await portableSummaries(zip);
     const categories=(Array.isArray(manifest.categories)?manifest.categories:[])
@@ -785,7 +790,7 @@ export async function inspectDataBackup(): Promise<DataBackupInspectResult> {
     categories.push(...native);
     return {
       ok: true,
-      path: result.filePaths[0],
+      path: filePath,
       formatVersion: manifest.version,
       createdAt: manifest.createdAt,
       sourcePlatform: manifest.source?.platform,

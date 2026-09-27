@@ -4,6 +4,7 @@ import {useEffect,useRef,useState} from 'react';
 import type {HarnessSnapshot} from './harness-types';
 import {useAppStore} from './store';
 import './harness-launcher.css';
+import {componentStatus} from './harness-component-status';
 
 const labels={
   'zh-CN':{title:'酒馆Agent',start:'启动',stop:'关闭',update:'更新',empty:'点击启动，在浏览器中打开 Agent。',states:{stopped:'未运行',installing:'准备组件中',starting:'启动中',running:'运行中',stopping:'正在关闭',updating:'检查更新中',error:'运行异常'}},
@@ -63,7 +64,7 @@ export default function HarnessPage({active=true}:{active?:boolean}){
     const info=state.updateInfo;
     if(!active||pending||!idle||state.checkingUpdates||!info||info.checkedAt===previousCheck.current||autoPrepared.current)return;
     autoPrepared.current=true;
-    const component=!!info.component&&!info.componentFailed&&info.component!==state.version;
+    const component=info.bundledUpdate===true||(!!info.component&&!info.componentFailed&&info.component!==state.version);
     const official=!!info.official&&!info.officialFailed&&info.official!==state.installedUpstream;
     // One approval per candidate per page visit; preparation refreshes metadata too.
     if(component)void prepare('component');else if(official)void prepare('official');
@@ -86,7 +87,7 @@ export default function HarnessPage({active=true}:{active?:boolean}){
         </div>
         <div className="harness-update-versions">
           <span>{ft("当前组件版本：")}{state.version ?? ft("尚未安装")}</span>
-          <span role="status">{state.checkingUpdates ? ft("检查中…") : !state.updateInfo ? ft("尚未检查") : state.updateInfo.componentFailed ? ft("检查失败，请重试") : state.updateInfo.component ? `${ft("最新已发布组件：")}${state.updateInfo.component}` : ft("暂无已发布组件")}</span>
+          <span role="status">{(()=>{const message=componentStatus(state);return ft(message.key,message.params);})()}</span>
         </div>
       </article>
       <article className="harness-update-card">

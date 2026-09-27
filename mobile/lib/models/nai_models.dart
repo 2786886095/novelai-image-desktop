@@ -1,6 +1,7 @@
 library;
 
 import 'dart:math' as math;
+import 'completion_sound.dart';
 
 import '../agent/agent_models.dart';
 import '../agent/agent_context.dart';
@@ -15,7 +16,7 @@ class NaiOption {
 }
 
 const appName = 'Langbai NovelAI Studio';
-const appVersion = '2.3.7';
+const appVersion = '2.4.0';
 
 const naiModels = <NaiOption>[
   NaiOption(
@@ -863,6 +864,9 @@ class HistoryItem {
 }
 
 class AppSettings {
+  CompletionSound completionSound;
+  bool persistI2IParams;
+  Map<String, dynamic> lastGenerationState;
   bool reduceMotion;
   String apiBaseUrl;
   String imageBaseUrl;
@@ -929,6 +933,11 @@ class AppSettings {
   List<String> stylePromptPresetGroups;
   List<PositivePromptPreset> positivePromptPresets;
   Map<String, String> reversePromptTemplates;
+  Map<String, String> reversePromptTemplatesV45;
+  Map<String, String> convertPromptTemplatesV45;
+  Map<String, String> comicAnalyzePromptTemplates;
+  String convertPromptTemplateVersion;
+  String agentPromptTemplateMode;
   Map<String, String> convertPromptTemplates;
   bool promptCodexEnhanceEnabled;
   bool promptCodexAdultEnabled;
@@ -972,6 +981,9 @@ class AppSettings {
   int autoBackupAssetPolicyVersion;
 
   AppSettings({
+    this.completionSound = const CompletionSound(),
+    this.persistI2IParams = true,
+    this.lastGenerationState = const {},
     this.reduceMotion = false,
     this.apiBaseUrl = 'https://api.novelai.net',
     this.imageBaseUrl = 'https://image.novelai.net',
@@ -1032,6 +1044,11 @@ class AppSettings {
     List<String>? stylePromptPresetGroups,
     List<PositivePromptPreset>? positivePromptPresets,
     Map<String, String>? reversePromptTemplates,
+    Map<String, String>? reversePromptTemplatesV45,
+    Map<String, String>? convertPromptTemplatesV45,
+    Map<String, String>? comicAnalyzePromptTemplates,
+    this.convertPromptTemplateVersion = 'v5',
+    this.agentPromptTemplateMode = 'mixed',
     Map<String, String>? convertPromptTemplates,
     this.promptCodexEnhanceEnabled = true,
     this.promptCodexAdultEnabled = true,
@@ -1072,6 +1089,9 @@ class AppSettings {
                 ?.id ??
             '',
         reversePromptTemplates = reversePromptTemplates ?? {},
+        reversePromptTemplatesV45 = reversePromptTemplatesV45 ?? {},
+        convertPromptTemplatesV45 = convertPromptTemplatesV45 ?? {},
+        comicAnalyzePromptTemplates = comicAnalyzePromptTemplates ?? {},
         convertPromptTemplates = convertPromptTemplates ?? {},
         promptShortcuts = promptShortcuts ?? [],
         stylePromptPresets = stylePromptPresets ?? [],
@@ -1145,6 +1165,11 @@ class AppSettings {
         'positivePromptPresets':
             positivePromptPresets.map((item) => item.toJson()).toList(),
         'reversePromptTemplates': reversePromptTemplates,
+        'reversePromptTemplatesV45': reversePromptTemplatesV45,
+        'convertPromptTemplatesV45': convertPromptTemplatesV45,
+        'comicAnalyzePromptTemplates': comicAnalyzePromptTemplates,
+        'convertPromptTemplateVersion': convertPromptTemplateVersion,
+        'agentPromptTemplateMode': agentPromptTemplateMode,
         'convertPromptTemplates': convertPromptTemplates,
         'promptCodexEnhanceEnabled': promptCodexEnhanceEnabled,
         'promptCodexAdultEnabled': promptCodexAdultEnabled,
@@ -1166,6 +1191,9 @@ class AppSettings {
         'directorTool': directorTool,
         'augmentDefry': augmentDefry,
         'augmentColorizePrompt': augmentColorizePrompt,
+        'completionSound': completionSound.toJson(),
+        'persistI2IParams': persistI2IParams,
+        'lastGenerationState': lastGenerationState,
         'reduceMotion': reduceMotion,
         'augmentEmotion': augmentEmotion,
         'augmentEmotionLevel': augmentEmotionLevel,
@@ -1276,6 +1304,11 @@ class AppSettings {
                 .toList() ??
             [],
         reversePromptTemplates: _stringMap(j['reversePromptTemplates']),
+        reversePromptTemplatesV45: _stringMap(j['reversePromptTemplatesV45']),
+        convertPromptTemplatesV45: _stringMap(j['convertPromptTemplatesV45']),
+        comicAnalyzePromptTemplates: _stringMap(j['comicAnalyzePromptTemplates']),
+        convertPromptTemplateVersion: j['convertPromptTemplateVersion']=='v4.5'?'v4.5':'v5',
+        agentPromptTemplateMode: ['mixed','tags','natural'].contains(j['agentPromptTemplateMode'])?j['agentPromptTemplateMode']:'mixed',
         convertPromptTemplates: _stringMap(j['convertPromptTemplates']),
         promptCodexEnhanceEnabled: j['promptCodexEnhanceEnabled'] ?? true,
         promptCodexAdultEnabled: j['promptCodexAdultEnabled'] ?? true,
@@ -1319,6 +1352,9 @@ class AppSettings {
             j['directorTool'], directorTools, 'bg-removal'),
         augmentDefry: _finiteClamp(_doubleValue(j['augmentDefry'], 0), 0, 5, 0),
         augmentColorizePrompt: _stringValue(j['augmentColorizePrompt'], ''),
+        completionSound: CompletionSound.fromJson(j['completionSound']),
+        persistI2IParams: j['persistI2IParams'] != false,
+        lastGenerationState: j['lastGenerationState'] is Map ? Map<String,dynamic>.from(j['lastGenerationState']) : {},
         reduceMotion: j['reduceMotion'] == true,
         augmentEmotion:
             _supportedOptionValue(j['augmentEmotion'], emotionOptions, 'happy'),

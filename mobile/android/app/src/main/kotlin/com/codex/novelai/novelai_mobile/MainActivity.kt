@@ -23,12 +23,23 @@ class MainActivity : FlutterActivity() {
         private const val INCOMING_BACKUP_PENDING = "__incoming_backup_pending__"
     }
 
+    private val completionAudio by lazy { CompletionAudio(this) }
+    override fun onDestroy(){completionAudio.stop();super.onDestroy()}
+
     private var incomingBackupChannel: MethodChannel? = null
     private val pendingIncomingBackups = ArrayDeque<String>()
     private var incomingBackupCopiesInProgress = 0
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger,"langbai.novelai/completion_sound").setMethodCallHandler { call,result ->
+            when(call.method){
+                "play" -> completionAudio.play(call.argument<String>("dataUrl")?:"",call.argument<Double>("volume")?:.5,result)
+                "stop" -> {completionAudio.stop();result.success(null)}
+                else -> result.notImplemented()
+            }
+        }
+
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger,"langbai.novelai/local_agent")
             .setMethodCallHandler { call, result ->
@@ -43,9 +54,13 @@ class MainActivity : FlutterActivity() {
                     when(call.method){
                         "status" -> result.success(agent.snapshot())
                         "backups" -> result.success(agent.backups())
-                        "lockData" -> result.success(agent.lockData())
-                        "unlockData" -> {agent.unlockData(args["token"] as? String ?: "");result.success(null)}
-                        "open" -> {startActivity(Intent(Intent.ACTION_VIEW,Uri.parse(agent.openUrl())));result.success(null)}
+                        "lockData","unlockData" -> Thread {
+                            try {
+                                val value=if(call.method=="lockData") agent.lockData() else {agent.unlockData(args["token"] as? String ?: "");null}
+                                runOnUiThread {result.success(value)}
+                            }catch(error:Exception){runOnUiThread {result.error("local_agent",error.message,null)}}
+                        }.start()
+                        "open" -> {startActivity(Intent(Intent.ACTION_VIEW,Uri.parse(agent.browserUrl())));result.success(null)}
                         "stop" -> {Thread {
                             agent.stop()
                             runOnUiThread {stopService(Intent(this,com.codex.novelai.novelai_mobile.agent.LocalAgentService::class.java));result.success(null)}
@@ -115,6 +130,31 @@ class MainActivity : FlutterActivity() {
             "langbai.novelai/storage",
         ).setMethodCallHandler { call, result ->
             when (call.method) {
+                "unifiedStorageInfo" -> {
+                    val control=java.io.File(filesDir,"unified-storage.json")
+                    val active=if(control.isFile)org.json.JSONObject(control.readText()).optString("root") else ""
+                    val name=if(packageName.endsWith(".agenttest"))"LangbaiStudio-Test" else "LangbaiStudio"
+                    result.success(mapOf("target" to java.io.File(Environment.getExternalStorageDirectory(),name).absolutePath,"activeRoot" to active,"agentRoot" to java.io.File(filesDir,"TavernAgent").absolutePath,"availableBytes" to Environment.getExternalStorageDirectory().usableSpace))
+                }
+                "deactivateUnifiedStorage" -> {
+                    try {
+                        val control=java.io.File(filesDir,"unified-storage.json")
+                        if(control.isFile)check(control.renameTo(java.io.File(filesDir,"unified-storage-previous-${System.currentTimeMillis()}.json")))
+                        result.success(null)
+                    }catch(error:Exception){result.error("storage_rollback",error.message,null)}
+                }
+                "activateUnifiedStorage" -> {
+                    try {
+                        check(Build.VERSION.SDK_INT<30||Environment.isExternalStorageManager()) {"Storage permission required"}
+                        val name=if(packageName.endsWith(".agenttest"))"LangbaiStudio-Test" else "LangbaiStudio"
+                        val target=java.io.File(Environment.getExternalStorageDirectory(),name).canonicalFile
+                        check(call.argument<String>("root")==target.path) {"Unexpected storage root"}
+                        val manifest=java.io.File(target,"storage-manifest.json")
+                        check(manifest.isFile&&org.json.JSONObject(manifest.readText()).getInt("format")==1) {"Verified migration required"}
+                        com.codex.novelai.novelai_mobile.agent.AgentFiles.atomicText(java.io.File(filesDir,"unified-storage.json").toPath(),org.json.JSONObject().put("root",target.path).toString())
+                        result.success(null)
+                    }catch(error:Exception){result.error("storage_activation",error.message,null)}
+                }
                 "isExternalStorageManager" -> {
                     val granted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                         Environment.isExternalStorageManager()

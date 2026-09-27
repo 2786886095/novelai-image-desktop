@@ -1,8 +1,9 @@
 import {beforeEach,describe,it,expect,vi} from 'vitest';
 const mock=vi.hoisted(()=>({language:'zh-CN',busy:true,stop:vi.fn(async()=>{}),show:vi.fn(),handlers:new Map<string,Function>()}));
-vi.mock('./store',()=>({getSetting:()=>mock.language}));
+vi.mock('./harness-exit-dialog',()=>({showCenteredExitConfirmation:(_owner:unknown,options:unknown)=>mock.show(options)}));
+vi.mock('./store',()=>({getSetting:()=>mock.language,getSettings:()=>({}),setSetting:vi.fn()}));
 vi.mock('electron',()=>({app:{once:vi.fn(),getPath:()=>'/tmp/studio-test',getAppPath:()=>'/tmp/studio-test',isPackaged:false},dialog:{showMessageBox:mock.show},shell:{openExternal:vi.fn()},ipcMain:{handle:(key:string,fn:Function)=>mock.handlers.set(key,fn)}}));
-vi.mock('./harness-engine',()=>({HarnessEngine:class{get busy(){return mock.busy;}stop=mock.stop;snapshot=()=>({phase:'running'});}}));
+vi.mock('./harness-engine',()=>({HarnessEngine:class{get busy(){return mock.busy;}stop=mock.stop;checkUpdates=vi.fn(async()=>{});snapshot=()=>({phase:'running'});}}));
 vi.mock('./agent-tools',()=>({AGENT_TOOL_NAMES:[],executeAgentTool:vi.fn()}));
 beforeEach(()=>{vi.resetModules();mock.busy=true;mock.stop.mockClear();mock.show.mockReset();mock.handlers.clear();});
 describe('Native close confirmation',()=>{

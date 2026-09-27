@@ -59,7 +59,7 @@ test('fresh settings default off and saved switch survives reload without deleti
   if(path.dirname(dir)!==os.tmpdir())throw Error('Unexpected test directory');await fs.unlink(path.join(dir,'studio-jev.json'));await fs.rmdir(dir);
  }
 });
-test('product instruction uses the same mixed tool in either mode and explains no Jev fees',async()=>{
+test('software templates are default, advanced Jev remains opt-in and explains fees',async()=>{
  const tools=await fs.readFile('harness/plugins/studio-tools/index.js','utf8'),ui=await fs.readFile('harness/plugins/studio-library/jev-client.js','utf8');
- assert.match(tools,/whether Jev is enabled or disabled/);assert.match(ui,/关闭后仍生成混合提示词/);assert.match(ui,/不产生 Jev 接口费用/);
+ assert.match(tools,/DEFAULT image-prompt workflow/);assert.match(tools,/ADVANCED OPT-IN Jev candidate analysis only/);assert.match(ui,/关闭后仍生成混合提示词/);assert.match(ui,/不产生 Jev 接口费用/);
 });

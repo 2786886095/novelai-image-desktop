@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import type {HarnessManifest} from './harness-policy';
+import {candidateRuntimeLink} from './harness-compatibility';
 /** Only wholly unchanged shipped plugins and launcher-owned links are migrated. */
 export async function upgradeBundledUserFiles(root:string, before:HarnessManifest, nextRoot:string, next:HarnessManifest) {
  const home=path.join(root,'user-home/profiles/node_modules');
@@ -15,6 +16,21 @@ export async function upgradeBundledUserFiles(root:string, before:HarnessManifes
  };
  const rollback=async()=>{for(const restore of undo.reverse())await restore();};
  try {
+  // Composition has defaults too. Update only an exact untouched shipped file;
+  // customized plugin graphs and explicit per-session limits remain user-owned.
+  const composition='community/community.patch.yml';
+  if(before.files[composition]&&next.files[composition]&&before.files[composition]!==next.files[composition]){
+   const target=path.join(root,'user-home/studio-community.patch.yml');
+   const stat=await fs.lstat(target).catch(e=>{if(e.code==='ENOENT')return null;throw e;});
+   if(stat?.isFile()&&!stat.isSymbolicLink()){
+    const previous=await fs.readFile(target);
+    if(digest(previous)===before.files[composition]){
+     const replacement=await fs.readFile(path.join(nextRoot,composition));
+     if(digest(replacement)!==next.files[composition])throw Error('Composition migration integrity failed');
+     undo.push(()=>fs.writeFile(target,previous));await fs.writeFile(target,replacement);changed++;
+    }else custom++;
+   }
+  }
   // A plugin is the compatibility unit. Never mix user-edited old files with new code.
   const prefixFor=(relative:string)=>{
    const own=/^(plugins\/studio-(?:brand|tools|data|library)\/)/.exec(relative);
@@ -74,7 +90,7 @@ export async function upgradeBundledUserFiles(root:string, before:HarnessManifes
      const relative=path.relative(versions,resolved);
      if(relative.startsWith('..')||path.isAbsolute(relative))continue;
      const parts=relative.split(path.sep);if(parts[1]!=='runtime'||parts[2]!=='node_modules')continue;
-     const target=path.join(nextRoot,'runtime/node_modules',...parts.slice(3));
+     const target=await candidateRuntimeLink(nextRoot,relative);if(!target)continue;
      if(path.resolve(target)===resolved)continue;
      try{if(!(await fs.stat(target)).isDirectory())continue;}catch(e){if((e as NodeJS.ErrnoException).code==='ENOENT')continue;throw e;}
      const type=process.platform==='win32'?'junction':'dir';

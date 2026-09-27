@@ -9,8 +9,13 @@ iOS continues using the existing Tavern screen.
 
 `files/TavernAgent/versions/<version>-<uuid>` holds replaceable runtime slots.
 `user-home`, `workspace`, `backups`, and the paid-tool journal are outside slots.
-An APK update does not copy over a populated home. Seed packages are copied only
-if missing. User-modified plugins are tested from a separate home copy. A failed
+An APK update does not copy over a populated home. Ordinary startup seeds only
+missing packages. During an explicitly confirmed component upgrade, packages
+that exactly match the previous official seed (including the complete file set)
+are upgraded on an isolated home copy. Added, modified, or partially deleted
+packages and linked packages are retained and tested by the compatibility probe.
+Activation repeats this migration on a fresh copy, then switches the home and
+active slot, retaining the original home and backup for recovery. A failed
 probe never changes `active.json`. Successful preparation requires explicit
 confirmation; a backup is made before activation. Launch is a separate action.
 

@@ -71,18 +71,37 @@ public final class AgentFiles {
         Files.move(temporary,file,StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING);
     }
     /** Preserve internal npm/plugin links without following them; external links fail closed. */
-    public static void backup(Path home,Path zip) throws IOException {
+    public static void backup(Path home,Path zip) throws IOException { backup(home,zip,Collections.emptyMap()); }
+    public static void backup(Path home,Path zip,Map<String,Path> overrides) throws IOException {
+        for(String name:overrides.keySet())if(!Arrays.asList("roleplay","sessions","mindspace-session-memory").contains(name))throw new IOException("Invalid data override");
         if(Files.isSymbolicLink(home))throw new IOException("Linked Agent home");
         if(Files.exists(home.resolve(".studio-backup.properties")))throw new IOException("Reserved backup manifest exists in home");
         Properties metadata=new Properties();
         long[] size={0};int[] count={0};
         try(ZipOutputStream out=new ZipOutputStream(Files.newOutputStream(zip,StandardOpenOption.CREATE_NEW))){
             if(!Files.exists(home))return;
+            Map<String,Path> entries=new LinkedHashMap<>();
             try(java.util.stream.Stream<Path> paths=Files.walk(home)){
-                for(Iterator<Path> it=paths.iterator();it.hasNext();){
-                    Path file=it.next();if(file.equals(home))continue;
+                for(Iterator<Path> it=paths.iterator();it.hasNext();){Path f=it.next();if(f.equals(home))continue;
+                    String n=home.relativize(f).toString().replace('\\','/');
+                    if(!overrides.containsKey(n.split("/",2)[0]))entries.put(n,f);
+                }
+            }
+            for(Map.Entry<String,Path> override:overrides.entrySet()){
+                Path base=override.getValue();if(Files.isSymbolicLink(base))throw new IOException("Linked data override");
+                if(!Files.isDirectory(base))throw new IOException("Shared data directory missing");
+                try(java.util.stream.Stream<Path> paths=Files.walk(base)){
+                    for(Iterator<Path> it=paths.iterator();it.hasNext();){Path f=it.next();
+                        if(Files.isSymbolicLink(f))throw new IOException("Linked shared data");
+                        entries.put(override.getKey()+(f.equals(base)?"":"/"+base.relativize(f).toString().replace('\\','/')),f);
+                    }
+                }
+            }
+            {
+                for(Map.Entry<String,Path> item:entries.entrySet()){
+                    Path file=item.getValue();
                     if(++count[0]>100000)throw new IOException("Too many backup entries");
-                    String name=home.relativize(file).toString().replace('\\','/');
+                    String name=item.getKey();
                     if(Files.isSymbolicLink(file)){
                         Path to=file.getParent().resolve(Files.readSymbolicLink(file)).normalize();
                         if(!to.startsWith(home)||to.equals(home))throw new IOException("Plugin link leaves user data: "+name);

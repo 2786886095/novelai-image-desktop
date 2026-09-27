@@ -1,5 +1,7 @@
 // Structured residual language: strings are data, never executable prompt syntax.
 export const HYBRID_INSTRUCTIONS=`Produce a NovelAI V5 HYBRID positive prompt using langbai_decide_prompt. The host enforces format=hybrid.
+For an explicit image-generation request, prefer supplying generate:{count:1} (plus any requested model/width/height/steps/cfgScale overrides). This compiles then calls the SAME Studio image tool with its normal confirmation, session limit and prompt locks in one tool step. Omit generate for prompt-only work. Never retry an uncertain paid result. Read generation state once first; there is no need to also read_studio_state or load a comic skill for a single image. Return the resulting image, not just the plan. Common dictionary spellings: grey_hair or white_hair (describe silver in a relation), mature_female, street, rain, night; not adult, silver_hair, city_street or rainy_night. Keep the user's adult age and scene in grounded relations when a compound phrase has no mature tag.
+Single-person example: description="女孩回望镜头", candidates=[{tag:"1girl",category:"count",explicit:true,evidence:"女孩"},{tag:"looking_back",category:"pose",explicit:true,evidence:"回望"}], relations=[{text:"she turns her head back toward the viewer",origin:"explicit",evidence:"回望镜头",dependsOn:["t0","t1"],after:"t1"}]. For one person omit characters and use base for ALL candidates and relations. Count is a user requirement, not optional completion: explicit:true with an exact description quote. Candidate IDs are zero-based strings "t0", "t1", NOT tag names. Evidence must be ONE contiguous verbatim substring of its source; never join quotes with ellipses. Preserve gaze/body directions from the request over generic front-facing defaults. On validation errors correct the cited fields; do not delete required subject count or silently discard relations. Use search_tags for uncertain tags first; put unsupported concepts into grounded English relations rather than inventing tags.
 Jev is OPTIONAL and controlled only by the saved user setting. Call this same tool whether Jev is enabled or disabled. Enabled: tags and relations receive real Jev scoring. Disabled: the host skips ALL Jev requests and uses your composition plan, dictionary and structural checks; scores/model/usage are null, jevUsed=false, decisionEngine=local. Do not fabricate scores, claim Jev verification, ask users to enable it merely to continue, or call DefAPI yourself. Language-model calls may still incur their own fees. If enabled but misconfigured or a Jev request fails, report the error; do not silently change the user's setting. New calls read the latest saved configuration; existing requests are not retroactively cancelled.
 args.mode=text: preserve the exact args.description and moderately complete applicable missing outfit, viewpoint, framing, light, posture, expression and action detail in args.plan. Do not invent people, weather, time or story events. Plan posture from body geometry first; omit uncertain posture tags.
 args.mode=image: first inspect the actual attachment with vision or langbai_reverse_prompt(mode:natural,templateVersion:v5). Supply imageAttachmentId and observations containing only visible evidence. Never use image metadata or a fictional completion as visual evidence. Every candidate requires observed:true and visualEvidence quoting observations. No invented detail, unseen hand, weather or costume. Jev receives these textual observations, NOT the image, so vision accuracy remains the inspecting model's responsibility.
@@ -11,6 +13,45 @@ For 2..22 people supply characters:[{kind:girl|boy|other},...] in spatial order.
 Only when readable text is explicitly requested or visible, supply renderedText:{text,origin:explicit|observed,evidence}; include text and language tags in base. It is serialized as the last base item before character separators. No canvas direction/resolution tags (use software parameters). Use special datasets, transparent background and comic tags only for their applicable explicit/observed cases; no redundant synonyms. Text outside renderedText is English.
 The result positivePrompt already contains weighted tags AND relations: pass it intact to apply_prompt/generate_image, do not reconstruct from selected tags. Only generate an image when requested. Report errors and missing coverage honestly.`;
 const quoted=(value,source)=>typeof value==='string'&&value.trim().length>0&&value.length<=1000&&source.includes(value);
+// dsh-tools author schema: required belongs to each property, not a JSON-schema array.
+const str=(description,required=false,values)=>({type:'string',description,...(required?{required:true}:{}),...(values?{enum:values}:{})});
+const scope=str('base for one person; c0/c1 etc only for declared multi-person characters');
+const evidence=str('One exact contiguous quote from description/plan/observations according to origin. No ellipses or joined quotes.');
+export const PROMPT_ARGUMENTS={type:'object',required:true,additionalProperties:false,properties:{
+ generate:{type:'object',description:'Only for an explicit image request. Compile then generate through normal Studio confirmation/locks. Omit for prompt-only.',additionalProperties:false,properties:{count:{type:'integer'},model:str('Optional requested generation model'),width:{type:'integer'},height:{type:'integer'},steps:{type:'integer'},cfgScale:{type:'number'}}},
+ description:str('Exact user-approved scene; do not add invented facts.',true),plan:str('Coherent moderate visual completion, preserving user directions.'),
+ mode:str('text or image',false,['text','image']),format:str('hybrid',false,['hybrid']),
+ imageAttachmentId:str('Existing image attachment ID for image mode'),observations:str('Only visible evidence from inspected image'),
+ characters:{type:'array',description:'Omit for one person. For 2..22 people declare each in spatial order.',items:{type:'object',additionalProperties:false,properties:{kind:str('Character kind',true,['girl','boy','other'])}}},
+ candidates:{type:'array',required:true,description:'1..48 mature dictionary tags. Candidate at index 0 has ID t0.',items:{type:'object',additionalProperties:false,properties:{
+ tag:str('One mature tag without weights/style syntax',true),category:str('Semantic category',true,['count','identity','appearance','clothing','prop','scene','lighting','camera','pose','expression','action']),
+ explicit:{type:'boolean',required:true,description:'True for requirements in description, including its person count.'},evidence,scope,
+ observed:{type:'boolean'},visualEvidence:str('Exact observations quote in image mode'),group:str('Mutually exclusive alternatives only; not a broad category'),
+ facet:str('Camera facet',false,['viewpoint','framing']),emphasis:str('Composition emphasis',false,['normal','focal','support','subtle']),reason:str('Required rationale for non-normal emphasis'),
+ anchor:str('Paired multi-person action role',false,['source','target','mutual']),interaction:str('Shared paired-action ID')
+ }}},
+ relations:{type:'array',required:true,description:'1..12 grounded English residual spatial/gaze/ownership phrases, not tag paraphrases.',items:{type:'object',additionalProperties:false,properties:{
+ text:str('One short English phrase; no comma or prompt control syntax',true),origin:str('explicit quotes description; completion quotes plan; observed quotes observations',true,['explicit','completion','observed']),
+ evidence:{...evidence,required:true},dependsOn:{type:'array',required:true,items:{type:'string'},description:'Candidate IDs such as ["t0","t2"], NOT numeric indexes'},
+ after:str('Optional candidate ID in dependsOn and SAME scope'),scope
+ }}},
+ renderedText:{type:'object',additionalProperties:false,properties:{text:str('Requested visible text',true),origin:str('Source',true,['explicit','observed']),evidence:{...evidence,required:true}}}
+}};
+export function normalizeHybridInput(input){
+ if(!input||input.format!=='hybrid'||!Array.isArray(input.candidates))return input;
+ if(input.candidates.some(c=>!c||typeof c!=='object')||!Array.isArray(input.relations)||input.relations.some(r=>!r||typeof r!=='object'))return input;
+ const value=structuredClone(input),characters=value.characters??[];
+ const counts=value.candidates.filter(c=>c.category==='count'&&(c.scope===undefined||c.scope==='base')).map(c=>String(c.tag).match(/^(\d+)(girl|boy|other)s?$/)).filter(Boolean);
+ const single=counts.length===1&&Number(counts[0][1])===1&&Array.isArray(characters)&&
+  (characters.length===0||(characters.length===1&&characters[0]?.kind===counts[0][2]));
+ // Collapse only an unambiguous single subject. Multi-person and unknown scopes still fail.
+ if(single&&value.candidates.every(c=>!c.anchor&&['base','c0'].includes(c.scope??'base'))&&(value.relations??[]).every(r=>['base','c0'].includes(r.scope??'base'))){
+  value.characters=[];for(const c of value.candidates)c.scope='base';for(const r of value.relations??[])r.scope='base';
+ }
+ const id=x=>Number.isSafeInteger(x)&&x>=0&&x<value.candidates.length?'t'+x:x;
+ for(const r of value.relations??[]){if(Array.isArray(r.dependsOn))r.dependsOn=r.dependsOn.map(id);if(r.after!==undefined)r.after=id(r.after);}
+ return value;
+}
 const score=(response,id)=>{const x=response?.answers?.[id];if(x?.type!=='score'||!Number.isFinite(x.score)||x.score<0||x.score>2)throw Error('Jev 关系评分缺失或非法：'+id);return x.score;};
 export function prepareHybrid(input,candidates){
  if(input.format!==undefined&&!['hybrid','tags'].includes(input.format))throw Error('提示词格式需要 hybrid 或 tags');
@@ -35,20 +76,24 @@ export function prepareHybrid(input,candidates){
  if((characters.length&&total!==characters.length)||(!characters.length&&total>1))throw Error('总人数必须与角色段数量一致');
  if(characters.length)for(const kind of ['girl','boy','other'])if(counts.filter(m=>m[2]===kind).reduce((n,m)=>n+Number(m[1]),0)!==characters.filter(c=>c.kind===kind).length)throw Error('角色类别与 base 人数不一致');
  if(!Array.isArray(input.relations)||input.relations.length<1||input.relations.length>12)throw Error('混合模式需要 1–12 个英文关系短语');
- const ids=new Map(candidates.map(c=>[c.id,c])),seen=new Set();
+ const ids=new Map(candidates.map(c=>[c.id,c])),seen=new Set(),relationErrors=[];
  const relations=input.relations.map((r,i)=>{
+  try{
   if(!r||typeof r.text!=='string'||r.text.length<4||r.text.length>260||!/[a-zA-Z]/.test(r.text)||/[^\x20-\x7E]|[,|:#{}\[\]<>`]/.test(r.text))throw Error('关系短语需为单个简短英文语义单元，不含提示词控制符');
   const text=r.text.trim(),scope=r.scope??'base',origin=r.origin;
   const source=origin==='explicit'?description:origin==='completion'&&mode==='text'?plan:origin==='observed'&&mode==='image'?observations:null;
-  if(source===null||!quoted(r.evidence,source))throw Error('关系短语来源或证据不合法');
+  if(source===null||!quoted(r.evidence,source))throw Error(`relations[${i}].evidence：关系短语来源或证据不合法。${origin==='explicit'?'description':origin==='completion'?'plan':'observations'} 中的一段连续原文才有效；不要使用省略号拼接，也不要改写引文。保持语义后修正该字段。`);
   // Image mode requires observation evidence even if a requested description says otherwise.
   if(mode==='image'&&origin!=='observed')throw Error('反推关系只能来自可见证据');
-  if(!scopes.has(scope)||!Array.isArray(r.dependsOn)||!r.dependsOn.length||r.dependsOn.length>12||r.dependsOn.some(id=>!ids.has(id)))throw Error('关系短语的角色段或关联候选不合法');
-  if(r.after!==undefined&&(!r.dependsOn.includes(r.after)||ids.get(r.after)?.scope!==scope))throw Error('关系短语需要紧跟同段关联 Tag');
+  if(!scopes.has(scope))throw Error(`scope=${scope} 不存在；可用段：${[...scopes].join(', ')}`);
+  if(!Array.isArray(r.dependsOn)||!r.dependsOn.length||r.dependsOn.length>12||r.dependsOn.some(id=>!ids.has(id)))throw Error(`dependsOn 需要 1–12 个有效候选 ID；收到 ${JSON.stringify(r.dependsOn)}。本次候选：${candidates.map(c=>c.id+'='+c.tag).join('; ')}。删除或重排候选后必须同步编号，不要重新检索无关 Tag。`);
+  if(r.after!==undefined&&(!r.dependsOn.includes(r.after)||ids.get(r.after)?.scope!==scope))throw Error(`after=${r.after} 必须在 dependsOn 中且属于同段 ${scope}；不需要紧跟某个 Tag 时省略 after。`);
   const plain=text.toLowerCase().replace(/[.!?]+$/,'').replaceAll('_',' ');
   if(candidates.some(c=>c.scope===scope&&c.tag===plain)||seen.has(scope+'|'+plain))throw Error('关系短语重复 Tag 或已有短语');seen.add(scope+'|'+plain);
   return {id:'n'+i,text,scope,origin,evidence:r.evidence,dependsOn:[...new Set(r.dependsOn)],after:r.after??null};
+  }catch(error){relationErrors.push(`relations[${i}]: ${error.message}`);return null;}
  });
+ if(relationErrors.length)throw Error(relationErrors.join('\n'));
  let renderedText=null;
  if(input.renderedText){
   const r=input.renderedText,source=mode==='image'&&r.origin==='observed'?observations:mode==='text'&&r.origin==='explicit'?description:null;

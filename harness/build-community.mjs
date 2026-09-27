@@ -7,6 +7,9 @@ import {fileURLToPath} from 'node:url';
 import {build} from 'rolldown';
 import {simplifyMemoryUI} from './community/memory-ui.mjs';
 import {adaptStrictCodecs,adaptSettingsScope,adaptIcons} from './community/harness-017.mjs';
+import {adaptSessionSources} from './community/session-v4.mjs';
+import {adaptCommitSchema} from './community/commit-schema.mjs';
+import {adaptRename} from './community/fs-rename.mjs';
 const repo=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const source=path.join(repo,'harness/community');
 const target=path.join(repo,'.tmp/harness-community');
@@ -42,6 +45,15 @@ for(const [relative,original] of Object.entries(manifests)) {
   await fs.cp(path.join(rp,relative),dest,{recursive:true});
   const meta={...original};for(const key of ['dependencies','devDependencies','peerDependencies','scripts'])delete meta[key];
   await fs.writeFile(path.join(dest,'package.json'),JSON.stringify(meta,null,2));await rewrite(dest);
+  if(name==='dsh-roleplay-rp-core'){
+    const entry=path.join(dest,'src/index.js');let code=await fs.readFile(entry,'utf8');
+    const before='chatMaxStepsPerRun: Schema.number().default(5)';
+    if(!code.includes(before))throw Error('Roleplay chat step default adapter no longer matches upstream');
+    // Read state, verify tags, repair arguments, generate, then commit the reply.
+    // Change the shipped default only: explicit plugin/session limits still win.
+    code=code.replace(before,'chatMaxStepsPerRun: Schema.number().default(12)');
+    await fs.writeFile(entry,code);
+  }
   if(name==='dsh-roleplay-rp-preset'){
     const builtinDir=path.join(dest,'src/studio-builtins');await fs.mkdir(builtinDir,{recursive:true});
     await fs.copyFile(path.join(source,'install-builtin-preset.mjs'),path.join(builtinDir,'install.mjs'));
@@ -49,7 +61,7 @@ for(const [relative,original] of Object.entries(manifests)) {
     const upstream=await fs.readFile(path.join(source,'infinite-gen4/infinite-gen-4.md'),'utf8');
     const provenance=JSON.parse(await fs.readFile(path.join(source,'infinite-gen4/SOURCE.json'),'utf8'));
     if(crypto.createHash('sha256').update(upstream).digest('hex')!==provenance.promptSha256)throw Error('Builtin prompt checksum mismatch');
-    const preset={name:'无限四代 · Studio',description:'dsh-infinite-gen-4 '+provenance.version+'，按会话选择的预设适配；不全局注入。',fields:[{name:'上游预设',description:provenance.repo+' @ '+provenance.commit,position:'top',content:upstream},{name:'Studio 实际工具执行',position:'bottom',content:'本会话运行于真实 NovelAI Studio。涉及软件读取、保存或生图时，必须实际调用工具，并只报告工具确认的结果，不用占位符伪造执行。普通聊天继续沿用选中的角色卡、世界书和记忆。切换预设只影响本会话提示词，不删除资料。用户要求生图时先读取软件参数；自然语言描述先调用 langbai_jev_status，已启用则整理明确语义和成熟 Tag 候选并调用 langbai_decide_prompt。Jev 失败必须说明，不冒充已筛选。风格提示词、画师串和负面提示词保持不变；实际生成使用 langbai_generate_image，等待软件确认。其他通用 Agent 工具继续可用。'}]};
+    const preset={name:'无限四代 · Studio',description:'dsh-infinite-gen-4 '+provenance.version+'，按会话选择的预设适配；不全局注入。',fields:[{name:'上游预设',description:provenance.repo+' @ '+provenance.commit,position:'top',content:upstream},{name:'Studio 实际工具执行',position:'bottom',content:'本会话运行于真实 NovelAI Studio。涉及软件读取、保存或生图时，必须实际调用工具，并只报告工具确认的结果，不用占位符伪造执行。普通聊天继续沿用选中的角色卡、世界书和记忆。切换预设只影响本会话提示词，不删除资料。用户要求生图时先读取软件参数；自然语言描述必须调用 langbai_prepare_image_prompt，实时使用软件选中的提示词转换模板（默认混合，支持切换和导入）；传入完整画面要求，直接使用返回的提示词，不自行缩短或绕到 Jev 编译。可在要求内合理补充细节，但不改变主体、关键特征、人物关系和主要场景，不把补充说成用户明示。Jev 仅在用户明确要求高级候选分析时使用。风格提示词、画师串和负面提示词保持不变；生成只在 Agent 内确认。成功后展示图片和以行内代码显示的完整文件路径，点击路径可打开所在文件夹，不要重复收费生图。其他通用 Agent 工具继续可用。'}]};
     await fs.writeFile(path.join(builtinDir,'preset.json'),JSON.stringify(preset,null,2));
     const filename=path.join(dest,'src/index.js');let code=await fs.readFile(filename,'utf8');
     code="import {installBuiltinPreset} from './studio-builtins/install.mjs';\n"+code;
@@ -83,6 +95,16 @@ for(const [relative,original] of Object.entries(manifests)) {
     await fs.copyFile(path.join(source,'preset-preservation.js'),path.join(dest,'src/studio-preset-preservation.js'));
     const template=path.join(dest,'presets/roleplay/agent.cordis.yml');
     await fs.writeFile(template,(await fs.readFile(template,'utf8')).replace('text: __RP_PERSONA_TEXT__','prefix: __RP_PERSONA_TEXT__'));
+  }
+  const materialFiles={
+    'dsh-roleplay-rp-character-card':['service.js','library.js'],
+    'dsh-roleplay-rp-persona':['index.js'],
+    'dsh-roleplay-rp-lore-book':['index.js'],
+    'dsh-roleplay-rp-preset':['index.js'],
+  }[name];
+  if(materialFiles){
+    await fs.copyFile(path.join(source,'fs-rename.mjs'),path.join(dest,'src/studio-fs-rename.mjs'));
+    for(const file of materialFiles){const filename=path.join(dest,'src',file);await fs.writeFile(filename,adaptRename(await fs.readFile(filename,'utf8')));}
   }
   await fs.copyFile(path.join(rp,'LICENSE'),path.join(dest,'LICENSE'));
 }
@@ -143,7 +165,7 @@ async function adaptTree(dir){
   const file=path.join(dir,entry.name);
   if(entry.isDirectory()&&entry.name!=='node_modules')await adaptTree(file);
   else if(entry.isFile()&&entry.name.endsWith('.js')){
-   const text=await fs.readFile(file,'utf8'),adapted=adaptIcons(adaptSettingsScope(adaptStrictCodecs(text)));
+    const text=await fs.readFile(file,'utf8'),adapted=adaptCommitSchema(adaptSessionSources(adaptIcons(adaptSettingsScope(adaptStrictCodecs(text)))));
    if(adapted!==text)await fs.writeFile(file,adapted);
   }
  }

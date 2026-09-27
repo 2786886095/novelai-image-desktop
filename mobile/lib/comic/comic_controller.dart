@@ -1,3 +1,5 @@
+import 'package:path_provider/path_provider.dart';
+import '../services/unified_storage.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -6,7 +8,6 @@ import 'dart:math';
 import 'package:archive/archive.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../billing/anlas.dart';
@@ -277,7 +278,7 @@ class ComicController extends ChangeNotifier {
       withData: true,
     );
     if (result == null) return;
-    final documents = await getApplicationDocumentsDirectory();
+    final documents = await UnifiedStorage.documents();
     final root = Directory(
         '${documents.path}${Platform.pathSeparator}comic-projects${Platform.pathSeparator}${project.id}${Platform.pathSeparator}references');
     await root.create(recursive: true);
@@ -304,7 +305,7 @@ class ComicController extends ChangeNotifier {
     try {
       final source = File(preset.filePath);
       final bytes = await source.readAsBytes();
-      final documents = await getApplicationDocumentsDirectory();
+      final documents = await UnifiedStorage.documents();
       final root = Directory(
           '${documents.path}${Platform.pathSeparator}comic-projects${Platform.pathSeparator}${project.id}${Platform.pathSeparator}references');
       await root.create(recursive: true);

@@ -404,6 +404,8 @@ export interface AgentWorkspaceMutationResult {
 }
 
 export interface AgentToolBridgeRequest {
+  /** In-process cancellation only; never accepted from bridge JSON. */
+  signal?: AbortSignal;
   tool: string;
   args: Record<string, unknown>;
   sessionId?: string;

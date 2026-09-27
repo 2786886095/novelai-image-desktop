@@ -1,3 +1,4 @@
+import 'unified_storage.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -200,7 +201,7 @@ class DataBackupService {
       '${DateTime.now().microsecondsSinceEpoch}-${_random.nextInt(1 << 30)}';
 
   Future<Directory> _defaultBackupDirectory() async {
-    final documents = await getApplicationDocumentsDirectory();
+    final documents = await UnifiedStorage.documents();
     final directory =
         Directory('${documents.path}${Platform.pathSeparator}backups');
     if (!await directory.exists()) await directory.create(recursive: true);
@@ -1162,7 +1163,7 @@ class DataBackupService {
               '${item.createdAt}\u241f${item.mode.value}\u241f${item.input}\u241f${item.result}')
           .toSet();
       final ids = current.map((item) => item.id).toSet();
-      final documents = await getApplicationDocumentsDirectory();
+      final documents = await UnifiedStorage.documents();
       final sourceDirectory = Directory(
           '${documents.path}${Platform.pathSeparator}imported-sources');
       for (final value in incoming) {
@@ -1282,7 +1283,7 @@ class DataBackupService {
             .toString());
       } catch (_) {}
     }
-    final documents = await getApplicationDocumentsDirectory();
+    final documents = await UnifiedStorage.documents();
     final directory = Directory([
       documents.path,
       'style-prompt-previews',

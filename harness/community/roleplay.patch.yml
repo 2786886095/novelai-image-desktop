@@ -44,7 +44,7 @@
         dataDir: !!js process.env.DSH_ROLEPLAY_DATA_DIR ?? './.dsh-roleplay'
         defaultMode: adaptive
         defaultExecutionMode: chat
-        chatMaxStepsPerRun: 5
+        chatMaxStepsPerRun: 12
         agentMaxStepsPerRun: 20
         maxEffectsPerCommit: 64
         maxArtifactBytes: 262144

@@ -1,6 +1,6 @@
 // Jev checks semantic fit, not calibrated NovelAI weights or guaranteed image quality.
-import {prepareHybrid,addHybridQuestions,assembleHybrid} from './jev-hybrid.js';
-export {HYBRID_INSTRUCTIONS} from './jev-hybrid.js';
+import {prepareHybrid,addHybridQuestions,assembleHybrid,normalizeHybridInput} from './jev-hybrid.js';
+export {HYBRID_INSTRUCTIONS,PROMPT_ARGUMENTS} from './jev-hybrid.js';
 export const CATEGORIES=new Set(['count','identity','appearance','clothing','prop','scene','lighting','camera','pose','expression','action']);
 export const COMPLETION_FACETS=['clothing','viewpoint','framing','lighting','pose','expression','action'];
 export const canonical=tag=>String(tag).trim().toLowerCase().replaceAll('_',' ').replace(/\s+/g,' ');
@@ -10,13 +10,14 @@ export function normalizeCandidates(input){
  if(!input||typeof input.description!=='string'||!input.description.trim()||input.description.length>8000)throw Error('请提供 1–8000 字的画面描述');
  if(!Array.isArray(input.candidates)||!input.candidates.length||input.candidates.length>48)throw Error('需要 1–48 个候选 Tag');
  if(input.plan!==undefined&&(typeof input.plan!=='string'||input.plan.length>2400))throw Error('补全方案需要不超过 2400 字的文本');
+ const evidenceErrors=input.candidates.flatMap((c,i)=>c?.explicit===true&&(typeof c.evidence!=='string'||!c.evidence.trim()||!input.description.includes(c.evidence))?[`candidates[${i}].evidence (t${i}, ${String(c.tag).slice(0,100)}): ${typeof c.evidence!=='string'||!c.evidence.trim()?'缺少非空原文引用':'引用不在 description 原文中'}。请引用 description 的连续原文；补全细节应使用 explicit:false，勿伪造引用或删除用户要求。`]:[]);
+ if(evidenceErrors.length)throw Error('提示词来源校验未通过：\n'+evidenceErrors.join('\n'));
  const seen=new Set();return input.candidates.map((c,i)=>{
   if(!c||!CATEGORIES.has(c.category)||typeof c.explicit!=='boolean')throw Error('候选词需要合法类别及 explicit 标记');
   if(typeof c.tag!=='string')throw Error('Tag 必须是字符串');
   const tag=canonical(c.tag);if(!tag||tag.length>100||/[,\n\r{}|:]|^artist\b/.test(tag))throw Error('候选只接受单个内容 Tag；风格与权重由独立步骤处理');
   const scope=c.scope??'base';if(typeof scope!=='string'||!/^(base|c\d+)$/.test(scope))throw Error('候选角色段不合法');
   const duplicateKey=scope+'|'+tag;if(seen.has(duplicateKey))throw Error('候选 Tag 重复');seen.add(duplicateKey);
-  if(c.explicit&&(!c.evidence||typeof c.evidence!=='string'||!input.description.includes(c.evidence)))throw Error('明确要求必须附上用户原文证据');
   const emphasis=c.emphasis??'normal';
   if(!['normal','support','focal','subtle'].includes(emphasis))throw Error('权重层级需要 normal、support、focal 或 subtle');
   if(emphasis!=='normal'&&(typeof c.reason!=='string'||!c.reason.trim()||c.reason.length>300))throw Error('调整权重需提供不超过 300 字的画面主次依据');
@@ -85,12 +86,21 @@ export function resolveDecisions(candidates,response,{mode='text',useJev=true}={
  return {positivePrompt:selected.map(c=>c.weight===1?c.tag:`${c.weight}::${c.tag}::`).join(', '),selected,omitted:[...rejected.values()].map(x=>x.tag),omissionDetails:[...rejected.values()],coverage:{present,missing},warnings,jevUsed:useJev,decisionEngine:useJev?'jev':'local',completion:'moderate',weightPolicy:'semantic-emphasis-v4; focal explicit=1.15 optional=1.1 <=2; total boosts<=3; subtle<=3 at 0.9; default=1',styleChanged:false,negativeChanged:false};
 }
 export async function decidePrompt(input,{config,lookup,fetchImpl=fetch,signal}){
+ input=normalizeHybridInput(input);
  const useJev=config?.enabled===true;
  if(useJev&&(typeof config.apiKey!=='string'||!config.apiKey.trim()))throw Error('Jev 已开启但尚未配置密钥；请配置密钥或关闭 Jev 后重试');
- const candidates=normalizeCandidates(input),hybrid=prepareHybrid(input,candidates);const verified=[];
- if(!hybrid&&candidates.some(c=>c.scope!=='base'||c.anchor||c.observed))throw Error('角色分段和图片证据需要 hybrid 格式');
+ const candidates=normalizeCandidates(input);let hybrid;const verified=[],issues=[];
+ // Inspect all residuals and dictionary candidates before any paid decision.
+ // A single useful repair turn is preferable to exhausting the agent's steps.
+ try{hybrid=prepareHybrid(input,candidates);}catch(error){issues.push(error.message);}
+ if(issues.length&&!issues.every(message=>message.startsWith('relations[')))throw Error(issues.join('\n'));
+ if(!issues.length&&!hybrid&&candidates.some(c=>c.scope!=='base'||c.anchor||c.observed))throw Error('角色分段和图片证据需要 hybrid 格式');
  const deadline=AbortSignal.timeout(45000),combined=signal?AbortSignal.any([signal,deadline]):deadline;
- for(const c of candidates){combined.throwIfAborted();const matches=await lookup(c.tag,combined);if(!Array.isArray(matches)||!matches.some(x=>canonical(x.tag??x.name)===c.tag))throw Error('词典未确认成熟 Tag：'+c.tag);verified.push(c);}
+ if(input.format==='hybrid'&&(input.mode??'text')==='text')for(const c of candidates)if(c.category==='count'&&/^\d+(girl|boy|other)s?$/.test(c.tag)&&!c.explicit)issues.push(`${c.id}.explicit：人数须引用 description 原文并设置 explicit:true；不要把人数当补全细节，禁止删除人数来规避。`);
+ const unknown=[];
+ for(const c of candidates){combined.throwIfAborted();const matches=await lookup(c.tag,combined);if(!Array.isArray(matches)||!matches.some(x=>canonical(x.tag??x.name)===c.tag))unknown.push(c.id+'='+c.tag);else verified.push(c);}
+ if(unknown.length)issues.push('词典未确认成熟 Tag：'+unknown.join('；')+'。先 search_tags 查询成熟词；若无对应 Tag，把概念保留为有原文证据的英文关系短语并更新 dependsOn 编号。');
+ if(issues.length)throw Error(issues.join('\n')+'\n请一次修正上述全部问题；未调用 Jev 或生图。');
  combined.throwIfAborted();
  if(!useJev)return {...assembleHybrid(resolveDecisions(verified,null,{mode:hybrid?.mode,useJev:false}),null,hybrid),model:null,usage:null};
  const request=addHybridQuestions(decisionRequest(input.description,verified,input.plan),hybrid);

@@ -1,4 +1,4 @@
-import {userPluginFingerprint} from './harness-compatibility';
+import {userPluginFingerprint,copyHarnessProbeHome} from './harness-compatibility';
 import {startHarnessBridge} from './harness-bridge';
 import type {HarnessUpdateProposal} from '../../src/harness-types';
 import {planLegacyPluginRepair} from './harness-legacy-repair';
@@ -19,7 +19,7 @@ import {engineLaunchUrl, installVerifiedBundle, isNewerBundle, redactHarnessLog,
 
 const exec = promisify(execFile);
 export interface EngineOptions {
-  root: string; seed: string; workspace: string; previewSource?: string;
+  root: string; seed: string; workspace: string; previewSource?: string; responsiveSource?: string; librarySource?: string; toolsSource?: string;
   openBrowser: (url: string) => Promise<unknown>;
   bridge: () => Promise<{env: Record<string,string>; close: () => Promise<void>}>;
   updateSource?: (signal: AbortSignal, log: (text: string) => void) => Promise<string | null>;
@@ -39,7 +39,22 @@ export class HarnessEngine {
   private updateInfo: HarnessUpdateCheck | null = null;
   private checking: Promise<void> | null = null;
   private prepared: {token:string;source:string;digest:string;active:string;plugins:string;expires:number;version:string;upstream:string} | null = null;
-  async checkUpdates(){if(this.checking)return this.checking;this.checking=Promise.all([checkHarnessUpdates(),this.readActive().catch(()=>null)]).then(([info])=>{this.updateInfo=info;}).finally(()=>{this.checking=null;});return this.checking;}
+  async checkUpdates(){
+    if(this.checking)return this.checking;
+    this.checking=Promise.all([checkHarnessUpdates(),this.readActive().catch(()=>null)]).then(async([info,active])=>{
+      // Remote publication and a locally bundled candidate are different sources.
+      // Offline/unpublished remote metadata must not hide the bundled update.
+      try {
+        const bundled=validateManifest(JSON.parse(await fs.readFile(path.join(this.options.seed,'manifest.json'),'utf8')));
+        info.bundledComponent=bundled.version;
+        info.bundledUpdate=!active||isNewerBundle(bundled.version,active.manifest.version);
+      } catch(error) {
+        if((error as NodeJS.ErrnoException).code!=='ENOENT')info.errors.push('本机随附组件：'+String(error));
+      }
+      this.updateInfo=info;
+    }).finally(()=>{this.checking=null;});
+    return this.checking;
+  }
   constructor(private readonly options: EngineOptions) {}
   get busy() { return !!this.child || !!this.action; }
   snapshot(): HarnessSnapshot { return {phase: this.phase, version: this.version, installedUpstream:this.installedUpstream, logs: [...this.logs], dataDirectory: this.options.root, updateInfo:this.updateInfo,checkingUpdates:!!this.checking}; }
@@ -60,6 +75,71 @@ export class HarnessEngine {
       this.installedUpstream = manifest.upstream;
       return {root, manifest};
     } catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null; throw error; }
+  }
+  private async presentationPatch(bundle: string): Promise<string|null> {
+    const source=this.options.responsiveSource ?? path.join(bundle,'plugins/studio-responsive');
+    try {await fs.access(path.join(source,'package.json'));}catch(error){if((error as NodeJS.ErrnoException).code==='ENOENT')return null;throw error;}
+    const names=['package.json','index.js','lib/client.js'];
+    const files=await Promise.all(names.map(async name=>({name,bytes:await fs.readFile(path.join(source,name))})));
+    const hash=crypto.createHash('sha256');for(const file of files)hash.update(file.name).update(file.bytes);
+    const directory=path.join(this.options.root,'presentation',hash.digest('hex'));
+    // Managed presentation files are outside all user-owned profiles/plugins.
+    for(const {name,bytes} of files){const target=path.join(directory,name);await fs.mkdir(path.dirname(target),{recursive:true});
+      try{await fs.writeFile(target,bytes,{flag:'wx'});}catch(error){if((error as NodeJS.ErrnoException).code!=='EEXIST')throw error;}
+      if(!(await fs.readFile(target)).equals(bytes))throw Error('Presentation component checksum mismatch');
+    }
+    const patch=path.join(directory,'presentation.patch.yml');
+    const content=`- insert:\n    - id: studio-responsive\n      name: ${JSON.stringify(path.join(directory,'index.js').replaceAll('\\','/'))}\n`;
+    try{await fs.writeFile(patch,content,{flag:'wx'});}catch(error){if((error as NodeJS.ErrnoException).code!=='EEXIST')throw error;}
+    if(await fs.readFile(patch,'utf8')!==content)throw Error('Presentation patch checksum mismatch');
+    return patch;
+  }
+  private async libraryPatch(bundle: string): Promise<string|null> {
+    const names=['package.json','index.js','protocol.js','jev-config.js','lib/client.js'];
+    const source=this.options.librarySource;if(!source)return null;
+    const installed=path.join(this.options.root,'user-home/profiles/node_modules/@langbai/dsh-studio-library');
+    const seed=path.join(bundle,'plugins/studio-library');
+    // A customized integration remains active. Never overwrite or shadow it.
+    for(const name of names){
+      try{if(!(await fs.readFile(path.join(installed,name))).equals(await fs.readFile(path.join(seed,name)))){this.log('软件资料插件有本机修改；保留自定义版本，未替换。');return null;}}
+      catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error;return null;}
+    }
+    // New app-owned helper; tolerate its absence in an older seed, but preserve a user's custom helper.
+    const extra='panel-layout-store.js';
+    const optional=async(file:string)=>fs.readFile(file).catch(e=>{if(e.code==='ENOENT')return null;throw e});
+    const custom=await optional(path.join(installed,extra)),original=await optional(path.join(seed,extra));
+    if(custom&&(!original||!custom.equals(original)))return null;
+    const files=await Promise.all([...names,extra].map(async name=>({name,bytes:await fs.readFile(path.join(source,name))})));
+    const hash=crypto.createHash('sha256');for(const file of files)hash.update(file.name).update(file.bytes);
+    hash.update('disable-old-insert-managed-v2');
+    const directory=path.join(this.options.root,'managed-library',hash.digest('hex'));
+    for(const {name,bytes} of files){const target=path.join(directory,name);await fs.mkdir(path.dirname(target),{recursive:true});
+      try{await fs.writeFile(target,bytes,{flag:'wx'});}catch(error){if((error as NodeJS.ErrnoException).code!=='EEXIST')throw error;}
+      if(!(await fs.readFile(target)).equals(bytes))throw Error('Studio library checksum mismatch');
+    }
+    const patch=path.join(directory,'library.patch.yml');
+    // In Harness patches, `name` is a matching guard, NOT a replacement field.
+    // Disable the verified seed and insert the managed dual host/client package.
+    const content=`- id: studio-library\n  disabled: true\n- insert:\n    - id: studio-library-managed\n      name: ${JSON.stringify(path.join(directory,'index.js').replaceAll('\\','/'))}\n`;
+    try{await fs.writeFile(patch,content,{flag:'wx'});}catch(error){if((error as NodeJS.ErrnoException).code!=='EEXIST')throw error;}
+    if(await fs.readFile(patch,'utf8')!==content)throw Error('Studio library patch checksum mismatch');
+    return patch;
+  }
+  private async toolsPatch(bundle:string):Promise<string|null>{
+    const source=this.options.toolsSource;if(!source)return null;
+    const names=['package.json','index.js'];
+    const installed=path.join(this.options.root,'user-home/profiles/node_modules/@langbai/dsh-studio-tools');
+    for(const name of names){
+      try{if(!(await fs.readFile(path.join(installed,name))).equals(await fs.readFile(path.join(bundle,'plugins/studio-tools',name)))){this.log('生图工具插件有本机修改；保留自定义版本。');return null}}
+      catch(error){if((error as NodeJS.ErrnoException).code==='ENOENT')return null;throw error}
+    }
+    const files=await Promise.all(names.map(async name=>({name,bytes:await fs.readFile(path.join(source,name))})));
+    const hash=crypto.createHash('sha256');for(const file of files)hash.update(file.name).update(file.bytes);
+    const directory=path.join(this.options.root,'managed-tools',hash.digest('hex'));await fs.mkdir(directory,{recursive:true});
+    for(const file of files){const target=path.join(directory,file.name);try{await fs.writeFile(target,file.bytes,{flag:'wx'})}catch(e){if((e as NodeJS.ErrnoException).code!=='EEXIST')throw e}if(!(await fs.readFile(target)).equals(file.bytes))throw Error('Studio tools checksum mismatch')}
+    const patch=path.join(directory,'tools.patch.yml');
+    await fs.writeFile(patch,`- id: studio-tools\n  disabled: true\n- insert:\n    - id: studio-tools-managed\n      name: ${JSON.stringify(path.join(directory,'index.js').replaceAll('\\','/'))}\n`);
+    this.log('已接入软件共用提示词模板工具（保留原组件和用户资料）。');return patch;
   }
   private async seedUserFiles(bundle: string) {
     const home = path.join(this.options.root, 'user-home');
@@ -240,6 +320,10 @@ export class HarnessEngine {
       const toolModule = runtimeRequire.resolve('@deepseek-ai/dsh-tools');
       const dataPatch=path.join(home,'studio-data.patch.yml');
       const additionalPatches:string[]=[];
+      const library=await this.libraryPatch(active.root);
+      const tools=await this.toolsPatch(active.root);
+      const presentation=await this.presentationPatch(active.root);
+      if(presentation)additionalPatches.push('--patch',presentation);
       const previewPatch=path.join(home,'studio-preview.patch.yml');
       try{await fs.access(previewPatch);additionalPatches.push('--patch',previewPatch);}catch(e){if((e as NodeJS.ErrnoException).code!=='ENOENT')throw e;}
       try{await fs.access(dataPatch);additionalPatches.push('--patch',dataPatch);}catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error;}
@@ -247,7 +331,10 @@ export class HarnessEngine {
       try{await fs.access(roleplayDefault);additionalPatches.push('--patch',roleplayDefault);}catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error;}
       const communityPatch=path.join(home,'studio-community.patch.yml');
       try{await fs.access(communityPatch);additionalPatches.push('--patch',communityPatch);}catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error;}
-      const child = spawn(path.join(active.root, active.manifest.node), [path.join(active.root, active.manifest.cli), 'web', ...additionalPatches, '--patch', path.join(home, 'studio.patch.yml'), '--no-open', '--host', '127.0.0.1', '--port', '0'], {
+      // The seed inserts studio-library. Apply its app-owned replacement AFTER
+      // that insertion, otherwise the seed silently replaces the new UI.
+      if(library)additionalPatches.push('--patch',library);
+      const child = spawn(path.join(active.root, active.manifest.node), [path.join(active.root, active.manifest.cli), 'web', ...additionalPatches, '--patch', path.join(home, 'studio.patch.yml'), ...(tools?['--patch',tools]:[]), '--no-open', '--host', '127.0.0.1', '--port', '0'], {
         cwd:this.options.workspace, windowsHide:true, stdio:['ignore','pipe','pipe'],
         env:{...process.env, ELECTRON_RUN_AS_NODE:'', DSH_HOME:home, DSH_ROLEPLAY_DATA_DIR:path.join(home,'roleplay'), STUDIO_DSH_TOOLS:toolModule, STUDIO_WORKSPACE:this.options.workspace, ...bridge.env},
       });
@@ -320,12 +407,23 @@ export class HarnessEngine {
     await fs.mkdir(path.join(root,'versions'),{recursive:true});
     await fs.symlink(path.resolve(source),path.join(root,'versions/candidate'),process.platform==='win32'?'junction':'dir');
     await fs.writeFile(path.join(root,'active.json'),JSON.stringify({slot:'candidate'}));
-    const probe=new HarnessEngine({root,seed:source,workspace:root,previewSource:this.options.previewSource,
+    const current=await this.readActive();
+    await copyHarnessProbeHome(this.options.root,path.join(root,'user-home'),source);
+    // Mirror the real upgrade: migrate only wholly unchanged bundled packages.
+    // Custom/new packages and their enabled/disabled configuration are copied intact.
+    if(current){
+      const next=validateManifest(JSON.parse(await fs.readFile(path.join(source,'manifest.json'),'utf8')));
+      await upgradeBundledUserFiles(root,current.manifest,source,next);
+    }
+    const probe=new HarnessEngine({root,seed:source,workspace:root,previewSource:this.options.previewSource,responsiveSource:this.options.responsiveSource,librarySource:this.options.librarySource,toolsSource:this.options.toolsSource,
       openBrowser:async()=>{},bridge:()=>startHarnessBridge({journal:path.join(root,'journal'),tools:[],execute:async()=>{throw Error('Compatibility probe does not execute user tools');}})});
     const cancel=()=>{void probe.stop().catch(()=>{});};signal.addEventListener('abort',cancel,{once:true});
     try{
       signal.throwIfAborted();await probe.start();signal.throwIfAborted();
-      if(probe.snapshot().phase!=='running')throw Error('候选组件启动检查未通过，现有酒馆保持不变。');
+      if(probe.snapshot().phase!=='running'){
+        for(const entry of probe.snapshot().logs.filter(line=>line.level==='error').slice(-8))this.log(`兼容检查：${entry.text}`,'warn');
+        throw Error('候选组件与当前插件组合启动检查未通过，请查看日志；现有酒馆保持不变。');
+      }
     }finally{signal.removeEventListener('abort',cancel);await probe.stop();}
   }
   async prepareUpdate(kind:'component'|'official'):Promise<HarnessUpdateProposal>{
@@ -379,6 +477,9 @@ export class HarnessEngine {
       if(await userPluginFingerprint(this.options.root,active?.manifest??null,manifest,this.options.previewSource)!==prepared.plugins)throw Error('检查后插件发生变化，请重新检查。');
       await this.backupUserHome();signal.throwIfAborted();
       await this.install(prepared.source,signal);this.phase='stopped';
+      // Refresh local status immediately; do not keep offering the installed seed.
+      await this.readActive();
+      if(this.updateInfo?.bundledComponent)this.updateInfo.bundledUpdate=isNewerBundle(this.updateInfo.bundledComponent,this.version!);
     });
   }
   async update() {

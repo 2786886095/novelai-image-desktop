@@ -279,6 +279,8 @@ class _ConvertPanelState extends State<_ConvertPanel> {
             },
           ),
           const SizedBox(height: 12),
+          _ReverseTemplateVersionSelector(value:s.settings.convertPromptTemplateVersion,onChanged:(v)=>s.setSettings((x)=>x.convertPromptTemplateVersion=v)),
+          const SizedBox(height:12),
           _ModeSelector(
               value: s.convertMode,
               onChanged: (m) {

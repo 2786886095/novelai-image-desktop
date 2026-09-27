@@ -48,7 +48,7 @@ class AgentInstrumentation: Instrumentation() {
                 check(File(home,"user-added-plugin/fixture.txt").readText()=="user-owned-plugin")
                 pass("backup-restores-session-and-custom-file")
                 targetContext.startForegroundService(Intent(targetContext,LocalAgentService::class.java))
-                agent.command("start",mapOf("bridgeUrl" to "http://127.0.0.1:9","bridgeToken" to "a".repeat(64)))
+                agent.command("start",mapOf("bridgeUrl" to "http://127.0.0.1:65534","bridgeToken" to "a".repeat(64)))
                 waitIdle(agent,180000);check(agent.snapshot()["running"]==true){agent.snapshot()["logs"].toString()}
                 pass("android-native-proot-harness-startup")
                 val url=agent.openUrl();runOnMainSync{activity.browser.loadUrl(url)}

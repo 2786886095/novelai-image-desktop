@@ -3,7 +3,7 @@
 [简体中文](./README.md) · [繁體中文](./README.zh-TW.md) · [English](./README.en.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md)
 
 
-**v2.3.7 平台說明：** 新版獨立酒館 Agent 元件目前支援 Windows x64；macOS/Linux 保留原有酒館，Android/iOS 保留行動酒館。升級先檢查相容性，再確認與備份；保留自訂外掛與資料。
+**v2.4.0 平台說明：** 新版獨立酒館 Agent 元件目前支援 Windows x64；macOS/Linux 保留原有酒館，Android/iOS 保留行動酒館。升級先檢查相容性，再確認與備份；保留自訂外掛與資料。
 
 ### 從一句靈感，到一組作品。
 

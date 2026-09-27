@@ -1,5 +1,5 @@
 import {isNewerBundle} from './harness-policy';
-export interface HarnessUpdateCheck { checkedAt:string; component:string|null; official:string|null; plugins:Record<string,string>; errors:string[]; componentFailed?:boolean; officialFailed?:boolean }
+export interface HarnessUpdateCheck { checkedAt:string; component:string|null; official:string|null; plugins:Record<string,string>; errors:string[]; componentFailed?:boolean; officialFailed?:boolean; bundledComponent?:string; bundledUpdate?:boolean }
 const headers={'Accept':'application/vnd.github+json','User-Agent':'Langbai-Tavern-Agent'};
 export function chooseComponent(releases:unknown, platform=process.platform, arch=process.arch):string|null {
  if(!Array.isArray(releases))throw Error('Invalid release list');

@@ -1,3 +1,4 @@
+import '../services/completion_sound.dart';
 import '../images/style_prompt_restore.dart';
 import '../images/upscale_plan.dart';
 import '../services/vibe_file.dart';
@@ -214,6 +215,8 @@ class AppState extends ChangeNotifier {
       // its hardcoded defaults instead of restoring the last-used values.
       if (settings.persistGenerateParams) {
         params = await storage.getParams();
+        final savedBatch=settings.lastGenerationState['batchCount'];
+        if(savedBatch is num && savedBatch.isFinite)batchCount=savedBatch.toInt().clamp(1,999);
         extras.charCaptions = await storage.getCharacterPrompts();
         batchIntervalSeconds =
             normalizeBatchIntervalSeconds(settings.batchIntervalSeconds);
@@ -259,6 +262,7 @@ class AppState extends ChangeNotifier {
           _modeFromSetting(settings.reversePromptMode, ReversePromptMode.tags);
       convertMode = _modeFromSetting(
           settings.convertPromptMode, ReversePromptMode.natural);
+      restoreI2IState();
       if (settings.persistInpaintParams) {
         inpaintModel = settings.inpaintModel;
         inpaintStrength = settings.inpaintStrength;
@@ -454,12 +458,14 @@ class AppState extends ChangeNotifier {
 
   void setI2ISizeMode(String value) {
     i2iSizeMode = value == 'custom' ? 'custom' : 'adaptive';
+    _scheduleToolStatePersist();
     notifyListeners();
     _scheduleGenerationQuote();
   }
 
   void setI2ISourceMode(String value) {
     i2iSourceMode = value == 'latest' ? 'latest' : 'original';
+    _scheduleToolStatePersist();
     notifyListeners();
   }
 
@@ -490,6 +496,7 @@ class AppState extends ChangeNotifier {
 
   void setBatchCount(int n) {
     batchCount = n.clamp(1, 999);
+    _scheduleToolStatePersist();
     notifyListeners();
     _scheduleGenerationQuote();
   }
@@ -1625,7 +1632,23 @@ class AppState extends ChangeNotifier {
   /// Persists the last-used tool selections (reverse/convert mode, inpaint /
   /// upscale / director options) so they survive an app restart, mirroring the
   /// desktop's `lastGenerationState`.
+  void restoreI2IState() {
+    i2i = I2IParams(); i2iSizeMode = 'adaptive'; i2iSourceMode = 'original';
+    if (!settings.persistI2IParams) return;
+    final saved = settings.lastGenerationState;
+    final raw = saved['i2iParams'] is Map ? saved['i2iParams'] as Map : const {};
+    double number(String key,double fallback,double max) {final v=raw[key];return v is num && v.isFinite ? v.toDouble().clamp(0,max) : fallback;}
+    i2i = I2IParams(strength:number('strength',.7,1),noise:number('noise',0,.99),extraNoiseSeed:number('extraNoiseSeed',0,2147483647).round());
+    // Enhance is a temporary paid operation and must never persist as active.
+    i2iSizeMode = saved['i2iSizeMode']=='custom'?'custom':'adaptive';
+    i2iSourceMode = saved['i2iSourceMode']=='latest'?'latest':'original';
+  }
+
   Future<void> persistToolState() async {
+    settings.lastGenerationState = {...settings.lastGenerationState,
+      'batchCount': batchCount,
+      'i2iParams': {'strength':i2i.strength,'noise':i2i.noise,'extraNoiseSeed':i2i.extraNoiseSeed,'upscaledEnhance':false},
+      'i2iSizeMode':i2iSizeMode,'i2iSourceMode':i2iSourceMode};
     settings
       ..reversePromptMode = reverseMode.value
       ..convertPromptMode = convertMode.value
@@ -1986,6 +2009,7 @@ class AppState extends ChangeNotifier {
           ? max(0, anlasBefore - after)
           : null;
       final spentText = _spentText(lastAnlasSpent);
+      if (CompletionAudio.shouldPlay(cancelled:_cancelGenerationRequested,completed:completed)) unawaited(CompletionAudio.play(settings.completionSound));
       if (_cancelGenerationRequested) {
         status = _rf('status.generationCancelled', {'spent': spentText});
       } else if (failed > 0) {
@@ -2363,6 +2387,7 @@ class AppState extends ChangeNotifier {
         }
 
         final spent = await _finishQuotedRun(token, before);
+        if (CompletionAudio.shouldPlay(cancelled:_cancelGenerationRequested,completed:completed)) unawaited(CompletionAudio.play(settings.completionSound));
         if (_cancelGenerationRequested && failed == 0) {
           status = _rf('status.generationCancelled', {'spent': spent});
         } else if (failed > 0) {
@@ -2636,7 +2661,9 @@ class AppState extends ChangeNotifier {
   // can be in flight (the button never disables while one runs), and a
   // foreground service keeps this specific request alive if the app is
   // backgrounded mid-request.
-  Future<void> reversePrompt() async {
+  Future<void> reversePrompt({String? templateVersion}) async {
+    if(templateVersion != null && !['v5','v4.5'].contains(templateVersion)) throw ArgumentError('Invalid template version');
+    final chosenVersion = templateVersion ?? settings.reversePromptTemplateVersion;
     final image = await _workbenchBytes();
     final sourcePath = workbenchImage?.filePath;
     final key = await storage.getVisionKey() ?? '';
@@ -2672,8 +2699,8 @@ class AppState extends ChangeNotifier {
       hint: reverseHint,
       knownCharacter: reverseKnownCharacter,
       systemTemplate: resolvedPromptTemplate('reverse', reverseMode,
-          scoped: reverseScope != ReversePromptScope.full),
-      templateVersion: settings.reversePromptTemplateVersion,
+          scoped: reverseScope != ReversePromptScope.full, templateVersion: chosenVersion),
+      templateVersion: chosenVersion,
     );
     await BackgroundQueueService.stop(owner);
     // "Cancel" just removes the job from the tracker (the in-flight HTTP
@@ -2712,7 +2739,9 @@ class AppState extends ChangeNotifier {
   }
 
   // Concurrent, same reasoning as reversePrompt.
-  Future<void> convertPrompt() async {
+  Future<void> convertPrompt({String? templateVersion}) async {
+    if(templateVersion != null && !['v5','v4.5'].contains(templateVersion)) throw ArgumentError('Invalid template version');
+    final chosenVersion = templateVersion ?? settings.convertPromptTemplateVersion;
     final key = await storage.getConvertKey() ?? '';
     final job = TextToolJob(
       id: '${DateTime.now().microsecondsSinceEpoch}',
@@ -2743,7 +2772,7 @@ class AppState extends ChangeNotifier {
       text: convertInput,
       mode: convertMode,
       knownCharacter: convertKnownCharacter,
-      systemTemplate: resolvedPromptTemplate('convert', convertMode),
+      systemTemplate: resolvedPromptTemplate('convert', convertMode, templateVersion: chosenVersion),
     );
     await BackgroundQueueService.stop(owner);
     // See reversePrompt: a removed job is treated as cancelled.
@@ -2863,32 +2892,33 @@ class AppState extends ChangeNotifier {
     String kind,
     ReversePromptMode mode, {
     bool scoped = false,
+    String? templateVersion,
   }) {
+    if(templateVersion != null && !['v5','v4.5'].contains(templateVersion)) throw ArgumentError('Invalid template version');
     final key = mode.value;
     if (kind == 'reverse') {
-      if (settings.reversePromptTemplateVersion == 'v5') {
-        final override = settings.reversePromptTemplates[key]?.trim() ?? '';
-        if (override.isNotEmpty) return override;
-      }
-      return promptTemplates.getReverse(
-        mode,
-        scoped: scoped,
-        templateVersion: settings.reversePromptTemplateVersion,
-      );
+      final override = promptOverrides(kind, templateVersion: templateVersion)[key]?.trim() ?? '';
+      if(override.isNotEmpty)return override;
+      return promptTemplates.getReverse(mode,scoped:scoped,templateVersion:templateVersion ?? settings.reversePromptTemplateVersion);
     }
     if (kind == 'convert') {
-      final override = settings.convertPromptTemplates[key]?.trim() ?? '';
-      if (override.isNotEmpty) return override;
-      return promptTemplates.get('convert', mode);
+      final override = promptOverrides(kind, templateVersion: templateVersion)[key]?.trim() ?? '';
+      if(override.isNotEmpty)return override;
+      return promptTemplates.get((templateVersion ?? settings.convertPromptTemplateVersion)=='v4.5'?'convertV45':'convert',mode);
     }
     if (kind == 'comic') {
-      final override = settings.comicPromptTemplate.trim();
-      return override.isNotEmpty
-          ? override
-          : promptTemplates.get('comic', mode);
+      final override = settings.comicAnalyzePromptTemplates[key]?.trim() ?? settings.comicPromptTemplate.trim();
+      return override.isNotEmpty?override:promptTemplates.get('comic',mode);
     }
     return '';
   }
+
+  Map<String,String> promptOverrides(String kind, {String? templateVersion}) => switch(kind){
+    'reverse' => (templateVersion ?? settings.reversePromptTemplateVersion)=='v4.5'?settings.reversePromptTemplatesV45:settings.reversePromptTemplates,
+    'convert' => (templateVersion ?? settings.convertPromptTemplateVersion)=='v4.5'?settings.convertPromptTemplatesV45:settings.convertPromptTemplates,
+    'comic' => settings.comicAnalyzePromptTemplates,
+    _ => throw ArgumentError.value(kind),
+  };
 
   Future<void> setPromptTemplate(
     String kind,
@@ -2897,9 +2927,7 @@ class AppState extends ChangeNotifier {
   ) async {
     final key = mode.value;
     await setSettings((settings) {
-      if (kind == 'reverse') settings.reversePromptTemplates[key] = value;
-      if (kind == 'convert') settings.convertPromptTemplates[key] = value;
-      if (kind == 'comic') settings.comicPromptTemplate = value;
+      promptOverrides(kind)[key] = value;
     });
   }
 
@@ -2909,8 +2937,7 @@ class AppState extends ChangeNotifier {
   ) async {
     final key = mode.value;
     await setSettings((settings) {
-      if (kind == 'reverse') settings.reversePromptTemplates.remove(key);
-      if (kind == 'convert') settings.convertPromptTemplates.remove(key);
+      promptOverrides(kind).remove(key);
       if (kind == 'comic') settings.comicPromptTemplate = '';
     });
   }

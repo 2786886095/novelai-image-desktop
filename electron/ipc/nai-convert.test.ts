@@ -495,3 +495,36 @@ describe("prompt codex enhancement", () => {
     expect(String(request.messages?.[0]?.content)).toContain("可复现画面");
   });
 });
+
+ it("uses live software templates on every conversion and rejects truncated output",async()=>{
+  const {convertPromptText}=await import('./nai');
+  settingsRef.current={convertApiUrl:'https://example.test/v1',convertApiKey:'test-only',convertApiModel:'test',convertPromptTemplates:{tags:'TAG TEMPLATE',natural:'PROSE TEMPLATE',mixed:'CUSTOM MIXED {{input}}'},reverseConvertDshEnabled:true};
+  axiosMock.post.mockReset();axiosMock.post.mockResolvedValue({data:{choices:[{message:{content:'software result'},finish_reason:'stop'}]}});
+  expect((await convertPromptText('雨夜撑伞','mixed')).result).toBe('software result');
+  expect(axiosMock.post.mock.calls[0][1].messages[0].content).toContain('CUSTOM MIXED');
+  expect(axiosMock.post.mock.calls[0][1].messages[0].content).not.toContain('Shared SillyTavern preset');
+  expect(axiosMock.post.mock.calls[0][1].max_tokens).toBeGreaterThanOrEqual(3000);
+  settingsRef.current.convertPromptTemplates!.mixed='EDITED LIVE';await convertPromptText('雨夜撑伞','mixed');
+  expect(axiosMock.post.mock.calls[1][1].messages[0].content).toContain('EDITED LIVE');
+  await convertPromptText('雨夜撑伞','natural');expect(axiosMock.post.mock.calls[2][1].messages[0].content).toContain('PROSE TEMPLATE');
+  axiosMock.post.mockResolvedValue({data:{choices:[{message:{content:'partial prompt'},finish_reason:'length'}]}});
+  expect((await convertPromptText('雨夜撑伞','mixed')).ok).toBe(false);
+ });
+
+it('repairs an explicit template unit range at most once and never returns an invalid prompt',async()=>{
+ const {convertPromptText}=await import('./nai');settingsRef.current={convertApiUrl:'https://example.test/v1',convertApiKey:'test-only',convertApiModel:'test',convertPromptTemplates:{mixed:'有效语义单元总数必须落在 50–150 之间',tags:'',natural:''},reverseConvertDshEnabled:false};
+ const reply=(content:string)=>({data:{choices:[{message:{content},finish_reason:'stop'}]}});
+ const good=Array.from({length:55},(_,i)=>'tag'+i).join(', ');axiosMock.post.mockReset();axiosMock.post.mockResolvedValueOnce(reply('too short')).mockResolvedValueOnce(reply(good));
+ expect((await convertPromptText('雨夜撑伞','mixed')).result).toBe(good);expect(axiosMock.post).toHaveBeenCalledTimes(2);
+ axiosMock.post.mockReset();axiosMock.post.mockResolvedValue(reply('still short'));expect((await convertPromptText('雨夜撑伞','mixed')).ok).toBe(false);expect(axiosMock.post).toHaveBeenCalledTimes(2);
+});
+
+it('audits typed mixed ratio and preserves explicit facts before returning text; bounded failure stops after three calls',async()=>{
+ const {convertPromptText}=await import('./nai');settingsRef.current={convertApiUrl:'https://example.test/v1',convertApiKey:'test-only',convertApiModel:'test',convertPromptTemplates:{mixed:'有效语义单元 50–150；Tag 65–75%',tags:'',natural:''}};
+ const good={segments:[{units:[...Array.from({length:42},(_,i)=>({kind:'tag',text:i===0?'white hair':'tag '+i})),...Array.from({length:18},(_,i)=>({kind:'natural',text:'her left arm rests gently '+i}))]}]};
+ axiosMock.post.mockReset();axiosMock.post.mockResolvedValue({data:{choices:[{message:{content:JSON.stringify(good)},finish_reason:'stop'}]}});
+ const result=await convertPromptText('白发女性','mixed');expect(result.ok).toBe(true);expect(result.validation).toEqual({total:60,tags:42,natural:18,tagPercent:70});expect(result.result).not.toContain('"kind"');
+ good.segments[0].units[0].text='black hair';axiosMock.post.mockClear();
+ axiosMock.post.mockResolvedValue({data:{choices:[{message:{content:JSON.stringify(good)},finish_reason:'stop'}]}});
+ expect((await convertPromptText('白发女性','mixed')).ok).toBe(false);expect(axiosMock.post).toHaveBeenCalledTimes(3);
+});

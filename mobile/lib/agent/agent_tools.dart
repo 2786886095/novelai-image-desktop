@@ -9,8 +9,20 @@ import '../services/artist_tag_service.dart';
 import '../services/online_gallery_service.dart';
 import '../state/app_state.dart';
 import 'agent_models.dart';
+import 'studio_data_service.dart';
+import 'software_actions.dart';
+import 'backup_tools.dart';
+import 'task_tools.dart';
+import 'library_tools.dart';
+import 'api_tools.dart';
+import 'session_controls.dart';
+import 'template_tools.dart';
+import 'template_workflow.dart';
 
 const agentReadTools = <String>{
+  'langbai_software_capabilities',
+  'langbai_read_studio_state',
+  'langbai_list_studio_data',
   'langbai_get_generation_state',
   'langbai_search_tags',
   'langbai_search_artist_styles',
@@ -23,6 +35,15 @@ const agentReadTools = <String>{
 };
 
 const agentMutatingTools = <String>{
+  'langbai_templates',
+  'langbai_api',
+  'langbai_library',
+  'langbai_tasks',
+  'langbai_backup',
+  'langbai_software_action',
+  'langbai_import_studio_data',
+  'langbai_update_studio_config',
+  'langbai_save_style_preset',
   'langbai_generate_image',
   'langbai_redraw_image',
   'langbai_inpaint_image',
@@ -37,6 +58,18 @@ const agentMutatingTools = <String>{
 };
 
 String agentToolTitle(String name) => switch (name) {
+      'langbai_templates' => '软件共用提示词模板',
+      'langbai_api' => 'API 配置与连接检查',
+      'langbai_library' => '管理本机资料库',
+      'langbai_tasks' => '软件生成队列',
+      'langbai_backup' => '本机备份与恢复',
+      'langbai_software_capabilities' => '查询软件操作清单',
+      'langbai_software_action' => '执行软件操作',
+      'langbai_read_studio_state' => '读取本机软件参数',
+      'langbai_list_studio_data' => '读取本机资料',
+      'langbai_update_studio_config' => '修改软件参数',
+      'langbai_save_style_preset' => '保存风格预设',
+      'langbai_import_studio_data' => '导入本机资料副本（保留已有资料）',
       'langbai_get_generation_state' => '读取当前生图状态',
       'langbai_search_tags' => '检索 Danbooru Tag',
       'langbai_search_artist_styles' => '检索画师与画风',
@@ -174,6 +207,103 @@ Map<String, dynamic> _generationProperties() => {
     };
 
 List<Map<String, dynamic>> agentToolSchemas() => [
+      _function(
+          'langbai_templates',
+          '读取、切换、导入编辑或恢复软件共用提示词模板。read 查看 body/revision；select 只切换模式；save 使用文本内容覆盖；restore 恢复内置模板。先读对应用途/版本/模式，修改传 expectedRevision；覆盖/恢复在 Agent 内确认且提前备份。不生成、不要求用户去软件再次确认。',
+          {
+            'action': _string('操作', ['read', 'select', 'save', 'restore']),
+            'kind': _string('用途', ['convert', 'reverse']),
+            'mode': _string('输出模式', ['mixed', 'tags', 'natural']),
+            'templateVersion': _string('版本', ['v5', 'v4.5']),
+            'body': _string('模板内容，不是文件路径'),
+            'expectedRevision': _string('先读取模板的 revision')
+          },
+          required: [
+            'action'
+          ]),
+      _function(
+          'langbai_library',
+          '本机角色卡、人设、世界书、采样/风格/正面预设的读取新建修改删除。先 read 查看中文字段说明和 revision，再传 expectedRevision。修改/删除在 Agent 内确认，执行前备份；不生图、不修改会话绑定。',
+          {
+            'action': _string('操作', ['read', 'create', 'update', 'delete']),
+            'collection': _string('分类', [
+              'characters',
+              'personas',
+              'lorebooks',
+              'samplerPresets',
+              'styles',
+              'positivePresets'
+            ]),
+            'expectedRevision': _string('资料修订号'),
+            'id': _string('资料 ID'),
+            'patch': {'type': 'object', 'additionalProperties': true},
+            'offset': _integer('起始位置', 0, 1000000),
+            'limit': _integer('条数', 1, 50)
+          },
+          required: [
+            'action',
+            'collection'
+          ]),
+      _function(
+          'langbai_api',
+          '读取/配置各用途 API，密钥由软件代管。read 返回中文字段与 revision；configure 传 profile、expectedRevision、patch；credential 打开 Agent 私密输入（不要在聊天填写密钥）；clearCredential 清除凭据；test 只测试当前保存的服务地址，不生成。覆盖/删除只在 Agent 内确认。',
+          {
+            'action': _string('操作',
+                ['read', 'configure', 'credential', 'clearCredential', 'test']),
+            'profile': _string(
+                'API 用途', ['novelai', 'reverse', 'convert', 'agent', 'tags']),
+            'expectedRevision': _string('读取返回的 revision'),
+            'patch': {'type': 'object'}
+          },
+          required: [
+            'action'
+          ]),
+      _function(
+          'langbai_tasks',
+          '管理软件生成队列：先 list，传 expectedRevision 后 pause/resume/remove/clear；remove 传 id。cancel 无需修订号，立即请求取消，保留已生成图片。继续执行可能收费，在 Agent 内确认。',
+          {
+            'action': _string(
+                '操作', ['list', 'pause', 'resume', 'cancel', 'remove', 'clear']),
+            'expectedRevision': _string('任务列表修订号'),
+            'id': _string('排队任务 ID')
+          },
+          required: [
+            'action'
+          ]),
+      _function(
+          'langbai_backup',
+          '本机备份完整流程：list 列表→inspect 检查→restore 在 Agent 内确认后恢复；create 默认不含密钥。恢复前自动保存备份，返回保存路径和撤销方法。只用列表返回的 ID。',
+          {
+            'action': _string('操作', ['list', 'create', 'inspect', 'restore']),
+            'backupId': _string('list 返回的 ID'),
+            'inspectionId': _string('inspect 返回的 ID'),
+            'categories': {
+              'type': 'array',
+              'items': {'type': 'string'}
+            },
+            'offset': _integer('起始位置', 0, 1000000),
+            'limit': _integer('条数', 1, 50)
+          },
+          required: [
+            'action'
+          ]),
+      _function('langbai_software_capabilities',
+          '查询当前端实际已接通的操作、中文说明、字段与确认规则；不要猜测不存在的操作。', {}),
+      _function(
+          'langbai_software_action',
+          '使用功能清单中的 action。修改前先读取同类资料取得 revision，传入 expectedRevision。收费、删除、覆盖、恢复、更新需在 Agent 内确认；禁止伪造 confirmed。',
+          {
+            'action': _string('功能清单中的准确操作 ID'),
+            'expectedRevision': _string('最近读取返回的 revision'),
+            'id': _string('资料 ID'),
+            'name': _string('名称'),
+            'group': _string('目标分组 ID 或名称；空字符串表示取消分组'),
+            'offset': _integer('起始位置', 0, 1000000),
+            'limit': _integer('读取条数', 1, 50)
+          },
+          required: [
+            'action'
+          ]),
       _function('langbai_get_generation_state', '读取当前模型、提示词、尺寸、锁定项与生成设置。', {}),
       _function(
         'langbai_search_tags',
@@ -290,7 +420,8 @@ List<Map<String, dynamic>> agentToolSchemas() => [
             'emotion',
             'declutter',
           ]),
-          'prompt': _string('上色提示词'),
+          'prompt': _string('上色提示词（旧字段）'),
+          'colorizePrompt': _string('上色提示词'),
           'emotion': _string('表情'),
           'emotionLevel': _number('表情强度', 0, 5),
           'defry': _number('Defry', 0, 5),
@@ -303,7 +434,9 @@ List<Map<String, dynamic>> agentToolSchemas() => [
         {
           'attachmentId': _string('图片 attachmentId'),
           'mode': _string('输出形式', ['tags', 'natural', 'mixed']),
+          'templateVersion': _string('模板版本', ['v5', 'v4.5']),
           'hint': _string('主体或目标提示'),
+          'scope': _string('反推范围', ['full', 'character', 'object', 'scene']),
           'knownCharacter': {'type': 'boolean'},
         },
         required: ['attachmentId'],
@@ -314,6 +447,7 @@ List<Map<String, dynamic>> agentToolSchemas() => [
         {
           'text': _string('待转换文本'),
           'mode': _string('输出形式', ['tags', 'natural', 'mixed']),
+          'templateVersion': _string('模板版本', ['v5', 'v4.5']),
           'knownCharacter': {'type': 'boolean'},
         },
         required: ['text'],
@@ -387,6 +521,7 @@ class _AgentAppSnapshot {
   final String directorTool;
   final AugmentOptions augmentOptions;
   final ReversePromptMode reverseMode;
+  final ReversePromptScope reverseScope;
   final String reverseHint;
   final bool reverseKnownCharacter;
   final ReversePromptMode convertMode;
@@ -413,6 +548,7 @@ class _AgentAppSnapshot {
     required this.directorTool,
     required this.augmentOptions,
     required this.reverseMode,
+    required this.reverseScope,
     required this.reverseHint,
     required this.reverseKnownCharacter,
     required this.convertMode,
@@ -450,6 +586,7 @@ class _AgentAppSnapshot {
           emotionLevel: app.augmentOptions.emotionLevel,
         ),
         reverseMode: app.reverseMode,
+        reverseScope: app.reverseScope,
         reverseHint: app.reverseHint,
         reverseKnownCharacter: app.reverseKnownCharacter,
         convertMode: app.convertMode,
@@ -477,6 +614,7 @@ class _AgentAppSnapshot {
       ..directorTool = directorTool
       ..augmentOptions = augmentOptions
       ..reverseMode = reverseMode
+      ..reverseScope = reverseScope
       ..reverseHint = reverseHint
       ..reverseKnownCharacter = reverseKnownCharacter
       ..convertMode = convertMode
@@ -493,6 +631,27 @@ class _AgentAppSnapshot {
 }
 
 class AgentToolExecutor {
+  late final AgentSessionControls sessions = AgentSessionControls(app);
+  late final AgentTemplateTools templates = AgentTemplateTools(app);
+  late final AgentTemplateWorkflow templateWorkflow =
+      AgentTemplateWorkflow(app);
+  late final AgentApiTools apiTools = AgentApiTools(app);
+  late final AgentLibraryTools libraries = AgentLibraryTools(app);
+  late final AgentTaskTools taskTools = AgentTaskTools(app);
+  late final AgentBackupTools backups = AgentBackupTools(app);
+  Future<Map<String, dynamic>> approvalSummary(
+          String tool, Map<String, dynamic> args, String session) async =>
+      tool == 'langbai_templates'
+          ? templateWorkflow.approvalSummary(args)
+          : tool == 'langbai_api'
+              ? apiTools.approvalSummary(args)
+              : tool == 'langbai_library'
+                  ? libraries.approvalSummary(args)
+                  : tool == 'langbai_backup'
+                      ? backups.approvalSummary(args, session)
+                      : args;
+  late final StudioDataService studioData = StudioDataService(app);
+  late final SoftwareActions softwareActions = SoftwareActions(app);
   final AppState app;
   final AgentMemoryList listMemories;
   final AgentMemoryUpsert upsertMemory;
@@ -769,29 +928,117 @@ class AgentToolExecutor {
   ReversePromptMode _mode(Object? value) => switch (value) {
         'tags' => ReversePromptMode.tags,
         'mixed' => ReversePromptMode.mixed,
-        _ => ReversePromptMode.natural,
+        'natural' => ReversePromptMode.natural,
+        _ =>
+          ReversePromptMode.values.byName(app.settings.agentPromptTemplateMode),
       };
 
   Future<AgentToolResult> execute(
       String tool, Map<String, dynamic> args, List<AgentAttachment> available,
-      {bool applyStudioPromptLocks = true}) async {
+      {bool applyStudioPromptLocks = true, String sessionId = 'legacy'}) async {
     final title = agentToolTitle(tool);
+    bool began = false;
+    Map<String, dynamic>? sessionState;
     final snapshot = _agentTransientTools.contains(tool)
         ? _AgentAppSnapshot.capture(app)
         : null;
     try {
+      if (AgentSessionControls.tools.contains(tool)) {
+        return AgentToolResult(
+            ok: true,
+            title: '当前会话生图设置',
+            output: _json(await sessions.execute(tool, args, sessionId)));
+      }
+      if (tool == 'langbai_templates') {
+        return AgentToolResult(
+            ok: true,
+            title: title,
+            output: _json(await templateWorkflow.execute(args)));
+      }
+      if (AgentTemplateTools.tools.contains(tool)) {
+        return AgentToolResult(
+            ok: true,
+            title: '软件共用模板',
+            output: _json(await templates.execute(tool, args)));
+      }
+      if (AgentSessionControls.paid.contains(tool)) {
+        sessions.begin(sessionId);
+        began = true;
+        if (sessionId != 'legacy') {
+          sessionState = await sessions.read(sessionId);
+        }
+        if (tool != 'langbai_generate_image') app.setBatchCount(1);
+      }
+      if (tool == 'langbai_get_generation_state') {
+        if (sessionId != 'legacy') {
+          sessionState = await sessions.read(sessionId);
+        }
+      }
+      if (tool == 'langbai_api' ||
+          tool == 'studio_api_input' ||
+          tool == 'studio_resolve_api_input') {
+        return AgentToolResult(
+            ok: true,
+            title: 'API 配置',
+            output: _json(await apiTools.execute(tool, args, sessionId)));
+      }
+      if (tool == 'studio_material_source') {
+        return AgentToolResult(
+            ok: true,
+            title: '本机完整资料',
+            output: _json(await libraries.materialSource(args)));
+      }
+      if (tool == 'langbai_library') {
+        return AgentToolResult(
+            ok: true,
+            title: title,
+            output: _json(await libraries.execute(args)));
+      }
+      if (tool == 'langbai_tasks') {
+        return AgentToolResult(
+            ok: true,
+            title: title,
+            output: _json(await taskTools.execute(args)));
+      }
+      if (tool == 'langbai_backup') {
+        return AgentToolResult(
+            ok: true,
+            title: title,
+            output: _json(await backups.execute(args, sessionId)));
+      }
+      if (tool == 'langbai_software_capabilities' ||
+          tool == 'langbai_software_action') {
+        return AgentToolResult(
+            ok: true,
+            title: '软件操作',
+            output: _json(await softwareActions.execute(tool, args)));
+      }
+      if (StudioDataService.tools.contains(tool)) {
+        return AgentToolResult(
+            ok: true,
+            title: title,
+            output: _json(await studioData.execute(tool, args)));
+      }
       switch (tool) {
         case 'langbai_get_generation_state':
           return AgentToolResult(
             ok: true,
             title: title,
             output: _json({
-              'params': app.params.toJson(),
+              'params': {
+                ...app.params.toJson(),
+                if (sessionState?['style'] != null)
+                  'stylePrompt': sessionState!['style']['prompt']
+              },
+              if (sessionState?['style'] != null)
+                'sessionStyle': sessionState!['style'],
               'modelMode': app.settings.modelMode,
               'generationGroupId': app.generationGroupId,
-              'lockedStylePrompt': app.settings.lockStylePrompt
-                  ? app.settings.savedStylePrompt
-                  : '',
+              'lockedStylePrompt': sessionState?['style'] != null
+                  ? sessionState!['style']['prompt']
+                  : app.settings.lockStylePrompt
+                      ? app.settings.savedStylePrompt
+                      : '',
               'lockedNegativePrompt': app.settings.lockNegativePrompt
                   ? app.settings.savedNegativePrompt
                   : '',
@@ -1042,6 +1289,9 @@ class AgentToolExecutor {
             available,
             applyStudioPromptLocks: applyStudioPromptLocks,
           );
+          if (sessionState?['style'] != null) {
+            app.params.stylePrompt = sessionState!['style']['prompt'];
+          }
           app.setBatchCount(_int(args['count'], 1, 1, 8));
           final images = await _collectNewImages(before, app.generate);
           return AgentToolResult(
@@ -1072,6 +1322,9 @@ class AgentToolExecutor {
             available,
             applyStudioPromptLocks: applyStudioPromptLocks,
           );
+          if (sessionState?['style'] != null) {
+            app.params.stylePrompt = sessionState!['style']['prompt'];
+          }
           app.i2i
             ..strength = _double(args['strength'], 0.7, 0.01, 1)
             ..noise = _double(args['noise'], 0, 0, 0.99);
@@ -1090,6 +1343,9 @@ class AgentToolExecutor {
               _findAttachment(_text(args['maskAttachmentId']), available);
           final before = app.history.map((item) => item.id).toSet();
           await app.setWorkbenchPath(source.filePath);
+          if (sessionState?['style'] != null) {
+            app.params.stylePrompt = sessionState!['style']['prompt'];
+          }
           app.inpaintPositivePrompt = _text(args['positivePrompt']);
           app.inpaintStrength = _double(args['strength'], 1, 0.1, 1);
           final maskBytes = await File(mask.filePath).readAsBytes();
@@ -1123,7 +1379,7 @@ class AgentToolExecutor {
           await app.setWorkbenchPath(source.filePath);
           app.directorTool = _text(args['tool'], 40);
           app.augmentOptions
-            ..colorizePrompt = _text(args['prompt'])
+            ..colorizePrompt = _text(args['colorizePrompt'] ?? args['prompt'])
             ..emotion = _text(args['emotion'], 40).ifEmpty('happy')
             ..emotionLevel = _double(args['emotionLevel'], 0, 0, 5)
             ..defry = _double(args['defry'], 0, 0, 5);
@@ -1140,10 +1396,16 @@ class AgentToolExecutor {
               _findAttachment(_text(args['attachmentId']), available);
           await app.setWorkbenchPath(source.filePath);
           app.reverseMode = _mode(args['mode']);
+          final scope = args['scope'] ?? 'full';
+          if (!['full', 'character', 'object', 'scene'].contains(scope)) {
+            throw StateError('反推范围无效');
+          }
+          app.reverseScope = ReversePromptScope.values.byName(scope);
           app.reverseHint = _text(args['hint']);
           app.reverseKnownCharacter = args['knownCharacter'] == true;
           final before = app.reverseHistory.length;
-          await app.reversePrompt();
+          await app.reversePrompt(
+              templateVersion: args['templateVersion'] as String?);
           if (app.reverseHistory.length <= before ||
               app.reverseResult.trim().isEmpty) {
             throw StateError(app.displayStatus);
@@ -1155,7 +1417,8 @@ class AgentToolExecutor {
           app.convertMode = _mode(args['mode']);
           app.convertKnownCharacter = args['knownCharacter'] == true;
           final before = app.convertHistory.length;
-          await app.convertPrompt();
+          await app.convertPrompt(
+              templateVersion: args['templateVersion'] as String?);
           if (app.convertHistory.length <= before ||
               app.convertResult.trim().isEmpty) {
             throw StateError(app.displayStatus);
@@ -1213,7 +1476,9 @@ class AgentToolExecutor {
             .replaceFirst('Exception: ', ''),
       );
     } finally {
-      if (snapshot != null) {
+      if (began) sessions.end(sessionId);
+      if (snapshot != null &&
+          (!AgentSessionControls.paid.contains(tool) || began)) {
         // Desktop tools operate on isolated inputs. Mirror that behavior on
         // mobile so an Agent run cannot silently replace the user's current
         // prompt, workbench image, batch size, or tool selections. The

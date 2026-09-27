@@ -1,18 +1,22 @@
-// Executed INSIDE the guest. Missing files are seeded once; existing user
-// profiles/plugins are never replaced by an APK or runtime update.
+// Executed INSIDE the guest. APK/startup never overwrite existing plugins.
+// An explicit runtime upgrade migrates unchanged official packages on a COPY.
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import {seedEntry} from './seed-upgrade.mjs';
 const home=process.env.DSH_HOME;
 if(!home || !['/studio-home','/probe-home'].includes(home))throw new Error('Invalid Agent home');
 const source='/opt/agent';
+const previous=process.env.STUDIO_PREVIOUS_SEED;
+if(previous && previous!=='/studio-previous-seed')throw new Error('Invalid previous seed');
 async function copyOnce(from,to){
-  try{await fs.lstat(to);return;}catch(e){if(e.code!=='ENOENT')throw e;}
-  await fs.mkdir(path.dirname(to),{recursive:true});
-  const temp=to+'.seed-tmp';
-  // An interrupted seed copy is never mistaken for a complete user plugin.
-  await fs.rm(temp,{recursive:true,force:true});
-  await fs.cp(from,temp,{recursive:true,dereference:false,errorOnExist:true,force:false});
-  await fs.rename(temp,to);
+  // A user-managed linked scope/directory is not a seed destination.
+  for(let parent=path.dirname(to);parent!==home;parent=path.dirname(parent)){
+    if(!parent.startsWith(home+'/'))throw new Error('Seed destination escapes home');
+    try{if((await fs.lstat(parent)).isSymbolicLink())return;}catch(error){if(error.code!=='ENOENT')throw error;}
+  }
+  const old=previous ? path.join(previous,path.relative(source,from)) : null;
+  const result=await seedEntry(from,to,old);
+  if(result==='updated')console.log('Official plugin upgraded: '+path.basename(to));
 }
 async function patch(name,text){
   try{await fs.writeFile(path.join(home,name),text,{flag:'wx'});}catch(e){if(e.code!=='EEXIST')throw e;}

@@ -2,6 +2,7 @@
     <!-- Required for Flutter debugging and the isolated local Agent fixture. -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <application>
-        <activity android:name=".agent.AgentQaActivity" android:exported="false" />
+        <!-- Debug only; activity itself enforces the isolated .agenttest package. -->
+        <activity android:name=".agent.AgentQaActivity" android:exported="true" />
     </application>
 </manifest>

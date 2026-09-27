@@ -1,8 +1,8 @@
+import 'unified_storage.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
@@ -97,7 +97,7 @@ class PortableProjects {
   }
 
   static Future<Directory> _directory() async => Directory(
-      '${(await getApplicationDocumentsDirectory()).path}/portable-project-capsules');
+      '${(await UnifiedStorage.documents()).path}/portable-project-capsules');
   static Future<void> restore(Map<String, List<int>> capsules) async {
     if (capsules.isEmpty) return;
     final dir = await _directory();

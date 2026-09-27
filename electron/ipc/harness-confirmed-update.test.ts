@@ -32,11 +32,15 @@ it('does not approve mismatched official version',async()=>{
  const {engine,probe}=await fixture();vi.mocked(engine.checkUpdates).mockImplementation(async()=>{(engine as any).updateInfo={official:'0.1.8'};});
  expect((await engine.prepareUpdate('official')).status).toBe('blocked');expect(probe).not.toHaveBeenCalled();
 });
-it('failed candidate boot and custom plugins both block approval without overwriting data',async()=>{
+it('custom plugins require a successful candidate probe and remain intact after approval',async()=>{
  const {engine,probe,home}=await fixture();probe.mockRejectedValueOnce(Error('candidate failed'));
  expect((await engine.prepareUpdate('component')).status).toBe('blocked');
  const plugin=path.join(home,'user-home/profiles/node_modules/mine/index.js');await fs.mkdir(path.dirname(plugin),{recursive:true});await fs.writeFile(plugin,'user plugin');
+ probe.mockRejectedValueOnce(Error('custom plugin boot failed'));
  expect((await engine.prepareUpdate('component')).status).toBe('blocked');expect(await fs.readFile(plugin,'utf8')).toBe('user plugin');
+ const plan=await engine.prepareUpdate('component');expect(plan.status).toBe('ready');
+ await engine.applyPreparedUpdate(plan.token!);expect(engine.snapshot().version).toBe('0.1.1');
+ expect(await fs.readFile(plugin,'utf8')).toBe('user plugin');
 });
 it('changed plugins invalidate approval; existing active version remains',async()=>{
  const {engine,home}=await fixture();const plan=await engine.prepareUpdate('official');expect(plan.status).toBe('ready');

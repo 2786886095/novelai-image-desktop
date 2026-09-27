@@ -107,17 +107,17 @@ void main() {
     expect(instruction, contains('featurePrompt'));
     expect(
         instruction, contains('signature appearance, outfit, and accessories'));
-    expect(instruction, contains('75–85%'));
+    expect(instruction, contains('65–75%'));
   });
 
-  test('bundled reverse and convert templates use the concise V5 contract',
+  test('bundled reverse and convert templates use the current desktop V5 contract',
       () async {
     final library = await PromptTemplateLibrary.load();
     for (final kind in ['scopedReverse', 'convert']) {
       for (final mode in ReversePromptMode.values) {
         final template = library.get(kind, mode);
         expect(template, contains('NovelAI V5'));
-        expect(template.length, inInclusiveRange(1000, 2700));
+        expect(template.length, inInclusiveRange(1000, 12000));
         expect(template, contains('fur dataset'));
         expect(template, contains('background dataset'));
         expect(template, contains('Text:'));
@@ -185,7 +185,7 @@ void main() {
     );
     expect(
       library.get('convert', ReversePromptMode.mixed),
-      allOf(contains('75–85%'), contains('15–25%'), contains('示例中文含义')),
+      allOf(contains('70%'), contains('30%'), contains('{{input}}')),
     );
   });
 

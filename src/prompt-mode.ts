@@ -254,7 +254,7 @@ export function modeUserInstruction(
       "Use concise English prose, not a comma-separated tag list. Dataset prefixes, numeric weights, and `text, <language> text, Text: ...` are the only syntax exceptions.",
       "For multiple characters use `base scene | A boy/girl ... | A boy/girl ...`; every segment must identify position and action without vague pronouns.",
       source === "convert"
-        ? "Convert only the user's stated content."
+        ? "Preserve the user's stated constraints; follow the selected software template for allowed reasonable elaboration without changing the overall intent."
         : "Describe only visible evidence in the requested scope.",
     ].join("\n");
   }
@@ -264,7 +264,9 @@ export function modeUserInstruction(
       `Output mode: mixed NovelAI ${versionLabel} prompt.`,
       ...outputContract,
       `Keep approximately ${templateVersion === "v4.5" ? "75–85%" : "65–75%"} mature Danbooru/NovelAI tag units and ${templateVersion === "v4.5" ? "15–25%" : "25–35%"} concise English natural-language relation phrases. Both parts are mandatory; even a short prompt needs at least one non-invented prose phrase.`,
-      "Use prose for tag-uncovered position, hand/side, target, depth, overlap, or text placement; never pad the ratio by inventing facts or fully restating existing tags.",
+      source === "convert"
+        ? "Use prose for tag-uncovered position, hand/side, target, depth, overlap, or text placement. Follow the selected software template for reasonable elaboration within the user's intent; never contradict explicit constraints, claim elaborations were explicit facts, or repeat tags to pad the ratio."
+        : "Use prose for tag-uncovered position, hand/side, target, depth, overlap, or text placement; never pad the ratio by inventing facts or fully restating existing tags.",
       "Discard retrieved candidates that are not exact matches. Use `base | character 1 | character 2` for multiple people and do not return pure prose.",
     ].join("\n");
   }

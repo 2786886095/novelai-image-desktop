@@ -1,3 +1,4 @@
+import 'unified_storage.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -7,7 +8,6 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:archive/archive.dart';
 import 'package:gal/gal.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../agent/agent_models.dart';
 import '../batch/batch_redraw_models.dart';
@@ -27,6 +27,7 @@ List<dynamic> _decodeJsonList(String raw) => jsonDecode(raw) as List<dynamic>;
 String _encodeJsonList(List<dynamic> data) => jsonEncode(data);
 
 class Storage {
+  void resetDataCaches(){_historyCache=null;_convertHistoryCache=null;_reverseHistoryCache=null;}
   static const _kParams = 'gen_params';
   static const _kHistory = 'history_index_v2';
   static const _kGroups = 'history_groups';
@@ -57,7 +58,7 @@ class Storage {
   List<TextToolHistoryItem>? _convertHistoryCache;
   List<TextToolHistoryItem>? _reverseHistoryCache;
   ({File file, String name})? _metadataInspectorSession;
-  Future<SharedPreferences> get _prefs => SharedPreferences.getInstance();
+  Future<UnifiedPreferences> get _prefs => UnifiedStorage.preferences();
 
   Future<String?> getToken() => _secure.read(key: _kToken);
   Future<void> setToken(String token) =>
@@ -87,12 +88,14 @@ class Storage {
     try {
       return AppSettings.fromJson(jsonDecode(raw) as Map<String, dynamic>);
     } catch (_) {
+      if(UnifiedStorage.active!=null)rethrow;
       return AppSettings();
     }
   }
 
-  Future<void> setSettings(AppSettings settings) async =>
-      (await _prefs).setString(_kSettings, jsonEncode(settings.toJson()));
+  Future<void> setSettings(AppSettings settings) async {
+    if(!await (await _prefs).setString(_kSettings, jsonEncode(settings.toJson())))throw StateError('Settings could not be saved.');
+  }
 
   Future<AgentWorkspace> getAgentWorkspace() async {
     final raw = (await _prefs).getString(_kAgentWorkspace);
@@ -102,8 +105,16 @@ class Storage {
         Map<String, dynamic>.from(jsonDecode(raw) as Map),
       );
     } catch (_) {
+      if(UnifiedStorage.active!=null)rethrow;
       return AgentWorkspace();
     }
+  }
+
+  Future<AgentWorkspace> getAgentWorkspaceStrict() async {
+    final raw=(await _prefs).getString(_kAgentWorkspace);
+    if(raw==null||raw.trim().isEmpty)return AgentWorkspace();
+    try{return AgentWorkspace.fromJson(Map<String,dynamic>.from(jsonDecode(raw) as Map));}
+    catch(_){throw StateError('本机酒馆资料格式错误，请在软件内检查备份；未用空资料替代。');}
   }
 
   Future<void> setAgentWorkspace(AgentWorkspace workspace) async {
@@ -125,7 +136,7 @@ class Storage {
       );
 
   Future<Directory> agentWorkspaceDirectory() async {
-    final documents = await getApplicationDocumentsDirectory();
+    final documents = await UnifiedStorage.documents();
     final directory = Directory(
       '${documents.path}${Platform.pathSeparator}LangbaiWorkspace',
     );
@@ -190,7 +201,7 @@ class Storage {
   }
 
   Future<Directory> _stylePromptPreviewRoot() async {
-    final root = await getApplicationDocumentsDirectory();
+    final root = await UnifiedStorage.documents();
     final directory =
         Directory('${root.path}${Platform.pathSeparator}style-prompt-previews');
     if (!directory.existsSync()) directory.createSync(recursive: true);
@@ -262,7 +273,7 @@ class Storage {
   }
 
   Future<Directory> _referencePresetRoot() async {
-    final root = await getApplicationDocumentsDirectory();
+    final root = await UnifiedStorage.documents();
     final directory =
         Directory('${root.path}${Platform.pathSeparator}reference-presets');
     if (!directory.existsSync()) directory.createSync(recursive: true);
@@ -440,8 +451,9 @@ class Storage {
     }
   }
 
-  Future<void> setParams(GenerateParams p) async =>
-      (await _prefs).setString(_kParams, jsonEncode(p.normalized().toJson()));
+  Future<void> setParams(GenerateParams p) async {
+    if(!await (await _prefs).setString(_kParams, jsonEncode(p.normalized().toJson())))throw StateError('Generation parameters could not be saved.');
+  }
 
   Future<List<CharCaptionItem>> getCharacterPrompts() async {
     final raw = (await _prefs).getString('character_prompts_v1');
@@ -608,7 +620,7 @@ class Storage {
   }
 
   Future<Directory> imagesDir() async {
-    final dir = await getApplicationDocumentsDirectory();
+    final dir = await UnifiedStorage.documents();
     final imagesDir = Directory('${dir.path}/images');
     if (!imagesDir.existsSync()) imagesDir.createSync(recursive: true);
     return imagesDir;
@@ -644,7 +656,7 @@ class Storage {
       }
     }
     final defaultBase = (await imagesDir()).path;
-    final custom = settings.onlineGalleryDownloadDir.trim();
+    final custom = settings.imageOutputDir.trim();
     for (final base in <String>[if (custom.isNotEmpty) custom, defaultBase]) {
       final dir = Directory(
         [base, date, if (groupFolder != null) groupFolder].join('/'),
@@ -921,7 +933,7 @@ class Storage {
   }) async {
     final settings = await getSettings();
     final defaultBase = (await imagesDir()).path;
-    final custom = settings.imageOutputDir.trim();
+    final custom = settings.onlineGalleryDownloadDir.trim();
     final safeSource =
         sanitizeFolderName(source.trim().isEmpty ? 'gallery' : source);
     final safeFolder =

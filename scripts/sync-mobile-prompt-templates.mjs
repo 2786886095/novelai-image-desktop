@@ -1,70 +1,28 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const sourcePath = path.join(root, "src", "data", "prompt-templates.ts");
-const legacySourcePath = path.join(
-  root,
-  "src",
-  "data",
-  "prompt-templates-v45.ts",
-);
-const outputPath = path.join(root, "mobile", "assets", "prompt_templates.json");
-const source = fs.readFileSync(sourcePath, "utf8");
-const legacySource = fs.readFileSync(legacySourcePath, "utf8");
-
-function extractObject(name, sourceText = source) {
-  const marker = `export const ${name} = `;
-  const start = sourceText.indexOf(marker);
-  if (start < 0) throw new Error(`${name} marker not found`);
-  const literalStart = start + marker.length;
-  const literalEnd = sourceText.indexOf("\n};", literalStart);
-  if (literalEnd < 0) throw new Error(`${name} end not found`);
-  const literal = sourceText.slice(literalStart, literalEnd + 2);
-  return Function(`"use strict"; return (${literal});`)();
+import { createRequire } from "node:module";
+import ts from "typescript";
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"..");
+// Compile the actual exports, including composed/derived templates. Regex
+// extraction silently went stale once V4.5 exports became expressions.
+function exportsOf(name){
+  const code=ts.transpileModule(fs.readFileSync(path.join(root,"src/data",name),"utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText;
+  const module={exports:{}};
+  Function("module","exports","require",code)(module,module.exports,createRequire(import.meta.url));
+  return module.exports;
 }
-
-function extractTemplate(name) {
-  const marker = `export const ${name} = `;
-  const start = source.indexOf(marker);
-  if (start < 0) throw new Error(`${name} marker not found`);
-  const literalStart = start + marker.length;
-  const literalEnd = source.indexOf("`;", literalStart);
-  if (literalEnd < 0) throw new Error(`${name} end not found`);
-  const literal = source.slice(literalStart, literalEnd + 1);
-  return Function(`"use strict"; return (${literal});`)();
+const current=exportsOf("prompt-templates.ts"),legacy=exportsOf("prompt-templates-v45.ts");
+const output={reverse:current.REVERSE_SYSTEM_PROMPTS,reverseV45:legacy.V45_REVERSE_SYSTEM_PROMPTS,convert:current.CONVERT_SYSTEM_PROMPTS,convertV45:legacy.V45_CONVERT_SYSTEM_PROMPTS,scopedReverse:current.SCOPED_REVERSE_SYSTEM_PROMPTS,scopedReverseV45:legacy.V45_SCOPED_REVERSE_SYSTEM_PROMPTS,comic:current.COMIC_ANALYZE_SYSTEM_PROMPTS,comicLegacy:current.COMIC_ANALYZE_SYSTEM_PROMPT};
+for(const [key,modes] of Object.entries(output)){
+  if(key==="comicLegacy")continue;
+  for(const mode of ["tags","natural","mixed"])if(typeof modes?.[mode]!=="string"||!modes[mode].trim())throw new Error(`${key}.${mode} is empty`);
 }
-
-const reverse = extractObject("REVERSE_SYSTEM_PROMPTS");
-const output = {
-  reverse,
-  reverseV45: extractObject("V45_REVERSE_SYSTEM_PROMPTS", legacySource),
-  convert: extractObject("CONVERT_SYSTEM_PROMPTS"),
-  scopedReverse: reverse,
-  scopedReverseV45: extractObject(
-    "V45_SCOPED_REVERSE_SYSTEM_PROMPTS",
-    legacySource,
-  ),
-  comic: extractObject("COMIC_ANALYZE_SYSTEM_PROMPTS"),
-  comicLegacy: extractTemplate("COMIC_ANALYZE_SYSTEM_PROMPT"),
-};
-
-for (const key of [
-  "reverse",
-  "reverseV45",
-  "convert",
-  "scopedReverse",
-  "scopedReverseV45",
-  "comic",
-]) {
-  for (const mode of ["tags", "natural", "mixed"]) {
-    if (typeof output[key]?.[mode] !== "string" || !output[key][mode].trim()) {
-      throw new Error(`${key}.${mode} is empty`);
-    }
-  }
+const target=path.join(root,"mobile/assets/prompt_templates.json");
+if(process.argv.includes("--check")){
+  if(JSON.stringify(JSON.parse(fs.readFileSync(target,"utf8")))!==JSON.stringify(output))throw new Error("Mobile prompt templates are stale; run sync-mobile-prompt-templates.mjs");
+  console.log("TEMPLATE PARITY PASS: 21 mode/version templates match desktop exports.");
+}else{
+  fs.writeFileSync(target,JSON.stringify(output,null,2)+"\n","utf8");
+  console.log("Synced 21 mode/version templates from desktop exports.");
 }
-
-fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-fs.writeFileSync(outputPath, `${JSON.stringify(output, null, 2)}\n`, "utf8");
-console.log(`Synced desktop prompt templates to ${outputPath}`);

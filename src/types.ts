@@ -1464,6 +1464,8 @@ export interface AppSettings {
   agentAutoCompactThreshold: number;
   agentVisionEnabled: boolean;
   // Convert output type + per-mode conversion system templates.
+  /** Agent defaults to mixed independently of the workbench tab selection. */
+  agentPromptTemplateMode?: ReversePromptMode;
   convertMode: ReversePromptMode;
   convertPromptTemplateVersion: ReversePromptTemplateVersion;
   convertPromptTemplates: ModePromptTemplates;

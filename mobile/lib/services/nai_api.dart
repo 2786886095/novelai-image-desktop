@@ -1361,6 +1361,7 @@ class NaiApi {
         mode,
         'convert',
         knownCharacter: knownCharacter,
+        templateVersion: settings.convertPromptTemplateVersion,
       ),
       if (hintText.isNotEmpty) hintText,
     ].join('\n');
@@ -1383,7 +1384,7 @@ class NaiApi {
       if (enhancement.context.isNotEmpty) enhancement.context,
       // Keep the paired-output contract last so the base template's ordinary
       // one-line instruction cannot override it.
-      knownCharacterRuntimeInstruction(mode, 'convert', knownCharacter),
+      knownCharacterRuntimeInstruction(mode, 'convert', knownCharacter, settings.convertPromptTemplateVersion),
     ].where((item) => item.trim().isNotEmpty).join('\n\n');
     final system = injectDshImageAiSystemPrompt(
       task: DshImageAiTask.convert,
@@ -1476,10 +1477,10 @@ class NaiApi {
       var notes = '';
       if (violations.isNotEmpty) {
         final repairSystem = [
-          promptRuleRepairSystemPrompt(mode, knownCharacter),
+          promptRuleRepairSystemPrompt(mode, knownCharacter, settings.convertPromptTemplateVersion),
           if (enhancement.context.isNotEmpty) enhancement.context,
           if (knownCharacter)
-            knownCharacterRuntimeInstruction(mode, 'convert', true),
+            knownCharacterRuntimeInstruction(mode, 'convert', true, settings.convertPromptTemplateVersion),
         ].join('\n\n');
         final repairUser = buildPromptRuleRepairUserText(
           mode: mode,

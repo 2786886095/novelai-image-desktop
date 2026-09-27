@@ -199,11 +199,11 @@ export function normalizeTavernLorebookEntry(value: unknown, index = 0): TavernL
   const raw = record(value);
   const extensions = record(raw.extensions);
   const positionRaw = string(raw.position || extensions.position).toLocaleLowerCase();
-  const position = positionRaw.includes("before_char") || positionRaw === "0"
+  const position = positionRaw === "before-character" || positionRaw.includes("before_char") || positionRaw === "0"
     ? "before-character"
-    : positionRaw.includes("before_example")
+    : positionRaw === "before-examples" || positionRaw.includes("before_example")
       ? "before-examples"
-      : positionRaw.includes("after_example")
+      : positionRaw === "after-examples" || positionRaw.includes("after_example")
         ? "after-examples"
         : positionRaw.includes("depth") || raw.depth !== undefined
           ? "depth"
@@ -217,7 +217,7 @@ export function normalizeTavernLorebookEntry(value: unknown, index = 0): TavernL
     constant: bool(raw.constant, false),
     selective: bool(raw.selective, false),
     caseSensitive: bool(raw.case_sensitive ?? raw.caseSensitive, false),
-    insertionOrder: Math.round(finite(raw.insertion_order ?? raw.order, 100 + index, -100_000, 100_000)),
+    insertionOrder: Math.round(finite(raw.insertion_order ?? raw.insertionOrder ?? raw.order, 100 + index, -100_000, 100_000)),
     priority: Math.round(finite(raw.priority, 100, -100_000, 100_000)),
     position,
     ...(Number.isFinite(Number(raw.depth)) ? { depth: Math.round(finite(raw.depth, 4, 0, 100)) } : {}),

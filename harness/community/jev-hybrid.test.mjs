@@ -79,7 +79,7 @@ test('images retain observed night rather than treating it as invented weather/t
  assert.ok((await run(x)).output.selected.some(c=>c.tag==='night'));
 });
 test('wrong mode, foreign scopes and invalid structure are rejected before fetch',async()=>{
- for(const mutate of [x=>{x.mode='anything'},x=>{x.characters=[{kind:'girl'}]},x=>{x.candidates[0].scope='c7'},x=>{x.relations[0].scope='c1'}]){
+ for(const mutate of [x=>{x.mode='anything'},x=>{x.characters=[{kind:'boy'}]},x=>{x.candidates[0].scope='c7'},x=>{x.relations[0].scope='c1'}]){
   const x=fixture();mutate(x);await assert.rejects(run(x));
  }
 });

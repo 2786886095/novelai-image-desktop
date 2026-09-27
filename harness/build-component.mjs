@@ -34,6 +34,6 @@ catch(error){if(error.code!=='ENOENT')throw error;}
 const packageInfo=JSON.parse(await fs.readFile(path.join(source,'node_modules/@deepseek-ai/dsh/package.json'),'utf8'));
 const lock=JSON.parse(await fs.readFile(path.join(repo,'harness/community/lock.json'),'utf8'));
 if(packageInfo.version!==lock.harnessCli)throw new Error('Runtime does not match the tested Harness lock');
-const manifest={format:1,protocol:1,version:'0.1.2',upstream:packageInfo.version,platform:process.platform,arch:process.arch,node:process.platform==='win32'?'node.exe':'node',cli:'runtime/node_modules/@deepseek-ai/dsh/lib/bin.js',files};
+const manifest={format:1,protocol:1,version:'0.1.7',upstream:packageInfo.version,platform:process.platform,arch:process.arch,node:process.platform==='win32'?'node.exe':'node',cli:'runtime/node_modules/@deepseek-ai/dsh/lib/bin.js',files};
 await fs.writeFile(path.join(target,'manifest.json'),JSON.stringify(manifest,null,2));
 console.log(`Component prepared: ${manifest.version}, upstream ${manifest.upstream}, ${Object.keys(files).length} hashed files, ${Math.round(bytes/1024/1024)} MiB. User data excluded.`);

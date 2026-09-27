@@ -1,3 +1,4 @@
+import {templateSelection} from "./harness-prompt-templates";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -449,6 +450,7 @@ export async function executeAgentTool(
         let lastMessage = "";
         for (let index = 0; index < count; index += 1) {
           try {
+            request.signal?.throwIfAborted();
             const result = await generateImage({ ...params, seedMode: params.seedMode }, extras);
             lastMessage = result.message;
             items.push(...result.items);
@@ -530,24 +532,26 @@ export async function executeAgentTool(
         return response(result.ok, result.ok ? "导演工具完成" : "导演工具失败", result, images);
       }
       case "langbai_reverse_prompt": {
+        const template = templateSelection(getSettings(), {...args, kind: "reverse"});
         const result = await reversePromptImage(
           readBase64(attachmentForRequest(request, args.attachmentId).filePath),
-          ["tags", "natural", "mixed"].includes(String(args.mode)) ? args.mode as "tags" | "natural" | "mixed" : "tags",
+          template.mode,
           ["full", "character", "object", "scene"].includes(String(args.scope)) ? String(args.scope) : "full",
           text(args.hint, 1_000),
           bool(args.knownCharacter),
-          args.templateVersion === "v4.5" ? "v4.5" : "v5",
+          template.templateVersion as "v4.5" | "v5",
         );
-        return response(result.ok, result.ok ? "图片反推完成" : "图片反推失败", result);
+        return response(result.ok, result.ok ? "图片反推完成" : "图片反推失败", {...result, template: {kind: template.kind, mode: template.mode, version: template.templateVersion, source: template.source, bodySha256:template.bodySha256}});
       }
       case "langbai_convert_prompt": {
+        const template = templateSelection(getSettings(), {...args, kind: "convert"});
         const result = await convertPromptText(
           text(args.text),
-          ["tags", "natural", "mixed"].includes(String(args.mode)) ? args.mode as "tags" | "natural" | "mixed" : "tags",
+          template.mode,
           bool(args.knownCharacter),
-          args.templateVersion === "v4.5" ? "v4.5" : "v5",
+          template.templateVersion as "v4.5" | "v5",
         );
-        return response(result.ok, result.ok ? "提示词转换完成" : "提示词转换失败", result);
+        return response(result.ok, result.ok ? "提示词转换完成" : "提示词转换失败", {...result, template: {kind: template.kind, mode: template.mode, version: template.templateVersion, source: template.source, bodySha256:template.bodySha256}});
       }
         case "langbai_list_history": {
           const groups = getHistoryGroups();

@@ -9,8 +9,8 @@ import JSZip from 'jszip';
 const root=process.cwd();
 const lock=JSON.parse(await fs.readFile(path.join(root,'harness/release-seed.json'),'utf8'));
 if(process.platform!=='win32'||process.arch!=='x64')throw Error('This seed is Windows x64 only');
-if(lock.tag!=='agent-v0.1.2'||lock.asset!=='tavern-agent-win32-x64-protocol1.zip'||!/^[a-f0-9]{64}$/.test(lock.sha256))throw Error('Invalid seed lock');
-const destination=path.join(root,'.tmp/harness-component012');
+if(lock.tag!=='agent-v0.1.7'||lock.asset!=='tavern-agent-win32-x64-protocol1.zip'||!/^[a-f0-9]{64}$/.test(lock.sha256))throw Error('Invalid seed lock');
+const destination=path.join(root,'.tmp/harness-release240');
 try{await fs.access(destination);throw Error('Seed destination already exists; do not overwrite it');}catch(e){if(e.code!=='ENOENT')throw e;}
 const temp=await fs.mkdtemp(path.join(os.tmpdir(),'studio-release-seed-'));
 execFileSync('gh',['release','download',lock.tag,'--repo','2786886095/novelai-image-desktop','--pattern',lock.asset,'--dir',temp],{stdio:'inherit',timeout:600000,windowsHide:true});

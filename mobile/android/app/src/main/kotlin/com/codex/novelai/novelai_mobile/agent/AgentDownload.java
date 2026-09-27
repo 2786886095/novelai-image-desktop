@@ -30,7 +30,7 @@ public final class AgentDownload {
                     HttpURLConnection c=(HttpURLConnection)current.openConnection(); connection=c;
                     c.setConnectTimeout(20000);c.setReadTimeout(30000);c.setInstanceFollowRedirects(false);
                     c.setRequestProperty("Accept-Encoding","identity");
-                    c.setRequestProperty("User-Agent","Langbai-Studio-Android/2.3.7");
+                    c.setRequestProperty("User-Agent","Langbai-Studio-Android/2.4.0");
                     if(offset>0)c.setRequestProperty("Range","bytes="+offset+"-");
                     int code=c.getResponseCode();
                     if(code==301||code==302||code==303||code==307||code==308){
