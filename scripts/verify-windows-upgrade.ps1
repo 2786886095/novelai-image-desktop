@@ -12,13 +12,23 @@ $setup = (Resolve-Path "release/Langbai-NovelAI-Studio-Setup-$version.exe").Path
 $out = Join-Path (Get-Location) 'release/upgrade-smoke'
 New-Item -ItemType Directory -Path $out -Force | Out-Null
 $target = Join-Path $env:RUNNER_TEMP ('studio-install-' + [guid]::NewGuid().ToString() + '\Langbai NovelAI Studio')
-function Run-Installer([string]$File, [string[]]$Arguments) {
+function Run-Installer([string]$File, [string[]]$Arguments, [int]$TimeoutSeconds=240) {
+  Write-Host "INSTALL_BEGIN $File $($Arguments -join ' ')"
+  $started=Get-Date
   $p = Start-Process -FilePath $File -ArgumentList $Arguments -PassThru -WindowStyle Hidden
-  if (-not $p.WaitForExit(240000)) {
-    & taskkill /PID $p.Id /T /F | Out-Null
-    throw 'Owned test installer exceeded four minutes.'
+  while (-not $p.WaitForExit(30000)) {
+    $elapsed=[int]((Get-Date)-$started).TotalSeconds
+    $files=@(Get-ChildItem -LiteralPath $target -Recurse -File -ErrorAction SilentlyContinue).Count
+    $p.Refresh()
+    $snapshot=@{file=$File;elapsed=$elapsed;pid=$p.Id;cpu=$p.CPU;window=$p.MainWindowTitle;installedFiles=$files}
+    $snapshot | ConvertTo-Json -Compress | Tee-Object -FilePath (Join-Path $out 'install-progress.jsonl') -Append | Out-Host
+    if ($elapsed -ge $TimeoutSeconds) {
+      & taskkill /PID $p.Id /T /F | Out-Null
+      throw "Owned test installer timed out after ${elapsed}s: $File"
+    }
   }
   if ($p.ExitCode -ne 0) { throw "Installer failed: $($p.ExitCode)" }
+  Write-Host "INSTALL_END exit=0 seconds=$([int]((Get-Date)-$started).TotalSeconds)"
 }
 function Verify-Installed {
   $reference = (Resolve-Path 'release/win-unpacked').Path
@@ -39,7 +49,7 @@ function Verify-Installed {
 }
 & gh release download v2.4.0 --repo 2786886095/novelai-image-desktop --pattern Langbai-NovelAI-Studio-Setup-2.4.0.exe --dir $out
 if ($LASTEXITCODE -ne 0) { throw 'Could not obtain the actual previous installer' }
-Run-Installer (Join-Path $out 'Langbai-NovelAI-Studio-Setup-2.4.0.exe') @('/S','--no-desktop-shortcut',"/D=$target")
+Run-Installer (Join-Path $out 'Langbai-NovelAI-Studio-Setup-2.4.0.exe') @('/S','--no-desktop-shortcut',"/D=$target") 600
 $sentinel = Join-Path $profile 'TavernAgent/user-home/user-preservation.txt'
 New-Item -ItemType Directory -Path (Split-Path $sentinel) -Force | Out-Null
 Set-Content -LiteralPath $sentinel -Value 'user-owned upgrade sentinel'

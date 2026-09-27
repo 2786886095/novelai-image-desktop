@@ -125,6 +125,7 @@ jobs:
             release/packaged-smoke/*.png
             release/installer-smoke/*.json
             release/upgrade-smoke/*.json
+            release/upgrade-smoke/*.jsonl
             release/agent-smoke/verification.json
           if-no-files-found: warn
 
