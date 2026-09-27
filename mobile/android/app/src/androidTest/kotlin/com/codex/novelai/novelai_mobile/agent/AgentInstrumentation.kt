@@ -27,7 +27,12 @@ class AgentInstrumentation: Instrumentation() {
                 check(agent.snapshot()["running"]==false)
                 pass("apk-reinstall-preserves-user-data-and-does-not-autostart")
             }else{
-                val activity=startActivitySync(Intent().setClassName(targetContext.packageName,"com.codex.novelai.novelai_mobile.agent.AgentQaActivity").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as AgentQaActivity
+                sendStatus(0,Bundle().apply{putString("stream","QA: opening isolated test activity (30 second limit)\n")})
+                val seat=java.util.concurrent.Executors.newSingleThreadExecutor()
+                val activity=try{
+                    seat.submit<AgentQaActivity>{startActivitySync(Intent().setClassName(targetContext.packageName,"com.codex.novelai.novelai_mobile.agent.AgentQaActivity").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as AgentQaActivity}.get(30,TimeUnit.SECONDS)
+                }finally{seat.shutdownNow()}
+                sendStatus(0,Bundle().apply{putString("stream","QA: activity ready; preparing runtime\n")})
                 targetContext.startForegroundService(Intent(targetContext,LocalAgentService::class.java))
                 agent.command("prepare");waitIdle(agent,600000)
                 check(agent.snapshot()["phase"]=="awaiting_confirmation"){agent.snapshot()["logs"].toString()}
