@@ -16,6 +16,8 @@ jobs:
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '24.14.0'
@@ -31,7 +33,11 @@ jobs:
           javac -cp /tmp/studio-agent-tests -d /tmp/studio-agent-tests mobile/android/app/src/main/kotlin/com/codex/novelai/novelai_mobile/agent/AgentDownload.java mobile/android/app/src/main/kotlin/com/codex/novelai/novelai_mobile/agent/AgentVersions.java harness/android/tests/AgentDownloadTest.java harness/android/tests/AgentVersionsTest.java
           java -cp /tmp/studio-agent-tests AgentDownloadTest
           java -cp /tmp/studio-agent-tests AgentVersionsTest
+      - name: Reuse immutable published runtime when component source is unchanged
+        id: published
+        run: node harness/android/resolve-published-runtime.mjs
       - name: Build pinned ARM64 Agent runtime
+        if: steps.published.outputs.reused != 'true'
         run: bash harness/android/build-rootfs.sh
       - name: Upload Android runtime (not a release)
         uses: actions/upload-artifact@v4
