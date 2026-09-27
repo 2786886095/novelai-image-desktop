@@ -262,3 +262,13 @@ exclusion of recipes from pools, durable pause/recovery, approved-cost bounds,
 atomic sharded storage and ZIP integrity/path validation. Use isolated
 application data for manual testing; never commit a local comparison library
 or generated artwork.
+
+## Shared original references and updated cards
+
+Artist cards now show original references beside generated images without cropping. Missing originals keep a placeholder. Tags can be toggled directly below ratings; notes sit alongside them. Copy, cover and regeneration controls are grouped. Pagination accepts a page number, and exploration displays each pool's eligible total alongside the draw count.
+
+Fetch references for selected or filtered single artists with pause, resume and retry. The reference image and Danbooru post count are shared across projects; generated images, ratings and notes remain project-specific. Exact artist-tag matching and explicit artist-page binding avoid guessing identities. Only accessible General/Sensitive static works are considered, scanning up to 48 posts per rating and returning at most 12 candidates.
+
+Local image import uses the native file picker and makes a proportional JPEG preview (longest edge 960px, no enlargement) without uploading or altering the source file. Both downloaded and local references are included in a separate original-library ZIP; back up this ZIP alongside project backups. Indexed post counts are not model training counts. Reference controls currently use Chinese labels.
+
+See the [reference guide](ARTIST_REFERENCES.zh-CN.md) for details and limitations.

@@ -1573,6 +1573,8 @@ export interface ImportedParams {
 }
 
 export interface NaiDesktopApi {
+  artistReferenceBackup: (mode: "export" | "import") => Promise<{ message: string }>;
+  artistReferences: (action: import("./artist-comparison/reference-types").ReferenceAction) => Promise<import("./artist-comparison/reference-types").ReferenceResponse>;
   comparison: (action: import("./artist-comparison/protocol").ComparisonAction) => Promise<import("./artist-comparison/protocol").ComparisonResponse>;
   platform: NodeJS.Platform;
   getResourceDatabaseOverview: () => Promise<ResourceDatabaseOverview>;

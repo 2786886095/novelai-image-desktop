@@ -62,6 +62,8 @@ import type {
 const imageSaves = createImageSaveTracker();
 
 contextBridge.exposeInMainWorld("naiDesktop", {
+  artistReferenceBackup: (mode: "export" | "import") => ipcRenderer.invoke("artist-reference:backup", mode),
+  artistReferences: (action: import("../src/artist-comparison/reference-types").ReferenceAction) => ipcRenderer.invoke("artist-reference:action", action),
   comparison: (action: import("../src/artist-comparison/protocol").ComparisonAction) => ipcRenderer.invoke("artist-comparison:action", action),
   onImageSaveFeedback: (callback: (notices: ImageSaveNotice[]) => void) => imageSaves.subscribe(callback),
   dismissImageSaveFeedback: (id: number) => imageSaves.dismiss(id),

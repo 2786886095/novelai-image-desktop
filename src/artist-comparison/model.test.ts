@@ -4,6 +4,7 @@ import {
   MAX_COMPARISON_ENTRIES,
   MAX_EXPLORATION_RECIPES,
   classifyEntry,
+  countArtistsByPool,
   sampleComparisonInterval,
   indexEntryJobs,
   createProject,
@@ -480,4 +481,16 @@ describe("artist comparison model", () => {
     project.runs = [first, second];
     expect(() => validateProject(project)).toThrow(/duplicate job IDs/);
   });
+});
+
+it("counts unique eligible artists per pool and reflects rating changes", () => {
+  const alpha = withPool(parseEntries("artist:alpha")[0], "high");
+  const beta = withPool(parseEntries("artist:beta")[0], "low");
+  const entries = [alpha, { ...alpha, id: "duplicate" }, beta,
+    parseEntries("artist:unrated")[0],
+    withPool(parseEntries("artist:alpha, artist:beta")[0], "high")];
+  expect([...countArtistsByPool(entries)]).toEqual([["high", 1], ["low", 1]]);
+  beta.ratingId = "high";
+  expect([...countArtistsByPool(entries)]).toEqual([["high", 2]]);
+  expect(countArtistsByPool([]).size).toBe(0);
 });

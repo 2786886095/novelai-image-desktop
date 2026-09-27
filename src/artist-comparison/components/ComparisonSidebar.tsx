@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { GenerateParams, NAIModel } from "../../types";
 import { NAI_MODELS } from "../../types";
+import { countArtistsByPool } from "../model";
 import type { ComparisonProject, ComparisonTag, PoolRule, RatingLevel } from "../model";
 import type { ComparisonStrings } from "../strings";
 import { Button, CommittedNumberInput, SelectMenuCompat } from "../../components/ui";
@@ -259,6 +260,7 @@ export function ComparisonSidebar(props: ComparisonSidebarProps) {
     return [headers, rows.slice(0, 4)] as const;
   }, [entryText, text.entries]);
   const mappedText = importMode === "tsv" ? toMappedTsv(entryText, tsvMapping) : entryText;
+  const poolCounts = useMemo(() => countArtistsByPool(project?.entries ?? []), [project?.entries]);
   const singles = project?.entries.filter((entry) => entry.kind === "single").length ?? 0;
 
   return <aside className="comparison-sidebar">
@@ -279,6 +281,7 @@ export function ComparisonSidebar(props: ComparisonSidebarProps) {
         const rule = exploreRules.find((item) => item.ratingId === level.id) ?? { ratingId: level.id, count: 1, minWeight: 0.5, maxWeight: 1 };
         return <div className="comparison-explore-rule" key={level.id}>
           <span className="comparison-rating-chip"><i style={{ background: level.color }} />{level.label}</span>
+          <label className="field comparison-pool-total"><span>{text.poolTotal}</span><output aria-label={`${level.label} ${text.poolTotal}`}>{poolCounts.get(level.id) ?? 0}</output></label>
           <CommittedNumberInput label={text.levelCount} value={rule.count} min={0} max={32} normalize={(value) => Math.max(0, Math.min(32, Math.round(value)))} onCommit={(value) => onExploreRulesChange(exploreRules.map((item) => item.ratingId === level.id ? { ...item, count: value } : item))} />
           <CommittedNumberInput label={text.minWeight} value={rule.minWeight} min={0.1} max={7} step={0.05} normalize={(value) => Math.max(0.1, Math.min(7, value))} onCommit={(value) => onExploreRulesChange(exploreRules.map((item) => item.ratingId === level.id ? { ...item, minWeight: value } : item))} />
           <CommittedNumberInput label={text.maxWeight} value={rule.maxWeight} min={0.1} max={7} step={0.05} normalize={(value) => Math.max(0.1, Math.min(7, value))} onCommit={(value) => onExploreRulesChange(exploreRules.map((item) => item.ratingId === level.id ? { ...item, maxWeight: value } : item))} />

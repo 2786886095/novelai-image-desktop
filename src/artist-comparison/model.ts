@@ -605,6 +605,19 @@ function candidateFor(entry: ComparisonEntry): Candidate | null {
   };
 }
 
+/** Count unique, eligible artists using the same rules as recipe sampling. */
+export function countArtistsByPool(entries: ComparisonEntry[]): Map<string, number> {
+  const pools = new Map<string, Set<string>>();
+  for (const entry of entries) {
+    const candidate = candidateFor(entry);
+    if (!candidate) continue;
+    const pool = pools.get(entry.ratingId!) ?? new Set<string>();
+    pool.add(candidate.artistKey);
+    pools.set(entry.ratingId!, pool);
+  }
+  return new Map([...pools].map(([id, artists]) => [id, artists.size]));
+}
+
 function normalizedWeight(value: number): number {
   const rounded = Math.round(value * 100) / 100;
   return Object.is(rounded, -0) ? 0 : rounded;
