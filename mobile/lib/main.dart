@@ -14,6 +14,7 @@ import 'models/nai_models.dart';
 import 'screens/gallery_screen.dart';
 import 'screens/ai_log_screen.dart';
 import 'screens/agent_screen.dart';
+import 'screens/local_agent_screen.dart';
 import 'screens/data_backup_settings.dart';
 import 'screens/generate_screen.dart';
 import 'screens/inspect_screen.dart';
@@ -111,6 +112,7 @@ class _HomeShellState extends State<HomeShell> {
   static const _incomingBackupPending = '__incoming_backup_pending__';
 
   int _index = 0;
+  final _agentVisible = ValueNotifier<bool>(false);
   bool _onboardingScheduled = false;
   bool _v5NoticeScheduled = false;
   bool _incomingBackupInitialChecked = !Platform.isAndroid && !Platform.isIOS;
@@ -169,7 +171,7 @@ class _HomeShellState extends State<HomeShell> {
         ),
       ),
       const OnlineGalleryScreen(),
-      const AgentScreen(),
+      Platform.isAndroid ? LocalAgentScreen(visible:_agentVisible) : const AgentScreen(),
       GalleryScreen(
         onOpenMetadata: () {
           if (mounted) setState(() => _index = 5);
@@ -184,6 +186,7 @@ class _HomeShellState extends State<HomeShell> {
 
   @override
   void dispose() {
+    _agentVisible.dispose();
     _incomingBackupChannel.setMethodCallHandler(null);
     super.dispose();
   }
@@ -322,6 +325,7 @@ class _HomeShellState extends State<HomeShell> {
     return StudioAdaptiveShell(
       selectedIndex: _index,
       onDestinationSelected: (index) {
+        _agentVisible.value = index == 9;
         FocusManager.instance.primaryFocus?.unfocus();
         setState(() => _index = index);
       },

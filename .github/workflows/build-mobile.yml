@@ -11,7 +11,33 @@ permissions:
   contents: write
 
 jobs:
+  android-agent-runtime:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.14.0'
+          cache: npm
+      - name: Install adapter build dependencies (no desktop binaries)
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Check Android publication and file policy
+        run: |
+          node --test harness/android/tests/*.test.mjs
+          mkdir -p /tmp/studio-agent-tests
+          javac -d /tmp/studio-agent-tests mobile/android/app/src/main/kotlin/com/codex/novelai/novelai_mobile/agent/AgentFiles.java harness/android/tests/AgentFilesTest.java
+          java -cp /tmp/studio-agent-tests AgentFilesTest
+      - name: Build pinned ARM64 Agent runtime
+        run: bash harness/android/build-rootfs.sh
+      - name: Upload Android runtime (not a release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-agent-runtime
+          path: artifacts/android-runtime/
+          if-no-files-found: error
   android:
+    needs: android-agent-runtime
     # These hotfixes are desktop-only; future releases are unaffected.
     if: "github.ref_name != 'v2.2.7' && github.ref_name != 'v2.2.8' && !contains(github.event.head_commit.message, 'release: v2.2.7') && !contains(github.event.head_commit.message, 'release: v2.2.8')"
     runs-on: ubuntu-latest
@@ -21,6 +47,30 @@ jobs:
         working-directory: mobile
     steps:
       - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.14.0'
+      - name: Prepare verified Android native executables
+        working-directory: .
+        run: node harness/android/prepare-native.mjs
+      - name: Fetch same-build runtime seed
+        uses: actions/download-artifact@v4
+        with:
+          name: android-agent-runtime
+          path: mobile/android/app/src/main/assets/agent
+      - name: Verify embedded runtime
+        working-directory: .
+        run: |
+          python3 - <<'PY'
+          import hashlib,json,pathlib
+          root=pathlib.Path('mobile/android/app/src/main/assets/agent')
+          seed=json.loads((root/'seed.json').read_text())
+          archive=root/'agent-rootfs.zip'
+          assert archive.stat().st_size==seed['bytes']
+          assert hashlib.file_digest(archive.open('rb'),'sha256').hexdigest()==seed['sha256']
+          print('EMBEDDED ANDROID AGENT HASH PASS')
+          PY
 
       - name: Setup Java
         uses: actions/setup-java@v4

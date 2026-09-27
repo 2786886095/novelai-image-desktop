@@ -7,3 +7,5 @@ release/
 .tmp/
 scripts/__pycache__/
 *.pyc
+mobile/android/app/src/main/jniLibs/
+mobile/android/app/src/main/assets/agent/

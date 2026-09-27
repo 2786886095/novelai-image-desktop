@@ -22,6 +22,12 @@ android {
     // reads compileSdk directly and fails when it's left to the Flutter default.
     compileSdk = 35
     ndkVersion = "26.1.10909125"
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging = true
+            keepDebugSymbols += ['**/libproot_legacy.so', '**/libprootloader_legacy.so', '**/libtalloc.so', '**/libandroidshmem.so']
+        }
+    }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

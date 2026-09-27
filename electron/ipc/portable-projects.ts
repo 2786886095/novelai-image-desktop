@@ -30,7 +30,12 @@ function relative(name:string) {
 async function exists(p:string) { try { return await fs.lstat(p); } catch(e) { if ((e as NodeJS.ErrnoException).code==='ENOENT') return null; throw e; } }
 async function plainDirectory(p:string) {
   for(let current=path.resolve(p);;current=path.dirname(current)) {
-    const st=await exists(current); if(st && (st.isSymbolicLink() || !st.isDirectory())) throw Error('Portable destination must not contain links');
+    const st=await exists(current);
+    // macOS system paths are aliases (/var -> /private/var, etc.). Only these
+    // OS-owned exact aliases are accepted, never links inside a user workspace.
+    const systemAlias=process.platform==='darwin' && ['/var','/tmp','/etc'].includes(current)
+      && st?.isSymbolicLink() && await fs.realpath(current)===`/private${current}`;
+    if(st && !systemAlias && (st.isSymbolicLink() || !st.isDirectory())) throw Error('Portable destination must not contain links');
     if(path.dirname(current)===current) break;
   }
 }

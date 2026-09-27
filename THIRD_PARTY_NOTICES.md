@@ -54,3 +54,17 @@ These projects are not affiliated with or endorsed by Langbai NovelAI Studio.
 ## DSH Market and optional built-in preset
 - dshmarket 1.65.0: https://github.com/dsh-market/dsh-market (MIT). Its undici, js-yaml and argparse dependencies retain their licenses in the component.
 - dsh-infinite-gen-4 0.4.0: https://github.com/Minglink/dsh-infinite-gen-4 (MIT). Pinned source and license in harness/community/infinite-gen4. Imported once as a selectable per-session Roleplay preset, without global injection or duplicate reinforcement. Existing custom presets, characters and lorebooks are retained.
+
+
+## Android local Agent integration candidate
+
+The Android launcher uses separate native PRoot executables from DSHA revision
+`bdb647c331c4d6c11b5632afdb901c50510720ea`; exact hashes, original license texts
+and build recipe are retained in `harness/android/upstream`. DSHA is MIT; Termux
+PRoot v5.1.107.92 is GPL-2.0. talloc and libandroid-shmem retain their upstream
+licenses. No proprietary proroot binary is included. See `harness/android/README.md`
+for build provenance, source requirements and validation gates.
+
+Ubuntu rootfs packages retain their copyright/license files under `/usr/share/doc`.
+The build emits the exact installed-package inventory. Node and locked npm packages
+retain their own LICENSE files. App MIT licensing does not relicense those components.

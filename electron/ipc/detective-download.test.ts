@@ -12,14 +12,18 @@ vi.mock("axios", () => ({ default: { get: (...args: unknown[]) => mock.get(...ar
 vi.mock("node:child_process", () => ({ execFile: (...args: unknown[]) => mock.exec(...args) }));
 vi.mock("./detective-release.json", () => ({ default: { version: "fixture", packages: [{file:"assets.zip",bytes:6,sha256:"bef57ec7f53a6d40beb640a780a639c83bc29ac8a9816f1fc6c5c6dcd93c4721",kind:"assets",variant:"full",directory:"novelai-desktop-assets"},{file:"light.zip",bytes:3,sha256:"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",kind:"assets",variant:"light",directory:"novelai-light-desktop-assets"}] } }));
 import { detectiveDownloadVariant, detectiveDownloadStart, detectiveDownloadStatus, detectiveDownloadCancel, detectiveDownloadDirectory, validateRange, verifyDownload, packageUrl } from "./detective-download";
+const originalPlatform=Object.getOwnPropertyDescriptor(process,"platform")!;
+const originalArch=Object.getOwnPropertyDescriptor(process,"arch")!;
 beforeEach(async () => {
+  Object.defineProperty(process,"platform",{configurable:true,value:"win32"});
+  Object.defineProperty(process,"arch",{configurable:true,value:"x64"});
   mock.root = fs.mkdtempSync(path.join(os.tmpdir(), "detective-download-"));
   mock.get.mockReset(); mock.exec.mockReset();
   mock.exec.mockImplementation((...args: unknown[]) => (args.at(-1) as Function)(new Error("fixture extraction failure")));
   detectiveDownloadVariant("full");
   await detectiveDownloadDirectory();
 });
-afterEach(() => { fs.rmSync(mock.root, { recursive: true, force: true }); });
+afterEach(() => { Object.defineProperty(process,"platform",originalPlatform); Object.defineProperty(process,"arch",originalArch); fs.rmSync(mock.root, { recursive: true, force: true }); });
 const done = async () => { await vi.waitFor(() => expect(detectiveDownloadStatus().busy).toBe(false)); return detectiveDownloadStatus(); };
 it('uses the current language for the native directory picker',async()=>{
  for(const [language,title] of [['zh-CN','选择模型与运行环境存放位置'],['zh-TW','選擇模型與執行環境儲存位置'],['en-US','Choose model and runtime location'],['ja-JP','モデルと実行環境の保存先を選択'],['ko-KR','모델 및 실행 환경 저장 위치 선택']]){mock.language=language;await detectiveDownloadDirectory();expect(mock.titles.at(-1)).toBe(title);}mock.language='zh-CN';
@@ -102,4 +106,10 @@ it("rejects invalid variants and prevents changing packages while downloading", 
   detectiveDownloadStart(); await vi.waitFor(()=>expect(mock.get).toHaveBeenCalled());
   expect(()=>detectiveDownloadVariant("light")).toThrow("取消");
   detectiveDownloadCancel(); await done();
+});
+
+it("rejects unsupported host platforms before starting a download",()=>{
+ Object.defineProperty(process,"platform",{configurable:true,value:"linux"});
+ expect(()=>detectiveDownloadStart()).toThrow("Windows x64");
+ expect(mock.get).not.toHaveBeenCalled();
 });

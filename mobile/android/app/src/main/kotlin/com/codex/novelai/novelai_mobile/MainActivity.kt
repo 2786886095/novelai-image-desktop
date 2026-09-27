@@ -30,6 +30,36 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger,"langbai.novelai/local_agent")
+            .setMethodCallHandler { call, result ->
+                if(Build.VERSION.SDK_INT < 26){
+                    if(call.method=="status")result.success(mapOf("supported" to false,"phase" to "unsupported"))
+                    else result.error("unsupported","Local Agent requires Android 8+",null)
+                    return@setMethodCallHandler
+                }
+                val agent=com.codex.novelai.novelai_mobile.agent.LocalAgentRuntime.get(this)
+                try {
+                    @Suppress("UNCHECKED_CAST") val args=(call.arguments as? Map<String,Any?>) ?: emptyMap()
+                    when(call.method){
+                        "status" -> result.success(agent.snapshot())
+                        "backups" -> result.success(agent.backups())
+                        "open" -> {startActivity(Intent(Intent.ACTION_VIEW,Uri.parse(agent.openUrl())));result.success(null)}
+                        "stop" -> {agent.stop();stopService(Intent(this,com.codex.novelai.novelai_mobile.agent.LocalAgentService::class.java));result.success(null)}
+                        "check","prepare","confirm","start","backup","restore" -> {
+                            if(call.method!="check"){
+                                val service=Intent(this,com.codex.novelai.novelai_mobile.agent.LocalAgentService::class.java)
+                                    .putExtra("title",args["notificationTitle"] as? String)
+                                    .putExtra("body",args["notificationBody"] as? String)
+                                    .putExtra("stop",args["stopLabel"] as? String)
+                                startForegroundService(service)
+                            }
+                            agent.command(call.method,args);result.success(null)
+                        }
+                        else -> result.notImplemented()
+                    }
+                }catch(error:Exception){result.error("local_agent",error.message,null)}
+            }
+
         incomingBackupChannel = MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             "langbai.novelai/incoming_backup",
