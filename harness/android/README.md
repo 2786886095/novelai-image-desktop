@@ -31,7 +31,14 @@ outside the home require explicit manual review rather than being traversed.
 2. On ARM64 Linux, `bash harness/android/build-rootfs.sh` builds a fresh Ubuntu
    guest with hash-pinned Node and locked Harness dependencies. It never uses a
    developer's existing user home or a community app's older prebuilt runtime.
-3. The mobile workflow embeds the matching verified rootfs archive in the APK.
+3. The mobile workflow stages only a verified, hash-pinned download descriptor in
+   the APK. Publish `agent-rootfs.zip` and `android-agent.json` together in the
+   matching `agent-v<version>` component release before releasing the app. The
+   user explicitly downloads the runtime on first use; checks alone never do so.
+   A private hash-addressed partial download supports retry/resume. The launcher
+   displays size, progress and transfer speed; activation still requires a
+   compatibility probe and confirmation. App updates preserve installed slots
+   and user data. The Gradle asset guard rejects embedded runtime archives.
 4. The Android foreground service starts PRoot, then Harness on loopback only.
    The authenticated bootstrap URL is opened in the phone browser, not logged.
 5. The Studio bridge accepts only authenticated loopback requests with stable

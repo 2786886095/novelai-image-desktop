@@ -28,6 +28,9 @@ jobs:
           mkdir -p /tmp/studio-agent-tests
           javac -d /tmp/studio-agent-tests mobile/android/app/src/main/kotlin/com/codex/novelai/novelai_mobile/agent/AgentFiles.java harness/android/tests/AgentFilesTest.java
           java -cp /tmp/studio-agent-tests AgentFilesTest
+          javac -cp /tmp/studio-agent-tests -d /tmp/studio-agent-tests mobile/android/app/src/main/kotlin/com/codex/novelai/novelai_mobile/agent/AgentDownload.java mobile/android/app/src/main/kotlin/com/codex/novelai/novelai_mobile/agent/AgentVersions.java harness/android/tests/AgentDownloadTest.java harness/android/tests/AgentVersionsTest.java
+          java -cp /tmp/studio-agent-tests AgentDownloadTest
+          java -cp /tmp/studio-agent-tests AgentVersionsTest
       - name: Build pinned ARM64 Agent runtime
         run: bash harness/android/build-rootfs.sh
       - name: Upload Android runtime (not a release)
@@ -54,23 +57,20 @@ jobs:
       - name: Prepare verified Android native executables
         working-directory: .
         run: node harness/android/prepare-native.mjs
-      - name: Fetch same-build runtime seed
+      - name: Fetch same-build runtime for separate component publication
         uses: actions/download-artifact@v4
         with:
           name: android-agent-runtime
-          path: mobile/android/app/src/main/assets/agent
-      - name: Verify embedded runtime
+          path: artifacts/android-runtime
+      - name: Stage verified download descriptor only (no runtime in APK)
         working-directory: .
-        run: |
-          python3 - <<'PY'
-          import hashlib,json,pathlib
-          root=pathlib.Path('mobile/android/app/src/main/assets/agent')
-          seed=json.loads((root/'seed.json').read_text())
-          archive=root/'agent-rootfs.zip'
-          assert archive.stat().st_size==seed['bytes']
-          assert hashlib.file_digest(archive.open('rb'),'sha256').hexdigest()==seed['sha256']
-          print('EMBEDDED ANDROID AGENT HASH PASS')
-          PY
+        run: node harness/android/stage-download.mjs artifacts/android-runtime mobile/android/app/src/main/assets/agent
+      - name: Upload download descriptor for component release
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-agent-download-descriptor
+          path: artifacts/android-runtime/android-agent.json
+          if-no-files-found: error
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -116,6 +116,17 @@ jobs:
 
       - name: Build APK (release)
         run: flutter build apk --release
+
+      - name: Reject embedded runtime in final APK
+        run: |
+          python3 - <<'PY'
+          import zipfile, json
+          with zipfile.ZipFile('build/app/outputs/flutter-apk/app-release.apk') as apk:
+              assert not any(n.endswith('agent-rootfs.zip') for n in apk.namelist())
+              meta=json.loads(apk.read('assets/agent/seed.json'))
+              assert 'asset' not in meta and meta['url'].startswith('https://github.com/2786886095/novelai-image-desktop/releases/download/')
+              print('APK ON-DEMAND PASS: descriptor present; runtime absent')
+          PY
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

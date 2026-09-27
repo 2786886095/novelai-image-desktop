@@ -38,8 +38,13 @@ class LocalAgentRuntime private constructor(private val context: Context) {
     @Volatile private var portableLock: String? = null
     @Volatile private var launchUrl: String? = null
     @Volatile private var progress = 0.0
+    @Volatile private var downloadBytes = 0L
+    @Volatile private var downloadTotal = 0L
+    @Volatile private var downloadSpeed = 0L
+    private val downloader = AgentDownload()
     @Volatile private var upstream = ""
     @Volatile private var update: JSONObject? = null
+    @Volatile private var downloadAvailable = false
     @Volatile private var proposal: Proposal? = null
     private data class Proposal(val token: String, val slot: File, val seed: JSONObject, val before: String, val expires: Long)
     private val activeFile get() = File(root, "active.json")
@@ -58,7 +63,10 @@ class LocalAgentRuntime private constructor(private val context: Context) {
     }
     @Synchronized fun snapshot(): Map<String, Any?> = mapOf(
         "supported" to (Build.VERSION.SDK_INT >= 26 && Build.SUPPORTED_ABIS.contains("arm64-v8a")),
-        "phase" to phase, "busy" to (busy || stopping), "error" to error, "progress" to progress,
+        "phase" to (if(phase=="stopped" && active()==null)"not_installed" else phase), "busy" to (busy || stopping), "error" to error, "progress" to progress,
+        "downloadBytes" to downloadBytes, "downloadTotal" to downloadTotal, "downloadSpeed" to downloadSpeed,
+        "runtimeBytes" to (update?.optLong("bytes") ?: runCatching{seed().getLong("bytes")}.getOrDefault(0L)),
+        "downloadAvailable" to downloadAvailable,
         "running" to (child?.isAlive == true && phase == "running"),
         "installed" to active()?.optString("version"), "installedUpstream" to active()?.optString("upstream"),
         "official" to upstream, "candidate" to update?.optString("version"),
@@ -86,7 +94,7 @@ class LocalAgentRuntime private constructor(private val context: Context) {
                 error = failure.message?.take(300) ?: failure.javaClass.simpleName
                 log("ERROR: ${error}")
                 if (child == null) phase = if(cancelled)"stopped" else "error"
-            } finally { busy = false }
+            } finally { downloadSpeed=0;busy = false }
         }
     }
     private fun validate(meta: JSONObject) {
@@ -113,6 +121,7 @@ class LocalAgentRuntime private constructor(private val context: Context) {
     }
     private fun checkUpdates() {
         log("Checking Studio Android component and official Harness separately…")
+        downloadAvailable=false
         try { val local=seed();validate(local);update=local } catch (_: Exception) { log("No bundled Android seed in this build") }
         try {
             val releases=org.json.JSONArray(fetchText(CHANNEL))
@@ -126,36 +135,44 @@ class LocalAgentRuntime private constructor(private val context: Context) {
                     val url=item.getString("browser_download_url")
                     require(url.startsWith("https://github.com/2786886095/novelai-image-desktop/releases/download/"))
                     val candidate=JSONObject(fetchText(url));validate(candidate)
-                    candidate.put("url",url.substringBeforeLast('/')+"/agent-rootfs.zip")
+                    val expected=url.substringBeforeLast('/')+"/agent-rootfs.zip"
+                    // A descriptor alone is not a downloadable release. Both assets must exist.
+                    val archive=(0 until assets.length()).map{assets.getJSONObject(it)}.firstOrNull{
+                        it.optString("name")=="agent-rootfs.zip" && it.optString("browser_download_url")==expected && it.optLong("size")==candidate.getLong("bytes")
+                    } ?: continue
+                    candidate.put("url",archive.getString("browser_download_url"))
                     update=candidate
+                    downloadAvailable=true
                     break
                 }
-                if(update?.has("url")==true)break
+                if(downloadAvailable)break
             }
         } catch (_: Exception) { log("Studio channel check failed; installed runtime unchanged") }
-        try { upstream=JSONObject(fetchText("https://registry.npmjs.org/@deepseek-ai%2fdsh/latest")).getString("version") }
+        try {
+            val tags=JSONObject(fetchText("https://registry.npmjs.org/-/package/@deepseek-ai%2Fdsh/dist-tags"))
+            upstream=AgentVersions.newest(tags.optString("latest"),tags.optString("next"))
+        }
         catch (_: Exception) { log("Official Harness check failed; no automatic install") }
         log("Update checks finished. Changes require a successful compatibility probe and confirmation.")
     }
     private fun prepare() {
         check(child==null);phase="preparing";proposal=null;progress=0.0
         val meta=update ?: seed();validate(meta)
+        val cached=File(root,"downloads/${meta.getString("sha256")}.part")
+        check(downloadAvailable || (cached.isFile && cached.length()==meta.getLong("bytes"))) { "Compatible Android runtime has not been published yet; check updates later" }
         check(active()?.optString("sha256") != meta.getString("sha256")) { "This component is already installed" }
         check(root.usableSpace > meta.getLong("unpackedBytes")*2 + meta.getLong("bytes") + 512L*1024*1024) { "Insufficient free storage" }
         val slot=File(root,"versions/${meta.getString("version")}-${UUID.randomUUID()}")
-        val archive=File(root,"candidate-${UUID.randomUUID()}.zip")
+        val url=meta.optString("url")
+        require(url.startsWith("https://github.com/2786886095/novelai-image-desktop/releases/download/agent-v") && url.endsWith("/agent-rootfs.zip")) { "No published compatible runtime download is available" }
+        phase="downloading"
+        val archive=downloader.fetch(URL(url),File(root,"downloads").toPath(),meta.getLong("bytes"),meta.getString("sha256"),{cancelled}) { received,total,speed ->
+            downloadBytes=received;downloadTotal=total;downloadSpeed=speed
+            progress=received.toDouble()/total
+        }.toFile()
+        phase="preparing";progress=0.5;downloadSpeed=0
         try {
-            val input=if(meta.has("url")) {
-                val url=meta.getString("url")
-                require(url.startsWith("https://github.com/2786886095/novelai-image-desktop/releases/download/"))
-                (URL(url).openConnection() as HttpURLConnection).apply {connectTimeout=20000;readTimeout=30000}.inputStream
-            } else context.assets.open("agent/"+meta.getString("asset"))
-            var received=0L
-            input.use { incoming -> archive.outputStream().use { out ->
-                val buffer=ByteArray(131072)
-                while(true){check(!cancelled){"Cancelled"};val n=incoming.read(buffer);if(n<0)break;received+=n;check(received<=meta.getLong("bytes"));out.write(buffer,0,n);progress=received.toDouble()/meta.getLong("bytes")*.5}
-            } }
-            check(received==meta.getLong("bytes") && AgentFiles.hash(archive.toPath())==meta.getString("sha256")) { "Runtime archive integrity mismatch" }
+            check(!cancelled) { "Cancelled" }
             AgentFiles.extract(archive.toPath(),slot.toPath(),meta.getLong("unpackedBytes")+16*1024*1024)
             val manifest=JSONObject(File(slot,".studio-rootfs.json").readText())
             val executable=manifest.getJSONArray("executables")
@@ -180,7 +197,7 @@ class LocalAgentRuntime private constructor(private val context: Context) {
             proposal=Proposal(UUID.randomUUID().toString(),slot,meta,before,System.currentTimeMillis()+15*60*1000)
             phase="awaiting_confirmation";progress=1.0
             log("Compatibility probe passed. Confirm to back up user data and activate this component.")
-        } finally { archive.delete() }
+        } finally { if(proposal?.slot==slot)archive.delete() }
     }
     private fun homeFingerprint(): String {
         if(!home.exists())return "empty"
@@ -313,7 +330,7 @@ class LocalAgentRuntime private constructor(private val context: Context) {
             stopping=true;cancelled=true;val processes=listOfNotNull(child,auxiliary).distinct()
             child=null;auxiliary=null;launchUrl=null;phase="stopped";processes
         }
-        try{for(process in owned)terminate(process);log("Agent stopped by user")}
+        try{downloader.cancel();for(process in owned)terminate(process);log("Agent stopped by user")}
         finally{stopping=false}
     }
     private fun terminate(process: Process) { if(process.isAlive){process.destroy();if(!process.waitFor(5,TimeUnit.SECONDS))process.destroyForcibly()} }

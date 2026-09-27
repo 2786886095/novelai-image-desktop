@@ -17,6 +17,8 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
+    // Java helpers alongside Kotlin must also reach javac/D8 (not just Kotlin's resolver).
+    sourceSets.main.java.srcDirs += 'src/main/kotlin'
     namespace = "com.codex.novelai.novelai_mobile"
     // Pinned explicitly (not flutter.compileSdkVersion) because the gal plugin
     // reads compileSdk directly and fails when it's left to the Flutter default.
@@ -71,6 +73,16 @@ android {
             // Stable release key when key.properties is present; otherwise the
             // debug key so `flutter run --release` and forks still build.
             signingConfig = keystorePropertiesFile.exists() ? signingConfigs.release : signingConfigs.debug
+        }
+    }
+}
+
+tasks.configureEach { task ->
+    if (task.name.matches('merge.*Assets')) {
+        task.doFirst {
+            if (file('src/main/assets/agent/agent-rootfs.zip').exists()) {
+                throw new GradleException('Agent runtime must be downloaded on demand, not embedded in the APK')
+            }
         }
     }
 }

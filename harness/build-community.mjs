@@ -123,7 +123,7 @@ managerCode=managerCode.replace('protected: PROTECTED_PATTERNS.some((re) => re.t
 managerCode=managerCode.replace('shell,\n','shell,\n      windowsHide: true,\n');
 await fs.writeFile(managerEntry,managerCode);
 const market=path.join(target,'packages/dshmarket');
-await fs.cp(path.join(temp,'dshmarket-1.66.1.tgz/package'),market,{recursive:true});packages.push('dshmarket');
+await fs.cp(path.join(temp,'dshmarket-1.66.2.tgz/package'),market,{recursive:true});packages.push('dshmarket');
 for(const [dep,version] of Object.entries(lock.marketDependencies)){
  const folder=path.join(repo,'node_modules',dep),pkg=JSON.parse(await fs.readFile(path.join(folder,'package.json'),'utf8'));
  if(pkg.version!==version)throw Error('Market dependency mismatch: '+dep);

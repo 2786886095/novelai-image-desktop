@@ -81,18 +81,32 @@ class _LocalAgentScreenState extends State<LocalAgentScreen> {
     final logs=(_state['logs'] as List?)?.join('\n')??'';
     final supported=_state['supported']==true;
     final proposal=_state['proposal'];
+    final downloading=_state['phase']=='downloading';
+    final total=(_state['downloadTotal'] as num?)?.toDouble()??0;
+    final received=(_state['downloadBytes'] as num?)?.toDouble()??0;
+    final speed=(_state['downloadSpeed'] as num?)?.toDouble()??0;
+    final runtimeBytes=(_state['runtimeBytes'] as num?)?.toDouble()??0;
+    String mib(double bytes)=>(bytes/1048576).toStringAsFixed(1);
     return Scaffold(body:SafeArea(child:ListView(padding:const EdgeInsets.all(16),children:[
       Text(t('title'),style:Theme.of(context).textTheme.titleLarge),const SizedBox(height:8),Text(t('about')),
       if(_state['supported']==false)Padding(padding:const EdgeInsets.symmetric(vertical:12),child:Text(t('unsupported'))),
       const SizedBox(height:12),
       Wrap(spacing:12,runSpacing:8,children:[Text('${t('studio')}: ${_state['installed']??'—'} → ${_state['candidate']??t('unknown')}'),Text('${t('official')}: ${_state['installedUpstream']??'—'} → ${(_state['official']??'').toString().isEmpty?t('unknown'):_state['official']}')]),
       const SizedBox(height:8),
+      Text(t('downloadHint')),
+      if(_state['downloadAvailable']==false && !busy)Text(t('notPublished')),
+      if(runtimeBytes>0)Text('${t('downloadSize')}: ${mib(runtimeBytes)} MiB'),
+      const SizedBox(height:8),
       Wrap(spacing:8,runSpacing:8,children:[
         OutlinedButton(onPressed:!supported||busy?null:()=>_act('check'),child:Text(t('check'))),
-        OutlinedButton(onPressed:!supported||busy||running?null:()=>_act('prepare'),child:Text(t('prepare'))),
+        OutlinedButton(onPressed:!supported||busy||running||_state['downloadAvailable']!=true?null:()=>_act('prepare'),child:Text(t('prepare'))),
         if(proposal is Map)FilledButton(onPressed:busy?null:()async{if(await _confirm(t('confirm'),t('confirmBody')))await _act('confirm',{'token':proposal['token']});},child:Text(t('confirm'))),
       ]),
-      if(busy)const Padding(padding:EdgeInsets.symmetric(vertical:8),child:LinearProgressIndicator()),
+      if(busy)Padding(padding:const EdgeInsets.symmetric(vertical:8),child:LinearProgressIndicator(value:downloading&&total>0?(received/total).clamp(0.0,1.0):null)),
+      if(downloading)Wrap(spacing:8,crossAxisAlignment:WrapCrossAlignment.center,children:[
+        Text('${total>0?(100*received/total).toStringAsFixed(1):"0.0"}% · ${mib(received)} / ${mib(total)} MiB · ${mib(speed)} MiB/s'),
+        TextButton(onPressed:()=>_act('stop'),child:Text(t('pauseDownload'))),
+      ]),
       if(_error!=null || _state['error']!=null)SelectableText(_error??'${_state['error']}',style:TextStyle(color:Theme.of(context).colorScheme.error)),
       const SizedBox(height:8),
       Row(children:[Expanded(child:Text(t('${_state['phase']??'stopped'}'))),
