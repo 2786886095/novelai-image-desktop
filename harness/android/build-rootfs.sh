@@ -59,9 +59,12 @@ PY
 sudo chroot "$ROOT" /usr/local/bin/node --version
 sudo chroot "$ROOT" /usr/bin/env DSH_HOME=/probe-home /usr/local/bin/node /opt/agent/seed-home.mjs
 sudo chroot "$ROOT" /usr/bin/env DSH_HOME=/probe-home /usr/local/bin/node /opt/agent/runtime/node_modules/@deepseek-ai/dsh/lib/bin.js web --help
+python3 "$REPO/harness/android/probe-rootfs.py" "$ROOT"
 sudo chroot "$ROOT" /usr/bin/dpkg-query -W > "$OUT/ubuntu-packages.txt"
 # Empty runtime mount points; no CI/developer credentials or test sessions shipped.
 sudo find "$ROOT/probe-home" -mindepth 1 -delete
+sudo find "$ROOT/studio-home" -mindepth 1 -delete
+sudo find "$ROOT/workspace" -mindepth 1 -delete
 sudo find "$ROOT/root" -mindepth 1 -delete
 sudo find "$ROOT/tmp" -mindepth 1 -delete
 sudo find "$ROOT/var/log" -type f -exec truncate -s0 {} \;
