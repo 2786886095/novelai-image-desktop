@@ -16,6 +16,7 @@ import crypto from 'node:crypto';
 import {createRequire} from 'node:module';
 import type {HarnessLog, HarnessPhase, HarnessSnapshot} from '../../src/harness-types';
 import {engineLaunchUrl, installVerifiedBundle, isNewerBundle, redactHarnessLog, validateManifest, verifyBundle} from './harness-policy';
+import {discardHarnessDownload} from './harness-update';
 
 const exec = promisify(execFile);
 export interface EngineOptions {
@@ -250,6 +251,8 @@ export class HarnessEngine {
     } catch(error) {await migration?.rollback();throw error;}
     this.version = manifest.version;
     this.log('组件校验完成。用户配置、插件及对话目录未覆盖。');
+    try{if(await discardHarnessDownload(this.options.root,source))this.log('已清理本次下载的临时副本；已安装组件、备份和用户资料保留。');}
+    catch{this.log('临时下载副本清理未完成，不影响已安装组件。','warn');}
     return {root:slot, manifest};
   }
   private async runAction(task: (signal: AbortSignal) => Promise<void>) {

@@ -5,6 +5,23 @@ import JSZip from 'jszip';
 import {chooseComponent} from './harness-update-check';
 import {safeBundlePath, validateManifest} from './harness-policy';
 
+/** Remove only a downloader-owned staging directory after successful activation. */
+export async function discardHarnessDownload(root:string, source:string) {
+  const parent=path.resolve(root,'downloads'),candidate=path.resolve(source);
+  if(path.dirname(candidate)!==parent||!/^[a-f0-9]{16}$/.test(path.basename(candidate)))return false;
+  const normalize=(p:string)=>process.platform==='win32'?p.toLowerCase():p;
+  if((await fs.lstat(parent)).isSymbolicLink()||(await fs.lstat(candidate)).isSymbolicLink())return false;
+  const canonicalParent=await fs.realpath(parent);
+  if(normalize(await fs.realpath(candidate))!==normalize(path.join(canonicalParent,path.basename(candidate))))return false;
+  let receipt:{manifestSha256?:string};
+  try{receipt=JSON.parse(await fs.readFile(path.join(candidate,'.studio-download.json'),'utf8'));}
+  catch{return false;}
+  const manifest=await fs.readFile(path.join(candidate,'manifest.json'));
+  if(receipt.manifestSha256!==crypto.createHash('sha256').update(manifest).digest('hex'))return false;
+  await fs.rm(candidate,{recursive:true,force:false});
+  return true;
+}
+
 /** Independent component releases, NOT upstream npm latest and NOT the application's updater. */
 export async function downloadCompatibleHarness(root: string, signal: AbortSignal, log:(text:string)=>void) {
   const headers={'Accept':'application/vnd.github+json','User-Agent':'Langbai-Tavern-Agent'};
@@ -55,7 +72,9 @@ export async function downloadCompatibleHarness(root: string, signal: AbortSigna
     if(percent>=lastExtract+10){lastExtract=percent;log(`Agent 解压校验 ${percent}%（${completed}/${count}）`);}
   }
   signal.throwIfAborted();
-  await fs.writeFile(path.join(staging,'manifest.json'),JSON.stringify(manifest));
+  const serialized=JSON.stringify(manifest);
+  await fs.writeFile(path.join(staging,'manifest.json'),serialized);
+  await fs.writeFile(path.join(staging,'.studio-download.json'),JSON.stringify({manifestSha256:crypto.createHash('sha256').update(serialized).digest('hex')}));
   return staging;
   }catch(error){
     // This uniquely created staging directory is never an installed engine or user home.

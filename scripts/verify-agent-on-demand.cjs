@@ -26,6 +26,7 @@ const {startHarnessBridge}=require('../dist-electron/electron/ipc/harness-bridge
  try{
   await engine.start();await fs.writeFile(path.join(root,'first-start.json'),JSON.stringify(engine.snapshot(),null,2));
   assert.equal(engine.snapshot().phase,'running');assert.equal(opened,1);assert.equal(downloads,1);result.checks.push('real download + verified install + authenticated HTTP 200');
+  assert.deepEqual(await fs.readdir(path.join(root,'downloads')),[]);result.checks.push('successful activation removes only the owned temporary download copy');
   await engine.stop();
   const sentinel=path.join(root,'user-home','user-preservation.txt');await fs.writeFile(sentinel,'user-owned sentinel');
   await engine.start();assert.equal(engine.snapshot().phase,'running');assert.equal(opened,2);assert.equal(downloads,1);
