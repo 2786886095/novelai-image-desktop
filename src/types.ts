@@ -1025,6 +1025,8 @@ export interface MetadataSnapshotResult {
 }
 
 export type DataBackupCategory =
+  | "tavernAgent"
+  | "styleLab"
   | "configuration"
   | "apiCredentials"
   | "agentWorkspace"
@@ -1071,6 +1073,12 @@ export interface DataBackupImportRequest {
   currentWorkspaceData?: Record<string, string>;
 }
 
+export interface DataBackupRecovery {
+  kind: "agent" | "detective";
+  id: string;
+  path: string;
+  status: "restored" | "staged" | "available";
+}
 export interface DataBackupImportResult {
   ok: boolean;
   message: string;
@@ -1081,6 +1089,9 @@ export interface DataBackupImportResult {
    * intentionally returned but never silently overwritten by the main process. */
   workspaceData?: Record<string, string>;
   rescueBackupPath?: string;
+  /** Complete native recovery folders; existing active workspaces are preserved. */
+  recoveryPaths?: string[];
+  recoveries?: DataBackupRecovery[];
 }
 
 export interface DataBackupOperationResult {
@@ -1380,6 +1391,7 @@ export interface AppSettings {
   proxyForTranslate: boolean;
   /** Preferred app update/download mirror. The other source remains fallback. */
   updateSource: "github";
+  completionSound?: { enabled: boolean; volume: number; dataUrl: string; name: string };
   theme: "light" | "dark" | "system";
   /** Explicit accessibility preference. It is intentionally independent from
    * Windows' generic animation-effects flag so performance tuning does not
@@ -1579,6 +1591,18 @@ export interface ImportedParams {
 }
 
 export interface NaiDesktopApi {
+  onStudioAgentRequest?: (callback:(request:import('./studio-agent-contract').StudioAgentRequest)=>void) => ()=>void;
+  replyStudioAgent: (id:string,reply:import('./studio-agent-contract').StudioAgentReply) => Promise<void>;
+  commitStudioSetting: (id:string,key:SettingKey,expected:AppSettings[SettingKey],value:AppSettings[SettingKey]) => Promise<void>;
+  harnessSnapshot: () => Promise<import("./harness-types").HarnessSnapshot>;
+  harnessStart: () => Promise<import("./harness-types").HarnessSnapshot>;
+  harnessStop: () => Promise<import("./harness-types").HarnessSnapshot>;
+  harnessPrepareUpdate: (kind: 'component' | 'official') => Promise<import("./harness-types").HarnessUpdateProposal>;
+  harnessApplyPreparedUpdate: (token: string) => Promise<import("./harness-types").HarnessSnapshot>;
+  harnessCheckUpdates: () => Promise<import("./harness-types").HarnessSnapshot>;
+  harnessUpdate: () => Promise<import("./harness-types").HarnessSnapshot>;
+  harnessOpenBackups: () => Promise<void>;
+  harnessRestoreBackup: () => Promise<import("./harness-types").HarnessSnapshot>;
   platform: NodeJS.Platform;
   getResourceDatabaseOverview: () => Promise<ResourceDatabaseOverview>;
   downloadResourceDatabase: (id: ResourceDatabaseId, confirmReplace?: boolean) => Promise<ResourceDatabaseDownloadResult>;
@@ -1588,6 +1612,9 @@ export interface NaiDesktopApi {
   clearResourceQueryCache: () => Promise<{ ok: boolean }>;
   relatedResourceTags: (tags: string[], limit?: number) => Promise<TagSuggestion[]>;
   onResourceDatabaseProgress: (callback: (event: ResourceDatabaseProgressEvent) => void) => () => void;
+  listPortableRecoveries: () => Promise<DataBackupRecovery[]>;
+  openPortableRecovery: (kind: "agent" | "detective", id: string) => Promise<void>;
+  activatePortableRecovery: (kind: "agent" | "detective", id: string) => Promise<{preserved: string}>;
   exportDataBackup: (request: DataBackupExportRequest) => Promise<DataBackupOperationResult>;
   inspectDataBackup: () => Promise<DataBackupInspectResult>;
   importDataBackup: (request: DataBackupImportRequest) => Promise<DataBackupImportResult>;
@@ -1691,6 +1718,16 @@ export interface NaiDesktopApi {
     loaded: number;
     total: number;
   }) => void) => () => void;
+  artistDetectiveStatus: () => Promise<import("./artist-detective-contract").DetectiveSnapshot>;
+  artistDetectiveDownloadStatus: () => Promise<import("../electron/ipc/detective-download").DetectiveDownloadStatus>;
+  artistDetectiveDownloadStart: () => Promise<import("../electron/ipc/detective-download").DetectiveDownloadStatus>;
+  artistDetectiveDownloadVariant: (variant: "full" | "light") => Promise<import("../electron/ipc/detective-download").DetectiveDownloadStatus>;
+  artistDetectiveDownloadCancel: () => Promise<import("../electron/ipc/detective-download").DetectiveDownloadStatus>;
+  artistDetectiveDownloadDirectory: () => Promise<import("../electron/ipc/detective-download").DetectiveDownloadStatus>;
+  artistDetectiveConfigure: (kind: "python" | "assets") => Promise<import("./artist-detective-contract").DetectiveSnapshot>;
+  artistDetectiveStart: (request: import("./artist-detective-contract").DetectiveRunRequest) => Promise<import("./artist-detective-contract").DetectiveSnapshot>;
+  artistDetectiveStop: () => Promise<import("./artist-detective-contract").DetectiveSnapshot>;
+  artistDetectiveOpenResults: () => Promise<void>;
   artistLabPickTarget: (sourcePath?: string) => Promise<{
     filePath: string;
     fileUrl: string;

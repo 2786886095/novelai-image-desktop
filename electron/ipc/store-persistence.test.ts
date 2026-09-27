@@ -1,7 +1,7 @@
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { atomicWriteFileSync, readWithBackupRecoverySync, rotateBackupsSync } from "./store";
 
 let dir: string;
@@ -13,6 +13,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -95,4 +96,35 @@ describe("readWithBackupRecoverySync", () => {
     const result = readWithBackupRecoverySync(file, parse, serialize);
     expect(result).toBeNull();
   });
+});
+
+describe('atomic save under Windows file sharing locks',()=>{
+ it.each(['EPERM','EBUSY','EACCES'])('retries transient %s without deleting the previous store',code=>{
+  atomicWriteFileSync(file,'ORIGINAL');
+  const rename=fs.renameSync.bind(fs);
+  const mock=vi.spyOn(fs,'renameSync').mockImplementationOnce(()=>{
+   expect(fs.readFileSync(file,'utf8')).toBe('ORIGINAL');
+   throw Object.assign(new Error('temporary lock'),{code});
+  }).mockImplementation(rename);
+  atomicWriteFileSync(file,'UPDATED');
+  expect(mock).toHaveBeenCalledTimes(2);
+  expect(fs.readFileSync(file,'utf8')).toBe('UPDATED');
+  expect(fs.readdirSync(dir)).toEqual(['store.json']);
+ });
+ it('bounds permanent permission failures and retains original bytes',()=>{
+  atomicWriteFileSync(file,'ORIGINAL');
+  const mock=vi.spyOn(fs,'renameSync').mockImplementation(()=>{throw Object.assign(new Error('locked'),{code:'EPERM'});});
+  expect(()=>atomicWriteFileSync(file,'NEW')).toThrow('locked');
+  expect(mock).toHaveBeenCalledTimes(5);
+  expect(fs.readFileSync(file,'utf8')).toBe('ORIGINAL');
+  expect(fs.readdirSync(dir)).toEqual(['store.json']);
+ });
+ it('does not retry unrelated failures or leave partial temporary files',()=>{
+  atomicWriteFileSync(file,'ORIGINAL');
+  const mock=vi.spyOn(fs,'renameSync').mockImplementation(()=>{throw Object.assign(new Error('no space'),{code:'ENOSPC'});});
+  expect(()=>atomicWriteFileSync(file,'NEW')).toThrow('no space');
+  expect(mock).toHaveBeenCalledTimes(1);
+  expect(fs.readFileSync(file,'utf8')).toBe('ORIGINAL');
+  expect(fs.readdirSync(dir)).toEqual(['store.json']);
+ });
 });

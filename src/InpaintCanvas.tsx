@@ -1,3 +1,4 @@
+import {RangeInput} from './components/RangeInput';
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Icon } from "./components/icons";
 import { droppedImagePath, hasDraggedFiles } from "./drag-drop";
@@ -574,9 +575,9 @@ export function InpaintCanvas() {
           />
           <span>{t("inpaint.gridUnit")}</span>
         </label>
-        <input
+        <RangeInput
           className="inpaint-toolbar-range"
-          type="range"
+          
           min={INPAINT_BRUSH_SLIDER_MIN}
           max={INPAINT_BRUSH_SLIDER_MAX}
           step={1}

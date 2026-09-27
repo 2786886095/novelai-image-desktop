@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:crypto/crypto.dart';
 
 import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -78,6 +79,115 @@ void main() {
 
   tearDown(() {
     if (root.existsSync()) root.deleteSync(recursive: true);
+  });
+
+  test('public backup API preserves desktop native capsules through mobile',
+      () async {
+    final supplied = Platform.environment['STUDIO_PORTABLE_INTEROP'];
+    final interop = supplied ?? root.path;
+    if (supplied == null) {
+      final bytes = utf8.encode('{"synthetic":true}');
+      final inner = Archive();
+      inner.addFile(
+          ArchiveFile('files/profiles/custom.json', bytes.length, bytes));
+      final manifest = utf8.encode(jsonEncode({
+        'version': 1,
+        'kind': 'agent',
+        'files': [
+          {
+            'name': 'profiles/custom.json',
+            'bytes': bytes.length,
+            'hash': sha256.convert(bytes).toString()
+          }
+        ],
+        'omitted': []
+      }));
+      inner.addFile(ArchiveFile('manifest.json', manifest.length, manifest));
+      final capsule = ZipEncoder().encode(inner)!;
+      final outer = Archive();
+      outer.addFile(ArchiveFile(
+          'portable-projects/agent-${sha256.convert(capsule)}.zip',
+          capsule.length,
+          capsule));
+      final old = utf8.encode(jsonEncode({
+        'format': DataBackupService.format,
+        'version': 1,
+        'categories': [
+          {'category': 'agentWorkspace', 'items': 0, 'bytes': 0}
+        ]
+      }));
+      outer.addFile(ArchiveFile('manifest.json', old.length, old));
+      await File('$interop/desktop.naisbackup')
+          .writeAsBytes(ZipEncoder().encode(outer)!);
+    }
+    final inspected = await service.inspect('$interop/desktop.naisbackup');
+    expect(
+        inspected.categories.any(
+            (c) => c.category == DataBackupCategory.tavernAgent && c.items > 0),
+        true);
+    final selected = {
+      DataBackupCategory.tavernAgent,
+      DataBackupCategory.styleLab
+    };
+    final report = await service.importBackup(
+        '$interop/desktop.naisbackup', selected,
+        confirmConfigurationOverwrite: true);
+    expect(report.retainedNativeArchives, greaterThan(0));
+    final exported = await service.createBackup(selected,
+        includeAssets: true, internal: true);
+    await File(exported.path).copy('$interop/mobile.naisbackup');
+    final before = ZipDecoder()
+        .decodeBytes(await File('$interop/desktop.naisbackup').readAsBytes());
+    final after = ZipDecoder()
+        .decodeBytes(await File('$interop/mobile.naisbackup').readAsBytes());
+    for (final file in before.files
+        .where((e) => e.isFile && e.name.startsWith('portable-projects/'))) {
+      expect(after.findFile(file.name)!.content, file.content);
+    }
+  });
+
+  test(
+      'imports both mobile and desktop workspace layers without replacing current state',
+      () async {
+    final archive = Archive();
+    void json(String name, Object value) {
+      final bytes = utf8.encode(jsonEncode(value));
+      archive.addFile(ArchiveFile(name, bytes.length, bytes));
+    }
+
+    json('manifest.json', {
+      'format': DataBackupService.format,
+      'version': 1,
+      'createdAt': '2026-09-27T00:00:00Z',
+      'source': {'platform': 'win32', 'appVersion': 'test'},
+      'categories': [
+        {'category': 'workspaceData', 'items': 2, 'bytes': 0}
+      ]
+    });
+    json('data/mobile-state.json',
+        {'mobile-only-project': 'keep mobile', 'existing': 'incoming'});
+    json('data/workspace.json', {
+      'langbai.artist-detective.v1': jsonEncode({
+        'prompt': 'keep desktop',
+        'parameters': {'model': 'nai-diffusion-4-5-full'}
+      })
+    });
+    final file = File('${root.path}/bridge.naisbackup')
+      ..writeAsBytesSync(ZipEncoder().encode(archive)!);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('existing', 'current');
+    await service.importBackup(file.path, {DataBackupCategory.workspaceData},
+        confirmConfigurationOverwrite: false);
+    expect(prefs.getString('mobile-only-project'), 'keep mobile');
+    expect(prefs.getString('existing'), 'current');
+    expect(
+        jsonDecode(prefs.getString('langbai.artist-detective.v1')!)['prompt'],
+        'keep desktop');
+    final exported =
+        await service.createBackup({DataBackupCategory.workspaceData});
+    final zip = ZipDecoder().decodeBytes(exported.readAsBytesSync());
+    expect(zip.findFile('data/mobile-state.json'), isNotNull);
+    expect(zip.findFile('data/workspace.json'), isNotNull);
   });
 
   test('migrates the old implicit image backup default to lightweight mode',

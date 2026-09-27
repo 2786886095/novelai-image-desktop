@@ -1,3 +1,6 @@
+import {useFeatureText} from "./feature-i18n";
+import {localizeStoreMessage} from './store-i18n';
+import {CompletionSoundSettings} from "./components/CompletionSoundSettings";
 import StyleLibrary, {StyleSortSelect,styleText} from "./StyleLibrary";
 import {sortStyles} from "./style-library";
 import {countStyleUse} from "./style-library-client";
@@ -27,7 +30,9 @@ import { format } from "date-fns";
 const loadToolsHub = () => import("./ToolsHub");
 const ToolsHub = lazy(loadToolsHub);
 const loadOnlineGalleryPage = () => import("./features/online-gallery/OnlineGalleryPage");
-const loadAgentPage = () => import("./AgentPage");
+// Native Harness component is currently distributed for Windows x64 only.
+// Keep the existing Tavern working on other desktop platforms until native bundles ship.
+const loadAgentPage = () => window.naiDesktop.platform === "win32" ? import("./HarnessPage") : import("./AgentPage");
 const loadInpaintCanvas = () => import("./InpaintCanvas").then((m) => ({ default: m.InpaintCanvas }));
 const loadMetadataInspector = () => import("./MetadataInspector");
 const OnlineGalleryPage = lazy(loadOnlineGalleryPage);
@@ -1718,12 +1723,12 @@ function PromptAndParams({
     setStyleNamePrompt({ stylePrompt, fallbackName });
   }
 
-  async function confirmSaveStylePromptPreset(rawName: string) {
+  async function confirmSaveStylePromptPreset(rawName: string, rating = 0) {
     const name = rawName.trim();
     if (!name || !styleNamePrompt) return;
     if (styleNamePrompt.presetId) {
       try {
-        await window.naiDesktop.setSetting("stylePromptPresets", stylePromptPresets.map(p => p.id === styleNamePrompt.presetId ? {...p, name} : p));
+        await window.naiDesktop.setSetting("stylePromptPresets", stylePromptPresets.map(p => p.id === styleNamePrompt.presetId ? {...p, name, rating} : p));
         await refreshSettings();
         setStyleNamePrompt(null);
         setToast(f("prompt.stylePresetSaved", { name }));
@@ -1734,12 +1739,13 @@ function PromptAndParams({
       id: makeStylePresetId(),
       name,
       prompt: styleNamePrompt.stylePrompt,
+      rating,
       group: selectedStylePresetGroup === "all" ? "Default" : selectedStylePresetGroup,
       createdAt: new Date().toISOString(),
       previewImages: [],
     };
-    setStyleNamePrompt(null);
     await window.naiDesktop.setSetting("stylePromptPresets", [...stylePromptPresets, preset]);
+    setStyleNamePrompt(null);
     await refreshSettings();
     setSelectedStylePresetId(preset.id);
     setToast(f("prompt.stylePresetSaved", { name }));
@@ -2171,7 +2177,7 @@ function PromptAndParams({
                       <button type="button" className="style-preset-more" title={t("prompt.styleMove")} aria-label={f("prompt.styleMoveTo", { name: preset.name })} onClick={() => setStylePresetActionId((current) => current === preset.id ? "" : preset.id)}><Icon name="moreHorizontal" /></button>
                       {stylePresetActionId === preset.id && (
                         <div className="style-preset-item-popover">
-                          <button type="button" onClick={() => {setStylePresetActionId(""); setStyleNamePrompt({stylePrompt: preset.prompt, fallbackName: preset.name, presetId: preset.id});}}>{characterPresetText(settings?.language).rename}</button>
+                          <button type="button" onClick={() => {setStylePresetActionId(""); setStyleNamePrompt({stylePrompt: preset.prompt, fallbackName: preset.name, presetId: preset.id});}}>{({'zh-CN':'编辑名称与评分','zh-TW':'編輯名稱與評分','en-US':'Edit name and rating','ja-JP':'名前・評価を編集','ko-KR':'이름 및 평점 편집'}[settings?.language ?? 'zh-CN'])}</button>
                           <strong>{t("prompt.styleMove")}</strong>
                           {stylePromptPresetGroups.map((group) => (
                             <button type="button" key={group} disabled={(preset.group || "Default") === group} onClick={() => void moveStylePromptPreset(preset.id, group)}>
@@ -2208,7 +2214,8 @@ function PromptAndParams({
           title={styleNamePrompt.presetId ? characterPresetText(settings?.language).rename : generateText.prompt.stylePresetSave}
           label={generateText.prompt.stylePresetNamePrompt}
           initial={styleNamePrompt.fallbackName}
-          onConfirm={(value) => void confirmSaveStylePromptPreset(value)}
+          initialRating={stylePromptPresets.find(p => p.id === styleNamePrompt.presetId)?.rating ?? 0}
+          onConfirm={(value, rating) => void confirmSaveStylePromptPreset(value, rating).catch(error => setToast(String(error)))}
           onClose={() => setStyleNamePrompt(null)}
         />
       )}
@@ -4683,6 +4690,7 @@ function ZoomableImageStage({
   const compareAnimationFrameRef = useRef<number | null>(null);
   const panStartRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
   const [zoom, setZoom] = useState(1);
+  const [fullscreen, setFullscreen] = useState(false);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [shellSize, setShellSize] = useState({ width: 0, height: 0 });
   const [intrinsicSize, setIntrinsicSize] = useState({ width: 0, height: 0 });
@@ -4708,6 +4716,7 @@ function ZoomableImageStage({
   }, [image.height, image.width, intrinsicSize.height, intrinsicSize.width, shellSize.height, shellSize.width]);
 
   useEffect(() => {
+    setFullscreen(false);
     setZoom(1);
     setPan({ x: 0, y: 0 });
     comparePositionRef.current = 50;
@@ -4875,6 +4884,7 @@ function ZoomableImageStage({
       <div
         ref={shellRef}
         data-image-copy-src={image.fileUrl}
+        onDoubleClick={event=>{if(!(event.target as HTMLElement).closest("button"))setFullscreen(true);}}
         tabIndex={0}
         aria-label={alt}
         onKeyDown={event=>{
@@ -4954,6 +4964,7 @@ function ZoomableImageStage({
           )}
         </div>
       </div>
+      {fullscreen&&<AppPortal><div className="style-image-lightbox" role="dialog" aria-modal="true" aria-label={alt} onClick={event=>{if(event.target===event.currentTarget)setFullscreen(false);}}><button type="button" aria-label={t("common.close")} onClick={()=>setFullscreen(false)}>×</button><PreviewImageViewer images={[{src:image.fileUrl,alt}]} index={0} onIndex={()=>{}} onBackgroundClick={()=>setFullscreen(false)} /></div></AppPortal>}
     </div>
   );
 }
@@ -5184,6 +5195,7 @@ function InputModal({
   title,
   label,
   initial,
+  initialRating,
   confirmText,
   onConfirm,
   onClose,
@@ -5191,11 +5203,16 @@ function InputModal({
   title: string;
   label: string;
   initial: string;
+  initialRating?: number;
   confirmText?: string;
-  onConfirm: (value: string) => void;
+  onConfirm: (value: string, rating?: number) => void;
   onClose: () => void;
 }) {
+  const ft=useFeatureText();
   const [value, setValue] = useState(initial);
+  const [rating, setRating] = useState(String(initialRating ?? 0));
+  const ratingValid = initialRating === undefined || (rating.trim() !== "" && Number.isFinite(Number(rating)) && Number(rating) >= 0 && Number(rating) <= 5);
+  const submit = () => { if(value.trim() && ratingValid) onConfirm(value, initialRating === undefined ? undefined : Number(rating)); };
   const language = useAppStore((state) => state.settings?.language);
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   return (
@@ -5214,15 +5231,20 @@ function InputModal({
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") onConfirm(value);
+                  if (e.key === "Enter") submit();
                   else if (e.key === "Escape") onClose();
                 }}
               />
             </label>
+            {initialRating !== undefined && <fieldset style={{border:0,padding:0,margin:0,display:"grid",gap:10}}><legend>{ft("评分 / Rating（0–5）")}</legend>
+              <SelectMenu ariaLabel={ft("快捷评分")} label={ft("快捷评分")} value={rating} options={Array.from({length:11},(_,i)=>({value:String(i/2),label:String(i/2)}))} onChange={setRating}/>
+              <label className="field"><span>{ft("自定义评分（例如 3.6、4.8）")}</span><input aria-label={ft("自定义评分")} type="number" min={0} max={5} step="any" value={rating} onChange={e=>setRating(e.target.value)} /></label>
+              {!ratingValid && <p role="alert">{ft("请输入 0 到 5 之间的数字。")}</p>}
+            </fieldset>}
           </div>
           <footer className="input-modal-footer">
             <Button onClick={onClose}>{t("common.cancel")}</Button>
-            <Button variant="primary" onClick={() => onConfirm(value)}>{confirmText ?? t("common.confirm")}</Button>
+            <Button variant="primary" disabled={!value.trim() || !ratingValid} onClick={submit}>{confirmText ?? t("common.confirm")}</Button>
           </footer>
         </div>
       </div>
@@ -5342,9 +5364,9 @@ function TokenGuideModal({ onClose }: { onClose: () => void }) {
           </footer>
         </div>
         {previewImage && (
-          <div className="token-guide-preview" onMouseDown={() => setPreviewImage("")}>
+          <div className="token-guide-preview" onClick={event=>{if(event.target===event.currentTarget)setPreviewImage("");}}>
             <button type="button" aria-label={text.close} onClick={() => setPreviewImage("")}><Icon name="close" /></button>
-            <img src={previewImage} alt={text.previewAlt} onMouseDown={(event) => event.stopPropagation()} draggable={false} />
+            <PreviewImageViewer images={[{src:previewImage,alt:text.previewAlt}]} index={0} onIndex={()=>{}} onBackgroundClick={()=>setPreviewImage("")}/>
           </div>
         )}
       </div>
@@ -5593,6 +5615,7 @@ const MemoizedHistoryPanel = memo(HistoryPanel);
 
 // ── Settings modal ────────────────────────────────────────────────────────────
 function SettingsModal({ onClose }: { onClose: () => void }) {
+  const ft=useFeatureText();
   const [section, setSection] = useState(
     () => new URLSearchParams(window.location.search).get("uiSettingsSection") ?? "api",
   );
@@ -5818,6 +5841,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
     ["templates", settingsShellText.nav.templates, "template"],
     ["prompt", settingsShellText.nav.prompt, "wand"],
     ["language", settingsShellText.nav.language, "globe"],
+    ["sound", ft("提示音"), "volume"],
     ["appearance", settingsShellText.nav.appearance, "palette"],
     ["performance", settingsShellText.nav.performance, "speed"],
     ["about", settingsShellText.nav.about, "info"],
@@ -6198,6 +6222,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                 </div>
               </div>
             )}
+            {section === "sound" && <div className="settings-form"><CompletionSoundSettings /></div>}
             {section === "appearance" && (
               <div className="settings-form">
                 <label className="field">
@@ -7188,12 +7213,12 @@ function MainPage() {
   // Final render-boundary guard: even if a future IPC path forgets to sanitize
   // an upstream HTML error page, it can never expand across the application.
   const displayStatusText = useMemo(
-    () => statusText ? compactRemoteErrorText(statusText, { serviceLabel: "NovelAI API 源", maxLength: 240 }) : "",
-    [statusText],
+    () => statusText ? compactRemoteErrorText(localizeStoreMessage(language,statusText), { serviceLabel: "NovelAI API", maxLength: 240 }) : "",
+    [statusText,language],
   );
   const displayToast = useMemo(
-    () => toast ? compactRemoteErrorText(toast, { serviceLabel: "NovelAI API 源", maxLength: 360 }) : "",
-    [toast],
+    () => toast ? compactRemoteErrorText(localizeStoreMessage(language,toast), { serviceLabel: "NovelAI API", maxLength: 360 }) : "",
+    [toast,language],
   );
   const workbenchActive = activeTab === "generate"
     || activeTab === "inpaint"
@@ -7318,7 +7343,7 @@ function MainPage() {
         </PersistentTabView>
         <PersistentTabView active={activeTab === "agent"} scope="tab:agent">
           <Suspense fallback={<div className="lazy-tool-loading">{t("tool.loadingTools")}</div>}>
-            <AgentPage />
+            <AgentPage active={activeTab === "agent"} />
           </Suspense>
         </PersistentTabView>
         <PersistentTabView active={activeTab === "referencePresets"} scope="tab:referencePresets">

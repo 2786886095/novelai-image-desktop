@@ -1,3 +1,4 @@
+import '../ui/zoomable_image.dart';
 import 'dart:convert';
 import 'character_preset_bar.dart' show characterPresetLabels;
 import 'dart:io';
@@ -405,55 +406,14 @@ class _PositivePromptPresetSheetState
   }
 
   void _showImage(PositivePromptPreset preset, StylePromptPreviewImage image) {
-    showDialog<void>(
-      context: context,
-      barrierColor: Colors.black.withOpacity(.9),
-      builder: (context) => Dialog.fullscreen(
-        backgroundColor: Colors.black,
-        child: SafeArea(
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: InteractiveViewer(
-                  minScale: .5,
-                  maxScale: 6,
-                  child: Center(
-                    child: Image.file(
-                      File(image.filePath),
-                      fit: BoxFit.contain,
-                      errorBuilder: (_, __, ___) => const Icon(
-                        Icons.broken_image_outlined,
-                        color: Colors.white70,
-                        size: 64,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              Positioned(
-                top: 8,
-                right: 8,
-                child: IconButton.filledTonal(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close),
-                ),
-              ),
-              Positioned(
-                left: 16,
-                right: 64,
-                bottom: 12,
-                child: Text(
-                  '${preset.name} · ${image.name}',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.white),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+    showGalleryImagePreview(context, images: [
+      Image.file(File(image.filePath),
+          fit: BoxFit.contain,
+          errorBuilder: (_, __, ___) =>
+              const Icon(Icons.broken_image_outlined, color: Colors.white70))
+    ], captions: [
+      '${preset.name} · ${image.name}'
+    ]);
   }
 
   Widget _presetList(

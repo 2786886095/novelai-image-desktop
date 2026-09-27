@@ -191,7 +191,16 @@ export function assignHistoryGroup(id: string, groupId?: string) {
  * Rename a saved image from the history panel: rename the file on disk (keeping
  * its extension, in the same folder, avoiding collisions) and update the index.
  */
+const renamingHistoryIds = new Set<string>();
 export async function renameHistoryItem(id: string, rawName: string): Promise<{ ok: boolean; message?: string; item?: HistoryItem }> {
+  // Windows may allow both pending unlinks to succeed. Serialize identity,
+  // not just destination filenames, before the first asynchronous operation.
+  if (renamingHistoryIds.has(id)) return {ok:false,message:"该图片正在重命名，请稍后重试。"};
+  renamingHistoryIds.add(id);
+  try { return await renameHistoryItemUnlocked(id, rawName); }
+  finally { renamingHistoryIds.delete(id); }
+}
+async function renameHistoryItemUnlocked(id: string, rawName: string): Promise<{ ok: boolean; message?: string; item?: HistoryItem }> {
   const items = getHistory();
   const item = items.find((it) => it.id === id);
   if (!item) return { ok: false, message: "找不到该图片记录。" };

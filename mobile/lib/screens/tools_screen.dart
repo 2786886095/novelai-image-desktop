@@ -168,54 +168,17 @@ class _InpaintPanelState extends State<_InpaintPanel> {
     if (strokes.isEmpty && !inverted) return;
     final raster = _rasterFor(workbench);
     final language = context.read<AppState>().settings.language;
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) => Dialog(
-        backgroundColor: Colors.black,
-        insetPadding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Text(
-                mobileUiTextFor(language, 'tools.maskPreviewTitle'),
-                style: const TextStyle(color: Colors.white),
-              ),
-            ),
-            Flexible(
-              child: InteractiveViewer(
-                maxScale: 8,
-                child: AspectRatio(
-                  aspectRatio: raster.sourceWidth / raster.sourceHeight,
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      Image.file(
-                        File(workbench.filePath),
-                        fit: BoxFit.fill,
-                      ),
-                      CustomPaint(
-                        key: const ValueKey('inpaint-mask-exact-preview'),
-                        painter: _InpaintMaskRasterPainter(
-                          raster: raster,
-                          inverted: inverted,
-                          color: maskColor.withOpacity(maskOpacity),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: Text(mobileUiTextFor(language, 'common.close')),
-            ),
-          ],
-        ),
-      ),
-    );
+    await showGalleryImagePreview(context,
+      captions: [mobileUiTextFor(language, 'tools.maskPreviewTitle')],
+      images: [AspectRatio(
+        aspectRatio: raster.sourceWidth / raster.sourceHeight,
+        child: Stack(fit: StackFit.expand, children: [
+          Image.file(File(workbench.filePath), fit: BoxFit.fill),
+          CustomPaint(key: const ValueKey('inpaint-mask-exact-preview'),
+            painter: _InpaintMaskRasterPainter(raster: raster, inverted: inverted,
+              color: maskColor.withOpacity(maskOpacity))),
+        ]),
+      )]);
   }
 
   Future<void> _openEditor(WorkingImage workbench) async {

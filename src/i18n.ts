@@ -107,9 +107,9 @@ const MAIN_TAB_LOCALES: Record<AppLanguage, MainTabLocale> = {
       desc: "浏览公开作品并提取提示词与原参数",
     },
     agent: {
-      label: "酒馆AI生图",
-      title: "酒馆 AI 生图",
-      desc: "自然对话整理提示词、搜索 Tag、分析画风并调用 NovelAI 生图",
+      label: "酒馆Agent",
+      title: "酒馆Agent",
+      desc: "启动、关闭与更新通用 Agent，查看实时运行日志",
     },
     records: {
       label: "记录",
@@ -161,9 +161,9 @@ const MAIN_TAB_LOCALES: Record<AppLanguage, MainTabLocale> = {
       desc: "瀏覽公開作品並擷取提示詞與原始參數",
     },
     agent: {
-      label: "酒館 AI 生圖",
-      title: "酒館 AI 生圖",
-      desc: "以自然對話整理提示詞、搜尋 Tag、分析畫風並呼叫 NovelAI 生圖",
+      label: "酒館Agent",
+      title: "酒館Agent",
+      desc: "啟動、關閉與更新 Agent，查看即時日誌",
     },
     records: {
       label: "記錄",
@@ -219,8 +219,8 @@ const MAIN_TAB_LOCALES: Record<AppLanguage, MainTabLocale> = {
       desc: "Browse public works and reuse prompts and original parameters",
     },
     agent: {
-      label: "Tavern AI",
-      title: "Tavern AI Image",
+      label: "Tavern Agent",
+      title: "Tavern Agent",
       desc: "Conversational prompting, tag search, style analysis, and NovelAI image generation",
     },
     records: {
@@ -277,8 +277,8 @@ const MAIN_TAB_LOCALES: Record<AppLanguage, MainTabLocale> = {
       desc: "公開作品を閲覧し、プロンプトと元パラメータを利用",
     },
     agent: {
-      label: "Tavern AI",
-      title: "Tavern AI 画像生成",
+      label: "Tavern Agent",
+      title: "酒場Agent",
       desc: "会話でプロンプト整理、Tag 検索、画風分析、NovelAI 画像生成",
     },
     records: {
@@ -335,8 +335,8 @@ const MAIN_TAB_LOCALES: Record<AppLanguage, MainTabLocale> = {
       desc: "공개 작품을 탐색하고 프롬프트와 원본 설정을 활용",
     },
     agent: {
-      label: "Tavern AI 이미지",
-      title: "Tavern AI 이미지",
+      label: "Tavern Agent",
+      title: "Tavern Agent",
       desc: "대화형 프롬프트 정리, Tag 검색, 화풍 분석과 NovelAI 이미지 생성",
     },
     records: {

@@ -62,6 +62,22 @@ import type {
 const imageSaves = createImageSaveTracker();
 
 contextBridge.exposeInMainWorld("naiDesktop", {
+  onStudioAgentRequest: (callback:(request:import('../src/studio-agent-contract').StudioAgentRequest)=>void) => {
+    const listener=(_event:Electron.IpcRendererEvent,request:import('../src/studio-agent-contract').StudioAgentRequest)=>callback(request);
+    ipcRenderer.on('studio-agent:request',listener);
+    return ()=>ipcRenderer.removeListener('studio-agent:request',listener);
+  },
+  replyStudioAgent: (id:string,reply:import('../src/studio-agent-contract').StudioAgentReply) => ipcRenderer.invoke('studio-agent:reply',id,reply),
+  commitStudioSetting: (id:string,key:SettingKey,expected:AppSettings[SettingKey],value:AppSettings[SettingKey]) => ipcRenderer.invoke('studio-agent:commit',id,key,expected,value),
+  harnessSnapshot: () => ipcRenderer.invoke("harness:snapshot"),
+  harnessStart: () => ipcRenderer.invoke("harness:start"),
+  harnessStop: () => ipcRenderer.invoke("harness:stop"),
+  harnessPrepareUpdate: (kind: 'component' | 'official') => ipcRenderer.invoke("harness:prepareUpdate", kind),
+  harnessApplyPreparedUpdate: (token: string) => ipcRenderer.invoke("harness:applyPreparedUpdate", token),
+  harnessCheckUpdates: () => ipcRenderer.invoke("harness:checkUpdates"),
+  harnessUpdate: () => ipcRenderer.invoke("harness:update"),
+  harnessOpenBackups: () => ipcRenderer.invoke("harness:openBackups"),
+  harnessRestoreBackup: () => ipcRenderer.invoke("harness:restoreBackup"),
   onImageSaveFeedback: (callback: (notices: ImageSaveNotice[]) => void) => imageSaves.subscribe(callback),
   dismissImageSaveFeedback: (id: number) => imageSaves.dismiss(id),
   platform: process.platform,
@@ -84,6 +100,11 @@ contextBridge.exposeInMainWorld("naiDesktop", {
     ipcRenderer.on("resource-database:progress", listener);
     return () => ipcRenderer.removeListener("resource-database:progress", listener);
   },
+  listPortableRecoveries: () => ipcRenderer.invoke("dataBackup:listRecoveries"),
+  openPortableRecovery: (kind: "agent" | "detective", id: string): Promise<void> =>
+    ipcRenderer.invoke("dataBackup:openRecovery", kind, id),
+  activatePortableRecovery: (kind: "agent" | "detective", id: string): Promise<{preserved:string}> =>
+    ipcRenderer.invoke("dataBackup:activateRecovery", kind, id),
   exportDataBackup: (request: DataBackupExportRequest): Promise<DataBackupOperationResult> =>
     ipcRenderer.invoke("dataBackup:export", request),
   inspectDataBackup: (): Promise<DataBackupInspectResult> =>
@@ -137,6 +158,16 @@ contextBridge.exposeInMainWorld("naiDesktop", {
   promptCodexUpdate: (): Promise<PromptCodexSnapshot> =>
     ipcRenderer.invoke("promptCodex:update"),
   artistLabPickTarget: (sourcePath?: string) => ipcRenderer.invoke("artistLab:pickTarget", sourcePath),
+  artistDetectiveStatus: () => ipcRenderer.invoke("artistDetective:status"),
+  artistDetectiveDownloadStatus: () => ipcRenderer.invoke("artistDetective:downloadStatus"),
+  artistDetectiveDownloadStart: () => ipcRenderer.invoke("artistDetective:downloadStart"),
+  artistDetectiveDownloadVariant: (variant: "full" | "light") => ipcRenderer.invoke("artistDetective:downloadVariant", variant),
+  artistDetectiveDownloadCancel: () => ipcRenderer.invoke("artistDetective:downloadCancel"),
+  artistDetectiveDownloadDirectory: () => ipcRenderer.invoke("artistDetective:downloadDirectory"),
+  artistDetectiveConfigure: (kind: "python" | "assets") => ipcRenderer.invoke("artistDetective:configure", kind),
+  artistDetectiveStart: (request: import("../src/artist-detective-contract").DetectiveRunRequest) => ipcRenderer.invoke("artistDetective:start", request),
+  artistDetectiveStop: () => ipcRenderer.invoke("artistDetective:stop"),
+  artistDetectiveOpenResults: () => ipcRenderer.invoke("artistDetective:openResults"),
   artistLabSearchArtists: (query?: string, limit?: number) =>
     ipcRenderer.invoke("artistLab:searchArtists", query, limit),
   artistLabPopularArtists: (limit?: number, force?: boolean) =>

@@ -17,6 +17,7 @@ import '../prompts/positive_prompt_presets.dart';
 import '../prompts/prompt_mode.dart';
 import '../references/reference_presets.dart';
 import 'storage.dart';
+import 'portable_projects.dart';
 
 // ZipEncoder is synchronous. Running it on Flutter's UI isolate made a due
 // backup freeze scrolling and touch input for large libraries. Keep the
@@ -26,6 +27,8 @@ List<int>? _encodeBackupArchive(Archive archive) =>
 
 /// Canonical categories shared with the Electron archive implementation.
 enum DataBackupCategory {
+  tavernAgent('tavernAgent'),
+  styleLab('styleLab'),
   configuration('configuration'),
   apiCredentials('apiCredentials'),
   artistLibrary('artistLibrary'),
@@ -86,12 +89,14 @@ class DataBackupImportReport {
   final int skipped;
   final int renamed;
   final String rescueBackupPath;
+  final int retainedNativeArchives;
 
   const DataBackupImportReport({
     required this.imported,
     required this.skipped,
     required this.renamed,
     required this.rescueBackupPath,
+    this.retainedNativeArchives = 0,
   });
 }
 
@@ -821,6 +826,11 @@ class DataBackupService {
       ));
     }
 
+    if (includeAssets) {
+      await PortableProjects.export(
+          archive, requested.map((c) => c.id).toSet());
+    }
+    summaries.addAll(_nativeSummaries(archive));
     final manifest = {
       'format': format,
       'version': formatVersion,
@@ -932,6 +942,30 @@ class DataBackupService {
     return jsonDecode(utf8.decode(bytes));
   }
 
+  List<DataBackupCategorySummary> _nativeSummaries(Archive archive) {
+    final capsules =
+        PortableProjects.inspect(archive, {'tavernAgent', 'styleLab'});
+    final stats = <DataBackupCategory, List<int>>{};
+    for (final entry in capsules.entries) {
+      final category = entry.key.startsWith('agent-')
+          ? DataBackupCategory.tavernAgent
+          : DataBackupCategory.styleLab;
+      final zip = ZipDecoder().decodeBytes(entry.value);
+      final data = jsonDecode(
+              utf8.decode(zip.findFile('manifest.json')!.content as List<int>))
+          as Map;
+      final counts = stats.putIfAbsent(category, () => [0, 0]);
+      for (final file in data['files'] as List) {
+        counts[0]++;
+        counts[1] += (file['bytes'] as int);
+      }
+    }
+    return stats.entries
+        .map((e) => DataBackupCategorySummary(
+            category: e.key, items: e.value[0], bytes: e.value[1]))
+        .toList();
+  }
+
   Future<DataBackupInspection> inspect(String filePath) async {
     final bundle = await _loadArchive(filePath);
     final source = bundle.manifest['source'] is Map
@@ -949,6 +983,10 @@ class DataBackupService {
         bytes: (json['bytes'] as num?)?.toInt() ?? 0,
       ));
     }
+    summaries.removeWhere((s) =>
+        s.category == DataBackupCategory.tavernAgent ||
+        s.category == DataBackupCategory.styleLab);
+    summaries.addAll(_nativeSummaries(bundle.archive));
     return DataBackupInspection(
       path: filePath,
       createdAt:
@@ -1702,6 +1740,8 @@ class DataBackupService {
           'Configuration overwrite requires a second confirmation.');
     }
     final bundle = await _loadArchive(filePath);
+    final portable = PortableProjects.inspect(
+        bundle.archive, requested.map((c) => c.id).toSet());
     // No write is permitted until a complete rescue archive reaches disk.
     final rescue = await createBackup(
       DataBackupCategory.values.toSet(),
@@ -1709,6 +1749,7 @@ class DataBackupService {
       prefix: 'before-import',
       internal: true,
     );
+    await PortableProjects.restore(portable);
     final counters = _Counters();
     var settings = await storage.getSettings();
 
@@ -1723,7 +1764,8 @@ class DataBackupService {
       // Configuration is the only overwrite category, but device-specific
       // output paths, API values, and merge-only preset libraries stay intact.
       incoming['imageOutputDir'] = current['imageOutputDir'];
-      incoming['onlineGalleryDownloadDir'] = current['onlineGalleryDownloadDir'];
+      incoming['onlineGalleryDownloadDir'] =
+          current['onlineGalleryDownloadDir'];
       incoming['backupDir'] = current['backupDir'];
       for (final key in _apiSettingKeys) {
         incoming[key] = current[key];
@@ -1886,9 +1928,10 @@ class DataBackupService {
       final mobile = _readJson(bundle, 'data/mobile-state.json');
       if (mobile is Map) {
         await _restoreWorkspace(Map<String, dynamic>.from(mobile), counters);
-      } else {
-        // Desktop archives only have renderer workspace strings. They remain
-        // namespaced and non-destructive on mobile.
+      }
+      {
+        // Restore both layers. A desktop round-trip can carry mobile-state
+        // alongside newly added renderer projects; neither may be discarded.
         final renderer = _readJson(bundle, 'data/workspace.json', const {});
         if (renderer is Map) {
           await _restoreWorkspace(
@@ -1916,6 +1959,7 @@ class DataBackupService {
       skipped: counters.skipped,
       renamed: counters.renamed,
       rescueBackupPath: rescue.path,
+      retainedNativeArchives: portable.length,
     );
   }
 

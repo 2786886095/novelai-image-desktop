@@ -81,6 +81,12 @@ jobs:
         if: runner.os == 'macOS'
         run: node scripts/install-macos-sharp.mjs
 
+      - name: Fetch hash-pinned Windows Agent seed
+        if: runner.os == 'Windows'
+        run: node scripts/fetch-harness-seed.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
+
       - name: Build app (${{ matrix.name }})
         run: npm run build && npx electron-builder --publish never
         env:

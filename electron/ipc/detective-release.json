@@ -1,0 +1,34 @@
+{
+  "version": "2026.09.26.2",
+  "platform": "win32-x64",
+  "sourceCommit": "f970abedbd54250c7b280df12f291592d10af4c3",
+  "defaultVariant": "full",
+  "packages": [
+    {
+      "file": "novelai-desktop-assets-20260926.zip",
+      "bytes": 8621242078,
+      "sha256": "49f95f9f22820da6955395ffe8c8e62a89218d1b58afe82d74f556d4762d171a",
+      "kind": "assets",
+      "variant": "full",
+      "directory": "novelai-desktop-assets"
+    },
+    {
+      "file": "artist-detective-novelai-light-desktop-assets-20260926.zip",
+      "bytes": 1958012035,
+      "sha256": "90b09b7f70cc0182ed9cbe5cc5b51bb759177635f6a22e7d45ae2df922d76014",
+      "kind": "assets",
+      "variant": "light",
+      "directory": "novelai-light-desktop-assets"
+    },
+    {
+      "file": "artist-detective-runtime-win-x64-cu128-f970abe.zip",
+      "bytes": 3535322169,
+      "sha256": "4935701575788f20e2545fd04300b70a3bde4763af0d5db3416686d31991565c",
+      "kind": "runtime"
+    }
+  ],
+  "minimumVramGB": {
+    "full": 8,
+    "light": null
+  }
+}

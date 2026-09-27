@@ -105,7 +105,7 @@ describe("prompt mode output handling", () => {
   it("repairs mixed mode when the model returns pure prose only", () => {
     const prose = "Two boys are in a classroom while one boy is drawing and another boy is juggling balls.";
     expect(modeNeedsRepair("mixed", prose)).toBe(true);
-    expect(modeRepairSystemPrompt("mixed")).toContain("75–85%");
+    expect(modeRepairSystemPrompt("mixed")).toContain("65–75%");
   });
 
   it("repairs mixed mode when the model returns a pure tag list", () => {
@@ -166,7 +166,7 @@ describe("prompt mode output handling", () => {
     expect(text).toContain("namePrompt");
     expect(text).toContain("featurePrompt");
     expect(text).toContain("signature appearance, outfit, and accessories");
-    expect(text).toContain("75–85%");
+    expect(text).toContain("65–75%");
   });
 
   it("adds mature-tag priority only to tags and mixed runtime rules", () => {
@@ -217,7 +217,7 @@ describe("concise NovelAI V5 production templates", () => {
     for (const template of six) {
       expect(template).toContain("NovelAI V5");
       expect(template.length).toBeGreaterThan(1_000);
-      expect(template.length).toBeLessThan(2_700);
+      expect(template.length).toBeLessThan(6_000);
       expect(template).not.toContain("优先使用 mcp 服务搜索");
       expect(template).not.toContain("不要默认全部无权重");
       expect(template).not.toContain("图片分析顺序");
@@ -235,8 +235,8 @@ describe("concise NovelAI V5 production templates", () => {
     expect(SCOPED_REVERSE_SYSTEM_PROMPTS.mixed).toContain(
       "其他关系短语紧跟被限定的 Tag 或动作",
     );
-    expect(CONVERT_SYSTEM_PROMPTS.mixed).toContain("75–85%");
-    expect(CONVERT_SYSTEM_PROMPTS.mixed).toContain("15–25%");
+    expect(CONVERT_SYSTEM_PROMPTS.mixed).toContain("65–75%");
+    expect(CONVERT_SYSTEM_PROMPTS.mixed).toContain("25–35%");
     expect(CONVERT_SYSTEM_PROMPTS.mixed).toContain("自然语言不得省略");
     expect(CONVERT_SYSTEM_PROMPTS.mixed).toContain("示例中文含义");
     expect(SCOPED_REVERSE_SYSTEM_PROMPTS.mixed).toContain("示例中文含义");

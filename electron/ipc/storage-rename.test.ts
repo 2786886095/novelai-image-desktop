@@ -40,6 +40,12 @@ describe('history image rename identity and collisions', () => {
     expect(await fs.readFile(fixture.items[0].filePath, 'utf8')).toBe('a');
     expect((await fs.readdir(directory)).length).toBe(2);
   });
+  it('releases the identity lock after a missing source failure', async () => {
+    const original=fixture.items[0].filePath;await fs.unlink(original);
+    expect((await renameHistoryItem('a','failed-name')).ok).toBe(false);
+    await fs.writeFile(original,'a');
+    expect((await renameHistoryItem('a','recovered-name')).ok).toBe(true);
+  });
   it('does not overwrite a destination that already exists', async () => {
     const target = path.join(directory, 'new-name.png');
     await fs.writeFile(target, 'existing');

@@ -55,6 +55,27 @@ export function selectedBatchRedrawCandidate(
   );
 }
 
+export type BatchRedrawPreviewEntry = {
+  itemId: string;
+  name: string;
+  url: string;
+  candidateId?: string;
+};
+
+/** Originals and generated outputs are separate galleries, never alternating pages. */
+export function batchRedrawPreviewEntries(
+  items: BatchRedrawItem[],
+  currentUrl: string,
+): BatchRedrawPreviewEntry[] {
+  const outputs = items.flatMap(item => batchRedrawCandidates(item).map(candidate => ({
+    itemId: item.id, name: item.name, url: candidate.resultUrl, candidateId: candidate.id,
+  })));
+  if (outputs.some(entry => entry.url === currentUrl)) return outputs;
+  const originals = items.map(item => ({itemId: item.id, name: item.name,
+    url: item.base64.startsWith('data:') ? item.base64 : `data:image/png;base64,${item.base64}`}));
+  return originals.some(entry => entry.url === currentUrl) ? originals : [];
+}
+
 function withCandidateAliases(
   item: BatchRedrawItem,
   candidates: BatchRedrawCandidate[],

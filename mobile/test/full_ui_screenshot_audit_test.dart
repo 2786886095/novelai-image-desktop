@@ -28,6 +28,7 @@ import 'package:novelai_mobile/screens/metadata_inspector_screen.dart';
 import 'package:novelai_mobile/screens/prompt_codex_screen.dart';
 import 'package:novelai_mobile/screens/random_artist_lab_screen.dart';
 import 'package:novelai_mobile/screens/settings_screen.dart';
+import 'package:novelai_mobile/screens/data_backup_settings.dart';
 import 'package:novelai_mobile/screens/tools_hub_screen.dart';
 import 'package:novelai_mobile/screens/tools_screen.dart';
 import 'package:novelai_mobile/services/aitag_service.dart';
@@ -387,6 +388,7 @@ List<({String name, _SurfaceBuilder build})> _surfaces() => [
       (name: 'gallery', build: (_) => const GalleryScreen()),
       (name: 'ai-log', build: (_) => const AiLogScreen()),
       (name: 'settings', build: (_) => const SettingsScreen()),
+      (name: 'backup-modules', build: (_) => const Scaffold(body:SafeArea(child:SingleChildScrollView(child:DataBackupSettingsPanel(initiallyExpanded:true))))),
       (
         name: 'prompt-codex',
         build: (_) => PromptCodexScreen(
@@ -651,7 +653,8 @@ void main() {
             }
           }
           expect(imageButton, findsWidgets);
-          await tester.tap(find.textContaining('/3').last);
+          // Target the actual image-manager control, not the obsolete 3-image limit.
+          await tester.tap(imageButton.last);
           await tester.pump(const Duration(milliseconds: 420));
           await tester.runAsync(
             () => Future<void>.delayed(const Duration(milliseconds: 120)),

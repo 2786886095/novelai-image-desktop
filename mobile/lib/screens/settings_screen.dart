@@ -1,3 +1,4 @@
+import '../ui/zoomable_image.dart';
 import '../ui/studio_theme.dart';
 import '../ui/studio_dropdown.dart';
 import 'dart:convert';
@@ -1651,36 +1652,9 @@ class _TokenGuideScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 10),
                       InkWell(
-                        onTap: () => showDialog<void>(
-                          context: context,
-                          builder: (previewContext) => Dialog.fullscreen(
-                            backgroundColor: Colors.black,
-                            child: Stack(
-                              fit: StackFit.expand,
-                              children: [
-                                InteractiveViewer(
-                                  minScale: 0.5,
-                                  maxScale: 5,
-                                  child: Image.asset(
-                                    images[index],
-                                    fit: BoxFit.contain,
-                                  ),
-                                ),
-                                Positioned(
-                                  top: 12,
-                                  right: 12,
-                                  child: SafeArea(
-                                    child: IconButton.filled(
-                                      onPressed: () =>
-                                          Navigator.pop(previewContext),
-                                      icon: const Icon(Icons.close),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
+                        onTap: () => showGalleryImagePreview(context,
+                          images: images.map((path) => Image.asset(path, fit: BoxFit.contain)).toList(),
+                          initialIndex: index),
                         child: AspectRatio(
                           aspectRatio: 1.92,
                           child: Image.asset(

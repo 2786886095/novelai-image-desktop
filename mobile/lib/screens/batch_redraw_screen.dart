@@ -1,3 +1,4 @@
+import '../ui/zoomable_image.dart';
 import '../ui/studio_dropdown.dart';
 import 'dart:convert';
 import 'dart:io';
@@ -46,34 +47,8 @@ String _batchSizePath(BatchRedrawProject project, BatchRedrawItem item) {
 
 Future<void> _previewBatchImage(BuildContext context, String path) async {
   if (path.isEmpty || !File(path).existsSync()) return;
-  await showDialog<void>(
-    context: context,
-    builder: (dialogContext) => Dialog.fullscreen(
-      backgroundColor: Colors.black,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          InteractiveViewer(
-            minScale: 0.5,
-            maxScale: 6,
-            child: Center(
-              child: Image.file(File(path), fit: BoxFit.contain),
-            ),
-          ),
-          Positioned(
-            top: 12,
-            right: 12,
-            child: SafeArea(
-              child: IconButton.filled(
-                onPressed: () => Navigator.pop(dialogContext),
-                icon: const Icon(Icons.close),
-              ),
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
+  await showGalleryImagePreview(context,
+      images: [Image.file(File(path), fit: BoxFit.contain)]);
 }
 
 class BatchRedrawScreen extends StatelessWidget {

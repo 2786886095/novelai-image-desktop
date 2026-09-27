@@ -1,3 +1,4 @@
+import '../ui/zoomable_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -214,9 +215,15 @@ class _GalleryFavoritesScreenState extends State<GalleryFavoritesScreen> {
                                                     width: double.infinity,
                                                     child: _FavoriteImage(
                                                         item: item,
-                                                        url: (item.images.firstOrNull?['thumb'] ?? '').isNotEmpty
-                                                            ? item.images.first['thumb']!
-                                                            : item.images.firstOrNull?['url'] ?? '')))),
+                                                        url: (item.images.firstOrNull?[
+                                                                        'thumb'] ??
+                                                                    '')
+                                                                .isNotEmpty
+                                                            ? item.images
+                                                                .first['thumb']!
+                                                            : item.images
+                                                                    .firstOrNull?['url'] ??
+                                                                '')))),
                                         Padding(
                                             padding: const EdgeInsets.symmetric(
                                                 horizontal: 8),
@@ -309,10 +316,12 @@ class _FavoriteImage extends StatelessWidget {
       ? const Center(child: Icon(Icons.image_not_supported_outlined))
       : Image.network(url,
           fit: BoxFit.contain,
-          headers: item.source == 'aitag' ? aitagImageHeaders : {
-            'Referer': item.sourceUrl,
-            'User-Agent': 'Langbai-NovelAI-Studio-Mobile'
-          },
+          headers: item.source == 'aitag'
+              ? aitagImageHeaders
+              : {
+                  'Referer': item.sourceUrl,
+                  'User-Agent': 'Langbai-NovelAI-Studio-Mobile'
+                },
           errorBuilder: (_, __, ___) =>
               const Center(child: Icon(Icons.broken_image_outlined)));
 }
@@ -332,14 +341,17 @@ class _FavoriteDetailState extends State<_FavoriteDetail> {
         text = galleryLibraryText(context.watch<AppState>().settings.language);
     return Scaffold(
         appBar: AppBar(
-            title: Text(item.source == 'tags-gallery' ? localizedGalleryTag(item.title, context.watch<AppState>().settings.language) : item.title),
+            title: Text(item.source == 'tags-gallery'
+                ? localizedGalleryTag(
+                    item.title, context.watch<AppState>().settings.language)
+                : item.title),
             actions: [GalleryFavoriteButton(item: item)]),
         body: SafeArea(
             child: ListView(padding: const EdgeInsets.all(16), children: [
           SizedBox(
               height: MediaQuery.sizeOf(context).height * .6,
-              child: InteractiveViewer(
-                  child: _FavoriteImage(
+              child: ZoomableImage(
+                  image: _FavoriteImage(
                       item: item,
                       url: item.images.elementAtOrNull(index)?['url'] ?? ''))),
           Row(mainAxisAlignment: MainAxisAlignment.center, children: [

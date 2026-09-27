@@ -4,7 +4,7 @@ import {useAppStore} from '../store';
 import {historyPickerText} from './HistoryImagePicker';
 import {desktopUiText} from '../i18n';
 export type PreviewImage={src:string;alt:string};
-export function PreviewImageViewer({images,index,onIndex,renderImage,showNavigation=true,onBackgroundClick}:{images:PreviewImage[];index:number;onIndex:(index:number)=>void;renderImage?:ReactNode;showNavigation?:boolean;onBackgroundClick?:()=>void}) {
+export function PreviewImageViewer({images,index,onIndex,renderImage,showNavigation=true,onBackgroundClick}:{images:PreviewImage[];index:number;onIndex:(index:number)=>void;renderImage?:ReactNode;showNavigation?:boolean;onBackgroundClick:()=>void}) {
  const language=useAppStore(s=>s.settings?.language),text=historyPickerText(language);
  const zoomLabels:Record<string,string[]>={'zh-CN':['缩小','放大'],'zh-TW':['縮小','放大'],'ja-JP':['縮小','拡大'],'ko-KR':['축소','확대']};
  const zoomText=zoomLabels[String(language)]??['Zoom out','Zoom in'];
@@ -12,14 +12,17 @@ export function PreviewImageViewer({images,index,onIndex,renderImage,showNavigat
  const root=useRef<HTMLDivElement>(null),stage=useRef<HTMLDivElement>(null),img=useRef<HTMLImageElement>(null),drag=useRef<{x:number;y:number;px:number;py:number}|null>(null);
  const moved=useRef(false);
  const backgroundPress=useRef(false);
+ const pointerStart=useRef<{x:number;y:number}|null>(null);
+ const isBlank=(target:EventTarget)=>target instanceof Element&&!target.closest("img,button,a,input,textarea,select,video,canvas,[role=button],.image-preview-controls span");
  const image=images[index];
  const reset=()=>{setScale(1);setPan({x:0,y:0});};
  useEffect(()=>{reset();drag.current=null;},[image?.src]);
  useEffect(()=>{root.current?.focus({preventScroll:true});},[]);
  function move(delta:number){const next=index+delta;if(next>=0&&next<images.length)onIndex(next);}
  function zoom(next:number){setScale(Math.min(8,Math.max(1,next)));setPan({x:0,y:0});}
- return <div ref={root} className="image-preview-viewer" tabIndex={0} onPointerDownCapture={e=>{moved.current=false;backgroundPress.current=e.target===root.current||e.target===stage.current;}} onMouseDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();if(moved.current){moved.current=false;return;}if(backgroundPress.current&&(e.target===root.current||e.target===stage.current))onBackgroundClick?.();}} onKeyDown={e=>{
+ return <div ref={root} className="image-preview-viewer" tabIndex={0} onPointerDownCapture={e=>{moved.current=false;pointerStart.current={x:e.clientX,y:e.clientY};backgroundPress.current=e.button===0&&isBlank(e.target);}} onPointerMoveCapture={e=>{const start=pointerStart.current;if(start&&Math.hypot(e.clientX-start.x,e.clientY-start.y)>4)moved.current=true;}} onPointerCancel={()=>{pointerStart.current=null;backgroundPress.current=false;}} onMouseDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();if(moved.current){moved.current=false;return;}if(backgroundPress.current&&isBlank(e.target))onBackgroundClick();backgroundPress.current=false;}} onKeyDown={e=>{
   if((e.target as HTMLElement).closest('input,textarea,[contenteditable="true"]'))return;
+  if(e.key==='Escape'){e.preventDefault();e.stopPropagation();onBackgroundClick();return;}
   const delta=e.key==='ArrowRight'||e.key==='ArrowDown'?1:e.key==='ArrowLeft'||e.key==='ArrowUp'?-1:0;
   if(delta&&showNavigation){e.preventDefault();e.stopPropagation();move(delta);}
  }}>

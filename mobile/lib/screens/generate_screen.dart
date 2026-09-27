@@ -4260,34 +4260,8 @@ class _ReferencePresetLibraryPanelState
 
   Future<void> _previewPreset(
       BuildContext context, ReferencePreset preset) async {
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) => Dialog.fullscreen(
-        child: SafeArea(
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: InteractiveViewer(
-                  minScale: 0.5,
-                  maxScale: 5,
-                  child: Center(
-                    child: _presetImage(preset.filePath),
-                  ),
-                ),
-              ),
-              Positioned(
-                right: 12,
-                top: 12,
-                child: IconButton.filledTonal(
-                  onPressed: () => Navigator.pop(dialogContext),
-                  icon: const Icon(Icons.close),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+    await showGalleryImagePreview(context,
+        images: [_presetImage(preset.filePath)], captions: [preset.name]);
   }
 
   Future<void> _deletePreset(

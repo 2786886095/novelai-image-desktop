@@ -1,3 +1,4 @@
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -20,7 +21,8 @@ Future<void> showGalleryImagePreview(BuildContext context,
           initialIndex: initialIndex,
           language: context.read<AppState>().settings.language,
           captions: captions,
-          actionsBuilder: actionsBuilder, footerBuilder: footerBuilder));
+          actionsBuilder: actionsBuilder,
+          footerBuilder: footerBuilder));
 }
 
 class ZoomableImage extends StatefulWidget {
@@ -148,7 +150,8 @@ class _FullscreenImageViewer extends StatefulWidget {
       required this.initialIndex,
       required this.language,
       this.captions,
-      this.actionsBuilder, this.footerBuilder});
+      this.actionsBuilder,
+      this.footerBuilder});
   @override
   State<_FullscreenImageViewer> createState() => _FullscreenImageViewerState();
 }
@@ -156,6 +159,33 @@ class _FullscreenImageViewer extends StatefulWidget {
 class _FullscreenImageViewerState extends State<_FullscreenImageViewer> {
   late int index;
   final controller = TransformationController();
+  final imageKey = GlobalKey();
+
+  bool _insideImage(Offset global) {
+    final root = imageKey.currentContext?.findRenderObject();
+    if (root == null) return false;
+    bool foundImage = false, inside = false;
+    void visit(RenderObject node) {
+      if (node is RenderImage && node.image != null) {
+        foundImage = true;
+        final source = Size(
+            node.image!.width / node.scale, node.image!.height / node.scale);
+        final fitted =
+            applyBoxFit(node.fit ?? BoxFit.scaleDown, source, node.size);
+        final alignment = node.alignment.resolve(node.textDirection);
+        final rect =
+            alignment.inscribe(fitted.destination, Offset.zero & node.size);
+        inside = inside || rect.contains(node.globalToLocal(global));
+      }
+      node.visitChildren(visit);
+    }
+
+    visit(root);
+    if (foundImage) return inside;
+    return root is RenderBox &&
+        (Offset.zero & root.size).contains(root.globalToLocal(global));
+  }
+
   @override
   void initState() {
     super.initState();
@@ -185,6 +215,10 @@ class _FullscreenImageViewerState extends State<_FullscreenImageViewer> {
             autofocus: true,
             onKeyEvent: (_, event) {
               if (event is! KeyDownEvent) return KeyEventResult.ignored;
+              if (event.logicalKey == LogicalKeyboardKey.escape) {
+                Navigator.pop(context);
+                return KeyEventResult.handled;
+              }
               if (event.logicalKey == LogicalKeyboardKey.arrowRight ||
                   event.logicalKey == LogicalKeyboardKey.arrowDown) {
                 move(1);
@@ -198,11 +232,20 @@ class _FullscreenImageViewerState extends State<_FullscreenImageViewer> {
               return KeyEventResult.ignored;
             },
             child: Stack(fit: StackFit.expand, children: [
-              InteractiveViewer(
-                  transformationController: controller,
-                  minScale: 1,
-                  maxScale: 10,
-                  child: Center(child: widget.images[index])),
+              GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTapUp: (details) {
+                    if (!_insideImage(details.globalPosition)) {
+                      Navigator.pop(context);
+                    }
+                  },
+                  child: InteractiveViewer(
+                      transformationController: controller,
+                      minScale: 1,
+                      maxScale: 10,
+                      child: Center(
+                          child: SizedBox(
+                              key: imageKey, child: widget.images[index])))),
               if (widget.captions != null && index < widget.captions!.length)
                 Positioned(
                     top: 8,
@@ -227,8 +270,13 @@ class _FullscreenImageViewerState extends State<_FullscreenImageViewer> {
                         icon: const Icon(Icons.close))
                   ]))),
               if (widget.footerBuilder != null)
-                Positioned(left: 16, right: 16, bottom: 72,
-                  child: SafeArea(child: Center(child: widget.footerBuilder!(context, index)))),
+                Positioned(
+                    left: 16,
+                    right: 16,
+                    bottom: 72,
+                    child: SafeArea(
+                        child: Center(
+                            child: widget.footerBuilder!(context, index)))),
               if (widget.images.length > 1)
                 Positioned(
                     left: 8,

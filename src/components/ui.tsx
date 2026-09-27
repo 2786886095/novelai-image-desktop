@@ -1,3 +1,4 @@
+import {RangeInput} from './RangeInput';
 // Shared presentational primitives used across the app's panels.
 import {
   Children,
@@ -570,8 +571,8 @@ export function SliderInput({
         {label}
         <strong>{value}</strong>
       </span>
-      <input
-        type="range"
+      <RangeInput
+        
         value={value}
         min={min}
         max={max}

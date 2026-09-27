@@ -1,4 +1,5 @@
-import {PreviewImageViewer} from './components/PreviewImageViewer';
+import {RangeInput} from './components/RangeInput';
+import {BatchRedrawPreview} from './components/BatchRedrawPreview';
 import { useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 import { Button, CommittedNumberInput, NumberInput, Toggle, SelectMenuCompat } from "./components/ui";
@@ -740,7 +741,6 @@ export function BatchRedraw({ onBack }: { onBack?: () => void }) {
   const [aiFilling, setAiFilling] = useState(false);
   const [showReferencePresets, setShowReferencePresets] = useState(false);
   const [lightbox, setLightbox] = useState<string | null>(null);
-  const previewItems=useMemo(()=>lightbox?[...new Set([...project.items.flatMap(item=>[dataUrlFromBase64(item.base64),...batchRedrawCandidates(item).map(candidate=>candidate.resultUrl)]),lightbox])]:[],[lightbox,project.items]);
   const [activeItemId, setActiveItemId] = useState<string | null>(null);
   const [resultFilter, setResultFilter] = useState<
     "all" | "done" | "failed" | "pending"
@@ -1622,8 +1622,8 @@ export function BatchRedraw({ onBack }: { onBack?: () => void }) {
             <span>
               {f("batch.params.strength", { value: globalStrength.toFixed(2) })}
             </span>
-            <input
-              type="range"
+            <RangeInput
+              
               min={0.1}
               max={0.99}
               step={0.01}
@@ -2304,21 +2304,10 @@ export function BatchRedraw({ onBack }: { onBack?: () => void }) {
         </section>
       )}
 
-      {lightbox && (
-        <div
-          className="redraw-lightbox"
-          role="presentation"
-          onClick={() => setLightbox(null)}
-        >
-          <PreviewImageViewer images={previewItems.map(src=>({src,alt:t("batch.results.previewAlt")}))} index={Math.max(0,previewItems.indexOf(lightbox))} onIndex={index=>setLightbox(previewItems[index])}/>
-          <button
-            className="redraw-lightbox-close"
-            onClick={() => setLightbox(null)}
-          >
-            <Icon name="close" />
-          </button>
-        </div>
-      )}
+      {lightbox && <BatchRedrawPreview
+        items={project.items} url={lightbox} onUrl={setLightbox}
+        onSelect={chooseCandidate} onClose={() => setLightbox(null)}
+      />}
       {showReferencePresets && (
         <ReferencePresetManager
           modal

@@ -17,6 +17,7 @@ import {
   prepareInpaintAssets,
   prepareImageBufferForSave,
   buildUpscalePayload,
+  describeUpscaleRequest,
   resolveUpscaleBaseUrl,
   resolveUpscaleModel,
   resolveUpscaleOutputSize,
@@ -730,13 +731,36 @@ describe("resolveUpscaleModel", () => {
     expect(resolveUpscaleModel("retired-model")).toBe("nai-diffusion-5-curated");
   });
 
-  it("builds the official standalone upscale payload contract", () => {
-    expect(buildUpscalePayload(Buffer.from([1, 2, 3]), "nai-diffusion-4-5-full"))
+  it("builds explicit numeric dimensions from the encoded input, not UI state", () => {
+    const image = PNG.sync.write(solidPng(832, 1216, [1, 2, 3, 255]));
+    expect(buildUpscalePayload(image, "nai-diffusion-4-5-full"))
       .toEqual({
-        image: "AQID",
+        image: image.toString("base64"),
+        width: 832,
+        height: 1216,
+        scale: 2,
         model: "nai-diffusion-5-curated",
         declared_blur_sigma: 0,
       });
+  });
+  it("rejects undecodable inputs before sending a paid upscale request", () => {
+    expect(() => buildUpscalePayload(Buffer.from([1, 2, 3]), "nai-diffusion-5-full")).toThrow("正整数");
+  });
+  it("meets a strict positive-integer endpoint contract while the legacy shape does not", () => {
+    const image = PNG.sync.write(solidPng(832, 1216, [1, 2, 3, 255]));
+    const payload = JSON.parse(JSON.stringify(buildUpscalePayload(image, "nai-diffusion-5-full")));
+    const accepts = (p: any) => [p.width, p.height].every(v => typeof v === "number" && Number.isSafeInteger(v) && v > 0);
+    expect(accepts({ image: payload.image, model: payload.model, declared_blur_sigma: 0 })).toBe(false);
+    expect(accepts(payload)).toBe(true);
+    expect(PNG.sync.read(Buffer.from(payload.image,"base64"))).toMatchObject({width:payload.width,height:payload.height});
+  });
+  it("diagnoses endpoint class without echoing private URL fields", () => {
+    expect(describeUpscaleRequest("https://image.novelai.net",832,1216,1)).toContain("接口=官方域名");
+    expect(describeUpscaleRequest("http://127.0.0.1:9000",832,1216,1)).toContain("接口=本机代理");
+    const text = describeUpscaleRequest("https://private-user:private-password@example.test/private-path?token=private-secret",832,1216,1);
+    expect(text).toContain("接口=自定义");
+    expect(text).toContain("正整数字段=true");
+    expect(text).not.toMatch(/private|example\.test/);
   });
 });
 

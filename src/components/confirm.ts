@@ -1,3 +1,5 @@
+import {useAppStore} from '../store';
+import {featureKey,featureText} from '../feature-text';
 /** Promise-based in-app confirmation used instead of blocking browser dialogs. */
 export function confirmAction(message: string, title = "请确认"): Promise<boolean> {
   return new Promise((resolve) => {
@@ -5,24 +7,34 @@ export function confirmAction(message: string, title = "请确认"): Promise<boo
     const backdrop = document.createElement("div");
     backdrop.className = "app-confirm-backdrop";
     backdrop.innerHTML = `
-      <section class="app-confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="app-confirm-title">
+      <section class="app-confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="app-confirm-title" tabindex="-1">
         <h3 id="app-confirm-title"></h3>
         <p></p>
         <div class="app-confirm-actions">
-          <button type="button" data-result="cancel">取消</button>
-          <button type="button" class="primary" data-result="confirm">确认</button>
+          <button type="button" data-result="cancel"></button>
+          <button type="button" class="primary" data-result="confirm"></button>
         </div>
       </section>`;
     const heading = backdrop.querySelector("h3");
     const body = backdrop.querySelector("p");
-    if (heading) heading.textContent = title;
-    if (body) body.textContent = message;
+    const titleKey=featureKey(title),messageKey=featureKey(message);
+    const render=()=>{
+      const language=useAppStore.getState().settings?.language;
+      if (heading) heading.textContent = featureText(language,titleKey);
+      if (body) body.textContent = featureText(language,messageKey);
+      backdrop.querySelector('[data-result="cancel"]')!.textContent=featureText(language,'取消');
+      backdrop.querySelector('[data-result="confirm"]')!.textContent=featureText(language,'确认');
+    };
+    render();const unsubscribe=useAppStore.subscribe(render);
+    const previousFocus=document.activeElement as HTMLElement | null;
     const finish = (value: boolean) => {
       if (settled) return;
       settled = true;
+      unsubscribe();
       backdrop.classList.add("is-leaving");
       window.setTimeout(() => backdrop.remove(), 130);
       resolve(value);
+      previousFocus?.focus();
     };
     backdrop.addEventListener("click", (event) => {
       const target = event.target as HTMLElement;
@@ -31,10 +43,14 @@ export function confirmAction(message: string, title = "请确认"): Promise<boo
     });
     backdrop.addEventListener("keydown", (event) => {
       if (event.key === "Escape") finish(false);
-      if (event.key === "Enter") finish(true);
+      if (event.key === "Tab") {
+        const buttons=Array.from(backdrop.querySelectorAll<HTMLButtonElement>('button'));
+        const index=buttons.indexOf(document.activeElement as HTMLButtonElement);
+        event.preventDefault();buttons[(index+(event.shiftKey?-1:1)+buttons.length)%buttons.length].focus();
+      }
     });
     document.body.appendChild(backdrop);
     window.requestAnimationFrame(() => backdrop.classList.add("is-visible"));
-    (backdrop.querySelector('[data-result="confirm"]') as HTMLButtonElement | null)?.focus();
+    (backdrop.querySelector('[role="alertdialog"]') as HTMLElement | null)?.focus();
   });
 }

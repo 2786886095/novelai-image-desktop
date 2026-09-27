@@ -69,6 +69,7 @@ import {
   MdUndo,
   MdUpload,
   MdUpgrade,
+  MdVolumeUp,
   MdVisibility,
   MdVisibilityOff,
   MdViewQuilt,
@@ -82,6 +83,7 @@ export type IconName =
   | "globe"
   | "folder"
   | "folderOpen"
+  | "volume"
   | "palette"
   | "paw"
   | "plug"
@@ -157,6 +159,7 @@ const MATERIAL_ICONS: Partial<Record<IconName, IconType>> = {
   globe: MdLanguage,
   folder: MdFolder,
   folderOpen: MdFolderOpen,
+  volume: MdVolumeUp,
   palette: MdPalette,
   paw: MdPets,
   plug: MdPower,

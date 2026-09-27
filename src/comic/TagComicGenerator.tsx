@@ -1,3 +1,5 @@
+import {RangeInput} from '../components/RangeInput';
+import {FilePicker} from '../components/FilePicker';
 import {AnimatedCollapse} from '../components/CharacterEditing';
 import {PreviewImageViewer} from '../components/PreviewImageViewer';
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -1672,8 +1674,8 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
             <label className="tag-comic-file-button">
               <Icon name="folderOpen" />
               <span>{text(language, "chooseFile")}</span>
-              <input
-                type="file"
+              <FilePicker
+                
                 accept=".txt,.json,.csv,text/plain,application/json,text/csv"
                 onChange={(event) => {
                   void importFile(event.target.files?.[0] ?? null);
@@ -1813,8 +1815,8 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                 <label className={clsx("tag-comic-file-button", !preciseModelSupported && "disabled")}>
                   <Icon name="folderOpen" />
                   <span>{text(language, "preciseUpload")}</span>
-                  <input
-                    type="file"
+                  <FilePicker
+                    
                     accept="image/png,image/jpeg,image/webp"
                     multiple
                     disabled={!preciseModelSupported || project.preciseReferences.length >= 5}
@@ -1857,12 +1859,12 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                       </SelectMenuCompat>
                       <label>
                         <span>{text(language, "preciseStrength")} · {reference.strength.toFixed(2)}</span>
-                        <input type="range" min={0} max={1} step={0.01} value={reference.strength}
+                        <RangeInput  min={0} max={1} step={0.01} value={reference.strength}
                           onChange={(event) => patchPreciseReference(reference.id, { strength: Number(event.target.value) })} />
                       </label>
                       <label>
                         <span>{text(language, "preciseFidelity")} · {reference.fidelity.toFixed(2)}</span>
-                        <input type="range" min={0} max={1} step={0.01} value={reference.fidelity}
+                        <RangeInput  min={0} max={1} step={0.01} value={reference.fidelity}
                           onChange={(event) => patchPreciseReference(reference.id, { fidelity: Number(event.target.value), informationExtracted: Number(event.target.value) })} />
                       </label>
                       <div className="tag-comic-reference-scope">
@@ -2156,12 +2158,12 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                               </SelectMenuCompat>
                               <label>
                                 <span>{text(language, "preciseStrength")} · {selection.strength.toFixed(2)}</span>
-                                <input type="range" min={0} max={1} step={0.01} value={selection.strength}
+                                <RangeInput  min={0} max={1} step={0.01} value={selection.strength}
                                   onChange={(event) => patchPanelReference(activePanel.id, asset.id, { strength: Number(event.target.value) })} />
                               </label>
                               <label>
                                 <span>{text(language, "preciseFidelity")} · {selection.fidelity.toFixed(2)}</span>
-                                <input type="range" min={0} max={1} step={0.01} value={selection.fidelity}
+                                <RangeInput  min={0} max={1} step={0.01} value={selection.fidelity}
                                   onChange={(event) => patchPanelReference(activePanel.id, asset.id, { fidelity: Number(event.target.value), informationExtracted: Number(event.target.value) })} />
                               </label>
                               <Button variant="ghost" onClick={() =>
@@ -2397,7 +2399,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
           aria-label={text(language, "closePreview")}
           onClick={() => setPreview(null)}
         >
-          <PreviewImageViewer images={previewItems.map(src=>({src,alt:text(language,"closePreview")}))} index={Math.max(0,previewItems.indexOf(preview))} onIndex={index=>setPreview(previewItems[index])}/>
+          <PreviewImageViewer onBackgroundClick={()=>setPreview(null)} images={previewItems.map(src=>({src,alt:text(language,"closePreview")}))} index={Math.max(0,previewItems.indexOf(preview))} onIndex={index=>setPreview(previewItems[index])}/>
           <button
             type="button"
             className="redraw-lightbox-close"

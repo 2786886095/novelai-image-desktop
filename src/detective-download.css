@@ -1,0 +1,34 @@
+.detective-download-panel {
+  grid-column: 1 / -1;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-canvas);
+  line-height: 1.6;
+}
+.detective-download-panel h3 { margin: 0 0 8px; }
+.detective-download-panel p { margin: 8px 0; overflow-wrap: anywhere; }
+.detective-download-panel a { color: var(--accent); overflow-wrap: anywhere; }
+.detective-download-panel progress { display: block; width: 100%; max-width: none; accent-color: var(--accent); height: 12px; }
+.detective-download-panel small { color: var(--text-muted); }
+.detective-download-panel .artist-candidate-actions { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 8px; margin: 12px 0; padding: 0; }
+.detective-download-panel summary { cursor: pointer; color: var(--text-primary); }
+.detective-download-panel li { margin: 6px 0; }
+
+.detective-runtime-toolbar { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.detective-runtime-actions { display:flex; gap:8px; margin-left:auto; flex-wrap:wrap; justify-content:flex-end; }
+.detective-parameter-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr)); gap:12px; min-width:0; align-items:end; }
+.detective-parameters { grid-column:1 / -1; min-width:0; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; border-top:1px solid var(--border); padding-top:16px; }
+.detective-parameters > h3,
+.detective-parameters > .detective-parameter-grid,
+.detective-parameters > small,
+.detective-parameters > button { grid-column:1 / -1; }
+.detective-parameters > h3 { margin:0; }
+.detective-parameters > label { display:grid; gap:6px; min-width:0; align-content:start; }
+.detective-parameters > label > span { color:var(--text-secondary); font-weight:700; }
+.detective-parameters > button { justify-self:start; }
+.detective-parameters textarea { box-sizing:border-box; }
+.detective-download-panel details p { overflow-wrap:anywhere; }
+.target-artist-lab .artist-target-empty { font-size:16px; line-height:1.5; text-align:center; padding:20px; box-sizing:border-box; overflow-wrap:anywhere; }
+@media(max-width:760px) { .detective-parameters { grid-template-columns:1fr; } .detective-parameter-grid { grid-template-columns:1fr; } }

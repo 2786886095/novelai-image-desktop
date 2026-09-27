@@ -3,6 +3,8 @@ import crypto, { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import JSZip from "jszip";
+import {DATA_BACKUP_CATEGORIES as CATEGORY_CONTRACT} from "../../src/data-backup-contract";
+import {exportPortableProjects, inspectPortableProjects, restorePortableProjects, portableSummaries} from './portable-projects';
 import type {
   AppSettings,
   DataBackupCategory,
@@ -61,17 +63,7 @@ const FORMAT = "langbai-novelai-studio-backup";
 const FORMAT_VERSION = 1;
 const MAX_JSON_BYTES = 128 * 1024 * 1024;
 const MAX_ASSET_BYTES = 256 * 1024 * 1024;
-const ALL_CATEGORIES: DataBackupCategory[] = [
-  "configuration",
-  "apiCredentials",
-  "agentWorkspace",
-  "artistLibrary",
-  "textHistory",
-  "referencePresets",
-  "imageHistory",
-  "promptPresets",
-  "workspaceData",
-];
+const ALL_CATEGORIES: DataBackupCategory[] = [...CATEGORY_CONTRACT];
 const API_SETTING_KEYS: Array<keyof AppSettings> = [
   "apiBaseUrl",
   "imageBaseUrl",
@@ -639,9 +631,24 @@ async function buildArchive(
         key.startsWith("langbai.") && typeof value === "string"),
     );
     zip.file("data/workspace.json", JSON.stringify(owned));
+    // Mobile-only preferences are preserved as passive data, never applied to
+    // Electron settings. This allows Android -> desktop -> iOS round trips.
+    const mobileStatePath = path.join(app.getPath("userData"), "backup-mobile-state.json");
+    try {
+      const stat = await fs.stat(mobileStatePath);
+      if (stat.size > MAX_JSON_BYTES) throw new Error("Mobile workspace is too large");
+      const mobileState = JSON.parse(await fs.readFile(mobileStatePath, "utf8"));
+      if (mobileState && typeof mobileState === "object" && !Array.isArray(mobileState)) {
+        zip.file("data/mobile-state.json", JSON.stringify(mobileState));
+      }
+    } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
     summaries.push(summary("workspaceData", Object.keys(owned).length));
   }
 
+  if (includeAssets) {
+    await exportPortableProjects(app.getPath('userData'), zip, selected);
+    summaries.push(...await portableSummaries(zip));
+  }
   const manifest: BackupManifest = {
     format: FORMAT,
     version: FORMAT_VERSION,
@@ -770,7 +777,12 @@ export async function inspectDataBackup(): Promise<DataBackupInspectResult> {
     return { ok: false, cancelled: true, categories: [], message: "已取消导入。" };
   }
   try {
-    const { manifest } = await loadArchive(result.filePaths[0]);
+    const { manifest, zip } = await loadArchive(result.filePaths[0]);
+    // Discover native payload even in old archives whose manifest hid it under legacy categories.
+    const native=await portableSummaries(zip);
+    const categories=(Array.isArray(manifest.categories)?manifest.categories:[])
+      .filter(item=>ALL_CATEGORIES.includes(item.category)&&!['tavernAgent','styleLab'].includes(item.category));
+    categories.push(...native);
     return {
       ok: true,
       path: result.filePaths[0],
@@ -778,8 +790,8 @@ export async function inspectDataBackup(): Promise<DataBackupInspectResult> {
       createdAt: manifest.createdAt,
       sourcePlatform: manifest.source?.platform,
       appVersion: manifest.source?.appVersion,
-      categories: Array.isArray(manifest.categories) ? manifest.categories : [],
-      requiresConfigurationConfirmation: manifest.categories.some((item) =>
+      categories,
+      requiresConfigurationConfirmation: categories.some((item) =>
         item.category === "configuration" || item.category === "apiCredentials"),
     };
   } catch (error: any) {
@@ -1363,8 +1375,10 @@ export async function importDataBackup(
   }
 
   let archive: Awaited<ReturnType<typeof loadArchive>>;
+  let portable: Awaited<ReturnType<typeof inspectPortableProjects>>;
   try {
     archive = await loadArchive(request.path);
+    portable = await inspectPortableProjects(archive.zip, new Set(categories));
   } catch (error: any) {
     return { ok: false, message: `无法读取备份：${error?.message ?? String(error)}`, imported: 0, skipped: 0, renamed: 0 };
   }
@@ -1552,6 +1566,18 @@ export async function importDataBackup(
     next.history.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
     next.convertHistory.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
     next.reverseHistory.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+    if (selected.has("workspaceData")) {
+      const mobile = await readJsonEntry<Record<string, unknown> | null>(archive.zip, "data/mobile-state.json", null);
+      if (mobile && typeof mobile === "object" && !Array.isArray(mobile)) {
+        const mobilePath = path.join(app.getPath("userData"), "backup-mobile-state.json");
+        let current: Record<string, unknown> = {};
+        try { current = JSON.parse(await fs.readFile(mobilePath, "utf8")); }
+        catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+        // Existing values win; this file is only an archive bridge.
+        await atomicWrite(mobilePath, Buffer.from(JSON.stringify({...mobile, ...current})));
+      }
+    }
+    const recoveries = await restorePortableProjects(app.getPath('userData'), portable!);
     writeStore(next);
 
     const workspaceData = selected.has("workspaceData")
@@ -1565,6 +1591,8 @@ export async function importDataBackup(
       renamed: counters.renamed,
       workspaceData,
       rescueBackupPath: rescue.path,
+      recoveryPaths: recoveries.map(item=>item.path),
+      recoveries,
     };
   } catch (error: any) {
     return {

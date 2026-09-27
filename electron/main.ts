@@ -1,3 +1,7 @@
+import {portableRecoveryPath, activatePortableRecovery, listPortableRecoveries} from './ipc/portable-projects';
+import {registerHarnessLauncher, harnessNeedsExitConfirmation, confirmHarnessExit} from "./ipc/harness-launcher";
+import { detectiveStatus, detectiveConfigure, detectiveStart, detectiveStop, detectiveOpenResults } from "./ipc/artist-detective";
+import { detectiveDownloadStatus, detectiveDownloadStart, detectiveDownloadCancel, detectiveDownloadDirectory, detectiveDownloadVariant } from "./ipc/detective-download";
 import { recoverLegacyCredentials } from "./ipc/credential-recovery";
 import { readClipboardImageFiles, savePastedImageFiles } from "./ipc/image-clipboard";
 import {
@@ -376,8 +380,7 @@ function createWindow() {
   attachEditContextMenu(mainWindow);
   mainWindow.webContents.on("did-fail-load", (_event, code, description, _url, isMainFrame) => {
     if (!isMainFrame || code === -3) return;
-    startupWindow?.destroy();
-    dialog.showErrorBox("启动失败 / Startup failed", `${description} (${code})`);
+      dialog.showErrorBox("启动失败 / Startup failed", `${description} (${code})`);
     mainWindow?.show();
   });
 
@@ -395,8 +398,6 @@ function createWindow() {
 
   mainWindow.once("ready-to-show", () => {
     if (!uiCapturePath) mainWindow?.show();
-    startupWindow?.destroy();
-    startupWindow = null;
   });
 
   if (uiCapturePath) {
@@ -631,6 +632,12 @@ function createWindow() {
     });
   }
 
+  mainWindow.on("close", (event) => {
+    if (!harnessNeedsExitConfirmation()) return;
+    event.preventDefault();
+    void confirmHarnessExit(mainWindow).then(confirmed => { if (confirmed) mainWindow?.close(); });
+  });
+
   mainWindow.on("closed", () => {
     mainWindow = null;
   });
@@ -741,6 +748,16 @@ function registerIpc() {
   ipcMain.handle("promptCodex:bundled", () => loadBundledPromptCodex());
   ipcMain.handle("promptCodex:update", () => updatePromptCodex());
   ipcMain.handle("artistLab:pickTarget", (_event, sourcePath?: string) => pickArtistLabTarget(sourcePath));
+  ipcMain.handle("artistDetective:status", () => detectiveStatus());
+ipcMain.handle("artistDetective:downloadStatus", () => detectiveDownloadStatus());
+ipcMain.handle("artistDetective:downloadStart", () => detectiveDownloadStart());
+ipcMain.handle("artistDetective:downloadVariant", (_event, value) => detectiveDownloadVariant(value));
+ipcMain.handle("artistDetective:downloadCancel", () => detectiveDownloadCancel());
+ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirectory());
+  ipcMain.handle("artistDetective:configure", (_event, kind) => detectiveConfigure(kind));
+  ipcMain.handle("artistDetective:start", (_event, request) => detectiveStart(request));
+  ipcMain.handle("artistDetective:stop", () => detectiveStop());
+  ipcMain.handle("artistDetective:openResults", () => detectiveOpenResults());
   ipcMain.handle(
     "artistLab:searchArtists",
     (_event, query: unknown, limit: unknown) => searchArtistTags(query, limit),
@@ -1329,6 +1346,19 @@ function registerIpc() {
   ipcMain.handle("dataBackup:export", (_event, request: DataBackupExportRequest) =>
     exportDataBackup(request),
   );
+  ipcMain.handle("dataBackup:listRecoveries", async event => {
+    if(event.sender!==mainWindow?.webContents)throw new Error("Unknown backup sender");
+    return listPortableRecoveries(app.getPath("userData"));
+  });
+  ipcMain.handle("dataBackup:openRecovery", async (event,kind,id) => {
+    if(event.sender!==mainWindow?.webContents)throw new Error("Unknown backup sender");
+    const {directory}=await portableRecoveryPath(app.getPath("userData"),kind,id);
+    const error=await shell.openPath(directory);if(error)throw new Error(error);
+  });
+  ipcMain.handle("dataBackup:activateRecovery", async (event,kind,id) => {
+    if(event.sender!==mainWindow?.webContents)throw new Error("Unknown backup sender");
+    return activatePortableRecovery(app.getPath("userData"),kind,id);
+  });
   ipcMain.handle("dataBackup:inspect", () => inspectDataBackup());
   ipcMain.handle("dataBackup:import", (_event, request: DataBackupImportRequest) =>
     importDataBackup(request),
@@ -1372,14 +1402,7 @@ function registerIpc() {
   ipcMain.handle("app:installUpdate", () => installUpdate());
 }
 
-let startupWindow: BrowserWindow | null = null;
 app.whenReady().then(async () => {
-  if (!uiCapturePath) {
-    startupWindow = new BrowserWindow({width:420,height:180,show:true,resizable:false,
-      title:"Langbai NovelAI Studio",webPreferences:{nodeIntegration:false,contextIsolation:true,sandbox:true}});
-    startupWindow.on("closed", () => { startupWindow = null; });
-    await startupWindow.loadURL("data:text/html;charset=utf-8," + encodeURIComponent('<!doctype html><meta charset="utf-8"><title>Langbai NovelAI Studio</title><body style="font:16px system-ui;padding:24px;background:#f8f7fc;color:#211b31"><strong>Langbai NovelAI Studio</strong><p>正在启动 / Starting…</p><small>正在加载设置与工作区 / Loading settings and workspace</small></body>'));
-  }
   await installLocalMediaProtocol();
   if (!uiCaptureUserData) {
     try { await recoverLegacyCredentials(); }
@@ -1401,6 +1424,7 @@ app.whenReady().then(async () => {
   }, 30_000);
   proxyRefreshTimer.unref();
   registerIpc();
+  registerHarnessLauncher(() => mainWindow);
   wireAutoUpdater(() => mainWindow);
   createWindow();
 
@@ -1408,7 +1432,6 @@ app.whenReady().then(async () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 }).catch((error: unknown) => {
-  startupWindow?.destroy();
   dialog.showErrorBox("启动失败 / Startup failed", String(error));
   app.quit();
 });
@@ -1417,6 +1440,11 @@ app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
 });
 
-app.on("before-quit", () => {
+app.on("before-quit", (event) => {
+  if (harnessNeedsExitConfirmation()) {
+    event.preventDefault();
+    void confirmHarnessExit(mainWindow).then(confirmed => { if (confirmed) app.quit(); });
+    return;
+  }
   void stopAgentRuntime();
 });

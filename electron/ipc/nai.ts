@@ -192,11 +192,30 @@ export function resolveUpscaleModel(_rawModel: string): string {
 }
 
 export function buildUpscalePayload(image: Buffer, rawModel: string) {
+  const { width, height } = readImageDimensions(image);
+  if (![width, height].every(v => Number.isSafeInteger(v) && v > 0)) {
+    throw new Error("超分输入图片尺寸必须是正整数，请重新加载有效图片。");
+  }
   return {
     image: image.toString("base64"),
+    width,
+    height,
+    scale: 2,
     model: resolveUpscaleModel(rawModel),
     declared_blur_sigma: UPSCALE_DECLARED_BLUR_SIGMA,
   };
+}
+
+/** Only bounded, non-secret fields: never include URL, token or image data. */
+export function describeUpscaleRequest(baseUrl: string, width: number, height: number, pass: number) {
+  let endpoint = "自定义";
+  try {
+    const url = new URL(baseUrl);
+    if (url.protocol === "https:" && (url.hostname === "novelai.net" || url.hostname.endsWith(".novelai.net"))) endpoint = "官方域名";
+    else if (["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)) endpoint = "本机代理";
+  } catch { endpoint = "地址无效"; }
+  const integerFields = Number.isSafeInteger(width) && width > 0 && Number.isSafeInteger(height) && height > 0;
+  return `upscale-contract-v2；接口=${endpoint}；width=${width}；height=${height}；正整数字段=${integerFields}；scale=2；pass=${pass}`;
 }
 
 export function resolveUpscaleOutputSize(
@@ -4862,6 +4881,7 @@ export async function upscaleImg(
 
   const job = beginJob();
   const abort = job.controller;
+  let requestDiagnostic = "";
 
   try {
     const { buffer, image } = await readWorkbenchImage();
@@ -4880,12 +4900,16 @@ export async function upscaleImg(
     const passes = plan.passes;
     let passInput = Buffer.from(preparedImage.base64, "base64");
     let outBuffer = passInput;
+    let sizeNote = "";
     for (let pass = 0; pass < passes; pass += 1) {
+      const payload = buildUpscalePayload(passInput, upscaleModel);
+      requestDiagnostic = describeUpscaleRequest(imageBaseUrl, payload.width, payload.height, pass + 1);
+      logInfo(requestDiagnostic);
       const res = await requestWithRetry(
         () =>
           axios.post(
             `${imageBaseUrl}/ai/upscale`,
-            buildUpscalePayload(passInput, upscaleModel),
+            payload,
             {
               headers: {
                 Authorization: `Bearer ${token}`,
@@ -4910,8 +4934,15 @@ export async function upscaleImg(
         outBuffer = Buffer.from(res.data); // not a zip — treat as raw image bytes
       }
       const actual = readImageDimensions(outBuffer);
-      if (actual.width !== plan.inputWidth * 2 ** (pass + 1) || actual.height !== plan.inputHeight * 2 ** (pass + 1)) {
-        throw new Error("超分返回的图片尺寸与请求不符。");
+      const inputSize = readImageDimensions(passInput);
+      if (![actual.width, actual.height].every(v => Number.isSafeInteger(v) && v > 0)) {
+        throw new Error("超分返回的数据不是有效图片。");
+      }
+      if (actual.width !== inputSize.width * 2 || actual.height !== inputSize.height * 2) {
+        // A paid, valid response must not be discarded or trigger another paid
+        // request merely because this endpoint chose a different output size.
+        sizeNote = `接口实际返回 ${actual.width}×${actual.height}，与预计倍率不同；已保存原始返回图片并停止后续付费请求。`;
+        break;
       }
       if (outBuffer.length === 0) break;
       passInput = outBuffer;
@@ -4967,20 +4998,20 @@ export async function upscaleImg(
     addHistory([item]);
     void refreshStoredAccount();
     const resizeNote = preparedImage.resized
-      ? `原图 ${preparedImage.originalWidth}×${preparedImage.originalHeight} 超过 NovelAI 超分输入上限，已先缩至 ${preparedImage.width}×${preparedImage.height} 后执行。`
+      ? `原图 ${preparedImage.originalWidth}×${preparedImage.originalHeight} 已按倍率、接口尺寸对齐及面积限制调整为 ${preparedImage.width}×${preparedImage.height} 后执行。`
       : "";
-    return { ok: true, message: `超分 ${scale}x 完成。${resizeNote}`, item };
+    return { ok: true, message: `${sizeNote ? "超分结果已保存（未达到预计尺寸）。" : `超分 ${scale === "max" ? "MAX" : `${scale}x`} 完成。`}${resizeNote}${sizeNote}`, item };
   } catch (error: any) {
     if (axios.isCancel(error) || error?.code === "ERR_CANCELED")
       return { ok: false, message: "超分已取消。" };
     const status = error?.response?.status;
     const detail = responseErrorText(error) || "未知错误";
     const hint = /resolution too high/i.test(detail)
-      ? "NovelAI 超分只接受约 1024×1024 等效面积以内的输入；程序会自动缩小后重试，如仍失败请换更小的图片。"
+      ? "接口拒绝了当前尺寸；请换用较小图片或核对接口尺寸限制。本次不会自动缩小并重发付费请求。"
       : "";
     return {
       ok: false,
-      message: `超分失败${status ? `（HTTP ${status}）` : ""}：${detail}${hint ? ` ${hint}` : ""}`,
+      message: `超分失败${status ? `（HTTP ${status}）` : ""}：${detail}${hint ? ` ${hint}` : ""}${requestDiagnostic ? ` [${requestDiagnostic}]` : ""}`,
     };
   } finally {
     job.end();

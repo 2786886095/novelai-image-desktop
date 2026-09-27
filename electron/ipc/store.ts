@@ -1,3 +1,5 @@
+import {normalizeCompletionSound} from "../../src/completion-sound";
+import { refreshShippedTemplates } from "../../src/data/prompt-template-migration";
 import {STYLE_SORTS,styleMetadata} from "../../src/style-library";
 import {mergeCharacterPresets} from "../../src/positive-prompt-presets";
 import {normalizeCharacterCaptions} from "../../src/character-presets";
@@ -173,6 +175,7 @@ export function defaultSettings(): AppSettings {
     updateSource: "github",
     theme: "light",
     reduceMotion: false,
+    completionSound: normalizeCompletionSound(null),
     autoComplete: true,
     weightHighlight: true,
     promptRandomizer: true,
@@ -477,6 +480,10 @@ function normalize(raw: Partial<PersistedData> | null): PersistedData {
   ) {
     settings.reversePromptTemplates = defaults.reversePromptTemplates;
   }
+  // Update only exact shipped defaults, mode by mode. Never overwrite custom prompts.
+  settings.reversePromptTemplates=refreshShippedTemplates(settings.reversePromptTemplates,"reverse");
+  settings.convertPromptTemplates=refreshShippedTemplates(settings.convertPromptTemplates,"convert");
+
   if (!settings.comicAnalyzePromptTemplate?.trim()) {
     settings.comicAnalyzePromptTemplate =
       rawSettings.comicAnalyzePromptTemplates?.natural?.trim() ||
@@ -500,15 +507,26 @@ function normalize(raw: Partial<PersistedData> | null): PersistedData {
 // (NTFS), so a crash/power-loss can never leave the live store half-written —
 // readers either see the old complete file or the new complete file.
 export function atomicWriteFileSync(file: string, data: string) {
-  const tmp = path.join(path.dirname(file), `.${path.basename(file)}.tmp-${process.pid}-${Date.now()}`);
-  fs.writeFileSync(tmp, data, "utf8");
-  const fd = fs.openSync(tmp, "r+");
+  const tmp = path.join(path.dirname(file), "." + path.basename(file) + ".tmp-" + process.pid + "-" + crypto.randomBytes(8).toString("hex"));
+  let owned = false;
   try {
-    fs.fsyncSync(fd);
+    const fd = fs.openSync(tmp, "wx");
+    owned = true;
+    try { fs.writeFileSync(fd, data, "utf8"); fs.fsyncSync(fd); }
+    finally { fs.closeSync(fd); }
+    // Antivirus/indexer sharing locks can briefly reject NTFS replacement.
+    // Keep atomic rename: never unlink the live store as a workaround.
+    for (let attempt = 0; ; attempt++) {
+      try { fs.renameSync(tmp, file); return; }
+      catch (error) {
+        const code = (error as NodeJS.ErrnoException).code;
+        if (attempt >= 4 || !["EPERM", "EBUSY", "EACCES"].includes(code ?? "")) throw error;
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20 * 2 ** attempt);
+      }
+    }
   } finally {
-    fs.closeSync(fd);
+    if (owned) { try { fs.unlinkSync(tmp); } catch { /* Renamed already, or retain the original error. */ } }
   }
-  fs.renameSync(tmp, file);
 }
 
 // Keep the last two known-good snapshots BEFORE overwriting `file`, so even a
@@ -620,11 +638,11 @@ export function setSetting<K extends SettingKey>(key: K, value: AppSettings[K]):
   if ((PROTECTED_DIRECTORY_KEYS as readonly string[]).includes(key) && typeof value === "string") {
     assertSafeDataDirectory(value, installedAppDir());
   }
-  const data = readStore();
+  const data = { ...readStore() }; // Failed persistence must not mutate the live settings cache.
   if ((SENSITIVE_SETTING_KEYS as readonly string[]).includes(key)) credentialVault.forget(key);
   data.settings = {
     ...data.settings,
-    [key]: key === "language" ? normalizeLanguage(value) : value,
+    [key]: key === "language" ? normalizeLanguage(value) : key === "completionSound" ? normalizeCompletionSound(value) : value,
   };
   writeStore(data);
   return data.settings[key];

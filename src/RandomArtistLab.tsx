@@ -1,3 +1,4 @@
+import { confirmAction } from "./components/confirm";
 import {PreviewImageViewer} from './components/PreviewImageViewer';
 import {FavoriteStyleExport} from './components/FavoriteStyleExport';
 import {parseCustomArtistPool, customArtistPoolText} from './custom-artist-pool';
@@ -498,6 +499,7 @@ function normalizeGenerationParams(
     ...DEFAULT_PARAMS,
     ...inherited,
     ...(value ?? {}),
+    model: "nai-diffusion-4-5-full",
     positivePrompt: "",
     stylePrompt: "",
     width: dimensions.width,
@@ -1465,9 +1467,9 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
           <Button
             type="button"
             variant="ghost"
-            onClick={(event) => {
+            onClick={async (event) => {
               event.preventDefault();
-              patch({ generationParams: normalizeGenerationParams(undefined, DEFAULT_PARAMS) });
+              if (await confirmAction("仅恢复本页生图参数，保留提示词、图片、收藏、模型与路径。", "恢复默认配置？")) patch({ generationParams: normalizeGenerationParams(undefined, DEFAULT_PARAMS) });
             }}
           >
             {paramText.reset}
@@ -1475,7 +1477,7 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
         </span>
       </summary>
       <div className="random-generation-grid">
-        <label className="wide"><span>{paramText.model}</span><SelectMenuCompat value={session.generationParams.model} onChange={(event) => patchGeneration("model", event.target.value as GenerateParams["model"])}>{NAI_MODELS.map((model) => <option key={model.value} value={model.value}>{model.value}</option>)}</SelectMenuCompat></label>
+        <label className="wide"><span>{paramText.model}</span><SelectMenuCompat value={session.generationParams.model} onChange={(event) => patchGeneration("model", event.target.value as GenerateParams["model"])}>{NAI_MODELS.filter(model=>model.value === "nai-diffusion-4-5-full").map((model) => <option key={model.value} value={model.value}>{model.value}</option>)}</SelectMenuCompat></label>
         <fieldset className="random-size-fields">
           <legend>{paramText.size}</legend>
           <div className="random-size-presets" role="group" aria-label={paramText.size}>
@@ -1604,6 +1606,6 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
     </div>
     <footer><span>{stylePreview.meaning}</span>{stylePreview.result && <small>{stylePreview.result.width}×{stylePreview.result.height}</small>}</footer>
   </aside></AppPortal>}
-  {previewResult?.image && <AppPortal><div className="modal-backdrop artist-result-preview-backdrop" role="dialog" aria-modal="true" aria-label={text.previewImage} onMouseDown={() => setPreviewResult(null)}><div className="artist-result-preview" onMouseDown={(event) => event.stopPropagation()}><button type="button" className="artist-result-preview-close" aria-label={text.back} onClick={() => setPreviewResult(null)}><Icon name="close" /></button><PreviewImageViewer images={previewItems.map(item=>({src:item.image!.fileUrl,alt:item.prompt}))} index={Math.max(0,previewItems.findIndex(item=>item.id===previewResult.id))} onIndex={index=>setPreviewResult(previewItems[index])}/><footer><b>{modelLabel(resultModel(previewResult))}</b><span>{variantOf(previewResult) === "mutated" ? text.variantMutated : text.variantPlain} · {previewResult.image.width}×{previewResult.image.height}</span></footer></div></div></AppPortal>}
+  {previewResult?.image && <AppPortal><div className="modal-backdrop artist-result-preview-backdrop" role="dialog" aria-modal="true" aria-label={text.previewImage} onMouseDown={() => setPreviewResult(null)}><div className="artist-result-preview" onMouseDown={(event) => event.stopPropagation()}><button type="button" className="artist-result-preview-close" aria-label={text.back} onClick={() => setPreviewResult(null)}><Icon name="close" /></button><PreviewImageViewer onBackgroundClick={()=>setPreviewResult(null)} images={previewItems.map(item=>({src:item.image!.fileUrl,alt:item.prompt}))} index={Math.max(0,previewItems.findIndex(item=>item.id===previewResult.id))} onIndex={index=>setPreviewResult(previewItems[index])}/><footer><b>{modelLabel(resultModel(previewResult))}</b><span>{variantOf(previewResult) === "mutated" ? text.variantMutated : text.variantPlain} · {previewResult.image.width}×{previewResult.image.height}</span></footer></div></div></AppPortal>}
   </>;
 }

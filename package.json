@@ -1,6 +1,6 @@
 {
   "name": "langbai-novelai-studio",
-  "version": "2.3.6",
+  "version": "2.3.7",
   "private": true,
   "description": "Langbai NovelAI Studio: API-only NovelAI image generation desktop client with Chinese UI.",
   "author": "Langbai",
@@ -96,6 +96,7 @@
       "dist/**",
       "dist-electron/**",
       "THIRD_PARTY_NOTICES.md",
+      "scripts/artist-detective-live.py",
       "!**/*.map",
       "!node_modules/onnxruntime-web/**",
       "!node_modules/onnxruntime-node/bin/napi-v3/win32/arm64/**",
@@ -112,8 +113,46 @@
         "nsis"
       ],
       "files": [
+        "dist/**",
+        "dist-electron/**",
+        "THIRD_PARTY_NOTICES.md",
+        "scripts/artist-detective-live.py",
+        "!**/*.map",
+        "!node_modules/onnxruntime-web/**",
+        "!node_modules/onnxruntime-node/bin/napi-v3/win32/arm64/**",
+        "!node_modules/@huggingface/transformers/dist/ort-wasm*",
+        "!node_modules/@huggingface/transformers/dist/transformers.js",
+        "!node_modules/@huggingface/transformers/dist/transformers.min.js",
+        "!node_modules/@huggingface/transformers/dist/transformers.web*",
+        "package.json",
         "!node_modules/onnxruntime-node/bin/napi-v3/darwin/**",
-        "!node_modules/onnxruntime-node/bin/napi-v3/linux/**"
+        "!node_modules/onnxruntime-node/bin/napi-v3/linux/**",
+        "!artifacts/**",
+        "!.tmp/**",
+        "!**/.env",
+        "!**/.env.*"
+      ],
+      "extraResources": [
+        {
+          "from": ".tmp/harness-component012",
+          "to": "harness-seed",
+          "filter": [
+            "**/*",
+            "!**/.compatibility-home/**",
+            "!**/.cache/**",
+            "!**/.env",
+            "!**/.env.*"
+          ]
+        },
+        {
+          "from": "harness/plugins/studio-preview",
+          "to": "studio-preview",
+          "filter": [
+            "package.json",
+            "index.js",
+            "lib/client.js"
+          ]
+        }
       ]
     },
     "nsis": {
@@ -143,8 +182,24 @@
         }
       ],
       "files": [
+        "dist/**",
+        "dist-electron/**",
+        "THIRD_PARTY_NOTICES.md",
+        "scripts/artist-detective-live.py",
+        "!**/*.map",
+        "!node_modules/onnxruntime-web/**",
+        "!node_modules/onnxruntime-node/bin/napi-v3/win32/arm64/**",
+        "!node_modules/@huggingface/transformers/dist/ort-wasm*",
+        "!node_modules/@huggingface/transformers/dist/transformers.js",
+        "!node_modules/@huggingface/transformers/dist/transformers.min.js",
+        "!node_modules/@huggingface/transformers/dist/transformers.web*",
+        "package.json",
         "!node_modules/onnxruntime-node/bin/napi-v3/win32/**",
-        "!node_modules/onnxruntime-node/bin/napi-v3/linux/**"
+        "!node_modules/onnxruntime-node/bin/napi-v3/linux/**",
+        "!artifacts/**",
+        "!.tmp/**",
+        "!**/.env",
+        "!**/.env.*"
       ]
     },
     "linux": {
@@ -154,20 +209,38 @@
         "AppImage"
       ],
       "files": [
+        "dist/**",
+        "dist-electron/**",
+        "THIRD_PARTY_NOTICES.md",
+        "scripts/artist-detective-live.py",
+        "!**/*.map",
+        "!node_modules/onnxruntime-web/**",
+        "!node_modules/onnxruntime-node/bin/napi-v3/win32/arm64/**",
+        "!node_modules/@huggingface/transformers/dist/ort-wasm*",
+        "!node_modules/@huggingface/transformers/dist/transformers.js",
+        "!node_modules/@huggingface/transformers/dist/transformers.min.js",
+        "!node_modules/@huggingface/transformers/dist/transformers.web*",
+        "package.json",
         "!node_modules/onnxruntime-node/bin/napi-v3/win32/**",
-        "!node_modules/onnxruntime-node/bin/napi-v3/darwin/**"
+        "!node_modules/onnxruntime-node/bin/napi-v3/darwin/**",
+        "!artifacts/**",
+        "!.tmp/**",
+        "!**/.env",
+        "!**/.env.*"
       ]
     },
     "dmg": {
       "artifactName": "Langbai-NovelAI-Studio-${version}-${arch}.${ext}"
     },
     "asarUnpack": [
+      "scripts/artist-detective-live.py",
       "dist-electron/electron/ipc/artist-catalog-*.js",
       "dist/artist-catalog/**",
       "node_modules/sharp/**",
       "node_modules/@img/**",
       "node_modules/onnxruntime-node/**"
-    ]
+    ],
+    "afterPack": "scripts/verify-harness-bundle.cjs"
   },
   "allowScripts": {
     "electron@42.11.0": true,

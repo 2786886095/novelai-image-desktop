@@ -1,3 +1,4 @@
+import { DEFAULT_ARTIST_IMAGE_BUDGET, iterationInteger, nextArtistBatch, planArtistImages, planArtistRounds, restoreArtistIteration } from "./artist-iteration-budget";
 import { imagePasteProps } from "./image-paste";
 import { useEffect, useRef, useState } from "react";
 import { useAppStore } from "./store";
@@ -14,6 +15,7 @@ import {
 import { generateArtistMatchRecipes, type GeneratedArtistRecipe } from "./artist-recipe";
 import type { AppLanguage, HistoryItem } from "./types";
 import RandomArtistLab from "./RandomArtistLab";
+import DetectiveArtistLab from "./DetectiveArtistLab";
 
 type TargetImage = { filePath: string; fileUrl: string; name: string; width?: number; height?: number };
 type LabResult = GeneratedArtistRecipe & {
@@ -38,6 +40,7 @@ type Session = {
   scanCount: number;
   shortlist: number;
   imageBudget: number;
+  iterationRounds: number;
   imagesUsed: number;
   discoveryOffset: number;
   matches: ArtistReferenceMatch[];
@@ -69,13 +72,21 @@ const HOME = {
 
 function restore(basePrompt: string): Session {
   if (sessionCache) return sessionCache;
-  const fallback: Session = { modelMode: "high", target: null, basePrompt, sharedStylePrompt: "", batchSize: 8, seed: 246813579, targetProgress: 85, stagnantLimit: 2, minImprovement: 2, scanCount: 40, shortlist: 20, imageBudget: 60, imagesUsed: 0, discoveryOffset: 0, matches: [], bestProgress: 0, round: 0, resetCount: 0, results: [] };
+  const fallback: Session = { modelMode: "high", target: null, basePrompt, sharedStylePrompt: "", batchSize: 8, seed: 246813579, targetProgress: 85, stagnantLimit: 2, minImprovement: 2, scanCount: 40, shortlist: 20, imageBudget: DEFAULT_ARTIST_IMAGE_BUDGET, iterationRounds: 38, imagesUsed: 0, discoveryOffset: 0, matches: [], bestProgress: 0, round: 0, resetCount: 0, results: [] };
   try {
     const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null") as Partial<Session> | null;
-    sessionCache = { ...fallback, ...raw, modelMode: raw?.modelMode === "light" ? "light" : "high", target: raw?.target ?? null, results: Array.isArray(raw?.results) ? raw.results : [], matches: Array.isArray(raw?.matches) ? raw.matches : [] };
+    sessionCache = { ...fallback, ...raw, ...restoreArtistIteration(raw), modelMode: raw?.modelMode === "light" ? "light" : "high", target: raw?.target ?? null, results: Array.isArray(raw?.results) ? raw.results : [], matches: Array.isArray(raw?.matches) ? raw.matches : [] };
   } catch { sessionCache = fallback; }
   return sessionCache;
 }
+
+const ITERATION_TEXT = {
+  "zh-CN": { rounds: "迭代轮数", budget: "图片预算（含基线）", estimate: "最多 {rounds} 轮 / {images} 张（含 1 张基线，末轮可不足一批）；达到目标或手动停止会提前结束。", finished: "已完成设置的迭代：{rounds} 轮，共生成 {images} 张。" },
+  "zh-TW": { rounds: "迭代輪數", budget: "圖片預算（含基線）", estimate: "最多 {rounds} 輪 / {images} 張（含 1 張基線，末輪可不足一批）；達到目標或手動停止會提前結束。", finished: "已完成設定的迭代：{rounds} 輪，共產生 {images} 張。" },
+  "en-US": { rounds: "Iteration rounds", budget: "Image budget (including baseline)", estimate: "Up to {rounds} rounds / {images} images (including 1 baseline; the final batch may be partial). Stops early on target or cancellation.", finished: "Configured search finished: {rounds} rounds, {images} images generated." },
+  "ja-JP": { rounds: "反復ラウンド数", budget: "画像予算（基準画像を含む）", estimate: "最大 {rounds} ラウンド / {images} 枚（基準1枚含む・最終回は端数可）。目標到達または停止操作で早期終了。", finished: "設定した探索が完了：{rounds} ラウンド、{images} 枚。" },
+  "ko-KR": { rounds: "반복 라운드 수", budget: "이미지 예산 (기준 포함)", estimate: "최대 {rounds}라운드 / {images}장 (기준 1장 포함, 마지막 배치는 일부 가능). 목표 도달 또는 취소 시 조기 종료됩니다.", finished: "설정한 탐색 완료: {rounds}라운드, {images}장 생성." },
+} satisfies Record<AppLanguage, Record<string, string>>;
 
 function interpolate(value: string, values: Record<string, unknown>) {
   return Object.entries(values).reduce((out, [key, replacement]) => out.replaceAll(`{${key}}`, String(replacement)), value);
@@ -110,13 +121,14 @@ function previewSizeForTarget(target: TargetImage | null) {
       : best);
 }
 
-function TargetArtistLab({ onBack }: { onBack: () => void }) {
+export function TargetArtistLab({ onBack }: { onBack: () => void }) {
   const language = useAppStore((state) => state.settings?.language ?? "zh-CN");
   const params = useAppStore((state) => state.params);
   const applyParams = useAppStore((state) => state.applyParams);
   const refreshAccount = useAppStore((state) => state.refreshAccount);
   const refreshHistory = useAppStore((state) => state.refreshHistory);
   const text = TEXT[language];
+  const iterationText = ITERATION_TEXT[language];
   const [session, setSession] = useState(() => restore(params.positivePrompt));
   const [running, setRunning] = useState(false);
   const [reversing, setReversing] = useState(false);
@@ -179,7 +191,7 @@ function TargetArtistLab({ onBack }: { onBack: () => void }) {
       const image = generated.items[0];
       if (!generated.ok || !image) throw new Error(generated.message);
       baselineSimilarity = (await window.naiDesktop.artistLabScoreImages(session.modelMode, session.target.filePath, image.filePath)).similarity;
-      patch({ baseline: { image, similarity: baselineSimilarity } });
+      patch({ baseline: { image, similarity: baselineSimilarity }, imagesUsed: 1 });
     } catch (error: any) {
       patch({ baseline: { error: error?.message ?? String(error) } });
       setRunning(false);
@@ -187,7 +199,7 @@ function TargetArtistLab({ onBack }: { onBack: () => void }) {
     }
 
     let imagesUsed = 1;
-    while (!cancelRef.current && bestProgress < session.targetProgress && imagesUsed < session.imageBudget) {
+    while (!cancelRef.current && round < session.iterationRounds && bestProgress < session.targetProgress && imagesUsed < session.imageBudget) {
       if (matches.length === 0 || shouldResetArtistSearch(stagnant, session.stagnantLimit)) {
         if (matches.length > 0) {
           resetCount += 1;
@@ -216,7 +228,7 @@ function TargetArtistLab({ onBack }: { onBack: () => void }) {
       const elites = accumulated.filter((item) => item.status === "done").sort((a, b) => (b.progress ?? 0) - (a.progress ?? 0)).slice(0, Math.max(2, Math.ceil(session.batchSize / 4))).map((item) => item.artists);
       const pool = matches.map((match, index) => ({ ...match.artist, postCount: Math.max(match.artist.postCount, Math.round((matches.length - index) ** 3)) }));
       const recipes = generateArtistMatchRecipes(pool, {
-        count: Math.min(session.batchSize, session.imageBudget - imagesUsed),
+        count: nextArtistBatch(round - 1, session.iterationRounds, imagesUsed, session.imageBudget, session.batchSize),
         round,
         eliteArtists: elites,
         seenPrompts: new Set(accumulated.map((item) => item.prompt)),
@@ -262,9 +274,10 @@ function TargetArtistLab({ onBack }: { onBack: () => void }) {
       const improvement = bestProgress - previousBest;
       stagnant = improvement < session.minImprovement ? stagnant + 1 : 0;
     }
-    if (imagesUsed >= session.imageBudget) {
+    if (imagesUsed >= session.imageBudget || round >= session.iterationRounds) {
       accumulated = accumulated.map((item) => item.status === "pending" ? { ...item, status: "skipped" } : item);
       setSession((state) => ({ ...state, results: accumulated, imagesUsed }));
+      if (accumulated.some((item) => item.round === round && item.status === "done")) setMessage(interpolate(iterationText.finished, { rounds: round, images: imagesUsed }));
     }
     setRunning(false);
     await Promise.allSettled([refreshAccount(), refreshHistory()]);
@@ -284,11 +297,13 @@ function TargetArtistLab({ onBack }: { onBack: () => void }) {
         <label><span>{text.prompt}</span><textarea value={session.basePrompt} onChange={(event) => patch({ basePrompt: event.target.value })} /></label><Button onClick={() => void reverseContent()} disabled={!session.target || reversing}>{reversing ? text.reversing : text.reverse}</Button>
         <label><span>{text.fixedStyle}</span><textarea value={session.sharedStylePrompt} onChange={(event) => patch({ sharedStylePrompt: event.target.value })} /></label>
         <div className="artist-run-options">
-          <CommittedNumberInput label={text.batch} value={session.batchSize} min={1} max={40} normalize={(value) => Math.max(1, Math.min(40, Math.round(value)))} onCommit={(batchSize) => patch({ batchSize })} />
+          <CommittedNumberInput label={text.batch} value={session.batchSize} min={1} max={40} normalize={(value) => Math.max(1, Math.min(40, Math.round(value)))} disabled={running} onCommit={(batchSize) => patch({ batchSize, ...planArtistImages(session.imageBudget, batchSize) })} />
           <CommittedNumberInput label={text.seed} value={session.seed} min={0} normalize={(value) => Math.max(0, Math.floor(value))} onCommit={(seed) => patch({ seed })} />
           <CommittedNumberInput label={text.goal} value={session.targetProgress} min={1} max={100} normalize={(value) => Math.max(1, Math.min(100, value))} onCommit={(targetProgress) => patch({ targetProgress })} />
-          <CommittedNumberInput label={"budget" in text ? text.budget : "Image budget"} value={session.imageBudget} min={8} max={240} normalize={(value) => Math.max(8, Math.min(240, Math.round(value)))} onCommit={(imageBudget) => patch({ imageBudget })} />
+          <CommittedNumberInput label={iterationText.rounds} value={session.iterationRounds} min={1} disabled={running} normalize={(value) => iterationInteger(value, session.iterationRounds)} onCommit={(rounds) => patch(planArtistRounds(rounds, session.batchSize))} />
+          <CommittedNumberInput label={iterationText.budget} value={session.imageBudget} min={2} disabled={running} normalize={(value) => iterationInteger(value, session.imageBudget, 2)} onCommit={(imageBudget) => patch(planArtistImages(imageBudget, session.batchSize))} />
         </div>
+        <small role="status">{interpolate(iterationText.estimate, { rounds: session.iterationRounds, images: Math.min(session.imageBudget, 1 + session.iterationRounds * session.batchSize) })}</small>
         <details className="artist-lab-advanced"><summary>{text.advanced}</summary><div className="artist-run-options">
           <CommittedNumberInput label={text.stagnant} value={session.stagnantLimit} min={1} normalize={(value) => Math.max(1, Math.floor(value))} onCommit={(stagnantLimit) => patch({ stagnantLimit })} />
           <CommittedNumberInput label={text.improvement} value={session.minImprovement} min={0.1} step={0.1} normalize={(value) => Math.max(0.1, value)} onCommit={(minImprovement) => patch({ minImprovement })} />
@@ -305,17 +320,13 @@ function TargetArtistLab({ onBack }: { onBack: () => void }) {
 }
 
 type ArtistLabScreen = "home" | "target" | "random";
-const SCREEN_KEY = "langbai.artist-lab.screen.v3";
-
 export default function ArtistLab({ onBack }: { onBack: () => void }) {
   const language = useAppStore((state) => state.settings?.language ?? "zh-CN");
-  const [screen, setScreen] = useState<ArtistLabScreen>(() => {
-    if (new URLSearchParams(window.location.search).get("uiCapture") === "randomArtist") return "random";
-    const saved = localStorage.getItem(SCREEN_KEY);
-    return saved === "target" || saved === "random" ? saved : "home";
-  });
-  const open = (next: ArtistLabScreen) => { localStorage.setItem(SCREEN_KEY, next); setScreen(next); };
-  if (screen === "target") return <TargetArtistLab onBack={() => open("home")} />;
+  const [screen, setScreen] = useState<ArtistLabScreen>("home");
+  // Navigation is deliberately not persisted; drafts and backend jobs remain independent.
+  const open = setScreen;
+  useEffect(()=>useAppStore.subscribe((s,p)=>{if(s.activeTab!==p.activeTab && s.activeTab==="tools")setScreen("home");}),[]);
+  if (screen === "target") return <DetectiveArtistLab onBack={() => open("home")} />;
   if (screen === "random") return <RandomArtistLab onBack={() => open("home")} />;
   const text = HOME[language];
   return <main className="artist-lab artist-lab-home"><header className="artist-lab-hero"><div><h2>{text.title}</h2><p>{text.subtitle}</p></div><Button onClick={onBack}>{text.back}</Button></header><section className="artist-lab-mode-grid"><button type="button" className="artist-lab-mode-card reverse" onClick={() => open("target")}><span className="artist-mode-icon"><Icon name="scan" /></span><div><h3>{text.target}</h3><p>{text.targetDesc}</p><b>{text.enter} →</b></div></button><button type="button" className="artist-lab-mode-card random" onClick={() => open("random")}><span className="artist-mode-icon"><Icon name="dice" /></span><div><h3>{text.random}</h3><p>{text.randomDesc}</p><b>{text.enter} →</b></div></button></section></main>;

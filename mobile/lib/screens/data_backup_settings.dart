@@ -13,6 +13,20 @@ Map<String, String> _backupText(Object? language) {
   final code = normalizeAppLocaleCode(language);
   const values = <String, Map<String, String>>{
     'zh-CN': {
+      'restoreGuide': "选择备份文件即可恢复；先核对分类，再确认导入。",
+      'retained': "新版桌面归档已保管 {count} 份；未在移动端运行。导出上述两项后，在桌面导入并使用恢复入口。",
+      'rescue': "导入前完整备份：",
+      'preserved': "原数据保留位置：",
+      'activateHelp': "恢复前将保留当前工作区，再切换到所选数据；不会自动启动任务。模型和运行环境沿用本机配置，请确认兼容后手动启动。",
+      'activateRecovery': "恢复使用此数据…",
+      'openRecovery': "打开恢复目录",
+      'staged': "已保存在恢复目录，尚未替换当前工作区",
+      'restored': "已恢复；任务未启动",
+      'recoveryTitle': "恢复结果与入口",
+      'styleLab': "画风实验室：当前自动迭代结果与参考图",
+      'tavernAgent': "新版酒馆 Agent（工作区、插件、会话，可能含密钥）",
+      'coverage':
+          "新版 Agent 独立备份，插件配置可能含密钥，不受应用 API 勾选项控制。备份前停止 Agent 与画风任务。旧版角色数据仅作兼容；移动端仅保管新版桌面数据，导回桌面再恢复。模型、运行环境与符号链接不迁移。自动轻量备份不含新版工作区及画风结果，请使用完整备份。",
       'title': '数据导入、导出与自动备份',
       'desc': '桌面、Android 与 iOS 共用 .naisbackup。默认全选，也可以排除任意数据。',
       'sensitive': 'API Token 与第三方密钥会按你的选择直接写入备份，请只交给可信设备。',
@@ -24,7 +38,8 @@ Map<String, String> _backupText(Object? language) {
       'busy': '正在处理…',
       'archive': '待导入归档',
       'mergeTitle': '确认安全合并',
-      'merge': '完全相同的图片按内容跳过；同名不同图添加 (1)；图片、参考预设、历史和时间分组只合并。导入前会先生成完整安全备份。',
+      'merge':
+          "所选数据均独立处理。常规记录只合并；新版 Agent 与画风结果先保存完整恢复副本，当前工作区存在时需在导入结果中手动切换。导入前会生成完整备份。",
       'overwriteTitle': '再次确认覆盖配置',
       'overwrite': '配置与 API 会覆盖现有对应值（设备路径除外）。其它数据仍不会覆盖。',
       'cancel': '取消',
@@ -57,10 +72,24 @@ Map<String, String> _backupText(Object? language) {
       'referencePresets': '参考预设与参考图',
       'imageHistory': '本机图片与生成记录',
       'promptPresets': '提示词、风格与预设图',
-      'agentWorkspace': '角色、对话、世界书、身份、预设与附件',
-      'workspaceData': '工具项目与其它本机数据',
+      'agentWorkspace': "移动端角色与旧版对话（兼容数据）",
+      'workspaceData': "工具草稿、画风参数与其他本机状态",
     },
     'zh-TW': {
+      'restoreGuide': "選擇備份檔即可復原；先核對分類，再確認匯入。",
+      'retained': "已保管 {count} 份新版桌面封存；未在行動端執行。匯出上述兩項後，在桌面匯入並使用復原入口。",
+      'rescue': "匯入前完整備份：",
+      'preserved': "原資料保留位置：",
+      'activateHelp': "復原前會保留目前工作區，再切換到所選資料；不會自動啟動任務。模型和執行環境沿用本機設定，請確認相容後手動啟動。",
+      'activateRecovery': "復原並使用此資料…",
+      'openRecovery': "開啟復原目錄",
+      'staged': "已保存至復原目錄，尚未取代目前工作區",
+      'restored': "已復原；任務未啟動",
+      'recoveryTitle': "復原結果與入口",
+      'styleLab': "畫風實驗室：目前自動迭代結果與參考圖",
+      'tavernAgent': "新版酒館 Agent（工作區、外掛、對話，可能含金鑰）",
+      'coverage':
+          "新版 Agent 獨立備份，外掛設定可能含金鑰，不受應用 API 勾選項控制。備份前停止 Agent 與畫風任務。舊版角色資料僅供相容；行動端僅保管新版桌面資料，匯回桌面再復原。模型、執行環境與符號連結不遷移。自動輕量備份不含新版工作區及畫風結果，請使用完整備份。",
       'title': '資料匯入、匯出與自動備份',
       'desc': '桌面、Android 與 iOS 共用 .naisbackup；預設全選。',
       'sensitive': 'API Token 與第三方金鑰會直接寫入所選備份，只交給可信裝置。',
@@ -72,7 +101,8 @@ Map<String, String> _backupText(Object? language) {
       'busy': '處理中…',
       'archive': '待匯入封存',
       'mergeTitle': '確認安全合併',
-      'merge': '相同圖片略過；同名不同圖加 (1)；圖片、參考預設、歷史與日期群組只合併。匯入前先建立完整安全備份。',
+      'merge':
+          "各項資料獨立處理。一般記錄只合併；新版 Agent 與畫風結果先保存完整復原副本，已有工作區時須在匯入結果手動切換。匯入前會建立完整備份。",
       'overwriteTitle': '再次確認覆蓋設定',
       'overwrite': '設定與 API 會覆蓋對應值（裝置路徑除外），其它資料仍不覆蓋。',
       'cancel': '取消',
@@ -105,10 +135,28 @@ Map<String, String> _backupText(Object? language) {
       'referencePresets': '參考預設與參考圖',
       'imageHistory': '本機圖片與生成記錄',
       'promptPresets': '提示詞、風格與預設圖',
-      'agentWorkspace': '角色、對話、世界書、身分、預設與附件',
-      'workspaceData': '工具專案與其它本機資料',
+      'agentWorkspace': "行動端角色與舊版對話（相容資料）",
+      'workspaceData': "工具草稿、畫風參數與其他本機狀態",
     },
     'en-US': {
+      'restoreGuide':
+          "To restore, choose the backup file, review categories, then confirm import.",
+      'retained':
+          "Retained {count} native desktop archives without running them. Export the two native categories, import on desktop, then use the recovery actions.",
+      'rescue': "Full backup before import:",
+      'preserved': "Previous data preserved at:",
+      'activateHelp':
+          "Current data will be preserved before switching to this recovery. Tasks will not start automatically. Local model/runtime settings remain; verify compatibility before starting manually.",
+      'activateRecovery': "Activate this recovery…",
+      'openRecovery': "Open recovery folder",
+      'staged': "Staged only; current workspace unchanged",
+      'restored': "Restored; tasks not started",
+      'recoveryTitle': "Recovery results and actions",
+      'styleLab': "Style Lab: current iteration results and reference",
+      'tavernAgent':
+          "Tavern Agent (profiles, plugins, chats; may contain keys)",
+      'coverage':
+          "Tavern Agent is backed up independently; plugin settings may contain keys regardless of the application API checkbox. Stop Agent and style tasks first. Legacy characters remain for compatibility. Mobile only retains native desktop data for return to desktop. Models, runtimes and symbolic links are excluded. Lightweight automatic backups exclude native workspaces and style results; use a full backup.",
       'title': 'Data import, export & automatic backup',
       'desc':
           'One .naisbackup format for desktop, Android, and iOS. Everything is selected by default.',
@@ -123,7 +171,7 @@ Map<String, String> _backupText(Object? language) {
       'archive': 'Archive to import',
       'mergeTitle': 'Confirm safe merge',
       'merge':
-          'Byte-identical images are skipped, same-name files receive (1), and images, reference presets, histories, and date groups are merge-only. A complete rescue backup is created first.',
+          "Categories are independent. Regular records are merged; native Agent and style results are staged in full. Existing workspaces require an explicit switch from the results. A full rescue backup is created first.",
       'overwriteTitle': 'Confirm configuration overwrite again',
       'overwrite':
           'Configuration and APIs replace matching values (device paths are preserved). Everything else remains merge-only.',
@@ -159,11 +207,26 @@ Map<String, String> _backupText(Object? language) {
       'referencePresets': 'Reference presets and images',
       'imageHistory': 'Local images and generation history',
       'promptPresets': 'Prompt/style presets and previews',
-      'agentWorkspace':
-          'Characters, chats, lorebooks, personas, presets, and attachments',
-      'workspaceData': 'Tool projects and other local data',
+      'agentWorkspace': "Mobile characters and legacy chats (compatibility)",
+      'workspaceData': "Tool drafts, style parameters and other local state",
     },
     'ja-JP': {
+      'restoreGuide': "バックアップを選び、項目を確認してインポートすると復元できます。",
+      'retained':
+          "デスクトップ専用アーカイブ {count} 件を保管しました。モバイルでは実行しません。専用の2項目を書き出し、デスクトップで読み込んで復元してください。",
+      'rescue': "インポート前の完全バックアップ：",
+      'preserved': "以前のデータの保存先：",
+      'activateHelp':
+          "現在のデータを退避してから切り替えます。タスクは自動起動しません。本機のモデルと実行環境を維持します。互換性を確認してから手動で起動してください。",
+      'activateRecovery': "このデータを使用…",
+      'openRecovery': "復元フォルダーを開く",
+      'staged': "復元フォルダーに保管・現在の作業領域は未変更",
+      'restored': "復元済み・タスク未起動",
+      'recoveryTitle': "復元結果と操作",
+      'styleLab': "画風ラボ：現在の反復結果と参照画像",
+      'tavernAgent': "新版 Tavern Agent（作業領域・プラグイン・会話、キーを含む場合あり）",
+      'coverage':
+          "新版 Agent は独立して保存します。プラグイン設定のキーはアプリ API の選択とは別です。先に Agent と画風タスクを停止してください。旧キャラクターは互換用です。モバイルはデスクトップ専用データを保管し、デスクトップへ戻して復元します。モデル・実行環境・リンクは含みません。軽量自動バックアップには新版作業領域と画風結果を含まないため、完全バックアップを使用してください。",
       'title': 'データ入出力と自動バックアップ',
       'desc': 'デスクトップ・Android・iOS 共通の .naisbackup。初期状態は全選択です。',
       'sensitive': '選択した API Token と外部キーは直接保存されます。信頼できる端末だけで共有してください。',
@@ -176,7 +239,7 @@ Map<String, String> _backupText(Object? language) {
       'archive': '読み込み対象',
       'mergeTitle': '安全マージを確認',
       'merge':
-          '同一画像はスキップ、同名別画像は (1) を追加し、画像・参照プリセット・履歴・日付グループはマージのみです。先に完全バックアップを作成します。',
+          "各項目は独立です。一般の記録はマージし、新版 Agent と画風結果は完全な復元コピーを保存します。既存領域がある場合は結果画面から手動で切り替えます。事前に完全バックアップを作成します。",
       'overwriteTitle': '設定上書きを再確認',
       'overwrite': '設定/API は対応値を上書きします（端末パスを除く）。その他はマージのみです。',
       'cancel': 'キャンセル',
@@ -209,10 +272,26 @@ Map<String, String> _backupText(Object? language) {
       'referencePresets': '参照プリセットと画像',
       'imageHistory': 'ローカル画像と生成履歴',
       'promptPresets': 'プロンプト・スタイル・プレビュー',
-      'agentWorkspace': 'キャラクター・会話・世界情報・ペルソナ・プリセット・添付',
-      'workspaceData': 'ツールプロジェクトとその他データ',
+      'agentWorkspace': "モバイルのキャラクターと旧会話（互換データ）",
+      'workspaceData': "ツール下書き・画風パラメーター・その他の状態",
     },
     'ko-KR': {
+      'restoreGuide': "복원하려면 백업 파일을 선택하고 항목을 확인한 후 가져오세요.",
+      'retained':
+          "데스크톱 전용 백업 {count}개를 실행하지 않고 보관했습니다. 해당 두 항목을 내보내 데스크톱에서 가져온 후 복구 기능을 사용하세요.",
+      'rescue': "가져오기 전 전체 백업:",
+      'preserved': "이전 데이터 보존 위치:",
+      'activateHelp':
+          "현재 데이터를 보존한 뒤 선택한 복구 데이터로 전환합니다. 작업은 자동 시작되지 않습니다. 로컬 모델과 실행 환경 설정은 유지되므로 호환성을 확인한 후 직접 시작하세요.",
+      'activateRecovery': "이 데이터로 복원…",
+      'openRecovery': "복구 폴더 열기",
+      'staged': "복구 폴더에 보관됨 · 현재 작업 공간 유지",
+      'restored': "복원됨 · 작업 시작 안 됨",
+      'recoveryTitle': "복구 결과 및 작업",
+      'styleLab': "화풍 실험실: 현재 반복 결과와 참조 이미지",
+      'tavernAgent': "새 Tavern Agent (작업 공간·플러그인·대화, 키 포함 가능)",
+      'coverage':
+          "새 Agent는 별도로 백업합니다. 플러그인 설정의 키는 앱 API 선택과 무관하게 포함될 수 있습니다. 먼저 Agent와 화풍 작업을 중지하세요. 이전 캐릭터는 호환용입니다. 모바일은 데스크톱 전용 데이터를 보관한 후 데스크톱에서 복원합니다. 모델·실행 환경·링크는 제외됩니다. 경량 자동 백업에는 새 작업 공간과 화풍 결과가 없으므로 전체 백업을 사용하세요.",
       'title': '데이터 가져오기·내보내기 및 자동 백업',
       'desc': '데스크톱·Android·iOS 공용 .naisbackup이며 기본값은 전체 선택입니다.',
       'sensitive': '선택한 API Token과 외부 키는 직접 저장됩니다. 신뢰하는 기기에서만 공유하세요.',
@@ -225,7 +304,7 @@ Map<String, String> _backupText(Object? language) {
       'archive': '가져올 백업',
       'mergeTitle': '안전 병합 확인',
       'merge':
-          '같은 이미지는 건너뛰고 이름만 같으면 (1)을 붙입니다. 이미지·참고 프리셋·기록·날짜 그룹은 병합만 하며 먼저 전체 안전 백업을 만듭니다.',
+          "각 항목은 독립적입니다. 일반 기록은 병합하고 새 Agent와 화풍 결과는 완전한 복구 사본으로 보관합니다. 기존 작업 공간이 있으면 결과 화면에서 직접 전환해야 합니다. 먼저 전체 백업을 만듭니다.",
       'overwriteTitle': '설정 덮어쓰기 재확인',
       'overwrite': '설정/API는 대응 값을 덮어씁니다(기기 경로 제외). 나머지는 병합만 합니다.',
       'cancel': '취소',
@@ -258,8 +337,8 @@ Map<String, String> _backupText(Object? language) {
       'referencePresets': '참고 프리셋과 이미지',
       'imageHistory': '로컬 이미지와 생성 기록',
       'promptPresets': '프롬프트·스타일·미리보기',
-      'agentWorkspace': '캐릭터·대화·로어북·페르소나·프리셋·첨부',
-      'workspaceData': '도구 프로젝트 및 기타 데이터',
+      'agentWorkspace': "모바일 캐릭터 및 이전 대화 (호환 데이터)",
+      'workspaceData': "도구 초안·화풍 매개변수 및 기타 로컬 상태",
     },
   };
   return values[code] ?? values['zh-CN']!;
@@ -293,6 +372,7 @@ class DataBackupSettingsPanel extends StatefulWidget {
 
 class _DataBackupSettingsPanelState extends State<DataBackupSettingsPanel>
     with WidgetsBindingObserver {
+  DataBackupImportReport? lastReport;
   Set<DataBackupCategory> exportSelection = DataBackupCategory.values.toSet();
   Set<DataBackupCategory> importSelection = {};
   DataBackupInspection? inspection;
@@ -519,6 +599,7 @@ class _DataBackupSettingsPanelState extends State<DataBackupSettingsPanel>
         importSelection,
         confirmConfigurationOverwrite: overwrites,
       );
+      if (mounted) setState(() => lastReport = report);
       await app.load();
       _message(text['done']!
           .replaceAll('{i}', '${report.imported}')
@@ -620,7 +701,7 @@ class _DataBackupSettingsPanelState extends State<DataBackupSettingsPanel>
           Align(
             alignment: AlignmentDirectional.centerStart,
             child: Text(
-              text['desc']!,
+              "${text['desc']!}\n${text['coverage']!}",
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
@@ -736,6 +817,19 @@ class _DataBackupSettingsPanelState extends State<DataBackupSettingsPanel>
               icon: const Icon(Icons.restore_rounded),
               label: Text(text['import']!),
             ),
+          ],
+          if (lastReport != null) ...[
+            const Divider(height: 24),
+            Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: SelectableText(text['recoveryTitle']!,
+                    style: Theme.of(context).textTheme.titleMedium)),
+            const SizedBox(height: 8),
+            if (lastReport!.retainedNativeArchives > 0)
+              SelectableText(text['retained']!.replaceAll(
+                  '{count}', '${lastReport!.retainedNativeArchives}')),
+            SelectableText(
+                "${text['rescue']}\n${lastReport!.rescueBackupPath}\n${text['restoreGuide']}"),
           ],
           if (!widget.importOnly) ...[
             const Divider(height: 32),
@@ -876,7 +970,8 @@ class _DataBackupSettingsPanelState extends State<DataBackupSettingsPanel>
               ),
             ),
             if (Platform.isIOS || Platform.isAndroid)
-              Text(text['desc']!, style: Theme.of(context).textTheme.bodySmall),
+              Text("${text['desc']!}\n${text['coverage']!}",
+                  style: Theme.of(context).textTheme.bodySmall),
           ],
         ],
       ),
