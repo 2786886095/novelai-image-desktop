@@ -47,6 +47,7 @@ android {
         targetSdk = 35
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        testInstrumentationRunner = "com.codex.novelai.novelai_mobile.agent.AgentInstrumentation"
     }
 
     signingConfigs {
@@ -61,6 +62,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            if (project.hasProperty('studioAgentQa')) {
+                applicationIdSuffix = '.agenttest'
+            }
+        }
         release {
             // Stable release key when key.properties is present; otherwise the
             // debug key so `flutter run --release` and forks still build.

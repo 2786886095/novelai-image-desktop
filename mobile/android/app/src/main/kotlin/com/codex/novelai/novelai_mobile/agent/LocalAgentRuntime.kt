@@ -34,6 +34,7 @@ class LocalAgentRuntime private constructor(private val context: Context) {
     @Volatile private var child: Process? = null
     @Volatile private var auxiliary: Process? = null
     @Volatile private var cancelled = false
+    @Volatile private var stopping = false
     @Volatile private var portableLock: String? = null
     @Volatile private var launchUrl: String? = null
     @Volatile private var progress = 0.0
@@ -57,7 +58,7 @@ class LocalAgentRuntime private constructor(private val context: Context) {
     }
     @Synchronized fun snapshot(): Map<String, Any?> = mapOf(
         "supported" to (Build.VERSION.SDK_INT >= 26 && Build.SUPPORTED_ABIS.contains("arm64-v8a")),
-        "phase" to phase, "busy" to busy, "error" to error, "progress" to progress,
+        "phase" to phase, "busy" to (busy || stopping), "error" to error, "progress" to progress,
         "running" to (child?.isAlive == true && phase == "running"),
         "installed" to active()?.optString("version"), "installedUpstream" to active()?.optString("upstream"),
         "official" to upstream, "candidate" to update?.optString("version"),
@@ -65,7 +66,7 @@ class LocalAgentRuntime private constructor(private val context: Context) {
         "logs" to logs.toList(), "proposal" to proposal?.let { mapOf("token" to it.token,"version" to it.seed.getString("version"),"upstream" to it.seed.getString("upstream")) }
     )
     @Synchronized fun command(name: String, args: Map<String, Any?> = emptyMap()) {
-        check(!busy && portableLock==null) { "Another Agent operation or backup is in progress" }
+        check(!busy && !stopping && portableLock==null) { "Another Agent operation or backup is in progress" }
         require(Build.VERSION.SDK_INT >= 26 && Build.SUPPORTED_ABIS.contains("arm64-v8a")) { "Local Agent requires Android 8+ and ARM64" }
         if (name != "check") check(child == null) { "Stop Agent before changing runtime or data" }
         busy = true; error = null; if(name!="check")cancelled=false
@@ -152,7 +153,7 @@ class LocalAgentRuntime private constructor(private val context: Context) {
             var received=0L
             input.use { incoming -> archive.outputStream().use { out ->
                 val buffer=ByteArray(131072)
-                while(true){val n=incoming.read(buffer);if(n<0)break;received+=n;check(received<=meta.getLong("bytes"));out.write(buffer,0,n);progress=received.toDouble()/meta.getLong("bytes")*.5}
+                while(true){check(!cancelled){"Cancelled"};val n=incoming.read(buffer);if(n<0)break;received+=n;check(received<=meta.getLong("bytes"));out.write(buffer,0,n);progress=received.toDouble()/meta.getLong("bytes")*.5}
             } }
             check(received==meta.getLong("bytes") && AgentFiles.hash(archive.toPath())==meta.getString("sha256")) { "Runtime archive integrity mismatch" }
             AgentFiles.extract(archive.toPath(),slot.toPath(),meta.getLong("unpackedBytes")+16*1024*1024)
@@ -306,6 +307,14 @@ class LocalAgentRuntime private constructor(private val context: Context) {
         }.start()
     }
     @Synchronized fun openUrl(): String { check(phase=="running" && child?.isAlive==true);return launchUrl ?: error("Agent is not ready") }
-    @Synchronized fun stop() { cancelled=true;child?.let { terminate(it) };auxiliary?.let{terminate(it)};child=null;auxiliary=null;launchUrl=null;phase="stopped";log("Agent stopped by user") }
+    fun stop() {
+        val owned=synchronized(this){
+            if(stopping)return
+            stopping=true;cancelled=true;val processes=listOfNotNull(child,auxiliary).distinct()
+            child=null;auxiliary=null;launchUrl=null;phase="stopped";processes
+        }
+        try{for(process in owned)terminate(process);log("Agent stopped by user")}
+        finally{stopping=false}
+    }
     private fun terminate(process: Process) { if(process.isAlive){process.destroy();if(!process.waitFor(5,TimeUnit.SECONDS))process.destroyForcibly()} }
 }

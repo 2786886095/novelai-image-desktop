@@ -18,7 +18,7 @@ class LocalAgentService : Service() {
     } }
     override fun onBind(intent: Intent?) = null
     override fun onStartCommand(intent: Intent?,flags: Int,startId: Int): Int {
-        if(intent?.action=="stop"){LocalAgentRuntime.get(this).stop();stopSelf();return START_NOT_STICKY}
+        if(intent?.action=="stop"){Thread {LocalAgentRuntime.get(this).stop();handler.post{stopSelf()}}.start();return START_NOT_STICKY}
         started=System.currentTimeMillis()
         val manager=getSystemService(NotificationManager::class.java)
         val title=intent?.getStringExtra("title") ?: "Local Tavern Agent"
@@ -33,5 +33,5 @@ class LocalAgentService : Service() {
         handler.removeCallbacks(watch);handler.postDelayed(watch,2000)
         return START_NOT_STICKY
     }
-    override fun onDestroy(){handler.removeCallbacks(watch);val agent=LocalAgentRuntime.get(this);val state=agent.snapshot();if(state["busy"]==true||state["running"]==true)agent.stop();wake?.let{if(it.isHeld)it.release()};wake=null;super.onDestroy()}
+    override fun onDestroy(){handler.removeCallbacks(watch);val agent=LocalAgentRuntime.get(this);val state=agent.snapshot();if(state["busy"]==true||state["running"]==true)Thread{agent.stop()}.start();wake?.let{if(it.isHeld)it.release()};wake=null;super.onDestroy()}
 }
