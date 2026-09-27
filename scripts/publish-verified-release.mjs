@@ -19,7 +19,7 @@ for(const name of ['Decode final Windows installers with the actual NSIS decoder
 call('gh',['run','download',buildRun,'-n','packaged-smoke-windows','-D','windows-install-evidence']);
 const installation=JSON.parse(fs.readFileSync('windows-install-evidence/upgrade-smoke/verification.json','utf8'));
 const agent=JSON.parse(fs.readFileSync('windows-install-evidence/agent-smoke/verification.json','utf8'));
-if(!installation.pass||installation.version!==version||!installation.userDataPreserved||!agent.pass)throw Error('Actual installation or Agent startup evidence missing');
+if(!installation.pass||installation.version!==version||!installation.userDataPreserved||!installation.legacyRuntimePreserved||!agent.pass)throw Error('Actual installation or Agent startup evidence missing');
 // Retry only the publication tooling: installers must match every application file.
 call('git',['diff','--exit-code',build.headSha,sha,'--','.',':!scripts/publish-verified-release.mjs',':!.github/workflows/build.yml']);
 const mobileRun=process.env.MOBILE_RUN;

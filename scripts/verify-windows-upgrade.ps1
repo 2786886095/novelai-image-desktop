@@ -50,12 +50,23 @@ function Verify-Installed {
 & gh release download v2.4.0 --repo 2786886095/novelai-image-desktop --pattern Langbai-NovelAI-Studio-Setup-2.4.0.exe --dir $out
 if ($LASTEXITCODE -ne 0) { throw 'Could not obtain the actual previous installer' }
 Run-Installer (Join-Path $out 'Langbai-NovelAI-Studio-Setup-2.4.0.exe') @('/S','--no-desktop-shortcut',"/D=$target") 600
+$legacyManifest=Join-Path $target 'resources/harness-seed/manifest.json'
+$legacyHash=(Get-FileHash -LiteralPath $legacyManifest).Hash
+$customSeedFile=Join-Path $target 'resources/harness-seed/custom-preservation.txt'
+Set-Content -LiteralPath $customSeedFile -Value 'custom resource retained'
 $sentinel = Join-Path $profile 'TavernAgent/user-home/user-preservation.txt'
 New-Item -ItemType Directory -Path (Split-Path $sentinel) -Force | Out-Null
 Set-Content -LiteralPath $sentinel -Value 'user-owned upgrade sentinel'
 $before=(Get-FileHash -LiteralPath $sentinel).Hash
 Run-Installer $setup @('/S','--updated','--no-desktop-shortcut',"/D=$target")
 $upgradeFiles=Verify-Installed
+$backupRoot=Join-Path (Split-Path $target -Parent) '.langbai-installer-backups'
+$receipts=@(Get-ChildItem -LiteralPath $backupRoot -Recurse -Filter 'preserved-runtime.json' -File)
+if ($receipts.Count -ne 1) { throw 'Expected exactly one legacy runtime recovery receipt' }
+$receipt=Get-Content -LiteralPath $receipts[0].FullName -Raw | ConvertFrom-Json
+if ((Get-FileHash -LiteralPath (Join-Path $receipt.destination 'manifest.json')).Hash -ne $legacyHash) { throw 'Legacy runtime manifest changed' }
+if ((Get-Content -LiteralPath (Join-Path $receipt.destination 'custom-preservation.txt') -Raw).Trim() -ne 'custom resource retained') { throw 'Unknown legacy resource lost' }
+
 if ((Get-FileHash -LiteralPath $sentinel).Hash -ne $before) { throw 'User data changed during upgrade' }
 $uninstall=Get-ChildItem -LiteralPath $target -Filter '*Uninstall*.exe' | Select-Object -First 1
 if (-not $uninstall) { throw 'No test uninstaller found' }
@@ -63,5 +74,5 @@ Run-Installer $uninstall.FullName @('/S')
 Run-Installer $setup @('/S','--no-desktop-shortcut',"/D=$target")
 $cleanFiles=Verify-Installed
 if ((Get-FileHash -LiteralPath $sentinel).Hash -ne $before) { throw 'Reinstallation removed user data' }
-@{pass=$true;version=$version;previous='2.4.0';upgradeFiles=$upgradeFiles;cleanFiles=$cleanFiles;userDataPreserved=$true;installerSha256=(Get-FileHash -LiteralPath $setup -Algorithm SHA256).Hash} | ConvertTo-Json | Set-Content -Encoding utf8 (Join-Path $out 'verification.json')
+@{pass=$true;version=$version;previous='2.4.0';upgradeFiles=$upgradeFiles;cleanFiles=$cleanFiles;userDataPreserved=$true;legacyRuntimePreserved=$true;installerSha256=(Get-FileHash -LiteralPath $setup -Algorithm SHA256).Hash} | ConvertTo-Json | Set-Content -Encoding utf8 (Join-Path $out 'verification.json')
 Write-Output 'WINDOWS_ACTUAL_INSTALL_AND_UPGRADE_OK'
