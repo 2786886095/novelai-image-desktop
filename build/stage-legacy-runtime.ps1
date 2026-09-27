@@ -1,4 +1,4 @@
-param(
+﻿param(
   [Parameter(Mandatory=$true)][ValidateSet('Stage','Restore','Commit')][string]$Operation,
   [Parameter(Mandatory=$true)][string]$Ledger,
   [string]$InstallDir
@@ -19,7 +19,7 @@ function Assert-PlainAncestors([string]$Path) {
 }
 try {
   $entries=@()
-  if (Test-Path -LiteralPath $Ledger) { $entries=@(Get-Content -LiteralPath $Ledger -Raw -Encoding UTF8 | ConvertFrom-Json) }
+  if (Test-Path -LiteralPath $Ledger) { $entries=ConvertFrom-Json -InputObject (Get-Content -LiteralPath $Ledger -Raw -Encoding UTF8) }
   if ($Operation -eq 'Stage') {
     if (-not [IO.Path]::IsPathRooted($InstallDir)) { throw 'Absolute installation path required' }
     $install=[IO.Path]::GetFullPath($InstallDir).TrimEnd('\')

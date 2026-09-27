@@ -12,8 +12,8 @@ function fixture(){
  const long=path.join(seed,'runtime','node_modules','deep'.repeat(35),'nested'.repeat(18),'file.txt');fs.mkdirSync(path.dirname(long),{recursive:true});fs.writeFileSync(long,'original bytes');
  fs.writeFileSync(path.join(seed,'unknown-custom-file.txt'),'retain custom file');
  const user=path.join(root,'user-home.txt');fs.writeFileSync(user,'user data');
- const run=(operation:string)=>spawnSync('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',path.resolve('build/stage-legacy-runtime.ps1'),'-Operation',operation,'-Ledger',ledger,'-InstallDir',install],{windowsHide:true,encoding:'utf8',timeout:20000});
- return {root,seed,ledger,long,user,run};
+ const run=(operation:string,selectedInstall=install)=>spawnSync('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',path.resolve('build/stage-legacy-runtime.ps1'),'-Operation',operation,'-Ledger',ledger,'-InstallDir',selectedInstall],{windowsHide:true,encoding:'utf8',timeout:20000});
+ return {root,install,seed,ledger,long,user,run};
 }
 describe.skipIf(process.platform!=='win32')('legacy NSIS long-path migration',()=>{
  it('moves a whole runtime, preserves long/custom files, and restores exact bytes on cancellation',()=>{
@@ -25,6 +25,7 @@ describe.skipIf(process.platform!=='win32')('legacy NSIS long-path migration',()
  it('keeps a recovery receipt after success and never overwrites a replacement source',()=>{
   const f=fixture();expect(f.run('Stage').status).toBe(0);expect(f.run('Commit').status).toBe(0);
   const [e]=JSON.parse(fs.readFileSync(f.ledger,'utf8').replace(/^\uFEFF/,''));expect(fs.existsSync(path.join(path.dirname(e.destination),'preserved-runtime.json'))).toBe(true);
+  const receipt=JSON.parse(fs.readFileSync(path.join(path.dirname(e.destination),'preserved-runtime.json'),'utf8').replace(/^\uFEFF/,''));expect(receipt).toEqual(e);
   fs.mkdirSync(f.seed);fs.writeFileSync(path.join(f.seed,'replacement'),'new');expect(f.run('Restore').status).toBe(22);
   expect(fs.readFileSync(path.join(e.destination,'unknown-custom-file.txt'),'utf8')).toBe('retain custom file');expect(fs.readFileSync(path.join(f.seed,'replacement'),'utf8')).toBe('new');
  },30000);
@@ -34,5 +35,12 @@ describe.skipIf(process.platform!=='win32')('legacy NSIS long-path migration',()
  it('refuses a linked runtime directory without traversing or moving its target',()=>{
   const f=fixture(),external=path.join(f.root,'external-runtime');fs.renameSync(f.seed,external);fs.symlinkSync(external,f.seed,'junction');
   expect(f.run('Stage').status).toBe(22);expect(fs.readFileSync(f.long,'utf8')).toBe('original bytes');expect(fs.lstatSync(f.seed).isSymbolicLink()).toBe(true);
+ },30000);
+ it('serializes separate recovery records for multiple old install locations',()=>{
+  const a=fixture(),b=fixture();expect(a.run('Stage').status).toBe(0);expect(a.run('Stage',b.install).status).toBe(0);
+  const entries=JSON.parse(fs.readFileSync(a.ledger,'utf8').replace(/^\uFEFF/,''));expect(entries).toHaveLength(2);
+  expect(a.run('Commit').status).toBe(0);
+  for(const e of entries){expect(JSON.parse(fs.readFileSync(path.join(path.dirname(e.destination),'preserved-runtime.json'),'utf8').replace(/^\uFEFF/,''))).toEqual(e);}
+  expect(a.run('Restore').status).toBe(0);expect(fs.readFileSync(a.long,'utf8')).toBe('original bytes');expect(fs.readFileSync(b.long,'utf8')).toBe('original bytes');
  },30000);
 });
