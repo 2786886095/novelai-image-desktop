@@ -20,7 +20,7 @@ class _LocalAgentScreenState extends State<LocalAgentScreen> {
   Map<String,dynamic> _state={};
   List<String> _backups=[];
   Timer? _poll;
-  bool _request=false,_reading=false,_checked=false;
+  bool _request=false,_reading=false,_checked=false,_launching=false;
   String? _error;
   LocalAgentBridge? _bridge;
   AgentController? _controller;
@@ -28,7 +28,7 @@ class _LocalAgentScreenState extends State<LocalAgentScreen> {
   String? _tool;
   Map<String,dynamic>? _args;
   String t(String key)=>localAgentText(context.read<AppState>().settings.language,key);
-  bool get busy=>_request || _state['busy']==true;
+  bool get busy=>_request || _launching || _state['busy']==true;
   bool get running=>_state['running']==true;
   @override void initState(){super.initState();widget.visible.addListener(_visible);_poll=Timer.periodic(const Duration(seconds:1),(_){if(widget.visible.value || _bridge!=null)_refresh();});_visible();}
   void _visible(){if(widget.visible.value){_refresh().then((_){if(mounted&&!_checked&&_state['supported']==true){_checked=true;_act('check');}});}}
@@ -37,7 +37,7 @@ class _LocalAgentScreenState extends State<LocalAgentScreen> {
     try{final state=await _native.invokeMapMethod<String,dynamic>('status');
       final backups=await _native.invokeListMethod<String>('backups');
       if(mounted)setState((){_state=state??{};_backups=backups??[];});
-      if(state?['running']!=true && state?['busy']!=true && _bridge!=null){await _closeBridge();}
+      if(!_launching && state?['running']!=true && state?['busy']!=true && _bridge!=null){await _closeBridge();}
     }catch(e){if(mounted)setState(()=>_error='$e');}finally{_reading=false;}
   }
   Future<void> _act(String name,[Map<String,dynamic> args=const {}])async{
@@ -49,6 +49,8 @@ class _LocalAgentScreenState extends State<LocalAgentScreen> {
   Future<void> _start()async{
     if(busy)return;
     final app=context.read<AppState>();
+    setState(()=>_launching=true);
+    try {
     await _closeBridge();
     _controller=AgentController(app:app);await _controller!.load();
     final home=_state['dataDirectory'] as String?;
@@ -63,7 +65,9 @@ class _LocalAgentScreenState extends State<LocalAgentScreen> {
         return result;
       });
     await _bridge!.start();
-    await _act('start',{'bridgeUrl':_bridge!.url,'bridgeToken':_bridge!.token});
+    if(mounted)await _act('start',{'bridgeUrl':_bridge!.url,'bridgeToken':_bridge!.token});
+    }catch(e){await _closeBridge();if(mounted)setState(()=>_error='$e');}
+    finally{if(mounted)setState(()=>_launching=false);}
   }
   Future<void> _closeBridge()async{
     if(_approval?.isCompleted==false)_approval!.complete(false);

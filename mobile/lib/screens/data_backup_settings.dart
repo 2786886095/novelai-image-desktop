@@ -26,7 +26,7 @@ Map<String, String> _backupText(Object? language) {
       'styleLab': "画风实验室：当前自动迭代结果与参考图",
       'tavernAgent': "新版酒馆 Agent（工作区、插件、会话，可能含密钥）",
       'coverage':
-          "新版 Agent 独立备份，插件配置可能含密钥，不受应用 API 勾选项控制。备份前停止 Agent 与画风任务。旧版角色数据仅作兼容；移动端仅保管新版桌面数据，导回桌面再恢复。模型、运行环境与符号链接不迁移。自动轻量备份不含新版工作区及画风结果，请使用完整备份。",
+          "新版 Agent 独立备份，插件配置可能含密钥，不受应用 API 勾选项控制。备份前停止 Agent 与画风任务。旧版角色数据仅作兼容；Android 完整备份包含本机新版 Agent 资料；导入的桌面 Agent 资料仍以独立归档保管，不自动覆盖本机酒馆。iOS 仅保管归档。模型、运行环境与符号链接不迁移。自动轻量备份不含新版工作区及画风结果，请使用完整备份。",
       'title': '数据导入、导出与自动备份',
       'desc': '桌面、Android 与 iOS 共用 .naisbackup。默认全选，也可以排除任意数据。',
       'sensitive': 'API Token 与第三方密钥会按你的选择直接写入备份，请只交给可信设备。',
@@ -89,7 +89,7 @@ Map<String, String> _backupText(Object? language) {
       'styleLab': "畫風實驗室：目前自動迭代結果與參考圖",
       'tavernAgent': "新版酒館 Agent（工作區、外掛、對話，可能含金鑰）",
       'coverage':
-          "新版 Agent 獨立備份，外掛設定可能含金鑰，不受應用 API 勾選項控制。備份前停止 Agent 與畫風任務。舊版角色資料僅供相容；行動端僅保管新版桌面資料，匯回桌面再復原。模型、執行環境與符號連結不遷移。自動輕量備份不含新版工作區及畫風結果，請使用完整備份。",
+          "新版 Agent 獨立備份，外掛設定可能含金鑰，不受應用 API 勾選項控制。備份前停止 Agent 與畫風任務。舊版角色資料僅供相容；Android 完整備份包含本機新版 Agent 資料；匯入的桌面 Agent 資料仍以獨立封存保管，不自動覆蓋本機酒館。iOS 僅保管封存。模型、執行環境與符號連結不遷移。自動輕量備份不含新版工作區及畫風結果，請使用完整備份。",
       'title': '資料匯入、匯出與自動備份',
       'desc': '桌面、Android 與 iOS 共用 .naisbackup；預設全選。',
       'sensitive': 'API Token 與第三方金鑰會直接寫入所選備份，只交給可信裝置。',
@@ -156,7 +156,7 @@ Map<String, String> _backupText(Object? language) {
       'tavernAgent':
           "Tavern Agent (profiles, plugins, chats; may contain keys)",
       'coverage':
-          "Tavern Agent is backed up independently; plugin settings may contain keys regardless of the application API checkbox. Stop Agent and style tasks first. Legacy characters remain for compatibility. Mobile only retains native desktop data for return to desktop. Models, runtimes and symbolic links are excluded. Lightweight automatic backups exclude native workspaces and style results; use a full backup.",
+          "Tavern Agent is backed up independently; plugin settings may contain keys regardless of the application API checkbox. Stop Agent and style tasks first. Legacy characters remain for compatibility. Android full backups include its local Agent home. Imported desktop Agent capsules are retained separately without overwriting the local Tavern. iOS retains capsules only. Models, runtimes and symbolic links are excluded. Lightweight automatic backups exclude native workspaces and style results; use a full backup.",
       'title': 'Data import, export & automatic backup',
       'desc':
           'One .naisbackup format for desktop, Android, and iOS. Everything is selected by default.',
@@ -226,7 +226,7 @@ Map<String, String> _backupText(Object? language) {
       'styleLab': "画風ラボ：現在の反復結果と参照画像",
       'tavernAgent': "新版 Tavern Agent（作業領域・プラグイン・会話、キーを含む場合あり）",
       'coverage':
-          "新版 Agent は独立して保存します。プラグイン設定のキーはアプリ API の選択とは別です。先に Agent と画風タスクを停止してください。旧キャラクターは互換用です。モバイルはデスクトップ専用データを保管し、デスクトップへ戻して復元します。モデル・実行環境・リンクは含みません。軽量自動バックアップには新版作業領域と画風結果を含まないため、完全バックアップを使用してください。",
+          "新版 Agent は独立して保存します。プラグイン設定のキーはアプリ API の選択とは別です。先に Agent と画風タスクを停止してください。旧キャラクターは互換用です。Android の完全バックアップには端末内 Agent データを含みます。デスクトップからのアーカイブは別途保持し、端末内の酒場を上書きしません。iOS はアーカイブの保持のみです。モデル・実行環境・リンクは含みません。軽量自動バックアップには新版作業領域と画風結果を含まないため、完全バックアップを使用してください。",
       'title': 'データ入出力と自動バックアップ',
       'desc': 'デスクトップ・Android・iOS 共通の .naisbackup。初期状態は全選択です。',
       'sensitive': '選択した API Token と外部キーは直接保存されます。信頼できる端末だけで共有してください。',
@@ -291,7 +291,7 @@ Map<String, String> _backupText(Object? language) {
       'styleLab': "화풍 실험실: 현재 반복 결과와 참조 이미지",
       'tavernAgent': "새 Tavern Agent (작업 공간·플러그인·대화, 키 포함 가능)",
       'coverage':
-          "새 Agent는 별도로 백업합니다. 플러그인 설정의 키는 앱 API 선택과 무관하게 포함될 수 있습니다. 먼저 Agent와 화풍 작업을 중지하세요. 이전 캐릭터는 호환용입니다. 모바일은 데스크톱 전용 데이터를 보관한 후 데스크톱에서 복원합니다. 모델·실행 환경·링크는 제외됩니다. 경량 자동 백업에는 새 작업 공간과 화풍 결과가 없으므로 전체 백업을 사용하세요.",
+          "새 Agent는 별도로 백업합니다. 플러그인 설정의 키는 앱 API 선택과 무관하게 포함될 수 있습니다. 먼저 Agent와 화풍 작업을 중지하세요. 이전 캐릭터는 호환용입니다. Android 전체 백업은 기기 내 Agent 데이터를 포함합니다. 가져온 데스크톱 자료는 별도로 보관하며 로컬 Tavern을 덮어쓰지 않습니다. iOS는 자료 보관만 지원합니다. 모델·실행 환경·링크는 제외됩니다. 경량 자동 백업에는 새 작업 공간과 화풍 결과가 없으므로 전체 백업을 사용하세요.",
       'title': '데이터 가져오기·내보내기 및 자동 백업',
       'desc': '데스크톱·Android·iOS 공용 .naisbackup이며 기본값은 전체 선택입니다.',
       'sensitive': '선택한 API Token과 외부 키는 직접 저장됩니다. 신뢰하는 기기에서만 공유하세요.',

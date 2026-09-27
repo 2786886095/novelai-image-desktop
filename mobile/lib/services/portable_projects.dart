@@ -3,10 +3,13 @@ import 'dart:io';
 import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:flutter/services.dart';
+import 'package:path/path.dart' as p;
 
-/// Native workspaces remain passive on Android/iOS. They never enter prefs,
-/// plugin loading, or process configuration, including during a round trip.
+/// Imported desktop capsules remain passive. Android's own native Agent home
+/// is exported using the same verified capsule format while the engine is locked.
 class PortableProjects {
+  static const _native = MethodChannel('langbai.novelai/local_agent');
   static const prefix = 'portable-projects/';
   static final _name = RegExp(r'^(agent|detective)-([a-f0-9]{64})\.zip$');
   static bool _selected(String kind, Set<String> selected) => kind == 'agent'
@@ -113,6 +116,20 @@ class PortableProjects {
   }
 
   static Future<void> export(Archive archive, Set<String> selected) async {
+    if(Platform.isAndroid && selected.contains('tavernAgent')) {
+      Map<String,dynamic>? lock;
+      try {
+        final state=await _native.invokeMapMethod<String,dynamic>('status');
+        if(state?['supported']==true) {
+          lock=await _native.invokeMapMethod<String,dynamic>('lockData');
+          if(lock?['home'] is String) {
+            final bytes=await packNativeHome(Directory(lock!['home'] as String));
+            if(bytes!=null){final name='agent-${sha256.convert(bytes)}.zip';archive.addFile(ArchiveFile('$prefix$name',bytes.length,bytes));}
+          }
+        }
+      } on MissingPluginException { /* Existing mobile builds have no native home. */ }
+      finally {if(lock!=null)await _native.invokeMethod('unlockData',{'token':lock['token']});}
+    }
     final dir = await _directory();
     if (!await dir.exists()) return;
     await for (final item in dir.list(followLinks: false)) {
@@ -127,5 +144,31 @@ class PortableProjects {
       validate(name, bytes);
       archive.addFile(ArchiveFile('$prefix$name', bytes.length, bytes));
     }
+  }
+
+  /// No executable runtime files are included. Mirrors the desktop contract,
+  /// including explicit omitted-link records and cross-platform path validation.
+  static Future<List<int>?> packNativeHome(Directory home) async {
+    if(!await home.exists())return null;
+    if(await FileSystemEntity.type(home.path,followLinks:false)!=FileSystemEntityType.directory)throw const FormatException('Linked Agent home');
+    final archive=Archive(),files=<Map<String,dynamic>>[],omitted=<String>[];
+    var total=0;
+    await for(final entry in home.list(recursive:true,followLinks:false)) {
+      final name=p.relative(entry.path,from:home.path).replaceAll('\\','/');
+      if(entry is Link){omitted.add(name);continue;}
+      if(entry is! File || RegExp(r'(^|/)(\.cache|logs|tmp)(/|$)|(^|/)(.*\.lock|.*\.pid)$',caseSensitive:false).hasMatch(name))continue;
+      final stat=await entry.stat();
+      if(stat.size>256*1024*1024 || (total+=stat.size)>1024*1024*1024 || files.length>=20000)throw const FormatException('Agent backup exceeds portable limits');
+      final bytes=await entry.readAsBytes(),after=await entry.stat();
+      if(after.size!=stat.size || after.modified!=stat.modified)throw const FormatException('Agent home changed during backup');
+      files.add({'name':name,'hash':sha256.convert(bytes).toString(),'bytes':bytes.length});
+      archive.addFile(ArchiveFile('files/$name',bytes.length,bytes));
+    }
+    if(files.isEmpty)return null;
+    final manifest=utf8.encode(jsonEncode({'version':1,'kind':'agent','files':files,'omitted':omitted}));
+    archive.addFile(ArchiveFile('manifest.json',manifest.length,manifest));
+    final bytes=ZipEncoder().encode(archive)!;
+    validate('agent-${sha256.convert(bytes)}.zip',bytes);
+    return bytes;
   }
 }

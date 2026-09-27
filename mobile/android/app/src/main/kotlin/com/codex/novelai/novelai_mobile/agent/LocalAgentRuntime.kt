@@ -34,6 +34,7 @@ class LocalAgentRuntime private constructor(private val context: Context) {
     @Volatile private var child: Process? = null
     @Volatile private var auxiliary: Process? = null
     @Volatile private var cancelled = false
+    @Volatile private var portableLock: String? = null
     @Volatile private var launchUrl: String? = null
     @Volatile private var progress = 0.0
     @Volatile private var upstream = ""
@@ -64,7 +65,7 @@ class LocalAgentRuntime private constructor(private val context: Context) {
         "logs" to logs.toList(), "proposal" to proposal?.let { mapOf("token" to it.token,"version" to it.seed.getString("version"),"upstream" to it.seed.getString("upstream")) }
     )
     @Synchronized fun command(name: String, args: Map<String, Any?> = emptyMap()) {
-        check(!busy) { "Another Agent operation is in progress" }
+        check(!busy && portableLock==null) { "Another Agent operation or backup is in progress" }
         require(Build.VERSION.SDK_INT >= 26 && Build.SUPPORTED_ABIS.contains("arm64-v8a")) { "Local Agent requires Android 8+ and ARM64" }
         if (name != "check") check(child == null) { "Stop Agent before changing runtime or data" }
         busy = true; error = null; if(name!="check")cancelled=false
@@ -207,6 +208,12 @@ class LocalAgentRuntime private constructor(private val context: Context) {
         log("Backup created: ${dir.absolutePath}");return dir
     }
     @Synchronized fun backups(): List<String> = File(root,"backups").listFiles()?.filter { File(it,"manifest.json").isFile }?.map { it.name }?.sortedDescending() ?: emptyList()
+    @Synchronized fun lockData(): Map<String,String> {
+        check(!busy && child==null && portableLock==null) { "Stop Agent before exporting user data" }
+        val token=UUID.randomUUID().toString();portableLock=token
+        return mapOf("token" to token,"home" to home.absolutePath)
+    }
+    @Synchronized fun unlockData(token: String) { check(portableLock==token);portableLock=null }
     private fun restore(name: String) {
         require(Regex("[0-9]+-[a-f0-9-]+\\z").matches(name));check(child==null)
         val from=File(root,"backups/$name");val meta=JSONObject(File(from,"manifest.json").readText());val zip=File(from,"user-home.zip")

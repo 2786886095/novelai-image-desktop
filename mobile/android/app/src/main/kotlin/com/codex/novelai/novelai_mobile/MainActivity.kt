@@ -43,6 +43,8 @@ class MainActivity : FlutterActivity() {
                     when(call.method){
                         "status" -> result.success(agent.snapshot())
                         "backups" -> result.success(agent.backups())
+                        "lockData" -> result.success(agent.lockData())
+                        "unlockData" -> {agent.unlockData(args["token"] as? String ?: "");result.success(null)}
                         "open" -> {startActivity(Intent(Intent.ACTION_VIEW,Uri.parse(agent.openUrl())));result.success(null)}
                         "stop" -> {agent.stop();stopService(Intent(this,com.codex.novelai.novelai_mobile.agent.LocalAgentService::class.java));result.success(null)}
                         "check","prepare","confirm","start","backup","restore" -> {

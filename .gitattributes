@@ -1,0 +1,2 @@
+# Hash-pinned upstream prompt bytes include CRLF; do not normalize the artifact.
+/harness/community/infinite-gen4/infinite-gen-4.md -text
