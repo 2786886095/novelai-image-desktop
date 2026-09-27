@@ -104,8 +104,7 @@ void main() {
   test(
       'successful image result uses shared Harness generatedImages contract and durable replay',
       () async {
-    final evidence =
-        Directory('../artifacts/agent-api-integration-20260927').absolute;
+    final evidence = dir;
     expect(evidence.existsSync(), true);
     final image = File('${evidence.path}/android-contract-fixture.png');
     image.writeAsBytesSync(base64Decode(
