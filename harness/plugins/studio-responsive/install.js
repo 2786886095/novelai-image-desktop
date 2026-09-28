@@ -1,6 +1,24 @@
 // Rebuilt into lib/client.js by build-responsive.mjs. No persisted preferences.
 export function installResponsive(css) {
   const root=document.documentElement;
+  const studioFavicon=__STUDIO_ICON_JSON__;
+  const originalIcons=new Map();
+  const ownedIcon=document.createElement('link');ownedIcon.rel='icon';ownedIcon.type='image/png';ownedIcon.href=studioFavicon;
+  function refreshIcons(){
+    for(const link of document.head.querySelectorAll('link[rel~="icon"],link[rel="apple-touch-icon"],link[rel="mask-icon"]')){
+      if(link===ownedIcon)continue;
+      if(!originalIcons.has(link))originalIcons.set(link,{href:link.getAttribute('href'),type:link.getAttribute('type'),sizes:link.getAttribute('sizes')});
+      if(link.getAttribute('href')!==studioFavicon)link.setAttribute('href',studioFavicon);
+      if(link.getAttribute('type')!=='image/png')link.setAttribute('type','image/png');
+      if(link.hasAttribute('sizes'))link.removeAttribute('sizes');
+    }
+    if(!ownedIcon.isConnected)document.head.append(ownedIcon);
+  }
+  refreshIcons();
+  const iconObserver=new MutationObserver(refreshIcons);
+  iconObserver.observe(document.head,{childList:true,subtree:true,attributes:true,attributeFilter:['href','rel','type','sizes']});
+  function restoreIcons(){iconObserver.disconnect();ownedIcon.remove();for(const [link,attrs] of originalIcons){if(link.getAttribute('href')!==studioFavicon)continue;for(const [name,value] of Object.entries(attrs)){if(value===null)link.removeAttribute(name);else link.setAttribute(name,value);}}originalIcons.clear();}
+
   const modules={settings:'SettingsRoot',theme:'AppearanceRow',models:'ModelsSection',layout:'AppFrame',composer:'InputBar',modelSelect:'ModelSelect'};
   const style=document.createElement('style');style.dataset.studioResponsive='';
   const previous=root.getAttribute('data-studio-responsive');root.dataset.studioResponsive='1';
@@ -49,5 +67,5 @@ export function installResponsive(css) {
   const observer=new MutationObserver(records=>{if(records.some(r=>[...r.addedNodes,...r.removedNodes].some(n=>n.nodeType===1&&n.matches?.('style[data-plugin-css]'))))schedule();});
   observer.observe(document.head,{childList:true});
   window.addEventListener('resize',viewport);window.visualViewport?.addEventListener('resize',viewport);window.visualViewport?.addEventListener('scroll',viewport);
-  return()=>{disposed=true;observer.disconnect();marketObserver.disconnect();cancelAnimationFrame(marketRaf);for(const [market,button] of marketControls){button.remove();delete market.dataset.studioMarketDetails;}marketControls.clear();cancelAnimationFrame(raf);style.remove();if(previous===null)root.removeAttribute('data-studio-responsive');else root.setAttribute('data-studio-responsive',previous);root.style.removeProperty('--studio-viewport-height');root.style.removeProperty('--studio-viewport-top');window.removeEventListener('resize',viewport);window.visualViewport?.removeEventListener('resize',viewport);window.visualViewport?.removeEventListener('scroll',viewport);};
+  return()=>{restoreIcons();disposed=true;observer.disconnect();marketObserver.disconnect();cancelAnimationFrame(marketRaf);for(const [market,button] of marketControls){button.remove();delete market.dataset.studioMarketDetails;}marketControls.clear();cancelAnimationFrame(raf);style.remove();if(previous===null)root.removeAttribute('data-studio-responsive');else root.setAttribute('data-studio-responsive',previous);root.style.removeProperty('--studio-viewport-height');root.style.removeProperty('--studio-viewport-top');window.removeEventListener('resize',viewport);window.visualViewport?.removeEventListener('resize',viewport);window.visualViewport?.removeEventListener('scroll',viewport);};
 }

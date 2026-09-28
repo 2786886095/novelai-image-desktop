@@ -101,6 +101,20 @@ class _LocalAgentScreenState extends State<LocalAgentScreen> {
     }
   }
 
+  Future<void> _prepareConfirmed(String kind, {bool reinstall = false}) async {
+    if (busy || running) return;
+    setState(() => _request = true);
+    try {
+      final plan = await _native.invokeMapMethod<String, dynamic>('planDownload', {'kind':kind, 'reinstall':reinstall});
+      if (!mounted || plan == null) return;
+      final size = ((plan['bytes'] as num) / 1048576).toStringAsFixed(1);
+      if (!await _confirm(t(reinstall ? 'reinstall' : 'install'), '${t('downloadSize')}: $size MiB · ${plan['version']}\n${t('downloadConsent')}')) return;
+      if (!mounted) return;
+      setState(() => _request = false);
+      await _act('prepare', {'kind':kind,'downloadToken':plan['token']});
+    } catch(e) {if(mounted) setState(() => _error = '$e');}
+    finally {if(mounted) setState(() => _request = false);}
+  }
   Future<void> _start() async {
     if (busy) return;
     final app = context.read<AppState>();
@@ -197,9 +211,9 @@ class _LocalAgentScreenState extends State<LocalAgentScreen> {
                     onPressed:
                         !supported || busy || running || !checked || failed
                             ? null
-                            : () => _act('prepare', {'kind': kind}),
+                            : () => _prepareConfirmed(kind),
                     child: Text(
-                        t(official ? 'officialPrepare' : 'componentPrepare'))),
+                        t(official ? 'officialPrepare' : (_state['installed'] == null ? 'install' : 'componentPrepare')))),
               ]),
             ])));
   }
@@ -259,6 +273,13 @@ class _LocalAgentScreenState extends State<LocalAgentScreen> {
                       }
                     },
               child: Text(t('confirm'))),
+      ]),
+      Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Text(t('retainData'))),
+      Wrap(spacing: 8, runSpacing: 8, children: [
+        OutlinedButton(onPressed: !supported || busy || running || _state['installed'] == null ? null : () => _prepareConfirmed('component', reinstall:true), child: Text(t('reinstall'))),
+        OutlinedButton(onPressed: !supported || busy || running || _state['installed'] == null ? null : () async {
+          if(await _confirm(t('uninstall'), t('retainData'))) await _act('uninstall', {'confirmed':true});
+        }, child: Text(t('uninstall'))),
       ]),
       ExpansionTile(title: Text(t('updateHelp')), children: [
         Text(t('about')),

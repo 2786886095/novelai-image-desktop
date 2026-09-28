@@ -3,7 +3,7 @@
 [简体中文](./README.md) · [繁體中文](./README.zh-TW.md) · [English](./README.en.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md)
 
 
-**v2.4.1 플랫폼 안내:** 새로운 독립 Tavern Agent 구성 요소는 Windows x64용입니다. macOS/Linux와 Android/iOS는 기존 Tavern 기능을 유지합니다. 호환성 검사, 사용자 확인 및 백업 후 업데이트하며 사용자 플러그인과 데이터를 보존합니다.
+**v2.4.2 플랫폼 안내:** 독립 Tavern Agent는 Windows x64 및 Android ARM64(Android 8 이상)를 지원하며 다른 플랫폼은 기존 Tavern을 유지합니다. 페이지를 열어도 다운로드하지 않으며 설치 전 버전과 크기를 표시하고 확인을 요청합니다. 구성 요소를 제거해도 대화와 사용자 자료는 보존되며 재설치 후 다시 사용할 수 있습니다.
 
 ### 하나의 아이디어에서 여러 작품으로.
 

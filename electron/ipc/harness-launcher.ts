@@ -6,7 +6,8 @@ import {TEMPLATE_GENERATION_TOOL,templateGenerationArgs,runTemplateGeneration} f
 import {HarnessEngine} from './harness-engine';
 import {registerPortableBusy, assertPortableIdle} from './portable-projects';
 import {startHarnessBridge} from './harness-bridge';
-import {downloadCompatibleHarness} from './harness-update';
+import {downloadCompatibleHarness,queryCompatibleHarness} from './harness-update';
+import {HarnessDownloadConsent} from './harness-download-consent';
 import {requiresAgentConfirmation} from '../../src/agent/operation-policy';
 import {AGENT_MUTATING_TOOLS,AGENT_TOOL_NAMES, executeAgentTool} from './agent-tools';
 import {createStudioDataTools,STUDIO_DATA_TOOLS} from './studio-data-tools';
@@ -134,9 +135,25 @@ export function registerHarnessLauncher(window:()=>BrowserWindow|null) {
   });
   const periodicCheck=setInterval(()=>{void engine?.checkUpdates();},6*60*60*1000);periodicCheck.unref();
   app.once('will-quit',()=>{clearTimeout(firstCheck);clearInterval(periodicCheck);});
-  ipcMain.handle('harness:prepareUpdate',async(event,kind)=>{
+  const downloadConsent=new HarnessDownloadConsent();
+  ipcMain.handle('harness:planDownload',async(event,kind,reinstall=false)=>{
+    if(event.sender!==window()?.webContents)throw Error('Unknown launcher sender');
+    if(!['component','official'].includes(kind)||typeof reinstall!=='boolean')throw Error('Invalid request');
+    assertPortableIdle();if(engine!.busy)throw Error('请先关闭 Agent。');
+    downloadConsent.clear();const asset=await queryCompatibleHarness(AbortSignal.timeout(30000));
+    if(!asset)throw Error('暂无已发布的兼容组件。');
+    if(!reinstall&&engine!.snapshot().version===asset.version)return {current:true,token:'',version:asset.version,bytes:0};
+    return downloadConsent.issue(asset,kind,reinstall);
+  });
+  ipcMain.handle('harness:uninstall',async(event,confirmed)=>{
+    if(event.sender!==window()?.webContents)throw Error('Unknown launcher sender');
+    if(confirmed!==true)throw Error('请先确认卸载。');assertPortableIdle();downloadConsent.clear();
+    void engine!.uninstallComponent().catch(error=>engine?.log(String(error),'error'));return engine!.snapshot();
+  });
+  ipcMain.handle('harness:prepareUpdate',async(event,kind,token)=>{
     if(event.sender!==window()?.webContents)throw new Error('Unknown launcher sender');
-    assertPortableIdle();return engine!.prepareUpdate(kind);
+    assertPortableIdle();const consent=downloadConsent.consume(token,kind);
+    return engine!.prepareUpdate(kind,signal=>downloadCompatibleHarness(root,signal,text=>engine!.log(text),consent.asset),consent.reinstall);
   });
   ipcMain.handle('harness:applyPreparedUpdate',async(event,token)=>{
     if(event.sender!==window()?.webContents)throw new Error('Unknown launcher sender');

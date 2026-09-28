@@ -1769,5 +1769,75 @@
     "Latest published component: {version}",
     "公開済みの最新コンポーネント：{version}",
     "최신 공개 구성 요소: {version}"
+  ],
+  "安装组件": [
+    "安装组件",
+    "安裝元件",
+    "Install component",
+    "コンポーネントをインストール",
+    "구성 요소 설치"
+  ],
+  "重新安装组件": [
+    "重新安装组件",
+    "重新安裝元件",
+    "Reinstall component",
+    "コンポーネントを再インストール",
+    "구성 요소 재설치"
+  ],
+  "卸载组件": [
+    "卸载组件",
+    "解除安裝元件",
+    "Uninstall component",
+    "コンポーネントを削除",
+    "구성 요소 제거"
+  ],
+  "组件管理": [
+    "组件管理",
+    "元件管理",
+    "Component management",
+    "コンポーネント管理",
+    "구성 요소 관리"
+  ],
+  "下载并安装组件": [
+    "下载并安装组件",
+    "下載並安裝元件",
+    "Download and install component",
+    "ダウンロードとインストール",
+    "다운로드 및 설치"
+  ],
+  "已取消下载。": [
+    "已取消下载。",
+    "已取消下載。",
+    "Download cancelled.",
+    "ダウンロードをキャンセルしました。",
+    "다운로드가 취소되었습니다."
+  ],
+  "将下载 Agent {version}，大小 {size} MiB。下载后检查兼容性，保留对话和全部用户资料。是否继续？": [
+    "将下载 Agent {version}，大小 {size} MiB。下载后检查兼容性，保留对话和全部用户资料。是否继续？",
+    "將下載 Agent {version}，大小 {size} MiB。下載後檢查相容性，保留對話和所有資料。繼續？",
+    "Download Agent {version} ({size} MiB), then check compatibility. All conversations and user data are retained. Continue?",
+    "Agent {version}（{size} MiB）をダウンロードし互換性を確認します。会話とデータは保持されます。続行しますか？",
+    "Agent {version}({size} MiB)을 다운로드하고 호환성을 확인합니다. 대화와 데이터를 유지합니다. 계속할까요?"
+  ],
+  "进入页面只检查版本，不下载。卸载组件保留对话、角色卡、预设、图片、设置和备份，重装后继续使用。": [
+    "进入页面只检查版本，不下载。卸载组件保留对话、角色卡、预设、图片、设置和备份，重装后继续使用。",
+    "開啟頁面只檢查版本，不下載。解除安裝保留對話、角色卡、預設、圖片、設定和備份，重裝後繼續使用。",
+    "Opening this page only checks versions. Uninstall keeps conversations, cards, presets, images, settings and backups for reinstall.",
+    "この画面ではバージョン確認のみ行います。削除後も会話、カード、プリセット、画像、設定、バックアップは保持されます。",
+    "이 페이지는 버전만 확인합니다. 제거 후에도 대화, 카드, 프리셋, 이미지, 설정과 백업은 유지됩니다."
+  ],
+  "仅移除 Agent 运行组件和下载缓存。对话、角色卡、预设、图片、设置和备份全部保留。": [
+    "仅移除 Agent 运行组件和下载缓存。对话、角色卡、预设、图片、设置和备份全部保留。",
+    "只移除 Agent 執行元件和下載快取。保留對話、角色卡、預設、圖片、設定和備份。",
+    "Remove only the Agent runtime and download cache. Keep conversations, cards, presets, images, settings and backups.",
+    "実行環境とキャッシュのみ削除します。会話、カード、プリセット、画像、設定、バックアップは保持します。",
+    "실행 환경과 캐시만 제거합니다. 대화, 카드, 프리셋, 이미지, 설정과 백업은 유지합니다."
+  ],
+  "请先安装组件，再启动 Agent。": [
+    "请先安装组件，再启动 Agent。",
+    "請先安裝元件，再啟動 Agent。",
+    "Install the component before starting Agent.",
+    "Agent の起動前にコンポーネントをインストールしてください。",
+    "Agent를 시작하기 전에 구성 요소를 설치하세요."
   ]
 }

@@ -1599,7 +1599,9 @@ export interface NaiDesktopApi {
   harnessSnapshot: () => Promise<import("./harness-types").HarnessSnapshot>;
   harnessStart: () => Promise<import("./harness-types").HarnessSnapshot>;
   harnessStop: () => Promise<import("./harness-types").HarnessSnapshot>;
-  harnessPrepareUpdate: (kind: 'component' | 'official') => Promise<import("./harness-types").HarnessUpdateProposal>;
+  harnessPlanDownload: (kind: 'component' | 'official', reinstall?: boolean) => Promise<{token:string;version:string;bytes:number;current?:boolean}>;
+  harnessUninstall: (confirmed: boolean) => Promise<import("./harness-types").HarnessSnapshot>;
+  harnessPrepareUpdate: (kind: 'component' | 'official', token: string) => Promise<import("./harness-types").HarnessUpdateProposal>;
   harnessApplyPreparedUpdate: (token: string) => Promise<import("./harness-types").HarnessSnapshot>;
   harnessCheckUpdates: () => Promise<import("./harness-types").HarnessSnapshot>;
   harnessUpdate: () => Promise<import("./harness-types").HarnessSnapshot>;

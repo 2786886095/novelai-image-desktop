@@ -1,7 +1,7 @@
 // Real download/install/start/restart against an isolated profile. No model or paid image calls.
 const fs=require('node:fs/promises'),path=require('node:path'),assert=require('node:assert/strict');
 const {HarnessEngine}=require('../dist-electron/electron/ipc/harness-engine.js');
-const {downloadCompatibleHarness}=require('../dist-electron/electron/ipc/harness-update.js');
+const {downloadCompatibleHarness,queryCompatibleHarness}=require('../dist-electron/electron/ipc/harness-update.js');
 const {startHarnessBridge}=require('../dist-electron/electron/ipc/harness-bridge.js');
 (async()=>{
  const base=path.resolve(process.argv[2]??'artifacts/repair-2.4.1/live-agent');await fs.mkdir(base,{recursive:true});
@@ -24,6 +24,10 @@ const {startHarnessBridge}=require('../dist-electron/electron/ipc/harness-bridge
   previewSource:path.resolve('harness/plugins/studio-preview'),librarySource:path.resolve('harness/plugins/studio-library'),toolsSource:path.resolve('harness/plugins/studio-tools'),responsiveSource:path.resolve('harness/plugins/studio-responsive')});
  const stop=setTimeout(()=>void engine.stop(),210000);
  try{
+  await engine.start();assert.equal(downloads,0);assert.equal(opened,0);result.checks.push('start does not implicitly download');
+  const selected=await queryCompatibleHarness(AbortSignal.timeout(30000));assert.ok(selected?.bytes>0);
+  const proposal=await engine.prepareUpdate('component',signal=>{downloads++;return downloadCompatibleHarness(root,signal,text=>engine.log(text),selected);});
+  assert.equal(proposal.status,'ready',proposal.message);await engine.applyPreparedUpdate(proposal.token);
   await engine.start();await fs.writeFile(path.join(root,'first-start.json'),JSON.stringify(engine.snapshot(),null,2));
   assert.equal(engine.snapshot().phase,'running');assert.equal(opened,1);assert.equal(downloads,1);result.checks.push('real download + verified install + authenticated HTTP 200');
   assert.deepEqual(await fs.readdir(path.join(root,'downloads')),[]);result.checks.push('successful activation removes only the owned temporary download copy');

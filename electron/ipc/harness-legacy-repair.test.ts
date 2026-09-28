@@ -24,7 +24,7 @@ it('entering the persistent Agent tab checks metadata without installing or star
  const ui=await fs.readFile('src/HarnessPage.tsx','utf8'),app=await fs.readFile('src/App.tsx','utf8');
  expect(app).toContain('<AgentPage active={activeTab === "agent"} />');
  const entry=ui.match(/useEffect\(\(\)=>\{([\s\S]*?)\},\[active\]\);/)?.[1] ?? '';
- expect(entry).toContain('if(!active){autoPrepared.current=false;return;}');
+ expect(entry).toContain('if(!active)return;');
  expect(entry).toContain('harnessCheckUpdates()');
  expect(entry).not.toMatch(/harness(?:Start|ApplyPreparedUpdate)\(/);
  expect(ui).toContain('void window.naiDesktop.harnessCheckUpdates()');

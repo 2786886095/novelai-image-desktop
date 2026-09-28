@@ -25,6 +25,8 @@ export async function recoverHarnessHome(root:string, source:string) {
     const versions=path.join(root,'versions'),slot=path.join(versions,active.slot);
     await regularDirectory(versions);await regularDirectory(slot);
     validateManifest(JSON.parse(await fs.readFile(path.join(slot,'manifest.json'),'utf8')));
+    // Explicitly uninstalled runtimes are never reactivated by a data restore.
+    if(await fs.stat(path.join(slot,'.studio-uninstalled')).then(()=>true,e=>{if(e.code==='ENOENT')return false;throw e;}))incoming=null;
   }catch(e){if((e as NodeJS.ErrnoException).code!=='ENOENT'||incoming)throw e;}
   const id=new Date().toISOString().replace(/[:.]/g,'-')+'-'+crypto.randomBytes(4).toString('hex');
   const staged=path.join(root,`restore-staging-${id}`),home=path.join(root,'user-home');

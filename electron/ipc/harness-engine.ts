@@ -17,6 +17,7 @@ import {createRequire} from 'node:module';
 import type {HarnessLog, HarnessPhase, HarnessSnapshot} from '../../src/harness-types';
 import {engineLaunchUrl, installVerifiedBundle, isNewerBundle, redactHarnessLog, validateManifest, verifyBundle} from './harness-policy';
 import {discardHarnessDownload} from './harness-update';
+import {removeHarnessComponent} from './harness-component-removal';
 
 const exec = promisify(execFile);
 export interface EngineOptions {
@@ -236,7 +237,7 @@ export class HarnessEngine {
       windowsHide:true, timeout:30000, signal, env:{...process.env, DSH_HOME:probeHome, ELECTRON_RUN_AS_NODE:''}, maxBuffer:1024*1024,
     });
     signal.throwIfAborted();
-    const previous = await this.readActive();
+    const previous = await this.readActive() ?? await this.readUninstalled();
     const migration = previous ? await upgradeBundledUserFiles(this.options.root, previous.manifest, slot, manifest) : null;
     try {
     await this.seedUserFiles(slot);
@@ -317,8 +318,9 @@ export class HarnessEngine {
       this.phase='updating';
       const restored=await recoverHarnessHome(this.options.root,source);
       this.log(`恢复前的资料已保留：${restored.preserved}`);
-      if(!restored.componentRestored)this.log('此备份没有组件记录：仅恢复资料，组件版本保持不变。','warn');
+      if(!restored.componentRestored)this.log('备份对应组件已卸载或没有组件记录：仅恢复资料，当前组件版本保持不变。','warn');
       const active=await this.readActive();this.version=active?.manifest.version ?? null;
+      const removed=await this.readUninstalled();if(active&&removed)await upgradeBundledUserFiles(this.options.root,removed.manifest,active.root,active.manifest);
       this.phase='stopped';this.log('备份恢复完成。请检查后手动启动 Agent。');
     });
   }
@@ -330,16 +332,27 @@ export class HarnessEngine {
     this.log(`历史随附插件兼容修复：${plan.packages.length} 个；自定义插件和用户资料保持不变。`);
     return repair;
   }
+  private async readUninstalled(){
+    try{const saved=JSON.parse(await fs.readFile(path.join(this.options.root,'uninstalled.json'),'utf8'));return {manifest:validateManifest(saved.manifest)};}
+    catch(e){if((e as NodeJS.ErrnoException).code==='ENOENT')return null;throw e;}
+  }
+  async uninstallComponent(){
+    if(this.busy)throw Error('请先关闭 Agent，再卸载组件。');
+    this.prepared=null;
+    return this.runAction(async()=>{
+      this.phase='updating';await this.backupUserHome();
+      const result=await removeHarnessComponent(this.options.root);this.version=null;this.installedUpstream=null;
+      this.phase='stopped';this.log(`组件已卸载（${result.removed} 个文件）；对话、角色卡、预设、图片、设置和备份保留。`);
+      if(result.preserved)this.log('自定义或未知组件文件已保留，未删除。','warn');
+    });
+  }
   async start() {
     if (this.child || this.action) return;
     return this.runAction(async signal => {
       this.phase = 'installing';
       let active = await this.readActive();
       if (!active) {
-        this.log('首次启动按需下载并校验 Agent 运行环境；可点击关闭取消，已有资料不会删除。');
-        const source=await this.availableSource(null,signal);
-        if(!source)throw Error('暂无可下载的兼容 Agent 组件，请稍后检查更新。');
-        active = await this.install(source, signal);
+        throw Error('尚未安装 Agent 组件，请先点击安装并确认下载。');
       }
       else if (await this.bundledUpgrade(active)) {
         this.log('发现软件随附的新组件；当前继续使用已安装版本，请关闭 Agent 后点击更新确认升级。');
@@ -459,7 +472,7 @@ export class HarnessEngine {
       }
     }finally{signal.removeEventListener('abort',cancel);await probe.stop();}
   }
-  async prepareUpdate(kind:'component'|'official'):Promise<HarnessUpdateProposal>{
+  async prepareUpdate(kind:'component'|'official', approvedDownload?: (signal:AbortSignal)=>Promise<string|null>, reinstall=false):Promise<HarnessUpdateProposal>{
     if(kind!=='component'&&kind!=='official')throw Error('Invalid update kind');
     if(this.busy)return {status:'blocked',kind,message:'请先关闭 Agent，再进行兼容性更新。'};
     this.prepared=null;
@@ -473,11 +486,11 @@ export class HarnessEngine {
         if(kind==='official'&&active&&!isNewerBundle(official!,active.manifest.upstream)){
           result={status:'current',kind,message:'当前已是最新版本。'};return;
         }
-        const source=await this.availableSource(active,signal,kind==='official'?official!:undefined);
+        const source=approvedDownload ? await approvedDownload(signal) : await this.availableSource(active,signal,kind==='official'?official!:undefined);
         if(!source){result={status:kind==='official'?'blocked':'current',kind,message:kind==='official'?'官方新版尚无匹配的兼容组件，请等待适配。':'暂无可安装的适配更新。'};return;}
         const raw=await fs.readFile(path.join(source,'manifest.json'),'utf8'),manifest=validateManifest(JSON.parse(raw));
         if(kind==='official'&&manifest.upstream!==official)throw Error('官方新版尚无匹配的兼容组件，请等待适配。');
-        if(active&&!isNewerBundle(manifest.version,active.manifest.version)){
+        if(active&&!isNewerBundle(manifest.version,active.manifest.version)&&!reinstall){
           result={status:kind==='official'?'blocked':'current',kind,message:kind==='official'?'官方新版尚无匹配的兼容组件，请等待适配。':'当前已是最新版本。'};return;
         }
         await verifyBundle(source,manifest,signal);

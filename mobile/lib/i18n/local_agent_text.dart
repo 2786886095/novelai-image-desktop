@@ -2,6 +2,11 @@ import 'app_locales.dart';
 
 String localAgentText(Object? locale, String key) {
   const text = <String, List<String>>{
+    "install": ["安装组件", "安裝元件", "Install component", "コンポーネントをインストール", "구성 요소 설치"],
+    "reinstall": ["重新安装组件", "重新安裝元件", "Reinstall component", "コンポーネントを再インストール", "구성 요소 재설치"],
+    "uninstall": ["卸载组件", "解除安裝元件", "Uninstall component", "コンポーネントを削除", "구성 요소 제거"],
+    "downloadConsent": ["确认后才开始下载并检查兼容性。对话和全部用户资料保留。", "確認後才開始下載並檢查相容性。保留對話與所有使用者資料。", "Download and compatibility check begin only after confirmation. All user data is retained.", "承認後にダウンロードと互換性確認を開始します。ユーザーデータは保持されます。", "확인 후 다운로드와 호환성 검사를 시작합니다. 모든 사용자 데이터를 유지합니다."],
+    "retainData": ["卸载仅移除运行组件和下载缓存；保留对话、角色卡、预设、图片、设置和备份，重装后继续读取。", "解除安裝只移除執行元件和下載快取；保留對話、角色卡、預設、圖片、設定和備份。", "Uninstall removes runtime and download cache only. Conversations, cards, presets, images, settings and backups remain available after reinstall.", "削除するのは実行環境とダウンロードキャッシュのみです。会話、カード、プリセット、画像、設定、バックアップは再インストール後も保持されます。", "실행 환경과 다운로드 캐시만 제거합니다. 대화, 카드, 프리셋, 이미지, 설정과 백업은 재설치 후에도 유지됩니다."],
     "componentCheck": [
       "检查适配更新",
       "檢查適配更新",

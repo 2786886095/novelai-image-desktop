@@ -52,6 +52,20 @@ class LocalAgentRuntime private constructor(private val context: Context) {
     @Volatile private var stopping = false
     @Volatile private var portableLock: String? = null
     @Volatile private var launchUrl: String? = null
+    private data class DownloadPlan(val token:String,val kind:String,val meta:JSONObject,val expires:Long,val reinstall:Boolean)
+    private var downloadConsent:DownloadPlan?=null
+    fun planDownload(kind:String,reinstall:Boolean):Map<String,Any?> {
+        synchronized(this){check(!busy && !stopping && child==null && portableLock==null);busy=true;downloadConsent=null}
+        try {
+            require(kind in listOf("component","official"));checkUpdates("both")
+            val meta=JSONObject((update ?: seed()).toString());validate(meta)
+            check(downloadAvailable) { "Compatible Android runtime has not been published yet; check updates later" }
+            if(kind=="official")check(!officialFailed && upstream==meta.getString("upstream")){"No compatible component for the official version"}
+            val p=DownloadPlan(UUID.randomUUID().toString(),kind,meta,System.currentTimeMillis()+600000,reinstall)
+            synchronized(this){downloadConsent=p}
+            return mapOf("token" to p.token,"bytes" to meta.getLong("bytes"),"version" to meta.getString("version"))
+        } finally {busy=false}
+    }
     private var browserHandoff: AgentBrowserHandoff? = null
     @Volatile private var progress = 0.0
     @Volatile private var downloadBytes = 0L
@@ -105,7 +119,8 @@ class LocalAgentRuntime private constructor(private val context: Context) {
                 root.mkdirs()
                 when(name) {
                     "check" -> checkUpdates(args["kind"] as? String ?: "both")
-                    "prepare" -> prepare(args["kind"] as? String ?: "component")
+                    "prepare" -> prepare(args["kind"] as? String ?: "component",args["downloadToken"] as? String ?: "")
+                    "uninstall" -> {check(args["confirmed"]==true);uninstallComponent()}
                     "confirm" -> confirm(args["token"] as? String ?: "")
                     "start" -> start(args)
                     "backup" -> backup()
@@ -131,7 +146,7 @@ class LocalAgentRuntime private constructor(private val context: Context) {
     private fun fetchText(url: String): String {
         val connection = URL(url).openConnection() as HttpURLConnection
         connection.connectTimeout=15000;connection.readTimeout=20000
-        connection.setRequestProperty("User-Agent", "Langbai-Studio-Android/2.4.1")
+        connection.setRequestProperty("User-Agent", "Langbai-Studio-Android/2.4.2")
         try { check(connection.responseCode == 200) { "Update HTTP ${connection.responseCode}" }
             val bytes=connection.inputStream.use { it.readBytesLimited(2*1024*1024) };return String(bytes,Charsets.UTF_8)
         } finally { connection.disconnect() }
@@ -186,14 +201,15 @@ class LocalAgentRuntime private constructor(private val context: Context) {
         }
         log("Update checks finished. Changes require a successful compatibility probe and confirmation.")
     }
-    private fun prepare(kind:String="component") {
+    private fun prepare(kind:String="component",downloadToken:String) {
         require(kind in listOf("component","official"))
+        val approved=downloadConsent;downloadConsent=null
+        check(approved!=null && approved.token==downloadToken && approved.kind==kind && System.currentTimeMillis()<approved.expires) { "Download approval expired; confirm again" }
         check(child==null);phase="preparing";proposal=null;progress=0.0
-        checkUpdates("both")
-        val meta=update ?: seed();validate(meta)
+        val meta=approved.meta;validate(meta)
         val cached=File(downloadRoot(),"${meta.getString("sha256")}.part")
         when(AgentUpdatePolicy.decide(kind,active()?.optString("sha256")?:"",active()?.optString("upstream")?:"",meta.getString("sha256"),meta.getString("upstream"),upstream,officialFailed,downloadAvailable,cached.isFile&&cached.length()==meta.getLong("bytes"))){
-            "current" -> {phase="stopped";log("This component is already installed");return}
+            "current" -> {if(!approved.reinstall){phase="stopped";log("This component is already installed");return}}
             "official_failed" -> error("Official Harness check failed; no automatic install")
             "incompatible" -> error("No compatible Android component for the latest official Harness; current data retained")
             "unpublished" -> error("Compatible Android runtime has not been published yet; check updates later")
@@ -238,6 +254,20 @@ class LocalAgentRuntime private constructor(private val context: Context) {
             if(proposal?.slot==slot)archive.delete()
             else discardCandidate(slot)
         }
+    }
+    private fun uninstallComponent(){
+        check(child==null);phase="preparing";proposal=null;downloadConsent=null
+        backup();check(!cancelled)
+        val versions=File(root,"versions")
+        check(!Files.isSymbolicLink(root.toPath()) && !Files.isSymbolicLink(versions.toPath()))
+        active()?.let { AgentFiles.atomicText(File(root,"uninstalled.json").toPath(),it.toString()) }
+        Files.deleteIfExists(activeFile.toPath())
+        for(slot in versions.listFiles() ?: emptyArray()){
+            if(Regex("[0-9]+\\.[0-9]+\\.[0-9]+(?:-[a-zA-Z0-9.-]+)?-[0-9a-f-]{36}").matches(slot.name) && File(slot,".studio-rootfs.json").isFile)
+                AgentComponentRemoval.removeSlot(root.toPath(),slot.toPath())
+        }
+        AgentComponentRemoval.removeDownloads(downloadRoot().toPath())
+        phase="stopped";log("Component uninstalled; conversations, presets, cards, images, settings and backups retained.")
     }
     private fun discardCandidate(slot:File){
         // Only this transaction's unactivated runtime slot; never user-home/backups.

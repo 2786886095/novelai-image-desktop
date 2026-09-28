@@ -65,7 +65,11 @@ class MainActivity : FlutterActivity() {
                             agent.stop()
                             runOnUiThread {stopService(Intent(this,com.codex.novelai.novelai_mobile.agent.LocalAgentService::class.java));result.success(null)}
                         }.start()}
-                        "check","prepare","confirm","start","backup","restore" -> {
+                        "planDownload" -> Thread {
+                            try {val value=agent.planDownload(args["kind"] as? String ?: "component",args["reinstall"]==true);runOnUiThread {result.success(value)}}
+                            catch(error:Exception){runOnUiThread {result.error("local_agent",error.message,null)}}
+                        }.start()
+                        "check","prepare","confirm","start","backup","restore","uninstall" -> {
                             if(call.method!="check"){
                                 val service=Intent(this,com.codex.novelai.novelai_mobile.agent.LocalAgentService::class.java)
                                     .putExtra("title",args["notificationTitle"] as? String)

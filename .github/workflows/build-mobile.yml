@@ -33,6 +33,8 @@ jobs:
           javac -cp /tmp/studio-agent-tests -d /tmp/studio-agent-tests mobile/android/app/src/main/kotlin/com/codex/novelai/novelai_mobile/agent/AgentDownload.java mobile/android/app/src/main/kotlin/com/codex/novelai/novelai_mobile/agent/AgentVersions.java harness/android/tests/AgentDownloadTest.java harness/android/tests/AgentVersionsTest.java
           java -cp /tmp/studio-agent-tests AgentDownloadTest
           java -cp /tmp/studio-agent-tests AgentVersionsTest
+          javac -d /tmp/studio-agent-tests mobile/android/app/src/main/kotlin/com/codex/novelai/novelai_mobile/agent/AgentComponentRemoval.java harness/android/tests/AgentComponentRemovalTest.java
+          java -cp /tmp/studio-agent-tests AgentComponentRemovalTest
       - name: Reuse immutable published runtime when component source is unchanged
         id: published
         run: node harness/android/resolve-published-runtime.mjs

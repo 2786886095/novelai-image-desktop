@@ -21,8 +21,6 @@ export default function HarnessPage({active=true}:{active?:boolean}){
   const [error,setError]=useState('');const [pending,setPending]=useState(false);
   const [updateMessage,setUpdateMessage]=useState('');
   const activeRef=useRef(active);activeRef.current=active;
-  const autoPrepared=useRef(false);
-  const previousCheck=useRef<string|undefined>(undefined);
   const consoleRef=useRef<HTMLDivElement>(null);const follow=useRef(true);
   useEffect(()=>{
     let disposed=false;let timer:ReturnType<typeof setTimeout>;
@@ -33,9 +31,7 @@ export default function HarnessPage({active=true}:{active?:boolean}){
     };void poll();return()=>{disposed=true;clearTimeout(timer);};
   },[]);
   useEffect(()=>{
-    if(!active){autoPrepared.current=false;return;}
-    previousCheck.current=state.updateInfo?.checkedAt;
-    autoPrepared.current=false;
+    if(!active)return;
     let disposed=false;
     void window.naiDesktop.harnessCheckUpdates().then(snapshot=>{if(!disposed)setState(snapshot);})
       .catch(e=>{if(!disposed)setError(String(e));});
@@ -46,11 +42,15 @@ export default function HarnessPage({active=true}:{active?:boolean}){
   const action=async(kind:'Start'|'Stop'|'CheckUpdates')=>{
     setPending(true);try{setState(await window.naiDesktop[`harness${kind}`]());setError('');}catch(e){setError(String(e));}finally{setPending(false);}
   };
-  const prepare=async(kind:'component'|'official')=>{
+  const prepare=async(kind:'component'|'official',reinstall=false)=>{
     if(pending)return;
     setPending(true);setUpdateMessage(ft("正在检查兼容性…"));
     try{
-      const proposal=await window.naiDesktop.harnessPrepareUpdate(kind);
+      const plan=await window.naiDesktop.harnessPlanDownload(kind,reinstall);
+      if(!activeRef.current)return;
+      if(plan.current){setUpdateMessage(ft("当前已是最新版本。"));return;}
+      if(!await confirmAction(ft("将下载 Agent {version}，大小 {size} MiB。下载后检查兼容性，保留对话和全部用户资料。是否继续？",{version:plan.version,size:(plan.bytes/1048576).toFixed(1)}),ft(reinstall?"重新安装组件":"下载并安装组件"))){setUpdateMessage(ft("已取消下载。"));return;}
+      const proposal=await window.naiDesktop.harnessPrepareUpdate(kind,plan.token);
       setUpdateMessage(ft(proposal.message));
       if(proposal.status!=='ready'||!proposal.token||!activeRef.current)return;
       const message=ft("兼容检查通过。组件 {from} → {to}，Harness {fromUpstream} → {upstream}。确认后先备份再升级，保留自定义插件与资料。",{from:proposal.fromVersion??ft("尚未安装"),to:proposal.version!,fromUpstream:proposal.fromUpstream??ft("尚未安装"),upstream:proposal.upstream!});
@@ -60,30 +60,22 @@ export default function HarnessPage({active=true}:{active?:boolean}){
     }catch(e){setUpdateMessage(ft(String(e)));}finally{setPending(false);}
   };
   const idle=state.phase==='stopped'||state.phase==='error';
-  useEffect(()=>{
-    const info=state.updateInfo;
-    if(!active||pending||!idle||state.checkingUpdates||!info||info.checkedAt===previousCheck.current||autoPrepared.current)return;
-    autoPrepared.current=true;
-    const component=info.bundledUpdate===true||(!!info.component&&!info.componentFailed&&info.component!==state.version);
-    const official=!!info.official&&!info.officialFailed&&info.official!==state.installedUpstream;
-    // One approval per candidate per page visit; preparation refreshes metadata too.
-    if(component)void prepare('component');else if(official)void prepare('official');
-  },[active,pending,idle,state.checkingUpdates,state.updateInfo?.checkedAt]);
+
 
   return <section className="harness-launcher" aria-label={text.title}>
     <header className="harness-launcher-header">
       <div className="harness-launcher-status" role="status"><span className={`harness-status-dot phase-${state.phase}`} /><strong>{text.states[state.phase]}</strong>{state.version && <small>Agent {state.version}</small>}</div>
       <div className="harness-launcher-actions">
         <button className="btn secondary" disabled={pending||state.checkingUpdates} onClick={()=>void action('CheckUpdates')}>{state.checkingUpdates?ft("检查中…"):ft("检查两项更新")}</button>
-        <button className="btn secondary" disabled={pending||idle||state.phase==='stopping'} onClick={()=>void action('Stop')}>{text.stop}</button>
-        <button className="btn primary" disabled={pending||!idle} onClick={()=>void action('Start')}>▶ {text.start}</button>
+        <button className="btn secondary" disabled={idle||state.phase==='stopping'} onClick={()=>void action('Stop')}>{text.stop}</button>
+        <button className="btn primary" disabled={pending||!idle||!state.version} onClick={()=>void action('Start')}>▶ {text.start}</button>
       </div>
     </header>
     <section className="harness-update-grid" aria-label={ft("Agent 更新状态")} aria-busy={!!state.checkingUpdates}>
       <article className="harness-update-card">
         <div className="harness-update-heading">
           <h3>{ft("Studio 适配组件")}</h3>
-          <button className="btn secondary" disabled={pending||!idle||state.checkingUpdates} onClick={()=>void prepare('component')}>{ft("检查适配更新")}</button>
+          <button className="btn secondary" disabled={pending||!idle||state.checkingUpdates} onClick={()=>void prepare('component')}>{ft(state.version?"检查适配更新":"安装组件")}</button>
         </div>
         <div className="harness-update-versions">
           <span>{ft("当前组件版本：")}{state.version ?? ft("尚未安装")}</span>
@@ -108,6 +100,16 @@ export default function HarnessPage({active=true}:{active?:boolean}){
         <p>{ft("两项更新均先检查兼容性，通过后由你确认升级；未通过时保留现有酒馆。")}</p>
       </details>
     </section>
+    <section className="harness-backup-help" aria-label={ft("组件管理")}>
+      <p>{ft("进入页面只检查版本，不下载。卸载组件保留对话、角色卡、预设、图片、设置和备份，重装后继续使用。")}</p>
+      <div className="harness-backup-actions">
+        <button className="btn secondary" disabled={pending||!idle||!state.version} onClick={()=>void prepare('component',true)}>{ft("重新安装组件")}</button>
+        <button className="btn secondary" disabled={pending||!idle||!state.version} onClick={async()=>{
+          if(!await confirmAction(ft("仅移除 Agent 运行组件和下载缓存。对话、角色卡、预设、图片、设置和备份全部保留。"),ft("卸载组件")))return;
+          setPending(true);setUpdateMessage('');try{setState(await window.naiDesktop.harnessUninstall(true));}catch(e){setError(String(e));}finally{setPending(false);}
+        }}>{ft("卸载组件")}</button>
+      </div>
+    </section>
     <details className="harness-backup-help">
       <summary>{ft("更新备份与恢复")}</summary>
       <p>{ft("有可安装更新时，会先自动备份用户配置、插件和会话；备份失败则停止升级。没有更新时不会新建备份。")}</p>
@@ -124,7 +126,7 @@ export default function HarnessPage({active=true}:{active?:boolean}){
     </details>
     <div className="harness-console" ref={consoleRef} role="log" aria-label={ft("Agent 日志")} aria-live="off" tabIndex={0}
       onScroll={e=>{const box=e.currentTarget;follow.current=box.scrollHeight-box.scrollTop-box.clientHeight<60;}}>
-      {!state.logs.length && <div className="harness-log info">{text.empty}</div>}
+      {!state.logs.length && <div className="harness-log info">{state.version?text.empty:ft("请先安装组件，再启动 Agent。")}</div>}
       {state.logs.map(line=><div key={line.id} className={`harness-log ${line.level}`}><span className="harness-log-time">{new Date(line.time).toLocaleTimeString(language)}</span> <span className="harness-log-level">[{line.level.toUpperCase()}]</span> {ft(line.text)}</div>)}
       {error && <div className="harness-log error" role="alert">{ft(error)}</div>}
     </div>

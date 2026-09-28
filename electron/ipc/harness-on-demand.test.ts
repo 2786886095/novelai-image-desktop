@@ -18,12 +18,12 @@ it('small desktop distribution does not bundle the runtime or depend on a build-
  const pkg=JSON.parse(await fs.readFile('package.json','utf8'));
  expect(pkg.build.win.extraResources.some((r:{to:string})=>r.to==='harness-seed')).toBe(false);
 });
-it('first explicit start downloads when no seed exists; download failure preserves the home',async()=>{
+it('start never downloads implicitly and preserves the home',async()=>{
  const {root,engine,download}=await fixture();
  await fs.mkdir(path.join(root,'home'),{recursive:true});await fs.writeFile(path.join(root,'home','user-data.txt'),'keep');
  download.mockRejectedValueOnce(Error('offline'));
- await engine.start();expect(download).toHaveBeenCalledOnce();
- expect(engine.snapshot().phase).toBe('error');expect(engine.snapshot().logs.some(x=>x.text.includes('offline'))).toBe(true);
+ await engine.start();expect(download).not.toHaveBeenCalled();
+ expect(engine.snapshot().phase).toBe('error');expect(engine.snapshot().logs.some(x=>x.text.includes('安装'))).toBe(true);
  expect(await fs.readFile(path.join(root,'home','user-data.txt'),'utf8')).toBe('keep');
  await expect(fs.access(path.join(root,'home','active.json'))).rejects.toThrow();
 });

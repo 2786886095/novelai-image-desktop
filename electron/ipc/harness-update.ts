@@ -23,7 +23,7 @@ export async function discardHarnessDownload(root:string, source:string) {
 }
 
 /** Independent component releases, NOT upstream npm latest and NOT the application's updater. */
-export async function downloadCompatibleHarness(root: string, signal: AbortSignal, log:(text:string)=>void) {
+export async function queryCompatibleHarness(signal: AbortSignal) {
   const headers={'Accept':'application/vnd.github+json','User-Agent':'Langbai-Tavern-Agent'};
   type Release={tag_name:string;draft:boolean;prerelease:boolean;assets:Array<{name:string;url:string;digest?:string;size:number}>};
   const releases:Release[]=[];
@@ -35,9 +35,17 @@ export async function downloadCompatibleHarness(root: string, signal: AbortSigna
   const selected=chooseComponent(releases);
   const assetName=`tavern-agent-${process.platform}-${process.arch}-protocol1.zip`;
   const release=releases.find(r=>r.tag_name===`agent-v${selected}`);
-  if(!release){log('尚无已发布的兼容 Agent 组件更新。');return null;}
+  if(!release)return null;
   const asset=release.assets.find(a=>a.name===assetName)!;
   if(!asset.digest?.match(/^sha256:[a-f0-9]{64}$/) || !Number.isSafeInteger(asset.size) || asset.size<=0 || asset.size>768*1024*1024)throw new Error('Agent 更新包缺少可信摘要或体积异常。');
+  return {version: selected!, bytes: asset.size, asset, tag: release.tag_name};
+}
+
+export type HarnessDownload = NonNullable<Awaited<ReturnType<typeof queryCompatibleHarness>>>;
+export async function downloadCompatibleHarness(root:string, signal:AbortSignal, log:(text:string)=>void, approved?:HarnessDownload) {
+  const selected=approved ?? await queryCompatibleHarness(signal);if(!selected)return null;
+  const {asset}=selected,release={tag_name:selected.tag};
+  const headers={'Accept':'application/vnd.github+json','User-Agent':'Langbai-Tavern-Agent'};
   log(`下载独立组件 ${release.tag_name}…`);
   if(!asset.url.startsWith('https://api.github.com/repos/2786886095/novelai-image-desktop/releases/assets/'))throw new Error('Unexpected update source');
   const download=await fetch(asset.url,{headers:{...headers,Accept:'application/octet-stream'},signal:AbortSignal.any([signal,AbortSignal.timeout(300000)])});
