@@ -26,8 +26,9 @@ it('clears only the displayed run by default and persists after polling',async()
  expect(JSON.parse(fs.readFileSync(configPath,'utf8'))).toMatchObject({assets:'unchanged-assets',python:'unchanged-python',image:path.join(mock.root,'reference.png')});
 });
 it('trashes all generated spool images including unranked images, but no reference or metadata',async()=>{
+ const canonicalImage=fs.realpathSync(image); // macOS resolves /var through /private/var.
  await detectiveClearResults({directory:run,deleteImages:true});
- expect(mock.trash).toHaveBeenCalledWith(image);expect(fs.existsSync(image)).toBe(false);
+ expect(mock.trash).toHaveBeenCalledWith(canonicalImage);expect(fs.existsSync(image)).toBe(false);
  expect(fs.existsSync(image.replace('.png','.json'))).toBe(true);expect(fs.existsSync(path.join(mock.root,'reference.png'))).toBe(true);
 });
 it('rejects stale run IDs and non-boolean deletion choices',async()=>{
