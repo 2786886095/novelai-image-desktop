@@ -6,9 +6,11 @@ import { execFile, type ExecFileOptions } from "node:child_process";
 import { promisify } from "node:util";
 import axios from "axios";
 import { proxyConfig } from "./proxy";
-import { atomicWriteFileSync, getSetting } from "./store";
+import { getSetting } from "./store";
 import {featureText} from '../../src/feature-text';
 import release from "./detective-release.json";
+import {detectiveRuntimeChecking,validateDetectiveRuntime,cancelDetectiveRuntimeCheck} from './detective-runtime-check';
+import {readDetectiveConfig,saveDetectiveConfig,detectiveProfile,updateDetectiveProfile} from './detective-models';
 
 const execute = (file: string, args: string[], options: ExecFileOptions) => promisify(execFile)(file, args, options);
 const REPO = "https://huggingface.co/langbai666/novelai-studio-artist-detective";
@@ -16,15 +18,8 @@ export const packageUrl = (file: string) => `${REPO}/resolve/main/${encodeURICom
 export type DownloadStage = "idle" | "downloading" | "verifying" | "extracting" | "checking" | "complete" | "failed" | "cancelled";
 export type DetectiveVariant = "full" | "light";
 type Package = { file: string; bytes: number; sha256: string; kind: string; variant?: DetectiveVariant; directory?: string };
-let selectedVariant: DetectiveVariant | undefined;
 function chosenVariant(): DetectiveVariant {
-  if (!selectedVariant) {
-    try {
-      const c = JSON.parse(fs.readFileSync(path.join(app.getPath("userData"), "artist-detective-runtime.json"), "utf8"));
-      selectedVariant = (c.downloadVariant ?? c.variant) === "light" ? "light" : "full";
-    } catch { selectedVariant = "full"; }
-  }
-  return selectedVariant;
+  return readDetectiveConfig().selectedVariant ?? 'full';
 }
 const packages = () => (release.packages as Package[]).filter(p => p.kind === "runtime" || !p.variant || p.variant === chosenVariant());
 export interface DetectiveDownloadStatus {
@@ -36,29 +31,29 @@ export interface DetectiveDownloadStatus {
 }
 let job: Promise<void> | null = null;
 let controller: AbortController | null = null;
-let selectedDirectory = "";
-let state = { stage: "idle" as DownloadStage, file: "", downloaded: 0, bytesPerSecond: 0, message: "" };
+type DownloadState={stage:DownloadStage;file:string;downloaded:number;bytesPerSecond:number;message:string};
+const states=new Map<string,DownloadState>();
+function currentState():DownloadState {
+  const key=app.getPath('userData')+'|'+chosenVariant();
+  if(!states.has(key))states.set(key,{stage:'idle',file:'',downloaded:0,bytesPerSecond:0,message:''});
+  return states.get(key)!;
+}
+let state:DownloadState={stage:'idle',file:'',downloaded:0,bytesPerSecond:0,message:''};
 function directory() {
-  if (selectedDirectory) return selectedDirectory;
-  try { const c = JSON.parse(fs.readFileSync(path.join(app.getPath("userData"), "artist-detective-runtime.json"), "utf8"));
-    if (typeof c.downloadDirectory === "string" && path.isAbsolute(c.downloadDirectory)) return c.downloadDirectory;
-  } catch { /* first install */ }
-  return path.join(app.getPath("userData"), "artist-detective-downloads");
+  const c=readDetectiveConfig(),v=chosenVariant(),p=detectiveProfile(c,v);
+  if(p.downloadDirectory && path.isAbsolute(p.downloadDirectory))return p.downloadDirectory;
+  return path.join(app.getPath("userData"), "artist-detective-downloads",v);
 }
 export function detectiveDownloadStatus(): DetectiveDownloadStatus {
-  return { ...state, variant: chosenVariant(), busy: !!job, directory: directory(), total: packages().reduce((a, p) => a + p.bytes, 0),
+  return { ...currentState(), variant: chosenVariant(), busy: !!job, directory: directory(), total: packages().reduce((a, p) => a + p.bytes, 0),
     packages: packages().map(p => ({ ...p, url: packageUrl(p.file) })), repository: REPO };
 }
 export function detectiveDownloadVariant(value: DetectiveVariant) {
   if (job) throw new Error("请先取消当前下载，再切换模型版本。");
   if (value !== "full" && value !== "light") throw new Error("Invalid model variant");
-  if (selectedVariant !== value) {
-    selectedVariant = value;
-    state = { stage: "idle", file: "", downloaded: 0, bytesPerSecond: 0, message: "" };
-  }
-  const p = path.join(app.getPath("userData"), "artist-detective-runtime.json");
-  let c = {}; try { c = JSON.parse(fs.readFileSync(p, "utf8")); } catch { /* first install */ }
-  atomicWriteFileSync(p, JSON.stringify({ ...c, downloadVariant: value }, null, 2));
+  if(detectiveRuntimeChecking())throw Error('请等待模型与运行环境校验完成。');
+  const c=readDetectiveConfig();
+  saveDetectiveConfig({...c,downloadVariant:value,selectedVariant:value});
   return detectiveDownloadStatus();
 }
 export async function verifyDownload(file: string, bytes: number, expected: string, signal?: AbortSignal) {
@@ -71,14 +66,11 @@ export async function detectiveDownloadDirectory() {
   if (job) throw new Error("请先取消当前下载");
   const result = await dialog.showOpenDialog({ title: featureText(getSetting('language'),"选择模型与运行环境存放位置"), properties: ["openDirectory", "createDirectory"] });
   if (!result.canceled && result.filePaths[0]) {
-    selectedDirectory = result.filePaths[0];
-    const p = path.join(app.getPath("userData"), "artist-detective-runtime.json");
-    let c = {}; try { c = JSON.parse(fs.readFileSync(p, "utf8")); } catch { /* first install */ }
-    atomicWriteFileSync(p, JSON.stringify({ ...c, downloadDirectory: selectedDirectory }, null, 2));
+    const c=readDetectiveConfig();saveDetectiveConfig(updateDetectiveProfile(c,chosenVariant(),{downloadDirectory:result.filePaths[0]}));
   }
   return detectiveDownloadStatus();
 }
-export function detectiveDownloadCancel() { controller?.abort(); return detectiveDownloadStatus(); }
+export function detectiveDownloadCancel() { controller?.abort(); if(job&&state.stage==='checking')cancelDetectiveRuntimeCheck(); return detectiveDownloadStatus(); }
 export function validateRange(header: unknown, offset: number, total: number) {
   return typeof header === "string" && header.startsWith(`bytes ${offset}-`) && header.endsWith(`/${total}`);
 }
@@ -124,23 +116,22 @@ async function download(p: Package, root: string, before: number, signal: AbortS
 }
 export function detectiveDownloadStart() {
   if (job) return detectiveDownloadStatus();
+  if (detectiveRuntimeChecking()) throw Error('请等待模型与运行环境校验完成。');
   if (process.platform !== "win32" || process.arch !== "x64") throw new Error("此运行包支持 Windows x64");
-  const configPath = path.join(app.getPath("userData"), "artist-detective-runtime.json");
-  let current: Record<string, unknown> = {};
-  try { current = JSON.parse(fs.readFileSync(configPath, "utf8")); } catch { /* first install */ }
+  let current=readDetectiveConfig();
   if (typeof current.pid === "number") {
     let running = false; try { process.kill(current.pid, 0); running = true; } catch { /* finished */ }
     if (running) throw new Error("请先停止画风迭代，再安装环境");
   }
   controller = new AbortController(); const signal = controller.signal, root = directory();
   const chosen = packages(), variant = chosenVariant();
-  state = { stage: "downloading", file: "", downloaded: 0, bytesPerSecond: 0, message: "" };
+  state=currentState();Object.assign(state,{ stage: "downloading", file: "", downloaded: 0, bytesPerSecond: 0, message: "" });
   job = (async () => {
     await fs.promises.mkdir(root, { recursive: true });
     let before = 0; const archives: string[] = [];
     for (const p of chosen) { state.file = p.file; archives.push(await download(p, root, before, signal)); before += p.bytes; }
     signal.throwIfAborted(); state.stage = "extracting"; state.bytesPerSecond = 0;
-    const install = path.join(root, `${release.version}-${Date.now()}`);
+    const install = path.join(root, `${release.version}-${variant}-${Date.now()}`);
     await fs.promises.mkdir(install);
     for (const file of archives) {
       state.file = path.basename(file); signal.throwIfAborted();
@@ -149,13 +140,13 @@ export function detectiveDownloadStart() {
     }
     state.stage = "checking"; state.file = "Python / CUDA / 模型清单";
     const python = path.join(install, "python", "python.exe"), assets = path.join(install, chosen.find(p => p.kind === "assets")?.directory ?? "novelai-desktop-assets");
-    const vram = variant === "full" ? "assert torch.cuda.get_device_properties(0).total_memory >= 8_000_000_000, 'Full model requires at least 8GB VRAM'; " : "";
-    const probe = "import sys,torch; from artist_detective.desktop.assets import verify; assert torch.cuda.is_available(), 'CUDA driver unavailable'; " + vram + "verify(sys.argv[1]); print('RUNTIME_OK')";
-    await execute(python, ["-B", "-I", "-c", probe, assets], { windowsHide: true, timeout: 10 * 60_000, signal, maxBuffer: 1024 * 1024 });
+    const verified=await validateDetectiveRuntime({python,assets,variant},true);
+    if(verified.state!=='passed')throw Error(verified.message??'Model verification failed');
     signal.throwIfAborted();
     // Re-read to preserve any new user settings made while downloading.
-    try { current = JSON.parse(fs.readFileSync(configPath, "utf8")); } catch { /* first install */ }
-    atomicWriteFileSync(configPath, JSON.stringify({ ...current, python, assets, variant }, null, 2));
+    current=readDetectiveConfig();
+    const next=updateDetectiveProfile(current,variant,{python,assets});
+    saveDetectiveConfig({...next,...(next.selectedVariant===variant?{python,assets,variant}:{})});
     state.stage = "complete"; state.message = "运行环境与模型校验通过，已切换到新版资源。原图片与历史记录保留。";
   })().catch(() => {
     const at = state.stage;

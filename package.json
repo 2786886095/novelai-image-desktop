@@ -1,6 +1,6 @@
 {
   "name": "langbai-novelai-studio",
-  "version": "2.4.2",
+  "version": "2.4.3",
   "private": true,
   "description": "Langbai NovelAI Studio: API-only NovelAI image generation desktop client with Chinese UI.",
   "author": "Langbai",
@@ -97,6 +97,7 @@
       "dist-electron/**",
       "THIRD_PARTY_NOTICES.md",
       "scripts/artist-detective-live.py",
+      "scripts/artist-detective-check.py",
       "!**/*.map",
       "!node_modules/onnxruntime-web/**",
       "!node_modules/onnxruntime-node/bin/napi-v3/win32/arm64/**",
@@ -117,6 +118,7 @@
         "dist-electron/**",
         "THIRD_PARTY_NOTICES.md",
         "scripts/artist-detective-live.py",
+        "scripts/artist-detective-check.py",
         "!**/*.map",
         "!node_modules/onnxruntime-web/**",
         "!node_modules/onnxruntime-node/bin/napi-v3/win32/arm64/**",
@@ -133,12 +135,34 @@
         "!**/.env.*"
       ],
       "extraResources": [
-        {"from":"harness/plugins/studio-library","to":"studio-library","filter":["package.json","index.js","protocol.js","jev-config.js","panel-layout-store.js","lib/client.js"]},
-        {"from":"harness/plugins/studio-tools","to":"studio-tools","filter":["package.json","index.js"]},
+        {
+          "from": "harness/plugins/studio-library",
+          "to": "studio-library",
+          "filter": [
+            "package.json",
+            "index.js",
+            "protocol.js",
+            "jev-config.js",
+            "panel-layout-store.js",
+            "lib/client.js"
+          ]
+        },
+        {
+          "from": "harness/plugins/studio-tools",
+          "to": "studio-tools",
+          "filter": [
+            "package.json",
+            "index.js"
+          ]
+        },
         {
           "from": "harness/plugins/studio-responsive",
           "to": "studio-responsive",
-          "filter": ["package.json", "index.js", "lib/client.js"]
+          "filter": [
+            "package.json",
+            "index.js",
+            "lib/client.js"
+          ]
         },
         {
           "from": "harness/plugins/studio-preview",
@@ -182,6 +206,7 @@
         "dist-electron/**",
         "THIRD_PARTY_NOTICES.md",
         "scripts/artist-detective-live.py",
+        "scripts/artist-detective-check.py",
         "!**/*.map",
         "!node_modules/onnxruntime-web/**",
         "!node_modules/onnxruntime-node/bin/napi-v3/win32/arm64/**",
@@ -209,6 +234,7 @@
         "dist-electron/**",
         "THIRD_PARTY_NOTICES.md",
         "scripts/artist-detective-live.py",
+        "scripts/artist-detective-check.py",
         "!**/*.map",
         "!node_modules/onnxruntime-web/**",
         "!node_modules/onnxruntime-node/bin/napi-v3/win32/arm64/**",
@@ -230,6 +256,7 @@
     },
     "asarUnpack": [
       "scripts/artist-detective-live.py",
+      "scripts/artist-detective-check.py",
       "dist-electron/electron/ipc/artist-catalog-*.js",
       "dist/artist-catalog/**",
       "node_modules/sharp/**",

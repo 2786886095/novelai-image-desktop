@@ -5,7 +5,17 @@ export interface DetectiveRunRequest {
   budget: number;
   parameters?: Partial<DetectiveParameters>;
 }
+export interface DetectiveRuntimeValidation {
+  state: 'unchecked' | 'checking' | 'passed' | 'failed';
+  message?: string;
+  checkedAt?: string;
+  details?: {python:string;torch:string;cuda:string;gpu:string;architecture:string;selfScore:number};
+}
 export interface DetectiveSnapshot {
+  selectedVariant?: 'full' | 'light';
+  activeVariant?: 'full' | 'light';
+  models?: Record<'full'|'light',{configured:boolean;validation:DetectiveRuntimeValidation;python?:string;assets?:string}>;
+  runtimeValidation?: DetectiveRuntimeValidation;
   ready: boolean;
   running: boolean;
   stage: string;

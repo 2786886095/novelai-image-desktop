@@ -170,6 +170,9 @@ contextBridge.exposeInMainWorld("naiDesktop", {
   artistDetectiveStart: (request: import("../src/artist-detective-contract").DetectiveRunRequest) => ipcRenderer.invoke("artistDetective:start", request),
   artistDetectiveStop: () => ipcRenderer.invoke("artistDetective:stop"),
   artistDetectiveOpenResults: () => ipcRenderer.invoke("artistDetective:openResults"),
+  artistDetectiveVerifyRuntime: () => ipcRenderer.invoke("artistDetective:verifyRuntime"),
+  artistDetectiveSelectModel: (variant:'full'|'light') => ipcRenderer.invoke("artistDetective:selectModel", variant),
+  artistDetectiveClearResults: (request: {directory:string;deleteImages:boolean}) => ipcRenderer.invoke("artistDetective:clearResults", request),
   artistLabSearchArtists: (query?: string, limit?: number) =>
     ipcRenderer.invoke("artistLab:searchArtists", query, limit),
   artistLabPopularArtists: (limit?: number, force?: boolean) =>

@@ -7,18 +7,18 @@ import { getToken, atomicWriteFileSync, getSetting } from "./store";
 import {featureText} from '../../src/feature-text';
 import { toLocalMediaUrl } from "./local-media-protocol";
 import { detectiveDownloadStatus } from "./detective-download";
+import {detectiveRuntimeChecking, detectiveRuntimeValidation, validateDetectiveRuntime} from './detective-runtime-check';
+import {readDetectiveConfig,saveDetectiveConfig,detectiveProfile,updateDetectiveProfile,validDetectiveVariant,type DetectiveConfig,type DetectiveModelVariant} from './detective-models';
+import {detectiveDownloadVariant} from './detective-download';
 import { detectiveBudget, detectiveParameters, detectiveRounds, type DetectiveRunRequest, type DetectiveSnapshot } from "../../src/artist-detective-contract";
 
 import {assertPortableIdle, registerPortableBusy} from './portable-projects';
-type Config = { python?: string; assets?: string; directory?: string; pid?: number; image?: string };
+type Config = DetectiveConfig;
 let child: ChildProcess | null = null;
-const configPath = () => path.join(app.getPath("userData"), "artist-detective-runtime.json");
-function config(): Config {
-  try { return JSON.parse(fs.readFileSync(configPath(), "utf8")); } catch { return {}; }
-}
-function save(value: Config) { atomicWriteFileSync(configPath(), JSON.stringify(value, null, 2)); }
+let clearing = false;
+const config=readDetectiveConfig,save=saveDetectiveConfig;
 function alive(pid?: number) { if (!pid) return false; try { process.kill(pid, 0); return true; } catch { return false; } }
-registerPortableBusy(()=>!!child || alive(config().pid), 'detective');
+registerPortableBusy(()=>!!child || clearing || detectiveRuntimeChecking() || alive(config().pid), 'detective');
 function read(file: string): any { try { return JSON.parse(fs.readFileSync(file, "utf8")); } catch { return null; } }
 function ready(c: Config) { return !!(c.python && c.assets && fs.existsSync(c.python) && fs.existsSync(path.join(c.assets, "manifest.json"))); }
 
@@ -48,7 +48,14 @@ export function detectiveStatus(): DetectiveSnapshot {
     }
   }
   candidates.sort((a, b) => b.score - a.score);
-  return { ready: ready(c), running, stage: failure && !running ? "failed" : status?.stage ?? "idle",
+  const selectedVariant=c.selectedVariant!,selected={...detectiveProfile(c,selectedVariant),variant:selectedVariant};
+  const runtimeValidation = detectiveRuntimeValidation(selected);
+  // One offline check per unchanged configuration, never competing with a running job.
+  if (ready(selected) && !running && !child && !clearing && !detectiveRuntimeChecking() && !detectiveDownloadStatus().busy && runtimeValidation.state === 'unchecked') {
+    try { assertPortableIdle(); void verifySelected(selectedVariant).catch(()=>{}); } catch { /* defer during backup/restore */ }
+  }
+  const models=Object.fromEntries((['full','light'] as const).map(v=>{const p=detectiveProfile(c,v);return [v,{...p,configured:ready(p),validation:detectiveRuntimeValidation({...p,variant:v})}];})) as NonNullable<DetectiveSnapshot['models']>;
+  return { selectedVariant,activeVariant:c.python&&c.assets?c.variant:undefined,models,ready:ready(selected),runtimeValidation:detectiveRuntimeValidation(selected), running, stage: failure && !running ? "failed" : status?.stage ?? "idle",
     completed: status?.completed ?? 0, budget, rounds: detectiveRounds(budget),
     best: candidates[0]?.score ?? status?.best, message: failure?.message, directory: c.directory,
     reference, fixedPrompt, candidates: candidates.slice(0, 32) };
@@ -56,12 +63,16 @@ export function detectiveStatus(): DetectiveSnapshot {
 
 export async function detectiveConfigure(kind: "python" | "assets") {
   const c = config();
-  if (alive(c.pid)) throw new Error("请先停止当前迭代。");
+  if (alive(c.pid) || child || clearing || detectiveRuntimeChecking()) throw new Error("请等待当前任务或校验完成。");
   if (kind !== "python" && kind !== "assets") throw new Error("Invalid configuration kind");
   const result = await dialog.showOpenDialog(kind === "python"
     ? { title: featureText(getSetting('language'),"选择已安装 Artist Detective 的 Python 3.12"), properties: ["openFile"], filters: [{ name: "Python", extensions: ["exe"] }] }
     : { title: featureText(getSetting('language'),"选择 novelai-desktop-assets 模型目录"), properties: ["openDirectory"] });
-  if (!result.canceled && result.filePaths[0]) { c[kind] = result.filePaths[0]; save(c); }
+  if (!result.canceled && result.filePaths[0]) {
+    const latest=config();
+    if(latest.selectedVariant!==c.selectedVariant)throw Error('Model selection changed; retry');
+    save(updateDetectiveProfile(latest,c.selectedVariant!,{[kind]:result.filePaths[0]}));
+  }
   return detectiveStatus();
 }
 
@@ -69,8 +80,12 @@ export async function detectiveStart(value: DetectiveRunRequest) {
   assertPortableIdle();
   if (detectiveDownloadStatus().busy) throw new Error("请等待模型与运行环境安装完成。");
   const c = config();
-  if (alive(c.pid) || child) throw new Error("已有画风迭代正在运行。");
-  if (!ready(c)) throw new Error("请先配置 Artist Detective 运行环境和模型目录。");
+  if (alive(c.pid) || child || clearing || detectiveRuntimeChecking()) throw new Error("已有画风迭代或校验正在运行。");
+  const selected={...detectiveProfile(c,c.selectedVariant!),variant:c.selectedVariant};
+  if (!ready(selected)) throw new Error("请先配置 Artist Detective 运行环境和模型目录。");
+  if (detectiveRuntimeValidation(selected).state !== 'passed') throw new Error("请先完成模型与运行环境校验。");
+  // A verified selected pair is the only pair used for this new run.
+  c.python=selected.python;c.assets=selected.assets;c.variant=c.selectedVariant;
   if (!value || typeof value.image !== "string" || !fs.existsSync(value.image)) throw new Error("请选择目标图片。");
   if (typeof value.prompt !== "string" || !value.prompt.trim() || value.prompt.length > 16000 || typeof value.style !== "string" || value.style.length > 8000) throw new Error("请填写有效的固定内容提示词。");
   const parameters = detectiveParameters(value.parameters);
@@ -113,4 +128,77 @@ export function detectiveStop() {
 export async function detectiveOpenResults() {
   const c = config();
   if (c.directory && fs.existsSync(c.directory)) await shell.openPath(c.directory);
+}
+
+export async function detectiveVerifyRuntime() {
+  assertPortableIdle();
+  const c=config();
+  if(child || clearing || alive(c.pid) || detectiveDownloadStatus().busy) throw Error('请等待当前任务结束。');
+  await verifySelected(c.selectedVariant!,true);
+  return detectiveStatus();
+}
+
+async function verifySelected(variant:DetectiveModelVariant,force=false) {
+  const profile=detectiveProfile(config(),variant);
+  const result=await validateDetectiveRuntime({...profile,variant},force);
+  const latest=config(),current=detectiveProfile(latest,variant);
+  if(result.state==='passed' && latest.selectedVariant===variant && current.python===profile.python && current.assets===profile.assets)
+    save({...latest,python:profile.python,assets:profile.assets,variant});
+  return result;
+}
+export function detectiveSelectModel(value:DetectiveModelVariant) {
+  assertPortableIdle();
+  const c=config();
+  if(!validDetectiveVariant(value))throw Error('Invalid model variant');
+  if(child||clearing||alive(c.pid)||detectiveRuntimeChecking()||detectiveDownloadStatus().busy)throw Error('请等待当前任务或校验完成。');
+  detectiveDownloadVariant(value);
+  const latest=config();save({...latest,selectedVariant:value});
+  const p=detectiveProfile(latest,value);
+  if(detectiveRuntimeValidation({...p,variant:value}).state==='passed')save({...config(),python:p.python,assets:p.assets,variant:value});
+  return detectiveStatus();
+}
+
+/** Enumerate only this run's generated spool PNGs; never delete an entire folder. */
+function generatedImages(directory:string,reference?:string) {
+  if(!fs.existsSync(directory))return [];
+  const root=fs.realpathSync(directory);
+  const check=(file:string)=>{
+    const relative=path.relative(root,fs.realpathSync(file));
+    if(fs.lstatSync(file).isSymbolicLink() || relative.startsWith('..') || path.isAbsolute(relative))throw Error('结果路径包含外部链接，已停止清空。');
+  };
+  const spool=path.join(root,'spool'),results=path.join(spool,'results');
+  if(!fs.existsSync(results))return [];
+  check(spool);check(results);
+  const files:string[]=[];
+  for(const entry of fs.readdirSync(results,{withFileTypes:true})) {
+    const folder=path.join(results,entry.name);check(folder);
+    if(!entry.isDirectory())continue;
+    for(const name of fs.readdirSync(folder)) {
+      const file=path.join(folder,name);check(file);
+      if(!/^[a-f0-9]{64}\.png$/i.test(name)||!fs.statSync(file).isFile())continue;
+      if(reference && fs.existsSync(reference) && fs.realpathSync(reference)===fs.realpathSync(file))continue;
+      files.push(file);
+    }
+  }
+  return files;
+}
+export async function detectiveClearResults(request:{directory:string;deleteImages:boolean}) {
+  assertPortableIdle();
+  const c=config();
+  if(child || clearing || alive(c.pid))throw Error('请先停止当前迭代。');
+  if(!request || typeof request.directory!=='string' || typeof request.deleteImages!=='boolean' || !c.directory || path.resolve(c.directory)!==path.resolve(request.directory))throw Error('当前迭代结果已变化，请刷新后重试。');
+  clearing=true;
+  try {
+    const files=request.deleteImages?generatedImages(c.directory,c.image):[];
+    const root=files.length?fs.realpathSync(c.directory):'';
+    for(const file of files){
+      const relative=path.relative(root,fs.realpathSync(file));
+      if(relative.startsWith('..')||path.isAbsolute(relative)||fs.lstatSync(file).isSymbolicLink()||!fs.statSync(file).isFile())throw Error('图片路径已变化，已停止清空。');
+      await shell.trashItem(file);
+    }
+    const latest=config();
+    if(latest.directory!==c.directory)throw Error('当前迭代结果已变化，请刷新后重试。');
+    save({...latest,directory:undefined,pid:undefined});
+  } finally {clearing=false;}
+  return detectiveStatus();
 }

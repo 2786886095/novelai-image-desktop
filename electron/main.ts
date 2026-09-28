@@ -1,6 +1,6 @@
 import {portableRecoveryPath, activatePortableRecovery, listPortableRecoveries} from './ipc/portable-projects';
 import {registerHarnessLauncher, harnessNeedsExitConfirmation, confirmHarnessExit} from "./ipc/harness-launcher";
-import { detectiveStatus, detectiveConfigure, detectiveStart, detectiveStop, detectiveOpenResults } from "./ipc/artist-detective";
+import { detectiveStatus, detectiveConfigure, detectiveStart, detectiveStop, detectiveOpenResults, detectiveClearResults, detectiveVerifyRuntime, detectiveSelectModel } from "./ipc/artist-detective";
 import { detectiveDownloadStatus, detectiveDownloadStart, detectiveDownloadCancel, detectiveDownloadDirectory, detectiveDownloadVariant } from "./ipc/detective-download";
 import { recoverLegacyCredentials } from "./ipc/credential-recovery";
 import { readClipboardImageFiles, savePastedImageFiles } from "./ipc/image-clipboard";
@@ -758,6 +758,9 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
   ipcMain.handle("artistDetective:start", (_event, request) => detectiveStart(request));
   ipcMain.handle("artistDetective:stop", () => detectiveStop());
   ipcMain.handle("artistDetective:openResults", () => detectiveOpenResults());
+  ipcMain.handle("artistDetective:verifyRuntime", () => detectiveVerifyRuntime());
+  ipcMain.handle("artistDetective:selectModel", (_event, value) => detectiveSelectModel(value));
+  ipcMain.handle("artistDetective:clearResults", (_event, request) => detectiveClearResults(request));
   ipcMain.handle(
     "artistLab:searchArtists",
     (_event, query: unknown, limit: unknown) => searchArtistTags(query, limit),

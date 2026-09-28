@@ -4,7 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { Readable } from "node:stream";
-const mock = vi.hoisted(() => ({ root: "", language:'zh-CN', titles:[] as string[], get: vi.fn(), exec: vi.fn() }));
+const mock = vi.hoisted(() => ({ root: "", language:'zh-CN', titles:[] as string[], get: vi.fn(), exec: vi.fn(), validate:vi.fn() }));
+vi.mock('./detective-runtime-check',()=>({detectiveRuntimeChecking:()=>false,cancelDetectiveRuntimeCheck:vi.fn(),validateDetectiveRuntime:mock.validate}));
 vi.mock("electron", () => ({ app: { getPath: () => mock.root }, dialog: { showOpenDialog: async (options:{title:string}) => {mock.titles.push(options.title);return { canceled: false, filePaths: [mock.root] };} } }));
 vi.mock("./store", () => ({ getSetting:()=>mock.language, atomicWriteFileSync: (p: string, s: string) => fs.writeFileSync(p, s) }));
 vi.mock("./proxy", () => ({ proxyConfig: () => ({}) }));
@@ -19,6 +20,7 @@ beforeEach(async () => {
   Object.defineProperty(process,"arch",{configurable:true,value:"x64"});
   mock.root = fs.mkdtempSync(path.join(os.tmpdir(), "detective-download-"));
   mock.get.mockReset(); mock.exec.mockReset();
+  mock.validate.mockReset().mockResolvedValue({state:'passed'});
   mock.exec.mockImplementation((...args: unknown[]) => (args.at(-1) as Function)(new Error("fixture extraction failure")));
   detectiveDownloadVariant("full");
   await detectiveDownloadDirectory();
@@ -72,7 +74,8 @@ it("activates new paths only after successful runtime checks and preserves user 
   mock.get.mockResolvedValue({status:200,headers:{},data:Readable.from([Buffer.from("abcdef")])});
   mock.exec.mockImplementation((...args: unknown[]) => (args.at(-1) as Function)(null,"RUNTIME_OK",""));
   detectiveDownloadStart(); await done();
-  expect(mock.exec).toHaveBeenCalledTimes(2);
+  expect(mock.exec).toHaveBeenCalledTimes(1);
+  expect(mock.validate).toHaveBeenCalledWith(expect.objectContaining({variant:'full'}),true);
   expect(detectiveDownloadStatus().stage).toBe("complete");
   const next = JSON.parse(fs.readFileSync(cfg,"utf8"));
   expect(next.directory).toBe("history"); expect(next.assets).toContain("novelai-desktop-assets"); expect(next.python).toContain("python.exe");
@@ -98,7 +101,33 @@ it("selects only the light bundle, persists choice and activates matching direct
   const config=JSON.parse(fs.readFileSync(path.join(mock.root,"artist-detective-runtime.json"),"utf8"));
   expect(config).toMatchObject({variant:"light",downloadVariant:"light"});
   expect(config.assets).toContain("novelai-light-desktop-assets");
+  expect(mock.validate).toHaveBeenCalledWith(expect.objectContaining({variant:'light'}),true);
   expect(JSON.stringify(mock.exec.mock.calls)).not.toContain("8_000_000_000");
+});
+
+it('preserves full resources when a separate light download fails validation',async()=>{
+ const cfg=path.join(mock.root,'artist-detective-runtime.json');
+ fs.writeFileSync(cfg,JSON.stringify({python:'full-python',assets:'full-assets',variant:'full',directory:'history'}));
+ detectiveDownloadVariant('light');
+ mock.get.mockResolvedValue({status:200,headers:{},data:Readable.from([Buffer.from('abc')])});
+ mock.exec.mockImplementation((...args:unknown[])=>(args.at(-1) as Function)(null,'',''));
+ mock.validate.mockResolvedValue({state:'failed',message:'light incompatible'});
+ detectiveDownloadStart();await done();
+ const c=JSON.parse(fs.readFileSync(cfg,'utf8'));expect(c).toMatchObject({python:'full-python',assets:'full-assets',variant:'full',directory:'history'});
+ expect(c.models.full.assets).toBe('full-assets');expect(c.models.light?.assets).toBeUndefined();
+ expect(detectiveDownloadStatus().stage).toBe('failed');
+ detectiveDownloadVariant('full');expect(detectiveDownloadStatus().stage).toBe('idle');
+ detectiveDownloadVariant('light');expect(detectiveDownloadStatus().stage).toBe('failed');
+});
+
+it('a successful light install retains the full profile and its download directory',async()=>{
+ const cfg=path.join(mock.root,'artist-detective-runtime.json');
+ fs.writeFileSync(cfg,JSON.stringify({python:'full-python',assets:'full-assets',variant:'full',downloadDirectory:mock.root,directory:'history'}));
+ detectiveDownloadVariant('light');mock.get.mockResolvedValue({status:200,headers:{},data:Readable.from([Buffer.from('abc')])});
+ mock.exec.mockImplementation((...args:unknown[])=>(args.at(-1) as Function)(null,'',''));
+ detectiveDownloadStart();await done();const c=JSON.parse(fs.readFileSync(cfg,'utf8'));
+ expect(c.models.full).toMatchObject({python:'full-python',assets:'full-assets',downloadDirectory:mock.root});
+ expect(c.models.light.assets).toContain('novelai-light-desktop-assets');expect(c.directory).toBe('history');
 });
 it("rejects invalid variants and prevents changing packages while downloading", async () => {
   expect(()=>detectiveDownloadVariant("other" as any)).toThrow("Invalid");

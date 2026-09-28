@@ -1732,6 +1732,9 @@ export interface NaiDesktopApi {
   artistDetectiveStart: (request: import("./artist-detective-contract").DetectiveRunRequest) => Promise<import("./artist-detective-contract").DetectiveSnapshot>;
   artistDetectiveStop: () => Promise<import("./artist-detective-contract").DetectiveSnapshot>;
   artistDetectiveOpenResults: () => Promise<void>;
+  artistDetectiveVerifyRuntime: () => Promise<import("./artist-detective-contract").DetectiveSnapshot>;
+  artistDetectiveSelectModel: (variant:'full'|'light') => Promise<import("./artist-detective-contract").DetectiveSnapshot>;
+  artistDetectiveClearResults: (request:{directory:string;deleteImages:boolean}) => Promise<import("./artist-detective-contract").DetectiveSnapshot>;
   artistLabPickTarget: (sourcePath?: string) => Promise<{
     filePath: string;
     fileUrl: string;

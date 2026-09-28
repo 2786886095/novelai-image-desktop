@@ -3,7 +3,7 @@
 [简体中文](./README.md) · [繁體中文](./README.zh-TW.md) · [English](./README.en.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md)
 
 
-**v2.4.2 platform note:** The standalone Tavern Agent supports Windows x64 and Android ARM64 (Android 8+); other platforms retain the existing Tavern. Opening its page does not download anything. Installation shows the version and download size and asks for confirmation. Uninstalling the component preserves conversations and user data for reinstallation.
+**v2.4.3 platform note:** The standalone Tavern Agent supports Windows x64 and Android ARM64 (Android 8+); other platforms retain the existing Tavern. Opening its page does not download anything. Installation shows the version and download size and asks for confirmation. Uninstalling the component preserves conversations and user data for reinstallation.
 
 ### From an idea to a collection of images.
 

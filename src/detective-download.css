@@ -32,3 +32,33 @@
 .detective-download-panel details p { overflow-wrap:anywhere; }
 .target-artist-lab .artist-target-empty { font-size:16px; line-height:1.5; text-align:center; padding:20px; box-sizing:border-box; overflow-wrap:anywhere; }
 @media(max-width:760px) { .detective-parameters { grid-template-columns:1fr; } .detective-parameter-grid { grid-template-columns:1fr; } }
+
+.detective-caption-options,
+.detective-budget-help {
+  grid-column: 1 / -1;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-canvas);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.detective-caption-options { display: grid; gap: 10px; }
+.detective-caption-options > label:not(.checkbox-line) { display: grid; gap: 6px; min-width: 0; }
+.detective-caption-options input:not([type="checkbox"]) { width: 100%; min-width: 0; box-sizing: border-box; }
+.detective-caption-options .checkbox-line { display: flex; align-items: center; gap: 8px; min-width: 0; margin: 0; }
+.detective-caption-options .checkbox-line input[type="checkbox"] { flex: 0 0 16px; width: 16px; height: 16px; min-height: 16px; padding: 0; }
+.detective-caption-options .checkbox-line span { min-width: 0; }
+.detective-caption-options > button { justify-self: start; max-width: 100%; white-space: normal; height: auto; min-height: 32px; }
+.detective-caption-options p,
+.detective-budget-help p { margin: 0; color: var(--text-secondary); }
+.detective-budget-help h3 { margin: 0 0 10px; }
+.detective-budget-help ol { margin: 0 0 12px; padding-inline-start: 22px; }
+.detective-budget-help li + li { margin-top: 10px; }
+.detective-budget-help > small { display: block; margin-top: 8px; color: var(--text-muted); }
+.detective-budget-help summary { cursor: pointer; color: var(--text-primary); font-weight: 700; }
+.detective-budget-help[open] summary { margin-bottom: 12px; }
+.detective-download-panel > summary { font-weight: 700; }
+.detective-download-panel[open] > summary { margin-bottom: 12px; }
+.detective-runtime-summary { grid-column: 1 / -1; margin: 0; color: var(--text-secondary); overflow-wrap: anywhere; }

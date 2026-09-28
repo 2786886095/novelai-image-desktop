@@ -1,7 +1,7 @@
 import {useAppStore} from '../store';
 import {featureKey,featureText} from '../feature-text';
 /** Promise-based in-app confirmation used instead of blocking browser dialogs. */
-export function confirmAction(message: string, title = "请确认"): Promise<boolean> {
+export function confirmAction(message: string, title = "请确认", choice?:{label:string;onChange:(checked:boolean)=>void}): Promise<boolean> {
   return new Promise((resolve) => {
     let settled = false;
     const backdrop = document.createElement("div");
@@ -17,11 +17,20 @@ export function confirmAction(message: string, title = "请确认"): Promise<boo
       </section>`;
     const heading = backdrop.querySelector("h3");
     const body = backdrop.querySelector("p");
+    const option=choice?document.createElement('label'):null;
+    if(option && choice){
+      option.className='checkbox-line';
+      const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.checked=false;
+      const text=document.createElement('span');text.textContent=choice.label;
+      checkbox.addEventListener('change',()=>choice.onChange(checkbox.checked));
+      option.append(checkbox,text);body?.after(option);
+    }
     const titleKey=featureKey(title),messageKey=featureKey(message);
     const render=()=>{
       const language=useAppStore.getState().settings?.language;
       if (heading) heading.textContent = featureText(language,titleKey);
       if (body) body.textContent = featureText(language,messageKey);
+      if(option && choice)option.querySelector('span')!.textContent=featureText(language,featureKey(choice.label));
       backdrop.querySelector('[data-result="cancel"]')!.textContent=featureText(language,'取消');
       backdrop.querySelector('[data-result="confirm"]')!.textContent=featureText(language,'确认');
     };
@@ -44,8 +53,8 @@ export function confirmAction(message: string, title = "请确认"): Promise<boo
     backdrop.addEventListener("keydown", (event) => {
       if (event.key === "Escape") finish(false);
       if (event.key === "Tab") {
-        const buttons=Array.from(backdrop.querySelectorAll<HTMLButtonElement>('button'));
-        const index=buttons.indexOf(document.activeElement as HTMLButtonElement);
+        const buttons=Array.from(backdrop.querySelectorAll<HTMLElement>('button,input'));
+        const index=buttons.indexOf(document.activeElement as HTMLElement);
         event.preventDefault();buttons[(index+(event.shiftKey?-1:1)+buttons.length)%buttons.length].focus();
       }
     });

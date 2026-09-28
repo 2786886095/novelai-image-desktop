@@ -1839,5 +1839,271 @@
     "Install the component before starting Agent.",
     "Agent の起動前にコンポーネントをインストールしてください。",
     "Agent를 시작하기 전에 구성 요소를 설치하세요."
+  ],
+  "反推范围与角色": [
+    "反推范围与角色",
+    "反推範圍與角色",
+    "Caption target and character",
+    "解析対象とキャラクター",
+    "분석 대상 및 캐릭터"
+  ],
+  "目标/角色提示（可选）": [
+    "目标/角色提示（可选）",
+    "目標/角色提示（可選）",
+    "Target / character hint (optional)",
+    "対象・キャラクターのヒント（任意）",
+    "대상 / 캐릭터 힌트 (선택)"
+  ],
+  "例如：这是芙宁娜 / 只反推右侧角色 / 只反推桌上的物品": [
+    "例如：这是芙宁娜 / 只反推右侧角色 / 只反推桌上的物品",
+    "例如：這是芙寧娜 / 只反推右側角色 / 只反推桌上的物品",
+    "Example: This is Furina / Describe only the character on the right / Only the objects on the table",
+    "例：これはフリーナ / 右側のキャラだけ解析 / 机の上の物だけ解析",
+    "예: 푸리나입니다 / 오른쪽 캐릭터만 분석 / 탁자 위 물건만 분석"
+  ],
+  "网络角色：优先使用角色 Tag": [
+    "网络角色：优先使用角色 Tag",
+    "網路角色：優先使用角色 Tag",
+    "Known character: prefer character tags",
+    "既知のキャラクター：キャラクタータグを優先",
+    "알려진 캐릭터: 캐릭터 태그 우선"
+  ],
+  "提示用于告诉视觉模型要识别谁、看哪里；留空则分析整张图。开启网络角色后，仅在能可靠识别时优先使用角色 Tag；识别不确定时仍描述外貌，不猜角色名。": [
+    "提示用于告诉视觉模型要识别谁、看哪里；留空则分析整张图。开启网络角色后，仅在能可靠识别时优先使用角色 Tag；识别不确定时仍描述外貌，不猜角色名。",
+    "提示用於告訴視覺模型要辨識誰、看哪裡；留空則分析整張圖。開啟網路角色後，僅在能可靠辨識時優先使用角色 Tag；辨識不確定時仍描述外貌，不猜角色名。",
+    "Tell the vision model who or what to focus on. Leave blank to analyze the whole image. When known-character mode is enabled, character tags take priority only for reliable identifications; uncertain identities use appearance descriptions, not guessed names.",
+    "誰・どこを解析するか指定します。空欄なら画像全体を解析します。既知のキャラクターを有効にすると、確実に識別できた場合のみキャラクタータグを優先します。不確かな場合は名前を推測せず外見を記述します。",
+    "누구를, 어디를 분석할지 지정하세요. 비우면 이미지 전체를 분석합니다. 알려진 캐릭터 옵션을 켜면 확실히 식별한 경우에만 캐릭터 태그를 우선 사용하며, 불확실하면 이름을 추측하지 않고 외모를 설명합니다."
+  ],
+  "修改这些选项后需重新点击反推；结果填入上方固定内容提示词，不会自动开始生图。": [
+    "修改这些选项后需重新点击反推；结果填入上方固定内容提示词，不会自动开始生图。",
+    "修改這些選項後需重新點擊反推；結果填入上方固定內容提示詞，不會自動開始生圖。",
+    "After changing these options, run captioning again. The result fills the fixed content prompt above; it does not start image generation.",
+    "設定変更後は再度解析を実行してください。結果は上の固定内容プロンプトに入力され、画像生成は自動で開始しません。",
+    "옵션 변경 후 다시 분석을 실행하세요. 결과는 위의 고정 내용 프롬프트에 입력되며 이미지 생성은 자동으로 시작되지 않습니다."
+  ],
+  "轮数与图片上限说明": [
+    "轮数与图片上限说明",
+    "輪數與圖片上限說明",
+    "Rounds and image limit explained",
+    "ラウンド数と画像上限の説明",
+    "라운드 및 이미지 한도 안내"
+  ],
+  "本次最多生成 {budget} 张图片": [
+    "本次最多生成 {budget} 张图片",
+    "本次最多生成 {budget} 張圖片",
+    "Up to {budget} images in this run",
+    "今回の生成上限：{budget} 枚",
+    "이번 실행에서 최대 {budget}장 생성"
+  ],
+  "搜索阶段：最多 {search} 张，分 {rounds} 轮。": [
+    "搜索阶段：最多 {search} 张，分 {rounds} 轮。",
+    "搜尋階段：最多 {search} 張，分 {rounds} 輪。",
+    "Search: up to {search} images across {rounds} rounds.",
+    "探索：{rounds} ラウンドで最大 {search} 枚。",
+    "검색: {rounds}라운드에 걸쳐 최대 {search}장."
+  ],
+  "一轮尝试最多 16 组画师组合，每组生成 2 张，用不同随机种子比较画风；一轮最多 32 张。": [
+    "一轮尝试最多 16 组画师组合，每组生成 2 张，用不同随机种子比较画风；一轮最多 32 张。",
+    "一輪嘗試最多 16 組畫師組合，每組生成 2 張，用不同隨機種子比較畫風；一輪最多 32 張。",
+    "Each round tests up to 16 artist combinations, generating 2 images per combination with different random seeds to compare styles: up to 32 images per round.",
+    "各ラウンドは最大16組の画師の組み合わせを試し、異なるシードで各2枚を生成して画風を比較します。1ラウンド最大32枚です。",
+    "라운드마다 최대 16개 작가 조합을 시험하고, 각 조합을 다른 시드로 2장씩 생성해 화풍을 비교합니다. 라운드당 최대 32장입니다."
+  ],
+  "最终复测：最多 16 张（已包含在上限内）。": [
+    "最终复测：最多 16 张（已包含在上限内）。",
+    "最終複測：最多 16 張（已包含在上限內）。",
+    "Final validation: up to 16 images (included in the limit).",
+    "最終検証：最大16枚（上限に含まれます）。",
+    "최종 재검증: 최대 16장 (한도에 포함)."
+  ],
+  "从搜索结果中选出最多 4 组，每组再用 4 个新随机种子出图，检查画风是否稳定。": [
+    "从搜索结果中选出最多 4 组，每组再用 4 个新随机种子出图，检查画风是否稳定。",
+    "從搜尋結果中選出最多 4 組，每組再用 4 個新隨機種子出圖，檢查畫風是否穩定。",
+    "Select up to 4 combinations from the search results and generate each with 4 new random seeds to check style consistency.",
+    "探索結果から最大4組を選び、それぞれ4つの新しいシードで生成して画風の安定性を確認します。",
+    "검색 결과에서 최대 4개 조합을 선택하고 각 조합을 새로운 시드 4개로 생성해 화풍의 일관성을 확인합니다."
+  ],
+  "修改轮数会更新图片上限；修改图片上限会重新计算轮数。最后一轮可能不足 32 张，上限不代表一定生成满。": [
+    "修改轮数会更新图片上限；修改图片上限会重新计算轮数。最后一轮可能不足 32 张，上限不代表一定生成满。",
+    "修改輪數會更新圖片上限；修改圖片上限會重新計算輪數。最後一輪可能不足 32 張，上限不代表一定生成滿。",
+    "Changing rounds updates the image limit; changing the image limit recalculates rounds. The last round may have fewer than 32 images. The limit is a cap, not a guaranteed total.",
+    "ラウンド数を変えると画像上限が更新され、画像上限を変えるとラウンド数が再計算されます。最後のラウンドは32枚未満の場合があります。上限まで必ず生成するわけではありません。",
+    "라운드를 바꾸면 이미지 한도가 갱신되고, 이미지 한도를 바꾸면 라운드가 다시 계산됩니다. 마지막 라운드는 32장 미만일 수 있으며 한도만큼 반드시 생성되는 것은 아닙니다."
+  ],
+  "生成图片会调用 NovelAI API，可能消耗 Anlas；可随时停止，已完成图片会保留。": [
+    "生成图片会调用 NovelAI API，可能消耗 Anlas；可随时停止，已完成图片会保留。",
+    "生成圖片會呼叫 NovelAI API，可能消耗 Anlas；可隨時停止，已完成圖片會保留。",
+    "Generation uses the NovelAI API and may consume Anlas. You can stop at any time; completed images are kept.",
+    "生成にはNovelAI APIを使用し、Anlasを消費する場合があります。いつでも停止でき、完成済みの画像は保持されます。",
+    "생성 시 NovelAI API를 호출하며 Anlas가 소모될 수 있습니다. 언제든 중지할 수 있고 완성된 이미지는 유지됩니다."
+  ],
+  "清空当前任务的结果列表和进度。默认保留图片文件；勾选下方选项会将本次迭代生成的全部图片移入回收站，不仅是页面展示的候选。参考图、模型、参数和其他任务不受影响。": [
+    "清空当前任务的结果列表和进度。默认保留图片文件；勾选下方选项会将本次迭代生成的全部图片移入回收站，不仅是页面展示的候选。参考图、模型、参数和其他任务不受影响。",
+    "清空目前任務的結果清單與進度。預設保留圖片；勾選下方選項會將本次迭代生成的全部圖片移至資源回收筒，不僅是頁面顯示的候選。參考圖、模型、參數及其他任務不受影響。",
+    "Clear the current run’s results and progress. Files are kept by default. Select the option below to move ALL images generated by this run to the recycle bin, not just the displayed candidates. Reference images, models, parameters and other runs are unchanged.",
+    "現在の実行結果と進捗をクリアします。通常は画像ファイルを保持します。下の項目を選ぶと、表示中の候補だけでなく今回生成した全画像をゴミ箱へ移動します。参考画像、モデル、設定、他の実行には影響しません。",
+    "현재 실행 결과와 진행 상황을 지웁니다. 기본적으로 파일은 보존됩니다. 아래 옵션을 선택하면 표시된 후보뿐 아니라 이번 실행에서 생성한 모든 이미지를 휴지통으로 옮깁니다. 참조 이미지, 모델, 설정, 다른 실행은 유지됩니다."
+  ],
+  "清空迭代结果？": [
+    "清空迭代结果？",
+    "清空迭代結果？",
+    "Clear iteration results?",
+    "反復結果をクリアしますか？",
+    "반복 결과를 지울까요?"
+  ],
+  "同时将本次生成的全部图片移入回收站": [
+    "同时将本次生成的全部图片移入回收站",
+    "同時將本次生成的全部圖片移至資源回收筒",
+    "Also move all images generated by this run to the recycle bin",
+    "今回生成した全画像もゴミ箱へ移動する",
+    "이번 실행에서 생성한 모든 이미지도 휴지통으로 이동"
+  ],
+  "模型与环境已验证，可使用": [
+    "模型与环境已验证，可使用",
+    "模型與環境已驗證，可使用",
+    "Model and runtime verified — ready to use",
+    "モデルと環境を検証済み・使用可能",
+    "모델 및 환경 검증 완료 — 사용 가능"
+  ],
+  "正在校验文件并加载模型…": [
+    "正在校验文件并加载模型…",
+    "正在校驗檔案並載入模型…",
+    "Verifying files and loading the model…",
+    "ファイル検証・モデル読込中…",
+    "파일 검증 및 모델 로딩 중…"
+  ],
+  "模型与环境待验证": [
+    "模型与环境待验证",
+    "模型與環境待驗證",
+    "Model and runtime need verification",
+    "モデルと環境の検証が必要です",
+    "모델 및 환경 검증 필요"
+  ],
+  "请配置模型与运行环境": [
+    "请配置模型与运行环境",
+    "請設定模型與執行環境",
+    "Configure a model and runtime",
+    "モデルと実行環境を設定してください",
+    "모델 및 실행 환경을 설정하세요"
+  ],
+  "重新校验": [
+    "重新校验",
+    "重新校驗",
+    "Verify again",
+    "再検証",
+    "다시 검증"
+  ],
+  "已验证，无需下载": [
+    "已验证，无需下载",
+    "已驗證，無需下載",
+    "Verified — no download needed",
+    "検証済み・ダウンロード不要",
+    "검증 완료 — 다운로드 불필요"
+  ],
+  "正在检查模型完整性、Python、PyTorch 和 CUDA，并执行本地模型评分。不会下载资源或调用付费生图，请稍候。": [
+    "正在检查模型完整性、Python、PyTorch 和 CUDA，并执行本地模型评分。不会下载资源或调用付费生图，请稍候。",
+    "正在檢查模型完整性、Python、PyTorch 與 CUDA，並執行本機模型評分。不會下載資源或呼叫付費生圖，請稍候。",
+    "Checking model integrity, Python, PyTorch and CUDA, then running a local scoring test. No downloads or paid generation. Please wait.",
+    "モデルの整合性、Python、PyTorch、CUDAを確認し、ローカル採点テストを実行します。ダウンロードや有料生成は行いません。しばらくお待ちください。",
+    "모델 무결성, Python, PyTorch, CUDA를 확인한 후 로컬 점수 테스트를 실행합니다. 다운로드나 유료 생성은 하지 않습니다. 잠시 기다려 주세요."
+  ],
+  "模型或环境校验失败，请检查路径后重新校验。": [
+    "模型或环境校验失败，请检查路径后重新校验。",
+    "模型或環境校驗失敗，請檢查路徑後重新校驗。",
+    "Model or runtime verification failed. Check the paths and verify again.",
+    "モデルまたは環境の検証に失敗しました。パスを確認して再検証してください。",
+    "모델 또는 환경 검증 실패. 경로를 확인한 후 다시 검증하세요."
+  ],
+  "重新下载或切换模型（可选）": [
+    "重新下载或切换模型（可选）",
+    "重新下載或切換模型（可選）",
+    "Download again or switch models (optional)",
+    "再ダウンロード・モデル切替（任意）",
+    "다시 다운로드 또는 모델 변경 (선택)"
+  ],
+  "下载模型与运行环境": [
+    "下载模型与运行环境",
+    "下載模型與執行環境",
+    "Download model and runtime",
+    "モデルと実行環境のダウンロード",
+    "모델 및 실행 환경 다운로드"
+  ],
+  "清空迭代结果": [
+    "清空迭代结果",
+    "清空迭代結果",
+    "Clear iteration results",
+    "反復結果をクリア",
+    "반복 결과 지우기"
+  ],
+  "模型独立管理": [
+    "模型独立管理",
+    "模型獨立管理",
+    "Independent model management",
+    "モデル別の管理",
+    "모델별 관리"
+  ],
+  "两个版本分别保存模型、环境和下载位置，分别校验。切换不会自动下载；校验通过后才启用，失败不覆盖原可用模型。": [
+    "两个版本分别保存模型、环境和下载位置，分别校验。切换不会自动下载；校验通过后才启用，失败不覆盖原可用模型。",
+    "兩個版本分別儲存模型、環境與下載位置，分別校驗。切換不會自動下載；校驗通過後才啟用，失敗不覆蓋原可用模型。",
+    "Each version has its own model, runtime, download location and verification. Switching does not download anything automatically. Only verified models are activated; failures preserve the previously usable model.",
+    "モデル、実行環境、保存先、検証結果をバージョンごとに管理します。切替時の自動ダウンロードはありません。検証成功後に有効化し、失敗時は以前のモデルを保持します。",
+    "각 버전의 모델, 환경, 다운로드 위치, 검증 결과를 별도로 관리합니다. 전환 시 자동 다운로드하지 않습니다. 검증 성공 후 활성화하며 실패하면 기존 모델을 유지합니다."
+  ],
+  "当前版本路径：": [
+    "当前版本路径：",
+    "目前版本路徑：",
+    "Paths for the selected version:",
+    "選択中のバージョンのパス：",
+    "선택한 버전 경로:"
+  ],
+  "尚未选择模型目录": [
+    "尚未选择模型目录",
+    "尚未選擇模型目錄",
+    "No model directory selected",
+    "モデルフォルダー未選択",
+    "모델 폴더 미선택"
+  ],
+  "尚未选择运行环境": [
+    "尚未选择运行环境",
+    "尚未選擇執行環境",
+    "No runtime selected",
+    "実行環境未選択",
+    "실행 환경 미선택"
+  ],
+  "已验证": [
+    "已验证",
+    "已驗證",
+    "Verified",
+    "検証済み",
+    "검증 완료"
+  ],
+  "校验中": [
+    "校验中",
+    "校驗中",
+    "Verifying",
+    "検証中",
+    "검증 중"
+  ],
+  "校验失败": [
+    "校验失败",
+    "校驗失敗",
+    "Verification failed",
+    "検証失敗",
+    "검증 실패"
+  ],
+  "待校验": [
+    "待校验",
+    "待校驗",
+    "Not verified yet",
+    "未検証",
+    "검증 대기"
+  ],
+  "未配置": [
+    "未配置",
+    "未設定",
+    "Not configured",
+    "未設定",
+    "미설정"
   ]
 }

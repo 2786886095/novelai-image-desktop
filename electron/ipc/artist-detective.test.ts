@@ -9,6 +9,7 @@ vi.mock("electron", () => ({ app: { getPath: () => mock.root, getAppPath: () => 
 vi.mock("node:child_process", () => ({ spawn: (...args: unknown[]) => mock.launch(...args) }));
 vi.mock("./store", () => ({ getToken: () => mock.token, atomicWriteFileSync: (file: string, text: string) => fs.writeFileSync(file, text) }));
 vi.mock("./local-media-protocol", () => ({ toLocalMediaUrl: (file: string) => "local:" + file }));
+vi.mock('./detective-runtime-check',()=>({detectiveRuntimeChecking:()=>false,detectiveRuntimeValidation:()=>({state:'passed'}),validateDetectiveRuntime:vi.fn()}));
 import { detectiveStart, detectiveStatus } from "./artist-detective";
 
 describe("desktop Artist Detective bridge", () => {
