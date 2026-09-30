@@ -76,6 +76,14 @@ void main() {
       'http://service.local/',
       'http://service.lan/',
       'http://0177.0.0.1/',
+      'http://127.1/',
+      'http://2130706433/',
+      'http://0x7f.0.0.1/',
+      'http://0008.8.8.8/',
+      'http://198.18.0.1/',
+      'http://224.0.0.1/',
+      'http://[::ffff:127.0.0.1]/',
+      'http://[::ffff:198.18.0.1]/',
       'https://user:password@example.org/',
       'https://example.org/?api_key=secret',
       'https://example.org/?auth_token=secret',
@@ -91,6 +99,17 @@ void main() {
     expect(results, hasLength(1));
     expect(results.single['url'], 'https://example.org/public?topic=art');
     expect(results.single['fetchedAt'], '2026-10-01T00:00:00.000Z');
+  });
+
+  test('keeps canonical public IP and ordinary hexadecimal-looking domains', () {
+    const urls = ['https://8.8.8.8/', 'https://fdroid.org/',
+      'https://[2606:4700:4700::1111]/'];
+    for (final url in urls) {
+      final results = parseDuckDuckGoLite(
+          '<a class="result-link" href="$url">public</a>');
+      expect(results, hasLength(1), reason: url);
+      expect(results.single['url'], url);
+    }
   });
 
   test('CAPTCHA and overlong query fail explicitly', () async {

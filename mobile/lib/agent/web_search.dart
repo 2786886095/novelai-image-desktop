@@ -138,6 +138,15 @@ bool _publicSource(Uri uri) {
       host.endsWith('.lan') || host.endsWith('.home') ||
       host.endsWith('.corp') || host.endsWith('.internal') ||
       host.isEmpty) return false;
+  // Native inet parsers disagree on octal, hex and short IPv4 spellings.
+  // Only canonical dotted decimal is allowed for a numeric host on every OS.
+  if (RegExp(r'^(?:0x[0-9a-f]+|[0-9]+)(?:\.(?:0x[0-9a-f]+|[0-9]+))*$')
+      .hasMatch(host)) {
+    final parts = host.split('.');
+    if (parts.length != 4 || parts.any((part) =>
+        !RegExp(r'^(?:0|[1-9][0-9]{0,2})$').hasMatch(part) ||
+        int.parse(part) > 255)) return false;
+  }
   final address = InternetAddress.tryParse(host);
   if (address == null && !host.contains('.')) return false;
   if (address == null && RegExp(r'^[0-9a-fx.]+$').hasMatch(host)) return false;
@@ -163,7 +172,8 @@ bool _publicSource(Uri uri) {
             (a == 100 && b >= 64 && b <= 127) ||
             (a == 169 && b == 254) ||
             (a == 172 && b >= 16 && b <= 31) ||
-            (a == 192 && b == 168)) return false;
+            (a == 192 && b == 168) ||
+            (a == 198 && (b == 18 || b == 19))) return false;
       }
     }
   }
