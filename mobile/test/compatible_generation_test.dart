@@ -16,7 +16,6 @@ import 'package:novelai_mobile/services/data_backup_service.dart';
 import 'package:novelai_mobile/services/openai_images.dart';
 import 'package:novelai_mobile/services/unified_storage.dart';
 import 'package:novelai_mobile/state/app_state.dart';
-import 'package:novelai_mobile/screens/compatible_images.dart';
 import 'package:novelai_mobile/screens/generate_screen.dart';
 import 'package:novelai_mobile/i18n/compatible_image_text.dart';
 
@@ -330,38 +329,11 @@ void main() {
       expect(labels.values.every((v) => v.isNotEmpty), isTrue);
     }
   });
-  testWidgets(
-      'actual settings card saves profile without generation and offers native switch',
-      (tester) async {
-    await tester.pumpWidget(ChangeNotifierProvider.value(
-        value: state,
-        child: const MaterialApp(
-            home: Scaffold(
-                body: SingleChildScrollView(
-                    child: CompatibleImageSettingsCard())))));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('配置 OpenAI Images 兼容接口 / New API'));
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byKey(const ValueKey('compatible-url')),
-        'https://example.test/v1');
-    await tester.enterText(find.byKey(const ValueKey('compatible-key')), key);
-    await tester.enterText(
-        find.byKey(const ValueKey('compatible-model')), 'custom-ui');
-    await tester.ensureVisible(find.text('保存并使用兼容图片服务'));
-    await tester.tap(find.text('保存并使用兼容图片服务'));
-    await tester.pumpAndSettle();
-    expect(state.settings.imageProvider, 'openai-images');
-    expect(state.settings.compatibleImage['model'], 'custom-ui');
-    expect(state.history, isEmpty);
-    await tester.ensureVisible(find.text('切回 NovelAI 原生'));
-    await tester.tap(find.text('切回 NovelAI 原生'));
-    await tester.pumpAndSettle();
-    expect(state.settings.imageProvider, 'novelai');
-    expect(
-        await storage.getCompatibleImageKey(
-            state.settings.compatibleImage['credentialId']),
-        key);
-    await tester.pumpWidget(const SizedBox.shrink());
+  test('retired separate image card is not mounted in normal settings', () {
+    final settingsSource = File('lib/screens/settings_screen.dart').readAsStringSync();
+    final generateSource = File('lib/screens/generate_screen.dart').readAsStringSync();
+    expect(settingsSource, isNot(contains('const CompatibleImageSettingsCard()')));
+    expect(generateSource, isNot(contains('return CompatibleGenerateScreen(')));
   });
   test('system proxy routing uses the configured endpoint and image URL',
       () async {
@@ -394,39 +366,15 @@ void main() {
         ['$url/images/generations', url.replaceFirst('/v1', '/image')]);
     expect(state.current, isNotNull);
   });
-  testWidgets(
-      'GenerateScreen button reaches real HTTP and displays its saved result',
+  testWidgets('GenerateScreen does not mount retired image-model controls',
       (tester) async {
-    var posts = 0;
-    final url = await tester.runAsync(() => serve((req) async {
-          posts++;
-          req.response.write(jsonEncode({
-            'data': [
-              {'b64_json': base64Encode(bytes)}
-            ]
-          }));
-          await req.response.close();
-        }));
-    await state.saveCompatibleSettings(config(url!), key);
+    await state.saveCompatibleSettings(config('https://example.test/v1'), key);
     await tester.pumpWidget(ChangeNotifierProvider.value(
         value: state,
         child: const MaterialApp(home: Scaffold(body: GenerateScreen()))));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('compatible-prompt')), findsOneWidget);
-    await tester.ensureVisible(find.text('生成图片'));
-    await tester.runAsync(() async {
-      await tester.tap(find.text('生成图片'));
-      final deadline = DateTime.now().add(const Duration(seconds: 5));
-      while (state.busy && DateTime.now().isBefore(deadline)) {
-        await Future<void>.delayed(const Duration(milliseconds: 10));
-      }
-    });
-    await tester.pumpAndSettle();
-    expect(posts, 1);
-    expect(state.current, isNotNull);
-    expect(state.status, contains('生成完成'));
-    await tester.ensureVisible(
-        find.byKey(const ValueKey('compatible-generation-status')));
+    expect(find.byKey(const ValueKey('compatible-prompt')), findsNothing);
+    expect(find.byKey(const ValueKey('compatible-generation-status')), findsNothing);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
   });

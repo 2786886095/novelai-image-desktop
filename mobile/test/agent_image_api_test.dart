@@ -10,6 +10,7 @@ import 'package:novelai_mobile/models/nai_models.dart';
 import 'package:novelai_mobile/services/storage.dart';
 import 'package:novelai_mobile/state/app_state.dart';
 import 'package:novelai_mobile/agent/api_tools.dart';
+import 'package:novelai_mobile/agent/api_catalog.dart';
 import 'package:novelai_mobile/agent/agent_tools.dart';
 import 'package:novelai_mobile/agent/local_agent_bridge.dart';
 import 'package:novelai_mobile/screens/compatible_images.dart';
@@ -53,6 +54,23 @@ class DelayedClient extends http.BaseClient {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  // The public mobile catalog no longer exposes a second image model. Keep
+  // exercising the legacy credential transaction in this isolated test only,
+  // so older backups can still be read without re-enabling it in production.
+  setUpAll(() {
+    apiProfiles['compatible-image'] = {
+      'title': 'Legacy image API', 'secret': 'imageApiKey', 'mobile': true,
+      'fields': {
+        'enabled': {'key': 'imageProvider', 'title': 'Enabled', 'type': 'boolean'},
+        'baseUrl': {'key': 'baseUrl', 'title': 'URL', 'type': 'url'},
+        'model': {'key': 'model', 'title': 'Model', 'type': 'text'},
+        'size': {'key': 'size', 'title': 'Size', 'type': 'text'},
+        'responseFormat': {'key': 'responseFormat', 'title': 'Format', 'type': 'choice', 'values': ['auto', 'b64_json', 'url']},
+        'extensions': {'key': 'extensions', 'title': 'Extensions', 'type': 'json'},
+      },
+    };
+  });
+  tearDownAll(() => apiProfiles.remove('compatible-image'));
   late GateStorage storage;
   late AppState app;
   late AgentApiTools tools;

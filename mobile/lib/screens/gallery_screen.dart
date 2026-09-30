@@ -11,6 +11,8 @@ import '../models/nai_models.dart';
 import '../i18n/app_locales.dart';
 import '../state/app_state.dart';
 import '../ui/zoomable_image.dart';
+import '../services/local_favorites.dart';
+import '../i18n/local_favorites_text.dart';
 
 const _ungroupedFilter = '__ungrouped';
 
@@ -457,6 +459,30 @@ class _GalleryScreenState extends State<GalleryScreen> {
                       [XFile(item.filePath)],
                       text: item.prompt,
                     ),
+                  ),
+                  FilledButton.tonalIcon(
+                    icon: const Icon(Icons.star_border),
+                    label: Text(localFavoritesText(language, 'add')),
+                    onPressed: !file.existsSync()
+                        ? null
+                        : () async {
+                            final messenger = ScaffoldMessenger.of(context);
+                            try {
+                              await MobileLocalFavorites.instance.add(item);
+                              if (context.mounted) {
+                                messenger.showSnackBar(SnackBar(
+                                    duration: const Duration(seconds: 2),
+                                    content: Text(localFavoritesText(
+                                        language, 'added'))));
+                              }
+                            } catch (error) {
+                              if (context.mounted) {
+                                messenger.showSnackBar(SnackBar(
+                                    content: Text(
+                                        '${localFavoritesText(language, 'error')}: $error')));
+                              }
+                            }
+                          },
                   ),
                   OutlinedButton.icon(
                     icon: const Icon(Icons.delete_outline),

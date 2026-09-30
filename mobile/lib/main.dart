@@ -12,6 +12,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'i18n/app_locales.dart';
 import 'models/nai_models.dart';
 import 'screens/gallery_screen.dart';
+import 'screens/local_favorites_screen.dart';
+import 'i18n/local_favorites_text.dart';
 import 'screens/ai_log_screen.dart';
 import 'screens/agent_screen.dart';
 import 'screens/local_agent_screen.dart';
@@ -107,11 +109,13 @@ class HomeShell extends StatefulWidget {
 }
 
 class _HomeShellState extends State<HomeShell> {
+  static const _navigationOrderKey = 'mobile_navigation_order_v1';
   static const _incomingBackupChannel =
       MethodChannel('langbai.novelai/incoming_backup');
   static const _incomingBackupPending = '__incoming_backup_pending__';
 
   int _index = 0;
+  List<int>? _navigationOrder;
   final _agentVisible = ValueNotifier<bool>(false);
   bool _onboardingScheduled = false;
   bool _v5NoticeScheduled = false;
@@ -142,11 +146,13 @@ class _HomeShellState extends State<HomeShell> {
     (icon: Icons.receipt_long_outlined, selectedIcon: Icons.receipt_long),
     (icon: Icons.settings_outlined, selectedIcon: Icons.settings),
     (icon: Icons.palette_outlined, selectedIcon: Icons.palette),
+    (icon: Icons.star_border, selectedIcon: Icons.star),
   ];
 
   @override
   void initState() {
     super.initState();
+    _loadNavigationOrder();
     _pages = [
       const GenerateScreen(),
       const ToolsScreen(kind: ToolPageKind.inpaint),
@@ -171,7 +177,9 @@ class _HomeShellState extends State<HomeShell> {
         ),
       ),
       const OnlineGalleryScreen(),
-      Platform.isAndroid ? LocalAgentScreen(visible:_agentVisible) : const AgentScreen(),
+      Platform.isAndroid
+          ? LocalAgentScreen(visible: _agentVisible)
+          : const AgentScreen(),
       GalleryScreen(
         onOpenMetadata: () {
           if (mounted) setState(() => _index = 5);
@@ -179,9 +187,44 @@ class _HomeShellState extends State<HomeShell> {
       ),
       const AiLogScreen(),
       const SettingsScreen(),
-      StyleLibraryScreen(onApply: () { if(mounted) setState(()=>_index=0); }),
+      StyleLibraryScreen(onApply: () {
+        if (mounted) setState(() => _index = 0);
+      }),
+      const LocalFavoritesScreen(),
     ];
     _initializeIncomingBackupChannel();
+  }
+
+  Future<void> _loadNavigationOrder() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getStringList(_navigationOrderKey);
+      if (raw == null) return;
+      final saved = raw.map(int.tryParse).toList();
+      if (saved.any((index) => index == null)) return;
+      if (mounted) {
+        setState(() => _navigationOrder =
+            StudioAdaptiveShell.normalizeDestinationOrder(saved.cast<int>(), _destinationIcons.length));
+      }
+    } catch (_) {
+      // Navigation remains usable in its default order if preferences fail.
+    }
+  }
+
+  Future<void> _saveNavigationOrder(List<int> order) async {
+    try {
+      final next = StudioAdaptiveShell.normalizeDestinationOrder(order, _destinationIcons.length);
+      final prefs = await SharedPreferences.getInstance();
+      if (!await prefs.setStringList(_navigationOrderKey, next.map((n) => '$n').toList())) {
+        throw StateError('Could not save navigation order');
+      }
+      if (mounted) setState(() => _navigationOrder = next);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('无法保存导航排序')));
+      }
+    }
   }
 
   @override
@@ -291,7 +334,11 @@ class _HomeShellState extends State<HomeShell> {
         ),
       );
     }
-    final labels = [...mainDestinationLabelsFor(language),styleLibraryText(language)['title']!];
+    final labels = [
+      ...mainDestinationLabelsFor(language),
+      styleLibraryText(language)['title']!,
+      localFavoritesLabelFor(language)
+    ];
     final shellText = shellTextFor(language);
     final destinations = [
       for (var i = 0; i < _destinationIcons.length; i++)
@@ -333,6 +380,8 @@ class _HomeShellState extends State<HomeShell> {
       pages: _pages,
       moreLabel: shellText.moreLabel,
       allFeaturesLabel: shellText.allFeatures,
+      destinationOrder: _navigationOrder,
+      onDestinationOrderChanged: _saveNavigationOrder,
     );
   }
 

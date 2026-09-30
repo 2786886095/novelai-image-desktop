@@ -1,5 +1,4 @@
 import '../ui/settings_section.dart';
-import 'compatible_images.dart';
 import 'completion_sound_settings.dart';
 import '../i18n/parity_text.dart';
 import '../ui/zoomable_image.dart';
@@ -541,7 +540,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   : settingsDetailText.networkTest),
             ),
           ]),
-          const CompatibleImageSettingsCard(),
           _Section(title: settingsText.novelAiSection, children: [
             _TextSetting(
                 label: 'API Base URL',
@@ -558,6 +556,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
               value: s.allowCustomEndpoint,
               onChanged: (value) =>
                   state.setSettings((x) => x.allowCustomEndpoint = value),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(settingsDetailText.allowCustomEndpointFallbackTitle),
+              subtitle: Text(settingsDetailText.allowCustomEndpointFallbackSubtitle),
+              value: s.allowCustomEndpointFallback,
+              onChanged: (value) => state.setSettings(
+                  (x) => x.allowCustomEndpointFallback = value),
             ),
             _SecretField(
                 controller: tokenCtrl, labelText: 'Persistent API Token'),

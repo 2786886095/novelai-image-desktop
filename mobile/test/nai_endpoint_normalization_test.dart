@@ -16,8 +16,8 @@ void main() {
             'https://image.novelai.net', s),
         'https://image.novelai.net');
   });
-  test('intermediary prefixes are retained only with explicit opt-in', () {
-    final s = AppSettings();
+  test('intermediary prefixes follow the saved custom-endpoint setting', () {
+    final s = AppSettings(allowCustomEndpoint: false);
     expect(
         resolveNovelAiBaseUrl('https://proxy.example/nai/ai/generate-image',
             'https://image.novelai.net', s),
@@ -27,5 +27,7 @@ void main() {
         resolveNovelAiBaseUrl('https://proxy.example/nai/ai/generate-image',
             'https://image.novelai.net', s),
         'https://proxy.example/nai');
+    expect(AppSettings().allowCustomEndpoint, isTrue);
+    expect(AppSettings.fromJson({}).allowCustomEndpoint, isTrue);
   });
 }

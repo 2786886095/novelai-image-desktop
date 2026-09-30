@@ -314,6 +314,13 @@ class AppState extends ChangeNotifier {
     try {
       promptTemplates = await PromptTemplateLibrary.load();
       settings = await storage.getSettings();
+      if (settings.imageProvider != 'novelai') {
+        // The separate OpenAI Images generator is retired. Keep its credential
+        // and configuration for backup/rollback, but never silently submit a
+        // generation to that service after this upgrade.
+        settings.imageProvider = 'novelai';
+        await storage.setSettings(settings);
+      }
       try {
         final savedAitagParams = await storage.getAitagCompatibleParams();
         if (savedAitagParams != null) {
@@ -2826,6 +2833,21 @@ class AppState extends ChangeNotifier {
   }
 
   // Concurrent, same reasoning as reversePrompt.
+  Future<AiTextResult> assistPositivePrompt({
+    required String currentPrompt,
+    required String instruction,
+    required String kind,
+  }) async {
+    final snapshot = AppSettings.fromJson(settings.toJson());
+    final version = snapshot.convertPromptTemplateVersion;
+    final mode = convertMode;
+    final template = resolvedPromptTemplate('convert', mode, templateVersion: version);
+    final key = await storage.getConvertKey() ?? '';
+    return api.assistPrompt(settings: snapshot, apiKey: key,
+      currentPrompt: currentPrompt, instruction: instruction, kind: kind,
+      mode: mode, templateVersion: version, conversionTemplate: template);
+  }
+
   Future<void> convertPrompt({String? templateVersion}) async {
     if(templateVersion != null && !['v5','v4.5'].contains(templateVersion)) throw ArgumentError('Invalid template version');
     final chosenVersion = templateVersion ?? settings.convertPromptTemplateVersion;

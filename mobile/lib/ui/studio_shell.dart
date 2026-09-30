@@ -59,6 +59,8 @@ class StudioAdaptiveShell extends StatelessWidget {
   final List<Widget> pages;
   final String moreLabel;
   final String allFeaturesLabel;
+  final List<int>? destinationOrder;
+  final ValueChanged<List<int>>? onDestinationOrderChanged;
 
   const StudioAdaptiveShell({
     super.key,
@@ -68,12 +70,33 @@ class StudioAdaptiveShell extends StatelessWidget {
     required this.pages,
     this.moreLabel = 'More',
     this.allFeaturesLabel = 'All features',
+    this.destinationOrder,
+    this.onDestinationOrderChanged,
   }) : assert(destinations.length == pages.length);
 
   // Reference presets are a first-class workflow on phones as well. Keep the
   // bottom bar to five destinations total (four primary pages + More) so labels
   // and hit targets remain usable on compact portrait and landscape devices.
   static const _phonePrimaryIndexes = [0, 1, 5, 7];
+
+  static List<int> normalizeDestinationOrder(List<int>? saved, int count) {
+    final defaults = [
+      for (final index in _phonePrimaryIndexes)
+        if (index < count) index,
+      for (var index = 0; index < count; index++)
+        if (!_phonePrimaryIndexes.contains(index)) index,
+    ];
+    if (saved == null) return defaults;
+    final valid = <int>[];
+    for (final index in saved) {
+      if (index >= 0 && index < count && !valid.contains(index)) valid.add(index);
+    }
+    return List<int>.unmodifiable([
+      ...valid,
+      for (final index in defaults)
+        if (!valid.contains(index)) index,
+    ]);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -86,6 +109,8 @@ class StudioAdaptiveShell extends StatelessWidget {
         pages: pages,
         moreLabel: moreLabel,
         allFeaturesLabel: allFeaturesLabel,
+        order: normalizeDestinationOrder(destinationOrder, destinations.length),
+        onOrderChanged: onDestinationOrderChanged,
       );
     }
     return _TabletShell(
@@ -94,6 +119,9 @@ class StudioAdaptiveShell extends StatelessWidget {
       destinations: destinations,
       pages: pages,
       extended: windowClass == StudioWindowClass.wideTablet,
+      order: destinationOrder == null
+          ? List<int>.generate(destinations.length, (index) => index)
+          : normalizeDestinationOrder(destinationOrder, destinations.length),
     );
   }
 }
@@ -168,6 +196,8 @@ class _PhoneShell extends StatelessWidget {
   final List<Widget> pages;
   final String moreLabel;
   final String allFeaturesLabel;
+  final List<int> order;
+  final ValueChanged<List<int>>? onOrderChanged;
 
   const _PhoneShell({
     required this.selectedIndex,
@@ -176,11 +206,13 @@ class _PhoneShell extends StatelessWidget {
     required this.pages,
     required this.moreLabel,
     required this.allFeaturesLabel,
+    required this.order,
+    required this.onOrderChanged,
   });
 
   @override
   Widget build(BuildContext context) {
-    const primary = StudioAdaptiveShell._phonePrimaryIndexes;
+    final primary = order.take(4).toList();
     final size = MediaQuery.sizeOf(context);
     final landscape = size.width > size.height;
     final phoneIndex = primary.indexOf(selectedIndex);
@@ -222,7 +254,8 @@ class _PhoneShell extends StatelessWidget {
 
   Future<void> _showMoreSheet(BuildContext context) async {
     FocusManager.instance.primaryFocus?.unfocus();
-    final primary = StudioAdaptiveShell._phonePrimaryIndexes.toSet();
+    final ownerContext = context;
+    final primary = order.take(4).toSet();
     final target = await showModalBottomSheet<int>(
       context: context,
       showDragHandle: true,
@@ -247,6 +280,19 @@ class _PhoneShell extends StatelessWidget {
                 children: [
                   Text(allFeaturesLabel,
                       style: Theme.of(context).textTheme.titleMedium),
+                  if (onOrderChanged != null)
+                    Align(alignment: Alignment.centerRight,
+                      child: TextButton.icon(
+                        onPressed: () async {
+                          Navigator.pop(context);
+                          await Future<void>.delayed(Duration.zero);
+                          if (ownerContext.mounted) {
+                            await _showOrderSheet(ownerContext);
+                          }
+                        },
+                        icon: const Icon(Icons.reorder),
+                        label: Text(_orderLabels(context).$1),
+                      )),
                   const SizedBox(height: StudioSpacing.md),
                   Flexible(
                     child: GridView.count(
@@ -258,9 +304,7 @@ class _PhoneShell extends StatelessWidget {
                       crossAxisSpacing: 8,
                       childAspectRatio: landscape ? 1.55 : 1.25,
                       children: [
-                        for (var index = 0;
-                            index < destinations.length;
-                            index++)
+                        for (final index in order)
                           if (!primary.contains(index))
                             _MoreDestinationButton(
                               destination: destinations[index],
@@ -285,7 +329,55 @@ class _PhoneShell extends StatelessWidget {
       onDestinationSelected(target);
     }
   }
+
+  Future<void> _showOrderSheet(BuildContext context) async {
+    final labels = _orderLabels(context);
+    final working = List<int>.of(order);
+    final updated = await showModalBottomSheet<List<int>>(
+      context: context, isScrollControlled: true, useSafeArea: true,
+      builder: (context) => SafeArea(child: SizedBox(
+        height: MediaQuery.sizeOf(context).height * 0.82,
+        child: Column(children: [
+          ListTile(title: Text(labels.$1), subtitle: Text(labels.$2),
+            trailing: FilledButton(onPressed: () => Navigator.pop(context, working),
+              child: Text(labels.$3))),
+          Expanded(child: StatefulBuilder(builder: (context, update) =>
+            ReorderableListView.builder(
+              buildDefaultDragHandles: false,
+              itemCount: working.length,
+              itemBuilder: (context, position) {
+                final index = working[position];
+                return ListTile(key: ValueKey('navigation-order-$index'),
+                  leading: Icon(destinations[index].icon),
+                  title: Text(destinations[index].label),
+                  subtitle: position < 4 ? Text(labels.$4) : null,
+                  trailing: ReorderableDragStartListener(
+                    index: position,
+                    child: const Icon(Icons.drag_handle),
+                  ),
+                );
+              },
+              onReorder: (oldIndex, newIndex) => update(() {
+                if (newIndex > oldIndex) newIndex--;
+                working.insert(newIndex, working.removeAt(oldIndex));
+              }),
+            ))),
+        ]))));
+    if (updated != null) onOrderChanged?.call(updated);
+  }
 }
+
+(String, String, String, String) _orderLabels(BuildContext context) =>
+    switch (Localizations.localeOf(context).toLanguageTag()) {
+      'en' => ('Reorder navigation', 'Drag to arrange. The first four appear in the bottom bar.', 'Save', 'Bottom bar'),
+      'en-US' => ('Reorder navigation', 'Drag to arrange. The first four appear in the bottom bar.', 'Save', 'Bottom bar'),
+      'ja' => ('ナビゲーションの並び替え', 'ドラッグして並べ替え。先頭4件は下部バーに表示。', '保存', '下部バー'),
+      'ja-JP' => ('ナビゲーションの並び替え', 'ドラッグして並べ替え。先頭4件は下部バーに表示。', '保存', '下部バー'),
+      'ko' => ('탐색 순서 변경', '드래그하여 정렬하세요. 앞의 네 항목이 하단 바에 표시됩니다.', '저장', '하단 바'),
+      'ko-KR' => ('탐색 순서 변경', '드래그하여 정렬하세요. 앞의 네 항목이 하단 바에 표시됩니다.', '저장', '하단 바'),
+      'zh-TW' => ('排列功能入口', '拖動排序；前四項顯示在底部導覽。', '儲存', '底部導覽'),
+      _ => ('排列功能入口', '拖动排序；前四项显示在底部导航。', '保存', '底部导航'),
+    };
 
 class _MoreDestinationButton extends StatelessWidget {
   final StudioDestination destination;
@@ -327,6 +419,7 @@ class _TabletShell extends StatelessWidget {
   final List<StudioDestination> destinations;
   final List<Widget> pages;
   final bool extended;
+  final List<int> order;
 
   const _TabletShell({
     required this.selectedIndex,
@@ -334,6 +427,7 @@ class _TabletShell extends StatelessWidget {
     required this.destinations,
     required this.pages,
     required this.extended,
+    required this.order,
   });
 
   @override
@@ -348,10 +442,10 @@ class _TabletShell extends StatelessWidget {
               key: const ValueKey('studio-tablet-navigation'),
               extended: extended,
               minExtendedWidth: 208,
-              selectedIndex: selectedIndex,
+                selectedIndex: order.indexOf(selectedIndex),
               onDestinationSelected: (index) {
                 FocusManager.instance.primaryFocus?.unfocus();
-                onDestinationSelected(index);
+                  onDestinationSelected(order[index]);
               },
               labelType: extended
                   ? NavigationRailLabelType.none
@@ -364,11 +458,11 @@ class _TabletShell extends StatelessWidget {
                     : const Icon(Icons.auto_awesome),
               ),
               destinations: [
-                for (final destination in destinations)
+                for (final index in order)
                   NavigationRailDestination(
-                    icon: Icon(destination.icon),
-                    selectedIcon: Icon(destination.selectedIcon),
-                    label: Text(destination.label),
+                    icon: Icon(destinations[index].icon),
+                    selectedIcon: Icon(destinations[index].selectedIcon),
+                    label: Text(destinations[index].label),
                   ),
               ],
             ),

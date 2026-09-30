@@ -21,6 +21,7 @@ class UnifiedStorage {
     'gen_params': 'data/generation-parameters.json',
     'history_index_v2': 'data/image-history.json',
     'history_groups': 'data/image-groups.json',
+    'local_favorites_v1': 'data/local-favorites.json',
     'reference_preset_library_v1': 'data/reference-presets.json',
     'character_prompts_v1': 'data/character-prompts.json',
     'comic_project_v2': 'data/comic-project.json',

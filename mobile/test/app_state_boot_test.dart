@@ -9,6 +9,21 @@ import 'package:novelai_mobile/tags/offline_tag_store.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  test('old independent image profile becomes NovelAI without discarding backup metadata', () async {
+    final storage = _BootStorage()
+      ..settings = AppSettings(
+        imageProvider: 'openai-images',
+        compatibleImage: {'credentialId': 'retained-secret-reference', 'model': 'old-model'},
+      );
+    final state = _BootState(api: _OfflineApi(), storage: storage, offlineTags: _OfflineTags());
+    addTearDown(state.dispose);
+    await state.load();
+    expect(state.settings.imageProvider, 'novelai');
+    expect(storage.settings.imageProvider, 'novelai');
+    expect(storage.settings.compatibleImage['credentialId'], 'retained-secret-reference');
+    expect(storage.settings.compatibleImage['model'], 'old-model');
+  });
+
   test('saved token network failure never traps the app on the boot screen',
       () async {
     final state = _BootState(

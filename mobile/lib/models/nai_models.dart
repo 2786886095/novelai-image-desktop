@@ -873,6 +873,7 @@ class AppSettings {
   String apiBaseUrl;
   String imageBaseUrl;
   bool allowCustomEndpoint;
+  bool allowCustomEndpointFallback;
   String visionApiUrl;
   String visionApiModel;
   String convertApiUrl;
@@ -991,7 +992,8 @@ class AppSettings {
     this.reduceMotion = false,
     this.apiBaseUrl = 'https://api.novelai.net',
     this.imageBaseUrl = 'https://image.novelai.net',
-    this.allowCustomEndpoint = false,
+    this.allowCustomEndpoint = true,
+    this.allowCustomEndpointFallback = false,
     this.visionApiUrl = 'https://api.openai.com/v1',
     this.visionApiModel = 'gpt-4o',
     this.convertApiUrl = 'https://api.openai.com/v1',
@@ -1112,6 +1114,7 @@ class AppSettings {
         'compatibleImage': compatibleImage,
         'imageBaseUrl': imageBaseUrl,
         'allowCustomEndpoint': allowCustomEndpoint,
+        'allowCustomEndpointFallback': allowCustomEndpointFallback,
         'visionApiUrl': visionApiUrl,
         'visionApiModel': visionApiModel,
         'convertApiUrl': convertApiUrl,
@@ -1220,7 +1223,8 @@ class AppSettings {
         compatibleImage: j['compatibleImage'] is Map ? Map<String, dynamic>.from(j['compatibleImage']) : {},
         apiBaseUrl: j['apiBaseUrl'] ?? 'https://api.novelai.net',
         imageBaseUrl: j['imageBaseUrl'] ?? 'https://image.novelai.net',
-        allowCustomEndpoint: j['allowCustomEndpoint'] ?? false,
+        allowCustomEndpoint: j['allowCustomEndpoint'] ?? true,
+        allowCustomEndpointFallback: j['allowCustomEndpointFallback'] ?? false,
         visionApiUrl: j['visionApiUrl'] ?? 'https://api.openai.com/v1',
         visionApiModel: j['visionApiModel'] ?? 'gpt-4o',
         convertApiUrl: j['convertApiUrl'] ?? 'https://api.openai.com/v1',

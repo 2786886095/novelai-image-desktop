@@ -1,5 +1,4 @@
 import 'style_library_screen.dart';
-import 'compatible_images.dart';
 import '../models/style_library.dart';
 import '../i18n/style_library_text.dart';
 import 'dart:convert';
@@ -36,6 +35,7 @@ import '../ui/studio_theme.dart';
 import '../ui/zoomable_image.dart';
 import 'reference_catalog_panel.dart';
 import 'positive_prompt_preset_sheet.dart';
+import 'prompt_assistant_dialog.dart';
 
 bool _isRoomyPhoneLandscape(BuildContext context) {
   final size = MediaQuery.sizeOf(context);
@@ -278,7 +278,6 @@ class GenerateScreen extends StatelessWidget {
         state.account.tierLevel == 3 && p.model.startsWith('nai-diffusion-5-');
 
     final preview = _PreviewCard(onPick: () => _pickImage(context));
-    if (state.settings.imageProvider == 'openai-images') return CompatibleGenerateScreen(preview:preview);
     final controls = <Widget>[
       _TagSearchBox(
         onInsert: (tag, negative) => state.setParam((params) {
@@ -538,6 +537,20 @@ class PromptEditorState extends State<PromptEditor> {
     widget.onChanged(value);
     _scheduleSuggestions(value);
   }
+
+    Future<void> _openAssistant(String kind) async {
+      final source = controller.text;
+      final result = await showDialog<String>(context: context,
+        builder: (_) => PromptAssistantDialog(kind: kind, source: source,
+          isCurrent: (expected) => mounted && controller.text == expected && widget.value == expected));
+      if (!mounted || result == null) return;
+      if (controller.text != source || widget.value != source) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(promptAssistantLabels(context.read<AppState>().settings.language)['stale']!)));
+        return;
+      }
+      _apply(result);
+    }
 
   void _scheduleSuggestions(String value) {
     suggestionTimer?.cancel();
@@ -931,6 +944,12 @@ class PromptEditorState extends State<PromptEditor> {
           runSpacing: 4,
           children: [
             if (widget.showTextTools) ...[
+              TextButton.icon(onPressed: () => _openAssistant('optimize'),
+                icon: const Icon(Icons.auto_awesome, size: 18),
+                label: Text(promptAssistantLabels(context.read<AppState>().settings.language)['optimize']!)),
+              TextButton.icon(onPressed: () => _openAssistant('custom'),
+                icon: const Icon(Icons.edit_note, size: 18),
+                label: Text(promptAssistantLabels(context.read<AppState>().settings.language)['custom']!)),
               TextButton.icon(
                 onPressed: translating ? null : _translate,
                 icon: translating

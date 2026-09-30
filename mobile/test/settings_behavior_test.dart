@@ -54,9 +54,9 @@ void main() {
           'github');
     });
 
-    test('custom NovelAI endpoints require explicit opt-in', () {
+    test('custom NovelAI endpoints honor explicit opt-out', () {
       const official = 'https://api.novelai.net';
-      final settings = AppSettings();
+      final settings = AppSettings(allowCustomEndpoint: false);
       expect(
         resolveNovelAiBaseUrl('http://127.0.0.1:9000/', official, settings),
         official,
